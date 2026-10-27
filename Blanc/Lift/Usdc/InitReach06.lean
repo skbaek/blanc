@@ -447,10 +447,47 @@ def KeysInit (L1 L2 L3 : Nat) (key : B256) : Prop :=
     (∃ j : Nat, j < (L2 + 31) / 32 ∧ key = (5 : B256).toBytes.keccak + j.toB256) ∨
     (∃ j : Nat, j < (L3 + 31) / 32 ∧ key = (7 : B256).toBytes.keccak + j.toB256)
 
+/-- All three initializer string ranges, including the old tail cleared to zero. -/
+def InitRange (L1 L2 L3 : Nat) (T : Conf) : Prop :=
+  ∀ key v S, T.d.stack = key :: v :: S →
+    KeysInit L1 L2 L3 key ∨ v = 0 ∧
+      (StrStore.ClearRange 4 ((L1 + 31) / 32) key ∨
+       StrStore.ClearRange 5 ((L2 + 31) / 32) key ∨
+       StrStore.ClearRange 7 ((L3 + 31) / 32) key)
+
+theorem InitRange.of_eq {L1 L2 L3 : Nat} {key v : B256} {S : List B256}
+    (stack : T.d.stack = key :: v :: S)
+    (kind : KeysInit L1 L2 L3 key ∨ v = 0 ∧
+      (StrStore.ClearRange 4 ((L1 + 31) / 32) key ∨
+       StrStore.ClearRange 5 ((L2 + 31) / 32) key ∨
+       StrStore.ClearRange 7 ((L3 + 31) / 32) key)) : InitRange L1 L2 L3 T := by
+  intro key' v' S' stack'
+  rw [stack] at stack'
+  obtain ⟨rfl, rfl, -⟩ := List.cons.inj stack'
+  exact kind
+
+theorem InitRange.of_top {L1 L2 L3 : Nat} {key : B256} {S : List B256}
+    (stack : T.d.stack = key :: S) (kind : KeysInit L1 L2 L3 key) : InitRange L1 L2 L3 T := by
+  intro key' v' S' stack'
+  rw [stack] at stack'
+  exact .inl ((List.cons.inj stack').1 ▸ kind)
+
+theorem InitRange.to_initStore {L1 L2 L3 : Nat} (range : InitRange L1 L2 L3 T) :
+    InitStore (KeysInit L1 L2 L3) T :=
+  fun key v S stack => (range key v S stack).imp_right And.left
+
+theorem InitRange.below {L1 L2 L3 : Nat} {K : List SFunc} :
+    InitRange L1 L2 L3 (T.below K) ↔ InitRange L1 L2 L3 T := Iff.rfl
+
+theorem InitRange.cap {L1 L2 L3 B : Nat} (h1 : L1 ≤ B) (h2 : L2 ≤ B) (h3 : L3 ≤ B)
+    (range : InitRange L1 L2 L3 T) : InitRange (min L1 B) (min L2 B) (min L3 B) T := by
+  rw [Nat.min_eq_left h1, Nat.min_eq_left h2, Nat.min_eq_left h3]
+  exact range
+
 /-- One `string storage = string memory` call of the body: the helper stores the slot, zero,
 or a payload word of the string whose header is at `p`, or returns the slot with every word but
 the scratch word kept. -/
-theorem helper06_call {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem helper06_call_range {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d') {τ : StrTags} {kh : Nat}
     (hh : fs[kh]? = some (StrStore.helper τ (.reg .mload) (StrStore.shortMem τ)))
     (E : StrStore.Entries τ (.reg .mload) fs) {k : SFunc} {b : Devm} {t p slot r : B256}
@@ -459,7 +496,7 @@ theorem helper06_call {Q : Sevm → Devm → Ninst → Devm → Prop}
     (run : Reach (FreePtr.PotStep Q) fs sevm ⟨St b (t :: (M.read p.toNat 32).1.toB256 ::
       (p + Bytes.toB256 [32]) :: slot :: r :: B) (M.read p.toNat 32).2 G, .callNext kh k, []⟩ T)
     (hT : AtSstore T) :
-    StrStore.StoreAt slot ((L.toNat + 31) / 32) T ∨ ∃ b' M' G',
+    StrStore.StoreRangeAt slot ((L.toNat + 31) / 32) T ∨ ∃ b' M' G',
       SolcStorageReturn.Keeps ((M.read p.toNat 32).2.write 0 slot.toBytes) M' ∧
       Reach (FreePtr.PotStep Q) fs sevm ⟨St b' (slot :: B) M' G', k, []⟩ T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' := fun h => eraseQ h.1
@@ -473,14 +510,30 @@ theorem helper06_call {Q : Sevm → Devm → Ninst → Devm → Prop}
     rw [← StrStore.toB256_add, toB256_toNat]
     rfl
   rw [e1, e2] at run
-  rcases StrStore.reach erase (by intro h; cases h) (ReachPayload.mload_rdStep eraseQ)
+  rcases StrStore.reach_range erase (by intro h; cases h) (ReachPayload.mload_rdStep eraseQ)
       (StrStore.shortMem_ok erase E.exit) E (by omega) (ReachPayload.mload_win eraseQ) run hT with
     st | ⟨f, K', b', M', G', hK, hk, run⟩
   · exact .inl (st.mono (StrStore.count_le _ _))
   · cases hK
     exact .inr ⟨b', M', G', hk, run⟩
 
-theorem body06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem helper06_call {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d') {τ : StrTags} {kh : Nat}
+    (hh : fs[kh]? = some (StrStore.helper τ (.reg .mload) (StrStore.shortMem τ)))
+    (E : StrStore.Entries τ (.reg .mload) fs) {k : SFunc} {b : Devm} {t p slot r : B256}
+    {B : List B256} {M : Mem} {G : Nat} {L : B256} (hL : memWord M p.toNat = L)
+    (hp : p.toNat + 32 < 2 ^ 256)
+    (run : Reach (FreePtr.PotStep Q) fs sevm ⟨St b (t :: (M.read p.toNat 32).1.toB256 ::
+      (p + Bytes.toB256 [32]) :: slot :: r :: B) (M.read p.toNat 32).2 G, .callNext kh k, []⟩ T)
+    (hT : AtSstore T) :
+    StrStore.StoreAt slot ((L.toNat + 31) / 32) T ∨ ∃ b' M' G',
+      SolcStorageReturn.Keeps ((M.read p.toNat 32).2.write 0 slot.toBytes) M' ∧
+      Reach (FreePtr.PotStep Q) fs sevm ⟨St b' (slot :: B) M' G', k, []⟩ T := by
+  rcases helper06_call_range eraseQ hh E hL hp run hT with stored | returned
+  · exact .inl stored.storeAt
+  · exact .inr returned
+
+theorem body06_reach_range {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d') {ι : I06Tags} {τ : StrTags}
     (hh : fs[ι.k25]? = some (StrStore.helper τ (.reg .mload) (StrStore.shortMem τ)))
     (E : StrStore.Entries τ (.reg .mload) fs) (ho : fs[ι.k30]? = some (b_416c_65 ι))
@@ -492,7 +545,7 @@ theorem body06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
     (b1 : p1.toNat + 32 < 2 ^ 256) (b2 : p2.toNat + 32 < 2 ^ 256) (b3 : p3.toNat + 32 < 2 ^ 256)
     (run : Reach (FreePtr.PotStep Q) fs sevm ⟨St b (a4 :: a3 :: a2 :: a1 :: dec :: p3 :: p2 :: p1 ::
       r :: S) M G, b_177e_51 ι, []⟩ T) (hT : AtSstore T) :
-    InitStore (KeysInit L1.toNat L2.toNat L3.toNat) T := by
+    InitRange L1.toNat L2.toNat L3.toNat T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' := fun h => eraseQ h.1
   rsd
   rsx
@@ -513,53 +566,53 @@ theorem body06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT rfl (fun _ h => by cases h)).elim
   repeat rsa
-  rcases helper06_call eraseQ hh E h1 b1 run hT with ⟨key, v, S', hs, hk | hv | ⟨j, hj, hk⟩⟩ |
+  rcases helper06_call_range eraseQ hh E h1 b1 run hT with ⟨key, v, S', hs, hk | ⟨j, hj, hk⟩ | ⟨hv, clear⟩⟩ |
     ⟨b', M', G', hk1, run⟩
-  · exact InitStore.of_eq hs (.inl (.inl (by rw [hk]; decide)))
-  · exact InitStore.of_eq hs (.inr hv)
-  · exact InitStore.of_eq hs (.inl (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩)))
+  · exact InitRange.of_eq hs (.inl (.inl (by rw [hk]; decide)))
+  · exact InitRange.of_eq hs (.inl (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩)))
+  · exact InitRange.of_eq hs (.inr ⟨hv, .inl clear⟩)
   have m1 : ∀ o, 32 ≤ o → o + 32 ≤ M.size → memWord M' o = memWord M o := fun o ho hs =>
     (memWord_keeps_scratch hk1 ho (le_trans hs (SolcStorageReturn.Keeps.read M _ _).2)).trans rfl
   rsd
   repeat rsa
-  rcases helper06_call eraseQ hh E ((m1 _ q2 s2).trans h2) b2 run hT with
-    ⟨key, v, S', hs, hk | hv | ⟨j, hj, hk⟩⟩ | ⟨b'', M'', G'', hk2, run⟩
-  · exact InitStore.of_eq hs (.inl (.inl (by rw [hk]; decide)))
-  · exact InitStore.of_eq hs (.inr hv)
-  · exact InitStore.of_eq hs (.inl (.inr (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩))))
+  rcases helper06_call_range eraseQ hh E ((m1 _ q2 s2).trans h2) b2 run hT with
+    ⟨key, v, S', hs, hk | ⟨j, hj, hk⟩ | ⟨hv, clear⟩⟩ | ⟨b'', M'', G'', hk2, run⟩
+  · exact InitRange.of_eq hs (.inl (.inl (by rw [hk]; decide)))
+  · exact InitRange.of_eq hs (.inl (.inr (.inr (.inl ⟨j, hj, by rw [hk]; rfl⟩))))
+  · exact InitRange.of_eq hs (.inr ⟨hv, .inr (.inl clear)⟩)
   have sz1 : M.size ≤ M'.size := le_trans (SolcStorageReturn.Keeps.read M _ _).2
     (le_trans (size_write_ge _ _ _) hk1.2)
   have m2 : ∀ o, 32 ≤ o → o + 32 ≤ M'.size → memWord M'' o = memWord M' o := fun o ho hs =>
     (memWord_keeps_scratch hk2 ho (le_trans hs (SolcStorageReturn.Keeps.read M' _ _).2)).trans rfl
   rsd
   repeat rsa
-  rcases helper06_call eraseQ hh E ((m2 _ q3 (by omega)).trans ((m1 _ q3 s3).trans h3)) b3 run hT
-    with ⟨key, v, S', hs, hk | hv | ⟨j, hj, hk⟩⟩ | ⟨b₃, M₃, G₃, -, run⟩
-  · exact InitStore.of_eq hs (.inl (.inl (by rw [hk]; decide)))
-  · exact InitStore.of_eq hs (.inr hv)
-  · exact InitStore.of_eq hs (.inl (.inr (.inr (.inr ⟨j, hj, by rw [hk]; rfl⟩))))
+  rcases helper06_call_range eraseQ hh E ((m2 _ q3 (by omega)).trans ((m1 _ q3 s3).trans h3)) b3 run hT
+    with ⟨key, v, S', hs, hk | ⟨j, hj, hk⟩ | ⟨hv, clear⟩⟩ | ⟨b₃, M₃, G₃, -, run⟩
+  · exact InitRange.of_eq hs (.inl (.inl (by rw [hk]; decide)))
+  · exact InitRange.of_eq hs (.inl (.inr (.inr (.inr ⟨j, hj, by rw [hk]; rfl⟩))))
+  · exact InitRange.of_eq hs (.inr ⟨hv, .inr (.inr clear)⟩)
   rsd
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl (.inl (by decide))
+  · exact InitRange.of_top rfl (.inl (by decide))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl (.inl (by decide))
+  · exact InitRange.of_top rfl (.inl (by decide))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl (.inl (by decide))
+  · exact InitRange.of_top rfl (.inl (by decide))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl (.inl (by decide))
+  · exact InitRange.of_top rfl (.inl (by decide))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
@@ -569,7 +622,7 @@ theorem body06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
   cases hg
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl (.inl (by decide))
+  · exact InitRange.of_top rfl (.inl (by decide))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
@@ -577,12 +630,27 @@ theorem body06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
   cases hK
   repeat rsa
   rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · exact InitStore.of_top rfl (.inl (by decide))
+  · exact InitRange.of_top rfl (.inl (by decide))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
   repeat rsa
   exact (Reach.not_ret_nilS run hT).elim
+
+theorem body06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d') {ι : I06Tags} {τ : StrTags}
+    (hh : fs[ι.k25]? = some (StrStore.helper τ (.reg .mload) (StrStore.shortMem τ)))
+    (E : StrStore.Entries τ (.reg .mload) fs) (ho : fs[ι.k30]? = some (b_416c_65 ι))
+    {b : Devm} {a4 a3 a2 a1 dec p3 p2 p1 r : B256} {S : List B256} {M : Mem} {G : Nat}
+    {L1 L2 L3 : B256}
+    (h1 : memWord M p1.toNat = L1) (h2 : memWord M p2.toNat = L2) (h3 : memWord M p3.toNat = L3)
+    (q2 : 32 ≤ p2.toNat) (q3 : 32 ≤ p3.toNat)
+    (s2 : p2.toNat + 32 ≤ M.size) (s3 : p3.toNat + 32 ≤ M.size)
+    (b1 : p1.toNat + 32 < 2 ^ 256) (b2 : p2.toNat + 32 < 2 ^ 256) (b3 : p3.toNat + 32 < 2 ^ 256)
+    (run : Reach (FreePtr.PotStep Q) fs sevm ⟨St b (a4 :: a3 :: a2 :: a1 :: dec :: p3 :: p2 :: p1 ::
+      r :: S) M G, b_177e_51 ι, []⟩ T) (hT : AtSstore T) :
+    InitStore (KeysInit L1.toNat L2.toNat L3.toNat) T := by
+  exact (body06_reach_range eraseQ hh E ho h1 h2 h3 q2 q3 s2 s3 b1 b2 b3 run hT).to_initStore
 
 /-- The length word of the dynamic string whose head is at calldata offset `h`. -/
 def len06 (sevm : Sevm) (h : B256) : Nat :=
@@ -601,10 +669,16 @@ def KeysInit06 (sevm : Sevm) : B256 → Prop :=
     (min (len06 sevm (Bytes.toB256 [4] + Bytes.toB256 [32])) (2 ^ 160))
     (min (len06 sevm (Bytes.toB256 [4] + Bytes.toB256 [32] + Bytes.toB256 [32])) (2 ^ 160))
 
+/-- The full initializer range at the actual frame's capped decoded lengths. -/
+abbrev InitRange06 (sevm : Sevm) (T : Conf) : Prop :=
+  InitRange (min (len06 sevm (Bytes.toB256 [4])) (2 ^ 160))
+    (min (len06 sevm (Bytes.toB256 [4] + Bytes.toB256 [32])) (2 ^ 160))
+    (min (len06 sevm (Bytes.toB256 [4] + Bytes.toB256 [32] + Bytes.toB256 [32])) (2 ^ 160)) T
+
 /-- **The wrapper and body on a reach to an `SSTORE`.** From the dispatcher's memory (free
 pointer `0x80`), a reach of the wrapper to an `SSTORE` stops at a write of `KeysInit06` or of
 zero. -/
-theorem wrap06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem wrap06_reach_range {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d') {ι : I06Tags} {τ : StrTags}
     (hb : fs[ι.k12]? = some (b_177e_51 ι))
     (hh : fs[ι.k25]? = some (StrStore.helper τ (.reg .mload) (StrStore.shortMem τ)))
@@ -612,7 +686,7 @@ theorem wrap06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
     {b : Devm} {S : List B256} {M : Mem} {G : Nat}
     (hfp : memWord M 64 = Bytes.toB256 [0x80])
     (run : Reach (FreePtr.PotStep Q) fs sevm ⟨St b S M G, b_0541_139 ι, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
+    (hT : AtSstore T) : InitRange06 sevm T := by
   have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' := fun h => eraseQ h.1
   repeat rsa
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
@@ -686,16 +760,44 @@ theorem wrap06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
     A3.keep _ (by rw [hfp, h128]; omega) (by rw [hfp, h128]; omega) (by rw [hfp, h128]; omega)
   have k23 : memWord M3 (memWord M1 64).toNat = memWord M2 (memWord M1 64).toNat :=
     A3.keep _ (by omega) (by omega) (by omega)
-  refine InitStore.below.mpr (InitStore.mono
-    (fun _ h => KeysInit.cap (by unfold len06; omega) (by unfold len06; omega)
-      (by unfold len06; omega) h)
-    (body06_reach eraseQ hh E ho (k13.trans (k12.trans A1.hdr)) (k23.trans A2.hdr) A3.hdr
+  refine InitRange.below.mpr (InitRange.cap
+    (by unfold len06; omega) (by unfold len06; omega) (by unfold len06; omega)
+    (body06_reach_range eraseQ hh E ho (k13.trans (k12.trans A1.hdr)) (k23.trans A2.hdr) A3.hdr
       (by omega) (by omega) (by omega) (by omega)
       (by rw [hfp, h128]; omega) (by omega) (by omega) inside hT'))
+
+theorem wrap06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d') {ι : I06Tags} {τ : StrTags}
+    (hb : fs[ι.k12]? = some (b_177e_51 ι))
+    (hh : fs[ι.k25]? = some (StrStore.helper τ (.reg .mload) (StrStore.shortMem τ)))
+    (E : StrStore.Entries τ (.reg .mload) fs) (ho : fs[ι.k30]? = some (b_416c_65 ι))
+    {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    (hfp : memWord M 64 = Bytes.toB256 [0x80])
+    (run : Reach (FreePtr.PotStep Q) fs sevm ⟨St b S M G, b_0541_139 ι, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
+  exact (wrap06_reach_range eraseQ hb hh E ho hfp run hT).to_initStore
 
 /-- **`initialize` from entry `0` on a reach to an `SSTORE`.** A reach of a V2-line code from
 its solc 0.6 dispatcher, with empty stack and memory and the `initialize` selector, stops at a
 write of `KeysInit06` or of zero. -/
+theorem root06_reach_range {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d') {ι : I06Tags} {τ : StrTags}
+    {a c : UInt8 × UInt8} {sel : SFunc} {kW : Nat}
+    (hw : sel.selWalk 0x3357162b = .inl (Bytes.toB256 [0x33, 0x57, 0x16, 0x2b], kW))
+    (hwrap : fs[kW]? = some (b_0541_139 ι)) (hb : fs[ι.k12]? = some (b_177e_51 ι))
+    (hh : fs[ι.k25]? = some (StrStore.helper τ (.reg .mload) (StrStore.shortMem τ)))
+    (E : StrStore.Entries τ (.reg .mload) fs) (ho : fs[ι.k30]? = some (b_416c_65 ι))
+    (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (run : Reach (FreePtr.PotStep Q) fs sevm ⟨St d [] Mem.empty G, dispatch06 a c sel, []⟩ T)
+    (hT : AtSstore T) : InitRange06 sevm T := by
+  have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' := fun h => eraseQ h.1
+  obtain ⟨g, b', G', hg, run⟩ := dispatch06_reach erase hs hw run hT
+  rw [hwrap] at hg
+  cases hg
+  have w := Mem.memWord_write_word Mem.empty (Bytes.toB256 [0x40]).toNat (Bytes.toB256 [0x80])
+  rw [show (Bytes.toB256 [0x40]).toNat = 64 by decide] at w run
+  exact wrap06_reach_range eraseQ hb hh E ho w.1 run hT
+
 theorem root06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d') {ι : I06Tags} {τ : StrTags}
     {a c : UInt8 × UInt8} {sel : SFunc} {kW : Nat}
@@ -706,13 +808,7 @@ theorem root06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) fs sevm ⟨St d [] Mem.empty G, dispatch06 a c sel, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
-  have erase : ∀ {s d n d'}, FreePtr.PotStep Q s d n d' → Ninst.Run s d n d' := fun h => eraseQ h.1
-  obtain ⟨g, b', G', hg, run⟩ := dispatch06_reach erase hs hw run hT
-  rw [hwrap] at hg
-  cases hg
-  have w := Mem.memWord_write_word Mem.empty (Bytes.toB256 [0x40]).toNat (Bytes.toB256 [0x80])
-  rw [show (Bytes.toB256 [0x40]).toNat = 64 by decide] at w run
-  exact wrap06_reach eraseQ hb hh E ho w.1 run hT
+  exact (root06_reach_range eraseQ hw hwrap hb hh E ho hs run hT).to_initStore
 
 theorem route_V2 : InitReachV2.selTree.selWalk 0x3357162b =
     .inl (Bytes.toB256 [0x33, 0x57, 0x16, 0x2b], 139) := by
@@ -721,15 +817,23 @@ theorem route_V2 : InitReachV2.selTree.selWalk 0x3357162b =
 /-- **V2 `initialize` on a prefix reach.** A reach of the V2 code from entry `0`, with empty
 stack and memory and the `initialize` selector, to an `SSTORE` stops at a write of `KeysInit06`
 or of zero. -/
+theorem init_reach_V2_range {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (run : Reach (FreePtr.PotStep Q) ImplV2.cert.prog sevm
+      ⟨St d [] Mem.empty G, ImplV2.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : InitRange06 sevm T := by
+  rw [InitReachV2.root_eq] at run
+  exact root06_reach_range eraseQ route_V2 wrap_V2 body_V2 helper_V2 entries_V2 owner_V2
+    hs run hT
+
 theorem init_reach_V2 {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) ImplV2.cert.prog sevm
       ⟨St d [] Mem.empty G, ImplV2.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
-  rw [InitReachV2.root_eq] at run
-  exact root06_reach eraseQ route_V2 wrap_V2 body_V2 helper_V2 entries_V2 owner_V2
-    hs run hT
+  exact (init_reach_V2_range eraseQ hs run hT).to_initStore
 
 theorem route_V2_1 : InitReachV2_1.selTree.selWalk 0x3357162b =
     .inl (Bytes.toB256 [0x33, 0x57, 0x16, 0x2b], 136) := by
@@ -738,15 +842,23 @@ theorem route_V2_1 : InitReachV2_1.selTree.selWalk 0x3357162b =
 /-- **V2_1 `initialize` on a prefix reach.** A reach of the V2_1 code from entry `0`, with empty
 stack and memory and the `initialize` selector, to an `SSTORE` stops at a write of `KeysInit06`
 or of zero. -/
+theorem init_reach_V2_1_range {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (run : Reach (FreePtr.PotStep Q) ImplV2_1.cert.prog sevm
+      ⟨St d [] Mem.empty G, ImplV2_1.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : InitRange06 sevm T := by
+  rw [InitReachV2_1.root_eq] at run
+  exact root06_reach_range eraseQ route_V2_1 wrap_V2_1 body_V2_1 helper_V2_1 entries_V2_1 owner_V2_1
+    hs run hT
+
 theorem init_reach_V2_1 {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) ImplV2_1.cert.prog sevm
       ⟨St d [] Mem.empty G, ImplV2_1.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
-  rw [InitReachV2_1.root_eq] at run
-  exact root06_reach eraseQ route_V2_1 wrap_V2_1 body_V2_1 helper_V2_1 entries_V2_1 owner_V2_1
-    hs run hT
+  exact (init_reach_V2_1_range eraseQ hs run hT).to_initStore
 
 theorem route_V2_2 : InitReachV2_2.selTree.selWalk 0x3357162b =
     .inl (Bytes.toB256 [0x33, 0x57, 0x16, 0x2b], 168) := by
@@ -755,14 +867,22 @@ theorem route_V2_2 : InitReachV2_2.selTree.selWalk 0x3357162b =
 /-- **V2_2 `initialize` on a prefix reach.** A reach of the V2_2 code from entry `0`, with empty
 stack and memory and the `initialize` selector, to an `SSTORE` stops at a write of `KeysInit06`
 or of zero. -/
+theorem init_reach_V2_2_range {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
+    (run : Reach (FreePtr.PotStep Q) Impl.cert.prog sevm
+      ⟨St d [] Mem.empty G, Impl.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : InitRange06 sevm T := by
+  rw [InitReachV2_2.root_eq] at run
+  exact root06_reach_range eraseQ route_V2_2 wrap_V2_2 body_V2_2 helper_V2_2 entries_V2_2 owner_V2_2
+    hs run hT
+
 theorem init_reach_V2_2 {Q : Sevm → Devm → Ninst → Devm → Prop}
     (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     (hs : initSelWord sevm = 0x3357162b) {d : Devm} {G : Nat}
     (run : Reach (FreePtr.PotStep Q) Impl.cert.prog sevm
       ⟨St d [] Mem.empty G, Impl.t_0000_c0, []⟩ T)
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
-  rw [InitReachV2_2.root_eq] at run
-  exact root06_reach eraseQ route_V2_2 wrap_V2_2 body_V2_2 helper_V2_2 entries_V2_2 owner_V2_2
-    hs run hT
+  exact (init_reach_V2_2_range eraseQ hs run hT).to_initStore
 
 end Blanc.Lift.Usdc.Init06
