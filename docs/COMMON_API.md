@@ -3851,8 +3851,21 @@ testing the written key. Completeness and soundness retain the original root,
 node and actual write. `modernCancel_write_ne_allowSlot` consumes finite
 faithfulness for exactly this list; its key constructors distinguish an
 authorization entry from an allowance entry. Cancellation selectors are now
-discharged by the exhaustive family reduction. Check truth and original
-successful hash-occurrence provenance remain separate obligations.
+discharged by the exhaustive family reduction. Finite-check truth remains
+an explicit obligation.
+
+[`ModernCancelReach`](../Blanc/Lift/Usdc/ModernCancelReach.lean) supplies the
+original ordered successful hashes for all four cancellation routes.
+`successfulSstore_ordered_hashes` follows the original entry, dispatcher,
+ABI decoding and pause guard into the unused-authorization check. The first
+hash consumes the masked calldata owner with base slot 16; the second consumes
+the full calldata nonce with that first result. Both occur before the same
+successful store, with no final-frame-success or signature-result premise.
+The history adapters `modernCancelKey?_ordered_hashes` and
+`actualModernCancelKeys_ordered_hashes` retain the original root, raw node,
+write owner and exact key from the unchanged collector. This proves occurrence
+and order within that prefix, without assuming hash injectivity or changing
+the finite population.
 
 For V2 and V2_1 old-blacklist writes, use
 [`Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean`](../Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean)'s
