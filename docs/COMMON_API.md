@@ -3867,6 +3867,16 @@ write owner and exact key from the unchanged collector. This proves occurrence
 and order within that prefix, without assuming hash injectivity or changing
 the finite population.
 
+[`ModernRemoveMinterReach`](../Blanc/Lift/Usdc/ModernRemoveMinterReach.lean)
+proves `successfulSstore_nonInc` for every actual removeMinter store in
+V2, V2_1 and V2_2. The original dispatcher, ABI bounds and master-minter
+guard lead to a masked same-key reload or a literal-zero store. Each value
+is bounded by that same node's current cell, including when earlier writes
+alias it. `modernRemoveMinter_nonInc` supplies the raw-history adapter.
+`modern_allowance_write_reduction` in `ModernWriteFamilies` consumes this result
+directly, removing selector 0x3092afd5 from the unresolved families without
+adding hash-separation premises or changing the actual-key population.
+
 For V2 and V2_1 old-blacklist writes, use
 [`Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean`](../Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean)'s
 `actualV2OldBlacklistKeys` with its explicit version. The certificate and
