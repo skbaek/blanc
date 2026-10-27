@@ -12,9 +12,13 @@ import Blanc.Lift.Usdc.V22TransferFromMappingTouches
 import Blanc.Lift.Usdc.V21InitializerMappingTouches
 import Blanc.Lift.Usdc.V22InitializerMappingTouches
 import Blanc.Lift.Usdc.V2_1ReceiveWithAuthorizationMappingTouches
+import Blanc.Lift.Usdc.V2TransferWithAuthorizationMappingTouches
+import Blanc.Lift.Usdc.V22ReceiveWithAuthorizationMappingTouches
+import Blanc.Lift.Usdc.V22ReceiveWithAuthorizationBytesMappingTouches
+import Blanc.Lift.Usdc.V22TransferWithAuthorizationBytesMappingTouches
 
 /-! Complete actual-store family coverage for the three modern USDC runtimes.
-Finite checks discharge only the already collected families; remaining selectors stay explicit. -/
+Finite checks discharge mapping aliases; owner selectors remain explicit. -/
 namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.WriteSite Blanc.ExecutionTrace
@@ -36,12 +40,16 @@ def modernPackedBlacklistSelector (version : ModernVersion) (selector : B256) : 
 instance (version : ModernVersion) (selector : B256) :
     Decidable (modernPackedBlacklistSelector version selector) := inferInstanceAs (Decidable (_ ∧ _))
 
-/-- Remaining mapping writers, excluding the caller/owner exceptions and dynamic initializers.
-Both inherited initializeV2_1 variants are covered without a new AllowedFrame exception. -/
-def modernOtherWriteSelectors : ModernVersion → List B256
-  | .v2 => [0xe3ee160e]
-  | .v2_1 => []
-  | .v2_2 => [0xe3ee160e, 0xef55bec6, 0x88b7ab63, 0xcf092995]
+/-- All authorization-transfer selectors with original-source and collector coverage. -/
+def modernAuthorizationSelector : ModernVersion → B256 → Prop
+  | .v2, selector => selector = 0xe3ee160e
+  | .v2_1, selector => selector = 0xe3ee160e ∨ selector = 0xef55bec6
+  | .v2_2, selector => selector = 0xe3ee160e ∨ selector = 0xef55bec6 ∨
+      selector = 0xcf092995 ∨ selector = 0x88b7ab63
+
+instance (version : ModernVersion) (selector : B256) :
+    Decidable (modernAuthorizationSelector version selector) := by
+  cases version <;> unfold modernAuthorizationSelector <;> infer_instance
 
 def modernNonfixedSelector (version : ModernVersion) (selector : B256) : Prop :=
   selector ∈ version.selectors.callers ∨ selector ∈ version.selectors.owners ∨
@@ -51,12 +59,11 @@ def modernNonfixedSelector (version : ModernVersion) (selector : B256) : Prop :=
   selector = 0x42966c68 ∨ modernMinterSelector version selector ∨
   selector = 0x23b872dd ∨
   selector = 0xa9059cbb ∨ (version ≠ .v2 ∧ selector = 0x2fc81e09) ∨
-  (version = .v2_1 ∧ (selector = 0xe3ee160e ∨ selector = 0xef55bec6)) ∨
-  selector ∈ modernOtherWriteSelectors version
+  modernAuthorizationSelector version selector
 
 instance (version : ModernVersion) (selector : B256) :
     Decidable (modernNonfixedSelector version selector) :=
-  inferInstanceAs (Decidable (_ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _))
+  inferInstanceAs (Decidable (_ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _))
 
 def modernWriteFamilyCheck (version : ModernVersion) (site : Site) : Bool :=
   site.nonInc || match site.slot with
@@ -168,9 +175,13 @@ def actualModernInitializerKeys (version : ModernVersion) (P : Adr)
 def actualModernAuthorizationKeys (version : ModernVersion) (P : Adr)
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future) : List HistoricalMappingKey :=
   match version with
+  | .v2 => actualV2TransferWithAuthorizationKeys P history
   | .v2_1 => actualV2_1TransferWithAuthorizationKeys P history ++
       actualV2_1ReceiveWithAuthorizationKeys P history
-  | .v2 | .v2_2 => []
+  | .v2_2 => actualV22TransferWithAuthorizationKeys P history ++
+      (actualV22ReceiveWithAuthorizationKeys P history ++
+      (actualV22TransferWithAuthorizationBytesKeys P history ++
+       actualV22ReceiveWithAuthorizationBytesKeys P history))
 
 /-- Actual initializer, authorization and standard keys, preserving each population. -/
 def actualModernCoveredKeys (version : ModernVersion) (P : Adr)
@@ -200,7 +211,12 @@ theorem ConfiguredHistoryTraceIn.actualModernCoveredKeys_sound
         exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
   rcases List.mem_append.mp member with authorization | member
   · cases version with
-    | v2 | v2_2 => cases authorization
+    | v2 =>
+        obtain ⟨node, inNodes, root, inFrames, site, write,
+          _, chain, _, found, owner, _, slot, _⟩ :=
+          ConfiguredHistoryTraceIn.actualV2TransferWithAuthorizationKeys_sound
+            history capabilities authorization
+        exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
     | v2_1 =>
         rcases List.mem_append.mp authorization with transfer | receive
         · obtain ⟨node, inNodes, root, inFrames, site, write,
@@ -213,6 +229,30 @@ theorem ConfiguredHistoryTraceIn.actualModernCoveredKeys_sound
             ConfiguredHistoryTraceIn.actualV2_1ReceiveWithAuthorizationKeys_sound
               history capabilities receive
           exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
+    | v2_2 =>
+        rcases List.mem_append.mp authorization with transfer | rest
+        · obtain ⟨node, inNodes, root, inFrames, site, write,
+            _, chain, _, found, owner, _, slot, _⟩ :=
+            ConfiguredHistoryTraceIn.actualV22TransferWithAuthorizationKeys_sound
+              history capabilities transfer
+          exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
+        rcases List.mem_append.mp rest with receive | rest
+        · obtain ⟨node, inNodes, root, inFrames, site, write,
+            _, chain, _, found, owner, _, slot, _⟩ :=
+            ConfiguredHistoryTraceIn.actualV22ReceiveWithAuthorizationKeys_sound
+              history capabilities receive
+          exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
+        rcases List.mem_append.mp rest with transferBytes | rest
+        · obtain ⟨node, inNodes, root, inFrames, site, write,
+            _, chain, _, found, owner, _, slot, _⟩ :=
+            ConfiguredHistoryTraceIn.actualV22TransferWithAuthorizationBytesKeys_sound
+              history capabilities transferBytes
+          exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
+        obtain ⟨node, inNodes, root, inFrames, site, write,
+          _, chain, _, found, owner, _, slot, _⟩ :=
+          ConfiguredHistoryTraceIn.actualV22ReceiveWithAuthorizationBytesKeys_sound
+            history capabilities rest
+        exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
   rcases List.mem_append.mp member with directTransfer | previousTransfer
   · cases version with
     | v2 =>
@@ -264,8 +304,8 @@ theorem ConfiguredHistoryTraceIn.actualModernCoveredKeys_sound
           ConfiguredHistoryTraceIn.actualV22BlacklistKeys_sound history capabilities blacklist
         exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
 
-/-- Reduce all actual tracked writes to proved exceptions/nonincrease or the exact remaining
-owner and other-mapping selectors. Finite check truth is still an explicit obligation. -/
+/-- Reduce all actual tracked writes to proved exceptions/nonincrease or owner selectors.
+Every other mapping family is covered; finite check truth remains an explicit obligation. -/
 theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (spenders : List Adr)
@@ -281,8 +321,7 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
     (tracked : allowSlot pair spender = write.key) :
     AllowedFrame version.selectors pair (Env.root node.sevm) ∨
       write.value.toNat ≤ ((node.devm.getStor P).get write.key).toNat ∨
-      Sevm.selector node.sevm ∈ version.selectors.owners ∨
-      Sevm.selector node.sevm ∈ modernOtherWriteSelectors version := by
+      Sevm.selector node.sevm ∈ version.selectors.owners := by
   have requested : HistoricalMappingKey.modern (.allow pair spender) ∈
       spenders.map (fun g => HistoricalMappingKey.modern (.allow pair g)) :=
     List.mem_map.mpr ⟨spender, observed, rfl⟩
@@ -299,7 +338,7 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
   · exact ((SlotFootprint.checkApartOn_eq_true.mp fixedApart) write.key fixed _ requested tracked).elim
   · rw [target] at nonInc
     exact .inr (.inl nonInc)
-  rcases family with caller | owner | initializer | cancel | remove | blacklist | packed | burn | minter | transfer | directTransfer | inherited | authorization | other
+  rcases family with caller | owner | initializer | cancel | remove | blacklist | packed | burn | minter | transfer | directTransfer | inherited | authorization
   · have callerFaithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
         (spenders.map (fun g => .modern (.allow pair g)))
         (actualModernCallerKeys version P history) = true := by
@@ -309,7 +348,7 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
         (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_left _ keyIn))))) wanted wantedIn equal
     exact .inl (ConfiguredHistoryTraceIn.modernCaller_write_allowed history capabilities
       pair spenders callerFaithful member target code caller found observed tracked)
-  · exact .inr (.inr (.inl owner))
+  · exact .inr (.inr owner)
   · apply Or.inl
     apply Or.inr ∘ Or.inr
     cases version <;>
@@ -452,25 +491,68 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
         · have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
             (site.key node.sevm) (List.mem_append_left _ collected) _ requested (tracked.trans slot)
           cases site <;> cases equal
-  · obtain ⟨rfl, selected⟩ := authorization
-    rcases selected with transfer | receive
-    · obtain ⟨site, _, _, collected, slot⟩ :=
-        ConfiguredHistoryTraceIn.actualV2_1TransferWithAuthorizationKeys_complete
-          history capabilities member target code transfer found
-      have inCovered : site.key node.sevm ∈ actualModernCoveredKeys .v2_1 P history :=
-        List.mem_append_right _ (List.mem_append_left _ (List.mem_append_left _ collected))
-      have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
-        (site.key node.sevm) inCovered _ requested (tracked.trans slot)
-      cases site <;> cases equal
-    · obtain ⟨site, _, _, collected, slot⟩ :=
-        ConfiguredHistoryTraceIn.actualV2_1ReceiveWithAuthorizationKeys_complete
-          history capabilities member target code receive found
-      have inCovered : site.key node.sevm ∈ actualModernCoveredKeys .v2_1 P history :=
-        List.mem_append_right _ (List.mem_append_left _ (List.mem_append_right _ collected))
-      have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
-        (site.key node.sevm) inCovered _ requested (tracked.trans slot)
-      cases site <;> cases equal
-  · exact .inr (.inr (.inr other))
+  · cases version with
+    | v2 =>
+        obtain ⟨site, _, _, collected, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV2TransferWithAuthorizationKeys_complete
+            history capabilities member target code authorization found
+        have inCovered : site.key node.sevm ∈ actualModernCoveredKeys .v2 P history :=
+          List.mem_append_right _ (List.mem_append_left _ (collected))
+        have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
+          (site.key node.sevm) inCovered _ requested (tracked.trans slot)
+        cases site <;> cases equal
+    | v2_1 =>
+        rcases authorization with transfer | receive
+        · obtain ⟨site, _, _, collected, slot⟩ :=
+            ConfiguredHistoryTraceIn.actualV2_1TransferWithAuthorizationKeys_complete
+              history capabilities member target code transfer found
+          have inCovered : site.key node.sevm ∈ actualModernCoveredKeys .v2_1 P history :=
+            List.mem_append_right _ (List.mem_append_left _ (List.mem_append_left _ collected))
+          have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
+            (site.key node.sevm) inCovered _ requested (tracked.trans slot)
+          cases site <;> cases equal
+        · obtain ⟨site, _, _, collected, slot⟩ :=
+            ConfiguredHistoryTraceIn.actualV2_1ReceiveWithAuthorizationKeys_complete
+              history capabilities member target code receive found
+          have inCovered : site.key node.sevm ∈ actualModernCoveredKeys .v2_1 P history :=
+            List.mem_append_right _ (List.mem_append_left _ (List.mem_append_right _ collected))
+          have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
+            (site.key node.sevm) inCovered _ requested (tracked.trans slot)
+          cases site <;> cases equal
+    | v2_2 =>
+        rcases authorization with transfer | receive | transferBytes | receiveBytes
+        · obtain ⟨site, _, _, collected, slot⟩ :=
+            ConfiguredHistoryTraceIn.actualV22TransferWithAuthorizationKeys_complete
+              history capabilities member target code transfer found
+          have inCovered : site.key node.sevm ∈ actualModernCoveredKeys .v2_2 P history :=
+            List.mem_append_right _ (List.mem_append_left _ (List.mem_append_left _ collected))
+          have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
+            (site.key node.sevm) inCovered _ requested (tracked.trans slot)
+          cases site <;> cases equal
+        · obtain ⟨site, _, _, collected, slot⟩ :=
+            ConfiguredHistoryTraceIn.actualV22ReceiveWithAuthorizationKeys_complete
+              history capabilities member target code receive found
+          have inCovered : site.key node.sevm ∈ actualModernCoveredKeys .v2_2 P history :=
+            List.mem_append_right _ (List.mem_append_left _ (List.mem_append_right _ (List.mem_append_left _ collected)))
+          have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
+            (site.key node.sevm) inCovered _ requested (tracked.trans slot)
+          cases site <;> cases equal
+        · obtain ⟨site, _, _, collected, slot⟩ :=
+            ConfiguredHistoryTraceIn.actualV22TransferWithAuthorizationBytesKeys_complete
+              history capabilities member target code transferBytes found
+          have inCovered : site.key node.sevm ∈ actualModernCoveredKeys .v2_2 P history :=
+            List.mem_append_right _ (List.mem_append_left _ (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_left _ collected))))
+          have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
+            (site.key node.sevm) inCovered _ requested (tracked.trans slot)
+          cases site <;> cases equal
+        · obtain ⟨site, _, _, collected, slot⟩ :=
+            ConfiguredHistoryTraceIn.actualV22ReceiveWithAuthorizationBytesKeys_complete
+              history capabilities member target code receiveBytes found
+          have inCovered : site.key node.sevm ∈ actualModernCoveredKeys .v2_2 P history :=
+            List.mem_append_right _ (List.mem_append_left _ (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_right _ collected))))
+          have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
+            (site.key node.sevm) inCovered _ requested (tracked.trans slot)
+          cases site <;> cases equal
 
 end History
 end Blanc.Lift.Usdc

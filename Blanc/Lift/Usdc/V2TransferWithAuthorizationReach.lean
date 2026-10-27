@@ -1,6 +1,7 @@
 import Blanc.Lift.Usdc.V2TransferReach
 import Blanc.Lift.CursorKeccakOrder
 import Blanc.Lift.FrameSkip
+import Blanc.Lift.ObservedReachSplit
 
 /-! Original successful authorization and balance hashes for V2 signed transfers. -/
 namespace Blanc.Lift.Usdc.V2TransferWithAuthorizationReach
@@ -314,6 +315,30 @@ theorem signature_call_reach_observed {Q : Sevm → Devm → Ninst → Devm → 
   exact ⟨_, _, _, _, _, run⟩
 
 
+/-- Both store-free helpers return on the same observed path before the selected writer. -/
+theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
+    {owner recipient : Adr} {nonce amount sigS sigR sigV before after : B256}
+    {b : Devm} {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe ImplV2.cert.prog sevm
+      ⟨St b (sigS :: sigR :: sigV :: nonce :: before :: after :: amount ::
+        recipient.toB256 :: owner.toB256 :: S) M G, ImplV2.t_4aac_c67, K⟩ T)
+    (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
+    AuthSource Q observe sevm owner nonce T ∨
+      V2TransferReach.ObservedSource Q observe sevm owner recipient T := by
+  obtain ⟨b', M', G', run⟩ := validity_call_reach_observed erase run hT
+  obtain ⟨D, returned, _, run⟩ := ObservedReach.return_of_sstoreFree
+    validity_sstoreFree (by decide +kernel) run hT
+  have stack := validity_return_stack erase hsg returned
+  rw [St.self' D, stack] at run
+  obtain ⟨b'', ptr, domain, M'', G'', run⟩ := signature_call_reach_observed erase run hT
+  obtain ⟨D, returned, _, run⟩ := ObservedReach.return_of_sstoreFree
+    signature_sstoreFree (by decide +kernel) run hT
+  obtain ⟨result, stack⟩ := signature_return_stack erase hsg returned
+  rw [St.self' D, stack] at run
+  exact signature_result_reach_observed erase run hT cont
+
 /-- The auth writer's three-instruction prefix has one occurrence in the actual runtime. -/
 theorem authPattern_occurrences :
     BytePattern.occurrences (authLine.flatMap Ninst.toBytes) ImplV2.code.toList = [0x4eb8] := by
@@ -360,5 +385,31 @@ theorem actualSource_of_observed {root node : Exec.Deriv} {κ : Cursor}
       hash.actual
     exact .inr ⟨location, (List.cons.inj (stack.symm.trans keyStack)).1,
       _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩
+
+/-- Every successful signed-transfer store is attributed to its original entry and hashes. -/
+theorem successfulSstore_source {root node : Exec.Deriv}
+    (pc : root.pc = 0) (code : root.sevm.code = ImplV2.code)
+    (hsg : root.sevm.benvStat.rules.stateGas = none)
+    (chain : Exec.Deriv.ParentPrefix root node)
+    (selected : Blanc.Sevm.selector root.sevm = 0xe3ee160e)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    ActualSource root node (Sevm.dataWord root.sevm 4).toAdr
+      (Sevm.dataWord root.sevm 36).toAdr (Sevm.dataWord root.sevm 164) write.key := by
+  obtain ⟨decoded, _, _⟩ := Exec.Deriv.successfulSstore?_decoded found
+  obtain ⟨κ, reach, ok⟩ :=
+    observed_reach_of_parentPrefix_noStateGas ImplV2.cert_check pc code hsg chain
+  obtain ⟨g, tree, -⟩ := ok.tree_of_sstore decoded
+  have target : AtSstore (κ.conf node.devm) := ⟨g, tree⟩
+  change ObservedReach (StepIn root) (Cursor.RawEdgeAt ImplV2.code ImplV2.cert root node)
+    ImplV2.cert.prog root.sevm ⟨root.devm, ImplV2.t_0000_c0, []⟩ (κ.conf node.devm) at reach
+  rw [St.self' root.devm] at reach
+  obtain ⟨b, S, M, G, run⟩ := entry_reach_observed (fun h => StepIn.toRun h) selected reach target
+  have source := body_reach_observed (fun h => StepIn.toRun h) hsg run target
+    (by intro f member; rcases List.mem_cons.mp member with rfl | member
+        · decide +kernel
+        have same := List.mem_singleton.mp member
+        subst f
+        decide +kernel)
+  exact actualSource_of_observed ok found source
 
 end Blanc.Lift.Usdc.V2TransferWithAuthorizationReach

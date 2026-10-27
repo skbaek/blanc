@@ -3835,12 +3835,11 @@ soundness retains the original root, node, successful store, owner and key.
 Under finite faithfulness for that exact list and apartness from
 `modernFixedWriteSlots`, `modern_allowance_write_reduction` eliminates fixed,
 cancellation, blacklist and established configure/mint aliases and attributes caller writes,
-leaving existing allowed exceptions, actual
-nonincrease, owner selectors or `modernOtherWriteSelectors`. This is a
-reduction toward the full classifier; the owner and remaining mapping cases
-and check truth stay open. The covered list also includes both inherited initializers
-and the two V2.1 authorization collectors; their original-store coverage removes
-both V2.1 authorization selectors from the residual mapping-writer list.
+leaving existing allowed exceptions, actual nonincrease or owner selectors.
+The covered list also includes both inherited initializers and all seven
+authorization-transfer collectors across V2, V2.1 and V2.2. Their original-store
+coverage removes the residual mapping-writer alternative entirely. Owner
+classification, finite check truth and historical input binding remain open.
 Both V2_2 packed-blacklist selectors are discharged;
 `initializeV2_1` is not promoted to an allowed exception.
 
@@ -4007,6 +4006,20 @@ actual target, code, selector, store pc and successful store, never a digest.
 Their `actual...Keys_sound` and `actual...Keys_complete` theorems retain raw
 occurrences, including repeated keys. Finite separation truth and historical
 input binding remain separate obligations.
+The matching V2 collector is
+[`V2TransferWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V2TransferWithAuthorizationMappingTouches.lean).
+V2.2 uses
+[`V22TransferWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V22TransferWithAuthorizationMappingTouches.lean),
+[`V22ReceiveWithAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V22ReceiveWithAuthorizationMappingTouches.lean),
+[`V22TransferWithAuthorizationBytesMappingTouches`](../Blanc/Lift/Usdc/V22TransferWithAuthorizationBytesMappingTouches.lean)
+and [`V22ReceiveWithAuthorizationBytesMappingTouches`](../Blanc/Lift/Usdc/V22ReceiveWithAuthorizationBytesMappingTouches.lean).
+Its authorization flag is identified by actual pc5060, and its balance stores
+by actual setter-return tags40e8/40f9. Source proofs preserve static-signature
+packing or dynamic ABI decoding and the receive caller guard before the same
+observed helper returns. No selector collector compares a written key with a
+proposed hash. `actualModernAuthorizationKeys` selects these exact populations
+by version; their soundness and completeness close every authorization arm in
+`modern_allowance_write_reduction` under its existing finite-check premises.
 
 [`V21InitializerReach`](../Blanc/Lift/Usdc/V21InitializerReach.lean) follows
 inherited `initializeV2_1` through its original dispatcher and optional transfer,
