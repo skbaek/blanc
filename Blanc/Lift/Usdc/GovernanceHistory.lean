@@ -3,42 +3,30 @@ import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.Governance
 
 /-!
-# The F2′ governance rows give the admin's upgrades along an In-history
+# Retained F2′ governance and a separate raw upgrade obligation
 
-F2′ (the user-adopted post-Pair governance input; Plans `54aea9f9`,
-`evidence/jaune-historical-forks-v1/wsl-usdc-h4a-20261020/proposed-contract.lean`) restricts
-what the proxy's admin may send: at every proxy entry of the D→B history whose caller is the
-admin word of the entry's own pre-state and whose selector is `upgradeTo`, `upgradeToAndCall`
-or `changeAdmin`, the caller, the zero value and the whole calldata are one of nine exact rows
-(`F2prime.adminInputShapes`). For each of V2, V2_1 and V2_2 the rows are: long-term admin to
-that version's upgrader by `changeAdmin`, the upgrader to that implementation by `upgradeTo`,
-and the upgrader back to the long-term admin by `changeAdmin`. There is no `upgradeToAndCall`
-row and no initializer row. The row literals are copied unchanged from the proposal.
+The user-adopted D→B governance input (Plans `54aea9f9`,
+`evidence/jaune-historical-forks-v1/wsl-usdc-h4a-20261020/proposed-contract.lean`)
+quantifies the actual settlement-retained entries. `UsdcGovernanceF2primeOn`
+preserves that predicate: an entry whose caller is its pre-state admin and
+whose selector is `upgradeTo`, `upgradeToAndCall` or `changeAdmin` must match
+one of nine exact actor/value/calldata rows. Historical consumers must pass
+`history.settledFrames`. There is no `upgradeToAndCall` or initializer row;
+other selectors remain unconstrained. No time, order or occurrence is asserted.
 
-`UsdcGovernanceF2primeAtImplWrites P frames nodes` is the part of F2′ the derivation
-consumes, at the scope of `AdminUpgradesWithinFrom` itself: only a proxy frame at `P` that is a
-parent prefix of a node of `nodes` with a successful `SSTORE` at `(P, implSlot)`, whose caller is
-the admin word of its own pre-state and whose selector is `upgradeTo` or `upgradeToAndCall`,
-must be one of the nine rows. It is implied by F2′ over the proxy entries (every such frame is a
-proxy entry with an admin caller and an F2′ selector), so it is no stronger than the adopted
-input. A reverted admin call that writes no implementation slot, and every `changeAdmin` frame,
-are unconstrained: the derivation never needs to know who the admin is, only that an admin
-upgrade which does write the slot is one of the three `upgradeTo` rows. Since F2′ has no
-`upgradeToAndCall` row, an admin `upgradeToAndCall` frame that writes the slot is still excluded,
-as F2′ excludes it. Along a history it is applied to `rawFrames` and `rawNodes`, every frame and
-node the history enters, retained or rolled back; `AdminUpgradesWithinFrom` constrains rolled-back
-implementation writes too.
+`UsdcGovernanceF2primeAtImplWrites` is a separate conditional obligation over
+caller-supplied derivation lists. The existing raw-history theorem applies it
+to `rawFrames` and `rawNodes`, including rolled-back implementation writes.
+That raw instance is NOT implied by the adopted retained-frame predicate.
+The names and signatures are retained for compatibility; neither this theorem
+nor the executable raw upgrade checker establishes the missing raw premise.
 
-`ConfiguredHistoryTraceIn.adminUpgradesWithinFrom_of_f2prime` derives the headline premise
-`AdminUpgradesWithinFrom` (`ProxyWritesHistory.lean`) from F2′ and one ordering fact,
-`UpgradeTargetsDeployedFirst`: each of the three implementations F2′ may install has an
-account in `W`, and no successful `SSTORE` before that account's boundary stores its address
-at `(P, implSlot)`. F2′ names no time, so the order of a deployment and the upgrade to it is
-not a consequence of F2′; it is stated here. Nor does it follow from the proxy's `isContract` guard: that
-guard only shows the implementation has code at the upgrade, while an entry's boundary is any
-committed boundary after its deployment (`UsdcDeployedWorld` does not make it the first one),
-and a transaction that both creates an implementation and upgrades to it would write the slot
-before any boundary at which the implementation is listed.
+`ConfiguredHistoryTraceIn.adminUpgradesWithinFrom_of_f2prime` derives
+`AdminUpgradesWithinFrom` from that explicit raw obligation and the additional
+`UpgradeTargetsDeployedFirst` condition. F2′ supplies neither deployment order
+nor installation at a chosen earlier boundary. The proxy's `isContract` guard
+only establishes code at the upgrade, not at an earlier committed boundary;
+a transaction may create an implementation and then upgrade to it.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -97,12 +85,20 @@ end F2prime
 
 open F2prime
 
-/-- **F2′ at the implementation-slot writes (stated; implied by the user-adopted D→B
-governance input).** For every node `m` of `nodes` with a successful `SSTORE` at
-`(P, implSlot)`, every frame of `frames` that is a parent prefix of `m`, runs the proxy runtime
-at `P`, has the admin word of its own pre-state as caller and has selector `upgradeTo` or
-`upgradeToAndCall` is one of the nine rows. Frames that write no implementation slot,
-non-admin callers and `changeAdmin` are unconstrained. -/
+/-- The adopted F2′ predicate over actual settlement-retained frames. Historical
+consumers pass the original D→B history's `settledFrames`, never raw frames or
+a selected subset. Nonadmin calls and other selectors are unconstrained. -/
+def UsdcGovernanceF2primeOn (P : Adr) (frames : List Exec.Frame) : Prop :=
+  ∀ G ∈ frames, Blanc.Lift.Token.IsEntry P G →
+    G.sevm.caller = adminOf G.pre.state P →
+    Blanc.Sevm.selector G.sevm ∈ [0x3659cfe6, 0x4f1ef286, 0x8f283970] →
+    AllowedAdminAsk G.sevm
+
+/-- A separate implementation-write obligation over derivation lists. At each
+successful implementation-slot write, a proxy parent frame with its entry
+admin as caller and an upgrade selector must match an allowed row. When used
+with raw history lists this also restricts discarded subtrees, and is not a
+consequence of the adopted retained F2′ predicate. -/
 def UsdcGovernanceF2primeAtImplWrites (P : Adr) (frames nodes : List Exec.Deriv) : Prop :=
   ∀ m ∈ nodes, ∀ w : Exec.StorageWrite, Exec.Deriv.successfulSstore? m = some w →
     w.owner = P → w.key = implSlot →
@@ -153,9 +149,10 @@ section History
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {P : Adr} {W : List UsdcDeployedEntry}
 
-/-- **The admin's upgrades from F2′.** Along an In-history over the deployed world, F2′ at
-the history's implementation-slot writes and the deployment-before-upgrade order of the three F2′
-implementations give `AdminUpgradesWithinFrom`. -/
+/-- Conditional raw upgrade classification from the explicit raw governance
+obligation and deployment-before-upgrade ordering. The theorem name is kept
+for compatibility; approved retained-frame F2′ alone does not supply its
+`governance` argument. -/
 theorem ConfiguredHistoryTraceIn.adminUpgradesWithinFrom_of_f2prime
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
