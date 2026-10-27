@@ -3810,10 +3810,18 @@ soundness/completeness theorems retain the actual root and store; recognition
 does not compare the written key. Under `checkFaithfulOn` for the exact
 observed Pair/spender list and this collected list, `modernCaller_write_source`
 derives the Pair caller and exact spender, and `modernCaller_write_allowed`
-supplies the existing `AllowedFrame` caller arm. Check truth and successful
-hash-occurrence provenance remain separate; the existing V2 approve hash
-witness is preserved. Other modern selectors and the full classifier remain
-outside this family.
+supplies the existing `AllowedFrame` caller arm. Check truth remains an
+explicit premise. For successful hash-occurrence provenance, use
+[`ModernCallerReach`](../Blanc/Lift/Usdc/ModernCallerReach.lean) and its
+[`ModernCallerHashBodies`](../Blanc/Lift/Usdc/ModernCallerHashBodies.lean)
+inner-path lemmas. `successfulSstore_ordered_hashes` follows the original
+dispatcher, ABI decoder and guards in every version/method combination. It
+produces `KeccakPairBefore` for caller/base-10 followed by masked-spender/inner
+digest before the same successful store. The history adapters
+`modernCallerKey?_ordered_hashes` and `actualModernCallerKeys_ordered_hashes`
+retain the original root, node, written key and both successful hashes for
+the unchanged collector. The existing V2 approve witness is preserved.
+Other modern selectors and the full classifier remain outside this family.
 
 For V2 and V2_1 old-blacklist writes, use
 [`Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean`](../Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean)'s
