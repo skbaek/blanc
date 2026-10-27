@@ -3786,6 +3786,18 @@ separate fixed-PC classification. Both collectors share `v1_store_site` and
 `v1Mapping_site_iff`; selectors with multiple mapping sites still require
 finer source attribution.
 
+For V2 `approve`, use
+[`Blanc/Lift/Usdc/V2ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V2ApproveMappingTouches.lean)'s
+`actualV2ApproveKeys`. Soundness and completeness cover every successful
+selected approve store in the original history's `rawNodes`, retaining order
+and duplicates. The recognizer tests target, exact code, selector and store
+success. [`Blanc/Lift/Usdc/V2ApproveReach.lean`](../Blanc/Lift/Usdc/V2ApproveReach.lean)'s
+`successfulSstore_ordered_hashes` derives its caller/spender nested slot10 key
+and the shared `KeccakPairBefore` witnesses from the same original frame
+prefix, without final-frame success, descriptor separation or hash injectivity.
+The off-implementation-slot consumer keeps initial apartness and freshness of
+this exact collected list explicit.
+
 For V1 `burn`, use
 [`Blanc/Lift/Usdc/V1BurnMappingTouches.lean`](../Blanc/Lift/Usdc/V1BurnMappingTouches.lean)'s
 `actualV1BurnBalanceKeys`. The recognizer selects actual successful balance
