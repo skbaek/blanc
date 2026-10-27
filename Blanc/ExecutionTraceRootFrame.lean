@@ -23,6 +23,13 @@ namespace Blanc.ExecutionTrace
 
 open Jaune
 
+/-- A committed frame's raw outcome is a success. -/
+theorem _root_.Jaune.Exec.Frame.exists_ok (frame : Exec.Frame) : ∃ post, frame.out = .ok post := by
+  rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
+  cases out with
+  | ok post => exact ⟨post, rfl⟩
+  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
+
 /-- A clean settlement of an entered call retains exactly its actual root.
 The successful raw execution follows from settlement; it is not an input. -/
 theorem ProcessMessageTrace.exists_root_of_entered_clean {msg : Msg} {post : Devm}

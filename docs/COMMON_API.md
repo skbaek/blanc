@@ -4947,6 +4947,10 @@ consumer needs canonical interpreter ingress as one conjunct:
   `SystemMessageTrace.mem_rawFrames_of_mem_settledFrames` supplies the same
   membership transport for a protocol system invocation.
 - To place the entered top-level root frame of a committed message or call transaction among settled frames, import [`Blanc/ExecutionTraceRootFrame.lean`](../Blanc/ExecutionTraceRootFrame.lean).
+  `Exec.Frame.exists_ok` extracts the successful raw outcome already guaranteed
+  by a retained frame's commitment; its qualified name is preserved after
+  relocation from the USDC locality consumer. It does not prove transaction
+  receipt identity or clean wrapper settlement.
   When the input is the actual clean settlement instead of a supplied successful
   raw execution, use `ProcessMessageTrace.exists_root_of_entered_clean`.
   It proves that the original trace retains exactly one root with the entered
@@ -4960,6 +4964,12 @@ consumer needs canonical interpreter ingress as one conjunct:
   [`UniswapV2PairUsdcOriginSeed`](../Blanc/Composition/UniswapV2PairUsdcOriginSeed.lean)
   combines the original receipt lookup with the prepared transaction message;
   code survives the sender debit without a sender/Pair separation premise.
+  `original_factory_preconditions_of_receipt` then composes that root with the
+  actual same-transaction factory LOG/CREATE2 inverse and the admitted debit
+  inverse. It derives the masked mapping guard, factory nonce bound and
+  pre-debit Pair nonce/code collision exclusion. The concrete body/bloom/V1
+  constructor-output allowance-seed chain consumes these derived facts from
+  the original D receipt rather than taking the four conditions as inputs.
   Body, receipt and entry-code authentication remain caller obligations.
   These existential trace inversions have no narrow tactic recipe trigger.
   `TransactionTrace.root_frame_of_call_value_with_message` additionally preserves

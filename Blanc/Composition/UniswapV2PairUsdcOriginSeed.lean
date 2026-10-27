@@ -5,6 +5,8 @@ import Blanc.Lift.Usdc.ImplV1Lifetime
 import Blanc.Lift.Usdc.HistoricalBloomExclusion
 import Blanc.ExecutionBlockLogs
 import Blanc.ExecutionTraceRootFrame
+import Blanc.ExecutionTransactionDebitInverse
+import Blanc.Lift.UniswapV2Factory.CreatePairInverseReceipt
 import Blanc.Lift.UniswapV2Factory.CreatePairForeignHistory
 
 /-!
@@ -132,6 +134,108 @@ theorem original_factory_root_of_receipt
   · rw [devm]; rfl
   · rw [devm]; rfl
   · rw [devm, prepared]; rfl
+
+/-- The original D receipt derives the factory guard and both accounts' entry
+conditions. Pair collision exclusion is transported backwards through the
+same admitted debit, so neither Pair freshness nor sender separation is an
+input. Body, receipt and factory-code authentication remain producer duties. -/
+theorem original_factory_preconditions_of_receipt
+    {pre post : BlockChain}
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (cut : last.bodyTrace.transactions.TxSplit 38)
+    (dBody : last.block.txs = HistoryAnchorBody.dBody)
+    (hnumber : last.block.header.number = 10008355)
+    (htime : last.block.header.timestamp = 1588710145)
+    (hfactory : cut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : last.blockOutput.receiptsTrie[BLT.toBytes (.bytes (38 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (receiptLogs : receipt.2.logs = [⟨UniswapV2Pair.Creation.factory,
+      [0xd3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9,
+       0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,
+       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2],
+      UniswapV2Pair.Creation.pairAddress.toB256.toBytes ++ (1 : B256).toBytes⟩]) :
+    (cut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max ∧
+      (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0 ∧
+      (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0 ∧
+      ((cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 &&&
+        (0xffffffffffffffffffffffffffffffffffffffff : B256)) = 0 := by
+  obtain ⟨root, roots, pc, sevm, devm, code, target, data, value, static, depth, fork,
+    stack, memory, state⟩ :=
+    original_factory_root_of_receipt last cut dBody hnumber htime hfactory receiptAt succeeded
+  have retained : root ∈ cut.head.settledFrames := by
+    rw [cut.head.settledFrames_eq, roots]
+    simp only [rootFrames, List.flatMap_cons, List.flatMap_nil, List.append_nil,
+      Exec.Frame.committedFrames_self, List.mem_cons, true_or]
+  obtain ⟨rawPost, outcome⟩ := root.exists_ok
+  have rootRules : root.sevm.benvStat.rules = Fork.ruleSet .muirGlacier := by
+    rw [BenvStat.rules, fork]
+  have blockFork : cut.benv.stat.fork = .muirGlacier := by
+    have same := fork
+    rw [sevm] at same
+    change cut.head.msg.benv.stat.fork = .muirGlacier at same
+    rw [prepareMessage_benv cut.head.prepared] at same
+    exact same
+  have blockRules : cut.benv.stat.rules = Fork.ruleSet .muirGlacier := by
+    rw [BenvStat.rules, blockFork]
+  have blockSg : cut.benv.stat.rules.stateGas = none := by rw [blockRules]; rfl
+  have finalReceipt := last.receipt_of_txSplit_settledRoots cut last.forkIn.stateGas_none
+    (by decide) (by decide)
+  rw [← cut.putIndex_eq.1] at receiptAt
+  have lookup : cut.txBout.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some receipt :=
+    (cut.head.receipt_of_settledRoots blockSg).trans (finalReceipt.symm.trans receiptAt)
+  have singleton : receipt.2.logs =
+      [UniswapV2Factory.CreatePairInverse.symbolicPairCreated root.sevm
+        UniswapV2Pair.Creation.pairAddress.toB256 1] := by
+    rw [UniswapV2Factory.CreatePairInverse.symbolicPairCreated, target]
+    exact receiptLogs
+  obtain ⟨guard, fresh, nonce, _creation⟩ :=
+    UniswapV2Factory.CreatePairInverse.entry_receipt_inverse cut.head blockSg retained
+      (root := Exec.Frame.rootDeriv root) rfl pc code stack memory outcome root.committed
+      (by change root.sevm.benvStat.rules.stateGas = none; rw [rootRules]; rfl)
+      (by change root.sevm.benvStat.rules.bal = none; rw [rootRules]; rfl)
+      (by change root.sevm.benvStat.rules.op.create2 = true; rw [rootRules]; rfl)
+      value (by change root.sevm.data.length.toB256 = 0x44; rw [data]; decide +kernel)
+      (by change Sevm.dataWord root.sevm 0 = _; rw [Sevm.dataWord, data]; decide +kernel)
+      (by change Sevm.dataWord root.sevm 4 = _; rw [Sevm.dataWord, data]; decide +kernel)
+      (by change Sevm.dataWord root.sevm 0x24 = _; rw [Sevm.dataWord, data]; decide +kernel)
+      lookup singleton
+  change ¬ State.Protected root.pre.state UniswapV2Pair.Creation.pairAddress at fresh
+  rw [state] at fresh
+  have pairFresh : (cut.head.debitState.get UniswapV2Pair.Creation.pairAddress).nonce = 0 ∧
+      (cut.head.debitState.get UniswapV2Pair.Creation.pairAddress).code.size = 0 := by
+    simpa only [State.Protected, not_or, not_not] using fresh
+  have account := (cut.head.account_eq_of_debit_nonce_zero pairFresh.1).2
+  rw [account] at pairFresh
+  have senderCode : (cut.benv.state.get cut.head.sender).code.isEmpty = true :=
+    checkTransaction_sender_code_emptyH (benv := cut.benv.beginTransaction)
+      (by change cut.benv.stat.rules.delegationEnabled = false; rw [blockRules]; rfl)
+      cut.head.checked
+  have factorySize : (cut.benv.state.get UniswapV2Pair.Creation.factory).code.size = 13859 := by
+    change (cut.benv.state.getCode UniswapV2Pair.Creation.factory).size = 13859
+    rw [hfactory, ByteArray.size_eq_length_toList, UniswapV2Factory.code_toList_length]
+  have senderApart : cut.head.sender ≠ UniswapV2Pair.Creation.factory := by
+    intro same
+    rw [same] at senderCode
+    have empty : (cut.benv.state.get UniswapV2Pair.Creation.factory).code.size = 0 := by
+      simpa only [ByteArray.isEmpty, beq_iff_eq] using senderCode
+    rw [factorySize] at empty
+    exact absurd empty (by decide)
+  have factoryAccount : cut.head.debitState.get UniswapV2Pair.Creation.factory =
+      cut.benv.state.get UniswapV2Pair.Creation.factory := by
+    rw [(State.of_subBal cut.head.debit).2]
+    exact debit_get_ne senderApart
+  change (root.pre.state.get root.sevm.currentTarget).nonce ≠ UInt64.max at nonce
+  rw [state, target, factoryAccount] at nonce
+  change root.pre.getStorVal root.sevm.currentTarget UniswapV2Factory.fk2 &&&
+    (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0 at guard
+  change (root.pre.state.getStor root.sevm.currentTarget).get UniswapV2Factory.fk2 &&&
+    (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0 at guard
+  rw [state, target, cut.head.debitState_getStor_eq] at guard
+  exact ⟨nonce, pairFresh.1, pairFresh.2, guard⟩
+
 
 /-- Derive the actual after-D proxy code, implementation word and zero tracked
 Pair allowance rows from the actual constructor receipt and exact C-to-D
@@ -285,7 +389,8 @@ The original C/D cuts supply their decoded fields and the C signature supplies
 the admitted sender. The successful receipt and constructor transport preserve
 V1 code from the exact pre-C cut. The successful debit supplies
 funding, and validation at the configured D fork supplies its exact intrinsic
-charge and gas margin. Body identity,
+charge and gas margin. The same original D receipt supplies the factory guard
+and nonce/code collision exclusions through actual CREATE2 inversion. Body identity,
 original receipt authentication, state and historical write-safety
 obligations remain explicit internal conditions, not adopted final ENV facts. -/
 theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
@@ -328,14 +433,22 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
     (hnumber : last.block.header.number = 10008355)
     (htime : last.block.header.timestamp = 1588710145)
     (hfactory : beforeCut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
-    (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
-    (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
-    (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0) :
+    {dReceipt : Fin 5 × Receipt}
+    (dReceiptAt : last.blockOutput.receiptsTrie[BLT.toBytes (.bytes (38 : Nat).toBytes)]? =
+      some dReceipt)
+    (dSucceeded : dReceipt.2.succeeded = true)
+    (dLogs : dReceipt.2.logs = [⟨UniswapV2Pair.Creation.factory,
+      [0xd3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9,
+       0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,
+       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2],
+      UniswapV2Pair.Creation.pairAddress.toB256.toBytes ++ (1 : B256).toBytes⟩]) :
     beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
       (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
       ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
         (allowSlot UniswapV2Pair.Creation.pairAddress g) = 0 := by
+  obtain ⟨hfnonce, hpairNonce, hpairCode, hslot2⟩ :=
+    original_factory_preconditions_of_receipt last beforeCut dBody hnumber htime hfactory
+      dReceiptAt dSucceeded dLogs
   have sender := HistoryAnchorBody.c_original_cut_sender_mainnet first afterCut cBody
   obtain ⟨_, cnonce, creceiver, cvalue, cinput, _⟩ :=
     HistoryAnchorBody.c_original_cut_fields first afterCut cBody
@@ -409,7 +522,9 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
 /-- The original C/D bloom identities discharge both boundary receipt scans.
 Only the intervening history needs Upgraded absence and, for the receipt-value
 alternative, Approval safety. Original header/body/receipt identification,
-initial pre-C state and finite separation remain explicit internal obligations. -/
+initial pre-C state and finite separation remain explicit internal obligations.
+The original D receipt, rather than assumed factory/Pair entry conditions,
+feeds the factory inverse. -/
 theorem original_pair_allowance_seed_of_boundary_blooms
     {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
@@ -449,10 +564,15 @@ theorem original_pair_allowance_seed_of_boundary_blooms
     (hnumber : last.block.header.number = 10008355)
     (htime : last.block.header.timestamp = 1588710145)
     (hfactory : beforeCut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
-    (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
-    (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
-    (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0) :
+    {dReceipt : Fin 5 × Receipt}
+    (dReceiptAt : last.blockOutput.receiptsTrie[BLT.toBytes (.bytes (38 : Nat).toBytes)]? =
+      some dReceipt)
+    (dSucceeded : dReceipt.2.succeeded = true)
+    (dLogs : dReceipt.2.logs = [⟨UniswapV2Pair.Creation.factory,
+      [0xd3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9,
+       0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,
+       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2],
+      UniswapV2Pair.Creation.pairAddress.toB256.toBytes ++ (1 : B256).toBytes⟩]) :
     beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
       (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
       ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
@@ -472,7 +592,7 @@ theorem original_pair_allowance_seed_of_boundary_blooms
   refine original_pair_allowance_seed_of_bodies_and_constructor_receipt
     history initialApart fresh first afterCut later last beforeCut rootsIn cBody dBody
     receiptAt succeeded slotsApart impl noUpgradedFull rowSep initApart
-    ?_ hnumber htime hfactory hfnonce hpairNonce hpairCode hslot2
+    ?_ hnumber htime hfactory dReceiptAt dSucceeded dLogs
   rcases approveEvidence with callers | logs
   · exact Or.inl callers
   · apply Or.inr
@@ -491,7 +611,8 @@ V1-to-C history and C prefix supply pre-C implementation code internally.
 `constructorOutput` must be proved by the genuine V1 constructor producer;
 it is not a new final environmental premise or a code-observation adoption.
 Original trace/anchor identification, middle-history evidence and finite
-separation remain the same unfulfilled producer obligations. -/
+separation remain the same unfulfilled producer obligations. The same D receipt
+derives the factory guard and pre-debit collision exclusions internally. -/
 theorem original_pair_allowance_seed_of_v1_constructor_output
     {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
@@ -534,10 +655,15 @@ theorem original_pair_allowance_seed_of_v1_constructor_output
     (hnumber : last.block.header.number = 10008355)
     (htime : last.block.header.timestamp = 1588710145)
     (hfactory : beforeCut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
-    (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
-    (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
-    (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0) :
+    {dReceipt : Fin 5 × Receipt}
+    (dReceiptAt : last.blockOutput.receiptsTrie[BLT.toBytes (.bytes (38 : Nat).toBytes)]? =
+      some dReceipt)
+    (dSucceeded : dReceipt.2.succeeded = true)
+    (dLogs : dReceipt.2.logs = [⟨UniswapV2Pair.Creation.factory,
+      [0xd3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9,
+       0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,
+       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2],
+      UniswapV2Pair.Creation.pairAddress.toB256.toBytes ++ (1 : B256).toBytes⟩]) :
     beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
       (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
       ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
@@ -547,6 +673,6 @@ theorem original_pair_allowance_seed_of_v1_constructor_output
   exact original_pair_allowance_seed_of_boundary_blooms history initialApart fresh
     first afterCut later last beforeCut rootsIn cBody dBody cBloom dBloom receiptAt
     succeeded slotsApart impl noUpgraded rowSep initApart approveEvidence
-    hnumber htime hfactory hfnonce hpairNonce hpairCode hslot2
+    hnumber htime hfactory dReceiptAt dSucceeded dLogs
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9

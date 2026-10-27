@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.AllowLocalityHistory
 import Blanc.Lift.WriteSiteReachHistory
+import Blanc.ExecutionTraceRootFrame
 
 /-!
 # Allowance locality at the attributed history `SSTORE`
@@ -34,12 +35,6 @@ theorem allow_class_of_wsObs {t : SelTable} {pair : Adr} {Tr : Adr → Prop} {si
   (SProg.RunP.point (P := WsStep sites ε fun _ _ _ _ => True) (d' := d)
     (fun r => allow_locality hsel hok sep r) ⟨trivial, obs⟩).2 rfl x v rest stack tracked
 
-/-- A committed frame's raw outcome is a success. -/
-theorem _root_.Jaune.Exec.Frame.exists_ok (frame : Exec.Frame) : ∃ post, frame.out = .ok post := by
-  rcases frame with ⟨pc, sevm, pre, out, run, committed⟩
-  cases out with
-  | ok post => exact ⟨post, rfl⟩
-  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
 
 section History
 
