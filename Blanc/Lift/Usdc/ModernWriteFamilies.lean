@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.ModernCancelMappingTouches
+import Blanc.Lift.Usdc.InitRowsHistory
 import Blanc.Lift.Usdc.ModernRemoveMinterReach
 import Blanc.Lift.Usdc.V2BlacklistMappingTouches
 import Blanc.Lift.Usdc.V22BlacklistMappingTouches
@@ -66,7 +67,7 @@ instance (version : ModernVersion) (selector : B256) :
   inferInstanceAs (Decidable (_ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _))
 
 def modernWriteFamilyCheck (version : ModernVersion) (site : Site) : Bool :=
-  site.nonInc || match site.slot with
+  match site.slot with
   | .const slot => decide (slot ∈ modernFixedWriteSlots)
   | _ =>
     match site.guards with
@@ -78,22 +79,19 @@ theorem modernWriteFamily_checked (version : ModernVersion) :
     (wsRoot version.ann).all (modernWriteFamilyCheck version) = true := by
   cases version <;> decide +kernel
 
-/-- Every successful store is literal, non-increasing at its own pre-state, or in a listed family.
-The original frame may later revert; no descriptor separation is assumed. -/
-theorem modern_store_fixed_nonInc_or_family (version : ModernVersion) {root node : Exec.Deriv}
+/-- Every successful store is literal or in a listed source family, including
+zero/decreasing writes and writes in frames that later revert. -/
+theorem modern_store_fixed_or_family (version : ModernVersion) {root node : Exec.Deriv}
     (pc : root.pc = 0) (code : root.sevm.code = version.code)
     (hsg : root.sevm.benvStat.rules.stateGas = none)
     (chain : Exec.Deriv.ParentPrefix root node)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
     write.key ∈ modernFixedWriteSlots ∨
-      write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∨
       modernNonfixedSelector version (Sevm.selector root.sevm) := by
-  obtain ⟨site, member, den, guards, nonInc⟩ :=
+  obtain ⟨site, member, den, guards, _⟩ :=
     successfulSstore_site version.cert_check version.wsCert pc code hsg chain found
   have checked := List.all_eq_true.mp (modernWriteFamily_checked version) site member
   unfold modernWriteFamilyCheck at checked
-  rcases Bool.or_eq_true_iff.mp checked with decreases | checked
-  · exact .inr (.inl (nonInc decreases))
   split at checked
   next slot shape =>
     have fixed := of_decide_eq_true checked
@@ -113,13 +111,42 @@ theorem modern_store_fixed_nonInc_or_family (version : ModernVersion) {root node
         guard (show selV2T.known = true from by decide)
       have family := of_decide_eq_true selected
       rw [guardEq, selectorEq] at family
-      exact .inr (.inr family)
+      exact .inr family
     next => contradiction
+
+/-- Every successful store is literal, non-increasing at its own pre-state, or in a listed family.
+The original frame may later revert; no descriptor separation is assumed. -/
+theorem modern_store_fixed_nonInc_or_family (version : ModernVersion) {root node : Exec.Deriv}
+    (pc : root.pc = 0) (code : root.sevm.code = version.code)
+    (hsg : root.sevm.benvStat.rules.stateGas = none)
+    (chain : Exec.Deriv.ParentPrefix root node)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ∈ modernFixedWriteSlots ∨
+      write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∨
+      modernNonfixedSelector version (Sevm.selector root.sevm) := by
+  exact (modern_store_fixed_or_family version pc code hsg chain found).imp_right Or.inr
 
 section History
 
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {version : ModernVersion} {P pair : Adr}
+
+/-- Raw history membership supplies the original entry facts for the exhaustive family law. -/
+theorem ConfiguredHistoryTraceIn.modern_write_fixed_or_family
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {node : Exec.Deriv}
+    (member : node ∈ history.rawNodes) (code : node.sevm.code = version.code)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ∈ modernFixedWriteSlots ∨
+      modernNonfixedSelector version (Sevm.selector node.sevm) := by
+  obtain ⟨root, inFrames, chain⟩ :=
+    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
+  obtain ⟨pc, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities root inFrames
+  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+  have rootCode : root.sevm.code = version.code := by rw [← same]; exact code
+  have family := modern_store_fixed_or_family version pc rootCode hsg chain found
+  rw [← same] at family
+  exact family
 
 /-- Raw history membership supplies the original entry facts for the exhaustive family law. -/
 theorem ConfiguredHistoryTraceIn.modern_write_fixed_nonInc_or_family
@@ -130,14 +157,55 @@ theorem ConfiguredHistoryTraceIn.modern_write_fixed_nonInc_or_family
     write.key ∈ modernFixedWriteSlots ∨
       write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∨
       modernNonfixedSelector version (Sevm.selector node.sevm) := by
-  obtain ⟨root, inFrames, chain⟩ :=
-    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
-  obtain ⟨pc, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities root inFrames
-  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
-  have rootCode : root.sevm.code = version.code := by rw [← same]; exact code
-  have family := modern_store_fixed_nonInc_or_family version pc rootCode hsg chain found
-  rw [← same] at family
-  exact family
+  exact (ConfiguredHistoryTraceIn.modern_write_fixed_or_family history capabilities
+    member code found).imp_right Or.inr
+
+/-- All literal runtime write slots are off the implementation slot; every
+remaining write retains its selector for the corresponding mapping proof. -/
+theorem ConfiguredHistoryTraceIn.modern_write_ne_implSlot_or_family
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {node : Exec.Deriv}
+    (member : node ∈ history.rawNodes) (code : node.sevm.code = version.code)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot ∨ modernNonfixedSelector version (Sevm.selector node.sevm) := by
+  rcases ConfiguredHistoryTraceIn.modern_write_fixed_or_family history capabilities
+    member code found with fixed | family
+  · have apart : ∀ slot ∈ modernFixedWriteSlots, slot ≠ implSlot := by decide +kernel
+    exact .inl (apart write.key fixed)
+  · exact .inr family
+
+/-- Initializer freshness removes initializer selectors from the remaining
+all-write runtime obligation; literal and zero-clearing stores are included. -/
+theorem ConfiguredHistoryTraceIn.modern_write_ne_implSlot_or_nonInitializer
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+      (actualV22MigrationHashKeys P history))
+    {node : Exec.Deriv} (member : node ∈ history.rawNodes)
+    (target : node.sevm.currentTarget = P) (code : node.sevm.code = version.code)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot ∨
+      (modernNonfixedSelector version (Sevm.selector node.sevm) ∧
+        Sevm.selector node.sevm ∉ version.selectors.inits) := by
+  rcases ConfiguredHistoryTraceIn.modern_write_ne_implSlot_or_family history capabilities
+    member code found with apart | family
+  · exact .inl apart
+  by_cases selected : Sevm.selector node.sevm ∈ version.selectors.inits
+  · have init : UsdcInitFrame node := by
+      have selected' : version.selectors.selT.eval (Env.root node.sevm) ∈
+          version.selectors.inits := by
+        cases version <;>
+          simpa only [ModernVersion.selectors, selV2, selV2_1, selV2_2, selV2T,
+            Term.eval, Op2.eval, Env.root, Sevm.selector, Sevm.dataWord,
+            show (224 : B256).toNat = 224 from rfl] using selected
+      cases version with
+      | v2 => exact .inr (.inl ⟨code, selected'⟩)
+      | v2_1 => exact .inr (.inr (.inl ⟨code, selected'⟩))
+      | v2_2 => exact .inr (.inr (.inr ⟨code, selected'⟩))
+    exact .inl (ConfiguredHistoryTraceIn.initializer_write_ne_implSlot history capabilities
+      initialApart fresh member target init found)
+  · exact .inr ⟨family, selected⟩
 
 /-- Each version contributes exactly its actual increasing transferFrom stores. -/
 def actualModernTransferFromKeys (version : ModernVersion) (P : Adr)
