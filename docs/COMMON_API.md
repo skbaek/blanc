@@ -1098,8 +1098,16 @@ For the own-code fact at an actual settled outer root, use
 for that root's `rootDeriv` directly from message entry, authorization and
 CREATE collision handling. It needs no installed-world invariant or extra
 stage capability. `mem_rawFrames_of_mem_settledRoots` supplies the same root's
-raw-frame membership. This applies to outer message roots; delegated
-descendants still need the positional origin classification above.
+raw-frame membership. `ConfiguredHistoryTraceIn.settledRoots_rootOwnEntry`
+retains both code equality and `codeAddress = some target` under the same
+nonempty, non-designating installed-code condition. `RootOwnEntry.code`
+projects the old `RootOwnCode` fact. The message producer `MsgRootEntry`,
+`Frame.enter_run_rootOwnEntry`, `processCreateMessage_msg_rootEntry` and
+`messageCallExecutionMessage_rootEntry` retain that address through entry,
+CREATE collision exclusion, authorization and code resolution; the
+per-level `settledRoots_rootOwnEntry` transports preserve the same actual
+roots. This applies to outer message roots; delegated descendants still need
+the positional origin classification above.
 For the same provenance restarted at a committed boundary inside the
 history (a block-body start or the boundary after any transaction, e.g. for
 a contract deployed after the checkpoint; safety only of the raw nodes
