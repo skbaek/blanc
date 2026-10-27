@@ -1,3 +1,4 @@
+import Blanc.Lift.Usdc.OldTransferFromAllowance
 import Blanc.Lift.Usdc.V2TransferFromEntry
 import Blanc.Lift.FrameSkip
 
@@ -20,20 +21,7 @@ theorem tail_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
     ∃ key value rest, T.d.stack = key :: value :: rest ∧
       value.toNat ≤ (T.d.getStorVal sevm.currentTarget key).toNat := by
-  unfold ImplV2.t_14b8_c59 guardedStack at run
-  orsd
-  iterate 3 orsx
-  rw [show Bytes.toB256 [0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-      0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff] = ff20 from rfl,
-    B256.and_comm owner.toB256 ff20, ff20_and_adr] at run
-  iterate 21 orsx
-  simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl,
-    show (Bytes.toB256 [32]).toNat = 32 from rfl,
-    show (Bytes.toB256 [64]).toNat = 64 from rfl] at run
-  rw [Mem.read_two_word_writes_at_raw, Mem.read_two_word_writes_at_raw] at run
-  rcases ObservedReach.sstoreS run with rfl | ⟨d', step, _, run⟩
-  · exact ⟨_, _, _, rfl, bounded⟩
-  exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
+  exact OldTransferFromAllowance.tail_nonInc erase run bounded hT cont
 
 /-- Reload after the balance transfer, then use the actual checked subtraction return.
 Even an allowance/balance hash alias cannot invalidate this same-node bound. -/
@@ -47,35 +35,7 @@ theorem allowance_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
     ∃ key value rest, T.d.stack = key :: value :: rest ∧
       value.toNat ≤ (T.d.getStorVal sevm.currentTarget key).toNat := by
-  unfold ImplV2.t_147d_c59 guardedStack at run
-  orsd
-  iterate 3 orsx
-  rw [show Bytes.toB256 [0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,
-      0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff] = ff20 from rfl,
-    B256.and_comm owner.toB256 ff20, ff20_and_adr] at run
-  iterate 21 orsx
-  simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl,
-    show (Bytes.toB256 [32]).toNat = 32 from rfl,
-    show (Bytes.toB256 [64]).toNat = 64 from rfl] at run
-  rw [Mem.read_two_word_writes_at_raw, Mem.read_two_word_writes_at_raw] at run
-  obtain ⟨loaded, loadStep, run⟩ := ObservedReach.rs_next run hT
-  have loadRun := erase loadStep
-  have storage := fun k => Devm.getStorVal_of_state (of_run_sload_state loadRun)
-    sevm.currentTarget k
-  simp only [St.getStorVal] at storage
-  obtain ⟨key, rest, pop, push⟩ := of_run_sload loadRun
-  simp only [Stack.Pop, Stack.Push, Split, St.stack, List.cons_append, List.nil_append,
-    List.cons.injEq] at pop push
-  obtain ⟨rfl, rfl⟩ := pop
-  rw [St.self push (SolcStorageReturn.sload_memory loadRun), St.getStorVal, storage] at run
-  iterate 4 orsx
-  obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
-  rw [show ImplV2.cert.prog[78]? = some ImplV2.t_4123_c78 from rfl] at hg
-  cases hg
-  obtain ⟨bound, _, _, _, run⟩ := V2TransferFromCallee.subtraction_return erase run hT
-  apply tail_nonInc erase run ?_ hT cont
-  rw [B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat bound)]
-  exact Nat.sub_le _ _
+  exact OldTransferFromAllowance.allowance_nonInc (version := .v2) (by decide) erase run hT cont
 
 /-- Original entry reaches either the witnessed recipient store or a non-increasing
 owner/allowance store, with no final-frame-success or hash-separation premise. -/

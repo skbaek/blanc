@@ -3966,28 +3966,34 @@ along the same observed path. `subtraction_return` derives the actual bound
 and unchanged storage base while retaining both observed cuts. Neither
 requires an assumed bound or a store-free caller. The V2 interfaces in
 [`V2TransferFromCallee`](../Blanc/Lift/Usdc/V2TransferFromCallee.lean)
-remain specializations; V2.1's public dispatch and allowance continuation are
-separate consumer obligations. V2.2 is explicitly excluded from these
-older-version theorems.
+remain specializations. V2.2 is explicitly excluded from these older-version
+theorems.
 
-[`V2TransferFromEntry`](../Blanc/Lift/Usdc/V2TransferFromEntry.lean) derives
-that original dispatcher, ABI and public-guard path while retaining the exact
-caller stack below the balance helper. Its companion
+[`OldTransferFromEntry`](../Blanc/Lift/Usdc/OldTransferFromEntry.lean) derives
+the original V2/V2.1 dispatcher, ABI and public-guard paths while retaining
+the exact caller stack below the balance helper. The actual runtime trees,
+helper indices and return tags are selected by version.
+[`OldTransferFromAllowance`](../Blanc/Lift/Usdc/OldTransferFromAllowance.lean)
+proves the allowance continuation non-increasing at the same original store.
+It reloads allowance after the balance helper and uses the actual checked
+subtraction return, so the bound tolerates balance/allowance hash aliasing.
+The complete final allowance tails are checked equal by `tail_v21`.
+[`V2TransferFromEntry`](../Blanc/Lift/Usdc/V2TransferFromEntry.lean) preserves
+its existing interface by specializing the shared entry proof.
+
 [`V2TransferFromContinuation`](../Blanc/Lift/Usdc/V2TransferFromContinuation.lean)
-uses the checked frame return to recover that stack, then proves the allowance
-continuation non-increasing at the same original store. The allowance value is
-reloaded after the balance helper, so this bound tolerates balance/allowance
-hash aliasing. `successfulSstore_credit_or_nonInc` now excludes both actual
-owner debits and allowance writes, leaving only the recipient store and its
-own successful hash. The existing V2 transfer-body walk retains the owner
-subtraction bound in `BoundedObservedSource`; source-only body and recipient
-interfaces remain available by projection.
+and [`V2_1TransferFromContinuation`](../Blanc/Lift/Usdc/V2_1TransferFromContinuation.lean)
+use the checked frame return to recover the original caller stack.
+Their `successfulSstore_credit_or_nonInc` excludes actual owner debits and
+allowance writes, leaving only the recipient store and its own successful
+hash. The exact recipient sites are `0x40e8` and `0x3d11`, respectively.
 [`V2TransferFromCreditHashes`](../Blanc/Lift/Usdc/V2TransferFromCreditHashes.lean)
-connects each member of the unchanged V2 `actualOldTransferFromCreditKeys`
-list to its actual increasing store and original successful recipient hash
-occurrence in the same raw history. No digest comparison, final-frame-success
-premise, hash injectivity or finite-population widening is introduced. This
-producer covers V2; the corresponding V2.1 producer remains separate.
+and [`V2_1TransferFromCreditHashes`](../Blanc/Lift/Usdc/V2_1TransferFromCreditHashes.lean)
+connect each member of the unchanged `actualOldTransferFromCreditKeys` list
+for its version to the actual increasing store and original successful
+recipient hash occurrence in the same raw history. No digest comparison,
+final-frame-success premise, hash injectivity or finite-population widening
+is introduced.
 
 For modern `transferFrom`, use
 [`ModernTransferFromSites`](../Blanc/Lift/Usdc/ModernTransferFromSites.lean)
@@ -4001,8 +4007,8 @@ and written value, without comparing a key to a proposed digest. Soundness
 identifies the exact recipient key at that original store; completeness proves
 all omitted selected writes non-increasing. `ModernWriteFamilies` adds this
 exact list to its finite faithful check and discharges the two older transferFrom
-cases. V2.2 transferFrom remains explicit. Original successful hash occurrences
-for this new collector remain a separate producer obligation; certificate key
+cases. V2.2 transferFrom remains explicit. The two credit-hash modules above
+supply original successful hash occurrences for the old-version collector; certificate key
 denotation alone does not provide them or prove finite-check truth.
 
 The V2 transfer and V2.1 mint producers are also consumed by
