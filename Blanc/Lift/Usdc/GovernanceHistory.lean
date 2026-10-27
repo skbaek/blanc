@@ -149,6 +149,66 @@ section History
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {P : Adr} {W : List UsdcDeployedEntry}
 
+/-- Approved retained-frame F2′ classifies the value of an actual retained
+proxy implementation write. The parent is the original committed frame, so
+its entry state supplies the admin tested by the proxy; discarded frames need
+no governance premise. The node's actual code-address provenance is explicit. -/
+theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.run)
+    (target : N.sevm.currentTarget = P) (code : N.sevm.code = Proxy.code)
+    (address : N.sevm.codeAddress = some P)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? N = some write)
+    (key : write.key = implSlot) : write.value.toAdr ∈ upgradeTargets := by
+  obtain ⟨G, frameMem, chain⟩ :=
+    (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix R.run N).mp retained
+  have settled : G ∈ history.settledFrames := by
+    rw [history.settledFrames_eq]
+    exact List.mem_flatMap.mpr ⟨R, member, frameMem⟩
+  have sameSevm := Exec.Deriv.ParentPrefix.sevm_eq chain
+  change N.sevm = G.sevm at sameSevm
+  have entry : Blanc.Lift.Token.IsEntry P G := by
+    constructor
+    · rw [← sameSevm]; exact target
+    · rw [← sameSevm]; exact address
+  have frameCode : G.sevm.code = Proxy.code := by rw [← sameSevm]; exact code
+  obtain ⟨pcZero, forkIn, hsg, _, _⟩ := history.rawFrame_entryFacts capabilities
+    (Exec.Frame.rootDeriv G) (history.mem_rawFrames_of_mem_settledFrames G settled)
+  obtain ⟨decoded, rest, stack⟩ := Exec.Deriv.successfulSstore?_decoded found
+  have classified : (∃ rest, N.devm.stack = adminSlot :: rest) ∨
+      ∃ rest, N.devm.stack = implSlot :: Proxy.upgradeArg G.sevm :: rest ∧
+        (Proxy.dispatchWord G.sevm = Proxy.upgradeToWord ∨
+          Proxy.dispatchWord G.sevm = Proxy.upgradeToAndCallWord) ∧
+        G.sevm.caller = (G.pre.getStorVal G.sevm.currentTarget adminSlot).toAdr := by
+    rcases G with ⟨pc, sevm, pre, out, run, committed⟩
+    dsimp only [Exec.Frame.rootDeriv] at pcZero chain
+    subst pc
+    exact Proxy.proxy_sstoreNodeH run frameCode hsg (bal forkIn) chain decoded
+  rcases classified with ⟨_, admin⟩ | ⟨_, impl, selector, caller⟩
+  · have sameKey := (List.cons.inj (stack.symm.trans admin)).1
+    rw [key] at sameKey
+    exact absurd sameKey (by decide)
+  · have value := (List.cons.inj (List.cons.inj (stack.symm.trans impl)).2).1
+    have admin : G.sevm.caller = adminOf G.pre.state P := by
+      rw [entry.1] at caller
+      exact caller
+    have selMem : Blanc.Sevm.selector G.sevm ∈ [0x3659cfe6, 0x4f1ef286, 0x8f283970] := by
+      rcases selector with h | h
+      · rw [dispatchWord_eq_selector] at h
+        rw [h]
+        decide
+      · rw [dispatchWord_eq_selector] at h
+        rw [h]
+        decide
+    obtain ⟨impl, inTargets, arg⟩ :=
+      AllowedAdminAsk.upgradeArg (governance G settled entry admin selMem) selector
+    rw [value, arg]
+    exact inTargets
+
 /-- Conditional raw upgrade classification from the explicit raw governance
 obligation and deployment-before-upgrade ordering. The theorem name is kept
 for compatibility; approved retained-frame F2′ alone does not supply its

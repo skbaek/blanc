@@ -1,6 +1,7 @@
 import Blanc.ExecutionRetainedNodeOrigin
 import Blanc.ExecutionInRootOwnCode
 import Blanc.Lift.Usdc.ProxyCommittedUpgradeLog
+import Blanc.Lift.Usdc.GovernanceHistory
 
 /-! Coupled USDC context and implementation-pointer induction within one retained root. -/
 
@@ -402,5 +403,39 @@ theorem ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_entry
   rcases (context N retained).2 target with ⟨code, address⟩ | entry
   · exact .inl ⟨code, address (history.settledRoots_rootOwnEntry R member)⟩
   · exact .inr entry
+
+/-- Consume approved F2′ in the coupled retained induction, using entry
+provenance already derived at each earlier write. This local specialization
+applies when the listed implementations are installed at the selected root;
+it does not assert that future implementations were installed at earlier
+roots, or exclude creation and upgrade in the same root. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_of_f2prime
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry} {R : Exec.Frame}
+    (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (installed : ∀ e ∈ W, R.pre.getCode e.adr = e.code)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (slot : ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (targets : ∀ a ∈ F2prime.upgradeTargets, ∃ e ∈ W, e.adr = a)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    ∀ N ∈ Exec.retainedNodes R.run,
+      (∃ e ∈ W, ((N.devm.getStor P).get implSlot).toAdr = e.adr) ∧
+      (N.sevm.currentTarget = P →
+        (N.sevm.code = Proxy.code ∧ N.sevm.codeAddress = some P) ∨
+          ∃ e ∈ W, N.sevm.code = e.code) := by
+  apply ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_entry history
+    capabilities bal member proxy installed impls lib slot ?_ apart
+  intro N retained target code address write found key
+  have inTargets := ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime
+    history capabilities bal governance member retained target code address found key
+  obtain ⟨e, he, adr⟩ := targets write.value.toAdr inTargets
+  exact ⟨e, he, adr.symm⟩
 
 end Blanc.Lift.Usdc
