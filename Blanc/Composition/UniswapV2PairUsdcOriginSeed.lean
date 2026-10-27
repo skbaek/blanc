@@ -237,6 +237,118 @@ theorem original_factory_preconditions_of_receipt
   exact ⟨nonce, pairFresh.1, pairFresh.2, guard⟩
 
 
+/-- The original D body and actual admission supply the forward factory inputs,
+including the gas margin. No sender, funding or gas premise is supplied. -/
+theorem original_factory_admission_of_body
+    {pre post : BlockChain}
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (cut : last.bodyTrace.transactions.TxSplit 38)
+    (dBody : last.block.txs = HistoryAnchorBody.dBody)
+    (hnumber : last.block.header.number = 10008355)
+    (htime : last.block.header.timestamp = 1588710145) :
+    cut.tx.type = .zero 4000000000 (some UniswapV2Pair.Creation.factory) ∧
+    cut.tx.data = UniswapV2Factory.createPairData ∧ cut.tx.value = 0 ∧ cut.tx.nonce = 205 ∧
+    (cut.tx.gas * cut.head.effectiveGasPrice).toB256 ≤ cut.benv.state.bal cut.head.sender ∧
+    cut.head.intrinsicGas + 2600000 ≤ cut.tx.gas ∧ cut.tx.gas < 2 ^ 64 ∧
+    mainnetChainConfig.forkAt 10008355 1588710145 = .ok cut.benv.stat.fork ∧
+    validateTransaction cut.benv.stat.rules cut.tx 0 =
+      .ok (cut.head.intrinsicGas, cut.head.calldataFloorGasCost) := by
+  have dtx := (HistoryAnchorBody.d_original_cut last cut dBody).2
+  have dtype : cut.tx.type =
+      .zero 4000000000 (some UniswapV2Pair.Creation.factory) := by
+    rw [dtx]
+    rfl
+  have ddata : cut.tx.data = UniswapV2Factory.createPairData := by
+    rw [dtx]
+    decide +kernel
+  have dvalue : cut.tx.value = 0 := by
+    rw [dtx]
+    rfl
+  have dnonce : cut.tx.nonce = 205 := by
+    rw [dtx]
+    rfl
+  have dgas : cut.tx.gas < 2 ^ 64 := by
+    rw [dtx]
+    decide +kernel
+  have hblob : transactionBlobGasFee cut.benv cut.tx = 0 := by
+    simp only [transactionBlobGasFee, Tx.isTypeThree, dtype, Bool.false_eq_true,
+      ↓reduceIte]
+  have hfunds : (cut.tx.gas * cut.head.effectiveGasPrice).toB256 ≤
+      cut.benv.state.bal cut.head.sender := by
+    simpa only [hblob, Nat.add_zero, State.incrNonce_bal] using
+      (State.of_subBal cut.head.debit).1
+  have hstat : cut.benv.stat = (initBenv last.fork pre last.block.header).stat :=
+    cut.before.stat_eq
+  have hfork : mainnetChainConfig.forkAt 10008355 1588710145 =
+      .ok cut.benv.stat.fork := by
+    have h := last.forkAt
+    rw [hnumber, htime] at h
+    rw [hstat]
+    exact h
+  have hmuir : cut.benv.stat.fork = .muirGlacier :=
+    Except.ok.inj (hfork.symm.trans UniswapV2Pair.pair_deployment_fork)
+  have hrules : cut.benv.stat.rules = Fork.ruleSet .muirGlacier := by
+    rw [BenvStat.rules, hmuir]
+  have hsg : cut.benv.stat.rules.stateGas = none := by
+    rw [hrules]
+    rfl
+  have hvalid : validateTransaction cut.benv.stat.rules cut.tx 0 =
+      .ok (cut.head.intrinsicGas, cut.head.calldataFloorGasCost) :=
+    (validateTransaction_sender_congr_none hsg).trans cut.head.validation
+  have evaluated : validateTransaction (Fork.ruleSet .muirGlacier)
+      HistoryAnchorBody.d38Tx 0 = .ok (21800, 0) := by
+    decide +kernel
+  have validation := hvalid
+  rw [hrules] at hvalid
+  conv at hvalid => lhs; rw [dtx]
+  have intrinsic : cut.head.intrinsicGas = 21800 :=
+    (Prod.mk.inj (Except.ok.inj (hvalid.symm.trans evaluated))).1
+  have hgas : cut.head.intrinsicGas + 2600000 ≤ cut.tx.gas := by
+    rw [intrinsic, dtx]
+    decide +kernel
+  exact ⟨dtype, ddata, dvalue, dnonce, hfunds, hgas, dgas, hfork, validation⟩
+
+/-- The original D receipt and body produce the initialized Pair checkpoint at
+the same settled transaction cut. The actual forward result is identified by
+determinism; no installed-code, initialized-state or Pair-freshness input is used. -/
+theorem original_pair_checkpoint_of_receipt
+    {pre post : BlockChain}
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (cut : last.bodyTrace.transactions.TxSplit 38)
+    (dBody : last.block.txs = HistoryAnchorBody.dBody)
+    (hnumber : last.block.header.number = 10008355)
+    (htime : last.block.header.timestamp = 1588710145)
+    (hfactory : cut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : last.blockOutput.receiptsTrie[BLT.toBytes (.bytes (38 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (receiptLogs : receipt.2.logs = [⟨UniswapV2Pair.Creation.factory,
+      [0xd3648bd0f6ba80134a33ba9275ac585d9d315f0ad8355cddefde31afa28d0e9,
+       0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,
+       0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2],
+      UniswapV2Pair.Creation.pairAddress.toB256.toBytes ++ (1 : B256).toBytes⟩]) :
+    (cut.afterBenv.state.getCode UniswapV2Pair.Creation.pairAddress).toList =
+      UniswapV2Pair.code.toList ∧
+    UniswapV2Pair.InitializedCheckpoint
+      (cut.afterBenv.state.getStor UniswapV2Pair.Creation.pairAddress)
+      UniswapV2Pair.Creation.factory
+      (UniswapV2Pair.Creation.domainSeparator cut.benv.stat.chainId.toB256
+        UniswapV2Pair.Creation.pairAddress)
+      UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1 := by
+  obtain ⟨nonce, pairNonce, pairCode, guard⟩ :=
+    original_factory_preconditions_of_receipt last cut dBody hnumber htime hfactory
+      receiptAt succeeded receiptLogs
+  obtain ⟨dtype, data, value, txNonce, funds, gas, gasBound, fork, valid⟩ :=
+    original_factory_admission_of_body last cut dBody hnumber htime
+  obtain ⟨state, output, result, installed, initialized⟩ :=
+    UniswapV2Factory.pair_createPair_transaction_muirGlacier fork dtype data value txNonce
+      valid cut.head.checked funds gas gasBound hfactory nonce pairNonce pairCode guard
+  have same : state = cut.txState :=
+    (Prod.mk.inj (Except.ok.inj (result.symm.trans cut.head.result))).1
+  subst state
+  exact ⟨installed, initialized⟩
+
 /-- Derive the actual after-D proxy code, implementation word and zero tracked
 Pair allowance rows from the actual constructor receipt and exact C-to-D
 interval. The factory's admitted execution supplies D preservation, rather
@@ -461,58 +573,8 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
     exact (show UsdcContextCode ImplV1.code from .inr (.inl rfl)).ne_nil
   have implAfter := (HistoryAnchorBody.c_original_cut_initialImplementation_code
     first afterCut cBody first.forkIn.stateGas_none clean nonempty).trans impl
-  have dtx := (HistoryAnchorBody.d_original_cut last beforeCut dBody).2
-  have dtype : beforeCut.tx.type =
-      .zero 4000000000 (some UniswapV2Pair.Creation.factory) := by
-    rw [dtx]
-    rfl
-  have ddata : beforeCut.tx.data = UniswapV2Factory.createPairData := by
-    rw [dtx]
-    decide +kernel
-  have dvalue : beforeCut.tx.value = 0 := by
-    rw [dtx]
-    rfl
-  have dnonce : beforeCut.tx.nonce = 205 := by
-    rw [dtx]
-    rfl
-  have dgas : beforeCut.tx.gas < 2 ^ 64 := by
-    rw [dtx]
-    decide +kernel
-  have hblob : transactionBlobGasFee beforeCut.benv beforeCut.tx = 0 := by
-    simp only [transactionBlobGasFee, Tx.isTypeThree, dtype, Bool.false_eq_true,
-      ↓reduceIte]
-  have hfunds : (beforeCut.tx.gas * beforeCut.head.effectiveGasPrice).toB256 ≤
-      beforeCut.benv.state.bal beforeCut.head.sender := by
-    simpa only [hblob, Nat.add_zero, State.incrNonce_bal] using
-      (State.of_subBal beforeCut.head.debit).1
-  have hstat : beforeCut.benv.stat = (initBenv last.fork pre last.block.header).stat :=
-    beforeCut.before.stat_eq
-  have hfork : mainnetChainConfig.forkAt 10008355 1588710145 =
-      .ok beforeCut.benv.stat.fork := by
-    have h := last.forkAt
-    rw [hnumber, htime] at h
-    rw [hstat]
-    exact h
-  have hmuir : beforeCut.benv.stat.fork = .muirGlacier :=
-    Except.ok.inj (hfork.symm.trans UniswapV2Pair.pair_deployment_fork)
-  have hrules : beforeCut.benv.stat.rules = Fork.ruleSet .muirGlacier := by
-    rw [BenvStat.rules, hmuir]
-  have hsg : beforeCut.benv.stat.rules.stateGas = none := by
-    rw [hrules]
-    rfl
-  have hvalid : validateTransaction beforeCut.benv.stat.rules beforeCut.tx 0 =
-      .ok (beforeCut.head.intrinsicGas, beforeCut.head.calldataFloorGasCost) :=
-    (validateTransaction_sender_congr_none hsg).trans beforeCut.head.validation
-  have evaluated : validateTransaction (Fork.ruleSet .muirGlacier)
-      HistoryAnchorBody.d38Tx 0 = .ok (21800, 0) := by
-    decide +kernel
-  rw [hrules] at hvalid
-  conv at hvalid => lhs; rw [dtx]
-  have intrinsic : beforeCut.head.intrinsicGas = 21800 :=
-    (Prod.mk.inj (Except.ok.inj (hvalid.symm.trans evaluated))).1
-  have hgas : beforeCut.head.intrinsicGas + 2600000 ≤ beforeCut.tx.gas := by
-    rw [intrinsic, dtx]
-    decide +kernel
+  obtain ⟨dtype, ddata, dvalue, dnonce, hfunds, hgas, dgas, _, _⟩ :=
+    original_factory_admission_of_body last beforeCut dBody hnumber htime
   exact original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
     history initialApart fresh first afterCut later last beforeCut rootsIn
     creceiver cinput cvalue sender cnonce receiptAt succeeded slotsApart implAfter noUpgraded

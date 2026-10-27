@@ -4970,7 +4970,18 @@ consumer needs canonical interpreter ingress as one conjunct:
   pre-debit Pair nonce/code collision exclusion. The concrete body/bloom/V1
   constructor-output allowance-seed chain consumes these derived facts from
   the original D receipt rather than taking the four conditions as inputs.
-  Body, receipt and entry-code authentication remain caller obligations.
+  `original_factory_admission_of_body` reuses the actual admission to derive
+  the original transaction fields, funding and gas margin. Combined with the
+  receipt-derived conditions, `original_pair_checkpoint_of_receipt` identifies
+  the same forward transaction result with the actual after-D state and supplies
+  its Pair runtime and initialized checkpoint.
+  `pairUsdcAllowQuiet_of_original_receipts` in
+  [`UniswapV2PairUsdcWeth9P1`](../Blanc/Composition/UniswapV2PairUsdcWeth9P1.lean)
+  joins this Pair checkpoint and the original allowance seed to P1 for the exact
+  post-B touched spenders. Full-history R3/R4 populations and post-D sender scope
+  remain unchanged; no zero endpoint or initialized Pair state is supplied.
+  Body, receipt and entry-code authentication, V1 constructor output,
+  middle-history evidence and finite separation remain caller obligations.
   These existential trace inversions have no narrow tactic recipe trigger.
   `TransactionTrace.root_frame_of_call_value_with_message` additionally preserves
   the exact identity `msg = trace.msg`, so execution facts carried by its relation
