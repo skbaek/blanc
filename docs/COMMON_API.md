@@ -3857,6 +3857,31 @@ nonincrease, with no owner-selector residual for V2.1. Finite-check truth,
 initializer exclusion, retained owner-query exclusion and historical binding
 remain obligations; V2/V2.2 owner classification is separate.
 
+For V2's four owner routes, use
+[`V2PermitReach`](../Blanc/Lift/Usdc/V2PermitReach.lean) and
+[`V2OwnerAuthorizationReach`](../Blanc/Lift/Usdc/V2OwnerAuthorizationReach.lean).
+Their `successfulSstore_source` laws follow the original pc-zero dispatcher,
+ABI, guards and actual returning helpers, including frames that later revert.
+Permit separates nonce pc `0x47fd` from the allowance setter; the three
+approval/increase/decrease authorizations separate flag pc `0x4eb8` from
+that setter. Every selected store retains its actual hash inputs, with
+ordered pairs for authorization and allowance rows.
+[`V2AllowanceSetterReach`](../Blanc/Lift/Usdc/V2AllowanceSetterReach.lean)
+transports the actual owner/spender through returning addition/subtraction
+helpers and reuses the shared approval setter; it does not infer arguments
+from hash values or assume a signature result.
+[`V2PermitMappingTouches`](../Blanc/Lift/Usdc/V2PermitMappingTouches.lean) and
+[`V2OwnerAuthorizationMappingTouches`](../Blanc/Lift/Usdc/V2OwnerAuthorizationMappingTouches.lean)
+collect exactly the corresponding original successful-store keys, preserving
+raw order and duplicates. Recognition uses target, code, selector and pc;
+finite faithful-key separation identifies the protected owner and spender.
+[`V2AllowanceWriteLocality`](../Blanc/Lift/Usdc/V2AllowanceWriteLocality.lean)'s
+`v2_allowance_write_locality` combines these with the covered modern keys and
+concludes the existing `AllowedFrame` or actual same-node nonincrease, with
+no V2 owner-selector residual. Finite-check truth, retained owner exclusion
+and historical binding remain explicit obligations; V2.2 permit coverage
+is separate.
+
 For exhaustive modern successful-store coverage, use
 [`ModernWriteFamilies`](../Blanc/Lift/Usdc/ModernWriteFamilies.lean).
 `modern_store_fixed_nonInc_or_family` applies the unchanged certified root
