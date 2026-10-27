@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.ModernCallerMappingTouches
+import Blanc.Lift.Usdc.ModernCancelMappingTouches
 import Blanc.Lift.Usdc.V2BlacklistMappingTouches
 
 /-! Complete actual-store family coverage for the three modern USDC runtimes.
@@ -21,21 +21,22 @@ instance (version : ModernVersion) (selector : B256) :
 The inherited initializeV2_1 stays here: it is not a new AllowedFrame exception. -/
 def modernOtherWriteSelectors : ModernVersion → List B256
   | .v2 => [0x23b872dd, 0x3092afd5, 0x4e44d956, 0x40c10f19, 0x42966c68,
-      0xa9059cbb, 0x5a049a70, 0xe3ee160e]
+      0xa9059cbb, 0xe3ee160e]
   | .v2_1 => [0x23b872dd, 0x3092afd5, 0x4e44d956, 0x40c10f19, 0x42966c68,
-      0xa9059cbb, 0x5a049a70, 0xe3ee160e, 0xef55bec6, 0x2fc81e09]
+      0xa9059cbb, 0xe3ee160e, 0xef55bec6, 0x2fc81e09]
   | .v2_2 => [0x23b872dd, 0x3092afd5, 0x4e44d956, 0x40c10f19, 0x42966c68,
-      0xa9059cbb, 0x5a049a70, 0xe3ee160e, 0xef55bec6, 0x2fc81e09,
-      0xb7b72899, 0x88b7ab63, 0xcf092995, 0x1a895266, 0xf9f92be4]
+      0xa9059cbb, 0xe3ee160e, 0xef55bec6, 0x2fc81e09,
+      0x88b7ab63, 0xcf092995, 0x1a895266, 0xf9f92be4]
 
 def modernNonfixedSelector (version : ModernVersion) (selector : B256) : Prop :=
   selector ∈ version.selectors.callers ∨ selector ∈ version.selectors.owners ∨
-  selector ∈ version.selectors.inits ∨ modernOldBlacklistSelector version selector ∨
+  selector ∈ version.selectors.inits ∨ selector ∈ modernCancelSelectors version ∨
+  modernOldBlacklistSelector version selector ∨
   selector ∈ modernOtherWriteSelectors version
 
 instance (version : ModernVersion) (selector : B256) :
     Decidable (modernNonfixedSelector version selector) :=
-  inferInstanceAs (Decidable (_ ∨ _ ∨ _ ∨ _ ∨ _))
+  inferInstanceAs (Decidable (_ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _))
 
 def modernWriteFamilyCheck (version : ModernVersion) (site : Site) : Bool :=
   site.nonInc || match site.slot with
@@ -111,14 +112,15 @@ theorem ConfiguredHistoryTraceIn.modern_write_fixed_nonInc_or_family
   rw [← same] at family
   exact family
 
-/-- The two established families, with exactly the existing actual-node populations.
+/-- The established families, with exactly their actual-node populations.
 Concatenation preserves duplicates within each family; it does not assert global chronological order. -/
 def actualModernCoveredKeys (version : ModernVersion) (P : Adr)
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future) : List HistoricalMappingKey :=
-  actualModernCallerKeys version P history ++ match version with
+  actualModernCancelKeys version P history ++ (actualModernCallerKeys version P history ++
+    match version with
   | .v2 => actualV2OldBlacklistKeys .v2 P history
   | .v2_1 => actualV2OldBlacklistKeys .v2_1 P history
-  | .v2_2 => []
+  | .v2_2 => [])
 
 /-- Every collected member comes from an original successful store with this exact key. -/
 theorem ConfiguredHistoryTraceIn.actualModernCoveredKeys_sound
@@ -129,7 +131,11 @@ theorem ConfiguredHistoryTraceIn.actualModernCoveredKeys_sound
       Exec.Deriv.ParentPrefix root node ∧ ∃ write,
         Exec.Deriv.successfulSstore? node = some write ∧
           write.owner = P ∧ write.key = key.slot := by
-  rcases List.mem_append.mp member with caller | blacklist
+  rcases List.mem_append.mp member with cancel | previous
+  · obtain ⟨node, inNodes, _, root, inFrames, chain, write, found, owner, slot⟩ :=
+      ConfiguredHistoryTraceIn.actualModernCancelKeys_sound history capabilities cancel
+    exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
+  rcases List.mem_append.mp previous with caller | blacklist
   · obtain ⟨node, inNodes, _, root, inFrames, chain, write, found, owner, slot⟩ :=
       ConfiguredHistoryTraceIn.actualModernCallerKeys_sound history capabilities caller
     exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
@@ -171,14 +177,14 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
   · exact ((SlotFootprint.checkApartOn_eq_true.mp fixedApart) write.key fixed _ requested tracked).elim
   · rw [target] at nonInc
     exact .inr (.inl nonInc)
-  rcases family with caller | owner | initializer | blacklist | other
+  rcases family with caller | owner | initializer | cancel | blacklist | other
   · have callerFaithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
         (spenders.map (fun g => .modern (.allow pair g)))
         (actualModernCallerKeys version P history) = true := by
       apply SlotFootprint.checkFaithfulOn_eq_true.mpr
       intro key keyIn wanted wantedIn equal
       exact (SlotFootprint.checkFaithfulOn_eq_true.mp faithful) key
-        (List.mem_append_left _ keyIn) wanted wantedIn equal
+        (List.mem_append_right _ (List.mem_append_left _ keyIn)) wanted wantedIn equal
     exact .inl (ConfiguredHistoryTraceIn.modernCaller_write_allowed history capabilities
       pair spenders callerFaithful member target code caller found observed tracked)
   · exact .inr (.inr (.inl owner))
@@ -188,6 +194,15 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
       simpa only [ModernVersion.selectors, selV2, selV2_1, selV2_2, selV2T,
         Term.eval, Op2.eval, Env.root, Sevm.selector, Sevm.dataWord,
         show (224 : B256).toNat = 224 from rfl] using initializer
+  · have cancelFaithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+        (spenders.map (fun g => .modern (.allow pair g)))
+        (actualModernCancelKeys version P history) = true := by
+      apply SlotFootprint.checkFaithfulOn_eq_true.mpr
+      intro key keyIn wanted wantedIn equal
+      exact (SlotFootprint.checkFaithfulOn_eq_true.mp faithful) key
+        (List.mem_append_left _ keyIn) wanted wantedIn equal
+    exact (ConfiguredHistoryTraceIn.modernCancel_write_ne_allowSlot history capabilities
+      pair spenders cancelFaithful member target code cancel found observed tracked.symm).elim
   · obtain ⟨old, selected⟩ := blacklist
     cases version with
     | v2 =>
@@ -197,7 +212,7 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
           apply SlotFootprint.checkFaithfulOn_eq_true.mpr
           intro key keyIn wanted wantedIn equal
           exact (SlotFootprint.checkFaithfulOn_eq_true.mp faithful) key
-            (List.mem_append_right _ keyIn) wanted wantedIn equal
+            (List.mem_append_right _ (List.mem_append_right _ keyIn)) wanted wantedIn equal
         exact (ConfiguredHistoryTraceIn.v2OldBlacklist_write_ne_allowSlot history capabilities
           pair spenders blacklistFaithful member target code selected found observed tracked.symm).elim
     | v2_1 =>
@@ -207,7 +222,7 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
           apply SlotFootprint.checkFaithfulOn_eq_true.mpr
           intro key keyIn wanted wantedIn equal
           exact (SlotFootprint.checkFaithfulOn_eq_true.mp faithful) key
-            (List.mem_append_right _ keyIn) wanted wantedIn equal
+            (List.mem_append_right _ (List.mem_append_right _ keyIn)) wanted wantedIn equal
         exact (ConfiguredHistoryTraceIn.v2OldBlacklist_write_ne_allowSlot history capabilities
           pair spenders blacklistFaithful member target code selected found observed tracked.symm).elim
     | v2_2 => exact (old rfl).elim

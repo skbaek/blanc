@@ -3828,16 +3828,31 @@ For exhaustive modern successful-store coverage, use
 `modern_store_fixed_nonInc_or_family` applies the unchanged certified root
 tables to the actual store: its key is a listed literal slot, its value is
 non-increasing at that same node, or its original selector is in a listed
-version-specific family. `actualModernCoveredKeys` concatenates the existing
-caller collector with the applicable V2/V2_1 old-blacklist collector; soundness
-retains the original root, node, successful store, owner and key. Under finite
-faithfulness for that exact list and apartness from `modernFixedWriteSlots`,
-`modern_allowance_write_reduction` eliminates fixed/old-blacklist aliases and
-attributes caller writes, leaving existing allowed exceptions, actual
+version-specific family. `actualModernCoveredKeys` concatenates the cancellation
+and caller collectors with the applicable V2/V2_1 old-blacklist collector;
+soundness retains the original root, node, successful store, owner and key.
+Under finite faithfulness for that exact list and apartness from
+`modernFixedWriteSlots`, `modern_allowance_write_reduction` eliminates fixed,
+cancellation and old-blacklist aliases and attributes caller writes,
+leaving existing allowed exceptions, actual
 nonincrease, owner selectors or `modernOtherWriteSelectors`. This is a
 reduction toward the full classifier; the owner and remaining mapping cases
 and check truth stay open. V2_2 packed-blacklist writers remain among those
 other selectors, and `initializeV2_1` is not promoted to an allowed exception.
+
+For `cancelAuthorization` in all three modern versions, including both V2_2
+overloads, use
+[`ModernCancelMappingTouches`](../Blanc/Lift/Usdc/ModernCancelMappingTouches.lean).
+`modernCancel_store_key` obtains the authorization-state key at base slot 16
+from the original successful store: masked calldata owner at word 4 and the
+full nonce at word 36. `actualModernCancelKeys` filters original `rawNodes`
+by target, exact runtime, cancellation selector and successful store, without
+testing the written key. Completeness and soundness retain the original root,
+node and actual write. `modernCancel_write_ne_allowSlot` consumes finite
+faithfulness for exactly this list; its key constructors distinguish an
+authorization entry from an allowance entry. Cancellation selectors are now
+discharged by the exhaustive family reduction. Check truth and original
+successful hash-occurrence provenance remain separate obligations.
 
 For V2 and V2_1 old-blacklist writes, use
 [`Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean`](../Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean)'s
