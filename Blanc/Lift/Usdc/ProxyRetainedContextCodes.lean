@@ -438,4 +438,83 @@ theorem ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_of_f2prime
   obtain ⟨e, he, adr⟩ := targets write.value.toAdr inTargets
   exact ⟨e, he, adr.symm⟩
 
+/-- A changed endpoint implementation word comes from an actual retained proxy
+write. Original F2′ and the source guard identify its literal target and code
+existence at that write. The context classifier is a producer output; no
+installation at root entry is assumed by this provenance lemma. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (classified : ∀ N ∈ Exec.retainedNodes R.run, N.sevm.currentTarget = P →
+      (N.sevm.code = Proxy.code ∧ N.sevm.codeAddress = some P) ∨
+        UsdcImplCode N.sevm.code)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot ∨
+      ∃ N ∈ Exec.retainedNodes R.run, ∃ write : Exec.StorageWrite,
+        Exec.Deriv.successfulSstore? N = some write ∧ write.owner = P ∧
+        write.key = implSlot ∧ write.value = (R.post.getStor P).get implSlot ∧
+        write.value.toAdr ∈ F2prime.upgradeTargets ∧
+        (N.devm.getCode write.value.toAdr).toList ≠ [] := by
+  by_cases unchanged : (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot
+  · exact .inl unchanged
+  have rawRoot := history.mem_rawFrames_of_mem_settledRoots R member
+  have hsg := (history.rawFrame_entryFacts capabilities _ rawRoot).2.2.1
+  have nonempty : (R.pre.getCode P).toList ≠ [] := by
+    rw [proxy]
+    exact (show UsdcContextCode Proxy.code from .inl rfl).ne_nil
+  obtain ⟨actual, _, owner, key, value, before, after, split, _⟩ :=
+    Exec.exists_lastRetainedSstore_of_getStor_ne_noStateGas R.run R.committed hsg
+      nonempty (Ne.symm unchanged)
+  have present : actual.storageWrite ∈ Exec.retainedStorageWrites R.run := by
+    rw [split]
+    exact List.mem_append_right _ List.mem_cons_self
+  obtain ⟨N, retained, found⟩ := List.mem_filterMap.mp present
+  have target : N.sevm.currentTarget = P :=
+    (successfulSstore?_node_owner found).2.symm.trans owner
+  rcases classified N retained target with ⟨code, address⟩ | implementation
+  · have allowed := ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code
+      history capabilities bal governance member retained target code address found key
+    exact .inr ⟨N, retained, actual.storageWrite, found, owner, key, value, allowed⟩
+  · exact (apart N retained target implementation actual.storageWrite found key).elim
+
+/-- Endpoint write provenance with its context obligation discharged by the
+existing installed-world induction. This consumer retains that induction's
+explicit entry-installation condition; the provenance core is also usable
+with a dynamic classifier once its historical producers are supplied. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_proxyWorld_implSlot_origin_of_f2prime
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry} {R : Exec.Frame}
+    (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (installed : ∀ e ∈ W, R.pre.getCode e.adr = e.code)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (slot : ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (targets : ∀ a ∈ F2prime.upgradeTargets, ∃ e ∈ W, e.adr = a)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot ∨
+      ∃ N ∈ Exec.retainedNodes R.run, ∃ write : Exec.StorageWrite,
+        Exec.Deriv.successfulSstore? N = some write ∧ write.owner = P ∧
+        write.key = implSlot ∧ write.value = (R.post.getStor P).get implSlot ∧
+        write.value.toAdr ∈ F2prime.upgradeTargets ∧
+        (N.devm.getCode write.value.toAdr).toList ≠ [] := by
+  have context := ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_of_f2prime
+    history capabilities bal member proxy installed impls lib slot governance targets apart
+  apply ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime history capabilities
+    bal member proxy governance ?_ apart
+  intro N retained target
+  rcases (context N retained).2 target with own | ⟨e, he, code⟩
+  · exact .inl own
+  · exact .inr (code ▸ impls e he)
+
 end Blanc.Lift.Usdc
