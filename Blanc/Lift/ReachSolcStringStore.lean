@@ -123,6 +123,38 @@ theorem StoreAt.mono {slot : B256} {n m : Nat} {T : Conf} (h : n ≤ m) (s : Sto
   · exact ⟨key, v, S, hs, .inr (.inl hv)⟩
   · exact ⟨key, v, S, hs, .inr (.inr ⟨j, by omega, hk⟩)⟩
 
+/-- The exact old-tail endpoint computed from the stored string header. -/
+def oldEnd (slot old : B256) : B256 :=
+  slot.toBytes.keccak + (Bytes.toB256 [31] +
+    (Bytes.toB256 [1, 0] * ((Bytes.toB256 [1] &&& old) =? 0) -
+      Bytes.toB256 [1] &&& old) / Bytes.toB256 [2]) / Bytes.toB256 [32]
+
+/-- A clearing key lies after an actual copy-prefix endpoint and below an old
+header's endpoint. No well-formedness assumption is made about that old header. -/
+def ClearRange (slot : B256) (n : Nat) (key : B256) : Prop :=
+  ∃ old i, i ≤ n ∧ (slot.toBytes.keccak + i.toB256).toNat ≤ key.toNat ∧
+    key.toNat < (oldEnd slot old).toNat
+
+/-- The helper's stores with the zero-clearing range retained. -/
+def StoreRangeAt (slot : B256) (n : Nat) (T : Conf) : Prop :=
+  ∃ key v S, T.d.stack = key :: v :: S ∧
+    (key = slot ∨ (∃ j : Nat, j < n ∧ key = slot.toBytes.keccak + j.toB256) ∨
+      v = 0 ∧ ClearRange slot n key)
+
+theorem StoreRangeAt.mono {slot : B256} {n m : Nat} {T : Conf}
+    (h : n ≤ m) (s : StoreRangeAt slot n T) : StoreRangeAt slot m T := by
+  obtain ⟨key, v, S, stack, fixed | ⟨j, bound, payload⟩ | ⟨zero, old, i, bound, lo, hi⟩⟩ := s
+  · exact ⟨key, v, S, stack, .inl fixed⟩
+  · exact ⟨key, v, S, stack, .inr (.inl ⟨j, by omega, payload⟩)⟩
+  · exact ⟨key, v, S, stack, .inr (.inr ⟨zero, old, i, by omega, lo, hi⟩)⟩
+
+theorem StoreRangeAt.storeAt {slot : B256} {n : Nat} {T : Conf}
+    (s : StoreRangeAt slot n T) : StoreAt slot n T := by
+  obtain ⟨key, v, S, stack, fixed | payload | ⟨zero, -⟩⟩ := s
+  · exact ⟨key, v, S, stack, .inl fixed⟩
+  · exact ⟨key, v, S, stack, .inr (.inr payload)⟩
+  · exact ⟨key, v, S, stack, .inr (.inl zero)⟩
+
 /-- The copy loop's iteration count is at most the string's word count. -/
 theorem count_le (p len : Nat) :
     SolcStoragePayload.count (p + len).toB256 p ≤ (len + 31) / 32 := by
@@ -135,12 +167,14 @@ theorem count_le (p len : Nat) :
 variable {τ} {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
   {T : Conf}
 
-theorem exit_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : Ninst}
+/-- The shared exit retains the exact clearing start and end from its stack. -/
+theorem exit_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : Ninst}
     (E : Entries τ rd fs)
     {K : List SFunc} {b : Devm} {x y z w s0 s1 : B256} {S : List B256} {M : Mem} {G : Nat}
     (run : Reach P fs sevm ⟨St b (x :: y :: z :: w :: s0 :: s1 :: S) M G, exitTree τ, K⟩ T)
     (hT : AtSstore T) :
-    ReachClear.ZeroAt T ∨ ∃ f K' b' G', K = f :: K' ∧
+    (∃ key rest, T.d.stack = key :: 0 :: rest ∧
+      y.toNat ≤ key.toNat ∧ key.toNat < w.toNat) ∨ ∃ f K' b' G', K = f :: K' ∧
       Reach P fs sevm ⟨St b' (s0 :: S) M G', f, K'⟩ T := by
   unfold exitTree at run
   rsd
@@ -149,12 +183,24 @@ theorem exit_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {
   rw [E.clr] at hg
   cases hg
   rsd
-  rcases ReachClear.clear_reach erase E.clrLoop rfl run hT with h | ⟨f, K', b', G', hK, run⟩
+  rcases ReachClear.clear_reach_range erase E.clrLoop rfl run hT with h | ⟨f, K', b', G', hK, run⟩
   · exact .inl h
   cases hK
   rsd
   iterate 2 rsx
   exact .inr (rs_retM run hT)
+
+theorem exit_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : Ninst}
+    (E : Entries τ rd fs)
+    {K : List SFunc} {b : Devm} {x y z w s0 s1 : B256} {S : List B256} {M : Mem} {G : Nat}
+    (run : Reach P fs sevm ⟨St b (x :: y :: z :: w :: s0 :: s1 :: S) M G, exitTree τ, K⟩ T)
+    (hT : AtSstore T) :
+    ReachClear.ZeroAt T ∨ ∃ f K' b' G', K = f :: K' ∧
+      Reach P fs sevm ⟨St b' (s0 :: S) M G', f, K'⟩ T := by
+  rcases exit_reach_range erase E run hT with
+    ⟨key, rest, stack, -, -⟩ | returned
+  · exact .inl ⟨key, rest, stack⟩
+  · exact .inr returned
 
 theorem toB256_add (a b : Nat) : a.toB256 + b.toB256 = (a + b).toB256 := by
   apply B256.toNat_inj
@@ -205,10 +251,10 @@ theorem shortMem_ok (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
 
 /-- **The helper on a reach to an `SSTORE`.** Entered with `len :: p :: slot :: r :: S` (the
 string length, its data pointer and the slot), the reach stops at a store of the slot, of
-zero, or of a payload word `keccak(slot) + j` for `j` below the copy loop's iteration count;
+a payload word `keccak(slot) + j` below the copy count, or zero within `ClearRange`;
 or the helper returns `slot :: S` into the pending continuation, with every byte of the entry
 memory but the scratch word at `0` kept. `rdStep` and `win` are the copy loop's read laws. -/
-theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : Ninst}
+theorem reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : Ninst}
     (hrd : rd ≠ .reg .sstore)
     (rdStep : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
       P sevm (St b (c :: S) M G) rd d →
@@ -222,7 +268,7 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : 
     (run : Reach P fs sevm ⟨St b (len.toB256 :: p.toB256 :: slot :: r :: S) M G,
       helper τ rd sa, K⟩ T)
     (hT : AtSstore T) :
-    StoreAt slot (SolcStoragePayload.count (p + len).toB256 p) T ∨ ∃ f K' b' M' G',
+    StoreRangeAt slot (SolcStoragePayload.count (p + len).toB256 p) T ∨ ∃ f K' b' M' G',
       K = f :: K' ∧ SolcStorageReturn.Keeps (M.write 0 slot.toBytes) M' ∧
       Reach P fs sevm ⟨St b' (slot :: S) M' G', f, K'⟩ T := by
   unfold helper at run
@@ -240,8 +286,9 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : 
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · rcases hsa run hT with ⟨v, S', hk⟩ | ⟨b', M', G', hk, run⟩
     · exact .inl ⟨_, _, _, hk, .inl rfl⟩
-    · rcases exit_reach erase E run hT with ⟨x, S', h⟩ | ⟨f, K', b'', G'', hK, run⟩
-      · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
+    · rcases exit_reach_range erase E run hT with ⟨x, S', h, lower, upper⟩ | ⟨f, K', b'', G'', hK, run⟩
+      · refine .inl ⟨_, _, _, h, .inr (.inr ⟨rfl, _, 0, Nat.zero_le _, ?_, upper⟩)⟩
+        simpa only [show (0 : Nat).toB256 = 0 from rfl, B256.add_zero] using lower
       · exact .inr ⟨f, K', b'', _, G'', hK, k0.trans hk, run⟩
   · unfold longArm at run
     rsd
@@ -255,24 +302,46 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : 
     rcases rs_branchTo run hT with ⟨hz, _, run⟩ | ⟨_, g, _, hg, run⟩
     · iterate 3 rsx
       rw [toB256_add] at run
-      rcases ReachPayload.payloadJ_reach erase hrd rdStep win E.loop (i := 0)
+      rcases ReachPayload.payloadJ_reach_exact erase hrd rdStep win E.loop (i := 0)
           (fin := (p + len).toB256) (base0 := slot.toBytes.keccak) (p := p)
           (by
             refine ⟨Nat.zero_le _, by omega, ?_⟩
             rw [St.stack, Nat.mul_zero, Nat.add_zero, show ((0 : Nat).toB256) = 0 from rfl,
               B256.add_zero])
-          run hT with ⟨j, v, S', hj, h⟩ | ⟨i, g, b', M', G', -, hg, hk, run⟩
-      · exact .inl ⟨_, _, _, h, .inr (.inr ⟨j, hj, rfl⟩)⟩
+          run hT with ⟨j, v, S', hj, h⟩ | ⟨i, g, b', M', G', countEq, hg, hk, run⟩
+      · exact .inl ⟨_, _, _, h, .inr (.inl ⟨j, hj, rfl⟩)⟩
       · rw [E.exit] at hg
         cases hg
-        rcases exit_reach erase E run hT with ⟨x, S', h⟩ | ⟨f, K', b'', G'', hK, run⟩
-        · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
+        rcases exit_reach_range erase E run hT with ⟨x, S', h, lower, upper⟩ | ⟨f, K', b'', G'', hK, run⟩
+        · exact .inl ⟨_, _, _, h, .inr (.inr ⟨rfl, _, i, countEq.le, lower, upper⟩)⟩
         · exact .inr ⟨f, K', b'', _, G'', hK, k0.trans hk, run⟩
     · rw [E.exit] at hg
       cases hg
-      rcases exit_reach erase E run hT with ⟨x, S', h⟩ | ⟨f, K', b'', G'', hK, run⟩
-      · exact .inl ⟨_, _, _, h, .inr (.inl rfl)⟩
+      rcases exit_reach_range erase E run hT with ⟨x, S', h, lower, upper⟩ | ⟨f, K', b'', G'', hK, run⟩
+      · refine .inl ⟨_, _, _, h, .inr (.inr ⟨rfl, _, 0, Nat.zero_le _, ?_, upper⟩)⟩
+        simpa only [show (0 : Nat).toB256 = 0 from rfl, B256.add_zero] using lower
       · exact .inr ⟨f, K', b'', _, G'', hK, k0, run⟩
+
+theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {rd : Ninst}
+    (hrd : rd ≠ .reg .sstore)
+    (rdStep : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
+      P sevm (St b (c :: S) M G) rd d →
+        ∃ v b' M' G', d = St b' (v :: S) M' G' ∧ SolcStorageReturn.Keeps M M')
+    {sa : SFunc} (hsa : ShortOK P fs sevm τ sa) (E : Entries τ rd fs)
+    {K : List SFunc} {b : Devm} {r : B256} {S : List B256} {M : Mem} {G : Nat} {len p : Nat}
+    {slot : B256} (hp : p < 2 ^ 256)
+    (win : ∀ {b : Devm} {S : List B256} {M : Mem} {G : Nat} {d : Devm} {c : B256},
+      P sevm (St b (c :: S) M G) rd d → c.toNat < ((p + len).toB256).toNat →
+        c.toNat + 32 < 2 ^ 256)
+    (run : Reach P fs sevm ⟨St b (len.toB256 :: p.toB256 :: slot :: r :: S) M G,
+      helper τ rd sa, K⟩ T)
+    (hT : AtSstore T) :
+    StoreAt slot (SolcStoragePayload.count (p + len).toB256 p) T ∨ ∃ f K' b' M' G',
+      K = f :: K' ∧ SolcStorageReturn.Keeps (M.write 0 slot.toBytes) M' ∧
+      Reach P fs sevm ⟨St b' (slot :: S) M' G', f, K'⟩ T := by
+  rcases reach_range erase hrd rdStep hsa E hp win run hT with stored | returned
+  · exact .inl stored.storeAt
+  · exact .inr returned
 
 end StrStore
 

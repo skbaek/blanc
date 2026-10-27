@@ -270,11 +270,8 @@ theorem keysV1_eq (sevm : Sevm) : KeysInit06 sevm =
 
 /-- A clearing range produced by one actual V1 string-helper call. The old word is
 existential only after the helper has supplied its actual SLOAD value. -/
-def ClearRange (slot : B256) (words : Nat) (key : B256) : Prop :=
-  ∃ old i, i ≤ words ∧ (slot.toBytes.keccak + i.toB256).toNat ≤ key.toNat ∧
-    key.toNat < (slot.toBytes.keccak +
-      (Bytes.toB256 [31] + (Bytes.toB256 [1, 0] * ((Bytes.toB256 [1] &&& old) =? 0) -
-        Bytes.toB256 [1] &&& old) / Bytes.toB256 [2]) / Bytes.toB256 [32]).toNat
+abbrev ClearRange (slot : B256) (words : Nat) (key : B256) : Prop :=
+  StrStore.ClearRange slot words key
 
 /-- V1's initializer keys, with every zero clearing store retaining its produced range. -/
 def InitRange (sevm : Sevm) (T : Conf) : Prop :=
