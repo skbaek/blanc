@@ -522,4 +522,74 @@ theorem ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualKeys
     (fun _ member => member) capabilities neutral codes proxyApart spenders observed
     v1Faithful v2Faithful v21Faithful v22Faithful v1FixedApart modernFixedApart
 
+
+/-- All five certified implementation/library runtimes avoid the proxy's
+implementation slot on the original raw history. The finite key premises are
+the existing V1 and modern populations; no code coverage or upgrade ordering
+is assumed to obtain this local known-runtime fact. -/
+theorem ConfiguredHistoryTraceIn.knownImplSlotApart_of_actualKeys
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain} {P : Adr}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (neutral : ∀ fork, F fork → NeutralFork fork)
+    {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (v1Fresh : V1MappingFreshKeys P history initial)
+    (modernFresh : ∀ version, ModernMappingFreshKeys version P history initial) :
+    KnownImplSlotApart P history.rawNodes := by
+  intro node member target codes write found
+  rcases codes with v1 | v2 | v21 | v22 | library
+  · exact ConfiguredHistoryTraceIn.v1_write_ne_implSlot history capabilities
+      initialApart v1Fresh member target v1 found
+  · exact ConfiguredHistoryTraceIn.modern_write_ne_implSlot history capabilities neutral
+      initialApart (modernFresh .v2) member target v2 found
+  · exact ConfiguredHistoryTraceIn.modern_write_ne_implSlot history capabilities neutral
+      initialApart (modernFresh .v2_1) member target v21 found
+  · exact ConfiguredHistoryTraceIn.modern_write_ne_implSlot history capabilities neutral
+      initialApart (modernFresh .v2_2) member target v22 found
+  · obtain ⟨root, inFrames, chain⟩ :=
+      (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
+    obtain ⟨pc, _, stateGas, _, _⟩ := history.rawFrame_entryFacts capabilities root inFrames
+    have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+    have rootCode : root.sevm.code = Lib.code := by rw [← same]; exact library
+    exact (lib_no_sstore_node pc stateGas chain rootCode found).elim
+
+
+/-- The positional code induction now obtains its slot-separation premise
+from actual finite keys rather than assuming it for unknown delegated code. -/
+theorem ConfiguredHistoryTraceIn.implSlotApart_of_actualKeys
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (neutral : ∀ fork, F fork → NeutralFork fork)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W history.rawNodes)
+    {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (v1Fresh : V1MappingFreshKeys P history initial)
+    (modernFresh : ∀ version, ModernMappingFreshKeys version P history initial) :
+    ImplSlotApart P history.rawNodes := by
+  exact ConfiguredHistoryTraceIn.implSlotApart_of_knownCodes history capabilities bal world upgrades
+    (ConfiguredHistoryTraceIn.knownImplSlotApart_of_actualKeys history capabilities neutral
+      initialApart v1Fresh modernFresh)
+
+/-- Original node-code coverage follows from deployed boundaries, ordered
+upgrades, and the actual finite mapping-key populations. -/
+theorem ConfiguredHistoryTraceIn.usdc_nodeCodes_of_actualKeys
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (neutral : ∀ fork, F fork → NeutralFork fork)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W history.rawNodes)
+    {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (v1Fresh : V1MappingFreshKeys P history initial)
+    (modernFresh : ∀ version, ModernMappingFreshKeys version P history initial) :
+    UsdcNodeCodes P history.rawNodes := by
+  exact ConfiguredHistoryTraceIn.usdc_nodeCodes history capabilities bal world upgrades
+    (ConfiguredHistoryTraceIn.implSlotApart_of_actualKeys history capabilities neutral bal world upgrades
+      initialApart v1Fresh modernFresh)
+
 end Blanc.Lift.Usdc

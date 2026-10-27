@@ -1,3 +1,7 @@
+import Blanc.Lift.Usdc.V2PermitMappingTouches
+import Blanc.Lift.Usdc.V2OwnerAuthorizationMappingTouches
+import Blanc.Lift.Usdc.V2_1PermitMappingTouches
+import Blanc.Lift.Usdc.V22PermitMappingTouches
 import Blanc.Lift.Usdc.ModernCancelMappingTouches
 import Blanc.Lift.Usdc.InitRowsHistory
 import Blanc.Lift.Usdc.ModernRemoveMinterReach
@@ -621,6 +625,267 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
           have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp allFaithful)
             (site.key node.sevm) inCovered _ requested (tracked.trans slot)
           cases site <;> cases equal
+
+/-- Original successful owner-selector stores, with the exact version's collector. -/
+def actualModernOwnerKeys (version : ModernVersion) (P : Adr)
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future) : List HistoricalMappingKey :=
+  match version with
+  | .v2 => actualV2PermitKeys P history ++ actualV2OwnerAuthorizationKeys P history
+  | .v2_1 => actualV2_1PermitKeys P history
+  | .v2_2 => actualV22PermitKeys P history
+
+/-- Completeness uses the source recognizer at the same successful store, not
+an existential store elsewhere in the history with an equal digest. -/
+theorem ConfiguredHistoryTraceIn.modernOwner_write_collected
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (neutral : ∀ fork, F fork → NeutralFork fork)
+    {node : Exec.Deriv} (member : node ∈ history.rawNodes)
+    (target : node.sevm.currentTarget = P) (code : node.sevm.code = version.code)
+    (selected : Sevm.selector node.sevm ∈ version.selectors.owners)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    ∃ key ∈ actualModernOwnerKeys version P history, write.key = key.slot := by
+  cases version with
+  | v2 =>
+      rcases List.mem_cons.mp selected with permit | authorization
+      · have collected := v2PermitKey?_eq_some_iff.mpr
+          ⟨target, code, permit, ⟨write, found⟩, rfl⟩
+        obtain ⟨_, _, _, actual, actualFound, _, slot, _⟩ :=
+          ConfiguredHistoryTraceIn.v2PermitKey?_sound history capabilities member collected
+        rw [found] at actualFound
+        cases actualFound
+        exact ⟨_, List.mem_append_left _
+          (ConfiguredHistoryTraceIn.actualV2PermitKeys_complete history member target code permit found), slot⟩
+      · have collected := v2OwnerAuthorizationKey?_eq_some_iff.mpr
+          ⟨target, code, authorization, ⟨write, found⟩, rfl⟩
+        obtain ⟨_, _, _, actual, actualFound, _, slot, _⟩ :=
+          ConfiguredHistoryTraceIn.v2OwnerAuthorizationKey?_sound history capabilities member collected
+        rw [found] at actualFound
+        cases actualFound
+        exact ⟨_, List.mem_append_right _
+          (ConfiguredHistoryTraceIn.actualV2OwnerAuthorizationKeys_complete
+            history member target code authorization found), slot⟩
+  | v2_1 =>
+      have permit := List.mem_singleton.mp selected
+      have collected := v2_1PermitKey?_eq_some_iff.mpr
+        ⟨target, code, permit, ⟨write, found⟩, rfl⟩
+      obtain ⟨_, _, _, actual, actualFound, _, slot, _⟩ :=
+        ConfiguredHistoryTraceIn.v2_1PermitKey?_sound history capabilities neutral member collected
+      rw [found] at actualFound
+      cases actualFound
+      exact ⟨_, ConfiguredHistoryTraceIn.actualV2_1PermitKeys_complete
+        history member target code permit found, slot⟩
+  | v2_2 =>
+      have permit : Sevm.selector node.sevm ∈ [0xd505accf, 0x9fd5a6cf] := by
+        rcases List.mem_cons.mp selected with first | second
+        · exact List.mem_cons_of_mem _ (List.mem_singleton.mpr first)
+        · exact List.mem_cons.mpr (.inl (List.mem_singleton.mp second))
+      have collected := v22PermitKey?_eq_some_iff.mpr
+        ⟨target, code, permit, ⟨write, found⟩, rfl⟩
+      obtain ⟨_, _, _, actual, actualFound, _, slot, _⟩ :=
+        ConfiguredHistoryTraceIn.v22PermitKey?_sound history capabilities member collected
+      rw [found] at actualFound
+      cases actualFound
+      exact ⟨_, ConfiguredHistoryTraceIn.actualV22PermitKeys_complete
+        history member target code permit found, slot⟩
+
+/-- Finite freshness obligations for all modern write families. Each field is
+over its original history population; no write-separation conclusion is assumed.
+The standard field retains the established increasing-transferFrom sublist,
+while transferFrom supplies the distinct all-write population. -/
+structure ModernMappingFreshKeys (version : ModernVersion) (P : Adr)
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (initial : HistoricalMappingKey → Prop) : Prop where
+  standard : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualModernStandardKeys version P history)
+  authorization : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualModernAuthorizationKeys version P history)
+  owner : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualModernOwnerKeys version P history)
+  removeMinter : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualModernRemoveHashKeys version P history)
+  burn : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualModernBurnHashKeys version P history)
+  transferFrom : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualModernTransferFromWriteKeys version P history)
+  inherited : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualInheritedInitializerKeys version P history)
+  migration : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+    (actualV22MigrationHashKeys P history)
+
+
+
+/-- Every authorization transfer/receive write belongs to its exact source
+collector, including the debit and authorization-state writes. -/
+theorem ConfiguredHistoryTraceIn.modernAuthorization_write_collected
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    {node : Exec.Deriv} (member : node ∈ history.rawNodes)
+    (target : node.sevm.currentTarget = P) (code : node.sevm.code = version.code)
+    (selected : modernAuthorizationSelector version (Sevm.selector node.sevm))
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    ∃ key ∈ actualModernAuthorizationKeys version P history, write.key = key.slot := by
+  cases version with
+  | v2 =>
+      obtain ⟨site, _, _, collected, slot⟩ :=
+        ConfiguredHistoryTraceIn.actualV2TransferWithAuthorizationKeys_complete
+          history capabilities member target code selected found
+      exact ⟨_, collected, slot⟩
+  | v2_1 =>
+      rcases selected with s0 | s1
+      · obtain ⟨site, _, _, collected, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV2_1TransferWithAuthorizationKeys_complete
+            history capabilities member target code s0 found
+        exact ⟨_, List.mem_append_left _ (collected), slot⟩
+      · obtain ⟨site, _, _, collected, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV2_1ReceiveWithAuthorizationKeys_complete
+            history capabilities member target code s1 found
+        exact ⟨_, List.mem_append_right _ (collected), slot⟩
+  | v2_2 =>
+      rcases selected with s0 | s1 | s2 | s3
+      · obtain ⟨site, _, _, collected, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV22TransferWithAuthorizationKeys_complete
+            history capabilities member target code s0 found
+        exact ⟨_, List.mem_append_left _ (collected), slot⟩
+      · obtain ⟨site, _, _, collected, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV22ReceiveWithAuthorizationKeys_complete
+            history capabilities member target code s1 found
+        exact ⟨_, List.mem_append_right _ (List.mem_append_left _ (collected)), slot⟩
+      · obtain ⟨site, _, _, collected, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV22TransferWithAuthorizationBytesKeys_complete
+            history capabilities member target code s2 found
+        exact ⟨_, List.mem_append_right _ (List.mem_append_right _ (List.mem_append_left _ (collected))), slot⟩
+      · obtain ⟨site, _, _, collected, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV22ReceiveWithAuthorizationBytesKeys_complete
+            history capabilities member target code s3 found
+        exact ⟨_, List.mem_append_right _ (List.mem_append_right _ (List.mem_append_right _ (collected))), slot⟩
+
+/-- Every successful modern runtime store in the proxy context avoids the
+implementation slot. This covers all selectors and all write values on the
+original raw history; finite freshness and fork neutrality remain explicit. -/
+theorem ConfiguredHistoryTraceIn.modern_write_ne_implSlot
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (neutral : ∀ fork, F fork → NeutralFork fork)
+    {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : ModernMappingFreshKeys version P history initial)
+    {node : Exec.Deriv} (member : node ∈ history.rawNodes)
+    (target : node.sevm.currentTarget = P) (code : node.sevm.code = version.code)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot := by
+  rcases ConfiguredHistoryTraceIn.modern_write_ne_implSlot_or_nonInitializer
+      history capabilities initialApart fresh.migration member target code found
+      with apart | ⟨family, notInitializer⟩
+  · exact apart
+  have standardApart : ∀ key ∈ actualModernStandardKeys version P history,
+      key.slot ≠ implSlot := fun _ inKeys =>
+    HistoricalMappingKey.slot_ne_implSlot initialApart fresh.standard inKeys
+  rcases family with caller | owner | initializer | cancel | remove | blacklist | packed | burn | minter | transferFrom | transfer | inherited | authorization
+  · have collected := modernCallerKey?_eq_some_iff.mpr
+      ⟨target, code, caller, ⟨write, found⟩, rfl⟩
+    obtain ⟨_, _, _, actual, actualFound, _, slot⟩ :=
+      ConfiguredHistoryTraceIn.modernCallerKey?_sound history capabilities member collected
+    rw [found] at actualFound
+    cases actualFound
+    have inKeys := ConfiguredHistoryTraceIn.actualModernCallerKeys_complete
+      history member target code caller found
+    rw [slot]
+    exact standardApart _ (List.mem_append_right _ (List.mem_append_right _
+      (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_left _ inKeys)))))
+  · obtain ⟨key, inKeys, slot⟩ :=
+      ConfiguredHistoryTraceIn.modernOwner_write_collected history capabilities neutral
+        member target code owner found
+    rw [slot]
+    exact HistoricalMappingKey.slot_ne_implSlot initialApart fresh.owner inKeys
+  · exact (notInitializer initializer).elim
+  · have collected := modernCancelKey?_eq_some_iff.mpr
+      ⟨target, code, cancel, ⟨write, found⟩, rfl⟩
+    obtain ⟨_, _, _, actual, actualFound, _, slot⟩ :=
+      ConfiguredHistoryTraceIn.modernCancelKey?_sound history capabilities member collected
+    rw [found] at actualFound
+    cases actualFound
+    have inKeys := ConfiguredHistoryTraceIn.actualModernCancelKeys_complete
+      history member target code cancel found
+    rw [slot]
+    exact standardApart _ (List.mem_append_right _ (List.mem_append_right _
+      (List.mem_append_right _ (List.mem_append_left _ inKeys))))
+  · exact ConfiguredHistoryTraceIn.modernRemoveMinter_write_ne_implSlot history capabilities
+      initialApart fresh.removeMinter member target code remove found
+  · obtain ⟨old, selected⟩ := blacklist
+    cases version with
+    | v2 =>
+        have collected := (v2OldBlacklistKey?_eq_some_iff (version := .v2)).mpr
+          ⟨target, code, selected, ⟨write, found⟩, rfl⟩
+        obtain ⟨_, _, _, actual, actualFound, _, slot⟩ :=
+          ConfiguredHistoryTraceIn.v2OldBlacklistKey?_sound history capabilities member collected
+        rw [found] at actualFound
+        cases actualFound
+        have inKeys := ConfiguredHistoryTraceIn.actualV2OldBlacklistKeys_complete (version := .v2)
+          history member target code selected found
+        rw [slot]
+        exact standardApart _ (List.mem_append_right _ (List.mem_append_right _
+          (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_right _ inKeys)))))
+    | v2_1 =>
+        have collected := (v2OldBlacklistKey?_eq_some_iff (version := .v2_1)).mpr
+          ⟨target, code, selected, ⟨write, found⟩, rfl⟩
+        obtain ⟨_, _, _, actual, actualFound, _, slot⟩ :=
+          ConfiguredHistoryTraceIn.v2OldBlacklistKey?_sound history capabilities member collected
+        rw [found] at actualFound
+        cases actualFound
+        have inKeys := ConfiguredHistoryTraceIn.actualV2OldBlacklistKeys_complete (version := .v2_1)
+          history member target code selected found
+        rw [slot]
+        exact standardApart _ (List.mem_append_right _ (List.mem_append_right _
+          (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_right _ inKeys)))))
+    | v2_2 => exact (old rfl).elim
+  · obtain ⟨rfl, selected⟩ := packed
+    have collected := v22BlacklistKey?_eq_some_iff.mpr
+      ⟨target, code, selected, ⟨write, found⟩, rfl⟩
+    obtain ⟨_, _, _, actual, actualFound, _, slot, _⟩ :=
+      ConfiguredHistoryTraceIn.v22BlacklistKey?_sound history capabilities member collected
+    rw [found] at actualFound
+    cases actualFound
+    have inKeys := ConfiguredHistoryTraceIn.actualV22BlacklistKeys_complete
+      history member target code selected found
+    rw [slot]
+    exact standardApart _ (List.mem_append_right _ (List.mem_append_right _
+      (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_right _ inKeys)))))
+  · exact ConfiguredHistoryTraceIn.modernBurn_write_ne_implSlot history capabilities
+      initialApart fresh.burn member target code burn found
+  · rcases ConfiguredHistoryTraceIn.modernMinter_write_source history capabilities 0 0
+        member target code minter found with supply | ⟨key, inKeys, slot, _⟩
+    · rw [supply]
+      decide +kernel
+    · rw [slot]
+      exact standardApart _ (List.mem_append_right _
+        (List.mem_append_right _ (List.mem_append_left _ inKeys)))
+  · exact ConfiguredHistoryTraceIn.modernTransferFrom_write_ne_implSlot history capabilities
+      initialApart fresh.transferFrom member target code transferFrom found
+  · cases version with
+    | v2 =>
+        obtain ⟨site, _, _, inKeys, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV2TransferKeys_complete
+            history capabilities member target code transfer found
+        rw [slot]
+        exact standardApart _ (List.mem_append_left _ inKeys)
+    | v2_1 =>
+        obtain ⟨site, _, _, inKeys, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV2_1TransferKeys_complete
+            history capabilities member target code transfer found
+        rw [slot]
+        exact standardApart _ (List.mem_append_left _ inKeys)
+    | v2_2 =>
+        obtain ⟨site, _, _, inKeys, slot⟩ :=
+          ConfiguredHistoryTraceIn.actualV22TransferKeys_complete
+            history capabilities member target code transfer found
+        rw [slot]
+        exact standardApart _ (List.mem_append_left _ inKeys)
+  · exact ConfiguredHistoryTraceIn.inheritedInitializer_write_ne_implSlot history capabilities
+      inherited.1 initialApart fresh.inherited member target code inherited.2 found
+  · obtain ⟨key, inKeys, slot⟩ :=
+      ConfiguredHistoryTraceIn.modernAuthorization_write_collected history capabilities
+        member target code authorization found
+    rw [slot]
+    exact HistoricalMappingKey.slot_ne_implSlot initialApart fresh.authorization inKeys
 
 end History
 end Blanc.Lift.Usdc

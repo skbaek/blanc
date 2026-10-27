@@ -176,7 +176,7 @@ def modernTransferFromKey? (version : ModernVersion) (P : Adr)
         | some _ => some (site.key node.sevm)
       else none
 
-def actualModernTransferFromKeys {F : Fork → Prop} {cfg : ChainConfig}
+def actualModernTransferFromWriteKeys {F : Fork → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (version : ModernVersion) (P : Adr)
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future) : List HistoricalMappingKey :=
   history.rawNodes.filterMap (modernTransferFromKey? version P)
@@ -217,9 +217,9 @@ section AllWriteHistory
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {version : ModernVersion} {P : Adr}
 
-theorem mem_actualModernTransferFromKeys
+theorem mem_actualModernTransferFromWriteKeys
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future) {key : HistoricalMappingKey} :
-    key ∈ actualModernTransferFromKeys version P history ↔
+    key ∈ actualModernTransferFromWriteKeys version P history ↔
       ∃ node ∈ history.rawNodes, modernTransferFromKey? version P node = some key := by
   exact List.mem_filterMap
 
@@ -249,10 +249,10 @@ theorem ConfiguredHistoryTraceIn.modernTransferFromKey?_source
     (successfulSstore?_node_owner found).2.trans target, keyEq, keyEq ▸ slot, hashes⟩
 
 /-- Every list entry is witnessed by a successful store and hashes in this same history. -/
-theorem ConfiguredHistoryTraceIn.actualModernTransferFromKeys_source
+theorem ConfiguredHistoryTraceIn.actualModernTransferFromWriteKeys_source
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) {key : HistoricalMappingKey}
-    (member : key ∈ actualModernTransferFromKeys version P history) :
+    (member : key ∈ actualModernTransferFromWriteKeys version P history) :
     ∃ node ∈ history.rawNodes, ∃ root ∈ history.rawFrames,
       ∃ (site : ModernTransferFromSite) (write : Exec.StorageWrite),
       modernTransferFromKey? version P node = some key ∧
@@ -260,7 +260,7 @@ theorem ConfiguredHistoryTraceIn.actualModernTransferFromKeys_source
       modernTransferFromSite? version node.pc node.devm.stack[2]? = some site ∧
       Exec.Deriv.successfulSstore? node = some write ∧ write.owner = P ∧
       key = site.key root.sevm ∧ write.key = key.slot ∧ site.hashes root node := by
-  obtain ⟨node, inNodes, collected⟩ := (mem_actualModernTransferFromKeys history).mp member
+  obtain ⟨node, inNodes, collected⟩ := (mem_actualModernTransferFromWriteKeys history).mp member
   obtain ⟨root, inFrames, site, write, source⟩ :=
     ConfiguredHistoryTraceIn.modernTransferFromKey?_source history capabilities inNodes collected
   exact ⟨node, inNodes, root, inFrames, site, write, collected, source⟩
@@ -272,7 +272,7 @@ theorem ConfiguredHistoryTraceIn.modernTransferFrom_successfulSstore_collected
     (member : node ∈ history.rawNodes) (target : node.sevm.currentTarget = P)
     (code : node.sevm.code = version.code) (selected : Sevm.selector node.sevm = 0x23b872dd)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
-    ∃ key ∈ actualModernTransferFromKeys version P history,
+    ∃ key ∈ actualModernTransferFromWriteKeys version P history,
       modernTransferFromKey? version P node = some key ∧ write.key = key.slot := by
   obtain ⟨root, inFrames, chain⟩ :=
     (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
@@ -284,7 +284,7 @@ theorem ConfiguredHistoryTraceIn.modernTransferFrom_successfulSstore_collected
   obtain ⟨site, located, slot, _⟩ :=
     modernTransferFrom_store_source version pc rootCode hsg chain rootSelected found
   have collected := modernTransferFromKey?_complete located target code selected found
-  refine ⟨site.key node.sevm, (mem_actualModernTransferFromKeys history).mpr
+  refine ⟨site.key node.sevm, (mem_actualModernTransferFromWriteKeys history).mpr
     ⟨node, member, collected⟩, collected, ?_⟩
   rw [same]
   exact slot
@@ -295,7 +295,7 @@ theorem ConfiguredHistoryTraceIn.modernTransferFrom_write_ne_implSlot
     (capabilities : BodyStageCapabilities F) {initial : HistoricalMappingKey → Prop}
     (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
     (fresh : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
-      (actualModernTransferFromKeys version P history))
+      (actualModernTransferFromWriteKeys version P history))
     {node : Exec.Deriv} (member : node ∈ history.rawNodes)
     (target : node.sevm.currentTarget = P) (code : node.sevm.code = version.code)
     (selected : Sevm.selector node.sevm = 0x23b872dd)
