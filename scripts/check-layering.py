@@ -402,6 +402,7 @@ SHARED += [
 # accounting replay rungs (beacon-deposit-historical-reach-v1, W3): contract-neutral.
 SHARED += [
     "ExecutionMidHistoryIn",
+    "ExecutionInstalledCertCuts",
     "ExecutionAccountingMidHistoryIn",
 ]
 
@@ -1491,6 +1492,7 @@ CONTRACTS = {
         "Lift.Usdc.ProxyReachH",
         "Lift.Usdc.ProxyRawCallers",
         "Lift.Usdc.ProxyContextCodes",
+        "Lift.Usdc.ImplV1Lifetime",
         "Lift.Usdc.AllowanceRawHistory",
         "Lift.Usdc.ProxySstoreH",
         "Lift.Usdc.ProxyUpgradeLog",

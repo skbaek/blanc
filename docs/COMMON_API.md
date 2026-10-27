@@ -2812,6 +2812,25 @@ a bare set-membership goal does not identify this execution-specific route.
   `toList_ne_nil_of_size_ne_zero` behind each contract's `code_toList_ne_nil`.
   Every `…_of_installedCert` above is a wrapper over the safe-parametric chain
   below, via its trace's `safeRawFrames_of_installedCert` bridge.
+- Installed-certificate code survival across actual transaction cuts:
+  [`Blanc/ExecutionInstalledCertCuts.lean`](../Blanc/ExecutionInstalledCertCuts.lean).
+  `ConfiguredBlockTraceIn.code_after_txSplit_of_installedCert` starts at the
+  selected transaction's `cut.afterBenv`, carries its code through the actual
+  remaining transactions, withdrawals, requests and rewards, and ends at the
+  block endpoint. `MidHistoryTraceIn.code_of_installedCert` extends that
+  remainder through the existing whole-block spine.
+  `ConfiguredBlockTraceIn.code_before_txSplit_of_installedCert` carries code
+  from a target block's prestate through its actual beacon/history stages and
+  `cut.before` to `cut.benv`.
+  `MidHistoryTraceIn.code_before_txSplit_of_installedCert` composes those exact
+  source and destination boundaries. Only `InstalledCert`, the selected
+  domain's `BodyStageCapabilities`, and source-cut installed code are needed;
+  safety/deletion exclusions are derived, and no balance/reward budget or
+  source-block-prestate installation is required. The starting installed code
+  remains a producer output; transport alone authenticates no historical
+  constructor or anchor. As with the installed-cert history route, the
+  reducible code-equality goal does not reliably distinguish this route's
+  specific premises, so use these named APIs rather than a goal-head recipe.
 - Safe-parametric no-deletion and code survival across configured In-histories:
   [`Blanc/ExecutionNoDelSafeHistory.lean`](../Blanc/ExecutionNoDelSafeHistory.lean).
   `ExecutionTrace.SafeRawFrames wa trace.rawFrames` says every node of every

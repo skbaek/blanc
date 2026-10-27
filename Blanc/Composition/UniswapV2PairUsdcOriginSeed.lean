@@ -1,6 +1,7 @@
 import Blanc.Lift.Usdc.V1ConstructorReceiptZero
 import Blanc.Lift.Usdc.HistoryAnchorCSender
 import Blanc.Lift.Usdc.HistoryAnchorCCode
+import Blanc.Lift.Usdc.ImplV1Lifetime
 import Blanc.Lift.Usdc.HistoricalBloomExclusion
 import Blanc.ExecutionBlockLogs
 import Blanc.Lift.UniswapV2Factory.CreatePairForeignHistory
@@ -374,5 +375,70 @@ theorem original_pair_allowance_seed_of_boundary_blooms
       _ logs
     intro entry different spender value _ matched
     exact False.elim (different (congrArg Log.address matched))
+
+/-- Internal composition from the actual V1 constructor's settled output to
+the original after-D allowance seed. The source transaction remainder, entire
+V1-to-C history and C prefix supply pre-C implementation code internally.
+
+`constructorOutput` must be proved by the genuine V1 constructor producer;
+it is not a new final environmental premise or a code-observation adoption.
+Original trace/anchor identification, middle-history evidence and finite
+separation remain the same unfulfilled producer obligations. -/
+theorem original_pair_allowance_seed_of_v1_constructor_output
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    {Tr : Adr → Prop} {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : V1MappingFreshKeys usdcProxy history initial)
+    {v1Origin v1Completed origin completed pre post : BlockChain}
+    (v1Block : ConfiguredBlockTraceIn HistFork mainnetChainConfig v1Origin v1Completed)
+    (v1Cut : v1Block.bodyTrace.transactions.TxSplit 30)
+    (v1ToC : ConfiguredHistoryTraceIn HistFork mainnetChainConfig v1Completed origin)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed)
+    (afterCut : first.bodyTrace.transactions.TxSplit 22)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (beforeCut : last.bodyTrace.transactions.TxSplit 38)
+    (rootsIn : ∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+      last.rootsBeforeTxSplit beforeCut, R ∈ history.settledRoots)
+    (cBody : first.block.txs = HistoryAnchorBody.cBody)
+    (dBody : last.block.txs = HistoryAnchorBody.dBody)
+    (cBloom : first.block.header.bloom = HistoricalBloomExclusion.observedCBloom)
+    (dBloom : last.block.header.bloom = HistoricalBloomExclusion.observedDBloom)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (slotsApart : ProxySlotsApart UniswapV2Pair.Creation.pairAddress Tr)
+    (constructorOutput : v1Cut.afterBenv.state.getCode ProxyCreation.initialImplementation.toAdr =
+      ImplV1.code)
+    (noUpgraded : ∀ entry ∈ later.receiptLogs,
+      ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
+    (rowSep : UsdcRowSep usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
+    (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
+    (approveEvidence :
+      (∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+          last.rootsBeforeTxSplit beforeCut, ∀ G ∈ Exec.committedFrames R.run,
+        G.sevm.currentTarget = usdcProxy → Sevm.selector G.sevm = 0x095ea7b3 →
+        G.sevm.caller ≠ UniswapV2Pair.Creation.pairAddress) ∨
+      (∀ entry ∈ later.receiptLogs,
+        V1ApprovalZeroFor usdcProxy UniswapV2Pair.Creation.pairAddress Tr entry))
+    (hnumber : last.block.header.number = 10008355)
+    (htime : last.block.header.timestamp = 1588710145)
+    (hfactory : beforeCut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
+    (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
+    (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
+    (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
+    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0) :
+    beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
+      (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
+      ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
+        (allowSlot UniswapV2Pair.Creation.pairAddress g) = 0  := by
+  have impl := ImplV1Lifetime.code_before_c22_of_creation_cut v1Block v1Cut v1ToC
+    first afterCut BodyStageCapabilities.historical constructorOutput
+  exact original_pair_allowance_seed_of_boundary_blooms history initialApart fresh
+    first afterCut later last beforeCut rootsIn cBody dBody cBloom dBloom receiptAt
+    succeeded slotsApart impl noUpgraded rowSep initApart approveEvidence
+    hnumber htime hfactory hfnonce hpairNonce hpairCode hslot2
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9
