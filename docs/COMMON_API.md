@@ -3969,6 +3969,17 @@ requires an assumed bound or a store-free caller. The V2 interfaces in
 remain specializations. V2.2 is explicitly excluded from these older-version
 theorems.
 
+[`V22TransferFromCallee`](../Blanc/Lift/Usdc/V22TransferFromCallee.lean)
+uses the same observed split for the V2.2 balance body: either an original
+balance store carries its own successful mapping hash and setter return tag,
+or the actual callee returns into the original caller with both path segments.
+Its subtraction return retains storage and the checked arithmetic bound.
+[`V22TransferFromEntry`](../Blanc/Lift/Usdc/V22TransferFromEntry.lean)
+follows the original dispatcher, ABI wrapper and public guards into that body
+with the exact saved caller stack. Neither result assumes eventual frame
+success or hash separation; the allowance continuation and history consumer
+remain separate obligations.
+
 [`OldTransferFromEntry`](../Blanc/Lift/Usdc/OldTransferFromEntry.lean) derives
 the original V2/V2.1 dispatcher, ABI and public-guard paths while retaining
 the exact caller stack below the balance helper. The actual runtime trees,

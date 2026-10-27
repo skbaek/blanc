@@ -1437,6 +1437,8 @@ CONTRACTS = {
         "Lift.Usdc.OldTransferBodyReach",
         "Lift.Usdc.OldTransferFromCallee",
         "Lift.Usdc.OldTransferFromEntry",
+        "Lift.Usdc.V22TransferFromCallee",
+        "Lift.Usdc.V22TransferFromEntry",
         "Lift.Usdc.OldTransferFromAllowance",
         "Lift.Usdc.V2TransferReach",
         "Lift.Usdc.V2TransferFromCallee",
