@@ -3885,9 +3885,22 @@ For the balance-writing suffixes of modern burn, use
 including its cap, blacklist query and original internal return.
 Each retains the actual base-9 key and successful `ObservedKeccak` before
 that store under the original edge observation, without final-frame success
-or hash-separation premises. These are suffix producers: the original burn
-entry/body composition, history collector and finite separation discharge
-remain separate obligations.
+or hash-separation premises. These are suffix producers; they do not alone
+establish an original-entry or history theorem. V2 and V2_1 burn entry/history
+coverage remains open.
+
+For complete original-entry V2_2 burn nonincrease, use
+[`V22BurnNonIncBodies`](../Blanc/Lift/Usdc/V22BurnNonIncBodies.lean) and
+[`V22BurnNonIncReach`](../Blanc/Lift/Usdc/V22BurnNonIncReach.lean).
+`successfulSstore_nonInc` follows the original dispatcher, ABI and role checks,
+actual balance/supply reads and checked subtractions. Each actual write is
+bounded by its own node's pre-state word. If the supply slot and balance hash
+coincide, the masked balance bound and monotone subtraction still discharge
+the second store after the first. No key-separation or final-frame-success
+premise is needed. `ConfiguredHistoryTraceIn.v22Burn_nonInc` supplies the
+raw-history adapter. `modern_allowance_write_reduction` consumes it directly,
+removing only V2_2 burn from the residual selectors, with no new collector or
+change to the finite actual-key populations.
 
 For V2_2 packed-blacklist updates, use
 [`V22BlacklistReach`](../Blanc/Lift/Usdc/V22BlacklistReach.lean) and
@@ -7587,6 +7600,11 @@ contract-neutral.
   [`ReachWalkSstore.lean`](../Blanc/Lift/ReachWalkSstore.lean); selectors and
   `orsx`/`orsd`/`orsld` in [`ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean)
   preserve the observations through the same shared walk implementations.
+  `ObservedReach.rs_retBase` and `rs_retBase` return through the actual
+  pending continuation with the same walk base and memory, so storage
+  bounds survive internal returns. The older `rs_retM` interfaces remain
+  projections with unchanged signatures. Their joint return-prefix and
+  SSTORE-target premises do not provide a reliable generic goal-only trigger.
   `ObservedReach.rs_retM` returns through the actual pending continuation,
   retaining memory and the remaining edge observations; `rs_retM` projects
   the existing observation-free interface. Its joint return-prefix and
