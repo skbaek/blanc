@@ -1967,3 +1967,5 @@ import Blanc.Lift.HistAccessWalkFacts
 import Blanc.Lift.HistShaWalk
 
 import Blanc.Lift.Usdc.HistoryAnchorBody
+import Blanc.Lift.Usdc.HistoryAnchorCSigningHash
+import Blanc.Lift.Usdc.HistoryAnchorCSender

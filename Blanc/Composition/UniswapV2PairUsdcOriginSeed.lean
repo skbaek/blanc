@@ -1,5 +1,5 @@
 import Blanc.Lift.Usdc.V1ConstructorReceiptZero
-import Blanc.Lift.Usdc.HistoryAnchorBody
+import Blanc.Lift.Usdc.HistoryAnchorCSender
 import Blanc.Lift.Usdc.HistoricalBloomExclusion
 import Blanc.ExecutionBlockLogs
 import Blanc.Lift.UniswapV2Factory.CreatePairForeignHistory
@@ -172,10 +172,11 @@ theorem original_pair_allowance_seed_of_constructor_receipt
     hfunds hgas hgasb hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
 
 /-- Connect both exact frozen body identities to the actual after-D seed.
-The original C/D cuts supply their decoded fields. The successful debit supplies
+The original C/D cuts supply their decoded fields and the C signature supplies
+the admitted sender. The successful debit supplies
 funding, and validation at the configured D fork supplies its exact intrinsic
 charge and gas margin. Body identity,
-original receipt authentication, sender, state and historical write-safety
+original receipt authentication, state and historical write-safety
 obligations remain explicit internal conditions, not adopted final ENV facts. -/
 theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
     {checkpoint future : BlockChain}
@@ -193,7 +194,6 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
       last.rootsBeforeTxSplit beforeCut, R ∈ history.settledRoots)
     (cBody : first.block.txs = HistoryAnchorBody.cBody)
     (dBody : last.block.txs = HistoryAnchorBody.dBody)
-    (sender : afterCut.head.sender = ProxyCreation.originalCreator)
     {receipt : Fin 5 × Receipt}
     (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
       some receipt)
@@ -229,6 +229,7 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
       (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
       ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
         (allowSlot UniswapV2Pair.Creation.pairAddress g) = 0 := by
+  have sender := HistoryAnchorBody.c_original_cut_sender_mainnet first afterCut cBody
   obtain ⟨_, cnonce, creceiver, cvalue, cinput, _⟩ :=
     HistoryAnchorBody.c_original_cut_fields first afterCut cBody
   have dtx := (HistoryAnchorBody.d_original_cut last beforeCut dBody).2
@@ -311,7 +312,6 @@ theorem original_pair_allowance_seed_of_boundary_blooms
     (dBody : last.block.txs = HistoryAnchorBody.dBody)
     (cBloom : first.block.header.bloom = HistoricalBloomExclusion.observedCBloom)
     (dBloom : last.block.header.bloom = HistoricalBloomExclusion.observedDBloom)
-    (sender : afterCut.head.sender = ProxyCreation.originalCreator)
     {receipt : Fin 5 × Receipt}
     (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
       some receipt)
@@ -358,7 +358,7 @@ theorem original_pair_allowance_seed_of_boundary_blooms
     (fun _ different matched => different matched.1) noUpgraded
   refine original_pair_allowance_seed_of_bodies_and_constructor_receipt
     history initialApart fresh first afterCut later last beforeCut rootsIn cBody dBody
-    sender receiptAt succeeded slotsApart impl noUpgradedFull proxyApart rowSep initApart
+    receiptAt succeeded slotsApart impl noUpgradedFull proxyApart rowSep initApart
     ?_ hnumber htime hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
   rcases approveEvidence with callers | logs
   · exact Or.inl callers

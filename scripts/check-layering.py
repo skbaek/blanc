@@ -1624,6 +1624,8 @@ CONTRACTS = {
 SHARED += ["ExecutionBodyTransactionCut"]
 CONTRACTS["usdc"].extend([
     "Lift.Usdc.HistoryAnchorBody",
+    "Lift.Usdc.HistoryAnchorCSigningHash",
+    "Lift.Usdc.HistoryAnchorCSender",
     "Lift.Usdc.HistoryAnchorBodyGenerated",
     "Lift.Usdc.HistoryAnchorBodyGeneratedC00",
     "Lift.Usdc.HistoryAnchorBodyGeneratedC01",
