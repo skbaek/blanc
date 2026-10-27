@@ -3828,9 +3828,9 @@ For exhaustive modern successful-store coverage, use
 `modern_store_fixed_nonInc_or_family` applies the unchanged certified root
 tables to the actual store: its key is a listed literal slot, its value is
 non-increasing at that same node, or its original selector is in a listed
-version-specific family. `actualModernCoveredKeys` concatenates the exact configure/mint
-family with the cancellation and caller collectors and the applicable blacklist
-collector: old base-3 keys for V2/V2_1 and packed balance keys for V2_2;
+version-specific family. `actualModernCoveredKeys` concatenates the actual increasing
+older-transferFrom credits, exact configure/mint family, cancellation and caller
+collectors and the applicable blacklist collector: old base-3 keys for V2/V2_1 and packed balance keys for V2_2;
 soundness retains the original root, node, successful store, owner and key.
 Under finite faithfulness for that exact list and apartness from
 `modernFixedWriteSlots`, `modern_allowance_write_reduction` eliminates fixed,
@@ -3950,6 +3950,22 @@ original root, prefix, actual store and key equality for the unchanged
 collector. Final-frame success, hash injectivity and finite-check truth are
 not required to obtain these witnesses. Initializer writes are outside this
 two-selector collector.
+
+For modern `transferFrom`, use
+[`ModernTransferFromSites`](../Blanc/Lift/Usdc/ModernTransferFromSites.lean)
+to reuse the unchanged root certificates at the same original successful store.
+`modernTransferFrom_store_nonInc_or_balance` derives nonincrease, the recipient
+balance key, or (only in V2.2) the sender balance key. V2/V2.1 sender debits and
+all three allowance writes already have certified nonincrease.
+[`OldTransferFromMappingTouches`](../Blanc/Lift/Usdc/OldTransferFromMappingTouches.lean)
+collects only actual increasing V2/V2.1 writes by testing the actual pre-word
+and written value, without comparing a key to a proposed digest. Soundness
+identifies the exact recipient key at that original store; completeness proves
+all omitted selected writes non-increasing. `ModernWriteFamilies` adds this
+exact list to its finite faithful check and discharges the two older transferFrom
+cases. V2.2 transferFrom remains explicit. Original successful hash occurrences
+for this new collector remain a separate producer obligation; certificate key
+denotation alone does not provide them or prove finite-check truth.
 
 For the combined configure/mint family, use
 [`ModernMinterFamilies`](../Blanc/Lift/Usdc/ModernMinterFamilies.lean).
