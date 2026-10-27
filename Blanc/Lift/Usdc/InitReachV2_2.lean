@@ -1,6 +1,8 @@
 import Blanc.Lift.Usdc.InitReach
-import Blanc.Lift.Usdc.Impl.Cert
+import Blanc.Lift.Usdc.Impl.Check
 import Blanc.Lift.CursorKeccak
+import Blanc.Lift.FrameSkip
+import Blanc.Lift.ObservedReachSplit
 
 /-!
 # FiatTokenV2_2's `initializeV2` on a prefix reach
@@ -450,6 +452,112 @@ theorem body22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
       Impl.t_2538_c55, []⟩ T) (hT : AtSstore T) : InitStore (BodyKeys sevm sL aP aL.toNat) T :=
   (body22_range erase bound run hT).to_initStore
 
+
+/-- A migration mapping write and the successful hash that computed its key. -/
+def MigrationSource (P : Sevm → Devm → Ninst → Devm → Prop)
+    (observe : Conf → Conf → Prop) (sevm : Sevm) (key : B256) : Prop :=
+  ∃ account : Adr,
+    (key = mapSlot account.toB256 3 ∧
+      ObservedKeccak P observe sevm (account.toB256.toBytes ++ (3 : B256).toBytes) (fun _ => True)) ∨
+    (key = mapSlot account.toB256 9 ∧
+      ObservedKeccak P observe sevm (account.toB256.toBytes ++ (9 : B256).toBytes) (fun _ => True))
+
+theorem MigrationSource.below {key : B256} {L : List SFunc}
+    (source : MigrationSource P
+      (fun before after => observe (before.below L) (after.below L)) sevm key) :
+    MigrationSource P observe sevm key := by
+  obtain ⟨account, source | source⟩ := source
+  · exact ⟨account, .inl ⟨source.1, source.2.below L⟩⟩
+  · exact ⟨account, .inr ⟨source.1, source.2.below L⟩⟩
+
+/-- String-store ranges, literal version18, or an actually observed migration mapping. -/
+def BodySource22 (P : Sevm → Devm → Ninst → Devm → Prop)
+    (observe : Conf → Conf → Prop) (sevm : Sevm) (sLen : Nat) (T : Conf) : Prop :=
+  StrStore.StoreRangeAt 5 ((sLen + 31) / 32) T ∨
+    ∀ key value rest, T.d.stack = key :: value :: rest →
+      key = 18 ∨ MigrationSource P observe sevm key
+
+theorem BodySource22.below {sLen : Nat} {L : List SFunc}
+    (source : BodySource22 P
+      (fun before after => observe (before.below L) (after.below L)) sevm sLen T) :
+    BodySource22 P observe sevm sLen (T.below L) := by
+  rcases source with string | other
+  · exact .inl string
+  · refine .inr fun key value rest stack => ?_
+    exact (other key value rest stack).imp_right MigrationSource.below
+
+/-- Retain original mapping observations through the actual string helper's return.
+The checked return arity suffices because the caller discards the helper result. -/
+theorem body22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {sL sP : Nat} {aL aP r : B256} {S : List B256} {b : Devm} {M : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none) (bound : sP + sL + 32 ≤ 2 ^ 256)
+    (run : ObservedReach P observe Impl.cert.prog sevm
+      ⟨St b (sL.toB256 :: sP.toB256 :: aL :: aP :: r :: S) M G, Impl.t_2538_c55, []⟩ T)
+    (hT : AtSstore T) : BodySource22 P observe sevm sL T := by
+  orsd
+  orsx
+  orsld
+  iterate 5 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT
+      (by decide) (fun _ h => by cases h)).elim
+  repeat first | orsd | orsx
+  obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
+  change some Impl.t_554b_c74 = some g at hg
+  cases hg
+  rcases ObservedReach.split run (S := []) rfl with
+    ⟨target, inside, same⟩ | ⟨returned, callee, _, later⟩
+  · have atStore : AtSstore target := by rw [same] at hT; exact hT
+    change ObservedReach _ _ _ _ ⟨_, StrStoreCd.helper τ, []⟩ target at inside
+    rcases StrStoreCd.reach_range erase entries bound inside.forget atStore with
+      stored | ⟨f, K', b', M', G', impossible, _⟩
+    · rw [same]
+      exact .inl stored
+    · cases impossible
+  obtain ⟨Y, stack, length⟩ := callee.entry_stack_below_noStateGas erase Impl.cert_check hsg
+    (k := 74) (ρ := 0x2556) (X := [sL.toB256, sP.toB256, 5, 0x2556])
+    (R := sL.toB256 :: sP.toB256 :: aL :: aP :: r :: S)
+    (show Impl.cert.entries[74]? = some ⟨0x554b, [.unk, .unk, .unk, .ret], 1⟩ from rfl)
+    (show Impl.cert.prog[74]? = some Impl.t_554b_c74 from rfl) rfl
+    (by exact .cons trivial (.cons trivial (.cons trivial (.cons rfl .nil))))
+  have singleton : ∃ result, Y = [result] := by
+    cases Y with
+    | nil => simp only [List.length_nil] at length; omega
+    | cons result tail =>
+      cases tail with
+      | nil => exact ⟨result, rfl⟩
+      | cons next rest => simp only [List.length_cons] at length; omega
+  obtain ⟨result, rfl⟩ := singleton
+  rw [St.self stack rfl] at later
+  clear run
+  have run := later
+  orsd
+  iterate 2 orsx
+  rw [head_eq] at run
+  rcases loop22_source erase (i := 0) (Nat.zero_le _) run hT with
+    loop | ⟨j, b', M', G', run⟩
+  · refine .inr fun key value rest stack => .inr ?_
+    obtain ⟨j, _, at3 | at9⟩ := loop key value rest stack
+    · have account : acctAt sevm aP j =
+          (Sevm.dataWord sevm (Bytes.toB256 [32] * j.toB256 + aP)).toAdr.toB256 :=
+        ff20_and_word _
+      rw [account] at at3
+      exact ⟨_, .inl at3⟩
+    · have account : acctAt sevm aP j &&& addrMask = (acctAt sevm aP j).toAdr.toB256 := by
+        rw [B256.and_comm]
+        exact ff20_and_word _
+      rw [account] at at9
+      exact ⟨_, .inr at9⟩
+  · refine .inr fun key value rest stack => ?_
+    rcases after22_source erase run hT key value rest stack with at9 | at3 | version
+    · have account : sevm.currentTarget.toB256 &&& addrMask = sevm.currentTarget.toB256 := by
+        rw [B256.and_comm]
+        exact ff20_and_adr _
+      rw [account] at at9
+      exact .inr ⟨_, .inr at9⟩
+    · exact .inr ⟨_, .inl at3⟩
+    · exact .inl version
+
 /-- The decoded array's data pointer and length words. -/
 def arrPtr (sevm : Sevm) : B256 :=
   Bytes.toB256 [32] + (Bytes.toB256 [4] + Sevm.dataWord sevm (Bytes.toB256 [4]))
@@ -475,47 +583,60 @@ def InitRange22 (sevm : Sevm) (T : Conf) : Prop :=
 theorem InitRange22.to_initStore (h : InitRange22 sevm T) :
     InitStore (KeysInitV2_2 sevm) T := BodyRange22.to_initStore h
 
-theorem wrap22_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+theorem wrap22_body (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    (run : Reach P Impl.cert.prog sevm ⟨St b S M G, Impl.t_0851_c162, []⟩ T)
-    (hT : AtSstore T) : InitRange22 sevm T := by
-  rsd
-  iterate 10 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
-  rsd
-  iterate 13 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St b S M G, Impl.t_0851_c162, []⟩ T)
+    (hT : AtSstore T) : ∃ G' T',
+      ObservedReach P
+        (fun before after => observe (before.below [Impl.t_0489_c162]) (after.below [Impl.t_0489_c162]))
+        Impl.cert.prog sevm
+        ⟨St b ((strLen sevm).toB256 :: (36 + strOff sevm).toB256 :: arrLen sevm :: arrPtr sevm ::
+          0x0489 :: S) M G', Impl.t_2538_c55, []⟩ T' ∧
+      T = T'.below [Impl.t_0489_c162] ∧ 36 + strOff sevm + strLen sevm + 32 ≤ 2 ^ 34 ∧
+      min (strLen sevm) (2 ^ 32) = strLen sevm ∧
+      min (arrLen sevm).toNat (2 ^ 32) = (arrLen sevm).toNat := by
+  orsd
+  iterate 10 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
+  orsd
+  iterate 13 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
   have off1 := toNat_le_of_gtCheck_eq_zero (eq_zero_of_iszero_ne_zero hw)
-  rsd
-  iterate 9 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
-  rsd
-  iterate 19 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
+  orsd
+  iterate 9 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
+  orsd
+  iterate 19 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
   have len1 := toNat_le_of_gtCheck_eq_zero (CdStrWrap.or_gt_zero (eq_zero_of_iszero_ne_zero hw))
-  rsd
-  iterate 16 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
+  orsd
+  iterate 16 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
   have off2 := toNat_le_of_gtCheck_eq_zero (eq_zero_of_iszero_ne_zero hw)
-  rsd
-  iterate 9 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
-  rsd
-  iterate 19 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
+  orsd
+  iterate 9 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
+  orsd
+  iterate 19 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨hw, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
   have len2 := toNat_le_of_gtCheck_eq_zero (CdStrWrap.or_gt_zero (eq_zero_of_iszero_ne_zero hw))
-  rsd
-  iterate 7 rsx
-  obtain ⟨_, T', inside, rfl⟩ := rs_callInto (E := []) rfl
-    (show Impl.cert.prog[55]? = some Impl.t_2538_c55 from rfl) rfl (fun _ h => by cases h) run hT
-  have hT' : AtSstore T' := AtSstore.below.mp hT
+  orsd
+  iterate 7 orsx
+  obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
+  change some Impl.t_2538_c55 = some g at hg
+  cases hg
+  rcases ObservedReach.split run (S := []) rfl with
+    ⟨T', inside, same⟩ | ⟨returned, _, _, later⟩
+  swap
+  · exact (Reach.false_of_sstoreFree (E := []) rfl later.forget hT
+      (by decide) (fun _ h => by cases h)).elim
   have e36 : Bytes.toB256 [4] + Bytes.toB256 [32] = (36 : B256) := by decide
   have four : Bytes.toB256 [4] = (4 : B256) := by decide
   have big : (Bytes.toB256 [1, 0, 0, 0, 0]).toNat = 2 ^ 32 := by decide
@@ -537,10 +658,28 @@ theorem wrap22_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d
   have hs : min (strLen sevm) (2 ^ 32) = strLen sevm := Nat.min_eq_left (by unfold strLen; omega)
   have ha : min (arrLen sevm).toNat (2 ^ 32) = (arrLen sevm).toNat :=
     Nat.min_eq_left (by unfold arrLen; omega)
+  exact ⟨_, T', inside, same, small, hs, ha⟩
+
+theorem wrap22_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    (run : Reach P Impl.cert.prog sevm ⟨St b S M G, Impl.t_0851_c162, []⟩ T)
+    (hT : AtSstore T) : InitRange22 sevm T := by
+  obtain ⟨G', T', inside, rfl, small, hs, ha⟩ := wrap22_body erase (ObservedReach.of_reach run) hT
   unfold InitRange22
   rw [hs, ha]
   exact BodyRange22.below.mpr (body22_range erase
-    (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT')
+    (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside.forget hT)
+
+/-- The original ABI decoder carries the body's actual mapping hash occurrences. -/
+theorem wrap22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St b S M G, Impl.t_0851_c162, []⟩ T)
+    (hT : AtSstore T) : BodySource22 P observe sevm (min (strLen sevm) (2 ^ 32)) T := by
+  obtain ⟨G', T', inside, rfl, small, hs, _⟩ := wrap22_body erase run hT
+  rw [hs]
+  exact BodySource22.below (body22_source erase hsg
+    (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT)
 
 theorem wrap22_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {S : List B256} {M : Mem} {G : Nat}
@@ -564,6 +703,32 @@ theorem initV2_2_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s
   rw [show Impl.cert.prog[162]? = some Impl.t_0851_c162 from rfl] at hg
   cases hg
   exact wrap22_reach_range erase run hT
+
+/-- The actual selector0x430239b4 route retains every successful migration key hash. -/
+theorem initV2_2_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : BodySource22 P observe sevm (min (strLen sevm) (2 ^ 32)) T := by
+  rw [root_eq] at run
+  unfold dispatch06 at run
+  iterate 7 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT
+      (by decide) (fun _ h => by cases h)).elim
+  orsd
+  iterate 5 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  swap
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT
+      (by decide) (fun _ h => by cases h)).elim
+  iterate 4 orsx
+  change ObservedReach _ _ _ _ ⟨St _ (initSelWord sevm :: _) _ _, _, _⟩ _ at run
+  rw [sel] at run
+  obtain ⟨-, g, _, hg, run⟩ := ObservedReach.selWalk_inlS erase route_initV2_2 run hT
+  rw [show Impl.cert.prog[162]? = some Impl.t_0851_c162 from rfl] at hg
+  cases hg
+  exact wrap22_source erase hsg run hT
 
 theorem initV2_2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}

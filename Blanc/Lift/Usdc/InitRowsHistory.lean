@@ -285,6 +285,33 @@ theorem ConfiguredHistoryTraceIn.initializer_write_ne_implSlot_or_migration
   rw [same]
   exact initFrame_sstore_ne_implSlot_or_migration pc hsg fresh gas rootInit chain found
 
+
+/-- Every actual initializer write is numerically off the implementation slot or
+has an original successful migration mapping hash before that same write. -/
+theorem ConfiguredHistoryTraceIn.initializer_write_ne_implSlot_or_hash
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {node : Exec.Deriv}
+    (member : node ∈ history.rawNodes) (init : UsdcInitFrame node)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot ∨ ∃ root ∈ history.rawFrames,
+      Exec.Deriv.ParentPrefix root node ∧ root.sevm.code = Impl.code ∧
+        initSelWord root.sevm = 0x430239b4 ∧ ∃ (account : Adr) (base : B256),
+          (base = 3 ∨ base = 9) ∧ write.key = mapSlot account.toB256 base ∧
+            ∃ hashPc, KeccakBefore root node (account.toB256.toBytes ++ base.toBytes) hashPc := by
+  obtain ⟨root, inFrames, chain⟩ :=
+    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
+  obtain ⟨pc, -, hsg, fresh, gas⟩ := history.rawFrame_entryFacts capabilities root inFrames
+  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+  have rootInit : UsdcInitFrame root := by
+    simpa only [UsdcInitFrame, same] using init
+  rcases initFrame_sstore_ne_implSlot_or_migration pc hsg fresh gas rootInit chain found with
+    safe | ⟨code, selected, _⟩
+  · exact .inl safe
+  rcases InitReachV2_2.initV2_2_successfulSstore_source pc code hsg fresh.1 selected chain found with
+    safe | source
+  · exact .inl safe
+  · exact .inr ⟨root, inFrames, chain, code, selected, source⟩
+
 /-- **`InitRowWritesNonInc` from the frame-local key separation.** -/
 theorem ConfiguredHistoryTraceIn.initRowWritesNonInc
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)

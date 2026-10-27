@@ -370,6 +370,73 @@ theorem initV2_2_reach_ne_implSlot_or_mapping
       key ≠ implSlot ∨ MigrationKey sevm key :=
   (initV2_2_reach_range erase sel run hT).ne_implSlot_or_mapping
 
+/-- Numerical string ranges and version18 are disjoint from the implementation
+slot; the only remaining case retains its actually executed mapping hash. -/
+theorem BodySource22.ne_implSlot_or_source
+    {P : Sevm → Devm → Ninst → Devm → Prop} {observe : Conf → Conf → Prop}
+    {sevm : Sevm} {T : Conf} {sLen : Nat} (cap : sLen ≤ 2 ^ 160)
+    (source : BodySource22 P observe sevm sLen T) :
+    ∀ key value rest, T.d.stack = key :: value :: rest →
+      key ≠ implSlot ∨ MigrationSource P observe sevm key := by
+  intro key value rest stack
+  rcases source with ⟨key', value', rest', stack', range⟩ | other
+  · rw [stack] at stack'
+    simp only [List.cons.injEq] at stack'
+    obtain ⟨rfl, rfl, rfl⟩ := stack'
+    exact .inl (InitV1KeyBounds.range_nat_key_ne_implSlot
+      (by decide : (5 : B256) ∈ [4, 5, 7]) cap range)
+  · rcases other key value rest stack with version | mapping
+    · exact .inl (version ▸ (by decide : (18 : B256) ≠ implSlot))
+    · exact .inr mapping
+
+/-- Original initializer entry reduces implementation-slot exclusion to an
+observed successful mapping hash, including zero writes. -/
+theorem initV2_2_source_ne_implSlot_or_source
+    {P : Sevm → Devm → Ninst → Devm → Prop} {observe : Conf → Conf → Prop}
+    {sevm : Sevm} {T : Conf}
+    (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) :
+    ∀ key value rest, T.d.stack = key :: value :: rest →
+      key ≠ implSlot ∨ MigrationSource P observe sevm key :=
+  (initV2_2_source erase sel hsg run hT).ne_implSlot_or_source
+    ((Nat.min_le_right _ _).trans (Nat.pow_le_pow_right (by decide) (by decide)))
+
+
+/-- An actual successful migration store is off the implementation slot or
+names the successful original hash occurrence that computed its mapping key. -/
+theorem initV2_2_successfulSstore_source {root node : Exec.Deriv}
+    (pc : root.pc = 0) (code : root.sevm.code = Impl.code)
+    (hsg : root.sevm.benvStat.rules.stateGas = none) (empty : root.devm.stack = [])
+    (selected : initSelWord root.sevm = 0x430239b4)
+    (chain : Exec.Deriv.ParentPrefix root node)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot ∨ ∃ (account : Adr) (base : B256),
+      (base = 3 ∨ base = 9) ∧ write.key = mapSlot account.toB256 base ∧
+        ∃ hashPc, KeccakBefore root node (account.toB256.toBytes ++ base.toBytes) hashPc := by
+  obtain ⟨decoded, rest, stack⟩ := Exec.Deriv.successfulSstore?_decoded found
+  obtain ⟨κ, reach, ok⟩ :=
+    observed_reach_of_parentPrefix_noStateGas Impl.cert_check pc code hsg chain
+  obtain ⟨g, tree, -⟩ := ok.tree_of_sstore decoded
+  have target : AtSstore (κ.conf node.devm) := ⟨g, tree⟩
+  change ObservedReach (StepIn root) (Cursor.RawEdgeAt Impl.code Impl.cert root node)
+    Impl.cert.prog root.sevm ⟨root.devm, Impl.t_0000_c0, []⟩ (κ.conf node.devm) at reach
+  rw [St.self empty rfl] at reach
+  rcases initV2_2_source_ne_implSlot_or_source (fun h => StepIn.toRun h) selected hsg reach target
+      write.key write.value rest stack with safe | ⟨account, at3 | at9⟩
+  · exact .inl safe
+  · obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
+      at3.2.actual
+    exact .inr ⟨account, 3, .inl rfl, at3.1, _, occ, next, rfl,
+      instruction, result, before, edge, after, hashStack, read⟩
+  · obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
+      at9.2.actual
+    exact .inr ⟨account, 9, .inr rfl, at9.1, _, occ, next, rfl,
+      instruction, result, before, edge, after, hashStack, read⟩
+
+
 end InitReachV2_2
 
 end Blanc.Lift.Usdc
