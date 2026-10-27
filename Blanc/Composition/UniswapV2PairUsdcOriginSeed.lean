@@ -4,6 +4,7 @@ import Blanc.Lift.Usdc.HistoryAnchorCCode
 import Blanc.Lift.Usdc.ImplV1Lifetime
 import Blanc.Lift.Usdc.HistoricalBloomExclusion
 import Blanc.ExecutionBlockLogs
+import Blanc.ExecutionTraceRootFrame
 import Blanc.Lift.UniswapV2Factory.CreatePairForeignHistory
 
 /-!
@@ -24,6 +25,113 @@ Neither D freshness nor R3 establishes absence of earlier Pair incarnations.
 namespace Blanc.Composition.UniswapV2PairUsdcWeth9
 
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Usdc
+
+/-- The original D receipt identifies the retained factory execution root.
+Entry code still needs its genuine historical producer; no Pair freshness or
+successful raw-execution premise is used to extract this same root. -/
+theorem original_factory_root_of_receipt
+    {pre post : BlockChain}
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (cut : last.bodyTrace.transactions.TxSplit 38)
+    (dBody : last.block.txs = HistoryAnchorBody.dBody)
+    (hnumber : last.block.header.number = 10008355)
+    (htime : last.block.header.timestamp = 1588710145)
+    (hfactory : cut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : last.blockOutput.receiptsTrie[BLT.toBytes (.bytes (38 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true) :
+    ∃ root, cut.head.settledRoots = [root] ∧ root.pc = 0 ∧
+      root.sevm = initSevm cut.head.msg ∧ root.pre = initDevm cut.head.msg ∧
+      root.sevm.code = UniswapV2Factory.code ∧
+      root.sevm.currentTarget = UniswapV2Pair.Creation.factory ∧
+      root.sevm.data = UniswapV2Factory.createPairData ∧ root.sevm.value = 0 ∧
+      root.sevm.isStatic = false ∧ root.sevm.depth = 1024 ∧
+      root.sevm.benvStat.fork = .muirGlacier ∧
+      root.pre.stack = [] ∧ root.pre.memory = Mem.empty ∧
+      root.pre.state = cut.head.debitState := by
+  have dtx := (HistoryAnchorBody.d_original_cut last cut dBody).2
+  have dtype : cut.tx.type = .zero 4000000000 (some UniswapV2Pair.Creation.factory) := by
+    rw [dtx]
+    rfl
+  have ddata : cut.tx.data = UniswapV2Factory.createPairData := by
+    rw [dtx]
+    decide +kernel
+  have dvalue : cut.tx.value = 0 := by
+    rw [dtx]
+    rfl
+  have hstat : cut.benv.stat = (initBenv last.fork pre last.block.header).stat :=
+    cut.before.stat_eq
+  have hfork : mainnetChainConfig.forkAt 10008355 1588710145 = .ok cut.benv.stat.fork := by
+    have h := last.forkAt
+    rw [hnumber, htime] at h
+    rw [hstat]
+    exact h
+  have hmuir : cut.benv.stat.fork = .muirGlacier :=
+    Except.ok.inj (hfork.symm.trans UniswapV2Pair.pair_deployment_fork)
+  have hrules : cut.benv.stat.rules = Fork.ruleSet .muirGlacier := by
+    rw [BenvStat.rules, hmuir]
+  have actual := last.receipt_of_txSplit_settledRoots cut last.forkIn.stateGas_none
+    (by decide) (by decide)
+  rw [← cut.putIndex_eq.1] at receiptAt
+  have same := Option.some.inj (actual.symm.trans receiptAt)
+  have status := congrArg (fun r : Fin 5 × Receipt => r.2.succeeded) same
+  change cut.head.messageOut.error.isNone = receipt.2.succeeded at status
+  have clean : cut.head.messageOut.error = none := by
+    rw [succeeded] at status
+    cases error : cut.head.messageOut.error with
+    | none => rfl
+    | some halt => rw [error] at status; contradiction
+  have prepared : cut.head.msg =
+      callMessage { cut.benv.beginTransaction with state := cut.head.debitState }
+        (transactionTenv cut.benv.beginTransaction cut.tx cut.index cut.head.sender
+          cut.head.effectiveGasPrice cut.head.intrinsicGas cut.head.blobVersionedHashes)
+        cut.tx UniswapV2Pair.Creation.factory := by
+    exact Except.ok.inj (cut.head.prepared.symm.trans
+      (prepareMessage_call (by rw [dtype]; rfl)))
+  have msgRules : cut.head.msg.benv.stat.rules = Fork.ruleSet .muirGlacier := by
+    rw [prepared]
+    exact hrules
+  have msgHsg : cut.head.msg.benv.stat.rules.stateGas = none := by rw [msgRules]; rfl
+  have disabled : cut.head.msg.benv.stat.rules.delegationEnabled = false := by
+    rw [msgRules]
+    rfl
+  have delegation : messageCallDelegation cut.head.msg = .ok (cut.head.msg, 0) :=
+    processMessageCall.legacyAuthorization_disabled cut.head.msg disabled
+  have direct : messageCallExecutionMessage cut.head.msg = cut.head.msg :=
+    Msg.resolveCodeDelegation_disabled cut.head.msg disabled
+  have target : cut.head.msg.target.isNone = false := by rw [prepared]; rfl
+  have zero : cut.head.msg.value = 0 := by
+    rw [prepared]
+    change cut.tx.value.toB256 = 0
+    rw [dvalue]
+    rfl
+  have entry : (Frame.ofCall cut.head.msg).enter = .run (initEvm cut.head.msg) := by
+    apply Frame.enter_run_of_nonprecompile (Msg.benvAfterTransfer_of_value_zero zero)
+      (adr := UniswapV2Pair.Creation.factory)
+    · rw [prepared]
+      rfl
+    · change cut.head.msg.benv.stat.rules.isPrecomp UniswapV2Pair.Creation.factory = false
+      rw [msgRules]
+      decide +kernel
+  obtain ⟨root, roots, pc, sevm, devm⟩ :=
+    cut.head.message.exists_root_of_clean_call msgHsg target clean delegation direct entry
+  refine ⟨root, roots, pc, sevm, devm, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [sevm, prepared]
+    change cut.head.debitState.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code
+    rw [(State.of_subBal cut.head.debit).2, State.setBal_getCode]
+    change ((cut.benv.state.incrNonce cut.head.sender).get UniswapV2Pair.Creation.factory).code = _
+    rw [State.incrNonce_get_code]
+    exact hfactory
+  · rw [sevm, prepared]; rfl
+  · rw [sevm, prepared]; exact ddata
+  · rw [sevm]; exact zero
+  · rw [sevm, prepared]; rfl
+  · rw [sevm, prepared]; rfl
+  · rw [sevm, prepared]; exact hmuir
+  · rw [devm]; rfl
+  · rw [devm]; rfl
+  · rw [devm, prepared]; rfl
 
 /-- Derive the actual after-D proxy code, implementation word and zero tracked
 Pair allowance rows from the actual constructor receipt and exact C-to-D

@@ -132,7 +132,9 @@ private theorem createRun_logs_error
     cases result
     simp only [ite_eq_right failed, and_self]
 
-private theorem callRun_logs_error
+/-- The actual call wrapper preserves its execution core’s error marker and
+retains exactly its clean log sequence under the selected state-gas rules. -/
+theorem callRun_logs_error
     {msg delegated execMsg : Msg} {refund : Nat}
     {evm : Devm} {state : State} {out : MsgCallOutput}
     (hsg : msg.benv.stat.rules.stateGas = none)

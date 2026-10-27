@@ -4935,6 +4935,21 @@ consumer needs canonical interpreter ingress as one conjunct:
   `SystemMessageTrace.mem_rawFrames_of_mem_settledFrames` supplies the same
   membership transport for a protocol system invocation.
 - To place the entered top-level root frame of a committed message or call transaction among settled frames, import [`Blanc/ExecutionTraceRootFrame.lean`](../Blanc/ExecutionTraceRootFrame.lean).
+  When the input is the actual clean settlement instead of a supplied successful
+  raw execution, use `ProcessMessageTrace.exists_root_of_entered_clean`.
+  It proves that the original trace retains exactly one root with the entered
+  pc, static environment and initial machine state. For an ordinary call,
+  `MessageCallTrace.exists_root_of_clean_call` transports the actual wrapper's
+  clean error marker to that core and uses explicit no-delegation equations.
+  The shared `callRun_logs_error` helper in
+  [`Blanc/ExecutionSettledReceiptLogs.lean`](../Blanc/ExecutionSettledReceiptLogs.lean)
+  exposes the same wrapper-to-core error and log equality independently.
+  The concrete `original_factory_root_of_receipt` consumer in
+  [`UniswapV2PairUsdcOriginSeed`](../Blanc/Composition/UniswapV2PairUsdcOriginSeed.lean)
+  combines the original receipt lookup with the prepared transaction message;
+  code survives the sender debit without a sender/Pair separation premise.
+  Body, receipt and entry-code authentication remain caller obligations.
+  These existential trace inversions have no narrow tactic recipe trigger.
   `TransactionTrace.root_frame_of_call_value_with_message` additionally preserves
   the exact identity `msg = trace.msg`, so execution facts carried by its relation
   can be applied to the retained transaction message. The original helper keeps
