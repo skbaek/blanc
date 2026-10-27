@@ -3878,6 +3878,17 @@ alias it. `modernRemoveMinter_nonInc` supplies the raw-history adapter.
 directly, removing selector 0x3092afd5 from the unresolved families without
 adding hash-separation premises or changing the actual-key population.
 
+For the balance-writing suffixes of modern burn, use
+[`ModernBurnStores`](../Blanc/Lift/Usdc/ModernBurnStores.lean).
+`caller_key_hash` covers V2 and V2_1's final caller-balance writer;
+`packed_setBalance_key_hash` covers V2_2's shared setBalance helper,
+including its cap, blacklist query and original internal return.
+Each retains the actual base-9 key and successful `ObservedKeccak` before
+that store under the original edge observation, without final-frame success
+or hash-separation premises. These are suffix producers: the original burn
+entry/body composition, history collector and finite separation discharge
+remain separate obligations.
+
 For V2_2 packed-blacklist updates, use
 [`V22BlacklistReach`](../Blanc/Lift/Usdc/V22BlacklistReach.lean) and
 [`V22BlacklistMappingTouches`](../Blanc/Lift/Usdc/V22BlacklistMappingTouches.lean).

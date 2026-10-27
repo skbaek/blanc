@@ -1434,6 +1434,7 @@ CONTRACTS = {
         "Lift.Usdc.ModernCancelMappingTouches",
         "Lift.Usdc.ModernCancelReach",
         "Lift.Usdc.ModernRemoveMinterReach",
+        "Lift.Usdc.ModernBurnStores",
         "Lift.Usdc.ModernCallerHashBodies",
         "Lift.Usdc.ModernCallerReach",
         "Lift.Usdc.ModernWriteFamilies",
