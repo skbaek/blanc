@@ -1450,6 +1450,7 @@ CONTRACTS = {
         "Lift.Usdc.ModernBurnNonIncReach",
         "Lift.Usdc.ModernCallerHashBodies",
         "Lift.Usdc.ModernCallerReach",
+        "Lift.Usdc.ModernMinterFamilies",
         "Lift.Usdc.ModernWriteFamilies",
         "Lift.Usdc.FootprintLedger",
         "Lift.Usdc.Governance",

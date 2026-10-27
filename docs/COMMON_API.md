@@ -3828,13 +3828,13 @@ For exhaustive modern successful-store coverage, use
 `modern_store_fixed_nonInc_or_family` applies the unchanged certified root
 tables to the actual store: its key is a listed literal slot, its value is
 non-increasing at that same node, or its original selector is in a listed
-version-specific family. `actualModernCoveredKeys` concatenates the cancellation
-and caller collectors with the applicable blacklist collector: old base-3
-keys for V2/V2_1 and packed balance keys for V2_2;
+version-specific family. `actualModernCoveredKeys` concatenates the exact configure/mint
+family with the cancellation and caller collectors and the applicable blacklist
+collector: old base-3 keys for V2/V2_1 and packed balance keys for V2_2;
 soundness retains the original root, node, successful store, owner and key.
 Under finite faithfulness for that exact list and apartness from
 `modernFixedWriteSlots`, `modern_allowance_write_reduction` eliminates fixed,
-cancellation and old-blacklist aliases and attributes caller writes,
+cancellation, blacklist and established configure/mint aliases and attributes caller writes,
 leaving existing allowed exceptions, actual
 nonincrease, owner selectors or `modernOtherWriteSelectors`. This is a
 reduction toward the full classifier; the owner and remaining mapping cases
@@ -3950,6 +3950,17 @@ original root, prefix, actual store and key equality for the unchanged
 collector. Final-frame success, hash injectivity and finite-check truth are
 not required to obtain these witnesses. Initializer writes are outside this
 two-selector collector.
+
+For the combined configure/mint family, use
+[`ModernMinterFamilies`](../Blanc/Lift/Usdc/ModernMinterFamilies.lean).
+`actualModernMinterKeys` selects the version's actual configureMinter keys and,
+only for V2, its actual mint keys. `modernMinter_write_source` derives either
+literal supply slot 11 or a collected logical key distinct from every allowance
+key. It assumes no hash separation. `ModernWriteFamilies` includes this exact
+list in `actualModernCoveredKeys`; its existing finite faithful/apart checks
+then eliminate all three configureMinter selectors and V2 mint from the residual
+families. Later-version mint remains explicit. No AllowedFrame exception,
+spender population, or global hash-injectivity premise is added.
 
 For V2 `configureMinter`, use
 [`Blanc/Lift/Usdc/V2ConfigureMinterMappingTouches.lean`](../Blanc/Lift/Usdc/V2ConfigureMinterMappingTouches.lean)'s
