@@ -3951,6 +3951,45 @@ collector. Final-frame success, hash injectivity and finite-check truth are
 not required to obtain these witnesses. Initializer writes are outside this
 two-selector collector.
 
+For V2 `configureMinter`, use
+[`Blanc/Lift/Usdc/V2ConfigureMinterMappingTouches.lean`](../Blanc/Lift/Usdc/V2ConfigureMinterMappingTouches.lean)'s
+`actualV2ConfigureMinterKeys`. The collector preserves the original history's
+order and duplicates. Its completeness theorem derives the reached store site
+for every selected successful store; recognition never compares the written key
+with a proposed hash. `V2ConfigureMinterReach.successfulSstore_source` derives
+the minter flag at base 12 or allowance at base 13, retaining that store's own
+successful original hash strictly before it. No final-frame success or hash
+injectivity is required. Initial apartness and freshness of this exact list
+remain explicit in the implementation-slot separation consumer.
+
+V2.1 uses
+[`Blanc/Lift/Usdc/V2_1ConfigureMinterMappingTouches.lean`](../Blanc/Lift/Usdc/V2_1ConfigureMinterMappingTouches.lean)'s
+`actualV2_1ConfigureMinterKeys` with the same exact-history guarantees.
+`V2_1ConfigureMinterReach` proves its own dispatcher, ABI, guard and source-PC
+coverage. It reuses `V2ConfigureMinterReach.body_reach_observed`, generalized
+over the surrounding program, because the two concrete body trees are
+definitionally equal. The existing V2 body walk and store-tail definitions
+remain the single owners; each runtime has its own source-location proof.
+
+V2.2 uses
+[`Blanc/Lift/Usdc/V22ConfigureMinterMappingTouches.lean`](../Blanc/Lift/Usdc/V22ConfigureMinterMappingTouches.lean)'s
+`actualV22ConfigureMinterKeys` for the same exact-history interface.
+`V22ConfigureMinterReach` proves the route and source locations in `Impl.code`,
+then reuses the identical V2 body without another generalization. Each collected
+row retains its own original successful hash before that actual store.
+
+For V2 `mint`, use
+[`Blanc/Lift/Usdc/V2MintMappingTouches.lean`](../Blanc/Lift/Usdc/V2MintMappingTouches.lean)'s
+`actualV2MintKeys`. The actual-store completeness theorem classifies the literal
+total-supply write at slot 11 separately, deriving its exclusion from the
+mapping collector. The recipient balance at base 9 and caller minter allowance
+at base 13 retain their own successful original hashes before their stores.
+`V2MintReach.successfulSstore_source` traverses the checked dispatcher, guards
+and arithmetic returns; its subtraction bound comes from the actual earlier
+mint guard. Recognition tests source PCs and actual store success, never a
+proposed key digest. Order, duplicates and original history membership remain
+explicit, as do initial apartness and freshness for slot separation.
+
 For V1 `burn`, use
 [`Blanc/Lift/Usdc/V1BurnMappingTouches.lean`](../Blanc/Lift/Usdc/V1BurnMappingTouches.lean)'s
 `actualV1BurnBalanceKeys`. The recognizer selects actual successful balance
