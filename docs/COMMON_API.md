@@ -3823,6 +3823,22 @@ retain the original root, node, written key and both successful hashes for
 the unchanged collector. The existing V2 approve witness is preserved.
 Other modern selectors and the full classifier remain outside this family.
 
+For exhaustive modern successful-store coverage, use
+[`ModernWriteFamilies`](../Blanc/Lift/Usdc/ModernWriteFamilies.lean).
+`modern_store_fixed_nonInc_or_family` applies the unchanged certified root
+tables to the actual store: its key is a listed literal slot, its value is
+non-increasing at that same node, or its original selector is in a listed
+version-specific family. `actualModernCoveredKeys` concatenates the existing
+caller collector with the applicable V2/V2_1 old-blacklist collector; soundness
+retains the original root, node, successful store, owner and key. Under finite
+faithfulness for that exact list and apartness from `modernFixedWriteSlots`,
+`modern_allowance_write_reduction` eliminates fixed/old-blacklist aliases and
+attributes caller writes, leaving existing allowed exceptions, actual
+nonincrease, owner selectors or `modernOtherWriteSelectors`. This is a
+reduction toward the full classifier; the owner and remaining mapping cases
+and check truth stay open. V2_2 packed-blacklist writers remain among those
+other selectors, and `initializeV2_1` is not promoted to an allowed exception.
+
 For V2 and V2_1 old-blacklist writes, use
 [`Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean`](../Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean)'s
 `actualV2OldBlacklistKeys` with its explicit version. The certificate and

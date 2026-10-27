@@ -1431,6 +1431,7 @@ CONTRACTS = {
         "Lift.Usdc.ModernCallerMappingTouches",
         "Lift.Usdc.ModernCallerHashBodies",
         "Lift.Usdc.ModernCallerReach",
+        "Lift.Usdc.ModernWriteFamilies",
         "Lift.Usdc.FootprintLedger",
         "Lift.Usdc.Governance",
         "Lift.Usdc.Hist",
