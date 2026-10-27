@@ -27,7 +27,8 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Usdc
 /-- Derive the actual after-D proxy code, implementation word and zero tracked
 Pair allowance rows from the actual constructor receipt and exact C-to-D
 interval. The factory's admitted execution supplies D preservation, rather
-than a supplied foreign-storage equality. -/
+than a supplied foreign-storage equality. The fixed proxy-slot separation
+also derives write separation over the actual history. -/
 theorem original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
     {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
@@ -57,7 +58,6 @@ theorem original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
       first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
         later.receiptLogs ++ last.receiptLogsBetween 0 38,
       ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
-    (proxyApart : ProxyRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawNodes)
     (rowSep : UsdcRowSep usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
     (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
     (approveEvidence :
@@ -91,6 +91,10 @@ theorem original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
   have early : last.block.header.timestamp < mainnetCancunTimestamp := by
     rw [htime]
     decide
+  have proxyApart :
+      ProxyRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawNodes :=
+    ConfiguredHistoryTraceIn.proxyRowsApart history BodyStageCapabilities.historical
+      (fun selected => selected.bal_none) slotsApart
   obtain ⟨proxy, _, word, zero⟩ :=
     ConfiguredHistoryTraceIn.original_v1_seed_before_cut38_of_constructor_receipt_and_approve_evidence
       history initialApart fresh first afterCut later last beforeCut rootsIn early
@@ -139,7 +143,6 @@ theorem original_pair_allowance_seed_of_constructor_receipt
       first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
         later.receiptLogs ++ last.receiptLogsBetween 0 38,
       ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
-    (proxyApart : ProxyRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawNodes)
     (rowSep : UsdcRowSep usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
     (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
     (noCaller : ∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
@@ -169,7 +172,7 @@ theorem original_pair_allowance_seed_of_constructor_receipt
   original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
     history initialApart fresh first afterCut later last beforeCut rootsIn
     receiver input value sender nonce receiptAt succeeded slotsApart impl noUpgraded
-    proxyApart rowSep initApart (.inl noCaller) hnumber htime htype hdata hvalue hnonce
+    rowSep initApart (.inl noCaller) hnumber htime htype hdata hvalue hnonce
     hfunds hgas hgasb hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
 
 /-- Connect both exact frozen body identities to the actual after-D seed.
@@ -207,7 +210,6 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
       first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
         later.receiptLogs ++ last.receiptLogsBetween 0 38,
       ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
-    (proxyApart : ProxyRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawNodes)
     (rowSep : UsdcRowSep usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
     (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
     (approveEvidence :
@@ -298,7 +300,7 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
   exact original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
     history initialApart fresh first afterCut later last beforeCut rootsIn
     creceiver cinput cvalue sender cnonce receiptAt succeeded slotsApart implAfter noUpgraded
-    proxyApart rowSep initApart approveEvidence hnumber htime dtype ddata dvalue dnonce
+    rowSep initApart approveEvidence hnumber htime dtype ddata dvalue dnonce
     hfunds hgas dgas hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
 
 /-- The original C/D bloom identities discharge both boundary receipt scans.
@@ -332,7 +334,6 @@ theorem original_pair_allowance_seed_of_boundary_blooms
       ImplV1.code)
     (noUpgraded : ∀ entry ∈ later.receiptLogs,
       ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
-    (proxyApart : ProxyRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawNodes)
     (rowSep : UsdcRowSep usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
     (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
     (approveEvidence :
@@ -369,7 +370,7 @@ theorem original_pair_allowance_seed_of_boundary_blooms
     (fun _ different matched => different matched.1) noUpgraded
   refine original_pair_allowance_seed_of_bodies_and_constructor_receipt
     history initialApart fresh first afterCut later last beforeCut rootsIn cBody dBody
-    receiptAt succeeded slotsApart impl noUpgradedFull proxyApart rowSep initApart
+    receiptAt succeeded slotsApart impl noUpgradedFull rowSep initApart
     ?_ hnumber htime hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
   rcases approveEvidence with callers | logs
   · exact Or.inl callers
