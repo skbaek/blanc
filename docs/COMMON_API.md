@@ -5757,6 +5757,13 @@ Use
   [`Blanc/ExecutionAccountingAdmission.lean`](../Blanc/ExecutionAccountingAdmission.lean),
   beside `TransactionTrace.msg_caller`) packages those two admission facts:
   the prepared message's caller has a nonzero nonce, so it is `State.Protected`.
+- To recover an account before the debit from a zero nonce afterward, use
+  `ExecutionTrace.TransactionTrace.account_eq_of_debit_nonce_zero` in
+  [`Blanc/ExecutionTransactionDebitInverse.lean`](../Blanc/ExecutionTransactionDebitInverse.lean).
+  It derives sender exclusion and equality of the entire target account from
+  the same actual transaction trace. No concrete sender nonce or fork premise
+  is needed. The caller must produce the debit-state zero nonce; this does not
+  authenticate a historical state or infer freshness from a receipt alone.
 - `ExecutionTrace.TransactionTrace.accountsToDelete_ne` and
   `ExecutionTrace.foldl_destroyAccount_get_eq` cover the final deletion fold.
 - `ExecutionTrace.TransactionTrace.settlement_sum_bounds` funds the sender
