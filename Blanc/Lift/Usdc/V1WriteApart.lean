@@ -7,6 +7,7 @@ import Blanc.Lift.Usdc.V1BurnMappingTouches
 import Blanc.Lift.Usdc.V1TransferMappingTouches
 import Blanc.Lift.Usdc.V1TransferFromMappingTouches
 import Blanc.Lift.Usdc.V1TransferFromNonInc
+import Blanc.Lift.Usdc.InitRowsHistory
 
 /-! Actual V1 stores separated using the exact collected mapping keys. -/
 
@@ -367,5 +368,61 @@ theorem ConfiguredHistoryTraceIn.v1_allowance_write_class
       rootSelector found atSite
     rw [rootTarget] at bound
     exact .inr bound
+
+
+/-- Finite actual-key separation supplies the internal V1 frame classifier over
+the same full raw history and any tracked subset of the observed spender list. -/
+theorem ConfiguredHistoryTraceIn.v1RawWriteClass_of_actualKeys
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain} {P pair : Adr}
+    {Tr : Adr → Prop} (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (spenders : List Adr)
+    (observed : ∀ g, Tr g → g ∈ spenders)
+    (faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV1MappingKeys P history) = true)
+    (fixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true) :
+    V1RawWriteClass P pair Tr history.rawFrames := by
+  intro G member target code m chain w found tracked
+  have nodeMember : m ∈ history.rawNodes :=
+    (history.mem_rawNodes_iff_rawFrame_parentPrefix m).mpr ⟨G, member, chain⟩
+  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+  have nodeTarget : m.sevm.currentTarget = P := by rw [same]; exact target
+  have nodeCode : m.sevm.code = ImplV1.code := by rw [same]; exact code
+  obtain ⟨g, inTr, key⟩ := tracked
+  rcases ConfiguredHistoryTraceIn.v1_allowance_write_class history capabilities spenders
+      faithful fixedApart nodeMember nodeTarget nodeCode found (observed g inTr) key with
+    (initializer | approve) | nonInc
+  · apply Or.inl
+    apply Or.inr ∘ Or.inr
+    change selV1T.eval (WriteSite.Env.root G.sevm) ∈ [0x3357162b]
+    rw [selV1T_root, ← same]
+    exact List.mem_singleton.mpr initializer
+  · apply Or.inl
+    apply Or.inl
+    change selV1T.eval (WriteSite.Env.root G.sevm) ∈ [0x095ea7b3] ∧
+      G.sevm.caller.toB256.toAdr = pair
+    rw [selV1T_root, toAdr_toB256, ← same]
+    exact ⟨List.mem_singleton.mpr approve.1, approve.2⟩
+  · exact .inr nonInc
+
+/-- Actual V1 key separation and unchanged modern descriptor separation classify
+all raw tracked-row writes, retaining their original parent-frame attribution. -/
+theorem ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualV1Keys
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain} {P pair : Adr}
+    {Tr : Adr → Prop} (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (codes : UsdcNodeCodes P history.rawNodes)
+    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
+    (modernSep : UsdcModernRowSep P pair Tr history.rawFrames)
+    (spenders : List Adr) (observed : ∀ g, Tr g → g ∈ spenders)
+    (faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV1MappingKeys P history) = true)
+    (fixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true) :
+    UsdcRawRowWriteClass P pair Tr history.rawFrames history.rawNodes := by
+  intro m member w found owner tracked
+  exact ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_v1Class history capabilities codes
+    proxyApart modernSep
+    (ConfiguredHistoryTraceIn.v1RawWriteClass_of_actualKeys history capabilities spenders
+      observed faithful fixedApart) member found owner tracked
 
 end Blanc.Lift.Usdc

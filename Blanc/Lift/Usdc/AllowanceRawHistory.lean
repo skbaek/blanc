@@ -106,6 +106,30 @@ def UsdcRowSep (P pair : Adr) (Tr : Adr → Prop) (frames : List Exec.Deriv) : P
     (G.sevm.code = Impl.code → RowSep 10 pair.toB256 (AllowKey Tr)
       (wsRoot ImplWs.implWsAnn) (WriteSite.Env.root G.sevm))
 
+/-- Descriptor separation for the three modern implementations. V1 can instead
+use a classifier justified by its actual mapping-store population. -/
+def UsdcModernRowSep (P pair : Adr) (Tr : Adr → Prop) (frames : List Exec.Deriv) : Prop :=
+  ∀ G ∈ frames, G.sevm.currentTarget = P →
+    (G.sevm.code = ImplV2.code → RowSep 10 pair.toB256 (AllowKey Tr)
+      (wsRoot ImplV2Ws.implWsAnn) (WriteSite.Env.root G.sevm)) ∧
+    (G.sevm.code = ImplV2_1.code → RowSep 10 pair.toB256 (AllowKey Tr)
+      (wsRoot ImplV2_1Ws.implWsAnn) (WriteSite.Env.root G.sevm)) ∧
+    (G.sevm.code = Impl.code → RowSep 10 pair.toB256 (AllowKey Tr)
+      (wsRoot ImplWs.implWsAnn) (WriteSite.Env.root G.sevm))
+
+theorem UsdcRowSep.modern {P pair : Adr} {Tr : Adr → Prop} {frames : List Exec.Deriv}
+    (separation : UsdcRowSep P pair Tr frames) : UsdcModernRowSep P pair Tr frames :=
+  fun G member target => (separation G member target).2
+
+/-- Internal V1 classifier interface at the same actual frame, node and store.
+Its producers may use descriptor separation or finite actual-key separation. -/
+def V1RawWriteClass (P pair : Adr) (Tr : Adr → Prop) (frames : List Exec.Deriv) : Prop :=
+  ∀ G ∈ frames, G.sevm.currentTarget = P → G.sevm.code = ImplV1.code →
+    ∀ m, Exec.Deriv.ParentPrefix G m → ∀ w : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? m = some w → (∃ g, Tr g ∧ allowSlot pair g = w.key) →
+        AllowedFrame selV1 pair (WriteSite.Env.root G.sevm) ∨
+          w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat
+
 /-- **The law's exception frames.** A frame running an implementation runtime whose
 selector-observed environment is one of its version's exceptions for the Pair. -/
 def UsdcAllowException (pair : Adr) (G : Exec.Deriv) : Prop :=
@@ -113,6 +137,17 @@ def UsdcAllowException (pair : Adr) (G : Exec.Deriv) : Prop :=
     (G.sevm.code = ImplV2.code ∧ AllowedFrame selV2 pair (WriteSite.Env.root G.sevm)) ∨
     (G.sevm.code = ImplV2_1.code ∧ AllowedFrame selV2_1 pair (WriteSite.Env.root G.sevm)) ∨
     (G.sevm.code = Impl.code ∧ AllowedFrame selV2_2 pair (WriteSite.Env.root G.sevm))
+
+/-- Internal interface for attributed raw allowance writes over the original
+populations. It is discharged by the implementation-specific classifiers. -/
+def UsdcRawRowWriteClass (P pair : Adr) (Tr : Adr → Prop)
+    (frames nodes : List Exec.Deriv) : Prop :=
+  ∀ {m : Exec.Deriv}, m ∈ nodes → ∀ {w : Exec.StorageWrite},
+    Exec.Deriv.successfulSstore? m = some w → w.owner = P →
+    (∃ g, Tr g ∧ allowSlot pair g = w.key) →
+      ∃ G ∈ frames, Exec.Deriv.ParentPrefix G m ∧ G.sevm.currentTarget = P ∧
+        (UsdcAllowException pair G ∨
+          w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat)
 
 /-- The caller- and owner-keyed part of `AllowedFrame`: the Pair as caller of a caller-keyed
 entry point, or the Pair named by calldata word 4 of an owner-keyed one. -/
@@ -182,14 +217,31 @@ section History
 variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
   {P : Adr} {pair : Adr} {Tr : Adr → Prop}
 
+/-- The existing descriptor-wide V1 premise supplies the internal classifier. -/
+theorem ConfiguredHistoryTraceIn.v1RawWriteClass_of_rowSep
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (rowSep : UsdcRowSep P pair Tr history.rawFrames) :
+    V1RawWriteClass P pair Tr history.rawFrames := by
+  intro G member target code m chain w found tracked
+  obtain ⟨pc, _, stateGas, _, _⟩ := history.rawFrame_entryFacts capabilities G member
+  have nodeTarget : m.sevm.currentTarget = P := by
+    rw [Exec.Deriv.ParentPrefix.sevm_eq chain]
+    exact target
+  have classified := rawWrite_allowClass pc stateGas chain ImplV1.cert_check implV1_wsCert
+    code (by decide) implV1_allowSitesOk ((rowSep G member target).1 code) found tracked
+  rw [nodeTarget] at classified
+  exact classified
+
 /-- **Every raw write at a tracked row, attributed and classified.** A successful raw
 `SSTORE` at `(P, k)` for a tracked Pair row `k` lies in a raw frame at `P` that is an
 exception frame, or the write does not raise the row above its word at the write's node. -/
-theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite
+theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_v1Class
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (codes : UsdcNodeCodes P history.rawNodes)
     (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
-    (rowSep : UsdcRowSep P pair Tr history.rawFrames)
+    (rowSep : UsdcModernRowSep P pair Tr history.rawFrames)
+    (v1Class : V1RawWriteClass P pair Tr history.rawFrames)
     {m : Exec.Deriv} (hm : m ∈ history.rawNodes) {w : Exec.StorageWrite}
     (found : Exec.Deriv.successfulSstore? m = some w) (owner : w.owner = P)
     (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
@@ -205,14 +257,14 @@ theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite
   obtain ⟨hpc, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities G hG
   have fam := codes m hm target
   rw [hsevm] at fam
-  obtain ⟨s1, s2, s21, s22⟩ := rowSep G hG gTarget
+  obtain ⟨s2, s21, s22⟩ := rowSep G hG gTarget
   have nonInc : w.value.toNat ≤ (m.devm.getStorVal m.sevm.currentTarget w.key).toNat →
       w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
     rw [target]; exact id
   rcases fam with h | h | h | h | h | h
   · exact absurd tracked (proxyApart m hm target (by rw [hsevm]; exact h) w found)
-  · exact (rawWrite_allowClass hpc hsg chain ImplV1.cert_check implV1_wsCert h (by decide)
-      implV1_allowSitesOk (s1 h) found tracked).imp (fun a => .inl ⟨h, a⟩) nonInc
+  · exact (v1Class G hG gTarget h m chain w found tracked).imp
+      (fun a => .inl ⟨h, a⟩) id
   · exact (rawWrite_allowClass hpc hsg chain ImplV2.cert_check implV2_wsCert h (by decide)
       implV2_allowSitesOk (s2 h) found tracked).imp (fun a => .inr (.inl ⟨h, a⟩)) nonInc
   · exact (rawWrite_allowClass hpc hsg chain ImplV2_1.cert_check implV2_1_wsCert h (by decide)
@@ -222,6 +274,23 @@ theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite
       implV2_2_allowSitesOk (s22 h) found tracked).imp (fun a => .inr (.inr (.inr ⟨h, a⟩)))
       nonInc
   · exact (lib_no_sstore_node hpc hsg chain h found).elim
+
+/-- **Every raw write at a tracked row, attributed and classified.** A successful raw
+`SSTORE` at `(P, k)` for a tracked Pair row `k` lies in a raw frame at `P` that is an
+exception frame, or the write does not raise the row above its word at the write's node. -/
+theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (codes : UsdcNodeCodes P history.rawNodes)
+    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
+    (rowSep : UsdcRowSep P pair Tr history.rawFrames)
+    {m : Exec.Deriv} (hm : m ∈ history.rawNodes) {w : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? m = some w) (owner : w.owner = P)
+    (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    ∃ G ∈ history.rawFrames, Exec.Deriv.ParentPrefix G m ∧ G.sevm.currentTarget = P ∧
+      (UsdcAllowException pair G ∨
+        w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat) := by
+  exact ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_v1Class history capabilities codes proxyApart rowSep.modern
+    (ConfiguredHistoryTraceIn.v1RawWriteClass_of_rowSep history capabilities rowSep) hm found owner tracked
 
 /-- **A changed row's last word comes from an attributed raw write.** If `P`'s cell `k`
 differs between checkpoint and future, some raw node wrote the future word there, in a raw

@@ -18,9 +18,7 @@ private theorem retainedRowWrite_nonInc_or_v2_2_owner_of_frames
     {frames roots : List Exec.Frame}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
-    (codes : UsdcNodeCodes P history.rawNodes)
-    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
-    (rowSep : UsdcRowSep P pair Tr history.rawFrames)
+    (rawClass : UsdcRawRowWriteClass P pair Tr history.rawFrames history.rawNodes)
     (initApart : InitRowsApart P pair Tr history.rawFrames)
     (framesEq : frames = rootFrames roots)
     (frameSubset : frames ⊆ history.settledFrames)
@@ -59,8 +57,7 @@ private theorem retainedRowWrite_nonInc_or_v2_2_owner_of_frames
   have target : G.sevm.currentTarget = P :=
     (congrArg Sevm.currentTarget (Exec.Deriv.ParentPrefix.sevm_eq chain)).symm.trans nodeTarget
   obtain ⟨raw, rawMem, rawChain, rawTarget, classified⟩ :=
-    ConfiguredHistoryTraceIn.usdc_rawRowWrite history capabilities codes proxyApart rowSep
-      nodeMember found owner tracked
+    rawClass nodeMember found owner tracked
   have same : raw.sevm = (Exec.Frame.rootDeriv G).sevm :=
     (Exec.Deriv.ParentPrefix.sevm_eq rawChain).symm.trans
       (Exec.Deriv.ParentPrefix.sevm_eq chain)
@@ -113,6 +110,39 @@ private theorem retainedRowWrite_nonInc_or_v2_2_owner_of_frames
 /-- A globally retained tracked-row write is non-increasing, or its same globally
 retained parent is a V2_2 owner exception. Caller and old-owner readiness inputs
 are local producer obligations; no exclusion is applied to a discarded frame. -/
+theorem ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner_of_rawClass
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
+    (rawClass : UsdcRawRowWriteClass P pair Tr history.rawFrames history.rawNodes)
+    (initApart : InitRowsApart P pair Tr history.rawFrames)
+    (noCaller : ∀ (G : Exec.Frame), G ∈ history.settledFrames →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery history P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    {R : Exec.Frame} (root : R ∈ history.settledRoots)
+    {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
+    {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
+    (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    ∃ G : Exec.Frame, G ∈ history.settledFrames ∧ G ∈ Exec.committedFrames R.run ∧
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m ∧ G.sevm.currentTarget = P ∧
+      (w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat ∨
+        (G.sevm.code = Impl.code ∧ Sevm.selector G.sevm ∈ selV2_2.owners ∧
+          (Sevm.dataWord G.sevm 4).toAdr = pair)) := by
+  exact retainedRowWrite_nonInc_or_v2_2_owner_of_frames history capabilities bal rawClass
+    initApart history.settledFrames_eq (fun _ member => member)
+    noCaller excluded oldReady root retained found owner tracked
+
+/-- A globally retained tracked-row write is non-increasing, or its same globally
+retained parent is a V2_2 owner exception. Caller and old-owner readiness inputs
+are local producer obligations; no exclusion is applied to a discarded frame. -/
 theorem ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
@@ -141,9 +171,9 @@ theorem ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner
       (w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat ∨
         (G.sevm.code = Impl.code ∧ Sevm.selector G.sevm ∈ selV2_2.owners ∧
           (Sevm.dataWord G.sevm 4).toAdr = pair)) := by
-  exact retainedRowWrite_nonInc_or_v2_2_owner_of_frames history capabilities bal codes
-    proxyApart rowSep initApart history.settledFrames_eq (fun _ member => member)
-    noCaller excluded oldReady root retained found owner tracked
+  exact ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner_of_rawClass history capabilities bal
+    (ConfiguredHistoryTraceIn.usdc_rawRowWrite history capabilities codes proxyApart rowSep)
+    initApart noCaller excluded oldReady root retained found owner tracked
 
 /-- The separate retained V2_2 owner producer closes the only residual case.
 This is one actual-write result, not a retained storage or endpoint fold. -/
@@ -185,6 +215,50 @@ theorem ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc
 /-- A retained write under an actual post-cut mid root is non-increasing or has the
 same mid retained V2_2 owner exception. Raw facts, independent native-query exclusion and
 explicit old-owner routing remain on the original full history. -/
+theorem MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner_of_rawClass
+    {pre completed : BlockChain} {i : Nat}
+    (prior : ConfiguredHistoryTraceIn F cfg checkpoint pre)
+    (block : ConfiguredBlockTraceIn F cfg pre completed)
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn F cfg completed future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
+    (rawClass : UsdcRawRowWriteClass P pair Tr
+      ((prior.step block).append later).rawFrames ((prior.step block).append later).rawNodes)
+    (initApart : InitRowsApart P pair Tr ((prior.step block).append later).rawFrames)
+    (noCaller : ∀ (G : Exec.Frame),
+      G ∈ ((MidHistoryTraceIn.tail block cut).append later).settledFrames →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery ((prior.step block).append later) P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ ((prior.step block).append later).settledFrames →
+      G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    {R : Exec.Frame} (root : R ∈ ((MidHistoryTraceIn.tail block cut).append later).settledRoots)
+    {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
+    {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
+    (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    ∃ G : Exec.Frame, G ∈ ((MidHistoryTraceIn.tail block cut).append later).settledFrames ∧
+      G ∈ Exec.committedFrames R.run ∧
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m ∧ G.sevm.currentTarget = P ∧
+      (w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat ∨
+        (G.sevm.code = Impl.code ∧ Sevm.selector G.sevm ∈ selV2_2.owners ∧
+          (Sevm.dataWord G.sevm 4).toAdr = pair)) := by
+  let full := (prior.step block).append later
+  let mid := (MidHistoryTraceIn.tail block cut).append later
+  exact retainedRowWrite_nonInc_or_v2_2_owner_of_frames full capabilities bal rawClass
+    initApart mid.settledFrames_eq
+    (MidHistoryTraceIn.settledFrames_subset_full prior block cut later)
+    noCaller excluded oldReady root retained found owner tracked
+
+/-- A retained write under an actual post-cut mid root is non-increasing or has the
+same mid retained V2_2 owner exception. Raw facts, independent native-query exclusion and
+explicit old-owner routing remain on the original full history. -/
 theorem MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner
     {pre completed : BlockChain} {i : Nat}
     (prior : ConfiguredHistoryTraceIn F cfg checkpoint pre)
@@ -220,12 +294,10 @@ theorem MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner
       (w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat ∨
         (G.sevm.code = Impl.code ∧ Sevm.selector G.sevm ∈ selV2_2.owners ∧
           (Sevm.dataWord G.sevm 4).toAdr = pair)) := by
-  let full := (prior.step block).append later
-  let mid := (MidHistoryTraceIn.tail block cut).append later
-  exact retainedRowWrite_nonInc_or_v2_2_owner_of_frames full capabilities bal codes
-    proxyApart rowSep initApart mid.settledFrames_eq
-    (MidHistoryTraceIn.settledFrames_subset_full prior block cut later)
-    noCaller excluded oldReady root retained found owner tracked
+  exact MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner_of_rawClass prior block cut later
+    capabilities bal
+    (ConfiguredHistoryTraceIn.usdc_rawRowWrite ((prior.step block).append later) capabilities
+      codes proxyApart rowSep) initApart noCaller excluded oldReady root retained found owner tracked
 
 end History
 
