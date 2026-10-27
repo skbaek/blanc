@@ -51,12 +51,14 @@ variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain
 include history capabilities initialApart fresh bal member proxy impl slot noUpgraded
   proxyApart rowSep initApart approveEvidence
 
+omit rowSep in
 /-- Every retained tracked-row write in this root is non-increasing. Its actual
 parent frame is Proxy or V1 by the retained context theorem. V1 has no owner
 exception; its sole caller exception is approve, and initializer stores use
 the existing calldata-key separation proof. No raw-code or upgrade-write ban
 is imposed on discarded child execution. -/
-theorem ConfiguredHistoryTraceIn.settledRoot_v1_allowanceWrite_nonInc_of_approveEvidence
+theorem ConfiguredHistoryTraceIn.settledRoot_v1_allowanceWrite_nonInc_of_v1Class
+    (v1Class : V1RawWriteClass P pair Tr history.rawFrames)
     {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
     {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
     (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
@@ -79,9 +81,7 @@ theorem ConfiguredHistoryTraceIn.settledRoot_v1_allowanceWrite_nonInc_of_approve
   · exact (proxyApart m nodeMember target proxyCode w found tracked).elim
   have parentCode : G.sevm.code = ImplV1.code := by rw [← same]; exact v1Code
   obtain ⟨pc, forkIn, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities _ rawMember
-  rcases rawWrite_allowClass pc hsg chain ImplV1.cert_check implV1_wsCert parentCode
-      (by decide) implV1_allowSitesOk ((rowSep _ rawMember parentTarget).1 parentCode)
-      found tracked with allowed | nonInc
+  rcases v1Class _ rawMember parentTarget parentCode m chain w found tracked with allowed | nonInc
   · rcases allowed with caller | ownerException | initializer
     · have callerFacts : Sevm.selector G.sevm = 0x095ea7b3 ∧ G.sevm.caller = pair := by
         change selV1T.eval (Env.root G.sevm) ∈ [0x095ea7b3] ∧
@@ -108,14 +108,15 @@ theorem ConfiguredHistoryTraceIn.settledRoot_v1_allowanceWrite_nonInc_of_approve
     · exact (List.not_mem_nil ownerException.1).elim
     · exact ConfiguredHistoryTraceIn.initRowWritesNonInc history capabilities initApart
         _ rawMember parentTarget (.inl ⟨parentCode, initializer⟩) m chain w found tracked
-  · rw [target] at nonInc
-    exact nonInc
+  · exact nonInc
 
+omit rowSep in
 /-- An actual retained root preserves a tracked allowance cell that enters at
 zero, using derived retained code control and actual write-site non-increase.
 This is a root transport law; constructor seeding and pre-deployment approve
 evidence must still be supplied by their own producers. -/
-theorem ConfiguredHistoryTraceIn.settledRoot_v1_allowance_zero_of_approveEvidence
+theorem ConfiguredHistoryTraceIn.settledRoot_v1_allowance_zero_of_v1Class
+    (v1Class : V1RawWriteClass P pair Tr history.rawFrames)
     {g : Adr} (tracked : Tr g)
     (zero : (R.pre.getStor P).get (allowSlot pair g) = 0) :
     (R.post.getStor P).get (allowSlot pair g) = 0 := by
@@ -127,10 +128,33 @@ theorem ConfiguredHistoryTraceIn.settledRoot_v1_allowance_zero_of_approveEvidenc
   apply Exec.cell_zero_of_retained_nonInc_noStateGas R.run R.committed
     facts.2.2.1 nonempty _ zero
   intro m retained w found owner key
-  have bound := ConfiguredHistoryTraceIn.settledRoot_v1_allowanceWrite_nonInc_of_approveEvidence
+  have bound := ConfiguredHistoryTraceIn.settledRoot_v1_allowanceWrite_nonInc_of_v1Class
     history capabilities initialApart fresh bal member proxy impl slot noUpgraded
-    proxyApart rowSep initApart approveEvidence retained found owner ⟨g, tracked, key.symm⟩
+    proxyApart initApart approveEvidence v1Class retained found owner ⟨g, tracked, key.symm⟩
   simpa only [key] using bound
+
+/-- Compatibility with the original descriptor-separation write interface. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_v1_allowanceWrite_nonInc_of_approveEvidence
+    {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
+    {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
+    (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
+  exact ConfiguredHistoryTraceIn.settledRoot_v1_allowanceWrite_nonInc_of_v1Class
+    history capabilities initialApart fresh bal member proxy impl slot noUpgraded
+    proxyApart initApart approveEvidence
+    (ConfiguredHistoryTraceIn.v1RawWriteClass_of_rowSep history capabilities rowSep)
+    retained found owner tracked
+
+/-- Compatibility with the original descriptor-separation root-zero interface. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_v1_allowance_zero_of_approveEvidence
+    {g : Adr} (tracked : Tr g)
+    (zero : (R.pre.getStor P).get (allowSlot pair g) = 0) :
+    (R.post.getStor P).get (allowSlot pair g) = 0 := by
+  exact ConfiguredHistoryTraceIn.settledRoot_v1_allowance_zero_of_v1Class
+    history capabilities initialApart fresh bal member proxy impl slot noUpgraded
+    proxyApart initApart approveEvidence
+    (ConfiguredHistoryTraceIn.v1RawWriteClass_of_rowSep history capabilities rowSep)
+    tracked zero
 
 omit approveEvidence in
 /-- Compatibility interface using the original caller-exclusion producer. -/

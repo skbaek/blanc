@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.ProxyCreation.HistoryCut
 import Blanc.Lift.Usdc.V1ReceiptAllowanceZero
+import Blanc.Lift.Usdc.V1WriteApart
 
 /-!
 # Original constructor receipt to the pre-Pair transaction cut
@@ -28,6 +29,71 @@ theorem ProxyCreation.OriginalConstructorSeed.implementation
     (state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation := by
   rw [seed.storage, Stor.get_set_ne _ (by decide : adminSlot ≠ implSlot),
     Stor.get_set_self]
+
+/-- Derive the V1 control and tracked zero rows just before the original
+Pair-deployment transaction from the same actual constructor's successful
+receipt. The independent pre-D approve-evidence obligation remains visible;
+this theorem does not adopt it as a new final environmental premise. -/
+theorem ConfiguredHistoryTraceIn.original_v1_seed_before_cut38_of_constructor_receipt_and_v1Class
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    {pair : Adr} {Tr : Adr → Prop} {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : V1MappingFreshKeys usdcProxy history initial)
+    {origin completed pre post : BlockChain}
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed)
+    (afterCut : first.bodyTrace.transactions.TxSplit 22)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (beforeCut : last.bodyTrace.transactions.TxSplit 38)
+    (rootsIn : ∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+      last.rootsBeforeTxSplit beforeCut, R ∈ history.settledRoots)
+    (early : last.block.header.timestamp < mainnetCancunTimestamp)
+    (receiver : afterCut.tx.type.receiver? = none)
+    (input : afterCut.tx.data = ProxyCreation.code.toList) (value : afterCut.tx.value = 0)
+    (sender : afterCut.head.sender = ProxyCreation.originalCreator)
+    (nonce : afterCut.tx.nonce = 20)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (slotsApart : ProxySlotsApart pair Tr)
+    (impl : afterCut.afterBenv.state.getCode ProxyCreation.initialImplementation.toAdr =
+      ImplV1.code)
+    (noUpgraded : ∀ entry ∈
+      first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
+        later.receiptLogs ++ last.receiptLogsBetween 0 38,
+      ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
+    (proxyApart : ProxyRowsApart usdcProxy pair Tr history.rawNodes)
+    (v1Class : V1RawWriteClass usdcProxy pair Tr history.rawFrames)
+    (initApart : InitRowsApart usdcProxy pair Tr history.rawFrames)
+    (approveEvidence :
+      (∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+          last.rootsBeforeTxSplit beforeCut, ∀ G ∈ Exec.committedFrames R.run,
+        G.sevm.currentTarget = usdcProxy → Sevm.selector G.sevm = 0x095ea7b3 →
+        G.sevm.caller ≠ pair) ∨
+      (∀ entry ∈ first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
+          later.receiptLogs ++ last.receiptLogsBetween 0 38,
+        V1ApprovalZeroFor usdcProxy pair Tr entry)) :
+    beforeCut.benv.state.getCode usdcProxy = Proxy.code ∧
+      beforeCut.benv.state.getCode ProxyCreation.initialImplementation.toAdr = ImplV1.code ∧
+      (beforeCut.benv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
+      ∀ g, Tr g → (beforeCut.benv.state.getStor usdcProxy).get (allowSlot pair g) = 0 := by
+  obtain ⟨_, seed⟩ := ProxyCreation.original_constructor_seed_of_receipt_cut22
+    first afterCut first.forkIn.stateGas_none receiver input value sender nonce
+    receiptAt succeeded slotsApart
+  have word := seed.implementation
+  have slot : ((afterCut.afterBenv.state.getStor usdcProxy).get implSlot).toAdr =
+      ProxyCreation.initialImplementation.toAdr := congrArg B256.toAdr word
+  have control := ConfiguredHistoryTraceIn.v1_between_txSplits_preserves_from_receipts
+    history initialApart fresh first afterCut later last beforeCut rootsIn early
+    seed.runtime impl slot noUpgraded
+  refine ⟨control.2.1, control.2.2.1, control.2.2.2.1.trans word, ?_⟩
+  intro g tracked
+  exact ConfiguredHistoryTraceIn.v1_allowance_zero_between_txSplits_of_v1Class
+    history initialApart fresh first afterCut later last beforeCut rootsIn early
+    seed.runtime impl slot noUpgraded proxyApart v1Class initApart approveEvidence tracked
+    (seed.allowance g tracked)
 
 /-- Derive the V1 control and tracked zero rows just before the original
 Pair-deployment transaction from the same actual constructor's successful
@@ -78,21 +144,75 @@ theorem ConfiguredHistoryTraceIn.original_v1_seed_before_cut38_of_constructor_re
       beforeCut.benv.state.getCode ProxyCreation.initialImplementation.toAdr = ImplV1.code ∧
       (beforeCut.benv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
       ∀ g, Tr g → (beforeCut.benv.state.getStor usdcProxy).get (allowSlot pair g) = 0 := by
-  obtain ⟨_, seed⟩ := ProxyCreation.original_constructor_seed_of_receipt_cut22
-    first afterCut first.forkIn.stateGas_none receiver input value sender nonce
-    receiptAt succeeded slotsApart
-  have word := seed.implementation
-  have slot : ((afterCut.afterBenv.state.getStor usdcProxy).get implSlot).toAdr =
-      ProxyCreation.initialImplementation.toAdr := congrArg B256.toAdr word
-  have control := ConfiguredHistoryTraceIn.v1_between_txSplits_preserves_from_receipts
+  exact ConfiguredHistoryTraceIn.original_v1_seed_before_cut38_of_constructor_receipt_and_v1Class
     history initialApart fresh first afterCut later last beforeCut rootsIn early
-    seed.runtime impl slot noUpgraded
-  refine ⟨control.2.1, control.2.2.1, control.2.2.2.1.trans word, ?_⟩
-  intro g tracked
-  exact ConfiguredHistoryTraceIn.v1_allowance_zero_between_txSplits_from_approve_evidence
+    receiver input value sender nonce receiptAt succeeded slotsApart impl noUpgraded
+    proxyApart
+    (ConfiguredHistoryTraceIn.v1RawWriteClass_of_rowSep history
+      BodyStageCapabilities.historical rowSep)
+    initApart approveEvidence
+
+/-- The original constructor-to-before-D seed from finite actual V1 key checks.
+The classifier is derived internally; caller exclusion or zero-valued original
+Approval receipts, retained context freshness, and initializer separation remain.
+Historical truth of the finite checks is an explicit producer obligation. -/
+theorem ConfiguredHistoryTraceIn.original_v1_seed_before_cut38_of_constructor_receipt_and_actualV1Keys
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    {pair : Adr} {Tr : Adr → Prop} {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : V1MappingFreshKeys usdcProxy history initial)
+    {origin completed pre post : BlockChain}
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed)
+    (afterCut : first.bodyTrace.transactions.TxSplit 22)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (beforeCut : last.bodyTrace.transactions.TxSplit 38)
+    (rootsIn : ∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+      last.rootsBeforeTxSplit beforeCut, R ∈ history.settledRoots)
+    (early : last.block.header.timestamp < mainnetCancunTimestamp)
+    (receiver : afterCut.tx.type.receiver? = none)
+    (input : afterCut.tx.data = ProxyCreation.code.toList) (value : afterCut.tx.value = 0)
+    (sender : afterCut.head.sender = ProxyCreation.originalCreator)
+    (nonce : afterCut.tx.nonce = 20)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (slotsApart : ProxySlotsApart pair Tr)
+    (impl : afterCut.afterBenv.state.getCode ProxyCreation.initialImplementation.toAdr =
+      ImplV1.code)
+    (noUpgraded : ∀ entry ∈
+      first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
+        later.receiptLogs ++ last.receiptLogsBetween 0 38,
+      ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
+    (proxyApart : ProxyRowsApart usdcProxy pair Tr history.rawNodes)
+    (spenders : List Adr) (observed : ∀ g, Tr g → g ∈ spenders)
+    (faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g)))
+      (actualV1MappingKeys usdcProxy history) = true)
+    (fixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true)
+    (initApart : InitRowsApart usdcProxy pair Tr history.rawFrames)
+    (approveEvidence :
+      (∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+          last.rootsBeforeTxSplit beforeCut, ∀ G ∈ Exec.committedFrames R.run,
+        G.sevm.currentTarget = usdcProxy → Sevm.selector G.sevm = 0x095ea7b3 →
+        G.sevm.caller ≠ pair) ∨
+      (∀ entry ∈ first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
+          later.receiptLogs ++ last.receiptLogsBetween 0 38,
+        V1ApprovalZeroFor usdcProxy pair Tr entry)) :
+    beforeCut.benv.state.getCode usdcProxy = Proxy.code ∧
+      beforeCut.benv.state.getCode ProxyCreation.initialImplementation.toAdr = ImplV1.code ∧
+      (beforeCut.benv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
+      ∀ g, Tr g → (beforeCut.benv.state.getStor usdcProxy).get (allowSlot pair g) = 0 := by
+  exact ConfiguredHistoryTraceIn.original_v1_seed_before_cut38_of_constructor_receipt_and_v1Class
     history initialApart fresh first afterCut later last beforeCut rootsIn early
-    seed.runtime impl slot noUpgraded proxyApart rowSep initApart approveEvidence tracked
-    (seed.allowance g tracked)
+    receiver input value sender nonce receiptAt succeeded slotsApart impl noUpgraded
+    proxyApart
+    (ConfiguredHistoryTraceIn.v1RawWriteClass_of_actualKeys history
+      BodyStageCapabilities.historical spenders observed faithful fixedApart)
+    initApart approveEvidence
 
 /-- Compatibility interface preserving the original caller-exclusion statement. -/
 theorem ConfiguredHistoryTraceIn.original_v1_seed_before_cut38_of_constructor_receipt
