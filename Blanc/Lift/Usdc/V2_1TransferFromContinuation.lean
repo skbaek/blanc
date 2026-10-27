@@ -6,6 +6,21 @@ namespace Blanc.Lift.Usdc.V2_1TransferFromContinuation
 open Jaune Blanc Blanc.Lift OldTransferFromEntry
 variable {observe : Conf → Conf → Prop}
 
+/-- The registered runtime has one final transferFrom allowance-store prefix. -/
+theorem allowancePattern_occurrences :
+    BytePattern.occurrences (OldTransferFromAllowance.storeLine.flatMap Ninst.toBytes)
+      ImplV2_1.code.toList = [0x13e1] := by
+  rw [ByteArray.toList_eq_toList_data]
+  decide +kernel
+
+/-- The original owner debit has a unique instruction prefix. -/
+theorem ownerPattern_occurrences :
+    BytePattern.occurrences (OldTransferBodyReach.ownerLine.flatMap Ninst.toBytes)
+      ImplV2_1.code.toList = [0x3cd2] := by
+  rw [ByteArray.toList_eq_toList_data]
+  decide +kernel
+
+
 /-- Exact registered-runtime scan identifies the original recipient store. -/
 theorem recipientPattern_occurrences :
     BytePattern.occurrences (OldTransferBodyReach.recipientLine.flatMap Ninst.toBytes)
@@ -80,14 +95,14 @@ theorem successfulSstore_source {root node : Exec.Deriv}
     (chain : Exec.Deriv.ParentPrefix root node)
     (selected : Blanc.Sevm.selector root.sevm = 0x23b872dd)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
-    (write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∧
+    (node.pc = 0x13e1 ∧ write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∧
       write.key = mapSlot root.sevm.caller.toB256
         (mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 10) ∧
       KeccakPairBefore root node
         ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (10 : B256).toBytes)
         (root.sevm.caller.toB256.toBytes ++
           (mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 10).toBytes)) ∨
-    (write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∧
+    (node.pc = 0x3cd2 ∧ write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∧
       write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 9 ∧
       ∃ hashPc, KeccakBefore root node
         ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
@@ -104,22 +119,26 @@ theorem successfulSstore_source {root node : Exec.Deriv}
     ImplV2_1.cert.prog root.sevm ⟨root.devm, ImplV2_1.t_0000_c0, []⟩ (κ.conf node.devm) at walk
   rw [St.self' root.devm] at walk
   rcases entry_source (fun h => StepIn.toRun h) hsg selected walk target with
-    ⟨value, other, shape, bound, hashes⟩ | source
-  · have same := List.cons.inj (stack.symm.trans shape)
+    ⟨value, other, shape, bound, ⟨tail, storeShape⟩, hashes⟩ | source
+  · have location := ok.pc_eq_of_prefix_singleton OldTransferFromAllowance.storeLine tail storeShape
+      (suffix := []) (by simp only [List.append_nil]) (by decide) allowancePattern_occurrences
+    have same := List.cons.inj (stack.symm.trans shape)
     have keyEq := same.1
     have valueEq := (List.cons.inj same.2).1
     rw [← keyEq, ← valueEq] at bound
     rw [← Exec.Deriv.ParentPrefix.sevm_eq chain] at bound
-    exact .inl ⟨bound, keyEq, hashes.actual⟩
-  rcases source with ⟨⟨value, other, keyStack, bound⟩, _, hash⟩ | recipient
-  · have same := List.cons.inj (stack.symm.trans keyStack)
+    exact .inl ⟨location, bound, keyEq, hashes.actual⟩
+  rcases source with ⟨⟨value, other, keyStack, bound⟩, ⟨tail, shape⟩, hash⟩ | recipient
+  · have location := ok.pc_eq_of_prefix_singleton OldTransferBodyReach.ownerLine tail shape
+      (suffix := []) (by simp only [List.append_nil]) (by decide) ownerPattern_occurrences
+    have same := List.cons.inj (stack.symm.trans keyStack)
     have keyEq := same.1
     have valueEq := (List.cons.inj same.2).1
     rw [← keyEq, ← valueEq] at bound
     rw [← Exec.Deriv.ParentPrefix.sevm_eq chain] at bound
     obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
       hash.actual
-    exact .inr (.inl ⟨bound, keyEq,
+    exact .inr (.inl ⟨location, bound, keyEq,
       _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩)
   obtain ⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩ := recipient
   have location := ok.pc_eq_of_prefix_singleton OldTransferBodyReach.recipientLine tail shape
@@ -141,7 +160,7 @@ theorem successfulSstore_credit_or_nonInc {root node : Exec.Deriv}
         ∃ hashPc, KeccakBefore root node
           ((Sevm.dataWord root.sevm 36).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) := by
   rcases successfulSstore_source pc code hsg chain selected found with
-    ⟨bound, _, _⟩ | ⟨bound, _, _⟩ | recipient
+    ⟨_, bound, _, _⟩ | ⟨_, bound, _, _⟩ | recipient
   · exact .inl bound
   · exact .inl bound
   · exact .inr recipient

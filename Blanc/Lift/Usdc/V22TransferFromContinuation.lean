@@ -6,6 +6,32 @@ namespace Blanc.Lift.Usdc.V22TransferFromContinuation
 open Jaune Blanc Blanc.Lift OldTransferFromEntry
 variable {observe : Conf → Conf → Prop}
 
+/-- The registered runtime has one final transferFrom allowance-store prefix. -/
+theorem allowancePattern_occurrences :
+    BytePattern.occurrences (OldTransferFromAllowance.storeLine.flatMap Ninst.toBytes)
+      Impl.code.toList = [0x16e4] := by
+  rw [ByteArray.toList_eq_toList_data]
+  decide +kernel
+
+/-- The balance setter returns immediately after its store, whereas the allowance
+store is followed by PUSH1. This uses the same checked cursor, not the written key. -/
+theorem balanceStore_ne_allowance {node : Exec.Deriv} {κ : Cursor}
+    (ok : CursorOK Impl.code Impl.cert node κ)
+    (shape : κ.f = .next (.reg .sstore) .ret) : node.pc ≠ 0x16e4 := by
+  intro same
+  have checked := ok.check
+  rw [shape] at checked
+  obtain ⟨_, a, tail⟩ := checkNode_nexts [.reg .sstore] .ret checked
+  change checkNode Impl.code Impl.cert.entries κ.m (κ.pc + 1) a .ret = true at tail
+  rw [ok.pc_eq.symm.trans same] at tail
+  have wrong : (byteAt Impl.code (0x16e4 + 1) == some (Jinst.toUInt8 .jump)) = false := by
+    decide +kernel
+  cases a with
+  | nil => simp only [checkNode, Bool.false_eq_true] at tail
+  | cons head rest =>
+    cases head <;> simp only [checkNode, wrong, Bool.false_and, Bool.false_eq_true] at tail
+
+
 /-- Recover the original saved stack from the checked callee return, then reload
 the allowance. Balance stores keep their own successful hash observations. -/
 theorem entry_source {Q : Sevm → Devm → Ninst → Devm → Prop}
@@ -70,18 +96,18 @@ theorem successfulSstore_source {root node : Exec.Deriv}
     (chain : Exec.Deriv.ParentPrefix root node)
     (selected : Blanc.Sevm.selector root.sevm = 0x23b872dd)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
-    (write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∧
+    (node.pc = 0x16e4 ∧ write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∧
       write.key = mapSlot root.sevm.caller.toB256
         (mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 10) ∧
       KeccakPairBefore root node
         ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (10 : B256).toBytes)
         (root.sevm.caller.toB256.toBytes ++
           (mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 10).toBytes)) ∨
-    (node.devm.stack[2]? = some 0x40e8 ∧
+    (node.pc ≠ 0x16e4 ∧ node.devm.stack[2]? = some 0x40e8 ∧
       write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 9 ∧
       ∃ hashPc, KeccakBefore root node
         ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
-    (node.devm.stack[2]? = some 0x40f9 ∧
+    (node.pc ≠ 0x16e4 ∧ node.devm.stack[2]? = some 0x40f9 ∧
       write.key = mapSlot (Sevm.dataWord root.sevm 36).toAdr.toB256 9 ∧
       ∃ hashPc, KeccakBefore root node
         ((Sevm.dataWord root.sevm 36).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) := by
@@ -95,23 +121,25 @@ theorem successfulSstore_source {root node : Exec.Deriv}
     Impl.cert.prog root.sevm ⟨root.devm, Impl.t_0000_c0, []⟩ (κ.conf node.devm) at walk
   rw [St.self' root.devm] at walk
   rcases entry_source (fun h => StepIn.toRun h) hsg selected walk target with
-    ⟨value, other, shape, bound, hashes⟩ | source
-  · have same := List.cons.inj (stack.symm.trans shape)
+    ⟨value, other, shape, bound, ⟨tail, storeShape⟩, hashes⟩ | source
+  · have location := ok.pc_eq_of_prefix_singleton OldTransferFromAllowance.storeLine tail storeShape
+      (suffix := []) (by simp only [List.append_nil]) (by decide) allowancePattern_occurrences
+    have same := List.cons.inj (stack.symm.trans shape)
     have keyEq := same.1
     have valueEq := (List.cons.inj same.2).1
     rw [← keyEq, ← valueEq] at bound
     rw [← Exec.Deriv.ParentPrefix.sevm_eq chain] at bound
-    exact .inl ⟨bound, keyEq, hashes.actual⟩
+    exact .inl ⟨location, bound, keyEq, hashes.actual⟩
   apply Or.inr
-  rcases source with ⟨⟨value, other, keyStack⟩, _, hash⟩ | ⟨⟨value, other, keyStack⟩, _, hash⟩
+  rcases source with ⟨⟨value, other, keyStack⟩, shape, hash⟩ | ⟨⟨value, other, keyStack⟩, shape, hash⟩
   · obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
       hash.actual
-    exact .inl ⟨by change node.devm.stack = _ at keyStack; rw [keyStack]; rfl,
+    exact .inl ⟨balanceStore_ne_allowance ok shape, by change node.devm.stack = _ at keyStack; rw [keyStack]; rfl,
       (List.cons.inj (stack.symm.trans keyStack)).1,
       _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩
   · obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
       hash.actual
-    exact .inr ⟨by change node.devm.stack = _ at keyStack; rw [keyStack]; rfl,
+    exact .inr ⟨balanceStore_ne_allowance ok shape, by change node.devm.stack = _ at keyStack; rw [keyStack]; rfl,
       (List.cons.inj (stack.symm.trans keyStack)).1,
       _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩
 
@@ -131,8 +159,10 @@ theorem successfulSstore_source_or_nonInc {root node : Exec.Deriv}
       write.key = mapSlot (Sevm.dataWord root.sevm 36).toAdr.toB256 9 ∧
       ∃ hashPc, KeccakBefore root node
         ((Sevm.dataWord root.sevm 36).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) := by
-  rcases successfulSstore_source pc code hsg chain selected found with ⟨bound, _, _⟩ | source
+  rcases successfulSstore_source pc code hsg chain selected found with
+    ⟨_, bound, _, _⟩ | ⟨_, source⟩ | ⟨_, source⟩
   · exact .inl bound
-  · exact .inr source
+  · exact .inr (.inl source)
+  · exact .inr (.inr source)
 
 end Blanc.Lift.Usdc.V22TransferFromContinuation

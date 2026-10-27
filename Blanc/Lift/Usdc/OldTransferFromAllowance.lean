@@ -10,6 +10,9 @@ variable {observe : Conf → Conf → Prop}
 theorem tail_v21 : ImplV2_1.t_13b0_c58 = ImplV2.t_14b8_c59 := by
   rfl
 
+/-- The common instruction prefix at the final transferFrom allowance store. -/
+def storeLine : List Ninst := [.reg .sstore, .push [1] (by decide), .reg (.swap 3), .reg .pop]
+
 /-- The final transferFrom allowance store and its two ordered successful hashes. -/
 def StoreSource (Q : Sevm → Devm → Ninst → Devm → Prop)
     (observe : Conf → Conf → Prop) (program : List SFunc)
@@ -18,6 +21,7 @@ def StoreSource (Q : Sevm → Devm → Ninst → Devm → Prop)
     T.d.stack = mapSlot sevm.caller.toB256 (mapSlot owner.toB256 10) :: value :: rest ∧
     value.toNat ≤ (T.d.getStorVal sevm.currentTarget
       (mapSlot sevm.caller.toB256 (mapSlot owner.toB256 10))).toNat ∧
+    (∃ tail, T.f = storeLine.foldr SFunc.next tail) ∧
     ObservedKeccakPair Q observe program sevm
       (owner.toB256.toBytes ++ (10 : B256).toBytes)
       (sevm.caller.toB256.toBytes ++ (mapSlot owner.toB256 10).toBytes)
@@ -57,7 +61,7 @@ theorem tail_source {program : List SFunc} {Q : Sevm → Devm → Ninst → Devm
     show (Bytes.toB256 [32]).toNat = 32 from rfl] at run
   rw [Mem.read_two_word_writes_at_raw] at run
   rcases ObservedReach.sstoreS run with rfl | ⟨d', step, _, run⟩
-  · exact ⟨_, _, rfl, bounded, _, firstHash, secondHash⟩
+  · exact ⟨_, _, rfl, bounded, ⟨_, rfl⟩, _, firstHash, secondHash⟩
   exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
 
 /-- Original nonincrease interface, projected from the ordered source. -/
