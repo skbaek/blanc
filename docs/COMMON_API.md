@@ -3834,6 +3834,17 @@ collects every selected successful row, while
 initial apartness and freshness of exactly this producer list. No key
 injectivity, final-state invariant or never-signer premise is inferred.
 
+For the actual V1 transferFrom allowance value, use
+[`Blanc/Lift/Usdc/V1TransferFromNonInc.lean`](../Blanc/Lift/Usdc/V1TransferFromNonInc.lean)'s
+`allowanceStore_nonInc`: at pc 0x14e2, a successful store writes no more than
+that same node's current cell under the original raw `ParentPrefix`.
+`successfulSstore_source` retains both balance-site alternatives and reuses the
+existing mapping-key and ordered-hash witnesses, adding the bound only to the
+allowance alternative. The proof follows the allowance reload after both
+balance writes and the checked subtraction; it needs no row separation or
+final-frame outcome. Its focused body walk is
+[`Blanc/Lift/Usdc/V1TransferFromNonIncReach.lean`](../Blanc/Lift/Usdc/V1TransferFromNonIncReach.lean).
+
 For V1 `removeMinter` and `configureMinter`, use
 [`Blanc/Lift/Usdc/V1MinterMappingTouches.lean`](../Blanc/Lift/Usdc/V1MinterMappingTouches.lean)'s
 `actualV1MinterKeys`. It recognizes each of the four successful store PCs

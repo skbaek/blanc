@@ -217,15 +217,20 @@ theorem route_transferFrom : SFunc.selWalk 0x23b872dd
     .inl (Bytes.toB256 [0x23, 0xb8, 0x72, 0xdd], 57) := by
   decide +kernel
 
-/-- Follow only the actual selected prefix through its concrete V1 guards. -/
-theorem transferFrom_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+/-- The selected actual prefix reaches the transferFrom body with its original continuation. -/
+theorem transferFrom_body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {T : Conf}
     (selected : Blanc.Sevm.selector sevm = 0x23b872dd)
     (run : ObservedReach Q observe ImplV1.cert.prog sevm
       ⟨St b S M G, ImplV1.t_0000_c0, []⟩ T)
     (hT : AtSstore T) :
-    ObservedSource Q observe sevm (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36).toAdr T := by
+    ∃ (base : Devm) (a c d e amount : B256) (rest : List B256) (mem : Mem)
+      (gas : Nat) (saved : List SFunc),
+      ObservedReach Q observe ImplV1.cert.prog sevm
+        ⟨St base (a :: c :: d :: e :: amount :: (Sevm.dataWord sevm 36).toAdr.toB256 ::
+          (Sevm.dataWord sevm 4).toAdr.toB256 :: rest) mem gas, ImplV1.t_12aa_c13, saved⟩ T ∧
+      (∀ f ∈ saved, f.sstoreFreeIn [] = true) := by
   unfold ImplV1.t_0000_c0 at run
   iterate 7 orsx
   rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
@@ -312,7 +317,20 @@ theorem transferFrom_reach_observed {Q : Sevm → Devm → Ninst → Devm → Pr
   iterate 6 orsx
   rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
-  exact body_reach_observed erase run hT cont
+  exact ⟨_, _, _, _, _, _, _, _, _, _, run, cont⟩
+
+/-- Follow only the actual selected prefix through its concrete V1 guards. -/
+theorem transferFrom_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {T : Conf}
+    (selected : Blanc.Sevm.selector sevm = 0x23b872dd)
+    (run : ObservedReach Q observe ImplV1.cert.prog sevm
+      ⟨St b S M G, ImplV1.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) :
+    ObservedSource Q observe sevm (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36).toAdr T := by
+  obtain ⟨base, a, c, d, e, amount, rest, mem, gas, saved, body, cont⟩ :=
+    transferFrom_body_reach_observed erase selected run hT
+  exact body_reach_observed erase body hT cont
 
 /-- Whole-code byte patterns locate the three literal store tails. -/
 theorem owner_pattern_occurrences :

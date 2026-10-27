@@ -6,6 +6,7 @@ import Blanc.Lift.Usdc.V1MintMappingTouches
 import Blanc.Lift.Usdc.V1BurnMappingTouches
 import Blanc.Lift.Usdc.V1TransferMappingTouches
 import Blanc.Lift.Usdc.V1TransferFromMappingTouches
+import Blanc.Lift.Usdc.V1TransferFromNonInc
 
 /-! Actual V1 stores separated using the exact collected mapping keys. -/
 
@@ -331,5 +332,40 @@ theorem ConfiguredHistoryTraceIn.v1_allowance_write_source
       (tracked.trans slot)
     rw [← equal] at recognized
     exact .inr recognized.allowance_source
+
+
+/-- The actual V1 allowance write law from finite observed-key separation. The
+transferFrom case uses its own current-cell subtraction bound, without descriptor RowSep. -/
+theorem ConfiguredHistoryTraceIn.v1_allowance_write_class
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain} {P pair : Adr}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (spenders : List Adr)
+    (faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV1MappingKeys P history) = true)
+    (fixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true)
+    {node : Exec.Deriv} (member : node ∈ history.rawNodes)
+    (target : node.sevm.currentTarget = P) (code : node.sevm.code = ImplV1.code)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write)
+    {spender : Adr} (observed : spender ∈ spenders) (tracked : allowSlot pair spender = write.key) :
+    (Sevm.selector node.sevm = 0x3357162b ∨
+      (Sevm.selector node.sevm = 0x095ea7b3 ∧ node.sevm.caller = pair)) ∨
+      write.value.toNat ≤ ((node.devm.getStor P).get write.key).toNat := by
+  rcases ConfiguredHistoryTraceIn.v1_allowance_write_source history capabilities spenders
+      faithful fixedApart member target code found observed tracked with
+    initializer | approve | ⟨selected, atSite, _, _⟩
+  · exact .inl (.inl initializer)
+  · exact .inl (.inr approve)
+  · obtain ⟨root, rootIn, chain⟩ :=
+      (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
+    obtain ⟨pc, _, stateGas, _, _⟩ := history.rawFrame_entryFacts capabilities root rootIn
+    have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+    have rootCode : root.sevm.code = ImplV1.code := by rw [← same]; exact code
+    have rootSelector : Sevm.selector root.sevm = 0x23b872dd := by rw [← same]; exact selected
+    have rootTarget : root.sevm.currentTarget = P := by rw [← same]; exact target
+    have bound := V1TransferFromNonInc.allowanceStore_nonInc pc rootCode stateGas chain
+      rootSelector found atSite
+    rw [rootTarget] at bound
+    exact .inr bound
 
 end Blanc.Lift.Usdc

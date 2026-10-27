@@ -1418,6 +1418,8 @@ CONTRACTS = {
         "Lift.Usdc.V1MintReach",
         "Lift.Usdc.V1MintMappingTouches",
         "Lift.Usdc.V1TransferFromReach",
+        "Lift.Usdc.V1TransferFromNonIncReach",
+        "Lift.Usdc.V1TransferFromNonInc",
         "Lift.Usdc.V1TransferFromMappingTouches",
         "Lift.Usdc.V1TransferReach",
         "Lift.Usdc.V1TransferMappingTouches",
