@@ -55,10 +55,10 @@ variable {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {T : Conf
 /-- **FiatTokenV2_2 `initializeV2` on a prefix reach.** A reach of the FiatTokenV2_2 code from entry `0`, with
 empty stack and the `initializeV2` selector, to an `SSTORE` stops at a write of `KeysInitV2`
 or of zero. -/
-theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+theorem initV2_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (sel : initSelWord sevm = 0xd608ea64) {d : Devm} {M : Mem} {G : Nat}
     (run : Reach P Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysInitV2 sevm) T := by
+    (hT : AtSstore T) : InitRangeV2 sevm T := by
   rw [root_eq] at run
   obtain ⟨g, b, G', hg, run⟩ := dispatch06_reach erase sel route_initV2 run hT
   rw [wrap_eq] at hg
@@ -68,10 +68,17 @@ theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   have small : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 34 := by omega
   have bound : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 256 :=
     small.trans (Nat.pow_le_pow_right (by decide) (by decide))
-  refine InitStore.below.mpr (InitStore.mono (KeysV2Len.cap lenB)
+  refine InitRangeV2.below.mpr (InitRangeV2Len.cap lenB
     (InitV2Check.reach erase join_eq ?_ inside hT'))
   intro d' M₁ G₁ tail
-  exact InitV2Tail.reach erase entries helper_eq freeDom (by decide) rfl bound tail hT'
+  exact InitV2Tail.reach_range erase entries helper_eq freeDom (by decide) rfl bound tail hT'
+
+theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0xd608ea64) {d : Devm} {M : Mem} {G : Nat}
+    (run : Reach P Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysInitV2 sevm) T :=
+  (initV2_reach_range erase sel run hT).to_initStore
+
 
 /-! ## `initializeV2_2(address[], string)` -/
 

@@ -98,6 +98,47 @@ theorem KeysV2Len.cap {sevm : Sevm} (h : CdStrWrap.cdLen sevm ≤ 2 ^ 32) (key :
   rw [Nat.min_eq_left h]
   exact k
 
+/-- All `initializeV2` stores, retaining the old name's clearing interval. -/
+def InitRangeV2Len (n : Nat) (T : Conf) : Prop :=
+  ∀ key v S, T.d.stack = key :: v :: S →
+    KeysV2Len n key ∨ v = 0 ∧ StrStore.ClearRange 4 ((n + 31) / 32) key
+
+def InitRangeV2 (sevm : Sevm) (T : Conf) : Prop :=
+  InitRangeV2Len (min (CdStrWrap.cdLen sevm) (2 ^ 32)) T
+
+theorem InitRangeV2Len.of_eq {n : Nat} {T : Conf} {key v : B256} {S : List B256}
+    (h : T.d.stack = key :: v :: S)
+    (hk : KeysV2Len n key ∨ v = 0 ∧ StrStore.ClearRange 4 ((n + 31) / 32) key) :
+    InitRangeV2Len n T := by
+  intro key' v' S' h'
+  rw [h] at h'
+  simp only [List.cons.injEq] at h'
+  obtain ⟨rfl, rfl, -⟩ := h'
+  exact hk
+
+theorem InitRangeV2Len.of_top {n : Nat} {T : Conf} {key : B256} {R : List B256}
+    (h : T.d.stack = key :: R) (hk : KeysV2Len n key) : InitRangeV2Len n T := by
+  intro key' v' S' h'
+  rw [h] at h'
+  simp only [List.cons.injEq] at h'
+  exact .inl (h'.1 ▸ hk)
+
+theorem InitRangeV2Len.to_initStore {n : Nat} {T : Conf} (h : InitRangeV2Len n T) :
+    InitStore (KeysV2Len n) T :=
+  fun key v S hs => (h key v S hs).imp_right And.left
+
+theorem InitRangeV2.below {sevm : Sevm} {T : Conf} {L : List SFunc} :
+    InitRangeV2 sevm (T.below L) ↔ InitRangeV2 sevm T := Iff.rfl
+
+theorem InitRangeV2Len.cap {sevm : Sevm} {T : Conf} (h : CdStrWrap.cdLen sevm ≤ 2 ^ 32)
+    (s : InitRangeV2Len (CdStrWrap.cdLen sevm) T) : InitRangeV2 sevm T := by
+  unfold InitRangeV2
+  rw [Nat.min_eq_left h]
+  exact s
+
+theorem InitRangeV2.to_initStore {sevm : Sevm} {T : Conf} (h : InitRangeV2 sevm T) :
+    InitStore (KeysInitV2 sevm) T := InitRangeV2Len.to_initStore h
+
 /-- The tags and table indices of one compilation of `initializeV2`'s shared part. -/
 structure V2Tags : Type where
   ret : UInt8 × UInt8
@@ -145,7 +186,7 @@ def tree : SFunc :=
 variable {ν} {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
   {T : Conf}
 
-theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {τ : StrTags}
+theorem reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {τ : StrTags}
     (E : StrStoreCd.Entries τ fs) (hh : fs[ν.kHelper]? = some (StrStoreCd.helper τ))
     {F : List Nat} (hF : SstoreFreeSet fs F = true) (hdF : ν.kDom ∈ F) {g : SFunc}
     (hdom : fs[ν.kDom]? = some g)
@@ -153,18 +194,18 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {τ : 
     (bound : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 256)
     (run : Reach P fs sevm ⟨St b ((CdStrWrap.cdLen sevm).toB256 ::
       (36 + CdStrWrap.cdOff sevm).toB256 :: r :: S) M G, tree ν, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysV2Len (CdStrWrap.cdLen sevm)) T := by
+    (hT : AtSstore T) : InitRangeV2Len (CdStrWrap.cdLen sevm) T := by
   unfold tree at run
   rsd
   iterate 5 rsx
   obtain ⟨g, _, hg, run⟩ := rs_callIn run hT
   rw [hh] at hg
   cases hg
-  rcases StrStoreCd.reach erase E (by omega) run hT with
-    ⟨key, v, S', h, hk | hv | ⟨j, hj, hk⟩⟩ | ⟨f, K', b', M', G', hK, run⟩
-  · exact InitStore.of_eq h (.inl (.inl (hk.trans (by decide))))
-  · exact InitStore.of_eq h (.inr hv)
-  · exact InitStore.of_eq h (.inl (.inr (.inr (.inr ⟨j, hj, by rw [hk]; rfl⟩))))
+  rcases StrStoreCd.reach_range erase E (by omega) run hT with
+    ⟨key, v, S', h, hk | ⟨j, hj, hk⟩ | ⟨hv, hr⟩⟩ | ⟨f, K', b', M', G', hK, run⟩
+  · exact InitRangeV2Len.of_eq h (.inl (.inl (hk.trans (by decide))))
+  · exact InitRangeV2Len.of_eq h (.inl (.inr (.inr (.inr ⟨j, hj, by rw [hk]; rfl⟩))))
+  · exact InitRangeV2Len.of_eq h (.inr ⟨hv, hr⟩)
   cases hK
   rsd
   iterate 69 rsx
@@ -173,16 +214,27 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {τ : 
   rsd
   rsx
   rcases Reach.sstoreS run with rfl | ⟨d', -, run⟩
-  · exact InitStore.of_top rfl (.inr (.inl (by decide)))
+  · exact InitRangeV2Len.of_top rfl (.inr (.inl (by decide)))
   rw [St.self' d'] at run
   iterate 2 rsk
   iterate 2 rsx
   rsld
   iterate 5 rsx
   rcases Reach.sstoreS run with rfl | ⟨d', -, run⟩
-  · exact InitStore.of_top rfl (.inr (.inr (.inl (by decide))))
+  · exact InitRangeV2Len.of_top rfl (.inr (.inr (.inl (by decide))))
   rw [St.self' d'] at run
   exact (Reach.not_ret_nilS run hT).elim
+
+theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {τ : StrTags}
+    (E : StrStoreCd.Entries τ fs) (hh : fs[ν.kHelper]? = some (StrStoreCd.helper τ))
+    {F : List Nat} (hF : SstoreFreeSet fs F = true) (hdF : ν.kDom ∈ F) {g : SFunc}
+    (hdom : fs[ν.kDom]? = some g)
+    {b : Devm} {r : B256} {S : List B256} {M : Mem} {G : Nat}
+    (bound : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 256)
+    (run : Reach P fs sevm ⟨St b ((CdStrWrap.cdLen sevm).toB256 ::
+      (36 + CdStrWrap.cdOff sevm).toB256 :: r :: S) M G, tree ν, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysV2Len (CdStrWrap.cdLen sevm)) T :=
+  (reach_range erase E hh hF hdF hdom bound run hT).to_initStore
 
 end InitV2Tail
 

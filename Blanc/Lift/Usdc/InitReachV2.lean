@@ -49,12 +49,12 @@ theorem route_initV2 : selTree.selWalk 0xd608ea64 =
 
 variable {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {T : Conf}
 
-theorem body_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+theorem body_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {r : B256} {S : List B256} {M : Mem} {G : Nat}
     (bound : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 256)
     (run : Reach P ImplV2.cert.prog sevm ⟨St b ((CdStrWrap.cdLen sevm).toB256 ::
       (36 + CdStrWrap.cdOff sevm).toB256 :: r :: S) M G, ImplV2.t_35f6_c18, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysV2Len (CdStrWrap.cdLen sevm)) T := by
+    (hT : AtSstore T) : InitRangeV2Len (CdStrWrap.cdLen sevm) T := by
   unfold ImplV2.t_35f6_c18 at run
   rsd
   rsx
@@ -63,16 +63,24 @@ theorem body_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
   rw [tail_eq] at run
-  exact InitV2Tail.reach erase entries helper_eq free69 (List.mem_singleton.mpr rfl) rfl bound
+  exact InitV2Tail.reach_range erase entries helper_eq free69 (List.mem_singleton.mpr rfl) rfl bound
     run hT
+
+theorem body_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {b : Devm} {r : B256} {S : List B256} {M : Mem} {G : Nat}
+    (bound : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 256)
+    (run : Reach P ImplV2.cert.prog sevm ⟨St b ((CdStrWrap.cdLen sevm).toB256 ::
+      (36 + CdStrWrap.cdOff sevm).toB256 :: r :: S) M G, ImplV2.t_35f6_c18, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysV2Len (CdStrWrap.cdLen sevm)) T :=
+  (body_reach_range erase bound run hT).to_initStore
 
 /-- **V2 `initializeV2` on a prefix reach.** A reach of the V2 code from entry `0`, with empty
 stack and the `initializeV2` selector, to an `SSTORE` stops at a write of `KeysInitV2` or of
 zero. -/
-theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+theorem initV2_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (sel : initSelWord sevm = 0xd608ea64) {d : Devm} {M : Mem} {G : Nat}
     (run : Reach P ImplV2.cert.prog sevm ⟨St d [] M G, ImplV2.t_0000_c0, []⟩ T)
-    (hT : AtSstore T) : InitStore (KeysInitV2 sevm) T := by
+    (hT : AtSstore T) : InitRangeV2 sevm T := by
   rw [root_eq] at run
   obtain ⟨g, b, G', hg, run⟩ := dispatch06_reach erase sel route_initV2 run hT
   rw [wrap_eq] at hg
@@ -80,8 +88,15 @@ theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   obtain ⟨b', M'', G'', T', inside, hT', rfl, lenB, offB⟩ :=
     CdStrWrap.reach erase (show ImplV2.cert.prog[18]? = some ImplV2.t_35f6_c18 from rfl) run hT
   have small : 36 + CdStrWrap.cdOff sevm + CdStrWrap.cdLen sevm + 32 ≤ 2 ^ 34 := by omega
-  exact InitStore.below.mpr (InitStore.mono (KeysV2Len.cap lenB) (body_reach erase
+  exact InitRangeV2.below.mpr (InitRangeV2Len.cap lenB (body_reach_range erase
     (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT'))
+
+
+theorem initV2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0xd608ea64) {d : Devm} {M : Mem} {G : Nat}
+    (run : Reach P ImplV2.cert.prog sevm ⟨St d [] M G, ImplV2.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : InitStore (KeysInitV2 sevm) T :=
+  (initV2_reach_range erase sel run hT).to_initStore
 
 end Blanc.Lift.Usdc.InitReachV2
 

@@ -1,5 +1,8 @@
 import Blanc.Lift.Usdc.InitReachV1
 import Blanc.Lift.Usdc.InitV1ConcreteBounds
+import Blanc.Lift.Usdc.InitReachV2
+import Blanc.Lift.Usdc.InitReachV2_1
+import Blanc.Lift.Usdc.InitReachV2_2
 import Jaune.MulDiv
 
 /-!
@@ -97,6 +100,18 @@ theorem range_key_ne_implSlot {L slot key value : B256}
     dsimp only [H] at oldEnd ⊢
     unfold StrStore.oldEnd at upper
     omega
+
+/-- Natural decoded lengths reuse the same fixed header bounds. -/
+theorem range_nat_key_ne_implSlot {L : Nat} {slot key value : B256}
+    (member : slot ∈ ([4, 5, 7] : List B256)) (cap : L ≤ 2 ^ 160)
+    (kind : key = slot ∨ (∃ j < (L + 31) / 32,
+      key = slot.toBytes.keccak + j.toB256) ∨
+      value = 0 ∧ StrStore.ClearRange slot ((L + 31) / 32) key) : key ≠ implSlot := by
+  obtain ⟨header, base, control⟩ := InitV1ConcreteBounds.bounds member
+  have small : L < 2 ^ 256 := by omega
+  apply range_key_ne_implSlot (L := L.toB256) (value := value)
+    (by rw [B256.toNat_toB256_of_lt small]; exact cap) header base control
+  simpa only [B256.toNat_toB256_of_lt small] using kind
 
 /-- Every helper store avoids the implementation slot under explicit numerical base
 bounds, or the helper reaches its original continuation. The fixed hashes are not
@@ -206,11 +221,7 @@ theorem initRange_ne_implSlot {L1 L2 L3 : Nat} {T : Conf}
       (kind : key = slot ∨ (∃ j < (L + 31) / 32,
         key = slot.toBytes.keccak + j.toB256) ∨
         value = 0 ∧ StrStore.ClearRange slot ((L + 31) / 32) key) : key ≠ implSlot := by
-    obtain ⟨header, base, control⟩ := InitV1ConcreteBounds.bounds member
-    have small : L < 2 ^ 256 := by omega
-    apply range_key_ne_implSlot (L := L.toB256) (value := value)
-      (by rw [B256.toNat_toB256_of_lt small]; exact cap) header base control
-    simpa only [B256.toNat_toB256_of_lt small] using kind
+    exact range_nat_key_ne_implSlot member cap kind
   rcases range key value rest stack with allowed | ⟨zero, clear⟩
   · rcases allowed with fixed | payload | payload | payload
     · have off : implSlot ∉ ([0, 1, 2, 4, 5, 6, 7, 8] : List B256) := by decide
@@ -264,3 +275,59 @@ theorem init_reach_V2_2_ne_implSlot
   exact initRange06_ne_implSlot (init_reach_V2_2_range eraseQ hs run hT)
 
 end Blanc.Lift.Usdc.Init06
+
+namespace Blanc.Lift.Usdc
+
+open Jaune Blanc Blanc.Lift
+
+/-- The actual name range and fixed slots of `initializeV2` avoid the implementation slot. -/
+theorem InitRangeV2Len.ne_implSlot {n : Nat} {T : Conf} (cap : n ≤ 2 ^ 160)
+    (range : InitRangeV2Len n T) :
+    ∀ key value rest, T.d.stack = key :: value :: rest → key ≠ implSlot := by
+  intro key value rest stack
+  rcases range key value rest stack with allowed | clear
+  · rcases allowed with fixed | fixed | fixed | payload
+    · exact fixed ▸ (by decide : (4 : B256) ≠ implSlot)
+    · exact fixed ▸ (by decide : (15 : B256) ≠ implSlot)
+    · exact fixed ▸ (by decide : (18 : B256) ≠ implSlot)
+    · exact InitV1KeyBounds.range_nat_key_ne_implSlot (value := value)
+        (by decide : (4 : B256) ∈ [4, 5, 7]) cap (.inr (.inl payload))
+  · exact InitV1KeyBounds.range_nat_key_ne_implSlot
+      (by decide : (4 : B256) ∈ [4, 5, 7]) cap (.inr (.inr clear))
+
+theorem InitRangeV2.ne_implSlot {sevm : Sevm} {T : Conf} (range : InitRangeV2 sevm T) :
+    ∀ key value rest, T.d.stack = key :: value :: rest → key ≠ implSlot := by
+  apply InitRangeV2Len.ne_implSlot (n := min (CdStrWrap.cdLen sevm) (2 ^ 32)) ?_ range
+  exact (Nat.min_le_right _ _).trans (Nat.pow_le_pow_right (by decide) (by decide))
+
+/-- Every actual `initializeV2` store avoids the implementation slot, including clearing. -/
+theorem InitReachV2.initV2_reach_ne_implSlot
+    {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {T : Conf}
+    (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0xd608ea64) {d : Devm} {M : Mem} {G : Nat}
+    (run : Reach P ImplV2.cert.prog sevm ⟨St d [] M G, ImplV2.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) :
+    ∀ key value rest, T.d.stack = key :: value :: rest → key ≠ implSlot :=
+  (InitReachV2.initV2_reach_range erase sel run hT).ne_implSlot
+
+/-- Every actual `initializeV2` store avoids the implementation slot, including clearing. -/
+theorem InitReachV2_1.initV2_reach_ne_implSlot
+    {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {T : Conf}
+    (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0xd608ea64) {d : Devm} {M : Mem} {G : Nat}
+    (run : Reach P ImplV2_1.cert.prog sevm ⟨St d [] M G, ImplV2_1.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) :
+    ∀ key value rest, T.d.stack = key :: value :: rest → key ≠ implSlot :=
+  (InitReachV2_1.initV2_reach_range erase sel run hT).ne_implSlot
+
+/-- Every actual `initializeV2` store avoids the implementation slot, including clearing. -/
+theorem InitReachV2_2.initV2_reach_ne_implSlot
+    {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {T : Conf}
+    (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0xd608ea64) {d : Devm} {M : Mem} {G : Nat}
+    (run : Reach P Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) :
+    ∀ key value rest, T.d.stack = key :: value :: rest → key ≠ implSlot :=
+  (InitReachV2_2.initV2_reach_range erase sel run hT).ne_implSlot
+
+end Blanc.Lift.Usdc

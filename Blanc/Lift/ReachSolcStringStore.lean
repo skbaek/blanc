@@ -361,6 +361,22 @@ def StoreAt (slot : B256) (len : Nat) (T : Conf) : Prop :=
 variable {τ : StrTags} {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
   {T : Conf}
 
+/-- Retain the bounded old-tail interval for zero-clearing writes. -/
+theorem reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (E : Entries τ fs)
+    {K : List SFunc} {b : Devm} {r : B256} {S : List B256} {M : Mem} {G : Nat} {len p : Nat}
+    {slot : B256} (bound : p + len + 32 ≤ 2 ^ 256)
+    (run : Reach P fs sevm ⟨St b (len.toB256 :: p.toB256 :: slot :: r :: S) M G, helper τ, K⟩ T)
+    (hT : AtSstore T) :
+    StrStore.StoreRangeAt slot ((len + 31) / 32) T ∨ ∃ f K' b' M' G', K = f :: K' ∧
+      Reach P fs sevm ⟨St b' (slot :: S) M' G', f, K'⟩ T := by
+  have hfin : ((p + len).toB256).toNat = p + len := B256.toNat_toB256_of_lt (by omega)
+  rcases StrStore.reach_range erase (by intro h; cases h) (ReachPayload.cdload_rdStep erase)
+      (StrStore.shortCd_ok erase E.exit) E (by omega)
+      (ReachPayload.cdload_win (by omega)) run hT with
+    s | ⟨f, K', b', M', G', hK, -, run⟩
+  · exact .inl (s.mono (StrStore.count_le p len))
+  · exact .inr ⟨f, K', b', M', G', hK, run⟩
+
 theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (E : Entries τ fs)
     {K : List SFunc} {b : Devm} {r : B256} {S : List B256} {M : Mem} {G : Nat} {len p : Nat}
     {slot : B256} (bound : p + len + 32 ≤ 2 ^ 256)
@@ -368,14 +384,9 @@ theorem reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (E : E
     (hT : AtSstore T) :
     StoreAt slot len T ∨ ∃ f K' b' M' G', K = f :: K' ∧
       Reach P fs sevm ⟨St b' (slot :: S) M' G', f, K'⟩ T := by
-  have hfin : ((p + len).toB256).toNat = p + len := B256.toNat_toB256_of_lt (by omega)
-  rcases StrStore.reach erase (by intro h; cases h) (ReachPayload.cdload_rdStep erase)
-      (StrStore.shortCd_ok erase E.exit) E (by omega)
-      (ReachPayload.cdload_win (by omega)) run hT with
-    s | ⟨f, K', b', M', G', hK, -, run⟩
-  · obtain ⟨key, v, S', hs, h⟩ := s.mono (StrStore.count_le p len)
-    exact .inl ⟨key, v, S', hs, h⟩
-  · exact .inr ⟨f, K', b', M', G', hK, run⟩
+  rcases reach_range erase E bound run hT with h | h
+  · exact .inl h.storeAt
+  · exact .inr h
 
 end StrStoreCd
 
