@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.InitV1KeyBounds
 import Blanc.Lift.Usdc.ProxyWritesHistory
+import Blanc.Lift.Usdc.HistoricalMappingKeys
 
 /-!
 # Initializer writes at the Pair's rows, from the prefix walks
@@ -311,6 +312,196 @@ theorem ConfiguredHistoryTraceIn.initializer_write_ne_implSlot_or_hash
     safe | source
   · exact .inl safe
   · exact .inr ⟨root, inFrames, chain, code, selected, source⟩
+
+/-- Decode only the two canonical mapping preimages used by V2.2 migration.
+The address comes from the input bytes, never from a comparison of digests. -/
+def v22MigrationInputKey? (input : Bytes) : Option HistoricalMappingKey :=
+  let account := (Bytes.toB256 (input.take 32)).toAdr
+  if input = account.toB256.toBytes ++ (3 : B256).toBytes then
+    some (.oldBlacklist3 account)
+  else if input = account.toB256.toBytes ++ (9 : B256).toBytes then
+    some (.modern (.bal account))
+  else none
+
+theorem v22MigrationInputKey?_complete (account : Adr) (base : B256)
+    (migration : base = 3 ∨ base = 9) :
+    ∃ key, v22MigrationInputKey? (account.toB256.toBytes ++ base.toBytes) = some key ∧
+      key.slot = mapSlot account.toB256 base := by
+  have address : (Bytes.toB256 ((account.toB256.toBytes ++ base.toBytes).take 32)).toAdr = account := by
+    rw [List.take_length_append' (B256.length_toBytes _).symm,
+      B256.toB256_toBytes, toAdr_toB256]
+  unfold v22MigrationInputKey?
+  dsimp only
+  rw [address]
+  rcases migration with rfl | rfl
+  · exact ⟨.oldBlacklist3 account, ite_eq_left rfl, rfl⟩
+  · have different : account.toB256.toBytes ++ (9 : B256).toBytes ≠
+        account.toB256.toBytes ++ (3 : B256).toBytes := by
+      intro equal
+      have words := congrArg Bytes.toB256 (List.append_cancel_left equal)
+      simp only [B256.toB256_toBytes] at words
+      exact (by decide : (9 : B256) ≠ 3) words
+    exact ⟨.modern (.bal account), by rw [ite_eq_right different, ite_eq_left rfl], rfl⟩
+
+theorem v22MigrationInputKey?_sound {input : Bytes} {key : HistoricalMappingKey}
+    (recognized : v22MigrationInputKey? input = some key) :
+    ∃ (account : Adr) (base : B256), (base = 3 ∨ base = 9) ∧
+      input = account.toB256.toBytes ++ base.toBytes ∧ key.slot = mapSlot account.toB256 base := by
+  unfold v22MigrationInputKey? at recognized
+  dsimp only at recognized
+  split at recognized
+  next at3 => cases recognized; exact ⟨_, 3, .inl rfl, at3, rfl⟩
+  next =>
+    split at recognized
+    next at9 => cases recognized; exact ⟨_, 9, .inr rfl, at9, rfl⟩
+    next => cases recognized
+
+/-- Successful original hash inputs in the migration selector, including inputs
+whose subsequent writes clear a slot. No unexecuted calldata row is collected. -/
+def v22MigrationHashKey? (P : Adr) (node : Exec.Deriv) : Option HistoricalMappingKey :=
+  if node.sevm.currentTarget = P ∧ node.sevm.code = Impl.code ∧
+      initSelWord node.sevm = 0x430239b4 ∧
+      node.devm.stack.take 2 = [0, 64] then
+    match node.sevm.code.getInst node.pc with
+    | some (.next (.reg .keccak256)) =>
+        match Rinst.run ⟨node.pc, node.sevm, node.devm⟩ .keccak256 with
+        | .ok _ => v22MigrationInputKey? (node.devm.memory.read 0 64).1
+        | .error _ => none
+    | _ => none
+  else none
+
+def actualV22MigrationHashKeys (P : Adr)
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future) : List HistoricalMappingKey :=
+  history.rawNodes.filterMap (v22MigrationHashKey? P)
+
+theorem v22MigrationHashKey?_complete {P : Adr} {root : Exec.Deriv}
+    (occurrence : Exec.NinstOccurrence root) {post : Devm}
+    (target : occurrence.node.sevm.currentTarget = P)
+    (code : occurrence.node.sevm.code = Impl.code)
+    (selected : initSelWord occurrence.node.sevm = 0x430239b4)
+    (instruction : occurrence.instruction = .reg .keccak256)
+    (success : occurrence.stepResult = .ok post)
+    (stack : ∃ rest, occurrence.node.devm.stack = 0 :: 64 :: rest)
+    {input : Bytes} (read : (occurrence.node.devm.memory.read 0 64).1 = input)
+    {key : HistoricalMappingKey} (recognized : v22MigrationInputKey? input = some key) :
+    v22MigrationHashKey? P occurrence.node = some key := by
+  have decoded := occurrence.decoded
+  rw [instruction] at decoded
+  have run := occurrence.stepRun
+  rw [instruction, success] at run
+  simp only [Ninst.StepRun, Ninst.step_reg] at run
+  have executed := (Step.run_ofExecution.mp run).2.symm
+  obtain ⟨rest, stack⟩ := stack
+  have shape : occurrence.node.devm.stack.take 2 = [0, 64] := by
+    rw [stack]; rfl
+  rw [v22MigrationHashKey?, ite_eq_left ⟨target, code, selected, shape⟩,
+    decoded, executed, read]
+  exact recognized
+
+
+theorem v22MigrationHashKey?_sound {P : Adr} {node : Exec.Deriv}
+    {key : HistoricalMappingKey} (recognized : v22MigrationHashKey? P node = some key) :
+    node.sevm.currentTarget = P ∧ node.sevm.code = Impl.code ∧
+      initSelWord node.sevm = 0x430239b4 ∧
+      Ninst.At node.sevm.code node.pc (.reg .keccak256) ∧
+      node.devm.stack.take 2 = [0, 64] ∧ ∃ post,
+        Rinst.run ⟨node.pc, node.sevm, node.devm⟩ .keccak256 = .ok post ∧
+        v22MigrationInputKey? (node.devm.memory.read 0 64).1 = some key := by
+  unfold v22MigrationHashKey? at recognized
+  split at recognized
+  next scope =>
+    split at recognized
+    next decoded =>
+      split at recognized
+      next post executed =>
+        exact ⟨scope.1, scope.2.1, scope.2.2.1, decoded, scope.2.2.2,
+          post, executed, recognized⟩
+      next => cases recognized
+    next => cases recognized
+  next => cases recognized
+
+/-- Every collected key has its successful original hash occurrence and exact
+canonical input, even if the enclosing frame later reverts. -/
+theorem ConfiguredHistoryTraceIn.actualV22MigrationHashKeys_sound
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    {key : HistoricalMappingKey} (member : key ∈ actualV22MigrationHashKeys P history) :
+    ∃ root ∈ history.rawFrames, ∃ occurrence : Exec.NinstOccurrence root,
+      occurrence.node ∈ history.rawNodes ∧ occurrence.node.sevm.currentTarget = P ∧
+      occurrence.node.sevm.code = Impl.code ∧
+      initSelWord occurrence.node.sevm = 0x430239b4 ∧
+      occurrence.node.devm.stack.take 2 = [0, 64] ∧
+      occurrence.instruction = .reg .keccak256 ∧ ∃ post,
+        occurrence.stepResult = .ok post ∧ ∃ (account : Adr) (base : B256),
+          (base = 3 ∨ base = 9) ∧
+          (occurrence.node.devm.memory.read 0 64).1 = account.toB256.toBytes ++ base.toBytes ∧
+          key.slot = mapSlot account.toB256 base := by
+  obtain ⟨node, inNodes, recognized⟩ := List.mem_filterMap.mp member
+  obtain ⟨target, code, selected, decoded, shape, post, executed, input⟩ :=
+    v22MigrationHashKey?_sound recognized
+  obtain ⟨root, inFrames, chain⟩ :=
+    (history.mem_rawNodes_iff_rawFrame_parentPrefix node).mp inNodes
+  have reached : node ∈ Exec.rawNodes root.exc := by
+    obtain ⟨earlier, decomposition⟩ := Exec.Deriv.ParentPrefix.rawNodes_decomposition chain
+    rw [decomposition]
+    exact List.mem_append_right earlier (Exec.mem_rawNodes_self node.exc)
+  obtain ⟨occurrence, same, instruction⟩ :=
+    Exec.exists_ninstOccurrence_of_mem_rawNodes reached decoded
+  have step : Ninst.StepRun occurrence.node.pc occurrence.node.sevm occurrence.node.devm
+      occurrence.instruction .none (.ok post) := by
+    rw [same, instruction]
+    simp only [Ninst.StepRun, Ninst.step_reg]
+    exact Step.run_ofExecution.mpr ⟨rfl, executed.symm⟩
+  have success := (occurrence_stepRun_unique occurrence (slot := .none) trivial step).2
+  obtain ⟨account, base, migration, read, slot⟩ := v22MigrationInputKey?_sound input
+  refine ⟨root, inFrames, occurrence, ?_⟩
+  rw [same]
+  exact ⟨inNodes, target, code, selected, shape, instruction, post, success,
+    account, base, migration, read, slot⟩
+
+/-- Every initializer write is numerically separated or its mapping key is
+collected from the original successful hash before that same write. -/
+theorem ConfiguredHistoryTraceIn.initializer_write_ne_implSlot_or_collected
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {node : Exec.Deriv}
+    (member : node ∈ history.rawNodes) (target : node.sevm.currentTarget = P)
+    (init : UsdcInitFrame node) {write : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot ∨ ∃ key ∈ actualV22MigrationHashKeys P history, write.key = key.slot := by
+  rcases ConfiguredHistoryTraceIn.initializer_write_ne_implSlot_or_hash history capabilities member init found with
+    safe | ⟨root, inFrames, chain, code, selected, account, base, migration, slot, pc, source⟩
+  · exact .inl safe
+  obtain ⟨occurrence, next, _, instruction, success, before, _, _, stack, read⟩ := source
+  have same := Exec.Deriv.ParentPrefix.sevm_eq before
+  have targetRoot : root.sevm.currentTarget = P := by
+    rw [← Exec.Deriv.ParentPrefix.sevm_eq chain]
+    exact target
+  have inNodes := (history.mem_rawNodes_iff_rawFrame_parentPrefix occurrence.node).mpr
+    ⟨root, inFrames, before⟩
+  obtain ⟨key, recognized, keySlot⟩ := v22MigrationInputKey?_complete account base migration
+  have collected := v22MigrationHashKey?_complete (P := P) occurrence
+    (by rw [same]; exact targetRoot) (by rw [same]; exact code)
+    (by rw [same]; exact selected) instruction success stack read recognized
+  exact .inr ⟨key, List.mem_filterMap.mpr ⟨occurrence.node, inNodes, collected⟩,
+    slot.trans keySlot.symm⟩
+
+/-- Trace-local freshness of actually hashed migration keys discharges every
+initializer's implementation-slot separation, including zero-clearing writes. -/
+theorem ConfiguredHistoryTraceIn.initializer_write_ne_implSlot
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : SlotFootprint.FreshKeys HistoricalMappingKey.slot fixedSlots initial
+      (actualV22MigrationHashKeys P history))
+    {node : Exec.Deriv} (member : node ∈ history.rawNodes)
+    (target : node.sevm.currentTarget = P) (init : UsdcInitFrame node)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot := by
+  rcases ConfiguredHistoryTraceIn.initializer_write_ne_implSlot_or_collected history capabilities member target init found with
+    safe | ⟨key, collected, slot⟩
+  · exact safe
+  · rw [slot]
+    exact HistoricalMappingKey.slot_ne_implSlot initialApart fresh collected
+
 
 /-- **`InitRowWritesNonInc` from the frame-local key separation.** -/
 theorem ConfiguredHistoryTraceIn.initRowWritesNonInc
