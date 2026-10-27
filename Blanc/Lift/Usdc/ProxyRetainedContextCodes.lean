@@ -1,5 +1,6 @@
 import Blanc.ExecutionRetainedNodeOrigin
 import Blanc.ExecutionInRootOwnCode
+import Blanc.ExecutionNonceCode
 import Blanc.Lift.Usdc.ProxyCommittedUpgradeLog
 import Blanc.Lift.Usdc.GovernanceHistory
 
@@ -516,5 +517,75 @@ theorem ConfiguredHistoryTraceIn.settledRoot_proxyWorld_implSlot_origin_of_f2pri
   rcases (context N retained).2 target with own | ⟨e, he, code⟩
   · exact .inl own
   · exact .inr (code ▸ impls e he)
+
+/-- The final implementation target keeps the exact nonempty code observed at
+its retained upgrade write, including when creation occurred earlier in this
+same root. This is the committed execution endpoint, before outer transaction
+settlement; runtime identity remains an installation-provenance obligation. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_code_of_f2prime
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (classified : ∀ N ∈ Exec.retainedNodes R.run, N.sevm.currentTarget = P →
+      (N.sevm.code = Proxy.code ∧ N.sevm.codeAddress = some P) ∨
+        UsdcImplCode N.sevm.code)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot ∨
+      ∃ N ∈ Exec.retainedNodes R.run, ∃ write : Exec.StorageWrite,
+        Exec.Deriv.successfulSstore? N = some write ∧ write.owner = P ∧
+        write.key = implSlot ∧ write.value = (R.post.getStor P).get implSlot ∧
+        write.value.toAdr ∈ F2prime.upgradeTargets ∧
+        (N.devm.getCode write.value.toAdr).toList ≠ [] ∧
+        R.post.getCode write.value.toAdr = N.devm.getCode write.value.toAdr := by
+  rcases ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime history
+      capabilities bal member proxy governance classified apart with unchanged |
+      ⟨N, retained, write, found, owner, key, value, allowed, nonempty⟩
+  · exact .inl unchanged
+  · obtain ⟨before, after, split⟩ := List.append_of_mem retained
+    have rawRoot := history.mem_rawFrames_of_mem_settledRoots R member
+    have hsg := (history.rawFrame_entryFacts capabilities _ rawRoot).2.2.1
+    have preserved := (Exec.retainedNodes_code_after_split_noStateGas
+      R.run R.committed hsg split nonempty).1
+    exact .inr ⟨N, retained, write, found, owner, key, value, allowed, nonempty, preserved⟩
+
+/-- A root entered with a nonempty active implementation ends with a nonempty
+active implementation. Changed targets use the actual retained guard and code
+transport, rather than installation of every future implementation at entry. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_nonempty_of_f2prime
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (active : (R.pre.getCode ((R.pre.getStor P).get implSlot).toAdr).toList ≠ [])
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (classified : ∀ N ∈ Exec.retainedNodes R.run, N.sevm.currentTarget = P →
+      (N.sevm.code = Proxy.code ∧ N.sevm.codeAddress = some P) ∨
+        UsdcImplCode N.sevm.code)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    (R.post.getCode ((R.post.getStor P).get implSlot).toAdr).toList ≠ [] := by
+  rcases ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_code_of_f2prime history
+      capabilities bal member proxy governance classified apart with unchanged |
+      ⟨N, _, write, _, _, _, value, _, nonempty, preserved⟩
+  · rw [unchanged]
+    have kept : R.post.getCode ((R.pre.getStor P).get implSlot).toAdr =
+        R.pre.getCode ((R.pre.getStor P).get implSlot).toAdr := by
+      have code := Exec.preserves_getCode R.run _ active
+      unfold Exec.Frame.post Execution.committedPost
+      split
+      next outEq _ =>
+        simpa only [outEq, Execution.getCode] using code
+      next outEq _ =>
+        have committed := R.committed
+        simp only [outEq, Execution.commits, Bool.false_eq_true] at committed
+    rw [kept]
+    exact active
+  · rw [← value, preserved]
+    exact nonempty
 
 end Blanc.Lift.Usdc

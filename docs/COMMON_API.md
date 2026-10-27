@@ -1969,6 +1969,25 @@ pre-Prague histories use `codeAt_empty_prePrague` with no authority premise
 at all. `sweepTouchedAccounts_getCode_empty` keeps empty code through the
 sweep.
 
+For code preservation within settlement-retained execution, use
+the following two routes. When code is already nonempty at an actual internal
+position, use
+[`Blanc/ExecutionNonceCode.lean`](../Blanc/ExecutionNonceCode.lean):
+`Exec.retainedNodes_code_after_split_noStateGas` preserves that exact code at
+every later retained node and the committed endpoint;
+`Exec.retainedNodes_getCode_of_ordered_noStateGas` selects a later original
+position. Neither requires nonempty code at root entry, so earlier creation
+inside the same root is allowed. Supply the actual retained-list split; code
+equality alone does not identify that witness for automatic recipe selection.
+`Exec.spawn_codePreserve_of_settlementCommits_noStateGas` is the child-return
+seam, including successful CREATE code deposit. Its constructor-target
+exclusion is derived using `Exec.codeAt_of_nonce_noStateGas`, which preserves
+even empty code at a nonzero-nonce account. `Evm.step_spawn_nonce_noStateGas`,
+`Exec.Deriv.ParentStep.nonce_ne_zero_noStateGas` and
+`Evm.step_codeAt_of_nonce_noStateGas` supply the instruction-level transport.
+Complete child settlement determines which nodes survive; discarded children
+cannot supply the starting position.
+
 System frames along retained `In`-histories by fork era are in
 [`Blanc/ExecutionHistoryInSystemFrames.lean`](../Blanc/ExecutionHistoryInSystemFrames.lean):
 `StagedBodyTrace.systemRawFrames` and the block/history `systemRawFrames`
@@ -6584,12 +6603,17 @@ Use
   message, its successful code-deposit charge and the exact installed Devm;
   the older state projection reuses that one clean-settlement traversal.
   For actual execution, [`Blanc/LockExclusion.lean`](../Blanc/LockExclusion.lean)
-  provides `Exec.nonce_ne_zero_committedPost`, on covered forks. Its instruction
-  donors are `Rinst.get_nonce_eq_of_ok`, `Ninst.nonce_ne_zero_of_none`,
-  `Evm.step_cont_nonce_ne_zero` and `Linst.get_nonce_eq_of_ok`.
+  provides `Exec.nonce_ne_zero_committedPost_noStateGas`, requiring only
+  `rules.stateGas = none`, and its original covered-fork projection
+  `Exec.nonce_ne_zero_committedPost`. The corresponding instruction donors are
+  `Rinst.get_nonce_eq_of_ok_noStateGas`, `Ninst.nonce_ne_zero_of_none_noStateGas`,
+  `Evm.step_cont_nonce_ne_zero_noStateGas` and `Linst.get_nonce_eq_of_ok_noStateGas`.
+  Each original name without `_noStateGas` retains its covered-fork API.
   `Evm.step_spawn_rollback_getStor` separately preserves all parent storage
   when complete child settlement discards the result, including unprotected
   owners; it requires no nonempty-code premise.
+  `Evm.step_spawn_rollback_code_stor_noStateGas` also preserves the entire code
+  map under the same complete-discard premise and `rules.stateGas = none`.
 - `ExecutionTrace.messageCallDelegation_fields` and its named projections
   (`_caller_eq`, `_target_eq`, `_currentTarget_eq`,
   `_shouldTransferValue_eq`) carry a routing or value field across the
