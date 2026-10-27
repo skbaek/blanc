@@ -4011,20 +4011,24 @@ cases. V2.2 transferFrom remains explicit. The two credit-hash modules above
 supply original successful hash occurrences for the old-version collector; certificate key
 denotation alone does not provide them or prove finite-check truth.
 
-The V2 transfer and V2.1 mint producers are also consumed by
-`ModernWriteFamilies`: only these version/selector cases leave its residual
-list. The existing finite faithful/apart checks use their exact actual-key
-collections; original hash witnesses remain in the producer interfaces.
+All three modern transfer and mint producers are consumed by
+[`ModernWriteFamilies`](../Blanc/Lift/Usdc/ModernWriteFamilies.lean) and
+[`ModernMinterFamilies`](../Blanc/Lift/Usdc/ModernMinterFamilies.lean).
+Their exact per-version actual lists extend `actualModernCoveredKeys`; supply
+writes stay in the literal-word branch. The faithful check now removes ordinary
+transfer and mint from every modern residual-selector list. It remains an
+explicit check obligation, and authorization, initializer and V2.2 transferFrom
+families remain separate. The received V2.1 transfer body and recipient
+interfaces reuse `OldTransferBodyReach`, preserving the newer shared proof.
 
 For the combined configure/mint family, use
 [`ModernMinterFamilies`](../Blanc/Lift/Usdc/ModernMinterFamilies.lean).
-`actualModernMinterKeys` selects the version's actual configureMinter keys and,
-for V2/V2.1, its actual mint keys. `modernMinter_write_source` derives either
+`actualModernMinterKeys` selects the version's actual configureMinter and mint keys. `modernMinter_write_source` derives either
 literal supply slot 11 or a collected logical key distinct from every allowance
 key. It assumes no hash separation. `ModernWriteFamilies` includes this exact
 list in `actualModernCoveredKeys`; its existing finite faithful/apart checks
-then eliminate all three configureMinter selectors and V2/V2.1 mint from the residual
-families. V2.2 mint remains explicit. No AllowedFrame exception,
+then eliminate configureMinter and mint in all three versions from the residual
+families. No AllowedFrame exception,
 spender population, or global hash-injectivity premise is added.
 
 For V2 `configureMinter`, use
@@ -4087,6 +4091,43 @@ tail over an arbitrary surrounding program. `ObservedSourceFor` shares the
 three-way classification with the version-specific balance tail as a parameter.
 The existing V2 interface remains
 available. Separation consumes freshness for exactly this collected list.
+
+For V2.2 `mint`, use
+[`Blanc/Lift/Usdc/V22MintMappingTouches.lean`](../Blanc/Lift/Usdc/V22MintMappingTouches.lean)'s
+`actualV22MintKeys`. The original-entry proof separates the literal supply write
+at `0x21b8`, caller minter allowance at `0x21f5`, and recipient balance through
+the guarded shared setter. Its retained immediate return excludes the first two
+source sites, so the recognizer needs no separate exact balance PC or digest
+comparison. Completeness covers every successful selected store and excludes
+supply from the mapping list; history soundness retains each row's own original
+successful hash. `V22TransferReach.StoreSource` now also retains that actual
+terminal tree, with the existing public transfer producer unchanged. Mint reuses
+its packed query, arithmetic and setter helpers and the identical V2 final
+minter-store helper. Freshness and initial apartness remain explicit for exactly
+the collected mapping list.
+
+For V2.2 `transfer`, use
+[`Blanc/Lift/Usdc/V22TransferMappingTouches.lean`](../Blanc/Lift/Usdc/V22TransferMappingTouches.lean)'s
+`actualV22TransferKeys`. Both writes use the same setter; the actual stack word
+at index 2 distinguishes its caller-balance return tag `0x40e8` from its
+recipient-balance return tag `0x40f9`. `V22TransferReach.successfulSstore_source`
+derives those tags, the written account key and its own successful earlier hash
+from original entry. Recognition checks target/code/selector, the retained tag
+and successful store, without a digest comparison or separate PC requirement.
+Completeness exhausts both tags, and history soundness binds the original frame,
+store and hash. Packed-balance queries, arithmetic and setter guards are traversed
+internally; no arithmetic or final-frame-success premise is added. Initial
+apartness and freshness remain explicit for the exact collected list.
+
+For V2.1 `transfer`, use
+[`Blanc/Lift/Usdc/V2_1TransferMappingTouches.lean`](../Blanc/Lift/Usdc/V2_1TransferMappingTouches.lean)'s
+`actualV2_1TransferKeys`. Its original entry proof derives the caller's balance
+store at `0x3cd2` and the recipient's at `0x3d11`, each with its own successful
+hash earlier in the same frame. It reuses the V2 transfer source shapes and the
+V2.1 mint arithmetic helpers; the actual balance guard supplies the debit bound.
+The collector preserves original raw-node order and duplicates and establishes
+completeness and same-history hash provenance without testing key digests.
+Separation requires explicit initial apartness and freshness of this exact list.
 
 For V1 `burn`, use
 [`Blanc/Lift/Usdc/V1BurnMappingTouches.lean`](../Blanc/Lift/Usdc/V1BurnMappingTouches.lean)'s
