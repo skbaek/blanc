@@ -228,15 +228,17 @@ theorem MessageCallTrace.logs_eq_settledRoots
           exact retained.logs_eq_settledRoots_of_clean execHsg clean
 
 /-- The actual transaction inserts its own message receipt under the selected
-historical settlement rules. No fixed refund quotient or sweep policy is used. -/
-theorem TransactionTrace.receipt_of_selected_settlement
+historical settlement rules and appends those same logs to the block output.
+No fixed refund quotient or sweep policy is used. -/
+theorem TransactionTrace.receipt_and_blockLogs_of_selected_settlement
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (hsg : benv.stat.rules.stateGas = none) :
     bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
       some (makeReceipt tx trace.messageOut.error bout'.cumulativeGasUsed
-        trace.messageOut.logs) := by
+        trace.messageOut.logs) ∧
+      bout'.blockLogs = bout.blockLogs ++ trace.messageOut.logs := by
   obtain ⟨refund, hrefund, _⟩ := trace.exists_selectedFinalStateForm hsg
   have valid : validateTransaction benv.stat.rules tx 0 =
       .ok (trace.intrinsicGas, trace.calldataFloorGasCost) := by
@@ -258,8 +260,21 @@ theorem TransactionTrace.receipt_of_selected_settlement
   have output := (Prod.mk.inj (Except.ok.inj result)).2
   have trie := congrArg BlockOutput.receiptsTrie output
   have cumulative := congrArg BlockOutput.cumulativeGasUsed output
-  rw [← trie, ← cumulative]
-  exact Std.TreeMap.getElem?_insert_self
+  constructor
+  · rw [← trie, ← cumulative]
+    exact Std.TreeMap.getElem?_insert_self
+  · exact (congrArg BlockOutput.blockLogs output).symm
+
+/-- The receipt projection of the original selected settlement. -/
+theorem TransactionTrace.receipt_of_selected_settlement
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none) :
+    bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
+      some (makeReceipt tx trace.messageOut.error bout'.cumulativeGasUsed
+        trace.messageOut.logs) :=
+  (trace.receipt_and_blockLogs_of_selected_settlement hsg).1
 
 /-- The actual receipt stores the retained root logs once, with its actual
 status, cumulative gas and selected transaction-index key. -/
@@ -345,18 +360,25 @@ theorem TransactionTrace.receipt_of_settledRoots_after_later_indices
   exact RlpConcrete.receipt_key_ne_of_small positive small (by have := later item member; omega)
 
 /-- Request processing changes request bytes and access accounting only;
-the actual receipt trie is preserved, including with enabled requests. -/
-theorem RequestsTrace.receiptsTrie_eq
+the actual receipt trie and block logs are preserved, including with enabled requests. -/
+theorem RequestsTrace.receiptsTrie_and_blockLogs_eq
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout') :
-    bout'.receiptsTrie = bout.receiptsTrie := by
+    bout'.receiptsTrie = bout.receiptsTrie ∧ bout'.blockLogs = bout.blockLogs := by
   have run := trace.run
   unfold processGeneralPurposeRequests processGeneralPurposeRequestsAt at run
   obtain ⟨_, _, run⟩ := Except.bind_eq_ok run
   dsimp only at run
   obtain ⟨_, _, run⟩ := Except.bind_eq_ok run
   cases run
-  rfl
+  exact ⟨rfl, rfl⟩
+
+/-- Request processing preserves the actual receipt trie. -/
+theorem RequestsTrace.receiptsTrie_eq
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout') :
+    bout'.receiptsTrie = bout.receiptsTrie :=
+  trace.receiptsTrie_and_blockLogs_eq.1
 
 /-- Both the enabled and disabled request stages preserve the actual trie. -/
 theorem RequestStageTrace.receiptsTrie_eq

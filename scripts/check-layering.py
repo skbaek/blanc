@@ -339,6 +339,7 @@ SHARED += [
     "ExecutionIndexedReceipts",
     "ExecutionReceiptRanges",
     "ExecutionHistoryReceiptLogs",
+    "ExecutionBlockLogs",
     "ExecutionHistoryCellProvenance",
     "ExecutionInRawNodeOrigin",
     "ExecutionInRootOwnCode",

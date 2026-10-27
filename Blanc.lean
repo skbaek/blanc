@@ -1657,6 +1657,7 @@ import Blanc.ExecutionHistoryCommittedCuts
 import Blanc.ExecutionIndexedReceipts
 import Blanc.ExecutionReceiptRanges
 import Blanc.ExecutionHistoryReceiptLogs
+import Blanc.ExecutionBlockLogs
 import Blanc.RlpBytesInjective
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin

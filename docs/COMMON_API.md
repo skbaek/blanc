@@ -5762,6 +5762,8 @@ stage lemma with the block output's gas counters).  Worked use: the deployed WET
 For the receipt of an existing admitted `TransactionTrace` under historical
 settlement, use `TransactionTrace.receipt_of_selected_settlement` in
 [`Blanc/ExecutionSettledReceiptLogs.lean`](../Blanc/ExecutionSettledReceiptLogs.lean).
+`TransactionTrace.receipt_and_blockLogs_of_selected_settlement` also exposes
+the exact message-log append to the actual block output from the same inversion.
 It identifies the actual receipt at `BLT.toBytes (.bytes index.toBytes)` with
 the same message status, message logs and final cumulative gas. Only
 `rules.stateGas = none` is required: the selected refund quotient, calldata
@@ -5792,6 +5794,8 @@ through its actual suffix, preserving the selected transaction's cumulative gas.
 The selected position must be positive and below 128.
 `RequestsTrace.receiptsTrie_eq` and `RequestStageTrace.receiptsTrie_eq`
 derive actual trie preservation for enabled and disabled request processing.
+`RequestsTrace.receiptsTrie_and_blockLogs_eq` supplies both trie and block-log
+preservation from the same original request result.
 `StagedBodyTrace.receiptsTrie_eq_transactionBout` transports through the actual
 withdrawal and final access-list fields to the body's final output.
 `StagedBodyTrace.receipt_of_txSplit_settledRoots` and
@@ -5838,6 +5842,17 @@ the roots of the original after/before interval. Its mainnet specialization,
 `root_logs_between_txSplits_of_mainnet_receipts`, derives stage premises from the
 actual final pre-Cancun timestamp and accepted-header chronology. These scans
 establish semantic transport, not independent archive/commitment authentication.
+For original block-log membership, use
+[`Blanc/ExecutionBlockLogs.lean`](../Blanc/ExecutionBlockLogs.lean).
+`TransactionTrace.blockLogs_eq` and `ApplyTransactionsTrace.blockLogs_eq` append
+the exact retained transaction-root logs in order. Request processing, withdrawals
+and final access accounting preserve these logs;
+`StagedBodyTrace.blockLogs_eq_transactionRoots` identifies the final sequence.
+`ConfiguredBlockTraceIn.mem_blockLogs_of_txSplit`, `mem_blockLogs_of_receipt`, and
+`mem_blockLogs_of_mem_receiptLogsBetween` place each selected original log in
+the actual final `blockOutput.blockLogs`, including arbitrary prefix/suffix intervals.
+These require only the selected no-state-gas rule and do not add system-call roots
+or assume independent archive/header identification.
 The joint trace/key query is documented here rather than dispatched from an
 arbitrary expanded receipt equality, list membership or quantified log predicate.
 
