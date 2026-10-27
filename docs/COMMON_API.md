@@ -3798,6 +3798,16 @@ prefix, without final-frame success, descriptor separation or hash injectivity.
 The off-implementation-slot consumer keeps initial apartness and freshness of
 this exact collected list explicit.
 
+For V2 and V2_1 old-blacklist writes, use
+[`Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean`](../Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean)'s
+`actualV2OldBlacklistKeys` with its explicit version. The certificate and
+same original prefix derive the masked calldata address at slot 3. The
+collector selects actual successful blacklist/unblacklist stores, preserving
+raw-node order and duplicates, with soundness and completeness.
+`v2OldBlacklist_write_ne_allowSlot` consumes the exact finite
+observed-versus-collected-key check. Its truth and successful hash-occurrence
+provenance remain separate obligations; term denotation does not prove either.
+
 For V1 `burn`, use
 [`Blanc/Lift/Usdc/V1BurnMappingTouches.lean`](../Blanc/Lift/Usdc/V1BurnMappingTouches.lean)'s
 `actualV1BurnBalanceKeys`. The recognizer selects actual successful balance
@@ -7147,6 +7157,14 @@ contract-neutral.
   listed site, `top` included, names a key) under the frame-local collision
   premise `RowSep`, with `rowOf`/`rowOf_eval` (a row slot term's owner and key)
   and `GuardObs.mono`.
+- To identify a slot term from a site's singleton selector guard, use
+  [`Blanc/Lift/WriteSiteSelector.lean`](../Blanc/Lift/WriteSiteSelector.lean):
+  `Site.slotSelectorCheck` checks the selector/slot correspondence over a
+  supplied descriptor list, and `Site.slot_eq_iff_of_selectorCheck` applies
+  it to a member whose actual guards hold. Supply the known selector term;
+  the conclusion concerns its evaluated word. This does not produce an
+  execution occurrence, hash witness, or separation premise. It serves the
+  existing V1 adapter and the V2/V2_1 blacklist collectors.
 - To preserve demanded zero cells using that locality, use
   [`Blanc/Lift/WriteSiteZero.lean`](../Blanc/Lift/WriteSiteZero.lean):
   `ZeroSlots` states the seed; `GuardObs.sstore_zero` combines

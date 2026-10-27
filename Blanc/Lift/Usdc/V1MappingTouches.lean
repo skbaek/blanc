@@ -1,6 +1,7 @@
 import Blanc.Lift.Usdc.HistoricalMappingKeys
 import Blanc.Lift.Usdc.AllowanceRawHistory
 import Blanc.Lift.Usdc.V1BlacklistReach
+import Blanc.Lift.WriteSiteSelector
 
 /-!
 Old blacklist mapping keys are collected only at actual successful V1 stores.
@@ -37,10 +38,7 @@ def actualV1OldBlacklistKeys {F : Fork → Prop} {cfg : ChainConfig}
 /-- A selector/slot correspondence over the fixed V1 root descriptors. -/
 def v1MappingSiteCheck (slot : Term) (selected : B256 → Prop)
     [DecidablePred selected] (site : Site) : Bool :=
-  match site.guards with
-  | [(term, selector)] => decide (term = selV1T) &&
-      decide (site.slot = slot ↔ selected selector)
-  | _ => false
+  Site.slotSelectorCheck selV1T slot selected site
 
 theorem v1Mapping_site_iff {slot : Term} {selected : B256 → Prop}
     [DecidablePred selected]
@@ -49,27 +47,13 @@ theorem v1Mapping_site_iff {slot : Term} {selected : B256 → Prop}
     (member : site ∈ wsRoot ImplV1Ws.implWsAnn) {sevm : Sevm}
     (guards : site.GuardsHold (Env.root sevm)) :
     site.slot = slot ↔ selected (Sevm.selector sevm) := by
-  have checked := (List.all_eq_true.mp table) site member
-  unfold v1MappingSiteCheck at checked
-  split at checked
-  next term selector shape =>
-    obtain ⟨termEq, slotCheck⟩ := Bool.and_eq_true_iff.mp checked
-    have termIs : term = selV1T := of_decide_eq_true termEq
-    subst term
-    have guard := guards (selV1T, selector) (by
-      rw [shape]
-      exact List.mem_cons_self)
-    have selectorEq : selV1T.eval (Env.root sevm) = Sevm.selector sevm := by
-      rw [← dispatchWord_eq_selector]
-      unfold Proxy.dispatchWord
-      rw [B256.and_comm]
-      rfl
-    have guardEq : selector = selV1T.eval (Env.root sevm) :=
-      guard (show selV1T.known = true from by decide)
-    have slots := of_decide_eq_true slotCheck
-    rw [guardEq, selectorEq] at slots
-    exact slots
-  next => contradiction
+  have selectorEq : selV1T.eval (Env.root sevm) = Sevm.selector sevm := by
+    rw [← dispatchWord_eq_selector]
+    unfold Proxy.dispatchWord
+    rw [B256.and_comm]
+    rfl
+  rw [← selectorEq]
+  exact Site.slot_eq_iff_of_selectorCheck table (by decide) member guards
 
 theorem v1OldBlacklist_site_iff {site : Site}
     (member : site ∈ wsRoot ImplV1Ws.implWsAnn) {sevm : Sevm}
