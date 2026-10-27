@@ -3951,14 +3951,24 @@ collector. Final-frame success, hash injectivity and finite-check truth are
 not required to obtain these witnesses. Initializer writes are outside this
 two-selector collector.
 
+[`OldTransferBodyReach`](../Blanc/Lift/Usdc/OldTransferBodyReach.lean)
+owns the shared V2/V2.1 balance-transfer walk. `body_reach_bounded` retains
+the owner store's actual subtraction bound or the recipient store, together
+with each branch's own original hash. `recipient_v21` checks equality of the
+complete recipient suffix; the owner/debit walks use their exact version's
+return addresses and helper indices. The V2 interfaces in `V2TransferReach`
+remain specializations of this shared proof.
+
+[`OldTransferFromCallee`](../Blanc/Lift/Usdc/OldTransferFromCallee.lean)
+uses that walk with an arbitrary original caller continuation in V2 or V2.1.
+`body_bounded_source_or_return` retains the balance-store evidence or a return
+along the same observed path. `subtraction_return` derives the actual bound
+and unchanged storage base while retaining both observed cuts. Neither
+requires an assumed bound or a store-free caller. The V2 interfaces in
 [`V2TransferFromCallee`](../Blanc/Lift/Usdc/V2TransferFromCallee.lean)
-reuses the existing V2 transfer-body proof with an arbitrary original caller
-continuation. It derives the exact balance-store/hash alternative or a return
-along that same observed path. Its `subtraction_return` reuses the existing
-checked subtraction return theorem, deriving the actual bound and unchanged
-storage base while retaining both observed cuts; it assumes no bound or
-store-free caller. It does not yet discharge transferFrom's
-original dispatcher or allowance continuation.
+remain specializations; V2.1's public dispatch and allowance continuation are
+separate consumer obligations. V2.2 is explicitly excluded from these
+older-version theorems.
 
 [`V2TransferFromEntry`](../Blanc/Lift/Usdc/V2TransferFromEntry.lean) derives
 that original dispatcher, ABI and public-guard path while retaining the exact

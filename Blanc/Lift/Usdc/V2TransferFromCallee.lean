@@ -1,4 +1,4 @@
-import Blanc.Lift.ObservedReachSplit
+import Blanc.Lift.Usdc.OldTransferFromCallee
 import Blanc.Lift.Usdc.V2TransferReach
 import Blanc.Lift.Usdc.OldBurnNonIncCallees
 
@@ -27,17 +27,7 @@ theorem body_bounded_source_or_return {Q : Sevm → Devm → Ninst → Devm → 
           ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G,
             ImplV2.t_3ef8_c74, continuation :: K⟩ ⟨returned, continuation, K⟩ ∧
         ObservedReach Q observe ImplV2.cert.prog sevm ⟨returned, continuation, K⟩ T := by
-  rcases ObservedReach.split run (S := []) rfl with
-    ⟨target, inside, same⟩ | returned
-  · have atStore : AtSstore target := by rw [same] at hT; exact hT
-    have source := V2TransferReach.body_reach_bounded erase inside atStore
-      (fun _ member => by cases member)
-    rcases source with ⟨⟨value, rest, stack, bound⟩, shape, hash⟩ | ⟨stack, shape, hash⟩
-    · rw [same]
-      exact .inl (.inl ⟨⟨value, rest, stack, bound⟩, shape, hash.below (continuation :: K)⟩)
-    · rw [same]
-      exact .inl (.inr ⟨stack, shape, hash.below (continuation :: K)⟩)
-  · exact .inr returned
+  exact OldTransferFromCallee.body_bounded_source_or_return (version := .v2) (by decide) erase run hT
 
 /-- Preserve the prior source-only callee interface. -/
 theorem body_source_or_return {Q : Sevm → Devm → Ninst → Devm → Prop}
@@ -79,12 +69,6 @@ theorem subtraction_return {Q : Sevm → Devm → Ninst → Devm → Prop}
         ⟨St b ((value - amount) :: S) M' G', continuation, K⟩ ∧
       ObservedReach Q observe ImplV2.cert.prog sevm
         ⟨St b ((value - amount) :: S) M' G', continuation, K⟩ T := by
-  obtain ⟨returned, callee, earlier, later⟩ := ObservedReach.return_of_sstoreFree
-    (show SstoreFreeSet ImplV2.cert.prog [5, 78, 88, 93] = true from by decide +kernel)
-    (show ImplV2.t_4123_c78.sstoreFreeIn [5, 78, 88, 93] = true from by decide +kernel)
-    run hT
-  obtain ⟨bound, M', G', rfl⟩ := OldBurnNonIncCallees.sub_ret
-    (version := .v2) (by decide) (SFunc.RunP.mono erase callee)
-  exact ⟨bound, M', G', earlier, later⟩
+  exact OldTransferFromCallee.subtraction_return (version := .v2) (by decide) erase run hT
 
 end Blanc.Lift.Usdc.V2TransferFromCallee

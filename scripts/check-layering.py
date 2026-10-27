@@ -1428,6 +1428,8 @@ CONTRACTS = {
         "Lift.Usdc.V2ApproveMappingTouches",
         "Lift.Usdc.V2_1MintReach",
         "Lift.Usdc.V2_1MintMappingTouches",
+        "Lift.Usdc.OldTransferBodyReach",
+        "Lift.Usdc.OldTransferFromCallee",
         "Lift.Usdc.V2TransferReach",
         "Lift.Usdc.V2TransferFromCallee",
         "Lift.Usdc.V2TransferFromEntry",
