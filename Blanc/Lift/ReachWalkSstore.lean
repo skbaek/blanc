@@ -215,14 +215,20 @@ theorem Reach.branchToS {d : Devm} {f : SFunc} {k : Nat} {K : List SFunc} {T : C
   · exact .inl ⟨t, d', pop, rest.forget⟩
   · exact .inr ⟨t, w, g, d', nonzero, lookup, pop, rest.forget⟩
 
-theorem Reach.jumpS {d : Devm} {k : Nat} {K : List SFunc} {T : Conf}
-    (h : Reach P fs sevm ⟨d, .jump k, K⟩ T) (hT : AtSstore T) :
-    ∃ t g d', fs[k]? = some g ∧ Devm.PopBurn [t] d d' ∧ Reach P fs sevm ⟨d', g, K⟩ T := by
-  rcases Relation.ReflTransGen.cases_head h with rfl | ⟨c, step, rest⟩
+theorem ObservedReach.jumpS {d : Devm} {k : Nat} {K : List SFunc} {T : Conf}
+    (h : ObservedReach P observe fs sevm ⟨d, .jump k, K⟩ T) (hT : AtSstore T) :
+    ∃ t g d', fs[k]? = some g ∧ Devm.PopBurn [t] d d' ∧ ObservedReach P observe fs sevm ⟨d', g, K⟩ T := by
+  rcases Relation.ReflTransGen.cases_head h with rfl | ⟨c, ⟨step, _⟩, rest⟩
   · obtain ⟨f', hx⟩ := hT
     cases hx
   · cases step with
     | jump t hk hp => exact ⟨t, _, _, hk, hp, rest⟩
+
+theorem Reach.jumpS {d : Devm} {k : Nat} {K : List SFunc} {T : Conf}
+    (h : Reach P fs sevm ⟨d, .jump k, K⟩ T) (hT : AtSstore T) :
+    ∃ t g d', fs[k]? = some g ∧ Devm.PopBurn [t] d d' ∧ Reach P fs sevm ⟨d', g, K⟩ T := by
+  obtain ⟨t, g, d', hk, pop, rest⟩ := ObservedReach.jumpS (ObservedReach.of_reach h) hT
+  exact ⟨t, g, d', hk, pop, rest.forget⟩
 
 theorem Reach.callS {d : Devm} {k : Nat} {f : SFunc} {K : List SFunc} {T : Conf}
     (h : Reach P fs sevm ⟨d, .callNext k f, K⟩ T) (hT : AtSstore T) :
@@ -315,11 +321,17 @@ theorem rs_branchTo {k : Nat} {dd w : B256}
   · exact .inl ⟨zero, G', rest.forget⟩
   · exact .inr ⟨nonzero, g, G', lookup, rest.forget⟩
 
+theorem ObservedReach.rs_jump {k : Nat} {dd : B256}
+    (run : ObservedReach P observe fs sevm ⟨St b (dd :: S) M G, .jump k, K⟩ T) (hT : AtSstore T) :
+    ∃ g G', fs[k]? = some g ∧ ObservedReach P observe fs sevm ⟨St b S M G', g, K⟩ T := by
+  obtain ⟨t, g, d', hk, pop, rest⟩ := ObservedReach.jumpS run hT
+  exact ⟨g, _, hk, (St.of_pop1 pop).2 ▸ rest⟩
+
 theorem rs_jump {k : Nat} {dd : B256}
     (run : Reach P fs sevm ⟨St b (dd :: S) M G, .jump k, K⟩ T) (hT : AtSstore T) :
     ∃ g G', fs[k]? = some g ∧ Reach P fs sevm ⟨St b S M G', g, K⟩ T := by
-  obtain ⟨t, g, d', hk, pop, rest⟩ := Reach.jumpS run hT
-  exact ⟨g, _, hk, (St.of_pop1 pop).2 ▸ rest⟩
+  obtain ⟨g, G', hk, rest⟩ := ObservedReach.rs_jump (ObservedReach.of_reach run) hT
+  exact ⟨g, G', hk, rest.forget⟩
 
 /-- A `callNext` whose callee is `SSTORE`-free: the callee returns before the target. -/
 theorem rs_callOver {E : List Nat} (hE : SstoreFreeSet fs E = true) {k : Nat} {dd : B256}

@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.InitReach
 import Blanc.Lift.Usdc.Impl.Cert
+import Blanc.Lift.CursorKeccak
 
 /-!
 # FiatTokenV2_2's `initializeV2` on a prefix reach
@@ -50,6 +51,8 @@ theorem route_initV2 : selTree.selWalk 0xd608ea64 =
     .inl (Bytes.toB256 [0xd6, 0x08, 0xea, 0x64], 133) := by
   decide +kernel
 
+variable {observe : Conf → Conf → Prop}
+
 variable {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {T : Conf}
 
 /-- **FiatTokenV2_2 `initializeV2` on a prefix reach.** A reach of the FiatTokenV2_2 code from entry `0`, with
@@ -88,40 +91,62 @@ def addrMask : B256 := Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0
 
 /-- **`_blacklist(x)` (entry `86`) on a reach.** It writes only `balanceAndBlacklistStates[x]`
 (slot `9` of the masked address), then returns over its argument and return tag. -/
+theorem blacklist_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {K : List SFunc} {b : Devm} {x t : B256} {R : List B256} {M : Mem} {G : Nat}
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St b (x :: t :: R) M G, Impl.t_4224_c86, K⟩ T)
+    (hT : AtSstore T) :
+    ((∀ key v S, T.d.stack = key :: v :: S → key = mapSlot (x &&& addrMask) 9) ∧
+      ObservedKeccak P observe sevm ((x &&& addrMask).toBytes ++ (9 : B256).toBytes)
+        (fun _ => True)) ∨
+      ∃ f K' b' M' G', K = f :: K' ∧ ObservedReach P observe Impl.cert.prog sevm ⟨St b' R M' G', f, K'⟩ T := by
+  orsd
+  iterate 4 orsx
+  obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
+  cases hg
+  orsd
+  iterate 2 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨hw, _, run⟩ | ⟨-, _, run⟩
+  · exact absurd hw (by decide)
+  orsd
+  iterate 13 orsx
+  orsld
+  iterate 2 orsx
+  orsd
+  iterate 13 orsx
+  obtain ⟨_, hash, run⟩ := ObservedKeccak.of_next erase run hT
+    (input := (x &&& addrMask).toBytes ++ (9 : B256).toBytes) (shape := fun _ => True)
+    (by exact Mem.read_two_word_writes_at_raw _ 0 _ _) (by trivial)
+  simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl,
+    show (Bytes.toB256 [32]).toNat = 32 from rfl] at run
+  rw [Mem.read_two_word_writes_at_raw] at run
+  iterate 3 orsx
+  rcases ObservedReach.sstoreS run with rfl | ⟨_, hstep, _, run⟩
+  · refine .inl ⟨?_, hash⟩
+    intro key v S h
+    simp only [St.stack, List.cons.injEq] at h
+    rw [← h.1]
+    rfl
+  obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
+  subst e
+  clear hstep
+  orsx
+  obtain ⟨f, K', b', G', hK, run⟩ := ObservedReach.rs_retM run hT
+  cases hK
+  orsd
+  orsx
+  obtain ⟨f, K', b', G', hK, run⟩ := ObservedReach.rs_retM run hT
+  exact .inr ⟨f, K', b', _, G', hK, run⟩
+
 theorem blacklist_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {K : List SFunc} {b : Devm} {x t : B256} {R : List B256} {M : Mem} {G : Nat}
     (run : Reach P Impl.cert.prog sevm ⟨St b (x :: t :: R) M G, Impl.t_4224_c86, K⟩ T)
     (hT : AtSstore T) :
     (∀ key v S, T.d.stack = key :: v :: S → key = mapSlot (x &&& addrMask) 9) ∨
       ∃ f K' b' M' G', K = f :: K' ∧ Reach P Impl.cert.prog sevm ⟨St b' R M' G', f, K'⟩ T := by
-  rsd
-  iterate 4 rsx
-  obtain ⟨g, _, hg, run⟩ := rs_callIn run hT
-  cases hg
-  rsd
-  iterate 2 rsx
-  rcases rs_branch run hT with ⟨hw, _, run⟩ | ⟨-, _, run⟩
-  · exact absurd hw (by decide)
-  rsd
-  iterate 13 rsx
-  rsld
-  iterate 2 rsx
-  rsd
-  iterate 17 rsx
-  rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · refine .inl fun key v S h => ?_
-    simp only [St.stack, List.cons.injEq] at h
-    rw [← h.1]
-    exact mapSlot_scratch _ _ _ (by decide) (by decide) (by decide) (by decide)
-  obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
-  subst e
-  clear hstep
-  rsx
-  obtain ⟨f, K', b', M', G', hK, run⟩ := rs_ret run hT
-  cases hK
-  rsd
-  rsx
-  exact .inr (rs_ret run hT)
+  rcases blacklist_source erase (ObservedReach.of_reach run) hT with
+    ⟨keys, _⟩ | ⟨f, K', b', M', G', same, rest⟩
+  · exact .inl keys
+  · exact .inr ⟨f, K', b', M', G', same, rest.forget⟩
 
 theorem head_eq : Impl.t_255a_c55 = Impl.t_255a_c101 := rfl
 
@@ -142,6 +167,73 @@ theorem lt_of_ltCheck {x y : B256} (h : B256.ltCheck x y ≠ 0) : x.toNat < y.to
     exact B256.lt_iff_toNat_lt_toNat.mp hl
   · exact (h rfl).elim
 
+theorem pass22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {b : Devm} {i : Nat} {sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
+    (hi : i ≤ aL.toNat)
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St b (i.toB256 :: sL :: sP :: aL :: aP :: r :: S) M G,
+      Impl.t_255a_c101, []⟩ T) (hT : AtSstore T) :
+    (∀ key v S, T.d.stack = key :: v :: S → ∃ j < aL.toNat,
+      (key = mapSlot (acctAt sevm aP j) 3 ∧
+        ObservedKeccak P observe sevm ((acctAt sevm aP j).toBytes ++ (3 : B256).toBytes) (fun _ => True)) ∨
+      (key = mapSlot (acctAt sevm aP j &&& addrMask) 9 ∧
+        ObservedKeccak P observe sevm ((acctAt sevm aP j &&& addrMask).toBytes ++ (9 : B256).toBytes)
+          (fun _ => True))) ∨
+      (∃ b' M' G', i + 1 ≤ aL.toNat ∧ ObservedReach P observe Impl.cert.prog sevm
+        ⟨St b' ((i + 1).toB256 :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_255a_c101, []⟩ T) ∨
+      ∃ b' M' G', ObservedReach P observe Impl.cert.prog sevm
+        ⟨St b' (i.toB256 :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_2698_c101, []⟩ T := by
+  have hiN : (i.toB256).toNat = i := B256.toNat_toB256_of_lt (by have := B256.toNat_lt aL; omega)
+  repeat first | orsd | orsx
+  rcases ObservedReach.rs_branch run hT with ⟨hw, _, run⟩ | ⟨-, _, run⟩
+  swap
+  · exact .inr (.inr ⟨_, _, _, run⟩)
+  have hlt : i < aL.toNat := by
+    have := lt_of_ltCheck (eqCheck_zero_eq_zero hw)
+    rwa [hiN] at this
+  repeat orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
+  repeat first | orsd | orsx | orsld
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
+  repeat first | orsd | orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
+  repeat first | orsd | orsx
+  obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
+  cases hg
+  rcases blacklist_source erase run hT with ⟨h, hash⟩ | ⟨f, K', b', M', G', hK, run⟩
+  · refine .inl fun key v S' hs => ⟨i, hlt, .inr ⟨h key v S' hs, hash⟩⟩
+  cases hK
+  repeat first | orsd | orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide) (fun _ h => by cases h)).elim
+  orsd
+  iterate 23 orsx
+  obtain ⟨_, hash, run⟩ := ObservedKeccak.of_next erase run hT
+    (input := (acctAt sevm aP i).toBytes ++ (3 : B256).toBytes) (shape := fun _ => True)
+    (by exact Mem.read_two_word_writes_at_raw _ 0 _ _) (by trivial)
+  simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl,
+    show (Bytes.toB256 [0] + Bytes.toB256 [32]).toNat = 32 from rfl] at run
+  rw [Mem.read_two_word_writes_at_raw] at run
+  repeat first | orsx | orsld
+  rcases ObservedReach.sstoreS run with rfl | ⟨_, hstep, _, run⟩
+  · refine .inl ?_
+    intro key v S' hs
+    simp only [St.stack, List.cons.injEq] at hs
+    rw [← hs.1]
+    exact ⟨i, hlt, .inl ⟨rfl, hash⟩⟩
+  obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
+  subst e
+  clear hstep
+  repeat orsx
+  obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_jump run hT
+  cases hg
+  rw [show Bytes.toB256 [1] + i.toB256 = (i + 1).toB256 by
+    rw [B256.add_comm]
+    exact toB256_add_toB256 (a := i) (b := 1) (by have := B256.toNat_lt aL; omega)] at run
+  exact .inr (.inl ⟨_, _, _, hlt, run⟩)
+
 theorem pass22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {i : Nat} {sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
     (hi : i ≤ aL.toNat)
@@ -152,50 +244,14 @@ theorem pass22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
         ⟨St b' ((i + 1).toB256 :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_255a_c101, []⟩ T) ∨
       ∃ b' M' G', Reach P Impl.cert.prog sevm
         ⟨St b' (i.toB256 :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_2698_c101, []⟩ T := by
-  have hiN : (i.toB256).toNat = i := B256.toNat_toB256_of_lt (by have := B256.toNat_lt aL; omega)
-  repeat rsa
-  rcases rs_branch run hT with ⟨hw, _, run⟩ | ⟨-, _, run⟩
-  swap
-  · exact .inr (.inr ⟨_, _, _, run⟩)
-  have hlt : i < aL.toNat := by
-    have := lt_of_ltCheck (eqCheck_zero_eq_zero hw)
-    rwa [hiN] at this
-  repeat rsa
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
-  repeat rsa
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
-  repeat rsa
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
-  repeat rsa
-  obtain ⟨g, _, hg, run⟩ := rs_callIn run hT
-  cases hg
-  rcases blacklist_reach erase run hT with h | ⟨f, K', b', M', G', hK, run⟩
-  · refine .inl fun key v S' hs => ⟨i, hlt, .inr (h key v S' hs)⟩
-  cases hK
-  repeat rsa
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide) (fun _ h => by cases h)).elim
-  repeat rsa
-  rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
-  · refine .inl ?_
-    intro key v S' hs
-    simp only [St.stack, List.cons.injEq] at hs
-    rw [← hs.1]
-    refine ⟨i, hlt, .inl ?_⟩
-    exact mapSlot_scratch _ _ _ (by decide) (by decide) (by decide) (by decide)
-  obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
-  subst e
-  clear hstep
-  repeat rsa
-  obtain ⟨g, _, hg, run⟩ := rs_jump run hT
-  cases hg
-  rw [show Bytes.toB256 [1] + i.toB256 = (i + 1).toB256 by
-    rw [B256.add_comm]
-    exact toB256_add_toB256 (a := i) (b := 1) (by have := B256.toNat_lt aL; omega)] at run
-  exact .inr (.inl ⟨_, _, _, hlt, run⟩)
+  rcases pass22_source erase hi (ObservedReach.of_reach run) hT with
+    keys | ⟨b', M', G', next, rest⟩ | ⟨b', M', G', rest⟩
+  · refine .inl fun key v S hs => ?_
+    obtain ⟨j, hj, h | h⟩ := keys key v S hs
+    · exact ⟨j, hj, .inl h.1⟩
+    · exact ⟨j, hj, .inr h.1⟩
+  · exact .inr (.inl ⟨b', M', G', next, rest.forget⟩)
+  · exact .inr (.inr ⟨b', M', G', rest.forget⟩)
 
 theorem pass22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {i : Nat} {sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
@@ -217,27 +273,41 @@ def AfterKeys (sevm : Sevm) (key : B256) : Prop :=
   key = mapSlot (sevm.currentTarget.toB256 &&& addrMask) 9 ∨
     key = mapSlot sevm.currentTarget.toB256 3 ∨ key = 18
 
-theorem after22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+theorem after22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {i sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
-    (run : Reach P Impl.cert.prog sevm ⟨St b (i :: sL :: sP :: aL :: aP :: r :: S) M G,
-      Impl.t_2698_c101, []⟩ T) (hT : AtSstore T) : ∀ key v S, T.d.stack = key :: v :: S → AfterKeys sevm key := by
-  repeat rsa
-  obtain ⟨g, _, hg, run⟩ := rs_callIn run hT
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St b (i :: sL :: sP :: aL :: aP :: r :: S) M G,
+      Impl.t_2698_c101, []⟩ T) (hT : AtSstore T) : ∀ key v S, T.d.stack = key :: v :: S →
+      (key = mapSlot (sevm.currentTarget.toB256 &&& addrMask) 9 ∧
+        ObservedKeccak P observe sevm ((sevm.currentTarget.toB256 &&& addrMask).toBytes ++ (9 : B256).toBytes)
+          (fun _ => True)) ∨
+      (key = mapSlot sevm.currentTarget.toB256 3 ∧
+        ObservedKeccak P observe sevm (sevm.currentTarget.toB256.toBytes ++ (3 : B256).toBytes)
+          (fun _ => True)) ∨ key = 18 := by
+  repeat first | orsd | orsx
+  obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
   cases hg
-  rcases blacklist_reach erase run hT with h | ⟨f, K', b', M', G', hK, run⟩
-  · exact fun key v S' hs => .inl (h key v S' hs)
+  rcases blacklist_source erase run hT with ⟨h, hash⟩ | ⟨f, K', b', M', G', hK, run⟩
+  · exact fun key v S' hs => .inl ⟨h key v S' hs, hash⟩
   cases hK
-  repeat rsa
-  rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
+  orsd
+  iterate 15 orsx
+  obtain ⟨_, hash, run⟩ := ObservedKeccak.of_next erase run hT
+    (input := sevm.currentTarget.toB256.toBytes ++ (3 : B256).toBytes) (shape := fun _ => True)
+    (by exact Mem.read_two_word_writes_at_raw _ 0 _ _) (by trivial)
+  simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl,
+    show (Bytes.toB256 [32]).toNat = 32 from rfl] at run
+  rw [Mem.read_two_word_writes_at_raw] at run
+  repeat first | orsx | orsld
+  rcases ObservedReach.sstoreS run with rfl | ⟨_, hstep, _, run⟩
   · intro key v S' hs
     simp only [St.stack, List.cons.injEq] at hs
     rw [← hs.1]
-    exact .inr (.inl (mapSlot_scratch _ _ _ (by decide) (by decide) (by decide) (by decide)))
+    exact .inr (.inl ⟨rfl, hash⟩)
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
-  repeat rsa
-  rcases Reach.sstoreS run with rfl | ⟨_, hstep, run⟩
+  repeat first | orsx | orsld
+  rcases ObservedReach.sstoreS run with rfl | ⟨_, hstep, _, run⟩
   · intro key v S' hs
     simp only [St.stack, List.cons.injEq] at hs
     rw [← hs.1]
@@ -245,8 +315,18 @@ theorem after22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
-  repeat rsa
-  exact (Reach.not_ret_nilS run hT).elim
+  repeat orsx
+  exact (Reach.not_ret_nilS run.forget hT).elim
+
+theorem after22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {b : Devm} {i sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
+    (run : Reach P Impl.cert.prog sevm ⟨St b (i :: sL :: sP :: aL :: aP :: r :: S) M G,
+      Impl.t_2698_c101, []⟩ T) (hT : AtSstore T) : ∀ key v S, T.d.stack = key :: v :: S → AfterKeys sevm key := by
+  intro key v S hs
+  rcases after22_source erase (ObservedReach.of_reach run) hT key v S hs with h | h | h
+  · exact .inl h.1
+  · exact .inr (.inl h.1)
+  · exact .inr (.inr h)
 
 theorem after22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {i sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
@@ -254,6 +334,29 @@ theorem after22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
       Impl.t_2698_c101, []⟩ T) (hT : AtSstore T) : InitStore (AfterKeys sevm) T := by
   intro key v S hs
   exact .inl (after22_keys erase run hT key v S hs)
+
+theorem loop22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {sL sP aL aP r : B256} {S : List B256} {i : Nat} (hi : i ≤ aL.toNat) {b : Devm} {M : Mem}
+    {G : Nat}
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St b (i.toB256 :: sL :: sP :: aL :: aP :: r :: S) M G,
+      Impl.t_255a_c101, []⟩ T) (hT : AtSstore T) :
+    (∀ key v S, T.d.stack = key :: v :: S → ∃ j < aL.toNat,
+      (key = mapSlot (acctAt sevm aP j) 3 ∧
+        ObservedKeccak P observe sevm ((acctAt sevm aP j).toBytes ++ (3 : B256).toBytes) (fun _ => True)) ∨
+      (key = mapSlot (acctAt sevm aP j &&& addrMask) 9 ∧
+        ObservedKeccak P observe sevm ((acctAt sevm aP j &&& addrMask).toBytes ++ (9 : B256).toBytes)
+          (fun _ => True))) ∨
+      ∃ j b' M' G', ObservedReach P observe Impl.cert.prog sevm
+        ⟨St b' (j :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_2698_c101, []⟩ T := by
+  refine ObservedReach.loop_index (fun j d => j ≤ aL.toNat ∧ ∃ b M G,
+      d = St b (j.toB256 :: sL :: sP :: aL :: aP :: r :: S) M G) aL.toNat (fun _ _ h => h.1) ?_
+    i _ ⟨hi, b, M, G, rfl⟩ run
+  intro j d ⟨hj, b, M, G, hd⟩ run
+  subst hd
+  rcases pass22_source erase hj run hT with h | ⟨b', M', G', hj', run⟩ | ⟨b', M', G', run⟩
+  · exact .inl (.inl h)
+  · exact .inr ⟨_, ⟨hj', b', M', G', rfl⟩, run⟩
+  · exact .inl (.inr ⟨_, b', M', G', run⟩)
 
 theorem loop22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {sL sP aL aP r : B256} {S : List B256} {i : Nat} (hi : i ≤ aL.toNat) {b : Devm} {M : Mem}
@@ -263,15 +366,12 @@ theorem loop22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (∀ key v S, T.d.stack = key :: v :: S → LoopKeys sevm aP aL.toNat key) ∨
       ∃ j b' M' G', Reach P Impl.cert.prog sevm
         ⟨St b' (j :: sL :: sP :: aL :: aP :: r :: S) M' G', Impl.t_2698_c101, []⟩ T := by
-  refine reach_loop_index (fun j d => j ≤ aL.toNat ∧ ∃ b M G,
-      d = St b (j.toB256 :: sL :: sP :: aL :: aP :: r :: S) M G) aL.toNat (fun _ _ h => h.1) ?_
-    i _ ⟨hi, b, M, G, rfl⟩ run
-  intro j d ⟨hj, b, M, G, hd⟩ run
-  subst hd
-  rcases pass22_keys erase hj run hT with h | ⟨b', M', G', hj', run⟩ | ⟨b', M', G', run⟩
-  · exact .inl (.inl h)
-  · exact .inr ⟨_, ⟨hj', b', M', G', rfl⟩, run⟩
-  · exact .inl (.inr ⟨_, b', M', G', run⟩)
+  rcases loop22_source erase hi (ObservedReach.of_reach run) hT with keys | ⟨j, b', M', G', rest⟩
+  · refine .inl fun key v S hs => ?_
+    obtain ⟨j, hj, h | h⟩ := keys key v S hs
+    · exact ⟨j, hj, .inl h.1⟩
+    · exact ⟨j, hj, .inr h.1⟩
+  · exact .inr ⟨j, b', M', G', rest.forget⟩
 
 theorem loop22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {sL sP aL aP r : B256} {S : List B256} {i : Nat} (hi : i ≤ aL.toNat) {b : Devm} {M : Mem}

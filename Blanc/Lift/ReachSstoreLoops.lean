@@ -444,11 +444,11 @@ theorem reach_loop_measure {head : SFunc} {K : List SFunc} {T : Conf} {Q : Prop}
 /-- **A loop by a bounded index.** If every pass from the head under `I i` either concludes
 `Q` or re-enters the head under `I (i + 1)`, and `I i` bounds `i` by `N`, every reach from
 the head under some `I i` concludes `Q`. -/
-theorem reach_loop_index {head : SFunc} {K : List SFunc} {T : Conf} {Q : Prop}
+theorem ObservedReach.loop_index {head : SFunc} {K : List SFunc} {T : Conf} {Q : Prop}
     (I : Nat → Devm → Prop) (N : Nat) (hN : ∀ i d, I i d → i ≤ N)
-    (pass : ∀ i d, I i d → Reach P fs sevm ⟨d, head, K⟩ T →
-      Q ∨ ∃ d', I (i + 1) d' ∧ Reach P fs sevm ⟨d', head, K⟩ T) :
-    ∀ i d, I i d → Reach P fs sevm ⟨d, head, K⟩ T → Q := by
+    (pass : ∀ i d, I i d → ObservedReach P observe fs sevm ⟨d, head, K⟩ T →
+      Q ∨ ∃ d', I (i + 1) d' ∧ ObservedReach P observe fs sevm ⟨d', head, K⟩ T) :
+    ∀ i d, I i d → ObservedReach P observe fs sevm ⟨d, head, K⟩ T → Q := by
   intro i
   induction h : N - i using Nat.strong_induction_on generalizing i with
   | _ n ih =>
@@ -457,6 +457,18 @@ theorem reach_loop_index {head : SFunc} {K : List SFunc} {T : Conf} {Q : Prop}
     · exact q
     · have hle := hN (i + 1) d' hI'
       exact ih (N - (i + 1)) (by omega) (i + 1) rfl d' hI' run'
+
+theorem reach_loop_index {head : SFunc} {K : List SFunc} {T : Conf} {Q : Prop}
+    (I : Nat → Devm → Prop) (N : Nat) (hN : ∀ i d, I i d → i ≤ N)
+    (pass : ∀ i d, I i d → Reach P fs sevm ⟨d, head, K⟩ T →
+      Q ∨ ∃ d', I (i + 1) d' ∧ Reach P fs sevm ⟨d', head, K⟩ T) :
+    ∀ i d, I i d → Reach P fs sevm ⟨d, head, K⟩ T → Q := by
+  intro i d hI run
+  refine ObservedReach.loop_index I N hN ?_ i d hI (ObservedReach.of_reach run)
+  intro j d' hI' run'
+  rcases pass j d' hI' run'.forget with done | ⟨d'', next, rest⟩
+  · exact .inl done
+  · exact .inr ⟨d'', next, ObservedReach.of_reach rest⟩
 
 end Loop
 
