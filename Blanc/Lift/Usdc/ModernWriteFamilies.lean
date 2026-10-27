@@ -2,7 +2,7 @@ import Blanc.Lift.Usdc.ModernCancelMappingTouches
 import Blanc.Lift.Usdc.ModernRemoveMinterReach
 import Blanc.Lift.Usdc.V2BlacklistMappingTouches
 import Blanc.Lift.Usdc.V22BlacklistMappingTouches
-import Blanc.Lift.Usdc.V22BurnNonIncReach
+import Blanc.Lift.Usdc.ModernBurnNonIncReach
 
 /-! Complete actual-store family coverage for the three modern USDC runtimes.
 Finite checks discharge only the already collected families; remaining selectors stay explicit. -/
@@ -27,19 +27,12 @@ def modernPackedBlacklistSelector (version : ModernVersion) (selector : B256) : 
 instance (version : ModernVersion) (selector : B256) :
     Decidable (modernPackedBlacklistSelector version selector) := inferInstanceAs (Decidable (_ ∧ _))
 
-/-- V2_2 burn writes are bounded at their own pre-state, even when their keys coincide. -/
-def modernBurnNonIncSelector (version : ModernVersion) (selector : B256) : Prop :=
-  version = .v2_2 ∧ selector = 0x42966c68
-
-instance (version : ModernVersion) (selector : B256) :
-    Decidable (modernBurnNonIncSelector version selector) := inferInstanceAs (Decidable (_ ∧ _))
-
 /-- Remaining mapping writers, excluding the caller/owner exceptions and dynamic initializers.
 The inherited initializeV2_1 stays here: it is not a new AllowedFrame exception. -/
 def modernOtherWriteSelectors : ModernVersion → List B256
-  | .v2 => [0x23b872dd, 0x4e44d956, 0x40c10f19, 0x42966c68,
+  | .v2 => [0x23b872dd, 0x4e44d956, 0x40c10f19,
       0xa9059cbb, 0xe3ee160e]
-  | .v2_1 => [0x23b872dd, 0x4e44d956, 0x40c10f19, 0x42966c68,
+  | .v2_1 => [0x23b872dd, 0x4e44d956, 0x40c10f19,
       0xa9059cbb, 0xe3ee160e, 0xef55bec6, 0x2fc81e09]
   | .v2_2 => [0x23b872dd, 0x4e44d956, 0x40c10f19,
       0xa9059cbb, 0xe3ee160e, 0xef55bec6, 0x2fc81e09,
@@ -50,7 +43,7 @@ def modernNonfixedSelector (version : ModernVersion) (selector : B256) : Prop :=
   selector ∈ version.selectors.inits ∨ selector ∈ modernCancelSelectors version ∨
   selector = 0x3092afd5 ∨
   modernOldBlacklistSelector version selector ∨ modernPackedBlacklistSelector version selector ∨
-  modernBurnNonIncSelector version selector ∨ selector ∈ modernOtherWriteSelectors version
+  selector = 0x42966c68 ∨ selector ∈ modernOtherWriteSelectors version
 
 instance (version : ModernVersion) (selector : B256) :
     Decidable (modernNonfixedSelector version selector) :=
@@ -261,9 +254,8 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
         (List.mem_append_right _ (List.mem_append_right _ keyIn)) wanted wantedIn equal
     exact (ConfiguredHistoryTraceIn.v22Blacklist_write_ne_allowSlot history capabilities
       pair spenders packedFaithful member target code selected found observed tracked.symm).elim
-  · obtain ⟨rfl, selected⟩ := burn
-    have nonInc := ConfiguredHistoryTraceIn.v22Burn_nonInc history capabilities
-      member code selected found
+  · have nonInc := ConfiguredHistoryTraceIn.modernBurn_nonInc history capabilities
+      member code burn found
     rw [target] at nonInc
     exact .inr (.inl nonInc)
   · exact .inr (.inr (.inr other))

@@ -3886,8 +3886,8 @@ including its cap, blacklist query and original internal return.
 Each retains the actual base-9 key and successful `ObservedKeccak` before
 that store under the original edge observation, without final-frame success
 or hash-separation premises. These are suffix producers; they do not alone
-establish an original-entry or history theorem. V2 and V2_1 burn entry/history
-coverage remains open.
+establish an original-entry or history theorem. The complete nonincrease route
+below avoids needing a separate burn key collector.
 
 For complete original-entry V2_2 burn nonincrease, use
 [`V22BurnNonIncBodies`](../Blanc/Lift/Usdc/V22BurnNonIncBodies.lean) and
@@ -3898,9 +3898,23 @@ bounded by its own node's pre-state word. If the supply slot and balance hash
 coincide, the masked balance bound and monotone subtraction still discharge
 the second store after the first. No key-separation or final-frame-success
 premise is needed. `ConfiguredHistoryTraceIn.v22Burn_nonInc` supplies the
-raw-history adapter. `modern_allowance_write_reduction` consumes it directly,
-removing only V2_2 burn from the residual selectors, with no new collector or
-change to the finite actual-key populations.
+raw-history adapter.
+
+For V2 and V2_1, use
+[`OldBurnNonIncCallees`](../Blanc/Lift/Usdc/OldBurnNonIncCallees.lean) and
+[`OldBurnNonIncBodies`](../Blanc/Lift/Usdc/OldBurnNonIncBodies.lean).
+The actual returning subtraction helpers preserve the storage base while
+changing scratch memory, and their guards prove the nonwrapping bound.
+The caller-balance read and exact first-store effect discharge both
+same-node bounds, including when its hash equals the supply slot.
+[`ModernBurnNonIncReach`](../Blanc/Lift/Usdc/ModernBurnNonIncReach.lean)
+combines all three original dispatchers and body proofs in
+`successfulSstore_nonInc`. `ConfiguredHistoryTraceIn.modernBurn_nonInc`
+connects this to actual raw-history nodes. The full
+`modern_allowance_write_reduction` consumes this theorem directly, removing
+burn from every modern residual selector list without a new collector,
+hash-separation premise or change to the finite actual-key populations.
+No final-frame-success or additional covered-fork premise is introduced.
 
 For V2_2 packed-blacklist updates, use
 [`V22BlacklistReach`](../Blanc/Lift/Usdc/V22BlacklistReach.lean) and
