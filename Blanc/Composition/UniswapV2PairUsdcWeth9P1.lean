@@ -1006,7 +1006,9 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys
 
 /-- The actual-key original-history P1 endpoint derives the initial V1 world
 from the constructor and original receipt, preserving the later supplied runtime
-boundaries and all original historical authentication obligations. -/
+boundaries and all original historical authentication obligations. Implementation-slot
+separation is derived from the full original finite-key populations, then restricted
+to the deployed suffix by original raw-frame membership. -/
 theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_constructor_bootstrap
     {checkpoint B future : BlockChain} {cfg : ChainConfig}
     {initial : HistoricalMappingKey → Prop} {W : List UsdcDeployedEntry}
@@ -1092,7 +1094,8 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_construc
         l.adr = usdcLib ∧ l.code = Lib.code ∧ l.Active e.pre)
     (upgrades : UpgradesWithinFrom usdcProxy (originalV1WorldEntries completed.state W)
       ((later.step last).append postD).rawNodes)
-    (knownApart : KnownImplSlotApart usdcProxy ((later.step last).append postD).rawNodes)
+    (modernFresh : ∀ version, ModernMappingFreshKeys version usdcProxy
+      ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD) initial)
     (senderExcluded : ∀ query ∈ ((MidHistoryTraceIn.tail last beforeCut).append postD).senderQueries,
       query.recover ≠ .ok UniswapV2Pair.Creation.pairAddress)
     (pairFresh : UniswapV2Pair.WriterFreshKeys (fun _ => False)
@@ -1110,6 +1113,22 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_construc
       G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none) :
     PairUsdcAllowQuiet UniswapV2Pair.Creation.pairAddress usdcProxy trace := by
   let full := (((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD
+  have knownFull := ConfiguredHistoryTraceIn.knownImplSlotApart_of_actualKeys
+    full BodyStageCapabilities.historical (fun _ selected => HistFork.neutral selected)
+    initialApart v1Fresh modernFresh
+  let front := ((beforeV1.step v1Block).append v1ToC).step first
+  let deployed := (later.step last).append postD
+  have rawEq : full.rawFrames = front.rawFrames ++ deployed.rawFrames := by
+    simp only [full, front, deployed, ConfiguredHistoryTraceIn.rawFrames_append,
+      ConfiguredHistoryTraceIn.rawFrames, List.append_assoc]
+  have knownApart : KnownImplSlotApart usdcProxy deployed.rawNodes := by
+    intro node member target code write found
+    obtain ⟨root, inFrames, chain⟩ :=
+      (deployed.mem_rawNodes_iff_rawFrame_parentPrefix node).mp member
+    have inFull : node ∈ full.rawNodes :=
+      (full.mem_rawNodes_iff_rawFrame_parentPrefix node).mpr
+        ⟨root, by rw [rawEq]; exact List.mem_append_right _ inFrames, chain⟩
+    exact knownFull node inFull target code write found
   have impl := ImplV1Lifetime.code_before_c22_of_creation_cut v1Block v1Cut v1ToC
     first afterCut BodyStageCapabilities.historical constructorOutput
   have early : last.block.header.timestamp < mainnetCancunTimestamp := by
