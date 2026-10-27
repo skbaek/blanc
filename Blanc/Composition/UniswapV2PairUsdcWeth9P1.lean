@@ -176,6 +176,66 @@ theorem pairUsdcAllowQuiet_of_mid_history_of_mid_senderQueries
     installed initial fresh notPre proxyApart rowSep initApart excluded oldReady
     tracked (seedZero g tracked)
 
+/-- P1 with V1 separation scoped to actual stores and the exact consumed spender
+population. Modern row separation, original full-history R3/R4, initializer duties,
+and genuine post-cut sender scope are unchanged. Both finite checks are explicit;
+neither an arbitrary classifier nor a new endpoint premise is supplied. -/
+theorem pairUsdcAllowQuiet_of_mid_history_of_actualV1Keys
+    {cfgH cfg : ChainConfig} {checkpoint pre completed B future : BlockChain} {i : Nat}
+    {usdc pair : Adr} {W : List UsdcDeployedEntry}
+    {KP : UniswapV2Pair.WriterKey → Prop} {st : UniswapV2Pair.State}
+    (prior : ConfiguredHistoryTraceIn HistFork cfgH checkpoint pre)
+    (block : ConfiguredBlockTraceIn HistFork cfgH pre completed)
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork cfgH completed B)
+    (trace : ConfiguredHistoryTrace cfg B future)
+    (world : UsdcDeployedWorld ((prior.step block).append later).BoundaryAt usdc W checkpoint.state)
+    (upgrades : UpgradesWithinFrom usdc W ((prior.step block).append later).rawNodes)
+    (apartSlot : ImplSlotApart usdc ((prior.step block).append later).rawNodes)
+    (apart : pair ≠ usdc)
+    (senderExcluded : ∀ query ∈ ((MidHistoryTraceIn.tail block cut).append later).senderQueries,
+      query.recover ≠ .ok pair)
+    (notSystem : pair ≠ systemAddress)
+    (installed : some (cut.afterBenv.state.getCode pair).toList = UniswapV2Pair.pairSem.image)
+    (initial : UniswapV2Pair.WriterRep KP (cut.afterBenv.state.getStor pair) st)
+    (fresh : UniswapV2Pair.WriterFreshKeys KP (UniswapV2Pair.pairMidTouchedKeysIn pair
+      ((MidHistoryTraceIn.tail block cut).append later)))
+    (notPre : ∀ {f : Fork}, HistFork f → ¬ f.ruleSet.isPrecomp pair)
+    (proxyApart : ProxyRowsApart usdc pair (PairTouchedSpenders pair usdc trace) ((prior.step block).append later).rawNodes)
+    (modernSep : UsdcModernRowSep usdc pair (PairTouchedSpenders pair usdc trace)
+      ((prior.step block).append later).rawFrames)
+    (v1Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys pair usdc trace)
+      (actualV1MappingKeys usdc ((prior.step block).append later)) = true)
+    (v1FixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys pair usdc trace) v1FixedWriteSlots = true)
+    (initApart : InitRowsApart usdc pair (PairTouchedSpenders pair usdc trace) ((prior.step block).append later).rawFrames)
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery ((prior.step block).append later) usdc pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ ((prior.step block).append later).settledFrames →
+      G.sevm.currentTarget = usdc →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    (seedZero : ∀ g, PairTouchedSpenders pair usdc trace g →
+      (cut.afterBenv.state.getStor usdc).get (allowSlot pair g) = 0) :
+    PairUsdcAllowQuiet pair usdc trace := by
+  have codes := ConfiguredHistoryTraceIn.usdc_nodeCodes
+    ((prior.step block).append later) BodyStageCapabilities.historical
+    (fun selected => selected.bal_none) world upgrades apartSlot
+  have rawClass : UsdcRawRowWriteClass usdc pair (PairTouchedSpenders pair usdc trace)
+      ((prior.step block).append later).rawFrames ((prior.step block).append later).rawNodes :=
+    ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualV1Keys
+    ((prior.step block).append later) BodyStageCapabilities.historical codes proxyApart modernSep
+    (pairTouchedSpenders pair usdc trace)
+    (fun g observed => (mem_pairTouchedSpenders trace).mpr observed) v1Faithful v1FixedApart
+  intro g tracked
+  exact UniswapV2PairUsdcOwners.mid_history_allowance_zero_of_rawClass
+    prior block cut later world upgrades apartSlot apart senderExcluded notSystem
+    installed initial fresh notPre rawClass initApart excluded oldReady
+    tracked (seedZero g tracked)
+
 /-- Original full-history sender interface, restricted to the actual post-cut
 queries before invoking the endpoint proof. -/
 theorem pairUsdcAllowQuiet_of_mid_history

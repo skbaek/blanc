@@ -66,6 +66,54 @@ theorem mid_retained_owner_excluded
 
 /-- Every actual retained tracked allowance write after the cut is non-increasing.
 The original full-history R3 query population and R4 readiness premise are retained. -/
+theorem mid_retainedRowWrite_nonInc_of_rawClass
+    {cfg : ChainConfig} {checkpoint pre completed future : BlockChain} {i : Nat}
+    {P pair : Adr} {Tr : Adr → Prop} {W : List UsdcDeployedEntry}
+    (prior : ConfiguredHistoryTraceIn HistFork cfg checkpoint pre)
+    (block : ConfiguredBlockTraceIn HistFork cfg pre completed)
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork cfg completed future)
+    (world : UsdcDeployedWorld ((prior.step block).append later).BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W ((prior.step block).append later).rawNodes)
+    (apartSlot : ImplSlotApart P ((prior.step block).append later).rawNodes)
+    (installed : some (cut.afterBenv.state.getCode pair).toList = UniswapV2Pair.pairSem.image)
+    (notPre : ∀ {f : Fork}, HistFork f → ¬ f.ruleSet.isPrecomp pair)
+    (rawClass : UsdcRawRowWriteClass P pair Tr
+      ((prior.step block).append later).rawFrames ((prior.step block).append later).rawNodes)
+    (initApart : InitRowsApart P pair Tr ((prior.step block).append later).rawFrames)
+    (noCaller : ∀ (G : Exec.Frame),
+      G ∈ ((MidHistoryTraceIn.tail block cut).append later).settledFrames →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery ((prior.step block).append later) P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ ((prior.step block).append later).settledFrames →
+      G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    {R : Exec.Frame} (root : R ∈ ((MidHistoryTraceIn.tail block cut).append later).settledRoots)
+    {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
+    {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
+    (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    ∃ G : Exec.Frame, G ∈ ((MidHistoryTraceIn.tail block cut).append later).settledFrames ∧
+      G ∈ Exec.committedFrames R.run ∧
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m ∧ G.sevm.currentTarget = P ∧
+      w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
+  obtain ⟨G, member, committed, chain, target, nonInc | residual⟩ :=
+    MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner_of_rawClass
+      prior block cut later BodyStageCapabilities.historical
+      (fun _ selected => selected.bal_none) rawClass initApart
+      noCaller excluded oldReady root retained found owner tracked
+  · exact ⟨G, member, committed, chain, target, nonInc⟩
+  · exact (mid_retained_owner_excluded prior block cut later world upgrades apartSlot
+      installed notPre G member target residual.1 residual.2.1 residual.2.2).elim
+
+/-- Every actual retained tracked allowance write after the cut is non-increasing.
+The original full-history R3 query population and R4 readiness premise are retained. -/
 theorem mid_retainedRowWrite_nonInc
     {cfg : ChainConfig} {checkpoint pre completed future : BlockChain} {i : Nat}
     {P pair : Adr} {Tr : Adr → Prop} {W : List UsdcDeployedEntry}
@@ -106,13 +154,10 @@ theorem mid_retainedRowWrite_nonInc
   have codes := ConfiguredHistoryTraceIn.usdc_nodeCodes
     ((prior.step block).append later) BodyStageCapabilities.historical
     (fun selected => selected.bal_none) world upgrades apartSlot
-  obtain ⟨G, member, committed, chain, target, nonInc | residual⟩ :=
-    MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner
-      prior block cut later BodyStageCapabilities.historical
-      (fun _ selected => selected.bal_none) codes proxyApart rowSep initApart
-      noCaller excluded oldReady root retained found owner tracked
-  · exact ⟨G, member, committed, chain, target, nonInc⟩
-  · exact (mid_retained_owner_excluded prior block cut later world upgrades apartSlot
-      installed notPre G member target residual.1 residual.2.1 residual.2.2).elim
+  exact mid_retainedRowWrite_nonInc_of_rawClass
+    prior block cut later world upgrades apartSlot installed notPre
+    (ConfiguredHistoryTraceIn.usdc_rawRowWrite ((prior.step block).append later)
+      BodyStageCapabilities.historical codes proxyApart rowSep)
+    initApart noCaller excluded oldReady root retained found owner tracked
 
 end Blanc.Composition.UniswapV2PairUsdcOwners
