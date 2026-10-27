@@ -3951,6 +3951,15 @@ collector. Final-frame success, hash injectivity and finite-check truth are
 not required to obtain these witnesses. Initializer writes are outside this
 two-selector collector.
 
+[`V2TransferFromCallee`](../Blanc/Lift/Usdc/V2TransferFromCallee.lean)
+reuses the existing V2 transfer-body proof with an arbitrary original caller
+continuation. It derives the exact balance-store/hash alternative or a return
+along that same observed path. Its `subtraction_return` reuses the existing
+checked subtraction return theorem, deriving the actual bound and unchanged
+storage base while retaining both observed cuts; it assumes no bound or
+store-free caller. It does not yet discharge transferFrom's
+original dispatcher or allowance continuation.
+
 For modern `transferFrom`, use
 [`ModernTransferFromSites`](../Blanc/Lift/Usdc/ModernTransferFromSites.lean)
 to reuse the unchanged root certificates at the same original successful store.
@@ -7698,6 +7707,19 @@ contract-neutral.
   with `True`. This relation adds no interpreter or actual-node premise;
   the observation producer must supply provenance. No automatic recipe is
   registered for this relation-construction interface.
+  To isolate an internal callee under a continuation that may itself store, use
+  [`Blanc/Lift/ObservedReachSplit.lean`](../Blanc/Lift/ObservedReachSplit.lean).
+  `ObservedReach.split` keeps every edge observation: either the target remains
+  inside the callee under the lifted observation predicate, or its returning
+  `RunPS` has both the original observed prefix and continuation suffix.
+  `ObservedReach.return_of_sstoreFree` specializes the return case when only
+  the callee is checked store-free, retaining both observed cuts and its actual
+  returning run. `ObservedReach.below` restores lower continuations; `ObservedKeccak.below`
+  lifts the same successful hash edge with unchanged input and source shape.
+  The general split assumes neither store-free continuations nor final-frame
+  success or fresh hashes.
+  The joint reach/continuation decomposition has no reliable goal-only trigger,
+  so this interface has no automatic recipe.
   `observed_reach_of_parentPrefix_noStateGas` in
   [`Cursor.lean`](../Blanc/Lift/Cursor.lean) builds that observation from the
   original prefix induction: `Cursor.RawEdgeAt` retains the actual parent
