@@ -1,6 +1,5 @@
 import Blanc.Lift.Usdc.V1ApproveRetainedLog
-import Blanc.ExecutionTraceEntry
-import Blanc.ExecutionTraceSettledOrigin
+import Blanc.ExecutionParentLogAttribution
 
 /-!
 # The original transaction receipt of an actual retained V1 approve write
@@ -45,32 +44,8 @@ theorem transaction_approve_write_receipt
       ⟨hsg, bal⟩ _ raw
   obtain ⟨pc, frameSg, frameBal⟩ := entry frame member
   have event := frame_approve_write_emits pc code frameSg frameBal selected chain found
-  rw [trace.settledFrames_eq] at member
-  change frame ∈ trace.settledRoots.flatMap (fun R => Exec.committedFrames R.run) at member
-  obtain ⟨R, root, retained⟩ := List.mem_flatMap.mp member
-  have rootMember : R ∈ trace.settledFrames := by
-    rw [trace.settledFrames_eq]
-    apply List.mem_flatMap.mpr
-    refine ⟨R, root, ?_⟩
-    simp only [Exec.committedFrames, R.committed, dite_true]
-    exact List.mem_cons_self
-  have rootSg := (entry R rootMember).2.1
-  have rootEvent := Exec.committedFrame_logs_subset_noStateGas R.run R.committed rootSg
-    frame retained event.2
-  have msgSg : trace.msg.benv.stat.rules.stateGas = none := by
-    rw [prepareMessage_benv trace.prepared]
-    exact hsg
-  have clean : trace.messageOut.error.isNone = true := by
-    cases status : trace.messageOut.error.isNone with
-    | true => rfl
-    | false =>
-        have empty := (trace.message.logs_and_settledRoots_eq_nil_of_error msgSg status).2
-        change R ∈ trace.message.settledRoots at root
-        rw [empty] at root
-        cases root
-  refine ⟨makeReceipt tx trace.messageOut.error bout'.cumulativeGasUsed
-    (trace.settledRoots.flatMap (fun R => R.post.logs)),
-    trace.receipt_of_settledRoots hsg, event.1, clean, ?_⟩
-  exact List.mem_flatMap.mpr ⟨R, root, rootEvent⟩
+  obtain ⟨receipt, lookup, clean, inLogs⟩ :=
+    trace.log_mem_receipt_of_settledFrame hsg member event.2
+  exact ⟨receipt, lookup, event.1, clean, inLogs⟩
 
 end Blanc.Lift.Usdc.V1ApproveRetainedLog

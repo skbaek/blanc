@@ -2169,6 +2169,25 @@ It needs root commitment, `stateGas = none`, and membership in
 `Exec.committedFrames`; delegation and access rules remain arbitrary. Complete
 failed settlement still discards the child subtree.
 
+For an actual same-parent LOG occurrence, use
+[`Blanc/ExecutionParentLogAttribution.lean`](../Blanc/ExecutionParentLogAttribution.lean).
+`Exec.Deriv.successfulLog?_mem_committedPost` puts the actual successful
+instruction's entry in its committing suffix endpoint;
+`Exec.Deriv.ParentPrefix.successfulLog_mem_committedPost` transports it to
+the exact root endpoint using the parent prefix's unchanged outcome.
+`Exec.Frame.parentLog_mem` supplies the retained-frame form.
+`ExecutionTrace.TransactionTrace.log_mem_receipt_of_settledFrame` factors
+endpoint-log membership through complete settlement into the original
+transaction's successful receipt; `parentLog_mem_receipt` starts from the
+same actual parent occurrence. `parentLog_eq_of_receipt_singleton` identifies
+that emitted entry from a proved lookup and singleton log list for the same
+receipt. Nested/reentrant logs need no exclusion premise. The source producer
+must supply the real parent prefix, successful LOG image and actual retained
+frame; these theorems neither infer an occurrence from a receipt value nor
+authenticate external receipt observations. Only `stateGas = none` is needed;
+delegation and access policies remain arbitrary. The membership and equality
+conclusions have no sufficiently specific goal head for a proof recipe.
+
 To regroup the retained boundaries into exact nonempty chunks and compose a
 local source simulation, use
 [`Blanc/Lift/SegmentedReplay.lean`](../Blanc/Lift/SegmentedReplay.lean).
@@ -6439,6 +6458,25 @@ current recipe matchers have no forward-transition shape to bind.
   `deploymentTxPreludeBout` delegates to the lower
   `ExecutionTrace.transactionPreludeBout`.  Redemption and deployment owners
   should retain compatibility names only as thin aliases to these primitives.
+- To invert the nonzero word returned by an actual internal CREATE, use
+  [`Blanc/ExecutionCreateResultInversion.lean`](../Blanc/ExecutionCreateResultInversion.lean).
+  `Resume.create_nonzero_inv` identifies the same clean settled child;
+  `GenericCreate.nonzero_inv` retains the canonical actual spawn, the original
+  `Xlot`, same-slot `ProcessCreateMessage`, exact resume, returned address and
+  installed child state. It derives target collision exclusion from the spawn
+  and reuses `ProcessCreateMessage.ok_charge_of_clean` to retain the actual
+  inner message and successful code-deposit charge. For a filled slot, apply
+  `RunFrame.some_inv` to that same `ProcessCreateMessage` to recover its actual
+  entry and settlement equations. `Xinst.create2_run_generic` exposes the actual
+  popped, gas-paid and memory-extended generic step under explicit
+  `rules.stateGas = none` and `rules.op.create2 = true`;
+  `Xinst.create2_nonzero_inv` composes that step with clean-settlement inversion.
+  `Ninst.RunCompiled.create2_run` preserves the single filled slot selected by
+  the compiled run. No storage-emptiness premise or absence of code at address
+  zero is needed. The consumer must produce the actual nonzero result word;
+  successful receipt status alone does not supply it, and enclosing rollback
+  retention remains separate. These existential inversion conclusions have no
+  reliable narrow recipe trigger; discover them through this branch.
 - Source attainment and source-step provenance:
   [`Blanc/SourceAttainment.lean`](../Blanc/SourceAttainment.lean).
 - Source-occurrence attribution when the executing code is a compiled prefix
