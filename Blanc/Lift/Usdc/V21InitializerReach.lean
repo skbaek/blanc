@@ -167,16 +167,19 @@ theorem blacklistPattern_occurrences :
   rw [ByteArray.toList_eq_toList_data]
   decide +kernel
 
-/-- Every original successful store is fixed, bounded at that same node, or has
-its own recipient-balance or target-blacklist hash before the store. -/
-theorem successfulSstore_source {root node : Exec.Deriv}
+/-- Every original successful store retains its fixed slot or exact mapping key and hash. -/
+theorem successfulSstore_all_source {root node : Exec.Deriv}
     (pc : root.pc = 0) (code : root.sevm.code = ImplV2_1.code)
     (hsg : root.sevm.benvStat.rules.stateGas = none)
     (chain : Exec.Deriv.ParentPrefix root node)
     (selected : Blanc.Sevm.selector root.sevm = 0x2fc81e09)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
     write.key = 18 ∨
-    write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∨
+    (node.pc = 0x3cd2 ∧
+      write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∧
+      write.key = mapSlot root.sevm.currentTarget.toB256 9 ∧
+      ∃ hashPc, KeccakBefore root node
+        (root.sevm.currentTarget.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
     (node.pc = 0x3d11 ∧ write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 9 ∧
       ∃ hashPc, KeccakBefore root node
         ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
@@ -194,13 +197,19 @@ theorem successfulSstore_source {root node : Exec.Deriv}
   rw [St.self' root.devm] at walk
   rcases entry_source (fun h => StepIn.toRun h) hsg selected walk target with
     source | afterSource
-  · rcases source with ⟨⟨value, other, keyStack, bound⟩, _, _⟩ |
+  · rcases source with ⟨⟨value, other, keyStack, bound⟩, ⟨tail, shape⟩, hash⟩ |
         ⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩
     · have same := List.cons.inj (stack.symm.trans keyStack)
       have valueEq := (List.cons.inj same.2).1
       rw [← same.1, ← valueEq] at bound
       rw [← Exec.Deriv.ParentPrefix.sevm_eq chain] at bound
-      exact .inr (.inl bound)
+      have location := ok.pc_eq_of_prefix_singleton OldTransferBodyReach.ownerLine tail shape
+        (suffix := []) (by simp only [List.append_nil]) (by decide)
+        V2_1TransferReach.ownerPattern_occurrences
+      obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
+        hash.actual
+      exact .inr (.inl ⟨location, bound, same.1,
+        _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩)
     · have location := ok.pc_eq_of_prefix_singleton OldTransferBodyReach.recipientLine tail shape
         (suffix := []) (by simp only [List.append_nil]) (by decide)
         V2_1TransferReach.recipientPattern_occurrences
@@ -216,5 +225,27 @@ theorem successfulSstore_source {root node : Exec.Deriv}
         hash.actual
       exact .inr (.inr (.inr ⟨location, (List.cons.inj (stack.symm.trans keyStack)).1,
         _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩))
+
+/-- Every original successful store is fixed, bounded at that same node, or has
+its own recipient-balance or target-blacklist hash before the store. -/
+theorem successfulSstore_source {root node : Exec.Deriv}
+    (pc : root.pc = 0) (code : root.sevm.code = ImplV2_1.code)
+    (hsg : root.sevm.benvStat.rules.stateGas = none)
+    (chain : Exec.Deriv.ParentPrefix root node)
+    (selected : Blanc.Sevm.selector root.sevm = 0x2fc81e09)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key = 18 ∨
+    write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∨
+    (node.pc = 0x3d11 ∧ write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 9 ∧
+      ∃ hashPc, KeccakBefore root node
+        ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
+    (node.pc = 0x15c0 ∧ write.key = mapSlot root.sevm.currentTarget.toB256 3 ∧
+      ∃ hashPc, KeccakBefore root node
+        (root.sevm.currentTarget.toB256.toBytes ++ (3 : B256).toBytes) hashPc) := by
+  rcases successfulSstore_all_source pc code hsg chain selected found with
+    fixed | ⟨_, bound, _, _⟩ | source
+  · exact .inl fixed
+  · exact .inr (.inl bound)
+  · exact .inr (.inr source)
 
 end Blanc.Lift.Usdc.V21InitializerReach
