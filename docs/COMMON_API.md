@@ -7072,6 +7072,17 @@ contract-neutral.
   `ConfiguredHistoryTraceIn.exists_retainedSstore_frame_wsObs` adds, to the attribution of
   `exists_retainedSstore_frame_sstoreCursor`, the `WsObs` at the write's node for every
   certified code and accepted write-site annotation of the attributing frame.
+  For a successful raw store, `WriteSite.successfulSstore_site` takes the checked
+  code and write-site annotation, pc-zero entry, `stateGas = none`, and the actual
+  `ParentPrefix` and `successfulSstore?` equation. It returns a root site with its
+  slot denotation, guards and nonincrease implication at the same node's current
+  storage cell. `ConfiguredHistoryTraceIn.rawFrame_successfulSstore_site` obtains
+  the entry facts from raw-frame membership and the history's capabilities.
+  This also covers stores in frames that later revert; it does not assert
+  retention, hash separation, or coverage of unexecuted descriptors. The V1
+  mapping producer and all-version raw allowance classifier use this shared
+  extraction. These existential site results have no reliable registered
+  goal-head trigger; use this branch rather than a broad `Exists` recipe.
 - For which bytes one lifted step wrote, use
   [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
   (the capability forms `call_run_writesAt_noStateGas`,

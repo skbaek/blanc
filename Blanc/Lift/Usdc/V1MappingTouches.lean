@@ -85,13 +85,8 @@ theorem v1_store_site {G node : Exec.Deriv} (pc : G.pc = 0)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
     ∃ site ∈ wsRoot ImplV1Ws.implWsAnn,
       site.slot.Den (Env.root G.sevm) write.key ∧ site.GuardsHold (Env.root G.sevm) := by
-  obtain ⟨decoded, rest, stack⟩ := successfulSstore?_decoded found
-  obtain ⟨κ, reach, ok⟩ :=
-    reach_of_parentPrefix_noStateGas ImplV1.cert_check pc code hsg chain
-  obtain ⟨g, tree, -⟩ := ok.tree_of_sstore decoded
-  have obs := ws_reach_start_noStateGas (fun h => StepIn.toRun h)
-    implV1_wsCert hsg reach tree
-  obtain ⟨site, member, den, guards, -⟩ := obs rfl write.key write.value rest stack
+  obtain ⟨site, member, den, guards, -⟩ :=
+    successfulSstore_site ImplV1.cert_check implV1_wsCert pc code hsg chain found
   exact ⟨site, member, den, guards⟩
 
 /-- The certified V1 write site supplies the old blacklist key at an actual
