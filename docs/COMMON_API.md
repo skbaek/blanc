@@ -3798,6 +3798,23 @@ prefix, without final-frame success, descriptor separation or hash injectivity.
 The off-implementation-slot consumer keeps initial apartness and freshness of
 this exact collected list explicit.
 
+For `approve`, `increaseAllowance` and `decreaseAllowance` in all three modern
+runtimes, use
+[`Blanc/Lift/Usdc/ModernCallerMappingTouches.lean`](../Blanc/Lift/Usdc/ModernCallerMappingTouches.lean).
+`ModernVersion` selects the exact existing code, certificate, annotations and
+selector table. `modernCaller_store_key` obtains the caller/calldata-spender
+slot-10 key from the certified site of the original successful store.
+`actualModernCallerKeys` filters the original `rawNodes` by target, exact code,
+caller selector and successful store, preserving order and duplicates. Its
+soundness/completeness theorems retain the actual root and store; recognition
+does not compare the written key. Under `checkFaithfulOn` for the exact
+observed Pair/spender list and this collected list, `modernCaller_write_source`
+derives the Pair caller and exact spender, and `modernCaller_write_allowed`
+supplies the existing `AllowedFrame` caller arm. Check truth and successful
+hash-occurrence provenance remain separate; the existing V2 approve hash
+witness is preserved. Other modern selectors and the full classifier remain
+outside this family.
+
 For V2 and V2_1 old-blacklist writes, use
 [`Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean`](../Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean)'s
 `actualV2OldBlacklistKeys` with its explicit version. The certificate and
@@ -7166,14 +7183,17 @@ contract-neutral.
   listed site, `top` included, names a key) under the frame-local collision
   premise `RowSep`, with `rowOf`/`rowOf_eval` (a row slot term's owner and key)
   and `GuardObs.mono`.
-- To identify a slot term from a site's singleton selector guard, use
+- To identify a slot term from a site's leading selector guard, use
   [`Blanc/Lift/WriteSiteSelector.lean`](../Blanc/Lift/WriteSiteSelector.lean):
   `Site.slotSelectorCheck` checks the selector/slot correspondence over a
   supplied descriptor list, and `Site.slot_eq_iff_of_selectorCheck` applies
-  it to a member whose actual guards hold. Supply the known selector term;
+  it to a member whose actual guards hold. Additional guards are permitted;
+  the first guard must still be the specified selector term, and the checked
+  slot/selector equivalence is unchanged. Supply the known selector term;
   the conclusion concerns its evaluated word. This does not produce an
   execution occurrence, hash witness, or separation premise. It serves the
-  existing V1 adapter and the V2/V2_1 blacklist collectors.
+  existing V1 adapter, V2/V2_1 blacklist collectors and modern caller-key
+  collector (including V2_2 descriptors with extra guards).
 - To preserve demanded zero cells using that locality, use
   [`Blanc/Lift/WriteSiteZero.lean`](../Blanc/Lift/WriteSiteZero.lean):
   `ZeroSlots` states the seed; `GuardObs.sstore_zero` combines

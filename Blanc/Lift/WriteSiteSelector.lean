@@ -1,16 +1,16 @@
 import Blanc.Lift.WriteSiteRows
 
-/-! Recover a slot term from a checked singleton selector guard. -/
+/-! Recover a slot term from a checked leading selector guard. -/
 namespace Blanc.Lift.WriteSite
 
 open Jaune
 
-/-- Every site has one selector guard, and the chosen selectors name exactly
-the requested slot term. This checks the supplied descriptors, not execution. -/
+/-- Every site starts with a selector guard, and the chosen selectors name exactly
+the requested slot term. Additional guards are permitted. This checks the supplied descriptors, not execution. -/
 def Site.slotSelectorCheck (selectorTerm slot : Term) (selected : B256 → Prop)
     [DecidablePred selected] (site : Site) : Bool :=
   match site.guards with
-  | [(term, selector)] => decide (term = selectorTerm) &&
+  | (term, selector) :: _ => decide (term = selectorTerm) &&
       decide (site.slot = slot ↔ selected selector)
   | _ => false
 
@@ -25,7 +25,7 @@ theorem Site.slot_eq_iff_of_selectorCheck {selectorTerm slot : Term}
   have checked := (List.all_eq_true.mp table) site member
   unfold Site.slotSelectorCheck at checked
   split at checked
-  next term selector shape =>
+  next term selector rest shape =>
     obtain ⟨termEq, slotCheck⟩ := Bool.and_eq_true_iff.mp checked
     have termIs : term = selectorTerm := of_decide_eq_true termEq
     subst term
