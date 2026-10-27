@@ -3993,6 +3993,19 @@ non-increasing. No comparison between a written key and a proposed digest
 selects a source. `actualModernTransferFromKeys` combines these exact populations
 by version, and the modern-family reduction now handles every transferFrom case.
 
+[`V21InitializerReach`](../Blanc/Lift/Usdc/V21InitializerReach.lean) follows
+inherited `initializeV2_1` through its original dispatcher and optional transfer,
+recovers the checked returning stack and observes the target-blacklist hash.
+Every store is at fixed slot18, a same-node nonincrease, or an actual recipient
+balance/target blacklist write with its own successful hash.
+[`V21InitializerMappingTouches`](../Blanc/Lift/Usdc/V21InitializerMappingTouches.lean)
+collects exactly nonliteral strict increases at these two actual store pcs.
+It never selects an input by comparing a written key with a digest. Its original
+history soundness and fixed/nonincrease/collected completeness feed
+`actualModernInitializerKeys` and the modern-family allowance reduction. V2.1's
+inherited initializer is thereby covered without a new `AllowedFrame` exception;
+the V2.2 inherited initializer remains an explicit residual.
+
 [`OldTransferFromEntry`](../Blanc/Lift/Usdc/OldTransferFromEntry.lean) derives
 the original V2/V2.1 dispatcher, ABI and public-guard paths while retaining
 the exact caller stack below the balance helper. The actual runtime trees,

@@ -1442,6 +1442,8 @@ CONTRACTS = {
         "Lift.Usdc.V22TransferFromAllowance",
         "Lift.Usdc.V22TransferFromContinuation",
         "Lift.Usdc.V22TransferFromMappingTouches",
+        "Lift.Usdc.V21InitializerReach",
+        "Lift.Usdc.V21InitializerMappingTouches",
         "Lift.Usdc.OldTransferFromAllowance",
         "Lift.Usdc.V2TransferReach",
         "Lift.Usdc.V2TransferFromCallee",
