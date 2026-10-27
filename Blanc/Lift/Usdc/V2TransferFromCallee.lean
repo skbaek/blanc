@@ -10,6 +10,36 @@ open Jaune Blanc Blanc.Lift
 /-- Isolate the balance-transfer callee without assuming its caller is store-free.
 Either the target is one of its exact observed balance stores, or the same path
 returns into the original caller continuation. -/
+theorem body_bounded_source_or_return {Q : Sevm → Devm → Ninst → Devm → Prop}
+    {observe : Conf → Conf → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {owner recipient : Adr} {b : Devm} {amount : B256}
+    {S : List B256} {M : Mem} {G : Nat} {continuation : SFunc} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe ImplV2.cert.prog sevm
+      ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G,
+        ImplV2.t_3ef8_c74, continuation :: K⟩ T)
+    (hT : AtSstore T) :
+    V2TransferReach.BoundedObservedSource Q observe sevm owner recipient T ∨
+      ∃ returned, SFunc.RunP Q ImplV2.cert.prog sevm
+        (St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G)
+        ImplV2.t_3ef8_c74 (.returned returned) ∧
+        ObservedReach Q observe ImplV2.cert.prog sevm
+          ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G,
+            ImplV2.t_3ef8_c74, continuation :: K⟩ ⟨returned, continuation, K⟩ ∧
+        ObservedReach Q observe ImplV2.cert.prog sevm ⟨returned, continuation, K⟩ T := by
+  rcases ObservedReach.split run (S := []) rfl with
+    ⟨target, inside, same⟩ | returned
+  · have atStore : AtSstore target := by rw [same] at hT; exact hT
+    have source := V2TransferReach.body_reach_bounded erase inside atStore
+      (fun _ member => by cases member)
+    rcases source with ⟨⟨value, rest, stack, bound⟩, shape, hash⟩ | ⟨stack, shape, hash⟩
+    · rw [same]
+      exact .inl (.inl ⟨⟨value, rest, stack, bound⟩, shape, hash.below (continuation :: K)⟩)
+    · rw [same]
+      exact .inl (.inr ⟨stack, shape, hash.below (continuation :: K)⟩)
+  · exact .inr returned
+
+/-- Preserve the prior source-only callee interface. -/
 theorem body_source_or_return {Q : Sevm → Devm → Ninst → Devm → Prop}
     {observe : Conf → Conf → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
@@ -27,16 +57,8 @@ theorem body_source_or_return {Q : Sevm → Devm → Ninst → Devm → Prop}
           ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G,
             ImplV2.t_3ef8_c74, continuation :: K⟩ ⟨returned, continuation, K⟩ ∧
         ObservedReach Q observe ImplV2.cert.prog sevm ⟨returned, continuation, K⟩ T := by
-  rcases ObservedReach.split run (S := []) rfl with
-    ⟨target, inside, same⟩ | returned
-  · have atStore : AtSstore target := by rw [same] at hT; exact hT
-    have source := V2TransferReach.body_reach_observed erase inside atStore
-      (fun _ member => by cases member)
-    rcases source with ⟨stack, shape, hash⟩ | ⟨stack, shape, hash⟩
-    · rw [same]
-      exact .inl (.inl ⟨stack, shape, hash.below (continuation :: K)⟩)
-    · rw [same]
-      exact .inl (.inr ⟨stack, shape, hash.below (continuation :: K)⟩)
+  rcases body_bounded_source_or_return erase run hT with source | returned
+  · exact .inl source.forget
   · exact .inr returned
 
 /-- The actual returning subtraction checks the bound and preserves storage.

@@ -3967,10 +3967,17 @@ caller stack below the balance helper. Its companion
 uses the checked frame return to recover that stack, then proves the allowance
 continuation non-increasing at the same original store. The allowance value is
 reloaded after the balance helper, so this bound tolerates balance/allowance
-hash aliasing. `successfulSstore_source_or_nonInc` derives either that bound or
-the original owner/recipient balance store with its own successful hash from
-an actual root prefix. It does not yet exclude the owner branch for the
-strictly increasing recipient-key collector; no finite population is widened.
+hash aliasing. `successfulSstore_credit_or_nonInc` now excludes both actual
+owner debits and allowance writes, leaving only the recipient store and its
+own successful hash. The existing V2 transfer-body walk retains the owner
+subtraction bound in `BoundedObservedSource`; source-only body and recipient
+interfaces remain available by projection.
+[`V2TransferFromCreditHashes`](../Blanc/Lift/Usdc/V2TransferFromCreditHashes.lean)
+connects each member of the unchanged V2 `actualOldTransferFromCreditKeys`
+list to its actual increasing store and original successful recipient hash
+occurrence in the same raw history. No digest comparison, final-frame-success
+premise, hash injectivity or finite-population widening is introduced. This
+producer covers V2; the corresponding V2.1 producer remains separate.
 
 For modern `transferFrom`, use
 [`ModernTransferFromSites`](../Blanc/Lift/Usdc/ModernTransferFromSites.lean)

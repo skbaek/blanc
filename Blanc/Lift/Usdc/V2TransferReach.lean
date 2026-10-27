@@ -1,4 +1,6 @@
 import Blanc.Lift.Usdc.V2MintReach
+import Blanc.Lift.ObservedReachSplit
+import Blanc.Lift.Usdc.OldBurnNonIncCallees
 
 /-! Actual V2 transfer stores and their original successful balance hashes. -/
 namespace Blanc.Lift.Usdc.V2TransferReach
@@ -17,15 +19,34 @@ def ObservedSource (Q : Sevm → Devm → Ninst → Devm → Prop)
     (∃ tail, T.f = recipientLine.foldr SFunc.next tail) ∧
     ObservedKeccak Q observe sevm (recipient.toB256.toBytes ++ (9 : B256).toBytes) (fun _ => True))
 
+/-- The owner alternative also retains the bound at that exact store. -/
+def BoundedObservedSource (Q : Sevm → Devm → Ninst → Devm → Prop)
+    (observe : Conf → Conf → Prop) (sevm : Sevm) (owner recipient : Adr) (T : Conf) : Prop :=
+  ((∃ value rest, T.d.stack = mapSlot owner.toB256 9 :: value :: rest ∧
+      value.toNat ≤ (T.d.getStorVal sevm.currentTarget (mapSlot owner.toB256 9)).toNat) ∧
+    (∃ tail, T.f = ownerLine.foldr SFunc.next tail) ∧
+    ObservedKeccak Q observe sevm (owner.toB256.toBytes ++ (9 : B256).toBytes) (fun _ => True)) ∨
+  ((∃ rest, T.d.stack = mapSlot recipient.toB256 9 :: rest) ∧
+    (∃ tail, T.f = recipientLine.foldr SFunc.next tail) ∧
+    ObservedKeccak Q observe sevm (recipient.toB256.toBytes ++ (9 : B256).toBytes) (fun _ => True))
+
+theorem BoundedObservedSource.forget {Q : Sevm → Devm → Ninst → Devm → Prop}
+    {sevm : Sevm} {owner recipient : Adr} {T : Conf}
+    (source : BoundedObservedSource Q observe sevm owner recipient T) :
+    ObservedSource Q observe sevm owner recipient T := by
+  rcases source with ⟨⟨value, rest, stack, _⟩, shape, hash⟩ | recipientSource
+  · exact .inl ⟨⟨value :: rest, stack⟩, shape, hash⟩
+  · exact .inr recipientSource
+
 /-- The recipient writer retains its own original successful balance hash. -/
-theorem recipient_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem recipient_reach_bounded {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {owner recipient : Adr} {b : Devm} {value amount : B256}
     {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
     (run : ObservedReach Q observe ImplV2.cert.prog sevm
       ⟨St b (value :: amount :: recipient.toB256 :: owner.toB256 :: S) M G, ImplV2.t_40ba_c74, K⟩ T)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    ObservedSource Q observe sevm owner recipient T := by
+    BoundedObservedSource Q observe sevm owner recipient T := by
   unfold ImplV2.t_40ba_c74 at run
   orsd
   iterate 4 orsx
@@ -45,14 +66,16 @@ theorem recipient_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
 
 /-- The first balance writer observes only its own hash before the store. -/
-theorem owner_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem owner_reach_bounded {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {owner recipient : Adr} {b : Devm} {value amount : B256}
     {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
     (run : ObservedReach Q observe ImplV2.cert.prog sevm
       ⟨St b (value :: amount :: recipient.toB256 :: owner.toB256 :: S) M G, ImplV2.t_407e_c74, K⟩ T)
+    (bounded : value.toNat ≤
+      (b.getStorVal sevm.currentTarget (mapSlot owner.toB256 9)).toNat)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    ObservedSource Q observe sevm owner recipient T := by
+    BoundedObservedSource Q observe sevm owner recipient T := by
   unfold ImplV2.t_407e_c74 at run
   orsd
   iterate 4 orsx
@@ -68,7 +91,7 @@ theorem owner_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   rw [Mem.read_two_word_writes_at_raw] at run
   iterate 3 orsx
   rcases ObservedReach.sstoreS run with rfl | ⟨d', step, _, run⟩
-  · exact .inl ⟨⟨_, rfl⟩, ⟨_, rfl⟩, hash⟩
+  · exact .inl ⟨⟨_, _, rfl, bounded⟩, ⟨_, rfl⟩, hash⟩
   obtain ⟨b', G', rfl⟩ := SolcStorageReturn.ri_sstore_any (erase step)
   iterate 6 orsx
   orsld
@@ -77,19 +100,17 @@ theorem owner_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   rw [show ImplV2.cert.prog[77]? = some ImplV2.t_41fd_c77 from rfl] at hg
   cases hg
   obtain ⟨_, _, _, run⟩ := V2MintReach.add_reach_observed erase run hT
-  exact recipient_reach_observed erase run hT cont
+  exact recipient_reach_bounded erase run hT cont
 
 /-- The checked subtraction returns into the first balance writer. -/
-theorem debit_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem debit_reach_bounded {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {owner recipient : Adr} {b : Devm} {amount : B256}
     {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
     (run : ObservedReach Q observe ImplV2.cert.prog sevm
       ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G, ImplV2.t_404e_c74, K⟩ T)
-    (enough : B256.eqCheck (B256.gtCheck amount (b.getStorVal sevm.currentTarget
-      (mapSlot owner.toB256 9))) 0 ≠ 0)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    ObservedSource Q observe sevm owner recipient T := by
+    BoundedObservedSource Q observe sevm owner recipient T := by
   unfold ImplV2.t_404e_c74 at run
   orsd
   iterate 3 orsx
@@ -114,18 +135,29 @@ theorem debit_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
   rw [show ImplV2.cert.prog[78]? = some ImplV2.t_4123_c78 from rfl] at hg
   cases hg
-  obtain ⟨_, _, _, _, run⟩ := V2MintReach.sub_reach_observed erase enough run hT
-  exact owner_reach_observed erase run hT cont
+  obtain ⟨returned, callee, _, run⟩ := ObservedReach.return_of_sstoreFree
+    (show SstoreFreeSet ImplV2.cert.prog [5, 78, 88, 93] = true from by decide +kernel)
+    (show ImplV2.t_4123_c78.sstoreFreeIn [5, 78, 88, 93] = true from by decide +kernel)
+    run hT
+  obtain ⟨bound, _, _, rfl⟩ := OldBurnNonIncCallees.sub_ret
+    (version := .v2) (by decide) (SFunc.RunP.mono erase callee)
+  apply owner_reach_bounded erase run ?_ hT cont
+  rw [B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat bound)]
+  have storage := Devm.getStorVal_of_state (of_run_sload_state loadRun)
+    sevm.currentTarget (mapSlot owner.toB256 9)
+  simp only [St.getStorVal] at storage
+  rw [← storage]
+  exact Nat.sub_le _ _
 
 /-- The internal transfer body is entered with its actual three arguments. -/
-theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem body_reach_bounded {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {owner recipient : Adr} {b : Devm} {amount : B256}
     {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
     (run : ObservedReach Q observe ImplV2.cert.prog sevm
       ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G, ImplV2.t_3ef8_c74, K⟩ T)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    ObservedSource Q observe sevm owner recipient T := by
+    BoundedObservedSource Q observe sevm owner recipient T := by
   unfold ImplV2.t_3ef8_c74 at run
   orsd
   iterate 4 orsx
@@ -157,17 +189,31 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨rfl, rfl⟩ := pop
   rw [St.self push (SolcStorageReturn.sload_memory loadRun), St.getStorVal] at run
   iterate 4 orsx
-  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨enough, _, run⟩
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
-  have current := of_run_sload_state loadRun
-  have storage : loadedPost.getStorVal sevm.currentTarget (mapSlot owner.toB256 9) =
-      b.getStorVal sevm.currentTarget (mapSlot owner.toB256 9) := by
-    unfold Devm.getStorVal Devm.getAcct
-    rw [← current]
-    rfl
-  apply debit_reach_observed erase run ?_ hT cont
-  rw [storage]
-  exact enough
+  exact debit_reach_bounded erase run hT cont
+
+/-- Compatibility projection of the stronger actual-store evidence. -/
+theorem recipient_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {owner recipient : Adr} {b : Devm} {value amount : B256}
+    {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe ImplV2.cert.prog sevm
+      ⟨St b (value :: amount :: recipient.toB256 :: owner.toB256 :: S) M G, ImplV2.t_40ba_c74, K⟩ T)
+    (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
+    ObservedSource Q observe sevm owner recipient T := by
+  exact (recipient_reach_bounded erase run hT cont).forget
+
+/-- Compatibility projection of the stronger actual-store evidence. -/
+theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {owner recipient : Adr} {b : Devm} {amount : B256}
+    {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe ImplV2.cert.prog sevm
+      ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G, ImplV2.t_3ef8_c74, K⟩ T)
+    (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
+    ObservedSource Q observe sevm owner recipient T := by
+  exact (body_reach_bounded erase run hT cont).forget
 
 /-- The checked dispatcher routes transfer through its original ABI wrapper. -/
 theorem route_transfer : SFunc.selWalk 0xa9059cbb

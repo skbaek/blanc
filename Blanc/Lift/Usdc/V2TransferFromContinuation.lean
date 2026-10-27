@@ -77,9 +77,9 @@ theorem allowance_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
   rw [B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat bound)]
   exact Nat.sub_le _ _
 
-/-- Original entry reaches either a witnessed balance store or a non-increasing
-allowance store, with no final-frame-success or hash-separation premise. -/
-theorem entry_source_or_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
+/-- Original entry reaches either the witnessed recipient store or a non-increasing
+owner/allowance store, with no final-frame-success or hash-separation premise. -/
+theorem entry_credit_or_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {T : Conf}
     (hsg : sevm.benvStat.rules.stateGas = none)
@@ -89,12 +89,16 @@ theorem entry_source_or_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hT : AtSstore T) :
     (∃ key value rest, T.d.stack = key :: value :: rest ∧
       value.toNat ≤ (T.d.getStorVal sevm.currentTarget key).toNat) ∨
-    V2TransferReach.ObservedSource Q observe sevm
-      (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36).toAdr T := by
+    ((∃ rest, T.d.stack = mapSlot (Sevm.dataWord sevm 36).toAdr.toB256 9 :: rest) ∧
+      (∃ tail, T.f = V2TransferReach.recipientLine.foldr SFunc.next tail) ∧
+      ObservedKeccak Q observe sevm
+        ((Sevm.dataWord sevm 36).toAdr.toB256.toBytes ++ (9 : B256).toBytes) (fun _ => True)) := by
   obtain ⟨R, b', M', G', body⟩ := entry_to_body erase selected run hT
-  rcases V2TransferFromCallee.body_source_or_return erase body hT with
+  rcases V2TransferFromCallee.body_bounded_source_or_return erase body hT with
     source | ⟨returned, callee, _, later⟩
-  · exact .inr source
+  · rcases source with ⟨⟨value, rest, stack, bound⟩, _, _⟩ | recipient
+    · exact .inl ⟨_, value, rest, stack, bound⟩
+    · exact .inr recipient
   obtain ⟨Y, stack, length⟩ := callee.entry_stack_below_noStateGas erase ImplV2.cert_check hsg
     (k := 74) (ρ := 0x147d)
     (X := [Sevm.dataWord sevm 68, (Sevm.dataWord sevm 36).toAdr.toB256,
@@ -116,16 +120,17 @@ theorem entry_source_or_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
   subst f
   decide +kernel
 
-/-- Each original successful store is non-increasing or carries its own balance-key hash. -/
-theorem successfulSstore_source_or_nonInc {root node : Exec.Deriv}
+/-- Each original successful increase carries its own recipient-balance hash. -/
+theorem successfulSstore_credit_or_nonInc {root node : Exec.Deriv}
     (pc : root.pc = 0) (code : root.sevm.code = ImplV2.code)
     (hsg : root.sevm.benvStat.rules.stateGas = none)
     (chain : Exec.Deriv.ParentPrefix root node)
     (selected : Blanc.Sevm.selector root.sevm = 0x23b872dd)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
     write.value.toNat ≤ (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ∨
-      V2TransferReach.ActualSource root node (Sevm.dataWord root.sevm 4).toAdr
-        (Sevm.dataWord root.sevm 36).toAdr write.key := by
+      (node.pc = 0x40e8 ∧ write.key = mapSlot (Sevm.dataWord root.sevm 36).toAdr.toB256 9 ∧
+        ∃ hashPc, KeccakBefore root node
+          ((Sevm.dataWord root.sevm 36).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) := by
   obtain ⟨decoded, rest, stack⟩ := Exec.Deriv.successfulSstore?_decoded found
   obtain ⟨κ, reach, ok⟩ :=
     observed_reach_of_parentPrefix_noStateGas ImplV2.cert_check pc code hsg chain
@@ -135,7 +140,7 @@ theorem successfulSstore_source_or_nonInc {root node : Exec.Deriv}
   change ObservedReach (StepIn root) (Cursor.RawEdgeAt ImplV2.code ImplV2.cert root node)
     ImplV2.cert.prog root.sevm ⟨root.devm, ImplV2.t_0000_c0, []⟩ (κ.conf node.devm) at walk
   rw [St.self' root.devm] at walk
-  rcases entry_source_or_nonInc (fun h => StepIn.toRun h) hsg selected walk target with
+  rcases entry_credit_or_nonInc (fun h => StepIn.toRun h) hsg selected walk target with
     ⟨key, value, other, shape, bound⟩ | source
   · have same := List.cons.inj (stack.symm.trans shape)
     have keyEq := same.1
@@ -143,20 +148,12 @@ theorem successfulSstore_source_or_nonInc {root node : Exec.Deriv}
     rw [← keyEq, ← valueEq] at bound
     rw [← Exec.Deriv.ParentPrefix.sevm_eq chain] at bound
     exact .inl bound
-  apply Or.inr
-  rcases source with
-    ⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩ | ⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩
-  · have location := ok.pc_eq_of_prefix_singleton V2TransferReach.ownerLine tail shape
-      (suffix := []) (by simp only [List.append_nil]) (by decide) V2TransferReach.ownerPattern_occurrences
-    obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
-      hash.actual
-    exact .inl ⟨location, (List.cons.inj (stack.symm.trans keyStack)).1,
-      _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩
-  · have location := ok.pc_eq_of_prefix_singleton V2TransferReach.recipientLine tail shape
-      (suffix := []) (by simp only [List.append_nil]) (by decide) V2TransferReach.recipientPattern_occurrences
-    obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
-      hash.actual
-    exact .inr ⟨location, (List.cons.inj (stack.symm.trans keyStack)).1,
-      _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩
+  obtain ⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩ := source
+  have location := ok.pc_eq_of_prefix_singleton V2TransferReach.recipientLine tail shape
+    (suffix := []) (by simp only [List.append_nil]) (by decide) V2TransferReach.recipientPattern_occurrences
+  obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
+    hash.actual
+  exact .inr ⟨location, (List.cons.inj (stack.symm.trans keyStack)).1,
+    _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩
 
 end Blanc.Lift.Usdc.V2TransferFromContinuation

@@ -1432,6 +1432,7 @@ CONTRACTS = {
         "Lift.Usdc.V2TransferFromCallee",
         "Lift.Usdc.V2TransferFromEntry",
         "Lift.Usdc.V2TransferFromContinuation",
+        "Lift.Usdc.V2TransferFromCreditHashes",
         "Lift.Usdc.V2TransferMappingTouches",
         "Lift.Usdc.V22ConfigureMinterReach",
         "Lift.Usdc.V22ConfigureMinterMappingTouches",
