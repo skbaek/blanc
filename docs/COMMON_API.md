@@ -1792,6 +1792,17 @@ Configured transitions and histories continue in
 `exists_configuredHistoryTrace_of_reachUsing` retain the schedule-selected
 rules and body traces without hard-coding a fork.
 
+To recover the receipt root, logs bloom and transaction root checked by an
+original selected-domain block, use
+[`Blanc/ExecutionBlockCommitments.lean`](../Blanc/ExecutionBlockCommitments.lean):
+`ExecutionTrace.ConfiguredBlockTraceIn.headerCommitments` returns their
+conjunction, and `.receiptRoot`, `.bloom` and `.txsRoot` give the individual
+header-to-output equalities. These consume only the original trace; its
+successful transition, selected fork and deterministic body run identify the
+checked output. They do not authenticate separately fetched receipts or prove
+trie injectivity. The projected equality goals have no carrier-specific head,
+so discovery stays in this branch rather than in a proof recipe.
+
 To relate a configured history to a later one, use
 `ExecutionTrace.ConfiguredHistoryTrace.ExtendsBy` in
 [`Blanc/ExecutionHistoryExtension.lean`](../Blanc/ExecutionHistoryExtension.lean):

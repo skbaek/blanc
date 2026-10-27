@@ -38,6 +38,7 @@ import Blanc.ExecutionSettledReceiptLogs
 import Blanc.ExecutionTransactionEffects
 import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
+import Blanc.ExecutionBlockCommitments
 import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryExtension
 import Blanc.ExecutionHistoryInAppend
