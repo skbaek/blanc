@@ -153,7 +153,7 @@ variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain
 proxy implementation write. The parent is the original committed frame, so
 its entry state supplies the admin tested by the proxy; discarded frames need
 no governance premise. The node's actual code-address provenance is explicit. -/
-theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime
+theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
     (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
@@ -163,7 +163,9 @@ theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime
     (target : N.sevm.currentTarget = P) (code : N.sevm.code = Proxy.code)
     (address : N.sevm.codeAddress = some P)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? N = some write)
-    (key : write.key = implSlot) : write.value.toAdr ∈ upgradeTargets := by
+    (key : write.key = implSlot) :
+    write.value.toAdr ∈ upgradeTargets ∧
+      (N.devm.getCode write.value.toAdr).toList ≠ [] := by
   obtain ⟨G, frameMem, chain⟩ :=
     (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix R.run N).mp retained
   have settled : G ∈ history.settledFrames := by
@@ -183,12 +185,13 @@ theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime
       ∃ rest, N.devm.stack = implSlot :: Proxy.upgradeArg G.sevm :: rest ∧
         (Proxy.dispatchWord G.sevm = Proxy.upgradeToWord ∨
           Proxy.dispatchWord G.sevm = Proxy.upgradeToAndCallWord) ∧
-        G.sevm.caller = (G.pre.getStorVal G.sevm.currentTarget adminSlot).toAdr := by
+        G.sevm.caller = (G.pre.getStorVal G.sevm.currentTarget adminSlot).toAdr ∧
+        (N.devm.getCode (Proxy.upgradeArg G.sevm).toAdr).toList ≠ [] := by
     rcases G with ⟨pc, sevm, pre, out, run, committed⟩
     dsimp only [Exec.Frame.rootDeriv] at pcZero chain
     subst pc
-    exact Proxy.proxy_sstoreNodeH run frameCode hsg (bal forkIn) chain decoded
-  rcases classified with ⟨_, admin⟩ | ⟨_, impl, selector, caller⟩
+    exact Proxy.proxy_sstoreNodeH_with_code run frameCode hsg (bal forkIn) chain decoded
+  rcases classified with ⟨_, admin⟩ | ⟨_, impl, selector, caller, nonempty⟩
   · have sameKey := (List.cons.inj (stack.symm.trans admin)).1
     rw [key] at sameKey
     exact absurd sameKey (by decide)
@@ -206,8 +209,27 @@ theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime
         decide
     obtain ⟨impl, inTargets, arg⟩ :=
       AllowedAdminAsk.upgradeArg (governance G settled entry admin selMem) selector
-    rw [value, arg]
-    exact inTargets
+    refine ⟨?_, ?_⟩
+    · rw [value, arg]
+      exact inTargets
+    · rw [value]
+      exact nonempty
+
+/-- Target-only compatibility projection of the retained upgrade theorem.
+The stronger result also retains the target code observed at the write. -/
+theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.run)
+    (target : N.sevm.currentTarget = P) (code : N.sevm.code = Proxy.code)
+    (address : N.sevm.codeAddress = some P)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? N = some write)
+    (key : write.key = implSlot) : write.value.toAdr ∈ upgradeTargets := by
+  exact (ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code
+    history capabilities bal governance member retained target code address found key).1
 
 /-- Conditional raw upgrade classification from the explicit raw governance
 obligation and deployment-before-upgrade ordering. The theorem name is kept
