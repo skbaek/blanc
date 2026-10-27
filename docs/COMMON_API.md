@@ -3823,6 +3823,40 @@ retain the original root, node, written key and both successful hashes for
 the unchanged collector. The existing V2 approve witness is preserved.
 Other modern selectors and the full classifier remain outside this family.
 
+For an already placed interior cursor, use
+[`Blanc/Lift/CursorObservedCut.lean`](../Blanc/Lift/CursorObservedCut.lean)'s
+`CursorOK.observedReach_from_cut`. Given the actual original-root prefix and
+remaining same-frame path, it constructs the observed suffix with the original
+root's `StepIn` child population and `RawEdgeAt` witnesses. It needs the existing
+certificate check and no-state-gas fact, without a final-success premise or
+restarting at pc zero. Its existential cursor/reach conclusion has no reliable
+single goal-head recipe trigger.
+
+For V2.1 owner writes, use
+[`V2_1PermitReach`](../Blanc/Lift/Usdc/V2_1PermitReach.lean)'s
+`successfulSstore_source`: it reuses the original pre-nonce prefix and separates
+the nonce increment at pc `0x41ae` from the approval setter. Both alternatives
+retain actual successful hash occurrences; the allowance pair is ordered.
+`ModernCallerReach.approval_core_source` generalizes the existing setter proof
+to its actual owner argument across all three modern versions while preserving
+`approve_core_hashes` as its caller specialization. The permit recovery helper
+must return on the observed path; no signature-success or final-frame-success
+premise is introduced.
+[`V2_1PermitMappingTouches`](../Blanc/Lift/Usdc/V2_1PermitMappingTouches.lean)'s
+`actualV2_1PermitKeys` selects exactly successful stores by target, code and
+selector, then uses the actual pc to choose nonce or allowance arguments.
+It preserves raw order and duplicates and never compares hash values in
+recognition. Soundness retains the original root and hash provenance;
+finite `checkFaithfulOn` identifies the Pair owner and exact spender and
+supplies the existing `AllowedFrame` owner arm. Fork-domain neutrality
+is discharged by `HistFork.neutral` on the historical domain.
+[`V2_1AllowanceWriteLocality`](../Blanc/Lift/Usdc/V2_1AllowanceWriteLocality.lean)
+combines that exact population with the covered modern population.
+`v2_1_allowance_write_locality` leaves only existing allowed frames or actual
+nonincrease, with no owner-selector residual for V2.1. Finite-check truth,
+initializer exclusion, retained owner-query exclusion and historical binding
+remain obligations; V2/V2.2 owner classification is separate.
+
 For exhaustive modern successful-store coverage, use
 [`ModernWriteFamilies`](../Blanc/Lift/Usdc/ModernWriteFamilies.lean).
 `modern_store_fixed_nonInc_or_family` applies the unchanged certified root

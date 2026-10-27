@@ -29,18 +29,28 @@ def core : ModernVersion → Action → SFunc
 
 variable {observe : Conf → Conf → Prop}
 
+def approvalLine : List Ninst := [.reg .sstore, .reg (.dup 1), .reg .mload]
+
+/-- The shared approval setter's actual owner/spender key and original ordered hashes. -/
+def ApprovalSource (Q : Sevm → Devm → Ninst → Devm → Prop)
+    (observe : Conf → Conf → Prop) (version : ModernVersion) (sevm : Sevm)
+    (owner spender : Adr) (T : Conf) : Prop :=
+  (∃ rest, T.d.stack = allowSlot owner spender :: rest) ∧
+  (∃ tail, T.f = approvalLine.foldr SFunc.next tail) ∧
+  ObservedKeccakPair Q observe version.cert.prog sevm
+    (owner.toB256.toBytes ++ (10 : B256).toBytes)
+    (spender.toB256.toBytes ++ (mapSlot owner.toB256 10).toBytes)
+
 /-- Approve's address guards precede the original nested-mapping hashes. -/
-theorem approve_core_hashes {version : ModernVersion}
+theorem approval_core_source {version : ModernVersion}
     {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
-    {sevm : Sevm} {b : Devm} {a : Adr} {value : B256} {S : List B256}
+    {sevm : Sevm} {b : Devm} {a owner : Adr} {value : B256} {S : List B256}
     {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
     (run : ObservedReach Q observe version.cert.prog sevm
-      ⟨St b (value :: a.toB256 :: sevm.caller.toB256 :: S) M G, core version .approve, K⟩ T)
+      ⟨St b (value :: a.toB256 :: owner.toB256 :: S) M G, core version .approve, K⟩ T)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    ObservedKeccakPair Q observe version.cert.prog sevm
-      (sevm.caller.toB256.toBytes ++ (10 : B256).toBytes)
-      (a.toB256.toBytes ++ (mapSlot sevm.caller.toB256 10).toBytes) := by
+    ApprovalSource Q observe version sevm owner a T := by
   cases version
   all_goals
     simp only [core] at run
@@ -69,7 +79,7 @@ theorem approve_core_hashes {version : ModernVersion}
     rw [B256.and_comm, ff20_and_adr] at run
     iterate 12 orsx
     obtain ⟨_, firstHash, run⟩ := ObservedKeccak.of_next_linked erase run hT
-      (input := sevm.caller.toB256.toBytes ++ (10 : B256).toBytes) (shape := fun _ => True)
+      (input := owner.toB256.toBytes ++ (10 : B256).toBytes) (shape := fun _ => True)
       (by exact Mem.read_two_word_writes_at_raw _ 0 _ _) (by trivial)
     simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl,
       show (Bytes.toB256 [32]).toNat = 32 from rfl] at run firstHash
@@ -78,11 +88,32 @@ theorem approve_core_hashes {version : ModernVersion}
     iterate 3 orsx
     rw [B256.and_comm, ff20_and_adr] at run
     iterate 9 orsx
-    obtain ⟨_, secondHash, _⟩ := ObservedKeccak.of_next erase run hT
-      (input := a.toB256.toBytes ++ (mapSlot sevm.caller.toB256 10).toBytes)
+    obtain ⟨_, secondHash, run⟩ := ObservedKeccak.of_next erase run hT
+      (input := a.toB256.toBytes ++ (mapSlot owner.toB256 10).toBytes)
       (shape := fun _ => True)
       (by exact Mem.read_two_word_writes_at_raw _ 0 _ _) (by trivial)
-    exact ⟨_, firstHash, secondHash⟩
+    simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl,
+      show (Bytes.toB256 [32]).toNat = 32 from rfl] at run
+    rw [Mem.read_two_word_writes_at_raw] at run
+    iterate 2 orsx
+    rcases ObservedReach.sstoreS run with rfl | ⟨d', step, _, run⟩
+    · exact ⟨⟨_, rfl⟩, ⟨_, rfl⟩, _, firstHash, secondHash⟩
+    exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT
+      (by decide +kernel) cont).elim
+
+/-- Caller approval is the existing specialization of the shared setter. -/
+theorem approve_core_hashes {version : ModernVersion}
+    {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {b : Devm} {a : Adr} {value : B256} {S : List B256}
+    {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe version.cert.prog sevm
+      ⟨St b (value :: a.toB256 :: sevm.caller.toB256 :: S) M G, core version .approve, K⟩ T)
+    (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
+    ObservedKeccakPair Q observe version.cert.prog sevm
+      (sevm.caller.toB256.toBytes ++ (10 : B256).toBytes)
+      (a.toB256.toBytes ++ (mapSlot sevm.caller.toB256 10).toBytes) := by
+  exact (approval_core_source erase run hT cont).2.2
 
 /-- Increase reads the old allowance using both original hashes before its arithmetic. -/
 theorem increase_core_hashes {version : ModernVersion}
