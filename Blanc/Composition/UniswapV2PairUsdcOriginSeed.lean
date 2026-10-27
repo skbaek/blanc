@@ -987,4 +987,114 @@ theorem original_pair_allowance_seed_of_v1_constructor_output
     cBody dBody cBloom dBloom receiptAt succeeded slotsApart constructorOutput noUpgraded
     v1Class initApart approveEvidence hnumber htime hfactory dReceiptAt dSucceeded dLogs
 
+/-- The original constructor and genuine C-block suffix produce the deployed
+starting state. Neither proxy code nor the implementation word at block end is
+an input. The later D block bounds the actual C timestamp; C's identified bloom
+supplies the exact tail receipt exclusion. -/
+theorem original_proxy_block_end_of_constructor_receipt
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    {Tr : Adr → Prop} {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : V1MappingFreshKeys usdcProxy history initial)
+    {origin completed pre post : BlockChain}
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed)
+    (cut : first.bodyTrace.transactions.TxSplit 22)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (rootsIn : ∀ R ∈ (MidHistoryTraceIn.tail first cut).settledRoots,
+      R ∈ history.settledRoots)
+    (early : last.block.header.timestamp < mainnetCancunTimestamp)
+    (cBody : first.block.txs = HistoryAnchorBody.cBody)
+    (cBloom : first.block.header.bloom = HistoricalBloomExclusion.observedCBloom)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (slotsApart : ProxySlotsApart UniswapV2Pair.Creation.pairAddress Tr)
+    (impl : cut.benv.state.getCode ProxyCreation.initialImplementation.toAdr = ImplV1.code) :
+    (MidHistoryTraceIn.tail first cut).OutputNotDeleted usdcProxy ∧
+      completed.state.getCode usdcProxy = Proxy.code ∧
+      completed.state.getCode ProxyCreation.initialImplementation.toAdr = ImplV1.code ∧
+      (completed.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation := by
+  obtain ⟨_, _, _, _, firstTip⟩ := stateTransitionUsing_reachedStep first.transition
+  obtain ⟨_, _, _, ⟨parent, parentTip, parentLt⟩, _⟩ :=
+    stateTransitionUsing_reachedStep last.transition
+  obtain ⟨tip, tipEq, firstLe⟩ := later.toReachUsing.tip_floor
+    ⟨first.block, firstTip, Nat.le_refl _⟩
+  have sameTip := Option.some.inj (tipEq.symm.trans parentTip)
+  have firstEarly : first.block.header.timestamp < mainnetCancunTimestamp := by
+    rw [sameTip] at firstLe
+    exact Nat.lt_of_le_of_lt firstLe (Nat.lt_trans parentLt early)
+  have sender := HistoryAnchorBody.c_original_cut_sender_mainnet first cut cBody
+  obtain ⟨_, nonce, receiver, value, input, _⟩ :=
+    HistoryAnchorBody.c_original_cut_fields first cut cBody
+  obtain ⟨clean, seed⟩ := ProxyCreation.original_constructor_seed_of_receipt_cut22
+    first cut first.forkIn.stateGas_none receiver input value sender nonce
+    receiptAt succeeded slotsApart
+  have nonempty : (cut.benv.state.getCode ProxyCreation.initialImplementation.toAdr).toList ≠ [] := by
+    rw [impl]
+    exact (show UsdcContextCode ImplV1.code from .inr (.inl rfl)).ne_nil
+  have implAfter := (HistoryAnchorBody.c_original_cut_initialImplementation_code
+    first cut cBody first.forkIn.stateGas_none clean nonempty).trans impl
+  have control := ConfiguredHistoryTraceIn.v1_tail_preserves_from_receipts history
+    initialApart fresh first cut rootsIn firstEarly seed.runtime implAfter
+    (congrArg B256.toAdr seed.implementation) (by
+      intro entry member upgraded
+      exact HistoricalBloomExclusion.address_ne_of_observedCBloom first cBloom
+        (first.mem_blockLogs_of_mem_receiptLogsBetween first.forkIn.stateGas_none member)
+        upgraded.1)
+  exact ⟨control.1, control.2.1, control.2.2.1, control.2.2.2.1.trans seed.implementation⟩
+
+/-- The original V1 entry starts at the completed proxy-constructor block.
+Later implementation/library entries keep their own positional boundaries. -/
+def originalV1WorldEntries (state : State) (entries : List UsdcDeployedEntry) :
+    List UsdcDeployedEntry :=
+  ⟨ProxyCreation.initialImplementation.toAdr, ImplV1.code, state, []⟩ :: entries
+
+/-- Build the initial world entry from constructor-derived block-end facts.
+The remaining entries retain exactly their ordinary deployed-world obligations. -/
+theorem original_v1_deployed_world
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    (entries : List UsdcDeployedEntry)
+    (proxy : checkpoint.state.getCode usdcProxy = Proxy.code)
+    (impl : checkpoint.state.getCode ProxyCreation.initialImplementation.toAdr = ImplV1.code)
+    (word : (checkpoint.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation)
+    (boundary : ∀ e ∈ entries, history.BoundaryAt e.base e.pre)
+    (installed : ∀ e ∈ entries, e.base.getCode e.adr = e.code)
+    (impls : ∀ e ∈ entries, UsdcImplCode e.code)
+    (apart : ∀ e ∈ entries, e.adr ≠ usdcProxy)
+    (lib : ∀ e ∈ entries, e.code = Impl.code →
+      ∃ l ∈ originalV1WorldEntries checkpoint.state entries,
+        l.adr = usdcLib ∧ l.code = Lib.code ∧ l.Active e.pre) :
+    UsdcDeployedWorld history.BoundaryAt usdcProxy
+      (originalV1WorldEntries checkpoint.state entries) checkpoint.state := by
+  refine ⟨proxy, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · intro e member
+    rcases List.mem_cons.mp member with rfl | member
+    · exact history.boundaryAt_checkpoint
+    · exact boundary e member
+  · intro e member
+    rcases List.mem_cons.mp member with rfl | member
+    · exact impl
+    · exact installed e member
+  · intro e member
+    rcases List.mem_cons.mp member with rfl | member
+    · exact .inl rfl
+    · exact impls e member
+  · intro e member
+    rcases List.mem_cons.mp member with rfl | member
+    · change ProxyCreation.initialImplementation.toAdr ≠ usdcProxy
+      decide +kernel
+    · exact apart e member
+  · intro e member code
+    rcases List.mem_cons.mp member with rfl | member
+    · exact False.elim ((by decide +kernel : ImplV1.code.size ≠ Impl.code.size)
+        (congrArg ByteArray.size code))
+    · exact lib e member code
+  · refine ⟨⟨ProxyCreation.initialImplementation.toAdr, ImplV1.code, checkpoint.state, []⟩,
+      List.mem_cons_self, rfl, ?_⟩
+    rw [word]
+
 end Blanc.Composition.UniswapV2PairUsdcWeth9
