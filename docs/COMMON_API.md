@@ -4003,8 +4003,18 @@ collects exactly nonliteral strict increases at these two actual store pcs.
 It never selects an input by comparing a written key with a digest. Its original
 history soundness and fixed/nonincrease/collected completeness feed
 `actualModernInitializerKeys` and the modern-family allowance reduction. V2.1's
-inherited initializer is thereby covered without a new `AllowedFrame` exception;
-the V2.2 inherited initializer remains an explicit residual.
+inherited initializer is thereby covered without a new `AllowedFrame` exception.
+
+[`V22InitializerReach`](../Blanc/Lift/Usdc/V22InitializerReach.lean) covers the
+inherited initializer's original V2.2 entry, optional transfer return and packed
+blacklist return. `V22BlacklistReach.store_source` retains the actual value,
+flag and stack tail while `store_key_hash` preserves its existing interface.
+The source proof distinguishes transfer tags from the blacklist flag and gives
+the exact original address/base-9 hash before every nonliteral store.
+[`V22InitializerMappingTouches`](../Blanc/Lift/Usdc/V22InitializerMappingTouches.lean)
+collects only actual nonfixed increases, with original-root/hash soundness and
+store completeness. The modern family consumes this exact V2.2 population;
+both inherited initializer variants are covered without an AllowedFrame exception.
 
 [`OldTransferFromEntry`](../Blanc/Lift/Usdc/OldTransferFromEntry.lean) derives
 the original V2/V2.1 dispatcher, ABI and public-guard paths while retaining

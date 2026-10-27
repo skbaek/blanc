@@ -7,15 +7,15 @@ open Jaune Blanc Blanc.Lift
 
 variable {observe : Conf → Conf → Prop}
 
-/-- The shared packed-word store computes the actual address/base-9 key before writing. -/
-theorem store_key_hash {Q : Sevm → Devm → Ninst → Devm → Prop}
+/-- The packed-word store retains its actual value, flag, tail and address/base-9 hash. -/
+theorem store_source {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {b : Devm} {a : Adr} {value flag : B256} {S : List B256}
     {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
     (run : ObservedReach Q observe Impl.cert.prog sevm
       ⟨St b (value :: flag :: a.toB256 :: S) M G, Impl.t_4d23_c10, K⟩ T)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    (∃ rest, T.d.stack = mapSlot a.toB256 9 :: rest) ∧
+    T.d.stack = mapSlot a.toB256 9 :: value :: flag :: S ∧
       ObservedKeccak Q observe sevm (a.toB256.toBytes ++ (9 : B256).toBytes) (fun _ => True) := by
   unfold Impl.t_4d23_c10 at run
   orsd
@@ -30,8 +30,21 @@ theorem store_key_hash {Q : Sevm → Devm → Ninst → Devm → Prop}
   rw [Mem.read_two_word_writes_at_raw] at run
   iterate 3 orsx
   rcases ObservedReach.sstoreS run with rfl | ⟨d', step, _, run⟩
-  · exact ⟨⟨_, rfl⟩, hash⟩
+  · exact ⟨rfl, hash⟩
   exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
+
+/-- The shared packed-word store computes the actual address/base-9 key before writing. -/
+theorem store_key_hash {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {b : Devm} {a : Adr} {value flag : B256} {S : List B256}
+    {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe Impl.cert.prog sevm
+      ⟨St b (value :: flag :: a.toB256 :: S) M G, Impl.t_4d23_c10, K⟩ T)
+    (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
+    (∃ rest, T.d.stack = mapSlot a.toB256 9 :: rest) ∧
+      ObservedKeccak Q observe sevm (a.toB256.toBytes ++ (9 : B256).toBytes) (fun _ => True) := by
+  obtain ⟨stack, hash⟩ := store_source erase run hT cont
+  exact ⟨⟨_, stack⟩, hash⟩
 
 /-- Either flag branch reaches the shared store; the false branch's balance read keeps the address. -/
 theorem setState_key_hash {Q : Sevm → Devm → Ninst → Devm → Prop}
