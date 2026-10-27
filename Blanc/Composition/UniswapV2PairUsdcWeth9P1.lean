@@ -1008,7 +1008,9 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys
 from the constructor and original receipt, preserving the later supplied runtime
 boundaries and all original historical authentication obligations. Implementation-slot
 separation is derived from the full original finite-key populations, then restricted
-to the deployed suffix by original raw-frame membership. -/
+to the deployed suffix by original raw-frame membership. The upgrade premise is
+derived from the exact raw-position check and these same deployment boundaries;
+no pre-Pair governance restriction or retained-only upgrade scan is substituted. -/
 theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_constructor_bootstrap
     {checkpoint B future : BlockChain} {cfg : ChainConfig}
     {initial : HistoricalMappingKey → Prop} {W : List UsdcDeployedEntry}
@@ -1092,8 +1094,8 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_construc
     (lib : ∀ e ∈ W, e.code = Impl.code →
       ∃ l ∈ originalV1WorldEntries completed.state W,
         l.adr = usdcLib ∧ l.code = Lib.code ∧ l.Active e.pre)
-    (upgrades : UpgradesWithinFrom usdcProxy (originalV1WorldEntries completed.state W)
-      ((later.step last).append postD).rawNodes)
+    (upgradeCheck : checkUpgradesWithinFrom usdcProxy (originalV1WorldEntries completed.state W)
+      ((later.step last).append postD).rawNodes = true)
     (modernFresh : ∀ version, ModernMappingFreshKeys version usdcProxy
       ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD) initial)
     (senderExcluded : ∀ query ∈ ((MidHistoryTraceIn.tail last beforeCut).append postD).senderQueries,
@@ -1147,6 +1149,8 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_construc
     receiptAt succeeded slotsApart impl
   have world := original_v1_deployed_world ((later.step last).append postD) W
     proxy implementation word boundary installed impls apart lib
+  have upgrades := ConfiguredHistoryTraceIn.upgradesWithinFrom_of_check
+    ((later.step last).append postD) world upgradeCheck
   have apartSlot := ConfiguredHistoryTraceIn.implSlotApart_of_knownCodes
     ((later.step last).append postD) BodyStageCapabilities.historical
     (fun {_} selected => HistFork.bal_none selected) world upgrades knownApart

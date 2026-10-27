@@ -115,6 +115,87 @@ theorem ConfiguredHistoryTraceIn.upgradesWithinFrom
     exact admin b₁ m b₂ split w found ((successfulSstore?_node_owner found).2.trans target) key G
       hG chain gTarget gCode sel caller
 
+/-- Check the actual raw chronology, including writes in subsequently reverted
+frames. A matching proxy implementation-slot write must name an entry whose
+original boundary prefix ends no later than this write. Prefix identity is
+supplied separately by the history's boundary proof, never inferred from length.
+No governance row, timestamp guess, or receipt filter changes the population. -/
+def checkUpgradesWithinFrom (P : Adr) (W : List UsdcDeployedEntry)
+    (nodes : List Exec.Deriv) : Bool :=
+  nodes.zipIdx.all fun (m, position) =>
+    if m.sevm.currentTarget = P ∧ m.sevm.code = Proxy.code then
+      match Exec.Deriv.successfulSstore? m with
+      | none => true
+      | some w => if w.key = implSlot then
+          W.any fun e => decide (e.pre.length ≤ position ∧ w.value.toAdr = e.adr)
+        else true
+    else true
+
+/-- The executable raw-position check supplies the existing upgrade premise.
+Every listed prefix must belong to this same chronology; equal lengths alone
+are insufficient. The history adapter below obtains this from actual boundaries. -/
+theorem upgradesWithinFrom_of_check {P : Adr} {W : List UsdcDeployedEntry}
+    {nodes : List Exec.Deriv}
+    (prefixes : ∀ e ∈ W, e.pre.IsPrefix nodes)
+    (checked : checkUpgradesWithinFrom P W nodes = true) :
+    UpgradesWithinFrom P W nodes := by
+  intro before m after split target code w found key
+  have member : (m, before.length) ∈ nodes.zipIdx := by
+    apply List.mk_mem_zipIdx_iff_getElem?.mpr
+    rw [split, List.getElem?_append_right (Nat.le_refl _)]
+    simp only [Nat.sub_self, List.getElem?_cons_zero]
+  have row := List.all_eq_true.mp checked (m, before.length) member
+  simp only [target, code, and_self, ite_true, found, key] at row
+  obtain ⟨e, inWorld, ready⟩ := List.any_eq_true.mp row
+  have facts := of_decide_eq_true ready
+  obtain ⟨rest, eq⟩ := List.prefix_of_prefix_length_le (prefixes e inWorld)
+    (show before.IsPrefix nodes from ⟨m :: after, split.symm⟩) facts.1
+  exact ⟨e, inWorld, ⟨rest, eq.symm⟩, facts.2⟩
+
+/-- Every positional upgrade witness passes the check. Thus, with original
+boundary prefixes, the check is equivalent to the consumed premise rather than
+a stronger governance or no-upgrade restriction. -/
+theorem checkUpgradesWithinFrom_of_upgrades {P : Adr} {W : List UsdcDeployedEntry}
+    {nodes : List Exec.Deriv} (upgrades : UpgradesWithinFrom P W nodes) :
+    checkUpgradesWithinFrom P W nodes = true := by
+  apply List.all_eq_true.mpr
+  rintro ⟨m, position⟩ member
+  dsimp only
+  by_cases relevant : m.sevm.currentTarget = P ∧ m.sevm.code = Proxy.code
+  · simp only [relevant, and_self, ite_true]
+    cases found : Exec.Deriv.successfulSstore? m with
+    | none => rfl
+    | some w =>
+      by_cases key : w.key = implSlot
+      · simp only [key, ite_true]
+        obtain ⟨lt, atNode⟩ := List.getElem?_eq_some_iff.mp
+          (List.mk_mem_zipIdx_iff_getElem?.mp member)
+        have split : nodes = nodes.take position ++ m :: nodes.drop (position + 1) := by
+          conv_lhs => rw [← List.take_append_drop position nodes]
+          rw [List.drop_eq_getElem_cons lt, atNode]
+        obtain ⟨e, inWorld, ⟨rest, active⟩, address⟩ := upgrades _ _ _ split
+          relevant.1 relevant.2 w found key
+        apply List.any_eq_true.mpr
+        refine ⟨e, inWorld, decide_eq_true ?_⟩
+        refine ⟨?_, address⟩
+        have lengths := congrArg List.length active
+        simp only [List.length_take, List.length_append] at lengths
+        omega
+      · simp only [key, ite_false]
+  · simp only [relevant, ite_false]
+
+/-- Bind the finite upgrade check to the existing deployed world's original
+committed boundaries. Check truth and installed code remain explicit inputs. -/
+theorem ConfiguredHistoryTraceIn.upgradesWithinFrom_of_check
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
+    (checked : checkUpgradesWithinFrom P W history.rawNodes = true) :
+    UpgradesWithinFrom P W history.rawNodes := by
+  apply Blanc.Lift.Usdc.upgradesWithinFrom_of_check (checked := checked)
+  intro e member
+  obtain ⟨rest, eq⟩ := ConfiguredHistoryTraceIn.BoundaryAt.prefix (world.boundary e member)
+  exact ⟨rest, eq.symm⟩
+
 /-- **P1 over the deployed world.** Every tracked allowance row of the Pair is at most its
 checkpoint word at every raw node and at the future, with the implementation and library
 accounts active from their own deployment boundaries, the proxy's own writes discharged
