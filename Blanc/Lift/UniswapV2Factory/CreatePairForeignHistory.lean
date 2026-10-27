@@ -33,9 +33,7 @@ theorem createPair_block_preserves_foreign_installed {pre completed : BlockChain
     (hfnonce : (cut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hpairStor : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
-    (hslot2 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0)
-    (hslot5 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get fk5 = 0) :
+    (hslot2 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0) :
     ∀ a, a ≠ UniswapV2Pair.Creation.factory →
       a ≠ UniswapV2Pair.Creation.pairAddress →
       (cut.benv.state.getCode a).toList ≠ [] →
@@ -56,7 +54,7 @@ theorem createPair_block_preserves_foreign_installed {pre completed : BlockChain
     (validateTransaction_sender_congr_none hsg).trans cut.head.validation
   obtain ⟨post, bout', htx, _, _, foreign⟩ := pair_createPair_transaction_muirGlacier_effects
     hfork htype hdata hvalue hnonce hvalid cut.head.checked hfunds hgas hgasb hfactory hfnonce
-    hpairNonce hpairCode hpairStor hslot2 hslot5
+    hpairNonce hpairCode hslot2
   have hpost : post = cut.txState :=
     (Prod.mk.inj (Except.ok.inj (htx.symm.trans cut.head.result))).1
   subst hpost

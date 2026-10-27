@@ -21,8 +21,8 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift
 10,008,355, timestamp 1,588,710,145), and `cut` its transaction fold cut at position 38, where
 the transaction is the factory's `createPair(WETH, USDC)`: legacy type to the factory, the
 `createPair` calldata, no value, nonce 205, enough funds and gas, the factory holding its
-certified code with a nonce below the maximum, the Pair address with nonce zero, no code and no
-storage, and the two `getPair` slots of the factory zero. Then the state right after the
+certified code with a nonce below the maximum, the Pair address with nonce zero and no code,
+and the factory’s `getPair[USDC][WETH]` slot zero. Then the state right after the
 transaction holds the certified Pair runtime at the Pair address with storage at the initialized
 checkpoint; and over the rest of the block followed by any later `HistFork` history, with
 trace-local freshness of the touched rows, the runtime stays installed and authenticated steps
@@ -44,9 +44,7 @@ theorem pair_history_initialized_from_createPair_block {pre completed : BlockCha
     (hfnonce : (cut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hpairStor : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
-    (hslot2 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0)
-    (hslot5 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get fk5 = 0) :
+    (hslot2 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0) :
     (cut.afterBenv.state.getCode UniswapV2Pair.Creation.pairAddress).toList =
         UniswapV2Pair.code.toList ∧
       UniswapV2Pair.InitializedCheckpoint
@@ -107,7 +105,7 @@ theorem pair_history_initialized_from_createPair_block {pre completed : BlockCha
     (validateTransaction_sender_congr_none hsg).trans cut.head.validation
   obtain ⟨post, bout', htx, hcode, hinit⟩ := pair_createPair_transaction_muirGlacier hfork
     htype hdata hvalue hnonce hvalid cut.head.checked hfunds hgas hgasb hfactory hfnonce
-    hpairNonce hpairCode hpairStor hslot2 hslot5
+    hpairNonce hpairCode hslot2
   have hpost : post = cut.txState :=
     (Prod.mk.inj (Except.ok.inj (htx.symm.trans cut.head.result))).1
   subst hpost

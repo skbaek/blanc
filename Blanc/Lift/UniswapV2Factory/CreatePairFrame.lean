@@ -8,7 +8,7 @@ import Blanc.Lift.UniswapV2Factory.CallShape
 
 `createPair_frame`: under Muir Glacier, a frame running the certified factory runtime at the
 factory address with the recorded calldata, no value and at least 2,600,000 gas, from a world where
-the Pair's `CREATE2` address is empty and `getPair[USDC][WETH]` is unset, runs (gas-exactly,
+the Pair's `CREATE2` address has nonce zero and no code, and `getPair[USDC][WETH]` is unset, runs (gas-exactly,
 `SProg.RunExact`) to a machine that holds the certified Pair runtime at the Pair address with
 storage at the initialized checkpoint over the factory, the domain separator of the frame's chain id
 and that address, and the sorted tokens (USDC, WETH). The frame's error, its accounts to delete
@@ -139,7 +139,7 @@ theorem createPair_frame_run {sevm : Sevm} {b : Devm} {G0 : Nat}
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hv1 : b.getStorVal sevm.currentTarget fk2 = 0)
     (hnonce : ((afterSloadH sevm b fk2).state.get sevm.currentTarget).nonce ≠ UInt64.max)
-    (hfresh : Create2TargetEmpty (create2Prepared sevm (afterSloadH sevm b fk2) belowCreate2 fm12
+    (hfresh : Create2TargetNoCollision (create2Prepared sevm (afterSloadH sevm b fk2) belowCreate2 fm12
       (G0 - 225 - 3920 - 34184) 0xa0 0x2d74 UniswapV2Pair.Creation.pairAddress)
       UniswapV2Pair.Creation.pairAddress)
     (hG0 : 225 + 3920 + 34184 ≤ G0)
@@ -237,12 +237,11 @@ theorem sfxMerge_ne_zero (x : B256) : sfxMerge x ≠ 0 := by
 
 /-- The factory's storage words a store reads either were zero at the transaction's start or are
 non-zero now, at each of the suffix's four stores, when the factory's storage at the frame's start
-is the transaction-start snapshot and `getPair` is unset in both directions there. -/
+is the transaction-start snapshot and `getPair[USDC][WETH]` is unset there. -/
 theorem sfx_refund_conditions {sevm : Sevm} {b q : Devm}
     (horig : ∀ k, getOrigStorVal sevm sevm.currentTarget k = b.getStorVal sevm.currentTarget k)
     (hq : ∀ k, q.getStorVal sevm.currentTarget k = b.getStorVal sevm.currentTarget k)
-    (hv1 : b.getStorVal sevm.currentTarget fk2 = 0)
-    (hv5 : b.getStorVal sevm.currentTarget fk5 = 0) :
+    (hv1 : b.getStorVal sevm.currentTarget fk2 = 0) :
     ((sfxB1 sevm q).getOrigStorVal sevm sevm.currentTarget fk2 = 0 ∨
       (sfxB1 sevm q).getStorVal sevm.currentTarget fk2 ≠ 0) ∧
     ((sfxB3 sevm q).getOrigStorVal sevm sevm.currentTarget fk5 = 0 ∨
@@ -285,7 +284,20 @@ theorem sfx_refund_conditions {sevm : Sevm} {b q : Devm}
         · by_cases hz : b.getStorVal sevm.currentTarget k = 0
           · exact Or.inl (orig0 d k hz)
           · exact Or.inr hz
-  refine ⟨Or.inl (orig0 _ _ hv1), Or.inl (orig0 _ _ hv5), ?_, ?_⟩
+  refine ⟨Or.inl (orig0 _ _ hv1), ?_, ?_, ?_⟩
+  · by_cases hz : b.getStorVal sevm.currentTarget fk5 = 0
+    · exact Or.inl (orig0 _ _ hz)
+    · right
+      rw [show sfxB3 sevm q = afterSloadH sevm (sfxB2 sevm q) fk5 from rfl,
+        getStorVal_afterSloadH,
+        show sfxB2 sevm q = afterSstoreH sevm (sfxB1 sevm q) fk2
+          (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256) from rfl,
+        getStorVal_afterSstoreH_ite]
+      split
+      · decide
+      · rw [show sfxB1 sevm q = afterSloadH sevm q fk2 from rfl,
+          getStorVal_afterSloadH, hq]
+        exact hz
   · exact split4 _ 3 (by
       rw [show sfxB5 sevm q = afterSloadH sevm (sfxB4 sevm q) 3 from rfl, getStorVal_afterSloadH])
   · have h7 : (sfxB7 sevm q).getStorVal sevm.currentTarget (sfxSlot sevm q) =
@@ -331,7 +343,7 @@ theorem returnPost_meta (d : Devm) (i sz : B256) (S : List B256) :
 /-- **The `createPair(WETH, USDC)` frame at Muir Glacier.**  A frame running the certified factory
 runtime at the factory address with the recorded calldata, no value, positive depth and at least
 2,600,000 gas (below `2^64`), from a world `b` holding the factory code there with a nonce below the
-maximum, an empty Pair `CREATE2` address, `getPair` unset in both directions, and the factory's
+maximum, a Pair `CREATE2` address with nonce zero and no code, `getPair[USDC][WETH]` unset, and the factory's
 storage equal to the transaction-start snapshot, runs to a machine with the frame's error, the
 certified Pair runtime at the Pair address, storage at the initialized checkpoint over the factory,
 the domain separator of the frame's chain id and the Pair address, and the sorted tokens; the Pair
@@ -343,10 +355,9 @@ theorem createPair_frame_effects {sevm : Sevm} {b : Devm} {G0 : Nat}
     (hvalue : sevm.value = 0) (hdata : sevm.data = createPairData)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hinstalled : b.state.getCode sevm.currentTarget = code)
-    (hempty : Create2TargetEmpty b UniswapV2Pair.Creation.pairAddress)
+    (hempty : Create2TargetNoCollision b UniswapV2Pair.Creation.pairAddress)
     (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
     (hv1 : b.getStorVal sevm.currentTarget fk2 = 0)
-    (hv5 : b.getStorVal sevm.currentTarget fk5 = 0)
     (horig : ∀ k, getOrigStorVal sevm sevm.currentTarget k = b.getStorVal sevm.currentTarget k)
     (hG : 2600000 ≤ G0) (hG64 : G0 < 2 ^ 64) :
     ∃ post, SProg.RunExact cert.prog sevm (St b [] Mem.empty G0) post ∧
@@ -449,18 +460,18 @@ theorem createPair_frame_effects {sevm : Sevm} {b : Devm} {G0 : Nat}
     rw [hQdef]; exact hQgas
   have hQgas' : sfxCost sevm Q + 2300 + 52 ≤ Q.gasLeft := by
     rw [hQgasL]; unfold except64th at *; omega
-  obtain ⟨h1, h2, h3, h4⟩ := sfx_refund_conditions horig hq hv1 hv5
+  obtain ⟨h1, h2, h3, h4⟩ := sfx_refund_conditions horig hq hv1
   -- the run
   have hnonceB1 : ((afterSloadH sevm b fk2).state.get sevm.currentTarget).nonce ≠ UInt64.max := by
     rw [afterSloadH_state]; exact hnonce
-  have hfresh : Create2TargetEmpty (create2Prepared sevm (afterSloadH sevm b fk2) belowCreate2 fm12
+  have hfresh : Create2TargetNoCollision (create2Prepared sevm (afterSloadH sevm b fk2) belowCreate2 fm12
       (G0 - 225 - 3920 - 34184) 0xa0 0x2d74 UniswapV2Pair.Creation.pairAddress) UniswapV2Pair.Creation.pairAddress := by
     have hget : (create2Prepared sevm (afterSloadH sevm b fk2) belowCreate2 fm12
         (G0 - 225 - 3920 - 34184) 0xa0 0x2d74 UniswapV2Pair.Creation.pairAddress).state.get UniswapV2Pair.Creation.pairAddress = b.state.get UniswapV2Pair.Creation.pairAddress := by
       rw [create2Prepared_state]
       unfold State.incrNonce
       rw [State.setAccount_get_ne _ htne, afterSloadH_state]
-    unfold Create2TargetEmpty
+    unfold Create2TargetNoCollision
     rw [hget]
     exact hempty
   have hsizeP : ((P.getCode (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256).toAdr).size.toB256 =
@@ -562,10 +573,9 @@ theorem createPair_frame {sevm : Sevm} {b : Devm} {G0 : Nat}
     (hvalue : sevm.value = 0) (hdata : sevm.data = createPairData)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hinstalled : b.state.getCode sevm.currentTarget = code)
-    (hempty : Create2TargetEmpty b UniswapV2Pair.Creation.pairAddress)
+    (hempty : Create2TargetNoCollision b UniswapV2Pair.Creation.pairAddress)
     (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
     (hv1 : b.getStorVal sevm.currentTarget fk2 = 0)
-    (hv5 : b.getStorVal sevm.currentTarget fk5 = 0)
     (horig : ∀ k, getOrigStorVal sevm sevm.currentTarget k = b.getStorVal sevm.currentTarget k)
     (hG : 2600000 ≤ G0) (hG64 : G0 < 2 ^ 64) :
     ∃ post, SProg.RunExact cert.prog sevm (St b [] Mem.empty G0) post ∧
@@ -581,7 +591,7 @@ theorem createPair_frame {sevm : Sevm} {b : Devm} {G0 : Nat}
       (0 ≤ b.refundCounter → 0 ≤ post.refundCounter) := by
   obtain ⟨post, run, err, installed, initialized, notDeleted, refund, _⟩ :=
     createPair_frame_effects hfork hcode htarget hvalue hdata hstatic hdepth hinstalled
-      hempty hnonce hv1 hv5 horig hG hG64
+      hempty hnonce hv1 horig hG hG64
   exact ⟨post, run, err, installed, initialized,
     notDeleted UniswapV2Pair.Creation.pairAddress, refund⟩
 

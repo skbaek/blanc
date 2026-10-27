@@ -81,9 +81,7 @@ theorem original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
     (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hpairStor : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
-    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0)
-    (hslot5 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk5 = 0) :
+    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0) :
     beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
       (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
       ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
@@ -105,7 +103,7 @@ theorem original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
     exact (show UsdcContextCode Proxy.code from .inl rfl).ne_nil
   obtain ⟨code, storage⟩ := UniswapV2Factory.createPair_block_preserves_foreign_installed
     last hnumber htime beforeCut htype hdata hvalue hnonce hfunds hgas hgasb hfactory
-    hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5 usdcProxy (by decide) (by decide) nonempty
+    hfnonce hpairNonce hpairCode hslot2 usdcProxy (by decide) (by decide) nonempty
   refine ⟨code.trans proxy, ?_, ?_⟩
   · rw [storage]
     exact word
@@ -162,9 +160,7 @@ theorem original_pair_allowance_seed_of_constructor_receipt
     (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hpairStor : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
-    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0)
-    (hslot5 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk5 = 0) :
+    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0) :
     beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
       (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
       ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
@@ -173,7 +169,7 @@ theorem original_pair_allowance_seed_of_constructor_receipt
     history initialApart fresh first afterCut later last beforeCut rootsIn
     receiver input value sender nonce receiptAt succeeded slotsApart impl noUpgraded
     rowSep initApart (.inl noCaller) hnumber htime htype hdata hvalue hnonce
-    hfunds hgas hgasb hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
+    hfunds hgas hgasb hfactory hfnonce hpairNonce hpairCode hslot2
 
 /-- Connect both exact frozen body identities to the actual after-D seed.
 The original C/D cuts supply their decoded fields and the C signature supplies
@@ -226,9 +222,7 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
     (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hpairStor : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
-    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0)
-    (hslot5 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk5 = 0) :
+    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0) :
     beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
       (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
       ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
@@ -301,7 +295,7 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
     history initialApart fresh first afterCut later last beforeCut rootsIn
     creceiver cinput cvalue sender cnonce receiptAt succeeded slotsApart implAfter noUpgraded
     rowSep initApart approveEvidence hnumber htime dtype ddata dvalue dnonce
-    hfunds hgas dgas hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
+    hfunds hgas dgas hfactory hfnonce hpairNonce hpairCode hslot2
 
 /-- The original C/D bloom identities discharge both boundary receipt scans.
 Only the intervening history needs Upgraded absence and, for the receipt-value
@@ -349,9 +343,7 @@ theorem original_pair_allowance_seed_of_boundary_blooms
     (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hpairStor : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
-    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0)
-    (hslot5 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk5 = 0) :
+    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0) :
     beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
       (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
       ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
@@ -371,7 +363,7 @@ theorem original_pair_allowance_seed_of_boundary_blooms
   refine original_pair_allowance_seed_of_bodies_and_constructor_receipt
     history initialApart fresh first afterCut later last beforeCut rootsIn cBody dBody
     receiptAt succeeded slotsApart impl noUpgradedFull rowSep initApart
-    ?_ hnumber htime hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
+    ?_ hnumber htime hfactory hfnonce hpairNonce hpairCode hslot2
   rcases approveEvidence with callers | logs
   · exact Or.inl callers
   · apply Or.inr

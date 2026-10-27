@@ -12,8 +12,8 @@ the recorded calldata `createPair(WETH, USDC)` (Pair creation transaction `0xd07
 of block 10,008,355, whose fork the mainnet schedule selects as Muir Glacier, `pair_deployment_fork`),
 zero value and the recorded nonce 205, admitted by Jaune's own validation and admission checks, with
 the sender able to pay `gas × price` and at least 2,600,000 gas beyond the intrinsic charge, over a
-pre-state that holds the certified factory runtime at the factory (nonce below the maximum), an empty
-Pair `CREATE2` address, and no `getPair` entry for the two tokens in either direction, succeeds
+pre-state that holds the certified factory runtime at the factory (nonce below the maximum), a
+Pair `CREATE2` address with nonce zero and no code, and no `getPair[USDC][WETH]` entry, succeeds
 through `processTransaction`, and the settled state holds the certified Pair runtime at the Pair
 address with storage at the initialized checkpoint over the factory, the domain separator of the
 block's chain id and the Pair address, and the sorted tokens (USDC, WETH).
@@ -34,8 +34,8 @@ the mainnet schedule selects at the recorded Pair creation coordinates, a legacy
 factory with the recorded `createPair(WETH, USDC)` calldata, zero value and nonce 205, which Jaune
 validates and admits, whose sender can pay `gas × price`, and whose gas covers the intrinsic charge
 plus 2,600,000 (below `2^64`), over a state holding the certified factory runtime at the factory
-(nonce below the maximum), an empty Pair `CREATE2` address and no `getPair` entry for the two
-tokens in either direction, is processed by `processTransaction`; the settled state holds the
+(nonce below the maximum), a Pair `CREATE2` address with nonce zero and no code and no
+`getPair[USDC][WETH]` entry, is processed by `processTransaction`; the settled state holds the
 certified Pair runtime at the Pair address with storage at the initialized checkpoint.
 Every other installed account retains its code and storage through settlement. -/
 theorem pair_createPair_transaction_muirGlacier_effects
@@ -55,9 +55,7 @@ theorem pair_createPair_transaction_muirGlacier_effects
     (hfnonce : (benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hpairStor : (benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
-    (hslot2 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0)
-    (hslot5 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk5 = 0) :
+    (hslot2 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0) :
     ∃ post bout', processTransaction benv bout tx index = .ok (post, bout') ∧
       (post.getCode UniswapV2Pair.Creation.pairAddress).toList = UniswapV2Pair.code.toList ∧
       UniswapV2Pair.InitializedCheckpoint (post.getStor UniswapV2Pair.Creation.pairAddress)
@@ -87,7 +85,7 @@ theorem pair_createPair_transaction_muirGlacier_effects
     have hc : (benv.state.get UniswapV2Pair.Creation.factory).code = code := hfactory
     rw [hc, hcodeSize] at hz
     exact absurd hz (by decide)
-  -- The sender's nonce is 205, so it is not the empty Pair address.
+  -- The sender's nonce is 205, so it is not the nonce-zero Pair address.
   have hsenderNonce : (benv.state.get sender).nonce = 205 := by
     rw [← hnonce]; exact ExecutionTrace.checkTransaction_sender_nonce hchecked
   have hneP : sender ≠ UniswapV2Pair.Creation.pairAddress := by
@@ -129,12 +127,10 @@ theorem pair_createPair_transaction_muirGlacier_effects
       (by show (debit.get UniswapV2Pair.Creation.factory).code = code; rw [hdebitF]; exact hfactory)
       (by
         show (debit.get UniswapV2Pair.Creation.pairAddress).nonce = 0 ∧
-          (debit.get UniswapV2Pair.Creation.pairAddress).code.size = 0 ∧
-          (debit.get UniswapV2Pair.Creation.pairAddress).stor.size = 0
-        rw [hdebitP]; exact ⟨hpairNonce, hpairCode, hpairStor⟩)
+          (debit.get UniswapV2Pair.Creation.pairAddress).code.size = 0
+        rw [hdebitP]; exact ⟨hpairNonce, hpairCode⟩)
       (by show (debit.get UniswapV2Pair.Creation.factory).nonce ≠ _; rw [hdebitF]; exact hfnonce)
       (by show (debit.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0; rw [hdebitF]; exact hslot2)
-      (by show (debit.get UniswapV2Pair.Creation.factory).stor.get fk5 = 0; rw [hdebitF]; exact hslot5)
       (fun k => by
         show (benv.state.get UniswapV2Pair.Creation.factory).stor.get k =
           (debit.get UniswapV2Pair.Creation.factory).stor.get k
@@ -219,9 +215,7 @@ theorem pair_createPair_transaction_muirGlacier
     (hfnonce : (benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hpairStor : (benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
-    (hslot2 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0)
-    (hslot5 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk5 = 0) :
+    (hslot2 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0) :
     ∃ post bout', processTransaction benv bout tx index = .ok (post, bout') ∧
       (post.getCode UniswapV2Pair.Creation.pairAddress).toList = UniswapV2Pair.code.toList ∧
       UniswapV2Pair.InitializedCheckpoint (post.getStor UniswapV2Pair.Creation.pairAddress)
@@ -231,7 +225,7 @@ theorem pair_createPair_transaction_muirGlacier
         UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1 := by
   obtain ⟨post, bout', result, installed, initialized, _⟩ :=
     pair_createPair_transaction_muirGlacier_effects hfork htype hdata hvalue hnonce hvalid
-      hchecked hfunds hgas hgasb hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
+      hchecked hfunds hgas hgasb hfactory hfnonce hpairNonce hpairCode hslot2
   exact ⟨post, bout', result, installed, initialized⟩
 
 end Blanc.Lift.UniswapV2Factory

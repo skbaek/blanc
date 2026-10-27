@@ -46,6 +46,11 @@ def create2Charge (sevm : Sevm) (M : Mem) (i sz : B256) : Nat :=
 def Create2TargetEmpty (d : Devm) (a : Adr) : Prop :=
   (d.state.get a).nonce = 0 ∧ (d.state.get a).code.size = 0 ∧ (d.state.get a).stor.size = 0
 
+/-- Exactly the target-account facts read by Jaune's `CREATE2` collision check.
+Target storage is unrestricted: successful create-message entry resets it. -/
+def Create2TargetNoCollision (d : Devm) (a : Adr) : Prop :=
+  (d.state.get a).nonce = 0 ∧ (d.state.get a).code.size = 0
+
 /-- The parent after a successful creation resumes: the child's world and gas incorporated, empty
 return data, and the new address on the stack. -/
 def create2Post (D child : Devm) (addr : Adr) : Devm :=

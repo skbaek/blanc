@@ -8579,12 +8579,19 @@ contract-neutral.
   `create2AddressOfHash` computes the CREATE2 address from an init-code digest
   (with `create2NewAddress_eq_ofHash` its identity against Jaune's
   `create2NewAddress`). An admitted `CREATE2` (non-static, affordable endowment,
-  creator nonce below the maximum, positive depth, empty target) steps to
-  `.spawn` via `Xinst.step_create2_spawnH`, creating the frame over `create2Prepared`
-  at that address. When the creation message succeeds without error
-  (`processCreateMessage … = .ok child`, `child.error = none`),
-  `create2_runCompiledH` closes the spawn into a compiled step (`Ninst.RunCompiled`)
-  to `create2Post` with the new address on the stack and the child's world installed.
+  creator nonce below the maximum, positive depth) needs only
+  `Create2TargetNoCollision`: target nonce zero and code size zero, with arbitrary
+  target storage. `Xinst.step_create2_spawnH_of_nonce_code` constructs the
+  `.spawn` over `create2Prepared`. When the creation message succeeds without
+  error (`processCreateMessage … = .ok child`, `child.error = none`),
+  `create2_runCompiledH_of_nonce_code` closes the spawn into a compiled step
+  (`Ninst.RunCompiled`) to `create2Post` with the new address on the stack and
+  the child's world installed. Create-message entry resets target storage.
+  The original `Create2TargetEmpty`, `Xinst.step_create2_spawnH` and
+  `create2_runCompiledH` retain their original nonce/code/storage contracts as
+  compatibility APIs. The registered `runcompiled-construction` goal-head
+  triggers select function walks, not these instruction-level CREATE2 spawns;
+  discover these helpers through this branch.
   Worked use: `pair_create2` in
   [`Blanc/Lift/UniswapV2Pair/Creation/Deploy.lean`](../Blanc/Lift/UniswapV2Pair/Creation/Deploy.lean).
 - Free-pointer memory with a pointer independent of allocation: `PtrMem p n M`

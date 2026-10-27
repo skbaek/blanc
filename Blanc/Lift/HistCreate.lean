@@ -311,7 +311,7 @@ theorem create2ChargeH_of_initCodeLimit {sevm : Sevm} {M : Mem} {i sz : B256}
 
 /-- An admitted CREATE2 spawn from the rule facts it reads: `rules.stateGas = none`, `CREATE2`
 available, and the init-code size bound only where `creation.initCodeLimit` holds. -/
-theorem Xinst.step_create2_spawnH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+theorem Xinst.step_create2_spawnH_of_nonce_code {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
     {v i sz salt : B256}
     (hsg : sevm.benvStat.rules.stateGas = none)
     (hcreate2 : sevm.benvStat.rules.op.create2 = true)
@@ -321,7 +321,7 @@ theorem Xinst.step_create2_spawnH {sevm : Sevm} {b : Devm} {S : List B256} {M : 
     (hbal : ¬ (b.state.get sevm.currentTarget).bal < v)
     (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
     (hdepth : sevm.depth ≠ 0)
-    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+    (hfresh : Create2TargetNoCollision (create2Prepared sevm b S M G i sz
         (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
         (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz))) :
     Xinst.step sevm (St b (v :: i :: sz :: salt :: S) M
@@ -370,15 +370,79 @@ theorem Xinst.step_create2_spawnH {sevm : Sevm} {b : Devm} {S : List B256} {M : 
   · exact fun h => by
       rcases h with h | h
       · exact h hfresh.1
-      · exact h hfresh.2.1
+      · exact h hfresh.2
   · exact fun h => by
       rcases h with h | h | h
       · exact hbal h
       · exact hnonce h
       · exact hdepth h
 
-/-- **`CREATE2`, closed, from rule facts.**  Charging
-`create2ChargeH`. -/
+/-- Compatibility wrapper retaining the original nonce/code/storage target premise. -/
+theorem Xinst.step_create2_spawnH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {v i sz salt : B256}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hcreate2 : sevm.benvStat.rules.op.create2 = true)
+    (hmax : sevm.benvStat.rules.creation.initCodeLimit = true →
+      sz.toNat ≤ sevm.benvStat.rules.code.maxInitCodeSize)
+    (hstatic : sevm.isStatic = false)
+    (hbal : ¬ (b.state.get sevm.currentTarget).bal < v)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetEmpty (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
+        (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz))) :
+    Xinst.step sevm (St b (v :: i :: sz :: salt :: S) M
+        (G + create2ChargeH sevm M i sz)) .create2 =
+      .spawn (Frame.ofCreate (createMsg sevm
+          (create2Prepared sevm b S M G i sz
+            (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
+          (except64th G) v
+          (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz))
+          (create2InitCode M i sz)))
+        (.create (create2Prepared sevm b S M G i sz
+            (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
+          (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz))) := by
+  exact Xinst.step_create2_spawnH_of_nonce_code hsg hcreate2 hmax hstatic hbal hnonce hdepth
+    ⟨hfresh.1, hfresh.2.1⟩
+
+/-- **`CREATE2`, closed, from rule facts and its actual nonce/code collision check.**
+Charging `create2ChargeH`; no initial target-storage premise is needed. -/
+theorem create2_runCompiledH_of_nonce_code {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {v i sz salt : B256} {child : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hcreate2 : sevm.benvStat.rules.op.create2 = true)
+    (hmax : sevm.benvStat.rules.creation.initCodeLimit = true →
+      sz.toNat ≤ sevm.benvStat.rules.code.maxInitCodeSize)
+    (hstatic : sevm.isStatic = false)
+    (hbal : ¬ (b.state.get sevm.currentTarget).bal < v)
+    (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
+    (hdepth : sevm.depth ≠ 0)
+    (hfresh : Create2TargetNoCollision (create2Prepared sevm b S M G i sz
+        (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
+        (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
+    (hchild : processCreateMessage (createMsg sevm
+        (create2Prepared sevm b S M G i sz
+          (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
+        (except64th G) v
+        (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz))
+        (create2InitCode M i sz)) = .ok child)
+    (herror : child.error = none) (hroom : S.length < 1024) :
+    Ninst.RunCompiled sevm (St b (v :: i :: sz :: salt :: S) M
+        (G + create2ChargeH sevm M i sz)) (.exec .create2)
+      (create2Post (create2Prepared sevm b S M G i sz
+          (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
+        child (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz))) := by
+  obtain ⟨xl, hfill, hrf⟩ := of_processCreateMessage _ _ hchild
+  refine ⟨xl, hfill, fun pc => XStep.run_toStep.mpr ?_⟩
+  show XStep.Run (Xinst.step _ _ _) xl _
+  rw [Xinst.step_create2_spawnH_of_nonce_code hsg hcreate2 hmax hstatic hbal hnonce hdepth hfresh]
+  refine ⟨_, hrf, ?_⟩
+  simp only [Resume.run, liftToExecution, Except.bind_ok, herror, Option.isSome_none,
+    Bool.false_eq_true, ite_false]
+  rw [Devm.push_eq_ok (by exact hroom)]
+  rfl
+
+/-- Compatibility wrapper retaining the original nonce/code/storage target premise. -/
 theorem create2_runCompiledH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
     {v i sz salt : B256} {child : Devm}
     (hsg : sevm.benvStat.rules.stateGas = none)
@@ -404,14 +468,7 @@ theorem create2_runCompiledH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} 
       (create2Post (create2Prepared sevm b S M G i sz
           (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz)))
         child (create2NewAddress sevm.currentTarget salt (create2InitCode M i sz))) := by
-  obtain ⟨xl, hfill, hrf⟩ := of_processCreateMessage _ _ hchild
-  refine ⟨xl, hfill, fun pc => XStep.run_toStep.mpr ?_⟩
-  show XStep.Run (Xinst.step _ _ _) xl _
-  rw [Xinst.step_create2_spawnH hsg hcreate2 hmax hstatic hbal hnonce hdepth hfresh]
-  refine ⟨_, hrf, ?_⟩
-  simp only [Resume.run, liftToExecution, Except.bind_ok, herror, Option.isSome_none,
-    Bool.false_eq_true, ite_false]
-  rw [Devm.push_eq_ok (by exact hroom)]
-  rfl
+  exact create2_runCompiledH_of_nonce_code hsg hcreate2 hmax hstatic hbal hnonce hdepth
+    ⟨hfresh.1, hfresh.2.1⟩ hchild herror hroom
 
 end Blanc.Lift

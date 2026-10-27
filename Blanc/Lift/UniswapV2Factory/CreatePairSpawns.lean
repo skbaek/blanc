@@ -235,14 +235,14 @@ theorem pairCtorCost_le {sevm : Sevm} (hfork : sevm.benvStat.fork = .muirGlacier
 
 /-- **The factory's `CREATE2` of the Pair, at Muir Glacier.**  From the factory frame (target
 `factory`) with the creation code at `[0xa0, 0xa0 + 11636)` of `fm12` and the salt
-`keccak(USDC ‖ WETH)`, a `CREATE2` with an empty target, enough gas for the constructor and the
+`keccak(USDC ‖ WETH)`, a `CREATE2` with target nonce zero and no code, enough gas for the constructor and the
 code deposit, positive depth and a creator nonce below the maximum is a compiled step to
 `pairCreate2Post`. -/
 theorem pairCreate2_runCompiled {sevm : Sevm} {b : Devm} {S : List B256} {Y : Nat}
     (hfork : sevm.benvStat.fork = .muirGlacier) (hstatic : sevm.isStatic = false)
     (htarget : sevm.currentTarget = UniswapV2Pair.Creation.factory) (hdepth : sevm.depth ≠ 0)
     (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
-    (hfresh : Create2TargetEmpty (create2Prepared sevm b S fm12 Y 0xa0 0x2d74
+    (hfresh : Create2TargetNoCollision (create2Prepared sevm b S fm12 Y 0xa0 0x2d74
       UniswapV2Pair.Creation.pairAddress) UniswapV2Pair.Creation.pairAddress)
     (hgas : 2338600 ≤ except64th Y) (hroom : S.length < 1024) :
     Ninst.RunCompiled sevm (St b ((0 : B256) :: 0xa0 :: 0x2d74 :: fk3 :: S) fm12
@@ -266,7 +266,7 @@ theorem pairCreate2_runCompiled {sevm : Sevm} {b : Devm} {S : List B256} {Y : Na
         show except64th Y = except64th Y - pairCtorCost sevm b S Y + pairCtorCost sevm b S Y
         unfold pairCtorCost at hle ⊢; omega)
       (by unfold gasCodeDeposit; omega)
-  have h := create2_runCompiledH (sevm := sevm) (b := b) (S := S) (M := fm12) (G := Y) (v := 0)
+  have h := create2_runCompiledH_of_nonce_code (sevm := sevm) (b := b) (S := S) (M := fm12) (G := Y) (v := 0)
     (i := 0xa0) (sz := 0x2d74) (salt := fk3) (child := pairChild sevm b S Y)
     (by rw [rules]; rfl) (by rw [rules]; rfl) (fun h => by rw [rules] at h; cases h) hstatic
     (not_lt_of_ge (B256.zero_le _)) hnonce hdepth (by rw [haddr]; exact hfresh)
