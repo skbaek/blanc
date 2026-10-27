@@ -46,6 +46,91 @@ def InitRowsApart (P pair : Adr) (Tr : Adr → Prop) (frames : List Exec.Deriv) 
   ∀ G ∈ frames, G.sevm.currentTarget = P → UsdcInitFrame G →
     ∀ g, Tr g → ¬ InitKeys G.sevm (allowSlot pair g)
 
+/-- Decide initializer key membership from the original calldata. String payloads
+use modular distance from their hash base, not enumeration of their word ranges.
+Only the capped blacklist account array is traversed. -/
+def checkInitKeys (sevm : Sevm) (key : B256) : Bool :=
+  let payload (slot : B256) (length : Nat) :=
+    decide ((key - slot.toBytes.keccak).toNat < (length + 31) / 32)
+  (decide (initSelWord sevm = 0x3357162b) &&
+    (decide (key ∈ ([0, 1, 2, 4, 5, 6, 7, 8] : List B256)) ||
+      payload 4 (min (Init06.len06 sevm 4) (2 ^ 160)) ||
+      payload 5 (min (Init06.len06 sevm (4 + 32)) (2 ^ 160)) ||
+      payload 7 (min (Init06.len06 sevm (4 + 32 + 32)) (2 ^ 160)))) ||
+  (decide (initSelWord sevm = 0xd608ea64) &&
+    (decide (key = 4 ∨ key = 15 ∨ key = 18) ||
+      payload 4 (min (CdStrWrap.cdLen sevm) (2 ^ 32)))) ||
+  (decide (initSelWord sevm = 0x430239b4) &&
+    (decide (key = 5) || payload 5 (min (InitReachV2_2.strLen sevm) (2 ^ 32)) ||
+      (List.range (min (InitReachV2_2.arrLen sevm).toNat (2 ^ 32))).any (fun j =>
+        decide (key = mapSlot (InitReachV2_2.acctAt sevm (InitReachV2_2.arrPtr sevm) j) 3 ∨
+          key = mapSlot (InitReachV2_2.acctAt sevm (InitReachV2_2.arrPtr sevm) j &&& InitReachV2_2.addrMask) 9)) ||
+      @decide (InitReachV2_2.AfterKeys sevm key) (by unfold InitReachV2_2.AfterKeys; infer_instance)))
+
+/-- The check is exact, including modular wraparound and the original decoder caps. -/
+theorem checkInitKeys_eq_true (sevm : Sevm) (key : B256) :
+    checkInitKeys sevm key = true ↔ InitKeys sevm key := by
+  have payload (slot : B256) (length : Nat) (bound : length ≤ 2 ^ 160) :
+      (key - slot.toBytes.keccak).toNat < (length + 31) / 32 ↔
+        ∃ j : Nat, j < (length + 31) / 32 ∧ key = slot.toBytes.keccak + j.toB256 := by
+    constructor
+    · intro member
+      refine ⟨(key - slot.toBytes.keccak).toNat, member, ?_⟩
+      rw [toB256_toNat, B256.add_comm, B256.sub_add_cancel]
+    · rintro ⟨j, member, rfl⟩
+      have small : j < 2 ^ 256 := by omega
+      have base := B256.toNat_lt slot.toBytes.keccak
+      simp only [B256.toNat_sub, B256.toNat_add, B256.toNat_toB256_of_lt small, Nat.lo]
+      omega
+  have capped (length : Nat) : min length (2 ^ 160) ≤ 2 ^ 160 := Nat.min_le_right _ _
+  have modern (length : Nat) : min length (2 ^ 32) ≤ 2 ^ 160 := by
+    have := Nat.min_le_right length (2 ^ 32)
+    omega
+  simp only [checkInitKeys, Bool.or_eq_true, Bool.and_eq_true, decide_eq_true_eq,
+    List.any_eq_true, List.mem_range, InitKeys, Init06.KeysInit06, Init06.KeysInit,
+    KeysInitV2, KeysV2Len, InitReachV2_2.KeysInitV2_2, InitReachV2_2.BodyKeys,
+    InitReachV2_2.LoopKeys]
+  rw [payload _ _ (capped _), payload _ _ (capped _), payload _ _ (capped _),
+    payload _ _ (modern _), payload _ _ (modern _)]
+  simp only [or_assoc, show Bytes.toB256 [4] = (4 : B256) from rfl,
+    show Bytes.toB256 [32] = (32 : B256) from rfl]
+
+/-- Finite initializer separation for the exact frame and spender populations.
+Frames at other targets or outside the initializer families impose no condition. -/
+def checkInitRowsApart (P pair : Adr) (spenders : List Adr) (frames : List Exec.Deriv) : Bool :=
+  frames.all fun G =>
+    letI : Decidable (UsdcInitFrame G) := by unfold UsdcInitFrame; infer_instance
+    if G.sevm.currentTarget = P ∧ UsdcInitFrame G then
+      spenders.all fun g => !(checkInitKeys G.sevm (allowSlot pair g))
+    else true
+
+theorem checkInitRowsApart_eq_true {P pair : Adr} {spenders : List Adr}
+    {frames : List Exec.Deriv} :
+    checkInitRowsApart P pair spenders frames = true ↔
+      InitRowsApart P pair (fun g => g ∈ spenders) frames := by
+  simp only [checkInitRowsApart, List.all_eq_true, InitRowsApart]
+  constructor
+  · intro checked G member target init g tracked
+    have atFrame := checked G member
+    simp only [target, init, and_self, ↓reduceIte, List.all_eq_true,
+      Bool.not_eq_true', Bool.eq_false_iff, ne_eq, checkInitKeys_eq_true] at atFrame
+    exact atFrame g tracked
+  · intro apart G member
+    split
+    · next selected =>
+        simp only [List.all_eq_true, Bool.not_eq_true', Bool.eq_false_iff, ne_eq, checkInitKeys_eq_true]
+        exact apart G member selected.1 selected.2
+    · rfl
+
+/-- Use an explicit finite spender superset without narrowing the tracked predicate. -/
+theorem initRowsApart_of_check {P pair : Adr} {Tr : Adr → Prop}
+    {spenders : List Adr} {frames : List Exec.Deriv}
+    (included : ∀ g, Tr g → g ∈ spenders)
+    (checked : checkInitRowsApart P pair spenders frames = true) :
+    InitRowsApart P pair Tr frames := by
+  intro G member target init g tracked
+  exact (checkInitRowsApart_eq_true.mp checked) G member target init g (included g tracked)
+
 theorem selV1T_root (sevm : Sevm) :
     selV1T.eval (WriteSite.Env.root sevm) = Blanc.Sevm.selector sevm := by
   rw [← dispatchWord_eq_selector]

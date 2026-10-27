@@ -900,9 +900,9 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys
     (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
       (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
       modernFixedWriteSlots = true)
-    (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress
-      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace)
-      ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD).rawFrames)
+    (initCheck : checkInitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress
+      (pairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD).rawFrames = true)
     (approveEvidence :
       (∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
           last.rootsBeforeTxSplit beforeCut, ∀ G ∈ Exec.committedFrames R.run,
@@ -943,6 +943,9 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys
       G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none) :
     PairUsdcAllowQuiet UniswapV2Pair.Creation.pairAddress usdcProxy trace := by
   let full := (((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD
+  have initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress
+      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace) full.rawFrames :=
+    initRowsApart_of_check (fun g observed => (mem_pairTouchedSpenders trace).mpr observed) initCheck
   let front := ((beforeV1.step v1Block).append v1ToC).step first
   let deployed := (later.step last).append postD
   have rawEq : full.rawFrames = front.rawFrames ++ deployed.rawFrames := by
@@ -1057,9 +1060,9 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_construc
     (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
       (pairTouchedHistoricalAllowanceKeys UniswapV2Pair.Creation.pairAddress usdcProxy trace)
       modernFixedWriteSlots = true)
-    (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress
-      (PairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace)
-      ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD).rawFrames)
+    (initCheck : checkInitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress
+      (pairTouchedSpenders UniswapV2Pair.Creation.pairAddress usdcProxy trace)
+      ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD).rawFrames = true)
     (approveEvidence :
       (∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
           last.rootsBeforeTxSplit beforeCut, ∀ G ∈ Exec.committedFrames R.run,
@@ -1129,7 +1132,7 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_construc
     beforeV1 v1Block v1Cut v1ToC first afterCut later last beforeCut postD trace
     initialApart v1Fresh cBody dBody cBloom dBloom receiptAt succeeded slotsApart
     constructorOutput noUpgraded v1Faithful v1FixedApart
-    v2Faithful v21Faithful v22Faithful modernFixedApart initApart approveEvidence
+    v2Faithful v21Faithful v22Faithful modernFixedApart initCheck approveEvidence
     hnumber htime hfactory dReceiptAt dSucceeded dLogs world upgrades apartSlot
     senderExcluded pairFresh excluded oldReady
 
