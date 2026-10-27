@@ -2940,6 +2940,12 @@ a bare set-membership goal does not identify this execution-specific route.
   `ApplyTransactionsTrace.append_settledRoots`, `settledRoots_cast` and
   `ConfiguredHistoryTraceIn.append_settledRoots` keep the index/list transports
   explicit. No canonical-cut substitution or flattened-frame root inference occurs.
+  `ConfiguredBlockTraceIn.settledRoots_eq_txSplit` lifts that arbitrary-cut split
+  to the original block including system stages.
+  `ConfiguredHistoryTraceIn.mem_settledRoots_of_between_txSplits` embeds the exact
+  after-first/before-last interval in the connected prefix/blocks/suffix history.
+  Use it to derive root membership rather than supplying an independent population
+  premise. These list membership/equality goals have no selective recipe head.
   `ApplyTransactionsTrace.noDelScheduled_iff_outputNotDeleted` and its
   `ConfiguredHistoryTraceIn` counterpart identify the safety and complete-settlement
   predicates on the same outputs. `ConfiguredBlockTraceIn.outputNotDeleted_after_txSplit_of_safe`

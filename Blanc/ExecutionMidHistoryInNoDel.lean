@@ -205,6 +205,53 @@ theorem ConfiguredHistoryTraceIn.append_settledRoots
     simp only [ConfiguredHistoryTraceIn.append, ConfiguredHistoryTraceIn.settledRoots,
       ih, List.append_assoc]
 
+/-- An arbitrary supplied transaction cut splits the original outer-root list.
+The before/head/after traces are retained, including actual system stages. -/
+theorem ConfiguredBlockTraceIn.settledRoots_eq_txSplit
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) :
+    block.settledRoots = block.rootsBeforeTxSplit cut ++ cut.head.settledRoots ++
+      (MidHistoryTraceIn.tail block cut).settledRoots := by
+  simp only [ConfiguredBlockTraceIn.settledRoots, StagedBodyTrace.settledRoots,
+    ConfiguredBlockTraceIn.rootsBeforeTxSplit, MidHistoryTraceIn.settledRoots,
+    cut.settledRoots_eq, List.append_assoc]
+
+/-- The exact after-first/before-last interval belongs to its connected original
+full history. No root is inferred from a flattened frame list or a different cut. -/
+theorem ConfiguredHistoryTraceIn.mem_settledRoots_of_between_txSplits
+    {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint origin completed pre post future : BlockChain}
+    (prior : ConfiguredHistoryTraceIn F cfg checkpoint origin)
+    (first : ConfiguredBlockTraceIn F cfg origin completed)
+    {i : Nat} (afterCut : first.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn F cfg completed pre)
+    (last : ConfiguredBlockTraceIn F cfg pre post)
+    {j : Nat} (beforeCut : last.bodyTrace.transactions.TxSplit j)
+    (suffix : ConfiguredHistoryTraceIn F cfg post future)
+    {R : Exec.Frame}
+    (member : R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+      last.rootsBeforeTxSplit beforeCut) :
+    R ∈ ((((prior.step first).append later).step last).append suffix).settledRoots := by
+  rw [ConfiguredHistoryTraceIn.append_settledRoots]
+  apply List.mem_append_left
+  change R ∈ ((prior.step first).append later).settledRoots ++ last.settledRoots
+  rcases List.mem_append.mp member with middle | finalPrefix
+  · apply List.mem_append_left
+    rw [ConfiguredHistoryTraceIn.append_settledRoots]
+    rw [MidHistoryTraceIn.append_settledRoots] at middle
+    rcases List.mem_append.mp middle with firstTail | laterRoot
+    · apply List.mem_append_left
+      change R ∈ prior.settledRoots ++ first.settledRoots
+      apply List.mem_append_right
+      rw [first.settledRoots_eq_txSplit afterCut]
+      exact List.mem_append_right _ firstTail
+    · exact List.mem_append_right _ laterRoot
+  · apply List.mem_append_right
+    rw [last.settledRoots_eq_txSplit beforeCut]
+    exact List.mem_append_left _ (List.mem_append_left _ finalPrefix)
+
+
 /-- The same block's root laws exclude deletion in an arbitrary supplied cut's
 actual after-trace, carrying code through its real opening calls and prefix. -/
 theorem ConfiguredBlockTraceIn.outputNotDeleted_after_txSplit_of_settledRoots
