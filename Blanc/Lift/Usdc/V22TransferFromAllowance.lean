@@ -12,15 +12,14 @@ theorem tail_eq : Impl.t_16b3_c68 = ImplV2.t_14b8_c59 := by
 
 /-- The actual post-balance reload and checked subtraction bound this exact store,
 including when an allowance key aliases a balance key. -/
-theorem allowance_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem allowance_source {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {owner recipient : Adr} {b : Devm} {amount : B256}
     {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
     (run : ObservedReach Q observe Impl.cert.prog sevm
       ⟨St b (guardedStack sevm owner recipient amount S) M G, Impl.t_1678_c68, K⟩ T)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    ∃ key value rest, T.d.stack = key :: value :: rest ∧
-      value.toNat ≤ (T.d.getStorVal sevm.currentTarget key).toNat := by
+    OldTransferFromAllowance.StoreSource Q observe Impl.cert.prog sevm owner T := by
   unfold guardedStack Impl.t_1678_c68 at run
   orsd
   iterate 3 orsx
@@ -48,8 +47,21 @@ theorem allowance_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
   cases hg
   obtain ⟨bound, _, _, run⟩ := V22TransferFromCallee.subtraction_return erase run hT
   rw [tail_eq] at run
-  apply OldTransferFromAllowance.tail_nonInc erase run ?_ hT cont
+  apply OldTransferFromAllowance.tail_source erase run ?_ hT cont
   rw [B256.toNat_sub_eq_of_le _ _ bound]
   exact Nat.sub_le _ _
+
+/-- Original nonincrease interface, projected from the ordered source. -/
+theorem allowance_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {owner recipient : Adr} {b : Devm} {amount : B256}
+    {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe Impl.cert.prog sevm
+      ⟨St b (guardedStack sevm owner recipient amount S) M G, Impl.t_1678_c68, K⟩ T)
+    (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
+    ∃ key value rest, T.d.stack = key :: value :: rest ∧
+      value.toNat ≤ (T.d.getStorVal sevm.currentTarget key).toNat := by
+  obtain ⟨value, rest, stack, bound, _⟩ := allowance_source erase run hT cont
+  exact ⟨_, value, rest, stack, bound⟩
 
 end Blanc.Lift.Usdc.V22TransferFromAllowance
