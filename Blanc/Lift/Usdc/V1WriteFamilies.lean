@@ -16,10 +16,13 @@ def v1NonfixedSelector (selector : B256) : Prop :=
 instance (selector : B256) : Decidable (v1NonfixedSelector selector) :=
   inferInstanceAs (Decidable (_ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _))
 
-/-- Fixed root slots avoid the implementation slot; every other descriptor has a family guard. -/
+/-- Literal slots written by V1, separate from its mapping and initializer payload keys. -/
+def v1FixedWriteSlots : List B256 := [0, 1, 2, 4, 5, 6, 7, 8, 11]
+
+/-- Fixed root slots belong to the literal list; every other descriptor has a family guard. -/
 def v1WriteFamilyCheck (site : Site) : Bool :=
   match site.slot with
-  | .const slot => decide (slot ≠ implSlot)
+  | .const slot => decide (slot ∈ v1FixedWriteSlots)
   | _ =>
     match site.guards with
     | (term, selector) :: _ => decide (term = selV1T) && decide (v1NonfixedSelector selector)
@@ -30,12 +33,12 @@ theorem v1WriteFamily_checked :
   decide +kernel
 
 /-- This classifies the source family, never a mapping row by equality of computed digests. -/
-theorem v1_store_family {root node : Exec.Deriv}
+theorem v1_store_fixed_or_family {root node : Exec.Deriv}
     (pc : root.pc = 0) (code : root.sevm.code = ImplV1.code)
     (hsg : root.sevm.benvStat.rules.stateGas = none)
     (chain : Exec.Deriv.ParentPrefix root node)
     {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
-    write.key ≠ implSlot ∨ v1NonfixedSelector (Sevm.selector root.sevm) := by
+    write.key ∈ v1FixedWriteSlots ∨ v1NonfixedSelector (Sevm.selector root.sevm) := by
   obtain ⟨site, member, den, guards⟩ := v1_store_site pc code hsg chain found
   have checked := List.all_eq_true.mp v1WriteFamily_checked site member
   unfold v1WriteFamilyCheck at checked
@@ -62,6 +65,18 @@ theorem v1_store_family {root node : Exec.Deriv}
       rw [guardEq, selectorEq] at family
       exact .inr family
     next => contradiction
+
+/-- Compatibility projection: the literal slots all avoid the implementation slot. -/
+theorem v1_store_family {root node : Exec.Deriv}
+    (pc : root.pc = 0) (code : root.sevm.code = ImplV1.code)
+    (hsg : root.sevm.benvStat.rules.stateGas = none)
+    (chain : Exec.Deriv.ParentPrefix root node)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key ≠ implSlot ∨ v1NonfixedSelector (Sevm.selector root.sevm) := by
+  rcases v1_store_fixed_or_family pc code hsg chain found with fixed | family
+  · have apart : ∀ slot ∈ v1FixedWriteSlots, slot ≠ implSlot := by decide +kernel
+    exact .inl (apart write.key fixed)
+  · exact .inr family
 
 /-- Every actual V1 history write is already apart or belongs to one of the listed source families. -/
 theorem ConfiguredHistoryTraceIn.v1_write_family
