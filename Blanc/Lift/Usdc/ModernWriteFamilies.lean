@@ -8,6 +8,7 @@ import Blanc.Lift.Usdc.OldTransferFromMappingTouches
 import Blanc.Lift.Usdc.V2TransferMappingTouches
 import Blanc.Lift.Usdc.V2_1TransferMappingTouches
 import Blanc.Lift.Usdc.V22TransferMappingTouches
+import Blanc.Lift.Usdc.V22TransferFromMappingTouches
 
 /-! Complete actual-store family coverage for the three modern USDC runtimes.
 Finite checks discharge only the already collected families; remaining selectors stay explicit. -/
@@ -37,7 +38,7 @@ The inherited initializeV2_1 stays here: it is not a new AllowedFrame exception.
 def modernOtherWriteSelectors : ModernVersion → List B256
   | .v2 => [0xe3ee160e]
   | .v2_1 => [0xe3ee160e, 0xef55bec6, 0x2fc81e09]
-  | .v2_2 => [0x23b872dd, 0xe3ee160e, 0xef55bec6, 0x2fc81e09,
+  | .v2_2 => [0xe3ee160e, 0xef55bec6, 0x2fc81e09,
       0x88b7ab63, 0xcf092995]
 
 def modernNonfixedSelector (version : ModernVersion) (selector : B256) : Prop :=
@@ -46,7 +47,7 @@ def modernNonfixedSelector (version : ModernVersion) (selector : B256) : Prop :=
   selector = 0x3092afd5 ∨
   modernOldBlacklistSelector version selector ∨ modernPackedBlacklistSelector version selector ∨
   selector = 0x42966c68 ∨ modernMinterSelector version selector ∨
-  oldTransferFromSelector version selector ∨
+  selector = 0x23b872dd ∨
   selector = 0xa9059cbb ∨ selector ∈ modernOtherWriteSelectors version
 
 instance (version : ModernVersion) (selector : B256) :
@@ -127,6 +128,14 @@ theorem ConfiguredHistoryTraceIn.modern_write_fixed_nonInc_or_family
   rw [← same] at family
   exact family
 
+/-- Each version contributes exactly its actual increasing transferFrom stores. -/
+def actualModernTransferFromKeys (version : ModernVersion) (P : Adr)
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future) : List HistoricalMappingKey :=
+  match version with
+  | .v2 => actualOldTransferFromCreditKeys .v2 P history
+  | .v2_1 => actualOldTransferFromCreditKeys .v2_1 P history
+  | .v2_2 => actualV22TransferFromKeys P history
+
 /-- The established families, with exactly their actual-node populations.
 Concatenation preserves duplicates within each family; it does not assert global chronological order. -/
 def actualModernCoveredKeys (version : ModernVersion) (P : Adr)
@@ -135,7 +144,7 @@ def actualModernCoveredKeys (version : ModernVersion) (P : Adr)
     | .v2 => actualV2TransferKeys P history
     | .v2_1 => actualV2_1TransferKeys P history
     | .v2_2 => actualV22TransferKeys P history) ++
-    (actualOldTransferFromCreditKeys version P history ++
+    (actualModernTransferFromKeys version P history ++
     (actualModernMinterKeys version P history ++
     (actualModernCancelKeys version P history ++ (actualModernCallerKeys version P history ++
     match version with
@@ -170,9 +179,15 @@ theorem ConfiguredHistoryTraceIn.actualModernCoveredKeys_sound
           ConfiguredHistoryTraceIn.actualV22TransferKeys_sound history capabilities directTransfer
         exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
   rcases List.mem_append.mp previousTransfer with transfer | previousMinter
-  · obtain ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot, _⟩ :=
-      ConfiguredHistoryTraceIn.actualOldTransferFromCreditKeys_sound history capabilities transfer
-    exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
+  · cases version with
+    | v2 | v2_1 =>
+        obtain ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot, _⟩ :=
+          ConfiguredHistoryTraceIn.actualOldTransferFromCreditKeys_sound history capabilities transfer
+        exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
+    | v2_2 =>
+        obtain ⟨node, inNodes, root, inFrames, chain, write, site, found, owner, _, slot, _⟩ :=
+          ConfiguredHistoryTraceIn.actualV22TransferFromKeys_sound history capabilities transfer
+        exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
   rcases List.mem_append.mp previousMinter with minter | previousFamilies
   · exact ConfiguredHistoryTraceIn.actualModernMinterKeys_sound history capabilities minter
   rcases List.mem_append.mp previousFamilies with cancel | previous
@@ -301,16 +316,29 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
     · have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp faithful) key
         (List.mem_append_right _ (List.mem_append_right _ (List.mem_append_left _ collected))) _ requested (tracked.trans slot)
       exact (different equal.symm).elim
-  · rcases ConfiguredHistoryTraceIn.oldTransferFrom_nonInc_or_collected history capabilities
-        member target code transfer found with nonInc | ⟨collected, slot⟩
-    · rw [target] at nonInc
-      exact .inr (.inl nonInc)
-    · have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp faithful)
-        (oldTransferFromCreditKey node.sevm) (List.mem_append_right _ (List.mem_append_left _ collected))
-        _ requested (tracked.trans slot)
-      change HistoricalMappingKey.modern (.allow pair spender) =
-        .modern (.bal (Sevm.dataWord node.sevm 36).toAdr) at equal
-      cases equal
+  · cases version with
+    | v2 | v2_1 =>
+        rcases ConfiguredHistoryTraceIn.oldTransferFrom_nonInc_or_collected history capabilities
+            member target code ⟨by decide, transfer⟩ found with nonInc | ⟨collected, slot⟩
+        · rw [target] at nonInc
+          exact .inr (.inl nonInc)
+        · have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp faithful)
+            (oldTransferFromCreditKey node.sevm)
+            (List.mem_append_right _ (List.mem_append_left _ collected))
+            _ requested (tracked.trans slot)
+          change HistoricalMappingKey.modern (.allow pair spender) =
+            .modern (.bal (Sevm.dataWord node.sevm 36).toAdr) at equal
+          cases equal
+    | v2_2 =>
+        rcases ConfiguredHistoryTraceIn.v22TransferFrom_nonInc_or_collected history capabilities
+            member target code transfer found with nonInc | ⟨site, collected, slot⟩
+        · rw [target] at nonInc
+          exact .inr (.inl nonInc)
+        · have equal := (SlotFootprint.checkFaithfulOn_eq_true.mp faithful)
+            (site.fromKey node.sevm)
+            (List.mem_append_right _ (List.mem_append_left _ collected))
+            _ requested (tracked.trans slot)
+          cases site <;> cases equal
   · cases version with
     | v2 =>
         obtain ⟨site, _, _, collected, slot⟩ :=

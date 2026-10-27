@@ -3977,8 +3977,21 @@ Its subtraction return retains storage and the checked arithmetic bound.
 [`V22TransferFromEntry`](../Blanc/Lift/Usdc/V22TransferFromEntry.lean)
 follows the original dispatcher, ABI wrapper and public guards into that body
 with the exact saved caller stack. Neither result assumes eventual frame
-success or hash separation; the allowance continuation and history consumer
-remain separate obligations.
+success or hash separation.
+[`V22TransferFromAllowance`](../Blanc/Lift/Usdc/V22TransferFromAllowance.lean)
+checks the complete final writer equal to the shared older allowance suffix,
+then derives nonincrease from the actual post-balance reload and subtraction.
+[`V22TransferFromContinuation`](../Blanc/Lift/Usdc/V22TransferFromContinuation.lean)
+recovers the original caller stack from the checked body return and classifies
+every original successful store as a same-node nonincrease or one of the two
+balance setters with its own successful hash.
+[`V22TransferFromMappingTouches`](../Blanc/Lift/Usdc/V22TransferFromMappingTouches.lean)
+collects only actual strict increases, using the actual setter return tags to
+distinguish owner and recipient. `actualV22TransferFromKeys_sound` retains the
+original store, root and earlier successful hash; the complement is already
+non-increasing. No comparison between a written key and a proposed digest
+selects a source. `actualModernTransferFromKeys` combines these exact populations
+by version, and the modern-family reduction now handles every transferFrom case.
 
 [`OldTransferFromEntry`](../Blanc/Lift/Usdc/OldTransferFromEntry.lean) derives
 the original V2/V2.1 dispatcher, ABI and public-guard paths while retaining
