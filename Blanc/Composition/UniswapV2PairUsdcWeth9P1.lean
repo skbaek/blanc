@@ -36,6 +36,65 @@ def PairTouchedSpenders (pair usdc : Adr) {cfg : ChainConfig} {checkpoint future
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (g : Adr) : Prop :=
   (Usdc.Key.allow pair g) ∈ Usdc.historyTouchedKeys usdc trace
 
+
+/-- The exact finite spender population of `PairTouchedSpenders`, preserving duplicates
+and order from the consumed post-checkpoint trace's touched-key list. -/
+noncomputable def pairTouchedSpenders (pair usdc : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) : List Adr :=
+  (Usdc.historyTouchedKeys usdc trace).filterMap fun key =>
+    match key with
+    | .allow owner spender => if owner = pair then some spender else none
+    | _ => none
+
+theorem mem_pairTouchedSpenders {pair usdc spender : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future) :
+    spender ∈ pairTouchedSpenders pair usdc trace ↔ PairTouchedSpenders pair usdc trace spender := by
+  constructor
+  · intro member
+    obtain ⟨key, touched, selected⟩ := List.mem_filterMap.mp member
+    cases key with
+    | allow owner other =>
+        change (if owner = pair then some other else none) = some spender at selected
+        split at selected
+        next equal =>
+          subst owner
+          cases selected
+          exact touched
+        next => cases selected
+    | _ => cases selected
+  · intro touched
+    exact List.mem_filterMap.mpr ⟨.allow pair spender, touched, if_pos rfl⟩
+
+/-- Historical key representation of precisely the allowance rows demanded by P1. -/
+noncomputable def pairTouchedHistoricalAllowanceKeys (pair usdc : Adr) {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future) :
+    List HistoricalMappingKey :=
+  (pairTouchedSpenders pair usdc trace).map (fun g => .modern (.allow pair g))
+
+/-- The actual V1 source reduction uses the exact final P1 population, rather than
+an independently supplied list. Both finite arithmetic checks remain explicit duties. -/
+theorem v1_allowance_write_source_of_pairTouched
+    {F : Fork → Prop} {cfgH cfg : ChainConfig} {checkpoint B future : BlockChain}
+    {pair usdc spender : Adr}
+    (history : ConfiguredHistoryTraceIn F cfgH checkpoint B)
+    (capabilities : BodyStageCapabilities F) (trace : ConfiguredHistoryTrace cfg B future)
+    (faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys pair usdc trace) (actualV1MappingKeys usdc history) = true)
+    (fixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (pairTouchedHistoricalAllowanceKeys pair usdc trace) v1FixedWriteSlots = true)
+    {node : Exec.Deriv} (member : node ∈ history.rawNodes)
+    (target : node.sevm.currentTarget = usdc) (code : node.sevm.code = ImplV1.code)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write)
+    (observed : PairTouchedSpenders pair usdc trace spender)
+    (tracked : allowSlot pair spender = write.key) :
+    Sevm.selector node.sevm = 0x3357162b ∨
+      (Sevm.selector node.sevm = 0x095ea7b3 ∧ node.sevm.caller = pair) ∨
+      (Sevm.selector node.sevm = 0x23b872dd ∧ node.pc = 0x14e2 ∧
+        (Sevm.dataWord node.sevm 4).toAdr = pair ∧ node.sevm.caller = spender) := by
+  exact ConfiguredHistoryTraceIn.v1_allowance_write_source history capabilities
+    (pairTouchedSpenders pair usdc trace) faithful fixedApart member target code found
+    ((mem_pairTouchedSpenders trace).mpr observed) tracked
+
 /-- **P1 from the D→B history.** For a historical-domain history from `D` to `B` over the
 deployed world at `D`, F2′ at its implementation-slot writes with the deployment-before-upgrade order of
 the F2′ implementations, the D→B premises of the Pair allowance law for the spenders the
