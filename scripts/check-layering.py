@@ -1427,6 +1427,7 @@ CONTRACTS = {
         "Lift.Usdc.V2ApproveReach",
         "Lift.Usdc.V2ApproveMappingTouches",
         "Lift.Usdc.V2BlacklistMappingTouches",
+        "Lift.Usdc.V2BlacklistReach",
         "Lift.Usdc.FootprintLedger",
         "Lift.Usdc.Governance",
         "Lift.Usdc.Hist",

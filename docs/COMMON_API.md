@@ -3805,8 +3805,17 @@ same original prefix derive the masked calldata address at slot 3. The
 collector selects actual successful blacklist/unblacklist stores, preserving
 raw-node order and duplicates, with soundness and completeness.
 `v2OldBlacklist_write_ne_allowSlot` consumes the exact finite
-observed-versus-collected-key check. Its truth and successful hash-occurrence
-provenance remain separate obligations; term denotation does not prove either.
+observed-versus-collected-key check; its truth remains an explicit obligation.
+For successful hash provenance, import
+[`Blanc/Lift/Usdc/V2BlacklistReach.lean`](../Blanc/Lift/Usdc/V2BlacklistReach.lean).
+Its `successfulSstore_hash` follows the original dispatcher, ABI wrapper, role
+guard and memory writes in either version. The exact masked address/base-3
+input is hashed successfully before the same store. The history adapters
+`v2OldBlacklistKey?_hash` and `actualV2OldBlacklistKeys_hash` retain that
+original root, prefix, actual store and key equality for the unchanged
+collector. Final-frame success, hash injectivity and finite-check truth are
+not required to obtain these witnesses. Initializer writes are outside this
+two-selector collector.
 
 For V1 `burn`, use
 [`Blanc/Lift/Usdc/V1BurnMappingTouches.lean`](../Blanc/Lift/Usdc/V1BurnMappingTouches.lean)'s
