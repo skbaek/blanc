@@ -259,6 +259,18 @@ def ImplSlotApart (P : Adr) (nodes : List Exec.Deriv) : Prop :=
   ∀ m ∈ nodes, m.sevm.currentTarget = P → m.sevm.code ≠ Proxy.code →
     ∀ w : Exec.StorageWrite, Exec.Deriv.successfulSstore? m = some w → w.key ≠ implSlot
 
+/-- Local implementation-slot separation only when the original node runs one of
+the five certified implementation/library runtimes. The positional code proof
+supplies this recognition; no conclusion about arbitrary delegated code is assumed. -/
+def KnownImplSlotApart (P : Adr) (nodes : List Exec.Deriv) : Prop :=
+  ∀ m ∈ nodes, m.sevm.currentTarget = P → UsdcImplCode m.sevm.code →
+    ∀ w : Exec.StorageWrite, Exec.Deriv.successfulSstore? m = some w → w.key ≠ implSlot
+
+theorem ImplSlotApart.known {P : Adr} {nodes : List Exec.Deriv}
+    (apart : ImplSlotApart P nodes) : KnownImplSlotApart P nodes := by
+  intro m member target code w found
+  exact apart m member target code.ne_proxy w found
+
 /-- The listed contexts at a position: `P`, and the accounts of `W` active there. -/
 def CtxAdr (P : Adr) (W : List UsdcDeployedEntry) (before : List Exec.Deriv) (a : Adr) :
     Prop :=
@@ -350,10 +362,10 @@ theorem safe_from (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
 /-- At a node whose earlier positions satisfy the invariant, `P` holds the proxy runtime,
 every account of `W` active there holds its runtime, and `P`'s implementation word names an
 account of `W` active there. -/
-theorem world_at (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+theorem world_at_of_knownApart (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
     (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
-    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes)
+    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : KnownImplSlotApart P history.rawNodes)
     {b post : List Exec.Deriv} {x : Exec.Deriv} (split : history.rawNodes = b ++ x :: post)
     (ok : ∀ b₁ m b₂, b = b₁ ++ m :: b₂ → CtxAt P W b₁ m) :
     x.devm.getCode P = Proxy.code ∧ (∀ e ∈ W, e.Active b → x.devm.getCode e.adr = e.code) ∧
@@ -394,7 +406,20 @@ theorem world_at (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
       refine ⟨e, he, ?_, hname⟩
       rw [hb]
       exact act.append _
-    · exact absurd key (apartSlot m (sub m hm) target hcode w found)
+    · obtain ⟨b₁, b₂, hb⟩ := List.append_of_mem hm
+      have family := (ok b₁ m b₂ hb P (.inl rfl) target).context world
+      exact absurd key (apartSlot m (sub m hm) target (family.resolve_left hcode) w found)
+
+/-- Compatibility form with the original all-nonproxy slot-separation premise. -/
+theorem world_at (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes)
+    {b post : List Exec.Deriv} {x : Exec.Deriv} (split : history.rawNodes = b ++ x :: post)
+    (ok : ∀ b₁ m b₂, b = b₁ ++ m :: b₂ → CtxAt P W b₁ m) :
+    x.devm.getCode P = Proxy.code ∧ (∀ e ∈ W, e.Active b → x.devm.getCode e.adr = e.code) ∧
+      ∃ e ∈ W, e.Active b ∧ ((x.devm.getStor P).get implSlot).toAdr = e.adr := by
+  exact world_at_of_knownApart history capabilities world upgrades apartSlot.known split ok
 
 /-- The active library of a running V2_2 implementation holds its actual installed code. -/
 theorem UsdcDeployedWorld.active_library_code
@@ -429,10 +454,10 @@ theorem installed_allowed {Bd : State → List Exec.Deriv → Prop}
 
 /-- One induction step, at one context: a node after a base `q` at a context listed at every
 position after `q` runs an allowed code, from the invariant at every earlier position. -/
-theorem ctxAt_step (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+theorem ctxAt_step_of_knownApart (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
     (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
-    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes)
+    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : KnownImplSlotApart P history.rawNodes)
     {s : State} {q mid after : List Exec.Deriv} {n : Exec.Deriv} (base : history.BoundaryAt s q)
     {a : Adr} (hctx : ∀ mid₁, CtxAdr P W (q ++ mid₁) a)
     (split : history.rawNodes = q ++ mid ++ n :: after)
@@ -440,7 +465,7 @@ theorem ctxAt_step (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (target : n.sevm.currentTarget = a) : AllowedAt P W (q ++ mid) a n.sevm.code := by
   rcases base.rawOrigin split with root | ⟨m, hm, he⟩ | ⟨m, hm, hspawn⟩
   · -- a message root runs the code installed at its target
-    obtain ⟨hP, hW, -⟩ := world_at history capabilities world upgrades apartSlot
+    obtain ⟨hP, hW, -⟩ := world_at_of_knownApart history capabilities world upgrades apartSlot
       (by rw [split, List.append_assoc]) ok
     have inst := installed_allowed world hP hW (hctx mid)
     rw [root a target inst.2.ne_nil inst.2.not_delegation]
@@ -462,7 +487,7 @@ theorem ctxAt_step (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     have ok' : ∀ b₁ m' b₂, q ++ mid₁ = b₁ ++ m' :: b₂ → CtxAt P W b₁ m' :=
       fun b₁ m' b₂ h => ok b₁ m' (b₂ ++ m :: mid₂) (by
         rw [posEq, h]; simp only [List.append_assoc, List.cons_append])
-    obtain ⟨hP, hW, hslot⟩ := world_at history capabilities world upgrades apartSlot split' ok'
+    obtain ⟨hP, hW, hslot⟩ := world_at_of_knownApart history capabilities world upgrades apartSlot split' ok'
     obtain ⟨f, rsm, pc', cevm, hs, henter, -, hsta, -⟩ := hspawn
     have childTarget : n.sevm.currentTarget = f.inner.currentTarget := by
       rw [← hsta]; exact Frame.enter_run_currentTarget henter
@@ -522,22 +547,59 @@ theorem ctxAt_step (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
       rw [hcode]
       exact mono instA.1
 
+/-- Compatibility form with the original all-nonproxy slot-separation premise. -/
+theorem ctxAt_step (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes)
+    {s : State} {q mid after : List Exec.Deriv} {n : Exec.Deriv} (base : history.BoundaryAt s q)
+    {a : Adr} (hctx : ∀ mid₁, CtxAdr P W (q ++ mid₁) a)
+    (split : history.rawNodes = q ++ mid ++ n :: after)
+    (ok : ∀ b₁ m b₂, q ++ mid = b₁ ++ m :: b₂ → CtxAt P W b₁ m)
+    (target : n.sevm.currentTarget = a) : AllowedAt P W (q ++ mid) a n.sevm.code := by
+  exact ctxAt_step_of_knownApart history capabilities bal world upgrades apartSlot.known base hctx split ok target
+
 /-- **The codes run in the listed contexts**, at every position of the history. -/
+theorem ConfiguredHistoryTraceIn.usdc_ctxAt_of_knownApart
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : KnownImplSlotApart P history.rawNodes) :
+    ∀ before n after, history.rawNodes = before ++ n :: after → CtxAt P W before n := by
+  refine List.forall_split_of_positional fun before n after split ok a ha target => ?_
+  rcases ha with rfl | ⟨e, he, ⟨mid, hmid⟩, rfl⟩
+  · have := ctxAt_step_of_knownApart history capabilities bal world upgrades apartSlot
+      history.boundaryAt_checkpoint (q := []) (fun _ => .inl rfl)
+      (by rw [List.nil_append]; exact split) (fun b₁ m b₂ h => ok b₁ m b₂ h) target
+    rwa [List.nil_append] at this
+  · subst hmid
+    exact ctxAt_step_of_knownApart history capabilities bal world upgrades apartSlot (world.boundary e he)
+      (fun mid₁ => .inr ⟨e, he, ⟨mid₁, rfl⟩, rfl⟩) split ok target
+
+/-- Compatibility form with the original all-nonproxy slot-separation premise. -/
 theorem ConfiguredHistoryTraceIn.usdc_ctxAt
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
     (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
     (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes) :
     ∀ before n after, history.rawNodes = before ++ n :: after → CtxAt P W before n := by
-  refine List.forall_split_of_positional fun before n after split ok a ha target => ?_
-  rcases ha with rfl | ⟨e, he, ⟨mid, hmid⟩, rfl⟩
-  · have := ctxAt_step history capabilities bal world upgrades apartSlot
-      history.boundaryAt_checkpoint (q := []) (fun _ => .inl rfl)
-      (by rw [List.nil_append]; exact split) (fun b₁ m b₂ h => ok b₁ m b₂ h) target
-    rwa [List.nil_append] at this
-  · subst hmid
-    exact ctxAt_step history capabilities bal world upgrades apartSlot (world.boundary e he)
-      (fun mid₁ => .inr ⟨e, he, ⟨mid₁, rfl⟩, rfl⟩) split ok target
+  exact ConfiguredHistoryTraceIn.usdc_ctxAt_of_knownApart history capabilities bal world upgrades apartSlot.known
+
+/-- The original all-nonproxy premise follows from separation for known runtimes.
+Recognition comes from the positional induction, so this does not assume the
+node-code conclusion in order to establish the implementation-slot invariant. -/
+theorem ConfiguredHistoryTraceIn.implSlotApart_of_knownCodes
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
+    (upgrades : UpgradesWithinFrom P W history.rawNodes)
+    (apart : KnownImplSlotApart P history.rawNodes) : ImplSlotApart P history.rawNodes := by
+  have contexts := ConfiguredHistoryTraceIn.usdc_ctxAt_of_knownApart
+    history capabilities bal world upgrades apart
+  intro m member target nonproxy w found
+  obtain ⟨before, after, split⟩ := List.append_of_mem member
+  have family := (contexts before m after split P (.inl rfl) target).context world
+  exact apart m member target (family.resolve_left nonproxy) w found
 
 /-- **The node codes at `P`.** Every raw node in the proxy's storage context runs a USDC
 code. -/

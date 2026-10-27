@@ -1092,7 +1092,7 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_construc
         l.adr = usdcLib ∧ l.code = Lib.code ∧ l.Active e.pre)
     (upgrades : UpgradesWithinFrom usdcProxy (originalV1WorldEntries completed.state W)
       ((later.step last).append postD).rawNodes)
-    (apartSlot : ImplSlotApart usdcProxy ((later.step last).append postD).rawNodes)
+    (knownApart : KnownImplSlotApart usdcProxy ((later.step last).append postD).rawNodes)
     (senderExcluded : ∀ query ∈ ((MidHistoryTraceIn.tail last beforeCut).append postD).senderQueries,
       query.recover ≠ .ok UniswapV2Pair.Creation.pairAddress)
     (pairFresh : UniswapV2Pair.WriterFreshKeys (fun _ => False)
@@ -1128,6 +1128,9 @@ theorem pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_construc
     receiptAt succeeded slotsApart impl
   have world := original_v1_deployed_world ((later.step last).append postD) W
     proxy implementation word boundary installed impls apart lib
+  have apartSlot := ConfiguredHistoryTraceIn.implSlotApart_of_knownCodes
+    ((later.step last).append postD) BodyStageCapabilities.historical
+    (fun {_} selected => HistFork.bal_none selected) world upgrades knownApart
   exact pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys
     beforeV1 v1Block v1Cut v1ToC first afterCut later last beforeCut postD trace
     initialApart v1Fresh cBody dBody cBloom dBloom receiptAt succeeded slotsApart
