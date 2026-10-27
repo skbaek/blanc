@@ -1430,6 +1430,8 @@ CONTRACTS = {
         "Lift.Usdc.V2_1MintMappingTouches",
         "Lift.Usdc.V2TransferReach",
         "Lift.Usdc.V2TransferFromCallee",
+        "Lift.Usdc.V2TransferFromEntry",
+        "Lift.Usdc.V2TransferFromContinuation",
         "Lift.Usdc.V2TransferMappingTouches",
         "Lift.Usdc.V22ConfigureMinterReach",
         "Lift.Usdc.V22ConfigureMinterMappingTouches",

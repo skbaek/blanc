@@ -3960,6 +3960,18 @@ storage base while retaining both observed cuts; it assumes no bound or
 store-free caller. It does not yet discharge transferFrom's
 original dispatcher or allowance continuation.
 
+[`V2TransferFromEntry`](../Blanc/Lift/Usdc/V2TransferFromEntry.lean) derives
+that original dispatcher, ABI and public-guard path while retaining the exact
+caller stack below the balance helper. Its companion
+[`V2TransferFromContinuation`](../Blanc/Lift/Usdc/V2TransferFromContinuation.lean)
+uses the checked frame return to recover that stack, then proves the allowance
+continuation non-increasing at the same original store. The allowance value is
+reloaded after the balance helper, so this bound tolerates balance/allowance
+hash aliasing. `successfulSstore_source_or_nonInc` derives either that bound or
+the original owner/recipient balance store with its own successful hash from
+an actual root prefix. It does not yet exclude the owner branch for the
+strictly increasing recipient-key collector; no finite population is widened.
+
 For modern `transferFrom`, use
 [`ModernTransferFromSites`](../Blanc/Lift/Usdc/ModernTransferFromSites.lean)
 to reuse the unchanged root certificates at the same original successful store.
