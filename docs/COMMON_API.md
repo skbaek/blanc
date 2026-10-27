@@ -3828,7 +3828,7 @@ For exhaustive modern successful-store coverage, use
 `modern_store_fixed_nonInc_or_family` applies the unchanged certified root
 tables to the actual store: its key is a listed literal slot, its value is
 non-increasing at that same node, or its original selector is in a listed
-version-specific family. `actualModernCoveredKeys` concatenates the actual increasing
+version-specific family. `actualModernCoveredKeys` concatenates the actual V2 transfer keys, increasing
 older-transferFrom credits, exact configure/mint family, cancellation and caller
 collectors and the applicable blacklist collector: old base-3 keys for V2/V2_1 and packed balance keys for V2_2;
 soundness retains the original root, node, successful store, owner and key.
@@ -3967,15 +3967,20 @@ cases. V2.2 transferFrom remains explicit. Original successful hash occurrences
 for this new collector remain a separate producer obligation; certificate key
 denotation alone does not provide them or prove finite-check truth.
 
+The V2 transfer and V2.1 mint producers are also consumed by
+`ModernWriteFamilies`: only these version/selector cases leave its residual
+list. The existing finite faithful/apart checks use their exact actual-key
+collections; original hash witnesses remain in the producer interfaces.
+
 For the combined configure/mint family, use
 [`ModernMinterFamilies`](../Blanc/Lift/Usdc/ModernMinterFamilies.lean).
 `actualModernMinterKeys` selects the version's actual configureMinter keys and,
-only for V2, its actual mint keys. `modernMinter_write_source` derives either
+for V2/V2.1, its actual mint keys. `modernMinter_write_source` derives either
 literal supply slot 11 or a collected logical key distinct from every allowance
 key. It assumes no hash separation. `ModernWriteFamilies` includes this exact
 list in `actualModernCoveredKeys`; its existing finite faithful/apart checks
-then eliminate all three configureMinter selectors and V2 mint from the residual
-families. Later-version mint remains explicit. No AllowedFrame exception,
+then eliminate all three configureMinter selectors and V2/V2.1 mint from the residual
+families. V2.2 mint remains explicit. No AllowedFrame exception,
 spender population, or global hash-injectivity premise is added.
 
 For V2 `configureMinter`, use
@@ -4016,6 +4021,28 @@ and arithmetic returns; its subtraction bound comes from the actual earlier
 mint guard. Recognition tests source PCs and actual store success, never a
 proposed key digest. Order, duplicates and original history membership remain
 explicit, as do initial apartness and freshness for slot separation.
+
+For V2 `transfer`, use
+[`Blanc/Lift/Usdc/V2TransferMappingTouches.lean`](../Blanc/Lift/Usdc/V2TransferMappingTouches.lean)'s
+`actualV2TransferKeys`. Original entry coverage derives the caller and recipient
+base9 balance stores, each with its own earlier successful hash. The actual
+balance guard supplies the subtraction bound through the unchanged storage
+read; the source theorem adds no bound premise. The collector preserves raw-node
+order and duplicates and derives source sites without testing proposed hashes.
+
+For V2.1 mint, use
+[`Blanc/Lift/Usdc/V2_1MintMappingTouches.lean`](../Blanc/Lift/Usdc/V2_1MintMappingTouches.lean)'s
+`actualV2_1MintKeys`. Original entry coverage derives supply at `0x1fd6`,
+recipient balance at `0x202c`, and caller minter allowance at `0x204d`.
+The mapping collector preserves raw-node order and duplicates, excludes the
+literal supply store, and retains each mapping store's own successful earlier
+hash in the same history. The arithmetic bound comes from the original mint
+guard. `V2_1MintReach` follows its own ABI and arithmetic helper paths;
+`V2MintReach.minter_store_reach_observed` shares only the identical final store
+tail over an arbitrary surrounding program. `ObservedSourceFor` shares the
+three-way classification with the version-specific balance tail as a parameter.
+The existing V2 interface remains
+available. Separation consumes freshness for exactly this collected list.
 
 For V1 `burn`, use
 [`Blanc/Lift/Usdc/V1BurnMappingTouches.lean`](../Blanc/Lift/Usdc/V1BurnMappingTouches.lean)'s

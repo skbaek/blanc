@@ -15,7 +15,7 @@ def balanceLine : List Ninst :=
 
 def minterLine : List Ninst := [.reg .sstore, .reg (.dup 0), .reg .mload, .reg (.dup 8)]
 
-def ObservedSource (Q : Sevm → Devm → Ninst → Devm → Prop)
+def ObservedSourceFor (balanceLine : List Ninst) (Q : Sevm → Devm → Ninst → Devm → Prop)
     (observe : Conf → Conf → Prop) (sevm : Sevm) (recipient : Adr) (T : Conf) : Prop :=
   ((∃ rest, T.d.stack = 11 :: rest) ∧ ∃ tail, T.f = supplyLine.foldr SFunc.next tail) ∨
   ((∃ rest, T.d.stack = mapSlot recipient.toB256 9 :: rest) ∧
@@ -24,6 +24,8 @@ def ObservedSource (Q : Sevm → Devm → Ninst → Devm → Prop)
   ((∃ rest, T.d.stack = mapSlot sevm.caller.toB256 13 :: rest) ∧
     (∃ tail, T.f = minterLine.foldr SFunc.next tail) ∧
     ObservedKeccak Q observe sevm (sevm.caller.toB256.toBytes ++ (13 : B256).toBytes) (fun _ => True))
+
+abbrev ObservedSource := ObservedSourceFor balanceLine
 
 /-- The V2 checked addition helper returns to the original observed continuation. -/
 theorem add_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
@@ -87,14 +89,17 @@ theorem sub_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact ⟨_, _, _, _, run⟩
 
 /-- The last mint store retains the caller/base13 hash from its own prefix. -/
-theorem minter_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+theorem minter_store_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
-    {sevm : Sevm} {recipient : Adr} {b : Devm} {value : B256} {S : List B256}
-    {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
-    (run : ObservedReach Q observe ImplV2.cert.prog sevm
+    {sevm : Sevm} {b : Devm} {value : B256} {S : List B256}
+    {M : Mem} {G : Nat} {K fs : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe fs sevm
       ⟨St b (value :: S) M G, ImplV2.t_20c0_c44, K⟩ T)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    ObservedSource Q observe sevm recipient T := by
+    (∃ rest, T.d.stack = mapSlot sevm.caller.toB256 13 :: rest) ∧
+    (∃ tail, T.f = minterLine.foldr SFunc.next tail) ∧
+    ObservedKeccak Q observe sevm (sevm.caller.toB256.toBytes ++ (13 : B256).toBytes)
+      (fun _ => True) := by
   unfold ImplV2.t_20c0_c44 at run
   orsd
   iterate 14 orsx
@@ -106,8 +111,19 @@ theorem minter_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   rw [Mem.read_two_word_writes_at_raw] at run
   iterate 3 orsx
   rcases ObservedReach.sstoreS run with rfl | ⟨d', _, _, run⟩
-  · exact .inr (.inr ⟨⟨_, rfl⟩, ⟨_, rfl⟩, hash⟩)
+  · exact ⟨⟨_, rfl⟩, ⟨_, rfl⟩, hash⟩
   exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
+
+/-- The last mint store retains the caller/base13 hash from its own prefix. -/
+theorem minter_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {recipient : Adr} {b : Devm} {value : B256} {S : List B256}
+    {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe ImplV2.cert.prog sevm
+      ⟨St b (value :: S) M G, ImplV2.t_20c0_c44, K⟩ T)
+    (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
+    ObservedSource Q observe sevm recipient T := by
+  exact .inr (.inr (minter_store_reach_observed erase run hT cont))
 
 /-- Balance and minter-allowance stores keep their distinct original hash inputs. -/
 theorem balance_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
