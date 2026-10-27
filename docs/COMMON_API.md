@@ -3829,7 +3829,8 @@ For exhaustive modern successful-store coverage, use
 tables to the actual store: its key is a listed literal slot, its value is
 non-increasing at that same node, or its original selector is in a listed
 version-specific family. `actualModernCoveredKeys` concatenates the cancellation
-and caller collectors with the applicable V2/V2_1 old-blacklist collector;
+and caller collectors with the applicable blacklist collector: old base-3
+keys for V2/V2_1 and packed balance keys for V2_2;
 soundness retains the original root, node, successful store, owner and key.
 Under finite faithfulness for that exact list and apartness from
 `modernFixedWriteSlots`, `modern_allowance_write_reduction` eliminates fixed,
@@ -3837,8 +3838,8 @@ cancellation and old-blacklist aliases and attributes caller writes,
 leaving existing allowed exceptions, actual
 nonincrease, owner selectors or `modernOtherWriteSelectors`. This is a
 reduction toward the full classifier; the owner and remaining mapping cases
-and check truth stay open. V2_2 packed-blacklist writers remain among those
-other selectors, and `initializeV2_1` is not promoted to an allowed exception.
+and check truth stay open. Both V2_2 packed-blacklist selectors are discharged;
+`initializeV2_1` is not promoted to an allowed exception.
 
 For `cancelAuthorization` in all three modern versions, including both V2_2
 overloads, use
@@ -3876,6 +3877,22 @@ alias it. `modernRemoveMinter_nonInc` supplies the raw-history adapter.
 `modern_allowance_write_reduction` in `ModernWriteFamilies` consumes this result
 directly, removing selector 0x3092afd5 from the unresolved families without
 adding hash-separation premises or changing the actual-key population.
+
+For V2_2 packed-blacklist updates, use
+[`V22BlacklistReach`](../Blanc/Lift/Usdc/V22BlacklistReach.lean) and
+[`V22BlacklistMappingTouches`](../Blanc/Lift/Usdc/V22BlacklistMappingTouches.lean).
+`successfulSstore_key_hash` follows the original dispatcher, public ABI,
+blacklister guard and both flag-update branches to the shared packed-word
+store. It proves the actual written key is the masked calldata address's
+base-9 balance slot and retains a successful `KeccakBefore` in that same
+original prefix, with no final-frame-success or hash-separation premise.
+`actualV22BlacklistKeys` collects one logical balance key per original
+matching successful store, preserving order and duplicates without testing
+the written digest. Its soundness carries the original root, node, owner,
+exact key and hash; completeness covers both selectors. Finite faithfulness
+for that exact population lets `v22Blacklist_write_ne_allowSlot` exclude
+these writes from protected allowance rows. The full modern family
+reduction consumes this collector alongside the unchanged older collectors.
 
 For V2 and V2_1 old-blacklist writes, use
 [`Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean`](../Blanc/Lift/Usdc/V2BlacklistMappingTouches.lean)'s

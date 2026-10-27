@@ -1,6 +1,7 @@
 import Blanc.Lift.Usdc.ModernCancelMappingTouches
 import Blanc.Lift.Usdc.ModernRemoveMinterReach
 import Blanc.Lift.Usdc.V2BlacklistMappingTouches
+import Blanc.Lift.Usdc.V22BlacklistMappingTouches
 
 /-! Complete actual-store family coverage for the three modern USDC runtimes.
 Finite checks discharge only the already collected families; remaining selectors stay explicit. -/
@@ -18,6 +19,13 @@ def modernOldBlacklistSelector (version : ModernVersion) (selector : B256) : Pro
 instance (version : ModernVersion) (selector : B256) :
     Decidable (modernOldBlacklistSelector version selector) := inferInstanceAs (Decidable (_ ∧ _))
 
+/-- V2_2's two public blacklist updates write its packed balance mapping. -/
+def modernPackedBlacklistSelector (version : ModernVersion) (selector : B256) : Prop :=
+  version = .v2_2 ∧ (selector = 0x1a895266 ∨ selector = 0xf9f92be4)
+
+instance (version : ModernVersion) (selector : B256) :
+    Decidable (modernPackedBlacklistSelector version selector) := inferInstanceAs (Decidable (_ ∧ _))
+
 /-- Remaining mapping writers, excluding the caller/owner exceptions and dynamic initializers.
 The inherited initializeV2_1 stays here: it is not a new AllowedFrame exception. -/
 def modernOtherWriteSelectors : ModernVersion → List B256
@@ -27,18 +35,18 @@ def modernOtherWriteSelectors : ModernVersion → List B256
       0xa9059cbb, 0xe3ee160e, 0xef55bec6, 0x2fc81e09]
   | .v2_2 => [0x23b872dd, 0x4e44d956, 0x40c10f19, 0x42966c68,
       0xa9059cbb, 0xe3ee160e, 0xef55bec6, 0x2fc81e09,
-      0x88b7ab63, 0xcf092995, 0x1a895266, 0xf9f92be4]
+      0x88b7ab63, 0xcf092995]
 
 def modernNonfixedSelector (version : ModernVersion) (selector : B256) : Prop :=
   selector ∈ version.selectors.callers ∨ selector ∈ version.selectors.owners ∨
   selector ∈ version.selectors.inits ∨ selector ∈ modernCancelSelectors version ∨
   selector = 0x3092afd5 ∨
-  modernOldBlacklistSelector version selector ∨
+  modernOldBlacklistSelector version selector ∨ modernPackedBlacklistSelector version selector ∨
   selector ∈ modernOtherWriteSelectors version
 
 instance (version : ModernVersion) (selector : B256) :
     Decidable (modernNonfixedSelector version selector) :=
-  inferInstanceAs (Decidable (_ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _))
+  inferInstanceAs (Decidable (_ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _ ∨ _))
 
 def modernWriteFamilyCheck (version : ModernVersion) (site : Site) : Bool :=
   site.nonInc || match site.slot with
@@ -122,7 +130,7 @@ def actualModernCoveredKeys (version : ModernVersion) (P : Adr)
     match version with
   | .v2 => actualV2OldBlacklistKeys .v2 P history
   | .v2_1 => actualV2OldBlacklistKeys .v2_1 P history
-  | .v2_2 => [])
+  | .v2_2 => actualV22BlacklistKeys P history)
 
 /-- Every collected member comes from an original successful store with this exact key. -/
 theorem ConfiguredHistoryTraceIn.actualModernCoveredKeys_sound
@@ -150,7 +158,10 @@ theorem ConfiguredHistoryTraceIn.actualModernCoveredKeys_sound
         obtain ⟨node, inNodes, _, root, inFrames, chain, write, found, owner, slot⟩ :=
           ConfiguredHistoryTraceIn.actualV2OldBlacklistKeys_sound history capabilities blacklist
         exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
-    | v2_2 => exact (List.not_mem_nil blacklist).elim
+    | v2_2 =>
+        obtain ⟨node, inNodes, _, root, inFrames, chain, write, found, owner, slot, _⟩ :=
+          ConfiguredHistoryTraceIn.actualV22BlacklistKeys_sound history capabilities blacklist
+        exact ⟨node, inNodes, root, inFrames, chain, write, found, owner, slot⟩
 
 /-- Reduce all actual tracked writes to proved exceptions/nonincrease or the exact remaining
 owner and other-mapping selectors. Finite check truth is still an explicit obligation. -/
@@ -179,7 +190,7 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
   · exact ((SlotFootprint.checkApartOn_eq_true.mp fixedApart) write.key fixed _ requested tracked).elim
   · rw [target] at nonInc
     exact .inr (.inl nonInc)
-  rcases family with caller | owner | initializer | cancel | remove | blacklist | other
+  rcases family with caller | owner | initializer | cancel | remove | blacklist | packed | other
   · have callerFaithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
         (spenders.map (fun g => .modern (.allow pair g)))
         (actualModernCallerKeys version P history) = true := by
@@ -232,6 +243,16 @@ theorem ConfiguredHistoryTraceIn.modern_allowance_write_reduction
         exact (ConfiguredHistoryTraceIn.v2OldBlacklist_write_ne_allowSlot history capabilities
           pair spenders blacklistFaithful member target code selected found observed tracked.symm).elim
     | v2_2 => exact (old rfl).elim
+  · obtain ⟨rfl, selected⟩ := packed
+    have packedFaithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+        (spenders.map (fun g => .modern (.allow pair g)))
+        (actualV22BlacklistKeys P history) = true := by
+      apply SlotFootprint.checkFaithfulOn_eq_true.mpr
+      intro key keyIn wanted wantedIn equal
+      exact (SlotFootprint.checkFaithfulOn_eq_true.mp faithful) key
+        (List.mem_append_right _ (List.mem_append_right _ keyIn)) wanted wantedIn equal
+    exact (ConfiguredHistoryTraceIn.v22Blacklist_write_ne_allowSlot history capabilities
+      pair spenders packedFaithful member target code selected found observed tracked.symm).elim
   · exact .inr (.inr (.inr other))
 
 end History
