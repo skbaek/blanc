@@ -2162,6 +2162,18 @@ boundaries never duplicate child logs. For message-root receipt bridges,
 and `Frame.enter_done_clean_logs_noStateGas` proves an immediate clean entry
 has no logs. These reuse the same settlement and native-entry proofs.
 
+To identify the observation of an actual successful LOG without unfolding a
+physical memory image, use
+[`Blanc/ExecutionLogImage.lean`](../Blanc/ExecutionLogImage.lean).
+`Exec.Deriv.successfulLog?_eq` combines the same node's actual successful
+outcome, decoded LOG count, explicit operand prefix and symbolic memory-read
+payload. It derives that node's exact `successfulLog?` entry, with topics taken
+from the operand tail. It proves neither enclosing retention nor receipt
+identity; use the parent-log attribution bridge for those. Keep the memory as
+a variable projection and pass a separately proved payload equation. The
+joint decoded-node/stack/payload requirements have no reliable narrow recipe
+trigger; discover the helper here before normalizing a concrete machine image.
+
 For inclusion from a retained frame into the root endpoint, use
 `Exec.committedFrame_logs_subset_noStateGas` in
 [`Blanc/Lift/CommittedFrameLogs.lean`](../Blanc/Lift/CommittedFrameLogs.lean).
