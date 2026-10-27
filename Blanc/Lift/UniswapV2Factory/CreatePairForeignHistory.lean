@@ -33,7 +33,7 @@ theorem createPair_block_preserves_foreign_installed {pre completed : BlockChain
     (hfnonce : (cut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hslot2 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0) :
+    (hslot2 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0) :
     ∀ a, a ≠ UniswapV2Pair.Creation.factory →
       a ≠ UniswapV2Pair.Creation.pairAddress →
       (cut.benv.state.getCode a).toList ≠ [] →

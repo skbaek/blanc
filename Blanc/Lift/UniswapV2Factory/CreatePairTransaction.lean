@@ -55,7 +55,7 @@ theorem pair_createPair_transaction_muirGlacier_effects
     (hfnonce : (benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hslot2 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0) :
+    (hslot2 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0) :
     ∃ post bout', processTransaction benv bout tx index = .ok (post, bout') ∧
       (post.getCode UniswapV2Pair.Creation.pairAddress).toList = UniswapV2Pair.code.toList ∧
       UniswapV2Pair.InitializedCheckpoint (post.getStor UniswapV2Pair.Creation.pairAddress)
@@ -130,7 +130,7 @@ theorem pair_createPair_transaction_muirGlacier_effects
           (debit.get UniswapV2Pair.Creation.pairAddress).code.size = 0
         rw [hdebitP]; exact ⟨hpairNonce, hpairCode⟩)
       (by show (debit.get UniswapV2Pair.Creation.factory).nonce ≠ _; rw [hdebitF]; exact hfnonce)
-      (by show (debit.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0; rw [hdebitF]; exact hslot2)
+      (by show (debit.get UniswapV2Pair.Creation.factory).stor.get fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0; rw [hdebitF]; exact hslot2)
       (fun k => by
         show (benv.state.get UniswapV2Pair.Creation.factory).stor.get k =
           (debit.get UniswapV2Pair.Creation.factory).stor.get k
@@ -215,7 +215,7 @@ theorem pair_createPair_transaction_muirGlacier
     (hfnonce : (benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
     (hpairNonce : (benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
     (hpairCode : (benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
-    (hslot2 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 = 0) :
+    (hslot2 : (benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0) :
     ∃ post bout', processTransaction benv bout tx index = .ok (post, bout') ∧
       (post.getCode UniswapV2Pair.Creation.pairAddress).toList = UniswapV2Pair.code.toList ∧
       UniswapV2Pair.InitializedCheckpoint (post.getStor UniswapV2Pair.Creation.pairAddress)

@@ -58,7 +58,7 @@ theorem sfxB10_refundCounter_ge
       (sfxB7 sevm q).getStorVal sevm.currentTarget (sfxSlot sevm q) ≠ 0) :
     q.refundCounter ≤ (sfxB10 sevm q).refundCounter := by
   have r1 := afterSstoreH_refundCounter_ge sevm (sfxB1 sevm q) fk2
-    (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256) hflat h1
+    (sfxMerge (q.getStorVal sevm.currentTarget fk2)) hflat h1
   have r2 := afterSstoreH_refundCounter_ge sevm (sfxB3 sevm q) fk5 (sfxMerge (sfxW10 sevm q))
     hflat h2
   have r3 := afterSstoreH_refundCounter_ge sevm (sfxB5 sevm q) 3 (sfxN sevm q + 1) hflat h3
@@ -75,7 +75,7 @@ theorem sfxB10_refundCounter_ge
     afterSloadH_refundCounter _ _ _
   have e10 : (sfxB10 sevm q).refundCounter = (sfxB9 sevm q).refundCounter := rfl
   have d2 : (sfxB2 sevm q) = afterSstoreH sevm (sfxB1 sevm q) fk2
-    (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256) := rfl
+    (sfxMerge (q.getStorVal sevm.currentTarget fk2)) := rfl
   have d4 : (sfxB4 sevm q) = afterSstoreH sevm (sfxB3 sevm q) fk5 (sfxMerge (sfxW10 sevm q)) := rfl
   have d6 : (sfxB6 sevm q) = afterSstoreH sevm (sfxB5 sevm q) 3 (sfxN sevm q + 1) := rfl
   have d8 : (sfxB8 sevm q) = afterSstoreH sevm (sfxB7 sevm q) (sfxSlot sevm q)
@@ -137,7 +137,7 @@ theorem createPair_frame_run {sevm : Sevm} {b : Devm} {G0 : Nat}
     (htarget : sevm.currentTarget = UniswapV2Pair.Creation.factory)
     (hvalue : sevm.value = 0) (hdata : sevm.data = createPairData)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
-    (hv1 : b.getStorVal sevm.currentTarget fk2 = 0)
+    (hv1 : b.getStorVal sevm.currentTarget fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0)
     (hnonce : ((afterSloadH sevm b fk2).state.get sevm.currentTarget).nonce ≠ UInt64.max)
     (hfresh : Create2TargetNoCollision (create2Prepared sevm (afterSloadH sevm b fk2) belowCreate2 fm12
       (G0 - 225 - 3920 - 34184) 0xa0 0x2d74 UniswapV2Pair.Creation.pairAddress)
@@ -155,7 +155,6 @@ theorem createPair_frame_run {sevm : Sevm} {b : Devm} {G0 : Nat}
     (hX : frameX sevm b G0 < 2 ^ 256) (h700 : 700 ≤ frameX sevm b G0)
     (hgasQ : initCallCharge sevm (frameP sevm b G0) belowCall (frameX sevm b G0) + 377 + 2400 ≤
       except64th (frameX sevm b G0 - 700))
-    (hv2Q : (frameQ sevm b G0).getStorVal sevm.currentTarget fk2 = 0)
     (hQgas : sfxCost sevm (frameQ sevm b G0) + 2300 + 52 ≤ (frameQ sevm b G0).gasLeft) :
     SProg.RunExact cert.prog sevm (St b [] Mem.empty G0) (framePost sevm b G0) := by
   have rules := muirRules hfork
@@ -214,7 +213,7 @@ theorem createPair_frame_run {sevm : Sevm} {b : Devm} {G0 : Nat}
     rw [← hgasQ']
     exact St.self hQst hQmem
   have hsfx := createPair_suffix (b := frameQ sevm b G0) (G := frameGf sevm b G0) hfork hstatic
-    hv2Q hGf
+    hGf
   rw [← e] at hsfx
   exact hsfx
 
@@ -237,11 +236,10 @@ theorem sfxMerge_ne_zero (x : B256) : sfxMerge x ≠ 0 := by
 
 /-- The factory's storage words a store reads either were zero at the transaction's start or are
 non-zero now, at each of the suffix's four stores, when the factory's storage at the frame's start
-is the transaction-start snapshot and `getPair[USDC][WETH]` is unset there. -/
+is the transaction-start snapshot. Both mapping stores preserve upper bits. -/
 theorem sfx_refund_conditions {sevm : Sevm} {b q : Devm}
     (horig : ∀ k, getOrigStorVal sevm sevm.currentTarget k = b.getStorVal sevm.currentTarget k)
-    (hq : ∀ k, q.getStorVal sevm.currentTarget k = b.getStorVal sevm.currentTarget k)
-    (hv1 : b.getStorVal sevm.currentTarget fk2 = 0) :
+    (hq : ∀ k, q.getStorVal sevm.currentTarget k = b.getStorVal sevm.currentTarget k) :
     ((sfxB1 sevm q).getOrigStorVal sevm sevm.currentTarget fk2 = 0 ∨
       (sfxB1 sevm q).getStorVal sevm.currentTarget fk2 ≠ 0) ∧
     ((sfxB3 sevm q).getOrigStorVal sevm sevm.currentTarget fk5 = 0 ∨
@@ -260,13 +258,13 @@ theorem sfx_refund_conditions {sevm : Sevm} {b q : Devm}
   -- the current word at the frame's other keys, through the two mapping stores
   have cur4 : ∀ k, (sfxB4 sevm q).getStorVal sevm.currentTarget k =
       if fk5 = k then sfxMerge (sfxW10 sevm q)
-      else if fk2 = k then (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256) else b.getStorVal sevm.currentTarget k := fun k => by
+      else if fk2 = k then (sfxMerge (q.getStorVal sevm.currentTarget fk2)) else b.getStorVal sevm.currentTarget k := fun k => by
     rw [show sfxB4 sevm q = afterSstoreH sevm (sfxB3 sevm q) fk5 (sfxMerge (sfxW10 sevm q)) from rfl,
       getStorVal_afterSstoreH_ite]
     split
     · rfl
     · rw [show sfxB3 sevm q = afterSloadH sevm (sfxB2 sevm q) fk5 from rfl, getStorVal_afterSloadH,
-        show sfxB2 sevm q = afterSstoreH sevm (sfxB1 sevm q) fk2 (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256) from rfl,
+        show sfxB2 sevm q = afterSstoreH sevm (sfxB1 sevm q) fk2 (sfxMerge (q.getStorVal sevm.currentTarget fk2)) from rfl,
         getStorVal_afterSstoreH_ite]
       split
       · rfl
@@ -280,21 +278,27 @@ theorem sfx_refund_conditions {sevm : Sevm} {b q : Devm}
       split
       · exact Or.inr (sfxMerge_ne_zero _)
       · split
-        · exact Or.inr (by decide)
+        · exact Or.inr (sfxMerge_ne_zero _)
         · by_cases hz : b.getStorVal sevm.currentTarget k = 0
           · exact Or.inl (orig0 d k hz)
           · exact Or.inr hz
-  refine ⟨Or.inl (orig0 _ _ hv1), ?_, ?_, ?_⟩
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · by_cases hz : b.getStorVal sevm.currentTarget fk2 = 0
+    · exact Or.inl (orig0 _ _ hz)
+    · right
+      rw [show sfxB1 sevm q = afterSloadH sevm q fk2 from rfl,
+        getStorVal_afterSloadH, hq]
+      exact hz
   · by_cases hz : b.getStorVal sevm.currentTarget fk5 = 0
     · exact Or.inl (orig0 _ _ hz)
     · right
       rw [show sfxB3 sevm q = afterSloadH sevm (sfxB2 sevm q) fk5 from rfl,
         getStorVal_afterSloadH,
         show sfxB2 sevm q = afterSstoreH sevm (sfxB1 sevm q) fk2
-          (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256) from rfl,
+          (sfxMerge (q.getStorVal sevm.currentTarget fk2)) from rfl,
         getStorVal_afterSstoreH_ite]
       split
-      · decide
+      · exact sfxMerge_ne_zero _
       · rw [show sfxB1 sevm q = afterSloadH sevm q fk2 from rfl,
           getStorVal_afterSloadH, hq]
         exact hz
@@ -357,7 +361,7 @@ theorem createPair_frame_effects {sevm : Sevm} {b : Devm} {G0 : Nat}
     (hinstalled : b.state.getCode sevm.currentTarget = code)
     (hempty : Create2TargetNoCollision b UniswapV2Pair.Creation.pairAddress)
     (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
-    (hv1 : b.getStorVal sevm.currentTarget fk2 = 0)
+    (hv1 : b.getStorVal sevm.currentTarget fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0)
     (horig : ∀ k, getOrigStorVal sevm sevm.currentTarget k = b.getStorVal sevm.currentTarget k)
     (hG : 2600000 ≤ G0) (hG64 : G0 < 2 ^ 64) :
     ∃ post, SProg.RunExact cert.prog sevm (St b [] Mem.empty G0) post ∧
@@ -446,7 +450,7 @@ theorem createPair_frame_effects {sevm : Sevm} {b : Devm} {G0 : Nat}
     exact hfacP k
   -- the suffix
   have hc1 := sstoreCostH_le (sevm := sevm) (devm := sfxB1 sevm Q) (key := fk2)
-    (value := (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256)) hflat
+    (value := sfxMerge (Q.getStorVal sevm.currentTarget fk2)) hflat
   have hc2 := sstoreCostH_le (sevm := sevm) (devm := sfxB3 sevm Q) (key := fk5)
     (value := sfxMerge (sfxW10 sevm Q)) hflat
   have hc3 := sstoreCostH_le (sevm := sevm) (devm := sfxB5 sevm Q) (key := 3)
@@ -460,7 +464,7 @@ theorem createPair_frame_effects {sevm : Sevm} {b : Devm} {G0 : Nat}
     rw [hQdef]; exact hQgas
   have hQgas' : sfxCost sevm Q + 2300 + 52 ≤ Q.gasLeft := by
     rw [hQgasL]; unfold except64th at *; omega
-  obtain ⟨h1, h2, h3, h4⟩ := sfx_refund_conditions horig hq hv1
+  obtain ⟨h1, h2, h3, h4⟩ := sfx_refund_conditions horig hq
   -- the run
   have hnonceB1 : ((afterSloadH sevm b fk2).state.get sevm.currentTarget).nonce ≠ UInt64.max := by
     rw [afterSloadH_state]; exact hnonce
@@ -485,7 +489,7 @@ theorem createPair_frame_effects {sevm : Sevm} {b : Devm} {G0 : Nat}
     hfork hcode htarget hvalue hdata hstatic hdepth hv1 hnonceB1 hfresh (by omega)
     (by unfold except64th; omega) hcodeP hstorP hsizeP
     (by show 885 ≤ P.gasLeft; rw [hPgas']; unfold except64th at *; omega) hX64 (by omega) hgasQ
-    ((hq fk2).trans hv1) hQgas'
+    hQgas'
   -- the final machine's account at the Pair address is the `initialize` child's
   have hpost : ∀ a, a ≠ sevm.currentTarget →
       (framePost sevm b G0).state.get a = (initChild sevm P belowCall X).state.get a := by
@@ -575,7 +579,7 @@ theorem createPair_frame {sevm : Sevm} {b : Devm} {G0 : Nat}
     (hinstalled : b.state.getCode sevm.currentTarget = code)
     (hempty : Create2TargetNoCollision b UniswapV2Pair.Creation.pairAddress)
     (hnonce : (b.state.get sevm.currentTarget).nonce ≠ UInt64.max)
-    (hv1 : b.getStorVal sevm.currentTarget fk2 = 0)
+    (hv1 : b.getStorVal sevm.currentTarget fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0)
     (horig : ∀ k, getOrigStorVal sevm sevm.currentTarget k = b.getStorVal sevm.currentTarget k)
     (hG : 2600000 ≤ G0) (hG64 : G0 < 2 ^ 64) :
     ∃ post, SProg.RunExact cert.prog sevm (St b [] Mem.empty G0) post ∧

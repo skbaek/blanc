@@ -174,14 +174,14 @@ theorem createPair_dispatch {b D : Devm} {G : Nat}
   refine rx_push (w := (0x31a : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   exact rx_callRet (g := t_031a_c2) rfl hbody hret
 
-/-- **`createPair`'s body up to `CREATE2`.**  With the slot `getPair[USDC][WETH]` empty, the body
+/-- **`createPair`'s body up to `CREATE2`.**  With the address bits of `getPair[USDC][WETH]` zero, the body
 passes its checks, sorts the tokens, copies the Pair creation code to `[0xa0, 0xa0 + 11636)`,
 hashes the salt `keccak(USDC ‖ WETH)` and reaches the `CREATE2` node with operands
 `0, 0xa0, 0x2d74, salt`. -/
 theorem createPair_prefix {b : Devm} {G : Nat}
     (hfork : sevm.benvStat.fork = .muirGlacier) (hcode : sevm.code = code)
     (hshifts : sevm.benvStat.rules.op.shifts = true)
-    (hv1 : b.getStorVal sevm.currentTarget fk2 = 0)
+    (hv1 : b.getStorVal sevm.currentTarget fk2 &&& (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0)
     (k : SFunc.RunExact cert.prog sevm (St (afterSloadH sevm b fk2) [(0x0 : B256), (0xa0 : B256), (0x2d74 : B256), fk3, fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)] fm12 G)
       (SFunc.lineDrop 80 t_0531_c10) o) :
     SFunc.RunExact cert.prog sevm (St b [(0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)] fm1 (G + 3920))
@@ -258,8 +258,8 @@ theorem createPair_prefix {b : Devm} {G : Nat}
   refine rx_mstore (c := 3) (M' := fm5) (by rw [St.extCost_eq fm4_size]; decide) rfl ?_
   refine rx_swap (n := 0) (S' := [(0x0 : B256), (0x40 : B256), (0xffffffffffffffffffffffffffffffffffffffff : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
   refine rx_keccak (c := 42) (v := fk2) (by rw [St.extCost_eq fm5_size]; decide) fm5_keccak_0 (read_covered_len fm5_size (by decide) (by decide)) (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_sload_muir hfork (v := (0x0 : B256)) hv1 (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_and (v := (0x0 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
+  refine rx_sload_muir hfork (v := (b.getStorVal sevm.currentTarget fk2)) rfl (Nat.le_of_ble_eq_true rfl) ?_
+  refine rx_and (v := (0x0 : B256)) hv1 (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_iszero (v := (0x1 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_push (w := (0x51f : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_branch_succ (by decide) ?_
@@ -480,7 +480,8 @@ the call returned. -/
 def sfxMerge (old : B256) : B256 := (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256) ||| ((0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256) &&& old)
 
 def sfxB1 (sevm : Sevm) (b : Devm) : Devm := afterSloadH sevm b fk2
-def sfxB2 (sevm : Sevm) (b : Devm) : Devm := afterSstoreH sevm (sfxB1 sevm b) fk2 (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256)
+def sfxB2 (sevm : Sevm) (b : Devm) : Devm :=
+  afterSstoreH sevm (sfxB1 sevm b) fk2 (sfxMerge (b.getStorVal sevm.currentTarget fk2))
 def sfxW10 (sevm : Sevm) (b : Devm) : B256 := (sfxB2 sevm b).getStorVal sevm.currentTarget fk5
 def sfxB3 (sevm : Sevm) (b : Devm) : Devm := afterSloadH sevm (sfxB2 sevm b) fk5
 def sfxB4 (sevm : Sevm) (b : Devm) : Devm :=
@@ -502,7 +503,8 @@ def sfxB10 (sevm : Sevm) (b : Devm) : Devm :=
     ((fm25 (sfxNEv sevm b)).read (0x2e68 : B256).toNat (0x40 : B256).toNat).1⟩
 
 /-- The four `SSTORE` charges of the suffix. -/
-def sfxCost1 (sevm : Sevm) (b : Devm) : Nat := sstoreCostH sevm (sfxB1 sevm b) fk2 (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256)
+def sfxCost1 (sevm : Sevm) (b : Devm) : Nat :=
+  sstoreCostH sevm (sfxB1 sevm b) fk2 (sfxMerge (b.getStorVal sevm.currentTarget fk2))
 def sfxCost2 (sevm : Sevm) (b : Devm) : Nat :=
   sstoreCostH sevm (sfxB3 sevm b) fk5 (sfxMerge (sfxW10 sevm b))
 def sfxCost3 (sevm : Sevm) (b : Devm) : Nat := sstoreCostH sevm (sfxB5 sevm b) 3 (sfxN sevm b + 1)
@@ -510,11 +512,11 @@ def sfxCost4 (sevm : Sevm) (b : Devm) : Nat :=
   sstoreCostH sevm (sfxB7 sevm b) (sfxSlot sevm b) (sfxMerge (sfxWAll sevm b))
 
 /-- **The storage suffix.**  From the `CALL`'s success flag over the world `b` the call returned,
-with `getPair[USDC][WETH]` still empty there, the body records the pair in both directions of
+the body preserves the upper bits and records the pair in both directions of
 `getPair`, appends it to `allPairs`, logs `PairCreated` and returns the pair word. -/
 theorem createPair_suffix {b : Devm} {G : Nat}
     (hfork : sevm.benvStat.fork = .muirGlacier) (hstatic : sevm.isStatic = false)
-    (hv2 : b.getStorVal sevm.currentTarget fk2 = 0) (hG : 2300 ≤ G) :
+    (hG : 2300 ≤ G) :
     SFunc.RunExact cert.prog sevm (St b ((1 : B256) :: [(0x2eac : B256), (0x485cc955 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) fm15
       (G + 2904 + sfxCost4 sevm b + 848 + sfxCost3 sevm b + 818 + sfxCost2 sevm b + 938 +
         sfxCost1 sevm b + 1032))
@@ -563,18 +565,18 @@ theorem createPair_suffix {b : Devm} {G : Nat}
   refine rx_dup (n := 5) rfl (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_keccak (c := 42) (v := fk2) (by rw [St.extCost_eq fm19_size]; decide) fm19_keccak_0 (read_covered_len fm19_size (by decide) (by decide)) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_dup (n := 0) rfl (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_sload_muir hfork (v := (0x0 : B256)) hv2 (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_swap (n := 7) (S' := [(0xffffffffffffffffffffffffffffffffffffffff : B256), fk2, (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x40 : B256), (0x20 : B256), (0x2 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0x0 : B256), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
+  refine rx_sload_muir hfork (v := (b.getStorVal sevm.currentTarget fk2)) rfl (Nat.le_of_ble_eq_true rfl) ?_
+  refine rx_swap (n := 7) (S' := [(0xffffffffffffffffffffffffffffffffffffffff : B256), fk2, (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x40 : B256), (0x20 : B256), (0x2 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (b.getStorVal sevm.currentTarget fk2), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
   refine rx_dup (n := 13) rfl (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_and (v := (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_push (w := (0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_swap (n := 8) (S' := [(0x0 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), fk2, (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x40 : B256), (0x20 : B256), (0x2 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
+  refine rx_swap (n := 8) (S' := [(b.getStorVal sevm.currentTarget fk2), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), fk2, (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x40 : B256), (0x20 : B256), (0x2 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
   refine rx_dup (n := 9) rfl (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_and (v := (0x0 : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
+  refine rx_and (v := ((0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256) &&& (b.getStorVal sevm.currentTarget fk2))) rfl (Nat.le_of_ble_eq_true rfl) ?_
   refine rx_dup (n := 1) rfl (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_or (v := (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256)) (by decide) (Nat.le_of_ble_eq_true rfl) ?_
-  refine rx_swap (n := 0) (S' := [(0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), fk2, (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x40 : B256), (0x20 : B256), (0x2 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
-  refine rx_swap (n := 1) (S' := [fk2, (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x40 : B256), (0x20 : B256), (0x2 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
+  refine rx_or (v := (sfxMerge (b.getStorVal sevm.currentTarget fk2))) rfl (Nat.le_of_ble_eq_true rfl) ?_
+  refine rx_swap (n := 0) (S' := [(0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (sfxMerge (b.getStorVal sevm.currentTarget fk2)), fk2, (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x40 : B256), (0x20 : B256), (0x2 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
+  refine rx_swap (n := 1) (S' := [fk2, (sfxMerge (b.getStorVal sevm.currentTarget fk2)), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x40 : B256), (0x20 : B256), (0x2 : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
   refine rx_sstore_muir hfork hstatic (by unfold gCallStipend; omega) ?_
   refine rx_swap (n := 3) (S' := [(0x2 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x40 : B256), (0x20 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0x0 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xffffffffffffffffffffffff0000000000000000000000000000000000000000 : B256), fk3, (0x80 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc : B256), (0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48 : B256), (0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2 : B256), (0x95 : B256), (0xc9c65396 : B256)]) rfl ?_
   refine rx_dup (n := 3) rfl (Nat.le_of_ble_eq_true rfl) ?_
