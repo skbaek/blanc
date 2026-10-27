@@ -137,6 +137,7 @@ SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "
 # Newly extracted common modules live in a separate additive row so concurrent
 # contract branches can extend the historical table cleanly.
 SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
+           "LogBloom", "ExecutionBlockLogExclusion",
            "ExecutionSenderOccurrences", "ExecutionSenderRootCallers", "ExecutionDelegationEligibility",
            "CodeReadInversion",
            "ExecutionSystemDelegation", "ExecutionHistoryDelegationEligibility",
@@ -1505,6 +1506,7 @@ CONTRACTS = {
         "Lift.Usdc.InitReachV1",
         "Lift.Usdc.InitV1KeyBounds",
         "Lift.Usdc.InitV1ConcreteBounds",
+        "Lift.Usdc.HistoricalBloomExclusion",
         "Lift.Usdc.InitRowsHistory",
         "Lift.Usdc.GovernanceHistory",
         "Lift.Usdc.InitializerClearing",

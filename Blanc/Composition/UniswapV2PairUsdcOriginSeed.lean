@@ -1,5 +1,7 @@
 import Blanc.Lift.Usdc.V1ConstructorReceiptZero
 import Blanc.Lift.Usdc.HistoryAnchorBody
+import Blanc.Lift.Usdc.HistoricalBloomExclusion
+import Blanc.ExecutionBlockLogs
 import Blanc.Lift.UniswapV2Factory.CreatePairForeignHistory
 
 /-!
@@ -286,5 +288,87 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
     creceiver cinput cvalue sender cnonce receiptAt succeeded slotsApart impl noUpgraded
     proxyApart rowSep initApart approveEvidence hnumber htime dtype ddata dvalue dnonce
     hfunds hgas dgas hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
+
+/-- The original C/D bloom identities discharge both boundary receipt scans.
+Only the intervening history needs Upgraded absence and, for the receipt-value
+alternative, Approval safety. Original header/body/receipt identification,
+initial state and finite separation remain explicit internal obligations. -/
+theorem original_pair_allowance_seed_of_boundary_blooms
+    {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    {Tr : Adr → Prop} {initial : HistoricalMappingKey → Prop}
+    (initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial)
+    (fresh : V1MappingFreshKeys usdcProxy history initial)
+    {origin completed pre post : BlockChain}
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed)
+    (afterCut : first.bodyTrace.transactions.TxSplit 22)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post)
+    (beforeCut : last.bodyTrace.transactions.TxSplit 38)
+    (rootsIn : ∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+      last.rootsBeforeTxSplit beforeCut, R ∈ history.settledRoots)
+    (cBody : first.block.txs = HistoryAnchorBody.cBody)
+    (dBody : last.block.txs = HistoryAnchorBody.dBody)
+    (cBloom : first.block.header.bloom = HistoricalBloomExclusion.observedCBloom)
+    (dBloom : last.block.header.bloom = HistoricalBloomExclusion.observedDBloom)
+    (sender : afterCut.head.sender = ProxyCreation.originalCreator)
+    {receipt : Fin 5 × Receipt}
+    (receiptAt : first.blockOutput.receiptsTrie[BLT.toBytes (.bytes (22 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (slotsApart : ProxySlotsApart UniswapV2Pair.Creation.pairAddress Tr)
+    (impl : afterCut.afterBenv.state.getCode ProxyCreation.initialImplementation.toAdr =
+      ImplV1.code)
+    (noUpgraded : ∀ entry ∈ later.receiptLogs,
+      ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
+    (proxyApart : ProxyRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawNodes)
+    (rowSep : UsdcRowSep usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
+    (initApart : InitRowsApart usdcProxy UniswapV2Pair.Creation.pairAddress Tr history.rawFrames)
+    (approveEvidence :
+      (∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+          last.rootsBeforeTxSplit beforeCut, ∀ G ∈ Exec.committedFrames R.run,
+        G.sevm.currentTarget = usdcProxy → Sevm.selector G.sevm = 0x095ea7b3 →
+        G.sevm.caller ≠ UniswapV2Pair.Creation.pairAddress) ∨
+      (∀ entry ∈ later.receiptLogs,
+        V1ApprovalZeroFor usdcProxy UniswapV2Pair.Creation.pairAddress Tr entry))
+    (hnumber : last.block.header.number = 10008355)
+    (htime : last.block.header.timestamp = 1588710145)
+    (hfactory : beforeCut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
+    (hfnonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
+    (hpairNonce : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
+    (hpairCode : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
+    (hpairStor : (beforeCut.benv.state.get UniswapV2Pair.Creation.pairAddress).stor.size = 0)
+    (hslot2 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 = 0)
+    (hslot5 : (beforeCut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk5 = 0) :
+    beforeCut.afterBenv.state.getCode usdcProxy = Proxy.code ∧
+      (beforeCut.afterBenv.state.getStor usdcProxy).get implSlot = ProxyCreation.initialImplementation ∧
+      ∀ g, Tr g → (beforeCut.afterBenv.state.getStor usdcProxy).get
+        (allowSlot UniswapV2Pair.Creation.pairAddress g) = 0 := by
+  have firstMissing : ¬ LogBloom.ContainsAddress first.block.header.bloom usdcProxy := by
+    rw [cBloom]
+    exact HistoricalBloomExclusion.observedC_missing
+  have lastMissing : ¬ LogBloom.ContainsAddress last.block.header.bloom usdcProxy := by
+    rw [dBloom]
+    exact HistoricalBloomExclusion.observedD_missing
+  have noUpgradedFull := ConfiguredHistoryTraceIn.receiptLogs_between_of_boundary_bloom_missing
+    first later last first.forkIn.stateGas_none last.forkIn.stateGas_none
+    firstMissing lastMissing (firstLo := 23) (firstHi := first.bodyTrace.decodedTxs.length)
+    (lastLo := 0) (lastHi := 38)
+    (fun entry => ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
+    (fun _ different matched => different matched.1) noUpgraded
+  refine original_pair_allowance_seed_of_bodies_and_constructor_receipt
+    history initialApart fresh first afterCut later last beforeCut rootsIn cBody dBody
+    sender receiptAt succeeded slotsApart impl noUpgradedFull proxyApart rowSep initApart
+    ?_ hnumber htime hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
+  rcases approveEvidence with callers | logs
+  · exact Or.inl callers
+  · apply Or.inr
+    apply ConfiguredHistoryTraceIn.receiptLogs_between_of_boundary_bloom_missing
+      first later last first.forkIn.stateGas_none last.forkIn.stateGas_none
+      firstMissing lastMissing
+      (property := V1ApprovalZeroFor usdcProxy UniswapV2Pair.Creation.pairAddress Tr)
+      _ logs
+    intro entry different spender value _ matched
+    exact False.elim (different (congrArg Log.address matched))
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9

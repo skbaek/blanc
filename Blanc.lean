@@ -39,6 +39,8 @@ import Blanc.ExecutionTransactionEffects
 import Blanc.ExecutionBodyEffects
 import Blanc.ExecutionHistory
 import Blanc.ExecutionBlockCommitments
+import Blanc.LogBloom
+import Blanc.ExecutionBlockLogExclusion
 import Blanc.ExecutionHistoryExact
 import Blanc.ExecutionHistoryExtension
 import Blanc.ExecutionHistoryInAppend
@@ -1930,6 +1932,7 @@ import Blanc.Lift.Usdc.InitReach06
 import Blanc.Lift.Usdc.InitReachV1
 import Blanc.Lift.Usdc.InitV1KeyBounds
 import Blanc.Lift.Usdc.InitV1ConcreteBounds
+import Blanc.Lift.Usdc.HistoricalBloomExclusion
 import Blanc.Lift.Usdc.InitRowsHistory
 import Blanc.Lift.Usdc.GovernanceHistory
 import Blanc.Lift.WriteSiteZero

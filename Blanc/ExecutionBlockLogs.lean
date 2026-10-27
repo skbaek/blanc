@@ -1,4 +1,5 @@
 import Blanc.ExecutionHistoryReceiptLogs
+import Blanc.ExecutionBlockLogExclusion
 
 /-! Original transaction logs in the final block output, including exact receipt intervals. -/
 
@@ -118,5 +119,31 @@ theorem ConfiguredBlockTraceIn.mem_blockLogs_of_mem_receiptLogsBetween
           List.append_nil] at member
         exact block.mem_blockLogs_of_receipt hsg actual lookup member
   · simp only [ite_eq_right range, List.not_mem_nil] at member
+
+/-- Missing boundary address bits lift a middle-history log predicate to exact
+boundary intervals, provided logs from other addresses satisfy the predicate.
+The original headers and the middle witness remain explicit. -/
+theorem ConfiguredHistoryTraceIn.receiptLogs_between_of_boundary_bloom_missing
+    {F : Fork → Prop} {cfg : ChainConfig} {origin completed pre post : BlockChain}
+    (first : ConfiguredBlockTraceIn F cfg origin completed)
+    (later : ConfiguredHistoryTraceIn F cfg completed pre)
+    (last : ConfiguredBlockTraceIn F cfg pre post)
+    (firstSg : first.fork.ruleSet.stateGas = none)
+    (lastSg : last.fork.ruleSet.stateGas = none) {address : Adr}
+    (firstMissing : ¬ LogBloom.ContainsAddress first.block.header.bloom address)
+    (lastMissing : ¬ LogBloom.ContainsAddress last.block.header.bloom address)
+    {firstLo firstHi lastLo lastHi : Nat} (property : Log → Prop)
+    (foreign : ∀ entry, entry.address ≠ address → property entry)
+    (middle : ∀ entry ∈ later.receiptLogs, property entry) :
+    ∀ entry ∈ first.receiptLogsBetween firstLo firstHi ++ later.receiptLogs ++
+      last.receiptLogsBetween lastLo lastHi, property entry := by
+  intro entry member
+  rcases List.mem_append.mp member with before | final
+  · rcases List.mem_append.mp before with initial | middleMember
+    · exact foreign entry (first.address_ne_of_bloom_missing firstMissing
+        (first.mem_blockLogs_of_mem_receiptLogsBetween firstSg initial))
+    · exact middle entry middleMember
+  · exact foreign entry (last.address_ne_of_bloom_missing lastMissing
+      (last.mem_blockLogs_of_mem_receiptLogsBetween lastSg final))
 
 end Blanc.ExecutionTrace

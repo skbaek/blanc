@@ -1803,6 +1803,22 @@ checked output. They do not authenticate separately fetched receipts or prove
 trie injectivity. The projected equality goals have no carrier-specific head,
 so discovery stays in this branch rather than in a proof recipe.
 
+To exclude an address using a missing log-bloom bit, use
+[`Blanc/LogBloom.lean`](../Blanc/LogBloom.lean).
+`LogBloom.ContainsAddress` requires all three address bits from Jaune's actual
+Keccak digest; `HasIndex`, `byteIndex` and `bitMask` expose an individual bit.
+`LogBloom.containsAddress_of_mem` proves that a member of `logs` has all three
+bits in `logsBloom logs`; `address_ne_of_missing` is its exclusion form. OR
+updates preserve existing bits, including through later logs and topics.
+No hash injectivity or cryptographic exclusion premise is needed.
+[`Blanc/ExecutionBlockLogExclusion.lean`](../Blanc/ExecutionBlockLogExclusion.lean)
+connects this to the original configured execution:
+`ExecutionTrace.ConfiguredBlockTraceIn.containsAddress_of_log_mem` gives the
+checked header's bits from membership in that block's actual output logs, and
+`.address_ne_of_bloom_missing` excludes an address when those bits are missing.
+Identifying an observed historical header remains a separate obligation.
+For transaction and interval membership, use `ExecutionBlockLogs` below.
+
 To relate a configured history to a later one, use
 `ExecutionTrace.ConfiguredHistoryTrace.ExtendsBy` in
 [`Blanc/ExecutionHistoryExtension.lean`](../Blanc/ExecutionHistoryExtension.lean):
@@ -3688,6 +3704,14 @@ These are internal composition interfaces: actual historical authentication,
 initial V1 implementation code, finite separation and genuine pre-D approve
 safety remain producer obligations. Caller exclusion is not a new final
 assumption and does not follow from R3 or Pair target emptiness.
+`original_pair_allowance_seed_of_boundary_blooms` additionally consumes the
+original C/D body and bloom identities. The checked literals in
+[`Blanc/Lift/Usdc/HistoricalBloomExclusion.lean`](../Blanc/Lift/Usdc/HistoricalBloomExclusion.lean)
+exclude USDC logs in both boundary blocks, so this adapter needs Upgraded
+absence and the receipt-value Approval alternative only on the intervening
+history. The caller-exclusion alternative still covers the whole original interval.
+Original receipt success, C sender, initial V1 code and finite separation remain
+explicit; these conditional literal identities are not historical adoption.
 
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s
@@ -5853,6 +5877,11 @@ and final access accounting preserve these logs;
 the actual final `blockOutput.blockLogs`, including arbitrary prefix/suffix intervals.
 These require only the selected no-state-gas rule and do not add system-call roots
 or assume independent archive/header identification.
+`ConfiguredHistoryTraceIn.receiptLogs_between_of_boundary_bloom_missing`
+combines missing address bits in the original boundary headers with a predicate
+on the middle history. It transports that predicate to arbitrary exact boundary
+intervals when every log from another address satisfies it; no middle witness
+is inferred from the two boundary blooms.
 The joint trace/key query is documented here rather than dispatched from an
 arbitrary expanded receipt equality, list membership or quantified log predicate.
 
