@@ -6,6 +6,49 @@ namespace Blanc.Lift.Usdc.V22BurnNonIncReach
 open Jaune Blanc Blanc.Lift
 
 /-- Pause, minter and blacklist checks lead to the bounded balance read and two stores. -/
+theorem body_source {Q : Sevm → Devm → Ninst → Devm → Prop} {observe : Conf → Conf → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {b : Devm} {amount : B256} {S : List B256}
+    {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe Impl.cert.prog sevm
+      ⟨St b (amount :: S) M G, Impl.t_2296_c54, K⟩ T)
+    (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
+    ModernBurnStores.StoreSource Q observe sevm T := by
+  unfold Impl.t_2296_c54 at run
+  orsd
+  orsx
+  orsld
+  iterate 7 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
+  unfold Impl.t_2320_c54 at run
+  orsd
+  iterate 11 orsx
+  orsld
+  iterate 3 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
+  unfold Impl.t_2388_c54 at run
+  orsd
+  iterate 4 orsx
+  obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
+  change some Impl.t_3f6a_c83 = some g at hg
+  cases hg
+  unfold Impl.t_3f6a_c83 at run
+  orsd
+  iterate 12 orsx
+  orsld
+  iterate 5 orsx
+  obtain ⟨f, K', G', same, run⟩ := ObservedReach.rs_retBase run hT
+  obtain ⟨rfl, rfl⟩ := List.cons.inj same
+  unfold Impl.t_2392_c54 at run
+  orsd
+  iterate 2 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
+  exact V22BurnNonIncBodies.read_source erase run hT cont
+
+/-- Compatibility projection of the observed source proof. -/
 theorem body_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {b : Devm} {amount : B256} {S : List B256}
@@ -15,41 +58,36 @@ theorem body_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
     ∃ key value rest, T.d.stack = key :: value :: rest ∧
       value.toNat ≤ (T.d.getStorVal sevm.currentTarget key).toNat := by
-  unfold Impl.t_2296_c54 at run
-  rsd
-  rsx
-  rsld
-  iterate 7 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide +kernel) cont).elim
-  unfold Impl.t_2320_c54 at run
-  rsd
-  iterate 11 rsx
-  rsld
-  iterate 3 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide +kernel) cont).elim
-  unfold Impl.t_2388_c54 at run
-  rsd
-  iterate 4 rsx
-  obtain ⟨g, _, hg, run⟩ := rs_callIn run hT
-  change some Impl.t_3f6a_c83 = some g at hg
-  cases hg
-  unfold Impl.t_3f6a_c83 at run
-  rsd
-  iterate 12 rsx
-  rsld
-  iterate 5 rsx
-  obtain ⟨f, K', G', same, run⟩ := rs_retBase run hT
-  obtain ⟨rfl, rfl⟩ := List.cons.inj same
-  unfold Impl.t_2392_c54 at run
-  rsd
-  iterate 2 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide +kernel) cont).elim
-  exact V22BurnNonIncBodies.read_nonInc erase run hT cont
+  obtain ⟨key, value, rest, stack, bound, _⟩ := body_source erase (ObservedReach.of_reach run) hT cont
+  exact ⟨key, value, rest, stack, bound⟩
 
 /-- The public ABI wrapper enters the original burn body with its decoded amount. -/
+theorem wrapper_source {Q : Sevm → Devm → Ninst → Devm → Prop} {observe : Conf → Conf → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {b : Devm} {selector : B256} {S : List B256}
+    {M : Mem} {G : Nat} {T : Conf}
+    (run : ObservedReach Q observe Impl.cert.prog sevm
+      ⟨St b (selector :: S) M G, Impl.t_0834_c161, []⟩ T) (hT : AtSstore T) :
+    ModernBurnStores.StoreSource Q observe sevm T := by
+  unfold Impl.t_0834_c161 at run
+  orsd
+  iterate 10 orsx
+  rcases ObservedReach.rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel)
+      (fun _ h => by cases h)).elim
+  unfold Impl.t_084a_c161 at run
+  orsd
+  iterate 3 orsx
+  obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
+  change some Impl.t_2296_c54 = some g at hg
+  cases hg
+  apply body_source erase run hT
+  intro f member
+  have same := List.mem_singleton.mp member
+  subst f
+  decide +kernel
+
+/-- Compatibility projection of the observed source proof. -/
 theorem wrapper_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
     {sevm : Sevm} {b : Devm} {selector : B256} {S : List B256}
@@ -58,23 +96,8 @@ theorem wrapper_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
       ⟨St b (selector :: S) M G, Impl.t_0834_c161, []⟩ T) (hT : AtSstore T) :
     ∃ key value rest, T.d.stack = key :: value :: rest ∧
       value.toNat ≤ (T.d.getStorVal sevm.currentTarget key).toNat := by
-  unfold Impl.t_0834_c161 at run
-  rsd
-  iterate 10 rsx
-  rcases rs_branch run hT with ⟨-, _, run⟩ | ⟨-, _, run⟩
-  · exact (Reach.false_of_sstoreFree (E := []) rfl run hT (by decide +kernel)
-      (fun _ h => by cases h)).elim
-  unfold Impl.t_084a_c161 at run
-  rsd
-  iterate 3 rsx
-  obtain ⟨g, _, hg, run⟩ := rs_callIn run hT
-  change some Impl.t_2296_c54 = some g at hg
-  cases hg
-  apply body_nonInc erase run hT
-  intro f member
-  have same := List.mem_singleton.mp member
-  subst f
-  decide +kernel
+  obtain ⟨key, value, rest, stack, bound, _⟩ := wrapper_source erase (ObservedReach.of_reach run) hT
+  exact ⟨key, value, rest, stack, bound⟩
 
 /-- The original pc-zero dispatcher selects the same public burn wrapper. -/
 theorem reach_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
