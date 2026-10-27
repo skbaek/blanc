@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.V1ConstructorReceiptZero
 import Blanc.Lift.Usdc.HistoryAnchorCSender
+import Blanc.Lift.Usdc.HistoryAnchorCCode
 import Blanc.Lift.Usdc.HistoricalBloomExclusion
 import Blanc.ExecutionBlockLogs
 import Blanc.Lift.UniswapV2Factory.CreatePairForeignHistory
@@ -173,7 +174,8 @@ theorem original_pair_allowance_seed_of_constructor_receipt
 
 /-- Connect both exact frozen body identities to the actual after-D seed.
 The original C/D cuts supply their decoded fields and the C signature supplies
-the admitted sender. The successful debit supplies
+the admitted sender. The successful receipt and constructor transport preserve
+V1 code from the exact pre-C cut. The successful debit supplies
 funding, and validation at the configured D fork supplies its exact intrinsic
 charge and gas margin. Body identity,
 original receipt authentication, state and historical write-safety
@@ -199,7 +201,7 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
       some receipt)
     (succeeded : receipt.2.succeeded = true)
     (slotsApart : ProxySlotsApart UniswapV2Pair.Creation.pairAddress Tr)
-    (impl : afterCut.afterBenv.state.getCode ProxyCreation.initialImplementation.toAdr =
+    (impl : afterCut.benv.state.getCode ProxyCreation.initialImplementation.toAdr =
       ImplV1.code)
     (noUpgraded : ∀ entry ∈
       first.receiptLogsBetween 23 first.bodyTrace.decodedTxs.length ++
@@ -232,6 +234,15 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
   have sender := HistoryAnchorBody.c_original_cut_sender_mainnet first afterCut cBody
   obtain ⟨_, cnonce, creceiver, cvalue, cinput, _⟩ :=
     HistoryAnchorBody.c_original_cut_fields first afterCut cBody
+  have clean := (ProxyCreation.original_constructor_seed_of_receipt_cut22
+    first afterCut first.forkIn.stateGas_none creceiver cinput cvalue sender cnonce
+    receiptAt succeeded slotsApart).1
+  have nonempty :
+      (afterCut.benv.state.getCode ProxyCreation.initialImplementation.toAdr).toList ≠ [] := by
+    rw [impl]
+    exact (show UsdcContextCode ImplV1.code from .inr (.inl rfl)).ne_nil
+  have implAfter := (HistoryAnchorBody.c_original_cut_initialImplementation_code
+    first afterCut cBody first.forkIn.stateGas_none clean nonempty).trans impl
   have dtx := (HistoryAnchorBody.d_original_cut last beforeCut dBody).2
   have dtype : beforeCut.tx.type =
       .zero 4000000000 (some UniswapV2Pair.Creation.factory) := by
@@ -286,14 +297,14 @@ theorem original_pair_allowance_seed_of_bodies_and_constructor_receipt
     decide +kernel
   exact original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence
     history initialApart fresh first afterCut later last beforeCut rootsIn
-    creceiver cinput cvalue sender cnonce receiptAt succeeded slotsApart impl noUpgraded
+    creceiver cinput cvalue sender cnonce receiptAt succeeded slotsApart implAfter noUpgraded
     proxyApart rowSep initApart approveEvidence hnumber htime dtype ddata dvalue dnonce
     hfunds hgas dgas hfactory hfnonce hpairNonce hpairCode hpairStor hslot2 hslot5
 
 /-- The original C/D bloom identities discharge both boundary receipt scans.
 Only the intervening history needs Upgraded absence and, for the receipt-value
 alternative, Approval safety. Original header/body/receipt identification,
-initial state and finite separation remain explicit internal obligations. -/
+initial pre-C state and finite separation remain explicit internal obligations. -/
 theorem original_pair_allowance_seed_of_boundary_blooms
     {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
@@ -317,7 +328,7 @@ theorem original_pair_allowance_seed_of_boundary_blooms
       some receipt)
     (succeeded : receipt.2.succeeded = true)
     (slotsApart : ProxySlotsApart UniswapV2Pair.Creation.pairAddress Tr)
-    (impl : afterCut.afterBenv.state.getCode ProxyCreation.initialImplementation.toAdr =
+    (impl : afterCut.benv.state.getCode ProxyCreation.initialImplementation.toAdr =
       ImplV1.code)
     (noUpgraded : ∀ entry ∈ later.receiptLogs,
       ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]))
