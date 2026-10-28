@@ -4211,6 +4211,15 @@ history. The caller-exclusion alternative still covers the whole original interv
 Original receipt success, C sender, initial V1 code and finite separation remain
 explicit; these conditional literal identities are not historical adoption.
 
+The original USDC seed consumer
+`UniswapV2PairUsdcWeth9.original_pair_selected_zero_of_v1_constructor_output_of_v1Class`
+joins the existing original C/D receipt zero-seed producer with V1 installed-runtime
+transport over the actual V1 source tail, intervening history and D transaction.
+It returns `UsdcSelectedReady` and every tracked zero allowance row at the same
+settled Pair deployment cut. It needs no code observation at D or selected-readiness
+premise. The V1 constructor output and original correspondence remain producer
+obligations; no new final environmental input is adopted.
+
 For V1 `approve`, use
 [`Blanc/Lift/Usdc/V1ApproveMappingTouches.lean`](../Blanc/Lift/Usdc/V1ApproveMappingTouches.lean)'s
 `actualV1ApproveKeys`. It collects the allowance key of each actual successful
