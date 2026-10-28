@@ -2013,6 +2013,21 @@ even empty code at a nonzero-nonce account. `Evm.step_spawn_nonce_noStateGas`,
 Complete child settlement determines which nodes survive; discarded children
 cannot supply the starting position.
 
+For nonzero-nonce continuity in the same retained execution, use
+`Exec.retainedNodes_nonce_ne_zero_after_split_noStateGas` or
+`Exec.retainedNodes_nonce_ne_zero_of_ordered_noStateGas`. They carry a nonzero
+nonce observed at an actual retained position through child return and all
+later retained positions, including the committed endpoint. The child-return
+seam `Exec.spawn_nonce_eq_of_settlementCommits_noStateGas` preserves every raw
+nonce exactly, including the CREATE target; code deposit changes no nonce.
+`Exec.rawNodes_nonce_ne_zero_noStateGas` supplies entry-to-node transport.
+`Exec.retainedNodes_create_ne_of_ordered_nonce_noStateGas` combines the ordered
+nonce result with the actual later CREATE guard to exclude address reuse;
+supply the later node's no-state-gas premise and its actual spawn/entry witness.
+These APIs require the original retained-list split, as above. They concern
+one execution and do not exclude an earlier lifetime in another transaction
+or prove survival through the outer transaction's deletion fold.
+
 For the final message or transaction state, use
 [`Blanc/ExecutionRetainedCodeSettlement.lean`](../Blanc/ExecutionRetainedCodeSettlement.lean).
 `MessageCallTrace.retainedNode_getCode_noStateGas` and
