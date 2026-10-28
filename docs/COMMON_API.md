@@ -10609,3 +10609,18 @@ same-value/restored writes and requires no earlier address-emptiness, final
 runtime-readiness or additional temporal F2prime assumption. Actual ranged
 census correspondence remains explicit; both selected cut transactions are
 outside this interval and need their own producer evidence.
+
+The V2.2 owner-exclusion producer is needed only on consumed retained frames.
+In `RetainedAllowanceWrites`, the `_of_rootFrames` variants of
+`usdc_retainedRowWrite_nonInc_of_retainedCode`,
+`settledRoot_allowanceWrite_nonInc_from_installations` and
+`settledRoot_allowance_zero_from_installations` use owner exclusion only on
+`Exec.committedFrames R.run`; the latter two also use root-local governance
+and caller exclusion. Existing full-history APIs remain compatibility wrappers.
+In `UniswapV2PairUsdcCallersIn`,
+`mid_allowance_zero_from_pair_history_of_origins_of_mid_frames` consumes both
+governance and V2.2 owner exclusion on the actual post-cut settled frames.
+Original raw-key, native-query, initializer and old-owner-routing populations
+remain full-history. This aligns the internal owner producer with Pair code
+installation at the cut; it does not assume pre-deployment owner exclusion or
+change an adopted environmental condition.
