@@ -45,6 +45,48 @@ private theorem validation_cost_none {rules : ForkRules} {tx : Tx} {sender : Adr
       · rw [ite_eq_right nonce] at validation
         exact finish validation
 
+/-- Before initcode metering, a legacy creation's intrinsic charge is bounded
+by charging every input byte at the larger of the zero and nonzero rates. -/
+theorem calculateIntrinsicCost_legacy_create_le {rules : ForkRules} {tx : Tx}
+    {sender : Adr} {gasPrice : Nat} (stateGas : rules.stateGas = none)
+    (initcode : rules.creation.initCodeLimit = false)
+    (txType : tx.type = .zero gasPrice none) :
+    (calculateIntrinsicCost rules tx sender).1 ≤
+      rules.gas.txBase + rules.gas.createAccess +
+        max standardCallDataTokenCost rules.txr.dataNonZero * tx.data.length := by
+  have bound (bytes : Bytes) (acc : Nat) :
+      bytes.foldl (fun n x => n +
+        (if x = 0 then standardCallDataTokenCost else rules.txr.dataNonZero)) acc ≤
+      acc + max standardCallDataTokenCost rules.txr.dataNonZero * bytes.length := by
+    induction bytes generalizing acc with
+    | nil => simp only [List.foldl_nil, List.length_nil, Nat.mul_zero, Nat.add_zero, le_refl]
+    | cons x xs ih =>
+      rw [List.foldl_cons, List.length_cons, Nat.mul_succ]
+      have next := ih (acc + (if x = 0 then standardCallDataTokenCost else rules.txr.dataNonZero))
+      have zeroLe := Nat.le_max_left standardCallDataTokenCost rules.txr.dataNonZero
+      have nonzeroLe := Nat.le_max_right standardCallDataTokenCost rules.txr.dataNonZero
+      split_ifs at next ⊢ <;> omega
+  simpa only [calculateIntrinsicCost, txType, TxType.receiver?, stateGas, initcode,
+    Bool.false_eq_true, ↓reduceIte, List.map_nil, List.sum_nil, Nat.add_zero, Nat.zero_add]
+    using Nat.add_le_add_left (bound tx.data 0) (rules.gas.txBase + rules.gas.createAccess)
+
+/-- The same byte-count bound applies to the intrinsic charge retained by an
+actual admitted legacy creation transaction. -/
+theorem TransactionTrace.intrinsicGas_legacy_create_le
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {gasPrice : Nat}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (stateGas : benv.stat.rules.stateGas = none)
+    (initcode : benv.stat.rules.creation.initCodeLimit = false)
+    (txType : tx.type = .zero gasPrice none) :
+    trace.intrinsicGas ≤ benv.stat.rules.gas.txBase + benv.stat.rules.gas.createAccess +
+      max standardCallDataTokenCost benv.stat.rules.txr.dataNonZero * tx.data.length := by
+  have cost := (validation_cost_none stateGas trace.validation).1
+  have bound := calculateIntrinsicCost_legacy_create_le
+    (sender := trace.validationSender) stateGas initcode txType
+  rw [cost] at bound
+  exact bound
+
 /-- Preparation allocates exactly the transaction gas left after intrinsic cost. -/
 theorem TransactionTrace.msg_gas_noStateGas
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}

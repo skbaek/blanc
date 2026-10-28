@@ -6516,6 +6516,15 @@ bounds the charge by the validated transaction reservation. These statements
 account for the refund cap and calldata floor. The block gas limit bounds the
 settled counter increments; it does not bound the sum of transaction gas reservations.
 
+For legacy creation before initcode metering,
+`ExecutionTrace.calculateIntrinsicCost_legacy_create_le` bounds intrinsic gas
+by the base/creation charges plus the input length times the larger per-byte
+rate. `TransactionTrace.intrinsicGas_legacy_create_le` transports that bound
+to the original transaction's retained validation result. This avoids evaluating
+all byte values when a length bound already leaves enough execution gas.
+Select the actual trace, legacy type and fork switches explicitly; this
+inequality has no automatic recipe trigger and does not identify a transaction.
+
 For the converse (a transaction *succeeds*, and I have its stages) use
 [`Blanc/TransactionForward.lean`](../Blanc/TransactionForward.lean):
 `checkTransactionGasLimits_ok_of_room` and `checkTransaction_ok_of_parts` assemble the
@@ -6663,6 +6672,33 @@ intervals when every log from another address satisfies it; no middle witness
 is inferred from the two boundary blooms.
 The joint trace/key query is documented here rather than dispatched from an
 arbitrary expanded receipt equality, list membership or quantified log predicate.
+
+For a successful creation receipt, use
+`ConfiguredBlockTraceIn.txSplit_error_eq_none_of_receipt` in
+[`ExecutionIndexedReceipts`](../Blanc/ExecutionIndexedReceipts.lean) to recover
+that original transaction's clean message result. Then
+`TransactionTrace.creation_entry_of_clean` in
+[`ExecutionTransactionDebitInverse`](../Blanc/ExecutionTransactionDebitInverse.lean)
+derives sender separation and the collision-free target in the pre-debit world.
+The same module's `gas_funds_of_no_blob_fee` projects the actual gas debit's
+funding inequality when the transaction has no blob fee. These APIs replace
+prestate observations with original admission/receipt witnesses; they do not
+identify a transaction, authenticate an external receipt or prove gas sufficiency.
+Their exact trace and receipt witnesses must be selected explicitly, so there
+is no new automatic goal-head recipe.
+
+For the concrete WETH creation, `weth9_creation_preconditions_of_receipt` in
+[`Weth9/DeployBlockHistory`](../Blanc/Lift/Weth9/DeployBlockHistory.lean)
+specializes those facts and derives the transaction gas bound from the original
+block's admission. `WethDeploymentTo.of_creation_receipt` in
+[`LiveUsdcWeth9B26213219History`](../Blanc/Composition/LiveUsdcWeth9B26213219History.lean)
+feeds the existing deployment-history record while preserving the exact cut and
+continuation. Transaction identity, constructor gas sufficiency, history and
+HASH-T remain explicit; an RPC receipt alone does not supply these witnesses.
+The additive `of_creation_receipt_at_gas_limit` constructor uses the recorded
+1,500,000 gas limit instead of a supplied constructor-margin inequality;
+`weth9_creation_gas_of_limit` derives that inequality from original Byzantium
+validation and the registered creation input's byte-count bound.
 
 For rules outside the covered forks (any schedule with `rules.stateGas = none` and
 `rules.bal = none`, including the touched-sweep forks and refund quotient 2), use

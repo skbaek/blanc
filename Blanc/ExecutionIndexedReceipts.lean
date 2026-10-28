@@ -65,6 +65,25 @@ theorem ConfiguredBlockTraceIn.receipt_of_txSplit
         (cut.head.settledRoots.flatMap (fun R => R.post.logs))) := by
   exact block.bodyTrace.receipt_of_txSplit cut hsg
 
+/-- Success of this original indexed receipt identifies a clean message
+result for the very same transaction. A processed transaction alone does not
+establish this: its receipt may still record a reverted or halted execution. -/
+theorem ConfiguredBlockTraceIn.txSplit_error_eq_none_of_receipt
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (hsg : block.fork.ruleSet.stateGas = none) {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true) :
+    cut.head.messageOut.error = none := by
+  have same := Option.some.inj (lookup.symm.trans (block.receipt_of_txSplit cut hsg))
+  have status := congrArg (fun value : Fin 5 × Receipt => value.2.succeeded) same
+  change receipt.2.succeeded = cut.head.messageOut.error.isNone at status
+  rw [succeeded] at status
+  cases error : cut.head.messageOut.error with
+  | none => rfl
+  | some failure => rw [error] at status; cases status
+
 /-- An independently identified receipt in this actual output carries exactly
 this original transaction's outer retained-root logs, each folded once. -/
 theorem ConfiguredBlockTraceIn.txSplit_logs_eq_of_receipt

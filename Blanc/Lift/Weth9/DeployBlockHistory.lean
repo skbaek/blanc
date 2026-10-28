@@ -1,6 +1,8 @@
 import Blanc.Lift.Weth9.DeployTransactionHistory
 import Blanc.ExecutionAccountingMidHistoryIn
 import Blanc.ExecutionMidHistoryInFacts
+import Blanc.ExecutionIndexedReceipts
+import Blanc.ExecutionTransactionDebitInverse
 
 /-!
 # WETH9 committed history from its creation transaction inside its block
@@ -24,6 +26,89 @@ A history that starts right after one transaction of a retained configured block
 namespace Blanc.Lift.Weth9
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+/-- Length of the already registered WETH creation input, without evaluating
+its individual calldata charges. -/
+theorem Creation.code_toList_length : Creation.code.toList.length = 3504 := by
+  rw [ByteArray.toList_eq_toList_data, Array.length_toList]
+  decide +kernel
+
+/-- Original Byzantium validation plus the recorded transaction gas limit
+supplies the constructor margin. A byte-count upper bound is sufficient; no
+evaluated intrinsic-gas observation is an input. -/
+theorem weth9_creation_gas_of_limit {pre completed : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (hnumber : block.block.header.number = 4719568)
+    (htime : block.block.header.timestamp = 1513077455)
+    {i : Nat} (cut : block.bodyTrace.transactions.TxSplit i) {gasPrice : Nat}
+    (htype : cut.tx.type = .zero gasPrice none)
+    (hdata : cut.tx.data = Creation.code.toList) (hgas : cut.tx.gas = 1500000) :
+    cut.head.intrinsicGas + 720000 ≤ cut.tx.gas := by
+  have forkAt := block.forkAt
+  rw [hnumber, htime] at forkAt
+  have fork : block.fork = .byzantium :=
+    Except.ok.inj (forkAt.symm.trans weth9_deployment_fork)
+  have rules : cut.benv.stat.rules = byzantiumRules := by
+    rw [cut.before.stat_eq]
+    change block.fork.ruleSet = byzantiumRules
+    rw [fork]
+    rfl
+  have bound := cut.head.intrinsicGas_legacy_create_le
+    (by rw [rules]; rfl) (by rw [rules]; rfl) htype
+  rw [rules, hdata, Creation.code_toList_length] at bound
+  change cut.head.intrinsicGas ≤ 53000 + 68 * 3504 at bound
+  omega
+
+/-- The original successful WETH creation receipt and transaction admission
+derive funding, the pre-debit collision check and the transaction gas bound.
+Transaction identity and recovered sender remain explicit; no prestate balance
+or target-account observation is supplied. -/
+theorem weth9_creation_preconditions_of_receipt {pre completed : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    {i : Nat} (cut : block.bodyTrace.transactions.TxSplit i) {gasPrice : Nat}
+    (htype : cut.tx.type = .zero gasPrice none)
+    (hnonce : cut.tx.nonce = 446)
+    (hsender : cut.head.sender = Creation.deployer)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true) :
+    (cut.tx.gas * cut.head.effectiveGasPrice).toB256 ≤
+        cut.benv.state.bal Creation.deployer ∧
+      accountHasCodeOrNonce cut.benv.state Creation.weth9Address = false ∧
+      cut.tx.gas < 2 ^ 64 := by
+  have hsg : cut.benv.stat.rules.stateGas = none := by
+    rw [cut.before.stat_eq]
+    exact BodyStageCapabilities.historical.stateGas_none block.forkIn
+  have funds := cut.head.gas_funds_of_no_blob_fee (by
+    simp only [transactionBlobGasFee, Tx.isTypeThree, htype, Bool.false_eq_true, ↓reduceIte])
+  rw [hsender] at funds
+  have senderNonce : (cut.benv.state.get cut.head.sender).nonce = 446 :=
+    (checkTransaction_sender_nonce cut.head.checked).trans hnonce
+  have debitNonce : (cut.head.debitState.get cut.head.sender).nonce = 447 := by
+    rw [(State.of_subBal cut.head.debit).2, State.setBal_get_nonce]
+    rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce, senderNonce]
+    rfl
+  have prepared := cut.head.prepared
+  simp only [prepareMessage, htype, TxType.receiver?] at prepared
+  have messageEq := (Except.ok.inj prepared).symm
+  have target : cut.head.msg.currentTarget = Creation.weth9Address := by
+    rw [messageEq]
+    change computeContractAddress cut.head.sender
+      ((cut.head.debitState.get cut.head.sender).nonce - 1) = _
+    rw [debitNonce, hsender, Creation.weth9Address_eq]
+    rfl
+  have clean := block.txSplit_error_eq_none_of_receipt cut block.forkIn.stateGas_none
+    lookup succeeded
+  have fresh := (cut.head.creation_entry_of_clean
+    (by rw [messageEq]; rfl) hsg clean).2
+  rw [target] at fresh
+  have gasLe := tx_gas_le_blockGasLimit_of_checked
+    (benv := cut.benv.beginTransaction) hsg cut.head.checked
+  change cut.tx.gas ≤ cut.benv.stat.blockGasLimit at gasLe
+  rw [cut.before.stat_eq] at gasLe
+  have headerBound := header_gasLimit_lt_of_transition block.transition
+  change cut.tx.gas ≤ block.block.header.gasLimit at gasLe
+  exact ⟨funds, fresh, by omega⟩
 
 /-- The keys the actual raw target entries of a mid history may touch, including entries whose
 effects later roll back. -/
