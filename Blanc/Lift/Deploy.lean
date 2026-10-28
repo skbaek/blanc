@@ -492,6 +492,72 @@ theorem solcOwnerConstructor_message_effects
     rw [storage]
     exact effects.2.2.1 a different
 
+/-- Recover the checked constructor's source run from the same clean retained
+CREATE, keeping its actual transfer, raw execution and successful code charge. -/
+theorem createTrace_source_witness
+    {code : ByteArray} {c : Cert} {entry : SFunc} {msg : Msg} {installed : Devm}
+    (checked : Cert.check code c = true) (codeEq : msg.code = code)
+    (first : c.prog[0]? = some entry)
+    (trace : ExecutionTrace.ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false)
+    (codeAddress : msg.codeAddress = none)
+    (stateGas : msg.benv.stat.rules.stateGas = none) :
+    ∃ (benv : Benv) (raw charged : Devm),
+      (processCreateMessage.msg msg).benvAfterTransfer = .ok benv ∧
+      exec (initEvm ((processCreateMessage.msg msg).withBenv benv)) = .ok raw ∧
+      raw.error = none ∧
+      processCreateMessage.chargeCodeGas msg.benv.stat.rules
+        (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) = .ok charged ∧
+      SFunc.Run c.prog (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta
+        (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna entry (.halted raw) ∧
+      installed = charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩ := by
+  obtain ⟨benv, raw, charged, transfer, ⟨run⟩, rawClean, charge, installedEq⟩ :=
+    createTrace_exec_witness trace clean codeAddress
+  have hsg :
+      (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta.benvStat.rules.stateGas =
+        none := by
+    change benv.stat.rules.stateGas = none
+    rw [Msg.benvAfterTransfer_ok_stateGas transfer]
+    exact stateGas
+  obtain ⟨body, found, source⟩ := lift_sound_noStateGas checked
+    (show (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta.code = code from codeEq)
+    hsg run
+  have same : body = entry := Option.some.inj (found.symm.trans first)
+  rw [same] at source
+  exact ⟨benv, raw, charged, transfer, (exec_iff_exec_eq _ _ _ _).mp ⟨run⟩,
+    rawClean, charge, source, installedEq⟩
+
+/-- A clean retained CREATE of a checked owner-constructor pattern installs
+the exact returned window and initialized storage. The trace supplies the
+execution witnesses; the source run derives zero call value. -/
+theorem solcOwnerConstructor_effects_of_createTrace
+    {code : ByteArray} {c : Cert} {msg : Msg} {installed : Devm}
+    {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    {size offset : B256}
+    (checked : Cert.check code c = true) (codeEq : msg.code = code)
+    (first : c.prog[0]? = some solcOwnerConstructor)
+    (ownerEntry : c.prog[1]? = some SolcStorageReturn.ownerInit)
+    (returnEntry : c.prog[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (trace : ExecutionTrace.ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false)
+    (codeAddress : msg.codeAddress = none)
+    (stateGas : msg.benv.stat.rules.stateGas = none) :
+    msg.value = 0 ∧
+      (installed.getCode msg.currentTarget).toList =
+        code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) ∧
+      installed.getStor msg.currentTarget = solcOwnerConstructorStorage Stor.empty msg.caller := by
+  obtain ⟨benv, raw, charged, transfer, executed, rawClean, charge, source, -⟩ :=
+    createTrace_source_witness checked codeEq first trace clean codeAddress stateGas
+  obtain ⟨zero, result, resultEq, output, storage, -⟩ :=
+    solcOwnerConstructor_message_effects ownerEntry returnEntry sizeWord offsetWord nonzero
+      transfer codeAddress executed rawClean charge source
+  have same : installed = result := Except.ok.inj (trace.result.symm.trans resultEq)
+  rw [codeEq] at output
+  exact ⟨zero, same ▸ output, same ▸ storage⟩
+
 /-- The creation frame of `msg` over the post-transfer environment `benv`. -/
 abbrev createSeed (msg : Msg) (benv : Benv) : Msg := (processCreateMessage.msg msg).withBenv benv
 

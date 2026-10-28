@@ -187,49 +187,8 @@ theorem constructor_witness_of_createTrace
         (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna
         t_0000_c0 (.halted raw) ∧
       installed = charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩ := by
-  rcases trace with ⟨slot, retained, process⟩
-  obtain ⟨inner, charged, innerProcess, innerClean, charge, installedEq⟩ :=
-    ProcessCreateMessage.ok_charge_of_clean process clean
-  have innerResult : processMessage (processCreateMessage.msg msg) = .ok inner :=
-    (show Blanc.ExecutionTrace.ProcessMessageTrace
-      (processCreateMessage.msg msg) (.ok inner) from ⟨slot, retained, innerProcess⟩).result
-  obtain ⟨benv, transfer⟩ := benvAfterTransfer_exists_zero
-    (msg := processCreateMessage.msg msg) (show (processCreateMessage.msg msg).value = 0 from hvalue)
-  have entry : (Frame.ofCall (processCreateMessage.msg msg)).enter =
-      .run (initEvm ((processCreateMessage.msg msg).withBenv benv)) := by
-    unfold Frame.enter Frame.ofCall
-    rw [transfer]
-    have entryCode : (processCreateMessage.msg msg).codeAddress = none := hcodeAddress
-    unfold executeCode.enter
-    simp only [Msg.withBenv, entryCode]
-  have entered := innerProcess
-  change RunFrame (Frame.ofCall (processCreateMessage.msg msg)) slot (.ok inner) at entered
-  unfold RunFrame at entered
-  rw [entry] at entered
-  obtain ⟨raw, slotEq, -⟩ := entered
-  subst slot
-  cases retained with
-  | some run =>
-      obtain ⟨rawPost, rawEq, rawClean, -, -⟩ :=
-        Blanc.MessageExecution.processMessage_clean_rawPost innerProcess innerClean
-      subst raw
-      have hexec : exec (initEvm ((processCreateMessage.msg msg).withBenv benv)) =
-          .ok rawPost := (exec_iff_exec_eq _ _ _ _).mp ⟨run⟩
-      have hsg :
-          (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta.benvStat.rules.stateGas =
-            none := by
-        change benv.stat.rules.stateGas = none
-        rw [Msg.benvAfterTransfer_ok_stateGas transfer]
-        exact hstateGas
-      have source := constructor_run_of_exec run
-        (show (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta.code = code from hcode)
-        hsg rfl rfl
-      have touched : inner =
-          Devm.recordTouch msg.benv.stat.rules true msg.currentTarget rawPost :=
-        Except.ok.inj (innerResult.symm.trans
-          (processMessage_ok_touch_of_exec transfer hcodeAddress hexec rawClean))
-      rw [touched] at charge
-      exact ⟨benv, rawPost, charged, transfer, hexec, rawClean, charge, source, installedEq⟩
+  -- The legacy value premise remains in the compatibility statement.
+  exact createTrace_source_witness cert_check hcode rfl trace clean hcodeAddress hstateGas
 
 /-- A clean retained CREATE of the registered constructor installs the proxy
 runtime and its two initialized slots in that trace's actual result. -/

@@ -7135,8 +7135,14 @@ current recipe matchers have no forward-transition shape to bind.
   CREATE result. The nonempty condition is essential: normalization may erase
   storage for an empty account. These compound projections are selected by the
   named actual execution/charge witnesses; they add no goal-head recipe.
-  Neither theorem assumes
-  touch recording is disabled, nor proves constructor execution, affordability,
+  `createTrace_exec_witness` starts directly from a clean retained
+  `ProcessCreateMessageTrace` with no separate code address and extracts the
+  original pc-zero `Exec`, successful transfer, clean raw result, actual code
+  charge and exact installation equation. It requires no zero-value or
+  prepared-entry premise; an absent interpreter slot is ruled out by the
+  actual successful no-code-address message.
+  The forward settlement bridges do not assume touch recording is disabled;
+  they require actual execution and charge witnesses. These APIs do not supply
   final transaction sweeping or a historical starting state. The
   `touch-preserving-message-settlement` recipe recognizes only the direct
   successful outer forms; it does not establish the theorem's entry,
@@ -9316,6 +9322,16 @@ contract-neutral.
   identify a concrete certificate/runtime literal or supply the historical
   execution witnesses. The existing proxy constructor settlement also uses
   the same common touch/charge projection.
+  To obtain the source witness from a retained creation, use
+  `createTrace_source_witness`: the checked certificate, its actual entry,
+  message-code identity and selected `stateGas = none` recover the source run
+  from the original retained execution. `solcOwnerConstructor_effects_of_createTrace`
+  combines this with the owner/return function-table entries, deriving zero
+  call value and exact installed window/storage from the trace itself.
+  No execution, transfer, charge or initial storage observation is supplied
+  separately. Concrete certificate checking and runtime-literal identities
+  remain the caller's obligations. The proxy's existing witness theorem is a
+  compatibility projection of this shared source recovery.
   The `solc-runtime-return` recipe matches only a named terminal-body exact
   run ending in a halted outcome; it never unfolds arbitrary certificate
   entries or concrete machine images to discover this pattern.

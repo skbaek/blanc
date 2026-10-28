@@ -1,5 +1,8 @@
 import Blanc.DeploymentMessage
 import Blanc.MessageExecution
+import Blanc.MessageExecutionInversion
+import Blanc.ExecutionCodeAt
+import Blanc.ExecutionMessageEffects
 
 /-!
 # Successful deployment settlement with recorded touches
@@ -90,5 +93,53 @@ theorem processCreateMessage_effects_of_exec_and_charge
       installed.getStor = raw.getStor := by
   exact ⟨_, processCreateMessage_ok_touch_of_exec_and_charge msg transfer codeAddress
     executed clean charge, createCharge_install_effects charge nonempty⟩
+
+/-- A clean retained CREATE with no separate code address contains the actual
+constructor execution, transfer and successful charge. No call-value or
+prepared-entry premise is needed to recover these witnesses. -/
+theorem createTrace_exec_witness
+    {msg : Msg} {installed : Devm}
+    (trace : ExecutionTrace.ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false)
+    (codeAddress : msg.codeAddress = none) :
+    ∃ (benv : Benv) (raw charged : Devm),
+      (processCreateMessage.msg msg).benvAfterTransfer = .ok benv ∧
+      Nonempty (Exec 0 (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta
+        (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna (.ok raw)) ∧
+      raw.error = none ∧
+      processCreateMessage.chargeCodeGas msg.benv.stat.rules
+        (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) = .ok charged ∧
+      installed = charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩ := by
+  rcases trace with ⟨slot, retained, process⟩
+  obtain ⟨inner, charged, innerProcess, innerClean, charge, installedEq⟩ :=
+    ProcessCreateMessage.ok_charge_of_clean process clean
+  have innerResult : processMessage (processCreateMessage.msg msg) = .ok inner :=
+    (show ExecutionTrace.ProcessMessageTrace
+      (processCreateMessage.msg msg) (.ok inner) from ⟨slot, retained, innerProcess⟩).result
+  cases retained with
+  | none =>
+      obtain ⟨error, impossible⟩ := ProcessMessage.none_error
+        (show (processCreateMessage.msg msg).codeAddress = none from codeAddress) innerProcess
+      cases impossible
+  | @some pc sevm pre out run =>
+      obtain ⟨raw, rawEq, rawClean, -, -⟩ :=
+        MessageExecution.processMessage_clean_rawPost innerProcess innerClean
+      subst out
+      have entered := (RunFrame.some_inv innerProcess).1
+      obtain ⟨benv, transfer, evmEq⟩ := Frame.enter_run_inv entered
+      have pcEq := congrArg Evm.pc evmEq
+      have sevmEq := congrArg Evm.sta evmEq
+      have preEq := congrArg Evm.dyna evmEq
+      change pc = 0 at pcEq
+      dsimp only at sevmEq preEq
+      rw [pcEq, sevmEq, preEq] at run
+      have executed : exec (initEvm ((processCreateMessage.msg msg).withBenv benv)) =
+          .ok raw := (exec_iff_exec_eq _ _ _ _).mp ⟨run⟩
+      have touched : inner =
+          raw.recordTouch msg.benv.stat.rules true msg.currentTarget :=
+        Except.ok.inj (innerResult.symm.trans
+          (processMessage_ok_touch_of_exec transfer codeAddress executed rawClean))
+      rw [touched] at charge
+      exact ⟨benv, raw, charged, transfer, ⟨run⟩, rawClean, charge, installedEq⟩
 
 end Blanc
