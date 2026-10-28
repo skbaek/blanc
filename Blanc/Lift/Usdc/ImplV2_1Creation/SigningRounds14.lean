@@ -1,0 +1,254 @@
+import Blanc.Lift.Usdc.ImplV2_1Creation.SigningBytes
+import Blanc.Lift.Usdc.ImplV2_1Creation.SigningStates
+
+/-! Bounded kernel checks against the existing Keccak permutation. -/
+namespace Blanc.Lift.Usdc.ImplV2_1Creation.SigningBlocks
+open Jaune Blanc.KeccakBlocks
+
+private def absorb084 (ws : Vector UInt64 25) : Vector UInt64 25 :=
+  (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane ws 0 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 1 (by decide) (UInt64.ofBytes 0x80 0x80 0x1 0x4 0x60 0x52 0x81 0x0)) 2 (by decide) (UInt64.ofBytes 0x52 0x82 0x3 0x81 0x82 0x1 0x20 0x60)) 3 (by decide) (UInt64.ofBytes 0x80 0x1 0x20 0x60 0x52 0x81 0x25 0x60)) 4 (by decide) (UInt64.ofBytes 0x60 0x39 0x91 0x25 0x60 0x47 0x53 0x61)) 5 (by decide) (UInt64.ofBytes 0x51 0x40 0x60 0x50 0x50 0x91 0x1 0x40)) 6 (by decide) (UInt64.ofBytes 0xff 0x73 0x5b 0xfd 0x90 0x3 0x91 0x80)) 7 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 8 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 9 (by decide) (UInt64.ofBytes 0x90 0x0 0x60 0x16 0x84 0xff 0xff 0xff)) 10 (by decide) (UInt64.ofBytes 0x60 0x52 0x20 0x60 0x3 0x60 0x52 0x81)) 11 (by decide) (UInt64.ofBytes 0xff 0x60 0x90 0x84 0x54 0x20 0x90 0x40)) 12 (by decide) (UInt64.ofBytes 0x40 0x60 0x57 0xdc 0x2c 0x61 0x15 0x16)) 13 (by decide) (UInt64.ofBytes 0x0 0x0 0xa0 0x79 0xc3 0x8 0x7f 0x51)) 14 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 15 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 16 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0))
+
+private def absorbed084 : Vector UInt64 25 :=
+  #v[0x3793a8e63253f5dd, 0xf39f245b5df8f2d7, 0x88364c6f1cb5ec1f, 0x246771b332c9a8e9, 0x77fa2ea6729b42e6, 0xa6380a7a1b69299, 0x6eb94c45b0bd8ba5, 0x23a01564157dff0a, 0x710f4cbab7b2a0d9, 0x68f99c7801e45957, 0x3747426bfbafbd98, 0x8560d59317d7d781, 0x850b312d6e75ef6d, 0x56f0f5d6e31f7216, 0xbff0f737d5ba92e6, 0xf8fddf3bb6a46b5b, 0xf24777e5e84e40d0, 0x2d64a8b079e884cf, 0xf64407faab184c67, 0x5d5174dbb282e9fa, 0x371a0634bafe4482, 0x42a40685ae244b8b, 0x1a1b4e85e7040fc4, 0x87b8d531a9743701, 0x2ca944ca58a49f2d]
+
+private theorem words084 : absorb084 state084 = absorbed084 := by
+  decide +kernel
+
+private def quarter084_1 : Vector UInt64 25 :=
+  #v[0xd590fc637624c6a2, 0x6a647246b812b51c, 0x83189708158af27e, 0xd630ae86dadc48b, 0xe9f3f13249a216b0, 0xe384ec3d260fd38b, 0x7b24a7310158db42, 0x1ee39f02f647caf3, 0x7102377d8550d72d, 0x3880dd3fcf19c8d0, 0x83f0189d21a53351, 0x5fb072e6053fab1a, 0x1101edf108c346cf, 0x3c3181b3fa3b966a, 0xaec6a7335875cca1, 0xcf013decc4dc8f29, 0xd65fd1ddf4e41e2f, 0x86829ea0ab715e3d, 0xc51e6af03d4a92d9, 0x1fd582788c631c0c, 0xd9d55d5b7da7ce55, 0xe6997d3fdf641578, 0x98d3f5e64dd53370, 0x591700aa5d1e6ac7, 0x9e8043dfc0247ae2]
+
+private theorem rounds084_0 : sixRounds 0 (by decide) absorbed084 = quarter084_1 := by
+  decide +kernel
+
+private def quarter084_2 : Vector UInt64 25 :=
+  #v[0x57c8095613001dbf, 0x5ca0a05120df54e2, 0x920dcf515b2951a8, 0xe902c627c02bb589, 0xd103fa4650f8edea, 0x2fe96a90f163e249, 0x52ce44e63e3ebc14, 0x7dbc6249c47418d, 0xc2b606982fb6f86a, 0x5b4b31ad0b22b37f, 0xa73b636978d8473c, 0x13759bae4f41d3cc, 0xcf8b20f5cb2b75ba, 0x8ad587ccf8bd5266, 0x54f7984e7ed81d9e, 0x62eab6ed14460e40, 0x8ea8ca77ba415928, 0x3d00ac917eff0327, 0xf2c8685c91846397, 0x285f788c10260264, 0x7c059ae0ad69ebdf, 0x87ba8490221a17e2, 0x5225a384fe32efc6, 0xe20ce20194f6abf1, 0x32aa3b2cc46ef608]
+
+private theorem rounds084_1 : sixRounds 6 (by decide) quarter084_1 = quarter084_2 := by
+  decide +kernel
+
+private def quarter084_3 : Vector UInt64 25 :=
+  #v[0x8ee64897fe1ed559, 0x667b498bb6210d83, 0x6910d593072bf8d2, 0xd083753d50a1ee4c, 0xe3cd87365e35b310, 0xd4338493ea53bd28, 0x7b8a9de5d6a90629, 0xa425fd0c62e51275, 0xe7a78870ed4db808, 0xc832e50671e9442a, 0xde0fe9dd5426390c, 0x8838575837d17b70, 0x3424f3daca7869b8, 0x7100c4ad49f61514, 0xd19e6cccdd5d964a, 0xa2f0d049834e7ac4, 0x3f7b635adce1f104, 0x4421565a732fc310, 0xc7499b19874b3ed8, 0x59b8fb4810fc6205, 0xbab86d85c97ac8af, 0x9bb9af1af4bf5b08, 0x8e4cd8e8129be311, 0x25c042c0ee2817a7, 0x9c811f3819814d75]
+
+private theorem rounds084_2 : sixRounds 12 (by decide) quarter084_2 = quarter084_3 := by
+  decide +kernel
+
+private theorem rounds084_3 : sixRounds 18 (by decide) quarter084_3 = state085 := by
+  decide +kernel
+
+private theorem perm084 : KECCAK.f1600 absorbed084 = state085 := by
+  rewrite [f1600_sixRounds]
+  rewrite [rounds084_0, rounds084_1, rounds084_2, rounds084_3]
+  rfl
+
+theorem block084 (tail : Bytes) :
+    KECCAK.Bytes.run 0 (bytes084 ++ tail) state084 =
+      KECCAK.Bytes.run 0 tail state085 := by
+  exact run_block_of_step bytes084 tail absorb084 state084 absorbed084
+    state085 (fun _ => rfl) words084 perm084
+
+private def absorb085 (ws : Vector UInt64 25) : Vector UInt64 25 :=
+  (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane ws 0 (by decide) (UInt64.ofBytes 0x80 0x1 0x4 0x60 0x52 0x81 0x0 0x0)) 1 (by decide) (UInt64.ofBytes 0x82 0x3 0x81 0x82 0x1 0x20 0x60 0x80)) 2 (by decide) (UInt64.ofBytes 0x1 0x20 0x60 0x52 0x81 0x25 0x60 0x52)) 3 (by decide) (UInt64.ofBytes 0x39 0x91 0x25 0x60 0x47 0x53 0x61 0x80)) 4 (by decide) (UInt64.ofBytes 0x40 0x60 0x50 0x50 0x91 0x1 0x40 0x60)) 5 (by decide) (UInt64.ofBytes 0x61 0x5b 0xfd 0x90 0x3 0x91 0x80 0x51)) 6 (by decide) (UInt64.ofBytes 0x21 0x3b 0x61 0x86 0x86 0x33 0xf4 0xf)) 7 (by decide) (UInt64.ofBytes 0xff 0xff 0x73 0x54 0x0 0x60 0x5b 0x56)) 8 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 9 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 10 (by decide) (UInt64.ofBytes 0x6d 0x2d 0x61 0x14 0x33 0x16 0xff 0xff)) 11 (by decide) (UInt64.ofBytes 0xc3 0x8 0x7f 0x51 0x80 0x40 0x60 0x57)) 12 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0xa0 0x79)) 13 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 14 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 15 (by decide) (UInt64.ofBytes 0x52 0x81 0x0 0x0 0x0 0x0 0x0 0x0)) 16 (by decide) (UInt64.ofBytes 0x90 0x81 0x1 0x82 0x4 0x60 0x20 0x60))
+
+private def absorbed085 : Vector UInt64 25 :=
+  #v[0x5668817d905aaa9c, 0x806f33b8b7c7c5a9, 0x6f1df3d528e08be0, 0x6dad86c7a25271d0, 0x3d0bc271a82bb3aa, 0x6a2c0158829cfdac, 0x416ceb16a2d16a12, 0x2b214bb8417369f6, 0x606dcdfd497df59e, 0xd6d67d85cc72c176, 0xcd4390074c004513, 0xef6277ae66aad565, 0xc3fe37967e6e21d7, 0x9af2d023d5cc6604, 0x923bafec64abc30b, 0xc126e194d21f94f1, 0x117c1b55a23a8dbb, 0x287da6ffaff65c52, 0xdd7ae639a7cb0049, 0x827da2b13e33be0c, 0x3ce9cb4082f94776, 0x89db945f2e2164ad, 0x85b2192d4d14cad8, 0xe9e97639ee86facc, 0xee4d40291ff4d272]
+
+private theorem words085 : absorb085 state085 = absorbed085 := by
+  decide +kernel
+
+private def quarter085_1 : Vector UInt64 25 :=
+  #v[0x877c634c3ac23f6e, 0x2323fd30711b88b8, 0xec3fc240bf1a55eb, 0x39a16632a48bfd42, 0x39512ef86d65a5e6, 0x47f0a7636ddb4d45, 0x54373bcd57f7f780, 0xc41dba9c35bb4ca1, 0x133e8001ec749b6b, 0x785594fac0f0f331, 0x66012cfc4c291d8e, 0x4144450af18ff37c, 0x43246a1cbe979123, 0xdac58bfdd89a7322, 0xf0796cdcf4f4c161, 0x9873a53e8939ff8d, 0xbdb968f3a3905ac4, 0xf031d5c097d86b4f, 0xca6852590c3b221b, 0x828905b604a9f742, 0x46c14a3e7f036b93, 0x7599f6ab3dbed5e3, 0xbd7aec389e6dcf34, 0x967daabbc80386c3, 0xaa0769da52ff44d5]
+
+private theorem rounds085_0 : sixRounds 0 (by decide) absorbed085 = quarter085_1 := by
+  decide +kernel
+
+private def quarter085_2 : Vector UInt64 25 :=
+  #v[0x537ebadbd3fdcf98, 0x5a65ef379b1ecec5, 0x30148d6265f5ff67, 0x97a8ced863cc74c8, 0xbb61f22c84d581ce, 0x763cb15488b3470f, 0xdb47a6b567cfaa4b, 0x7a3c471c9072b93, 0xc97744a8bde9d78e, 0xa885fd76c6a5ca, 0xf645d82d96d2a7b3, 0xee59b66387c36915, 0x829c2b0eca0204c1, 0xf6a00300ff0306ed, 0xf1fd6d238a27b2a1, 0x9446b04b614d760d, 0xa100a9e331290d, 0xc4a08007dbff4d84, 0xd82dae179d06e982, 0xdeac9674eed4717c, 0x873551ab19843a8f, 0x6391bca0f3fa0186, 0xddb8afe8201c8449, 0x4f7c0e4100406be6, 0x48b72ccc2158feb5]
+
+private theorem rounds085_1 : sixRounds 6 (by decide) quarter085_1 = quarter085_2 := by
+  decide +kernel
+
+private def quarter085_3 : Vector UInt64 25 :=
+  #v[0x6532cafc4fed8083, 0x4a28263ab66efe0c, 0xbff5a521ac1ac25a, 0x9a5b96f9b1605075, 0xab79677b53c9ae65, 0x42a188b8dc7394a1, 0x7f44b0ed519ea7ad, 0x7e53a5e7e15f748b, 0xac43445c0b99def0, 0xf237def0b8062c8e, 0xfa7431ce84bd2b00, 0x96d3f0fb97416ac, 0x8a214eca0f11b085, 0x934529f695559165, 0xcbac38b3d734e95a, 0x133d6fb4e6b88d91, 0xdeb50d91e251083d, 0x19d91922e1efd8c9, 0x1b73bcb49fa17453, 0xd150e79c602d42ca, 0xb9648e85b658a67, 0x57ad32b7725ea3d1, 0x2ef71db285fb2918, 0x5016a7f5574d8575, 0xd464a018546a3cd7]
+
+private theorem rounds085_2 : sixRounds 12 (by decide) quarter085_2 = quarter085_3 := by
+  decide +kernel
+
+private theorem rounds085_3 : sixRounds 18 (by decide) quarter085_3 = state086 := by
+  decide +kernel
+
+private theorem perm085 : KECCAK.f1600 absorbed085 = state086 := by
+  rewrite [f1600_sixRounds]
+  rewrite [rounds085_0, rounds085_1, rounds085_2, rounds085_3]
+  rfl
+
+theorem block085 (tail : Bytes) :
+    KECCAK.Bytes.run 0 (bytes085 ++ tail) state085 =
+      KECCAK.Bytes.run 0 tail state086 := by
+  exact run_block_of_step bytes085 tail absorb085 state085 absorbed085
+    state086 (fun _ => rfl) words085 perm085
+
+private def absorb086 (ws : Vector UInt64 25) : Vector UInt64 25 :=
+  (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane ws 0 (by decide) (UInt64.ofBytes 0x4f 0x7f 0x52 0x1 0x82 0x24 0x60 0x52)) 1 (by decide) (UInt64.ofBytes 0x20 0x3a 0x65 0x6c 0x62 0x61 0x6e 0x77)) 2 (by decide) (UInt64.ofBytes 0x69 0x20 0x72 0x65 0x6c 0x6c 0x61 0x63)) 3 (by decide) (UInt64.ofBytes 0x68 0x74 0x20 0x74 0x6f 0x6e 0x20 0x73)) 4 (by decide) (UInt64.ofBytes 0x60 0x72 0x65 0x6e 0x77 0x6f 0x20 0x65)) 5 (by decide) (UInt64.ofBytes 0x81 0x90 0x51 0x90 0x52 0x1 0x82 0x44)) 6 (by decide) (UInt64.ofBytes 0x5b 0xfd 0x90 0x1 0x64 0x60 0x3 0x90)) 7 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0x73)) 8 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 9 (by decide) (UInt64.ofBytes 0x61 0x16 0x81 0xff 0xff 0xff 0xff 0xff)) 10 (by decide) (UInt64.ofBytes 0x8 0x7f 0x51 0x40 0x60 0x57 0xd9 0x2d)) 11 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0xa0 0x79 0xc3)) 12 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 13 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 14 (by decide) (UInt64.ofBytes 0x81 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 15 (by decide) (UInt64.ofBytes 0x20 0x60 0x80 0x80 0x1 0x4 0x60 0x52)) 16 (by decide) (UInt64.ofBytes 0x2f 0x60 0x52 0x82 0x3 0x81 0x82 0x1))
+
+private def absorbed086 : Vector UInt64 25 :=
+  #v[0xc9e3b0c4ec66273b, 0x75ef591130a3f7d2, 0xb755cdb3e2e20a8c, 0x3f8c2497edd74ef, 0x20b834716c31b798, 0x32cbe2f8abc42290, 0xb7af21c52327706, 0x9b45a560f8724e4e, 0xe4134eddc7b82dae, 0x3b6cc5b0355ff58f, 0xe630f30d63632011, 0x162c7424343dd14d, 0x7c3ec9fff9d6052b, 0xf213e26705c7946c, 0x8f4748fc92c53fc1, 0xbe4048364fd7de, 0x1c8b54760df6b3c1, 0x79cd718e5cfae3c3, 0x8be5007b8b6998cc, 0x7ba2c16924c11c78, 0x64034f810f9136aa, 0x3e7f0678fc3801ff, 0x9435ea7baacde0f3, 0x54c3393391a0fd3e, 0xd5a8593b6f7b9004]
+
+private theorem words086 : absorb086 state086 = absorbed086 := by
+  decide +kernel
+
+private def quarter086_1 : Vector UInt64 25 :=
+  #v[0xaa94a52abeb6d8e5, 0x1d9356939dd1a5d1, 0x39cad9da3f3274b, 0x3d0ec838e65d0aa5, 0xaef06b1734d82c91, 0xeddaf02f6dde7f6e, 0x741e2938982cc689, 0xca5df12ded1f7d83, 0x15a84b19d0fbcde, 0xcfa0d2b19a56d784, 0xb09c2f93c790d7a2, 0x6dba7cd7f03d2a83, 0x43c41b077f5de4b, 0xf46112299f313a84, 0x8412012b5e52b1dd, 0xec5b1c404b8f85d6, 0xe59a6d594292ad2d, 0x7cae6dac3400126e, 0x33cced8e5cc5c6d6, 0x32d376eebcd1df3c, 0xa459051bd783d186, 0x4d55f7cfb3ef509d, 0x3a0284b26ed497b6, 0x296724a585f73989, 0x6bfbd265e15d36a1]
+
+private theorem rounds086_0 : sixRounds 0 (by decide) absorbed086 = quarter086_1 := by
+  decide +kernel
+
+private def quarter086_2 : Vector UInt64 25 :=
+  #v[0xe8b5113204ab974f, 0xbe112bae22e9f6e1, 0x59e4648ef2d7650e, 0x3b1b0d355a454af3, 0xd4256499dce322e6, 0x8cc1d2858468cec0, 0xead195a3528818d4, 0xc8ce74341416a72e, 0x59ec79d47759d078, 0x24b8bb174c387e5f, 0xc40c4e56c1eb1fdd, 0xa6a00f1f63b9609e, 0xccc909d429c053f2, 0x371457eba3a2a672, 0x49d47d8f89393f6f, 0xc9ac75e71951aa44, 0x26a24ceabdc92efb, 0xb563fd1d59cd033d, 0x139f6921a56aa2d3, 0x4542fce3efef6b75, 0x8d2ff97428757288, 0xa79e06aa3ac36e14, 0x30ec321b1ed20489, 0x8408b3f68eff9cd, 0xafd647da2710352c]
+
+private theorem rounds086_1 : sixRounds 6 (by decide) quarter086_1 = quarter086_2 := by
+  decide +kernel
+
+private def quarter086_3 : Vector UInt64 25 :=
+  #v[0x673c82ec8a8a6552, 0xb004eeb1f17587c8, 0x804c9322c1ee3b82, 0xa8811ad0f86f5d59, 0x7c581b8050850791, 0x313508a47ddbe686, 0x5d5cb682a7514428, 0x18838d5fcf6fb69c, 0x8a55c9f6dbf8decc, 0xff92686a97ce8eba, 0x6970cf1bdceda6d0, 0x8d2a99f50c708761, 0x87d2f79e4326b0ab, 0x3e176a8e3e0a70df, 0x5e2f403c5f809891, 0xcbc613c297c84e36, 0x1692f82e316ff553, 0x9c57e2e1a6c60c7e, 0xcb3beddbff284367, 0x81211a224776cbb6, 0xfe2f8319dbf7d1f4, 0x8b5991c727325a0, 0x2653beb4b880fe67, 0x8f50d607937ab208, 0xcfa3c58a2f5e9158]
+
+private theorem rounds086_2 : sixRounds 12 (by decide) quarter086_2 = quarter086_3 := by
+  decide +kernel
+
+private theorem rounds086_3 : sixRounds 18 (by decide) quarter086_3 = state087 := by
+  decide +kernel
+
+private theorem perm086 : KECCAK.f1600 absorbed086 = state087 := by
+  rewrite [f1600_sixRounds]
+  rewrite [rounds086_0, rounds086_1, rounds086_2, rounds086_3]
+  rfl
+
+theorem block086 (tail : Bytes) :
+    KECCAK.Bytes.run 0 (bytes086 ++ tail) state086 =
+      KECCAK.Bytes.run 0 tail state087 := by
+  exact run_block_of_step bytes086 tail absorb086 state086 absorbed086
+    state087 (fun _ => rfl) words086 perm086
+
+private def absorb087 (ws : Vector UInt64 25) : Vector UInt64 25 :=
+  (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane ws 0 (by decide) (UInt64.ofBytes 0x50 0x61 0x80 0x1 0x20 0x60 0x52 0x81)) 1 (by decide) (UInt64.ofBytes 0x1 0x40 0x60 0x39 0x91 0x2f 0x60 0xde)) 2 (by decide) (UInt64.ofBytes 0x91 0x80 0x51 0x40 0x60 0x50 0x50 0x91)) 3 (by decide) (UInt64.ofBytes 0x54 0x80 0x8 0x60 0x5b 0xfd 0x90 0x3)) 4 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0x7f)) 5 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0xff 0xff 0xff 0xff 0xff)) 6 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 7 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 8 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0x73 0x16 0x0)) 9 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 10 (by decide) (UInt64.ofBytes 0x83 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 11 (by decide) (UInt64.ofBytes 0x82 0x91 0x17 0x91 0x90 0x91 0x16 0x81)) 12 (by decide) (UInt64.ofBytes 0x90 0x16 0x91 0x51 0x40 0x60 0x55 0x90)) 13 (by decide) (UInt64.ofBytes 0xf5 0xb8 0xc6 0xa9 0xdf 0x66 0xdb 0x7f)) 14 (by decide) (UInt64.ofBytes 0x97 0x18 0xe5 0xc7 0xaa 0xe9 0x6f 0x22)) 15 (by decide) (UInt64.ofBytes 0xb 0xc7 0x1d 0xc3 0x4a 0xe9 0x8e 0xae)) 16 (by decide) (UInt64.ofBytes 0x7 0xb7 0x74 0x25 0xb 0x90 0xc9 0xb6))
+
+private def absorbed087 : Vector UInt64 25 :=
+  #v[0xe05e6ed66af8c8b7, 0x81ffcdbf31ae8101, 0xbbaa61a81f4937f0, 0x766bc6b43569d2f2, 0xa289123a8f6e5612, 0xda61fd8af466438, 0x96037ef1bf08d8f1, 0xeb7f9c65753ef4c9, 0x2e88f430b5dbea03, 0xc459bf2ff00f3e80, 0x4d80604b01fa5786, 0xfb949b0e678aef5d, 0x38f3775c28c4a735, 0x59bda82793c52e01, 0x7d42615d5e9ae9b6, 0x19d1ca5464f6af22, 0x7bc2f7db2c7ae357, 0xb4c036b9e4b98567, 0xcdc0757582ead639, 0x44c4eaa40afcd43f, 0x31e16089bd7e5576, 0x4573b571446a17d2, 0x11e7884dd2fabd1, 0xd5732812f6b58905, 0x3a89adea6a81a725]
+
+private theorem words087 : absorb087 state087 = absorbed087 := by
+  decide +kernel
+
+private def quarter087_1 : Vector UInt64 25 :=
+  #v[0xcc0f7406bf04d603, 0x1ac2ba31d23ac0c7, 0xdfccecc75c237d1c, 0x346b0165f7fba886, 0xdf3e1a2787d1f1d0, 0x372d5b3a17177afc, 0xc74dd41630c01aa8, 0xaa42e20e0f09d96d, 0xa1a08312b89b9bfc, 0x21f8e508b997fbb3, 0x7dab6d4c57653019, 0x290a7d55e97c7bf2, 0xd8fbff284a73ec7a, 0x6c9c718f0436473b, 0xdedb92bb37a1eb88, 0xb2a92ed1a449acff, 0xf2d099dc665dd80d, 0xbbc00f9163f4e8ea, 0xaa261224e2d35c00, 0x231ed9e0107fc0bd, 0x5bebf3a314f43850, 0xf69181d7599d3c11, 0x263cc7adf55b5ed3, 0x1e444c29a8558a4e, 0x956d71cd606ef910]
+
+private theorem rounds087_0 : sixRounds 0 (by decide) absorbed087 = quarter087_1 := by
+  decide +kernel
+
+private def quarter087_2 : Vector UInt64 25 :=
+  #v[0x2728c202ce3e2d0c, 0xa76c1eb51ac8b246, 0x2ea5dc498a72de4b, 0x4479ba80ca0aecd1, 0xd9e00b63db005048, 0xc35158484108c521, 0x1c9cccbca1db3bdb, 0xdac8bf96c774d41, 0xd9d00d3527ca1e14, 0x2d6cace35ea56302, 0x22452231e5455c11, 0x84ff3cd24599fae4, 0x3d55cd6c438d041f, 0x5c35106d0ccbe99f, 0xf1a8eb11103aa4e8, 0x726118e3d8530e7b, 0x25a91abce40332de, 0x294292fe580b667a, 0xe1df537542fca172, 0xc8eb5f13b80f26b7, 0x9b22c3af03734c19, 0xc86a1f6da89d93eb, 0xead24a47be9c9843, 0xf367479b9ecdd7c3, 0x7f66b4bbcf34deaf]
+
+private theorem rounds087_1 : sixRounds 6 (by decide) quarter087_1 = quarter087_2 := by
+  decide +kernel
+
+private def quarter087_3 : Vector UInt64 25 :=
+  #v[0xef5ccd4525a16082, 0x728d05ee84867525, 0xd78d936db297ca26, 0x23dee5a89b31bed2, 0xed73ad0125b890b4, 0x5ad4ac3fb96f6852, 0x172547bc757ea904, 0xec71892c9f23c66b, 0x4e85b7f04a17d0bb, 0x8f856ca1d1ec7942, 0x2be11d42e8a4f036, 0x2ae711efe86e9fff, 0x16df2682eaf60559, 0x77c36630bd9d3fe6, 0xcef05fc5ccc7e2f4, 0x5a0b107552722768, 0x378edea728397868, 0x68a80cc44ead72b7, 0x234cc346faac9b95, 0x83c0c52c425f1895, 0x415cded491e1f505, 0x7a09f969f9e56316, 0x456ea37264c39565, 0x984038ae5207032, 0x7a5e72ac91218ea8]
+
+private theorem rounds087_2 : sixRounds 12 (by decide) quarter087_2 = quarter087_3 := by
+  decide +kernel
+
+private theorem rounds087_3 : sixRounds 18 (by decide) quarter087_3 = state088 := by
+  decide +kernel
+
+private theorem perm087 : KECCAK.f1600 absorbed087 = state088 := by
+  rewrite [f1600_sixRounds]
+  rewrite [rounds087_0, rounds087_1, rounds087_2, rounds087_3]
+  rfl
+
+theorem block087 (tail : Bytes) :
+    KECCAK.Bytes.run 0 (bytes087 ++ tail) state087 =
+      KECCAK.Bytes.run 0 tail state088 := by
+  exact run_block_of_step bytes087 tail absorb087 state087 absorbed087
+    state088 (fun _ => rfl) words087 perm087
+
+private def absorb088 (ws : Vector UInt64 25) : Vector UInt64 25 :=
+  (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane ws 0 (by decide) (UInt64.ofBytes 0x56 0x50 0xa2 0x90 0x0 0x60 0x90 0xe6)) 1 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0x73 0x5b)) 2 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 3 (by decide) (UInt64.ofBytes 0x60 0x16 0xff 0xff 0xff 0xff 0xff 0xff)) 4 (by decide) (UInt64.ofBytes 0x20 0x60 0xc 0x60 0x52 0x81 0x90 0x0)) 5 (by decide) (UInt64.ofBytes 0xff 0x60 0x54 0x20 0x90 0x40 0x60 0x52)) 6 (by decide) (UInt64.ofBytes 0x73 0x54 0x0 0x60 0x5b 0x56 0x90 0x16)) 7 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 8 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 9 (by decide) (UInt64.ofBytes 0x61 0x14 0x33 0x16 0xff 0xff 0xff 0xff)) 10 (by decide) (UInt64.ofBytes 0x7f 0x51 0x80 0x40 0x60 0x57 0xff 0x2e)) 11 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0xa0 0x79 0xc3 0x8)) 12 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 13 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 14 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 15 (by decide) (UInt64.ofBytes 0x1 0x82 0x4 0x60 0x20 0x60 0x52 0x81)) 16 (by decide) (UInt64.ofBytes 0x52 0x1 0x82 0x24 0x60 0x52 0x90 0x81))
+
+private def absorbed088 : Vector UInt64 25 :=
+  #v[0xef00770e167e7598, 0xe97f5238cf5c742d, 0xe6a43d37bcfa97a5, 0x60dfa2f27383ef2d, 0x2e92da12354c3504, 0xc42d4721f104b8c5, 0x85ac49341a79ac24, 0xffdfa74b0d4fb5d, 0xe46ae167ea84fe9e, 0x131863b86b903d67, 0x8d459fe2651c4f49, 0x7a346bd0867df359, 0x94cfc46679d15ec5, 0x1f771e2352e12352, 0x91caa184f7c74b21, 0x6ffa8e2aec67b41d, 0x6d95b76e5e739be5, 0xc2d35631b4c5a16, 0x8bb81ff96163aecf, 0x1c44a4c53aa6839e, 0xce45896de64c2e67, 0x29308e9b6c182ef, 0xa719b4d0b503caac, 0x85ae849199d3eae, 0xfb9bef9fa4168093]
+
+private theorem words088 : absorb088 state088 = absorbed088 := by
+  decide +kernel
+
+private def quarter088_1 : Vector UInt64 25 :=
+  #v[0x1d32d0902d67ec3, 0x603517045aacf8aa, 0x41b6a9280539c2e0, 0xbb3719878ecbaee0, 0xf98db5fda642f0d3, 0xe9411b619dec07ac, 0x86aa05bf051e528a, 0xb5645495f0e5f40a, 0x409c9e890fad523e, 0xc8bff185a3c916ee, 0x9fe5c7c637172bb1, 0xb56d89321404c2ba, 0x7d89d356a62c9dbf, 0xee48b606c0d004f4, 0x9a400c87282dd2df, 0x7faedf3b18a7e7ef, 0xecc01e35574028eb, 0xa351fb82d5100f3, 0x4d4101ec7180b297, 0x2bec284028cbb3d, 0x40b2dc0ae5d624ce, 0xe3011e8eb757cf89, 0x31de8329cacf4afc, 0x92940dacf0da3039, 0x7ff26413a0685dd2]
+
+private theorem rounds088_0 : sixRounds 0 (by decide) absorbed088 = quarter088_1 := by
+  decide +kernel
+
+private def quarter088_2 : Vector UInt64 25 :=
+  #v[0xbb01c4e581d5f446, 0x279f75d2f38d048f, 0x3d7eda29c1d9dee2, 0xc3c33077ba206357, 0x97ddd28931d7d890, 0x849d2daec8698e08, 0x9c9f6f855329ad2e, 0x68601b76fe1663a, 0xbe13136c880af008, 0xff83a1c3d1e93c2a, 0x142c5676ead14cf0, 0x285ffe59f8f57cca, 0xf0e7ff4d7383b18c, 0xdea3d254fd563c0f, 0x65e8ea8e93775da3, 0xfd4a51f63945eec2, 0xb0a8e1a79a22f1b0, 0xe457df03219f7a0d, 0xa7f26b2eec6dd149, 0x8efc50a8c5288bda, 0x9ee7b6681924b4fd, 0x711ff207d07c751d, 0xfb14fe8e3f8f99b, 0x12312d50b73c1334, 0xf0f73cd1d884486e]
+
+private theorem rounds088_1 : sixRounds 6 (by decide) quarter088_1 = quarter088_2 := by
+  decide +kernel
+
+private def quarter088_3 : Vector UInt64 25 :=
+  #v[0x54dd4c0857c08ba9, 0x181b84920184b3d2, 0xbad252b204796ddb, 0xc9cbd312ac95c071, 0x643231919d92ae7, 0x309f2da5883e6a8a, 0xc69154a599466768, 0xaf1ad963ee4e7c7a, 0x3b520695cdf35f1c, 0xada956e05d0eae2, 0xa812b0ab80cc9290, 0x5e37498b5e7ccf6f, 0x5cac1ff9f8a487cc, 0x92e89e780dde3a0, 0xe8a9037cf332f51d, 0xf46c9de7a243aa3b, 0x5842108ce74f68c0, 0x2fb64ff265d808a9, 0x6366180c314e7e85, 0xd1548421e789ebab, 0x4cb176dd9d44f9c4, 0xe84dbbd29968a3dd, 0xb2d4fb3247a962b0, 0xe9ea178f76c7927d, 0xaa28c4af784a9e3a]
+
+private theorem rounds088_2 : sixRounds 12 (by decide) quarter088_2 = quarter088_3 := by
+  decide +kernel
+
+private theorem rounds088_3 : sixRounds 18 (by decide) quarter088_3 = state089 := by
+  decide +kernel
+
+private theorem perm088 : KECCAK.f1600 absorbed088 = state089 := by
+  rewrite [f1600_sixRounds]
+  rewrite [rounds088_0, rounds088_1, rounds088_2, rounds088_3]
+  rfl
+
+theorem block088 (tail : Bytes) :
+    KECCAK.Bytes.run 0 (bytes088 ++ tail) state088 =
+      KECCAK.Bytes.run 0 tail state089 := by
+  exact run_block_of_step bytes088 tail absorb088 state088 absorbed088
+    state089 (fun _ => rfl) words088 perm088
+
+private def absorb089 (ws : Vector UInt64 25) : Vector UInt64 25 :=
+  (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane (KECCAK.xorLane ws 0 (by decide) (UInt64.ofBytes 0x65 0x6c 0x62 0x61 0x6e 0x77 0x4f 0x7f)) 1 (by decide) (UInt64.ofBytes 0x72 0x65 0x6c 0x6c 0x61 0x63 0x20 0x3a)) 2 (by decide) (UInt64.ofBytes 0x20 0x74 0x6f 0x6e 0x20 0x73 0x69 0x20)) 3 (by decide) (UInt64.ofBytes 0x65 0x6e 0x77 0x6f 0x20 0x65 0x68 0x74)) 4 (by decide) (UInt64.ofBytes 0x51 0x90 0x52 0x1 0x82 0x44 0x60 0x72)) 5 (by decide) (UInt64.ofBytes 0x90 0x1 0x64 0x60 0x3 0x90 0x81 0x90)) 6 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0x73 0x5b 0xfd)) 7 (by decide) (UInt64.ofBytes 0xff 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 8 (by decide) (UInt64.ofBytes 0x81 0xff 0xff 0xff 0xff 0xff 0xff 0xff)) 9 (by decide) (UInt64.ofBytes 0x51 0x40 0x60 0x57 0x6b 0x2f 0x61 0x16)) 10 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0xa0 0x79 0xc3 0x8 0x7f)) 11 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 12 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 13 (by decide) (UInt64.ofBytes 0x0 0x0 0x0 0x0 0x0 0x0 0x0 0x0)) 14 (by decide) (UInt64.ofBytes 0x80 0x80 0x1 0x4 0x60 0x52 0x81 0x0)) 15 (by decide) (UInt64.ofBytes 0x52 0x82 0x3 0x81 0x82 0x1 0x20 0x60)) 16 (by decide) (UInt64.ofBytes 0x80 0x1 0x20 0x60 0x52 0x81 0x32 0x60))
+
+private def absorbed089 : Vector UInt64 25 :=
+  #v[0x92e81011d2c8023a, 0xc1d52567ed9deb78, 0x71fd91ed533c6ea2, 0xeed76f916458111, 0xf8141d1d412bda29, 0x45dab5f8123cf5b0, 0xa8cbce422d3745ab, 0x4b5f335035cd869b, 0x9e331b1ef0d54487, 0x25cf088ec46bbbba, 0x6d7af6db9f86a146, 0xa0dba30ea70d92e, 0xdc7733a0d8d01cfd, 0xb2a65907c2dac2bf, 0x326c307e28e22b88, 0xf5df3c1ccb7b89fb, 0x7f93180d79b628ba, 0xb6c72af4e9c25dd6, 0xff1c6ceb95dc01b3, 0xb6ab0b0536230b4e, 0xcc98cddad77535f2, 0xca1860c7d8259822, 0x5bc9d12596c68435, 0xc061031bd3364f49, 0xc8ab5733d9d4942c]
+
+private theorem words089 : absorb089 state089 = absorbed089 := by
+  decide +kernel
+
+private def quarter089_1 : Vector UInt64 25 :=
+  #v[0xc9079669fd924cf1, 0xedae5cd95af3e88b, 0xe8ea338e33e49138, 0x8e9f629dfd557d7e, 0x47365fa39a3c2b42, 0xc0edb5094d3d3740, 0x1f0eb29112eba47b, 0x889b2cc40a00fd1a, 0x8741da64000197a4, 0xf30fd6f2f80ffc73, 0xb0446d43c19d4787, 0x582af18c9bf28347, 0x58743134306ee208, 0x7a4cad43dfc930e1, 0x68a8bb9b09affdbf, 0xbb14ec3e273cb64, 0x88769a8f38fea131, 0x181141e86b3b8d2b, 0x228848807b1c8a63, 0x6b86ed6bee1487ca, 0x87b7c955c61101c, 0x443962af7082fe39, 0x6df937aa3dadc556, 0x26b916c79cfb1b5e, 0x9affa21404c8ef00]
+
+private theorem rounds089_0 : sixRounds 0 (by decide) absorbed089 = quarter089_1 := by
+  decide +kernel
+
+private def quarter089_2 : Vector UInt64 25 :=
+  #v[0xe2c267dc922b9ab6, 0xa193c7579b7e0a59, 0x169e040a3430f35a, 0x989f8dd3b7c51003, 0x9e57cb0526f36971, 0x9ca8ca0b5f94901f, 0x222399c50883d53a, 0x4f96876430bd983e, 0x67c7b23769c494b8, 0x66dc9591c5071314, 0x5de2f2f7cb77eec9, 0xdedf8488f63bfa04, 0x75872426cb3c5406, 0x27b0054083ad5e3, 0xac1e78bea4834ede, 0xa7eccc5dfc9ab21d, 0x33f07789a80ba366, 0x482874f9186103c9, 0xb574f9174e92f275, 0xdbe78ba0e6addeb0, 0x40fa7f3e0517d88a, 0x6048c795bc4fa2d1, 0xe39423aafa02e2a7, 0xcc2458222fc203fb, 0x2f2cab6499200db9]
+
+private theorem rounds089_1 : sixRounds 6 (by decide) quarter089_1 = quarter089_2 := by
+  decide +kernel
+
+private def quarter089_3 : Vector UInt64 25 :=
+  #v[0x941609441100ec38, 0x75af5ab2e7368c84, 0xc509e6a42120ff69, 0x4fb37018b9f47ac2, 0x37cbc72b19f107c4, 0x2ab71c2521af030f, 0x95a8200363920859, 0xfd1ecda25a361ab, 0x2d37af71126c0e84, 0x338b9584b53e7ffa, 0x172ba928cbe3dbe2, 0x50e801ef5e3de982, 0xe0b54b9ba87efe92, 0x7eee99379994b406, 0x9fb259590ccff53a, 0xbeba1b4b94c06409, 0xe7561a4fca8123a, 0x7b2360106e1ddc2e, 0x561cfa8a46fcf8ef, 0xa4ab2c1b6dcec59b, 0xff0ddfe55649f696, 0x2caed1f00f1114d6, 0xd6b67f1a24d54d43, 0x6bc36147bb9e075d, 0xa04715738b46c037]
+
+private theorem rounds089_2 : sixRounds 12 (by decide) quarter089_2 = quarter089_3 := by
+  decide +kernel
+
+private theorem rounds089_3 : sixRounds 18 (by decide) quarter089_3 = state090 := by
+  decide +kernel
+
+private theorem perm089 : KECCAK.f1600 absorbed089 = state090 := by
+  rewrite [f1600_sixRounds]
+  rewrite [rounds089_0, rounds089_1, rounds089_2, rounds089_3]
+  rfl
+
+theorem block089 (tail : Bytes) :
+    KECCAK.Bytes.run 0 (bytes089 ++ tail) state089 =
+      KECCAK.Bytes.run 0 tail state090 := by
+  exact run_block_of_step bytes089 tail absorb089 state089 absorbed089
+    state090 (fun _ => rfl) words089 perm089
+
+end Blanc.Lift.Usdc.ImplV2_1Creation.SigningBlocks

@@ -2377,6 +2377,41 @@ theorem ConfiguredHistoryTraceIn.creation_txSplit_origins_and_available_targets
   exact ConfiguredHistoryTraceIn.creation_origins_and_available_targets history capabilities bal
     cut.head headRoots impls ready receiver input checked noExecs hsg apart
 
+/-- Concrete creation observations can supply retained target exclusion without
+repeating their signed-input proof. Carry older runtime availability through the
+same actual selected transaction and retain its guarded origin obligations. -/
+theorem ConfiguredHistoryTraceIn.txSplit_origins_and_available_of_retainedTargets_ne
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (rootsIn : ∀ R ∈ block.settledRoots, R ∈ history.settledRoots)
+    {P : Adr} {W available : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ available, UsdcImplCode e.code)
+    (ready : UsdcEntriesReady available cut.benv.state)
+    (excluded : ∀ R ∈ cut.head.settledRoots, ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget ≠ P) :
+    UsdcTransactionOrigins P W cut.head ∧
+      UsdcGuardedInstallations P W cut.head.settledRoots ∧
+      UsdcEntriesReady available cut.afterBenv.state := by
+  have guarded := TransactionTrace.usdc_origins_of_retainedTargets_ne (W := W) cut.head excluded
+  have hsg : cut.benv.stat.rules.stateGas = none := by
+    have stat : cut.benv.stat = (initBenv block.fork pre block.block.header).stat :=
+      block.txSplit_stat cut
+    rw [stat]
+    exact capabilities.stateGas_none block.forkIn
+  refine ⟨guarded.1, guarded.2, ?_⟩
+  intro e member
+  apply (ConfiguredHistoryTraceIn.impl_transaction_preserves_retained history
+    capabilities bal (impls e member) cut.head ?_ hsg
+    (ready e member).1 (ready e member).2).2
+  intro R member
+  apply rootsIn R
+  rw [block.settledRoots_eq_txSplit cut]
+  exact List.mem_append_left _ (List.mem_append_right _ member)
+
 /-- Grow the available family only after the new entry's actual runtime and
 conditional library facts have been obtained from its original creation. -/
 theorem UsdcEntriesReady.cons {available : List UsdcDeployedEntry} {state : State}

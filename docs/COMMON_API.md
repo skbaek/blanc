@@ -7048,6 +7048,11 @@ compose them. `squeeze` and `run_empty` expose the original final padding and
 digest projection. These prove no hash injectivity or historical input identity.
 The WETH creation `SigningEncoding` and `SigningHash` modules apply these facts
 to the exact EIP-155 envelope conditional on explicit transaction fields.
+`run_block_of_step` composes the actual symbolic byte-runner step with explicit
+absorption and permutation equations. Use it for each full block after checking
+those equations; it retains the exact bytes and suffix and adds no padding,
+length, or hash assumption. The caller must select the absorption function and
+intermediate state, which the result does not determine.
 Select each state witness explicitly; arbitrary hash goals have no automatic recipe.
 The contract-specific `Creation.recoveredSender_of_creation_fields` in
 [`Weth9/Creation/SigningRecover`](../Blanc/Lift/Weth9/Creation/SigningRecover.lean)
@@ -9823,7 +9828,18 @@ contract-neutral.
   source run to the actual returned code window and unchanged storage, without
   a fork or memory-alignment premise. Neither theorem identifies a runtime
   literal or proves CREATE settlement or historical installation.
-  For the modern owner constructor source pattern in the same module,
+  For Solidity's library constructor, use `solcLibraryConstructor_effects`
+  in [`Blanc/Lift/SolcLibraryConstructor.lean`](../Blanc/Lift/SolcLibraryConstructor.lean).
+  From the actual successful source run it derives unchanged storage and the
+  copied runtime image after the `ADDRESS` word write and overlapping `PUSH20`
+  byte write. `solcLibraryReturn_effects` handles the patch/return suffix;
+  `solcLibraryPatchedImage_window` exposes the opcode, twenty address bytes,
+  and unchanged template tail. Memory remains symbolic through both inverses.
+  These results do not identify a certificate or runtime literal, establish
+  creation settlement, or supply historical execution. Select the inverse
+  explicitly from its source-run hypothesis; its result has no reliable
+  goal-head dispatch for an automatic recipe.
+  For the modern owner constructor source pattern in `Lift/Deploy.lean`,
   `solcConstructorPrelude_effects` inverts the memory-pointer initialization,
   slot-one packed-flag clear, slot-eleven reset and call-value guard, retaining
   the actual successful continuation run. `solcOwnerConstructor_effects`
@@ -10716,3 +10732,21 @@ ordered trace by determinism. `UsdcMidHistoryOrigins.splice` and
 head, preserving its original prefix, suffix and all system roots. These are
 producer compositions; concrete signed creation/census correspondence and
 initial selected-zero evidence still need their existing original observations.
+
+For concrete original USDC creation boundaries, `CreationHistory.lean` connects
+`ImplV2Creation`, `ImplV2_1Creation`, `LibCreation` and `ImplV2_2Creation` original
+observations to guarded transaction origins and runtime availability. Each
+`OriginalObservation.origins_and_available_targets` preserves older available
+entries and adds the checked runtime at its actual after-cut state. V2.2 also
+uses the already-created library entry. Entry metadata remains unchanged;
+these results establish runtime availability, not historical boundary adoption.
+`OriginalModernCreationChain` records the four original blocks and five actual
+intervening histories; its entry definitions retain the actual after-cut state
+and canonical raw-node prefix. The chain definition alone asserts no runtime,
+origin or installation property across the intervening intervals.
+The shared `ProxyRetainedNoDel` adapter
+`ConfiguredHistoryTraceIn.txSplit_origins_and_available_of_retainedTargets_ne`
+accepts a concrete observation's checked retained-target exclusion, so callers
+do not repeat its signed-input, CREATE-address or no-external-instruction proof.
+The observation correspondence and source-registration decisions remain open.
+

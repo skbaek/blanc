@@ -33,4 +33,17 @@ theorem run_empty (wc : Fin 17) (ws : Vector UInt64 25) :
         ((8 : UInt64) <<< 60))) := by
   rfl
 
+/-- Transport one actual byte-runner step using checked absorption and permutation
+equations. The caller supplies the symbolic step for the exact block and suffix;
+this theorem does not assert a block length or invent padding. -/
+theorem run_block_of_step (bytes tail : Bytes)
+    (absorb : Vector UInt64 25 → Vector UInt64 25)
+    (before absorbed after : Vector UInt64 25)
+    (step : ∀ ws, KECCAK.Bytes.run 0 (bytes ++ tail) ws =
+      KECCAK.Bytes.run 0 tail (KECCAK.f1600 (absorb ws)))
+    (words : absorb before = absorbed) (permutation : KECCAK.f1600 absorbed = after) :
+    KECCAK.Bytes.run 0 (bytes ++ tail) before = KECCAK.Bytes.run 0 tail after := by
+  exact (step before).trans (congrArg (fun ws => KECCAK.Bytes.run 0 tail ws)
+    ((congrArg KECCAK.f1600 words).trans permutation))
+
 end Blanc.KeccakBlocks
