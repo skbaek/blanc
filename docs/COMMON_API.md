@@ -1144,6 +1144,11 @@ entry after authorization/delegation; no installed-world or prestate-nonce
 premise is needed. `MessageCallTrace.settledRoots_context_protected` and the
 matching process-trace producers retain the original message witnesses;
 `messageCallExecutionMessage_context_code_nonempty` handles designators.
+`TransactionTrace.settledRoot_create_ne_of_earlier_running` excludes any
+earlier retained nonempty running-code context at the actual CREATE target.
+`TransactionTrace.settledRoot_before_create_context_empty` applies this to
+every node of the retained prefix, ruling out nonempty suspended callers at
+that target before the spawn. It does not classify later runtime/delegation.
 `TransactionTrace.settledRoot_create_ne_of_earlier_selfdestruct` combines that
 producer with an actual retained-list split and later CREATE spawn to exclude
 the earlier SELFDESTRUCT's storage context as the new target. Supply the root
@@ -2063,7 +2068,8 @@ CALL target code, or the inherited delegated context; the same-frame seam is
 `Exec.retainedNodes_protected_of_ordered_noStateGas` combines nonce and code
 continuity, while `Evm.step_spawn_create_unprotected_noStateGas` supplies the
 actual later CREATE guard. Together they yield
-`Exec.retainedNodes_create_ne_of_earlier_selfdestruct_noStateGas`; obtain its
+`Exec.retainedNodes_create_ne_of_earlier_running_noStateGas`, with the
+SELFDESTRUCT specialization `Exec.retainedNodes_create_ne_of_earlier_selfdestruct_noStateGas`; obtain its
 root premise from the actual transaction producer documented above.
 
 For a checked constructor that cannot execute external instructions, use

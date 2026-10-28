@@ -828,6 +828,33 @@ theorem Exec.retainedNodes_protected_of_ordered_noStateGas
     rw [Exec.retainedNodes_getCode_of_ordered_noStateGas run committed hsg split nonempty]
     exact code
 
+/-- A later CREATE cannot reuse the storage context of any earlier retained
+execution of nonempty code, including a suspended caller or delegated frame.
+The original retained-position split supplies the order. -/
+theorem Exec.retainedNodes_create_ne_of_earlier_running_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (root : sevm.code.size ≠ 0 → State.Protected pre.state sevm.currentTarget)
+    {before middle after : List Exec.Deriv} {m n : Exec.Deriv}
+    (split : Exec.retainedNodes run = before ++ m :: (middle ++ n :: after))
+    (running : m.sevm.code.size ≠ 0)
+    {frame : Frame} {resume : Resume} {pc' : Nat}
+    (nodeGas : n.sevm.benvStat.rules.stateGas = none)
+    (step : Evm.step ⟨n.pc, n.sevm, n.devm⟩ = .spawn frame resume pc')
+    (create : frame.isCreate = true) : frame.inner.currentTarget ≠ m.sevm.currentTarget := by
+  have member : m ∈ Exec.rawNodes run :=
+    (Exec.retainedNodes_sublist_rawNodes run).subset (by
+      rw [split]
+      exact List.mem_append_right _ List.mem_cons_self)
+  have protection := Exec.rawNodes_context_protected_noStateGas run hsg root m member running
+  have later := Exec.retainedNodes_protected_of_ordered_noStateGas
+    run committed hsg split protection
+  intro same
+  apply Evm.step_spawn_create_unprotected_noStateGas nodeGas step create
+  rw [same]
+  exact later
+
 /-- An earlier retained SELFDESTRUCT cannot target the address of a later
 CREATE spawn. The actual root's context protection is transported through all
 entered frames; the original retained-position split supplies the order. -/
@@ -843,20 +870,11 @@ theorem Exec.retainedNodes_create_ne_of_earlier_selfdestruct_noStateGas
     (nodeGas : n.sevm.benvStat.rules.stateGas = none)
     (step : Evm.step ⟨n.pc, n.sevm, n.devm⟩ = .spawn frame resume pc')
     (create : frame.isCreate = true) : frame.inner.currentTarget ≠ m.sevm.currentTarget := by
-  have member : m ∈ Exec.rawNodes run :=
-    (Exec.retainedNodes_sublist_rawNodes run).subset (by
-      rw [split]
-      exact List.mem_append_right _ List.mem_cons_self)
   have running : m.sevm.code.size ≠ 0 := by
     intro empty
     simp only [Linst.At, ByteArray.getInst, empty, Nat.not_lt_zero, ↓reduceDIte] at destruct
     cases destruct
-  have protection := Exec.rawNodes_context_protected_noStateGas run hsg root m member running
-  have later := Exec.retainedNodes_protected_of_ordered_noStateGas
-    run committed hsg split protection
-  intro same
-  apply Evm.step_spawn_create_unprotected_noStateGas nodeGas step create
-  rw [same]
-  exact later
+  exact Exec.retainedNodes_create_ne_of_earlier_running_noStateGas
+    run committed hsg root split running nodeGas step create
 
 end Blanc

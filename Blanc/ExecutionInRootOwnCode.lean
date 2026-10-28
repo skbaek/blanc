@@ -465,6 +465,26 @@ theorem TransactionTrace.settledRoots_context_protected
       State.Protected R.pre.state R.sevm.currentTarget :=
   trace.message.settledRoots_context_protected (prepareMessage_own_entry trace.prepared)
 
+/-- An actual CREATE excludes every earlier retained nonempty running-code
+context at its target, including suspended and delegated contexts. Protection
+comes from the original transaction entry, not an installed-runtime premise. -/
+theorem TransactionTrace.settledRoot_create_ne_of_earlier_running
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    {R : Exec.Frame} (root : R ∈ trace.settledRoots)
+    (hsg : R.sevm.benvStat.rules.stateGas = none)
+    {before middle after : List Exec.Deriv} {m n : Exec.Deriv}
+    (split : Exec.retainedNodes R.run = before ++ m :: (middle ++ n :: after))
+    (running : m.sevm.code.size ≠ 0)
+    {frame : Frame} {resume : Resume} {pc' : Nat}
+    (nodeGas : n.sevm.benvStat.rules.stateGas = none)
+    (step : Evm.step ⟨n.pc, n.sevm, n.devm⟩ = .spawn frame resume pc')
+    (create : frame.isCreate = true) : frame.inner.currentTarget ≠ m.sevm.currentTarget :=
+  Exec.retainedNodes_create_ne_of_earlier_running_noStateGas
+    R.run R.committed hsg (trace.settledRoots_context_protected R root)
+    split running nodeGas step create
+
 /-- Within an actual transaction root, an earlier retained SELFDESTRUCT cannot
 name the target of a later CREATE spawn. All context protection is derived
 from this transaction's original message entry. -/
@@ -484,5 +504,31 @@ theorem TransactionTrace.settledRoot_create_ne_of_earlier_selfdestruct
   Exec.retainedNodes_create_ne_of_earlier_selfdestruct_noStateGas
     R.run R.committed hsg (trace.settledRoots_context_protected R root)
     split destruct nodeGas step create
+
+/-- Every retained context at the future CREATE target has empty running code
+before that spawn. Thus no nonempty suspended caller at the target predates
+the actual creation in this transaction root. -/
+theorem TransactionTrace.settledRoot_before_create_context_empty
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    {R : Exec.Frame} (root : R ∈ trace.settledRoots)
+    (hsg : R.sevm.benvStat.rules.stateGas = none)
+    {before after : List Exec.Deriv} {n : Exec.Deriv}
+    (split : Exec.retainedNodes R.run = before ++ n :: after)
+    {frame : Frame} {resume : Resume} {pc' : Nat}
+    (nodeGas : n.sevm.benvStat.rules.stateGas = none)
+    (step : Evm.step ⟨n.pc, n.sevm, n.devm⟩ = .spawn frame resume pc')
+    (create : frame.isCreate = true) :
+    ∀ m ∈ before, m.sevm.currentTarget = frame.inner.currentTarget →
+      m.sevm.code.size = 0 := by
+  intro m member target
+  by_contra running
+  obtain ⟨first, middle, same⟩ := List.append_of_mem member
+  have ordered : Exec.retainedNodes R.run = first ++ m :: (middle ++ n :: after) := by
+    rw [split, same]
+    simp only [List.append_assoc, List.cons_append]
+  exact (trace.settledRoot_create_ne_of_earlier_running root hsg
+    ordered running nodeGas step create) target.symm
 
 end Blanc.ExecutionTrace
