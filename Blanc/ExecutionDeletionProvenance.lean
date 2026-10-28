@@ -2,6 +2,8 @@ import Blanc.ExecutionRetainedDeletionSafety
 import Blanc.ExecutionRetainedCodeSettlement
 import Blanc.ExecutionHistoricalAdmission
 import Blanc.ExecutionCommittedCell
+import Blanc.ExecutionInRootOwnCode
+import Blanc.ExecutionSettledRootEntry
 
 /-! Deletion-set provenance without an installed-code premise. -/
 
@@ -806,6 +808,55 @@ theorem TransactionTrace.code_preserved_of_retained_terminals
   refine ⟨notDeleted, ?_⟩
   exact (trace.cell_property_of_settledRoots 0 hsg installed nonempty nondesignator notDeleted
     (fun _ => True) (by intro R member ready; trivial) trivial).2
+
+/-- An installed call-only checked runtime excludes every retained SELFDESTRUCT
+at its address. Actual transaction roots supply pc zero, own code and empty
+inherited deletions; membership in the block's created-account set is irrelevant. -/
+theorem TransactionTrace.retained_terminals_safe_of_installedCert
+    {a : Adr} {C : ByteArray} {c : Lift.Cert}
+    (checked : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
+    (noSelfdestruct : c.noSelfdestruct = true) (nondesignator : ¬ isValidDelegation C)
+    (nonempty : C.toList ≠ [])
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none) (installed : benv.state.getCode a = C) :
+    ∀ R ∈ trace.settledRoots, ∀ node ∈ Exec.retainedNodes R.run,
+      node.sevm.currentTarget = a → ¬ Linst.At node.sevm.code node.pc .selfdestruct := by
+  intro R member node retained target
+  have code := (trace.settledRoots_entry_code_cell installed nonempty nondesignator 0 R member).1
+  have frames : R ∈ trace.settledFrames := by
+    rw [trace.settledFrames_eq]
+    exact List.mem_flatMap.mpr ⟨R, member, by
+      simp only [Exec.committedFrames, R.committed, ↓reduceDIte]
+      exact List.mem_cons_self⟩
+  have raw := trace.message.mem_rawFrames_of_mem_settledFrames R frames
+  have entry := trace.rootEntryIn (F := fun fork => fork.ruleSet.stateGas = none) hsg _ raw
+  have own := trace.settledRoots_rootOwnCode R member a
+  change R.sevm.currentTarget = a → (R.pre.getCode a).toList ≠ [] →
+    ¬ isValidDelegation (R.pre.getCode a) → R.sevm.code = R.pre.getCode a at own
+  exact Exec.safe_of_installedCert checked callOnly noSelfdestruct nondesignator R.run
+    entry.2 code nonempty
+    (fun atTarget => ⟨entry.1, (own atTarget (by rw [code]; exact nonempty)
+      (by rw [code]; exact nondesignator)).trans code⟩)
+    node ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained) target
+
+/-- Checked installed code reaches final transaction settlement even if its
+account was created earlier in this block. No terminal-safety or deletion
+oracle, created-account exclusion, or fork-specific SELFDESTRUCT rule is supplied. -/
+theorem TransactionTrace.code_preserved_of_installedCert
+    {a : Adr} {C : ByteArray} {c : Lift.Cert}
+    (checked : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
+    (noSelfdestruct : c.noSelfdestruct = true) (nondesignator : ¬ isValidDelegation C)
+    (nonempty : C.toList ≠ [])
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none) (installed : benv.state.getCode a = C) :
+    a ∉ trace.messageOut.accountsToDelete ∧ state.getCode a = C :=
+  trace.code_preserved_of_retained_terminals hsg installed nonempty nondesignator
+    (trace.retained_terminals_safe_of_installedCert checked callOnly noSelfdestruct
+      nondesignator nonempty hsg installed)
 
 /-- Sequential transactions preserve code from its actual installation state.
 The account may occur in the block's created-account set; only actual retained

@@ -2099,6 +2099,17 @@ actual starting installation and terminal-safety premises. No claim about
 the historical origin of that installation follows. As above, a code equality
 does not determine the required transaction trace or safety certificate.
 
+For an already installed call-only runtime with a checked no-SELFDESTRUCT
+certificate, `TransactionTrace.retained_terminals_safe_of_installedCert`
+derives the retained terminal condition from actual root entries and own-code
+provenance. `TransactionTrace.code_preserved_of_installedCert` then proves
+final deletion exclusion and exact code preservation. These require no
+not-created premise: installation at transaction entry suffices, even for an
+account created earlier in the block. They do not cover runtime first installed
+during this same transaction or a runtime that delegates arbitrary code.
+The certificate, exact transaction and installation witness must be selected
+explicitly; no automatic recipe can infer them from the final code equality.
+
 When the same selected root already has a deletion-exclusion proof, use
 `TransactionTrace.not_mem_accountsToDelete_of_settledRoot` to discharge the
 actual output-deletion premise, then apply the retained-node code transport.
@@ -3902,11 +3913,15 @@ between successive roots or authenticate a historical creation cut.
 `settledRoot_proxyV1_implSlot_eq_of_freshKeys` exposes the cell conclusion
 without an incoming NoDel premise. In
 [`V1TransactionContinuity.lean`](../Blanc/Lift/Usdc/V1TransactionContinuity.lean),
-`v1_transaction_preserves` and `v1_transactions_preserve` derive both installed
-entry codes and the implementation word through the actual ordered transaction
-sequence. V1's existing installed certificate preserves the implementation
-account itself. Initial code/slot, block-created exclusions, exact-list freshness,
-same-history root inclusion and absent retained upgrade logs remain explicit;
+`v1_transaction_preserves_retained` and `v1_transactions_preserve_retained`
+derive both installed entry codes and the implementation word through the
+actual ordered transaction sequence, without created-account exclusions for
+either account. The actual retained Proxy/V1 classifier supplies proxy terminal
+safety; V1's checked installed certificate supplies implementation safety.
+Initial code/slot, exact-list freshness, same-history root inclusion and absent
+retained upgrade logs remain explicit. The older `v1_transaction_preserves`
+and `v1_transactions_preserve` statements retain their extra exclusions and
+project these stronger results; historical creation binding is still separate.
 [`V1HistoryContinuity.lean`](../Blanc/Lift/Usdc/V1HistoryContinuity.lean)'s
 `v1_block_preserves` and `v1_history_preserves` extend this to actual block
 settlement and configured segments whose rule bits disable system stages.
