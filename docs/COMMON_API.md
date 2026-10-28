@@ -9509,6 +9509,19 @@ contract-neutral.
   lookup remain explicit. Select these APIs by their actual trace/cut and
   certificate witnesses; their compound premises have no reliable goal-head
   recipe trigger.
+  The contract-specific V1 binding is in
+  [`Usdc/ImplV1Origin`](../Blanc/Lift/Usdc/ImplV1Origin.lean).
+  `create_address` proves nonce18 at the already registered proxy creator
+  yields the registered initial implementation address.
+  `constructor_effects_of_original_receipt` specializes the shared result to
+  the original index30 cut and derives its admitted sender from recovery.
+  `constructor_effects_of_original_slot` binds fields through the actual body
+  slot and decoder; `constructor_effects_of_signed_slot` supplies recovery from
+  explicit signature fields and a signing-hash equality via
+  `recoveredSender_of_signingHash`. That hash equality remains a caller
+  obligation, not a proved payload computation. Creation code and certificate
+  stay parameters with checked entry and runtime-window identities; no new
+  input, original field correspondence or historical inclusion is adopted.
   The `solc-runtime-return` recipe matches only a named terminal-body exact
   run ending in a halted outcome; it never unfolds arbitrary certificate
   entries or concrete machine images to discover this pattern.
