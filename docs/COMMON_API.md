@@ -1912,6 +1912,14 @@ The per-root block facts already transported to a mid history are in
 `MidHistoryTraceIn.rewardCreditsFunded` (every block, the cut block included, funds its reward
 credits under `BodyStageCapabilities F`), `rawFrames_entered` (any `EnteredCondition`),
 `rootEntryIn` and `calldata_bound`, each through `rawFrames_mem_block`.
+The same module's `ConfiguredBlockTraceIn.txSplit_chainId` connects a cut's
+admission environment to the successful configured transition's chain ID.
+`txSplit_recoveredSender` projects the actual admission check at that chain ID;
+`txSplit_sender_of_recovery` identifies the admitted sender from a recovery
+proof for the exact cut transaction. These preserve the original block and
+cut, without a transaction-success premise. They do not authenticate external
+transaction data. Their equality goals have no reliable narrow recipe head;
+use this branch with the block and cut explicitly.
 
 For the original retained forest and admitted queries after a transaction cut,
 use [`Blanc/ExecutionMidHistoryInForest.lean`](../Blanc/ExecutionMidHistoryInForest.lean).
@@ -6683,8 +6691,30 @@ digest projection. These prove no hash injectivity or historical input identity.
 The WETH creation `SigningEncoding` and `SigningHash` modules apply these facts
 to the exact EIP-155 envelope conditional on explicit transaction fields.
 Select each state witness explicitly; arbitrary hash goals have no automatic recipe.
+The contract-specific `Creation.recoveredSender_of_creation_fields` in
+[`Weth9/Creation/SigningRecover`](../Blanc/Lift/Weth9/Creation/SigningRecover.lean)
+supplies `signingPayload_hash` to recovery while retaining the exact signed
+fields. `WethDeploymentTo.of_original_creation_fields_receipt` in the live
+checkpoint history then constructs its original transaction cut and deployment
+record from slot85, decoding and the successful receipt. Neither API requires
+an extra hash or recovered-sender premise; original field correspondence,
+later history and HASH-T remain explicit. The older conditional APIs remain.
 
 For a successful creation receipt, use
+`StagedBodyTrace.decodedTxs_getElem_of_slot` and `txSplit_tx_eq_of_slot` in
+[`ExecutionBodyTransactionCut`](../Blanc/ExecutionBodyTransactionCut.lean)
+to identify the original decoded transaction from one indexed body slot and
+its actual-fork decoder result. The other slots retain their original inputs
+and successful decoding; full frozen-body equality is unnecessary for this
+selected identity. `mapM_getElem_of_eq_ok` is the underlying position-preserving
+successful `Except` traversal fact. These explicit slot/cut equality adapters
+have no reliable narrow recipe head and do not authenticate observations.
+If no cut has yet been supplied, `StagedBodyTrace.txSplitOfSlot` constructs it
+from those same slot/decode facts: successful decoding proves the index is in
+range, and `splitAt` retains the original prefix, head and suffix.
+`txSplitOfSlot_spec` gives its exact index and transaction. This witness-producing
+API requires no separate bound or transaction-cut assumption.
+Then use
 `ConfiguredBlockTraceIn.txSplit_error_eq_none_of_receipt` in
 [`ExecutionIndexedReceipts`](../Blanc/ExecutionIndexedReceipts.lean) to recover
 that original transaction's clean message result. Then
@@ -7249,7 +7279,14 @@ current recipe matchers have no forward-transition shape to bind.
   successful outer forms; it does not establish the theorem's entry,
   execution, address, output or charge obligations.
 - Generic deployment-message facts:
-  [`Blanc/DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean).  An inner
+  [`Blanc/DeploymentMessage.lean`](../Blanc/DeploymentMessage.lean).
+  `processCreateMessage_msg_afterTransfer_getStor` derives empty target storage
+  from the actual successful prepared CREATE transfer, for arbitrary call value,
+  caller/target identity and nonce. It reuses preparation's storage reset and the
+  balance-update equations: normalization may clear storage but cannot populate
+  it. The successful transfer remains explicit; this does not assert sufficient
+  funds or successful constructor execution. This equality is selected by its
+  transfer witness, without a reliable single-head proof-recipe trigger. An inner
   creation error crosses through
   `processCreateMessage_ok_of_processMessage_error`; a raw creation-code
   REVERT with no separate code address crosses through
@@ -9433,6 +9470,21 @@ contract-neutral.
   separately. Concrete certificate checking and runtime-literal identities
   remain the caller's obligations. The proxy's existing witness theorem is a
   compatibility projection of this shared source recovery.
+  For the legacy EXP/literal-mask constructor, use
+  `legacyConstructorPrelude_effects`, `legacyOwnerConstructor_effects`,
+  `legacyOwnerConstructor_message_effects`, and
+  `legacyOwnerConstructor_effects_of_createTrace` in the same common owner.
+  They compose the actual slot-one flag clear, slot-eleven reset,
+  `SolcStorageReturn.legacyOwnerInit_effects`, multiply/divide call target,
+  and terminal return. The source has no nonpayable guard: neither a zero
+  call-value premise nor a zero-value conclusion is introduced. Successful
+  CREATE entry uses `processCreateMessage_msg_afterTransfer_getStor` for
+  empty initial storage under arbitrary value transfer. The actual run or
+  retained CREATE supplies execution and charge; the result is the installed
+  code window and `solcOwnerConstructorStorage`. A concrete checked certificate,
+  runtime-window identity, and original historical correspondence remain
+  explicit. Select these compound inverses with their source/run witnesses;
+  no separate automatic recipe trigger is reliable for that combination.
   The `solc-runtime-return` recipe matches only a named terminal-body exact
   run ending in a halted outcome; it never unfolds arbitrary certificate
   entries or concrete machine images to discover this pattern.

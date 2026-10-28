@@ -1,7 +1,7 @@
 -- DeploymentMessage.lean : contract-neutral CREATE message plumbing.
 --
 -- Constructor-specific execution remains in each contract.  This owner keeps
--- the shared bridge from fresh-account preparation and zero-value transfer to
+-- the shared bridge from fresh-account preparation and entry transfer to
 -- an ordinary successful `processMessage` result.
 
 import Blanc.ExecutionOccurrence
@@ -27,6 +27,31 @@ theorem processCreateMessage_msg_getStor_currentTarget (msg : Msg) :
     split
     · rw [State.get_setPresent_self]
     · rw [State.get_set_self]
+
+/-- Successful CREATE entry still has empty target storage after transferring
+any call value. Balance normalization can clear storage, but cannot populate
+the storage already cleared by creation preparation. No nonce, distinct-caller
+or zero-value premise is needed. -/
+theorem processCreateMessage_msg_afterTransfer_getStor
+    {msg : Msg} {benv : Benv}
+    (htransfer : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv) :
+    benv.state.getStor msg.currentTarget = Stor.empty := by
+  let prepared := processCreateMessage.msg msg
+  have empty := processCreateMessage_msg_getStor_currentTarget msg
+  by_cases zero : prepared.value = 0
+  · exact (benvAfterTransfer_ok_getStor htransfer _ (Or.inl zero)).trans empty
+  by_cases transfer : prepared.shouldTransferValue = true
+  · obtain ⟨mid, debit, rfl⟩ := of_benvAfterTransfer transfer zero htransfer
+    change ((mid.addBal prepared.currentTarget prepared.value).get msg.currentTarget).stor = _
+    rw [State.addBal, State.setBal_get_stor]
+    split
+    · rfl
+    · rw [(State.of_subBal debit).2, State.setBal_get_stor]
+      split
+      · rfl
+      · exact empty
+  · rw [of_benvAfterTransfer_no transfer htransfer]
+    exact empty
 
 /-- A zero-value message can always cross its optional entry transfer. -/
 theorem benvAfterTransfer_exists_zero

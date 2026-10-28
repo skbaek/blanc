@@ -1,10 +1,12 @@
 import Blanc.Composition.LiveUsdcWeth9B26213219Checkpoint
 import Blanc.Lift.Weth9.DeployBlockHistory
+import Blanc.Lift.Weth9.Creation.SigningRecover
 import Blanc.Lift.Weth9.AllowanceReplay
 import Blanc.Lift.UniswapV2Factory.CreatePairHistory
 import Blanc.Lift.UniswapV2Pair.PairPositionalCalls
 import Blanc.ExecutionMidHistoryOwnCode
 import Blanc.ExecutionMidHistoryCallers
+import Blanc.ExecutionBodyTransactionCut
 
 /-!
 # The concrete checkpoint from deployment histories ending at one block
@@ -95,6 +97,158 @@ def WethDeploymentTo.of_creation_receipt_at_gas_limit
   .of_creation_receipt block number time cut txType data value nonce sender
     (Weth9.weth9_creation_gas_of_limit block number time cut txType data gasLimit)
     lookup succeeded history fresh
+
+/-- Signature recovery for the original transaction supplies its admitted
+sender. The receipt supplies success, and the recorded gas limit supplies the
+constructor margin; original data correspondence and HASH-T remain explicit. -/
+def WethDeploymentTo.of_creation_receipt_recovered
+    {checkpoint pre completed : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (number : block.block.header.number = 4719568)
+    (time : block.block.header.timestamp = 1513077455)
+    {index : Nat} (cut : block.bodyTrace.transactions.TxSplit index) {gasPrice : Nat}
+    (txType : cut.tx.type = .zero gasPrice none)
+    (data : cut.tx.data = Weth9.Creation.code.toList) (value : cut.tx.value = 0)
+    (nonce : cut.tx.nonce = 446)
+    (recovered : recoverSender 1 cut.tx = .ok Weth9.Creation.deployer)
+    (gasLimit : cut.tx.gas = 1500000)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true)
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
+    (fresh : Weth9.KeysFresh (fun _ => False)
+      (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
+        ((MidHistoryTraceIn.tail block cut).append history))) :
+    WethDeploymentTo checkpoint := by
+  exact .of_creation_receipt_at_gas_limit block number time cut txType data value nonce
+    (block.txSplit_sender_of_recovery cut recovered) gasLimit lookup succeeded history fresh
+
+/-- Position 85 in the original block body identifies the creation transaction
+and its receipt key. Decoding and recovery concern that exact slot; no full
+frozen-body equality or admitted-sender premise is required. -/
+def WethDeploymentTo.of_creation_receipt_slot
+    {checkpoint pre completed : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (number : block.block.header.number = 4719568)
+    (time : block.block.header.timestamp = 1513077455)
+    (cut : block.bodyTrace.transactions.TxSplit 85)
+    {slot : Bytes ⊕ Tx} {tx : Tx}
+    (atIndex : block.block.txs[85]? = some slot)
+    (decoded : decodeTx block.fork.ruleSet slot = .ok tx) {gasPrice : Nat}
+    (txType : tx.type = .zero gasPrice none)
+    (data : tx.data = Weth9.Creation.code.toList) (value : tx.value = 0)
+    (nonce : tx.nonce = 446)
+    (recovered : recoverSender 1 tx = .ok Weth9.Creation.deployer)
+    (gasLimit : tx.gas = 1500000)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (85 : Nat).toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true)
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
+    (fresh : Weth9.KeysFresh (fun _ => False)
+      (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
+        ((MidHistoryTraceIn.tail block cut).append history))) :
+    WethDeploymentTo checkpoint := by
+  obtain ⟨index, same⟩ := block.bodyTrace.txSplit_tx_eq_of_slot cut atIndex decoded
+  rw [← same] at txType data value nonce recovered gasLimit
+  rw [← index] at lookup
+  exact .of_creation_receipt_recovered block number time cut txType data value nonce
+    recovered gasLimit lookup succeeded history fresh
+
+/-- Produce the deployment input directly from the original block, selected
+slot and receipt. The transaction cut and its original suffix are constructed
+from successful decoding rather than supplied as another witness. -/
+noncomputable def WethDeploymentTo.of_original_creation_receipt
+    {checkpoint pre completed : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (number : block.block.header.number = 4719568)
+    (time : block.block.header.timestamp = 1513077455)
+    {slot : Bytes ⊕ Tx} {tx : Tx}
+    (atIndex : block.block.txs[85]? = some slot)
+    (decoded : decodeTx block.fork.ruleSet slot = .ok tx) {gasPrice : Nat}
+    (txType : tx.type = .zero gasPrice none)
+    (data : tx.data = Weth9.Creation.code.toList) (value : tx.value = 0)
+    (nonce : tx.nonce = 446)
+    (recovered : recoverSender 1 tx = .ok Weth9.Creation.deployer)
+    (gasLimit : tx.gas = 1500000)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (85 : Nat).toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true)
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
+    (fresh : let cut := block.bodyTrace.txSplitOfSlot atIndex decoded
+      Weth9.KeysFresh (fun _ => False)
+        (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
+          ((MidHistoryTraceIn.tail block cut).append history))) :
+    WethDeploymentTo checkpoint := by
+  exact .of_creation_receipt_slot block number time
+    (block.bodyTrace.txSplitOfSlot atIndex decoded) atIndex decoded txType data value nonce
+    recovered gasLimit lookup succeeded history fresh
+
+/-- The original signed creation transaction and successful receipt produce
+the deployment input. Recovery follows from its fields and the fixed payload
+hash, not an additional recovered-sender premise. Original correspondence,
+the later history and HASH-T remain explicit. -/
+noncomputable def WethDeploymentTo.of_original_signed_creation_receipt
+    {checkpoint pre completed : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (number : block.block.header.number = 4719568)
+    (time : block.block.header.timestamp = 1513077455)
+    {slot : Bytes ⊕ Tx} {tx : Tx}
+    (atIndex : block.block.txs[85]? = some slot)
+    (decoded : decodeTx block.fork.ruleSet slot = .ok tx)
+    (txType : tx.type = .zero 21000000000 none)
+    (data : tx.data = Weth9.Creation.code.toList) (value : tx.value = 0)
+    (nonce : tx.nonce = 446) (gasLimit : tx.gas = 1500000)
+    (v : tx.v = 37)
+    (r : tx.r.toB256 =
+      0x7ce08af79f7a6c1b8b336f50890a80602c4dcd1e3cc5ca131373f0e8ff15e278)
+    (s : tx.s.toB256 =
+      0x45e183d91f1e8f31e32d333cf6090990c9bf7d35dd00472cfd2d3a63ca8b1a5)
+    (hashed : Weth9.Creation.signingPayload.keccak =
+      0x1e62afdbf54076edd8083f93eab1bf693f2a5a3675886b669d13d9b3e6221235)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (85 : Nat).toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true)
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
+    (fresh : let cut := block.bodyTrace.txSplitOfSlot atIndex decoded
+      Weth9.KeysFresh (fun _ => False)
+        (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
+          ((MidHistoryTraceIn.tail block cut).append history))) :
+    WethDeploymentTo checkpoint := by
+  exact .of_original_creation_receipt block number time atIndex decoded txType data value nonce
+    (Weth9.Creation.recoveredSender_of_fields txType nonce gasLimit value data v r s hashed)
+    gasLimit lookup succeeded history fresh
+
+/-- Original signed fields and the successful original receipt construct the
+deployment record with the payload hash discharged by its kernel proof. The
+original slot/field correspondence, later history and HASH-T stay explicit. -/
+noncomputable def WethDeploymentTo.of_original_creation_fields_receipt
+    {checkpoint pre completed : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (number : block.block.header.number = 4719568)
+    (time : block.block.header.timestamp = 1513077455)
+    {slot : Bytes ⊕ Tx} {tx : Tx}
+    (atIndex : block.block.txs[85]? = some slot)
+    (decoded : decodeTx block.fork.ruleSet slot = .ok tx)
+    (txType : tx.type = .zero 21000000000 none)
+    (data : tx.data = Weth9.Creation.code.toList) (value : tx.value = 0)
+    (nonce : tx.nonce = 446) (gasLimit : tx.gas = 1500000)
+    (v : tx.v = 37)
+    (r : tx.r.toB256 =
+      0x7ce08af79f7a6c1b8b336f50890a80602c4dcd1e3cc5ca131373f0e8ff15e278)
+    (s : tx.s.toB256 =
+      0x45e183d91f1e8f31e32d333cf6090990c9bf7d35dd00472cfd2d3a63ca8b1a5)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (85 : Nat).toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true)
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
+    (fresh : let cut := block.bodyTrace.txSplitOfSlot atIndex decoded
+      Weth9.KeysFresh (fun _ => False)
+        (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
+          ((MidHistoryTraceIn.tail block cut).append history))) :
+    WethDeploymentTo checkpoint := by
+  exact .of_original_creation_receipt block number time atIndex decoded txType data value nonce
+    (Weth9.Creation.recoveredSender_of_creation_fields txType nonce gasLimit value data v r s)
+    gasLimit lookup succeeded history fresh
 
 def WethDeploymentTo.trace {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :=
   (MidHistoryTraceIn.tail d.block d.cut).append d.history
