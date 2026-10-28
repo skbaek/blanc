@@ -1900,6 +1900,13 @@ configured blocks. Its lemmas `settledFrames` (base frames are a prefix),
 `noSenderAt` and `noAuthorityAt` restrict an extension's retained frames and
 caller/authority exclusion premises to the history it extends.
 
+To reassociate actual selected-domain histories without replacing their witnesses,
+use `ConfiguredHistoryTraceIn.append_assoc` and `MidHistoryTraceIn.append_assoc`
+in [`Blanc/ExecutionHistoryInAssociativity.lean`](../Blanc/ExecutionHistoryInAssociativity.lean).
+Both prove equality of the Type-valued original traces by their final block spine.
+They are explicit rewrite lemmas: no automatic recipe chooses an orientation
+through dependent transaction-cut indices.
+
 To concatenate two selected-domain (`In`) histories end to end, use
 `ExecutionTrace.ConfiguredHistoryTraceIn.append` in
 [`Blanc/ExecutionHistoryInAppend.lean`](../Blanc/ExecutionHistoryInAppend.lean):
@@ -10748,5 +10755,17 @@ The shared `ProxyRetainedNoDel` adapter
 `ConfiguredHistoryTraceIn.txSplit_origins_and_available_of_retainedTargets_ne`
 accepts a concrete observation's checked retained-target exclusion, so callers
 do not repeat its signed-input, CREATE-address or no-external-instruction proof.
+`OriginalModernCreationChain.Censuses` states the four original receipt ranges,
+with only entries already created at each interval. Its
+`origins_and_available_of_censuses` composes all four intervals and constructor
+heads, then the continuation after V2.2, deriving guarded origins, installations
+and final family availability from initial V1 availability. The result retains
+the actual trace and every enabled system root. A subset argument permits the
+consumer's entry ordering without changing the original evidence population.
+In `ProxyCompleteAvailable.lean`,
+`ConfiguredHistoryTraceIn.mid_origins_of_complete_available_family` supplies the
+last interval once all allowed implementation addresses have available runtimes;
+it needs no later upgrade census. The concrete chain derives that availability
+at the V2.2 cut using its original constructor observations.
 The observation correspondence and source-registration decisions remain open.
 
