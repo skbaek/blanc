@@ -608,6 +608,11 @@ def UsdcSelectedReady (P : Adr) (W : List UsdcDeployedEntry) (state : State) : P
       state.getCode e.adr = e.code ∧
       (e.code = Impl.code → state.getCode usdcLib = Lib.code)
 
+/-- F2′ on the committed frames of exactly these actual retained roots.
+This keeps the governance interval separate from the history used for entry facts. -/
+def UsdcRootGovernance (P : Adr) (roots : List Exec.Frame) : Prop :=
+  ∀ R ∈ roots, UsdcGovernanceF2primeOn P (Exec.committedFrames R.run)
+
 section RuntimeOrigins
 
 variable {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
@@ -758,6 +763,88 @@ theorem ConfiguredHistoryTraceIn.entryOrigin_finalReady
 /-- Actual guarded upgrade origins make selected runtime readiness survive the
 whole transaction. Only initial selection and actual guarded writes need an
 origin; no future-runtime installation, final readiness or deletion is assumed. -/
+theorem ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins_of_scoped_governance
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (trace : TransactionTrace benv bout tx index state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (proxy : benv.state.getCode P = Proxy.code)
+    (slot : ∃ e ∈ W, ((benv.state.getStor P).get implSlot).toAdr = e.adr ∧
+      benv.state.getCode e.adr = e.code ∧
+      (e.code = Impl.code → benv.state.getCode usdcLib = Lib.code))
+    (installations : ∀ R ∈ trace.settledRoots, ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm ∧
+        e.TransactionOrigin trace)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P trace.settledRoots) :
+    P ∉ trace.messageOut.accountsToDelete ∧ state.getCode P = Proxy.code ∧
+      ∃ e ∈ W, ((state.getStor P).get implSlot).toAdr = e.adr ∧
+        state.getCode e.adr = e.code ∧
+        (e.code = Impl.code → state.getCode usdcLib = Lib.code) := by
+  have proxyFamily : UsdcContextCode Proxy.code := .inl rfl
+  have ready := TransactionTrace.usdc_root_ready trace impls
+    (show UsdcSelectedReady P W benv.state from ⟨proxy, slot⟩)
+  have localInstall (R : Exec.Frame) (member : R ∈ trace.settledRoots)
+      (N : Exec.Deriv) (retained : N ∈ Exec.retainedNodes R.run)
+      (target : N.sevm.currentTarget = P) (code : N.sevm.code = Proxy.code)
+      (own : N.sevm.codeAddress = some P) (write : Exec.StorageWrite)
+      (found : Exec.Deriv.successfulSstore? N = some write) (key : write.key = implSlot)
+      (allowed : write.value.toAdr ∈ F2prime.upgradeTargets)
+      (nonempty : (N.devm.getCode write.value.toAdr).toList ≠ []) :
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm := by
+    obtain ⟨e, he, address, localReady, _⟩ :=
+      installations R member N retained target code own write found key allowed nonempty
+    exact ⟨e, he, address, localReady⟩
+  have context (R : Exec.Frame) (member : R ∈ trace.settledRoots) :=
+    ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations_of_root_governance history capabilities bal
+      (rootsIn R member) (ready R member).1 impls lib (ready R member).2 (onRoots R member)
+      (localInstall R member) (apart R member)
+  have notDeleted := trace.not_deleted_of_retained_terminals hsg (a := P) (by
+    intro R member
+    apply ConfiguredHistoryTraceIn.settledRoot_usdcContext_terminal_safe history capabilities (rootsIn R member)
+    intro N retained target
+    rcases (context R member N retained).2 target with ⟨code, _⟩ | ⟨e, he, code, _⟩
+    · exact .inl code
+    · rw [code]; exact (impls e he).context)
+  let property (word : B256) : Prop := ∃ e ∈ W, word.toAdr = e.adr ∧
+    state.getCode e.adr = e.code ∧ (e.code = Impl.code → state.getCode usdcLib = Lib.code)
+  have initial : property ((benv.state.getStor P).get implSlot) := by
+    obtain ⟨e, he, address, runtime, library⟩ := slot
+    exact ⟨e, he, address, ConfiguredHistoryTraceIn.entryOrigin_finalReady history capabilities bal trace rootsIn hsg
+      (impls e he) (e.transactionOrigin_of_entry trace runtime library)⟩
+  have transported := trace.cell_property_of_settledRoots implSlot hsg proxy proxyFamily.ne_nil
+    proxyFamily.not_delegation notDeleted property (by
+      intro R member entry
+      rcases ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2prime_of_root_governance history capabilities bal
+          (rootsIn R member) (ready R member).1 impls lib (ready R member).2 (onRoots R member)
+          (localInstall R member) (apart R member) with
+          unchanged | ⟨N, retained, write, found, owner, key, value, allowed, nonempty, _⟩
+      · rw [unchanged]; exact entry
+      · have target : N.sevm.currentTarget = P :=
+          (successfulSstore?_node_owner found).2.symm.trans owner
+        rcases (context R member N retained).2 target with ⟨code, own⟩ | ⟨e, he, code, _⟩
+        · obtain ⟨e, he, address, _, origin⟩ :=
+            installations R member N retained target code own write found key allowed nonempty
+          refine ⟨e, he, ?_, ConfiguredHistoryTraceIn.entryOrigin_finalReady history capabilities bal trace rootsIn hsg
+            (impls e he) origin⟩
+          rw [← value]; exact address
+        · exact (apart R member N retained target (by rw [code]; exact impls e he)
+            write found key).elim) initial
+  exact ⟨notDeleted, transported.2, transported.1⟩
+
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -788,56 +875,11 @@ theorem ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins
       ∃ e ∈ W, ((state.getStor P).get implSlot).toAdr = e.adr ∧
         state.getCode e.adr = e.code ∧
         (e.code = Impl.code → state.getCode usdcLib = Lib.code) := by
-  have proxyFamily : UsdcContextCode Proxy.code := .inl rfl
-  have ready := TransactionTrace.usdc_root_ready trace impls
-    (show UsdcSelectedReady P W benv.state from ⟨proxy, slot⟩)
-  have localInstall (R : Exec.Frame) (member : R ∈ trace.settledRoots)
-      (N : Exec.Deriv) (retained : N ∈ Exec.retainedNodes R.run)
-      (target : N.sevm.currentTarget = P) (code : N.sevm.code = Proxy.code)
-      (own : N.sevm.codeAddress = some P) (write : Exec.StorageWrite)
-      (found : Exec.Deriv.successfulSstore? N = some write) (key : write.key = implSlot)
-      (allowed : write.value.toAdr ∈ F2prime.upgradeTargets)
-      (nonempty : (N.devm.getCode write.value.toAdr).toList ≠ []) :
-      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm := by
-    obtain ⟨e, he, address, localReady, _⟩ :=
-      installations R member N retained target code own write found key allowed nonempty
-    exact ⟨e, he, address, localReady⟩
-  have context (R : Exec.Frame) (member : R ∈ trace.settledRoots) :=
-    ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations history capabilities bal
-      (rootsIn R member) (ready R member).1 impls lib (ready R member).2 governance
-      (localInstall R member) (apart R member)
-  have notDeleted := trace.not_deleted_of_retained_terminals hsg (a := P) (by
-    intro R member
-    apply ConfiguredHistoryTraceIn.settledRoot_usdcContext_terminal_safe history capabilities (rootsIn R member)
-    intro N retained target
-    rcases (context R member N retained).2 target with ⟨code, _⟩ | ⟨e, he, code, _⟩
-    · exact .inl code
-    · rw [code]; exact (impls e he).context)
-  let property (word : B256) : Prop := ∃ e ∈ W, word.toAdr = e.adr ∧
-    state.getCode e.adr = e.code ∧ (e.code = Impl.code → state.getCode usdcLib = Lib.code)
-  have initial : property ((benv.state.getStor P).get implSlot) := by
-    obtain ⟨e, he, address, runtime, library⟩ := slot
-    exact ⟨e, he, address, ConfiguredHistoryTraceIn.entryOrigin_finalReady history capabilities bal trace rootsIn hsg
-      (impls e he) (e.transactionOrigin_of_entry trace runtime library)⟩
-  have transported := trace.cell_property_of_settledRoots implSlot hsg proxy proxyFamily.ne_nil
-    proxyFamily.not_delegation notDeleted property (by
-      intro R member entry
-      rcases ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2prime history capabilities bal
-          (rootsIn R member) (ready R member).1 impls lib (ready R member).2 governance
-          (localInstall R member) (apart R member) with
-          unchanged | ⟨N, retained, write, found, owner, key, value, allowed, nonempty, _⟩
-      · rw [unchanged]; exact entry
-      · have target : N.sevm.currentTarget = P :=
-          (successfulSstore?_node_owner found).2.symm.trans owner
-        rcases (context R member N retained).2 target with ⟨code, own⟩ | ⟨e, he, code, _⟩
-        · obtain ⟨e, he, address, _, origin⟩ :=
-            installations R member N retained target code own write found key allowed nonempty
-          refine ⟨e, he, ?_, ConfiguredHistoryTraceIn.entryOrigin_finalReady history capabilities bal trace rootsIn hsg
-            (impls e he) origin⟩
-          rw [← value]; exact address
-        · exact (apart R member N retained target (by rw [code]; exact impls e he)
-            write found key).elim) initial
-  exact ⟨notDeleted, transported.2, transported.1⟩
+  exact ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins_of_scoped_governance
+    history capabilities bal impls lib trace rootsIn hsg proxy slot installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
+
 
 end RuntimeOrigins
 
@@ -854,6 +896,45 @@ def UsdcTransactionsOrigins (P : Adr) (W : List UsdcDeployedEntry) :
 /-- Selected readiness propagates through the actual transaction list and
 supplies all of its root-entry facts independently of allowance caller proofs.
 Actual guarded origins still have to be produced for the original history. -/
+theorem ConfiguredHistoryTraceIn.transactions_dynamic_runtimeReady_of_origins_of_scoped_governance
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (origins : UsdcTransactionsOrigins P W trace)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (initial : UsdcSelectedReady P W benv.state)
+    (onRoots : UsdcRootGovernance P trace.settledRoots) :
+    trace.NoDelScheduled P ∧ UsdcSelectedReady P W finalBenv.state ∧
+      ∀ R ∈ trace.settledRoots, R.pre.getCode P = Proxy.code ∧
+        ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
+  induction trace with
+  | nil =>
+    refine ⟨trivial, initial, ?_⟩
+    intro R member
+    cases member
+  | cons head tail ih =>
+    have first := ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins_of_scoped_governance
+      history capabilities bal impls lib head
+      (fun R member => rootsIn R (List.mem_append_left _ member)) hsg initial.1 initial.2
+      origins.1 (fun R member => apart R (List.mem_append_left _ member)) (fun R member => onRoots R (List.mem_append_left _ member))
+    have rest := ih (fun R member => rootsIn R (List.mem_append_right _ member)) hsg
+      origins.2 (fun R member => apart R (List.mem_append_right _ member)) first.2 (fun R member => onRoots R (List.mem_append_right _ member))
+    refine ⟨⟨first.1, rest.1⟩, rest.2.1, ?_⟩
+    intro R member
+    rcases List.mem_append.mp member with before | after
+    · exact TransactionTrace.usdc_root_ready head impls initial R before
+    · exact rest.2.2 R after
+
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.transactions_dynamic_runtimeReady_of_origins
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -874,23 +955,10 @@ theorem ConfiguredHistoryTraceIn.transactions_dynamic_runtimeReady_of_origins
     trace.NoDelScheduled P ∧ UsdcSelectedReady P W finalBenv.state ∧
       ∀ R ∈ trace.settledRoots, R.pre.getCode P = Proxy.code ∧
         ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
-  induction trace with
-  | nil =>
-    refine ⟨trivial, initial, ?_⟩
-    intro R member
-    cases member
-  | cons head tail ih =>
-    have first := ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins
-      history capabilities bal impls lib governance head
-      (fun R member => rootsIn R (List.mem_append_left _ member)) hsg initial.1 initial.2
-      origins.1 (fun R member => apart R (List.mem_append_left _ member))
-    have rest := ih (fun R member => rootsIn R (List.mem_append_right _ member)) hsg
-      origins.2 (fun R member => apart R (List.mem_append_right _ member)) first.2
-    refine ⟨⟨first.1, rest.1⟩, rest.2.1, ?_⟩
-    intro R member
-    rcases List.mem_append.mp member with before | after
-    · exact TransactionTrace.usdc_root_ready head impls initial R before
-    · exact rest.2.2 R after
+  exact ConfiguredHistoryTraceIn.transactions_dynamic_runtimeReady_of_origins_of_scoped_governance
+    history capabilities bal impls lib trace rootsIn hsg origins apart initial
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
 
 
 /-- The installed implementation and its conditional V2.2 library persist
@@ -1152,6 +1220,63 @@ theorem SystemMessageTrace.usdc_root_ready
 /-- Selected readiness crosses an actual system CALL by its complete root
 post-state. Only local guarded installations are needed: system CALL settlement
 does not run the transaction's deletion and fee-sweep boundary. -/
+theorem ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations_of_scoped_governance
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    {benv : Benv} {target : Adr} {data : Bytes} {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : ∀ R ∈ trace.settledRoots, ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P trace.settledRoots) :
+    UsdcSelectedReady P W state ∧
+      ∀ R ∈ trace.settledRoots, R.pre.getCode P = Proxy.code ∧
+        ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
+  have ready := SystemMessageTrace.usdc_root_ready trace impls initial
+  have finalCode {a : Adr} {C : ByteArray} (family : UsdcContextCode C)
+      (present : benv.state.getCode a = C) : state.getCode a = C :=
+    (trace.cell_property_of_settledRoots 0 hsg present family.ne_nil family.not_delegation
+      (fun _ => True) (by intro R member entry; trivial) trivial).2
+  let property (word : B256) : Prop := ∃ e ∈ W, word.toAdr = e.adr ∧
+    state.getCode e.adr = e.code ∧ (e.code = Impl.code → state.getCode usdcLib = Lib.code)
+  have first : property ((benv.state.getStor P).get implSlot) := by
+    obtain ⟨e, he, address, runtime, library⟩ := initial.2
+    exact ⟨e, he, address, finalCode (impls e he).context runtime,
+      fun implementation => finalCode (.inr (.inr (.inr (.inr (.inr rfl)))))
+        (library implementation)⟩
+  have msgGas : (systemTransactionMessage benv target data).benv.stat.rules.stateGas = none := by
+    simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction] using hsg
+  have final := trace.cell_property_of_settledRoots implSlot hsg initial.1
+    (show UsdcContextCode Proxy.code from .inl rfl).ne_nil
+    (show UsdcContextCode Proxy.code from .inl rfl).not_delegation property (by
+      intro R member _
+      have post := ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime_of_root_governance
+        history capabilities bal (rootsIn R member) (ready R member).1 impls lib
+        (ready R member).2 (onRoots R member) (installations R member) (apart R member)
+      have stateEq := trace.message.settledRoots_post_state_of_call msgGas rfl R member
+      obtain ⟨e, he, address, runtime, library⟩ := post.2
+      refine ⟨e, he, address, ?_, ?_⟩
+      · simpa only [Devm.getCode_state, stateEq] using runtime
+      · intro implementation
+        simpa only [Devm.getCode_state, stateEq] using library implementation) first
+  exact ⟨⟨final.2, final.1⟩, ready⟩
+
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -1178,35 +1303,10 @@ theorem ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
     UsdcSelectedReady P W state ∧
       ∀ R ∈ trace.settledRoots, R.pre.getCode P = Proxy.code ∧
         ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
-  have ready := SystemMessageTrace.usdc_root_ready trace impls initial
-  have finalCode {a : Adr} {C : ByteArray} (family : UsdcContextCode C)
-      (present : benv.state.getCode a = C) : state.getCode a = C :=
-    (trace.cell_property_of_settledRoots 0 hsg present family.ne_nil family.not_delegation
-      (fun _ => True) (by intro R member entry; trivial) trivial).2
-  let property (word : B256) : Prop := ∃ e ∈ W, word.toAdr = e.adr ∧
-    state.getCode e.adr = e.code ∧ (e.code = Impl.code → state.getCode usdcLib = Lib.code)
-  have first : property ((benv.state.getStor P).get implSlot) := by
-    obtain ⟨e, he, address, runtime, library⟩ := initial.2
-    exact ⟨e, he, address, finalCode (impls e he).context runtime,
-      fun implementation => finalCode (.inr (.inr (.inr (.inr (.inr rfl)))))
-        (library implementation)⟩
-  have msgGas : (systemTransactionMessage benv target data).benv.stat.rules.stateGas = none := by
-    simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
-      Benv.beginTransaction] using hsg
-  have final := trace.cell_property_of_settledRoots implSlot hsg initial.1
-    (show UsdcContextCode Proxy.code from .inl rfl).ne_nil
-    (show UsdcContextCode Proxy.code from .inl rfl).not_delegation property (by
-      intro R member _
-      have post := ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime
-        history capabilities bal (rootsIn R member) (ready R member).1 impls lib
-        (ready R member).2 governance (installations R member) (apart R member)
-      have stateEq := trace.message.settledRoots_post_state_of_call msgGas rfl R member
-      obtain ⟨e, he, address, runtime, library⟩ := post.2
-      refine ⟨e, he, address, ?_, ?_⟩
-      · simpa only [Devm.getCode_state, stateEq] using runtime
-      · intro implementation
-        simpa only [Devm.getCode_state, stateEq] using library implementation) first
-  exact ⟨⟨final.2, final.1⟩, ready⟩
+  exact ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib trace rootsIn hsg initial installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
 
 
 /-- Actual guarded writes select locally installed entries; no endpoint code
@@ -1238,9 +1338,38 @@ variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain
   (lib : ∀ e ∈ W, e.code = Impl.code → ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
   (governance : UsdcGovernanceF2primeOn P history.settledFrames)
 
-include capabilities bal impls lib governance
+include capabilities bal impls lib
 
 /-- The two actual request CALLs carry selected readiness in request order. -/
+theorem ConfiguredHistoryTraceIn.requests_dynamic_runtimeReady_from_installations_of_scoped_governance
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : UsdcGuardedInstallations P W trace.settledRoots)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P trace.settledRoots) :
+    UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
+  have first := ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib trace.withdrawal
+    (fun R member => rootsIn R (List.mem_append_left _ member)) hsg initial
+    (fun R member => installations R (List.mem_append_left _ member))
+    (fun R member => apart R (List.mem_append_left _ member)) (fun R member => onRoots R (List.mem_append_left _ member))
+  have second := ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib trace.consolidation
+    (fun R member => rootsIn R (List.mem_append_right _ member)) hsg first.1
+    (fun R member => installations R (List.mem_append_right _ member))
+    (fun R member => apart R (List.mem_append_right _ member)) (fun R member => onRoots R (List.mem_append_right _ member))
+  refine ⟨?_, ?_⟩
+  · rw [trace.state_eq_consolidationState]; exact second.1
+  · intro R member
+    rcases List.mem_append.mp member with before | after
+    · exact first.2 R before
+    · exact second.2 R after
+
+include governance in
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.requests_dynamic_runtimeReady_from_installations
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout')
@@ -1250,24 +1379,34 @@ theorem ConfiguredHistoryTraceIn.requests_dynamic_runtimeReady_from_installation
     (installations : UsdcGuardedInstallations P W trace.settledRoots)
     (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
     UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
-  have first := ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
-    history capabilities bal impls lib governance trace.withdrawal
-    (fun R member => rootsIn R (List.mem_append_left _ member)) hsg initial
-    (fun R member => installations R (List.mem_append_left _ member))
-    (fun R member => apart R (List.mem_append_left _ member))
-  have second := ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
-    history capabilities bal impls lib governance trace.consolidation
-    (fun R member => rootsIn R (List.mem_append_right _ member)) hsg first.1
-    (fun R member => installations R (List.mem_append_right _ member))
-    (fun R member => apart R (List.mem_append_right _ member))
-  refine ⟨?_, ?_⟩
-  · rw [trace.state_eq_consolidationState]; exact second.1
-  · intro R member
-    rcases List.mem_append.mp member with before | after
-    · exact first.2 R before
-    · exact second.2 R after
+  exact ConfiguredHistoryTraceIn.requests_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib trace rootsIn hsg initial installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
+
 
 /-- The actual optional beaconStage preserves selected readiness, including the skipped arm. -/
+theorem ConfiguredHistoryTraceIn.beaconStage_dynamic_runtimeReady_from_installations_of_scoped_governance
+    {rules : ForkRules} {benv : Benv} {state : State} {outputBal : BalBuilder}
+    (trace : BeaconStageTrace rules benv state outputBal)
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : UsdcGuardedInstallations P W trace.settledRoots)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P trace.settledRoots) :
+    UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
+  cases trace with
+  | skipped =>
+    refine ⟨initial, ?_⟩
+    intro R member
+    cases member
+  | called _ _ message _ _ =>
+    exact ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations_of_scoped_governance
+      history capabilities bal impls lib message rootsIn hsg initial installations apart onRoots
+
+include governance in
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.beaconStage_dynamic_runtimeReady_from_installations
     {rules : ForkRules} {benv : Benv} {state : State} {outputBal : BalBuilder}
     (trace : BeaconStageTrace rules benv state outputBal)
@@ -1277,16 +1416,34 @@ theorem ConfiguredHistoryTraceIn.beaconStage_dynamic_runtimeReady_from_installat
     (installations : UsdcGuardedInstallations P W trace.settledRoots)
     (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
     UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
+  exact ConfiguredHistoryTraceIn.beaconStage_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib trace rootsIn hsg initial installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
+
+
+/-- The actual optional historyStage preserves selected readiness, including the skipped arm. -/
+theorem ConfiguredHistoryTraceIn.historyStage_dynamic_runtimeReady_from_installations_of_scoped_governance
+    {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State} {outputBal : BalBuilder}
+    (trace : HistoryStageTrace rules benv inputBal state outputBal)
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : UsdcGuardedInstallations P W trace.settledRoots)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P trace.settledRoots) :
+    UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
   cases trace with
   | skipped =>
     refine ⟨initial, ?_⟩
     intro R member
     cases member
-  | called _ _ message _ _ =>
-    exact ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
-      history capabilities bal impls lib governance message rootsIn hsg initial installations apart
+  | called _ _ _ _ message _ _ =>
+    exact ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations_of_scoped_governance
+      history capabilities bal impls lib message rootsIn hsg initial installations apart onRoots
 
-/-- The actual optional historyStage preserves selected readiness, including the skipped arm. -/
+include governance in
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.historyStage_dynamic_runtimeReady_from_installations
     {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State} {outputBal : BalBuilder}
     (trace : HistoryStageTrace rules benv inputBal state outputBal)
@@ -1296,16 +1453,34 @@ theorem ConfiguredHistoryTraceIn.historyStage_dynamic_runtimeReady_from_installa
     (installations : UsdcGuardedInstallations P W trace.settledRoots)
     (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
     UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
+  exact ConfiguredHistoryTraceIn.historyStage_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib trace rootsIn hsg initial installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
+
+
+/-- The actual optional requestStage preserves selected readiness, including the skipped arm. -/
+theorem ConfiguredHistoryTraceIn.requestStage_dynamic_runtimeReady_from_installations_of_scoped_governance
+    {rules : ForkRules} {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestStageTrace rules benv bout state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : UsdcGuardedInstallations P W trace.settledRoots)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P trace.settledRoots) :
+    UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
   cases trace with
   | skipped =>
     refine ⟨initial, ?_⟩
     intro R member
     cases member
-  | called _ _ _ _ message _ _ =>
-    exact ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
-      history capabilities bal impls lib governance message rootsIn hsg initial installations apart
+  | called _ message _ =>
+    exact ConfiguredHistoryTraceIn.requests_dynamic_runtimeReady_from_installations_of_scoped_governance
+      history capabilities bal impls lib message rootsIn hsg initial installations apart onRoots
 
-/-- The actual optional requestStage preserves selected readiness, including the skipped arm. -/
+include governance in
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.requestStage_dynamic_runtimeReady_from_installations
     {rules : ForkRules} {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestStageTrace rules benv bout state bout')
@@ -1315,14 +1490,11 @@ theorem ConfiguredHistoryTraceIn.requestStage_dynamic_runtimeReady_from_installa
     (installations : UsdcGuardedInstallations P W trace.settledRoots)
     (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
     UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
-  cases trace with
-  | skipped =>
-    refine ⟨initial, ?_⟩
-    intro R member
-    cases member
-  | called _ message _ =>
-    exact ConfiguredHistoryTraceIn.requests_dynamic_runtimeReady_from_installations
-      history capabilities bal impls lib governance message rootsIn hsg initial installations apart
+  exact ConfiguredHistoryTraceIn.requestStage_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib trace rootsIn hsg initial installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
+
 
 end SelectedSystemStages
 
@@ -1389,10 +1561,32 @@ variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain
   (lib : ∀ e ∈ W, e.code = Impl.code → ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
   (governance : UsdcGovernanceF2primeOn P history.settledFrames)
 
-include capabilities bal impls lib governance
+include capabilities bal impls lib
 
 /-- After the transaction list, follow the actual withdrawals, optional
 requests and rewards. Readiness is derived for every actual request root. -/
+theorem ConfiguredHistoryTraceIn.body_tail_dynamic_runtimeReady_from_installations_of_scoped_governance
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (rootsIn : ∀ R ∈ trace.requests.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W trace.transactionBenv.state)
+    (installations : UsdcGuardedInstallations P W trace.requests.settledRoots)
+    (apart : ∀ R ∈ trace.requests.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P trace.requests.settledRoots) :
+    UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.requests.settledRoots := by
+  have requestGas : (trace.transactionBenv.withState trace.withdrawalState).stat.rules.stateGas = none := by
+    change trace.transactionBenv.stat.rules.stateGas = none
+    rw [trace.transactions.stat_eq]
+    exact hsg
+  have requests := ConfiguredHistoryTraceIn.requestStage_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib trace.requests rootsIn requestGas
+    (StagedBodyTrace.usdc_withdrawal_ready trace initial) installations apart onRoots
+  exact ⟨StagedBodyTrace.usdc_reward_ready trace requests.1, requests.2⟩
+
+include governance in
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.body_tail_dynamic_runtimeReady_from_installations
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
     {wds : List Withdrawal} {state : State} {bout : BlockOutput}
@@ -1403,24 +1597,22 @@ theorem ConfiguredHistoryTraceIn.body_tail_dynamic_runtimeReady_from_installatio
     (installations : UsdcGuardedInstallations P W trace.requests.settledRoots)
     (apart : ∀ R ∈ trace.requests.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
     UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.requests.settledRoots := by
-  have requestGas : (trace.transactionBenv.withState trace.withdrawalState).stat.rules.stateGas = none := by
-    change trace.transactionBenv.stat.rules.stateGas = none
-    rw [trace.transactions.stat_eq]
-    exact hsg
-  have requests := ConfiguredHistoryTraceIn.requestStage_dynamic_runtimeReady_from_installations
-    history capabilities bal impls lib governance trace.requests rootsIn requestGas
-    (StagedBodyTrace.usdc_withdrawal_ready trace initial) installations apart
-  exact ⟨StagedBodyTrace.usdc_reward_ready trace requests.1, requests.2⟩
+  exact ConfiguredHistoryTraceIn.body_tail_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib trace rootsIn hsg initial installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
+
 
 /-- Every actual stage of a configured block preserves selected readiness.
 Transaction origins remain obligations only on that block's actual list. -/
-theorem ConfiguredHistoryTraceIn.block_dynamic_runtimeReady_of_origins
+theorem ConfiguredHistoryTraceIn.block_dynamic_runtimeReady_of_origins_of_scoped_governance
     {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post)
     (rootsIn : ∀ R ∈ block.settledRoots, R ∈ history.settledRoots)
     (initial : UsdcSelectedReady P W pre.state)
     (origins : UsdcTransactionsOrigins P W block.bodyTrace.transactions)
     (installations : UsdcGuardedInstallations P W block.settledRoots)
-    (apart : ∀ R ∈ block.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    (apart : ∀ R ∈ block.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P block.settledRoots) :
     block.NoDelScheduled P ∧ UsdcSelectedReady P W post.state ∧
       UsdcRootsReady P W block.settledRoots := by
   have beaconIn (R : Exec.Frame) (member : R ∈ block.bodyTrace.beacon.settledRoots) :
@@ -1434,25 +1626,25 @@ theorem ConfiguredHistoryTraceIn.block_dynamic_runtimeReady_of_origins
   have requestIn (R : Exec.Frame) (member : R ∈ block.bodyTrace.requests.settledRoots) :
       R ∈ block.settledRoots := List.mem_append_right _ member
   have hsg := capabilities.stateGas_none block.forkIn
-  have beacon := ConfiguredHistoryTraceIn.beaconStage_dynamic_runtimeReady_from_installations
-    history capabilities bal impls lib governance block.bodyTrace.beacon
+  have beacon := ConfiguredHistoryTraceIn.beaconStage_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib block.bodyTrace.beacon
     (fun R member => rootsIn R (beaconIn R member)) hsg initial
     (fun R member => installations R (beaconIn R member))
-    (fun R member => apart R (beaconIn R member))
-  have opening := ConfiguredHistoryTraceIn.historyStage_dynamic_runtimeReady_from_installations
-    history capabilities bal impls lib governance block.bodyTrace.history
+    (fun R member => apart R (beaconIn R member)) (fun R member => onRoots R (beaconIn R member))
+  have opening := ConfiguredHistoryTraceIn.historyStage_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib block.bodyTrace.history
     (fun R member => rootsIn R (historyIn R member)) hsg beacon.1
     (fun R member => installations R (historyIn R member))
-    (fun R member => apart R (historyIn R member))
-  have transactions := ConfiguredHistoryTraceIn.transactions_dynamic_runtimeReady_of_origins
-    history capabilities bal impls lib governance block.bodyTrace.transactions
+    (fun R member => apart R (historyIn R member)) (fun R member => onRoots R (historyIn R member))
+  have transactions := ConfiguredHistoryTraceIn.transactions_dynamic_runtimeReady_of_origins_of_scoped_governance
+    history capabilities bal impls lib block.bodyTrace.transactions
     (fun R member => rootsIn R (transactionIn R member)) hsg origins
-    (fun R member => apart R (transactionIn R member)) opening.1
-  have closing := ConfiguredHistoryTraceIn.body_tail_dynamic_runtimeReady_from_installations
-    history capabilities bal impls lib governance block.bodyTrace
+    (fun R member => apart R (transactionIn R member)) opening.1 (fun R member => onRoots R (transactionIn R member))
+  have closing := ConfiguredHistoryTraceIn.body_tail_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib block.bodyTrace
     (fun R member => rootsIn R (requestIn R member)) hsg transactions.2.1
     (fun R member => installations R (requestIn R member))
-    (fun R member => apart R (requestIn R member))
+    (fun R member => apart R (requestIn R member)) (fun R member => onRoots R (requestIn R member))
   refine ⟨transactions.1, ?_, ?_⟩
   · rw [block.postEq]; exact closing.1
   · intro R member
@@ -1464,9 +1656,59 @@ theorem ConfiguredHistoryTraceIn.block_dynamic_runtimeReady_of_origins
       · exact transactions.2.2 R transactionRoots
     · exact closing.2 R requests
 
+include governance in
+/-- Compatibility wrapper for governance supplied on the full original history. -/
+theorem ConfiguredHistoryTraceIn.block_dynamic_runtimeReady_of_origins
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post)
+    (rootsIn : ∀ R ∈ block.settledRoots, R ∈ history.settledRoots)
+    (initial : UsdcSelectedReady P W pre.state)
+    (origins : UsdcTransactionsOrigins P W block.bodyTrace.transactions)
+    (installations : UsdcGuardedInstallations P W block.settledRoots)
+    (apart : ∀ R ∈ block.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    block.NoDelScheduled P ∧ UsdcSelectedReady P W post.state ∧
+      UsdcRootsReady P W block.settledRoots := by
+  exact ConfiguredHistoryTraceIn.block_dynamic_runtimeReady_of_origins_of_scoped_governance
+    history capabilities bal impls lib block rootsIn initial origins installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
+
 
 /-- Readiness starts after the actual selected transaction and crosses only
 its suffix plus the source block's closing stages. -/
+theorem ConfiguredHistoryTraceIn.after_txSplit_dynamic_runtimeReady_of_origins_of_scoped_governance
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (rootsIn : ∀ R ∈ (MidHistoryTraceIn.tail block cut).settledRoots,
+      R ∈ history.settledRoots)
+    (initial : UsdcSelectedReady P W cut.afterBenv.state)
+    (origins : UsdcTransactionsOrigins P W cut.after)
+    (installations : UsdcGuardedInstallations P W (MidHistoryTraceIn.tail block cut).settledRoots)
+    (apart : ∀ R ∈ (MidHistoryTraceIn.tail block cut).settledRoots,
+      KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P (MidHistoryTraceIn.tail block cut).settledRoots) :
+    cut.after.NoDelScheduled P ∧ UsdcSelectedReady P W post.state ∧
+      UsdcRootsReady P W (MidHistoryTraceIn.tail block cut).settledRoots := by
+  have hsg := capabilities.stateGas_none block.forkIn
+  have cutGas : cut.afterBenv.stat.rules.stateGas = none := by
+    rw [block.txSplit_stat cut]; exact hsg
+  have transactions := ConfiguredHistoryTraceIn.transactions_dynamic_runtimeReady_of_origins_of_scoped_governance
+    history capabilities bal impls lib cut.after
+    (fun R member => rootsIn R (List.mem_append_left _ member)) cutGas origins
+    (fun R member => apart R (List.mem_append_left _ member)) initial (fun R member => onRoots R (List.mem_append_left _ member))
+  have closing := ConfiguredHistoryTraceIn.body_tail_dynamic_runtimeReady_from_installations_of_scoped_governance
+    history capabilities bal impls lib block.bodyTrace
+    (fun R member => rootsIn R (List.mem_append_right _ member)) hsg transactions.2.1
+    (fun R member => installations R (List.mem_append_right _ member))
+    (fun R member => apart R (List.mem_append_right _ member)) (fun R member => onRoots R (List.mem_append_right _ member))
+  refine ⟨transactions.1, ?_, ?_⟩
+  · rw [block.postEq]; exact closing.1
+  · intro R member
+    rcases List.mem_append.mp member with transactionRoots | requestRoots
+    · exact transactions.2.2 R transactionRoots
+    · exact closing.2 R requestRoots
+
+include governance in
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.after_txSplit_dynamic_runtimeReady_of_origins
     {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
     (cut : block.bodyTrace.transactions.TxSplit i)
@@ -1479,27 +1721,47 @@ theorem ConfiguredHistoryTraceIn.after_txSplit_dynamic_runtimeReady_of_origins
       KnownImplSlotApart P (Exec.retainedNodes R.run)) :
     cut.after.NoDelScheduled P ∧ UsdcSelectedReady P W post.state ∧
       UsdcRootsReady P W (MidHistoryTraceIn.tail block cut).settledRoots := by
-  have hsg := capabilities.stateGas_none block.forkIn
-  have cutGas : cut.afterBenv.stat.rules.stateGas = none := by
-    rw [block.txSplit_stat cut]; exact hsg
-  have transactions := ConfiguredHistoryTraceIn.transactions_dynamic_runtimeReady_of_origins
-    history capabilities bal impls lib governance cut.after
-    (fun R member => rootsIn R (List.mem_append_left _ member)) cutGas origins
-    (fun R member => apart R (List.mem_append_left _ member)) initial
-  have closing := ConfiguredHistoryTraceIn.body_tail_dynamic_runtimeReady_from_installations
-    history capabilities bal impls lib governance block.bodyTrace
-    (fun R member => rootsIn R (List.mem_append_right _ member)) hsg transactions.2.1
-    (fun R member => installations R (List.mem_append_right _ member))
-    (fun R member => apart R (List.mem_append_right _ member))
-  refine ⟨transactions.1, ?_, ?_⟩
-  · rw [block.postEq]; exact closing.1
-  · intro R member
-    rcases List.mem_append.mp member with transactionRoots | requestRoots
-    · exact transactions.2.2 R transactionRoots
-    · exact closing.2 R requestRoots
+  exact ConfiguredHistoryTraceIn.after_txSplit_dynamic_runtimeReady_of_origins_of_scoped_governance
+    history capabilities bal impls lib block cut rootsIn initial origins installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
+
 
 /-- Original suffix and later-block origins suffice for all selected-runtime
 root entries, without using an allowance invariant or caller exclusion. -/
+theorem ConfiguredHistoryTraceIn.mid_dynamic_runtimeReady_of_origins_of_scoped_governance
+    {start : Benv} {finish : BlockChain} (mid : MidHistoryTraceIn F cfg start finish)
+    (rootsIn : ∀ R ∈ mid.settledRoots, R ∈ history.settledRoots)
+    (initial : UsdcSelectedReady P W start.state)
+    (origins : UsdcMidHistoryOrigins P W mid)
+    (installations : UsdcGuardedInstallations P W mid.settledRoots)
+    (apart : ∀ R ∈ mid.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (onRoots : UsdcRootGovernance P mid.settledRoots) :
+    mid.OutputNotDeleted P ∧ UsdcSelectedReady P W finish.state ∧
+      UsdcRootsReady P W mid.settledRoots := by
+  induction mid with
+  | tail block cut =>
+    have result := ConfiguredHistoryTraceIn.after_txSplit_dynamic_runtimeReady_of_origins_of_scoped_governance
+      history capabilities bal impls lib block cut rootsIn initial origins installations apart onRoots
+    exact ⟨(cut.after.outputNotDeleted_iff_noDelScheduled P).mpr result.1, result.2⟩
+  | step prior block ih =>
+    have first := ih (fun R member => rootsIn R (List.mem_append_left _ member)) initial
+      origins.1 (fun R member => installations R (List.mem_append_left _ member))
+      (fun R member => apart R (List.mem_append_left _ member)) (fun R member => onRoots R (List.mem_append_left _ member))
+    have next := ConfiguredHistoryTraceIn.block_dynamic_runtimeReady_of_origins_of_scoped_governance
+      history capabilities bal impls lib block
+      (fun R member => rootsIn R (List.mem_append_right _ member)) first.2.1 origins.2
+      (fun R member => installations R (List.mem_append_right _ member))
+      (fun R member => apart R (List.mem_append_right _ member)) (fun R member => onRoots R (List.mem_append_right _ member))
+    refine ⟨⟨first.1, (block.bodyTrace.transactions.outputNotDeleted_iff_noDelScheduled P).mpr next.1⟩,
+      next.2.1, ?_⟩
+    intro R member
+    rcases List.mem_append.mp member with earlier | later
+    · exact first.2.2 R earlier
+    · exact next.2.2 R later
+
+include governance in
+/-- Compatibility wrapper for governance supplied on the full original history. -/
 theorem ConfiguredHistoryTraceIn.mid_dynamic_runtimeReady_of_origins
     {start : Benv} {finish : BlockChain} (mid : MidHistoryTraceIn F cfg start finish)
     (rootsIn : ∀ R ∈ mid.settledRoots, R ∈ history.settledRoots)
@@ -1509,26 +1771,11 @@ theorem ConfiguredHistoryTraceIn.mid_dynamic_runtimeReady_of_origins
     (apart : ∀ R ∈ mid.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
     mid.OutputNotDeleted P ∧ UsdcSelectedReady P W finish.state ∧
       UsdcRootsReady P W mid.settledRoots := by
-  induction mid with
-  | tail block cut =>
-    have result := ConfiguredHistoryTraceIn.after_txSplit_dynamic_runtimeReady_of_origins
-      history capabilities bal impls lib governance block cut rootsIn initial origins installations apart
-    exact ⟨(cut.after.outputNotDeleted_iff_noDelScheduled P).mpr result.1, result.2⟩
-  | step prior block ih =>
-    have first := ih (fun R member => rootsIn R (List.mem_append_left _ member)) initial
-      origins.1 (fun R member => installations R (List.mem_append_left _ member))
-      (fun R member => apart R (List.mem_append_left _ member))
-    have next := ConfiguredHistoryTraceIn.block_dynamic_runtimeReady_of_origins
-      history capabilities bal impls lib governance block
-      (fun R member => rootsIn R (List.mem_append_right _ member)) first.2.1 origins.2
-      (fun R member => installations R (List.mem_append_right _ member))
-      (fun R member => apart R (List.mem_append_right _ member))
-    refine ⟨⟨first.1, (block.bodyTrace.transactions.outputNotDeleted_iff_noDelScheduled P).mpr next.1⟩,
-      next.2.1, ?_⟩
-    intro R member
-    rcases List.mem_append.mp member with earlier | later
-    · exact first.2.2 R earlier
-    · exact next.2.2 R later
+  exact ConfiguredHistoryTraceIn.mid_dynamic_runtimeReady_of_origins_of_scoped_governance
+    history capabilities bal impls lib mid rootsIn initial origins installations apart
+    (fun R member => ConfiguredHistoryTraceIn.governance_on_settledRoot
+      history governance (rootsIn R member))
+
 
 end SelectedHistory
 

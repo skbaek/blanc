@@ -2244,6 +2244,21 @@ the full raw-key/signature-query history. Transaction and history consumers
 must transport that restricted scope explicitly; no pre-interval governance
 is inferred.
 
+`UsdcRootGovernance` states F2′ on the committed frames of the supplied actual
+roots. The `_of_scoped_governance` transaction, system-stage, block and mid-history
+readiness cores consume exactly that population and restrict it along the actual
+trace constructors. Their full-history compatibility APIs keep old signatures.
+This separates governance timing from the original history used for entry facts;
+it does not supply original upgrade or installation evidence.
+
+
+`mid_allowance_zero_from_pair_history_of_origins_of_scoped_governance` now
+consumes F2′ only on the actual post-cut `mid.settledFrames`. It derives root
+readiness and Pair caller exclusion with that same scope, then uses root-scoped
+allowance non-increase and zero transport. The original full-history raw-key,
+native-query and old-owner routing populations are unchanged. Concrete runtime
+origins/local installations and the original initial seed remain producer duties.
+
 `UsdcSelectedReady` records only the currently selected implementation and its
 conditional library. `TransactionTrace.usdc_root_ready` derives actual root
 entry readiness from transaction entry, independently of allowance caller

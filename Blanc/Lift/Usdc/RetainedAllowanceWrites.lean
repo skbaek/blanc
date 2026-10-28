@@ -451,11 +451,12 @@ variable
 include history capabilities bal proxyApart rowSep v1Class initApart noCaller excluded
   oldReady v2_2Owner member proxy impls lib slot governance installations apart
 
-omit noCaller in
+omit noCaller governance in
 /-- Allowance non-increase from retained F2′ governance and runtime installations
 at actual upgrade positions. No raw-node code family or raw upgrade check is an
 input; caller, native-query, routing and row-separation obligations are unchanged. -/
-theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootCallers
+theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootCallers_of_root_governance
+    (rootGovernance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
     (noRootCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
       G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
       Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
@@ -465,8 +466,8 @@ theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installa
     {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
     (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
     w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
-  have context := ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations
-    history capabilities (fun {_} hf => bal _ hf) member proxy impls lib slot governance
+  have context := ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations_of_root_governance
+    history capabilities (fun {_} hf => bal _ hf) member proxy impls lib slot rootGovernance
     installations apart
   have target : m.sevm.currentTarget = P :=
     (successfulSstore?_node_owner found).2.symm.trans owner
@@ -480,6 +481,25 @@ theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installa
       capabilities bal proxyApart rowSep v1Class initApart noRootCaller excluded oldReady v2_2Owner
       member retained code found owner tracked
   exact bound
+
+omit noCaller in
+/-- Compatibility wrapper retaining governance on the full original history. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootCallers
+    (noRootCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
+    {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
+    (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
+  exact ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootCallers_of_root_governance
+    history capabilities bal proxyApart rowSep v1Class initApart excluded oldReady
+    v2_2Owner member proxy impls lib slot installations apart
+    (ConfiguredHistoryTraceIn.governance_on_settledRoot history governance member)
+    noRootCaller retained found owner tracked
+
 
 /-- Compatibility with caller evidence over the full original settled history. -/
 theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations
@@ -495,11 +515,12 @@ theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installa
   rw [history.settledFrames_eq]
   exact List.mem_flatMap.mpr ⟨R, member, committed⟩
 
-omit noCaller in
+omit noCaller governance in
 /-- A zero allowance row remains zero across the actual settled root, using the
 retained dynamic upgrade proof and the shared cell invariant. Transaction sweeps
 and history composition are separate from this execution-root endpoint. -/
-theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations_of_rootCallers
+theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations_of_rootCallers_of_root_governance
+    (rootGovernance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
     (noRootCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
       G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
       Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
@@ -516,11 +537,29 @@ theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations_o
   apply Exec.cell_zero_of_retained_nonInc_noStateGas R.run R.committed
     facts.2.2.1 nonempty _ zero
   intro m retained w found owner key
-  have bound := ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootCallers
+  have bound := ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootCallers_of_root_governance
     history capabilities bal proxyApart rowSep v1Class initApart excluded oldReady
-    v2_2Owner member proxy impls lib slot governance installations apart noRootCaller retained found owner
+    v2_2Owner member proxy impls lib slot installations apart rootGovernance noRootCaller retained found owner
     ⟨g, tracked, key.symm⟩
   simpa only [key] using bound
+
+omit noCaller in
+/-- Compatibility wrapper retaining governance on the full original history. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations_of_rootCallers
+    (noRootCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    {g : Adr} (tracked : Tr g)
+    (zero : (R.pre.getStor P).get (allowSlot pair g) = 0) :
+    (R.post.getStor P).get (allowSlot pair g) = 0 := by
+  exact ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations_of_rootCallers_of_root_governance
+    history capabilities bal proxyApart rowSep v1Class initApart excluded oldReady
+    v2_2Owner member proxy impls lib slot installations apart
+    (ConfiguredHistoryTraceIn.governance_on_settledRoot history governance member)
+    noRootCaller tracked zero
+
 
 /-- Compatibility with caller evidence over the full original settled history. -/
 theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations
