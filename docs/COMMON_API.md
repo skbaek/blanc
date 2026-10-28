@@ -9547,6 +9547,22 @@ contract-neutral.
   `legacyOwnerConstructor_runtime_of_txSplit_receipt` specializes with a proved
   runtime window and CREATE-address arithmetic. No zero-value, installed-code,
   final-storage or independent deletion-exclusion premise is required.
+  `solcOwnerConstructor_balSilentSet` and
+  `solcOwnerConstructor_deletions_of_createTrace` supply the same source-derived
+  deletion preservation for the modern owner constructor and its helper table.
+  `solcOwnerConstructor_effects_of_transactionTrace`,
+  `solcOwnerConstructor_effects_of_txSplit_receipt` and
+  `solcOwnerConstructor_runtime_of_txSplit_receipt` carry its runtime window
+  and owner storage through complete settlement at the original receipt cut.
+  Both constructor families use
+  `TransactionTrace.getCode_getStor_of_create_effects`, which extracts the
+  actual successful retained CREATE once and transports constructor-local
+  effects through the message and transaction. The modern and legacy APIs
+  derive deletion preservation from their checked source; they do not ask for
+  an independent final deletion exclusion. Existing legacy statements stay
+  unchanged. The CREATE-local safety lemma also applies to nested creation,
+  but later runtime execution and outer transaction deletion must still be
+  connected for a contract first created and then used within one transaction.
   Concrete certificate checking, runtime/transaction correspondence and receipt
   lookup remain explicit. Select these APIs by their actual trace/cut and
   certificate witnesses; their compound premises have no reliable goal-head

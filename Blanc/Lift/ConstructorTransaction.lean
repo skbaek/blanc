@@ -79,6 +79,45 @@ theorem TransactionTrace.creation_target_eq
     simp only [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce, nonceEq]
   rw [target, debitNonce, UInt64.add_sub_cancel]
 
+/-- Carry constructor-local effects through the actual retained CREATE and
+the outer transaction. Each producer is checked on that CREATE witness; it
+must establish deletion preservation as well as nonempty code and storage. -/
+theorem TransactionTrace.getCode_getStor_of_create_effects
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {code : ByteArray}
+    {window : Bytes} {storage : Stor}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (stateGas : benv.stat.rules.stateGas = none)
+    (receiver : tx.type.receiver? = none) (input : tx.data = code.toList)
+    (clean : trace.messageOut.error = none) (nonempty : window ≠ [])
+    (effects : ∀ {installed}, ProcessCreateMessageTrace trace.msg (.ok installed) →
+      installed.error.isSome = false →
+      installed.accountsToDelete = trace.msg.inheritedDeletions ∧
+        (installed.getCode trace.msg.currentTarget).toList = window ∧
+        installed.getStor trace.msg.currentTarget = storage) :
+    (state.getCode trace.msg.currentTarget).toList = window ∧
+      state.getStor trace.msg.currentTarget = storage := by
+  obtain ⟨target, _, _, _, _, inherited⟩ := trace.creation_message_fields receiver input
+  have msgStateGas : trace.msg.benv.stat.rules.stateGas = none := by
+    rw [prepareMessage_benv trace.prepared]
+    exact stateGas
+  obtain ⟨installed, ⟨retained⟩, _, _, innerClean, sameState, deletions⟩ :=
+    trace.message.exists_clean_create_with_deletions
+      (by rw [target]; rfl) msgStateGas clean
+  obtain ⟨preserved, codeEq, storageEq⟩ := effects retained (by rw [innerClean]; rfl)
+  have noDelete : trace.msg.currentTarget ∉ trace.messageOut.accountsToDelete := by
+    rw [deletions, preserved, inherited]
+    exact AdrSet.not_mem_empty
+  have messageCode : (trace.messageState.getCode trace.msg.currentTarget).toList = window := by
+    rw [sameState]
+    exact codeEq
+  have messageStorage : trace.messageState.getStor trace.msg.currentTarget = storage := by
+    rw [sameState]
+    exact storageEq
+  have final := trace.getCode_getStor_of_message_nonempty stateGas noDelete
+    (fun empty => nonempty (messageCode.symm.trans empty))
+  exact ⟨(congrArg ByteArray.toList final.1).trans messageCode, final.2.trans messageStorage⟩
+
 end Blanc.ExecutionTrace
 
 namespace Blanc.Lift
@@ -160,37 +199,23 @@ theorem legacyOwnerConstructor_effects_of_transactionTrace
         code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) ∧
       state.getStor trace.msg.currentTarget =
         solcOwnerConstructorStorage Stor.empty trace.sender := by
-  obtain ⟨target, codeEq, codeAddress, caller, _, inherited⟩ :=
+  obtain ⟨_, codeEq, codeAddress, caller, _, _⟩ :=
     trace.creation_message_fields receiver input
   have msgStateGas : trace.msg.benv.stat.rules.stateGas = none := by
     rw [prepareMessage_benv trace.prepared]
     exact stateGas
-  obtain ⟨installed, ⟨retained⟩, _, _, innerClean, sameState, deletions⟩ :=
-    trace.message.exists_clean_create_with_deletions
-      (by rw [target]; rfl) msgStateGas clean
-  have noDelete : trace.msg.currentTarget ∉ trace.messageOut.accountsToDelete := by
-    rw [deletions, legacyOwnerConstructor_deletions_of_createTrace checked codeEq first
-      ownerEntry returnEntry retained (by rw [innerClean]; rfl) codeAddress msgStateGas,
-      inherited]
-    exact AdrSet.not_mem_empty
-  have effects := legacyOwnerConstructor_effects_of_createTrace checked codeEq first
-    ownerEntry returnEntry sizeWord offsetWord nonzero retained
-    (by rw [innerClean]; rfl) codeAddress msgStateGas
-  have messageCode : (trace.messageState.getCode trace.msg.currentTarget).toList =
-      code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) := by
-    rw [sameState]
-    exact effects.1
-  have messageStorage : trace.messageState.getStor trace.msg.currentTarget =
-      solcOwnerConstructorStorage Stor.empty trace.sender := by
-    rw [sameState, ← caller]
-    exact effects.2
-  have codeNonempty : (trace.messageState.getCode trace.msg.currentTarget).toList ≠ [] := by
-    intro empty
-    have length := congrArg List.length (messageCode.symm.trans empty)
+  refine trace.getCode_getStor_of_create_effects stateGas receiver input clean ?_ ?_
+  · intro empty
+    have length := congrArg List.length empty
     rw [ByteArray.length_sliceD, List.length_nil] at length
     exact nonzero length
-  have final := trace.getCode_getStor_of_message_nonempty stateGas noDelete codeNonempty
-  exact ⟨(congrArg ByteArray.toList final.1).trans messageCode, final.2.trans messageStorage⟩
+  · intro installed retained innerClean
+    refine ⟨legacyOwnerConstructor_deletions_of_createTrace checked codeEq first
+      ownerEntry returnEntry retained innerClean codeAddress msgStateGas, ?_⟩
+    have effects := legacyOwnerConstructor_effects_of_createTrace checked codeEq first
+      ownerEntry returnEntry sizeWord offsetWord nonzero retained innerClean codeAddress msgStateGas
+    rw [caller] at effects
+    exact effects
 
 /-- The successful receipt in the original configured block supplies the
 clean transaction result. Installation is at this exact cut's after-state. -/
@@ -251,6 +276,142 @@ theorem legacyOwnerConstructor_runtime_of_txSplit_receipt
       cut.afterBenv.state.getStor address =
         solcOwnerConstructorStorage Stor.empty cut.head.sender := by
   have effects := legacyOwnerConstructor_effects_of_txSplit_receipt checked first ownerEntry
+    returnEntry sizeWord offsetWord nonzero block cut stateGas receiver input lookup succeeded
+  have target := (cut.head.creation_target_eq receiver).trans addressEq
+  rw [target] at effects
+  refine ⟨?_, effects.2⟩
+  apply ByteArray.ext
+  rw [← Array.toList_inj]
+  simpa only [ByteArray.toList_eq_toList_data] using effects.1.trans window
+
+/-- The two helper entries reached by the modern owner constructor form a
+closed balance-silent set. No runtime-byte or historical assumption is used. -/
+theorem solcOwnerConstructor_balSilentSet
+    {fs : List SFunc} {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    (ownerEntry : fs[1]? = some SolcStorageReturn.ownerInit)
+    (returnEntry : fs[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound)) :
+    BalSilentSet fs [1, 2] = true := by
+  simp only [BalSilentSet, List.all_cons, List.all_nil, ownerEntry, returnEntry]
+  rfl
+
+/-- The actual modern constructor reaches no deletion-producing instruction. -/
+theorem solcOwnerConstructor_deletions_of_createTrace
+    {code : ByteArray} {c : Cert} {msg : Msg} {installed : Devm}
+    {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    (checked : Cert.check code c = true) (codeEq : msg.code = code)
+    (first : c.prog[0]? = some solcOwnerConstructor)
+    (ownerEntry : c.prog[1]? = some SolcStorageReturn.ownerInit)
+    (returnEntry : c.prog[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (trace : ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false) (codeAddress : msg.codeAddress = none)
+    (stateGas : msg.benv.stat.rules.stateGas = none) :
+    installed.accountsToDelete = msg.inheritedDeletions := by
+  exact createTrace_deletions_of_balSilent checked codeEq first
+    (solcOwnerConstructor_balSilentSet ownerEntry returnEntry) rfl rfl
+    trace clean codeAddress stateGas
+
+/-- The modern checked owner constructor installs its runtime window and
+owner storage through complete transaction settlement; deletion preservation
+is derived from the same checked source, without an exclusion oracle. -/
+theorem solcOwnerConstructor_effects_of_transactionTrace
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {code : ByteArray} {c : Cert}
+    {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    {size offset : B256}
+    (checked : Cert.check code c = true)
+    (first : c.prog[0]? = some solcOwnerConstructor)
+    (ownerEntry : c.prog[1]? = some SolcStorageReturn.ownerInit)
+    (returnEntry : c.prog[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (trace : TransactionTrace benv bout tx index state bout')
+    (stateGas : benv.stat.rules.stateGas = none)
+    (receiver : tx.type.receiver? = none) (input : tx.data = code.toList)
+    (clean : trace.messageOut.error = none) :
+    (state.getCode trace.msg.currentTarget).toList =
+        code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) ∧
+      state.getStor trace.msg.currentTarget =
+        solcOwnerConstructorStorage Stor.empty trace.sender := by
+  obtain ⟨_, codeEq, codeAddress, caller, _, _⟩ :=
+    trace.creation_message_fields receiver input
+  have msgStateGas : trace.msg.benv.stat.rules.stateGas = none := by
+    rw [prepareMessage_benv trace.prepared]
+    exact stateGas
+  refine trace.getCode_getStor_of_create_effects stateGas receiver input clean ?_ ?_
+  · intro empty
+    have length := congrArg List.length empty
+    rw [ByteArray.length_sliceD, List.length_nil] at length
+    exact nonzero length
+  · intro installed retained innerClean
+    refine ⟨solcOwnerConstructor_deletions_of_createTrace checked codeEq first
+      ownerEntry returnEntry retained innerClean codeAddress msgStateGas, ?_⟩
+    have effects := solcOwnerConstructor_effects_of_createTrace checked codeEq first
+      ownerEntry returnEntry sizeWord offsetWord nonzero retained innerClean codeAddress msgStateGas
+    rw [caller] at effects
+    exact effects.2
+
+/-- The successful receipt in the original configured block supplies the
+clean transaction result. Installation is at this exact cut's after-state. -/
+theorem solcOwnerConstructor_effects_of_txSplit_receipt
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    {code : ByteArray} {c : Cert} {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    {size offset : B256}
+    (checked : Cert.check code c = true)
+    (first : c.prog[0]? = some solcOwnerConstructor)
+    (ownerEntry : c.prog[1]? = some SolcStorageReturn.ownerInit)
+    (returnEntry : c.prog[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (stateGas : block.fork.ruleSet.stateGas = none)
+    (receiver : cut.tx.type.receiver? = none) (input : cut.tx.data = code.toList)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true) :
+    (cut.afterBenv.state.getCode cut.head.msg.currentTarget).toList =
+        code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) ∧
+      cut.afterBenv.state.getStor cut.head.msg.currentTarget =
+        solcOwnerConstructorStorage Stor.empty cut.head.sender := by
+  have cutStateGas : cut.benv.stat.rules.stateGas = none := by
+    have stat : cut.benv.stat = (initBenv block.fork pre block.block.header).stat :=
+      block.txSplit_stat cut
+    rw [stat]
+    exact stateGas
+  exact solcOwnerConstructor_effects_of_transactionTrace checked first ownerEntry returnEntry
+    sizeWord offsetWord nonzero cut.head cutStateGas receiver input
+    (block.txSplit_error_eq_none_of_receipt cut stateGas lookup succeeded)
+
+/-- A proved runtime window and CREATE-address arithmetic specialize the original-cut
+installation result. Neither installed code nor constructor storage is assumed. -/
+theorem solcOwnerConstructor_runtime_of_txSplit_receipt
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    {code runtime : ByteArray} {c : Cert} {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    {size offset : B256} {address : Adr}
+    (checked : Cert.check code c = true)
+    (first : c.prog[0]? = some solcOwnerConstructor)
+    (ownerEntry : c.prog[1]? = some SolcStorageReturn.ownerInit)
+    (returnEntry : c.prog[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (window : code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) = runtime.toList)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (stateGas : block.fork.ruleSet.stateGas = none)
+    (receiver : cut.tx.type.receiver? = none) (input : cut.tx.data = code.toList)
+    (addressEq : computeContractAddress cut.head.sender cut.tx.nonce = address)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true) :
+    cut.afterBenv.state.getCode address = runtime ∧
+      cut.afterBenv.state.getStor address =
+        solcOwnerConstructorStorage Stor.empty cut.head.sender := by
+  have effects := solcOwnerConstructor_effects_of_txSplit_receipt checked first ownerEntry
     returnEntry sizeWord offsetWord nonzero block cut stateGas receiver input lookup succeeded
   have target := (cut.head.creation_target_eq receiver).trans addressEq
   rw [target] at effects
