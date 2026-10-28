@@ -2184,6 +2184,17 @@ transaction list. Both omit created-account exclusions and final deletion
 oracles. They may start after a successful creation cut in the same block;
 first creation and later use inside one outer transaction still need the
 separate constructor-to-runtime chronology argument.
+`settledRoot_implContext_after_constructor` handles the later suffix inside
+one settled root. It starts with runtime code installed at the actual resume
+node, and conditional V2.2 library code there, then derives empty/constructor/
+runtime/library context classification and SELFDESTRUCT exclusion throughout
+the suffix. Its earlier prefix must be nonempty, run only empty or certified
+constructor code at the target, and end at a node that cannot spawn. These
+structural premises remain separate obligations supplied by actual CREATE and
+complete constructor settlement; the theorem assumes neither installation at
+root entry nor later terminal safety. Selected root, split and certificate
+witnesses are not recoverable from the conclusion alone, so this consumer has
+no automatic recipe trigger.
 `impl_block_preserves_retained` carries readiness through all original block
 stages; `impl_after_txSplit_preserves_retained` starts at the actual selected
 transaction's after-state, with no source-block-prestate installation premise.

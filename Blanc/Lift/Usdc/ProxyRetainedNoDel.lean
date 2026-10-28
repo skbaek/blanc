@@ -226,6 +226,172 @@ theorem ConfiguredHistoryTraceIn.settledRoot_implContext_of_installed
       rw [childSevm, target] at own
       exact .inl (own.trans ownCode)
 
+/-- Starting at the actual post-constructor resume point, installed runtime
+code controls later calls. Earlier contexts may be empty or run the checked
+constructor; a completed constructor boundary cannot spawn the suffix root.
+These structural inputs are separate from the derived terminal-safety result. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_implContext_after_constructor
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {I : Adr} {C K : ByteArray} {certificate : Cert} {R : Exec.Frame}
+    (member : R ∈ history.settledRoots) (family : UsdcImplCode C)
+    (checked : Cert.check K certificate = true)
+    (noExecs : ∀ f ∈ certificate.prog, f.execsSatisfy (fun _ => false) = true)
+    (noSelfdestruct : certificate.noSelfdestruct = true)
+    {earlierPart suffix : List Exec.Deriv} {resumeNode : Exec.Deriv}
+    (chronology : Exec.retainedNodes R.run = earlierPart ++ resumeNode :: suffix)
+    (prefixNonempty : earlierPart ≠ [])
+    (prefixCodes : ∀ n ∈ earlierPart, n.sevm.currentTarget = I →
+      n.sevm.code.size = 0 ∨ n.sevm.code = K)
+    (boundary : ∀ prior m, earlierPart = prior ++ [m] →
+      ∀ n, ¬ Exec.Deriv.SpawnedAt m n)
+    (installed : resumeNode.devm.getCode I = C)
+    (library : C = Impl.code → resumeNode.devm.getCode usdcLib = Lib.code) :
+    (∀ N ∈ resumeNode :: suffix, N.sevm.currentTarget = I →
+      N.sevm.code.size = 0 ∨ N.sevm.code = K ∨ N.sevm.code = C ∨ N.sevm.code = Lib.code) ∧
+    (∀ N ∈ resumeNode :: suffix, N.sevm.currentTarget = I →
+      ¬ Linst.At N.sevm.code N.pc .selfdestruct) := by
+  have rawRoot := history.mem_rawFrames_of_mem_settledRoots R member
+  have rootFacts := history.rawFrame_entryFacts capabilities _ rawRoot
+  have libFamily : UsdcContextCode Lib.code := .inr (.inr (.inr (.inr (.inr rfl))))
+  have suffixRetained (N : Exec.Deriv) (inside : N ∈ resumeNode :: suffix) :
+      N ∈ Exec.retainedNodes R.run := by
+    rw [chronology]
+    exact List.mem_append_right _ inside
+  have installedAt (N : Exec.Deriv) (inside : N ∈ resumeNode :: suffix) :
+      N.devm.getCode I = C := by
+    rcases List.mem_cons.mp inside with rfl | later
+    · exact installed
+    · exact ((Exec.retainedNodes_code_after_split_noStateGas R.run R.committed
+        rootFacts.2.2.1 chronology (by rw [installed]; exact family.context.ne_nil)).2
+        N later).trans installed
+  have libraryAt (implementation : C = Impl.code) (N : Exec.Deriv)
+      (inside : N ∈ resumeNode :: suffix) : N.devm.getCode usdcLib = Lib.code := by
+    rcases List.mem_cons.mp inside with rfl | later
+    · exact library implementation
+    · exact ((Exec.retainedNodes_code_after_split_noStateGas R.run R.committed
+        rootFacts.2.2.1 chronology (by rw [library implementation]; exact libFamily.ne_nil)).2
+        N later).trans (library implementation)
+  have classified : ∀ N ∈ resumeNode :: suffix, N.sevm.currentTarget = I →
+      N.sevm.code.size = 0 ∨ N.sevm.code = K ∨ N.sevm.code = C ∨ N.sevm.code = Lib.code := by
+    refine List.forall_mem_of_positional fun before N after split earlier target => ?_
+    have fullSplit : Exec.retainedNodes R.run = (earlierPart ++ before) ++ N :: after := by
+      rw [chronology, split, List.append_assoc]
+    have priorSuffix (m : Exec.Deriv) (inside : m ∈ before) :
+        m ∈ resumeNode :: suffix := by
+      rw [split]
+      exact List.mem_append_left _ inside
+    rcases Exec.retainedNodes_split_immediate_origin R.run R.committed fullSplit with
+      ⟨empty, _⟩ | ⟨m, inside, same⟩ | ⟨prior, m, last, spawned⟩
+    · cases earlierPart with
+      | nil => exact (prefixNonempty rfl).elim
+      | cons x xs => cases empty
+    · rw [← same] at target ⊢
+      rcases List.mem_append.mp inside with old | recent
+      · rcases prefixCodes m old target with empty | ctor
+        · exact .inl empty
+        · exact .inr (.inl ctor)
+      · exact earlier m recent target
+    · have hm : m ∈ before := by
+        by_cases empty : before = []
+        · have lastPrefix : earlierPart = prior ++ [m] := by
+            simpa only [empty, List.append_nil] using last
+          exact (boundary prior m lastPrefix N spawned).elim
+        · apply List.mem_of_getLast?
+          have final := congrArg List.getLast? last
+          simpa only [List.getLast?_append_of_ne_nil earlierPart empty,
+            List.getLast?_append_of_ne_nil prior (List.cons_ne_nil m []),
+            List.getLast?_singleton] using final
+      have mRetained := suffixRetained m (priorSuffix m hm)
+      have ownCode := installedAt m (priorSuffix m hm)
+      obtain ⟨f, rsm, pc', cevm, step, enter, _, childSevm, _⟩ := spawned
+      have childTarget : N.sevm.currentTarget = f.inner.currentTarget := by
+        rw [← childSevm]
+        exact Frame.enter_run_currentTarget enter
+      have childCode : N.sevm.code = f.inner.code := by
+        rw [← childSevm]
+        exact Frame.enter_run_code enter
+      apply Or.inr
+      apply Or.inr
+      by_cases same : m.sevm.currentTarget = I
+      · obtain ⟨x, decoded, spawn, _⟩ := Evm.step_spawn_inv step
+        obtain ⟨frame, frameMember, chain⟩ :=
+          (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix R.run m).mp mRetained
+        have frameRaw := history.committedFrame_mem_rawFrames rawRoot frameMember
+        have facts := history.rawFrame_entryFacts capabilities _ frameRaw
+        have env : m.sevm = frame.sevm := Exec.Deriv.ParentPrefix.sevm_eq chain
+        have codes : m.sevm.code = C ∨ m.sevm.code = Lib.code := by
+          rcases earlier m hm same with empty | ctor | own | lib
+          · simp only [Xinst.At, ByteArray.getInst, empty, Nat.not_lt_zero, ↓reduceDIte] at decoded
+            cases decoded
+          · obtain ⟨cursor, reachable, ok⟩ := cursor_of_parentPrefix_noStateGas checked
+              facts.1 (by change frame.sevm.code = K; rw [← env]; exact ctor) facts.2.2.1 chain
+            have impossible := ok.execsSatisfy
+              (Cursor.execsSatisfy_of_reachable noExecs reachable) decoded
+            cases impossible
+          · exact .inl own
+          · exact .inr lib
+        have frameFamily : UsdcImplCode frame.sevm.code := by
+          rw [← env]
+          rcases codes with own | lib
+          · rw [own]; exact family
+          · exact .inr (.inr (.inr (.inr lib)))
+        rcases usdc_exec_kind facts.1 facts.2.2.1 (bal facts.2.1) chain
+            frameFamily.context decoded with call | staticcall | ⟨rfl, proxyDel | implDel⟩
+        · apply Or.inl
+          rw [childCode, Xinst.step_directCall_spawn_code (.inl call) spawn
+            (by rw [← childTarget, target, ownCode]; exact family.context.not_delegation),
+            ← childTarget, target, ownCode]
+        · apply Or.inl
+          rw [childCode, Xinst.step_directCall_spawn_code (.inr staticcall) spawn
+            (by rw [← childTarget, target, ownCode]; exact family.context.not_delegation),
+            ← childTarget, target, ownCode]
+        · exact (frameFamily.ne_proxy proxyDel.1).elim
+        · have implementation : C = Impl.code := by
+            rcases codes with own | lib
+            · exact own.symm.trans ((congrArg Sevm.code env).trans implDel.1)
+            · exact (lib_ne_impl (lib.symm.trans
+                ((congrArg Sevm.code env).trans implDel.1))).elim
+          obtain ⟨g, w, rest, stack⟩ := Xinst.step_delegatecall_spawn_stack spawn
+          have addr : w.toAdr = usdcLib := by
+            rw [implDel.2 g w rest stack, toAdr_toB256]
+          have actual : m.devm.getCode w.toAdr = Lib.code := by
+            rw [addr]
+            exact libraryAt implementation m (priorSuffix m hm)
+          apply Or.inr
+          rw [childCode, Xinst.step_delegatecall_spawn_code spawn stack
+            (by rw [actual]; exact libFamily.not_delegation), actual]
+      · have own := (Evm.step_spawn_child step enter).2.2
+          (by rw [childSevm, target]; exact same)
+          (by rw [childSevm, target, ownCode]; exact family.context.ne_empty)
+          (by rw [childSevm, target, ownCode]; exact family.context.not_delegation)
+        rw [childSevm, target] at own
+        exact .inl (own.trans ownCode)
+  refine ⟨classified, ?_⟩
+  intro N inside target
+  obtain ⟨frame, frameMember, chain⟩ :=
+    (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix R.run N).mp
+      (suffixRetained N inside)
+  have frameRaw := history.committedFrame_mem_rawFrames rawRoot frameMember
+  have facts := history.rawFrame_entryFacts capabilities _ frameRaw
+  have env : N.sevm = frame.sevm := Exec.Deriv.ParentPrefix.sevm_eq chain
+  rcases classified N inside target with empty | ctor | runtime
+  · intro destruct
+    simp only [Linst.At, ByteArray.getInst, empty, Nat.not_lt_zero, ↓reduceDIte] at destruct
+    cases destruct
+  · exact not_selfdestruct_of_parentPrefix_noStateGas checked noSelfdestruct facts.1
+      (by change frame.sevm.code = K; rw [← env]; exact ctor) facts.2.2.1 chain
+  · have context : UsdcContextCode N.sevm.code := by
+      rcases runtime with own | lib
+      · rw [own]; exact family.context
+      · rw [lib]; exact libFamily
+    obtain ⟨cert, certChecked, safe⟩ := usdcContextCode_certified _ context
+    exact not_selfdestruct_of_parentPrefix_noStateGas certChecked safe facts.1
+      (by change frame.sevm.code = N.sevm.code; rw [← env]) facts.2.2.1 chain
+
+
 /-- Every installed implementation runtime survives complete transaction
 settlement, including V2.2 with its fixed library delegation. No created-account
 exclusion or caller-supplied terminal classifier is needed. -/
