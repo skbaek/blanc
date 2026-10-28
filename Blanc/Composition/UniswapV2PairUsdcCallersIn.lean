@@ -1,3 +1,4 @@
+import Blanc.Lift.Usdc.RetainedAllowanceWrites
 import Blanc.Lift.Usdc.ProxyRetainedContextCodes
 import Blanc.Lift.Usdc.ProxyContextCodes
 import Blanc.Lift.Usdc.ProxyRawCallers
@@ -5,6 +6,7 @@ import Blanc.Lift.Usdc.AllowanceRawHistory
 import Blanc.Lift.UniswapV2Pair.PairPositionalCallsIn
 import Blanc.ExecutionInCodeImage
 import Blanc.ExecutionMidHistoryInForest
+import Blanc.ExecutionMidHistoryInNoDel
 import Blanc.StaticStorage
 
 /-! Retained Pair callers through the actual USDC proxy ancestry. -/
@@ -375,5 +377,92 @@ theorem mid_retained_caller_write_excluded_from_installations
   intro A member target mutable G child childMutable
   exact (UniswapV2Pair.pair_mid_history_children_shapeHist mid installed initial fresh
     A member target mutable G child childMutable).2.2
+
+/-- The actual Pair post-cut caller theorem supplies the caller premise for
+complete USDC transaction allowance preservation. Only the transaction's roots
+must belong to that post-cut history; governance and native-query obligations
+remain on the original full history. Final selected-runtime readiness remains
+separate from this zero-allowance and pointer-membership projection. -/
+theorem transaction_allowance_zero_from_pair_history
+    {cfg : ChainConfig} {checkpoint pre completed future : BlockChain} {i : Nat}
+    {pair P : Adr} {W : List UsdcDeployedEntry} {Tr : Adr → Prop}
+    {KP : UniswapV2Pair.WriterKey → Prop} {st : UniswapV2Pair.State}
+    (prior : ConfiguredHistoryTraceIn HistFork cfg checkpoint pre)
+    (block : ConfiguredBlockTraceIn HistFork cfg pre completed)
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork cfg completed future)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (rootReady : ∀ R ∈ ((prior.step block).append later).settledRoots,
+      R.pre.getCode P = Proxy.code ∧
+        ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre)
+    (governance : UsdcGovernanceF2primeOn P ((prior.step block).append later).settledFrames)
+    (installations : ∀ R ∈ ((prior.step block).append later).settledRoots,
+      ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apartSlot : ∀ R ∈ ((prior.step block).append later).settledRoots,
+      KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (apart : pair ≠ P)
+    (excluded : ∀ query ∈ ((MidHistoryTraceIn.tail block cut).append later).senderQueries,
+      query.recover ≠ .ok pair)
+    (notSystem : pair ≠ systemAddress)
+    (installed : some (cut.afterBenv.state.getCode pair).toList = UniswapV2Pair.pairSem.image)
+    (initial : UniswapV2Pair.WriterRep KP (cut.afterBenv.state.getStor pair) st)
+    (fresh : UniswapV2Pair.WriterFreshKeys KP (UniswapV2Pair.pairMidTouchedKeysIn pair
+      ((MidHistoryTraceIn.tail block cut).append later)))
+    (proxyApart : ProxyRowsApart P pair Tr ((prior.step block).append later).rawNodes)
+    (rowSep : UsdcModernRowSep P pair Tr ((prior.step block).append later).rawFrames)
+    (v1Class : V1RawWriteClass P pair Tr ((prior.step block).append later).rawFrames)
+    (initApart : InitRowsApart P pair Tr ((prior.step block).append later).rawFrames)
+    (excludedNative : ∀ query : RetainedOldOwnerNativeQuery ((prior.step block).append later) P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ ((prior.step block).append later).settledFrames →
+      G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    (v2_2Owner : ∀ (G : Exec.Frame), G ∈ ((prior.step block).append later).settledFrames →
+      G.sevm.currentTarget = P → G.sevm.code = Impl.code →
+      Sevm.selector G.sevm ∈ selV2_2.owners → (Sevm.dataWord G.sevm 4).toAdr ≠ pair)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (rootsInMid : ∀ R ∈ trace.settledRoots,
+      R ∈ ((MidHistoryTraceIn.tail block cut).append later).settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (proxy : benv.state.getCode P = Proxy.code)
+    (slot : ∃ e ∈ W, ((benv.state.getStor P).get implSlot).toAdr = e.adr ∧
+      benv.state.getCode e.adr = e.code ∧
+      (e.code = Impl.code → benv.state.getCode usdcLib = Lib.code))
+    (zero : ∀ g, Tr g → (benv.state.getStor P).get (allowSlot pair g) = 0) :
+    P ∉ trace.messageOut.accountsToDelete ∧ state.getCode P = Proxy.code ∧
+      (∃ e ∈ W, ((state.getStor P).get implSlot).toAdr = e.adr) ∧
+      ∀ g, Tr g → (state.getStor P).get (allowSlot pair g) = 0 := by
+  let full := (prior.step block).append later
+  let mid := (MidHistoryTraceIn.tail block cut).append later
+  have noCaller := mid_retained_caller_write_excluded_from_installations prior block cut later
+    impls lib rootReady governance installations apartSlot apart excluded notSystem installed initial fresh
+  have rootsIn : ∀ R ∈ trace.settledRoots, R ∈ full.settledRoots := by
+    intro R member
+    exact MidHistoryTraceIn.settledRoots_subset_full prior block cut later (rootsInMid R member)
+  apply Usdc.ConfiguredHistoryTraceIn.transaction_allowance_zero_from_installations_of_transactionCallers
+    full BodyStageCapabilities.historical (fun _ hf => hf.bal_none)
+    proxyApart rowSep v1Class initApart excludedNative oldReady v2_2Owner impls lib governance
+    trace rootsIn ?_ hsg proxy slot
+    (fun R member => installations R (rootsIn R member))
+    (fun R member => apartSlot R (rootsIn R member)) zero
+  intro G member
+  rw [trace.settledFrames_eq] at member
+  obtain ⟨R, root, committed⟩ := List.mem_flatMap.mp member
+  apply noCaller G
+  rw [mid.settledFrames_eq]
+  exact List.mem_flatMap.mpr ⟨R, rootsInMid R root, committed⟩
 
 end Blanc.Composition.UniswapV2PairUsdcCallers

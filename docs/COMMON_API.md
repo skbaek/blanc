@@ -3298,6 +3298,8 @@ a bare set-membership goal does not identify this execution-specific route.
   `ApplyTransactionsTrace.append_settledRoots`, `settledRoots_cast` and
   `ConfiguredHistoryTraceIn.append_settledRoots` keep the index/list transports
   explicit. No canonical-cut substitution or flattened-frame root inference occurs.
+  `MidHistoryTraceIn.settledRoots_subset_full` embeds the actual after-cut roots
+  into the supplied original full history using that same cut decomposition.
   `ConfiguredBlockTraceIn.settledRoots_eq_txSplit` lifts that arbitrary-cut split
   to the original block including system stages.
   `ConfiguredHistoryTraceIn.mem_settledRoots_of_between_txSplits` embeds the exact
@@ -5152,6 +5154,9 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   actual write; the original raw-code interface is a compatibility wrapper.
   `usdc_retainedRowWrite_nonInc_of_retainedCode` consumes that local code fact,
   preserving the original native-query population and retained parent witness.
+  The `_of_rootCallers` variant restricts caller exclusion to committed frames
+  of that actual root; native-query and old-owner evidence retain their original
+  full-history scope. The original theorem is a compatibility wrapper.
   `settledRoot_allowanceWrite_nonInc_from_installations` derives the code fact
   from retained F2′ governance, the initially selected runtime, and installations
   at actual upgrade positions. It does not require the raw upgrade checker or
@@ -5172,6 +5177,15 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   exclusion, final deletion oracle or raw upgrade checker is supplied. Readiness
   of the selected implementation at the final transaction state and composition
   across subsequent transactions remain separate producer obligations.
+  The two root endpoints also have `_of_rootCallers` variants.
+  `transaction_allowance_zero_from_installations_of_transactionCallers` requires
+  caller exclusion only over that actual transaction’s settled frames. Existing
+  full-history caller interfaces restrict their input to these scopes.
+  `UniswapV2PairUsdcCallers.transaction_allowance_zero_from_pair_history`
+  supplies this transaction-scoped exclusion from the actual post-cut Pair
+  history and derives full-history root membership through the common inclusion
+  lemma. Governance, native-query and old-owner inputs keep their original
+  full-history populations; final selected-runtime readiness remains open.
   The write-scoped caller input is supplied by `retained_caller_write_excluded`
   in [`UniswapV2PairUsdcCallersIn.lean`](../Blanc/Composition/UniswapV2PairUsdcCallersIn.lean).
   It follows actual retained parents, uses the Pair's historical child-selector

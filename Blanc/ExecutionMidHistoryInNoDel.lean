@@ -217,6 +217,26 @@ theorem ConfiguredBlockTraceIn.settledRoots_eq_txSplit
     ConfiguredBlockTraceIn.rootsBeforeTxSplit, MidHistoryTraceIn.settledRoots,
     cut.settledRoots_eq, List.append_assoc]
 
+/-- Actual roots after a supplied transaction cut remain roots of the original history. -/
+theorem MidHistoryTraceIn.settledRoots_subset_full
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint pre completed future : BlockChain}
+    (prior : ConfiguredHistoryTraceIn F cfg checkpoint pre)
+    (block : ConfiguredBlockTraceIn F cfg pre completed) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn F cfg completed future) :
+    ((MidHistoryTraceIn.tail block cut).append later).settledRoots ⊆
+      ((prior.step block).append later).settledRoots := by
+  intro R member
+  rw [MidHistoryTraceIn.append_settledRoots] at member
+  rw [ConfiguredHistoryTraceIn.append_settledRoots]
+  rcases List.mem_append.mp member with tailRoot | laterRoot
+  · apply List.mem_append_left
+    change R ∈ prior.settledRoots ++ block.settledRoots
+    apply List.mem_append_right
+    rw [block.settledRoots_eq_txSplit cut]
+    exact List.mem_append_right _ tailRoot
+  · exact List.mem_append_right _ laterRoot
+
 /-- The exact after-first/before-last interval belongs to its connected original
 full history. No root is inferred from a flattened frame list or a different cut. -/
 theorem ConfiguredHistoryTraceIn.mem_settledRoots_of_between_txSplits

@@ -221,6 +221,57 @@ theorem ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc
 
 /-- One retained write needs classification only at its own node. All native
 queries and initializer separation still belong to the original history. -/
+theorem ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_of_retainedCode_of_rootCallers
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
+    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
+    (rowSep : UsdcModernRowSep P pair Tr history.rawFrames)
+    (v1Class : V1RawWriteClass P pair Tr history.rawFrames)
+    (initApart : InitRowsApart P pair Tr history.rawFrames)
+    {R : Exec.Frame}
+    (noCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery history P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    (v2_2Owner : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      G.sevm.code = Impl.code → Sevm.selector G.sevm ∈ selV2_2.owners →
+      (Sevm.dataWord G.sevm 4).toAdr ≠ pair)
+    (root : R ∈ history.settledRoots)
+    {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
+    (code : UsdcContextCode m.sevm.code)
+    {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
+    (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    ∃ G : Exec.Frame, G ∈ history.settledFrames ∧ G ∈ Exec.committedFrames R.run ∧
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m ∧ G.sevm.currentTarget = P ∧
+      w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
+  have rawRoot := history.mem_rawFrames_of_mem_settledRoots R root
+  have rawNode := history.rawNodes_of_mem_rawFrames _ rawRoot m
+    ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained)
+  have classified := ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_nodeCode history
+    capabilities proxyApart rowSep v1Class rawNode code found owner tracked
+  have subset : Exec.committedFrames R.run ⊆ history.settledFrames := by
+    intro G member
+    rw [history.settledFrames_eq]
+    exact List.mem_flatMap.mpr ⟨R, root, member⟩
+  have framesEq : Exec.committedFrames R.run = rootFrames [R] := by
+    simp only [rootFrames, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+  obtain ⟨G, member, committed, chain, target, nonInc | residual⟩ :=
+    retainedRowWrite_nonInc_or_v2_2_owner_of_frames history capabilities bal initApart
+      framesEq subset noCaller excluded oldReady
+      List.mem_cons_self retained found owner tracked classified
+  · exact ⟨G, subset member, committed, chain, target, nonInc⟩
+  · exact (v2_2Owner G (subset member) target residual.1 residual.2.1 residual.2.2).elim
+
+
+/-- Compatibility with caller evidence over the full original settled history. -/
 theorem ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_of_retainedCode
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
@@ -251,18 +302,13 @@ theorem ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_of_retainedCode
     ∃ G : Exec.Frame, G ∈ history.settledFrames ∧ G ∈ Exec.committedFrames R.run ∧
       Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m ∧ G.sevm.currentTarget = P ∧
       w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
-  have rawRoot := history.mem_rawFrames_of_mem_settledRoots R root
-  have rawNode := history.rawNodes_of_mem_rawFrames _ rawRoot m
-    ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained)
-  have classified := ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_nodeCode history
-    capabilities proxyApart rowSep v1Class rawNode code found owner tracked
-  obtain ⟨G, member, committed, chain, target, nonInc | residual⟩ :=
-    retainedRowWrite_nonInc_or_v2_2_owner_of_frames history capabilities bal initApart
-      history.settledFrames_eq (fun _ member => member) noCaller excluded oldReady
-      root retained found owner tracked classified
-  · exact ⟨G, member, committed, chain, target, nonInc⟩
-  · exact (v2_2Owner G member target residual.1 residual.2.1 residual.2.2).elim
-
+  apply ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_of_retainedCode_of_rootCallers
+    history capabilities bal proxyApart rowSep v1Class initApart ?_ excluded oldReady
+    v2_2Owner root retained code found owner tracked
+  intro G member
+  apply noCaller G
+  rw [history.settledFrames_eq]
+  exact List.mem_flatMap.mpr ⟨R, root, member⟩
 
 /-- A retained write under an actual post-cut mid root is non-increasing or has the
 same mid retained V2_2 owner exception. Raw facts, independent native-query exclusion and
@@ -405,10 +451,16 @@ variable
 include history capabilities bal proxyApart rowSep v1Class initApart noCaller excluded
   oldReady v2_2Owner member proxy impls lib slot governance installations apart
 
+omit noCaller in
 /-- Allowance non-increase from retained F2′ governance and runtime installations
 at actual upgrade positions. No raw-node code family or raw upgrade check is an
 input; caller, native-query, routing and row-separation obligations are unchanged. -/
-theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations
+theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootCallers
+    (noRootCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
     {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
     {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
     (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
@@ -424,15 +476,35 @@ theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installa
     · rw [code]
       exact (impls e he).context
   obtain ⟨G, _, _, _, _, bound⟩ :=
-    ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_of_retainedCode history
-      capabilities bal proxyApart rowSep v1Class initApart noCaller excluded oldReady v2_2Owner
+    ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_of_retainedCode_of_rootCallers history
+      capabilities bal proxyApart rowSep v1Class initApart noRootCaller excluded oldReady v2_2Owner
       member retained code found owner tracked
   exact bound
 
+/-- Compatibility with caller evidence over the full original settled history. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations
+    {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
+    {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
+    (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
+  apply ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootCallers
+    history capabilities bal proxyApart rowSep v1Class initApart excluded oldReady
+    v2_2Owner member proxy impls lib slot governance installations apart ?_ retained found owner tracked
+  intro G committed
+  apply noCaller G
+  rw [history.settledFrames_eq]
+  exact List.mem_flatMap.mpr ⟨R, member, committed⟩
+
+omit noCaller in
 /-- A zero allowance row remains zero across the actual settled root, using the
 retained dynamic upgrade proof and the shared cell invariant. Transaction sweeps
 and history composition are separate from this execution-root endpoint. -/
-theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations
+theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations_of_rootCallers
+    (noRootCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
     {g : Adr} (tracked : Tr g)
     (zero : (R.pre.getStor P).get (allowSlot pair g) = 0) :
     (R.post.getStor P).get (allowSlot pair g) = 0 := by
@@ -444,11 +516,24 @@ theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations
   apply Exec.cell_zero_of_retained_nonInc_noStateGas R.run R.committed
     facts.2.2.1 nonempty _ zero
   intro m retained w found owner key
-  have bound := ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations
-    history capabilities bal proxyApart rowSep v1Class initApart noCaller excluded oldReady
-    v2_2Owner member proxy impls lib slot governance installations apart retained found owner
+  have bound := ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootCallers
+    history capabilities bal proxyApart rowSep v1Class initApart excluded oldReady
+    v2_2Owner member proxy impls lib slot governance installations apart noRootCaller retained found owner
     ⟨g, tracked, key.symm⟩
   simpa only [key] using bound
+
+/-- Compatibility with caller evidence over the full original settled history. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations
+    {g : Adr} (tracked : Tr g)
+    (zero : (R.pre.getStor P).get (allowSlot pair g) = 0) :
+    (R.post.getStor P).get (allowSlot pair g) = 0 := by
+  apply ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations_of_rootCallers
+    history capabilities bal proxyApart rowSep v1Class initApart excluded oldReady
+    v2_2Owner member proxy impls lib slot governance installations apart ?_ tracked zero
+  intro G committed
+  apply noCaller G
+  rw [history.settledFrames_eq]
+  exact List.mem_flatMap.mpr ⟨R, member, committed⟩
 
 end Dynamic
 
@@ -458,18 +543,13 @@ terminal safety excludes deletion, so fee settlement and touched-account sweep
 need no supplied deletion oracle or created-account exclusion. The selected
 implementation address remains in W; runtime readiness at the final state is
 not asserted by this projection. -/
-theorem ConfiguredHistoryTraceIn.transaction_allowance_zero_from_installations
+theorem ConfiguredHistoryTraceIn.transaction_allowance_zero_from_installations_of_transactionCallers
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
     (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
     (rowSep : UsdcModernRowSep P pair Tr history.rawFrames)
     (v1Class : V1RawWriteClass P pair Tr history.rawFrames)
     (initApart : InitRowsApart P pair Tr history.rawFrames)
-    (noCaller : ∀ (G : Exec.Frame), G ∈ history.settledFrames →
-      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
-      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
-      Exec.Deriv.successfulSstore? m = some w →
-      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
     (excluded : ∀ query : RetainedOldOwnerNativeQuery history P pair,
       executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
     (oldReady : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
@@ -489,6 +569,11 @@ theorem ConfiguredHistoryTraceIn.transaction_allowance_zero_from_installations
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
     (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (noCaller : ∀ (G : Exec.Frame), G ∈ trace.settledFrames →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
     (hsg : benv.stat.rules.stateGas = none)
     (proxy : benv.state.getCode P = Proxy.code)
     (slot : ∃ e ∈ W, ((benv.state.getStor P).get implSlot).toAdr = e.adr ∧
@@ -550,11 +635,73 @@ theorem ConfiguredHistoryTraceIn.transaction_allowance_zero_from_installations
     proxyFamily.not_delegation notDeleted (fun word => word = 0)
     (by
       intro R member rootZero
-      exact ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations history
-        capabilities bal proxyApart rowSep v1Class initApart noCaller excluded oldReady v2_2Owner
+      exact ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations_of_rootCallers history
+        capabilities bal proxyApart rowSep v1Class initApart excluded oldReady v2_2Owner
         (rootsIn R member) (ready R member).1 impls lib (ready R member).2 governance
-        (installations R member) (apart R member) tracked rootZero)
+        (installations R member) (apart R member)
+        (fun G committed => noCaller G (by
+          rw [trace.settledFrames_eq]
+          exact List.mem_flatMap.mpr ⟨R, member, committed⟩)) tracked rootZero)
     (zero g tracked)).1
+
+/-- Compatibility with caller evidence over the full original settled history. -/
+theorem ConfiguredHistoryTraceIn.transaction_allowance_zero_from_installations
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
+    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
+    (rowSep : UsdcModernRowSep P pair Tr history.rawFrames)
+    (v1Class : V1RawWriteClass P pair Tr history.rawFrames)
+    (initApart : InitRowsApart P pair Tr history.rawFrames)
+    (noCaller : ∀ (G : Exec.Frame), G ∈ history.settledFrames →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery history P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    (v2_2Owner : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      G.sevm.code = Impl.code → Sevm.selector G.sevm ∈ selV2_2.owners →
+      (Sevm.dataWord G.sevm 4).toAdr ≠ pair)
+    {W : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (proxy : benv.state.getCode P = Proxy.code)
+    (slot : ∃ e ∈ W, ((benv.state.getStor P).get implSlot).toAdr = e.adr ∧
+      benv.state.getCode e.adr = e.code ∧
+      (e.code = Impl.code → benv.state.getCode usdcLib = Lib.code))
+    (installations : ∀ R ∈ trace.settledRoots, ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (zero : ∀ g, Tr g → (benv.state.getStor P).get (allowSlot pair g) = 0) :
+    P ∉ trace.messageOut.accountsToDelete ∧ state.getCode P = Proxy.code ∧
+      (∃ e ∈ W, ((state.getStor P).get implSlot).toAdr = e.adr) ∧
+      ∀ g, Tr g → (state.getStor P).get (allowSlot pair g) = 0 := by
+  apply ConfiguredHistoryTraceIn.transaction_allowance_zero_from_installations_of_transactionCallers
+    history capabilities bal proxyApart rowSep v1Class initApart excluded oldReady v2_2Owner
+    impls lib governance trace rootsIn ?_ hsg proxy slot installations apart zero
+  intro G member
+  rw [trace.settledFrames_eq] at member
+  obtain ⟨R, root, committed⟩ := List.mem_flatMap.mp member
+  apply noCaller G
+  rw [history.settledFrames_eq]
+  exact List.mem_flatMap.mpr ⟨R, rootsIn R root, committed⟩
 
 end History
 
