@@ -5028,6 +5028,20 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `usdc_retainedRowWrite_nonInc` closes that case with a separate retained
   V2_2 owner producer. These are local write inequalities, not a storage fold
   or a proof of the endpoint zero seed.
+  `usdc_rawRowWrite_of_nodeCode` factors the implementation classifier at one
+  actual write; the original raw-code interface is a compatibility wrapper.
+  `usdc_retainedRowWrite_nonInc_of_retainedCode` consumes that local code fact,
+  preserving the original native-query population and retained parent witness.
+  `settledRoot_allowanceWrite_nonInc_from_installations` derives the code fact
+  from retained F2′ governance, the initially selected runtime, and installations
+  at actual upgrade positions. It does not require the raw upgrade checker or
+  all future runtimes installed at root entry. Modern row separation, the V1
+  actual-write classifier, initializer separation, caller exclusion, R3/R4 and
+  the separate V2_2 owner producer remain explicit.
+  `settledRoot_allowance_zero_from_installations` composes those write bounds
+  with `Exec.cell_zero_of_retained_nonInc_noStateGas`: a tracked row entering
+  the actual settled root at zero leaves at zero. The seed, outer transaction
+  deletion/sweep, and original history composition remain separate obligations.
   The write-scoped caller input is supplied by `retained_caller_write_excluded`
   in [`UniswapV2PairUsdcCallersIn.lean`](../Blanc/Composition/UniswapV2PairUsdcCallersIn.lean).
   It follows actual retained parents, uses the Pair's historical child-selector

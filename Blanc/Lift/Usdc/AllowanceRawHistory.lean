@@ -238,13 +238,14 @@ theorem ConfiguredHistoryTraceIn.v1RawWriteClass_of_rowSep
 /-- **Every raw write at a tracked row, attributed and classified.** A successful raw
 `SSTORE` at `(P, k)` for a tracked Pair row `k` lies in a raw frame at `P` that is an
 exception frame, or the write does not raise the row above its word at the write's node. -/
-theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_v1Class
+theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_nodeCode
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (codes : UsdcNodeCodes P history.rawNodes)
+    (capabilities : BodyStageCapabilities F)
     (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
     (rowSep : UsdcModernRowSep P pair Tr history.rawFrames)
     (v1Class : V1RawWriteClass P pair Tr history.rawFrames)
     {m : Exec.Deriv} (hm : m ∈ history.rawNodes) {w : Exec.StorageWrite}
+    (fam : UsdcContextCode m.sevm.code)
     (found : Exec.Deriv.successfulSstore? m = some w) (owner : w.owner = P)
     (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
     ∃ G ∈ history.rawFrames, Exec.Deriv.ParentPrefix G m ∧ G.sevm.currentTarget = P ∧
@@ -257,7 +258,6 @@ theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_v1Class
   have gTarget : G.sevm.currentTarget = P := by rw [← hsevm]; exact target
   refine ⟨G, hG, chain, gTarget, ?_⟩
   obtain ⟨hpc, -, hsg, -, -⟩ := history.rawFrame_entryFacts capabilities G hG
-  have fam := codes m hm target
   rw [hsevm] at fam
   obtain ⟨s2, s21, s22⟩ := rowSep G hG gTarget
   have nonInc : w.value.toNat ≤ (m.devm.getStorVal m.sevm.currentTarget w.key).toNat →
@@ -276,6 +276,23 @@ theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_v1Class
       implV2_2_allowSitesOk (s22 h) found tracked).imp (fun a => .inr (.inr (.inr ⟨h, a⟩)))
       nonInc
   · exact (lib_no_sstore_node hpc hsg chain h found).elim
+
+/-- Compatibility with classification of every raw node. The proof itself only
+needs the code of the particular node that performed the write. -/
+theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_v1Class
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (codes : UsdcNodeCodes P history.rawNodes)
+    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
+    (rowSep : UsdcModernRowSep P pair Tr history.rawFrames)
+    (v1Class : V1RawWriteClass P pair Tr history.rawFrames)
+    {m : Exec.Deriv} (hm : m ∈ history.rawNodes) {w : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? m = some w) (owner : w.owner = P)
+    (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    ∃ G ∈ history.rawFrames, Exec.Deriv.ParentPrefix G m ∧ G.sevm.currentTarget = P ∧
+      (UsdcAllowException pair G ∨
+        w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat) := by
+  exact ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_nodeCode history capabilities proxyApart rowSep v1Class hm
+    (codes m hm ((successfulSstore?_node_owner found).2.symm.trans owner)) found owner tracked
 
 /-- **Every raw write at a tracked row, attributed and classified.** A successful raw
 `SSTORE` at `(P, k)` for a tracked Pair row `k` lies in a raw frame at `P` that is an
