@@ -152,13 +152,15 @@ variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain
 /-- Approved retained-frame F2′ classifies the value of an actual retained
 proxy implementation write. The parent is the original committed frame, so
 its entry state supplies the admin tested by the proxy; discarded frames need
-no governance premise. The node's actual code-address provenance is explicit. -/
-theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code
+no governance premise. Governance is required only on this root's committed
+frames; the broader history supplies execution facts. Code-address provenance
+is explicit. -/
+theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code_of_root_governance
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
     (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
-    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
     {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    (governance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
     {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.run)
     (target : N.sevm.currentTarget = P) (code : N.sevm.code = Proxy.code)
     (address : N.sevm.codeAddress = some P)
@@ -208,12 +210,44 @@ theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_co
         rw [h]
         decide
     obtain ⟨impl, inTargets, arg⟩ :=
-      AllowedAdminAsk.upgradeArg (governance G settled entry admin selMem) selector
+      AllowedAdminAsk.upgradeArg (governance G frameMem entry admin selMem) selector
     refine ⟨?_, ?_⟩
     · rw [value, arg]
       exact inTargets
     · rw [value]
       exact nonempty
+
+/-- Restrict an existing full-history governance proof to one actual retained
+root. This direction imposes no governance outside the selected root. -/
+theorem ConfiguredHistoryTraceIn.governance_on_settledRoot
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    {R : Exec.Frame} (member : R ∈ history.settledRoots) :
+    UsdcGovernanceF2primeOn P (Exec.committedFrames R.run) := by
+  intro G frameMem
+  apply governance G
+  rw [history.settledFrames_eq]
+  exact List.mem_flatMap.mpr ⟨R, member, frameMem⟩
+
+/-- Compatibility wrapper retaining the original full-history input. -/
+theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.run)
+    (target : N.sevm.currentTarget = P) (code : N.sevm.code = Proxy.code)
+    (address : N.sevm.codeAddress = some P)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? N = some write)
+    (key : write.key = implSlot) :
+    write.value.toAdr ∈ upgradeTargets ∧
+      (N.devm.getCode write.value.toAdr).toList ≠ [] := by
+  exact ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code_of_root_governance
+    history capabilities bal member
+    (ConfiguredHistoryTraceIn.governance_on_settledRoot history governance member)
+    retained target code address found key
+
 
 /-- Target-only compatibility projection of the retained upgrade theorem.
 The stronger result also retains the target code observed at the write. -/

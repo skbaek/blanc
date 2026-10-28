@@ -2234,6 +2234,16 @@ origin. Only those actual guarded writes need origins, and governance stays on
 the original full history. Proxy deletion exclusion and final proxy code are
 also derived. The concrete constructor/entry origin producer at historical
 upgrade positions remains a separate producer duty.
+The retained upgrade and dynamic context/endpoint producers also expose
+`_of_root_governance` cores. They consume F2′ only on
+`Exec.committedFrames R.run` for the selected settled root; the original full
+history still supplies execution facts. Existing full-history APIs restrict
+their premise through `governance_on_settledRoot` and preserve their signatures.
+Use the scoped cores when the approved governance interval starts later than
+the full raw-key/signature-query history. Transaction and history consumers
+must transport that restricted scope explicitly; no pre-interval governance
+is inferred.
+
 `UsdcSelectedReady` records only the currently selected implementation and its
 conditional library. `TransactionTrace.usdc_root_ready` derives actual root
 entry readiness from transaction entry, independently of allowance caller

@@ -542,14 +542,14 @@ theorem ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_of_f2prime
 write. Original F2′ and the source guard identify its literal target and code
 existence at that write. The context classifier is a producer output; no
 installation at root entry is assumed by this provenance lemma. -/
-theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime
+theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime_of_root_governance
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
     (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
     {P : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
     (proxy : R.pre.getCode P = Proxy.code)
-    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (governance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
     (classified : ∀ N ∈ Exec.retainedNodes R.run, N.sevm.currentTarget = P →
       (N.sevm.code = Proxy.code ∧ N.sevm.codeAddress = some P) ∨
         UsdcImplCode N.sevm.code)
@@ -577,10 +577,35 @@ theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime
   have target : N.sevm.currentTarget = P :=
     (successfulSstore?_node_owner found).2.symm.trans owner
   rcases classified N retained target with ⟨code, address⟩ | implementation
-  · have allowed := ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code
-      history capabilities bal governance member retained target code address found key
+  · have allowed := ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code_of_root_governance
+      history capabilities bal member governance retained target code address found key
     exact .inr ⟨N, retained, actual.storageWrite, found, owner, key, value, allowed⟩
   · exact (apart N retained target implementation actual.storageWrite found key).elim
+
+/-- Compatibility wrapper retaining the original full-history governance API. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (classified : ∀ N ∈ Exec.retainedNodes R.run, N.sevm.currentTarget = P →
+      (N.sevm.code = Proxy.code ∧ N.sevm.codeAddress = some P) ∨
+        UsdcImplCode N.sevm.code)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot ∨
+      ∃ N ∈ Exec.retainedNodes R.run, ∃ write : Exec.StorageWrite,
+        Exec.Deriv.successfulSstore? N = some write ∧ write.owner = P ∧
+        write.key = implSlot ∧ write.value = (R.post.getStor P).get implSlot ∧
+        write.value.toAdr ∈ F2prime.upgradeTargets ∧
+        (N.devm.getCode write.value.toAdr).toList ≠ [] := by
+  exact ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime_of_root_governance
+    history capabilities bal member proxy
+    (ConfiguredHistoryTraceIn.governance_on_settledRoot history governance member)
+    classified apart
+
 
 /-- Endpoint write provenance with its context obligation discharged by the
 existing installed-world induction. This consumer retains that induction's
@@ -621,6 +646,37 @@ theorem ConfiguredHistoryTraceIn.settledRoot_proxyWorld_implSlot_origin_of_f2pri
 its retained upgrade write, including when creation occurred earlier in this
 same root. This is the committed execution endpoint, before outer transaction
 settlement; runtime identity remains an installation-provenance obligation. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_code_of_f2prime_of_root_governance
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (governance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
+    (classified : ∀ N ∈ Exec.retainedNodes R.run, N.sevm.currentTarget = P →
+      (N.sevm.code = Proxy.code ∧ N.sevm.codeAddress = some P) ∨
+        UsdcImplCode N.sevm.code)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot ∨
+      ∃ N ∈ Exec.retainedNodes R.run, ∃ write : Exec.StorageWrite,
+        Exec.Deriv.successfulSstore? N = some write ∧ write.owner = P ∧
+        write.key = implSlot ∧ write.value = (R.post.getStor P).get implSlot ∧
+        write.value.toAdr ∈ F2prime.upgradeTargets ∧
+        (N.devm.getCode write.value.toAdr).toList ≠ [] ∧
+        R.post.getCode write.value.toAdr = N.devm.getCode write.value.toAdr := by
+  rcases ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime_of_root_governance history
+      capabilities bal member proxy governance classified apart with unchanged |
+      ⟨N, retained, write, found, owner, key, value, allowed, nonempty⟩
+  · exact .inl unchanged
+  · obtain ⟨before, after, split⟩ := List.append_of_mem retained
+    have rawRoot := history.mem_rawFrames_of_mem_settledRoots R member
+    have hsg := (history.rawFrame_entryFacts capabilities _ rawRoot).2.2.1
+    have preserved := (Exec.retainedNodes_code_after_split_noStateGas
+      R.run R.committed hsg split nonempty).1
+    exact .inr ⟨N, retained, write, found, owner, key, value, allowed, nonempty, preserved⟩
+
+/-- Compatibility wrapper retaining the original full-history governance API. -/
 theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_code_of_f2prime
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -640,16 +696,11 @@ theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_code_of_f2prime
         write.value.toAdr ∈ F2prime.upgradeTargets ∧
         (N.devm.getCode write.value.toAdr).toList ≠ [] ∧
         R.post.getCode write.value.toAdr = N.devm.getCode write.value.toAdr := by
-  rcases ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_of_f2prime history
-      capabilities bal member proxy governance classified apart with unchanged |
-      ⟨N, retained, write, found, owner, key, value, allowed, nonempty⟩
-  · exact .inl unchanged
-  · obtain ⟨before, after, split⟩ := List.append_of_mem retained
-    have rawRoot := history.mem_rawFrames_of_mem_settledRoots R member
-    have hsg := (history.rawFrame_entryFacts capabilities _ rawRoot).2.2.1
-    have preserved := (Exec.retainedNodes_code_after_split_noStateGas
-      R.run R.committed hsg split nonempty).1
-    exact .inr ⟨N, retained, write, found, owner, key, value, allowed, nonempty, preserved⟩
+  exact ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_code_of_f2prime_of_root_governance
+    history capabilities bal member proxy
+    (ConfiguredHistoryTraceIn.governance_on_settledRoot history governance member)
+    classified apart
+
 
 /-- A root entered with a nonempty active implementation ends with a nonempty
 active implementation. Changed targets use the actual retained guard and code
@@ -691,6 +742,55 @@ theorem ConfiguredHistoryTraceIn.settledRoot_implSlot_nonempty_of_f2prime
 which runtime installation evidence is needed. The coupled induction derives
 classification; it is not supplied as a hypothesis. Creation earlier in this
 root is allowed for both the implementation and its V2.2 library. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations_of_root_governance
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry} {R : Exec.Frame}
+    (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (slot : ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧
+      e.RuntimeReady R.pre)
+    (governance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
+    (installations : ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    ∀ N ∈ Exec.retainedNodes R.run,
+      (∃ e ∈ W, ((N.devm.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady N.devm) ∧
+      (N.sevm.currentTarget = P →
+        (N.sevm.code = Proxy.code ∧ N.sevm.codeAddress = some P) ∨
+          ∃ e ∈ W, N.sevm.code = e.code ∧
+            (e.code = Impl.code → N.devm.getCode usdcLib = Lib.code)) := by
+  have context := ConfiguredHistoryTraceIn.retained_proxyWorld_context_from_installations
+    history capabilities bal (R := Exec.Frame.rootDeriv R)
+    (history.mem_rawFrames_of_mem_settledRoots R member) R.committed
+    (history.settledRoots_rootOwnCode R member) proxy impls lib slot
+    (by
+      intro N retained target code address write found key
+      have own := address (history.settledRoots_rootOwnEntry R member)
+      have allowed := ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code_of_root_governance
+        history capabilities bal member governance retained target code own found key
+      exact installations N retained target code own write found key allowed.1 allowed.2)
+    (by
+      intro N retained target e he code write found
+      exact apart N retained target (by rw [code]; exact impls e he) write found)
+  intro N retained
+  refine ⟨(context N retained).1, ?_⟩
+  intro target
+  rcases (context N retained).2 target with ⟨code, address⟩ | entry
+  · exact .inl ⟨code, address (history.settledRoots_rootOwnEntry R member)⟩
+  · exact .inr entry
+
+/-- Compatibility wrapper retaining the original full-history governance API. -/
 theorem ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -719,30 +819,55 @@ theorem ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installati
         (N.sevm.code = Proxy.code ∧ N.sevm.codeAddress = some P) ∨
           ∃ e ∈ W, N.sevm.code = e.code ∧
             (e.code = Impl.code → N.devm.getCode usdcLib = Lib.code)) := by
-  have context := ConfiguredHistoryTraceIn.retained_proxyWorld_context_from_installations
-    history capabilities bal (R := Exec.Frame.rootDeriv R)
-    (history.mem_rawFrames_of_mem_settledRoots R member) R.committed
-    (history.settledRoots_rootOwnCode R member) proxy impls lib slot
-    (by
-      intro N retained target code address write found key
-      have own := address (history.settledRoots_rootOwnEntry R member)
-      have allowed := ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code
-        history capabilities bal governance member retained target code own found key
-      exact installations N retained target code own write found key allowed.1 allowed.2)
-    (by
-      intro N retained target e he code write found
-      exact apart N retained target (by rw [code]; exact impls e he) write found)
-  intro N retained
-  refine ⟨(context N retained).1, ?_⟩
-  intro target
-  rcases (context N retained).2 target with ⟨code, address⟩ | entry
-  · exact .inl ⟨code, address (history.settledRoots_rootOwnEntry R member)⟩
-  · exact .inr entry
+  exact ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations_of_root_governance
+    history capabilities bal member proxy impls lib slot
+    (ConfiguredHistoryTraceIn.governance_on_settledRoot history governance member)
+    installations apart
+
 
 /-- Discharge the endpoint provenance classifier with the dynamic retained
 induction. Only initial selected-code readiness and actual upgrade-position
 runtime evidence are supplied, not installation of all entries at root entry.
 Historical installation evidence itself remains a separate producer duty. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2prime_of_root_governance
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry} {R : Exec.Frame}
+    (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (slot : ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧
+      e.RuntimeReady R.pre)
+    (governance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
+    (installations : ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    (R.post.getStor P).get implSlot = (R.pre.getStor P).get implSlot ∨
+      ∃ N ∈ Exec.retainedNodes R.run, ∃ write : Exec.StorageWrite,
+        Exec.Deriv.successfulSstore? N = some write ∧ write.owner = P ∧
+        write.key = implSlot ∧ write.value = (R.post.getStor P).get implSlot ∧
+        write.value.toAdr ∈ F2prime.upgradeTargets ∧
+        (N.devm.getCode write.value.toAdr).toList ≠ [] ∧
+        R.post.getCode write.value.toAdr = N.devm.getCode write.value.toAdr := by
+  have context := ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations_of_root_governance
+    history capabilities bal member proxy impls lib slot governance installations apart
+  apply ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_code_of_f2prime_of_root_governance history
+    capabilities bal member proxy governance ?_ apart
+  intro N retained target
+  rcases (context N retained).2 target with own | ⟨e, he, code, _⟩
+  · exact .inl own
+  · exact .inr (code ▸ impls e he)
+
+/-- Compatibility wrapper retaining the original full-history governance API. -/
 theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2prime
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -772,21 +897,18 @@ theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2p
         write.value.toAdr ∈ F2prime.upgradeTargets ∧
         (N.devm.getCode write.value.toAdr).toList ≠ [] ∧
         R.post.getCode write.value.toAdr = N.devm.getCode write.value.toAdr := by
-  have context := ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations
-    history capabilities bal member proxy impls lib slot governance installations apart
-  apply ConfiguredHistoryTraceIn.settledRoot_implSlot_origin_code_of_f2prime history
-    capabilities bal member proxy governance ?_ apart
-  intro N retained target
-  rcases (context N retained).2 target with own | ⟨e, he, code, _⟩
-  · exact .inl own
-  · exact .inr (code ▸ impls e he)
+  exact ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2prime_of_root_governance
+    history capabilities bal member proxy impls lib slot
+    (ConfiguredHistoryTraceIn.governance_on_settledRoot history governance member)
+    installations apart
+
 
 /-- The dynamic selected implementation and its conditional V2.2 library are
 ready at the committed root endpoint. An unchanged pointer uses its initial
 installation; a changed pointer uses the actual retained last writer and code
 observed there. Temporary upgrades and restoration are allowed. Final outer
 transaction deletion/sweep is not part of this committed execution endpoint. -/
-theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime
+theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime_of_root_governance
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
@@ -799,7 +921,7 @@ theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime
       ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
     (slot : ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧
       e.RuntimeReady R.pre)
-    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (governance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
     (installations : ∀ N ∈ Exec.retainedNodes R.run,
       N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
       N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
@@ -826,9 +948,9 @@ theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime
     exact (show R.post.getCode a = R.pre.getCode a from by
       simpa only [postEq, Execution.getCode] using kept).trans present
   refine ⟨keepEntry proxy (.inl rfl), ?_⟩
-  have context := ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations
+  have context := ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations_of_root_governance
     history capabilities bal member proxy impls lib slot governance installations apart
-  rcases ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2prime
+  rcases ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2prime_of_root_governance
       history capabilities bal member proxy impls lib slot governance installations apart with
       unchanged | ⟨N, retained, write, found, owner, key, value, allowed, nonempty, _⟩
   · obtain ⟨e, he, address, ready⟩ := slot
@@ -853,5 +975,37 @@ theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime
         exact keepObserved (ready.2 implementation)
           (show UsdcContextCode Lib.code from .inr (.inr (.inr (.inr (.inr rfl)))))
     · exact (apart N retained target (by rw [code]; exact impls e he) write found key).elim
+
+/-- Compatibility wrapper retaining the original full-history governance API. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry} {R : Exec.Frame}
+    (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (slot : ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧
+      e.RuntimeReady R.pre)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (installations : ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    R.post.getCode P = Proxy.code ∧
+      ∃ e ∈ W, ((R.post.getStor P).get implSlot).toAdr = e.adr ∧
+        e.RuntimeReady R.post := by
+  exact ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime_of_root_governance
+    history capabilities bal member proxy impls lib slot
+    (ConfiguredHistoryTraceIn.governance_on_settledRoot history governance member)
+    installations apart
+
 
 end Blanc.Lift.Usdc
