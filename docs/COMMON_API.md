@@ -10656,3 +10656,21 @@ transaction-list producer. Earlier-cut availability and actual root membership
 remain explicit; selected boundary transactions need separate constructor
 proofs. These are internal producers, not replacement fields in a final
 original-history assumption record. Census correspondence remains unadopted.
+
+
+The available-runtime producer in `Blanc/Lift/Usdc/ProxyRetainedNoDel.lean`
+also covers actual system messages, both request messages, optional beacon,
+history and request stages, withdrawals and rewards via the `usdc_available_targets`
+family and `usdc_available_targets_after_transactions`. Configured-history
+`block_origins_of_available_targets`, `after_txSplit_origins_of_available_targets`,
+`before_txSplit_origins_of_available_targets` and `mid_origins_of_available_targets`
+compose those stages with the original transaction lists. Their conclusion
+contains the derived origins and guarded installations, plus final availability.
+`origins_between_txSplits_of_census` covers the complete original interval:
+source-cut suffix, intervening blocks, and target-block opening/prefix. It
+requires availability only at the actual source cut and derives availability
+at the target cut; all root membership and target restrictions come from the
+same original history/census. Selected boundary transactions remain separate.
+The general stage/mid producers handle enabled system calls; the receipt-census
+adapter retains its existing pre-Cancun bound. No original observation has been
+adopted and no final origin/readiness fields have replaced the concrete producers.

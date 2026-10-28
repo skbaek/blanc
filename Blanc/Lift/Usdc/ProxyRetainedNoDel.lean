@@ -1940,4 +1940,345 @@ theorem ConfiguredHistoryTraceIn.mid_dynamic_runtimeReady_of_origins
 
 end SelectedHistory
 
+section AvailableStages
+
+variable {P : Adr} {W available : List UsdcDeployedEntry}
+  (subset : ∀ e ∈ available, e ∈ W)
+  (impls : ∀ e ∈ available, UsdcImplCode e.code)
+
+include subset impls
+
+/-- An actual system message preserves the available runtime family and
+supplies guarded installations at its retained nodes. Its complete system
+wrapper has no transaction deletion fold. -/
+theorem SystemMessageTrace.usdc_available_targets
+    {benv : Benv} {target : Adr} {data : Bytes} {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (hsg : benv.stat.rules.stateGas = none)
+    (ready : UsdcEntriesReady available benv.state)
+    (targets : UsdcUpgradeTargetsIn P available trace.settledRoots) :
+    UsdcEntriesReady available state ∧ UsdcGuardedInstallations P W trace.settledRoots := by
+  have entry {a : Adr} {C : ByteArray} (family : UsdcContextCode C)
+      (present : benv.state.getCode a = C) (R : Exec.Frame) (root : R ∈ trace.settledRoots) :
+      R.pre.getCode a = C := by
+    simpa only [systemTransactionMessage_benv_state] using
+      (trace.message.settledRoots_entry_code_cell
+        (by rw [systemTransactionMessage_benv_state]; exact present)
+        family.ne_nil family.not_delegation 0 R root).1
+  have finalCode {a : Adr} {C : ByteArray} (family : UsdcContextCode C)
+      (present : benv.state.getCode a = C) : state.getCode a = C :=
+    (trace.cell_property_of_settledRoots 0 hsg present family.ne_nil family.not_delegation
+      (fun _ => True) (by intro R root initial; trivial) trivial).2
+  have libFamily : UsdcContextCode Lib.code := .inr (.inr (.inr (.inr (.inr rfl))))
+  refine ⟨?_, ?_⟩
+  · intro e member
+    exact ⟨finalCode (impls e member).context (ready e member).1,
+      fun implementation => finalCode libFamily ((ready e member).2 implementation)⟩
+  · intro R root N retained target code _ write found key _ _
+    obtain ⟨e, member, address⟩ := targets R root N retained write found
+      ((successfulSstore?_node_owner found).2.trans target) key code
+    have raw := (Exec.retainedNodes_sublist_rawNodes R.run).subset retained
+    refine ⟨e, subset e member, address, ?_, ?_⟩
+    · exact Exec.rawNodes_getCode R.run
+        (entry (impls e member).context (ready e member).1 R root)
+        (impls e member).context.ne_nil N raw
+    · intro implementation
+      exact Exec.rawNodes_getCode R.run
+        (entry libFamily ((ready e member).2 implementation) R root) libFamily.ne_nil N raw
+
+/-- Both original request messages preserve availability in execution order. -/
+theorem RequestsTrace.usdc_available_targets
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (ready : UsdcEntriesReady available benv.state)
+    (targets : UsdcUpgradeTargetsIn P available trace.settledRoots) :
+    UsdcEntriesReady available state ∧ UsdcGuardedInstallations P W trace.settledRoots := by
+  have first := SystemMessageTrace.usdc_available_targets subset impls trace.withdrawal hsg ready
+    (fun R member => targets R (List.mem_append_left _ member))
+  have second := SystemMessageTrace.usdc_available_targets subset impls trace.consolidation hsg first.1
+    (fun R member => targets R (List.mem_append_right _ member))
+  refine ⟨?_, ?_⟩
+  · rw [trace.state_eq_consolidationState]; exact second.1
+  · intro R member
+    rcases List.mem_append.mp member with before | after
+    · exact first.2 R before
+    · exact second.2 R after
+
+/-- Available runtimes cross the actual optional beacon stage. -/
+theorem BeaconStageTrace.usdc_available_targets
+    {rules : ForkRules} {benv : Benv} {state : State} {outputBal : BalBuilder}
+    (trace : BeaconStageTrace rules benv state outputBal)
+    (hsg : benv.stat.rules.stateGas = none)
+    (ready : UsdcEntriesReady available benv.state)
+    (targets : UsdcUpgradeTargetsIn P available trace.settledRoots) :
+    UsdcEntriesReady available state ∧ UsdcGuardedInstallations P W trace.settledRoots := by
+  cases trace with
+  | skipped =>
+    refine ⟨ready, ?_⟩
+    intro R member; cases member
+  | called _ _ message _ _ =>
+    exact SystemMessageTrace.usdc_available_targets subset impls message hsg ready targets
+
+/-- Available runtimes cross the actual optional history stage. -/
+theorem HistoryStageTrace.usdc_available_targets
+    {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State} {outputBal : BalBuilder}
+    (trace : HistoryStageTrace rules benv inputBal state outputBal)
+    (hsg : benv.stat.rules.stateGas = none)
+    (ready : UsdcEntriesReady available benv.state)
+    (targets : UsdcUpgradeTargetsIn P available trace.settledRoots) :
+    UsdcEntriesReady available state ∧ UsdcGuardedInstallations P W trace.settledRoots := by
+  cases trace with
+  | skipped =>
+    refine ⟨ready, ?_⟩
+    intro R member; cases member
+  | called _ _ _ _ message _ _ =>
+    exact SystemMessageTrace.usdc_available_targets subset impls message hsg ready targets
+
+/-- Available runtimes cross the actual optional requests stage. -/
+theorem RequestStageTrace.usdc_available_targets
+    {rules : ForkRules} {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestStageTrace rules benv bout state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (ready : UsdcEntriesReady available benv.state)
+    (targets : UsdcUpgradeTargetsIn P available trace.settledRoots) :
+    UsdcEntriesReady available state ∧ UsdcGuardedInstallations P W trace.settledRoots := by
+  cases trace with
+  | skipped =>
+    refine ⟨ready, ?_⟩
+    intro R member; cases member
+  | called _ message _ =>
+    exact RequestsTrace.usdc_available_targets subset impls message hsg ready targets
+
+/-- Withdrawals, requests and rewards retain the available family and derive
+all installations in the source block's actual closing stages. -/
+theorem StagedBodyTrace.usdc_available_targets_after_transactions
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (hsg : benv.stat.rules.stateGas = none)
+    (ready : UsdcEntriesReady available trace.transactionBenv.state)
+    (targets : UsdcUpgradeTargetsIn P available trace.requests.settledRoots) :
+    UsdcEntriesReady available state ∧ UsdcGuardedInstallations P W trace.requests.settledRoots := by
+  have withdrawn : UsdcEntriesReady available trace.withdrawalState := by
+    intro e member
+    exact ⟨trace.withdrawalCode_of_code (ready e member).1,
+      fun implementation => trace.withdrawalCode_of_code ((ready e member).2 implementation)⟩
+  have requestGas : (trace.transactionBenv.withState trace.withdrawalState).stat.rules.stateGas = none := by
+    change trace.transactionBenv.stat.rules.stateGas = none
+    rw [trace.transactions.stat_eq]
+    exact hsg
+  have requests := RequestStageTrace.usdc_available_targets subset impls trace.requests
+    requestGas withdrawn targets
+  refine ⟨?_, requests.2⟩
+  have code (a : Adr) : state.getCode a = trace.requestState.getCode a := by
+    simp only [trace.finalState_eq, trace.rewardState_eq]
+    split
+    · rfl
+    · exact payRewards_getCode _ _ _ _ _ _
+  intro e member
+  exact ⟨(code e.adr).trans (requests.1 e member).1,
+    fun implementation => (code usdcLib).trans ((requests.1 e member).2 implementation)⟩
+
+end AvailableStages
+
+section AvailableHistory
+
+variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+  (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+  (capabilities : BodyStageCapabilities F)
+  (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+  {P : Adr} {W available : List UsdcDeployedEntry}
+  (subset : ∀ e ∈ available, e ∈ W)
+  (impls : ∀ e ∈ available, UsdcImplCode e.code)
+
+include capabilities bal subset impls
+
+/-- Earlier-created runtimes and actual target restrictions produce every
+transaction origin and guarded installation through a complete original block,
+including enabled system stages. No per-root readiness is assumed. -/
+theorem ConfiguredHistoryTraceIn.block_origins_of_available_targets
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post)
+    (rootsIn : ∀ R ∈ block.settledRoots, R ∈ history.settledRoots)
+    (ready : UsdcEntriesReady available pre.state)
+    (targets : UsdcUpgradeTargetsIn P available block.settledRoots) :
+    UsdcTransactionsOrigins P W block.bodyTrace.transactions ∧
+      UsdcGuardedInstallations P W block.settledRoots ∧
+      UsdcEntriesReady available post.state := by
+  have beaconIn (R : Exec.Frame) (member : R ∈ block.bodyTrace.beacon.settledRoots) :
+      R ∈ block.settledRoots :=
+    List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ member))
+  have historyIn (R : Exec.Frame) (member : R ∈ block.bodyTrace.history.settledRoots) :
+      R ∈ block.settledRoots :=
+    List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ member))
+  have transactionIn (R : Exec.Frame) (member : R ∈ block.bodyTrace.transactions.settledRoots) :
+      R ∈ block.settledRoots := List.mem_append_left _ (List.mem_append_right _ member)
+  have requestIn (R : Exec.Frame) (member : R ∈ block.bodyTrace.requests.settledRoots) :
+      R ∈ block.settledRoots := List.mem_append_right _ member
+  have hsg := capabilities.stateGas_none block.forkIn
+  have beacon := BeaconStageTrace.usdc_available_targets subset impls block.bodyTrace.beacon
+    hsg ready (fun R member => targets R (beaconIn R member))
+  have opening := HistoryStageTrace.usdc_available_targets subset impls block.bodyTrace.history
+    hsg beacon.1 (fun R member => targets R (historyIn R member))
+  have transactions := ConfiguredHistoryTraceIn.transactions_origins_of_available_targets
+    history capabilities bal subset impls block.bodyTrace.transactions
+    (fun R member => rootsIn R (transactionIn R member)) hsg opening.1
+    (fun R member => targets R (transactionIn R member))
+  have closing := StagedBodyTrace.usdc_available_targets_after_transactions subset impls
+    block.bodyTrace hsg transactions.2.2 (fun R member => targets R (requestIn R member))
+  refine ⟨transactions.1, ?_, ?_⟩
+  · intro R member
+    rcases List.mem_append.mp member with before | requests
+    · rcases List.mem_append.mp before with openingRoots | transactionRoots
+      · rcases List.mem_append.mp openingRoots with beaconRoots | historyRoots
+        · exact beacon.2 R beaconRoots
+        · exact opening.2 R historyRoots
+      · exact transactions.2.1 R transactionRoots
+    · exact closing.2 R requests
+  · rw [block.postEq]
+    exact closing.1
+
+/-- Start with the implementations installed after a genuine creation cut;
+include its original suffix and all closing stages, without requiring these
+implementations in the source block's prestate. -/
+theorem ConfiguredHistoryTraceIn.after_txSplit_origins_of_available_targets
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (rootsIn : ∀ R ∈ (MidHistoryTraceIn.tail block cut).settledRoots,
+      R ∈ history.settledRoots)
+    (ready : UsdcEntriesReady available cut.afterBenv.state)
+    (targets : UsdcUpgradeTargetsIn P available (MidHistoryTraceIn.tail block cut).settledRoots) :
+    UsdcTransactionsOrigins P W cut.after ∧
+      UsdcGuardedInstallations P W (MidHistoryTraceIn.tail block cut).settledRoots ∧
+      UsdcEntriesReady available post.state := by
+  have hsg := capabilities.stateGas_none block.forkIn
+  have cutGas : cut.afterBenv.stat.rules.stateGas = none := by
+    rw [block.txSplit_stat cut]; exact hsg
+  have transactions := ConfiguredHistoryTraceIn.transactions_origins_of_available_targets
+    history capabilities bal subset impls cut.after
+    (fun R member => rootsIn R (List.mem_append_left _ member)) cutGas ready
+    (fun R member => targets R (List.mem_append_left _ member))
+  have closing := StagedBodyTrace.usdc_available_targets_after_transactions subset impls
+    block.bodyTrace hsg transactions.2.2
+    (fun R member => targets R (List.mem_append_right _ member))
+  refine ⟨transactions.1, ?_, ?_⟩
+  · intro R member
+    rcases List.mem_append.mp member with before | after
+    · exact transactions.2.1 R before
+    · exact closing.2 R after
+  · rw [block.postEq]
+    exact closing.1
+
+/-- The original post-cut history obtains all runtime origins and local
+installations from its initially available family and actual upgrade targets.
+This also covers later enabled system stages and complete transaction settlement. -/
+theorem ConfiguredHistoryTraceIn.mid_origins_of_available_targets
+    {start : Benv} {finish : BlockChain} (mid : MidHistoryTraceIn F cfg start finish)
+    (rootsIn : ∀ R ∈ mid.settledRoots, R ∈ history.settledRoots)
+    (ready : UsdcEntriesReady available start.state)
+    (targets : UsdcUpgradeTargetsIn P available mid.settledRoots) :
+    UsdcMidHistoryOrigins P W mid ∧
+      UsdcGuardedInstallations P W mid.settledRoots ∧
+      UsdcEntriesReady available finish.state := by
+  induction mid with
+  | tail block cut =>
+    exact ConfiguredHistoryTraceIn.after_txSplit_origins_of_available_targets
+      history capabilities bal subset impls block cut rootsIn ready targets
+  | step prior block ih =>
+    have first := ih (fun R member => rootsIn R (List.mem_append_left _ member)) ready
+      (fun R member => targets R (List.mem_append_left _ member))
+    have next := ConfiguredHistoryTraceIn.block_origins_of_available_targets
+      history capabilities bal subset impls block
+      (fun R member => rootsIn R (List.mem_append_right _ member)) first.2.2
+      (fun R member => targets R (List.mem_append_right _ member))
+    refine ⟨⟨first.1, next.1⟩, ?_, next.2.2⟩
+    intro R member
+    rcases List.mem_append.mp member with before | after
+    · exact first.2.1 R before
+    · exact next.2.1 R after
+
+/-- The actual opening stages and transaction prefix produce origins and
+installations up to the next genuine cut, excluding its selected transaction. -/
+theorem ConfiguredHistoryTraceIn.before_txSplit_origins_of_available_targets
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (rootsIn : ∀ R ∈ block.rootsBeforeTxSplit cut, R ∈ history.settledRoots)
+    (ready : UsdcEntriesReady available pre.state)
+    (targets : UsdcUpgradeTargetsIn P available (block.rootsBeforeTxSplit cut)) :
+    UsdcTransactionsOrigins P W cut.before ∧
+      UsdcGuardedInstallations P W (block.rootsBeforeTxSplit cut) ∧
+      UsdcEntriesReady available cut.benv.state := by
+  have hsg := capabilities.stateGas_none block.forkIn
+  have beacon := BeaconStageTrace.usdc_available_targets subset impls block.bodyTrace.beacon
+    hsg ready (fun R member => targets R
+      (List.mem_append_left _ (List.mem_append_left _ member)))
+  have opening := HistoryStageTrace.usdc_available_targets subset impls block.bodyTrace.history
+    hsg beacon.1 (fun R member => targets R
+      (List.mem_append_left _ (List.mem_append_right _ member)))
+  have transactions := ConfiguredHistoryTraceIn.transactions_origins_of_available_targets
+    history capabilities bal subset impls cut.before
+    (fun R member => rootsIn R (List.mem_append_right _ member)) hsg opening.1
+    (fun R member => targets R (List.mem_append_right _ member))
+  refine ⟨transactions.1, ?_, transactions.2.2⟩
+  intro R member
+  rcases List.mem_append.mp member with first | ending
+  · rcases List.mem_append.mp first with beaconRoot | historyRoot
+    · exact beacon.2 R beaconRoot
+    · exact opening.2 R historyRoot
+  · exact transactions.2.1 R ending
+
+end AvailableHistory
+
+
+/-- The complete original interval between two actual cuts obtains its mid
+and ending transaction origins, guarded installations and final availability
+from initial available runtimes and the same original receipt census. Neither
+selected boundary transaction is silently included or treated as an assumption. -/
+theorem ConfiguredHistoryTraceIn.origins_between_txSplits_of_census
+    {checkpoint origin completed pre post future : BlockChain}
+    (before : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint origin)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed) {i : Nat}
+    (afterCut : first.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post) {j : Nat}
+    (beforeCut : last.bodyTrace.transactions.TxSplit j)
+    (after : ConfiguredHistoryTraceIn HistFork mainnetChainConfig post future)
+    (early : last.block.header.timestamp < mainnetCancunTimestamp)
+    {lo hi : Nat} (lower : lo ≤ first.block.header.number)
+    (upper : last.block.header.number ≤ hi) {P : Adr} (available : List UsdcDeployedEntry)
+    (census : ((((before.step first).append later).step last).append after).ReceiptCensus
+      lo hi (UpgradedTargetSatisfies P (fun target => ∃ e ∈ available, target = e.adr)))
+    {W : List UsdcDeployedEntry}
+    (subset : ∀ e ∈ available, e ∈ W)
+    (impls : ∀ e ∈ available, UsdcImplCode e.code)
+    (ready : UsdcEntriesReady available afterCut.afterBenv.state) :
+    UsdcMidHistoryOrigins P W ((MidHistoryTraceIn.tail first afterCut).append later) ∧
+      UsdcTransactionsOrigins P W beforeCut.before ∧
+      UsdcGuardedInstallations P W
+        (((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+          last.rootsBeforeTxSplit beforeCut) ∧
+      UsdcEntriesReady available beforeCut.benv.state := by
+  let full := (((before.step first).append later).step last).append after
+  have rootsIn (R : Exec.Frame)
+      (member : R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+        last.rootsBeforeTxSplit beforeCut) : R ∈ full.settledRoots :=
+    ConfiguredHistoryTraceIn.mem_settledRoots_of_between_txSplits
+      before first afterCut later last beforeCut after member
+  have targets := ConfiguredHistoryTraceIn.upgradeTargetsIn_between_txSplits_of_census
+    before first afterCut later last beforeCut after early lower upper available census
+  have mid := ConfiguredHistoryTraceIn.mid_origins_of_available_targets
+    full BodyStageCapabilities.historical (fun hf => hf.bal_none) subset impls
+    ((MidHistoryTraceIn.tail first afterCut).append later)
+    (fun R member => rootsIn R (List.mem_append_left _ member)) ready
+    (fun R member => targets R (List.mem_append_left _ member))
+  have ending := ConfiguredHistoryTraceIn.before_txSplit_origins_of_available_targets
+    full BodyStageCapabilities.historical (fun hf => hf.bal_none) subset impls last beforeCut
+    (fun R member => rootsIn R (List.mem_append_right _ member)) mid.2.2
+    (fun R member => targets R (List.mem_append_right _ member))
+  refine ⟨mid.1, ending.1, ?_, ending.2.2⟩
+  intro R member
+  rcases List.mem_append.mp member with first | last
+  · exact mid.2.1 R first
+  · exact ending.2.1 R last
+
 end Blanc.Lift.Usdc
