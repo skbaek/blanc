@@ -1125,6 +1125,21 @@ CREATE collision exclusion, authorization and code resolution; the
 per-level `settledRoots_rootOwnEntry` transports preserve the same actual
 roots. This applies to outer message roots; delegated descendants still need
 the positional origin classification above.
+
+For the weaker nonce-or-code protection needed to exclude earlier deletion,
+`TransactionTrace.settledRoots_context_protected` derives protection whenever
+an actual root runs nonempty code. It covers CREATE nonce seeding and CALL
+entry after authorization/delegation; no installed-world or prestate-nonce
+premise is needed. `MessageCallTrace.settledRoots_context_protected` and the
+matching process-trace producers retain the original message witnesses;
+`messageCallExecutionMessage_context_code_nonempty` handles designators.
+`TransactionTrace.settledRoot_create_ne_of_earlier_selfdestruct` combines that
+producer with an actual retained-list split and later CREATE spawn to exclude
+the earlier SELFDESTRUCT's storage context as the new target. Supply the root
+and later-node no-state-gas facts. This is an ordered-position result, not
+whole-transaction deletion safety or a cross-transaction lifetime theorem;
+the required trace/split witnesses cannot be inferred from a bare protection
+goal for automatic recipe selection.
 For the same provenance restarted at a committed boundary inside the
 history (a block-body start or the boundary after any transaction, e.g. for
 a contract deployed after the checkpoint; safety only of the raw nodes
@@ -2027,6 +2042,18 @@ supply the later node's no-state-gas premise and its actual spawn/entry witness.
 These APIs require the original retained-list split, as above. They concern
 one execution and do not exclude an earlier lifetime in another transaction
 or prove survival through the outer transaction's deletion fold.
+
+`Exec.rawNodes_context_protected_noStateGas` transports a root's conditional
+context protection to every nonempty-code raw node. Its child seam
+`Evm.step_spawn_context_protected_noStateGas` uses actual CREATE nonce seeding,
+CALL target code, or the inherited delegated context; the same-frame seam is
+`Exec.Deriv.ParentStep.protected_noStateGas`.
+`Frame.enter_run_create_nonce_ne_zero` is the shared constructor seed lemma.
+`Exec.retainedNodes_protected_of_ordered_noStateGas` combines nonce and code
+continuity, while `Evm.step_spawn_create_unprotected_noStateGas` supplies the
+actual later CREATE guard. Together they yield
+`Exec.retainedNodes_create_ne_of_earlier_selfdestruct_noStateGas`; obtain its
+root premise from the actual transaction producer documented above.
 
 For the final message or transaction state, use
 [`Blanc/ExecutionRetainedCodeSettlement.lean`](../Blanc/ExecutionRetainedCodeSettlement.lean).

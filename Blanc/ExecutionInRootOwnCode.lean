@@ -1,3 +1,4 @@
+import Blanc.ExecutionNonceCode
 import Blanc.ExecutionInRawNodeOrigin
 import Blanc.ExecutionInCodeImage
 import Blanc.ExecutionCallerExclusion
@@ -348,5 +349,140 @@ theorem ConfiguredHistoryTraceIn.mem_rawFrames_of_mem_settledRoots {F : Fork →
   exact List.mem_flatMap.mpr ⟨R, member, by
     rw [Exec.Frame.committedFrames_self]
     exact List.mem_cons_self⟩
+
+/-- Resolving a call's delegated code cannot produce nonempty running code
+at an account with empty own code: delegation itself needs a designator. -/
+theorem messageCallExecutionMessage_context_code_nonempty {msg : Msg}
+    (own : msg.code = msg.benv.state.getCode msg.currentTarget) :
+    (messageCallExecutionMessage msg).code.size ≠ 0 →
+      ((messageCallExecutionMessage msg).benv.state.getCode
+        (messageCallExecutionMessage msg).currentTarget).size ≠ 0 := by
+  unfold messageCallExecutionMessage Msg.resolveCodeDelegation
+  split
+  · rw [own]
+    exact fun nonempty => nonempty
+  · rename_i address resolved
+    intro _
+    change (msg.benv.state.getCode msg.currentTarget).size ≠ 0
+    rw [← own]
+    unfold ForkRules.delegatedCodeAddress at resolved
+    split at resolved
+    · unfold getDelegatedCodeAddress at resolved
+      split at resolved
+      · rename_i valid
+        rw [valid.1]
+        decide
+      · cases resolved
+    · cases resolved
+
+/-- An actual CALL root with nonempty running code has protected own code
+after the entry transfer. -/
+theorem ProcessMessageTrace.settledRoots_context_protected
+    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessMessageTrace msg out)
+    (own : msg.code.size ≠ 0 → (msg.benv.state.getCode msg.currentTarget).size ≠ 0) :
+    ∀ R ∈ trace.settledRoots, R.sevm.code.size ≠ 0 →
+      State.Protected R.pre.state R.sevm.currentTarget := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none => intro R member; cases member
+  | @some pc sevm pre execution run =>
+    intro R member
+    simp only [ProcessMessageTrace.settledRoots] at member
+    split at member
+    · simp only [RetainedXlot.settledRoots] at member
+      split at member
+      · rw [List.mem_singleton] at member
+        subst R
+        have entered := (RunFrame.some_inv process).1
+        intro nonempty
+        change sevm.code.size ≠ 0 at nonempty
+        have code : sevm.code = msg.code := Frame.enter_run_code entered
+        rw [code] at nonempty
+        apply Or.inr
+        change (pre.getCode sevm.currentTarget).size ≠ 0
+        rw [Frame.enter_run_currentTarget entered, Frame.enter_run_getCode entered]
+        exact own nonempty
+      · cases member
+    · cases member
+
+/-- The actual collision-checked CREATE root is protected by its seeded nonce,
+including while the constructor is running and installed code is still empty. -/
+theorem ProcessCreateMessageTrace.settledRoots_context_protected
+    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessCreateMessageTrace msg out)
+    (collision : accountHasCodeOrNonce msg.benv.state msg.currentTarget = false) :
+    ∀ R ∈ trace.settledRoots,
+      State.Protected R.pre.state R.sevm.currentTarget := by
+  have unprotected : ¬ State.Protected msg.benv.state msg.currentTarget :=
+    messageCreateCollision_false_target_unprotected collision
+  have zeroNonce : (msg.benv.state.get msg.currentTarget).nonce = 0 :=
+    not_ne_iff.mp (fun nonce => unprotected (Or.inl nonce))
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none => intro R member; cases member
+  | @some pc sevm pre execution run =>
+    intro R member
+    simp only [ProcessCreateMessageTrace.settledRoots] at member
+    split at member
+    · simp only [RetainedXlot.settledRoots] at member
+      split at member
+      · rw [List.mem_singleton] at member
+        subst R
+        have entered := (RunFrame.some_inv process).1
+        have seeded := Frame.enter_run_create_nonce_ne_zero entered zeroNonce
+        change State.Protected pre.state sevm.currentTarget
+        rw [Frame.enter_run_currentTarget entered]
+        exact Or.inl seeded
+      · cases member
+    · cases member
+
+/-- Original message admission, authorization, delegation resolution and CREATE
+nonce seeding derive context protection at every selected outer root. -/
+theorem MessageCallTrace.settledRoots_context_protected
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out) (own : MsgOwn msg) :
+    ∀ R ∈ trace.settledRoots, R.sevm.code.size ≠ 0 →
+      State.Protected R.pre.state R.sevm.currentTarget := by
+  cases trace with
+  | createCollision => intro R member; cases member
+  | createRun target collision evm core inner result =>
+    intro R member _
+    exact inner.settledRoots_context_protected collision R member
+  | callRun target delegated refund delegation execMsg execEq evm core inner result =>
+    subst execEq
+    exact inner.settledRoots_context_protected
+      (messageCallExecutionMessage_context_code_nonempty
+        (messageCallDelegation_own delegation target own))
+
+/-- Every actual transaction root supplies context protection without an
+installed-runtime assumption or a prestate nonce premise. -/
+theorem TransactionTrace.settledRoots_context_protected
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout') :
+    ∀ R ∈ trace.settledRoots, R.sevm.code.size ≠ 0 →
+      State.Protected R.pre.state R.sevm.currentTarget :=
+  trace.message.settledRoots_context_protected (prepareMessage_own_entry trace.prepared)
+
+/-- Within an actual transaction root, an earlier retained SELFDESTRUCT cannot
+name the target of a later CREATE spawn. All context protection is derived
+from this transaction's original message entry. -/
+theorem TransactionTrace.settledRoot_create_ne_of_earlier_selfdestruct
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    {R : Exec.Frame} (root : R ∈ trace.settledRoots)
+    (hsg : R.sevm.benvStat.rules.stateGas = none)
+    {before middle after : List Exec.Deriv} {m n : Exec.Deriv}
+    (split : Exec.retainedNodes R.run = before ++ m :: (middle ++ n :: after))
+    (destruct : Linst.At m.sevm.code m.pc .selfdestruct)
+    {frame : Frame} {resume : Resume} {pc' : Nat}
+    (nodeGas : n.sevm.benvStat.rules.stateGas = none)
+    (step : Evm.step ⟨n.pc, n.sevm, n.devm⟩ = .spawn frame resume pc')
+    (create : frame.isCreate = true) : frame.inner.currentTarget ≠ m.sevm.currentTarget :=
+  Exec.retainedNodes_create_ne_of_earlier_selfdestruct_noStateGas
+    R.run R.committed hsg (trace.settledRoots_context_protected R root)
+    split destruct nodeGas step create
 
 end Blanc.ExecutionTrace

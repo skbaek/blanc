@@ -149,6 +149,31 @@ theorem Exec.codeAt_of_nonce_noStateGas
       (Exec.Deriv.ParentStep.nonce_ne_zero_noStateGas
         (.runOk step enter child resumed next) hsg nonce)).trans head
 
+/-- A fresh entered constructor has target nonce one, hence a protected
+storage context, before its runtime code has been deposited. -/
+theorem Frame.enter_run_create_nonce_ne_zero
+    {msg : Msg} {childEvm : Evm}
+    (enter : (Frame.ofCreate msg).enter = .run childEvm)
+    (zeroNonce : (msg.benv.state.get msg.currentTarget).nonce = 0) :
+    (childEvm.dyna.state.get msg.currentTarget).nonce ≠ 0 := by
+  obtain ⟨entry, transfer, childEq⟩ := Frame.enter_run_inv enter
+  rw [childEq]
+  change (entry.state.get msg.currentTarget).nonce ≠ 0
+  rw [Msg.benvAfterTransfer_get_nonce transfer msg.currentTarget]
+  change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+    msg.currentTarget).get msg.currentTarget).nonce ≠ 0
+  rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+  have keep : ((msg.benv.state.setStor msg.currentTarget .empty).get
+      msg.currentTarget).nonce = (msg.benv.state.get msg.currentTarget).nonce := by
+    unfold State.setStor
+    dsimp only
+    split
+    · rw [State.get_setPresent_self]
+    · rw [State.get_set_self]
+  rw [keep, zeroNonce]
+  change (0 + 1 : UInt64) ≠ 0
+  decide
+
 /-- An entered constructor with zero target nonce and empty target code still
 has empty target code at its raw committed endpoint, before code deposit. -/
 theorem Exec.create_raw_target_code_empty_noStateGas
@@ -160,24 +185,7 @@ theorem Exec.create_raw_target_code_empty_noStateGas
     (zeroNonce : (msg.benv.state.get msg.currentTarget).nonce = 0)
     (zeroSize : (msg.benv.state.getCode msg.currentTarget).size = 0) :
     (Execution.committedPost raw committed).getCode msg.currentTarget = .empty := by
-  have seed : (childEvm.dyna.state.get msg.currentTarget).nonce ≠ 0 := by
-    obtain ⟨entry, transfer, childEq⟩ := Frame.enter_run_inv enter
-    rw [childEq]
-    change (entry.state.get msg.currentTarget).nonce ≠ 0
-    rw [Msg.benvAfterTransfer_get_nonce transfer msg.currentTarget]
-    change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
-      msg.currentTarget).get msg.currentTarget).nonce ≠ 0
-    rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
-    have keep : ((msg.benv.state.setStor msg.currentTarget .empty).get
-        msg.currentTarget).nonce = (msg.benv.state.get msg.currentTarget).nonce := by
-      unfold State.setStor
-      dsimp only
-      split
-      · rw [State.get_setPresent_self]
-      · rw [State.get_set_self]
-    rw [keep, zeroNonce]
-    change (0 + 1 : UInt64) ≠ 0
-    decide
+  have seed := Frame.enter_run_create_nonce_ne_zero enter zeroNonce
   rw [Exec.codeAt_of_nonce_noStateGas child committed hsg seed,
     Frame.enter_run_getCode enter msg.currentTarget]
   change (processCreateMessage.msg msg).benv.state.getCode msg.currentTarget = .empty
@@ -642,5 +650,213 @@ theorem Exec.retainedNodes_create_ne_of_ordered_nonce_noStateGas
   exact (Evm.step_spawn_nonce_noStateGas nodeGas step enter
     (Exec.retainedNodes_nonce_ne_zero_of_ordered_noStateGas
       run committed hsg split nonce)).2 create
+
+/-- A parent continuation preserves nonce-or-code protection. -/
+theorem Exec.Deriv.ParentStep.protected_noStateGas
+    {node next : Exec.Deriv} (edge : Exec.Deriv.ParentStep next node)
+    (hsg : node.sevm.benvStat.rules.stateGas = none) {a : Adr}
+    (protection : State.Protected node.devm.state a) :
+    State.Protected next.devm.state a := by
+  rcases protection with nonce | code
+  · exact Or.inl (Exec.Deriv.ParentStep.nonce_ne_zero_noStateGas edge hsg nonce)
+  · have nonempty : (node.devm.getCode a).toList ≠ [] := by
+      intro empty
+      apply code
+      change (node.devm.getCode a).size = 0
+      rw [ByteArray.size_eq_length_toList, empty]
+      rfl
+    apply Or.inr
+    change (next.devm.getCode a).size ≠ 0
+    rw [Exec.Deriv.ParentStep.codePreserve edge a nonempty]
+    exact code
+
+/-- An entered child with nonempty running code has a nonce-or-code protected
+storage context when its spawning parent's context is protected. CREATE seeds
+a nonce; calls load target code or retain the parent's context. -/
+theorem Evm.step_spawn_context_protected_noStateGas
+    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
+    {frame : Frame} {resume : Resume} {child : Evm}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (enter : frame.enter = .run child)
+    (parent : State.Protected pre.state sevm.currentTarget)
+    (nonempty : child.sta.code.size ≠ 0) :
+    State.Protected child.dyna.state child.sta.currentTarget := by
+  obtain ⟨x, _, spawn, _⟩ := Evm.step_spawn_inv step
+  rcases Xinst.step_shapeNoStateGas sevm pre x hsg with
+    ⟨execution, shape, _⟩ |
+    ⟨d, endowment, address, mi, ms, hprefix, shape⟩ |
+    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+      ii, isz, oi, osz, code, disablePrecompiles, hprefix, hprefix₀, _, source, shape⟩ <;>
+    rw [shape] at spawn
+  · cases spawn
+  · have unprotected := genericCreate_step_spawn_prepared_target_unprotected spawn
+    have zeroNonce : ((d.state.incrNonce sevm.currentTarget).get address).nonce = 0 :=
+      not_ne_iff.mp (fun nonce => unprotected (Or.inl nonce))
+    obtain ⟨rfl, rfl⟩ := genericCreate_step_spawn_exact spawn
+    rw [Frame.enter_run_currentTarget enter]
+    have seeded := Frame.enter_run_create_nonce_ne_zero enter zeroNonce
+    exact Or.inl seeded
+  · obtain ⟨rfl, rfl⟩ := genericCall_step_spawn_exact spawn
+    have targetEq : child.sta.currentTarget = target := Frame.enter_run_currentTarget enter
+    rcases source with same | source
+    · rw [targetEq, same]
+      rcases parent with nonce | ownCode
+      · exact Or.inl (Evm.step_spawn_nonce_noStateGas hsg step enter nonce).1
+      · apply Or.inr
+        change (child.dyna.getCode sevm.currentTarget).size ≠ 0
+        rw [(Evm.step_spawn_child step enter).2.1]
+        exact ownCode
+    · apply Or.inr
+      change (child.dyna.getCode child.sta.currentTarget).size ≠ 0
+      rw [(Evm.step_spawn_child step enter).2.1, targetEq, hprefix₀.getCode target]
+      by_cases delegation : isValidDelegation (d₀.getCode target)
+      · rw [delegation.1]
+        decide
+      · have childCode : child.sta.code = code := Frame.enter_run_code enter
+        rw [childCode, source delegation] at nonempty
+        exact nonempty
+
+/-- Every nonempty-code raw context inherits protection from the actual root
+context. The condition permits empty-code roots and fresh constructors. -/
+theorem Exec.rawNodes_context_protected_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (hsg : sevm.benvStat.rules.stateGas = none)
+    (root : sevm.code.size ≠ 0 → State.Protected pre.state sevm.currentTarget) :
+    ∀ n ∈ Exec.rawNodes run, n.sevm.code.size ≠ 0 →
+      State.Protected n.devm.state n.sevm.currentTarget := by
+  induction run with
+  | halt step =>
+    intro n member nonempty
+    simp only [Exec.rawNodes, List.mem_singleton] at member
+    subst n
+    exact root nonempty
+  | cont step next ih =>
+    intro n member nonempty
+    simp only [Exec.rawNodes, List.mem_cons] at member
+    rcases member with rfl | member
+    · exact root nonempty
+    · exact ih hsg (fun code => Exec.Deriv.ParentStep.protected_noStateGas
+        (.cont step next) hsg (root code)) n member nonempty
+  | doneErr step enter resumed =>
+    intro n member nonempty
+    simp only [Exec.rawNodes, List.mem_singleton] at member
+    subst n
+    exact root nonempty
+  | doneOk step enter resumed next ih =>
+    intro n member nonempty
+    simp only [Exec.rawNodes, List.mem_cons] at member
+    rcases member with rfl | member
+    · exact root nonempty
+    · exact ih hsg (fun code => Exec.Deriv.ParentStep.protected_noStateGas
+        (.doneOk step enter resumed next) hsg (root code)) n member nonempty
+  | @runErr pc sevm pre frame resume pc' childEvm raw error step enter child resumed ih =>
+    intro n member nonempty
+    simp only [Exec.rawNodes, List.mem_cons] at member
+    rcases member with rfl | member
+    · exact root nonempty
+    · have parentCode : sevm.code.size ≠ 0 := by
+        intro empty
+        obtain ⟨x, atX, _, _⟩ := Evm.step_spawn_inv step
+        simp only [Xinst.At, ByteArray.getInst, empty, Nat.not_lt_zero, ↓reduceDIte] at atX
+        cases atX
+      exact ih (by rw [Evm.step_spawn_child_benvStat step enter]; exact hsg)
+        (Evm.step_spawn_context_protected_noStateGas hsg step enter (root parentCode))
+        n member nonempty
+  | @runOk pc sevm pre frame resume pc' childEvm raw post out
+      step enter child resumed next childIH nextIH =>
+    intro n member nonempty
+    simp only [Exec.rawNodes, List.mem_cons, List.mem_append] at member
+    rcases member with rfl | inChild | inNext
+    · exact root nonempty
+    · have parentCode : sevm.code.size ≠ 0 := by
+        intro empty
+        obtain ⟨x, atX, _, _⟩ := Evm.step_spawn_inv step
+        simp only [Xinst.At, ByteArray.getInst, empty, Nat.not_lt_zero, ↓reduceDIte] at atX
+        cases atX
+      exact childIH (by rw [Evm.step_spawn_child_benvStat step enter]; exact hsg)
+        (Evm.step_spawn_context_protected_noStateGas hsg step enter (root parentCode))
+        n inChild nonempty
+    · exact nextIH hsg (fun code => Exec.Deriv.ParentStep.protected_noStateGas
+        (.runOk step enter child resumed next) hsg (root code)) n inNext nonempty
+
+/-- An actual CREATE spawn's target was nonce-and-code unprotected before
+this instruction. The instruction prefix does not alter the account state. -/
+theorem Evm.step_spawn_create_unprotected_noStateGas
+    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
+    {frame : Frame} {resume : Resume}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (create : frame.isCreate = true) :
+    ¬ State.Protected pre.state frame.inner.currentTarget := by
+  obtain ⟨x, _, spawn, _⟩ := Evm.step_spawn_inv step
+  rcases Xinst.step_shapeNoStateGas sevm pre x hsg with
+    ⟨execution, shape, _⟩ |
+    ⟨d, endowment, address, mi, ms, hprefix, shape⟩ |
+    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+      ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, shape⟩ <;>
+    rw [shape] at spawn
+  · cases spawn
+  · have unprotected := genericCreate_step_spawn_target_unprotected spawn
+    obtain ⟨rfl, rfl⟩ := genericCreate_step_spawn_exact spawn
+    change ¬ State.Protected pre.state address
+    rw [hprefix.state]
+    exact unprotected
+  · obtain ⟨rfl, rfl⟩ := genericCall_step_spawn_exact spawn
+    cases create
+
+/-- Nonce-or-code protection at an earlier retained position survives at a
+later retained position in the same committed execution. -/
+theorem Exec.retainedNodes_protected_of_ordered_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} {a : Adr}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    {before middle after : List Exec.Deriv} {m n : Exec.Deriv}
+    (split : Exec.retainedNodes run = before ++ m :: (middle ++ n :: after))
+    (protection : State.Protected m.devm.state a) : State.Protected n.devm.state a := by
+  rcases protection with nonce | code
+  · exact Or.inl (Exec.retainedNodes_nonce_ne_zero_of_ordered_noStateGas
+      run committed hsg split nonce)
+  · have nonempty : (m.devm.getCode a).toList ≠ [] := by
+      intro empty
+      apply code
+      change (m.devm.getCode a).size = 0
+      rw [ByteArray.size_eq_length_toList, empty]
+      rfl
+    apply Or.inr
+    change (n.devm.getCode a).size ≠ 0
+    rw [Exec.retainedNodes_getCode_of_ordered_noStateGas run committed hsg split nonempty]
+    exact code
+
+/-- An earlier retained SELFDESTRUCT cannot target the address of a later
+CREATE spawn. The actual root's context protection is transported through all
+entered frames; the original retained-position split supplies the order. -/
+theorem Exec.retainedNodes_create_ne_of_earlier_selfdestruct_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (root : sevm.code.size ≠ 0 → State.Protected pre.state sevm.currentTarget)
+    {before middle after : List Exec.Deriv} {m n : Exec.Deriv}
+    (split : Exec.retainedNodes run = before ++ m :: (middle ++ n :: after))
+    (destruct : Linst.At m.sevm.code m.pc .selfdestruct)
+    {frame : Frame} {resume : Resume} {pc' : Nat}
+    (nodeGas : n.sevm.benvStat.rules.stateGas = none)
+    (step : Evm.step ⟨n.pc, n.sevm, n.devm⟩ = .spawn frame resume pc')
+    (create : frame.isCreate = true) : frame.inner.currentTarget ≠ m.sevm.currentTarget := by
+  have member : m ∈ Exec.rawNodes run :=
+    (Exec.retainedNodes_sublist_rawNodes run).subset (by
+      rw [split]
+      exact List.mem_append_right _ List.mem_cons_self)
+  have running : m.sevm.code.size ≠ 0 := by
+    intro empty
+    simp only [Linst.At, ByteArray.getInst, empty, Nat.not_lt_zero, ↓reduceDIte] at destruct
+    cases destruct
+  have protection := Exec.rawNodes_context_protected_noStateGas run hsg root m member running
+  have later := Exec.retainedNodes_protected_of_ordered_noStateGas
+    run committed hsg split protection
+  intro same
+  apply Evm.step_spawn_create_unprotected_noStateGas nodeGas step create
+  rw [same]
+  exact later
 
 end Blanc
