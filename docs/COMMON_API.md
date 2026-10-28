@@ -1109,6 +1109,17 @@ Complete child settlement excludes discarded child witnesses. It requires no
 code, fork, no-write or own-code premise; actual message-root own-code facts
 remain the caller's separate obligation. Use the named theorem with retained
 prefix provenance when inducting over retained contexts.
+`Exec.retainedNodes_segment_of_mem` exposes the complete remaining subexecution
+at a retained node as one contiguous segment of the original chronology and
+derives that node's committing endpoint. Its
+`Exec.retainedNodes_settled_spawn_segment` specialization places the actual
+settlement-retained child immediately after its spawning instruction; the
+suffix explicitly retains the resumed-parent execution before the remaining
+ancestor continuations. Supply the actual
+`runOk` derivation, original retained membership, and complete child settlement,
+not merely a structurally similar child or its raw success. These existential
+segments need an explicitly selected occurrence, so a bare list-equality goal
+does not determine an automatic recipe.
 For the own-code fact at an actual settled outer root, use
 [`Blanc/ExecutionInRootOwnCode.lean`](../Blanc/ExecutionInRootOwnCode.lean):
 `ConfiguredHistoryTraceIn.settledRoots_rootOwnCode` derives `RootOwnCode`
