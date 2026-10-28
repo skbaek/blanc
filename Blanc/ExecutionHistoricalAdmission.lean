@@ -310,7 +310,7 @@ theorem processMessageCall_callRun_out_noStateGas
     exact absurd ha AdrSet.not_mem_empty
 
 /-- EIP-7702 authorization and code resolution keep the inherited deletions. -/
-private theorem messageCallExecutionMessage_inherited {msg delegated : Msg} {refund : Nat}
+theorem messageCallExecutionMessage_inherited {msg delegated : Msg} {refund : Nat}
     (delegation : messageCallDelegation msg = .ok ⟨delegated, refund⟩) :
     (messageCallExecutionMessage delegated).inheritedDeletions = msg.inheritedDeletions := by
   have hres : (messageCallExecutionMessage delegated).inheritedDeletions =

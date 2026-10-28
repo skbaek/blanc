@@ -1988,6 +1988,106 @@ even empty code at a nonzero-nonce account. `Evm.step_spawn_nonce_noStateGas`,
 Complete child settlement determines which nodes survive; discarded children
 cannot supply the starting position.
 
+For the final message or transaction state, use
+[`Blanc/ExecutionRetainedCodeSettlement.lean`](../Blanc/ExecutionRetainedCodeSettlement.lean).
+`MessageCallTrace.retainedNode_getCode_noStateGas` and
+`TransactionTrace.retainedNode_getCode_noStateGas` transport a nonempty-code
+observation from an actual retained node through outer settlement. The latter
+requires exclusion from the transaction's actual final `accountsToDelete` set;
+refunds, fees and empty-account sweep preserve the observed code. Root fork
+facts follow from actual trace membership, and code need not exist at root
+entry. The message proof uses `ProcessMessageTrace.settledRoot_post_code`,
+`ProcessCreateMessageTrace.settledRoot_post_code_of_nonempty` and
+`MessageCallTrace.settledRoot_post_code_of_nonempty`. Successful CREATE deposit
+uses `Exec.create_raw_target_code_empty_noStateGas` in `ExecutionNonceCode`:
+the collision guard and constructor nonce keep the raw target empty before
+deposit. `MessageCallTrace.mem_rawFrames_of_mem_settledFrames` is exported from
+`ExecutionTraceSettledOrigin` for the actual-entry bridge. These code equalities
+do not determine the root, retained occurrence or final deletion witness, so
+there is no reliable automatic recipe trigger.
+
+For accounts that may have been created after root entry, use
+[`Blanc/ExecutionDeletionProvenance.lean`](../Blanc/ExecutionDeletionProvenance.lean).
+`Exec.retained_atd_origin_noStateGas` traces any endpoint deletion to the
+initial deletion set or to a SELFDESTRUCT node in the same execution's
+complete-settlement-retained chronology.
+`Exec.not_mem_atd_of_retained_terminal_safe` therefore needs only initial
+deletion absence and retained terminal exclusion, without installed entry
+code or exclusion from the created-account set. Discarded child settlements
+use the existing rollback law; successful CREATE deposits preserve the raw
+child deletion set. The lower-level interfaces are
+`Linst.selfdestruct_accountsToDelete_noStateGas`,
+`Linst.accountsToDelete_origin_noStateGas`,
+`Evm.step_cont_atd_noStateGas`, `Evm.step_halt_atd_origin_noStateGas`,
+`Evm.step_spawn_enter_atd_subset_noStateGas`,
+`Evm.step_spawn_resume_atd_origin_noStateGas` and
+`Evm.step_doneOk_atd_subset_noStateGas`.
+`GenericCreate.step_done_atd`, `GenericCall.step_done_atd`,
+`Xinst.step_done_atd_noStateGas`, `Resume.create_atd_of_clean`,
+`Resume.call_atd_of_clean`, `executeCode.handle_precompile_ok_atd`,
+`ProcessMessage.none_ok_atd` and `ProcessCreateMessage.none_ok_atd_of_clean`
+cover the synchronous and return boundaries. These membership/equality goals
+do not identify the actual execution or terminal-safety certificate, so no
+reliable automatic recipe trigger is registered.
+
+For an actual transaction, the initial deletion-absence premise is derived by
+`TransactionTrace.settledRoot_entry_not_deleted` in the same module. Its
+`RetainedXlot`, `ProcessMessageTrace`, `ProcessCreateMessageTrace` and
+`MessageCallTrace.settledRoot_entry_atd` adapters identify the selected root's
+entry set with the message's inherited deletions. The existing
+`messageCallExecutionMessage_inherited` helper in `ExecutionHistoricalAdmission`
+is public for the delegation step; transaction preparation supplies emptiness.
+`TransactionTrace.not_deleted_of_retained_terminal_safe` then supplies the
+actual output exclusion, and
+`TransactionTrace.retainedNode_getCode_of_terminal_safe` carries observed
+nonempty code to the transaction endpoint. These interfaces need neither
+installed entry code nor an initial not-created invariant. Terminal safety
+still ranges over the actual retained nodes of the selected root; code
+classification and historical installation remain consumer obligations.
+Selected trace/root/node witnesses cannot be recovered from the equality or
+membership goal alone, so these adapters have no automatic recipe trigger.
+
+The USDC consumer `ConfiguredHistoryTraceIn.transaction_retained_usdcContext_code`
+in `Lift/Usdc/ProxyRetainedNoDel.lean` supplies terminal safety using
+`settledRoot_usdcContext_terminal_safe`: the same selected root must belong to
+both the actual transaction and the configured history. The actual retained
+node supplies nonempty code; retained USDC-family classification supplies the
+checked certificate and each original frame's entry facts. Entry installation,
+initial NoDel and final deletion exclusion are not assumed. The original
+`settledRoot_usdcContext_noDel` API keeps its stronger input invariant and now
+reuses this terminal-safety producer. Actual historical code classification
+and constructor installation remain separate producer obligations.
+
+For whole transactions, including those with no retained interpreter root,
+use `TransactionTrace.not_deleted_of_retained_terminals`. Its terminal
+condition ranges over all actual settled roots; synchronous completion and
+discarded outcomes are handled by the CALL, CREATE and
+`MessageCallTrace.not_deleted_of_settledRoots` adapters. These require only
+deletion exclusion, not the stronger installed-account `NoDel` invariant.
+`TransactionTrace.code_preserved_of_retained_terminals` preserves installed
+nonempty, nondesignator code and supplies the actual output deletion exclusion.
+`ApplyTransactionsTrace.code_preserved_of_retained_terminals` composes that
+result across the exact transaction list, also returning `NoDelScheduled`.
+Both allow an account created earlier in the same block; neither assumes
+exclusion from the block's created-account set. They retain stateGas-none,
+actual starting installation and terminal-safety premises. No claim about
+the historical origin of that installation follows. As above, a code equality
+does not determine the required transaction trace or safety certificate.
+
+When the same selected root already has a deletion-exclusion proof, use
+`TransactionTrace.not_mem_accountsToDelete_of_settledRoot` to discharge the
+actual output-deletion premise, then apply the retained-node code transport.
+Its message-level companion is
+`MessageCallTrace.not_mem_accountsToDelete_of_settledRoot`. Neither requires
+installed code, a nonempty entry account, or exclusion from the initial
+created-account set. `ProcessMessageTrace.settledRoot_post_atd` and
+`ProcessCreateMessageTrace.settledRoot_post_atd` identify the core deletion set
+with that of the actual retained root; `ProcessMessage.ok_atd_eq_committedPost`
+is the raw CALL settlement projection. Successful code deposit preserves the
+constructor's deletion set, while failed complete settlement supplies no root.
+These adapters consume selected-root membership and cannot infer that witness
+from a deletion-membership goal, so they have no automatic recipe trigger.
+
 System frames along retained `In`-histories by fork era are in
 [`Blanc/ExecutionHistoryInSystemFrames.lean`](../Blanc/ExecutionHistoryInSystemFrames.lean):
 `StagedBodyTrace.systemRawFrames` and the block/history `systemRawFrames`

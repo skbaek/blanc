@@ -38,7 +38,8 @@ private theorem ProcessCreateMessageTrace.mem_rawFrames_of_mem_settledFrames
     · exact Exec.mem_rawFrameRoots_of_mem_committedFrames run frame member
     · exact False.elim (List.not_mem_nil member)
 
-private theorem MessageCallTrace.mem_rawFrames_of_mem_settledFrames
+/-- Every retained message frame came from an actual raw invocation. -/
+theorem MessageCallTrace.mem_rawFrames_of_mem_settledFrames
     (trace : MessageCallTrace msg state out) (frame : Exec.Frame)
     (member : frame ∈ trace.settledFrames) : (Blanc.Exec.Frame.rootDeriv (frame := frame)) ∈ trace.rawFrames := by
   cases trace with

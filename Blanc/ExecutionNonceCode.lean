@@ -149,6 +149,41 @@ theorem Exec.codeAt_of_nonce_noStateGas
       (Exec.Deriv.ParentStep.nonce_ne_zero_noStateGas
         (.runOk step enter child resumed next) hsg nonce)).trans head
 
+/-- An entered constructor with zero target nonce and empty target code still
+has empty target code at its raw committed endpoint, before code deposit. -/
+theorem Exec.create_raw_target_code_empty_noStateGas
+    {msg : Msg} {childEvm : Evm} {raw : Execution}
+    (enter : (Frame.ofCreate msg).enter = .run childEvm)
+    (child : Exec childEvm.pc childEvm.sta childEvm.dyna raw)
+    (committed : Execution.commits raw = true)
+    (hsg : childEvm.sta.benvStat.rules.stateGas = none)
+    (zeroNonce : (msg.benv.state.get msg.currentTarget).nonce = 0)
+    (zeroSize : (msg.benv.state.getCode msg.currentTarget).size = 0) :
+    (Execution.committedPost raw committed).getCode msg.currentTarget = .empty := by
+  have seed : (childEvm.dyna.state.get msg.currentTarget).nonce ≠ 0 := by
+    obtain ⟨entry, transfer, childEq⟩ := Frame.enter_run_inv enter
+    rw [childEq]
+    change (entry.state.get msg.currentTarget).nonce ≠ 0
+    rw [Msg.benvAfterTransfer_get_nonce transfer msg.currentTarget]
+    change (((msg.benv.state.setStor msg.currentTarget .empty).incrNonce
+      msg.currentTarget).get msg.currentTarget).nonce ≠ 0
+    rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
+    have keep : ((msg.benv.state.setStor msg.currentTarget .empty).get
+        msg.currentTarget).nonce = (msg.benv.state.get msg.currentTarget).nonce := by
+      unfold State.setStor
+      dsimp only
+      split
+      · rw [State.get_setPresent_self]
+      · rw [State.get_set_self]
+    rw [keep, zeroNonce]
+    change (0 + 1 : UInt64) ≠ 0
+    decide
+  rw [Exec.codeAt_of_nonce_noStateGas child committed hsg seed,
+    Frame.enter_run_getCode enter msg.currentTarget]
+  change (processCreateMessage.msg msg).benv.state.getCode msg.currentTarget = .empty
+  rw [processCreateMessage.msg_getCode]
+  exact ByteArray.eq_empty_of_size_eq_zero zeroSize
+
 /-- Complete successful child settlement preserves every nonempty code in
 the child's raw result. In the CREATE case, the guarded target starts with
 empty code and nonce one, so it is still empty before the final code deposit. -/
@@ -187,30 +222,8 @@ theorem Exec.spawn_codePreserve_of_settlementCommits_noStateGas
     let msg := createMsg sevm prepared (except64th d.gasLeft) endowment address
       ((d.memory.read mi ms).1)
     change (Frame.ofCreate msg).enter = .run childEvm at enter
-    have seed : (childEvm.dyna.state.get address).nonce ≠ 0 := by
-      obtain ⟨entry, transfer, childEq⟩ := Frame.enter_run_inv enter
-      rw [childEq]
-      change (entry.state.get address).nonce ≠ 0
-      rw [Msg.benvAfterTransfer_get_nonce transfer address]
-      change (((prepared.state.setStor address .empty).incrNonce address).get address).nonce ≠ 0
-      rw [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce]
-      have keep : ((prepared.state.setStor address .empty).get address).nonce =
-          (prepared.state.get address).nonce := by
-        unfold State.setStor
-        dsimp only
-        split
-        · rw [State.get_setPresent_self]
-        · rw [State.get_set_self]
-      rw [keep]
-      change ((d.state.incrNonce sevm.currentTarget).get address).nonce + 1 ≠ 0
-      rw [zeroNonce]
-      decide
-    have rawEmpty : (Execution.committedPost raw committed).getCode address = .empty := by
-      rw [Exec.codeAt_of_nonce_noStateGas child committed childGas seed,
-        Frame.enter_run_getCode enter address]
-      change (processCreateMessage.msg msg).benv.state.getCode address = .empty
-      rw [processCreateMessage.msg_getCode]
-      exact ByteArray.eq_empty_of_size_eq_zero zeroSize
+    have rawEmpty : (Execution.committedPost raw committed).getCode address = .empty :=
+      Exec.create_raw_target_code_empty_noStateGas enter child committed childGas zeroNonce zeroSize
     have different : address ≠ a := by
       intro equal
       apply nonempty
