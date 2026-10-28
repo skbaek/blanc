@@ -466,6 +466,12 @@ registry has identified the likely vocabulary.
   account's storage. No owner cleanliness, fork gas constant, prepared output,
   code registration or historical installation premise is supplied. The caller
   must separately connect this source template to its certified constructor.
+  The older EXP/literal-mask sequence uses `SolcStorageReturn.legacyOwnerInit`
+  and `legacyOwnerInit_effects` in the same owner. It proves the same exact
+  returned stack, memory, packed owner word and foreign-storage equations;
+  V1's registered runtime helper `OldInitializerV1Callee.helper47_effects`
+  consumes the shared inverse via an exact source-shape equation. This does
+  not register the separate creation input or establish historical deployment.
   This compound inverse conclusion has no reliable single goal-head recipe;
   select it by the named source template in the actual run hypothesis.
 - **Four-bit tagged logical storage keys.** `Blanc.TaggedStorage.encode` in
@@ -3635,7 +3641,8 @@ show reachable calls start below the root.
 
 Use the primitive word facts in
 [`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) before
-destructing a `B256`: `B256.mul_comm` covers word multiplication, including
+destructing a `B256`: `B256.mul_one` preserves a word multiplied by one,
+and `B256.mul_comm` covers word multiplication, including
 wrapping products, and `B256.not_lt_of_ltCheck_eq_zero` turns a zero unsigned
 comparison flag into the negated strict comparison. The latter does not
 assert that arithmetic producing either operand was overflow-free. Import

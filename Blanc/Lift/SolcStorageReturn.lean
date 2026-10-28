@@ -1,3 +1,4 @@
+import Blanc.MachineDataFacts
 import Blanc.AddressSlotProofs
 import Blanc.LadderBase
 import Blanc.Lift.SolcStorageClear
@@ -468,6 +469,107 @@ theorem ownerInit_effects
     exact (sstore_preserves_getStor_ne regular different.symm).trans (congrFun storage a)
   obtain ⟨b', G', e⟩ := SolcStorageReturn.ri_sstore_any store
   rw [e] at run effect foreign
+  obtain ⟨_, returned⟩ := ric_ret run
+  simp only [Seg.done.injEq, Outcome.returned.injEq] at returned
+  subst post
+  exact ⟨rfl, rfl, effect.trans (congrArg (fun s => s.set 0
+    (addressSlotWriteWord (b.getStorVal sevm.currentTarget 0) owner.toAdr.toB256))
+      (congrFun storage sevm.currentTarget)), foreign⟩
+
+/-- The legacy packed-address initializer uses EXP and a literal mask. Its
+source shape is shared by constructor and runtime owner setters. -/
+def legacyOwnerInit : SFunc := (.dest (.next (.reg (.dup 0)) (.next (.push [0x00] (by decide)) (.next (.reg (.dup 0)) (.next (.push [0x01, 0x00] (by decide)) (.next (.reg .exp) (.next (.reg (.dup 1)) (.next (.reg .sload) (.next (.reg (.dup 1)) (.next (.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide)) (.next (.reg .mul) (.next (.reg .not) (.next (.reg .and) (.next (.reg (.swap 0)) (.next (.reg (.dup 3)) (.next (.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] (by decide)) (.next (.reg .and) (.next (.reg .mul) (.next (.reg .or) (.next (.reg (.swap 0)) (.next (.reg .sstore) (.next (.reg .pop) (.next (.reg .pop) .ret)))))))))))))))))))))))
+
+/-- Exact returning effects of the legacy packed owner setter. Arbitrary upper
+bits of the owner operand are masked by the actual run. -/
+theorem legacyOwnerInit_effects
+    {fs : List SFunc} {sevm : Sevm} {b post : Devm} {owner returnPC : B256}
+    {S : List B256} {M : Mem} {G : Nat}
+    (run : SFunc.Run fs sevm (St b (owner :: returnPC :: S) M G)
+      legacyOwnerInit (.returned post)) :
+    post.stack = S ∧ post.memory = M ∧
+      post.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 0
+        (addressSlotWriteWord (b.getStorVal sevm.currentTarget 0) owner.toAdr.toB256) ∧
+      (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) := by
+  have run := run.cut
+  unfold legacyOwnerInit at run
+  obtain ⟨_, run⟩ := ric_dest run
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, eq⟩ := ri_exp step
+  change _ = St b (1 :: 0 :: owner :: owner :: returnPC :: S) M _ at eq
+  subst eq
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_dup (n := 1) rfl step
+  obtain ⟨loaded, load, run⟩ := ric_next run
+  have storage : loaded.getStor = b.getStor := (Ninst.Hinv.inv (f := Devm.getStor) load).symm
+  have memory : loaded.memory = M := sload_memory load
+  obtain ⟨key, tail, popped, pushed⟩ := of_run_sload load
+  simp only [Stack.Pop, Stack.Push, Split, St.stack, List.cons_append, List.nil_append,
+    List.cons.injEq] at popped pushed
+  obtain ⟨rfl, rfl⟩ := popped
+  rw [St.self pushed memory] at run
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_dup (n := 1) rfl step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, eq⟩ := ri_mul step
+  change _ = St loaded ((~~~ addressMask) :: b.getStorVal sevm.currentTarget 0 ::
+    1 :: 0 :: owner :: owner :: returnPC :: S) M _ at eq
+  subst eq
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, eq⟩ := ri_not step
+  change _ = St loaded (addressMask :: b.getStorVal sevm.currentTarget 0 ::
+    1 :: 0 :: owner :: owner :: returnPC :: S) M _ at eq
+  subst eq
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_and step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_dup (n := 3) rfl step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, eq⟩ := ri_and step
+  change _ = St loaded (((~~~ addressMask) &&& owner) :: 1 ::
+    (addressMask &&& b.getStorVal sevm.currentTarget 0) ::
+    0 :: owner :: owner :: returnPC :: S) M _ at eq
+  rw [show (~~~ addressMask) &&& owner = owner.toAdr.toB256 from
+    addressSlotReadWord_eq_toAdr_toB256 owner] at eq
+  subst eq
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, eq⟩ := ri_mul step
+  simp only [B256.mul_one] at eq
+  subst eq
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, eq⟩ := ri_or step
+  rw [B256.or_comm] at eq
+  change _ = St loaded (addressSlotWriteWord (b.getStorVal sevm.currentTarget 0)
+    owner.toAdr.toB256 :: 0 :: owner :: owner :: returnPC :: S) M _ at eq
+  subst eq
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl step
+  obtain ⟨written, store, run⟩ := ric_next run
+  have effect := sstore_getStor_set (xs := []) store (by exact ⟨_, rfl⟩)
+  have foreign : ∀ a, a ≠ sevm.currentTarget → written.getStor a = b.getStor a := by
+    intro a different
+    obtain ⟨pc, regular⟩ := of_run_reg store
+    exact (sstore_preserves_getStor_ne regular different.symm).trans (congrFun storage a)
+  obtain ⟨b', G', eq⟩ := ri_sstore_any store
+  rw [eq] at run effect foreign
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_pop step
   obtain ⟨_, returned⟩ := ric_ret run
   simp only [Seg.done.injEq, Outcome.returned.injEq] at returned
   subst post

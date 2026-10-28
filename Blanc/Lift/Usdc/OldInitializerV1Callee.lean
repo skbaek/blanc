@@ -702,6 +702,22 @@ local macro "qn" : tactic => `(tactic| (
   refine .next ⟨w, silentClass rfl, silentNoExec rfl⟩ ?_
   clear w))
 
+
+/-- The registered V1 runtime owner helper is the shared legacy initializer. -/
+theorem helper47_shape : ImplV1.t_2e47_c47 = SolcStorageReturn.legacyOwnerInit := rfl
+
+/-- The actual returning V1 owner helper preserves the upper slot bits,
+changes only the low address field, and restores the caller's stack tail. -/
+theorem helper47_effects {post : Devm} {owner returnPC : B256}
+    (run : SFunc.Run ImplV1.cert.prog sevm (St b (owner :: returnPC :: S) M G)
+      ImplV1.t_2e47_c47 (.returned post)) :
+    post.stack = S ∧ post.memory = M ∧
+      post.getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set 0
+        (addressSlotWriteWord (b.getStorVal sevm.currentTarget 0) owner.toAdr.toB256) ∧
+      (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) := by
+  rw [helper47_shape] at run
+  exact SolcStorageReturn.legacyOwnerInit_effects run
+
 /-- Helper `47` (owner setter) writes only slot `0`. -/
 theorem helper47_obs (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {d : Devm} {o : Outcome}

@@ -1,3 +1,4 @@
+import Blanc.MachineDataFacts
 import Blanc.Lift.BeaconDeposit.DepositArgs
 import Blanc.Lift.BeaconDeposit.CountView
 import Blanc.Lift.ExactWalkOps
@@ -76,11 +77,8 @@ lemma bsub_add_cancel {x y : B256} (h : y.toNat ≤ x.toNat) : (x - y) + y = x :
     have hx := x.toNat_lt
     omega
 
-lemma mul_one_b256 (x : B256) : x * (1 : B256) = x := by
-  apply B256.toNat_inj
-  rw [B256.toNat_mul]
-  have h1 : (1 : B256).toNat = 1 := by decide
-  rw [h1, Nat.mul_one, Nat.lo_eq_of_lt x.toNat_lt]
+lemma mul_one_b256 (x : B256) : x * (1 : B256) = x :=
+  Blanc.B256.mul_one x
 
 theorem offset0 {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
     (hcd : sevm.data.length < 2 ^ 256)

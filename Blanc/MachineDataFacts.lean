@@ -19,6 +19,13 @@ theorem B256.mul_comm (x y : B256) : x * y = y * x := by
   apply B256.toNat_inj
   rw [B256.toNat_mul, B256.toNat_mul, Nat.mul_comm]
 
+/-- Multiplication by one preserves an EVM word. -/
+theorem B256.mul_one (x : B256) : x * (1 : B256) = x := by
+  apply B256.toNat_inj
+  rw [B256.toNat_mul]
+  have h1 : (1 : B256).toNat = 1 := by decide
+  rw [h1, Nat.mul_one, Nat.lo_eq_of_lt x.toNat_lt]
+
 /-- A word whose natural-number value is zero is the zero word. -/
 theorem B256.eq_zero_of_toNat {x : B256} (h : x.toNat = 0) : x = 0 :=
   B256.toNat_inj _ _ (by rw [h, B256.toNat_zero])
