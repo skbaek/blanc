@@ -9439,6 +9439,15 @@ contract-neutral.
   discover these helpers through this branch.
   Worked use: `pair_create2` in
   [`Blanc/Lift/UniswapV2Pair/Creation/Deploy.lean`](../Blanc/Lift/UniswapV2Pair/Creation/Deploy.lean).
+  For the actual factory transaction followed by a historical replay, use
+  `pair_history_initialized_from_createPair_block_noCollision` in
+  [`Blanc/Lift/UniswapV2Factory/CreatePairHistory.lean`](../Blanc/Lift/UniswapV2Factory/CreatePairHistory.lean).
+  It forwards the existing `pair_history_initialized_from_createPair_block`
+  with admitted transaction inputs, factory code and nonce room, Pair nonce/code
+  collision exclusion, and the factory guard masked to its low address bits.
+  Neither interface requires initial Pair-storage emptiness or a reverse
+  factory-slot value. Original receipt/body authentication and later trace-local
+  hash freshness remain separate requirements.
 - Free-pointer memory with a pointer independent of allocation: `PtrMem p n M`
   in [`Blanc/Lift/ExactWalkMemory.lean`](../Blanc/Lift/ExactWalkMemory.lean)
   combines aligned size, `Mem.Wf` and the existing `MemMatches` word at offset64.

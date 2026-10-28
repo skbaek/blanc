@@ -118,4 +118,71 @@ theorem pair_history_initialized_from_createPair_block {pre completed : BlockCha
     (fun _ hf => hf.dataNonZero_ge) ((MidHistoryTraceIn.tail block cut).append history)
     (by show some _ = some UniswapV2Pair.code.toList; rw [← hcode]; rfl) hinit fresh
 
+/-- Explicit no-collision interface for live receipt consumers. The existing
+WSL historical theorem already uses exactly these weaker inputs. -/
+theorem pair_history_initialized_from_createPair_block_noCollision {pre completed : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (hnumber : block.block.header.number = 10008355)
+    (htime : block.block.header.timestamp = 1588710145)
+    (cut : block.bodyTrace.transactions.TxSplit 38) {gasPrice : Nat}
+    (htype : cut.tx.type = .zero gasPrice (some UniswapV2Pair.Creation.factory))
+    (hdata : cut.tx.data = createPairData) (hvalue : cut.tx.value = 0)
+    (hnonce : cut.tx.nonce = 205)
+    (hfunds : (cut.tx.gas * cut.head.effectiveGasPrice).toB256 ≤
+      cut.benv.state.bal cut.head.sender)
+    (hgas : cut.head.intrinsicGas + 2600000 ≤ cut.tx.gas) (hgasb : cut.tx.gas < 2 ^ 64)
+    (hfactory : cut.benv.state.getCode UniswapV2Pair.Creation.factory = code)
+    (hfnonce : (cut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
+    (hpairNonce : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
+    (hpairCode : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
+    (hslot2 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get fk2 &&&
+      (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0) :
+    (cut.afterBenv.state.getCode UniswapV2Pair.Creation.pairAddress).toList =
+        UniswapV2Pair.code.toList ∧
+      UniswapV2Pair.InitializedCheckpoint
+        (cut.afterBenv.state.getStor UniswapV2Pair.Creation.pairAddress)
+        UniswapV2Pair.Creation.factory
+        (UniswapV2Pair.Creation.domainSeparator cut.benv.stat.chainId.toB256
+          UniswapV2Pair.Creation.pairAddress)
+        UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1 ∧
+      ∀ {future : BlockChain}
+        (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed future),
+        UniswapV2Pair.WriterFreshKeys (fun _ => False)
+          (UniswapV2Pair.pairMidTouchedKeysIn UniswapV2Pair.Creation.pairAddress
+            ((MidHistoryTraceIn.tail block cut).append history)) →
+        some (future.state.getCode UniswapV2Pair.Creation.pairAddress).toList =
+            UniswapV2Pair.pairSem.image ∧
+        ∃ steps : List UniswapV2Pair.PairStep,
+          steps.flatMap (fun s => UniswapV2Pair.pairSubtreeFrames
+              UniswapV2Pair.Creation.pairAddress s.frame) =
+            UniswapV2Pair.committedPairFramesMidIn UniswapV2Pair.Creation.pairAddress
+              ((MidHistoryTraceIn.tail block cut).append history) ∧
+          (∀ s ∈ steps, s.AuthenticWith UniswapV2Pair.PairEntryAuth
+            UniswapV2Pair.Creation.pairAddress) ∧
+          ∃ (finish : UniswapV2Pair.State) (K' : UniswapV2Pair.WriterKey → Prop),
+            UniswapV2Pair.PairObservedReplayWith UniswapV2Pair.PairAdmittedConsumesH
+              (UniswapV2Pair.initializedState UniswapV2Pair.Creation.factory
+                (UniswapV2Pair.Creation.domainSeparator cut.benv.stat.chainId.toB256
+                  UniswapV2Pair.Creation.pairAddress)
+                UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1) steps finish ∧
+            UniswapV2Pair.SourceReplay
+              (UniswapV2Pair.initializedState UniswapV2Pair.Creation.factory
+                (UniswapV2Pair.Creation.domainSeparator cut.benv.stat.chainId.toB256
+                  UniswapV2Pair.Creation.pairAddress)
+                UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1)
+              (steps.map UniswapV2Pair.PairStep.source) finish ∧
+            UniswapV2Pair.runSourceInvocations
+              (UniswapV2Pair.initializedState UniswapV2Pair.Creation.factory
+                (UniswapV2Pair.Creation.domainSeparator cut.benv.stat.chainId.toB256
+                  UniswapV2Pair.Creation.pairAddress)
+                UniswapV2Pair.Creation.token0 UniswapV2Pair.Creation.token1)
+              (steps.map UniswapV2Pair.PairStep.source) = some finish ∧
+            (∀ k, K' k → k ∈ UniswapV2Pair.pairMidTouchedKeysIn
+              UniswapV2Pair.Creation.pairAddress
+              ((MidHistoryTraceIn.tail block cut).append history)) ∧
+            UniswapV2Pair.WriterRep K'
+              (future.state.getStor UniswapV2Pair.Creation.pairAddress) finish := by
+  exact pair_history_initialized_from_createPair_block block hnumber htime cut htype hdata
+    hvalue hnonce hfunds hgas hgasb hfactory hfnonce hpairNonce hpairCode hslot2
+
 end Blanc.Lift.UniswapV2Factory
