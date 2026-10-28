@@ -5240,6 +5240,16 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `settledRoot_retained_proxyWorld_from_installations`; the old APIs remain
   compatibility wrappers. Historical readiness/installation producers and
   actual Pair state, sender exclusion and key freshness remain explicit.
+  Both installation-based caller and Pair transaction interfaces have
+  `_of_mid_roots` variants: proxy/selected-runtime readiness, actual guarded
+  installations and known implementation-slot separation are needed only on
+  roots of the original post-cut history. They derive full-history membership
+  through `MidHistoryTraceIn.settledRoots_subset_full`, so governance, finite
+  raw populations, native queries and old-owner conditions keep their original
+  scopes. The prior interfaces restrict their full-root evidence as wrappers.
+  This avoids requiring the proxy before creation in a history starting at an
+  earlier implementation deployment; it does not supply the remaining actual
+  runtime/history producers.
   `MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner` consumes that
   mid-history caller exclusion through the same retained-write classifier.
   It retains the original root, committed parent and write witnesses while
