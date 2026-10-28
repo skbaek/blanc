@@ -5042,6 +5042,16 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   with `Exec.cell_zero_of_retained_nonInc_noStateGas`: a tracked row entering
   the actual settled root at zero leaves at zero. The seed, outer transaction
   deletion/sweep, and original history composition remain separate obligations.
+  `transaction_allowance_zero_from_installations` derives each root's readiness
+  from the actual transaction entry using `settledRoots_entry_code_cell`, then
+  derives retained terminal safety and transaction deletion exclusion. It carries
+  every initially zero tracked row through fee settlement and account sweep,
+  preserving proxy code and implementation-address membership in the listed
+  runtimes. It needs only the initially selected runtime and conditional V2_2
+  library, plus installations at actual upgrade positions. No created-account
+  exclusion, final deletion oracle or raw upgrade checker is supplied. Readiness
+  of the selected implementation at the final transaction state and composition
+  across subsequent transactions remain separate producer obligations.
   The write-scoped caller input is supplied by `retained_caller_write_excluded`
   in [`UniswapV2PairUsdcCallersIn.lean`](../Blanc/Composition/UniswapV2PairUsdcCallersIn.lean).
   It follows actual retained parents, uses the Pair's historical child-selector

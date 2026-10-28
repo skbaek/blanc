@@ -2,7 +2,7 @@ import Blanc.Lift.Usdc.AllowanceRawHistory
 import Blanc.Lift.Usdc.InitRowsHistory
 import Blanc.Lift.Usdc.RetainedOldRecovery
 import Blanc.ExecutionMidHistoryInForest
-import Blanc.Lift.Usdc.ProxyRetainedContextCodes
+import Blanc.Lift.Usdc.ProxyRetainedNoDel
 import Blanc.ExecutionRetainedCellZero
 
 /-! Actual globally retained allowance writers and their remaining V2_2 owner case. -/
@@ -451,6 +451,110 @@ theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations
   simpa only [key] using bound
 
 end Dynamic
+
+/-- Complete transaction settlement preserves all tracked zero allowance rows.
+Root readiness is derived from the transaction's actual entry state. Retained
+terminal safety excludes deletion, so fee settlement and touched-account sweep
+need no supplied deletion oracle or created-account exclusion. The selected
+implementation address remains in W; runtime readiness at the final state is
+not asserted by this projection. -/
+theorem ConfiguredHistoryTraceIn.transaction_allowance_zero_from_installations
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (bal : ∀ f, F f → f.ruleSet.bal = none)
+    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
+    (rowSep : UsdcModernRowSep P pair Tr history.rawFrames)
+    (v1Class : V1RawWriteClass P pair Tr history.rawFrames)
+    (initApart : InitRowsApart P pair Tr history.rawFrames)
+    (noCaller : ∀ (G : Exec.Frame), G ∈ history.settledFrames →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery history P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    (v2_2Owner : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      G.sevm.code = Impl.code → Sevm.selector G.sevm ∈ selV2_2.owners →
+      (Sevm.dataWord G.sevm 4).toAdr ≠ pair)
+    {W : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (proxy : benv.state.getCode P = Proxy.code)
+    (slot : ∃ e ∈ W, ((benv.state.getStor P).get implSlot).toAdr = e.adr ∧
+      benv.state.getCode e.adr = e.code ∧
+      (e.code = Impl.code → benv.state.getCode usdcLib = Lib.code))
+    (installations : ∀ R ∈ trace.settledRoots, ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (zero : ∀ g, Tr g → (benv.state.getStor P).get (allowSlot pair g) = 0) :
+    P ∉ trace.messageOut.accountsToDelete ∧ state.getCode P = Proxy.code ∧
+      (∃ e ∈ W, ((state.getStor P).get implSlot).toAdr = e.adr) ∧
+      ∀ g, Tr g → (state.getStor P).get (allowSlot pair g) = 0 := by
+  have proxyFamily : UsdcContextCode Proxy.code := .inl rfl
+  have libraryFamily : UsdcContextCode Lib.code := .inr (.inr (.inr (.inr (.inr rfl))))
+  have ready (R : Exec.Frame) (member : R ∈ trace.settledRoots) :
+      R.pre.getCode P = Proxy.code ∧
+        ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧
+          e.RuntimeReady R.pre := by
+    obtain ⟨e, he, address, runtime, library⟩ := slot
+    obtain ⟨rootProxy, rootSlot⟩ := trace.settledRoots_entry_code_cell
+      proxy proxyFamily.ne_nil proxyFamily.not_delegation implSlot R member
+    refine ⟨rootProxy, e, he, ?_, ?_, ?_⟩
+    · rw [rootSlot]; exact address
+    · exact (trace.settledRoots_entry_code_cell runtime (impls e he).context.ne_nil
+        (impls e he).context.not_delegation 0 R member).1
+    · intro implementation
+      exact (trace.settledRoots_entry_code_cell (library implementation) libraryFamily.ne_nil
+        libraryFamily.not_delegation 0 R member).1
+  have context (R : Exec.Frame) (member : R ∈ trace.settledRoots) :=
+    ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations history
+      capabilities (fun {_} hf => bal _ hf) (rootsIn R member) (ready R member).1 impls lib
+      (ready R member).2 governance (installations R member) (apart R member)
+  have notDeleted := trace.not_deleted_of_retained_terminals hsg (a := P) (by
+    intro R member
+    apply ConfiguredHistoryTraceIn.settledRoot_usdcContext_terminal_safe history capabilities
+      (rootsIn R member)
+    intro N retained target
+    rcases (context R member N retained).2 target with ⟨code, _⟩ | ⟨e, he, code, _⟩
+    · exact .inl code
+    · rw [code]; exact (impls e he).context)
+  have pointer := trace.cell_property_of_settledRoots implSlot hsg proxy proxyFamily.ne_nil
+    proxyFamily.not_delegation notDeleted (fun word => ∃ e ∈ W, word.toAdr = e.adr)
+    (by
+      intro R member _
+      obtain ⟨_, e, he, address, _⟩ :=
+        ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime history capabilities
+          (fun {_} hf => bal _ hf) (rootsIn R member) (ready R member).1 impls lib
+          (ready R member).2 governance (installations R member) (apart R member)
+      exact ⟨e, he, address⟩)
+    (by obtain ⟨e, he, address, _⟩ := slot; exact ⟨e, he, address⟩)
+  refine ⟨notDeleted, pointer.2, pointer.1, ?_⟩
+  intro g tracked
+  exact (trace.cell_property_of_settledRoots (allowSlot pair g) hsg proxy proxyFamily.ne_nil
+    proxyFamily.not_delegation notDeleted (fun word => word = 0)
+    (by
+      intro R member rootZero
+      exact ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations history
+        capabilities bal proxyApart rowSep v1Class initApart noCaller excluded oldReady v2_2Owner
+        (rootsIn R member) (ready R member).1 impls lib (ready R member).2 governance
+        (installations R member) (apart R member) tracked rootZero)
+    (zero g tracked)).1
 
 end History
 
