@@ -457,6 +457,17 @@ registry has identified the likely vocabulary.
   write of a clean word keeps the raw upper ninety-six bits).
   Use it when delegated code can make a nominal address slot raw-dirty; a plain
   full-word `SSTORE` is observably different in that state.
+  For the Solidity constructor's slot-zero owner initializer, use
+  `SolcStorageReturn.ownerInit_effects` over `SolcStorageReturn.ownerInit` in
+  [`Blanc/Lift/SolcStorageReturn.lean`](../Blanc/Lift/SolcStorageReturn.lean).
+  The actual successful source run derives the packed write using
+  `addressSlotWriteWord raw owner.toAdr.toB256`, exact removal of the owner and
+  internal return word, unchanged memory, and preservation of every foreign
+  account's storage. No owner cleanliness, fork gas constant, prepared output,
+  code registration or historical installation premise is supplied. The caller
+  must separately connect this source template to its certified constructor.
+  This compound inverse conclusion has no reliable single goal-head recipe;
+  select it by the named source template in the actual run hypothesis.
 - **Four-bit tagged logical storage keys.** `Blanc.TaggedStorage.encode` in
   [`Blanc/TaggedStorage.lean`](../Blanc/TaggedStorage.lean) combines a region
   with a payload after masking the payload to 252 bits.  Use
@@ -9275,6 +9286,20 @@ contract-neutral.
   source run to the actual returned code window and unchanged storage, without
   a fork or memory-alignment premise. Neither theorem identifies a runtime
   literal or proves CREATE settlement or historical installation.
+  For the modern owner constructor source pattern in the same module,
+  `solcConstructorPrelude_effects` inverts the memory-pointer initialization,
+  slot-one packed-flag clear, slot-eleven reset and call-value guard, retaining
+  the actual successful continuation run. `solcOwnerConstructor_effects`
+  composes that prefix with `SolcStorageReturn.ownerInit_effects` and the
+  terminal code-window inverse. Given the actual successful source run and
+  function-table entries for the owner initializer and return body, it derives
+  zero call value, exact `solcOwnerConstructorStorage`, preservation of foreign
+  storage and the returned code window. It accepts arbitrary initial storage,
+  memory, stack and fork. These named source templates do not identify a
+  registered certificate, a runtime literal or a historical CREATE. The
+  compound inverse has no reliable goal-head dispatch: select it explicitly
+  with its actual run and function-table witnesses; the forward terminal recipe
+  below remains the automatic entry point for exact code-return runs.
   The `solc-runtime-return` recipe matches only a named terminal-body exact
   run ending in a halted outcome; it never unfolds arbitrary certificate
   entries or concrete machine images to discover this pattern.

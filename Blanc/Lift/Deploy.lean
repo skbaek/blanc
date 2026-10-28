@@ -1,4 +1,6 @@
 import Blanc.Lift.Exact
+import Blanc.Lift.SolcStorageReturn
+import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.WalkSteps
 import Blanc.DeploymentMessage
@@ -247,6 +249,188 @@ theorem solcRuntimeReturn_effects
   | last terminal =>
       have effect := ri_return terminal
       exact ⟨funext effect.2.1, effect.1.trans read⟩
+
+/-- The packed flag word retained by this Solidity constructor prologue. -/
+def solcConstructorFlagWord (raw : B256) : B256 :=
+  (~~~ ((255 : B256) <<< 160)) &&& raw
+
+/-- The reverting arm of the nonpayable constructor check. -/
+def solcConstructorRevert : SFunc :=
+  .next (.push [0x00] (by decide)) (.next (.reg (.dup 0)) (.last .revert))
+
+/-- Solidity prologue clearing a packed flag in slot one and resetting slot eleven. -/
+def solcConstructorPrelude (success : SFunc) : SFunc := (.next (.push [0x80] (by decide)) (.next (.push [0x40] (by decide)) (.next (.reg .mstore) (.next (.push [0x01] (by decide)) (.next (.reg (.dup 0)) (.next (.reg .sload) (.next (.push [0xff] (by decide)) (.next (.push [0xa0] (by decide)) (.next (.reg .shl) (.next (.reg .not) (.next (.reg .and) (.next (.reg (.swap 0)) (.next (.reg .sstore) (.next (.push [0x00] (by decide)) (.next (.push [0x0b] (by decide)) (.next (.reg .sstore) (.next (.reg .callvalue) (.next (.reg (.dup 0)) (.next (.reg .iszero) (.next (.push [0x00, 0x00, 0x23] (by decide)) (.branch solcConstructorRevert success)))))))))))))))))))))
+
+/-- Invert the storage/memory prologue and successful nonpayable guard. The
+continuation is left explicit so the source pattern can be composed with an
+actual internal owner call and terminal code return. -/
+theorem solcConstructorPrelude_effects
+    {fs : List SFunc} {sevm : Sevm} {b post : Devm} {S : List B256}
+    {M : Mem} {G : Nat} {success : SFunc}
+    (run : SFunc.Run fs sevm (St b S M G) (solcConstructorPrelude success) (.halted post)) :
+    sevm.value = 0 ∧ ∃ after G',
+      after.getStor sevm.currentTarget =
+        ((b.getStor sevm.currentTarget).set 1
+          (solcConstructorFlagWord (b.getStorVal sevm.currentTarget 1))).set 11 0 ∧
+      (∀ a, a ≠ sevm.currentTarget → after.getStor a = b.getStor a) ∧
+      SFunc.Run fs sevm (St after (0 :: S) (M.write 64 (128 : B256).toBytes) G')
+        success (.halted post) := by
+  let memory := M.write 64 (128 : B256).toBytes
+  have run := run.cut
+  unfold solcConstructorPrelude at run
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, eq⟩ := ri_mstore step
+  change _ = St b S memory _ at eq
+  subst eq
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
+  obtain ⟨loaded, load, run⟩ := ric_next run
+  have storage : loaded.getStor = b.getStor := (Ninst.Hinv.inv (f := Devm.getStor) load).symm
+  have loadMemory : loaded.memory = memory := SolcStorageReturn.sload_memory load
+  obtain ⟨key, tail, popped, pushed⟩ := of_run_sload load
+  simp only [Stack.Pop, Stack.Push, Split, St.stack, List.cons_append, List.nil_append,
+    List.cons.injEq] at popped pushed
+  obtain ⟨rfl, rfl⟩ := popped
+  rw [St.self pushed loadMemory] at run
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_shl step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_not step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, eq⟩ := ri_and step
+  change _ = St loaded (solcConstructorFlagWord (b.getStorVal sevm.currentTarget 1) ::
+    1 :: S) memory _ at eq
+  subst eq
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl step
+  obtain ⟨cleared, clear, run⟩ := ric_next run
+  have clearOwn := sstore_getStor_set (xs := []) clear (by exact ⟨_, rfl⟩)
+  have clearForeign : ∀ a, a ≠ sevm.currentTarget → cleared.getStor a = b.getStor a := by
+    intro a different
+    obtain ⟨pc, regular⟩ := of_run_reg clear
+    exact (sstore_preserves_getStor_ne regular different.symm).trans (congrFun storage a)
+  obtain ⟨b1, G1, eq⟩ := SolcStorageReturn.ri_sstore_any clear
+  rw [eq] at run clearOwn clearForeign
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨reset, resetStore, run⟩ := ric_next run
+  have resetOwn := sstore_getStor_set (xs := []) resetStore (by exact ⟨_, rfl⟩)
+  have resetForeign : ∀ a, a ≠ sevm.currentTarget → reset.getStor a = b.getStor a := by
+    intro a different
+    obtain ⟨pc, regular⟩ := of_run_reg resetStore
+    exact (sstore_preserves_getStor_ne regular different.symm).trans (clearForeign a different)
+  obtain ⟨b2, G2, eq⟩ := SolcStorageReturn.ri_sstore_any resetStore
+  rw [eq] at run resetOwn resetForeign
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_callvalue step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_iszero step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  rcases ric_branch run with ⟨_, _, failed⟩ | ⟨nonzero, G3, run⟩
+  · exact (SFunc.RunCutP.false_of_noOk failed (by decide)).elim
+  · have zero : sevm.value = 0 := by
+      by_contra different
+      simp only [B256.eqCheck, different, ↓reduceIte] at nonzero
+      exact nonzero rfl
+    refine ⟨zero, b2, G3, ?_, resetForeign, ?_⟩
+    · change b2.getStor sevm.currentTarget = (b1.getStor sevm.currentTarget).set 11 0 at resetOwn
+      change b1.getStor sevm.currentTarget = _ at clearOwn
+      rw [resetOwn, clearOwn]
+      exact congrArg (fun s => (s.set 1
+        (solcConstructorFlagWord (b.getStorVal sevm.currentTarget 1))).set 11 0)
+        (congrFun storage sevm.currentTarget)
+    · rw [zero] at run
+      exact run.uncut
+
+/-- Continuation after the owner initializer returns. -/
+def solcConstructorExit : SFunc :=
+  .dest (.next (.push [0x00, 0x00, 0x57] (by decide)) (.jump 2))
+
+/-- The nonpayable arm calls the owner initializer with the actual caller. -/
+def solcConstructorOwnerCall : SFunc :=
+  .dest (.next (.reg .pop) (.next (.push [0x00, 0x00, 0x2f] (by decide))
+    (.next (.reg .caller) (.next (.push [0x00, 0x00, 0x35] (by decide))
+      (.callNext 1 solcConstructorExit)))))
+
+/-- The complete constructor entry pattern, with owner and return entries
+supplied by its function table. -/
+def solcOwnerConstructor : SFunc := solcConstructorPrelude solcConstructorOwnerCall
+
+/-- Exact storage resulting from the constructor's three writes. -/
+def solcOwnerConstructorStorage (initial : Stor) (owner : Adr) : Stor :=
+  (((initial.set 1 (solcConstructorFlagWord (initial.get 1))).set 11 0).set 0
+    (addressSlotWriteWord (initial.get 0) owner.toB256))
+
+/-- Invert the complete source constructor. All storage effects and the actual
+returned code window follow from its successful run, including the internal
+owner call. No gas schedule, initial-memory alignment or prepared output is
+assumed. A concrete certificate and its runtime-window identity remain separate. -/
+theorem solcOwnerConstructor_effects
+    {fs : List SFunc} {sevm : Sevm} {b post : Devm} {S : List B256}
+    {M : Mem} {G : Nat} {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    {size offset : B256}
+    (ownerEntry : fs[1]? = some SolcStorageReturn.ownerInit)
+    (returnEntry : fs[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (run : SFunc.Run fs sevm (St b S M G) solcOwnerConstructor (.halted post)) :
+    sevm.value = 0 ∧
+      post.getStor sevm.currentTarget =
+        solcOwnerConstructorStorage (b.getStor sevm.currentTarget) sevm.caller ∧
+      (∀ a, a ≠ sevm.currentTarget → post.getStor a = b.getStor a) ∧
+      post.output = sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) := by
+  obtain ⟨zero, after, G1, own, foreign, run⟩ := solcConstructorPrelude_effects run
+  have run := run.cut
+  unfold solcConstructorOwnerCall at run
+  obtain ⟨_, run⟩ := ric_dest run
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_pop step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_caller step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨G2, called⟩ := ric_call ownerEntry run
+  rcases called with ⟨D, callee, cont⟩ | ⟨D, callee, _⟩
+  · have effects := SolcStorageReturn.ownerInit_effects callee
+    have slotZero : after.getStorVal sevm.currentTarget 0 = b.getStorVal sevm.currentTarget 0 := by
+      change (after.getStor sevm.currentTarget).get 0 = _
+      rw [own, Stor.get_set_ne _ (by decide : (11 : B256) ≠ 0),
+        Stor.get_set_ne _ (by decide : (1 : B256) ≠ 0)]
+      rfl
+    have ownerOwn : D.getStor sevm.currentTarget =
+        solcOwnerConstructorStorage (b.getStor sevm.currentTarget) sevm.caller := by
+      rw [effects.2.2.1]
+      rw [slotZero, toAdr_toB256, own]
+      rfl
+    rw [St.self effects.1 effects.2.1] at cont
+    unfold solcConstructorExit at cont
+    obtain ⟨_, cont⟩ := ric_dest cont
+    obtain ⟨_, step, cont⟩ := ric_next cont
+    obtain ⟨_, rfl⟩ := ri_push step
+    obtain ⟨_, terminal⟩ := ric_jump (by intro h; cases h) returnEntry cont
+    have final := solcRuntimeReturn_effects sizeWord offsetWord nonzero terminal.uncut
+    refine ⟨zero, (congrFun final.1 sevm.currentTarget).trans ownerOwn, ?_, final.2⟩
+    intro a different
+    exact (congrFun final.1 a).trans ((effects.2.2.2 a different).trans (foreign a different))
+  · exact (SFunc.RunP.not_halted (S := []) rfl (by decide) (by decide) callee rfl).elim
 
 /-- The creation frame of `msg` over the post-transfer environment `benv`. -/
 abbrev createSeed (msg : Msg) (benv : Benv) : Msg := (processCreateMessage.msg msg).withBenv benv
