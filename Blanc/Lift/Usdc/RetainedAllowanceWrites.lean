@@ -1,3 +1,4 @@
+import Blanc.Lift.Usdc.V1WriteApart
 import Blanc.Lift.Usdc.AllowanceRawHistory
 import Blanc.Lift.Usdc.InitRowsHistory
 import Blanc.Lift.Usdc.RetainedOldRecovery
@@ -830,6 +831,187 @@ theorem ConfiguredHistoryTraceIn.transaction_allowance_zero_from_installations
   apply noCaller G
   rw [history.settledFrames_eq]
   exact List.mem_flatMap.mpr ⟨R, rootsIn R root, committed⟩
+
+/-- Actual full-history successful-store keys classify this retained node. -/
+theorem ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_of_retainedCode_of_rootFrames_of_actualKeys
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (neutral : ∀ f, F f → NeutralFork f)
+    (bal : ∀ f, F f → f.ruleSet.bal = none)
+    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
+    (spenders : List Adr) (observed : ∀ g, Tr g → g ∈ spenders)
+    (v1Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV1MappingKeys P history) = true)
+    (v2Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV2CoveredKeys P history) = true)
+    (v21Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV2_1CoveredKeys P history) = true)
+    (v22Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV22CoveredKeys P history) = true)
+    (v1FixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true)
+    (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) modernFixedWriteSlots = true)
+    (initApart : InitRowsApart P pair Tr history.rawFrames)
+    {R : Exec.Frame}
+    (noCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery history P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    (v2_2Owner : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run → G.sevm.currentTarget = P →
+      G.sevm.code = Impl.code → Sevm.selector G.sevm ∈ selV2_2.owners →
+      (Sevm.dataWord G.sevm 4).toAdr ≠ pair)
+    (root : R ∈ history.settledRoots)
+    {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
+    (code : UsdcContextCode m.sevm.code)
+    {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
+    (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    ∃ G : Exec.Frame, G ∈ history.settledFrames ∧ G ∈ Exec.committedFrames R.run ∧
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m ∧ G.sevm.currentTarget = P ∧
+      w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
+  have rawRoot := history.mem_rawFrames_of_mem_settledRoots R root
+  have rawNode := history.rawNodes_of_mem_rawFrames _ rawRoot m
+    ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained)
+  have classified := ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_actualKeys_of_nodeCode history history
+    (fun _ h => h) capabilities neutral proxyApart spenders observed v1Faithful v2Faithful v21Faithful v22Faithful v1FixedApart modernFixedApart
+    rawNode code found owner tracked
+  have subset : Exec.committedFrames R.run ⊆ history.settledFrames := by
+    intro G member
+    rw [history.settledFrames_eq]
+    exact List.mem_flatMap.mpr ⟨R, root, member⟩
+  have framesEq : Exec.committedFrames R.run = rootFrames [R] := by
+    simp only [rootFrames, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+  obtain ⟨G, member, committed, chain, target, nonInc | residual⟩ :=
+    retainedRowWrite_nonInc_or_v2_2_owner_of_frames history capabilities bal initApart
+      framesEq subset noCaller excluded oldReady
+      List.mem_cons_self retained found owner tracked classified
+  · exact ⟨G, subset member, committed, chain, target, nonInc⟩
+  · exact (v2_2Owner G member target residual.1 residual.2.1 residual.2.2).elim
+
+section ActualKeys
+
+variable
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F) (neutral : ∀ f, F f → NeutralFork f)
+    (bal : ∀ f, F f → f.ruleSet.bal = none)
+    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
+    (spenders : List Adr) (observed : ∀ g, Tr g → g ∈ spenders)
+    (v1Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV1MappingKeys P history) = true)
+    (v2Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV2CoveredKeys P history) = true)
+    (v21Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV2_1CoveredKeys P history) = true)
+    (v22Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) (actualV22CoveredKeys P history) = true)
+    (v1FixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true)
+    (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
+      (spenders.map (fun g => .modern (.allow pair g))) modernFixedWriteSlots = true)
+    (initApart : InitRowsApart P pair Tr history.rawFrames)
+    (noCaller : ∀ (G : Exec.Frame), G ∈ history.settledFrames →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    (excluded : ∀ query : RetainedOldOwnerNativeQuery history P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    (v2_2Owner : ∀ (G : Exec.Frame), G ∈ history.settledFrames → G.sevm.currentTarget = P →
+      G.sevm.code = Impl.code → Sevm.selector G.sevm ∈ selV2_2.owners →
+      (Sevm.dataWord G.sevm 4).toAdr ≠ pair)
+    {W : List UsdcDeployedEntry} {R : Exec.Frame}
+    (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (slot : ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧
+      e.RuntimeReady R.pre)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (installations : ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run))
+
+include history capabilities neutral bal proxyApart spenders observed v1Faithful v2Faithful v21Faithful v22Faithful v1FixedApart modernFixedApart initApart excluded
+  oldReady member proxy impls lib slot installations apart
+
+/-- Retained runtime context and original actual-key checks imply non-increase. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootFrames_of_actualKeys
+    (rootGovernance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
+    (rootOwner : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → G.sevm.code = Impl.code →
+      Sevm.selector G.sevm ∈ selV2_2.owners → (Sevm.dataWord G.sevm 4).toAdr ≠ pair)
+    (noRootCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    {m : Exec.Deriv} (retained : m ∈ Exec.retainedNodes R.run)
+    {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
+    (owner : w.owner = P) (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
+    w.value.toNat ≤ ((m.devm.getStor P).get w.key).toNat := by
+  have context := ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations_of_root_governance
+    history capabilities (fun {_} hf => bal _ hf) member proxy impls lib slot rootGovernance
+    installations apart
+  have target : m.sevm.currentTarget = P :=
+    (successfulSstore?_node_owner found).2.symm.trans owner
+  have code : UsdcContextCode m.sevm.code := by
+    rcases (context m retained).2 target with ⟨code, _⟩ | ⟨e, he, code, _⟩
+    · exact .inl code
+    · rw [code]
+      exact (impls e he).context
+  obtain ⟨G, _, _, _, _, bound⟩ :=
+    ConfiguredHistoryTraceIn.usdc_retainedRowWrite_nonInc_of_retainedCode_of_rootFrames_of_actualKeys history
+      capabilities neutral bal proxyApart spenders observed v1Faithful v2Faithful v21Faithful v22Faithful v1FixedApart modernFixedApart initApart noRootCaller excluded oldReady rootOwner
+      member retained code found owner tracked
+  exact bound
+
+/-- Original actual-key checks preserve zero through the actual settled root. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_allowance_zero_from_installations_of_rootFrames_of_actualKeys
+    (rootGovernance : UsdcGovernanceF2primeOn P (Exec.committedFrames R.run))
+    (rootOwner : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → G.sevm.code = Impl.code →
+      Sevm.selector G.sevm ∈ selV2_2.owners → (Sevm.dataWord G.sevm 4).toAdr ≠ pair)
+    (noRootCaller : ∀ (G : Exec.Frame), G ∈ Exec.committedFrames R.run →
+      G.sevm.currentTarget = P → ∀ (m : Exec.Deriv) (w : Exec.StorageWrite),
+      Exec.Deriv.ParentPrefix (Exec.Frame.rootDeriv G) m →
+      Exec.Deriv.successfulSstore? m = some w →
+      Sevm.selector G.sevm ∈ [0x095ea7b3, 0x39509351, 0xa457c2d7] → G.sevm.caller ≠ pair)
+    {g : Adr} (tracked : Tr g)
+    (zero : (R.pre.getStor P).get (allowSlot pair g) = 0) :
+    (R.post.getStor P).get (allowSlot pair g) = 0 := by
+  have rawRoot := history.mem_rawFrames_of_mem_settledRoots R member
+  have facts := history.rawFrame_entryFacts capabilities _ rawRoot
+  have nonempty : (R.pre.getCode P).toList ≠ [] := by
+    rw [proxy]
+    exact (show UsdcContextCode Proxy.code from .inl rfl).ne_nil
+  apply Exec.cell_zero_of_retained_nonInc_noStateGas R.run R.committed
+    facts.2.2.1 nonempty _ zero
+  intro m retained w found owner key
+  have bound := ConfiguredHistoryTraceIn.settledRoot_allowanceWrite_nonInc_from_installations_of_rootFrames_of_actualKeys
+    history capabilities neutral bal proxyApart spenders observed v1Faithful v2Faithful v21Faithful v22Faithful v1FixedApart modernFixedApart initApart excluded oldReady
+    member proxy impls lib slot installations apart rootGovernance rootOwner noRootCaller retained found owner
+    ⟨g, tracked, key.symm⟩
+  simpa only [key] using bound
+
+end ActualKeys
 
 end History
 

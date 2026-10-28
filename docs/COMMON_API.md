@@ -10674,3 +10674,19 @@ same original history/census. Selected boundary transactions remain separate.
 The general stage/mid producers handle enabled system calls; the receipt-census
 adapter retains its existing pre-Cancun bound. No original observation has been
 adopted and no final origin/readiness fields have replaced the concrete producers.
+
+
+`Blanc/Lift/Usdc/V1WriteApart.lean` supplies
+`ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_actualKeys_of_nodeCode`: the
+original four faithful-key checks and two fixed-slot separation checks classify
+one actual node with its own `UsdcContextCode`, preserving parent attribution.
+The existing whole-scope classifier remains a compatible wrapper.
+`Blanc/Lift/Usdc/RetainedAllowanceWrites.lean` exposes `_of_actualKeys` versions
+of the retained write, root non-increase and root zero endpoints. They derive
+code locally from the original guarded installations and use these same actual
+successful-store populations, without descriptor-wide modern row separation.
+In `Blanc/Composition/UniswapV2PairUsdcCallersIn.lean`,
+`mid_allowance_zero_from_pair_history_of_retained_origins_of_actualKeys`
+combines runtime, caller and owner producers with that root fold. Initial zero,
+actual origin/install evidence, native exclusions and original R4/initializer
+obligations retain their existing scope. No global raw-node code family is needed.
