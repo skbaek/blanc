@@ -6673,6 +6673,17 @@ is inferred from the two boundary blooms.
 The joint trace/key query is documented here rather than dispatched from an
 arbitrary expanded receipt equality, list membership or quantified log predicate.
 
+For large concrete Keccak computations, use `KeccakBlocks.sixRounds` and
+`KeccakBlocks.f1600_sixRounds` in
+[`Blanc/KeccakBlocks.lean`](../Blanc/KeccakBlocks.lean) to factor the production
+permutation into four six-round groups through its existing reference-equivalence
+theorem. Prove each concrete intermediate-state equation in the kernel, then
+compose them. `squeeze` and `run_empty` expose the original final padding and
+digest projection. These prove no hash injectivity or historical input identity.
+The WETH creation `SigningEncoding` and `SigningHash` modules apply these facts
+to the exact EIP-155 envelope conditional on explicit transaction fields.
+Select each state witness explicitly; arbitrary hash goals have no automatic recipe.
+
 For a successful creation receipt, use
 `ConfiguredBlockTraceIn.txSplit_error_eq_none_of_receipt` in
 [`ExecutionIndexedReceipts`](../Blanc/ExecutionIndexedReceipts.lean) to recover
