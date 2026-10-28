@@ -3,6 +3,9 @@ import Blanc.Lift.Usdc.ProxyContextCodes
 import Blanc.Lift.CursorOccurrenceNoStateGas
 import Blanc.Lift.CommittedFrameLogs
 import Blanc.ExecutionRetainedCellAt
+import Blanc.ExecutionInRootOwnCode
+import Blanc.ExecutionHistoryReceiptCensus
+import Blanc.ExecutionMidHistoryInNoDel
 
 /-!
 # A retained implementation-slot write entails an Upgraded log
@@ -209,5 +212,71 @@ theorem ConfiguredHistoryTraceIn.retainedNode_implSlot_eq_of_noUpgraded
   obtain ⟨_, _, hsg, _, _⟩ := history.rawFrame_entryFacts capabilities R member
   exact Exec.retainedNode_cell_eq_of_noRetainedWriteTo_noStateGas R.exc committed hsg
     P implSlot hcode noWrite retained
+
+/-- A value predicate for the target decoded from an actual proxy Upgraded log.
+Other addresses and topics impose no condition. This is correspondence input,
+not an assumption about code or selection at a different state. -/
+def UpgradedTargetSatisfies (P : Adr) (property : Adr → Prop) (entry : Log) : Prop :=
+  entry.address = P → entry.topics = [Proxy.upgradedTopic] →
+    property entry.data.toB256.toAdr
+
+/-- The value of every actual retained proxy implementation write satisfies
+any target predicate established by the same root's actual Upgraded logs. -/
+theorem ConfiguredHistoryTraceIn.retained_implSstore_target_of_logs
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {R : Exec.Frame} (member : R ∈ history.settledRoots)
+    (property : Adr → Prop)
+    (logs : ∀ entry ∈ R.post.logs, UpgradedTargetSatisfies P property entry)
+    {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.run)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? N = some write)
+    (owner : write.owner = P) (key : write.key = implSlot)
+    (nodeCode : N.sevm.code = Proxy.code) : property write.value.toAdr := by
+  obtain ⟨entry, present, address, topics, payload⟩ :=
+    ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded_data_of_proxyCode history
+      capabilities bal (R := Exec.Frame.rootDeriv R)
+      (history.mem_rawFrames_of_mem_settledRoots R member) R.committed retained
+      found owner key nodeCode
+  have selected := logs entry present address topics
+  rw [payload, B256.toB256_toBytes] at selected
+  exact selected
+
+/-- A range census on the same original mainnet history constrains every
+retained proxy implementation target strictly between the two actual cuts.
+Use target inequality to exclude premature selection, or membership to select
+an already-created runtime family. Neither conclusion assumes earlier code
+emptiness, final runtime readiness, or an order extension to F2prime. -/
+theorem ConfiguredHistoryTraceIn.retained_implSstore_target_between_txSplits_of_census
+    {checkpoint origin completed pre post future : BlockChain}
+    (before : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint origin)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed) {i : Nat}
+    (afterCut : first.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post) {j : Nat}
+    (beforeCut : last.bodyTrace.transactions.TxSplit j)
+    (after : ConfiguredHistoryTraceIn HistFork mainnetChainConfig post future)
+    (early : last.block.header.timestamp < mainnetCancunTimestamp)
+    {lo hi : Nat} (lower : lo ≤ first.block.header.number)
+    (upper : last.block.header.number ≤ hi) {P : Adr} (property : Adr → Prop)
+    (census : ((((before.step first).append later).step last).append after).ReceiptCensus
+      lo hi (UpgradedTargetSatisfies P property))
+    {R : Exec.Frame}
+    (member : R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+      last.rootsBeforeTxSplit beforeCut)
+    {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.run)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? N = some write)
+    (owner : write.owner = P) (key : write.key = implSlot)
+    (nodeCode : N.sevm.code = Proxy.code) : property write.value.toAdr := by
+  have logs := ConfiguredHistoryTraceIn.root_logs_between_txSplits_of_mainnet_census
+    before first afterCut later last beforeCut after early lower upper
+    (UpgradedTargetSatisfies P property) census
+  exact ConfiguredHistoryTraceIn.retained_implSstore_target_of_logs
+    ((((before.step first).append later).step last).append after)
+    BodyStageCapabilities.historical (fun h => h.bal_none)
+    (ConfiguredHistoryTraceIn.mem_settledRoots_of_between_txSplits
+      before first afterCut later last beforeCut after member)
+    property (logs R member) retained found owner key nodeCode
 
 end Blanc.Lift.Usdc

@@ -10597,3 +10597,15 @@ the history theorem derives memory well-formedness from original `FreshEntry`.
 No memory or free-pointer premise should be added to a final history consumer.
 Existing address/topic APIs remain compatible projections. Provider census
 correspondence and deployment chronology are separate producer obligations.
+
+`UpgradedTargetSatisfies` decodes the target of an actual proxy Upgraded log.
+`retained_implSstore_target_of_logs` transfers any such address predicate to
+each actual retained implementation write in the same root.
+`retained_implSstore_target_between_txSplits_of_census` combines that result
+with the original census-to-cut adapter and derives full-history root membership.
+Instantiate the predicate with target inequality to exclude selection before
+creation, or with membership in an already-created family. The theorem covers
+same-value/restored writes and requires no earlier address-emptiness, final
+runtime-readiness or additional temporal F2prime assumption. Actual ranged
+census correspondence remains explicit; both selected cut transactions are
+outside this interval and need their own producer evidence.
