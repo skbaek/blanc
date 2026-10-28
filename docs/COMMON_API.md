@@ -8536,6 +8536,25 @@ contract-neutral.
   raw-frame membership, commitment and conditional own-code from that same
   root. Installed Proxy/V1 code, the implementation word, the same-root
   absence of Upgraded logs and local known-V1 write separation remain explicit.
+  For implementations created later in the same root, use
+  `UsdcDeployedEntry.RuntimeReady` and
+  `ConfiguredHistoryTraceIn.retained_proxyWorld_context_from_installations`.
+  The selected entry is ready initially; each actual retained proxy upgrade
+  supplies readiness at that write. The induction carries nonempty code with
+  `Exec.retainedNodes_getCode_of_ordered_noStateGas`, deriving both current
+  pointer readiness and execution-family classification. Conditional V2.2
+  library readiness follows the running implementation through nested calls,
+  even when the proxy pointer changes before that frame resumes.
+  `settledRoot_retained_proxyWorld_from_installations` obtains the original
+  F2prime target and nonempty-code guard before requesting runtime evidence;
+  `settledRoot_dynamic_implSlot_origin_code_of_f2prime` supplies the resulting
+  classifier to committed-endpoint provenance. Future entries need not be
+  installed at root entry. The older installed-world API projects this same
+  induction with its exact original statement. Actual runtime identities and
+  historical correspondence remain producer obligations; retained governance
+  does not establish the raw upgrade check. These APIs require explicit root,
+  upgrade and installation witnesses; there is no reliable automatic goal-head
+  recipe for selecting them.
 - Storage loops and straight-line steps on such a reach, in
   [`Blanc/Lift/ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean): the step
   function `stepR`/`ri_stepR` with the tactics `rsx` (one straight-line step), `rsd`
