@@ -1,4 +1,5 @@
 import Blanc.ExecutionHistoryReceiptLogs
+import Blanc.ExecutionHistoryInAppend
 
 /-! Inclusive block-number censuses cover receipt predicates on the original
 configured history. Successful header validation supplies the number bounds;
@@ -93,5 +94,90 @@ theorem ConfiguredHistoryTraceIn.receiptLogs_of_census
     rcases List.mem_append.mp member with earlier | last
     · exact earlierLogs entry earlier
     · exact census.2 lastLower lastUpper entry last
+
+/-- A range census follows the same original append decomposition. No block
+or receipt from another replay is substituted. -/
+theorem ConfiguredHistoryTraceIn.receiptCensus_append
+    {F : Fork → Prop} {cfg : ChainConfig} {pre middle post : BlockChain}
+    (first : ConfiguredHistoryTraceIn F cfg pre middle)
+    (later : ConfiguredHistoryTraceIn F cfg middle post)
+    (lo hi : Nat) (property : Log → Prop) :
+    (first.append later).ReceiptCensus lo hi property ↔
+      first.ReceiptCensus lo hi property ∧ later.ReceiptCensus lo hi property := by
+  induction later with
+  | refl => simp only [ConfiguredHistoryTraceIn.append, ReceiptCensus, and_true]
+  | step prior block ih =>
+      simp only [ConfiguredHistoryTraceIn.append, ReceiptCensus, ih, and_assoc]
+
+/-- Restrict a census on the full original history to the receipt interval
+strictly between two genuine transaction cuts. Bounds are needed only at the
+two boundary blocks, even when the original history continues beyond the census. -/
+theorem ConfiguredHistoryTraceIn.receiptLogs_between_txSplits_of_census
+    {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint origin completed pre post future : BlockChain}
+    (before : ConfiguredHistoryTraceIn F cfg checkpoint origin)
+    (first : ConfiguredBlockTraceIn F cfg origin completed) {i : Nat}
+    (_afterCut : first.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn F cfg completed pre)
+    (last : ConfiguredBlockTraceIn F cfg pre post) {j : Nat}
+    (_beforeCut : last.bodyTrace.transactions.TxSplit j)
+    (after : ConfiguredHistoryTraceIn F cfg post future)
+    {lo hi : Nat} (lower : lo ≤ first.block.header.number)
+    (upper : last.block.header.number ≤ hi) (property : Log → Prop)
+    (census : ((((before.step first).append later).step last).append after).ReceiptCensus
+      lo hi property) :
+    ∀ entry ∈ first.receiptLogsBetween (i + 1) first.bodyTrace.decodedTxs.length ++
+      later.receiptLogs ++ last.receiptLogsBetween 0 j, property entry := by
+  have throughLast :=
+    (ConfiguredHistoryTraceIn.receiptCensus_append _ after lo hi property).mp census |>.1
+  simp only [ReceiptCensus] at throughLast
+  have throughMiddle :=
+    (ConfiguredHistoryTraceIn.receiptCensus_append (before.step first) later lo hi property).mp
+      throughLast.1
+  have throughFirst := throughMiddle.1
+  simp only [ReceiptCensus] at throughFirst
+  obtain ⟨_, _, _, firstTip⟩ := first.tip_number_step
+  obtain ⟨parent, parentTip, number, _⟩ := last.tip_number_step
+  obtain ⟨tip, tipEq, firstLe⟩ := later.tip_number_floor
+    ⟨first.block, firstTip, Nat.le_refl _⟩
+  have same := Option.some.inj (tipEq.symm.trans parentTip)
+  rw [same] at firstLe
+  have firstUpper : first.block.header.number ≤ hi := by omega
+  have parentUpper : parent.header.number ≤ hi := by omega
+  have lastLower : lo ≤ last.block.header.number := by omega
+  have middleLogs := later.receiptLogs_of_census ⟨first.block, firstTip, lower⟩
+    parentTip parentUpper property throughMiddle.2
+  intro entry member
+  rcases List.mem_append.mp member with firstOrMiddle | lastMember
+  · rcases List.mem_append.mp firstOrMiddle with firstMember | middleMember
+    · exact throughFirst.2 lower firstUpper entry
+        (first.receiptLogsBetween_subset_full _ _ firstMember)
+    · exact middleLogs entry middleMember
+  · exact throughLast.2 lastLower upper entry
+      (last.receiptLogsBetween_subset_full _ _ lastMember)
+
+/-- The original census covers retained logs strictly between actual cuts
+before Cancun. Accepted mainnet chronology supplies disabled system stages;
+range correspondence is still the explicit external evidence boundary. -/
+theorem ConfiguredHistoryTraceIn.root_logs_between_txSplits_of_mainnet_census
+    {checkpoint origin completed pre post future : BlockChain}
+    (before : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint origin)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed) {i : Nat}
+    (afterCut : first.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post) {j : Nat}
+    (beforeCut : last.bodyTrace.transactions.TxSplit j)
+    (after : ConfiguredHistoryTraceIn HistFork mainnetChainConfig post future)
+    (early : last.block.header.timestamp < mainnetCancunTimestamp)
+    {lo hi : Nat} (lower : lo ≤ first.block.header.number)
+    (upper : last.block.header.number ≤ hi) (property : Log → Prop)
+    (census : ((((before.step first).append later).step last).append after).ReceiptCensus
+      lo hi property) :
+    ∀ R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+      last.rootsBeforeTxSplit beforeCut, ∀ entry ∈ R.post.logs, property entry := by
+  exact ConfiguredHistoryTraceIn.root_logs_between_txSplits_of_mainnet_receipts
+    first afterCut later last beforeCut early property
+    (ConfiguredHistoryTraceIn.receiptLogs_between_txSplits_of_census before first afterCut
+      later last beforeCut after lower upper property census)
 
 end Blanc.ExecutionTrace

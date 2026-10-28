@@ -7029,8 +7029,15 @@ starting lower bound. `ReceiptCensus` asserts a log predicate only on actual
 blocks within an inclusive number range. `receiptLogs_of_census` derives whole
 history coverage from actual endpoint bounds, without per-block bounds or a
 replacement replay. Census correspondence remains external evidence, not RPC
-completeness or consensus authentication. These arbitrary-predicate adapters
-have no narrower reliable proof-recipe trigger.
+completeness or consensus authentication. `receiptCensus_append` restricts that
+same census along the actual original append. `receiptLogs_between_txSplits_of_census`
+uses only the two boundary block-number bounds to cover receipts strictly after
+one original cut and strictly before another, even if the full history continues
+beyond the census. `root_logs_between_txSplits_of_mainnet_census` transports this
+to retained root logs before Cancun, deriving disabled system stages from accepted
+chronology. The selected boundary transactions are excluded. These adapters do
+not authenticate a provider scan or assume earlier target-address emptiness.
+These arbitrary-predicate adapters have no narrower reliable proof-recipe trigger.
 
 For large concrete Keccak computations, use `KeccakBlocks.sixRounds` and
 `KeccakBlocks.f1600_sixRounds` in
