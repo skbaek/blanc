@@ -9485,6 +9485,30 @@ contract-neutral.
   runtime-window identity, and original historical correspondence remain
   explicit. Select these compound inverses with their source/run witnesses;
   no separate automatic recipe trigger is reliable for that combination.
+  For the actual transaction and original receipt, continue with
+  [`ConstructorTransaction`](../Blanc/Lift/ConstructorTransaction.lean).
+  `TransactionTrace.creation_message_fields` projects the prepared constructor
+  and empty inherited deletion set for arbitrary value;
+  `creation_target_eq` derives the CREATE address from the admitted sender and
+  signed nonce through the actual debit, without a prestate nonce premise.
+  `createTrace_deletions_of_balSilent` transports a checked syntactic closure
+  through actual execution, touch and code charge. The legacy closure and
+  `legacyOwnerConstructor_deletions_of_createTrace` discharge that condition
+  from the same helper entries used for the constructor effects.
+  `legacyOwnerConstructor_effects_of_transactionTrace` then derives installed
+  code and owner storage through the actual refund, fee, deletion fold and
+  touched sweep. Its shared settlement step is
+  `TransactionTrace.getCode_getStor_of_message_nonempty`; the constructor
+  derives both its nonempty-code and deletion-exclusion premises.
+  `legacyOwnerConstructor_effects_of_txSplit_receipt` obtains clean execution
+  from the original indexed receipt and targets that exact cut's after-state;
+  `legacyOwnerConstructor_runtime_of_txSplit_receipt` specializes with a proved
+  runtime window and CREATE-address arithmetic. No zero-value, installed-code,
+  final-storage or independent deletion-exclusion premise is required.
+  Concrete certificate checking, runtime/transaction correspondence and receipt
+  lookup remain explicit. Select these APIs by their actual trace/cut and
+  certificate witnesses; their compound premises have no reliable goal-head
+  recipe trigger.
   The `solc-runtime-return` recipe matches only a named terminal-body exact
   run ending in a halted outcome; it never unfolds arbitrary certificate
   entries or concrete machine images to discover this pattern.

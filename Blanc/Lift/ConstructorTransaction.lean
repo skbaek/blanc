@@ -1,0 +1,262 @@
+import Blanc.Lift.Deploy
+import Blanc.Lift.BalSilent
+import Blanc.TransactionForwardH
+import Blanc.ExecutionTraceCreateResult
+import Blanc.ExecutionIndexedReceipts
+
+/-!
+# Checked constructors through their original transaction settlement
+
+Source-level deletion preservation and the actual retained CREATE result feed
+refund, fee, deletion and touched-account settlement. Constructor certificates,
+runtime windows and original transaction correspondence remain explicit.
+-/
+
+namespace Blanc.ExecutionTrace
+
+open Jaune
+
+/-- The actual admitted creation transaction supplies its prepared code,
+caller, target and empty inherited deletion set, for arbitrary call value. -/
+theorem TransactionTrace.creation_message_fields
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {code : ByteArray}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (receiver : tx.type.receiver? = none) (input : tx.data = code.toList) :
+    trace.msg.target = none ∧ trace.msg.code = code ∧
+      trace.msg.codeAddress = none ∧ trace.msg.caller = trace.sender ∧
+      trace.msg.currentTarget = computeContractAddress trace.sender
+        (trace.debitState.getNonce trace.sender - 1) ∧
+      trace.msg.inheritedDeletions = .emptyWithCapacity := by
+  have prepared := trace.prepared
+  simp only [prepareMessage, receiver] at prepared
+  rw [← Except.ok.inj prepared]
+  refine ⟨rfl, ?_, rfl, rfl, rfl, rfl⟩
+  change ({ data := { toList := tx.data } } : ByteArray) = code
+  rw [input]
+  apply ByteArray.ext
+  rw [← Array.toList_inj]
+  exact ByteArray.toList_eq_toList_data
+
+/-- Nonempty installed code and its storage survive the actual transaction's
+refund, fee, deletion fold and touched sweep when its final deletion set omits
+that account. Constructor consumers derive both premises from their source run. -/
+theorem TransactionTrace.getCode_getStor_of_message_nonempty
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {target : Adr}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (stateGas : benv.stat.rules.stateGas = none)
+    (notDeleted : target ∉ trace.messageOut.accountsToDelete)
+    (nonempty : (trace.messageState.getCode target).toList ≠ []) :
+    state.getCode target = trace.messageState.getCode target ∧
+      state.getStor target = trace.messageState.getStor target := by
+  obtain ⟨refund, _, finalState⟩ := trace.exists_selectedFinalStateForm stateGas
+  have finalCode := congrArg (fun s => s.getCode target) finalState
+  have finalStorage := congrArg (fun s => s.getStor target) finalState
+  rw [finalCode, finalStorage]
+  exact settled_getCode_getStor_of_code_nonempty
+    (fun a member equal => notDeleted (equal ▸ Std.HashSet.mem_toList.mp member)) nonempty
+
+/-- Original admission and debit recover the CREATE address from this
+transaction's admitted sender and signed nonce, without a prestate nonce premise. -/
+theorem TransactionTrace.creation_target_eq
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (receiver : tx.type.receiver? = none) :
+    trace.msg.currentTarget = computeContractAddress trace.sender tx.nonce := by
+  have prepared := trace.prepared
+  simp only [prepareMessage, receiver] at prepared
+  have target : trace.msg.currentTarget = computeContractAddress trace.sender
+      (trace.debitState.getNonce trace.sender - 1) :=
+    congrArg Msg.currentTarget (Except.ok.inj prepared).symm
+  have nonceEq : (benv.state.get trace.sender).nonce = tx.nonce :=
+    checkTransaction_sender_nonce trace.checked
+  have debitNonce : trace.debitState.getNonce trace.sender = tx.nonce + 1 := by
+    rw [(State.of_subBal trace.debit).2]
+    change (((benv.state.incrNonce trace.sender).setBal trace.sender _).get trace.sender).nonce = _
+    rw [State.setBal_get_nonce]
+    simp only [State.incrNonce, State.setAccount_get_self, Acct.clearIfEmpty_nonce, nonceEq]
+  rw [target, debitNonce, UInt64.add_sub_cancel]
+
+end Blanc.ExecutionTrace
+
+namespace Blanc.Lift
+
+open Jaune ExecutionTrace
+
+/-- A checked balance-silent constructor preserves its inherited deletions
+through the actual source run, touch, code charge and installation. -/
+theorem createTrace_deletions_of_balSilent
+    {code : ByteArray} {c : Cert} {entry : SFunc} {S : List Nat}
+    {msg : Msg} {installed : Devm}
+    (checked : Cert.check code c = true) (codeEq : msg.code = code)
+    (first : c.prog[0]? = some entry)
+    (closed : BalSilentSet c.prog S = true)
+    (silent : entry.balSilent = true) (refs : entry.refs.all (· ∈ S) = true)
+    (trace : ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false) (codeAddress : msg.codeAddress = none)
+    (stateGas : msg.benv.stat.rules.stateGas = none) :
+    installed.accountsToDelete = msg.inheritedDeletions := by
+  obtain ⟨benv, raw, charged, transfer, executed, rawClean, charge, source, installedEq⟩ :=
+    createTrace_source_witness checked codeEq first trace clean codeAddress stateGas
+  have frame := SFunc.RunP.balance_deletion_frame_of_balSilent (fun h => h)
+    closed silent refs source
+  have rawDeletion : raw.accountsToDelete = msg.inheritedDeletions :=
+    congrArg (fun p => p.2.1) frame
+  have chargedDeletion := congrArg Prod.fst (chargeCodeGas_delSets_ok charge)
+  rw [installedEq]
+  change charged.accountsToDelete = msg.inheritedDeletions
+  exact chargedDeletion.trans rawDeletion
+
+/-- The two helper entries reached by the legacy owner constructor form a
+closed balance-silent set. No runtime-byte or historical assumption is used. -/
+theorem legacyOwnerConstructor_balSilentSet
+    {fs : List SFunc} {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    (ownerEntry : fs[1]? = some SolcStorageReturn.legacyOwnerInit)
+    (returnEntry : fs[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound)) :
+    BalSilentSet fs [1, 2] = true := by
+  simp only [BalSilentSet, List.all_cons, List.all_nil, ownerEntry, returnEntry]
+  rfl
+
+/-- The actual legacy constructor reaches no deletion-producing instruction. -/
+theorem legacyOwnerConstructor_deletions_of_createTrace
+    {code : ByteArray} {c : Cert} {msg : Msg} {installed : Devm}
+    {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    (checked : Cert.check code c = true) (codeEq : msg.code = code)
+    (first : c.prog[0]? = some legacyOwnerConstructor)
+    (ownerEntry : c.prog[1]? = some SolcStorageReturn.legacyOwnerInit)
+    (returnEntry : c.prog[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (trace : ProcessCreateMessageTrace msg (.ok installed))
+    (clean : installed.error.isSome = false) (codeAddress : msg.codeAddress = none)
+    (stateGas : msg.benv.stat.rules.stateGas = none) :
+    installed.accountsToDelete = msg.inheritedDeletions := by
+  exact createTrace_deletions_of_balSilent checked codeEq first
+    (legacyOwnerConstructor_balSilentSet ownerEntry returnEntry) rfl rfl
+    trace clean codeAddress stateGas
+
+/-- The actual admitted legacy creation transaction installs the returned
+runtime window and owner storage through its complete settlement. Source
+execution proves deletion exclusion; successful entry value is arbitrary. -/
+theorem legacyOwnerConstructor_effects_of_transactionTrace
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {code : ByteArray} {c : Cert}
+    {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    {size offset : B256}
+    (checked : Cert.check code c = true)
+    (first : c.prog[0]? = some legacyOwnerConstructor)
+    (ownerEntry : c.prog[1]? = some SolcStorageReturn.legacyOwnerInit)
+    (returnEntry : c.prog[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (trace : TransactionTrace benv bout tx index state bout')
+    (stateGas : benv.stat.rules.stateGas = none)
+    (receiver : tx.type.receiver? = none) (input : tx.data = code.toList)
+    (clean : trace.messageOut.error = none) :
+    (state.getCode trace.msg.currentTarget).toList =
+        code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) ∧
+      state.getStor trace.msg.currentTarget =
+        solcOwnerConstructorStorage Stor.empty trace.sender := by
+  obtain ⟨target, codeEq, codeAddress, caller, _, inherited⟩ :=
+    trace.creation_message_fields receiver input
+  have msgStateGas : trace.msg.benv.stat.rules.stateGas = none := by
+    rw [prepareMessage_benv trace.prepared]
+    exact stateGas
+  obtain ⟨installed, ⟨retained⟩, _, _, innerClean, sameState, deletions⟩ :=
+    trace.message.exists_clean_create_with_deletions
+      (by rw [target]; rfl) msgStateGas clean
+  have noDelete : trace.msg.currentTarget ∉ trace.messageOut.accountsToDelete := by
+    rw [deletions, legacyOwnerConstructor_deletions_of_createTrace checked codeEq first
+      ownerEntry returnEntry retained (by rw [innerClean]; rfl) codeAddress msgStateGas,
+      inherited]
+    exact AdrSet.not_mem_empty
+  have effects := legacyOwnerConstructor_effects_of_createTrace checked codeEq first
+    ownerEntry returnEntry sizeWord offsetWord nonzero retained
+    (by rw [innerClean]; rfl) codeAddress msgStateGas
+  have messageCode : (trace.messageState.getCode trace.msg.currentTarget).toList =
+      code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) := by
+    rw [sameState]
+    exact effects.1
+  have messageStorage : trace.messageState.getStor trace.msg.currentTarget =
+      solcOwnerConstructorStorage Stor.empty trace.sender := by
+    rw [sameState, ← caller]
+    exact effects.2
+  have codeNonempty : (trace.messageState.getCode trace.msg.currentTarget).toList ≠ [] := by
+    intro empty
+    have length := congrArg List.length (messageCode.symm.trans empty)
+    rw [ByteArray.length_sliceD, List.length_nil] at length
+    exact nonzero length
+  have final := trace.getCode_getStor_of_message_nonempty stateGas noDelete codeNonempty
+  exact ⟨(congrArg ByteArray.toList final.1).trans messageCode, final.2.trans messageStorage⟩
+
+/-- The successful receipt in the original configured block supplies the
+clean transaction result. Installation is at this exact cut's after-state. -/
+theorem legacyOwnerConstructor_effects_of_txSplit_receipt
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    {code : ByteArray} {c : Cert} {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    {size offset : B256}
+    (checked : Cert.check code c = true)
+    (first : c.prog[0]? = some legacyOwnerConstructor)
+    (ownerEntry : c.prog[1]? = some SolcStorageReturn.legacyOwnerInit)
+    (returnEntry : c.prog[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (stateGas : block.fork.ruleSet.stateGas = none)
+    (receiver : cut.tx.type.receiver? = none) (input : cut.tx.data = code.toList)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true) :
+    (cut.afterBenv.state.getCode cut.head.msg.currentTarget).toList =
+        code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) ∧
+      cut.afterBenv.state.getStor cut.head.msg.currentTarget =
+        solcOwnerConstructorStorage Stor.empty cut.head.sender := by
+  have cutStateGas : cut.benv.stat.rules.stateGas = none := by
+    have stat : cut.benv.stat = (initBenv block.fork pre block.block.header).stat :=
+      block.txSplit_stat cut
+    rw [stat]
+    exact stateGas
+  exact legacyOwnerConstructor_effects_of_transactionTrace checked first ownerEntry returnEntry
+    sizeWord offsetWord nonzero cut.head cutStateGas receiver input
+    (block.txSplit_error_eq_none_of_receipt cut stateGas lookup succeeded)
+
+/-- A proved runtime window and CREATE-address arithmetic specialize the original-cut
+installation result. Neither installed code nor constructor storage is assumed. -/
+theorem legacyOwnerConstructor_runtime_of_txSplit_receipt
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    {code runtime : ByteArray} {c : Cert} {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    {size offset : B256} {address : Adr}
+    (checked : Cert.check code c = true)
+    (first : c.prog[0]? = some legacyOwnerConstructor)
+    (ownerEntry : c.prog[1]? = some SolcStorageReturn.legacyOwnerInit)
+    (returnEntry : c.prog[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (window : code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) = runtime.toList)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (stateGas : block.fork.ruleSet.stateGas = none)
+    (receiver : cut.tx.type.receiver? = none) (input : cut.tx.data = code.toList)
+    (addressEq : computeContractAddress cut.head.sender cut.tx.nonce = address)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true) :
+    cut.afterBenv.state.getCode address = runtime ∧
+      cut.afterBenv.state.getStor address =
+        solcOwnerConstructorStorage Stor.empty cut.head.sender := by
+  have effects := legacyOwnerConstructor_effects_of_txSplit_receipt checked first ownerEntry
+    returnEntry sizeWord offsetWord nonzero block cut stateGas receiver input lookup succeeded
+  have target := (cut.head.creation_target_eq receiver).trans addressEq
+  rw [target] at effects
+  refine ⟨?_, effects.2⟩
+  apply ByteArray.ext
+  rw [← Array.toList_inj]
+  simpa only [ByteArray.toList_eq_toList_data] using effects.1.trans window
+
+end Blanc.Lift
