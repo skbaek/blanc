@@ -2228,7 +2228,18 @@ retained last writers select an entry with local installation and transaction
 origin. Only those actual guarded writes need origins, and governance stays on
 the original full history. Proxy deletion exclusion and final proxy code are
 also derived. The concrete constructor/entry origin producer at historical
-upgrade positions and composition across transactions remain separate duties.
+upgrade positions remains a separate producer duty.
+`UsdcSelectedReady` records only the currently selected implementation and its
+conditional library. `TransactionTrace.usdc_root_ready` derives actual root
+entry readiness from transaction entry, independently of allowance caller
+proofs. `UsdcTransactionOrigins` and `UsdcTransactionsOrigins` index the actual
+guarded writes and ordered transaction constructors; they introduce no replay.
+`transactions_dynamic_runtimeReady_of_origins` propagates selected readiness,
+proxy nondeletion and all root entry facts through that transaction list.
+System-stage and full original-history composition remain subsequent duties.
+`impl_midHistory_txSplit_retained_origin` joins local runtime readiness and the
+transaction-entry origin using the same genuine earlier installation, original
+intervening history and actual target cut.
 `impl_block_preserves_retained` carries readiness through all original block
 stages; `impl_after_txSplit_preserves_retained` starts at the actual selected
 transaction's after-state, with no source-block-prestate installation premise.

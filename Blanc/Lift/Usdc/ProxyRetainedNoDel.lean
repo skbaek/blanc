@@ -600,10 +600,40 @@ theorem ConfiguredHistoryTraceIn.impl_transaction_preserves_retained
     Lib.cert_noSelfdestruct libFamily.not_delegation libFamily.ne_nil hsg
     (library implementation)).2
 
+/-- Proxy code, current implementation identity and the conditional V2.2 library
+at one actual state. Future implementations are not required to be installed. -/
+def UsdcSelectedReady (P : Adr) (W : List UsdcDeployedEntry) (state : State) : Prop :=
+  state.getCode P = Proxy.code ∧
+    ∃ e ∈ W, ((state.getStor P).get implSlot).toAdr = e.adr ∧
+      state.getCode e.adr = e.code ∧
+      (e.code = Impl.code → state.getCode usdcLib = Lib.code)
+
 section RuntimeOrigins
 
 variable {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
   {state : State} {bout' : BlockOutput}
+
+/-- Selected readiness at transaction entry supplies each actual root entry.
+This requires no allowance invariant or caller theorem. -/
+theorem TransactionTrace.usdc_root_ready
+    (trace : TransactionTrace benv bout tx index state bout')
+    {P : Adr} {W : List UsdcDeployedEntry} (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (ready : UsdcSelectedReady P W benv.state)
+    (R : Exec.Frame) (member : R ∈ trace.settledRoots) :
+    R.pre.getCode P = Proxy.code ∧
+      ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
+  have proxyFamily : UsdcContextCode Proxy.code := .inl rfl
+  have libraryFamily : UsdcContextCode Lib.code := .inr (.inr (.inr (.inr (.inr rfl))))
+  obtain ⟨e, he, address, runtime, library⟩ := ready.2
+  obtain ⟨rootProxy, rootSlot⟩ := trace.settledRoots_entry_code_cell
+    ready.1 proxyFamily.ne_nil proxyFamily.not_delegation implSlot R member
+  refine ⟨rootProxy, e, he, ?_, ?_, ?_⟩
+  · rw [rootSlot]; exact address
+  · exact (trace.settledRoots_entry_code_cell runtime (impls e he).context.ne_nil
+      (impls e he).context.not_delegation 0 R member).1
+  · intro implementation
+    exact (trace.settledRoots_entry_code_cell (library implementation) libraryFamily.ne_nil
+      libraryFamily.not_delegation 0 R member).1
 
 /-- Actual retained CREATE provenance for a USDC runtime within one transaction.
 The witness keeps the original child, complete settlement and resumed parent;
@@ -656,6 +686,19 @@ def UsdcDeployedEntry.TransactionOrigin (e : UsdcDeployedEntry)
     (trace : TransactionTrace benv bout tx index state bout') : Prop :=
   UsdcRuntimeOrigin trace e.adr e.code ∧
     (e.code = Impl.code → UsdcRuntimeOrigin trace usdcLib Lib.code)
+
+/-- Installation and origin evidence is needed only at actual guarded writes
+inside this transaction's retained roots. -/
+def UsdcTransactionOrigins (P : Adr) (W : List UsdcDeployedEntry)
+    (trace : TransactionTrace benv bout tx index state bout') : Prop :=
+  ∀ R ∈ trace.settledRoots, ∀ N ∈ Exec.retainedNodes R.run,
+    N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+    N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+    Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+    write.value.toAdr ∈ F2prime.upgradeTargets →
+    (N.devm.getCode write.value.toAdr).toList ≠ [] →
+    ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm ∧
+      e.TransactionOrigin trace
 
 /-- Initial selected readiness supplies both relevant entry origins. -/
 theorem UsdcDeployedEntry.transactionOrigin_of_entry (e : UsdcDeployedEntry)
@@ -746,20 +789,8 @@ theorem ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins
         state.getCode e.adr = e.code ∧
         (e.code = Impl.code → state.getCode usdcLib = Lib.code) := by
   have proxyFamily : UsdcContextCode Proxy.code := .inl rfl
-  have libraryFamily : UsdcContextCode Lib.code := .inr (.inr (.inr (.inr (.inr rfl))))
-  have ready (R : Exec.Frame) (member : R ∈ trace.settledRoots) :
-      R.pre.getCode P = Proxy.code ∧
-        ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
-    obtain ⟨e, he, address, runtime, library⟩ := slot
-    obtain ⟨rootProxy, rootSlot⟩ := trace.settledRoots_entry_code_cell
-      proxy proxyFamily.ne_nil proxyFamily.not_delegation implSlot R member
-    refine ⟨rootProxy, e, he, ?_, ?_, ?_⟩
-    · rw [rootSlot]; exact address
-    · exact (trace.settledRoots_entry_code_cell runtime (impls e he).context.ne_nil
-        (impls e he).context.not_delegation 0 R member).1
-    · intro implementation
-      exact (trace.settledRoots_entry_code_cell (library implementation) libraryFamily.ne_nil
-        libraryFamily.not_delegation 0 R member).1
+  have ready := TransactionTrace.usdc_root_ready trace impls
+    (show UsdcSelectedReady P W benv.state from ⟨proxy, slot⟩)
   have localInstall (R : Exec.Frame) (member : R ∈ trace.settledRoots)
       (N : Exec.Deriv) (retained : N ∈ Exec.retainedNodes R.run)
       (target : N.sevm.currentTarget = P) (code : N.sevm.code = Proxy.code)
@@ -809,6 +840,58 @@ theorem ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins
   exact ⟨notDeleted, transported.2, transported.1⟩
 
 end RuntimeOrigins
+
+/-- Pointwise origin evidence on the actual ordered transaction constructors.
+This is a producer obligation on those traces, not an alternative replay. -/
+def UsdcTransactionsOrigins (P : Adr) (W : List UsdcDeployedEntry) :
+    {txs : List (Nat × Tx)} → {benv : Benv} → {bout : BlockOutput} →
+    {finalBenv : Benv} → {finalBout : BlockOutput} →
+    ApplyTransactionsTrace txs benv bout finalBenv finalBout → Prop
+  | _, _, _, _, _, .nil .. => True
+  | _, _, _, _, _, .cons head tail =>
+      UsdcTransactionOrigins P W head ∧ UsdcTransactionsOrigins P W tail
+
+/-- Selected readiness propagates through the actual transaction list and
+supplies all of its root-entry facts independently of allowance caller proofs.
+Actual guarded origins still have to be produced for the original history. -/
+theorem ConfiguredHistoryTraceIn.transactions_dynamic_runtimeReady_of_origins
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (origins : UsdcTransactionsOrigins P W trace)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (initial : UsdcSelectedReady P W benv.state) :
+    trace.NoDelScheduled P ∧ UsdcSelectedReady P W finalBenv.state ∧
+      ∀ R ∈ trace.settledRoots, R.pre.getCode P = Proxy.code ∧
+        ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
+  induction trace with
+  | nil =>
+    refine ⟨trivial, initial, ?_⟩
+    intro R member
+    cases member
+  | cons head tail ih =>
+    have first := ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins
+      history capabilities bal impls lib governance head
+      (fun R member => rootsIn R (List.mem_append_left _ member)) hsg initial.1 initial.2
+      origins.1 (fun R member => apart R (List.mem_append_left _ member))
+    have rest := ih (fun R member => rootsIn R (List.mem_append_right _ member)) hsg
+      origins.2 (fun R member => apart R (List.mem_append_right _ member)) first.2
+    refine ⟨⟨first.1, rest.1⟩, rest.2.1, ?_⟩
+    intro R member
+    rcases List.mem_append.mp member with before | after
+    · exact TransactionTrace.usdc_root_ready head impls initial R before
+    · exact rest.2.2 R after
+
 
 /-- The installed implementation and its conditional V2.2 library persist
 through the actual ordered transaction list. This can start at the after-state
@@ -1015,5 +1098,30 @@ theorem ConfiguredHistoryTraceIn.impl_midHistory_txSplit_retained_ready
     libFamily.ne_nil libFamily.not_delegation 0 R root).1
   exact Exec.rawNodes_getCode R.run lib libFamily.ne_nil N
     ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained)
+
+/-- An earlier genuine installation cut supplies both local readiness and the
+entry-origin branch for an actual target transaction. The same original span
+and target cut are used for both; no final-state origin premise is introduced. -/
+theorem ConfiguredHistoryTraceIn.impl_midHistory_txSplit_retained_origin
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {e : UsdcDeployedEntry} (family : UsdcImplCode e.code)
+    {start : Benv} {pre post : BlockChain} (mid : MidHistoryTraceIn F cfg start pre)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (midRootsIn : ∀ R ∈ mid.settledRoots, R ∈ history.settledRoots)
+    (prefixRootsIn : ∀ R ∈ cut.before.settledRoots, R ∈ history.settledRoots)
+    (installed : start.state.getCode e.adr = e.code)
+    (library : e.code = Impl.code → start.state.getCode usdcLib = Lib.code)
+    {R : Exec.Frame} (root : R ∈ cut.head.settledRoots)
+    {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.run) :
+    e.RuntimeReady N.devm ∧ e.TransactionOrigin cut.head := by
+  have entry := ConfiguredHistoryTraceIn.impl_midHistory_before_txSplit_preserves_retained
+    history capabilities bal family mid block cut midRootsIn prefixRootsIn installed library
+  exact ⟨ConfiguredHistoryTraceIn.impl_midHistory_txSplit_retained_ready
+    history capabilities bal family mid block cut midRootsIn prefixRootsIn installed library root retained,
+    e.transactionOrigin_of_entry cut.head entry.1 entry.2⟩
 
 end Blanc.Lift.Usdc
