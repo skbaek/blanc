@@ -2195,6 +2195,15 @@ complete constructor settlement; the theorem assumes neither installation at
 root entry nor later terminal safety. Selected root, split and certificate
 witnesses are not recoverable from the conclusion alone, so this consumer has
 no automatic recipe trigger.
+`created_impl_runtime_survives_segment` discharges those prefix and boundary
+obligations from an actual retained CREATE/constructor/resume split and complete
+child settlement. CREATE freshness excludes earlier nonempty target contexts;
+checked constructor execution supplies its code and no-spawn boundary. The
+suffix classifier then feeds `created_runtime_survives_of_later_terminal_safe`,
+yielding final deletion exclusion and the installed runtime at the outer
+transaction endpoint. It retains the actual segment, constructor certificate,
+resume installation and conditional library witnesses; it does not identify
+an original historical creation from bytes or a receipt by itself.
 `impl_block_preserves_retained` carries readiness through all original block
 stages; `impl_after_txSplit_preserves_retained` starts at the actual selected
 transaction's after-state, with no source-block-prestate installation premise.

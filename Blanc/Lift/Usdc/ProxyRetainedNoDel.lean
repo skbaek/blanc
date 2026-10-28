@@ -1,3 +1,4 @@
+import Blanc.Lift.ConstructorTransaction
 import Blanc.ExecutionHistoryCommittedCuts
 import Blanc.ExecutionRetainedDeletionSafety
 import Blanc.ExecutionDeletionProvenance
@@ -391,6 +392,123 @@ theorem ConfiguredHistoryTraceIn.settledRoot_implContext_after_constructor
     exact not_selfdestruct_of_parentPrefix_noStateGas certChecked safe facts.1
       (by change frame.sevm.code = N.sevm.code; rw [← env]) facts.2.2.1 chain
 
+
+/-- An actual retained CREATE segment supplies the prefix and boundary facts
+for the post-constructor classifier. The installed USDC runtime then survives
+complete settlement of the same outer transaction. -/
+theorem ConfiguredHistoryTraceIn.created_impl_runtime_survives_segment
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (stateGas : benv.stat.rules.stateGas = none)
+    {R : Exec.Frame} (root : R ∈ trace.settledRoots)
+    (member : R ∈ history.settledRoots)
+    {before suffix : List Exec.Deriv} {spawnNode resumeNode : Exec.Deriv}
+    {frame : Frame} {resume : Resume} {pc' : Nat} {child : Evm} {raw : Execution}
+    (step : Evm.step ⟨spawnNode.pc, spawnNode.sevm, spawnNode.devm⟩ =
+      .spawn frame resume pc')
+    (enter : frame.enter = .run child) (create : frame.isCreate = true)
+    (childRun : Exec child.pc child.sta child.dyna raw)
+    (settles : frame.settlementCommits raw = true)
+    (nodeGas : spawnNode.sevm.benvStat.rules.stateGas = none)
+    (chronology : Exec.retainedNodes R.run =
+      before ++ spawnNode :: (Exec.retainedNodes childRun ++ resumeNode :: suffix))
+    {C K : ByteArray} {certificate : Cert} (family : UsdcImplCode C)
+    (checked : Cert.check K certificate = true) (constructorImage : child.sta.code = K)
+    (noExecs : ∀ f ∈ certificate.prog, f.execsSatisfy (fun _ => false) = true)
+    (noSelfdestruct : certificate.noSelfdestruct = true)
+    (installed : resumeNode.devm.getCode frame.inner.currentTarget = C)
+    (library : C = Impl.code → resumeNode.devm.getCode usdcLib = Lib.code) :
+    frame.inner.currentTarget ∉ trace.messageOut.accountsToDelete ∧
+      state.getCode frame.inner.currentTarget = C := by
+  have facts := history.rawFrame_entryFacts capabilities _
+    (history.mem_rawFrames_of_mem_settledRoots R member)
+  have rootGas : R.sevm.benvStat.rules.stateGas = none := facts.2.2.1
+  have childGas : child.sta.benvStat.rules.stateGas = none := by
+    rw [Evm.step_spawn_child_benvStat step enter]
+    exact nodeGas
+  have childCommits := Frame.raw_commits_of_settlementCommits settles
+  have childRootMember : Exec.Frame.rootDeriv (Exec.Frame.ofRun childRun childCommits) ∈
+      Exec.retainedNodes childRun := by
+    apply (Exec.committedFrameRoots_sublist_retainedNodes childRun).subset
+    apply List.mem_map.mpr
+    refine ⟨Exec.Frame.ofRun childRun childCommits, ?_, rfl⟩
+    simp only [Exec.committedFrames, childCommits, ↓reduceDIte]
+    exact List.mem_cons_self
+  have childNonempty : Exec.retainedNodes childRun ≠ [] := by
+    intro empty
+    rw [empty] at childRootMember
+    cases childRootMember
+  have constructorChain (n : Exec.Deriv) (inside : n ∈ Exec.retainedNodes childRun) :
+      Exec.Deriv.ParentPrefix ⟨child.pc, child.sta, child.dyna, raw, childRun⟩ n :=
+    rawNodes_parentPrefix_of_noExecs_noStateGas checked noExecs
+      (Frame.enter_run_pc enter) constructorImage childGas n
+      ((Exec.retainedNodes_sublist_rawNodes childRun).subset inside)
+  have spawnMember : spawnNode ∈ Exec.retainedNodes R.run := by
+    rw [chronology]
+    exact List.mem_append_right _ List.mem_cons_self
+  have spawnNonempty : spawnNode.sevm.code.size ≠ 0 := by
+    intro empty
+    obtain ⟨x, decoded, _, _⟩ := Evm.step_spawn_inv step
+    simp only [Xinst.At, ByteArray.getInst, empty, Nat.not_lt_zero, ↓reduceDIte] at decoded
+    cases decoded
+  have spawnDifferent : spawnNode.sevm.currentTarget ≠ frame.inner.currentTarget := by
+    intro same
+    apply Evm.step_spawn_create_unprotected_noStateGas nodeGas step create
+    rw [← same]
+    exact Exec.rawNodes_context_protected_noStateGas R.run rootGas
+      (trace.settledRoots_context_protected R root) spawnNode
+      ((Exec.retainedNodes_sublist_rawNodes R.run).subset spawnMember) spawnNonempty
+  have prefixCodes : ∀ n ∈ (before ++ [spawnNode]) ++ Exec.retainedNodes childRun,
+      n.sevm.currentTarget = frame.inner.currentTarget →
+        n.sevm.code.size = 0 ∨ n.sevm.code = K := by
+    intro n inside target
+    rcases List.mem_append.mp inside with earlier | constructor
+    · rcases List.mem_append.mp earlier with prior | self
+      · exact .inl (trace.settledRoot_before_create_context_empty root rootGas chronology
+          nodeGas step create n prior target)
+      · have equal := List.mem_singleton.mp self
+        subst n
+        exact (spawnDifferent target).elim
+    · exact .inr ((congrArg Sevm.code
+        (Exec.Deriv.ParentPrefix.sevm_eq (constructorChain n constructor))).trans constructorImage)
+  have nonempty : (before ++ [spawnNode]) ++ Exec.retainedNodes childRun ≠ [] := by
+    intro empty
+    have inside : spawnNode ∈ (before ++ [spawnNode]) ++ Exec.retainedNodes childRun :=
+      List.mem_append_left _ (List.mem_append_right _ List.mem_cons_self)
+    rw [empty] at inside
+    cases inside
+  have boundary : ∀ prior m,
+      (before ++ [spawnNode]) ++ Exec.retainedNodes childRun = prior ++ [m] →
+      ∀ n, ¬ Exec.Deriv.SpawnedAt m n := by
+    intro prior m last n spawned
+    have lastChild : (Exec.retainedNodes childRun).getLast? = some m := by
+      have final := congrArg List.getLast? last
+      simpa only [List.getLast?_append_of_ne_nil (before ++ [spawnNode]) childNonempty,
+        List.getLast?_append_of_ne_nil prior (List.cons_ne_nil m []),
+        List.getLast?_singleton] using final
+    have chain := constructorChain m (List.mem_of_getLast? lastChild)
+    obtain ⟨cursor, reached, ok⟩ := cursor_of_parentPrefix_noStateGas checked
+      (Frame.enter_run_pc enter) constructorImage childGas chain
+    obtain ⟨f, rsm, pc, evm, spawn, _⟩ := spawned
+    obtain ⟨x, decoded, _, _⟩ := Evm.step_spawn_inv spawn
+    have impossible := ok.execsSatisfy (Cursor.execsSatisfy_of_reachable noExecs reached) decoded
+    cases impossible
+  have split : Exec.retainedNodes R.run =
+      ((before ++ [spawnNode]) ++ Exec.retainedNodes childRun) ++ resumeNode :: suffix := by
+    rw [chronology]
+    simp only [List.append_assoc, List.cons_append, List.nil_append]
+  have laterSafe := (ConfiguredHistoryTraceIn.settledRoot_implContext_after_constructor history capabilities bal
+    member family checked noExecs noSelfdestruct split nonempty prefixCodes boundary
+    installed library).2
+  have survived := trace.created_runtime_survives_of_later_terminal_safe stateGas root
+    rootGas step enter create childRun nodeGas chronology checked constructorImage noExecs
+    noSelfdestruct laterSafe (List.mem_cons_self) (by rw [installed]; exact family.context.ne_nil)
+  exact ⟨survived.1, survived.2.trans installed⟩
 
 /-- Every installed implementation runtime survives complete transaction
 settlement, including V2.2 with its fixed library delegation. No created-account
