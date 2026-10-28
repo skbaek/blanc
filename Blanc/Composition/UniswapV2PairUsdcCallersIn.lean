@@ -1,3 +1,4 @@
+import Blanc.Composition.UniswapV2PairUsdcOwnersIn
 import Blanc.Lift.Usdc.RetainedAllowanceWrites
 import Blanc.Lift.Usdc.ProxyRetainedContextCodes
 import Blanc.Lift.Usdc.ProxyContextCodes
@@ -730,6 +731,79 @@ theorem mid_allowance_zero_from_pair_history_of_origins_of_mid_frames
     (show UsdcContextCode Proxy.code from .inl rfl).ne_nil
     (show UsdcContextCode Proxy.code from .inl rfl).not_delegation runtime.1
     (fun word => word = 0) rootZero (zero g tracked)).1
+
+/-- Retained runtime origins derive V2.2 owner exclusion as well as caller
+exclusion, so all tracked Pair allowances stay zero without a separate owner
+or per-frame library premise. Original full-history row/native/R4 scopes and
+concrete guarded-origin and local-installation obligations are retained. -/
+theorem mid_allowance_zero_from_pair_history_of_retained_origins
+    {cfg : ChainConfig} {checkpoint pre completed future : BlockChain} {i : Nat}
+    {pair P : Adr} {W : List UsdcDeployedEntry} {Tr : Adr → Prop}
+    {KP : UniswapV2Pair.WriterKey → Prop} {st : UniswapV2Pair.State}
+    (prior : ConfiguredHistoryTraceIn HistFork cfg checkpoint pre)
+    (block : ConfiguredBlockTraceIn HistFork cfg pre completed)
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork cfg completed future)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (governance : UsdcGovernanceF2primeOn P
+      ((MidHistoryTraceIn.tail block cut).append later).settledFrames)
+    (installations : ∀ R ∈ ((MidHistoryTraceIn.tail block cut).append later).settledRoots,
+      ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apartSlot : ∀ R ∈ ((MidHistoryTraceIn.tail block cut).append later).settledRoots,
+      KnownImplSlotApart P (Exec.retainedNodes R.run))
+    (apart : pair ≠ P)
+    (excluded : ∀ query ∈ ((MidHistoryTraceIn.tail block cut).append later).senderQueries,
+      query.recover ≠ .ok pair)
+    (notSystem : pair ≠ systemAddress)
+    (notPre : ∀ {f : Fork}, HistFork f → ¬ f.ruleSet.isPrecomp pair)
+    (installed : some (cut.afterBenv.state.getCode pair).toList = UniswapV2Pair.pairSem.image)
+    (initial : UniswapV2Pair.WriterRep KP (cut.afterBenv.state.getStor pair) st)
+    (fresh : UniswapV2Pair.WriterFreshKeys KP (UniswapV2Pair.pairMidTouchedKeysIn pair
+      ((MidHistoryTraceIn.tail block cut).append later)))
+    (proxyApart : ProxyRowsApart P pair Tr ((prior.step block).append later).rawNodes)
+    (rowSep : UsdcModernRowSep P pair Tr ((prior.step block).append later).rawFrames)
+    (v1Class : V1RawWriteClass P pair Tr ((prior.step block).append later).rawFrames)
+    (initApart : InitRowsApart P pair Tr ((prior.step block).append later).rawFrames)
+    (excludedNative : ∀ query : RetainedOldOwnerNativeQuery ((prior.step block).append later) P pair,
+      executeEcrecover query.actualEvm ≠ .ok gasEcrecover pair.toB256.toBytes)
+    (oldReady : ∀ (G : Exec.Frame), G ∈ ((prior.step block).append later).settledFrames →
+      G.sevm.currentTarget = P →
+      ((G.sevm.code = ImplV2.code ∧ Sevm.selector G.sevm ∈ selV2.owners) ∨
+        (G.sevm.code = ImplV2_1.code ∧ Sevm.selector G.sevm ∈ selV2_1.owners)) →
+      (Sevm.dataWord G.sevm 4).toAdr = pair →
+      G.sevm.benvStat.rules.delegatedCodeAddress (G.pre.getCode 1) = none)
+    (selected : UsdcSelectedReady P W cut.afterBenv.state)
+    (origins : UsdcMidHistoryOrigins P W ((MidHistoryTraceIn.tail block cut).append later))
+    (zero : ∀ g, Tr g → (cut.afterBenv.state.getStor P).get (allowSlot pair g) = 0) :
+    UsdcSelectedReady P W future.state ∧
+      ∀ g, Tr g → (future.state.getStor P).get (allowSlot pair g) = 0 := by
+  let full := (prior.step block).append later
+  let mid := (MidHistoryTraceIn.tail block cut).append later
+  have onRoots : UsdcRootGovernance P mid.settledRoots := by
+    intro R root G frameMem
+    apply governance G
+    rw [mid.settledFrames_eq]
+    exact List.mem_flatMap.mpr ⟨R, root, frameMem⟩
+  have rootsIn : ∀ R ∈ mid.settledRoots, R ∈ full.settledRoots := by
+    intro R member
+    exact MidHistoryTraceIn.settledRoots_subset_full prior block cut later member
+  have runtime := Usdc.ConfiguredHistoryTraceIn.mid_dynamic_runtimeReady_of_origins_of_scoped_governance
+    full BodyStageCapabilities.historical (fun hf => hf.bal_none) impls lib
+    mid rootsIn selected origins installations apartSlot onRoots
+  have noOwner := UniswapV2PairUsdcOwners.mid_retained_owner_excluded_from_installations_of_mid_roots
+    prior block cut later impls lib runtime.2.2 governance installations apartSlot installed notPre
+  exact mid_allowance_zero_from_pair_history_of_origins_of_mid_frames
+    prior block cut later impls lib governance installations apartSlot apart excluded
+    notSystem installed initial fresh proxyApart rowSep v1Class initApart excludedNative oldReady
+    noOwner selected origins zero
 
 /-- Compatibility with V2.2 owner exclusion on the full original history. -/
 theorem mid_allowance_zero_from_pair_history_of_origins_of_scoped_governance

@@ -10624,3 +10624,17 @@ Original raw-key, native-query, initializer and old-owner-routing populations
 remain full-history. This aligns the internal owner producer with Pair code
 installation at the cut; it does not assume pre-deployment owner exclusion or
 change an adopted environmental condition.
+
+
+`Blanc/Composition/UniswapV2PairUsdcOwnersIn.lean` also supplies
+`mid_retained_owner_excluded_from_installations_of_mid_roots`: actual root
+readiness, root-local guarded installations and mid governance derive the
+library code at the same retained V2.2 permit frame; the installed Pair code
+then rejects that permit. The old world-based owner API remains compatible.
+In `Blanc/Composition/UniswapV2PairUsdcCallersIn.lean`,
+`mid_allowance_zero_from_pair_history_of_retained_origins` combines that
+producer with runtime transport and the scoped allowance fold. It derives
+owner exclusion internally and asks for no per-frame library installation.
+The Pair must be outside the selected fork's precompiles. Concrete original
+origins/local installations and initial selected-zero evidence still need
+producers; original full raw-key, native-query and R4 populations are unchanged.
