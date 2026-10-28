@@ -510,6 +510,53 @@ theorem ConfiguredHistoryTraceIn.created_impl_runtime_survives_segment
     noSelfdestruct laterSafe (List.mem_cons_self) (by rw [installed]; exact family.context.ne_nil)
   exact ⟨survived.1, survived.2.trans installed⟩
 
+/-- A retained successful CREATE execution supplies its actual child/resume
+segment. Installation in that resumed state survives the outer transaction;
+no separate chronology or terminal-safety witness is required. -/
+theorem ConfiguredHistoryTraceIn.created_impl_runtime_survives_runOk
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (stateGas : benv.stat.rules.stateGas = none)
+    {R : Exec.Frame} (root : R ∈ trace.settledRoots)
+    (member : R ∈ history.settledRoots)
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Frame} {resume : Resume} {child : Evm} {raw out : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (enter : frame.enter = .run child) (create : frame.isCreate = true)
+    (childRun : Exec child.pc child.sta child.dyna raw)
+    (resumed : resume.run (frame.settle raw) = .ok post)
+    (next : Exec pc' sevm post out)
+    (retained : (⟨pc, sevm, pre, out, .runOk step enter childRun resumed next⟩ : Exec.Deriv)
+      ∈ Exec.retainedNodes R.run)
+    (settles : frame.settlementCommits raw = true)
+    (nodeGas : sevm.benvStat.rules.stateGas = none)
+    {C K : ByteArray} {certificate : Cert} (family : UsdcImplCode C)
+    (checked : Cert.check K certificate = true) (constructorImage : child.sta.code = K)
+    (noExecs : ∀ f ∈ certificate.prog, f.execsSatisfy (fun _ => false) = true)
+    (noSelfdestruct : certificate.noSelfdestruct = true)
+    (installed : post.getCode frame.inner.currentTarget = C)
+    (library : C = Impl.code → post.getCode usdcLib = Lib.code) :
+    frame.inner.currentTarget ∉ trace.messageOut.accountsToDelete ∧
+      state.getCode frame.inner.currentTarget = C := by
+  have committed := (Exec.retainedNodes_segment_of_mem R.run R.committed retained).1
+  obtain ⟨before, after, segment⟩ := Exec.retainedNodes_settled_spawn_segment
+    (root := Exec.Frame.rootDeriv R) R.committed step enter childRun resumed next retained settles
+  obtain ⟨tail, nextNodes⟩ := Exec.retainedNodes_eq_root_cons next committed
+  have chronology : Exec.retainedNodes R.run = before ++
+      (⟨pc, sevm, pre, out, .runOk step enter childRun resumed next⟩ : Exec.Deriv) ::
+        (Exec.retainedNodes childRun ++
+          (⟨pc', sevm, post, out, next⟩ : Exec.Deriv) :: (tail ++ after)) := by
+    change Exec.retainedNodes R.run = _ at segment
+    simpa only [nextNodes, List.cons_append] using segment
+  exact ConfiguredHistoryTraceIn.created_impl_runtime_survives_segment history capabilities bal
+    trace stateGas root member step enter create childRun settles nodeGas chronology
+    family checked constructorImage noExecs noSelfdestruct installed library
+
 /-- Every installed implementation runtime survives complete transaction
 settlement, including V2.2 with its fixed library delegation. No created-account
 exclusion or caller-supplied terminal classifier is needed. -/

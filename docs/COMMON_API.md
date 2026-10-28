@@ -1100,6 +1100,11 @@ message facts `MsgRootCode`, `MsgOwn`, `messageCallDelegation_own`,
 induction over `rawNodes` that bounds the codes run in a storage context;
 `List.forall_mem_of_positional` is that induction along list positions.
 No recipe is registered: use this branch and the named theorem.
+For the first retained node of a committing execution,
+`Exec.retainedNodes_eq_root_cons` in `ExecutionOccurrence.lean` exposes the
+actual root followed by an existential tail. It reuses the existing traversal
+spine without exposing its private tail representation. An explicit execution
+and commitment witness select this adapter; no automatic recipe is registered.
 For positional origin within one committing settlement-retained execution,
 [`Blanc/ExecutionRetainedNodeOrigin.lean`](../Blanc/ExecutionRetainedNodeOrigin.lean):
 `Exec.retainedNodes_split_origin` takes the exact retained split and gives the
@@ -2204,6 +2209,11 @@ yielding final deletion exclusion and the installed runtime at the outer
 transaction endpoint. It retains the actual segment, constructor certificate,
 resume installation and conditional library witnesses; it does not identify
 an original historical creation from bytes or a receipt by itself.
+`created_impl_runtime_survives_runOk` constructs that segment from the actual
+retained successful CREATE derivation, its completed child settlement and
+resumed parent. It needs no separately supplied retained-list equality;
+installation is stated at that actual resumed state. Original occurrence and
+constructor/runtime identification remain explicit.
 `impl_block_preserves_retained` carries readiness through all original block
 stages; `impl_after_txSplit_preserves_retained` starts at the actual selected
 transaction's after-state, with no source-block-prestate installation premise.

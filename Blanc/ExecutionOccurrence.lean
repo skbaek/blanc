@@ -113,6 +113,15 @@ private theorem Exec.retainedNodesOfCommits_eq_root_cons
   | runErr => simp only [Execution.commits, Bool.false_eq_true] at committed
   | runOk => simp only [Exec.retainedNodesOfCommits, retainedTailOfCommits]
 
+/-- A committed execution retains its actual root as the first node. The tail
+is existential so consumers need not depend on the private traversal spine. -/
+theorem Exec.retainedNodes_eq_root_cons
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
+    ∃ tail, Exec.retainedNodes run = ⟨pc, sevm, pre, out, run⟩ :: tail := by
+  exact ⟨_, (Exec.retainedNodes_eq_of_commits run committed).trans
+    (Exec.retainedNodesOfCommits_eq_root_cons run committed)⟩
+
 private theorem Exec.descendantFrameRoots_sublist_retainedNodesOfCommits
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (committed : Execution.commits out = true) :
