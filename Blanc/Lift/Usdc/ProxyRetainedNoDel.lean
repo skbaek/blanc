@@ -1321,6 +1321,167 @@ def UsdcGuardedInstallations (P : Adr) (W : List UsdcDeployedEntry)
     (N.devm.getCode write.value.toAdr).toList ≠ [] →
     ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm
 
+/-- Runtime availability at a genuine interval boundary. Only implementations
+already created there belong to this list; later versions need not exist. -/
+def UsdcEntriesReady (available : List UsdcDeployedEntry) (state : State) : Prop :=
+  ∀ e ∈ available, state.getCode e.adr = e.code ∧
+    (e.code = Impl.code → state.getCode usdcLib = Lib.code)
+
+/-- Every actual retained proxy upgrade in this interval selects an available
+entry. An original receipt census can establish this address-only restriction;
+it assumes no runtime installation, transaction origin or final-state fact. -/
+def UsdcUpgradeTargetsIn (P : Adr) (available : List UsdcDeployedEntry)
+    (roots : List Exec.Frame) : Prop :=
+  ∀ R ∈ roots, ∀ N ∈ Exec.retainedNodes R.run, ∀ write : Exec.StorageWrite,
+    Exec.Deriv.successfulSstore? N = some write → write.owner = P →
+    write.key = implSlot → N.sevm.code = Proxy.code →
+    ∃ e ∈ available, write.value.toAdr = e.adr
+
+/-- Previously created entries supply local runtime readiness and transaction
+origins at every actual upgrade in this transaction. The address restriction
+and the original entry-state installation have distinct producer obligations. -/
+theorem TransactionTrace.usdc_origins_of_available_targets
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    {P : Adr} {W available : List UsdcDeployedEntry}
+    (subset : ∀ e ∈ available, e ∈ W)
+    (impls : ∀ e ∈ available, UsdcImplCode e.code)
+    (ready : UsdcEntriesReady available benv.state)
+    (targets : UsdcUpgradeTargetsIn P available trace.settledRoots) :
+    UsdcTransactionOrigins P W trace ∧ UsdcGuardedInstallations P W trace.settledRoots := by
+  have origins : UsdcTransactionOrigins P W trace := by
+    intro R root N retained target code _ write found key _ _
+    obtain ⟨e, member, address⟩ := targets R root N retained write found
+      ((successfulSstore?_node_owner found).2.trans target) key code
+    have entry := ready e member
+    have family := (impls e member).context
+    have own := (trace.settledRoots_entry_code_cell entry.1 family.ne_nil
+      family.not_delegation 0 R root).1
+    have localReady : e.RuntimeReady N.devm := by
+      refine ⟨Exec.rawNodes_getCode R.run own family.ne_nil N
+        ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained), ?_⟩
+      intro implementation
+      have libFamily : UsdcContextCode Lib.code := .inr (.inr (.inr (.inr (.inr rfl))))
+      have libEntry := (trace.settledRoots_entry_code_cell (entry.2 implementation)
+        libFamily.ne_nil libFamily.not_delegation 0 R root).1
+      exact Exec.rawNodes_getCode R.run libEntry libFamily.ne_nil N
+        ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained)
+    exact ⟨e, subset e member, address, localReady,
+      e.transactionOrigin_of_entry trace entry.1 entry.2⟩
+  refine ⟨origins, ?_⟩
+  intro R root N retained target code codeAddress write found key allowed nonempty
+  obtain ⟨e, member, address, localReady, _⟩ :=
+    origins R root N retained target code codeAddress write found key allowed nonempty
+  exact ⟨e, member, address, localReady⟩
+
+/-- Carry available implementations through the original ordered transaction
+list and derive every origin and guarded installation from their actual entry
+states. This starts at a genuine cut and includes the whole supplied suffix. -/
+theorem ConfiguredHistoryTraceIn.transactions_origins_of_available_targets
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W available : List UsdcDeployedEntry}
+    (subset : ∀ e ∈ available, e ∈ W)
+    (impls : ∀ e ∈ available, UsdcImplCode e.code)
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (ready : UsdcEntriesReady available benv.state)
+    (targets : UsdcUpgradeTargetsIn P available trace.settledRoots) :
+    UsdcTransactionsOrigins P W trace ∧
+      UsdcGuardedInstallations P W trace.settledRoots ∧
+      UsdcEntriesReady available finalBenv.state := by
+  induction trace with
+  | nil =>
+    refine ⟨trivial, ?_, ready⟩
+    intro R member
+    cases member
+  | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail ih =>
+    have first := TransactionTrace.usdc_origins_of_available_targets head subset impls ready
+      (fun R member => targets R (List.mem_append_left _ member))
+    have after : UsdcEntriesReady available txState := by
+      intro e member
+      exact (ConfiguredHistoryTraceIn.impl_transaction_preserves_retained history capabilities bal
+        (impls e member) head (fun R root => rootsIn R (List.mem_append_left _ root))
+        hsg (ready e member).1 (ready e member).2).2
+    have rest := ih (fun R member => rootsIn R (List.mem_append_right _ member)) hsg after
+      (fun R member => targets R (List.mem_append_right _ member))
+    refine ⟨⟨first.1, rest.1⟩, ?_, rest.2.2⟩
+    intro R member
+    rcases List.mem_append.mp member with before | after
+    · exact first.2 R before
+    · exact rest.2.1 R after
+
+/-- The same original census supplies the available-entry restriction consumed
+by the runtime-origin producer. Both selected transactions remain outside this
+interval and require their own checked-constructor argument. -/
+theorem ConfiguredHistoryTraceIn.upgradeTargetsIn_between_txSplits_of_census
+    {checkpoint origin completed pre post future : BlockChain}
+    (before : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint origin)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed) {i : Nat}
+    (afterCut : first.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post) {j : Nat}
+    (beforeCut : last.bodyTrace.transactions.TxSplit j)
+    (after : ConfiguredHistoryTraceIn HistFork mainnetChainConfig post future)
+    (early : last.block.header.timestamp < mainnetCancunTimestamp)
+    {lo hi : Nat} (lower : lo ≤ first.block.header.number)
+    (upper : last.block.header.number ≤ hi) {P : Adr} (available : List UsdcDeployedEntry)
+    (census : ((((before.step first).append later).step last).append after).ReceiptCensus
+      lo hi (UpgradedTargetSatisfies P (fun target => ∃ e ∈ available, target = e.adr))) :
+    UsdcUpgradeTargetsIn P available
+      (((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+        last.rootsBeforeTxSplit beforeCut) := by
+  intro R member N retained write found owner key nodeCode
+  exact ConfiguredHistoryTraceIn.retained_implSstore_target_between_txSplits_of_census
+    before first afterCut later last beforeCut after early lower upper
+    (fun target => ∃ e ∈ available, target = e.adr) census
+    member retained found owner key nodeCode
+
+/-- Original receipt evidence and earlier-created runtime availability derive
+origins and local installations for the actual transaction list in the cut
+interval. No endpoint readiness or transaction-origin field is assumed. -/
+theorem ConfiguredHistoryTraceIn.transactions_origins_between_txSplits_of_census
+    {checkpoint origin completed pre post future : BlockChain}
+    (before : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint origin)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig origin completed) {i : Nat}
+    (afterCut : first.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed pre)
+    (last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post) {j : Nat}
+    (beforeCut : last.bodyTrace.transactions.TxSplit j)
+    (after : ConfiguredHistoryTraceIn HistFork mainnetChainConfig post future)
+    (early : last.block.header.timestamp < mainnetCancunTimestamp)
+    {lo hi : Nat} (lower : lo ≤ first.block.header.number)
+    (upper : last.block.header.number ≤ hi) {P : Adr} (available : List UsdcDeployedEntry)
+    (census : ((((before.step first).append later).step last).append after).ReceiptCensus
+      lo hi (UpgradedTargetSatisfies P (fun target => ∃ e ∈ available, target = e.adr)))
+    {W : List UsdcDeployedEntry}
+    (subset : ∀ e ∈ available, e ∈ W)
+    (impls : ∀ e ∈ available, UsdcImplCode e.code)
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (inInterval : ∀ R ∈ trace.settledRoots,
+      R ∈ ((MidHistoryTraceIn.tail first afterCut).append later).settledRoots ++
+        last.rootsBeforeTxSplit beforeCut)
+    (hsg : benv.stat.rules.stateGas = none)
+    (ready : UsdcEntriesReady available benv.state) :
+    UsdcTransactionsOrigins P W trace ∧
+      UsdcGuardedInstallations P W trace.settledRoots ∧
+      UsdcEntriesReady available finalBenv.state := by
+  have targets := ConfiguredHistoryTraceIn.upgradeTargetsIn_between_txSplits_of_census
+    before first afterCut later last beforeCut after early lower upper available census
+  exact ConfiguredHistoryTraceIn.transactions_origins_of_available_targets
+    ((((before.step first).append later).step last).append after)
+    BodyStageCapabilities.historical (fun hf => hf.bal_none) subset impls trace
+    (fun R member => ConfiguredHistoryTraceIn.mem_settledRoots_of_between_txSplits
+      before first afterCut later last beforeCut after (inInterval R member))
+    hsg ready (fun R member => targets R (inInterval R member))
+
+
 /-- Selected runtime facts at the entries of these actual settled roots. -/
 def UsdcRootsReady (P : Adr) (W : List UsdcDeployedEntry)
     (roots : List Exec.Frame) : Prop :=

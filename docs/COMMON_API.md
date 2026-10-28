@@ -10638,3 +10638,21 @@ owner exclusion internally and asks for no per-frame library installation.
 The Pair must be outside the selected fork's precompiles. Concrete original
 origins/local installations and initial selected-zero evidence still need
 producers; original full raw-key, native-query and R4 populations are unchanged.
+
+
+In `Blanc/Lift/Usdc/ProxyRetainedNoDel.lean`, `UsdcEntriesReady` records
+runtime availability at a genuine interval start, for only the entries already
+created there. `UsdcUpgradeTargetsIn` is an address-only restriction on actual
+retained proxy implementation writes. `TransactionTrace.usdc_origins_of_available_targets`
+derives local readiness and transaction-entry origins; the configured-history
+`transactions_origins_of_available_targets` carries those entries through the
+original transaction list, yielding all origins, guarded installations and
+final availability. Neither producer assumes final runtime or allowance facts.
+In the same runtime-producer module,
+`upgradeTargetsIn_between_txSplits_of_census` supplies that address restriction
+from original ranged receipt evidence, and
+`transactions_origins_between_txSplits_of_census` composes it with the actual
+transaction-list producer. Earlier-cut availability and actual root membership
+remain explicit; selected boundary transactions need separate constructor
+proofs. These are internal producers, not replacement fields in a final
+original-history assumption record. Census correspondence remains unadopted.
