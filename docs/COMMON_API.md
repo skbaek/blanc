@@ -2094,6 +2094,22 @@ transaction list. Both omit created-account exclusions and final deletion
 oracles. They may start after a successful creation cut in the same block;
 first creation and later use inside one outer transaction still need the
 separate constructor-to-runtime chronology argument.
+`impl_block_preserves_retained` carries readiness through all original block
+stages; `impl_after_txSplit_preserves_retained` starts at the actual selected
+transaction's after-state, with no source-block-prestate installation premise.
+`impl_midHistory_preserves_retained` follows that source-block remainder and
+later configured blocks. `impl_before_txSplit_preserves_retained` retains the
+target block's opening stages and actual transaction prefix;
+`impl_midHistory_before_txSplit_preserves_retained` composes the two carriers.
+Enabled system stages reuse the common committed cell transport with the
+constant true cell property, retaining its nonempty-code conclusion; no system
+terminal-safety assumption is added. Finally,
+`impl_midHistory_txSplit_retained_ready` supplies `UsdcDeployedEntry.RuntimeReady`
+at an actual retained target-transaction node, as consumed by the upgrade-write
+classifier. Installation at the original starting cut, conditional library
+installation and membership of the actual intervening roots in the configured
+history remain explicit. The constructor and original historical bindings
+supply those inputs; no finite input or observation is adopted by this transport.
 
 For whole transactions, including those with no retained interpreter root,
 use `TransactionTrace.not_deleted_of_retained_terminals`. Its terminal

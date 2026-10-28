@@ -1,3 +1,4 @@
+import Blanc.ExecutionHistoryCommittedCuts
 import Blanc.ExecutionRetainedDeletionSafety
 import Blanc.ExecutionDeletionProvenance
 import Blanc.Lift.Usdc.ProxyRetainedContextCodes
@@ -294,5 +295,184 @@ theorem ConfiguredHistoryTraceIn.impl_transactions_preserve_retained
     have rest := ih (fun R member => rootsIn R (List.mem_append_right _ member))
       hsg first.2.1 first.2.2
     exact ⟨⟨first.1, rest.1⟩, rest.2⟩
+
+/-- Implementation readiness crosses every actual stage of a configured
+block. Enabled system calls use the common code-transport result; actual
+transaction settlement uses the implementation-family safety proof. -/
+theorem ConfiguredHistoryTraceIn.impl_block_preserves_retained
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {I : Adr} {C : ByteArray} (family : UsdcImplCode C)
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post)
+    (rootsIn : ∀ R ∈ block.settledRoots, R ∈ history.settledRoots)
+    (installed : pre.state.getCode I = C)
+    (library : C = Impl.code → pre.state.getCode usdcLib = Lib.code) :
+    block.NoDelScheduled I ∧ post.state.getCode I = C ∧
+      (C = Impl.code → post.state.getCode usdcLib = Lib.code) := by
+  have hsg := capabilities.stateGas_none block.forkIn
+  have libFamily : UsdcContextCode Lib.code := .inr (.inr (.inr (.inr (.inr rfl))))
+  have opening {a : Adr} {code : ByteArray} (fam : UsdcContextCode code)
+      (present : pre.state.getCode a = code) : block.bodyTrace.historyState.getCode a = code := by
+    have beacon := (block.bodyTrace.beacon.cell_property_of_settledRoots 0 hsg
+      present fam.ne_nil fam.not_delegation (fun _ => True)
+      (by intro R member ready; trivial) trivial).2
+    exact (block.bodyTrace.history.cell_property_of_settledRoots 0 hsg beacon
+      fam.ne_nil fam.not_delegation (fun _ => True)
+      (by intro R member ready; trivial) trivial).2
+  have transactions := ConfiguredHistoryTraceIn.impl_transactions_preserve_retained
+    history capabilities bal family block.bodyTrace.transactions
+    (fun R member => rootsIn R (List.mem_append_left _ (List.mem_append_right _ member)))
+    hsg (opening family.context installed) (fun implementation => opening libFamily (library implementation))
+  have closing {a : Adr} {code : ByteArray} (fam : UsdcContextCode code)
+      (present : block.bodyTrace.transactionBenv.state.getCode a = code) :
+      post.state.getCode a = code := by
+    rw [block.postEq]
+    exact (block.bodyTrace.cell_property_after_transactions_of_settledRoots 0 hsg present
+      fam.ne_nil fam.not_delegation (fun _ => True)
+      (by intro R member ready; trivial) trivial).2
+  exact ⟨transactions.1, closing family.context transactions.2.1,
+    fun implementation => closing libFamily (transactions.2.2 implementation)⟩
+
+/-- Start at the actual after-state of a selected transaction, then retain its
+suffix transactions and the source block's withdrawals, requests and rewards.
+The implementation need not exist in the source block's prestate. -/
+theorem ConfiguredHistoryTraceIn.impl_after_txSplit_preserves_retained
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {I : Adr} {C : ByteArray} (family : UsdcImplCode C)
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (rootsIn : ∀ R ∈ cut.after.settledRoots, R ∈ history.settledRoots)
+    (installed : cut.afterBenv.state.getCode I = C)
+    (library : C = Impl.code → cut.afterBenv.state.getCode usdcLib = Lib.code) :
+    cut.after.NoDelScheduled I ∧ post.state.getCode I = C ∧
+      (C = Impl.code → post.state.getCode usdcLib = Lib.code) := by
+  have hsg := capabilities.stateGas_none block.forkIn
+  have cutSg : cut.afterBenv.stat.rules.stateGas = none := by
+    rw [block.txSplit_stat cut]
+    exact hsg
+  have transactions := ConfiguredHistoryTraceIn.impl_transactions_preserve_retained
+    history capabilities bal family cut.after rootsIn cutSg installed library
+  have closing {a : Adr} {code : ByteArray} (fam : UsdcContextCode code)
+      (present : block.bodyTrace.transactionBenv.state.getCode a = code) :
+      post.state.getCode a = code := by
+    rw [block.postEq]
+    exact (block.bodyTrace.cell_property_after_transactions_of_settledRoots 0 hsg present
+      fam.ne_nil fam.not_delegation (fun _ => True)
+      (by intro R member ready; trivial) trivial).2
+  exact ⟨transactions.1, closing family.context transactions.2.1,
+    fun implementation => closing (.inr (.inr (.inr (.inr (.inr rfl)))))
+      (transactions.2.2 implementation)⟩
+
+/-- Installation after an original creation cut persists through the actual
+mid-history spine, including the source-block remainder and every later block. -/
+theorem ConfiguredHistoryTraceIn.impl_midHistory_preserves_retained
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {I : Adr} {C : ByteArray} (family : UsdcImplCode C)
+    {start : Benv} {finish : BlockChain} (mid : MidHistoryTraceIn F cfg start finish)
+    (rootsIn : ∀ R ∈ mid.settledRoots, R ∈ history.settledRoots)
+    (installed : start.state.getCode I = C)
+    (library : C = Impl.code → start.state.getCode usdcLib = Lib.code) :
+    finish.state.getCode I = C ∧
+      (C = Impl.code → finish.state.getCode usdcLib = Lib.code) := by
+  induction mid with
+  | tail block cut =>
+    exact (ConfiguredHistoryTraceIn.impl_after_txSplit_preserves_retained
+      history capabilities bal family block cut
+      (fun R member => rootsIn R (List.mem_append_left _ member)) installed library).2
+  | step prior block ih =>
+    have ready := ih (fun R member => rootsIn R (List.mem_append_left _ member)) installed library
+    exact (ConfiguredHistoryTraceIn.impl_block_preserves_retained history capabilities bal
+      family block (fun R member => rootsIn R (List.mem_append_right _ member)) ready.1 ready.2).2
+
+/-- At a genuine target cut, retain the block's actual opening stages and its
+original transaction prefix. No transaction after that cut is used. -/
+theorem ConfiguredHistoryTraceIn.impl_before_txSplit_preserves_retained
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {I : Adr} {C : ByteArray} (family : UsdcImplCode C)
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (rootsIn : ∀ R ∈ cut.before.settledRoots, R ∈ history.settledRoots)
+    (installed : pre.state.getCode I = C)
+    (library : C = Impl.code → pre.state.getCode usdcLib = Lib.code) :
+    cut.before.NoDelScheduled I ∧ cut.benv.state.getCode I = C ∧
+      (C = Impl.code → cut.benv.state.getCode usdcLib = Lib.code) := by
+  have hsg := capabilities.stateGas_none block.forkIn
+  have opening {a : Adr} {code : ByteArray} (fam : UsdcContextCode code)
+      (present : pre.state.getCode a = code) : block.bodyTrace.historyState.getCode a = code := by
+    have beacon := (block.bodyTrace.beacon.cell_property_of_settledRoots 0 hsg
+      present fam.ne_nil fam.not_delegation (fun _ => True)
+      (by intro R member ready; trivial) trivial).2
+    exact (block.bodyTrace.history.cell_property_of_settledRoots 0 hsg beacon
+      fam.ne_nil fam.not_delegation (fun _ => True)
+      (by intro R member ready; trivial) trivial).2
+  exact ConfiguredHistoryTraceIn.impl_transactions_preserve_retained
+    history capabilities bal family cut.before rootsIn hsg (opening family.context installed)
+    (fun implementation => opening (.inr (.inr (.inr (.inr (.inr rfl))))) (library implementation))
+
+/-- Compose a source-cut mid history with a target block's original prefix.
+Both installation and historical membership refer to those exact carriers;
+the source block's prestate need not contain the implementation. -/
+theorem ConfiguredHistoryTraceIn.impl_midHistory_before_txSplit_preserves_retained
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {I : Adr} {C : ByteArray} (family : UsdcImplCode C)
+    {start : Benv} {pre post : BlockChain} (mid : MidHistoryTraceIn F cfg start pre)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (midRootsIn : ∀ R ∈ mid.settledRoots, R ∈ history.settledRoots)
+    (prefixRootsIn : ∀ R ∈ cut.before.settledRoots, R ∈ history.settledRoots)
+    (installed : start.state.getCode I = C)
+    (library : C = Impl.code → start.state.getCode usdcLib = Lib.code) :
+    cut.benv.state.getCode I = C ∧
+      (C = Impl.code → cut.benv.state.getCode usdcLib = Lib.code) := by
+  have ready := ConfiguredHistoryTraceIn.impl_midHistory_preserves_retained
+    history capabilities bal family mid midRootsIn installed library
+  exact (ConfiguredHistoryTraceIn.impl_before_txSplit_preserves_retained
+    history capabilities bal family block cut prefixRootsIn ready.1 ready.2).2
+
+/-- Runtime readiness at an actual retained target-transaction node follows
+from installation at an earlier genuine cut and the original intervening
+history. This is the form consumed at an actual proxy upgrade write. -/
+theorem ConfiguredHistoryTraceIn.impl_midHistory_txSplit_retained_ready
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {e : UsdcDeployedEntry} (family : UsdcImplCode e.code)
+    {start : Benv} {pre post : BlockChain} (mid : MidHistoryTraceIn F cfg start pre)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (midRootsIn : ∀ R ∈ mid.settledRoots, R ∈ history.settledRoots)
+    (prefixRootsIn : ∀ R ∈ cut.before.settledRoots, R ∈ history.settledRoots)
+    (installed : start.state.getCode e.adr = e.code)
+    (library : e.code = Impl.code → start.state.getCode usdcLib = Lib.code)
+    {R : Exec.Frame} (root : R ∈ cut.head.settledRoots)
+    {N : Exec.Deriv} (retained : N ∈ Exec.retainedNodes R.run) :
+    e.RuntimeReady N.devm := by
+  have ready := ConfiguredHistoryTraceIn.impl_midHistory_before_txSplit_preserves_retained
+    history capabilities bal family mid block cut midRootsIn prefixRootsIn installed library
+  have own := (cut.head.settledRoots_entry_code_cell ready.1 family.context.ne_nil
+    family.context.not_delegation 0 R root).1
+  refine ⟨Exec.rawNodes_getCode R.run own family.context.ne_nil N
+    ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained), ?_⟩
+  intro implementation
+  have libFamily : UsdcContextCode Lib.code := .inr (.inr (.inr (.inr (.inr rfl))))
+  have lib := (cut.head.settledRoots_entry_code_cell (ready.2 implementation)
+    libFamily.ne_nil libFamily.not_delegation 0 R root).1
+  exact Exec.rawNodes_getCode R.run lib libFamily.ne_nil N
+    ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained)
 
 end Blanc.Lift.Usdc
