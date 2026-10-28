@@ -2055,6 +2055,31 @@ actual later CREATE guard. Together they yield
 `Exec.retainedNodes_create_ne_of_earlier_selfdestruct_noStateGas`; obtain its
 root premise from the actual transaction producer documented above.
 
+For a checked constructor that cannot execute external instructions, use
+`rawNodes_parentPrefix_of_noExecs_noStateGas` in
+[`Blanc/Lift/CallRestriction.lean`](../Blanc/Lift/CallRestriction.lean). It keeps
+every raw node in the original frame, including executions that eventually
+fail; internal synthetic calls are allowed. With the certificate's checked
+no-SELFDESTRUCT restriction,
+`rawNodes_not_selfdestruct_of_noExecs_noStateGas` derives terminal safety for
+that entire constructor segment. Supply the original checked code, PC-zero
+entry, no-state-gas fact, and `execsSatisfy (fun _ => false)` for every
+certificate function; neither a byte search nor a silent endpoint is a substitute.
+
+`TransactionTrace.created_runtime_survives_of_later_terminal_safe` in
+[`Blanc/Lift/ConstructorTransaction.lean`](../Blanc/Lift/ConstructorTransaction.lean)
+combines those constructor facts with an actual retained-list decomposition
+around the CREATE spawn and the later runtime segment. Earlier terminal safety
+comes from CREATE freshness and original transaction context protection; the
+constructor's terminal safety comes from its checked certificate. Only the
+later runtime/delegation terminal classifier is supplied. A nonempty-code
+observation in that later segment then reaches final transaction state, and
+the address is absent from the final message deletion set. The actual creation
+segment/order and later classifier remain producer obligations; this is not
+an unconditional installed-runtime or historical-lifetime theorem. Because
+these witnesses determine the constructor/runtime boundary, a bare code-equality
+goal is insufficient for automatic recipe selection.
+
 For the final message or transaction state, use
 [`Blanc/ExecutionRetainedCodeSettlement.lean`](../Blanc/ExecutionRetainedCodeSettlement.lean).
 `MessageCallTrace.retainedNode_getCode_noStateGas` and

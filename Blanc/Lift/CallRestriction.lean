@@ -285,4 +285,59 @@ theorem call_or_staticcall_of_parentPrefix_noStateGas {code : ByteArray} {c : Ce
   exact ok.exec_call_or_staticcall (Cursor.callOnly_of_reach callOnly reachable) hat
 
 
+/-- If a checked certificate contains no external instruction, every raw node
+of its actual execution is a same-frame prefix of the original root. Internal
+synthetic calls remain allowed; no recursive EVM child can be entered. -/
+theorem rawNodes_parentPrefix_of_noExecs_noStateGas
+    {code : ByteArray} {c : Cert} {F : Exec.Deriv}
+    (checked : Cert.check code c = true)
+    (noExecs : ∀ f ∈ c.prog, f.execsSatisfy (fun _ => false) = true)
+    (pcZero : F.pc = 0) (codeEq : F.sevm.code = code)
+    (stateGas : F.sevm.benvStat.rules.stateGas = none) :
+    ∀ n ∈ Exec.rawNodes F.exc, Exec.Deriv.ParentPrefix F n := by
+  have noSpawn {n : Exec.Deriv} (chain : Exec.Deriv.ParentPrefix F n)
+      {frame : Frame} {resume : Resume} {pc' : Nat}
+      (step : Evm.step ⟨n.pc, n.sevm, n.devm⟩ = .spawn frame resume pc') : False := by
+    obtain ⟨cursor, reached, ok⟩ :=
+      cursor_of_parentPrefix_noStateGas checked pcZero codeEq stateGas chain
+    obtain ⟨x, decoded, _, _⟩ := Evm.step_spawn_inv step
+    have impossible := ok.execsSatisfy (Cursor.execsSatisfy_of_reachable noExecs reached) decoded
+    cases impossible
+  have descend {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+      (run : Exec pc sevm pre out)
+      (chain : Exec.Deriv.ParentPrefix F ⟨pc, sevm, pre, out, run⟩) :
+      ∀ n ∈ Exec.rawNodes run, Exec.Deriv.ParentPrefix F n := by
+    induction run with
+    | halt step =>
+      intro n member
+      simp only [Exec.rawNodes, List.mem_singleton] at member
+      subst n
+      exact chain
+    | cont step next ih =>
+      intro n member
+      simp only [Exec.rawNodes, List.mem_cons] at member
+      rcases member with rfl | member
+      · exact chain
+      · exact ih (chain.snoc (.cont step next)) n member
+    | doneErr step enter resumed => exact (noSpawn chain step).elim
+    | doneOk step enter resumed next ih => exact (noSpawn chain step).elim
+    | runErr step enter child resumed ih => exact (noSpawn chain step).elim
+    | runOk step enter child resumed next childIH nextIH => exact (noSpawn chain step).elim
+  exact descend F.exc (.refl F)
+
+/-- A checked constructor with no external instructions or SELFDESTRUCT
+terminals excludes SELFDESTRUCT at every actual raw node, for every outcome. -/
+theorem rawNodes_not_selfdestruct_of_noExecs_noStateGas
+    {code : ByteArray} {c : Cert} {F : Exec.Deriv}
+    (checked : Cert.check code c = true)
+    (noExecs : ∀ f ∈ c.prog, f.execsSatisfy (fun _ => false) = true)
+    (noSelfdestruct : c.noSelfdestruct = true)
+    (pcZero : F.pc = 0) (codeEq : F.sevm.code = code)
+    (stateGas : F.sevm.benvStat.rules.stateGas = none) :
+    ∀ n ∈ Exec.rawNodes F.exc, ¬ Linst.At n.sevm.code n.pc .selfdestruct := by
+  intro n member
+  exact not_selfdestruct_of_parentPrefix_noStateGas checked noSelfdestruct pcZero codeEq
+    stateGas (rawNodes_parentPrefix_of_noExecs_noStateGas
+      checked noExecs pcZero codeEq stateGas n member)
+
 end Blanc.Lift

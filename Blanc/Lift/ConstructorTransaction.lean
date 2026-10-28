@@ -1,3 +1,5 @@
+import Blanc.Lift.CallRestriction
+import Blanc.ExecutionDeletionProvenance
 import Blanc.Lift.Deploy
 import Blanc.Lift.BalSilent
 import Blanc.TransactionForwardH
@@ -421,3 +423,75 @@ theorem solcOwnerConstructor_runtime_of_txSplit_receipt
   simpa only [ByteArray.toList_eq_toList_data] using effects.1.trans window
 
 end Blanc.Lift
+
+namespace Blanc.ExecutionTrace
+
+open Jaune
+
+/-- A certified CREATE segment and later terminal safety carry a newly
+installed nonempty runtime through the same outer transaction. Earlier
+SELFDESTRUCT contexts are excluded by actual CREATE admission and chronology;
+the constructor certificate excludes its own terminals. Only the later
+runtime/delegation classifier remains a caller obligation. -/
+theorem TransactionTrace.created_runtime_survives_of_later_terminal_safe
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (stateGas : benv.stat.rules.stateGas = none)
+    {R : Exec.Frame} (root : R ∈ trace.settledRoots)
+    (rootGas : R.sevm.benvStat.rules.stateGas = none)
+    {before after : List Exec.Deriv} {spawnNode observed : Exec.Deriv}
+    {frame : Frame} {resume : Resume} {pc' : Nat} {child : Evm} {raw : Execution}
+    (step : Evm.step ⟨spawnNode.pc, spawnNode.sevm, spawnNode.devm⟩ =
+      .spawn frame resume pc')
+    (enter : frame.enter = .run child) (create : frame.isCreate = true)
+    (childRun : Exec child.pc child.sta child.dyna raw)
+    (nodeGas : spawnNode.sevm.benvStat.rules.stateGas = none)
+    (chronology : Exec.retainedNodes R.run =
+      before ++ spawnNode :: (Exec.retainedNodes childRun ++ after))
+    {constructorCode : ByteArray} {certificate : Lift.Cert}
+    (checked : Lift.Cert.check constructorCode certificate = true)
+    (constructorImage : child.sta.code = constructorCode)
+    (noExecs : ∀ f ∈ certificate.prog, f.execsSatisfy (fun _ => false) = true)
+    (noSelfdestruct : certificate.noSelfdestruct = true)
+    (laterSafe : ∀ n ∈ after, n.sevm.currentTarget = frame.inner.currentTarget →
+      ¬ Linst.At n.sevm.code n.pc .selfdestruct)
+    (observation : observed ∈ after)
+    (runtimeNonempty : (observed.devm.getCode frame.inner.currentTarget).toList ≠ []) :
+    frame.inner.currentTarget ∉ trace.messageOut.accountsToDelete ∧
+      state.getCode frame.inner.currentTarget = observed.devm.getCode frame.inner.currentTarget := by
+  have constructorSafe := Lift.rawNodes_not_selfdestruct_of_noExecs_noStateGas
+    (F := ⟨child.pc, child.sta, child.dyna, raw, childRun⟩)
+    checked noExecs noSelfdestruct (Frame.enter_run_pc enter) constructorImage
+    (by rw [Evm.step_spawn_child_benvStat step enter]; exact nodeGas)
+  have allSafe : ∀ n ∈ Exec.retainedNodes R.run,
+      n.sevm.currentTarget = frame.inner.currentTarget →
+      ¬ Linst.At n.sevm.code n.pc .selfdestruct := by
+    intro n member target destruct
+    rw [chronology] at member
+    rcases List.mem_append.mp member with earlier | rest
+    · obtain ⟨first, middle, same⟩ := List.append_of_mem earlier
+      have ordered : Exec.retainedNodes R.run =
+          first ++ n :: (middle ++ spawnNode :: (Exec.retainedNodes childRun ++ after)) := by
+        rw [chronology, same]
+        simp only [List.append_assoc, List.cons_append]
+      exact (trace.settledRoot_create_ne_of_earlier_selfdestruct root rootGas
+        ordered destruct nodeGas step create) target.symm
+    · rcases List.mem_cons.mp rest with equal | inTail
+      · subst n
+        obtain ⟨x, decoded, _, _⟩ := Evm.step_spawn_inv step
+        unfold Xinst.At at decoded
+        unfold Linst.At at destruct
+        rw [decoded] at destruct
+        cases destruct
+      · rcases List.mem_append.mp inTail with inConstructor | later
+        · exact constructorSafe n
+            ((Exec.retainedNodes_sublist_rawNodes childRun).subset inConstructor) destruct
+        · exact laterSafe n later target destruct
+  have retained : observed ∈ Exec.retainedNodes R.run := by
+    rw [chronology]
+    exact List.mem_append_right _ (List.mem_cons_of_mem _ (List.mem_append_right _ observation))
+  exact ⟨trace.not_deleted_of_retained_terminal_safe stateGas root allSafe,
+    trace.retainedNode_getCode_of_terminal_safe stateGas root retained runtimeNonempty allSafe⟩
+
+end Blanc.ExecutionTrace
