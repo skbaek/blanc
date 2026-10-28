@@ -49,6 +49,26 @@ theorem UpgradeStoreConf.below {x : B256} {T : Conf} (h : UpgradeStoreConf x T)
   exact ⟨a, b, r, y, rest, K ++ L, stack, tree,
     by simp only [Conf.below, cont, List.cons_append]⟩
 
+/-- Exact stack value and unchanged memory at the implementation write.
+The continuation logs the same `x` that this instruction stores. -/
+def UpgradeStoreDataConf (x : B256) (M : Mem) (T : Conf) : Prop :=
+  ∃ a b r rest K,
+    T.d.stack = implSlot :: x :: a :: b :: r :: x :: rest ∧
+    T.f = .next (.reg .sstore) (.next (.reg .pop) (.next (.reg .pop) .ret)) ∧
+    T.K = t_06e2_c9 :: K ∧ T.d.memory = M
+
+theorem UpgradeStoreDataConf.forget {x : B256} {M : Mem} {T : Conf}
+    (h : UpgradeStoreDataConf x M T) : UpgradeStoreConf x T := by
+  obtain ⟨a, b, r, rest, K, stack, tree, cont, _⟩ := h
+  exact ⟨a, b, r, x, rest, K, stack, tree, cont⟩
+
+theorem UpgradeStoreDataConf.below {x : B256} {M : Mem} {T : Conf}
+    (h : UpgradeStoreDataConf x M T) (L : List SFunc) :
+    UpgradeStoreDataConf x M (T.below L) := by
+  obtain ⟨a, b, r, rest, K, stack, tree, cont, memory⟩ := h
+  exact ⟨a, b, r, rest, K ++ L, stack, tree,
+    by simp only [Conf.below, cont, List.cons_append], memory⟩
+
 /-- What a proxy frame's `SSTORE` writes, read at the target configuration: the admin slot, or
 the implementation slot with `upgradeArg` below it, under an upgrade selector, for a caller
 equal to the admin word of the frame's entry state `b`. -/
@@ -112,11 +132,11 @@ theorem isContract_retH (bal : sevm.benvStat.rules.bal = none) {x r : B256} {D :
   exact ⟨_, G', post⟩
 
 /-- `_setImplementation(x)` (entry 25) writes only the implementation slot, with `x`. -/
-theorem setImpl_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {x r : B256}
+theorem setImpl_reachS_with_data (bal : sevm.benvStat.rules.bal = none) {x r : B256}
     (run : Reach P prog sevm ⟨St b (x :: r :: S) M G, t_0779_c25, []⟩ T) (hT : AtSstore T) :
     T.d.stack = implSlot :: x :: implSlot :: x :: r :: S ∧
       T.f = .next (.reg .sstore) (.next (.reg .pop) (.next (.reg .pop) .ret)) ∧
-      T.K = [] ∧ (T.d.getCode x.toAdr).toList ≠ [] := by
+      T.K = [] ∧ T.d.memory = M ∧ (T.d.getCode x.toAdr).toList ≠ [] := by
   unfold t_0779_c25 at run
   obtain ⟨_, run⟩ := rs_dest run hT
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -144,7 +164,7 @@ theorem setImpl_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {x r : B
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
   rcases Reach.sstoreS run with rfl | ⟨_, -, run⟩
-  · refine ⟨rfl, rfl, rfl, ?_⟩
+  · refine ⟨rfl, rfl, rfl, rfl, ?_⟩
     change ((accountAccessH sevm b x.toAdr).state.getCode x.toAdr).toList ≠ []
     rw [accountAccessH_state]
     intro empty
@@ -157,6 +177,15 @@ theorem setImpl_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {x r : B
     decide
   · exact (Reach.false_of_sstoreFree empty_sstoreFree run hT (by decide)
       (fun _ h => by cases h)).elim
+
+/-- Compatibility projection retaining the code-existence API. -/
+theorem setImpl_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {x r : B256}
+    (run : Reach P prog sevm ⟨St b (x :: r :: S) M G, t_0779_c25, []⟩ T) (hT : AtSstore T) :
+    T.d.stack = implSlot :: x :: implSlot :: x :: r :: S ∧
+      T.f = .next (.reg .sstore) (.next (.reg .pop) (.next (.reg .pop) .ret)) ∧
+      T.K = [] ∧ (T.d.getCode x.toAdr).toList ≠ [] := by
+  obtain ⟨stack, tree, cont, _, nonempty⟩ := setImpl_reachS_with_data hP bal run hT
+  exact ⟨stack, tree, cont, nonempty⟩
 
 /-- Compatibility projection of the checked implementation-store geometry. -/
 theorem setImpl_reachS (bal : sevm.benvStat.rules.bal = none) {x r : B256}
@@ -261,9 +290,9 @@ theorem sel36_reachS {d : Devm}
   · freeS
 
 /-- `_upgradeTo(x)` (entry 9) writes only through `_setImplementation(x)`. -/
-theorem upgrade_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {x : B256}
+theorem upgrade_reachS_with_data (bal : sevm.benvStat.rules.bal = none) {x : B256}
     (run : Reach P prog sevm ⟨St b (x :: S) M G, t_06d9_c9, []⟩ T) (hT : AtSstore T) :
-    ∃ rest, T.d.stack = implSlot :: x :: rest ∧ UpgradeStoreConf x T ∧
+    ∃ rest, T.d.stack = implSlot :: x :: rest ∧ UpgradeStoreDataConf x M T ∧
       (T.d.getCode x.toAdr).toList ≠ [] := by
   unfold t_06d9_c9 at run
   obtain ⟨_, run⟩ := rs_dest run hT
@@ -273,10 +302,18 @@ theorem upgrade_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {x : B25
   obtain ⟨_, T', inner, rfl⟩ := rs_callInto empty_sstoreFree (k := 25) rfl (by decide)
     (fun _ h => by cases h) run hT
   dsimp only at inner
-  obtain ⟨hs, tree, cont, nonempty⟩ := setImpl_reachS_with_code hP bal inner (AtSstore.below.mp hT)
+  obtain ⟨hs, tree, cont, memory, nonempty⟩ := setImpl_reachS_with_data hP bal inner (AtSstore.below.mp hT)
   refine ⟨_, hs, ?_, nonempty⟩
-  refine ⟨implSlot, x, _, x, S, [], hs, tree, ?_⟩
+  refine ⟨implSlot, x, _, S, [], hs, tree, ?_, memory⟩
   simp only [Conf.below, cont, List.nil_append]
+
+/-- Compatibility projection retaining the code-existence API. -/
+theorem upgrade_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {x : B256}
+    (run : Reach P prog sevm ⟨St b (x :: S) M G, t_06d9_c9, []⟩ T) (hT : AtSstore T) :
+    ∃ rest, T.d.stack = implSlot :: x :: rest ∧ UpgradeStoreConf x T ∧
+      (T.d.getCode x.toAdr).toList ≠ [] := by
+  obtain ⟨rest, stack, geometry, nonempty⟩ := upgrade_reachS_with_data hP bal run hT
+  exact ⟨rest, stack, geometry.forget, nonempty⟩
 
 /-- Compatibility projection of the stronger code-existence result. -/
 theorem upgrade_reachS (bal : sevm.benvStat.rules.bal = none) {x : B256}
@@ -287,11 +324,11 @@ theorem upgrade_reachS (bal : sevm.benvStat.rules.bal = none) {x : B256}
 
 /-- `upgradeTo` (entry 33, wrapper of entry 1): it writes only on its admin side, through
 `_upgradeTo` of its decoded argument. -/
-theorem sel33_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
+theorem sel33_reachS_with_data (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
     (run : Reach P prog sevm ⟨St b (x :: S) M G, t_0077_c33, []⟩ T) (hT : AtSstore T) :
     ∃ rest, T.d.stack = implSlot :: upgradeArg sevm :: rest ∧
       sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
-      UpgradeStoreConf (upgradeArg sevm) T ∧
+      UpgradeStoreDataConf (upgradeArg sevm) M T ∧
       (T.d.getCode (upgradeArg sevm).toAdr).toList ≠ [] := by
   unfold t_0077_c33 at run
   obtain ⟨_, run⟩ := rs_dest run hT
@@ -364,7 +401,7 @@ theorem sel33_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm}
     obtain ⟨_, T'', inner9, rfl⟩ := rs_callInto free_sstoreFree (k := 9) rfl (by decide)
       (fun _ h => by cases h) run hT
     dsimp only at inner9
-    obtain ⟨rest, hs, geometry, nonempty⟩ := upgrade_reachS_with_code hP bal inner9 (AtSstore.below.mp hT)
+    obtain ⟨rest, hs, geometry, nonempty⟩ := upgrade_reachS_with_data hP bal inner9 (AtSstore.below.mp hT)
     exact ⟨rest, hs, hadm, (geometry.below _).below _, nonempty⟩
   · unfold t_025c_c1 at run
     obtain ⟨_, run⟩ := rs_dest run hT
@@ -373,6 +410,16 @@ theorem sel33_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm}
     obtain ⟨g, _, hg, run⟩ := rs_jump run hT
     exact (Reach.false_of_sstoreFree free_sstoreFree run hT
       (SstoreFreeSet.lookup free_sstoreFree (by decide) hg) (fun _ h => by cases h)).elim
+
+/-- Compatibility projection retaining the code-existence API. -/
+theorem sel33_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
+    (run : Reach P prog sevm ⟨St b (x :: S) M G, t_0077_c33, []⟩ T) (hT : AtSstore T) :
+    ∃ rest, T.d.stack = implSlot :: upgradeArg sevm :: rest ∧
+      sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+      UpgradeStoreConf (upgradeArg sevm) T ∧
+      (T.d.getCode (upgradeArg sevm).toAdr).toList ≠ [] := by
+  obtain ⟨rest, stack, caller, geometry, nonempty⟩ := sel33_reachS_with_data hP bal run hT
+  exact ⟨rest, stack, caller, geometry.forget, nonempty⟩
 
 /-- Compatibility projection of the stronger code-existence result. -/
 theorem sel33_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
@@ -385,11 +432,11 @@ theorem sel33_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256
 
 /-- `upgradeToAndCall` (entry 34, wrapper of entry 2): it writes only on its admin side,
 through `_upgradeTo` of its decoded address argument, before its self-call. -/
-theorem sel34_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
+theorem sel34_reachS_with_data (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
     (run : Reach P prog sevm ⟨St b (x :: S) M G, t_00ba_c34, []⟩ T) (hT : AtSstore T) :
     ∃ rest, T.d.stack = implSlot :: upgradeArg sevm :: rest ∧
       sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
-      UpgradeStoreConf (upgradeArg sevm) T ∧
+      UpgradeStoreDataConf (upgradeArg sevm) M T ∧
       (T.d.getCode (upgradeArg sevm).toAdr).toList ≠ [] := by
   unfold t_00ba_c34 at run
   obtain ⟨_, run⟩ := rs_dest run hT
@@ -471,7 +518,7 @@ theorem sel34_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm}
     obtain ⟨_, T'', inner9, rfl⟩ := rs_callInto free_sstoreFree (k := 9) rfl (by decide)
       (fun _ h => by cases h) run hT
     dsimp only at inner9
-    obtain ⟨rest, hs, geometry, nonempty⟩ := upgrade_reachS_with_code hP bal inner9 (AtSstore.below.mp hT)
+    obtain ⟨rest, hs, geometry, nonempty⟩ := upgrade_reachS_with_data hP bal inner9 (AtSstore.below.mp hT)
     exact ⟨rest, hs, hadm, (geometry.below _).below _, nonempty⟩
   · unfold t_02fa_c2 at run
     obtain ⟨_, run⟩ := rs_dest run hT
@@ -481,6 +528,16 @@ theorem sel34_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm}
     exact (Reach.false_of_sstoreFree free_sstoreFree run hT
       (SstoreFreeSet.lookup free_sstoreFree (by decide) hg) (fun _ h => by cases h)).elim
 
+
+/-- Compatibility projection retaining the code-existence API. -/
+theorem sel34_reachS_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
+    (run : Reach P prog sevm ⟨St b (x :: S) M G, t_00ba_c34, []⟩ T) (hT : AtSstore T) :
+    ∃ rest, T.d.stack = implSlot :: upgradeArg sevm :: rest ∧
+      sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+      UpgradeStoreConf (upgradeArg sevm) T ∧
+      (T.d.getCode (upgradeArg sevm).toAdr).toList ≠ [] := by
+  obtain ⟨rest, stack, caller, geometry, nonempty⟩ := sel34_reachS_with_data hP bal run hT
+  exact ⟨rest, stack, caller, geometry.forget, nonempty⟩
 
 /-- Compatibility projection of the stronger code-existence result. -/
 theorem sel34_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
@@ -492,11 +549,12 @@ theorem sel34_reachS (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256
   exact ⟨rest, stack, caller, geometry⟩
 
 /-- **Every `SSTORE` a proxy frame reaches.** -/
-theorem proxy_sstoreH_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm}
+theorem proxy_sstoreH_with_data (bal : sevm.benvStat.rules.bal = none) {b : Devm}
     (run : Reach P prog sevm ⟨St b S M G, t_0000_c0, []⟩ T) (hT : AtSstore T) :
     ProxySstoreConf sevm b T ∧
       (∀ rest, T.d.stack = implSlot :: rest →
-        (T.d.getCode (upgradeArg sevm).toAdr).toList ≠ []) := by
+        (T.d.getCode (upgradeArg sevm).toAdr).toList ≠ [] ∧
+        UpgradeStoreDataConf (upgradeArg sevm) (M.write 64 (128 : B256).toBytes) T) := by
   unfold t_0000_c0 at run
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -522,9 +580,9 @@ theorem proxy_sstoreH_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm
     rcases rs_branchTo run hT with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_0077_c33 := Option.some.inj (hg.symm.trans rfl)
-      obtain ⟨rest, hs, hadm, geometry, nonempty⟩ := sel33_reachS_with_code hP bal run hT
-      exact ⟨.inr ⟨rest, hs, .inl (eqCheck_ne_zero h).symm, hadm, geometry⟩,
-        fun _ _ => nonempty⟩
+      obtain ⟨rest, hs, hadm, geometry, nonempty⟩ := sel33_reachS_with_data hP bal run hT
+      exact ⟨.inr ⟨rest, hs, .inl (eqCheck_ne_zero h).symm, hadm, geometry.forget⟩,
+        fun _ _ => ⟨nonempty, geometry⟩⟩
     unfold t_0041_c0 at run
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -533,9 +591,9 @@ theorem proxy_sstoreH_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm
     rcases rs_branchTo run hT with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_00ba_c34 := Option.some.inj (hg.symm.trans rfl)
-      obtain ⟨rest, hs, hadm, geometry, nonempty⟩ := sel34_reachS_with_code hP bal run hT
-      exact ⟨.inr ⟨rest, hs, .inr (eqCheck_ne_zero h).symm, hadm, geometry⟩,
-        fun _ _ => nonempty⟩
+      obtain ⟨rest, hs, hadm, geometry, nonempty⟩ := sel34_reachS_with_data hP bal run hT
+      exact ⟨.inr ⟨rest, hs, .inr (eqCheck_ne_zero h).symm, hadm, geometry.forget⟩,
+        fun _ _ => ⟨nonempty, geometry⟩⟩
     unfold t_004c_c0 at run
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -584,6 +642,15 @@ theorem proxy_sstoreH_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm
       (SstoreFreeSet.lookup free_sstoreFree (by decide) hg) (fun _ h => by cases h)).elim
 
 
+/-- Compatibility projection retaining the code-existence API. -/
+theorem proxy_sstoreH_with_code (bal : sevm.benvStat.rules.bal = none) {b : Devm}
+    (run : Reach P prog sevm ⟨St b S M G, t_0000_c0, []⟩ T) (hT : AtSstore T) :
+    ProxySstoreConf sevm b T ∧
+      (∀ rest, T.d.stack = implSlot :: rest →
+        (T.d.getCode (upgradeArg sevm).toAdr).toList ≠ []) := by
+  obtain ⟨classified, exactData⟩ := proxy_sstoreH_with_data hP bal run hT
+  exact ⟨classified, fun rest stack => (exactData rest stack).1⟩
+
 /-- Compatibility projection of the stronger code-existence result. -/
 theorem proxy_sstoreH (bal : sevm.benvStat.rules.bal = none) {b : Devm}
     (run : Reach P prog sevm ⟨St b S M G, t_0000_c0, []⟩ T) (hT : AtSstore T) :
@@ -594,6 +661,26 @@ end Walk
 
 /-- The classified actual cursor at a historical proxy `SSTORE`, retaining
 its checked internal continuation for successful suffix reasoning. -/
+theorem proxy_sstoreCursorH_with_data {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec 0 sevm pre out) (codeEq : sevm.code = Proxy.code)
+    (hsg : sevm.benvStat.rules.stateGas = none) (bal : sevm.benvStat.rules.bal = none)
+    {N : Exec.Deriv} (chain : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, out, run⟩ N)
+    (hat : Ninst.At N.sevm.code N.pc (.reg .sstore)) :
+    ∃ κ, CursorOK code cert N κ ∧ ProxySstoreConf sevm pre (κ.conf N.devm) ∧
+      (∀ rest, N.devm.stack = implSlot :: rest →
+        (N.devm.getCode (upgradeArg sevm).toAdr).toList ≠ [] ∧
+        UpgradeStoreDataConf (upgradeArg sevm)
+          (pre.memory.write 64 (128 : B256).toBytes) (κ.conf N.devm)) := by
+  obtain ⟨κ, reach, ok⟩ := reach_of_parentPrefix_noStateGas cert_check
+    (R := ⟨0, sevm, pre, out, run⟩) rfl codeEq hsg chain
+  obtain ⟨g, hf, -⟩ := ok.tree_of_sstore hat
+  have hT : AtSstore (κ.conf N.devm) := ⟨g, hf⟩
+  change Reach _ _ _ ⟨pre, t_0000_c0, []⟩ _ at reach
+  rw [show (⟨pre, t_0000_c0, []⟩ : Conf) =
+      ⟨St pre pre.stack pre.memory pre.gasLeft, t_0000_c0, []⟩ by rw [← St.self' pre]] at reach
+  exact ⟨κ, ok, proxy_sstoreH_with_data (fun h => StepIn.toRun h) bal reach hT⟩
+
+/-- Compatibility projection retaining the code-existence API. -/
 theorem proxy_sstoreCursorH_with_code {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec 0 sevm pre out) (codeEq : sevm.code = Proxy.code)
     (hsg : sevm.benvStat.rules.stateGas = none) (bal : sevm.benvStat.rules.bal = none)
@@ -602,14 +689,9 @@ theorem proxy_sstoreCursorH_with_code {sevm : Sevm} {pre : Devm} {out : Executio
     ∃ κ, CursorOK code cert N κ ∧ ProxySstoreConf sevm pre (κ.conf N.devm) ∧
       (∀ rest, N.devm.stack = implSlot :: rest →
         (N.devm.getCode (upgradeArg sevm).toAdr).toList ≠ []) := by
-  obtain ⟨κ, reach, ok⟩ := reach_of_parentPrefix_noStateGas cert_check
-    (R := ⟨0, sevm, pre, out, run⟩) rfl codeEq hsg chain
-  obtain ⟨g, hf, -⟩ := ok.tree_of_sstore hat
-  have hT : AtSstore (κ.conf N.devm) := ⟨g, hf⟩
-  change Reach _ _ _ ⟨pre, t_0000_c0, []⟩ _ at reach
-  rw [show (⟨pre, t_0000_c0, []⟩ : Conf) =
-      ⟨St pre pre.stack pre.memory pre.gasLeft, t_0000_c0, []⟩ by rw [← St.self' pre]] at reach
-  exact ⟨κ, ok, proxy_sstoreH_with_code (fun h => StepIn.toRun h) bal reach hT⟩
+  obtain ⟨κ, ok, classified, exactData⟩ :=
+    proxy_sstoreCursorH_with_data run codeEq hsg bal chain hat
+  exact ⟨κ, ok, classified, fun rest stack => (exactData rest stack).1⟩
 
 /-- Compatibility projection retaining the original cursor API. -/
 theorem proxy_sstoreCursorH {sevm : Sevm} {pre : Devm} {out : Execution}

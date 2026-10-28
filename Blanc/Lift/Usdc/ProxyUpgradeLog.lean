@@ -2,10 +2,12 @@ import Blanc.ExecutionModelAccounting
 import Blanc.Lift.Usdc.ProxySstoreH
 import Blanc.Lift.HistCursorCuts
 import Blanc.Lift.CommittedLogs
+import Blanc.Lift.PtrWordMemory
 
 /-! A retained implementation write in a successful proxy frame emits `Upgraded`.
 The proof follows the checked internal continuation of the same original frame.
-It specifies the address and topic; the data payload remains existential. -/
+The exact-data theorem links the emitted payload to the implementation word stored
+by that same instruction; the older address/topic APIs remain projections. -/
 
 namespace Blanc.Lift.Usdc.Proxy
 
@@ -39,10 +41,23 @@ private def upgradeLogLine : List Ninst :=
     .reg .sub,
     .reg (.swap 0)]
 
-private theorem upgradeLogLine_inverse {sevm : Sevm} {b : Devm}
+/-- The two masks applied by the checked event encoder. -/
+private def upgradeLogWord (x : B256) : B256 :=
+  let mask : B256 := 0xffffffffffffffffffffffffffffffffffffffff
+  mask &&& (mask &&& x)
+
+/-- Actual memory after staging the event word, before reloading the free pointer. -/
+private def upgradeLogMemory (M : Mem) (x : B256) : Mem :=
+  (M.read 64 32).2.write (M.read 64 32).1.toB256.toNat (upgradeLogWord x).toBytes
+
+private theorem upgradeLogLine_exact {sevm : Sevm} {b : Devm}
     {x : B256} {S : List B256} {M : Mem} {G : Nat} {d : Devm}
     (run : Line.Run sevm (St b (x :: S) M G) upgradeLogLine d) :
-    ∃ i sz M' G', d = St b (i :: sz :: upgradedTopic :: x :: S) M' G' := by
+    let p := (M.read 64 32).1.toB256
+    let written := upgradeLogMemory M x
+    let i := (written.read 64 32).1.toB256
+    ∃ G', d = St b (i :: (32 + p - i) :: upgradedTopic :: x :: S)
+      (written.read 64 32).2 G' := by
   unfold upgradeLogLine at run
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_push step
@@ -91,18 +106,52 @@ private theorem upgradeLogLine_inverse {sevm : Sevm} {b : Devm}
   obtain ⟨_, step, run⟩ := Line.of_run_cons run
   obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl step
   cases run
-  exact ⟨_, _, _, _, rfl⟩
+  exact ⟨_, rfl⟩
+
+/-- With the actual free-pointer word kept disjoint from the event store,
+    the checked encoder stages exactly one masked address word. -/
+private theorem upgradeLogLine_payload {sevm : Sevm} {b : Devm}
+    {x p : B256} {S : List B256} {M : Mem} {G : Nat} {d : Devm}
+    (pointer : PtrWord p M) (far : 96 ≤ p.toNat)
+    (run : Line.Run sevm (St b (x :: S) M G) upgradeLogLine d) :
+    ∃ M' G', d = St b (p :: 32 :: upgradedTopic :: x :: S) M' G' ∧
+      (M'.read p.toNat 32).1 = (upgradeLogWord x).toBytes := by
+  have kept := (pointer.extend 64 32).write p.toNat (upgradeLogWord x).toBytes far
+  have reloaded : ((upgradeLogMemory M x).read 64 32).1.toB256 = p := by
+    simpa only [upgradeLogMemory, pointer.2] using kept.2
+  have size : (32 : B256) + p - p = 32 := by
+    apply B256.toNat_inj
+    rw [B256.toNat_sub, B256.toNat_add]
+    have bound := B256.toNat_lt p
+    change (2 ^ 256 + (32 + p.toNat) % 2 ^ 256 - p.toNat) % 2 ^ 256 = 32
+    omega
+  obtain ⟨G', state⟩ := upgradeLogLine_exact run
+  rw [pointer.2, reloaded, size] at state
+  refine ⟨_, G', state, ?_⟩
+  rw [memRead_extend_fst]
+  unfold upgradeLogMemory
+  rw [pointer.2, Mem.read_write_word_of_wf (pointer.extend 64 32).1]
+
+private theorem upgradeLogLine_inverse {sevm : Sevm} {b : Devm}
+    {x : B256} {S : List B256} {M : Mem} {G : Nat} {d : Devm}
+    (run : Line.Run sevm (St b (x :: S) M G) upgradeLogLine d) :
+    ∃ i sz M' G', d = St b (i :: sz :: upgradedTopic :: x :: S) M' G' := by
+  obtain ⟨G', state⟩ := upgradeLogLine_exact run
+  exact ⟨_, _, _, G', state⟩
 
 /-- A successful same-frame suffix beginning at the classified implementation
 write emits the literal `Upgraded` topic and retains it through its endpoint. -/
-theorem upgradeStoreConf_emitsUpgraded {N : Exec.Deriv} {κ : Cursor}
+private theorem upgradeStoreConf_emitsUpgraded_encoded {N : Exec.Deriv} {κ : Cursor}
     (ok : CursorOK code cert N κ) {x : B256}
     (geometry : UpgradeStoreConf x (κ.conf N.devm)) {post : Devm}
     (success : N.exn = .ok post) (committed : Execution.commits N.exn = true)
     (hsg : N.sevm.benvStat.rules.stateGas = none)
     (bal : N.sevm.benvStat.rules.bal = none) :
-    ∃ entry ∈ post.logs,
-      entry.address = N.sevm.currentTarget ∧ entry.topics = [upgradedTopic] := by
+    ∃ y entry, entry ∈ post.logs ∧
+      entry.address = N.sevm.currentTarget ∧ entry.topics = [upgradedTopic] ∧
+      (∃ a b r S, N.devm.stack = implSlot :: x :: a :: b :: r :: y :: S) ∧
+      (∀ p, PtrWord p N.devm.memory → 96 ≤ p.toNat →
+        entry.data = (upgradeLogWord y).toBytes) := by
   obtain ⟨a, b, r, y, S, K, stack, tree, cont⟩ := geometry
   let cut : CursorStateAt code cert N
       (.next (.reg .sstore) (.next (.reg .pop) (.next (.reg .pop) .ret)))
@@ -153,12 +202,59 @@ theorem upgradeStoreConf_emitsUpgraded {N : Exec.Deriv} {κ : Cursor}
   have logs := Exec.committed_logs_noStateGas A.exc committedA (afterEnv ▸ hsg) rfl rfl
   rw [finalPost] at logs
   have appended := congrArg Devm.logs afterLog
-  refine ⟨⟨N.sevm.currentTarget, [upgradedTopic], (M.read i.toNat sz.toNat).1⟩, ?_, rfl, rfl⟩
-  rw [logs]
-  apply List.mem_append_left
-  rw [appended]
-  change _ ∈ (afterSstoreH N.sevm N.devm implSlot x).logs ++ [_]
-  exact List.mem_append_right _ (List.mem_singleton_self _)
+  refine ⟨y, ⟨N.sevm.currentTarget, [upgradedTopic], (M.read i.toNat sz.toNat).1⟩,
+    ?_, rfl, rfl, ⟨a, b, r, S, stack⟩, ?_⟩
+  · rw [logs]
+    apply List.mem_append_left
+    rw [appended]
+    change _ ∈ (afterSstoreH N.sevm N.devm implSlot x).logs ++ [_]
+    exact List.mem_append_right _ (List.mem_singleton_self _)
+  · intro p pointer far
+    obtain ⟨M', G'', payloadState, payload⟩ := upgradeLogLine_payload pointer far line
+    have states := logState.symm.trans payloadState
+    have stackEq := congrArg Devm.stack states
+    simp only [St.stack, List.cons.injEq] at stackEq
+    have memories : M = M' := congrArg Devm.memory states
+    change (M.read i.toNat sz.toNat).1 = _
+    rw [stackEq.1, stackEq.2.1, memories]
+    exact payload
+
+/-- Compatibility projection retaining the address/topic-only API. -/
+theorem upgradeStoreConf_emitsUpgraded {N : Exec.Deriv} {κ : Cursor}
+    (ok : CursorOK code cert N κ) {x : B256}
+    (geometry : UpgradeStoreConf x (κ.conf N.devm)) {post : Devm}
+    (success : N.exn = .ok post) (committed : Execution.commits N.exn = true)
+    (hsg : N.sevm.benvStat.rules.stateGas = none)
+    (bal : N.sevm.benvStat.rules.bal = none) :
+    ∃ entry ∈ post.logs,
+      entry.address = N.sevm.currentTarget ∧ entry.topics = [upgradedTopic] := by
+  obtain ⟨_, entry, present, address, topics, _, _⟩ :=
+    upgradeStoreConf_emitsUpgraded_encoded ok geometry success committed hsg bal
+  exact ⟨entry, present, address, topics⟩
+
+/-- The exact implementation-write geometry links the retained event's payload
+    to the word stored by this instruction. -/
+theorem upgradeStoreConf_emitsUpgraded_data {N : Exec.Deriv} {κ : Cursor}
+    (ok : CursorOK code cert N κ) {x p : B256}
+    (geometry : UpgradeStoreDataConf x N.devm.memory (κ.conf N.devm))
+    (pointer : PtrWord p N.devm.memory) (far : 96 ≤ p.toNat)
+    (masked : (0xffffffffffffffffffffffffffffffffffffffff : B256) &&& x = x)
+    {post : Devm} (success : N.exn = .ok post)
+    (committed : Execution.commits N.exn = true)
+    (hsg : N.sevm.benvStat.rules.stateGas = none)
+    (bal : N.sevm.benvStat.rules.bal = none) :
+    ∃ entry ∈ post.logs, entry.address = N.sevm.currentTarget ∧
+      entry.topics = [upgradedTopic] ∧ entry.data = x.toBytes := by
+  obtain ⟨y, entry, present, address, topics, stack, payload⟩ :=
+    upgradeStoreConf_emitsUpgraded_encoded ok geometry.forget success committed hsg bal
+  obtain ⟨a, b, r, S, stack⟩ := stack
+  obtain ⟨a', b', r', S', K, exactStack, _, _, _⟩ := geometry
+  have same := stack.symm.trans exactStack
+  simp only [List.cons.injEq] at same
+  have aligned : y = x := same.2.2.2.2.2.1
+  refine ⟨entry, present, address, topics, ?_⟩
+  rw [payload p pointer far, aligned]
+  simp only [upgradeLogWord, masked]
 
 /-- Every implementation-slot `SSTORE` reached by a committing pc-0 frame
 of the checked proxy runtime entails a retained `Upgraded` log in that frame.
@@ -187,5 +283,48 @@ theorem proxy_implSstore_emitsUpgraded {sevm : Sevm} {pre : Devm} {out : Executi
         upgradeStoreConf_emitsUpgraded ok geometry outcome retained
           (env ▸ hsg) (env ▸ bal)
       exact ⟨entry, present, by rw [← env]; exact address, topics⟩
+
+/-- An actual pc-0 proxy prefix with well-formed entry memory emits the
+    precise implementation word written by the selected `SSTORE`. -/
+theorem proxy_implSstore_emitsUpgraded_data {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec 0 sevm pre out) (committed : Execution.commits out = true)
+    (codeEq : sevm.code = Proxy.code) (hsg : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (wf : Mem.Wf pre.memory) {N : Exec.Deriv}
+    (chain : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, out, run⟩ N)
+    (hat : Ninst.At N.sevm.code N.pc (.reg .sstore)) {v : B256} {rest : List B256}
+    (slot : N.devm.stack = implSlot :: v :: rest) :
+    ∃ entry ∈ (Execution.committedPost out committed).logs,
+      entry.address = sevm.currentTarget ∧ entry.topics = [upgradedTopic] ∧
+      entry.data = v.toBytes := by
+  obtain ⟨κ, ok, _, exactData⟩ :=
+    proxy_sstoreCursorH_with_data run codeEq hsg bal chain hat
+  have geometry := (exactData (v :: rest) slot).2
+  obtain ⟨a, b, r, S, K, stack, tree, cont, memory⟩ := geometry
+  have value : upgradeArg sevm = v := (List.cons.inj (List.cons.inj (stack.symm.trans slot)).2).1
+  have ownGeometry : UpgradeStoreDataConf (upgradeArg sevm) N.devm.memory (κ.conf N.devm) :=
+    ⟨a, b, r, S, K, stack, tree, cont, rfl⟩
+  have pointer : PtrWord 128 N.devm.memory := by
+    rw [memory]
+    refine ⟨wf.write _ _, ?_⟩
+    rw [Mem.read_write_word_of_wf wf, B256.toB256_toBytes]
+  have masked : (0xffffffffffffffffffffffffffffffffffffffff : B256) &&& upgradeArg sevm =
+      upgradeArg sevm := by
+    change (0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
+      (0xffffffffffffffffffffffffffffffffffffffff &&& Sevm.dataWord sevm 4) =
+      0xffffffffffffffffffffffffffffffffffffffff &&& Sevm.dataWord sevm 4
+    rw [B256.and_comm 0xffffffffffffffffffffffffffffffffffffffff
+      (0xffffffffffffffffffffffffffffffffffffffff &&& Sevm.dataWord sevm 4),
+      B256.and_comm 0xffffffffffffffffffffffffffffffffffffffff (Sevm.dataWord sevm 4),
+      B256.and_idem_right]
+  have env : N.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
+  have outcome : N.exn = out := Blanc.Exec.Deriv.ParentPrefix.exn_eq chain
+  have retained : Execution.commits N.exn = true := by rw [outcome]; exact committed
+  cases out with
+  | error err => simp only [Execution.commits, Bool.false_eq_true] at committed
+  | ok post =>
+    obtain ⟨entry, present, address, topics, payload⟩ :=
+      upgradeStoreConf_emitsUpgraded_data ok ownGeometry pointer (by decide) masked
+        outcome retained (env ▸ hsg) (env ▸ bal)
+    exact ⟨entry, present, by rw [← env]; exact address, topics, value ▸ payload⟩
 
 end Blanc.Lift.Usdc.Proxy

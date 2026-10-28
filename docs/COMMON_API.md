@@ -10585,3 +10585,15 @@ derives the initial source guards, cached words and starting segment from the
 original successful execution. `swap_source_transfersH` composes both optional
 transfers from that same physical chain and the same admitted queue witnesses;
 only executed calls advance the source index.
+
+For the exact value of an actual retained USDC proxy implementation write, use
+`ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded_data_of_proxyCode`
+in `Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean`; the `_data` sibling derives
+proxy code from existing `ImplSlotApart`. The same original committed root
+contains an `Upgraded` log whose data equals `write.value.toBytes`, including
+same-value or later-restored writes. Actual prefix classification carries the
+duplicate stack word and memory initialization through `UpgradeStoreDataConf`;
+the history theorem derives memory well-formedness from original `FreshEntry`.
+No memory or free-pointer premise should be added to a final history consumer.
+Existing address/topic APIs remain compatible projections. Provider census
+correspondence and deployment chronology are separate producer obligations.
