@@ -8563,7 +8563,15 @@ contract-neutral.
   `settledRoot_retained_proxyWorld_from_installations` obtains the original
   F2prime target and nonempty-code guard before requesting runtime evidence;
   `settledRoot_dynamic_implSlot_origin_code_of_f2prime` supplies the resulting
-  classifier to committed-endpoint provenance. Future entries need not be
+  classifier to committed-endpoint provenance.
+  `settledRoot_dynamic_runtimeReady_of_f2prime` additionally proves the proxy
+  runtime and selected implementation/library readiness at that endpoint.
+  An unchanged pointer uses its initial installation; a changed pointer uses
+  the actual retained final writer. Temporary upgrades and restoration are
+  allowed. This endpoint precedes final transaction deletion and touched sweep;
+  constructor deletion safety must be established separately before carrying
+  an implementation first created in this transaction through those stages.
+  Future entries need not be
   installed at root entry. The older installed-world API projects this same
   induction with its exact original statement. Actual runtime identities and
   historical correspondence remain producer obligations; retained governance

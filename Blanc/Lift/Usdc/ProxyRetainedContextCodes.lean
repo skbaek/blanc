@@ -781,4 +781,77 @@ theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2p
   · exact .inl own
   · exact .inr (code ▸ impls e he)
 
+/-- The dynamic selected implementation and its conditional V2.2 library are
+ready at the committed root endpoint. An unchanged pointer uses its initial
+installation; a changed pointer uses the actual retained last writer and code
+observed there. Temporary upgrades and restoration are allowed. Final outer
+transaction deletion/sweep is not part of this committed execution endpoint. -/
+theorem ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry} {R : Exec.Frame}
+    (member : R ∈ history.settledRoots)
+    (proxy : R.pre.getCode P = Proxy.code)
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (slot : ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧
+      e.RuntimeReady R.pre)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (installations : ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apart : KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    R.post.getCode P = Proxy.code ∧
+      ∃ e ∈ W, ((R.post.getStor P).get implSlot).toAdr = e.adr ∧
+        e.RuntimeReady R.post := by
+  have rawRoot := history.mem_rawFrames_of_mem_settledRoots R member
+  have hsg := (history.rawFrame_entryFacts capabilities _ rawRoot).2.2.1
+  obtain ⟨post, out⟩ := R.exists_ok
+  have postEq : R.post = post := by
+    unfold Exec.Frame.post Execution.committedPost
+    split
+    next equal _ => exact Except.ok.inj (equal.symm.trans out)
+    next equal _ => cases equal.symm.trans out
+  have keepEntry {a : Adr} {code : ByteArray} (present : R.pre.getCode a = code)
+      (family : UsdcContextCode code) : R.post.getCode a = code := by
+    have kept := Exec.preserves_getCode R.run a (by rw [present]; exact family.ne_nil)
+    rw [out] at kept
+    exact (show R.post.getCode a = R.pre.getCode a from by
+      simpa only [postEq, Execution.getCode] using kept).trans present
+  refine ⟨keepEntry proxy (.inl rfl), ?_⟩
+  have context := ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations
+    history capabilities bal member proxy impls lib slot governance installations apart
+  rcases ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2prime
+      history capabilities bal member proxy impls lib slot governance installations apart with
+      unchanged | ⟨N, retained, write, found, owner, key, value, allowed, nonempty, _⟩
+  · obtain ⟨e, he, address, ready⟩ := slot
+    refine ⟨e, he, ?_, keepEntry ready.1 (impls e he).context, ?_⟩
+    · rw [unchanged]; exact address
+    · intro implementation
+      exact keepEntry (ready.2 implementation)
+        (show UsdcContextCode Lib.code from .inr (.inr (.inr (.inr (.inr rfl)))))
+  · have target : N.sevm.currentTarget = P :=
+      (successfulSstore?_node_owner found).2.symm.trans owner
+    rcases (context N retained).2 target with ⟨code, own⟩ | ⟨e, he, code, _⟩
+    · obtain ⟨e, he, address, ready⟩ :=
+        installations N retained target code own write found key allowed nonempty
+      obtain ⟨before, after, split⟩ := List.append_of_mem retained
+      have keepObserved {a : Adr} {code : ByteArray} (present : N.devm.getCode a = code)
+          (family : UsdcContextCode code) : R.post.getCode a = code :=
+        ((Exec.retainedNodes_code_after_split_noStateGas R.run R.committed hsg split
+          (by rw [present]; exact family.ne_nil)).1).trans present
+      refine ⟨e, he, ?_, keepObserved ready.1 (impls e he).context, ?_⟩
+      · rw [← value]; exact address
+      · intro implementation
+        exact keepObserved (ready.2 implementation)
+          (show UsdcContextCode Lib.code from .inr (.inr (.inr (.inr (.inr rfl)))))
+    · exact (apart N retained target (by rw [code]; exact impls e he) write found key).elim
+
 end Blanc.Lift.Usdc
