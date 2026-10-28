@@ -2082,6 +2082,18 @@ initial NoDel and final deletion exclusion are not assumed. The original
 `settledRoot_usdcContext_noDel` API keeps its stronger input invariant and now
 reuses this terminal-safety producer. Actual historical code classification
 and constructor installation remain separate producer obligations.
+`settledRoot_implContext_of_installed` supplies a separate classifier at an
+installed implementation account: retained execution runs that runtime or the
+fixed V2.2 library. It requires library installation only for V2.2, derives
+spawn restrictions from the checked source, and needs no proxy implementation
+slot or upgrade hypothesis. `impl_transaction_preserves_retained` uses this
+classifier to preserve any USDC implementation runtime and its conditional
+library through complete transaction settlement;
+`impl_transactions_preserve_retained` composes it along the original ordered
+transaction list. Both omit created-account exclusions and final deletion
+oracles. They may start after a successful creation cut in the same block;
+first creation and later use inside one outer transaction still need the
+separate constructor-to-runtime chronology argument.
 
 For whole transactions, including those with no retained interpreter root,
 use `TransactionTrace.not_deleted_of_retained_terminals`. Its terminal
