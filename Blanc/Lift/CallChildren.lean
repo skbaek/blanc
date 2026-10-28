@@ -186,16 +186,12 @@ theorem Exec.descendantFrames_callerTarget_of_children {p ca : Adr} {Q : Sevm �
 
 namespace ExecutionTrace
 
-/-- **The weakened caller fold over a configured history.**  If no settled message root runs at `ca`
-with caller `p` without `Q`, and every direct child of every settled frame at `p` or at `ca` satisfies
-the target property, every settled frame satisfies it. -/
-theorem ConfiguredHistoryTrace.settledFrames_callerTarget_of_children {p ca : Adr}
-    {Q : Sevm → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (roots : ∀ R ∈ trace.settledRoots, CallerTarget p ca Q R.sevm)
-    (children : ∀ G ∈ trace.settledFrames, CallerChildren p ca Q G.sevm (Exec.childFrames G.run)) :
-    ∀ F ∈ trace.settledFrames, CallerTarget p ca Q F.sevm := by
-  rw [trace.settledFrames_eq] at children ⊢
+/-- The weakened caller fold over the committed expansion of any list of message roots. -/
+theorem rootFrames_callerTarget_of_children {p ca : Adr} {Q : Sevm → Prop}
+    (rs : List Exec.Frame)
+    (roots : ∀ R ∈ rs, CallerTarget p ca Q R.sevm)
+    (children : ∀ G ∈ rootFrames rs, CallerChildren p ca Q G.sevm (Exec.childFrames G.run)) :
+    ∀ F ∈ rootFrames rs, CallerTarget p ca Q F.sevm := by
   intro F member
   obtain ⟨R, hR, inR⟩ := List.mem_flatMap.mp member
   have below : ∀ G ∈ Exec.committedFrames R.run,
@@ -210,6 +206,18 @@ theorem ConfiguredHistoryTrace.settledFrames_callerTarget_of_children {p ca : Ad
     · exact Exec.descendantFrames_callerTarget_of_children R.run (below _ List.mem_cons_self)
         (fun G hG => below G (List.mem_cons_of_mem _ hG)) F inner
   · simp only [List.not_mem_nil] at inR
+
+/-- **The weakened caller fold over a configured history.**  If no settled message root runs at `ca`
+with caller `p` without `Q`, and every direct child of every settled frame at `p` or at `ca` satisfies
+the target property, every settled frame satisfies it. -/
+theorem ConfiguredHistoryTrace.settledFrames_callerTarget_of_children {p ca : Adr}
+    {Q : Sevm → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (roots : ∀ R ∈ trace.settledRoots, CallerTarget p ca Q R.sevm)
+    (children : ∀ G ∈ trace.settledFrames, CallerChildren p ca Q G.sevm (Exec.childFrames G.run)) :
+    ∀ F ∈ trace.settledFrames, CallerTarget p ca Q F.sevm := by
+  rw [trace.settledFrames_eq] at children ⊢
+  exact rootFrames_callerTarget_of_children trace.settledRoots roots children
 
 end ExecutionTrace
 

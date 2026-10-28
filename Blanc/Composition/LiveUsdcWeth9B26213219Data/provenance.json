@@ -1,0 +1,1000 @@
+{
+  "agreement_scope": {
+    "backend_independence": "unverified; no consensus/state-root authenticity claim",
+    "required_operator_ids": [
+      "drpc",
+      "tenderly",
+      "nodies"
+    ],
+    "rule": "every required value must agree across all three named service operators; failures abort, no fallback or silent provider removal"
+  },
+  "bundle_file_sha256": "568151c10e914376dc78d16fbf6cc2fd43c991594fca524545e27f08b33dd125",
+  "candidate_header": {
+    "chainId": 1,
+    "hash": "0xa79841b4ef0d00bcd0b0c8dc6b405efd4ab1ac3182b1a9a4877f873673e24b6c",
+    "number": 26213219,
+    "number_hex": "0x18ffb63",
+    "stateRoot": "0xc06b5b1e9eb7e86aa2de8bc9117b1640d7ee1f84624326cbf1d5b6df027d4c4d",
+    "timestamp": 1792251479,
+    "timestamp_hex": "0x6ad39657",
+    "utc": "2026-10-17T15:37:59Z"
+  },
+  "contract_sha256": "c0fa285a6b3a98e80ca0b037bc5aa2bab1382fc0efe7659944419553562f5fcc",
+  "fields": [
+    {
+      "account": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "field_id": "usdc-proxy.code",
+      "kind": "code",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.usdcProxyCode",
+      "slot_quantity": null,
+      "slot_word": null,
+      "source_records": [
+        {
+          "label": "usdc-proxy.code",
+          "operator_id": "drpc",
+          "request_file": "013-drpc-usdc-proxy.code-request.json",
+          "request_sha256": "368b74f39866638cb156ee0de7adce447c2a4b842faa8eda0471a3990a6e1f32",
+          "response_file": "013-drpc-usdc-proxy.code-response.bin",
+          "response_sha256": "fab074335ab69dc3a71e832516f97d92b7bfed858ada6bd20c440f1b9650fb0a"
+        },
+        {
+          "label": "usdc-proxy.code",
+          "operator_id": "tenderly",
+          "request_file": "014-tenderly-usdc-proxy.code-request.json",
+          "request_sha256": "31a3b1db45d858a20c3430781264e908bc87188bb9e4ee72606f30ee163089ec",
+          "response_file": "014-tenderly-usdc-proxy.code-response.bin",
+          "response_sha256": "ce774910db258189e19fee65ba1482e6140de0722717e536eca230e8afc8f207"
+        },
+        {
+          "label": "usdc-proxy.code",
+          "operator_id": "nodies",
+          "request_file": "015-nodies-usdc-proxy.code-request.json",
+          "request_sha256": "25265b4778e133803c9b2cd11fbd08722e19bc647fad90ae452d52606c2f8eb9",
+          "response_file": "015-nodies-usdc-proxy.code-response.bin",
+          "response_sha256": "5de616f234e0fee7b723215aa1625577201594de69c42d94dc692b6912377dc9"
+        }
+      ],
+      "value_bytes": 2186,
+      "value_sha256": "c1bcd4dc4f30c4dcf6c9fe462abeaf2efefc065dcb4dec74996e471f1ce219b4"
+    },
+    {
+      "account": "0x43506849d7c04f9138d1a2050bbf3a0c054402dd",
+      "field_id": "usdc-impl.code",
+      "kind": "code",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.usdcImplementationCode",
+      "slot_quantity": null,
+      "slot_word": null,
+      "source_records": [
+        {
+          "label": "usdc-impl.code",
+          "operator_id": "drpc",
+          "request_file": "016-drpc-usdc-impl.code-request.json",
+          "request_sha256": "7ed00c60c59f52b2d445fb2a1c6b649d44f6defe4ee2c52cfad30df060b632ab",
+          "response_file": "016-drpc-usdc-impl.code-response.bin",
+          "response_sha256": "625036bf40b89df0be6c272ab6f210d23762ec824ac8e7c59024a74807b029c3"
+        },
+        {
+          "label": "usdc-impl.code",
+          "operator_id": "tenderly",
+          "request_file": "017-tenderly-usdc-impl.code-request.json",
+          "request_sha256": "876f4da1a3f7751816dc9322e2601fa74a262d11050bc77fcce3e1e72243370d",
+          "response_file": "017-tenderly-usdc-impl.code-response.bin",
+          "response_sha256": "ad5d14c5438f6c1d594fead010a6f34fa0294d438f7935e28eaf4b204cffb184"
+        },
+        {
+          "label": "usdc-impl.code",
+          "operator_id": "nodies",
+          "request_file": "018-nodies-usdc-impl.code-request.json",
+          "request_sha256": "4653f13ccad841bbf5fd8eab779d4d35f371be06f504d8746cca8b6eb4e6e23c",
+          "response_file": "018-nodies-usdc-impl.code-response.bin",
+          "response_sha256": "e87a14fabe87b72704edbea640c8295853c86e4e87157b64cdbb53db31509938"
+        }
+      ],
+      "value_bytes": 23464,
+      "value_sha256": "21a831a7cff1a353b295490f43a66e48e55d1c76c60cd89b24138efd8e8b7c8a"
+    },
+    {
+      "account": "0x800c32eaa2a6c93cf4cb51794450ed77fbfbb172",
+      "field_id": "usdc-lib.code",
+      "kind": "code",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.usdcLibraryCode",
+      "slot_quantity": null,
+      "slot_word": null,
+      "source_records": [
+        {
+          "label": "usdc-lib.code",
+          "operator_id": "drpc",
+          "request_file": "019-drpc-usdc-lib.code-request.json",
+          "request_sha256": "88c727fd30e9270c3146615f7a79f68c7c806d080b2d4a7ef57dac9570cbf41f",
+          "response_file": "019-drpc-usdc-lib.code-response.bin",
+          "response_sha256": "0f6ccf3724f3f09c2072b9c6094951fbba000c588a2dac81450808a4b899d465"
+        },
+        {
+          "label": "usdc-lib.code",
+          "operator_id": "tenderly",
+          "request_file": "020-tenderly-usdc-lib.code-request.json",
+          "request_sha256": "ac7c3a6a63167778314c326d308ff8f18bcddd10d2ae3c07b1ce84a7802983c4",
+          "response_file": "020-tenderly-usdc-lib.code-response.bin",
+          "response_sha256": "a579f38df94ea22d5c8f08ac104acddaed5333ddb8c45eba3c85407f18791d5c"
+        },
+        {
+          "label": "usdc-lib.code",
+          "operator_id": "nodies",
+          "request_file": "021-nodies-usdc-lib.code-request.json",
+          "request_sha256": "001e2adc26a7c194b9f1e5fdd3418a3ebcc289f1dc293a0a53f978b558164836",
+          "response_file": "021-nodies-usdc-lib.code-response.bin",
+          "response_sha256": "9771fc7902df76aa384127a5ec8f6b80540c2b556e02241fb796e834cb66263b"
+        }
+      ],
+      "value_bytes": 1741,
+      "value_sha256": "e623d68901b35847ecd21acf5b87819fa1cd841ec59ee541ab28a2a7e844bf82"
+    },
+    {
+      "account": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "field_id": "weth9.code",
+      "kind": "code",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.weth9Code",
+      "slot_quantity": null,
+      "slot_word": null,
+      "source_records": [
+        {
+          "label": "weth9.code",
+          "operator_id": "drpc",
+          "request_file": "022-drpc-weth9.code-request.json",
+          "request_sha256": "b18e5d9d6e47280c784dca4f0c2538927ebe10b75585345dd2c32274ae784491",
+          "response_file": "022-drpc-weth9.code-response.bin",
+          "response_sha256": "683f1f7032ec714c0fdac9bd13c571d0ff844190b43c391aa05e1046ed4ee05d"
+        },
+        {
+          "label": "weth9.code",
+          "operator_id": "tenderly",
+          "request_file": "023-tenderly-weth9.code-request.json",
+          "request_sha256": "0e09d08140ecd4adbe1190d53fee1770b8017477756e8feaba1feb4f5a476a25",
+          "response_file": "023-tenderly-weth9.code-response.bin",
+          "response_sha256": "282fcb21b89856720b709bd89bf76293e37e5ab8f3ecfa7f98ed104dd19cd798"
+        },
+        {
+          "label": "weth9.code",
+          "operator_id": "nodies",
+          "request_file": "024-nodies-weth9.code-request.json",
+          "request_sha256": "2a68e096a372a7527ac14d3ed402ea4c7203b680337d9e273761a85651bc39b1",
+          "response_file": "024-nodies-weth9.code-response.bin",
+          "response_sha256": "459e0617eed9fc8c53055fb086dae2e7bb7f58291edc023da0d198495cf9c1e6"
+        }
+      ],
+      "value_bytes": 3124,
+      "value_sha256": "5566bf50796faf93c9b6f6adacd3b32c70bfe16b48ffc59db6cd144cbdc89739"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "uniswap-v2-pair.code",
+      "kind": "code",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairCode",
+      "slot_quantity": null,
+      "slot_word": null,
+      "source_records": [
+        {
+          "label": "uniswap-v2-pair.code",
+          "operator_id": "drpc",
+          "request_file": "025-drpc-uniswap-v2-pair.code-request.json",
+          "request_sha256": "a3238f3546a52c6f100e36743c6fd9b9a8c1976648cf968a911549dcb6877360",
+          "response_file": "025-drpc-uniswap-v2-pair.code-response.bin",
+          "response_sha256": "71d36659a465fef7e7e2ef66a7b80eaf68440a4000e303ee0b6c4fa9ff2debc6"
+        },
+        {
+          "label": "uniswap-v2-pair.code",
+          "operator_id": "tenderly",
+          "request_file": "026-tenderly-uniswap-v2-pair.code-request.json",
+          "request_sha256": "dfaa9e398d547af863eab64889868182a24407826cc788681677d571f631fc5c",
+          "response_file": "026-tenderly-uniswap-v2-pair.code-response.bin",
+          "response_sha256": "be94e434dab0538f329d3dc89c2527c0bf9690debb14b82af8ca659970bdf437"
+        },
+        {
+          "label": "uniswap-v2-pair.code",
+          "operator_id": "nodies",
+          "request_file": "027-nodies-uniswap-v2-pair.code-request.json",
+          "request_sha256": "f5e8565716ab65469fe2d00e2c2e7ca8f71ae1233463887a504c7d68cffe91c8",
+          "response_file": "027-nodies-uniswap-v2-pair.code-response.bin",
+          "response_sha256": "2e7e8f89ef9648d718c345297375fc939e05f8c078c7a38f65eed2560792ee05"
+        }
+      ],
+      "value_bytes": 11293,
+      "value_sha256": "8b5db55fa9ab3b9527508d4abe0b39eb588bf310270c8e04b3f38214e8ba63b4"
+    },
+    {
+      "account": "0x5c69bee701ef814a2b6a3edd4b1652cb9cc5aa6f",
+      "field_id": "uniswap-v2-factory.code",
+      "kind": "code",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.factoryCode",
+      "slot_quantity": null,
+      "slot_word": null,
+      "source_records": [
+        {
+          "label": "uniswap-v2-factory.code",
+          "operator_id": "drpc",
+          "request_file": "028-drpc-uniswap-v2-factory.code-request.json",
+          "request_sha256": "3762f5b742dce60b1f484c25220cb7f7c89714b64798275c67cc58bb076c0bc6",
+          "response_file": "028-drpc-uniswap-v2-factory.code-response.bin",
+          "response_sha256": "56f1b032f75f3009060ffef6a1583f574cfd231cdafbfc84407a007289d62cec"
+        },
+        {
+          "label": "uniswap-v2-factory.code",
+          "operator_id": "tenderly",
+          "request_file": "029-tenderly-uniswap-v2-factory.code-request.json",
+          "request_sha256": "94d17f2911f53afbdca7d7d8f352ad37d89eaca1beea89b86838d853371b71cd",
+          "response_file": "029-tenderly-uniswap-v2-factory.code-response.bin",
+          "response_sha256": "1f30bff9ac7cb37bf356d51ebbb9385b8442e9e69a77b870d4c335f4cca638a4"
+        },
+        {
+          "label": "uniswap-v2-factory.code",
+          "operator_id": "nodies",
+          "request_file": "030-nodies-uniswap-v2-factory.code-request.json",
+          "request_sha256": "b2ebf37f0060655cff5961e49d56845bb7d03097003377085893059ba77cf2db",
+          "response_file": "030-nodies-uniswap-v2-factory.code-response.bin",
+          "response_sha256": "b952e8753e74654c6e6dc301847a1f02bea412811c97388362f5545084936cfa"
+        }
+      ],
+      "value_bytes": 13859,
+      "value_sha256": "3abc53f12a9cb8ae37ebfada9efc261c1ab4c2759d161e341a49bf67df3f8321"
+    },
+    {
+      "account": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "field_id": "usdc.impl",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.usdcImplementationWord",
+      "slot_quantity": "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3",
+      "slot_word": "0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3",
+      "source_records": [
+        {
+          "label": "usdc.impl",
+          "operator_id": "drpc",
+          "request_file": "031-drpc-usdc.impl-request.json",
+          "request_sha256": "4674551832ec79c8bb25a0f38194714151a15425dac50fe3a06e1e5d51fae38b",
+          "response_file": "031-drpc-usdc.impl-response.bin",
+          "response_sha256": "f13cc5b223b3f432f72bc762b1c9e87ce1fb6ff2078061863f9a4e7d539e611f"
+        },
+        {
+          "label": "usdc.impl",
+          "operator_id": "tenderly",
+          "request_file": "032-tenderly-usdc.impl-request.json",
+          "request_sha256": "cb384cc0caf75b610bcabb0b6ddbe7c1029b132321efa1cb863f4f6af03705e0",
+          "response_file": "032-tenderly-usdc.impl-response.bin",
+          "response_sha256": "5cfcd81b4d45f876b93e3037e6cd7514c0b2e36291a785d82a28b9e4b0063540"
+        },
+        {
+          "label": "usdc.impl",
+          "operator_id": "nodies",
+          "request_file": "033-nodies-usdc.impl-request.json",
+          "request_sha256": "ee3131a6083c37e0ded8556b0a0b1a76489572b79466cb95a0f819d649b4d96f",
+          "response_file": "033-nodies-usdc.impl-response.bin",
+          "response_sha256": "f37ac843bc8ca9a499a9c1e8f845c088892c939661d3c78581af59b923ac5b9f"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "01a29eb47b2cfa03aa942482b72c56c30ac2e5397fcd2b47d100c50396f7cf57"
+    },
+    {
+      "account": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "field_id": "usdc.initialized",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.usdcInitializedWord",
+      "slot_quantity": "0x8",
+      "slot_word": "0x0000000000000000000000000000000000000000000000000000000000000008",
+      "source_records": [
+        {
+          "label": "usdc.initialized",
+          "operator_id": "drpc",
+          "request_file": "034-drpc-usdc.initialized-request.json",
+          "request_sha256": "a84e0cb7e6b4e2055a1029d2599732612c8bbadb20900553d078ab71b35ba077",
+          "response_file": "034-drpc-usdc.initialized-response.bin",
+          "response_sha256": "65b02f4bd53193698c506f6d87ed547b4646578342bf6015746f20f725e163e6"
+        },
+        {
+          "label": "usdc.initialized",
+          "operator_id": "tenderly",
+          "request_file": "035-tenderly-usdc.initialized-request.json",
+          "request_sha256": "aea6a996532b80e4144c02c84a451b40ec7d2b9b441131e5ecd5c390a8a0f9ab",
+          "response_file": "035-tenderly-usdc.initialized-response.bin",
+          "response_sha256": "43654fc22198510be5b52240845bcf27d64a22729e3acb32f69da830bd99ffb0"
+        },
+        {
+          "label": "usdc.initialized",
+          "operator_id": "nodies",
+          "request_file": "036-nodies-usdc.initialized-request.json",
+          "request_sha256": "a9cd26289477e6b804f0188dd43bb3559b6e8e669cd1f0b5eb146ed49107cd6c",
+          "response_file": "036-nodies-usdc.initialized-response.bin",
+          "response_sha256": "3c86b42c353fe82976f1057cb522c1e6d60cdab312a17d1b09995ebe99d6f5fa"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "06e16cbdbd948c919276cc0679d3440450a5ddf4a7269cbe593e6771695ab882"
+    },
+    {
+      "account": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "field_id": "usdc.version",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.usdcVersionWord",
+      "slot_quantity": "0x12",
+      "slot_word": "0x0000000000000000000000000000000000000000000000000000000000000012",
+      "source_records": [
+        {
+          "label": "usdc.version",
+          "operator_id": "drpc",
+          "request_file": "037-drpc-usdc.version-request.json",
+          "request_sha256": "62d973f1c9a35c08c861cb1d5380e80c6040f0cfbe0adfc6c6edb2eea902b902",
+          "response_file": "037-drpc-usdc.version-response.bin",
+          "response_sha256": "5fde6f7e471cc475f307c5637ce4281e72a87e3e924ccaf4de61f4dadbdbc3ce"
+        },
+        {
+          "label": "usdc.version",
+          "operator_id": "tenderly",
+          "request_file": "038-tenderly-usdc.version-request.json",
+          "request_sha256": "c31f3325659f27786dcc3a01310994458fe63b3acba2734f833f1b6b56507297",
+          "response_file": "038-tenderly-usdc.version-response.bin",
+          "response_sha256": "11731aa8f1cbf6f69c9a3a7d752192b9cb78ec79eeefa322eb0d542317bdd268"
+        },
+        {
+          "label": "usdc.version",
+          "operator_id": "nodies",
+          "request_file": "039-nodies-usdc.version-request.json",
+          "request_sha256": "d061164b31eeab73ce85a7d51d3abf5a2a8f8e51d6006c45ff322d34652af369",
+          "response_file": "039-nodies-usdc.version-response.bin",
+          "response_sha256": "c0fa49cd55178c33f86f95618fd93957ef3f4f87e73cc4d672799f98bc24866c"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "d9147961436944f43cd99d28b2bbddbf452ef872b30c8279e255e7daafc7f946"
+    },
+    {
+      "account": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "field_id": "usdc.admin",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.usdcAdminWord",
+      "slot_quantity": "0x10d6a54a4754c8869d6886b5f5d7fbfa5b4522237ea5c60d11bc4e7a1ff9390b",
+      "slot_word": "0x10d6a54a4754c8869d6886b5f5d7fbfa5b4522237ea5c60d11bc4e7a1ff9390b",
+      "source_records": [
+        {
+          "label": "usdc.admin",
+          "operator_id": "drpc",
+          "request_file": "040-drpc-usdc.admin-request.json",
+          "request_sha256": "15390284c53853e800dc33026aad39fc90fb7f5f99cbddfa4e700f1832ef5b91",
+          "response_file": "040-drpc-usdc.admin-response.bin",
+          "response_sha256": "c9d25056b917c7fc80349290303af7755d067283f185ba43d1c9dfc0e05a24d8"
+        },
+        {
+          "label": "usdc.admin",
+          "operator_id": "tenderly",
+          "request_file": "041-tenderly-usdc.admin-request.json",
+          "request_sha256": "72e4bdc4942cd14418e38a22d3b5e68ff4729e4d88b262fe93fb7a77f7047875",
+          "response_file": "041-tenderly-usdc.admin-response.bin",
+          "response_sha256": "cb521197449a51f7d816088a1e15c7f5168e0e4187637006cb66ba991f000eb0"
+        },
+        {
+          "label": "usdc.admin",
+          "operator_id": "nodies",
+          "request_file": "042-nodies-usdc.admin-request.json",
+          "request_sha256": "cf9f04ac2d8bdf360a0e010e193e001818d7de3277db9a6bca775958b6c6818f",
+          "response_file": "042-nodies-usdc.admin-response.bin",
+          "response_sha256": "3c8efa05b1c8597078a69445a0e780d63f00bffbb723d3c67ddcbf2beaf33d17"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "2255271b8ec5b520a0449fd9c16c695e3692ef251a1c5603e4200f0bdeddf258"
+    },
+    {
+      "account": "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+      "field_id": "usdc.pairBalance",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.usdcPairBalanceWord",
+      "slot_quantity": "0x28c0947f463362aab09a2d7896ccc847fb7e52633a16b978fb2caf3db1a9b8f8",
+      "slot_word": "0x28c0947f463362aab09a2d7896ccc847fb7e52633a16b978fb2caf3db1a9b8f8",
+      "source_records": [
+        {
+          "label": "usdc.pairBalance",
+          "operator_id": "drpc",
+          "request_file": "043-drpc-usdc.pairBalance-request.json",
+          "request_sha256": "d3d126d6a1152115055763a916b878fcc45e5e3e12d2467578c6d836227b2c4e",
+          "response_file": "043-drpc-usdc.pairBalance-response.bin",
+          "response_sha256": "bac4b03502edf1777f40356c74d0901f44c2aa6f8bd1973bee199654d15322f8"
+        },
+        {
+          "label": "usdc.pairBalance",
+          "operator_id": "tenderly",
+          "request_file": "044-tenderly-usdc.pairBalance-request.json",
+          "request_sha256": "87b4b8616e931e9156812688cf53c1d758c184d34e579d81ecbc9b4c62d4f20d",
+          "response_file": "044-tenderly-usdc.pairBalance-response.bin",
+          "response_sha256": "c3f7e7b5e8411aecb48a707ff205dbf1ac55efa7b29ffbb498bb9e4f7160e001"
+        },
+        {
+          "label": "usdc.pairBalance",
+          "operator_id": "nodies",
+          "request_file": "045-nodies-usdc.pairBalance-request.json",
+          "request_sha256": "1dd124d3f4d7c6152ad4bf7422807696c6c76cb66530bad511322e2d21a8396f",
+          "response_file": "045-nodies-usdc.pairBalance-response.bin",
+          "response_sha256": "d4b1283869e61244f0683cf81343401a6e6eacde430643e3bafe9328464ba5b4"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "1b8f75c7ce80f3f161c9ed43c4487b5187529cbc84b8393ee12853e86f4a3e8a"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot0",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot0Word",
+      "slot_quantity": "0x0",
+      "slot_word": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "source_records": [
+        {
+          "label": "pair.slot0",
+          "operator_id": "drpc",
+          "request_file": "046-drpc-pair.slot0-request.json",
+          "request_sha256": "ad4527c23fc9507ee1eddb8a69ae414e7b1ce61dc79036892a77ed22c07c2433",
+          "response_file": "046-drpc-pair.slot0-response.bin",
+          "response_sha256": "c0f4ffe660bbbb2a15bf650e27d2ea0598e4d500039be492d39c8dbc28aceccf"
+        },
+        {
+          "label": "pair.slot0",
+          "operator_id": "tenderly",
+          "request_file": "047-tenderly-pair.slot0-request.json",
+          "request_sha256": "b376cbf826d870779ef6f3ea9a0f2989a56d818a24f0df248162bd3511c44c2b",
+          "response_file": "047-tenderly-pair.slot0-response.bin",
+          "response_sha256": "fff0ebf33233f1de16c0321437580b91a94765444d68b6280c373dbf444e419e"
+        },
+        {
+          "label": "pair.slot0",
+          "operator_id": "nodies",
+          "request_file": "048-nodies-pair.slot0-request.json",
+          "request_sha256": "3b6b2939a96f08a2241b13adfd929452bec3042920bcc150ecf4abc7a8f4f7c8",
+          "response_file": "048-nodies-pair.slot0-response.bin",
+          "response_sha256": "8a12d87d6fb54406ce049d86f537758d58dd91a313bf8b5799ea4a3a40f61b91"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "9c1d42faa821eefbba75ffe2c5b23d3ca6367064f9d54b51734adce11f5b7e94"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot3",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot3Word",
+      "slot_quantity": "0x3",
+      "slot_word": "0x0000000000000000000000000000000000000000000000000000000000000003",
+      "source_records": [
+        {
+          "label": "pair.slot3",
+          "operator_id": "drpc",
+          "request_file": "049-drpc-pair.slot3-request.json",
+          "request_sha256": "b18f201296e1fb79c73e7cecbb7b19651edb0431d1d685b70bb52c0e20eb1e6a",
+          "response_file": "049-drpc-pair.slot3-response.bin",
+          "response_sha256": "27a5926deec670193904d01dc3402febdc1f8ccb28ba0e6dd93917126aee82ea"
+        },
+        {
+          "label": "pair.slot3",
+          "operator_id": "tenderly",
+          "request_file": "050-tenderly-pair.slot3-request.json",
+          "request_sha256": "31161ccc21ed6e914cfb868a7756218c3514354187b7d373c6b01dac4c53e50d",
+          "response_file": "050-tenderly-pair.slot3-response.bin",
+          "response_sha256": "035591557a36ec87ff81b776c0cb351e48a8cd4032d103a49c170aa921ed05fc"
+        },
+        {
+          "label": "pair.slot3",
+          "operator_id": "nodies",
+          "request_file": "051-nodies-pair.slot3-request.json",
+          "request_sha256": "76aa241611c138500793d041bb03f4c90dcc12935c0312e7a6ec8e838b3f36e6",
+          "response_file": "051-nodies-pair.slot3-response.bin",
+          "response_sha256": "fb47e6c8e45a118674e8bf555d235933ec55325dd7f073e2351c111bf7a7fd66"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "c901c3e9d9e9f95347511e3196f3fcc31db00f8e2fd25fafa72f3cd3cfd5337c"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot5",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot5Word",
+      "slot_quantity": "0x5",
+      "slot_word": "0x0000000000000000000000000000000000000000000000000000000000000005",
+      "source_records": [
+        {
+          "label": "pair.slot5",
+          "operator_id": "drpc",
+          "request_file": "010-drpc-pair.slot5-request.json",
+          "request_sha256": "e54a6c1fe1e28bc5731a77ac01425e56478cc4772f284d4e05d8d960caa4dac2",
+          "response_file": "010-drpc-pair.slot5-response.bin",
+          "response_sha256": "2d8d6324d17bf4c3424864f6a204be2ae0a90b1a054d749ef759ca312792e348"
+        },
+        {
+          "label": "pair.slot5",
+          "operator_id": "tenderly",
+          "request_file": "011-tenderly-pair.slot5-request.json",
+          "request_sha256": "7a2266cfa94926f4c3f17f660dae850eeb39e5927bfef4cb0247c201aac2d008",
+          "response_file": "011-tenderly-pair.slot5-response.bin",
+          "response_sha256": "d601ed7982432e197908c0954cc5a1e7d7b9103a6882fe0a7614057cd9e8bb81"
+        },
+        {
+          "label": "pair.slot5",
+          "operator_id": "nodies",
+          "request_file": "012-nodies-pair.slot5-request.json",
+          "request_sha256": "9dd6770313224033bfe72e4c60f384ef63e8a1897538c4718700aab58664ed3c",
+          "response_file": "012-nodies-pair.slot5-response.bin",
+          "response_sha256": "e36f58a4001049ecc06281b0dd3c07f1bcf89a7d30b68e1c307f0f2385598475"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "4a6ded4d4b2b78d41dc2790afbe265a7d9b5d81fca90f4d0974dfdd02dcf3e6a"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot6",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot6Word",
+      "slot_quantity": "0x6",
+      "slot_word": "0x0000000000000000000000000000000000000000000000000000000000000006",
+      "source_records": [
+        {
+          "label": "pair.slot6",
+          "operator_id": "drpc",
+          "request_file": "052-drpc-pair.slot6-request.json",
+          "request_sha256": "37ac3917ccad7f1a08fabdf473f86df79e3151ec265e4f1b25813b5e01fa788a",
+          "response_file": "052-drpc-pair.slot6-response.bin",
+          "response_sha256": "629bc488a1d09a715105f1f14fe482476978e3ddf2b0da74ec6c7ff6b54dcbef"
+        },
+        {
+          "label": "pair.slot6",
+          "operator_id": "tenderly",
+          "request_file": "053-tenderly-pair.slot6-request.json",
+          "request_sha256": "9f676b2bf4048acf8381bfe246ad8bab53977beaca0dfa9937833d4ab8e2174a",
+          "response_file": "053-tenderly-pair.slot6-response.bin",
+          "response_sha256": "1f652fefad4633a4aa58b789b5dc749803de76a907e09186e24ea096fa9d9299"
+        },
+        {
+          "label": "pair.slot6",
+          "operator_id": "nodies",
+          "request_file": "054-nodies-pair.slot6-request.json",
+          "request_sha256": "2a092c93a399c079853c561766d343923f6581151a3ab78c0ae3a018dc18f652",
+          "response_file": "054-nodies-pair.slot6-response.bin",
+          "response_sha256": "d9d4582eec1930bd3c54a65a4d20af592f9a4895c5e44ad6789431893befce4b"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "01a4171f1877202991660784eea8cff8b6b235af9be79d3ce1e167dad74c025e"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot7",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot7Word",
+      "slot_quantity": "0x7",
+      "slot_word": "0x0000000000000000000000000000000000000000000000000000000000000007",
+      "source_records": [
+        {
+          "label": "pair.slot7",
+          "operator_id": "drpc",
+          "request_file": "055-drpc-pair.slot7-request.json",
+          "request_sha256": "40975d8b2753929f3aa9ccaed68f38586da3944bac878ef124dc6a3938555fe4",
+          "response_file": "055-drpc-pair.slot7-response.bin",
+          "response_sha256": "c470fb965a41f0d9a7b01336a50d86ba6adab0145deea84eda0e1e11edbbefe5"
+        },
+        {
+          "label": "pair.slot7",
+          "operator_id": "tenderly",
+          "request_file": "056-tenderly-pair.slot7-request.json",
+          "request_sha256": "210a399ff8f9d84820ebfc902c17e040385fa1d10793f58a8d31212db1199c47",
+          "response_file": "056-tenderly-pair.slot7-response.bin",
+          "response_sha256": "18a2b0c6a8e53bbb5aaae3c565c12d96452b506ad820934aab0888957ebeeef3"
+        },
+        {
+          "label": "pair.slot7",
+          "operator_id": "nodies",
+          "request_file": "057-nodies-pair.slot7-request.json",
+          "request_sha256": "91b15f299b2d0efc8c9cad6d9fe269b4128da5c781be047f7c921d0c587e516a",
+          "response_file": "057-nodies-pair.slot7-response.bin",
+          "response_sha256": "18d17565516411537c855bc0f209629186727629fa56d47a996fbfbbddddaf14"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "a2b8dfe1b05a9e1c74d832d9ff079f17abe2c55ae690967a293abdb23712e441"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot8",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot8Word",
+      "slot_quantity": "0x8",
+      "slot_word": "0x0000000000000000000000000000000000000000000000000000000000000008",
+      "source_records": [
+        {
+          "label": "pair.slot8",
+          "operator_id": "drpc",
+          "request_file": "058-drpc-pair.slot8-request.json",
+          "request_sha256": "b6f61e35e3dc8906eac1dc31972e1c061a03a92ba3cd963cee725ebda2c88410",
+          "response_file": "058-drpc-pair.slot8-response.bin",
+          "response_sha256": "12d41c75b87d6c1506581a65af59f387457bc93096b122d9fb34ac085b125ffa"
+        },
+        {
+          "label": "pair.slot8",
+          "operator_id": "tenderly",
+          "request_file": "059-tenderly-pair.slot8-request.json",
+          "request_sha256": "6dfc859a14484648753e09501f06c988d6601f2654b3eecef4c7466861ba62fc",
+          "response_file": "059-tenderly-pair.slot8-response.bin",
+          "response_sha256": "63abf4c2416527d3539b9914b7c93d02587fac1c6a655d7fed22c2e28246dcba"
+        },
+        {
+          "label": "pair.slot8",
+          "operator_id": "nodies",
+          "request_file": "060-nodies-pair.slot8-request.json",
+          "request_sha256": "ba3616c2a2878f1d9e41292af8f2d58fd231065b1c99d6ff49a4273b7ca24712",
+          "response_file": "060-nodies-pair.slot8-response.bin",
+          "response_sha256": "300043aa5bed402114a56873b15efacadaaaa8593fff0cbf001140106243d251"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "f5b87be540e06a2c16e9ac634ba71404ac97c4a176ab57451824a3168f51590e"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot9",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot9Word",
+      "slot_quantity": "0x9",
+      "slot_word": "0x0000000000000000000000000000000000000000000000000000000000000009",
+      "source_records": [
+        {
+          "label": "pair.slot9",
+          "operator_id": "drpc",
+          "request_file": "061-drpc-pair.slot9-request.json",
+          "request_sha256": "a39d8ef37a26143c01e38ce2fd616e2ff6af525faecb17656a5563cfca8e4af0",
+          "response_file": "061-drpc-pair.slot9-response.bin",
+          "response_sha256": "466fda611cda45b088fbcf2e6475626953bf586efe908b4021d97145da624271"
+        },
+        {
+          "label": "pair.slot9",
+          "operator_id": "tenderly",
+          "request_file": "062-tenderly-pair.slot9-request.json",
+          "request_sha256": "ee1dacf5a18eecaf9ca947239e2c693e724e73a5737cfac19f93758b89b4a123",
+          "response_file": "062-tenderly-pair.slot9-response.bin",
+          "response_sha256": "4fdde98d7cf58bf3157521f4b8d417d41148b04d14cf0826d00aff1e009c03be"
+        },
+        {
+          "label": "pair.slot9",
+          "operator_id": "nodies",
+          "request_file": "063-nodies-pair.slot9-request.json",
+          "request_sha256": "6d04233cf08c3efd17d9598021853c13cc73ec110c778e1707587d6789ab6120",
+          "response_file": "063-nodies-pair.slot9-response.bin",
+          "response_sha256": "a154b4495ae8b46803dd4a736900ac102928b52c7e46da129a9d526cfd41db0f"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "1c2083c8cdaf75db43b50a97991b8c8905c90cb3ac617e66f0572762242ba9e3"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot10",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot10Word",
+      "slot_quantity": "0xa",
+      "slot_word": "0x000000000000000000000000000000000000000000000000000000000000000a",
+      "source_records": [
+        {
+          "label": "pair.slot10",
+          "operator_id": "drpc",
+          "request_file": "064-drpc-pair.slot10-request.json",
+          "request_sha256": "ca10efd0513f4e397faab766d5b38717cfee407e4ce4670e8b23c5b7008b568f",
+          "response_file": "064-drpc-pair.slot10-response.bin",
+          "response_sha256": "1ab03e67dcef453b50f50eff324419d4211597f71d7aedd675988152b83f00ee"
+        },
+        {
+          "label": "pair.slot10",
+          "operator_id": "tenderly",
+          "request_file": "065-tenderly-pair.slot10-request.json",
+          "request_sha256": "e0eeda469d0b75c11326f046ea0cbd06614ffaac6b2cdec2a1a887544698de97",
+          "response_file": "065-tenderly-pair.slot10-response.bin",
+          "response_sha256": "cc956bf91d3884d8031f791b1f1ef6e79b78706f1fae8f14b1b9e160f41015ae"
+        },
+        {
+          "label": "pair.slot10",
+          "operator_id": "nodies",
+          "request_file": "066-nodies-pair.slot10-request.json",
+          "request_sha256": "6f5134521dad29beaa5c63fbdb9c774615d5af76abeedf16195e2f979202b8e7",
+          "response_file": "066-nodies-pair.slot10-response.bin",
+          "response_sha256": "a0c7d67022be13ec9048b8033769ef1cbd43df2701e78c6a930b421a3ffde352"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "cd1da7eba2d7fdffba725a5f54516ac715ce840bebf279a7f783b1080e4e1896"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot11",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot11Word",
+      "slot_quantity": "0xb",
+      "slot_word": "0x000000000000000000000000000000000000000000000000000000000000000b",
+      "source_records": [
+        {
+          "label": "pair.slot11",
+          "operator_id": "drpc",
+          "request_file": "067-drpc-pair.slot11-request.json",
+          "request_sha256": "fcac86b8f16ec4083c88ea6db4f5c41f2e4e47ae0749df0935c8ae371d2ef2de",
+          "response_file": "067-drpc-pair.slot11-response.bin",
+          "response_sha256": "6306bc007045754ec51a5ee7050f20ffea7fa04701f82e5615868f20504ce58a"
+        },
+        {
+          "label": "pair.slot11",
+          "operator_id": "tenderly",
+          "request_file": "068-tenderly-pair.slot11-request.json",
+          "request_sha256": "031c73e2589c1518c50a37a6320a031e6b08696eb87e88d1ff9ec34387a7bf28",
+          "response_file": "068-tenderly-pair.slot11-response.bin",
+          "response_sha256": "2cf484fafa0da2356b5a60e25760a1bff57eee0169780074f366e6d2b5f37f14"
+        },
+        {
+          "label": "pair.slot11",
+          "operator_id": "nodies",
+          "request_file": "069-nodies-pair.slot11-request.json",
+          "request_sha256": "938cc63e9d4c633f3a62b63fd2dadb48ecc511f8eadb5ffb3ac8a3ae40308358",
+          "response_file": "069-nodies-pair.slot11-response.bin",
+          "response_sha256": "45d2da180ced31c9dcfb2334921e0db1ba9a360f333432d94af8a8b49d66abca"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "e862d6ce21784a6483a181f7766f0c2eb423f14b14f34702025839b3934442a7"
+    },
+    {
+      "account": "0xb4e16d0168e52d35cacd2c6185b44281ec28c9dc",
+      "field_id": "pair.slot12",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.pairSlot12Word",
+      "slot_quantity": "0xc",
+      "slot_word": "0x000000000000000000000000000000000000000000000000000000000000000c",
+      "source_records": [
+        {
+          "label": "pair.slot12",
+          "operator_id": "drpc",
+          "request_file": "070-drpc-pair.slot12-request.json",
+          "request_sha256": "e58ee5de7c9ff5ff83529bed72afd1c95e3269a4afbf7ea92f885d0b9506a704",
+          "response_file": "070-drpc-pair.slot12-response.bin",
+          "response_sha256": "922dbc7104fe2eb4f752cb7736216b26a62558d52ddc07a3f765de90bd271e6c"
+        },
+        {
+          "label": "pair.slot12",
+          "operator_id": "tenderly",
+          "request_file": "071-tenderly-pair.slot12-request.json",
+          "request_sha256": "4cade2acdf33d0cc974c2dcb5c8d675f0df4d90ea045b38261c2a04142709c8a",
+          "response_file": "071-tenderly-pair.slot12-response.bin",
+          "response_sha256": "f0ad0413a938734f129fdf3191df406837f0ac20c223ded9781a5779e64888e1"
+        },
+        {
+          "label": "pair.slot12",
+          "operator_id": "nodies",
+          "request_file": "072-nodies-pair.slot12-request.json",
+          "request_sha256": "35e220bd00277cd3bb48dd05e5dbc3fdc0dd435ef36340eeb8af38bf11780265",
+          "response_file": "072-nodies-pair.slot12-response.bin",
+          "response_sha256": "d090920a490d55651d8a2d01d28a42c087771c8b23cf6f3ea3ada5c3fbd43587"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "ec4916dd28fc4c10d78e287ca5d9cc51ee1ae73cbfde08c6b37324cbfaac8bc5"
+    },
+    {
+      "account": "0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2",
+      "field_id": "weth.pairBalance",
+      "kind": "storage",
+      "lean_definition": "Blanc.Composition.LiveUsdcWeth9B26213219Data.wethPairBalanceWord",
+      "slot_quantity": "0xb374801ace2c02f5db0425ab5920a2b7ed1d5a00abbcd395fda7530ba1d666c0",
+      "slot_word": "0xb374801ace2c02f5db0425ab5920a2b7ed1d5a00abbcd395fda7530ba1d666c0",
+      "source_records": [
+        {
+          "label": "weth.pairBalance",
+          "operator_id": "drpc",
+          "request_file": "073-drpc-weth.pairBalance-request.json",
+          "request_sha256": "c88237448c2dc80349c82b957adc18b31034df647e25906c46580a4bd6a849b1",
+          "response_file": "073-drpc-weth.pairBalance-response.bin",
+          "response_sha256": "002e3e46e2c996a0a47f3dab0ec7b88a24137df09730b3cd212de4d73dc3fc3e"
+        },
+        {
+          "label": "weth.pairBalance",
+          "operator_id": "tenderly",
+          "request_file": "074-tenderly-weth.pairBalance-request.json",
+          "request_sha256": "3faecf488843122b0fd3693d6f24263d0f8021b49610e9d1ea4a65e97d0438fc",
+          "response_file": "074-tenderly-weth.pairBalance-response.bin",
+          "response_sha256": "b633dfa4a568e3b279f180606f69f27dde6dbc3daef463a6a4fa7fea855314b7"
+        },
+        {
+          "label": "weth.pairBalance",
+          "operator_id": "nodies",
+          "request_file": "075-nodies-weth.pairBalance-request.json",
+          "request_sha256": "cf3681105d9efe9a069168744c63b9dda7fd4e08de849f48c86bb4731304e6be",
+          "response_file": "075-nodies-weth.pairBalance-response.bin",
+          "response_sha256": "09ea3616e808b4f023e38e716461a260c9aa293977da1ccfed63d10db8298fe1"
+        }
+      ],
+      "value_bytes": 32,
+      "value_sha256": "ca74ab405fdf2466f670832ef923e5f8189b697e28598dfc3354135007595c81"
+    }
+  ],
+  "immutable_sources": [
+    {
+      "bytes": 190952,
+      "commit": "3c28a5ef8fe062c8ca9685bfd234f1890883b7c5",
+      "local_path": "source/historical-Fork.lean",
+      "path": "Jaune/Fork.lean",
+      "repository_id": "jaune",
+      "sha256": "90a9419243e762f58edc9b8ce86b2a853513a241d978e73f5b1034ebb2df055a"
+    },
+    {
+      "bytes": 113193,
+      "commit": "05696652e319fae23dd77fc4fa531e740b12628a",
+      "local_path": "source/combined-Fork.lean",
+      "path": "Jaune/Fork.lean",
+      "repository_id": "jaune",
+      "sha256": "28d42f106a3bdc5faee9d16f51e799ab0686c8fb7eae9f0fbb81ecabee266563"
+    },
+    {
+      "bytes": 49642,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/usdc-history-reference.json",
+      "path": "scripts/usdc-history-reference.json",
+      "repository_id": "blanc",
+      "sha256": "d0cb2b0a086baef1eaa6f647474e9209ffa90a0e52075f8e94f6c54df132185b"
+    },
+    {
+      "bytes": 9147,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/Blanc__Semantics.lean",
+      "path": "Blanc/Semantics.lean",
+      "repository_id": "blanc",
+      "sha256": "78cb8a2fb8bd529264e33a76e7fcece63984e5288a34d5560e62b41e8bec7874"
+    },
+    {
+      "bytes": 16748,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/Blanc__ExecutionHistory.lean",
+      "path": "Blanc/ExecutionHistory.lean",
+      "repository_id": "blanc",
+      "sha256": "92690dde99485b9d34efe89554c8517e3525358c99ba5ebe42c07a6d30e490c5"
+    },
+    {
+      "bytes": 669,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/Blanc__Lift__MapSlot.lean",
+      "path": "Blanc/Lift/MapSlot.lean",
+      "repository_id": "blanc",
+      "sha256": "3b56e8bb03df10f0a8f8a07f470b54abe44aed5cb34f8e9a43928df284c0bd25"
+    },
+    {
+      "bytes": 2011,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/Blanc__Lift__Usdc__Slots.lean",
+      "path": "Blanc/Lift/Usdc/Slots.lean",
+      "repository_id": "blanc",
+      "sha256": "b08a2a037ffaa6682eff6bdbdd0bd4de41ba79d4ef3152c1a74c4eda5d3eb62f"
+    },
+    {
+      "bytes": 2019,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/Blanc__Lift__Weth9__Spec.lean",
+      "path": "Blanc/Lift/Weth9/Spec.lean",
+      "repository_id": "blanc",
+      "sha256": "382b0eb2cbaab81c2195f53b956693a9ffd672ab7932f45437828e424a2b4d9b"
+    },
+    {
+      "bytes": 3159,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/scripts__keccak.py",
+      "path": "scripts/keccak.py",
+      "repository_id": "blanc",
+      "sha256": "6b4e6f432d009b129da7d5ad75d3e83dbcc4210226af251325ceb41488003e50"
+    },
+    {
+      "bytes": 74899,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/scripts__lift__certificates.json",
+      "path": "scripts/lift/certificates.json",
+      "repository_id": "blanc",
+      "sha256": "c968461b6c525fc8784eddb812577830470159d213aa5125d805c1d939056295"
+    },
+    {
+      "bytes": 4372,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/usdc-proxy-runtime.hex",
+      "path": "scripts/lift/inputs/usdc-proxy-runtime.hex",
+      "repository_id": "blanc",
+      "sha256": "49ea48404095ae5de0d99bf0f11861f9dbaded296108853f109f30c334544afb"
+    },
+    {
+      "bytes": 46928,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/usdc-impl-runtime.hex",
+      "path": "scripts/lift/inputs/usdc-impl-runtime.hex",
+      "repository_id": "blanc",
+      "sha256": "ff3cffa36fad84365bbcd9da6b5249d65be3f3c9afbf112dcf52b339f5a5573e"
+    },
+    {
+      "bytes": 3482,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/usdc-lib-runtime.hex",
+      "path": "scripts/lift/inputs/usdc-lib-runtime.hex",
+      "repository_id": "blanc",
+      "sha256": "3f6f5e4e9fca8207653e1b7b03fd2858771697be6a6bd8345600d6ed32cf5ef7"
+    },
+    {
+      "bytes": 6249,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/weth9-runtime.hex",
+      "path": "scripts/lift/inputs/weth9-runtime.hex",
+      "repository_id": "blanc",
+      "sha256": "9c364833caa02e018eceb88164356a2b79a883d6ca6190f1a6351f2444e1ac1a"
+    },
+    {
+      "bytes": 22587,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/uniswap-v2-pair-runtime.hex",
+      "path": "scripts/lift/inputs/uniswap-v2-pair-runtime.hex",
+      "repository_id": "blanc",
+      "sha256": "87e18d030efc4a775b724b128d89f5f3b6ae49e66c5eb41f7b7b8891f21c2111"
+    },
+    {
+      "bytes": 27719,
+      "commit": "cda29e1c90badcc722a2ae2c6846a73f1e9b471f",
+      "local_path": "source/uniswap-v2-factory-runtime.hex",
+      "path": "scripts/lift/inputs/uniswap-v2-factory-runtime.hex",
+      "repository_id": "blanc",
+      "sha256": "c7ee31ccabe4c26d785588089e202a87c10c33527f25dbe8fcd15b96d8a4056e"
+    },
+    {
+      "bytes": 15745,
+      "commit": "1d04ef47ffc40cc87590816d772874de3fd39ac7",
+      "local_path": "accepted-source-audit/schema.json",
+      "path": "evidence/live-usdc-weth9-assembly-v1/wsl-finite-input-audit-20261020/schema.json",
+      "repository_id": "plans",
+      "sha256": "3032685fbe03f9d79a57dc881dbaa684ef7f00e01407f1dda4e1c84510176ebc"
+    },
+    {
+      "bytes": 4412,
+      "commit": "1d04ef47ffc40cc87590816d772874de3fd39ac7",
+      "local_path": "accepted-source-audit/report.md",
+      "path": "evidence/live-usdc-weth9-assembly-v1/wsl-finite-input-audit-20261020/report.md",
+      "repository_id": "plans",
+      "sha256": "c784497f2d03a07da045327ed0d239650cd8923601ec0d11a647f7eb63cee060"
+    },
+    {
+      "bytes": 22409,
+      "commit": "1d04ef47ffc40cc87590816d772874de3fd39ac7",
+      "local_path": "accepted-source-audit/worker-report.md",
+      "path": "evidence/live-usdc-weth9-assembly-v1/wsl-finite-input-audit-20261020/worker-report.md",
+      "repository_id": "plans",
+      "sha256": "722005fb82f5344f8b291b946f563d7f37c596fe89dfb38f39a73054a3babcb0"
+    },
+    {
+      "bytes": 473771,
+      "commit": "1d04ef47ffc40cc87590816d772874de3fd39ac7",
+      "local_path": "accepted-source-audit/sources.json",
+      "path": "evidence/live-usdc-weth9-assembly-v1/wsl-finite-input-audit-20261020/sources.json",
+      "repository_id": "plans",
+      "sha256": "f759b179e2a4a907011b5efb80419ffc35feddad982957d2da7be25e471f9f52"
+    }
+  ],
+  "kernel_status": "UNELABORATED; no theorem or kernel verdict emitted",
+  "lean_file": "Data.lean",
+  "lean_sha256": "da3a61b62161fd90e033fb14df73931ebcd2d611215d099b82eb17ce8d94c331",
+  "open_boundaries": [
+    "kernel equalities for computed slot coordinates and supplied code",
+    "same-B C3/L3/L4 compatibility and historical KW/KP/model maps",
+    "hybrid checker soundness, history/support/backing/P1 and retained P4",
+    "registered artifact admission and public reference classification"
+  ],
+  "reconstruction_lock_sha256": "dd4d15eae6dc939ddbb313698622791e62d9ef5b858d4dbc9999a68a9892b49b",
+  "required_service_operators": [
+    "drpc",
+    "nodies",
+    "tenderly"
+  ],
+  "schema": "l5-offline-literals-v1",
+  "status": "UNADMITTED finite data preparation; no Lean proof",
+  "validator_canonical_bundle_sha256": "f0431c506b132b0f9835b381b1300eb3371a08e973546507c812d974df6e5b22",
+  "validator_sha256": "b7ee5f91f7cea84f2c1b7f45c4b05d644ce8cb032fdaf3312375f41e329bbd7c",
+  "values_file_sha256": "a04238bf6d5bbcabb0b91037157a49745e529a1269eaa65f8871a685cfc5538e",
+  "writer_sha256": "5045e51f3d7af2849e8efdce60551c268b5f0d2bec9e9a5036ecfe723a44b522"
+}

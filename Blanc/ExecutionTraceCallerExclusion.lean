@@ -32,7 +32,7 @@ private theorem messageCallDelegation_code_own
     rcases rest with ⟨rfl, _⟩
     rfl
 
-private theorem messageCallExecutionMessage_code_empty
+theorem messageCallExecutionMessage_code_empty
     {msg : Msg} {a : Adr}
     (own : msg.code = msg.benv.state.getCode msg.currentTarget)
     (empty : msg.benv.state.getCode a = ByteArray.empty) :
@@ -261,5 +261,20 @@ theorem ConfiguredHistoryTrace.txRawFrames_caller_excluded
   exact ConfiguredHistoryTrace.txCallers_of_empty trace senders empty avoid
 
 
+
+theorem prepareMessage_callCode {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
+    (prepared : prepareMessage benv tenv tx = .ok msg)
+    (call : msg.target.isNone = false) :
+    msg.codeAddress = some msg.currentTarget ∧
+      msg.code = msg.benv.state.getCode msg.currentTarget := by
+  cases receiver : tx.type.receiver? with
+  | none =>
+    simp only [prepareMessage, receiver] at prepared
+    rw [← Except.ok.inj prepared] at call
+    cases call
+  | some target =>
+    simp only [prepareMessage, receiver] at prepared
+    rw [← Except.ok.inj prepared]
+    exact ⟨rfl, rfl⟩
 
 end Blanc.ExecutionTrace

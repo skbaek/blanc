@@ -2619,6 +2619,53 @@ that the body runs nor describes the storage effect. The production example is
 it names the exact `mloadWord 0 ++ [pushB256 maxExitRequestsLimitSlot]` prefix
 and closes at the following `SSTORE` without changing or duplicating the body.
 
+### Original history, caller and receipt adapters
+
+For a caller fold over an arbitrary complete-settlement root list, use
+`rootFrames_callerTarget_of_children` in
+[`Blanc/Lift/CallChildren.lean`](../Blanc/Lift/CallChildren.lean).
+[`Blanc/ExecutionMidHistoryCallers.lean`](../Blanc/ExecutionMidHistoryCallers.lean)
+provides the selected-domain and mid-history wrappers and checked-sender exclusion.
+The canonical roots and frame expansion remain in
+[`Blanc/ExecutionHistoryCommittedCuts.lean`](../Blanc/ExecutionHistoryCommittedCuts.lean),
+and system-stage caller facts remain in
+[`Blanc/ExecutionSenderRootCallers.lean`](../Blanc/ExecutionSenderRootCallers.lean).
+`ConfiguredHistoryTraceIn.append_senderQueries` and
+`MidHistoryTraceIn.noSenderAt_of_senderQueries` in
+[`Blanc/ExecutionMidHistoryInForest.lean`](../Blanc/ExecutionMidHistoryInForest.lean)
+retain the exact original query lists, including failed transactions.
+
+For original suffix/prefix root code provenance, use
+[`Blanc/ExecutionMidHistoryOwnCode.lean`](../Blanc/ExecutionMidHistoryOwnCode.lean):
+`settledRoots_rootOwnEntry` and `rootsBeforeTxSplit_rootOwnEntry` derive root entry
+facts without an installed-world or storage-invariant assumption.
+For caller exclusion over a Cancun suffix or history, use
+[`Blanc/ExecutionMidHistoryInCallerExclusion.lean`](../Blanc/ExecutionMidHistoryInCallerExclusion.lean).
+Its `NoSenderAt`, `AllCancun` and `BeaconCodeInstalled` record exact sender,
+selected-fork and actual beacon-code duties. Earlier historical forks use
+[`Blanc/ExecutionMidHistoryPreCancunCallers.lean`](../Blanc/ExecutionMidHistoryPreCancunCallers.lean).
+Initial empty code and actual creation avoidance remain explicit.
+
+For creation avoidance restricted to the original retained forest, use
+[`Blanc/ExecutionRetainedCodeAt.lean`](../Blanc/ExecutionRetainedCodeAt.lean),
+[`Blanc/ExecutionRetainedMessageCallers.lean`](../Blanc/ExecutionRetainedMessageCallers.lean)
+and [`Blanc/ExecutionRetainedHistoryCallers.lean`](../Blanc/ExecutionRetainedHistoryCallers.lean).
+These carry code preservation and caller exclusion from executions through clean
+message settlement, checked transactions and pre-Cancun histories. Failed subtrees
+roll back; no condition is imposed on their discarded creations. Initial code and
+retained creation provenance still require producers. The public
+`messageCallExecutionMessage_code_empty` and `prepareMessage_callCode` in
+[`Blanc/ExecutionTraceCallerExclusion.lean`](../Blanc/ExecutionTraceCallerExclusion.lean)
+supply the actual message-code facts.
+
+To convert an original selected-domain history after an established fork floor,
+use `ConfiguredHistoryTraceIn.coveredOfReached` in
+[`Blanc/ExecutionHistoryInReached.lean`](../Blanc/ExecutionHistoryInReached.lean).
+Its frame and sender-query projection theorems preserve the original lists;
+the conversion supplies no replacement history or authentication claim.
+These adapters require explicit trace, cut and capability witnesses, so this
+branch supplies discovery rather than a single goal-head recipe.
+
 ## I — invariance and noninterference
 
 ### I1. One instruction/line/function preserves an observation

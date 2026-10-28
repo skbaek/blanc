@@ -322,19 +322,17 @@ theorem PairObservedReplayWith.consumed_of_mem
     · exact ⟨_, _, consumed⟩
     · exact ih s later
 
-/-- **Call shape from positional consumption (no certificate memory bound).**  Over a configured
-history, every non-static direct child of every committed non-static Pair frame is called by the
-Pair with the `transfer` or the `uniswapV2Call` selector, at the callee's own code address unless
-the callee holds an EIP-7702 delegation designator. -/
-theorem pair_replay_children_shape
+/-- Any authenticated observed Pair replay with positional consumption determines the
+mutable child selectors. This uses no fork-specific admission or token/factory invariant. -/
+theorem PairObservedReplayWith.children_shape
     {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
     (positional : ∀ root segment transcript out,
       Consumes root segment transcript out → PairRootedConsumes root segment transcript out)
     {pair : Adr} {frames : List Exec.Frame} {steps : List PairStep} {st finish : State}
+    (replay : PairObservedReplayWith Consumes st steps finish)
     (observedEq : steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
       frames.flatMap (pairFrameObs pair))
-    (auth : ∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair)
-    (replay : PairObservedReplayWith Consumes st steps finish) :
+    (auth : ∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) :
     ∀ G ∈ frames, G.sevm.currentTarget = pair → G.sevm.isStatic = false →
       ∀ c ∈ Exec.childFrames G.run, c.sevm.isStatic = false →
         c.sevm.caller = pair ∧
@@ -369,7 +367,28 @@ theorem pair_replay_children_shape
   · rw [codeAddress undelegated, targetEq]
   · exact requestFor_mutable_selector (static.symm.trans mutable) data
 
-/-- The modern configured-history projection of the actual replay child shape. -/
+/-- Argument-order compatibility for the original positional replay theorem. -/
+theorem pair_replay_children_shape
+    {Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult → Prop}
+    (positional : ∀ root segment transcript out,
+      Consumes root segment transcript out → PairRootedConsumes root segment transcript out)
+    {pair : Adr} {frames : List Exec.Frame} {steps : List PairStep} {st finish : State}
+    (observedEq : steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
+      frames.flatMap (pairFrameObs pair))
+    (auth : ∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair)
+    (replay : PairObservedReplayWith Consumes st steps finish) :
+    ∀ G ∈ frames, G.sevm.currentTarget = pair → G.sevm.isStatic = false →
+      ∀ c ∈ Exec.childFrames G.run, c.sevm.isStatic = false →
+        c.sevm.caller = pair ∧
+          (getDelegatedCodeAddress (c.pre.getCode c.sevm.currentTarget) = none →
+            c.sevm.codeAddress = some c.sevm.currentTarget) ∧
+          (Blanc.Sevm.selector c.sevm = 0xa9059cbb ∨ Blanc.Sevm.selector c.sevm = 0x10d1e85c) :=
+  replay.children_shape positional observedEq auth
+
+/-- **Call shape from positional consumption (no certificate memory bound).**  Over a configured
+history, every non-static direct child of every committed non-static Pair frame is called by the
+Pair with the `transfer` or the `uniswapV2Call` selector, at the callee's own code address unless
+the callee holds an EIP-7702 delegation designator. -/
 theorem pair_history_children_shape {pair : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
     (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -384,7 +403,6 @@ theorem pair_history_children_shape {pair : Adr} {cfg : ChainConfig}
           (Blanc.Sevm.selector c.sevm = 0xa9059cbb ∨ Blanc.Sevm.selector c.sevm = 0x10d1e85c) := by
   obtain ⟨-, steps, observedEq, auth, finish, K', replay, -⟩ :=
     pair_history_committed trace installed initial fresh
-  exact pair_replay_children_shape (fun _ _ _ _ consumed => consumed.positional)
-    observedEq auth replay
+  exact replay.children_shape (fun _ _ _ _ consumed => consumed.positional) observedEq auth
 
 end Blanc.Lift.UniswapV2Pair

@@ -1,4 +1,5 @@
 import Blanc.Lift.Weth9.Premise
+import Blanc.CompiledFixedInvariance
 
 /-!
 # WETH9 `approve` preserves solvency under the local collision premise
@@ -116,16 +117,115 @@ private theorem approve_segC {sevm : Sevm} {s s' : Devm} {k v : B256} {xs : Stac
   exact Stack.prefix_of_swap (n := 0) (by simp only [Stack.Swap, Stack.SwapCore, and_self])
     (of_run_swap h2) hp1
 
+/-- The event signature used by the deployed WETH9 approval body. -/
+def approvalTopic : B256 := Bytes.toB256
+  [0x8c, 0x5b, 0xe1, 0xe5, 0xeb, 0xec, 0x7d, 0x5b, 0xd1, 0x4f, 0x71,
+   0x42, 0x7d, 0x1e, 0x84, 0xf3, 0xdd, 0x03, 0x14, 0xc0, 0xf7, 0xb2, 0x29,
+   0x1e, 0x5b, 0x20, 0x0a, 0xc8, 0xc7, 0xc3, 0xb9, 0x25]
+
+open scoped LogOutputHinv
+
+private theorem approve_post_log {sevm : Sevm} {d post : Devm}
+    {value spender : B256} {xs : Stack}
+    (hp : value :: 0 :: value :: spender :: xs <<+ d.stack)
+    (run : Line.Run sevm d approvePost post) :
+    ∃ data, Log.mk sevm.currentTarget
+      [approvalTopic, sevm.caller.toB256, spender &&& ~~~ addressMask] data ∈ post.logs := by
+  unfold approvePost at run
+  obtain ⟨d1, h1, run⟩ := Line.of_run_cons run
+  obtain ⟨d2, h2, run⟩ := Line.of_run_cons run
+  obtain ⟨d3, h3, run⟩ := Line.of_run_cons run
+  obtain ⟨d4, h4, run⟩ := Line.of_run_cons run
+  obtain ⟨d5, h5, run⟩ := Line.of_run_cons run
+  obtain ⟨d6, h6, run⟩ := Line.of_run_cons run
+  obtain ⟨d7, h7, run⟩ := Line.of_run_cons run
+  obtain ⟨d8, h8, run⟩ := Line.of_run_cons run
+  obtain ⟨d9, h9, run⟩ := Line.of_run_cons run
+  obtain ⟨d10, h10, run⟩ := Line.of_run_cons run
+  obtain ⟨d11, h11, run⟩ := Line.of_run_cons run
+  obtain ⟨d12, h12, run⟩ := Line.of_run_cons run
+  obtain ⟨d13, h13, run⟩ := Line.of_run_cons run
+  obtain ⟨d14, h14, run⟩ := Line.of_run_cons run
+  obtain ⟨d15, h15, run⟩ := Line.of_run_cons run
+  obtain ⟨d16, h16, run⟩ := Line.of_run_cons run
+  obtain ⟨d17, h17, run⟩ := Line.of_run_cons run
+  obtain ⟨d18, h18, run⟩ := Line.of_run_cons run
+  obtain ⟨d19, h19, run⟩ := Line.of_run_cons run
+  obtain ⟨d20, h20, run⟩ := Line.of_run_cons run
+  obtain ⟨d21, h21, run⟩ := Line.of_run_cons run
+  obtain ⟨d22, h22, run⟩ := Line.of_run_cons run
+  obtain ⟨d23, h23, run⟩ := Line.of_run_cons run
+  obtain ⟨d24, h24, run⟩ := Line.of_run_cons run
+  obtain ⟨d25, h25, run⟩ := Line.of_run_cons run
+  obtain ⟨d26, h26, run⟩ := Line.of_run_cons run
+  obtain ⟨d27, h27, run⟩ := Line.of_run_cons run
+  have hp1 := prefix_of_pop (of_run_pop h1) hp
+  have hp2 := prefix_of_dup_val h2 (by show_nth) hp1
+  have hp3 := prefix_of_push (of_run_push h3) hp2
+  have hp4 := prefix_of_and h4 hp3
+  rw [ff20_and_word] at hp4
+  have hp5 := prefix_of_push (of_run_caller h5) hp4
+  have hp6 := prefix_of_push (of_run_push h6) hp5
+  have hp7 := prefix_of_and h7 hp6
+  rw [ff20_and_adr] at hp7
+  have hp8 := prefix_of_push (of_run_push h8) hp7
+  have hp9 := prefix_of_dup_val h9 (by show_nth) hp8
+  have hp10 := prefix_of_push (of_run_push h10) hp9
+  obtain ⟨mem1, hp11⟩ := prefix_of_mload h11 hp10
+  have hp12 := prefix_of_dup_val h12 (by show_nth) hp11
+  have hp13 := prefix_of_dup_val h13 (by show_nth) hp12
+  have hp14 := prefix_of_dup_val h14 (by show_nth) hp13
+  have hp15 := prefix_of_mstore h15 hp14
+  have hp16 := prefix_of_push (of_run_push h16) hp15
+  have hp17 := prefix_of_add h17 hp16
+  have hp18 : value :: mem1 :: (Bytes.toB256 [32] + mem1) ::
+      approvalTopic :: sevm.caller.toB256 :: spender.toAdr.toB256 ::
+      0 :: value :: spender :: xs <<+ d18.stack :=
+    Stack.prefix_of_swap (by exact Stack.swapCore_succ Stack.swapCore_zero)
+      (of_run_swap h18) hp17
+  have hp19 := prefix_of_pop (of_run_pop h19) hp18
+  have hp20 := prefix_of_pop (of_run_pop h20) hp19
+  have hp21 := prefix_of_push (of_run_push h21) hp20
+  obtain ⟨mem2, hp22⟩ := prefix_of_mload h22 hp21
+  have hp23 := prefix_of_dup_val h23 (by show_nth) hp22
+  have hp24 : (Bytes.toB256 [32] + mem1) :: mem2 :: mem2 ::
+      approvalTopic :: sevm.caller.toB256 :: spender.toAdr.toB256 ::
+      0 :: value :: spender :: xs <<+ d24.stack :=
+    Stack.prefix_of_swap (by exact Stack.swapCore_succ Stack.swapCore_zero)
+      (of_run_swap h24) hp23
+  have hp25 := prefix_of_sub h25 hp24
+  have hp26 : mem2 :: ((Bytes.toB256 [32] + mem1) - mem2) ::
+      approvalTopic :: sevm.caller.toB256 :: spender.toAdr.toB256 ::
+      0 :: value :: spender :: xs <<+ d26.stack :=
+    Stack.prefix_of_swap (by simp only [Stack.Swap, Stack.SwapCore, and_self])
+      (of_run_swap h26) hp25
+  rw [← and_mask_word] at hp26
+  obtain ⟨mi, sz, topics, hlen, hpop, hlogs⟩ := of_run_log_val h27
+  have hknown : [mem2, (Bytes.toB256 [0x20] + mem1) - mem2,
+      approvalTopic, sevm.caller.toB256, spender &&& ~~~ addressMask] <<+ d26.stack := by
+    exact pref_trans ⟨0 :: value :: spender :: xs, rfl⟩ hp26
+  have heq := List.pref_unique (by simp only [List.length_cons, List.length_nil, hlen]; rfl)
+    hknown (pref_of_split hpop)
+  simp only [List.cons.injEq] at heq
+  obtain ⟨rfl, rfl, rfl⟩ := heq
+  have tailLogs : d27.logs = post.logs := Line.of_inv Devm.logs (by line_inv) run
+  refine ⟨(d26.memory.read mem2.toNat (Bytes.toB256 [32] + mem1 - mem2).toNat).1, ?_⟩
+  rw [← tailLogs, hlogs]
+  exact List.mem_append_right _ (List.mem_cons_self ..)
+
 /-- The storage and balance effect of entry 11: exactly one SSTORE, of the
 top-of-stack `value` at the allowance key of `(caller, spender & mask)`. -/
-theorem approve_effect {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
+theorem approve_effect_log {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
     {value spender : B256} {xs : Stack}
     (hg : prog[11]? = some g) (hstk : value :: spender :: xs <<+ d.stack)
     (run : SFunc.Run prog sevm d g o) :
     Devm.getStor (Outcome.devm o) sevm.currentTarget =
         (Devm.getStor d sevm.currentTarget).set
           (allowKey sevm.caller.toB256 (spender &&& ~~~ addressMask)) value ∧
-      Devm.getBal (Outcome.devm o) = Devm.getBal d := by
+      Devm.getBal (Outcome.devm o) = Devm.getBal d ∧
+      ∃ data, Log.mk sevm.currentTarget
+        [approvalTopic, sevm.caller.toB256, spender &&& ~~~ addressMask] data ∈
+          (Outcome.devm o).logs := by
   have hg' : g = t_057b_c11 := by
     simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
       List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
@@ -171,12 +271,26 @@ theorem approve_effect {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
         funext a; exact Devm.Burn.getStor burn a
       have hburnBal : Devm.getBal d0 = Devm.getBal d := by
         funext a; exact Devm.Burn.getBal burn a
-      refine ⟨?_, ?_⟩
+      refine ⟨?_, ?_, ?_⟩
       · show Devm.getStor dd sevm.currentTarget = _
         rw [hretStor, ← i7, hset, ← i5, ← i4, ← i3, ← i2, ← i1, hburnStor]
         rfl
       · show Devm.getBal dd = _
         rw [hretBal, ← b7, ← b6, ← b5, ← b4, ← b3, ← b2, ← b1, hburnBal]
+      · obtain ⟨data, member⟩ := approve_post_log (prefix_of_sstore hsstore hs5) hPost
+        exact ⟨data, hret.logs ▸ member⟩
+
+/-- Compatibility projection of the exact storage/balance and event theorem. -/
+theorem approve_effect {sevm : Sevm} {d : Devm} {o : Outcome} {g : SFunc}
+    {value spender : B256} {xs : Stack}
+    (hg : prog[11]? = some g) (hstk : value :: spender :: xs <<+ d.stack)
+    (run : SFunc.Run prog sevm d g o) :
+    Devm.getStor (Outcome.devm o) sevm.currentTarget =
+        (Devm.getStor d sevm.currentTarget).set
+          (allowKey sevm.caller.toB256 (spender &&& ~~~ addressMask)) value ∧
+      Devm.getBal (Outcome.devm o) = Devm.getBal d := by
+  have h := approve_effect_log hg hstk run
+  exact ⟨h.1, h.2.1⟩
 
 /-! ## O4 control: the collision premise is necessary -/
 
@@ -306,15 +420,37 @@ private theorem wrap_line_stack {sevm : Sevm} {s s' : Devm}
   have hp23 := prefix_of_pop (of_run_pop h23) (prefix_of_pop (of_run_pop h22) hp21)
   exact ⟨_, [r], prefix_of_push (of_run_push h24) hp23⟩
 
+private def approveReturn : List Ninst :=
+  [.push [0x40] (by decide), .reg .mload, .reg (.dup 0), .reg (.dup 2),
+   .reg .iszero, .reg .iszero, .reg .iszero, .reg .iszero, .reg (.dup 1),
+   .reg .mstore, .push [0x20] (by decide), .reg .add, .reg (.swap 1),
+   .reg .pop, .reg .pop, .push [0x40] (by decide), .reg .mload,
+   .reg (.dup 0), .reg (.swap 1), .reg .sub, .reg (.swap 0)]
+
+private theorem approve_return_logs {sevm : Sevm} {d : Devm} {o : Outcome}
+    (run : SFunc.Run prog sevm d t_0187_c27 o) :
+    d.logs = (Outcome.devm o).logs := by
+  change SFunc.Run prog sevm d (.dest (chain approveReturn (.last .return_))) o at run
+  cases run with
+  | dest burn rest =>
+    obtain ⟨post, line, rest⟩ := run_chain_prefix approveReturn [] rest
+    cases rest with
+    | last ret =>
+      exact burn.logs.trans ((Line.of_inv Devm.logs (by line_inv) line).trans
+        (Linst.Hinv.inv ret))
+
 /-- **Entry 27 wrapper effect, exactly.**  A successful run of the `approve` selector wrapper leaves
 every balance alone and writes exactly one word: `calldata[36:68]` at the allowance slot
 `allowance[caller][spender]`, `spender` the address-masked first argument. -/
-theorem approve_wrapper_ok {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
+theorem approve_wrapper_ok_log {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
     (hw : prog[27]? = some w) (run : SFunc.Run prog sevm d w o) :
     (Outcome.devm o).getBal = d.getBal ∧
       Devm.getStor (Outcome.devm o) sevm.currentTarget =
         (Devm.getStor d sevm.currentTarget).set
-          (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr) (Sevm.dataWord sevm 36) := by
+          (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr) (Sevm.dataWord sevm 36) ∧
+      ∃ data, Log.mk sevm.currentTarget
+        [approvalTopic, sevm.caller.toB256, (Sevm.dataWord sevm 4).toAdr.toB256] data ∈
+          (Outcome.devm o).logs := by
   have hw' : w = t_0147_c27 := by
     simpa only [prog, Cert.prog, cert, List.map_cons, List.map_nil, List.length_cons,
       List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ,
@@ -355,19 +491,33 @@ theorem approve_wrapper_ok {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
     cases r with
     | @callHalt _ d7 _ _ _ g x lookup pop2 rc =>
       have s07 : Same d d7 := s06.trans (Same.of_state pop2.state)
-      obtain ⟨hs, hb⟩ := approve_effect lookup (popBurn_pref pop2 hstk).2 rc
+      obtain ⟨hs, hb, data, member⟩ := approve_effect_log lookup (popBurn_pref pop2 hstk).2 rc
       rw [allowArg_mask, hkey] at hs
-      refine ⟨hb.trans s07.bal.symm, hs.trans ?_⟩
-      rw [s07.stor]
+      refine ⟨hb.trans s07.bal.symm, hs.trans ?_, data, ?_⟩
+      · rw [s07.stor]
+      · simpa only [allowArg_mask, allowArg, and_mask_word, toAdr_toB256, Outcome.devm] using member
     | @callRet _ d7 d8 _ _ g _ x lookup pop2 rc tail =>
       have s07 : Same d d7 := s06.trans (Same.of_state pop2.state)
-      obtain ⟨hs, hb⟩ := approve_effect lookup (popBurn_pref pop2 hstk).2 rc
+      obtain ⟨hs, hb, data, member⟩ := approve_effect_log lookup (popBurn_pref pop2 hstk).2 rc
       rw [allowArg_mask, hkey] at hs
       have hst := SFunc.Run.state_of_silent (S := []) rfl (by decide) (by decide) tail
       have s8o : Same d8 (Outcome.devm o) := Same.of_state hst.symm
       refine ⟨s8o.bal.symm.trans (hb.trans s07.bal.symm),
-        (congrFun s8o.stor.symm _).trans (hs.trans ?_)⟩
-      rw [s07.stor]
+        (congrFun s8o.stor.symm _).trans (hs.trans ?_), data, ?_⟩
+      · rw [s07.stor]
+      · have logs := approve_return_logs tail
+        rw [← logs]
+        simpa only [allowArg_mask, allowArg, and_mask_word, toAdr_toB256, Outcome.devm] using member
+
+/-- Compatibility projection of the successful wrapper storage/balance effect. -/
+theorem approve_wrapper_ok {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
+    (hw : prog[27]? = some w) (run : SFunc.Run prog sevm d w o) :
+    (Outcome.devm o).getBal = d.getBal ∧
+      Devm.getStor (Outcome.devm o) sevm.currentTarget =
+        (Devm.getStor d sevm.currentTarget).set
+          (allowSlot sevm.caller (Sevm.dataWord sevm 4).toAdr) (Sevm.dataWord sevm 36) := by
+  have h := approve_wrapper_ok_log hw run
+  exact ⟨h.1, h.2.1⟩
 
 /-- **Entry 27 wrapper effect.**  The `approve` selector wrapper leaves every balance alone, and
 either leaves the contract's storage alone (its state-silent revert branch) or writes exactly one

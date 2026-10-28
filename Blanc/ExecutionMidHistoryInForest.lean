@@ -3,6 +3,7 @@ import Blanc.ExecutionInCodeImage
 import Blanc.ExecutionSenderRootCallers
 import Blanc.ExecutionHistoryInAppend
 import Blanc.ExecutionHistoryCommittedCuts
+import Blanc.ExecutionMidHistoryCallers
 
 /-!
 # Original retained roots and sender queries after a transaction cut
@@ -254,5 +255,27 @@ theorem MidHistoryTraceIn.settledRoots_caller_ne_of_senderQueries
     · apply block.bodyTrace.settledRoots_caller_ne_of_noSenderAt _ notSystem R inBlock
       exact block.bodyTrace.transactions.noSenderAt_of_senderQueries
         (fun query member => excluded query (List.mem_append_right _ member))
+
+theorem ConfiguredHistoryTraceIn.append_senderQueries
+    {F : Fork → Prop} {cfg : ChainConfig} {a b c : BlockChain}
+    (first : ConfiguredHistoryTraceIn F cfg a b)
+    (second : ConfiguredHistoryTraceIn F cfg b c) :
+    (first.append second).senderQueries = first.senderQueries ++ second.senderQueries :=
+  configured_senderQueries_append first second
+
+theorem MidHistoryTraceIn.noSenderAt_of_senderQueries
+    {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (mid : MidHistoryTraceIn F cfg start future) {a : Adr}
+    (excluded : ∀ query ∈ mid.senderQueries, query.recover ≠ .ok a) :
+    mid.NoSenderAt a := by
+  induction mid with
+  | tail block cut => exact cut.after.noSenderAt_of_senderQueries excluded
+  | step prior block ih =>
+    have queries : (MidHistoryTraceIn.step prior block).senderQueries =
+        prior.senderQueries ++ block.bodyTrace.transactions.senderQueries := List.map_append
+    rw [queries] at excluded
+    exact ⟨ih (fun query member => excluded query (List.mem_append_left _ member)),
+      block.bodyTrace.transactions.noSenderAt_of_senderQueries
+        (fun query member => excluded query (List.mem_append_right _ member))⟩
 
 end Blanc.ExecutionTrace
