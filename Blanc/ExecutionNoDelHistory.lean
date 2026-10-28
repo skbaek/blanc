@@ -6,6 +6,10 @@ import Blanc.ExecutionTraceCodeAt
 /-!
 # Protected-account code survival and no-deletion across configured histories
 
+The `…_of_runtimeSafety` family consumes the certificate-produced
+`InstalledRuntimeSafety` bundle, allowing CREATE2-capable runtimes. The original
+`…_of_installedCert` signatures remain call-only compatibility wrappers.
+
 `Blanc/ExecutionNoDelTransaction.lean` keeps an account `wa` holding an installed checked
 runtime `C` (`InstalledCert C`: a certificate check, `callOnly`, `noSelfdestruct`, no EIP-7702
 designator, nonempty) through one selected transaction under `stateGas = none`. This module
@@ -43,6 +47,12 @@ structure InstalledCert (C : ByteArray) : Prop where
   notDelegation : ¬ isValidDelegation C
   nonempty : C.toList ≠ []
 
+/-- A call-only certificate is one producer of the shared runtime-safety facts. -/
+theorem InstalledCert.runtimeSafety {C : ByteArray} (K : InstalledCert C) :
+    InstalledRuntimeSafety C := by
+  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
+  exact InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct K.notDelegation K.nonempty
+
 namespace ExecutionTrace
 
 variable {wa : Adr} {C : ByteArray}
@@ -50,124 +60,192 @@ variable {wa : Adr} {C : ByteArray}
 /-- **A system message keeps a protected installed runtime**, and never schedules `wa` for
 deletion, under `stateGas = none`. A system message is an ordinary message call to its target
 with empty inherited deletions; no premise that `wa` differs from the target is needed. -/
-theorem SystemMessageTrace.noDel_of_installedCert (K : InstalledCert C)
+theorem SystemMessageTrace.noDel_of_runtimeSafety (K : InstalledRuntimeSafety C)
     {benv : Benv} {target : Adr} {data : Bytes} {state : State} {out : MsgCallOutput}
     (trace : SystemMessageTrace benv target data state out)
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     wa ∉ out.accountsToDelete ∧ state.getCode wa = C := by
-  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   exact trace.noDel_of_safe K.notDelegation K.nonempty hsg installed notCreated
-    (trace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct K.notDelegation
-      K.nonempty hsg installed notCreated)
+    (trace.safeRawFrames_of_runtimeSafety K hsg installed notCreated)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem SystemMessageTrace.noDel_of_installedCert (K : InstalledCert C)
+    {benv : Benv} {target : Adr} {data : Bytes} {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    wa ∉ out.accountsToDelete ∧ state.getCode wa = C :=
+  trace.noDel_of_runtimeSafety K.runtimeSafety hsg installed notCreated
 
 /-- The two checked request calls keep a protected installed runtime. -/
-theorem RequestsTrace.noDel_of_installedCert (K : InstalledCert C)
+theorem RequestsTrace.noDel_of_runtimeSafety (K : InstalledRuntimeSafety C)
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout')
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     wa ∉ trace.withdrawalOut.accountsToDelete ∧
       wa ∉ trace.consolidationOut.accountsToDelete ∧ state.getCode wa = C := by
-  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   exact trace.noDel_of_safe K.notDelegation K.nonempty hsg installed notCreated
-    (trace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct K.notDelegation
-      K.nonempty hsg installed notCreated)
+    (trace.safeRawFrames_of_runtimeSafety K hsg installed notCreated)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem RequestsTrace.noDel_of_installedCert (K : InstalledCert C)
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    wa ∉ trace.withdrawalOut.accountsToDelete ∧
+      wa ∉ trace.consolidationOut.accountsToDelete ∧ state.getCode wa = C :=
+  trace.noDel_of_runtimeSafety K.runtimeSafety hsg installed notCreated
 
 /-- **A selected transaction list keeps a protected installed runtime** and schedules no
 deletion of `wa`, under `stateGas = none`, when `wa` is not block-created. -/
-theorem ApplyTransactionsTrace.noDel_of_installedCert (K : InstalledCert C)
+theorem ApplyTransactionsTrace.noDel_of_runtimeSafety (K : InstalledRuntimeSafety C)
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     trace.NoDelScheduled wa ∧ finalBenv.state.getCode wa = C := by
-  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   exact trace.noDel_of_safe K.notDelegation K.nonempty hsg installed notCreated
-    (trace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct K.notDelegation
-      K.nonempty hsg installed notCreated)
+    (trace.safeRawFrames_of_runtimeSafety K hsg installed notCreated)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem ApplyTransactionsTrace.noDel_of_installedCert (K : InstalledCert C)
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    trace.NoDelScheduled wa ∧ finalBenv.state.getCode wa = C :=
+  trace.noDel_of_runtimeSafety K.runtimeSafety hsg installed notCreated
 
 /-- The beacon stage keeps a protected installed runtime. -/
-theorem BeaconStageTrace.code_of_installedCert (K : InstalledCert C)
+theorem BeaconStageTrace.code_of_runtimeSafety (K : InstalledRuntimeSafety C)
     {rules : ForkRules} {benv : Benv} {state : State} {bal : BalBuilder}
     (trace : BeaconStageTrace rules benv state bal)
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     state.getCode wa = C := by
-  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   exact trace.code_of_safe K.notDelegation K.nonempty hsg installed notCreated
-    (trace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct K.notDelegation
-      K.nonempty hsg installed notCreated)
+    (trace.safeRawFrames_of_runtimeSafety K hsg installed notCreated)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem BeaconStageTrace.code_of_installedCert (K : InstalledCert C)
+    {rules : ForkRules} {benv : Benv} {state : State} {bal : BalBuilder}
+    (trace : BeaconStageTrace rules benv state bal)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    state.getCode wa = C :=
+  trace.code_of_runtimeSafety K.runtimeSafety hsg installed notCreated
 
 /-- The history-storage stage keeps a protected installed runtime. -/
-theorem HistoryStageTrace.code_of_installedCert (K : InstalledCert C)
+theorem HistoryStageTrace.code_of_runtimeSafety (K : InstalledRuntimeSafety C)
     {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State}
     {bal : BalBuilder}
     (trace : HistoryStageTrace rules benv inputBal state bal)
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     state.getCode wa = C := by
-  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   exact trace.code_of_safe K.notDelegation K.nonempty hsg installed notCreated
-    (trace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct K.notDelegation
-      K.nonempty hsg installed notCreated)
+    (trace.safeRawFrames_of_runtimeSafety K hsg installed notCreated)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem HistoryStageTrace.code_of_installedCert (K : InstalledCert C)
+    {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State}
+    {bal : BalBuilder}
+    (trace : HistoryStageTrace rules benv inputBal state bal)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    state.getCode wa = C :=
+  trace.code_of_runtimeSafety K.runtimeSafety hsg installed notCreated
 
 /-- The request stage keeps a protected installed runtime. -/
-theorem RequestStageTrace.code_of_installedCert (K : InstalledCert C)
+theorem RequestStageTrace.code_of_runtimeSafety (K : InstalledRuntimeSafety C)
     {rules : ForkRules} {benv : Benv} {bout : BlockOutput} {state : State}
     {bout' : BlockOutput}
     (trace : RequestStageTrace rules benv bout state bout')
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     state.getCode wa = C := by
-  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   exact trace.code_of_safe K.notDelegation K.nonempty hsg installed notCreated
-    (trace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct K.notDelegation
-      K.nonempty hsg installed notCreated)
+    (trace.safeRawFrames_of_runtimeSafety K hsg installed notCreated)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem RequestStageTrace.code_of_installedCert (K : InstalledCert C)
+    {rules : ForkRules} {benv : Benv} {bout : BlockOutput} {state : State}
+    {bout' : BlockOutput}
+    (trace : RequestStageTrace rules benv bout state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    state.getCode wa = C :=
+  trace.code_of_runtimeSafety K.runtimeSafety hsg installed notCreated
 
 /-- **A staged body keeps a protected installed runtime**, stage by stage in `applyBody` order,
 and no selected transaction of it schedules `wa` for deletion. -/
-theorem StagedBodyTrace.noDel_of_installedCert (K : InstalledCert C)
+theorem StagedBodyTrace.noDel_of_runtimeSafety (K : InstalledRuntimeSafety C)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
     {wds : List Withdrawal} {state : State} {bout : BlockOutput}
     (trace : StagedBodyTrace benv txs ommers wds state bout)
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     trace.transactions.NoDelScheduled wa ∧ state.getCode wa = C := by
-  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   exact trace.noDel_of_safe K.notDelegation K.nonempty hsg installed notCreated
-    (trace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct K.notDelegation
-      K.nonempty hsg installed notCreated)
+    (trace.safeRawFrames_of_runtimeSafety K hsg installed notCreated)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem StagedBodyTrace.noDel_of_installedCert (K : InstalledCert C)
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    trace.transactions.NoDelScheduled wa ∧ state.getCode wa = C :=
+  trace.noDel_of_runtimeSafety K.runtimeSafety hsg installed notCreated
 
 /-- **A configured block keeps a protected installed runtime**, with per-block
 `stateGas = none` from the history's own capability evidence. -/
-theorem ConfiguredBlockTraceIn.noDel_of_installedCert (K : InstalledCert C)
+theorem ConfiguredBlockTraceIn.noDel_of_runtimeSafety (K : InstalledRuntimeSafety C)
     {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTraceIn F cfg pre post)
     (capabilities : BodyStageCapabilities F)
     (installed : pre.state.getCode wa = C) :
     trace.NoDelScheduled wa ∧ post.state.getCode wa = C := by
-  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   exact trace.noDel_of_safe K.notDelegation K.nonempty capabilities installed
-    (trace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct K.notDelegation
-      K.nonempty capabilities installed)
+    (trace.safeRawFrames_of_runtimeSafety K capabilities installed)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem ConfiguredBlockTraceIn.noDel_of_installedCert (K : InstalledCert C)
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : ConfiguredBlockTraceIn F cfg pre post)
+    (capabilities : BodyStageCapabilities F)
+    (installed : pre.state.getCode wa = C) :
+    trace.NoDelScheduled wa ∧ post.state.getCode wa = C :=
+  trace.noDel_of_runtimeSafety K.runtimeSafety capabilities installed
 
 /-- **Code survival and no-deletion along a configured history.** If the checkpoint holds an
 installed checked runtime `C` at `wa`, the endpoint state of a retained In-history holds `C` at
 `wa` (by induction, so does every checkpoint of its spine), and no selected transaction along it
 schedules `wa` for deletion. No `CoveredFork`; per-block `stateGas = none` from
 `BodyStageCapabilities F`; no premise that `wa` is never targeted. -/
-theorem ConfiguredHistoryTraceIn.noDel_of_installedCert (K : InstalledCert C)
+theorem ConfiguredHistoryTraceIn.noDel_of_runtimeSafety (K : InstalledRuntimeSafety C)
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
     (installed : checkpoint.state.getCode wa = C) :
     history.NoDelScheduled wa ∧ future.state.getCode wa = C := by
-  obtain ⟨c, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   exact history.noDel_of_safe K.notDelegation K.nonempty capabilities installed
-    (history.safeRawFrames_of_installedCert hc callOnly noSelfdestruct K.notDelegation
-      K.nonempty capabilities installed)
+    (history.safeRawFrames_of_runtimeSafety K capabilities installed)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem ConfiguredHistoryTraceIn.noDel_of_installedCert (K : InstalledCert C)
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (installed : checkpoint.state.getCode wa = C) :
+    history.NoDelScheduled wa ∧ future.state.getCode wa = C :=
+  history.noDel_of_runtimeSafety K.runtimeSafety capabilities installed
 
 end ExecutionTrace
 

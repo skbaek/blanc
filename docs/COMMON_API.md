@@ -3165,6 +3165,18 @@ a bare set-membership goal does not identify this execution-specific route.
   `Exec.inv_noDel_of_installedCert` composes it with
   `Exec.inv_noDel_of_raw_terminal_safe`. Message/inherited-deletion and
   transaction-level closure remain separate.
+  `Exec.safe_of_installedUndelegatedCert` extends the same all-outcome producer
+  to a checked certificate whose functions satisfy `Xinst.notDelegatecall`:
+  CALL, STATICCALL and CREATE2 are allowed. The actual creation guard rules
+  out an owner-targeting CREATE2; there is no supplied final-code or raw-safety
+  premise. Existing call-only signatures remain wrappers over the shared
+  private frame traversal. The low-level guard lives in
+  [`Blanc/ExecutionCreateGuard.lean`](../Blanc/ExecutionCreateGuard.lean):
+  `Xinst.step_create_isCreate_noStateGas` identifies actual CREATE-family
+  frames, and `Evm.step_spawn_create_unprotected_noStateGas` excludes a
+  protected target from the actual collision guard. These lemmas need only
+  state-gas absence, not modern fork coverage. No separate recipe: choose
+  the named producer from the available certificate restriction.
 - Message and selected-transaction closure of that producer:
   [`Blanc/ExecutionNoDelTransaction.lean`](../Blanc/ExecutionNoDelTransaction.lean).
   `RunFrame.invNoDel_of_installedCert` produces the slot `Xlot.InvNoDel`
@@ -3183,6 +3195,24 @@ a bare set-membership goal does not identify this execution-specific route.
   (fork-free slot code preservation) and
   `sweepTouchedAccounts_getCode_of_nonempty` (the sweep never erases an
   account with nonempty code). It needs `wa ∉ benv.createdAccounts`.
+- CREATE2-capable installed-runtime transport uses `InstalledRuntimeSafety C`
+  in [`Blanc/ExecutionNoDelProducer.lean`](../Blanc/ExecutionNoDelProducer.lean).
+  Its `of_cert` and `of_undelegatedCert` constructors derive all-outcome raw
+  safety from checked certificates; the latter permits CREATE2. The
+  `safeRawFrames_of_runtimeSafety` bridges in `ExecutionNoDelSafeHistory`
+  carry this producer through messages, transactions, stages and histories.
+  The matching `noDel_of_runtimeSafety` / `code_of_runtimeSafety` wrappers in
+  `ExecutionNoDelHistory` derive code preservation without a supplied
+  `SafeRawFrames` oracle. `InstalledCert.runtimeSafety` preserves the old
+  call-only APIs. `ExecutionInstalledCertCuts` exposes
+  `ConfiguredBlockTraceIn.code_after_txSplit_of_runtimeSafety`,
+  `code_before_txSplit_of_runtimeSafety`, and their `MidHistoryTraceIn`
+  compositions on the original transaction cuts. The installed source code
+  and history are explicit inputs; these lemmas authenticate neither.
+  The concrete factory's `runtimeSafety` producer and `code_before_txSplit`
+  consumers live in `Lift/UniswapV2Factory/TerminalSafety.lean` and
+  `Lift/UniswapV2Factory/History.lean`. No recipe is registered: the choice
+  of original history, cut and source observation is explicit at this branch.
 - History closure of that producer:
   [`Blanc/ExecutionNoDelHistory.lean`](../Blanc/ExecutionNoDelHistory.lean).
   `InstalledCert C` bundles the actual runtime facts (certificate check,
@@ -6891,6 +6921,17 @@ intervals when every log from another address satisfies it; no middle witness
 is inferred from the two boundary blooms.
 The joint trace/key query is documented here rather than dispatched from an
 arbitrary expanded receipt equality, list membership or quantified log predicate.
+For a block-range census on that original spine, use
+[`Blanc/ExecutionHistoryReceiptCensus.lean`](../Blanc/ExecutionHistoryReceiptCensus.lean).
+`ConfiguredBlockTraceIn.receiptLogsBetween_subset_full` embeds any partial interval
+in the same block's full scan. `tip_number_step` derives the accepted parent and
+consecutive number; `ConfiguredHistoryTraceIn.tip_number_floor` transports a
+starting lower bound. `ReceiptCensus` asserts a log predicate only on actual
+blocks within an inclusive number range. `receiptLogs_of_census` derives whole
+history coverage from actual endpoint bounds, without per-block bounds or a
+replacement replay. Census correspondence remains external evidence, not RPC
+completeness or consensus authentication. These arbitrary-predicate adapters
+have no narrower reliable proof-recipe trigger.
 
 For large concrete Keccak computations, use `KeccakBlocks.sixRounds` and
 `KeccakBlocks.f1600_sixRounds` in

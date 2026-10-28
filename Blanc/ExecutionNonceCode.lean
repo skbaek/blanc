@@ -1,3 +1,4 @@
+import Blanc.ExecutionCreateGuard
 import Blanc.ExecutionHistoryInCodeAt
 import Blanc.LockExclusion
 import Blanc.ExecutionCellProvenance
@@ -779,31 +780,6 @@ theorem Exec.rawNodes_context_protected_noStateGas
         n inChild nonempty
     · exact nextIH hsg (fun code => Exec.Deriv.ParentStep.protected_noStateGas
         (.runOk step enter child resumed next) hsg (root code)) n inNext nonempty
-
-/-- An actual CREATE spawn's target was nonce-and-code unprotected before
-this instruction. The instruction prefix does not alter the account state. -/
-theorem Evm.step_spawn_create_unprotected_noStateGas
-    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
-    {frame : Frame} {resume : Resume}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
-    (create : frame.isCreate = true) :
-    ¬ State.Protected pre.state frame.inner.currentTarget := by
-  obtain ⟨x, _, spawn, _⟩ := Evm.step_spawn_inv step
-  rcases Xinst.step_shapeNoStateGas sevm pre x hsg with
-    ⟨execution, shape, _⟩ |
-    ⟨d, endowment, address, mi, ms, hprefix, shape⟩ |
-    ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
-      ii, isz, oi, osz, code, disablePrecompiles, hprefix, _, _, _, shape⟩ <;>
-    rw [shape] at spawn
-  · cases spawn
-  · have unprotected := genericCreate_step_spawn_target_unprotected spawn
-    obtain ⟨rfl, rfl⟩ := genericCreate_step_spawn_exact spawn
-    change ¬ State.Protected pre.state address
-    rw [hprefix.state]
-    exact unprotected
-  · obtain ⟨rfl, rfl⟩ := genericCall_step_spawn_exact spawn
-    cases create
 
 /-- Nonce-or-code protection at an earlier retained position survives at a
 later retained position in the same committed execution. -/

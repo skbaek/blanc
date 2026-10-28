@@ -123,6 +123,18 @@ theorem Exec.rawNodes_of_mem_rawFrameRoots
 (`Exec.safe_of_installedCert`) covers every node of every listed frame's own
 execution, since those nodes are nodes of the whole run. This is the leaf
 bridge used by every trace-level `safeRawFrames_of_installedCert`. -/
+theorem Exec.safeNodes_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (installed : pre.getCode wa = C)
+    (root : sevm.currentTarget = wa → pc = 0 ∧ sevm.code = C) :
+    ∀ R ∈ Exec.rawFrameRoots run, Exec.SafeNodes wa R.exc := by
+  intro R hR node hn htgt
+  exact K.safe run hsg installed root node (Exec.rawNodes_of_mem_rawFrameRoots run R hR node hn) htgt
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
 theorem Exec.safeNodes_of_installedCert {wa : Adr} {C : ByteArray} {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
     (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
@@ -131,10 +143,9 @@ theorem Exec.safeNodes_of_installedCert {wa : Adr} {C : ByteArray} {c : Lift.Cer
     (hsg : sevm.benvStat.rules.stateGas = none)
     (installed : pre.getCode wa = C) (hCne : C.toList ≠ [])
     (root : sevm.currentTarget = wa → pc = 0 ∧ sevm.code = C) :
-    ∀ R ∈ Exec.rawFrameRoots run, Exec.SafeNodes wa R.exc := by
-  intro R hR node hn htgt
-  exact Exec.safe_of_installedCert hc callOnly noSelfdestruct hCdel run hsg installed
-    hCne root node (Exec.rawNodes_of_mem_rawFrameRoots run R hR node hn) htgt
+    ∀ R ∈ Exec.rawFrameRoots run, Exec.SafeNodes wa R.exc :=
+  Exec.safeNodes_of_runtimeSafety (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    run hsg installed root
 
 /-- Proof-of-work rewards only credit balances. -/
 theorem payRewards_getCode (pow : PowRules) (number : Nat) (coinbase : Adr)
@@ -841,6 +852,29 @@ theorem ConfiguredHistoryTraceIn.noDel_of_safe {wa : Adr} {C : ByteArray}
 
 /-- **Per-frame safety of a retained call message from an installed checked
 runtime.** Top-run safety covers every listed frame's execution. -/
+theorem ProcessMessageTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
+    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessMessageTrace msg out)
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (installed : msg.benv.state.getCode wa = C)
+    (hcode : msg.currentTarget = wa → msg.code = C)
+    (_h : Msg.NoDel wa msg) :
+    SafeRawFrames wa trace.rawFrames := by
+  rcases trace with ⟨slot, retained, run⟩
+  cases retained with
+  | none => exact SafeRawFrames.nil wa
+  | @some pc sevm pre raw run' =>
+      obtain ⟨henter, -⟩ := RunFrame.some_inv run
+      exact Exec.safeNodes_of_runtimeSafety K run'
+        (by rw [Frame.enter_run_benvStat henter]; exact hsg)
+        (by rw [Frame.enter_run_getCode henter]; exact installed)
+        (fun htgt => ⟨Frame.enter_run_pc henter, by
+          rw [Frame.enter_run_code henter]
+          exact hcode (show (Frame.ofCall msg).inner.currentTarget = wa from by
+            rw [← Frame.enter_run_currentTarget henter]; exact htgt)⟩)
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
 theorem ProcessMessageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
     {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
@@ -851,24 +885,40 @@ theorem ProcessMessageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteA
     (installed : msg.benv.state.getCode wa = C)
     (hcode : msg.currentTarget = wa → msg.code = C)
     (h : Msg.NoDel wa msg) :
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel (installed ▸ h.code))
+    hsg installed hcode h
+
+/-- **Per-frame safety of a retained create message from an installed checked
+runtime**, for a create not targeting `wa`. -/
+theorem ProcessCreateMessageTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
+    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    (trace : ProcessCreateMessageTrace msg out)
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (installed : msg.benv.state.getCode wa = C)
+    (h_ct : msg.currentTarget ≠ wa)
+    (_h : Msg.NoDel wa msg) :
     SafeRawFrames wa trace.rawFrames := by
-  have hCne : C.toList ≠ [] := installed ▸ h.code
   rcases trace with ⟨slot, retained, run⟩
   cases retained with
   | none => exact SafeRawFrames.nil wa
   | @some pc sevm pre raw run' =>
       obtain ⟨henter, -⟩ := RunFrame.some_inv run
-      exact Exec.safeNodes_of_installedCert hc callOnly noSelfdestruct hCdel run'
-        (by rw [Frame.enter_run_benvStat henter]; exact hsg)
-        (by rw [Frame.enter_run_getCode henter]; exact installed)
-        hCne
-        (fun htgt => ⟨Frame.enter_run_pc henter, by
-          rw [Frame.enter_run_code henter]
-          exact hcode (show (Frame.ofCall msg).inner.currentTarget = wa from by
-            rw [← Frame.enter_run_currentTarget henter]; exact htgt)⟩)
+      exact Exec.safeNodes_of_runtimeSafety K run'
+        (by rw [Frame.enter_run_benvStat henter,
+          show (Frame.ofCreate msg).inner = processCreateMessage.msg msg from rfl,
+          processCreateMessage.msg_benvStat]; exact hsg)
+        (by rw [Frame.enter_run_getCode henter,
+          show (Frame.ofCreate msg).inner = processCreateMessage.msg msg from rfl,
+          processCreateMessage.msg_getCode]; exact installed)
+        (fun htgt => absurd (show msg.currentTarget = wa from by
+          have hinner : (Frame.ofCreate msg).inner.currentTarget = wa := by
+            rw [← Frame.enter_run_currentTarget henter]; exact htgt
+          exact hinner) h_ct)
 
-/-- **Per-frame safety of a retained create message from an installed checked
-runtime**, for a create not targeting `wa`. -/
+/-- Compatibility wrapper for the original call-only certificate API. -/
 theorem ProcessCreateMessageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
     {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
@@ -879,34 +929,17 @@ theorem ProcessCreateMessageTrace.safeRawFrames_of_installedCert {wa : Adr} {C :
     (installed : msg.benv.state.getCode wa = C)
     (h_ct : msg.currentTarget ≠ wa)
     (h : Msg.NoDel wa msg) :
-    SafeRawFrames wa trace.rawFrames := by
-  have hCne : C.toList ≠ [] := installed ▸ h.code
-  rcases trace with ⟨slot, retained, run⟩
-  cases retained with
-  | none => exact SafeRawFrames.nil wa
-  | @some pc sevm pre raw run' =>
-      obtain ⟨henter, -⟩ := RunFrame.some_inv run
-      exact Exec.safeNodes_of_installedCert hc callOnly noSelfdestruct hCdel run'
-        (by rw [Frame.enter_run_benvStat henter,
-          show (Frame.ofCreate msg).inner = processCreateMessage.msg msg from rfl,
-          processCreateMessage.msg_benvStat]; exact hsg)
-        (by rw [Frame.enter_run_getCode henter,
-          show (Frame.ofCreate msg).inner = processCreateMessage.msg msg from rfl,
-          processCreateMessage.msg_getCode]; exact installed)
-        hCne
-        (fun htgt => absurd (show msg.currentTarget = wa from by
-          have hinner : (Frame.ofCreate msg).inner.currentTarget = wa := by
-            rw [← Frame.enter_run_currentTarget henter]; exact htgt
-          exact hinner) h_ct)
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel (installed ▸ h.code))
+    hsg installed h_ct h
 
 /-- **Per-frame safety of a settled message call from an installed checked
 runtime.** The collision arm retains nothing; the create/call arms delegate
 to the retained core (EIP-7702 authorization and code resolution keep `wa`'s
 code for the call arm). -/
-theorem MessageCallTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
-    {c : Lift.Cert}
-    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
-    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
+theorem MessageCallTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
     {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out)
     (hsg : msg.benv.stat.rules.stateGas = none)
@@ -916,18 +949,17 @@ theorem MessageCallTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArra
         msg.code = msg.benv.state.getCode msg.currentTarget)
     (h : Msg.NoDel wa msg) (h_inherited : wa ∉ msg.inheritedDeletions) :
     SafeRawFrames wa trace.rawFrames := by
-  have hCne : C.toList ≠ [] := installed ▸ h.code
   cases trace with
   | createCollision target collision result => exact SafeRawFrames.nil wa
   | createRun target collision evm core coreTrace result =>
       have h_ct : msg.currentTarget ≠ wa := ne_wa_of_not_hasCodeOrNonce h.code
         (by simpa only [messageCreateCollision] using collision)
-      exact coreTrace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel
+      exact coreTrace.safeRawFrames_of_runtimeSafety K
         hsg installed h_ct h
   | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
       obtain ⟨address, ownCode⟩ := own target
       obtain ⟨hdNoDel, hdCode, hdInherited, hdOwn⟩ := messageCallDelegation_installed
-        delegation h (by rw [installed]; exact hCdel) h_inherited address ownCode
+        delegation h (by rw [installed]; exact K.notDelegation) h_inherited address ownCode
       have execState : execMsg.benv.state.getCode wa = C := by
         rw [execMsgEq, messageCallExecutionMessage_getCode, hdCode, installed]
       have execSg : execMsg.benv.stat.rules.stateGas = none := by
@@ -944,17 +976,33 @@ theorem MessageCallTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArra
         split <;> exact hdInherited
       have execCode : execMsg.currentTarget = wa → execMsg.code = C := by
         rw [execMsgEq]
-        exact messageCallExecutionMessage_code_installed hdOwn (hdCode.trans installed) hCdel
-      exact coreTrace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel
+        exact messageCallExecutionMessage_code_installed hdOwn (hdCode.trans installed) K.notDelegation
+      exact coreTrace.safeRawFrames_of_runtimeSafety K
         execSg execState execCode execNoDel
 
-/-- **Per-frame safety of one selected transaction from an installed checked
-runtime.** -/
-theorem TransactionTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem MessageCallTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
     {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
     (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
-    (hCne : C.toList ≠ [])
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out)
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (installed : msg.benv.state.getCode wa = C)
+    (own : msg.target.isNone = false →
+      msg.codeAddress = some msg.currentTarget ∧
+        msg.code = msg.benv.state.getCode msg.currentTarget)
+    (h : Msg.NoDel wa msg) (h_inherited : wa ∉ msg.inheritedDeletions) :
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel (installed ▸ h.code))
+    hsg installed own h h_inherited
+
+/-- **Per-frame safety of one selected transaction from an installed checked
+runtime.** -/
+theorem TransactionTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
+
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
@@ -977,12 +1025,42 @@ theorem TransactionTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArra
     · rw [hbenv]
       simpa only [Benv.beginTransaction] using notCreated
     · rw [hmsgState]
-      exact hCne
-  exact trace.message.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel
+      exact K.nonempty
+  exact trace.message.safeRawFrames_of_runtimeSafety K
     hmsgSg hmsgState (prepareMessage_own trace.prepared) hnodel
     (trace.not_mem_msg_inheritedDeletions wa)
 
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem TransactionTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
+    {c : Lift.Cert}
+    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
+    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
+    (hCne : C.toList ≠ [])
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    hsg installed notCreated
+
 /-- **Per-frame safety of a system message from an installed checked runtime.** -/
+theorem SystemMessageTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
+
+    {benv : Benv} {target : Adr} {data : Bytes} {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    SafeRawFrames wa trace.rawFrames := by
+  exact trace.message.safeRawFrames_of_runtimeSafety K
+    hsg installed (fun _ => ⟨rfl, rfl⟩)
+    ⟨notCreated, show (benv.state.getCode wa).toList ≠ [] by rw [installed]; exact K.nonempty⟩
+    AdrSet.not_mem_empty
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
 theorem SystemMessageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
     {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
@@ -992,31 +1070,26 @@ theorem SystemMessageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteAr
     (trace : SystemMessageTrace benv target data state out)
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
-    SafeRawFrames wa trace.rawFrames := by
-  exact trace.message.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel
-    hsg installed (fun _ => ⟨rfl, rfl⟩)
-    ⟨notCreated, show (benv.state.getCode wa).toList ≠ [] by rw [installed]; exact hCne⟩
-    AdrSet.not_mem_empty
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    hsg installed notCreated
 
 /-- **Per-frame safety of the two checked request calls from an installed
 checked runtime.** The consolidation code fact comes back out of the
 withdrawal's safe chain. -/
-theorem RequestsTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
-    {c : Lift.Cert}
-    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
-    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
-    (hCne : C.toList ≠ [])
+theorem RequestsTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
     {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
     (trace : RequestsTrace benv bout state bout')
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     SafeRawFrames wa trace.rawFrames := by
-  have hsW := trace.withdrawal.safeRawFrames_of_installedCert hc callOnly noSelfdestruct
-    hCdel hCne hsg installed notCreated
+  have hsW := trace.withdrawal.safeRawFrames_of_runtimeSafety K hsg installed notCreated
   have hwCode : trace.withdrawalState.getCode wa = C :=
-    (trace.withdrawal.noDel_of_safe hCdel hCne hsg installed notCreated hsW).2
-  have hsC := trace.consolidation.safeRawFrames_of_installedCert
-    (benv := benv.withState trace.withdrawalState) hc callOnly noSelfdestruct hCdel hCne
+    (trace.withdrawal.noDel_of_safe K.notDelegation K.nonempty hsg installed notCreated hsW).2
+  have hsC := trace.consolidation.safeRawFrames_of_runtimeSafety
+    (benv := benv.withState trace.withdrawalState) K
     hsg hwCode notCreated
   have rawEq : trace.rawFrames =
       trace.withdrawal.rawFrames ++ trace.consolidation.rawFrames := rfl
@@ -1026,13 +1099,25 @@ theorem RequestsTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
   · exact hsW R h
   · exact hsC R h
 
-/-- **Per-frame safety of a selected transaction list from an installed checked
-runtime.** The next code fact comes back out of the head's safe chain. -/
-theorem ApplyTransactionsTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem RequestsTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
     {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
     (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
     (hCne : C.toList ≠ [])
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    hsg installed notCreated
+
+/-- **Per-frame safety of a selected transaction list from an installed checked
+runtime.** The next code fact comes back out of the head's safe chain. -/
+theorem ApplyTransactionsTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
@@ -1043,10 +1128,10 @@ theorem ApplyTransactionsTrace.safeRawFrames_of_installedCert {wa : Adr} {C : By
   | nil => exact SafeRawFrames.nil wa
   | cons head tail ih =>
       have hsHead : SafeRawFrames wa head.rawFrames :=
-        head.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel hCne hsg
+        head.safeRawFrames_of_runtimeSafety K hsg
           installed notCreated
       have hstate : _ :=
-        (head.noDel_of_safe hCdel hCne hsg installed notCreated hsHead).2.2
+        (head.noDel_of_safe K.notDelegation K.nonempty hsg installed notCreated hsHead).2.2
       have hsTail : SafeRawFrames wa tail.rawFrames := ih hsg hstate notCreated
       intro R hR
       simp only [ApplyTransactionsTrace.rawFrames, List.mem_append] at hR
@@ -1054,7 +1139,37 @@ theorem ApplyTransactionsTrace.safeRawFrames_of_installedCert {wa : Adr} {C : By
       · exact hsHead R h
       · exact hsTail R h
 
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem ApplyTransactionsTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
+    {c : Lift.Cert}
+    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
+    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
+    (hCne : C.toList ≠ [])
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    hsg installed notCreated
+
 /-- The beacon stage retains per-frame safety. -/
+theorem BeaconStageTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
+    {rules : ForkRules} {benv : Benv} {state : State} {bal : BalBuilder}
+    (trace : BeaconStageTrace rules benv state bal)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    SafeRawFrames wa trace.rawFrames := by
+  cases trace with
+  | skipped => exact SafeRawFrames.nil wa
+  | called _ _ message _ _ =>
+      exact message.safeRawFrames_of_runtimeSafety K
+        hsg installed notCreated
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
 theorem BeaconStageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
     {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
@@ -1064,14 +1179,27 @@ theorem BeaconStageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArra
     (trace : BeaconStageTrace rules benv state bal)
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    hsg installed notCreated
+
+/-- The history-storage stage retains per-frame safety. -/
+theorem HistoryStageTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
+    {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State}
+    {bal : BalBuilder}
+    (trace : HistoryStageTrace rules benv inputBal state bal)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     SafeRawFrames wa trace.rawFrames := by
   cases trace with
   | skipped => exact SafeRawFrames.nil wa
-  | called _ _ message _ _ =>
-      exact message.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel hCne
+  | called _ _ _ _ message _ _ =>
+      exact message.safeRawFrames_of_runtimeSafety K
         hsg installed notCreated
 
-/-- The history-storage stage retains per-frame safety. -/
+/-- Compatibility wrapper for the original call-only certificate API. -/
 theorem HistoryStageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
     {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
@@ -1082,14 +1210,27 @@ theorem HistoryStageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArr
     (trace : HistoryStageTrace rules benv inputBal state bal)
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    hsg installed notCreated
+
+/-- The request stage retains per-frame safety. -/
+theorem RequestStageTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
+    {rules : ForkRules} {benv : Benv} {bout : BlockOutput} {state : State}
+    {bout' : BlockOutput}
+    (trace : RequestStageTrace rules benv bout state bout')
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     SafeRawFrames wa trace.rawFrames := by
   cases trace with
   | skipped => exact SafeRawFrames.nil wa
-  | called _ _ _ _ message _ _ =>
-      exact message.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel hCne
+  | called _ requests _ =>
+      exact requests.safeRawFrames_of_runtimeSafety K
         hsg installed notCreated
 
-/-- The request stage retains per-frame safety. -/
+/-- Compatibility wrapper for the original call-only certificate API. -/
 theorem RequestStageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
     {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
@@ -1100,43 +1241,36 @@ theorem RequestStageTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArr
     (trace : RequestStageTrace rules benv bout state bout')
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
-    SafeRawFrames wa trace.rawFrames := by
-  cases trace with
-  | skipped => exact SafeRawFrames.nil wa
-  | called _ requests _ =>
-      exact requests.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel hCne
-        hsg installed notCreated
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    hsg installed notCreated
 
 /-- **Per-frame safety of a staged body from an installed checked runtime.**
 Stage code facts come back out of each stage's safe chain, in `applyBody`
 order. -/
-theorem StagedBodyTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
-    {c : Lift.Cert}
-    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
-    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
-    (hCne : C.toList ≠ [])
+theorem StagedBodyTrace.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
     {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
     {wds : List Withdrawal} {state : State} {bout : BlockOutput}
     (trace : StagedBodyTrace benv txs ommers wds state bout)
     (hsg : benv.stat.rules.stateGas = none)
     (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
     SafeRawFrames wa trace.rawFrames := by
-  have hsBeacon := trace.beacon.safeRawFrames_of_installedCert hc callOnly noSelfdestruct
-    hCdel hCne hsg installed notCreated
+  have hsBeacon := trace.beacon.safeRawFrames_of_runtimeSafety K hsg installed notCreated
   have hbeacon : trace.beaconState.getCode wa = C :=
-    trace.beacon.code_of_safe hCdel hCne hsg installed notCreated hsBeacon
-  have hsHistory := trace.history.safeRawFrames_of_installedCert
-    (benv := benv.withState trace.beaconState) hc callOnly noSelfdestruct hCdel hCne hsg
+    trace.beacon.code_of_safe K.notDelegation K.nonempty hsg installed notCreated hsBeacon
+  have hsHistory := trace.history.safeRawFrames_of_runtimeSafety
+    (benv := benv.withState trace.beaconState) K hsg
     hbeacon notCreated
   have hhistory : trace.historyState.getCode wa = C :=
-    trace.history.code_of_safe (benv := benv.withState trace.beaconState) hCdel hCne hsg
+    trace.history.code_of_safe (benv := benv.withState trace.beaconState) K.notDelegation K.nonempty hsg
       hbeacon notCreated hsHistory
-  have hsTx := trace.transactions.safeRawFrames_of_installedCert
-    (benv := (benv.withState trace.beaconState).withState trace.historyState) hc callOnly
-    noSelfdestruct hCdel hCne hsg hhistory notCreated
+  have hsTx := trace.transactions.safeRawFrames_of_runtimeSafety
+    (benv := (benv.withState trace.beaconState).withState trace.historyState) K hsg hhistory notCreated
   have htx : trace.transactionBenv.state.getCode wa = C :=
     (trace.transactions.noDel_of_safe
-      (benv := (benv.withState trace.beaconState).withState trace.historyState) hCdel hCne
+      (benv := (benv.withState trace.beaconState).withState trace.historyState) K.notDelegation K.nonempty
       hsg hhistory notCreated hsTx).2
   have txStat : trace.transactionBenv.stat = benv.stat := trace.transactions.stat_eq
   have txCreated : trace.transactionBenv.createdAccounts = benv.createdAccounts :=
@@ -1151,9 +1285,8 @@ theorem StagedBodyTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray
         simp only [withdrawalsPass, processWithdrawals, enabled, ↓reduceIte] at run
         rw [← (Prod.mk.inj run).1, processWithdrawalsState_getCode]
         exact htx
-  have hsReq := trace.requests.safeRawFrames_of_installedCert
-    (benv := trace.transactionBenv.withState trace.withdrawalState) hc callOnly
-    noSelfdestruct hCdel hCne
+  have hsReq := trace.requests.safeRawFrames_of_runtimeSafety
+    (benv := trace.transactionBenv.withState trace.withdrawalState) K
     (by change trace.transactionBenv.stat.rules.stateGas = none; rw [txStat]; exact hsg)
     hwithdrawal
     (by change wa ∉ trace.transactionBenv.createdAccounts; rw [txCreated]; exact notCreated)
@@ -1162,8 +1295,34 @@ theorem StagedBodyTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray
   have habt := SafeRawFrames.append hab hsTx
   exact SafeRawFrames.append habt hsReq
 
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem StagedBodyTrace.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
+    {c : Lift.Cert}
+    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
+    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
+    (hCne : C.toList ≠ [])
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout)
+    (hsg : benv.stat.rules.stateGas = none)
+    (installed : benv.state.getCode wa = C) (notCreated : wa ∉ benv.createdAccounts) :
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    hsg installed notCreated
+
 /-- **Per-frame safety of a configured block from an installed checked
 runtime.** -/
+theorem ConfiguredBlockTraceIn.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : ConfiguredBlockTraceIn F cfg pre post)
+    (capabilities : BodyStageCapabilities F)
+    (installed : pre.state.getCode wa = C) :
+    SafeRawFrames wa trace.rawFrames := by
+  exact trace.bodyTrace.safeRawFrames_of_runtimeSafety K (capabilities.stateGas_none trace.forkIn) installed AdrSet.not_mem_empty
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
 theorem ConfiguredBlockTraceIn.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
     {c : Lift.Cert}
     (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
@@ -1173,18 +1332,16 @@ theorem ConfiguredBlockTraceIn.safeRawFrames_of_installedCert {wa : Adr} {C : By
     (trace : ConfiguredBlockTraceIn F cfg pre post)
     (capabilities : BodyStageCapabilities F)
     (installed : pre.state.getCode wa = C) :
-    SafeRawFrames wa trace.rawFrames := by
-  exact trace.bodyTrace.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel
-    hCne (capabilities.stateGas_none trace.forkIn) installed AdrSet.not_mem_empty
+    SafeRawFrames wa trace.rawFrames :=
+  trace.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    capabilities installed
 
 /-- **Per-frame safety along a configured history from an installed checked
 runtime**, by refl/step induction; each checkpoint code fact comes back out
 of the prior spine's safe chain. -/
-theorem ConfiguredHistoryTraceIn.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
-    {c : Lift.Cert}
-    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
-    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
-    (hCne : C.toList ≠ [])
+theorem ConfiguredHistoryTraceIn.safeRawFrames_of_runtimeSafety {wa : Adr} {C : ByteArray}
+    (K : InstalledRuntimeSafety C)
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
     (capabilities : BodyStageCapabilities F)
@@ -1195,15 +1352,30 @@ theorem ConfiguredHistoryTraceIn.safeRawFrames_of_installedCert {wa : Adr} {C : 
   | step prior block ih =>
       have hsPrior : SafeRawFrames wa prior.rawFrames := ih
       have hcurrent : _ :=
-        (prior.noDel_of_safe hCdel hCne capabilities installed hsPrior).2
+        (prior.noDel_of_safe K.notDelegation K.nonempty capabilities installed hsPrior).2
       have hsBlock : SafeRawFrames wa block.rawFrames :=
-        block.safeRawFrames_of_installedCert hc callOnly noSelfdestruct hCdel hCne
+        block.safeRawFrames_of_runtimeSafety K
           capabilities hcurrent
       intro R hR
       simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append] at hR
       rcases hR with h | h
       · exact hsPrior R h
       · exact hsBlock R h
+
+/-- Compatibility wrapper for the original call-only certificate API. -/
+theorem ConfiguredHistoryTraceIn.safeRawFrames_of_installedCert {wa : Adr} {C : ByteArray}
+    {c : Lift.Cert}
+    (hc : Lift.Cert.check C c = true) (callOnly : c.callOnly = true)
+    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
+    (hCne : C.toList ≠ [])
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (installed : checkpoint.state.getCode wa = C) :
+    SafeRawFrames wa history.rawFrames :=
+  history.safeRawFrames_of_runtimeSafety
+    (InstalledRuntimeSafety.of_cert hc callOnly noSelfdestruct hCdel hCne)
+    capabilities installed
 
 end ExecutionTrace
 
