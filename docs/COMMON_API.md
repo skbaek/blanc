@@ -2249,7 +2249,15 @@ or fee-sweep boundary to cross. `UsdcGuardedInstallations` and `UsdcRootsReady`
 name those actual-root predicates. The `requests_`, `beaconStage_`,
 `historyStage_` and `requestStage_dynamic_runtimeReady_from_installations`
 consumers retain both ordered request CALLs and the optional stages' skipped
-arms. Full block and original-history composition remain subsequent duties.
+arms. `StagedBodyTrace.usdc_withdrawal_ready` and `usdc_reward_ready` carry
+selection through the actual financial stages. `body_tail_dynamic_runtimeReady_from_installations`
+and `block_dynamic_runtimeReady_of_origins` compose all actual block stages;
+`after_txSplit_dynamic_runtimeReady_of_origins` starts strictly after the original
+selected transaction. `UsdcMidHistoryOrigins` follows that actual suffix and
+later block lists. `mid_dynamic_runtimeReady_of_origins` derives final selected
+readiness, every original mid-root entry fact and actual output nondeletion.
+It is independent of the allowance caller proof. Concrete historical guarded
+origins/local installations and initial selection remain producer duties.
 `impl_midHistory_txSplit_retained_origin` joins local runtime readiness and the
 transaction-entry origin using the same genuine earlier installation, original
 intervening history and actual target cut.
@@ -5257,6 +5265,14 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   full-history populations; final selected-runtime readiness remains open.
   The write-scoped caller input is supplied by `retained_caller_write_excluded`
   in [`UniswapV2PairUsdcCallersIn.lean`](../Blanc/Composition/UniswapV2PairUsdcCallersIn.lean).
+  `mid_allowance_zero_from_pair_history_of_origins` derives root readiness and
+  deletion exclusion from initial selected readiness and the original guarded
+  origins, then supplies the Pair caller proof and folds each zero allowance
+  row through the actual source-block suffix and later history. Its conclusion
+  includes final selected readiness and every tracked row zero. The original
+  full-history governance, raw-key, R3 native-query and R4 scopes are unchanged;
+  no final-state code or per-root readiness input is required. Historical origin,
+  local installation and initial-zero producers remain explicit obligations.
   It follows actual retained parents, uses the Pair's historical child-selector
   theorem and proxy calldata inheritance, and permits the V2_2 library as an
   intermediate case. The library's no-SSTORE theorem excludes that case only
