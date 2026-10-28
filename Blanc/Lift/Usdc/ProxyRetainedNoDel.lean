@@ -2281,4 +2281,212 @@ theorem ConfiguredHistoryTraceIn.origins_between_txSplits_of_census
   · exact mid.2.1 R first
   · exact ending.2.1 R last
 
+/-- A transaction whose actual retained nodes avoid the proxy has no guarded
+proxy installation or runtime-origin obligation. -/
+theorem TransactionTrace.usdc_origins_of_retainedTargets_ne
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (excluded : ∀ R ∈ trace.settledRoots, ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget ≠ P) :
+    UsdcTransactionOrigins P W trace ∧ UsdcGuardedInstallations P W trace.settledRoots := by
+  constructor
+  · intro R root N retained target
+    exact (excluded R root N retained target).elim
+  · intro R root N retained target
+    exact (excluded R root N retained target).elim
+
+/-- Original creation input, checked code and its no-external-instruction
+certificate discharge the selected transaction's guarded obligations. -/
+theorem TransactionTrace.usdc_origins_of_create_noExecs
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {code : ByteArray} {c : Cert}
+    (trace : TransactionTrace benv bout tx index state bout')
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (receiver : tx.type.receiver? = none) (input : tx.data = code.toList)
+    (checked : Cert.check code c = true)
+    (noExecs : ∀ f ∈ c.prog, f.execsSatisfy (fun _ => false) = true)
+    (hsg : benv.stat.rules.stateGas = none)
+    (apart : trace.msg.currentTarget ≠ P) :
+    UsdcTransactionOrigins P W trace ∧ UsdcGuardedInstallations P W trace.settledRoots := by
+  exact TransactionTrace.usdc_origins_of_retainedTargets_ne trace
+    (trace.retainedNodes_currentTarget_ne_of_create_noExecs
+      receiver input checked noExecs hsg apart)
+
+/-- The selected constructor also preserves every already available USDC
+runtime through complete transaction settlement. Newly deployed entries are
+added separately from their checked original constructor output. -/
+theorem ConfiguredHistoryTraceIn.creation_origins_and_available_targets
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {code : ByteArray} {c : Cert}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    {P : Adr} {W available : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ available, UsdcImplCode e.code)
+    (ready : UsdcEntriesReady available benv.state)
+    (receiver : tx.type.receiver? = none) (input : tx.data = code.toList)
+    (checked : Cert.check code c = true)
+    (noExecs : ∀ f ∈ c.prog, f.execsSatisfy (fun _ => false) = true)
+    (hsg : benv.stat.rules.stateGas = none)
+    (apart : trace.msg.currentTarget ≠ P) :
+    UsdcTransactionOrigins P W trace ∧
+      UsdcGuardedInstallations P W trace.settledRoots ∧
+      UsdcEntriesReady available state := by
+  have guarded := TransactionTrace.usdc_origins_of_create_noExecs (W := W) trace
+    receiver input checked noExecs hsg apart
+  refine ⟨guarded.1, guarded.2, ?_⟩
+  intro e member
+  exact (ConfiguredHistoryTraceIn.impl_transaction_preserves_retained history capabilities bal
+    (impls e member) trace rootsIn hsg (ready e member).1 (ready e member).2).2
+
+/-- The actual selected head, rather than a replacement transaction, closes the
+creation boundary between two available-runtime intervals. -/
+theorem ConfiguredHistoryTraceIn.creation_txSplit_origins_and_available_targets
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {pre post : BlockChain} (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (rootsIn : ∀ R ∈ block.settledRoots, R ∈ history.settledRoots)
+    {P : Adr} {W available : List UsdcDeployedEntry} {code : ByteArray} {c : Cert}
+    (impls : ∀ e ∈ available, UsdcImplCode e.code)
+    (ready : UsdcEntriesReady available cut.benv.state)
+    (receiver : cut.tx.type.receiver? = none) (input : cut.tx.data = code.toList)
+    (checked : Cert.check code c = true)
+    (noExecs : ∀ f ∈ c.prog, f.execsSatisfy (fun _ => false) = true)
+    (apart : cut.head.msg.currentTarget ≠ P) :
+    UsdcTransactionOrigins P W cut.head ∧
+      UsdcGuardedInstallations P W cut.head.settledRoots ∧
+      UsdcEntriesReady available cut.afterBenv.state := by
+  have headRoots : ∀ R ∈ cut.head.settledRoots, R ∈ history.settledRoots := by
+    intro R member
+    apply rootsIn R
+    rw [block.settledRoots_eq_txSplit cut]
+    exact List.mem_append_left _ (List.mem_append_right _ member)
+  have hsg : cut.benv.stat.rules.stateGas = none := by
+    have stat := block.txSplit_stat cut
+    change cut.benv.stat = _ at stat
+    rw [stat]
+    exact capabilities.stateGas_none block.forkIn
+  exact ConfiguredHistoryTraceIn.creation_origins_and_available_targets history capabilities bal
+    cut.head headRoots impls ready receiver input checked noExecs hsg apart
+
+/-- Grow the available family only after the new entry's actual runtime and
+conditional library facts have been obtained from its original creation. -/
+theorem UsdcEntriesReady.cons {available : List UsdcDeployedEntry} {state : State}
+    {entry : UsdcDeployedEntry} (ready : UsdcEntriesReady available state)
+    (installed : state.getCode entry.adr = entry.code)
+    (library : entry.code = Impl.code → state.getCode usdcLib = Lib.code) :
+    UsdcEntriesReady (entry :: available) state := by
+  intro e member
+  rcases List.mem_cons.mp member with equal | member
+  · subst e
+    exact ⟨installed, library⟩
+  · exact ready e member
+
+/-- Guarded origins compose along the original ordered transaction append. -/
+theorem UsdcTransactionsOrigins.append
+    {P : Adr} {W : List UsdcDeployedEntry}
+    {xs ys : List (Nat × Tx)} {benv middle finalBenv : Benv}
+    {bout middleBout finalBout : BlockOutput}
+    (left : ApplyTransactionsTrace xs benv bout middle middleBout)
+    (right : ApplyTransactionsTrace ys middle middleBout finalBenv finalBout)
+    (before : UsdcTransactionsOrigins P W left)
+    (after : UsdcTransactionsOrigins P W right) :
+    UsdcTransactionsOrigins P W (left.append right) := by
+  induction left with
+  | nil => exact after
+  | cons head tail ih => exact ⟨before.1, ih right before.2 after⟩
+
+/-- Transport only the transaction-list index, preserving the actual trace. -/
+theorem UsdcTransactionsOrigins.cast
+    {P : Adr} {W : List UsdcDeployedEntry}
+    {xs ys : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (same : xs = ys) (trace : ApplyTransactionsTrace xs benv bout finalBenv finalBout)
+    (origins : UsdcTransactionsOrigins P W trace) :
+    UsdcTransactionsOrigins P W (same ▸ trace) := by
+  cases same
+  exact origins
+
+/-- Reassemble the supplied actual cut's prefix, selected transaction and
+suffix. Deterministic trace equality retains the original history carrier. -/
+theorem UsdcTransactionsOrigins.of_txSplit
+    {P : Adr} {W : List UsdcDeployedEntry}
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv} {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) {i : Nat}
+    (cut : trace.TxSplit i)
+    (before : UsdcTransactionsOrigins P W cut.before)
+    (head : UsdcTransactionOrigins P W cut.head)
+    (after : UsdcTransactionsOrigins P W cut.after) :
+    UsdcTransactionsOrigins P W trace := by
+  have lists : txs.take i ++ ((cut.index, cut.tx) :: txs.drop (i + 1)) = txs := by
+    rw [← cut.at_eq]
+    exact List.take_append_drop i txs
+  let rebuilt := cut.before.append (.cons cut.head cut.after)
+  have rebuiltOrigins : UsdcTransactionsOrigins P W rebuilt :=
+    UsdcTransactionsOrigins.append cut.before (.cons cut.head cut.after) before ⟨head, after⟩
+  let joined : ApplyTransactionsTrace txs benv bout finalBenv finalBout := lists ▸ rebuilt
+  have joinedOrigins : UsdcTransactionsOrigins P W joined :=
+    UsdcTransactionsOrigins.cast lists rebuilt rebuiltOrigins
+  rw [ApplyTransactionsTrace.eq_of_same trace joined]
+  exact joinedOrigins
+
+/-- Rejoin two actual mid-history intervals at their common selected block.
+Only that block's original prefix and selected head need additional origins. -/
+theorem UsdcMidHistoryOrigins.splice
+    {F : Fork → Prop} {cfg : ChainConfig} {P : Adr} {W : List UsdcDeployedEntry}
+    {start : Benv} {pre post future : BlockChain}
+    (left : MidHistoryTraceIn F cfg start pre)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn F cfg post future)
+    (leftOrigins : UsdcMidHistoryOrigins P W left)
+    (before : UsdcTransactionsOrigins P W cut.before)
+    (head : UsdcTransactionOrigins P W cut.head)
+    (rightOrigins : UsdcMidHistoryOrigins P W ((MidHistoryTraceIn.tail block cut).append later)) :
+    UsdcMidHistoryOrigins P W ((left.step block).append later) := by
+  induction later with
+  | refl =>
+    exact ⟨leftOrigins,
+      UsdcTransactionsOrigins.of_txSplit block.bodyTrace.transactions cut before head rightOrigins⟩
+  | step later next ih => exact ⟨ih rightOrigins.1, rightOrigins.2⟩
+
+/-- Guarded installation evidence follows the exact concatenated root list. -/
+theorem UsdcGuardedInstallations.append {P : Adr} {W : List UsdcDeployedEntry}
+    {left right : List Exec.Frame}
+    (before : UsdcGuardedInstallations P W left)
+    (after : UsdcGuardedInstallations P W right) :
+    UsdcGuardedInstallations P W (left ++ right) := by
+  intro R member
+  rcases List.mem_append.mp member with first | last
+  · exact before R first
+  · exact after R last
+
+/-- Retain all system and transaction roots when joining at a creation cut;
+no prefix, selected head or closing system stage is discarded. -/
+theorem UsdcGuardedInstallations.splice
+    {F : Fork → Prop} {cfg : ChainConfig} {P : Adr} {W : List UsdcDeployedEntry}
+    {start : Benv} {pre post future : BlockChain}
+    (left : MidHistoryTraceIn F cfg start pre)
+    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i)
+    (later : ConfiguredHistoryTraceIn F cfg post future)
+    (leftInstall : UsdcGuardedInstallations P W left.settledRoots)
+    (before : UsdcGuardedInstallations P W (block.rootsBeforeTxSplit cut))
+    (head : UsdcGuardedInstallations P W cut.head.settledRoots)
+    (rightInstall : UsdcGuardedInstallations P W
+      ((MidHistoryTraceIn.tail block cut).append later).settledRoots) :
+    UsdcGuardedInstallations P W ((left.step block).append later).settledRoots := by
+  have joined := UsdcGuardedInstallations.append
+    (UsdcGuardedInstallations.append leftInstall (UsdcGuardedInstallations.append before head))
+    rightInstall
+  simpa only [MidHistoryTraceIn.append_settledRoots, MidHistoryTraceIn.settledRoots,
+    block.settledRoots_eq_txSplit cut, List.append_assoc] using joined
+
 end Blanc.Lift.Usdc

@@ -40,6 +40,99 @@ theorem TransactionTrace.creation_message_fields
   rw [← Array.toList_inj]
   exact ByteArray.toList_eq_toList_data
 
+/-- Every retained node of a checked constructor without external instructions
+executes at the original creation target. Entry facts come from the actual
+CREATE trace, including when its settled root list is empty. -/
+theorem ProcessCreateMessageTrace.retainedNodes_currentTarget_of_noExecs
+    {msg : Msg} {out : Except (EvmError × State × AdrSet × Tra) Devm}
+    {code : ByteArray} {c : Lift.Cert}
+    (trace : ProcessCreateMessageTrace msg out)
+    (checked : Lift.Cert.check code c = true)
+    (noExecs : ∀ f ∈ c.prog, f.execsSatisfy (fun _ => false) = true)
+    (codeEq : msg.code = code) (stateGas : msg.benv.stat.rules.stateGas = none) :
+    ∀ R ∈ trace.settledRoots, ∀ n ∈ Exec.retainedNodes R.run,
+      n.sevm.currentTarget = msg.currentTarget := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none => intro R member; cases member
+  | @some pc sevm pre raw run =>
+    intro R member
+    simp only [ProcessCreateMessageTrace.settledRoots] at member
+    split at member
+    · simp only [RetainedXlot.settledRoots] at member
+      split at member
+      · rw [List.mem_singleton] at member
+        subst R
+        intro n node
+        have enter := (RunFrame.some_inv process).1
+        have childGas := Frame.enter_run_benvStat enter
+        have gas := processCreateMessage.msg_benvStat msg
+        have chain := Lift.rawNodes_parentPrefix_of_noExecs_noStateGas
+          (F := ⟨pc, sevm, pre, raw, run⟩) checked noExecs (Frame.enter_run_pc enter)
+          ((Frame.enter_run_code enter).trans codeEq)
+          (by rw [childGas]
+              change (processCreateMessage.msg msg).benv.stat.rules.stateGas = none
+              rw [gas]
+              exact stateGas)
+          n ((Exec.retainedNodes_sublist_rawNodes run).subset node)
+        rw [Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain]
+        exact Frame.enter_run_currentTarget enter
+      · cases member
+    · cases member
+
+/-- The original CREATE arm of the message wrapper preserves the constructor's
+target classification; a collision contributes no settled root. -/
+theorem MessageCallTrace.retainedNodes_currentTarget_of_create_noExecs
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    {code : ByteArray} {c : Lift.Cert}
+    (trace : MessageCallTrace msg state out)
+    (target : msg.target = none) (checked : Lift.Cert.check code c = true)
+    (noExecs : ∀ f ∈ c.prog, f.execsSatisfy (fun _ => false) = true)
+    (codeEq : msg.code = code) (stateGas : msg.benv.stat.rules.stateGas = none) :
+    ∀ R ∈ trace.settledRoots, ∀ n ∈ Exec.retainedNodes R.run,
+      n.sevm.currentTarget = msg.currentTarget := by
+  cases trace with
+  | createCollision => intro R member; cases member
+  | createRun targetNone collision evm core inner result =>
+    exact inner.retainedNodes_currentTarget_of_noExecs checked noExecs codeEq stateGas
+  | callRun targetSome delegated refund delegation execMsg execMsgEq evm core inner result =>
+    rw [target] at targetSome
+    cases targetSome
+
+/-- An admitted original creation transaction supplies all root-entry facts
+needed to keep every retained constructor node at its prepared target. -/
+theorem TransactionTrace.retainedNodes_currentTarget_of_create_noExecs
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {code : ByteArray} {c : Lift.Cert}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (receiver : tx.type.receiver? = none) (input : tx.data = code.toList)
+    (checked : Lift.Cert.check code c = true)
+    (noExecs : ∀ f ∈ c.prog, f.execsSatisfy (fun _ => false) = true)
+    (stateGas : benv.stat.rules.stateGas = none) :
+    ∀ R ∈ trace.settledRoots, ∀ n ∈ Exec.retainedNodes R.run,
+      n.sevm.currentTarget = trace.msg.currentTarget := by
+  obtain ⟨target, codeEq, _⟩ := trace.creation_message_fields receiver input
+  exact trace.message.retainedNodes_currentTarget_of_create_noExecs
+    target checked noExecs codeEq (by rw [prepareMessage_benv trace.prepared]; exact stateGas)
+
+/-- A checked original constructor cannot contribute a retained node at a
+different protected account. No successful-outcome premise is needed. -/
+theorem TransactionTrace.retainedNodes_currentTarget_ne_of_create_noExecs
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput} {code : ByteArray} {c : Lift.Cert} {protectedP : Adr}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (receiver : tx.type.receiver? = none) (input : tx.data = code.toList)
+    (checked : Lift.Cert.check code c = true)
+    (noExecs : ∀ f ∈ c.prog, f.execsSatisfy (fun _ => false) = true)
+    (stateGas : benv.stat.rules.stateGas = none)
+    (apart : trace.msg.currentTarget ≠ protectedP) :
+    ∀ R ∈ trace.settledRoots, ∀ n ∈ Exec.retainedNodes R.run,
+      n.sevm.currentTarget ≠ protectedP := by
+  intro R root n node
+  rw [trace.retainedNodes_currentTarget_of_create_noExecs
+    receiver input checked noExecs stateGas R root n node]
+  exact apart
+
 /-- Nonempty installed code and its storage survive the actual transaction's
 refund, fee, deletion fold and touched sweep when its final deletion set omits
 that account. Constructor consumers derive both premises from their source run. -/

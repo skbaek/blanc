@@ -9872,6 +9872,16 @@ contract-neutral.
   no separate automatic recipe trigger is reliable for that combination.
   For the actual transaction and original receipt, continue with
   [`ConstructorTransaction`](../Blanc/Lift/ConstructorTransaction.lean).
+  Its `ProcessCreateMessageTrace.retainedNodes_currentTarget_of_noExecs`,
+  `MessageCallTrace.retainedNodes_currentTarget_of_create_noExecs` and
+  `TransactionTrace.retainedNodes_currentTarget_of_create_noExecs` derive each
+  actual retained constructor node's target from original entry/preparation,
+  exact checked code, no external instructions and no state gas.
+  `TransactionTrace.retainedNodes_currentTarget_ne_of_create_noExecs` excludes
+  a different protected account; `creation_target_eq` supplies the signed
+  CREATE address. Failed/collision paths remain covered, with no success,
+  independent root-entry or final foreign-write premise. This CREATE-specific
+  inversion is outside the ordinary message-settlement recipe's boundary.
   `TransactionTrace.creation_message_fields` projects the prepared constructor
   and empty inherited deletion set for arbitrary value;
   `creation_target_eq` derives the CREATE address from the admitted sender and
@@ -10690,3 +10700,19 @@ In `Blanc/Composition/UniswapV2PairUsdcCallersIn.lean`,
 combines runtime, caller and owner producers with that root fold. Initial zero,
 actual origin/install evidence, native exclusions and original R4/initializer
 obligations retain their existing scope. No global raw-node code family is needed.
+
+
+For an original selected creation between available-runtime intervals,
+`TransactionTrace.usdc_origins_of_create_noExecs` in
+`Blanc/Lift/Usdc/ProxyRetainedNoDel.lean` discharges guarded origin and installation
+obligations using the common constructor target exclusion.
+`ConfiguredHistoryTraceIn.creation_txSplit_origins_and_available_targets`
+applies it to the actual supplied cut and transports already-created runtimes
+through complete transaction settlement. `UsdcEntriesReady.cons` extends that
+family only with the new original constructor's derived installation/library facts.
+`UsdcTransactionsOrigins.append`, `.cast` and `.of_txSplit` reassemble the actual
+ordered trace by determinism. `UsdcMidHistoryOrigins.splice` and
+`UsdcGuardedInstallations.splice` join the two intervals across that selected
+head, preserving its original prefix, suffix and all system roots. These are
+producer compositions; concrete signed creation/census correspondence and
+initial selected-zero evidence still need their existing original observations.
