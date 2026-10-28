@@ -1,3 +1,4 @@
+import Blanc.Lift.Deploy
 import Blanc.ExecutionHistoryInEraBounds
 import Blanc.ProofRecipeTactic
 import Blanc.Lift.CursorKeccakOrder
@@ -1747,6 +1748,43 @@ example : True := by
   expect_no_recipe_trigger "goal-head:ExecutionTrace.StagedBodyTrace.SystemStagesDisabled"
   expect_no_recipe_trigger "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.SystemStagesDisabled"
   expect_no_recipe_offered "mainnet-pre-cancun-stages"
+  trivial
+
+-- EXPECT: solc-runtime-return
+-- These are discovery controls, not tests of the theorem-proved copy effect.
+example {fs : List Lift.SFunc} {sevm : Sevm} {pre post : Devm}
+    {sizeBytes offsetBytes : Bytes} {sizeBound : sizeBytes.length ≤ 32}
+    {offsetBound : offsetBytes.length ≤ 32}
+    (run : Lift.SFunc.RunExact fs sevm pre
+      (Lift.solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound) (.halted post)) :
+    Lift.SFunc.RunExact fs sevm pre
+      (Lift.solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound) (.halted post) := by
+  expect_recipe_trigger "goal-shape:solc-runtime-return"
+  expect_recipe_offered "solc-runtime-return"
+  blanc_suggest
+  exact run
+
+example {fs : List Lift.SFunc} {sevm : Sevm} {pre post : Devm} {body : Lift.SFunc}
+    (run : Lift.SFunc.RunExact fs sevm pre body (.halted post)) :
+    Lift.SFunc.RunExact fs sevm pre body (.halted post) := by
+  expect_no_recipe_trigger "goal-shape:solc-runtime-return"
+  expect_no_recipe_offered "solc-runtime-return"
+  exact run
+
+example {fs : List Lift.SFunc} {sevm : Sevm} {pre post : Devm}
+    {sizeBytes offsetBytes : Bytes} {sizeBound : sizeBytes.length ≤ 32}
+    {offsetBound : offsetBytes.length ≤ 32}
+    (run : Lift.SFunc.RunExact fs sevm pre
+      (Lift.solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound) (.returned post)) :
+    Lift.SFunc.RunExact fs sevm pre
+      (Lift.solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound) (.returned post) := by
+  expect_no_recipe_trigger "goal-shape:solc-runtime-return"
+  expect_no_recipe_offered "solc-runtime-return"
+  exact run
+
+example : True := by
+  expect_no_recipe_trigger "goal-shape:solc-runtime-return"
+  expect_no_recipe_offered "solc-runtime-return"
   trivial
 
 end Blanc

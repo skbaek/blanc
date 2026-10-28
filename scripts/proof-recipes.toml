@@ -1558,3 +1558,20 @@ canonical_example = "Blanc/ExecutionHistoryInEraBounds.lean:ConfiguredHistoryTra
 symbols = ["module:Blanc/ExecutionHistoryInEraBounds.lean", "declaration:Blanc.mainnetChainConfig_preCancun_of_timestamp_lt", "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt", "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun"]
 review_owner = "proof-infrastructure"
 review_date = "2026-10-27"
+
+[[recipe]]
+id = "solc-runtime-return"
+status = "active"
+triggers = ["goal-shape:solc-runtime-return"]
+preferred_path = "Apply Blanc.Lift.solcRuntimeReturn_runExact to the named solcRuntimeReturn terminal body, supplying the two PUSH-word equalities, nonzero length, aligned symbolic memory and four-word stack room. Its charge is actual memory expansion plus gasCopy * ceilDiv length 32 + 19, and its output is the executing code window at the supplied offset. To invert an existing successful source run, use solcRuntimeReturn_effects for the exact returned bytes and storage preservation, without fork or memory-alignment assumptions."
+boundary = "Advice matches only a direct SFunc.RunExact goal whose body is the named solcRuntimeReturn and whose outcome is halted. It does not unfold arbitrary certificate entries, match an arbitrary exact walk or returned outcome, prove literal bytecode identity, or establish CREATE settlement or historical installation. Concrete consumers identify their registered source tree with this body and discharge word encodings separately."
+owner_module = "Blanc/Lift/Deploy.lean"
+canonical_example = "Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean:runtimeReturn_runExact"
+symbols = [
+  "module:Blanc/Lift/Deploy.lean",
+  "declaration:Blanc.Lift.solcRuntimeReturn",
+  "declaration:Blanc.Lift.solcRuntimeReturn_runExact",
+  "declaration:Blanc.Lift.solcRuntimeReturn_effects",
+]
+review_owner = "proof-infrastructure"
+review_date = "2026-10-28"

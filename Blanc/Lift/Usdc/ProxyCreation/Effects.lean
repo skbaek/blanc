@@ -135,42 +135,9 @@ theorem runtimeReturn_effects
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0290_c3 (.halted post)) :
     post.getStor = b.getStor ∧
       post.output = sevm.code.sliceD 671 2186 (Linst.toUInt8 .stop) := by
-  obtain ⟨copied, hcopied⟩ : ∃ copied : Mem,
-    M.write 0 (sevm.code.sliceD 671 2186 (Linst.toUInt8 .stop)) = copied := ⟨_, rfl⟩
-  have hlen : (sevm.code.sliceD 671 2186 (Linst.toUInt8 .stop)).length = 2186 :=
-    ByteArray.length_sliceD _ _ _ _
-  have hne : sevm.code.sliceD 671 2186 (Linst.toUInt8 .stop) ≠ [] := by
-    intro empty
-    rw [empty] at hlen
-    cases hlen
-  have hread : (copied.read 0 2186).1 =
-      sevm.code.sliceD 671 2186 (Linst.toUInt8 .stop) := by
-    have h := Mem.read_write_zero M hne
-    rw [hlen, hcopied] at h
-    exact h
-  have run := run.cut
-  unfold t_0290_c3 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, e⟩ := ri_codecopy step
-  change _ = St b (2186 :: S)
-    (M.write 0 (sevm.code.sliceD 671 2186 (Linst.toUInt8 .stop))) _ at e
-  rw [hcopied] at e
-  subst e
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  cases run with
-  | last terminal =>
-    have effect := ri_return terminal
-    exact ⟨funext effect.2.1, effect.1.trans hread⟩
+  exact solcRuntimeReturn_effects (sizeBytes := [0x08, 0x8a])
+    (offsetBytes := [0x02, 0x9f]) (sizeBound := by decide) (offsetBound := by decide)
+    (size := 2186) (offset := 671) (by decide) (by decide) (by decide) run
 
 /-- Every registered internal writer/predicate returns rather than halting. -/
 theorem internal_noHalt : NoHaltSet cert.prog [1, 2, 4] = true := by decide

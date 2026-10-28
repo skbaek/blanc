@@ -669,3 +669,14 @@ A suggestion is guidance, not a proof that its recipe applies at a particular go
 - Canonical example: [Blanc/ExecutionHistoryInEraBounds.lean](../Blanc/ExecutionHistoryInEraBounds.lean) — `ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun`
 - Registered symbols: `module:Blanc/ExecutionHistoryInEraBounds.lean`, `declaration:Blanc.mainnetChainConfig_preCancun_of_timestamp_lt`, `declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt`, `declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun`
 - Review: `proof-infrastructure` on `2026-10-27`
+
+## `solc-runtime-return`
+
+- Status: `active`
+- Triggers: `goal-shape:solc-runtime-return`
+- Preferred path: Apply Blanc.Lift.solcRuntimeReturn_runExact to the named solcRuntimeReturn terminal body, supplying the two PUSH-word equalities, nonzero length, aligned symbolic memory and four-word stack room. Its charge is actual memory expansion plus gasCopy * ceilDiv length 32 + 19, and its output is the executing code window at the supplied offset. To invert an existing successful source run, use solcRuntimeReturn_effects for the exact returned bytes and storage preservation, without fork or memory-alignment assumptions.
+- Boundary: Advice matches only a direct SFunc.RunExact goal whose body is the named solcRuntimeReturn and whose outcome is halted. It does not unfold arbitrary certificate entries, match an arbitrary exact walk or returned outcome, prove literal bytecode identity, or establish CREATE settlement or historical installation. Concrete consumers identify their registered source tree with this body and discharge word encodings separately.
+- Owner module: [Blanc/Lift/Deploy.lean](../Blanc/Lift/Deploy.lean)
+- Canonical example: [Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean](../Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean) — `runtimeReturn_runExact`
+- Registered symbols: `module:Blanc/Lift/Deploy.lean`, `declaration:Blanc.Lift.solcRuntimeReturn`, `declaration:Blanc.Lift.solcRuntimeReturn_runExact`, `declaration:Blanc.Lift.solcRuntimeReturn_effects`
+- Review: `proof-infrastructure` on `2026-10-28`

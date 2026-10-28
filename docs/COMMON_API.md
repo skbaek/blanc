@@ -9166,14 +9166,24 @@ contract-neutral.
   constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
-  A concrete consumer of `rx_codecopy` and `rx_return_any` is
+  For Solidity's terminal code-window sequence, use `solcRuntimeReturn` and
+  `solcRuntimeReturn_runExact` from `Lift/Deploy.lean`. The common forward
+  theorem accepts nonempty PUSH encodings for the length and offset, a nonzero
+  length, aligned symbolic memory and four-word stack room. Its exact charge
+  is memory expansion plus `gasCopy * ceilDiv length 32 + 19`; RETURN causes
+  no additional expansion. `solcRuntimeReturn_effects` inverts a successful
+  source run to the actual returned code window and unchanged storage, without
+  a fork or memory-alignment premise. Neither theorem identifies a runtime
+  literal or proves CREATE settlement or historical installation.
+  The `solc-runtime-return` recipe matches only a named terminal-body exact
+  run ending in a halted outcome; it never unfolds arbitrary certificate
+  entries or concrete machine images to discover this pattern.
   `ProxyCreation.runtimeReturn_runExact` in
-  [`Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean`](../Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean).
-  It copies and returns the executing code's 2186-byte window at offset 671,
-  with 226 fixed gas plus the actual memory-expansion charge. It requires
-  aligned incoming memory and stack room, and derives zero further expansion
-  at RETURN from the copied memory. The separate kernel-checked
-  `ProxyCreation.runtime_window` in
+  [`Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean`](../Blanc/Lift/Usdc/ProxyCreation/RuntimeReturn.lean)
+  is the existing concrete specialization, retaining its exact 2186-byte window
+  at offset 671 and 226 fixed gas plus actual memory expansion. The original
+  `ProxyCreation.runtimeReturn_effects` is likewise a projection of the common
+  inverse. The separate kernel-checked `ProxyCreation.runtime_window` in
   [`Blanc/Lift/Usdc/ProxyCreation/RuntimeWindow.lean`](../Blanc/Lift/Usdc/ProxyCreation/RuntimeWindow.lean)
   identifies that window in the registered creation input with the registered
   proxy runtime. The companion `ProxyCreation.prefix_runExact` and

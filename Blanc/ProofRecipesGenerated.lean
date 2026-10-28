@@ -497,6 +497,14 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/ExecutionHistoryInEraBounds.lean", "declaration:Blanc.mainnetChainConfig_preCancun_of_timestamp_lt", "declaration:Blanc.ExecutionTrace.ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt", "declaration:Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.systemStagesDisabled_of_mainnet_tip_before_cancun"]
     boundary := "The schedule must be mainnetChainConfig and the timestamp must be the actual block or final chain tip. A block-number bound alone is insufficient for the mixed activation schedule. The predicate goal does not establish either premise, authenticate a historical block, or disable stages on Cancun and later forks."
   },
+  {
+    id := "solc-runtime-return"
+    status := "active"
+    triggers := ["goal-shape:solc-runtime-return"]
+    preferredPath := "Apply Blanc.Lift.solcRuntimeReturn_runExact to the named solcRuntimeReturn terminal body, supplying the two PUSH-word equalities, nonzero length, aligned symbolic memory and four-word stack room. Its charge is actual memory expansion plus gasCopy * ceilDiv length 32 + 19, and its output is the executing code window at the supplied offset. To invert an existing successful source run, use solcRuntimeReturn_effects for the exact returned bytes and storage preservation, without fork or memory-alignment assumptions."
+    symbols := ["module:Blanc/Lift/Deploy.lean", "declaration:Blanc.Lift.solcRuntimeReturn", "declaration:Blanc.Lift.solcRuntimeReturn_runExact", "declaration:Blanc.Lift.solcRuntimeReturn_effects"]
+    boundary := "Advice matches only a direct SFunc.RunExact goal whose body is the named solcRuntimeReturn and whose outcome is halted. It does not unfold arbitrary certificate entries, match an arbitrary exact walk or returned outcome, prove literal bytecode identity, or establish CREATE settlement or historical installation. Concrete consumers identify their registered source tree with this body and discharge word encodings separately."
+  },
 ]
 
 end Blanc.ProofRecipes

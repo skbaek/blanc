@@ -113,6 +113,141 @@ theorem rx_codecopy {o : Outcome} {di si sz : B256} {c : Nat} {M' : Mem}
 
 end Steps
 
+/-- Solidity's terminal constructor window: load a length, duplicate it for
+RETURN, copy executing code to memory zero, then return that same window. -/
+def solcRuntimeReturn (sizeBytes offsetBytes : Bytes)
+    (sizeBound : sizeBytes.length ≤ 32) (offsetBound : offsetBytes.length ≤ 32) : SFunc :=
+  .dest (.next (.push sizeBytes sizeBound) (.next (.reg (.dup 0))
+    (.next (.push offsetBytes offsetBound) (.next (.push [0x00] (by decide))
+      (.next (.reg .codecopy) (.next (.push [0x00] (by decide)) (.last .return_)))))))
+
+/-- Construct the terminal copy/return walk over symbolic memory. The charge
+includes CODECOPY's word charge and the exact expansion; RETURN adds none. -/
+theorem solcRuntimeReturn_runExact
+    {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {sizeHead offsetHead : UInt8} {sizeTail offsetTail : Bytes}
+    {sizeBound : (sizeHead :: sizeTail).length ≤ 32}
+    {offsetBound : (offsetHead :: offsetTail).length ≤ 32} {size offset : B256}
+    (sizeWord : Bytes.toB256 (sizeHead :: sizeTail) = size)
+    (offsetWord : Bytes.toB256 (offsetHead :: offsetTail) = offset)
+    (nonzero : size.toNat ≠ 0)
+    (aligned : M.size % 32 = 0) (room : S.length + 4 ≤ 1024) :
+    SFunc.RunExact fs sevm
+      (St b S M (G + (calculateMemoryGasCost (memExtSize M.size 0 size.toNat) -
+        calculateMemoryGasCost M.size) + gasCopy * ceilDiv size.toNat 32 + 19))
+      (solcRuntimeReturn (sizeHead :: sizeTail) (offsetHead :: offsetTail)
+        sizeBound offsetBound)
+      (.halted ((St b S
+        (M.write 0 (sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop))) G).withOutput (sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop)))) := by
+  let window := sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop)
+  let copied := M.write 0 window
+  have length : window.length = size.toNat := ByteArray.length_sliceD _ _ _ _
+  have nonempty : window ≠ [] := by
+    intro empty
+    apply nonzero
+    rw [empty] at length
+    exact length.symm
+  have memorySize : copied.size = memExtSize M.size 0 size.toNat :=
+    Mem.size_write_of_size rfl aligned length
+  have memoryAligned : copied.size % 32 = 0 := by
+    rw [memorySize]
+    exact memExtSize_mod_32 aligned
+  have fits : 0 + size.toNat ≤ copied.size := by
+    have bound := Mem.write_end_le_size M 0 nonempty
+    simpa only [length] using bound
+  have read : (copied.read 0 size.toNat).1 = window := by
+    change ((M.write 0 window).read 0 size.toNat).1 = window
+    rw [← length]
+    exact Mem.read_write_zero M nonempty
+  have memory : (copied.read 0 size.toNat).2 = copied :=
+    Mem.read_snd_eq_self (memExtSize_of_le memoryAligned fits)
+  have post : returnPost (St b (0 :: size :: S) copied G) 0 size S =
+      (St b S copied G).withOutput window := by
+    change ((St b S copied G).withMemory (copied.read 0 size.toNat).2).withOutput
+      (copied.read 0 size.toNat).1 = _
+    rw [memory, read]
+    rfl
+  change SFunc.RunExact fs sevm _ _ (.halted ((St b S copied G).withOutput window))
+  rw [← post]
+  unfold solcRuntimeReturn
+  apply rx_dest
+  apply rx_push sizeWord (by omega)
+  apply rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega)
+  apply rx_push offsetWord (by simp only [List.length_cons]; omega)
+  apply rx_push (w := 0) (by decide) (by simp only [List.length_cons]; omega)
+  rw [show G + (calculateMemoryGasCost (memExtSize M.size 0 size.toNat) -
+      calculateMemoryGasCost M.size) + gasCopy * ceilDiv size.toNat 32 + 6 =
+      (G + 3) + ((calculateMemoryGasCost (memExtSize M.size 0 size.toNat) -
+        calculateMemoryGasCost M.size) + gasCopy * ceilDiv size.toNat 32 + 3) by omega]
+  refine rx_codecopy (G := G + 3)
+    (c := (calculateMemoryGasCost (memExtSize M.size 0 size.toNat) -
+      calculateMemoryGasCost M.size) + gasCopy * ceilDiv size.toNat 32 + 3)
+    (M' := copied) ?_ ?_ ?_
+  · rw [St.extCost_eq rfl]
+    change 3 + gasCopy * ceilDiv size.toNat 32 +
+      (calculateMemoryGasCost (memExtSize M.size 0 size.toNat) -
+        calculateMemoryGasCost M.size) = _
+    omega
+  · rfl
+  · apply rx_push (w := 0) (by decide) (by simp only [List.length_cons]; omega)
+    exact rx_return_any rfl (Devm.extCost_zero_of_le memoryAligned fits)
+
+/-- Invert a successful terminal copy/return walk. No fork or initial-memory
+alignment premise is needed: the actual returned window and storage follow
+from the successful source instructions. -/
+theorem solcRuntimeReturn_effects
+    {fs : List SFunc} {sevm : Sevm} {b post : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {sizeBytes offsetBytes : Bytes} {sizeBound : sizeBytes.length ≤ 32}
+    {offsetBound : offsetBytes.length ≤ 32} {size offset : B256}
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (run : SFunc.Run fs sevm (St b S M G)
+      (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound) (.halted post)) :
+    post.getStor = b.getStor ∧
+      post.output = sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) := by
+  obtain ⟨copied, copiedEq⟩ : ∃ copied : Mem,
+      M.write 0 (sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop)) = copied :=
+    ⟨_, rfl⟩
+  have length : (sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop)).length =
+      size.toNat := ByteArray.length_sliceD _ _ _ _
+  have nonempty : sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) ≠ [] := by
+    intro empty
+    apply nonzero
+    rw [empty] at length
+    exact length.symm
+  have read : (copied.read 0 size.toNat).1 =
+      sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) := by
+    have read := Mem.read_write_zero M nonempty
+    rw [length, copiedEq] at read
+    exact read
+  have run := run.cut
+  unfold solcRuntimeReturn at run
+  obtain ⟨_, run⟩ := ric_dest run
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, equal⟩ := ri_push step
+  rw [sizeWord] at equal
+  subst equal
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, equal⟩ := ri_push step
+  rw [offsetWord] at equal
+  subst equal
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, equal⟩ := ri_codecopy step
+  change _ = St b (size :: S)
+    (M.write 0 (sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop))) _ at equal
+  rw [copiedEq] at equal
+  subst equal
+  obtain ⟨_, step, run⟩ := ric_next run
+  obtain ⟨_, rfl⟩ := ri_push step
+  cases run with
+  | last terminal =>
+      have effect := ri_return terminal
+      exact ⟨funext effect.2.1, effect.1.trans read⟩
+
 /-- The creation frame of `msg` over the post-transfer environment `benv`. -/
 abbrev createSeed (msg : Msg) (benv : Benv) : Msg := (processCreateMessage.msg msg).withBenv benv
 

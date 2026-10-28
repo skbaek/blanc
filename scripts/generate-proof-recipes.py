@@ -789,6 +789,7 @@ REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "goal-shape:devm-update-projection",
     "goal-shape:exact-retained-storage-effects",
     "goal-shape:extcodesize-compiled-step",
+    "goal-shape:solc-runtime-return",
     "goal-shape:finite-coalition-ledger",
     "goal-shape:fixed-byte-offset",
     "goal-shape:frame-root-carrying",

@@ -66,6 +66,20 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
       return head == some `Blanc.HistFork
   | "goal-head:NeutralFork" =>
       return head == some `Blanc.NeutralFork
+  | "goal-shape:solc-runtime-return" =>
+      -- Inspect only the named terminal body and halted outcome; never unfold
+      -- arbitrary certificate entries or concrete machine images for advice.
+      let target := target.consumeMData
+      unless target.getAppFn.isConstOf `Blanc.Lift.SFunc.RunExact do return false
+      match target.getAppArgs with
+      | #[_, _, _, body, outcome] =>
+          let body := body.consumeMData
+          let outcome := outcome.consumeMData
+          return body.getAppFn.isConstOf `Blanc.Lift.solcRuntimeReturn &&
+            body.getAppArgs.size == 4 &&
+            outcome.getAppFn.isConstOf `Blanc.Lift.Outcome.halted &&
+            outcome.getAppArgs.size == 1
+      | _ => return false
   | "goal-shape:extcodesize-compiled-step" =>
       -- One exact compiled-instruction shape and one named definition lookup.
       -- Do not normalize the goal or inspect unrelated operands.
