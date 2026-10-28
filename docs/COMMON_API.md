@@ -2214,6 +2214,21 @@ retained successful CREATE derivation, its completed child settlement and
 resumed parent. It needs no separately supplied retained-list equality;
 installation is stated at that actual resumed state. Original occurrence and
 constructor/runtime identification remain explicit.
+`UsdcRuntimeCreation` retains the actual root, successful CREATE child,
+complete settlement, resumed parent and checked constructor/runtime installation
+witnesses within one transaction. `UsdcRuntimeOrigin` is either that witness or
+actual entry installation with the conditional V2_2 library;
+`UsdcDeployedEntry.TransactionOrigin` also carries the library's own origin when
+needed. `runtimeOrigin_preserves` and `entryOrigin_finalReady` derive final code
+through the existing initial/created survival producers, including deletion and
+sweep. These records contain no final-state code or terminal-safety oracle.
+`transaction_dynamic_runtimeReady_of_origins` folds selected readiness through
+the implementation cell: unchanged pointers retain their witness; actual
+retained last writers select an entry with local installation and transaction
+origin. Only those actual guarded writes need origins, and governance stays on
+the original full history. Proxy deletion exclusion and final proxy code are
+also derived. The concrete constructor/entry origin producer at historical
+upgrade positions and composition across transactions remain separate duties.
 `impl_block_preserves_retained` carries readiness through all original block
 stages; `impl_after_txSplit_preserves_retained` starts at the actual selected
 transaction's after-state, with no source-block-prestate installation premise.

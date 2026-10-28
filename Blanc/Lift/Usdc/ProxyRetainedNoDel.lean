@@ -600,6 +600,216 @@ theorem ConfiguredHistoryTraceIn.impl_transaction_preserves_retained
     Lib.cert_noSelfdestruct libFamily.not_delegation libFamily.ne_nil hsg
     (library implementation)).2
 
+section RuntimeOrigins
+
+variable {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+  {state : State} {bout' : BlockOutput}
+
+/-- Actual retained CREATE provenance for a USDC runtime within one transaction.
+The witness keeps the original child, complete settlement and resumed parent;
+its installation is local to that resume, never the final transaction state. -/
+structure UsdcRuntimeCreation (trace : TransactionTrace benv bout tx index state bout')
+    (I : Adr) (C : ByteArray) where
+  root : Exec.Frame
+  rootIn : root ∈ trace.settledRoots
+  pc : Nat
+  nextPc : Nat
+  sevm : Sevm
+  pre : Devm
+  post : Devm
+  frame : Frame
+  resume : Resume
+  child : Evm
+  raw : Execution
+  out : Execution
+  step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume nextPc
+  enter : frame.enter = .run child
+  create : frame.isCreate = true
+  childRun : Exec child.pc child.sta child.dyna raw
+  resumed : resume.run (frame.settle raw) = .ok post
+  next : Exec nextPc sevm post out
+  retained : (⟨pc, sevm, pre, out, .runOk step enter childRun resumed next⟩ : Exec.Deriv)
+    ∈ Exec.retainedNodes root.run
+  settles : frame.settlementCommits raw = true
+  nodeGas : sevm.benvStat.rules.stateGas = none
+  constructor : ByteArray
+  certificate : Cert
+  checked : Cert.check constructor certificate = true
+  constructorImage : child.sta.code = constructor
+  noExecs : ∀ f ∈ certificate.prog, f.execsSatisfy (fun _ => false) = true
+  noSelfdestruct : certificate.noSelfdestruct = true
+  address : frame.inner.currentTarget = I
+  installed : post.getCode frame.inner.currentTarget = C
+  library : C = Impl.code → post.getCode usdcLib = Lib.code
+
+/-- Runtime origin is either actual transaction-entry installation or a retained
+successful CREATE with a checked constructor. It states no final-state fact. -/
+def UsdcRuntimeOrigin (trace : TransactionTrace benv bout tx index state bout')
+    (I : Adr) (C : ByteArray) : Prop :=
+  (benv.state.getCode I = C ∧
+    (C = Impl.code → benv.state.getCode usdcLib = Lib.code)) ∨
+  Nonempty (UsdcRuntimeCreation trace I C)
+
+/-- A selected implementation carries its own origin and, only for V2.2, the
+origin of the fixed library. Later unused implementations need no origin here. -/
+def UsdcDeployedEntry.TransactionOrigin (e : UsdcDeployedEntry)
+    (trace : TransactionTrace benv bout tx index state bout') : Prop :=
+  UsdcRuntimeOrigin trace e.adr e.code ∧
+    (e.code = Impl.code → UsdcRuntimeOrigin trace usdcLib Lib.code)
+
+/-- Initial selected readiness supplies both relevant entry origins. -/
+theorem UsdcDeployedEntry.transactionOrigin_of_entry (e : UsdcDeployedEntry)
+    (trace : TransactionTrace benv bout tx index state bout')
+    (installed : benv.state.getCode e.adr = e.code)
+    (library : e.code = Impl.code → benv.state.getCode usdcLib = Lib.code) :
+    e.TransactionOrigin trace := by
+  refine ⟨.inl ⟨installed, library⟩, ?_⟩
+  intro implementation
+  exact .inl ⟨library implementation, fun impossible => (lib_ne_impl impossible).elim⟩
+
+/-- The two concrete origins share complete transaction-settlement preservation.
+A newly created runtime uses its actual constructor/resume, not a final oracle. -/
+theorem ConfiguredHistoryTraceIn.runtimeOrigin_preserves
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (trace : TransactionTrace benv bout tx index state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    {I : Adr} {C : ByteArray} (family : UsdcImplCode C)
+    (origin : UsdcRuntimeOrigin trace I C) :
+    I ∉ trace.messageOut.accountsToDelete ∧ state.getCode I = C := by
+  rcases origin with ⟨installed, library⟩ | ⟨created⟩
+  · have kept := ConfiguredHistoryTraceIn.impl_transaction_preserves_retained history capabilities bal family
+      trace rootsIn hsg installed library
+    exact ⟨kept.1, kept.2.1⟩
+  · obtain ⟨created⟩ := created
+    have kept := ConfiguredHistoryTraceIn.created_impl_runtime_survives_runOk history capabilities bal trace hsg
+      created.rootIn (rootsIn created.root created.rootIn) created.step created.enter
+      created.create created.childRun created.resumed created.next created.retained
+      created.settles created.nodeGas family created.checked created.constructorImage
+      created.noExecs created.noSelfdestruct created.installed created.library
+    simpa only [created.address] using kept
+
+/-- Own and conditional library origins give the selected runtime at the actual
+final State, after account deletion, fee settlement and touched-account sweep. -/
+theorem ConfiguredHistoryTraceIn.entryOrigin_finalReady
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    (trace : TransactionTrace benv bout tx index state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    {e : UsdcDeployedEntry} (family : UsdcImplCode e.code)
+    (origin : e.TransactionOrigin trace) :
+    state.getCode e.adr = e.code ∧
+      (e.code = Impl.code → state.getCode usdcLib = Lib.code) := by
+  refine ⟨(ConfiguredHistoryTraceIn.runtimeOrigin_preserves history capabilities bal trace rootsIn hsg family origin.1).2, ?_⟩
+  intro implementation
+  exact (ConfiguredHistoryTraceIn.runtimeOrigin_preserves history capabilities bal trace rootsIn hsg
+    (show UsdcImplCode Lib.code from .inr (.inr (.inr (.inr rfl))))
+    (origin.2 implementation)).2
+
+/-- Actual guarded upgrade origins make selected runtime readiness survive the
+whole transaction. Only initial selection and actual guarded writes need an
+origin; no future-runtime installation, final readiness or deletion is assumed. -/
+theorem ConfiguredHistoryTraceIn.transaction_dynamic_runtimeReady_of_origins
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    (trace : TransactionTrace benv bout tx index state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (proxy : benv.state.getCode P = Proxy.code)
+    (slot : ∃ e ∈ W, ((benv.state.getStor P).get implSlot).toAdr = e.adr ∧
+      benv.state.getCode e.adr = e.code ∧
+      (e.code = Impl.code → benv.state.getCode usdcLib = Lib.code))
+    (installations : ∀ R ∈ trace.settledRoots, ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm ∧
+        e.TransactionOrigin trace)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    P ∉ trace.messageOut.accountsToDelete ∧ state.getCode P = Proxy.code ∧
+      ∃ e ∈ W, ((state.getStor P).get implSlot).toAdr = e.adr ∧
+        state.getCode e.adr = e.code ∧
+        (e.code = Impl.code → state.getCode usdcLib = Lib.code) := by
+  have proxyFamily : UsdcContextCode Proxy.code := .inl rfl
+  have libraryFamily : UsdcContextCode Lib.code := .inr (.inr (.inr (.inr (.inr rfl))))
+  have ready (R : Exec.Frame) (member : R ∈ trace.settledRoots) :
+      R.pre.getCode P = Proxy.code ∧
+        ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
+    obtain ⟨e, he, address, runtime, library⟩ := slot
+    obtain ⟨rootProxy, rootSlot⟩ := trace.settledRoots_entry_code_cell
+      proxy proxyFamily.ne_nil proxyFamily.not_delegation implSlot R member
+    refine ⟨rootProxy, e, he, ?_, ?_, ?_⟩
+    · rw [rootSlot]; exact address
+    · exact (trace.settledRoots_entry_code_cell runtime (impls e he).context.ne_nil
+        (impls e he).context.not_delegation 0 R member).1
+    · intro implementation
+      exact (trace.settledRoots_entry_code_cell (library implementation) libraryFamily.ne_nil
+        libraryFamily.not_delegation 0 R member).1
+  have localInstall (R : Exec.Frame) (member : R ∈ trace.settledRoots)
+      (N : Exec.Deriv) (retained : N ∈ Exec.retainedNodes R.run)
+      (target : N.sevm.currentTarget = P) (code : N.sevm.code = Proxy.code)
+      (own : N.sevm.codeAddress = some P) (write : Exec.StorageWrite)
+      (found : Exec.Deriv.successfulSstore? N = some write) (key : write.key = implSlot)
+      (allowed : write.value.toAdr ∈ F2prime.upgradeTargets)
+      (nonempty : (N.devm.getCode write.value.toAdr).toList ≠ []) :
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm := by
+    obtain ⟨e, he, address, localReady, _⟩ :=
+      installations R member N retained target code own write found key allowed nonempty
+    exact ⟨e, he, address, localReady⟩
+  have context (R : Exec.Frame) (member : R ∈ trace.settledRoots) :=
+    ConfiguredHistoryTraceIn.settledRoot_retained_proxyWorld_from_installations history capabilities bal
+      (rootsIn R member) (ready R member).1 impls lib (ready R member).2 governance
+      (localInstall R member) (apart R member)
+  have notDeleted := trace.not_deleted_of_retained_terminals hsg (a := P) (by
+    intro R member
+    apply ConfiguredHistoryTraceIn.settledRoot_usdcContext_terminal_safe history capabilities (rootsIn R member)
+    intro N retained target
+    rcases (context R member N retained).2 target with ⟨code, _⟩ | ⟨e, he, code, _⟩
+    · exact .inl code
+    · rw [code]; exact (impls e he).context)
+  let property (word : B256) : Prop := ∃ e ∈ W, word.toAdr = e.adr ∧
+    state.getCode e.adr = e.code ∧ (e.code = Impl.code → state.getCode usdcLib = Lib.code)
+  have initial : property ((benv.state.getStor P).get implSlot) := by
+    obtain ⟨e, he, address, runtime, library⟩ := slot
+    exact ⟨e, he, address, ConfiguredHistoryTraceIn.entryOrigin_finalReady history capabilities bal trace rootsIn hsg
+      (impls e he) (e.transactionOrigin_of_entry trace runtime library)⟩
+  have transported := trace.cell_property_of_settledRoots implSlot hsg proxy proxyFamily.ne_nil
+    proxyFamily.not_delegation notDeleted property (by
+      intro R member entry
+      rcases ConfiguredHistoryTraceIn.settledRoot_dynamic_implSlot_origin_code_of_f2prime history capabilities bal
+          (rootsIn R member) (ready R member).1 impls lib (ready R member).2 governance
+          (localInstall R member) (apart R member) with
+          unchanged | ⟨N, retained, write, found, owner, key, value, allowed, nonempty, _⟩
+      · rw [unchanged]; exact entry
+      · have target : N.sevm.currentTarget = P :=
+          (successfulSstore?_node_owner found).2.symm.trans owner
+        rcases (context R member N retained).2 target with ⟨code, own⟩ | ⟨e, he, code, _⟩
+        · obtain ⟨e, he, address, _, origin⟩ :=
+            installations R member N retained target code own write found key allowed nonempty
+          refine ⟨e, he, ?_, ConfiguredHistoryTraceIn.entryOrigin_finalReady history capabilities bal trace rootsIn hsg
+            (impls e he) origin⟩
+          rw [← value]; exact address
+        · exact (apart R member N retained target (by rw [code]; exact impls e he)
+            write found key).elim) initial
+  exact ⟨notDeleted, transported.2, transported.1⟩
+
+end RuntimeOrigins
+
 /-- The installed implementation and its conditional V2.2 library persist
 through the actual ordered transaction list. This can start at the after-state
 of the original successful creation cut, including earlier creation in a block. -/
