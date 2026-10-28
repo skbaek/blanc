@@ -1124,4 +1124,206 @@ theorem ConfiguredHistoryTraceIn.impl_midHistory_txSplit_retained_origin
     history capabilities bal family mid block cut midRootsIn prefixRootsIn installed library root retained,
     e.transactionOrigin_of_entry cut.head entry.1 entry.2⟩
 
+
+/-- System CALL entry gives the same selected runtime at its actual root.
+Beginning the system transaction does not replace the world state. -/
+theorem SystemMessageTrace.usdc_root_ready
+    {benv : Benv} {target : Adr} {data : Bytes} {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    {P : Adr} {W : List UsdcDeployedEntry} (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (ready : UsdcSelectedReady P W benv.state)
+    (R : Exec.Frame) (member : R ∈ trace.settledRoots) :
+    R.pre.getCode P = Proxy.code ∧
+      ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
+  have entry {a : Adr} {C : ByteArray} (family : UsdcContextCode C)
+      (present : benv.state.getCode a = C) (key : B256) :
+      R.pre.getCode a = C ∧ (R.pre.getStor a).get key = (benv.state.getStor a).get key := by
+    simpa only [systemTransactionMessage_benv_state] using
+      trace.message.settledRoots_entry_code_cell
+        (by rw [systemTransactionMessage_benv_state]; exact present)
+        family.ne_nil family.not_delegation key R member
+  obtain ⟨e, he, address, runtime, library⟩ := ready.2
+  have proxy := entry (.inl rfl) ready.1 implSlot
+  refine ⟨proxy.1, e, he, ?_, (entry (impls e he).context runtime 0).1, ?_⟩
+  · rw [proxy.2]; exact address
+  · intro implementation
+    exact (entry (.inr (.inr (.inr (.inr (.inr rfl))))) (library implementation) 0).1
+
+/-- Selected readiness crosses an actual system CALL by its complete root
+post-state. Only local guarded installations are needed: system CALL settlement
+does not run the transaction's deletion and fee-sweep boundary. -/
+theorem ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (capabilities : BodyStageCapabilities F)
+    (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+    {P : Adr} {W : List UsdcDeployedEntry}
+    (impls : ∀ e ∈ W, UsdcImplCode e.code)
+    (lib : ∀ e ∈ W, e.code = Impl.code →
+      ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+    (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+    {benv : Benv} {target : Adr} {data : Bytes} {state : State} {out : MsgCallOutput}
+    (trace : SystemMessageTrace benv target data state out)
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : ∀ R ∈ trace.settledRoots, ∀ N ∈ Exec.retainedNodes R.run,
+      N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+      N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+      Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+      write.value.toAdr ∈ F2prime.upgradeTargets →
+      (N.devm.getCode write.value.toAdr).toList ≠ [] →
+      ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    UsdcSelectedReady P W state ∧
+      ∀ R ∈ trace.settledRoots, R.pre.getCode P = Proxy.code ∧
+        ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre := by
+  have ready := SystemMessageTrace.usdc_root_ready trace impls initial
+  have finalCode {a : Adr} {C : ByteArray} (family : UsdcContextCode C)
+      (present : benv.state.getCode a = C) : state.getCode a = C :=
+    (trace.cell_property_of_settledRoots 0 hsg present family.ne_nil family.not_delegation
+      (fun _ => True) (by intro R member entry; trivial) trivial).2
+  let property (word : B256) : Prop := ∃ e ∈ W, word.toAdr = e.adr ∧
+    state.getCode e.adr = e.code ∧ (e.code = Impl.code → state.getCode usdcLib = Lib.code)
+  have first : property ((benv.state.getStor P).get implSlot) := by
+    obtain ⟨e, he, address, runtime, library⟩ := initial.2
+    exact ⟨e, he, address, finalCode (impls e he).context runtime,
+      fun implementation => finalCode (.inr (.inr (.inr (.inr (.inr rfl)))))
+        (library implementation)⟩
+  have msgGas : (systemTransactionMessage benv target data).benv.stat.rules.stateGas = none := by
+    simpa only [BenvStat.rules, systemTransactionMessage, processSystemTransactionMsg,
+      Benv.beginTransaction] using hsg
+  have final := trace.cell_property_of_settledRoots implSlot hsg initial.1
+    (show UsdcContextCode Proxy.code from .inl rfl).ne_nil
+    (show UsdcContextCode Proxy.code from .inl rfl).not_delegation property (by
+      intro R member _
+      have post := ConfiguredHistoryTraceIn.settledRoot_dynamic_runtimeReady_of_f2prime
+        history capabilities bal (rootsIn R member) (ready R member).1 impls lib
+        (ready R member).2 governance (installations R member) (apart R member)
+      have stateEq := trace.message.settledRoots_post_state_of_call msgGas rfl R member
+      obtain ⟨e, he, address, runtime, library⟩ := post.2
+      refine ⟨e, he, address, ?_, ?_⟩
+      · simpa only [Devm.getCode_state, stateEq] using runtime
+      · intro implementation
+        simpa only [Devm.getCode_state, stateEq] using library implementation) first
+  exact ⟨⟨final.2, final.1⟩, ready⟩
+
+
+/-- Actual guarded writes select locally installed entries; no endpoint code
+or transaction-survival witness is asserted by this system-stage predicate. -/
+def UsdcGuardedInstallations (P : Adr) (W : List UsdcDeployedEntry)
+    (roots : List Exec.Frame) : Prop :=
+  ∀ R ∈ roots, ∀ N ∈ Exec.retainedNodes R.run,
+    N.sevm.currentTarget = P → N.sevm.code = Proxy.code →
+    N.sevm.codeAddress = some P → ∀ write : Exec.StorageWrite,
+    Exec.Deriv.successfulSstore? N = some write → write.key = implSlot →
+    write.value.toAdr ∈ F2prime.upgradeTargets →
+    (N.devm.getCode write.value.toAdr).toList ≠ [] →
+    ∃ e ∈ W, write.value.toAdr = e.adr ∧ e.RuntimeReady N.devm
+
+/-- Selected runtime facts at the entries of these actual settled roots. -/
+def UsdcRootsReady (P : Adr) (W : List UsdcDeployedEntry)
+    (roots : List Exec.Frame) : Prop :=
+  ∀ R ∈ roots, R.pre.getCode P = Proxy.code ∧
+    ∃ e ∈ W, ((R.pre.getStor P).get implSlot).toAdr = e.adr ∧ e.RuntimeReady R.pre
+
+section SelectedSystemStages
+
+variable {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+  (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
+  (capabilities : BodyStageCapabilities F)
+  (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
+  {P : Adr} {W : List UsdcDeployedEntry}
+  (impls : ∀ e ∈ W, UsdcImplCode e.code)
+  (lib : ∀ e ∈ W, e.code = Impl.code → ∃ l ∈ W, l.adr = usdcLib ∧ l.code = Lib.code)
+  (governance : UsdcGovernanceF2primeOn P history.settledFrames)
+
+include capabilities bal impls lib governance
+
+/-- The two actual request CALLs carry selected readiness in request order. -/
+theorem ConfiguredHistoryTraceIn.requests_dynamic_runtimeReady_from_installations
+    {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestsTrace benv bout state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : UsdcGuardedInstallations P W trace.settledRoots)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
+  have first := ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
+    history capabilities bal impls lib governance trace.withdrawal
+    (fun R member => rootsIn R (List.mem_append_left _ member)) hsg initial
+    (fun R member => installations R (List.mem_append_left _ member))
+    (fun R member => apart R (List.mem_append_left _ member))
+  have second := ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
+    history capabilities bal impls lib governance trace.consolidation
+    (fun R member => rootsIn R (List.mem_append_right _ member)) hsg first.1
+    (fun R member => installations R (List.mem_append_right _ member))
+    (fun R member => apart R (List.mem_append_right _ member))
+  refine ⟨?_, ?_⟩
+  · rw [trace.state_eq_consolidationState]; exact second.1
+  · intro R member
+    rcases List.mem_append.mp member with before | after
+    · exact first.2 R before
+    · exact second.2 R after
+
+/-- The actual optional beaconStage preserves selected readiness, including the skipped arm. -/
+theorem ConfiguredHistoryTraceIn.beaconStage_dynamic_runtimeReady_from_installations
+    {rules : ForkRules} {benv : Benv} {state : State} {outputBal : BalBuilder}
+    (trace : BeaconStageTrace rules benv state outputBal)
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : UsdcGuardedInstallations P W trace.settledRoots)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
+  cases trace with
+  | skipped =>
+    refine ⟨initial, ?_⟩
+    intro R member
+    cases member
+  | called _ _ message _ _ =>
+    exact ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
+      history capabilities bal impls lib governance message rootsIn hsg initial installations apart
+
+/-- The actual optional historyStage preserves selected readiness, including the skipped arm. -/
+theorem ConfiguredHistoryTraceIn.historyStage_dynamic_runtimeReady_from_installations
+    {rules : ForkRules} {benv : Benv} {inputBal : BalBuilder} {state : State} {outputBal : BalBuilder}
+    (trace : HistoryStageTrace rules benv inputBal state outputBal)
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : UsdcGuardedInstallations P W trace.settledRoots)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
+  cases trace with
+  | skipped =>
+    refine ⟨initial, ?_⟩
+    intro R member
+    cases member
+  | called _ _ _ _ message _ _ =>
+    exact ConfiguredHistoryTraceIn.system_dynamic_runtimeReady_from_installations
+      history capabilities bal impls lib governance message rootsIn hsg initial installations apart
+
+/-- The actual optional requestStage preserves selected readiness, including the skipped arm. -/
+theorem ConfiguredHistoryTraceIn.requestStage_dynamic_runtimeReady_from_installations
+    {rules : ForkRules} {benv : Benv} {bout : BlockOutput} {state : State} {bout' : BlockOutput}
+    (trace : RequestStageTrace rules benv bout state bout')
+    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+    (hsg : benv.stat.rules.stateGas = none)
+    (initial : UsdcSelectedReady P W benv.state)
+    (installations : UsdcGuardedInstallations P W trace.settledRoots)
+    (apart : ∀ R ∈ trace.settledRoots, KnownImplSlotApart P (Exec.retainedNodes R.run)) :
+    UsdcSelectedReady P W state ∧ UsdcRootsReady P W trace.settledRoots := by
+  cases trace with
+  | skipped =>
+    refine ⟨initial, ?_⟩
+    intro R member
+    cases member
+  | called _ message _ =>
+    exact ConfiguredHistoryTraceIn.requests_dynamic_runtimeReady_from_installations
+      history capabilities bal impls lib governance message rootsIn hsg initial installations apart
+
+end SelectedSystemStages
+
 end Blanc.Lift.Usdc

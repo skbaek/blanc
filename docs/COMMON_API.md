@@ -1050,7 +1050,12 @@ preservation. The ordered fold returns actual deletion exclusions, endpoint code
 and property, and every original settled root's entry facts. Descendant entries
 are not identified with the transaction input. The beacon/history
 `state_eq_of_disabled` adapters expose each skipped opening stage's actual
-state identity. Use this explicit trace/cell
+state identity. `ProcessMessageTrace.settledRoots_post_state` identifies an
+actual complete CALL root's post-state with the core result;
+`MessageCallTrace.settledRoots_post_state_of_call` carries that identity through
+the CALL wrapper with state gas disabled. CREATE is excluded because code
+deposit can change its state. Failed settlement supplies no retained root.
+Use this explicit trace/cell
 branch directly; there is no distinct reliable single goal-head recipe trigger.
 For exact transaction-position cuts, use
 [`Blanc/ExecutionHistoryCommittedCuts.lean`](../Blanc/ExecutionHistoryCommittedCuts.lean):
@@ -2236,7 +2241,15 @@ proofs. `UsdcTransactionOrigins` and `UsdcTransactionsOrigins` index the actual
 guarded writes and ordered transaction constructors; they introduce no replay.
 `transactions_dynamic_runtimeReady_of_origins` propagates selected readiness,
 proxy nondeletion and all root entry facts through that transaction list.
-System-stage and full original-history composition remain subsequent duties.
+`SystemMessageTrace.usdc_root_ready` derives entry facts through the actual
+system-message wrapper. `system_dynamic_runtimeReady_from_installations` uses
+the complete CALL root's post-state to transport selected runtime readiness;
+only actual guarded local installations are needed, with no transaction deletion
+or fee-sweep boundary to cross. `UsdcGuardedInstallations` and `UsdcRootsReady`
+name those actual-root predicates. The `requests_`, `beaconStage_`,
+`historyStage_` and `requestStage_dynamic_runtimeReady_from_installations`
+consumers retain both ordered request CALLs and the optional stages' skipped
+arms. Full block and original-history composition remain subsequent duties.
 `impl_midHistory_txSplit_retained_origin` joins local runtime readiness and the
 transaction-entry origin using the same genuine earlier installation, original
 intervening history and actual target cut.

@@ -220,4 +220,40 @@ theorem HistoryStageTrace.state_eq_of_disabled
   | skipped => rfl
   | called enabled _ _ _ _ _ _ => rw [disabled] at enabled; cases enabled
 
+
+/-- A root retained by complete CALL settlement has the actual core result's
+state. Failed settlement contributes no root to this statement. -/
+theorem ProcessMessageTrace.settledRoots_post_state
+    {msg : Msg} {post : Devm} (trace : ProcessMessageTrace msg (.ok post))
+    (R : Exec.Frame) (member : R ∈ trace.settledRoots) :
+    R.post.state = post.state := by
+  rcases trace with ⟨slot, retained, process⟩
+  cases retained with
+  | none => cases member
+  | @some pc sevm pre raw run =>
+    by_cases settles : Frame.settlementCommits (Frame.ofCall msg) raw = true
+    · have committed := Frame.raw_commits_of_settlementCommits settles
+      simp only [ProcessMessageTrace.settledRoots, settles, ↓reduceIte,
+        RetainedXlot.settledRoots, committed, ↓reduceDIte, List.mem_singleton] at member
+      subst R
+      exact (ProcessMessage.ok_state_eq_committedPost process committed).symm
+    · simp only [ProcessMessageTrace.settledRoots, settles, Bool.false_eq_true,
+        ↓reduceIte, List.not_mem_nil] at member
+
+/-- The CALL wrapper keeps the actual complete root's post-state when state
+gas is disabled. CREATE is excluded because its code deposit changes state. -/
+theorem MessageCallTrace.settledRoots_post_state_of_call
+    {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out)
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (call : msg.target.isNone = false)
+    (R : Exec.Frame) (member : R ∈ trace.settledRoots) :
+    R.post.state = state := by
+  cases trace with
+  | createCollision target collision result => rw [call] at target; cases target
+  | createRun target collision evm core retained result => rw [call] at target; cases target
+  | callRun target delegated refund delegation execMsg execution evm core retained result =>
+    exact (retained.settledRoots_post_state R member).trans
+      (processMessageCall_callRun_out_noStateGas hsg target delegation execution core result).1.symm
+
 end Blanc.ExecutionTrace
