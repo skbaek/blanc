@@ -5186,6 +5186,16 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   state and finite touched-key freshness remain inputs. The original
   `mid_retained_caller_write_excluded` is a compatibility wrapper that restricts
   its full-history exclusion through `senderQueries_subset_full`.
+  `mid_retained_caller_write_excluded_from_installations` derives the same
+  post-cut write exclusion from actual retained root contexts. It consumes
+  ordinary F2prime governance on the original full settled-frame population,
+  proxy and selected-runtime readiness at each actual root entry, and runtime
+  evidence at guarded upgrade writes. It uses no raw-world or raw-upgrade
+  premise. Parent code families and V2_2 library code at same-frame nodes
+  follow from the common retained/committed-frame membership equivalence and
+  `settledRoot_retained_proxyWorld_from_installations`; the old APIs remain
+  compatibility wrappers. Historical readiness/installation producers and
+  actual Pair state, sender exclusion and key freshness remain explicit.
   `MidHistoryTraceIn.usdc_retainedRowWrite_nonInc_or_v2_2_owner` consumes that
   mid-history caller exclusion through the same retained-write classifier.
   It retains the original root, committed parent and write witnesses while
