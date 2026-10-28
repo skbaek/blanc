@@ -1105,6 +1105,12 @@ For positional origin within one committing settlement-retained execution,
 `Exec.retainedNodes_split_origin` takes the exact retained split and gives the
 actual input root, an earlier retained node with the same static environment,
 or an earlier retained node satisfying the existing `SpawnedAt` relation.
+`Exec.retainedNodes_split_immediate_origin` strengthens the spawn case to
+`before = prior ++ [spawner]`: the child root immediately follows its actual
+spawn in retained chronology. This identifies which side of a constructor
+boundary a later child's spawning instruction occupies. Same-frame ancestors
+may still occur earlier across a completed child; the theorem does not assert
+adjacency for that separate case.
 Complete child settlement excludes discarded child witnesses. It requires no
 code, fork, no-write or own-code premise; actual message-root own-code facts
 remain the caller's separate obligation. Use the named theorem with retained
