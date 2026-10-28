@@ -4,6 +4,7 @@ import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.WalkSteps
 import Blanc.DeploymentMessage
+import Blanc.DeploymentTouch
 
 /-!
 # Deploying lifted creation code
@@ -431,6 +432,65 @@ theorem solcOwnerConstructor_effects
     intro a different
     exact (congrFun final.1 a).trans ((effects.2.2.2 a different).trans (foreign a different))
   · exact (SFunc.RunP.not_halted (S := []) rfl (by decide) (by decide) callee rfl).elim
+
+/-- The actual execution and code charge of this owner constructor install
+its returned code window and initialized storage. The zero-value premise and
+nonempty output are consequences of the source run, not supplied effects. -/
+theorem solcOwnerConstructor_message_effects
+    {fs : List SFunc} {msg : Msg} {benv : Benv} {raw charged : Devm}
+    {sizeBytes offsetBytes : Bytes}
+    {sizeBound : sizeBytes.length ≤ 32} {offsetBound : offsetBytes.length ≤ 32}
+    {size offset : B256}
+    (ownerEntry : fs[1]? = some SolcStorageReturn.ownerInit)
+    (returnEntry : fs[2]? = some (solcRuntimeReturn sizeBytes offsetBytes sizeBound offsetBound))
+    (sizeWord : sizeBytes.toB256 = size) (offsetWord : offsetBytes.toB256 = offset)
+    (nonzero : size.toNat ≠ 0)
+    (transfer : (processCreateMessage.msg msg).benvAfterTransfer = .ok benv)
+    (codeAddress : msg.codeAddress = none)
+    (executed : exec (initEvm ((processCreateMessage.msg msg).withBenv benv)) = .ok raw)
+    (clean : raw.error = none)
+    (charge : processCreateMessage.chargeCodeGas msg.benv.stat.rules
+      (raw.recordTouch msg.benv.stat.rules true msg.currentTarget) = .ok charged)
+    (run : SFunc.Run fs
+      (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta
+      (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna
+      solcOwnerConstructor (.halted raw)) :
+    msg.value = 0 ∧ ∃ installed, processCreateMessage msg = .ok installed ∧
+      (installed.getCode msg.currentTarget).toList =
+        msg.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop) ∧
+      installed.getStor msg.currentTarget = solcOwnerConstructorStorage Stor.empty msg.caller ∧
+      (∀ a, a ≠ msg.currentTarget → installed.getStor a = benv.state.getStor a) := by
+  have source : SFunc.Run fs
+      (initEvm ((processCreateMessage.msg msg).withBenv benv)).sta
+      (St (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna [] Mem.empty
+        (initEvm ((processCreateMessage.msg msg).withBenv benv)).dyna.gasLeft)
+      solcOwnerConstructor (.halted raw) := run
+  have effects := solcOwnerConstructor_effects ownerEntry returnEntry
+    sizeWord offsetWord nonzero source
+  have zero : msg.value = 0 := effects.1
+  have initial : benv.state.getStor msg.currentTarget = Stor.empty := by
+    rw [benvAfterTransfer_ok_getStor transfer msg.currentTarget (Or.inl zero)]
+    exact processCreateMessage_msg_getStor_currentTarget msg
+  have outputNonempty : raw.output ≠ [] := by
+    intro empty
+    have length := congrArg List.length empty
+    rw [effects.2.2.2, ByteArray.length_sliceD, List.length_nil] at length
+    exact nonzero length
+  obtain ⟨installed, settled, code, storage⟩ :=
+    processCreateMessage_effects_of_exec_and_charge msg transfer codeAddress
+      executed clean charge outputNonempty
+  refine ⟨zero, installed, settled, ?_, ?_, ?_⟩
+  · rw [code, ByteArray.toList_eq_toList_data]
+    exact effects.2.2.2
+  · rw [storage]
+    have own : raw.getStor msg.currentTarget =
+        solcOwnerConstructorStorage (benv.state.getStor msg.currentTarget) msg.caller :=
+      effects.2.1
+    rw [initial] at own
+    exact own
+  · intro a different
+    rw [storage]
+    exact effects.2.2.1 a different
 
 /-- The creation frame of `msg` over the post-transfer environment `benv`. -/
 abbrev createSeed (msg : Msg) (benv : Benv) : Msg := (processCreateMessage.msg msg).withBenv benv

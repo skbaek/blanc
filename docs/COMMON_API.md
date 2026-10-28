@@ -7127,7 +7127,15 @@ current recipe matchers have no forward-transition shape to bind.
   code address, actual raw execution and a clean raw result.
   `processCreateMessage_ok_touch_of_exec_and_charge` additionally consumes
   successful code charging on that touched result and installs its charged
-  output with the actual `setCode` normalization. Neither theorem assumes
+  output with the actual `setCode` normalization. For the installed effects,
+  `createCharge_install_effects` derives exact installed output and preservation
+  of the entire storage function from actual touch/code charging and nonempty
+  raw output. `processCreateMessage_effects_of_exec_and_charge` combines those
+  facts with the actual execution and transfer, producing the same settled
+  CREATE result. The nonempty condition is essential: normalization may erase
+  storage for an empty account. These compound projections are selected by the
+  named actual execution/charge witnesses; they add no goal-head recipe.
+  Neither theorem assumes
   touch recording is disabled, nor proves constructor execution, affordability,
   final transaction sweeping or a historical starting state. The
   `touch-preserving-message-settlement` recipe recognizes only the direct
@@ -9300,6 +9308,14 @@ contract-neutral.
   compound inverse has no reliable goal-head dispatch: select it explicitly
   with its actual run and function-table witnesses; the forward terminal recipe
   below remains the automatic entry point for exact code-return runs.
+  `solcOwnerConstructor_message_effects` composes that source inverse with
+  actual transfer, execution and code charging to derive the installed code
+  window, exact initialized storage and foreign storage preservation. Zero
+  call value and nonempty output are derived from the source run. The actual
+  CREATE preparation supplies empty initial target storage. It does not
+  identify a concrete certificate/runtime literal or supply the historical
+  execution witnesses. The existing proxy constructor settlement also uses
+  the same common touch/charge projection.
   The `solc-runtime-return` recipe matches only a named terminal-body exact
   run ending in a halted outcome; it never unfolds arbitrary certificate
   entries or concrete machine images to discover this pattern.

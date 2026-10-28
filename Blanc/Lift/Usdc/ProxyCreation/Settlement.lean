@@ -147,73 +147,25 @@ theorem constructor_message_effects
   have hraw_out : raw.output = Proxy.code.toList := by
     rw [houtput]
     exact runtime_window
-  have hcharged_stor : charged.getStor msg.currentTarget =
-      raw.getStor msg.currentTarget := by
-    have hstate := chargeCodeGas_state_ok hcharge
-    have hg : Devm.getStor charged msg.currentTarget =
-        Devm.getStor (Devm.recordTouch msg.benv.stat.rules true
-          msg.currentTarget raw) msg.currentTarget := by
-      show charged.state.getStor msg.currentTarget =
-        (Devm.recordTouch msg.benv.stat.rules true msg.currentTarget
-          raw).state.getStor msg.currentTarget
-      rw [hstate]
-    rw [hg]
-    show Devm.getStor (Devm.recordTouch msg.benv.stat.rules true
-      msg.currentTarget raw) msg.currentTarget =
-      Devm.getStor raw msg.currentTarget
-    show (Devm.recordTouch msg.benv.stat.rules true msg.currentTarget
-      raw).state.getStor msg.currentTarget =
-      raw.state.getStor msg.currentTarget
-    rw [Devm.recordTouch_state]
-  have hcharged_out : charged.output = raw.output := by
-    have hmach := processCreateMessage.chargeCodeGas_ok_eq_setMach hcharge
-    rw [hmach]
-    show (Devm.recordTouch msg.benv.stat.rules true msg.currentTarget
-      raw).output = raw.output
-    exact Devm.recordTouch_output _ _ _ _
-  have hout_len : charged.output.length = 2186 := by
-    rw [hcharged_out, houtput]
-    exact List.length_sliceD _ _ _ _
-  have hcode_eq : (⟨⟨charged.output⟩⟩ : ByteArray) = Proxy.code := by
+  have nonempty : raw.output ≠ [] := by
+    intro empty
+    have length : raw.output.length = 2186 := by
+      rw [houtput]
+      exact List.length_sliceD _ _ _ _
+    rw [empty, List.length_nil] at length
+    cases length
+  obtain ⟨installed, settled, code, storage⟩ :=
+    processCreateMessage_effects_of_exec_and_charge msg htransfer hcodeAddress
+      hexec herror hcharge nonempty
+  refine ⟨installed, settled, ?_, ?_⟩
+  · rw [code]
     apply ByteArray.ext
     rw [← Array.toList_inj]
-    have e1 : ({data := { toList := charged.output } } : ByteArray).data.toList =
-        charged.output := rfl
-    have e2 : Proxy.code.data.toList = Proxy.code.toList :=
-      ByteArray.toList_eq_toList_data.symm
-    rw [e1, e2, hcharged_out, hraw_out]
-  have hnotEmpty : ¬ ({charged.state.get msg.currentTarget with code :=
-      ⟨⟨charged.output⟩⟩} : Acct).Empty := by
-    intro hempty
-    have hsize : (⟨⟨charged.output⟩⟩ : ByteArray).size = 0 := hempty.1
-    have hsize_eq : (⟨⟨charged.output⟩⟩ : ByteArray).size =
-      charged.output.length := rfl
-    rw [hsize_eq, hout_len] at hsize
-    exact (by decide : 2186 ≠ 0) hsize
-  have hinstalled_code : (charged.setCode msg.currentTarget
-      ⟨⟨charged.output⟩⟩).getCode msg.currentTarget = Proxy.code := by
-    have hget : (charged.setCode msg.currentTarget
-        ⟨⟨charged.output⟩⟩).state.getCode msg.currentTarget =
-        ⟨⟨charged.output⟩⟩ := by
-      show (charged.state.setCode msg.currentTarget
-        ⟨⟨charged.output⟩⟩).getCode msg.currentTarget = ⟨⟨charged.output⟩⟩
-      simp only [State.setCode, State.getCode, State.setAccount_get_self,
-        Acct.clearIfEmpty_code]
-    rw [Devm.getCode_state, hget]
-    exact hcode_eq
-  have hinstalled_stor : (charged.setCode msg.currentTarget
-      ⟨⟨charged.output⟩⟩).getStor msg.currentTarget =
-      (Stor.empty.set implSlot initialImplementation).set adminSlot
-        msg.caller.toB256 := by
-    simp only [Devm.setCode_getStor]
-    split
-    · next h => exact absurd h.2 hnotEmpty
-    · next _ => exact hcharged_stor.trans hraw_stor
-  have hsettle : processCreateMessage msg =
-      .ok (charged.setCode msg.currentTarget ⟨⟨charged.output⟩⟩) :=
-    processCreateMessage_ok_touch_of_exec_and_charge msg htransfer hcodeAddress
-      hexec herror hcharge
-  exact ⟨_, hsettle, hinstalled_code, hinstalled_stor⟩
+    change raw.output = Proxy.code.data.toList
+    rw [← ByteArray.toList_eq_toList_data]
+    exact hraw_out
+  · rw [storage]
+    exact hraw_stor
 
 /-- The actual clean retained CREATE supplies the constructor source run and
 its exact touch, charge and code-installation result. -/
