@@ -184,6 +184,66 @@ theorem rx_sstoreH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : O
   rw [← afterSstoreH_stateGas sevm b k' v]
   exact k
 
+/-- `SLOAD` at the actual selected charge in an exact cut run. -/
+theorem rxc_sload_selH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {r : Seg}
+    {C : List Nat} {S : List B256} {M : Mem} {G : Nat} {key : B256}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C
+      (St (afterSloadH sevm b key) (b.getStorVal sevm.currentTarget key :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (key :: S) M (G + sloadCostH sevm b key))
+      (.next (.reg .sload) f) r := by
+  refine .next ?_ k
+  have h := Ninst.runCompiled_sload_selectedH (sevm := sevm) (base := b) (key := key)
+    (stack := S) (memory := M) (G := G) hsg rfl hroom
+  simpa only [St, afterSloadH_stateGas] using h
+
+/-- `SSTORE` at the actual selected charge in an exact cut run. -/
+theorem rxc_sstoreH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {r : Seg}
+    {C : List Nat} {S : List B256} {M : Mem} {G : Nat} {key value : B256}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hsentry : sevm.benvStat.rules.sstore.stipendSentry = true →
+      gCallStipend < G + sstoreCostH sevm b key value)
+    (hstatic : sevm.isStatic = false)
+    (k : SFunc.RunExactCut fs sevm C (St (afterSstoreH sevm b key value) S M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (key :: value :: S) M (G + sstoreCostH sevm b key value))
+      (.next (.reg .sstore) f) r := by
+  refine .next (Ninst.runCompiled_sstore_selectedH hsg hsentry hstatic) ?_
+  rw [← afterSstoreH_stateGas sevm b key value]
+  exact k
+
+/-- Historical SSTORE pricing depends only on the selected price inputs. -/
+theorem sstoreCostH_congr {sevm : Sevm} {d1 d2 : Devm} (key value : B256)
+    (hkeys : d1.accessedStorageKeys = d2.accessedStorageKeys)
+    (hstor : Devm.getStor d1 sevm.currentTarget = Devm.getStor d2 sevm.currentTarget)
+    (hcreated : d1.createdAccounts = d2.createdAccounts) :
+    sstoreCostH sevm d1 key value = sstoreCostH sevm d2 key value := by
+  unfold sstoreCostH storageAccessCostH
+  rw [hkeys]
+  have horig : d1.getOrigStorVal sevm sevm.currentTarget key =
+      d2.getOrigStorVal sevm sevm.currentTarget key := by
+    unfold Devm.getOrigStorVal
+    rw [hcreated]
+  rw [horig]
+  show sstoreRegimeGasCost _ _ _ _ _ ((Devm.getStor d1 sevm.currentTarget).get key) = _
+  rw [hstor]
+  rfl
+
+/-- The actual flat Muir Glacier read charge. -/
+theorem sloadCostH_muir_eq {sevm : Sevm} (hmuir : sevm.benvStat.rules = muirGlacierRules)
+    (base : Devm) (key : B256) : sloadCostH sevm base key = 800 := by
+  unfold sloadCostH
+  rw [hmuir]
+  rfl
+
+/-- The actual Muir Glacier net-metered write charge is at most 20,000. -/
+theorem sstoreCostH_muir_le {sevm : Sevm} (hmuir : sevm.benvStat.rules = muirGlacierRules)
+    (base : Devm) (key value : B256) : sstoreCostH sevm base key value ≤ 20000 := by
+  unfold sstoreCostH storageAccessCostH
+  rw [hmuir]
+  unfold sstoreRegimeGasCost
+  change (if _ then if _ then 0 + 20000 else 0 + 5000 else 0 + 800) ≤ 20000
+  split_ifs <;> decide
+
 /-- Under a flat `SLOAD` price of at most 2100 (every historical schedule), one `SLOAD` costs at
 most 2100. -/
 theorem sloadCostH_le {sevm : Sevm} {base : Devm} {key : B256}

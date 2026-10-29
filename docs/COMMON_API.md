@@ -2548,9 +2548,10 @@ prefix plus those observations in the existing retained chronology. Its
 `CoveredFork` premise covers child initialization, CALL and CREATE resumption,
 and complete settlement failure; failed subtrees are pruned and settlement
 boundaries never duplicate child logs. For message-root receipt bridges,
-`Frame.settle_logs_of_ok` preserves logs through successful frame settlement,
-and `Frame.enter_done_clean_logs_noStateGas` proves an immediate clean entry
-has no logs. These reuse the same settlement and native-entry proofs.
+`Frame.settle_logs_eq` exposes complete-settlement log preservation, including
+code-deposit settlement; `Frame.settle_logs_of_ok` retains its compatibility
+interface. `Frame.enter_done_clean_logs_noStateGas` proves an immediate clean
+entry has no logs. These reuse the same settlement and native-entry proofs.
 
 To identify the observation of an actual successful LOG without unfolding a
 physical memory image, use
@@ -9826,6 +9827,18 @@ contract-neutral.
   constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
+  For exact creation walks under the selected historical schedule, use
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
+  `Ninst.runCompiled_sload_selectedH`/`runCompiled_sstore_selectedH`,
+  `rx_sload_selH`/`rx_sstoreH` and `rxc_sload_selH`/`rxc_sstoreH` charge
+  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`.
+  `sstoreCostH_congr` transports only the actual price inputs. `sloadCostH_muir_eq`
+  and `sstoreCostH_muir_le` give the actual 800-gas read and at-most-20000 write
+  under Muir rules. `liftCreate_postH`
+  and `liftCreate_okH` lift a checked exact constructor run from `stateGas = none`,
+  retaining the historical target touch. Code admissibility, deposit gas, size,
+  value transfer and the run remain explicit obligations.
+
   For Solidity's terminal code-window sequence, use `solcRuntimeReturn` and
   `solcRuntimeReturn_runExact` from `Lift/Deploy.lean`. The common forward
   theorem accepts nonempty PUSH encodings for the length and offset, a nonzero

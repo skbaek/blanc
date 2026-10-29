@@ -282,11 +282,19 @@ private theorem Frame_settle_logs
   rw [Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok] at settle
   exact Frame_settleMsg_logs settle
 
-/-- Successful frame settlement preserves the raw result's log sequence. -/
+/-- Successful complete frame settlement preserves the raw execution log list.
+This exposes the canonical settlement proof to retained-message consumers. -/
+theorem Frame.settle_logs_eq
+    {frame : Frame} {pre post : Devm}
+    (settle : frame.settle (.ok pre) = .ok post) :
+    post.logs = pre.logs :=
+  Frame_settle_logs settle
+
+/-- Compatibility name for the canonical successful settlement log projection. -/
 theorem Frame.settle_logs_of_ok
     {frame : Frame} {pre post : Devm}
     (settle : frame.settle (.ok pre) = .ok post) :
-    post.logs = pre.logs := Frame_settle_logs settle
+    post.logs = pre.logs := Frame.settle_logs_eq settle
 
 private theorem Resume_create_logs
     {parent child post : Devm} {address : Adr}
