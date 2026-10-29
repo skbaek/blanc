@@ -404,6 +404,8 @@ def run_registry(args: argparse.Namespace) -> int:
                     argv += ["--check-parts", str(check["parts"])]
                 if check.get("literal_tries") is True:
                     argv.append("--check-literal-tries")
+                if check.get("trie_build") is True:
+                    argv.append("--check-trie-build")
                 if "rest_parts" in check:
                     argv += ["--check-rest-parts", str(check["rest_parts"])]
                 if check.get("assembly") in ("seven", "two", "chain"):
@@ -560,6 +562,8 @@ parser.add_argument("--check-rest-parts", type=int, default=0,
                     help="memory-mode split Check: move the tail of the rest_/jrest_ assembly chain into CheckRest1..CheckRest{K-1}, cut at CheckPart boundaries, so Check keeps only the head of the chain and cert_checkM/cert_jumpsOkM (K >= 2; registry check.rest_parts); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--check-literal-tries", action="store_true",
                     help="emit the code tries as data checked once against LTrie.ofList (registry check.literal_tries)")
+parser.add_argument("--check-trie-build", action="store_true",
+                    help="with --check-literal-tries: check each literal trie by one linear LTrie.build pass (Blanc.Lift.CodeTriesBuild), which also yields the length bound, instead of LTrie.ofList parts and two length decisions (registry check.trie_build); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--check-assembly", choices=("seven", "two", "chain"), default=None,
                     help="emit cert_check as a call to the shared seven-entry assembler Cert.check_seven (Blanc.Lift.CheckAssembly) or two-entry assembler Cert.check_two (Blanc.Lift.CheckAssemblyPair), or (chain) as a chain over the certificate's tails (Cert.checkAll_drop, Blanc.Lift.CheckChain) for certificates too long for the membership case split, instead of the generic conjunction (registry check.assembly); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--no-join-entries", action="store_true",
@@ -648,6 +652,8 @@ if args.check_rest_parts != 0 and (args.check_rest_parts < 2 or args.check_parts
     parser.error("--check-rest-parts K needs K >= 2, --check-out, --memret and --check-parts N >= K")
 if args.tries_out is not None and args.check_parts >= 2:
     parser.error("standalone tries and split Check both own CheckTries.lean")
+if args.check_trie_build and not args.check_literal_tries:
+    parser.error("--check-trie-build needs --check-literal-tries")
 
 # 1. Load bytecode
 code_hex = args.hex.read_text().strip()
@@ -2387,6 +2393,16 @@ def literal_tries_lines(depth: int) -> List[str]:
             h = 1 << (d - 1)
             return f"(.node {top_tree(lo, d - 1)} {top_tree(lo + h, d - 1)})"
         out += [f"def {name} : LTrie {ty} := {top_tree(0, top)}", ""]
+        if args.check_trie_build:
+            # One left-to-right pass checks the data and the length bound together
+            # (`LTrie.build_eq`); the public equality is unchanged.
+            out += [
+                f"private theorem {name}_build : LTrie.build {depth} ({src}) = ({name}, []) := by",
+                "  kernel_rfl", "",
+                f"theorem {name}_eq : {name} = LTrie.ofList {depth} ({src}) :=",
+                f"  LTrie.eq_ofList_of_build {name}_build", "",
+            ]
+            continue
         if depth < 15:
             proof = "  kernel_rfl"
         else:
@@ -2411,7 +2427,8 @@ def literal_tries_lines(depth: int) -> List[str]:
     out += [
         f"def codeTries : CodeTries code {depth} :=",
         f"  CodeTries.ofData code {depth} bytesTrie startsTrie bytesTrie_eq startsTrie_eq",
-        "    (by decide +kernel) (by decide +kernel)",
+        ("    (LTrie.length_le_of_build bytesTrie_build) (LTrie.length_le_of_build startsTrie_build)"
+         if args.check_trie_build else "    (by decide +kernel) (by decide +kernel)"),
         "",
     ]
     return out
@@ -2658,7 +2675,8 @@ def check_source() -> Any:
         "",
     ])
     if args.check_literal_tries and args.check_parts < 2:
-        lines[2:2] = ["import Blanc.Lift.CodeTriesData", "import Blanc.ConcreteRun"]
+        lines[2:2] = ["import Blanc.Lift.CodeTriesData", "import Blanc.ConcreteRun"] + (
+            ["import Blanc.Lift.CodeTriesBuild"] if args.check_trie_build else [])
     if MEMRET:
         return check_source_mem(lines)
     blocks = []
@@ -2824,6 +2842,7 @@ def split_check(head: List[str], blocks: List[List[str]], assembly: List[str],
         preamble = lines[2:split]  # from the blank line after the imports
         tries = ([f"import {ns}.Cert", "import Blanc.Lift.CheckFast"] +
                  (["import Blanc.Lift.CodeTriesData", "import Blanc.ConcreteRun"] if args.check_literal_tries else []) +
+                 (["import Blanc.Lift.CodeTriesBuild"] if args.check_trie_build else []) +
                  preamble + lines[split:])
         tries += [f"end {ns}", ""]
         files["CheckTries"] = "\n".join(tries)

@@ -585,6 +585,7 @@ import Blanc.ConcreteRun
 import Blanc.Lift.MemMap
 import Blanc.Lift.CheckMem
 import Blanc.Lift.CodeTriesData
+import Blanc.Lift.CodeTriesBuild
 import Blanc.Lift.WitnessArms
 import Blanc.Lift.Witness
 import Blanc.Lift.WitnessChild

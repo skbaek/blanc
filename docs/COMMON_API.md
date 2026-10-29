@@ -9782,7 +9782,10 @@ contract-neutral.
   `callPairFrom_stages`) in
   [`Blanc/Lift/WitnessBoundary.lean`](../Blanc/Lift/WitnessBoundary.lean). Code tries given as
   generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in
-  [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean). Worked use:
+  [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean); the data checked in one
+  linear pass that also yields the length bound (`LTrie.build`, `LTrie.build_eq`,
+  `LTrie.eq_ofList_of_build`, `LTrie.length_le_of_build`; producer option `check.trie_build`) in
+  [`Blanc/Lift/CodeTriesBuild.lean`](../Blanc/Lift/CodeTriesBuild.lean). Worked use:
   `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean` (`vminus_witness`).
 - Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
   slot and, with the arguments swapped (slot first), Vyper's, in
