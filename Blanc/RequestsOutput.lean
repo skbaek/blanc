@@ -48,4 +48,46 @@ theorem RequestsTrace.requests_eq
   exact (congrArg (fun result : State × BlockOutput => result.2.requests)
     (Except.ok.inj run)).symm
 
+/-- Transaction settlement preserves the incoming request list; requests are
+assembled only by the later request pass. -/
+private theorem processTransaction_requests {benv : Benv} {bout : BlockOutput}
+    {tx : Tx} {index : Nat} {p : State × BlockOutput}
+    (run : processTransaction benv bout tx index = .ok p) :
+    p.2.requests = bout.requests := by
+  unfold processTransaction at run
+  obtain ⟨b1, hb1, run⟩ := Except.bind_eq_ok run
+  obtain ⟨validationSender, _, run⟩ := Except.bind_eq_ok run
+  obtain ⟨ig, _, run⟩ := Except.bind_eq_ok run
+  obtain ⟨ck, _, run⟩ := Except.bind_eq_ok run
+  obtain ⟨st1, _, run⟩ := Except.bind_eq_ok run
+  obtain ⟨msg, _, run⟩ := Except.bind_eq_ok run
+  obtain ⟨q, _, run⟩ := Except.bind_eq_ok run
+  obtain ⟨rc, _, run⟩ := Except.bind_eq_ok run
+  obtain ⟨b2, hb2, run⟩ := Except.bind_eq_ok run
+  obtain ⟨b3, hb3, run⟩ := Except.bind_eq_ok run
+  simp only [Except.ok.injEq] at hb1 hb2 hb3
+  have requests : b3.requests = bout.requests := by
+    rw [← hb3, ← hb2, ← hb1]
+    rfl
+  cases run
+  exact requests
+
+/-- A retained transaction sequence preserves the incoming request list. -/
+theorem ApplyTransactionsTrace.requests_eq
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout) :
+    finalBout.requests = bout.requests := by
+  induction trace with
+  | nil => rfl
+  | cons head tail ih => exact ih.trans (processTransaction_requests head.result)
+
+/-- The actual block body starts transactions with an empty request list. -/
+theorem AppliedBodyTrace.transaction_requests_eq_nil
+    {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : AppliedBodyTrace benv txs ommers wds state bout) :
+    trace.transactionBout.requests = [] :=
+  trace.transactions.requests_eq
+
 end Blanc.ExecutionTrace

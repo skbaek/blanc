@@ -48,6 +48,8 @@ import Blanc.ExecutionMidHistoryIn
 import Blanc.ExecutionMidHistoryInFacts
 import Blanc.ExecutionMidHistoryInForest
 import Blanc.ExecutionMidHistoryInNoDel
+import Blanc.ExecutionMidHistoryInCallerExclusion
+import Blanc.ExecutionMidHistoryInBeaconCode
 import Blanc.ExecutionHistoryInCodeAt
 import Blanc.ExecutionHistoryInCallerExclusion
 import Blanc.ExecutionSenderQueryCuts
@@ -875,6 +877,7 @@ import Blanc.Lift.WithdrawalRequest.ResetWindowCount
 import Blanc.Lift.WithdrawalRequest.WordBudget
 import Blanc.Lift.WithdrawalRequest.WordHistory
 import Blanc.Lift.WithdrawalRequest.WordFifo
+import Blanc.Lift.WithdrawalRequest.HistoryFifo
 import Blanc.Lift.WithdrawalRequest.WordDelivery
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so

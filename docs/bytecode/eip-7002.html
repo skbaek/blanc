@@ -43,7 +43,7 @@
       <div>
         <h1>The EIP-7002 contract.</h1>
         <p class="lede">Since Prague, every validator exit or partial withdrawal triggered from the execution layer passes through these 504 bytes, written by hand in assembly. At the end of every block the client calls the contract, and a block whose call fails is invalid.</p>
-        <p class="lede-sm">With its canonical code installed, Blanc proves that this end-of-block call succeeds whatever the contract’s storage holds; that each block’s requests are exactly the oldest pending submissions, in order, none dropped, duplicated, reordered or emitted early; and that the EIP’s own fee guarantee is false of these bytes — while showing exactly where, and how far beyond any account’s reach, the deployed arithmetic departs from the specification. Mainnet met the theorems’ starting premises when Prague began.</p>
+        <p class="lede-sm">Blanc proves that the end-of-block call succeeds whatever storage holds when the canonical code is installed. Its deployment-rooted FIFO theorem states that committed submissions equal emitted records followed by the queue remaining in concrete storage, under the conditions below. Separate results characterize where the bytecode’s word-arithmetic fee differs from the EIP’s unbounded-integer formula.</p>
       </div>
       <div class="plate idplate">
         <div class="plate-head"><span class="who"><span class="k">Artifact</span>EIP-7002 contract</span><span class="meta">Ethereum mainnet</span></div>
@@ -54,7 +54,7 @@
           <dt>Written in</dt><dd>assembly for the geas assembler, as published in the EIP and the <code>sys-asm</code> repository</dd>
           <dt>Created</dt><dd>block 21,881,389 (19 February 2025) by the keyless transaction printed in the EIP</dd>
           <dt>Used</dt><dd>21,747 requests from Prague’s activation to block 26,141,229; none before</dd>
-          <dt>Proofs</dt><dd><a href="https://github.com/skbaek/blanc/tree/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest"><code>Blanc/Lift/WithdrawalRequest/</code></a>, 13,119 lines of Lean, with two counterexamples in <code>Blanc/Composition/</code></dd>
+          <dt>Proofs</dt><dd><a href="https://github.com/skbaek/blanc/tree/main/Blanc/Lift/WithdrawalRequest"><code>Blanc/Lift/WithdrawalRequest/</code></a>, with two checkpoint counterexamples in <code>Blanc/Composition/</code></dd>
         </dl>
       </div>
     </div>
@@ -104,34 +104,40 @@
       </section>
 
       <section id="fifo">
-        <p class="eyebrow">Safety, after any history</p>
+        <p class="eyebrow">FIFO from deployment</p>
         <h2>Submissions in, requests out.</h2>
-        <p>From a checkpoint whose storage represents the initial state, for every block of a configured history, the requests the block hands to the consensus layer are exactly the first queued entries, at most sixteen, in first-in-first-out order, and each is the caller, public key and amount of exactly one committed submission, which paid the fee the bytecode computed. No committed submission is dropped, duplicated, reordered or emitted before it was made; the entries not yet emitted are exactly the queue that storage holds afterwards; and the queue never reaches the four bookkeeping slots.</p>
+        <p>After canonical deployment, every committed submission is, in order, either a withdrawal record published by the blocks or an entry still in the contract’s final queue. The statement reads directly:</p>
         <div class="thm">
-          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/WordFifo.lean#L345"><code>Blanc.Lift.WithdrawalRequest.block_word_fifo</code> · WordFifo.lean:345</a></div>
-<pre class="lean"><span class="kw">theorem</span> <span class="nm">block_word_fifo</span>
-    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
-    (history : ConfiguredHistoryTrace cfg checkpoint pre)
-    (block : ConfiguredBlockTrace cfg pre post)
-    (installed : SystemCodeInstalled checkpoint.state)
-    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
-    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
-    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
-    (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
-    (init : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial)
-    (occurrences : ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
-      submissionFramePayments).length ≤ wordOccurrenceCap) :
-    BlockWordFifo history block</pre>
+          <div class="head"><span class="tag">Definition, verbatim</span><a href="https://github.com/skbaek/blanc/blob/b828dd5d1da7626dbc8e9c6625cce9d60d2c91f4/Blanc/Lift/WithdrawalRequest/HistoryFifo.lean#L71"><code>HistoryFifo</code> · HistoryFifo.lean:71</a></div>
+<pre class="lean"><span class="kw">def</span> <span class="nm">HistoryFifo</span> {cfg : ChainConfig} {checkpoint final : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint final) : Prop :=
+  submissions history = emissions history ++ remainingQueue history</pre>
         </div>
-        <p>The premises are trace-local and finite. The contract recognizes the system call only by its caller, so the history must contain no transaction from the system address, no EIP-7702 authorization signed by it and no creation addressed to it, even a failed one, and the address must hold no code at the checkpoint; the four system contracts must hold their canonical code there; and the history may contain at most 2<sup>254</sup> committed submissions. There is no hash premise, and no entry condition on the frames that run the contract.</p>
-        <p>A companion bounds delivery. An entry at position <i>q</i> of the queue when a block’s requests are computed is emitted exactly ⌊<i>q</i>/16⌋ blocks later, counting that block as zero, in every configured extension of the history that long — and nothing submitted later overtakes it (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/WordDelivery.lean#L309"><code>block_word_delivery</code></a>). Beneath both lies an exact replay: the storage at the end of any such history represents the EIP’s model replayed over exactly the committed submissions and system calls, in order (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/WordReplay.lean#L323"><code>history_word_storage_replay</code></a>).</p>
+        <p>These lists are concrete observations. <code>submissions</code> reads committed calls, including calls inside transactions and excluding reverted effects. <code>emissions</code> reads the actual type-1 block requests. <code>remainingQueue</code> reads the live entries between the head and tail in final contract storage. All three use records containing the caller, public key and amount, so equality preserves every field, order and multiplicity.</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/b828dd5d1da7626dbc8e9c6625cce9d60d2c91f4/Blanc/Lift/WithdrawalRequest/HistoryFifo.lean#L285"><code>Blanc.Lift.WithdrawalRequest.history_fifo</code> · HistoryFifo.lean:285</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">history_fifo</span>
+    {cfg : ChainConfig} {checkpoint final : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint final)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : history.NoSenderAt systemAddress)
+    (authorities : history.NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ history.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : (submissions history).length ≤ wordOccurrenceCap) :
+    HistoryFifo history</pre>
+        </div>
+        <p><code>deployment</code> identifies the actual committed canonical creation transaction and the same chain’s preactivation prefix. Its admitted Cancun execution establishes the initial storage and runtime code; these are proved consequences, not separate starting-state assumptions. The subsequent history covers Prague, Osaka, BPO1 and BPO2, including an empty history.</p>
+        <p>The remaining premises are explicit. The other three system contracts must have their canonical code at the modern checkpoint. Transactions and authorizations exclude the system address, no entered creation targets it, and its code is empty at the post-deployment boundary. The Cancun prefix also requires canonical beacon code at later block openings. The modern history contains at most 2<sup>254</sup> committed submissions. There is no hash premise or per-frame entry condition, and the theorem does not authenticate historical block inclusion.</p>
+        <p>A companion bounds delivery: an entry at position <i>q</i> when a block’s requests are computed is emitted exactly ⌊<i>q</i>/16⌋ blocks later, counting that block as zero, in every admitted extension that long. Nothing submitted later overtakes it (<a href="https://github.com/skbaek/blanc/blob/b828dd5d1da7626dbc8e9c6625cce9d60d2c91f4/Blanc/Lift/WithdrawalRequest/WordDelivery.lean#L398"><code>block_word_delivery_from_deployment</code></a>). The runtime emits at most sixteen entries per block and uses the fee its word arithmetic computes.</p>
       </section>
 
       <section id="control">
         <p class="eyebrow">Statements that can fail</p>
         <h2>The system-address premise is not decorative.</h2>
-        <p>A closed theorem builds a two-block configured history that meets every other premise of the request theorem but places, at the system address, a contract that calls the queue from inside a user transaction and drains it before the block’s own system call — and the conclusion fails (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/WithdrawalRequestDrainControl.lean#L547"><code>systemEmpty_loadBearing_witness</code></a>). As far as we know, putting code at that address would take a signature by its key or a 160-bit Keccak preimage, but Blanc does not prove this, and the premise stays.</p>
+        <p>A closed theorem builds a two-block history from an independently supplied checkpoint that places, at the system address, a contract that calls the queue from inside a user transaction and drains it before the block’s own system call — and FIFO fails (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/WithdrawalRequestDrainControl.lean#L547"><code>systemEmpty_loadBearing_witness</code></a>). This witness does not supply the canonical deployment required by the headline. As far as we know, putting code at that address would take a signature by its key or a 160-bit Keccak preimage, but Blanc does not prove this, and the premise stays.</p>
       </section>
 
       <section id="frames">
@@ -159,15 +165,15 @@
     (output / (17 : B256)).toNat = Blanc.WithdrawalRequest.fee model ↔
       NatFeeDomain excess iterations</pre>
         </div>
-        <p>The bytecode’s fee never exceeds the EIP’s, and equals it exactly when no intermediate value of the series wraps. Then a closed theorem builds a three-block configured history, under the premises of the request theorem, in which a submission is committed after paying 2<sup>245</sup> wei: at least the fee the bytecode computes at an excess of 2,893, about 3.2·10<sup>73</sup> wei, but less than the EIP’s, about 8.1·10<sup>73</sup> wei (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/WithdrawalRequestFeeRefutation.lean#L1182"><code>nat_fee_guarantee_refuted</code></a>). The guarantee that every committed submission paid at least the EIP’s fee is therefore false of the deployed bytes — which is why the request theorem speaks of the fee the bytecode computes.</p>
-        <p>The divergence begins only where the EIP’s own fee is out of any account’s reach. By direct computation, outside the proofs, the two fees agree at every excess below 2,893, and at 2,892 the fee is already about 7.6·10<sup>73</sup> wei, more than 10<sup>47</sup> times all the ether in existence. The wrapped arithmetic does yield a fee of 1 wei near an excess of 2<sup>252</sup>, but every model state a history reaches from deployment has its effective excess plus its count bounded by the number of submissions, so that excess would take about 2<sup>252</sup> of them. The counterexample reaches its excess with 2,895 submissions in one block, on a synthetic Prague chain whose block gas limit, 2<sup>29</sup>, is about nine times mainnet’s; on mainnet the excess has so far peaked at 666, on 19 December 2025.</p>
+        <p>The bytecode’s fee never exceeds the EIP’s, and equals it exactly when no intermediate value of the series wraps. Then a closed theorem builds a three-block configured history from an independently supplied checkpoint, in which a submission is committed after paying 2<sup>245</sup> wei: at least the fee the bytecode computes at an excess of 2,893, about 3.2·10<sup>73</sup> wei, but less than the EIP’s, about 8.1·10<sup>73</sup> wei (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/WithdrawalRequestFeeRefutation.lean#L1182"><code>nat_fee_guarantee_refuted</code></a>). This refutes that fee guarantee for the checkpoint model; it does not provide a canonical deployment witness or a mainnet exploit. FIFO uses the fee the bytecode computes.</p>
+        <p>The divergence begins only where the EIP’s own fee is out of any account’s reach. By direct computation, outside the proofs, the two fees agree at every excess below 2,893, and at 2,892 the fee is already about 7.6·10<sup>73</sup> wei, more than 10<sup>47</sup> times all the ether in existence. The wrapped arithmetic does yield a fee of 1 wei near an excess of 2<sup>252</sup>, but every model state a history reaches from deployment has its effective excess plus its count bounded by the number of submissions, so that excess would take about 2<sup>252</sup> of them. The counterexample reaches its excess with 2,895 submissions in one block, on a synthetic Prague chain whose block gas limit, 2<sup>29</sup>, is about nine times mainnet’s; the retained mainnet scan through block 26,141,229 recorded a peak excess of 666, on 19 December 2025.</p>
       </section>
 
       <section id="mainnet">
         <p class="eyebrow">The seventh question</p>
         <h2>Mainnet, when Prague began.</h2>
         <p>The contract was deployed before Prague, but its use began only when Prague activated, so all of it lies in forks Jaune covers. At block 22,431,083, the last before Prague, three providers report that its storage held exactly the model’s initial state — the inhibitor in the excess slot, zeros in the count, head and tail — with the same storage root it had at deployment, 549,694 blocks earlier; that it had logged no request; that the four system contracts held their canonical code; and that the system address held none.</p>
-        <p>Mainnet’s state when Prague activated, as the providers report it, therefore met the checkpoint premises of the request theorems. What separates those theorems from the live contract is the premise that mainnet’s history is a configured one, which rests on Jaune’s fidelity, and the exclusions at the system address. Under every covered fork, executing the recorded keyless creation input installs the certified runtime and leaves storage representing that initial state, with no hash premise (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/Creation/Deploy.lean#L88"><code>deploy_initial</code></a>).</p>
+        <p>These observations support the connection to mainnet, but do not authenticate its history inside Lean. The current FIFO headline instead derives the initial storage and runtime from canonical Cancun deployment and its admitted prefix. Applying it to mainnet still relies on the historical execution being a configured one in Jaune and on the stated environmental conditions. The constructor result establishes the runtime and initial storage without a hash premise (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/Creation/Deploy.lean#L88"><code>deploy_initial</code></a>).</p>
       </section>
 
       <section id="limits">
@@ -181,7 +187,7 @@
           <li>Storage growth: dequeued slots are left in storage, and nothing is proved about them.</li>
           <li>Transaction-level liveness; anything beyond 2<sup>254</sup> committed submissions.</li>
         </ul>
-        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#57-eip-7002-withdrawal-requests-actual-fee-fifo-from-submissions-to-block-requests">EIP-7002 section</a> lists every theorem with its premises, file and line.</p>
+        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#57-eip-7002-withdrawal-requests-actual-fee-fifo-from-submissions-to-block-requests">EIP-7002 section</a> lists every theorem with its premises, file and line.</p>
       </section>
 
       <section id="prior">
@@ -203,7 +209,7 @@
   <div class="wrap footgrid">
     <div class="colophon">
       <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+      <p>MIT-licensed. The FIFO and deployment-delivery statements link to Blanc <code>b828dd5d</code>, with Jaune <code>ff22ec8</code>. Other immutable proof links retain the earlier <code>5048a51f</code> snapshot and its Jaune pin <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
     <div>
       <h4>Deployed bytecode</h4>

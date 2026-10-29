@@ -38,14 +38,9 @@ theorem block_checked_system_totality {cfg : ChainConfig} {checkpoint pre post :
     processCheckedSystemTransaction block.bodyTrace.requestBenv withdrawalRequestPredeployAddress [] =
       .ok ((systemProtocolPost block.bodyTrace.requestBenv).state,
         systemProtocolOutput block.bodyTrace.requestBenv) ∧
-    (systemProtocolOutput block.bodyTrace.requestBenv).error = none ∧
     (systemProtocolOutput block.bodyTrace.requestBenv).gasLeft =
       systemTransactionGas - systemProtocolGas block.bodyTrace.requestBenv ∧
-    systemProtocolGas block.bodyTrace.requestBenv ≤ 210000 ∧
-    (systemProtocolOutput block.bodyTrace.requestBenv).returnData =
-      (systemProtocolPost block.bodyTrace.requestBenv).output ∧
-    (systemProtocolOutput block.bodyTrace.requestBenv).refundCounter =
-      (systemProtocolPost block.bodyTrace.requestBenv).refundCounter := by
+    systemProtocolGas block.bodyTrace.requestBenv ≤ 210000 := by
   exact checked_system_totality (block.bodyTrace.requestBenv_covered block.covered)
     (block_request_code history block code)
 

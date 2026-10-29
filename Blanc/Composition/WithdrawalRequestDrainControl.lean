@@ -6,10 +6,10 @@ import Blanc.Lift.WithdrawalRequest.SubmissionCount
 /-!
 # E5(ii): the SYSTEM_ADDRESS exclusion is load-bearing, closed
 
-`block_word_fifo` assumes no code at SYSTEM_ADDRESS (`systemEmpty`).  This module builds, with
+`block_word_fifo_of_checkpoint` assumes no code at SYSTEM_ADDRESS (`systemEmpty`).  This module builds, with
 no hypotheses, a two-block configured history that keeps every other hypothesis of
-`block_word_fifo` but installs the SystemDrainer runtime at SYSTEM_ADDRESS, and whose second
-block fails `BlockWordFifo` (`systemEmpty_loadBearing_witness`):
+`block_word_fifo_of_checkpoint` but installs the SystemDrainer runtime at SYSTEM_ADDRESS, and whose second
+block fails `CheckpointBlockWordFifo` (`systemEmpty_loadBearing_witness`):
 
 * the checkpoint is the fee refutation's (`checkpointState`) with the drainer at
   SYSTEM_ADDRESS and `senderE` at nonce `1`;
@@ -19,7 +19,7 @@ block fails `BlockWordFifo` (`systemEmpty_loadBearing_witness`):
   predeploy runs its system path and dequeues `txC`'s request before the block's own system
   call: at the request boundary the queue is empty although the block committed a submission.
 
-The absence of code at SYSTEM_ADDRESS is an explicit `block_word_fifo` premise, not a proved
+The absence of code at SYSTEM_ADDRESS is an explicit `block_word_fifo_of_checkpoint` premise, not a proved
 mainnet exclusion. This formal-model witness shows why that trace-local exclusion is necessary.
 -/
 
@@ -593,9 +593,9 @@ theorem drain_stageD {pre : BlockChain} {parent : Block} (ready : ChainReady pre
 
 /-- **E5(ii), closed: the SYSTEM_ADDRESS exclusion of the FIFO headline is load-bearing.**
 With no hypotheses: the two-block history from the drain checkpoint (`drainChain`, the drainer
-at SYSTEM_ADDRESS) keeps every other hypothesis of `block_word_fifo` (installed system code, no
+at SYSTEM_ADDRESS) keeps every other hypothesis of `block_word_fifo_of_checkpoint` (installed system code, no
 sender or authority at SYSTEM_ADDRESS, no code-free root frame targeting it, INIT, the
-occurrence cap), and block D fails `BlockWordFifo`. -/
+occurrence cap), and block D fails `CheckpointBlockWordFifo`. -/
 theorem systemEmpty_loadBearing_witness : SystemEmptyLoadBearing := by
   obtain ⟨chainA, traceA, parentA, okA, preD, readyA, beforeA⟩ := drain_stageA
   obtain ⟨chainD, traceD, okD, committed, drained⟩ :=

@@ -105,7 +105,7 @@ REQUIRED_HEADLINES = [
     "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.vplus_witness2_covered",
     "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness_covered",
     "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process",
-    "Blanc.Lift.WithdrawalRequest.block_word_fifo",
+    "Blanc.Lift.WithdrawalRequest.history_fifo",
     "Blanc.Lift.WithdrawalRequest.block_word_delivery",
     "Blanc.Lift.WithdrawalRequest.wordSystem_excess_wraps",
     "Blanc.Lift.WithdrawalRequest.DrainControl.systemEmpty_loadBearing_witness",

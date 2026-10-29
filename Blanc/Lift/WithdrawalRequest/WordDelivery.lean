@@ -173,7 +173,7 @@ theorem history_reset_frames {cfg : ChainConfig} {checkpoint future : BlockChain
 /-! ## Delivery over configured histories -/
 
 /-- Queue drain between two request boundaries. Under the hypotheses of
-`block_word_fifo` for the history through block `D`, where that history extends
+`block_word_fifo_of_checkpoint` for the history through block `D`, where that history extends
 the history through block `B` by exactly `depth` further blocks, and for the
 queue model `modelB` represented by the predeploy's storage at `B`'s request
 boundary (unique by `RepresentsStorage.unique`): the storage at `D`'s request
@@ -296,9 +296,9 @@ theorem block_word_queue_after
 
 /-- D1 delivery bound. Let the history through block `D` extend the history
 through block `B` by exactly `depth = q / 16` further configured blocks (`B`
-counted as depth 0), under the hypotheses of `block_word_fifo` for the history
+counted as depth 0), under the hypotheses of `block_word_fifo_of_checkpoint` for the history
 through `D`. If `entry` sits at index `q` of the queue model `modelB` represented
-at `B`'s request boundary (the model of `BlockWordFifo`, unique by
+at `B`'s request boundary (the model of `CheckpointBlockWordFifo`, unique by
 `RepresentsStorage.unique`), then `D`'s withdrawal request output is
 `systemOutput modelD` for the model `modelD` represented at `D`'s request
 boundary, `entry` is at position `q % 16` of `emitted modelD`, and the emitted
@@ -351,5 +351,81 @@ theorem block_word_delivery
       List.getElem?_append_left (by omega), List.getElem?_drop, split, queued]
   · rw [emitted, queue, maxPerBlock, List.take_take, Nat.min_eq_left (by omega),
       List.take_append_of_le_length ahead]
+
+/-! ## Deployment-rooted consumers -/
+
+/-- Queue drain from canonical Cancun deployment and its admitted all-Cancun prefix,
+followed by the same modern histories through B and D. Construction and the admitted
+prefix derive checkpoint INIT and EIP-7002 code. Checkpoint SYSTEM emptiness is transported
+from Admission.systemEmpty at the actual post-deployment boundary. The other three
+installations and modern environment/capacity premises remain explicit. The queue/drain
+conclusion is the existing checkpoint result for these same request boundaries. -/
+theorem block_word_queue_after_from_deployment
+    {cfg : ChainConfig} {checkpoint preB postB preD postD : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission)
+    (historyB : ConfiguredHistoryTrace cfg checkpoint preB)
+    (blockB : ConfiguredBlockTrace cfg preB postB)
+    (historyD : ConfiguredHistoryTrace cfg checkpoint preD)
+    (blockD : ConfiguredBlockTrace cfg preD postD) {depth : Nat}
+    (extension : (ConfiguredHistoryTrace.step historyB blockB).ExtendsBy
+      (ConfiguredHistoryTrace.step historyD blockD) depth)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step historyD blockD).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step historyD blockD).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step historyD blockD).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : ((ConfiguredHistoryTrace.step historyD blockD).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap)
+    (modelB : Blanc.WithdrawalRequest.State)
+    (repB : RepresentsStorage (blockB.bodyTrace.requestBenv.state.getStor
+      withdrawalRequestPredeployAddress).get modelB) :
+    ∃ modelD : Blanc.WithdrawalRequest.State,
+      RepresentsStorage (blockD.bodyTrace.requestBenv.state.getStor
+        withdrawalRequestPredeployAddress).get modelD ∧
+      blockD.bodyTrace.requests.withdrawalOut.returnData = systemOutput modelD ∧
+      (16 * depth ≤ modelB.queue.length →
+        ∃ later, modelD.queue = modelB.queue.drop (16 * depth) ++ later) := by
+  have initialized := deployment.initialized admission
+  exact block_word_queue_after historyB blockB historyD blockD extension
+    (otherInstalled.with_withdrawal initialized.checkpointCode) senders authorities avoid
+    initialized.systemEmpty initialized.checkpointStorage occurrences modelB repB
+
+/-- The exact delivery bound from canonical deployment through its admitted all-Cancun
+prefix and these modern histories. A queue entry at B is emitted at D at q%16 when the
+actual modern history extension has depth q/16. Construction and the admitted prefix derive
+INIT and EIP-7002 code at the shared checkpoint. Checkpoint SYSTEM emptiness is transported
+from Admission.systemEmpty at the actual post-deployment boundary. -/
+theorem block_word_delivery_from_deployment
+    {cfg : ChainConfig} {checkpoint preB postB preD postD : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission)
+    (historyB : ConfiguredHistoryTrace cfg checkpoint preB)
+    (blockB : ConfiguredBlockTrace cfg preB postB)
+    (historyD : ConfiguredHistoryTrace cfg checkpoint preD)
+    (blockD : ConfiguredBlockTrace cfg preD postD) {depth : Nat}
+    (extension : (ConfiguredHistoryTrace.step historyB blockB).ExtendsBy
+      (ConfiguredHistoryTrace.step historyD blockD) depth)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step historyD blockD).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step historyD blockD).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step historyD blockD).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : ((ConfiguredHistoryTrace.step historyD blockD).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap)
+    (modelB : Blanc.WithdrawalRequest.State)
+    (repB : RepresentsStorage (blockB.bodyTrace.requestBenv.state.getStor
+      withdrawalRequestPredeployAddress).get modelB)
+    {q : Nat} {entry : Blanc.WithdrawalRequest.Entry} (queued : modelB.queue[q]? = some entry)
+    (exactDepth : depth = q / 16) :
+    ∃ modelD : Blanc.WithdrawalRequest.State,
+      RepresentsStorage (blockD.bodyTrace.requestBenv.state.getStor
+        withdrawalRequestPredeployAddress).get modelD ∧
+      blockD.bodyTrace.requests.withdrawalOut.returnData = systemOutput modelD ∧
+      (emitted modelD)[q % 16]? = some entry ∧
+      (emitted modelD).take (q % 16 + 1) =
+        (modelB.queue.drop (16 * depth)).take (q % 16 + 1) := by
+  have initialized := deployment.initialized admission
+  exact block_word_delivery historyB blockB historyD blockD extension
+    (otherInstalled.with_withdrawal initialized.checkpointCode) senders authorities avoid
+    initialized.systemEmpty initialized.checkpointStorage occurrences modelB repB queued exactDepth
 
 end Blanc.Lift.WithdrawalRequest

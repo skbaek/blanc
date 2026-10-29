@@ -71,18 +71,6 @@ theorem pair_create_postH (msg : Msg) (hvalue : msg.value = 0)
 
 /-! ## World facts of the two children -/
 
-theorem liftCreatePost_meta (t : Adr) (raw : Devm) :
-    (liftCreatePost t raw).accountsToDelete = raw.accountsToDelete ∧
-    (liftCreatePost t raw).refundCounter = raw.refundCounter ∧
-    (liftCreatePost t raw).createdAccounts = raw.createdAccounts := ⟨rfl, rfl, rfl⟩
-
-theorem recordTouch_meta (rules : ForkRules) (cond : Bool) (adr : Adr) (d : Devm) :
-    (d.recordTouch rules cond adr).accountsToDelete = d.accountsToDelete ∧
-    (d.recordTouch rules cond adr).refundCounter = d.refundCounter ∧
-    (d.recordTouch rules cond adr).createdAccounts = d.createdAccounts ∧
-    (d.recordTouch rules cond adr).gasLeft = d.gasLeft := ⟨rfl, rfl, rfl, rfl⟩
-
-
 /-- A store at a created account never lowers the refund counter (its original storage is
 zero). -/
 theorem afterSstoreH_refund_ge_of_created {sevm : Sevm} {base : Devm} {key value : B256}

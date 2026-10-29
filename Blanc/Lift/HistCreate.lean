@@ -289,6 +289,19 @@ theorem processMessage_ok_of_execH
   simp only [Bool.false_eq_true, ↓reduceIte, processMessage.settle, executeCode.handleErrorWith_ok,
     Except.bind_ok, herror, Option.isSome_none]
 
+/-- Code deposit and installation preserve the constructor bookkeeping. -/
+theorem liftCreatePost_meta (t : Adr) (raw : Devm) :
+    (liftCreatePost t raw).accountsToDelete = raw.accountsToDelete ∧
+    (liftCreatePost t raw).refundCounter = raw.refundCounter ∧
+    (liftCreatePost t raw).createdAccounts = raw.createdAccounts := ⟨rfl, rfl, rfl⟩
+
+/-- EIP-161 touch recording preserves deletion, refund, creation and gas projections. -/
+theorem recordTouch_meta (rules : ForkRules) (cond : Bool) (adr : Adr) (d : Devm) :
+    (d.recordTouch rules cond adr).accountsToDelete = d.accountsToDelete ∧
+    (d.recordTouch rules cond adr).refundCounter = d.refundCounter ∧
+    (d.recordTouch rules cond adr).createdAccounts = d.createdAccounts ∧
+    (d.recordTouch rules cond adr).gasLeft = d.gasLeft := ⟨rfl, rfl, rfl, rfl⟩
+
 /-- **Deploying lifted creation code, exactly, from `rules.stateGas = none`.**  As
 `liftCreate_post`, with the settled machine `raw` with the new target's touch recorded: that
 moves only `touchedAccounts`, and is the identity when the rules do not sweep. -/

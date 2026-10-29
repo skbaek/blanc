@@ -1,14 +1,17 @@
 import Blanc.Lift.WithdrawalRequest.ModelBlockRequests
 import Blanc.Lift.WithdrawalRequest.WordHistory
 import Blanc.Lift.WithdrawalRequest.SubmissionCount
+import Blanc.Lift.WithdrawalRequest.DeploymentHistory
 
 /-!
 Full configured-history FIFO under the bytecode's word-fee admission. The
 exact actual word replay is composed into `WordHistory`; every queue, count
 and excess margin is derived from the number of actual submission-payment
 occurrences since INIT. No Nat payment, balance, fee-domain or ENTRY premise
-is used. Histories with more than `wordOccurrenceCap` occurrences are the
-only excluded case (Form D); at most `2 ^ 190` blocks never reach it.
+is used. Within the stated deployment, fork and environmental conditions,
+Form D isolates the capacity alternative: more than `wordOccurrenceCap`
+occurrences. At most `2 ^ 190` modern blocks never reach that bound. The
+deployment prefix selects Cancun; the modern suffix uses `CoveredFork`.
 -/
 
 namespace Blanc.Lift.WithdrawalRequest
@@ -276,73 +279,195 @@ theorem history_word_model {cfg : ChainConfig} {checkpoint future : BlockChain}
   exact ⟨prefixModel.1, prefixModel.2, conservation, excessLe, countLe, headLe, tailLe, lengthEq,
     sumLt, slotLt, margin.slots_safe (by omega)⟩
 
-/-- FIFO for one actual configured block under word-fee admission: the block's
-exact word events split into the earlier history, its user transactions and
-its canonical reset; the model at the request boundary is a word-admitted
-history represented in storage; the block's withdrawal request bytes are
-`systemOutput` of that model, i.e. its first `min 16 queue` entries in order;
-outputs plus the remaining queue are exactly the committed submissions in
-order; each output is, position for position, the `(caller, pubkey, amount)` of
-exactly one committed submission frame of the trace before this block's
-request phase (an order-preserving bijection onto outputs plus final queue);
-every bookkeeping value stays within `wordOccurrenceCap`; and every live
-queue read slot and next write slot is the unwrapped `4 + 3 * index + offset`,
-never slots 0–3, before and after the block's reset. -/
-def BlockWordFifo {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+/-- The bookkeeping of one model state is safe: every counter is within
+`wordOccurrenceCap`, the queue pointers are ordered and span exactly the queue,
+the two word sums the bytecode forms never wrap, and every live queue slot and
+the next write slot are the unwrapped `4 + 3 * index + offset` (never slots 0–3).
+
+Three fields follow from others and stay for readers: `sumLt` from `excessLe`
+and `countLe`, and `slotLt` from `tailLe`, by arithmetic (`3 * wordOccurrenceCap
++ 6 < 2 ^ 256`); `slots` from `slotLt` by `submission_queueSlot_toNat`. For a
+state that storage represents, `headLe` and `length` also follow from
+`RepresentsStorage.coherent`. -/
+structure WordBookkeepingSafe (state : Blanc.WithdrawalRequest.State) : Prop where
+  /-- The effective excess is within the cap. -/
+  excessLe : effectiveExcess state ≤ wordOccurrenceCap
+  /-- The pending submission count is within the cap. -/
+  countLe : state.count ≤ wordOccurrenceCap
+  /-- The queue head does not pass the tail. -/
+  headLe : state.head ≤ state.tail
+  /-- The queue tail is within the cap. -/
+  tailLe : state.tail ≤ wordOccurrenceCap
+  /-- The queue holds exactly the entries between head and tail. -/
+  length : state.queue.length = state.tail - state.head
+  /-- Excess plus count fits a word (follows from `excessLe` and `countLe`). -/
+  sumLt : effectiveExcess state + state.count < 2 ^ 256
+  /-- The tail's last slot fits a word (follows from `tailLe`). -/
+  slotLt : queueBase state.tail + 2 < 2 ^ 256
+  /-- Every live read slot and the next write slot is unwrapped and above
+  slot 3 (follows from `slotLt` by `submission_queueSlot_toNat`). -/
+  slots : QueueSlotsSafe state
+
+/-- The witness for one actual configured block: the exact guarded word replay
+of the predeploy from the checkpoint to the state after the block, split into
+the earlier history's events, this block's user-transaction events and this
+block's withdrawal system call (the reset), each tied to the trace. -/
+structure BlockWordReplay {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post) where
+  /-- The word events of the earlier history. -/
+  past : List WordReplayEvent
+  /-- The word events of this block's user transactions. -/
+  transactions : List WordReplayEvent
+  /-- This block's withdrawal system call. -/
+  reset : WordReplayEvent
+  /-- The guarded word replay runs from the checkpoint's predeploy storage over
+  the earlier events, this block's transactions and the reset, to the
+  predeploy storage after the block. -/
+  replay : WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
+    ((past ++ transactions) ++ [reset]) (post.state.getStor withdrawalRequestPredeployAddress)
+  /-- The earlier events' frames are the earlier history's observed settled frames. -/
+  pastObserves : past.map WordReplayEvent.frame =
+    history.settledFrames.flatMap balanceFrameObservation
+  /-- The transaction events' frames are this block's observed transaction frames. -/
+  transactionsObserve : transactions.map WordReplayEvent.frame =
+    block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation
+  /-- The reset is a system-call event. -/
+  resetSystem : reset.kind = .system
+  /-- The reset starts at this block's request boundary. -/
+  resetAtBoundary : reset.frame.pre.state = block.bodyTrace.requestBenv.state
+
+namespace BlockWordReplay
+
+variable {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+  {history : ConfiguredHistoryTrace cfg checkpoint pre}
+  {block : ConfiguredBlockTrace cfg pre post}
+
+/-- The model at this block's request boundary: the word model replayed from
+INIT over the earlier events and this block's transactions. -/
+def model (r : BlockWordReplay history block) : Blanc.WithdrawalRequest.State :=
+  (r.past ++ r.transactions).foldl wordModelUpdate initial
+
+/-- The committed submissions through this block, in order. The reset adds
+none (`resetSystem`). -/
+def submissions (r : BlockWordReplay history block) : List Submission :=
+  wordModelSubmissions (r.past ++ r.transactions)
+
+/-- The entries emitted by earlier blocks' system calls, in order. -/
+def pastOutputs (r : BlockWordReplay history block) : List Blanc.WithdrawalRequest.Entry :=
+  wordModelOutputs initial r.past
+
+/-- All entries emitted through this block: the earlier outputs, then this
+block's emitted prefix of the queue. -/
+def outputs (r : BlockWordReplay history block) : List Blanc.WithdrawalRequest.Entry :=
+  r.pastOutputs ++ emitted r.model
+
+/-- Each committed submission's frame with its typed entry, in order. -/
+def frames (r : BlockWordReplay history block) :
+    List (Exec.Frame × Blanc.WithdrawalRequest.Entry) :=
+  wordSubmissionFrames (r.past ++ r.transactions)
+
+/-- At the request boundary, the model is a word-admitted history of the
+committed submissions that emitted the earlier outputs, and the predeploy's
+storage represents it. -/
+structure BoundaryModel (r : BlockWordReplay history block) : Prop where
+  /-- The same concrete replay starts at storage representing INIT. This ties
+  the abstract history's starting state to its observed execution. -/
+  origin : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial
+  /-- The model is a word-admitted history from INIT. -/
+  wordHistory : WordHistory initial r.model r.submissions r.pastOutputs
+  /-- The request-boundary storage represents the model. -/
+  represents : RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
+    withdrawalRequestPredeployAddress).get r.model
+
+/-- This block's withdrawal request bytes are `systemOutput` of the boundary
+model, i.e. its first `min 16 queue` entries in order; they take their place in
+the block's request list; and the type-1 entry is omitted exactly when nothing
+is emitted. -/
+structure Emission (r : BlockWordReplay history block) : Prop where
+  /-- The system call returns the model's emitted entries' records. -/
+  withdrawal : block.bodyTrace.requests.withdrawalOut.returnData = systemOutput r.model
+  /-- The block's request list carries them as its type-1 entry, between the
+  optional deposit and consolidation batches. The transaction prefix is empty
+  by `AppliedBodyTrace.transaction_requests_eq_nil`. -/
+  requests : block.blockOutput.requests =
+    optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
+    optionalRequestEntry 1 (systemOutput r.model) ++
+    optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData
+  /-- The type-1 entry is omitted iff nothing is emitted (follows from
+  `withdrawal` by `optionalRequestEntry_eq_nil_iff` and `outputRecords_length`). -/
+  omittedIff : optionalRequestEntry 1 block.bodyTrace.requests.withdrawalOut.returnData = [] ↔
+    emitted r.model = []
+
+/-- After this block's reset, the system-stepped model is a word-admitted
+history of the same submissions that emitted all outputs so far, and the
+predeploy's storage after the block represents it. -/
+structure AfterReset (r : BlockWordReplay history block) : Prop where
+  /-- INIT represents the concrete starting storage of this very replay. -/
+  origin : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial
+  /-- The reset model is a word-admitted history from INIT (follows from
+  `BoundaryModel.wordHistory` by the constructor `WordHistory.system`). -/
+  wordHistory : WordHistory initial (Blanc.WithdrawalRequest.system r.model) r.submissions
+    r.outputs
+  /-- The storage after the block represents the reset model. -/
+  represents : RepresentsStorage (post.state.getStor withdrawalRequestPredeployAddress).get
+    (Blanc.WithdrawalRequest.system r.model)
+
+/-- FIFO: the committed submissions' entries, in order, are exactly all outputs
+so far followed by the queue left after the reset; nothing is dropped,
+duplicated, reordered or emitted early. Follows from `AfterReset.wordHistory`
+by `WordHistory.conservation` (INIT's queue is empty). -/
+def Fifo (r : BlockWordReplay history block) : Prop :=
+  r.submissions.map Submission.entry = r.outputs ++ (Blanc.WithdrawalRequest.system r.model).queue
+
+/-- Each committed submission is, in order, exactly one committed
+submission-payment frame of the trace, whose caller and calldata are its
+entry's caller and `(pubkey, amount)` payload; in trace terms, those frames'
+entries are all outputs followed by the remaining queue. -/
+structure Provenance (r : BlockWordReplay history block) : Prop where
+  /-- The submission frames are the submission-payment frames of the history
+  extended by this block. -/
+  stepFrames : r.frames.map Prod.fst =
+    ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+      submissionFramePayments).map Prod.fst
+  /-- Each frame's caller and calldata are its entry's caller and payload
+  (follows from `BlockWordReplay.replay` by `WordStorageReplay.submissionFrames`). -/
+  payloads : ∀ pair ∈ r.frames,
+    pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2
+  /-- The frames' entries are all outputs followed by the remaining queue
+  (follows from `Fifo` by `wordSubmissionFrames_entries`). -/
+  entries : r.frames.map Prod.snd = r.outputs ++ (Blanc.WithdrawalRequest.system r.model).queue
+
+end BlockWordReplay
+
+/-- FIFO for one actual configured block under word-fee admission. A witness
+`r : BlockWordReplay` splits the block's exact word replay into the earlier
+history, its user transactions and its canonical reset, and seven units hold:
+- `BoundaryModel`: the request-boundary model is a word-admitted history that
+  storage represents;
+- `Emission`: the block's withdrawal request bytes are `systemOutput` of that
+  model, its first `min 16 queue` entries in order;
+- `AfterReset`: the system-stepped model is a word-admitted history that the
+  storage after the block represents;
+- `Fifo`: outputs plus the remaining queue are exactly the committed
+  submissions in order;
+- `Provenance`: each output or queued entry is, position for position, the
+  `(caller, pubkey, amount)` of exactly one committed submission frame of the
+  trace;
+- `WordBookkeepingSafe`, before and after the reset: every bookkeeping value
+  stays within `wordOccurrenceCap` and every live queue slot is the unwrapped
+  `4 + 3 * index + offset`, never slots 0–3. -/
+def CheckpointBlockWordFifo {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
     (block : ConfiguredBlockTrace cfg pre post) : Prop :=
-  ∃ past transactionEvents : List WordReplayEvent, ∃ reset : WordReplayEvent,
-    WordStorageReplay (checkpoint.state.getStor withdrawalRequestPredeployAddress)
-      ((past ++ transactionEvents) ++ [reset])
-      (post.state.getStor withdrawalRequestPredeployAddress) ∧
-    past.map WordReplayEvent.frame = history.settledFrames.flatMap balanceFrameObservation ∧
-    transactionEvents.map WordReplayEvent.frame =
-      block.bodyTrace.transactions.settledFrames.flatMap balanceFrameObservation ∧
-    reset.kind = .system ∧
-    reset.frame.pre.state = block.bodyTrace.requestBenv.state ∧
-    let model := (past ++ transactionEvents).foldl wordModelUpdate initial
-    WordHistory initial model (wordModelSubmissions (past ++ transactionEvents))
-      (wordModelOutputs initial past) ∧
-    RepresentsStorage (block.bodyTrace.requestBenv.state.getStor
-      withdrawalRequestPredeployAddress).get model ∧
-    block.bodyTrace.requests.withdrawalOut.returnData = systemOutput model ∧
-    block.blockOutput.requests = block.bodyTrace.transactionBout.requests ++
-      optionalRequestEntry 0 block.bodyTrace.requests.depositRequests ++
-      optionalRequestEntry 1 (systemOutput model) ++
-      optionalRequestEntry 2 block.bodyTrace.requests.consolidationOut.returnData ∧
-    (optionalRequestEntry 1 block.bodyTrace.requests.withdrawalOut.returnData = [] ↔
-      emitted model = []) ∧
-    WordHistory initial (Blanc.WithdrawalRequest.system model)
-      (wordModelSubmissions ((past ++ transactionEvents) ++ [reset]))
-      (wordModelOutputs initial past ++ emitted model) ∧
-    (wordModelSubmissions ((past ++ transactionEvents) ++ [reset])).map Submission.entry =
-      (wordModelOutputs initial past ++ emitted model) ++
-        (Blanc.WithdrawalRequest.system model).queue ∧
-    let submissions := wordSubmissionFrames (past ++ transactionEvents)
-    submissions.map Prod.fst =
-      ((history.settledFrames ++ block.bodyTrace.transactions.settledFrames).flatMap
-        submissionFramePayments).map Prod.fst ∧
-    submissions.map Prod.fst =
-      ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
-        submissionFramePayments).map Prod.fst ∧
-    (∀ pair ∈ submissions,
-      pair.1.sevm.caller = pair.2.caller ∧ pair.1.sevm.data = submissionPayload pair.2) ∧
-    submissions.map Prod.snd = (wordModelOutputs initial past ++ emitted model) ++
-      (Blanc.WithdrawalRequest.system model).queue ∧
-    RepresentsStorage (post.state.getStor withdrawalRequestPredeployAddress).get
-      (Blanc.WithdrawalRequest.system model) ∧
-    effectiveExcess model ≤ wordOccurrenceCap ∧ model.count ≤ wordOccurrenceCap ∧
-    model.head ≤ model.tail ∧ model.tail ≤ wordOccurrenceCap ∧
-    model.queue.length = model.tail - model.head ∧
-    effectiveExcess model + model.count < 2 ^ 256 ∧ queueBase model.tail + 2 < 2 ^ 256 ∧
-    effectiveExcess (Blanc.WithdrawalRequest.system model) ≤ wordOccurrenceCap ∧
-    (Blanc.WithdrawalRequest.system model).tail ≤ wordOccurrenceCap ∧
-    QueueSlotsSafe model ∧ QueueSlotsSafe (Blanc.WithdrawalRequest.system model)
+  ∃ r : BlockWordReplay history block,
+    r.BoundaryModel ∧ r.Emission ∧ r.AfterReset ∧ r.Fifo ∧ r.Provenance ∧
+    WordBookkeepingSafe r.model ∧ WordBookkeepingSafe (Blanc.WithdrawalRequest.system r.model)
 
 /-- Form H: under the original INIT/CODE/SYSTEM hypotheses, every block of a
 history with at most `wordOccurrenceCap` submission-payment occurrences since
 the checkpoint satisfies exact word-fee FIFO. -/
-theorem block_word_fifo
+theorem block_word_fifo_of_checkpoint
     {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
     (block : ConfiguredBlockTrace cfg pre post)
@@ -355,7 +480,7 @@ theorem block_word_fifo
     (init : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial)
     (occurrences : ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
       submissionFramePayments).length ≤ wordOccurrenceCap) :
-    BlockWordFifo history block := by
+    CheckpointBlockWordFifo history block := by
   have code : checkpoint.state.getCode withdrawalRequestPredeployAddress =
       Blanc.withdrawalRequestCode := by
     apply installed (withdrawalRequestPredeployAddress, Blanc.withdrawalRequestCode)
@@ -371,8 +496,9 @@ theorem block_word_fifo
   subst equality
   obtain ⟨prefixHistory, prefixRep, _, excessLe, countLe, headLe, tailLe, lengthEq, sumLt,
       slotLt, prefixSlots⟩ := prefixes (past ++ transactionEvents) [reset] rfl
-  obtain ⟨fullHistory, fullRep, conservation, fullExcessLe, _, _, fullTailLe, _, _, _,
-      fullSlots⟩ := prefixes ((past ++ transactionEvents) ++ [reset]) [] (List.append_nil _).symm
+  obtain ⟨fullHistory, fullRep, conservation, fullExcessLe, fullCountLe, fullHeadLe, fullTailLe,
+      fullLengthEq, fullSumLt, fullSlotLt, fullSlots⟩ :=
+    prefixes ((past ++ transactionEvents) ++ [reset]) [] (List.append_nil _).symm
   have resetFrames : wordSubmissionFrames ((past ++ transactionEvents) ++ [reset]) =
       wordSubmissionFrames (past ++ transactionEvents) := by
     simp only [wordSubmissionFrames, List.flatMap_append, List.flatMap_cons, List.flatMap_nil,
@@ -381,25 +507,25 @@ theorem block_word_fifo
       wordModelSubmissions (past ++ transactionEvents) := by
     simp only [wordModelSubmissions, List.flatMap_append, List.flatMap_cons, List.flatMap_nil,
       resetKind, List.append_nil]
-  have prefixFrames := prefixReplay.submissionFrames
-  rw [List.map_append, pastMap, transactionMap, ← List.flatMap_append,
-    observed_submissionFramePayments] at prefixFrames
+  rw [resetSubmissions] at fullHistory conservation
+  have prefixPayloads := prefixReplay.submissionFrames.2
   have fullFrames := (history_word_submission_frames (.step history block) replay observed).1
   rw [resetFrames] at fullFrames
   have entries := wordSubmissionFrames_entries (past ++ transactionEvents)
-  rw [← resetSubmissions] at entries
   rw [prefixReplay.fold_eq, prefixOutputs] at *
   rw [replay.fold_eq, finalModel, fullOutputs] at *
   have payload := block_requests_of_request_rep history block code _ prefixRep
-  exact ⟨past, transactionEvents, reset, replay, pastMap, transactionMap, resetKind, resetPre,
-    prefixHistory, prefixRep, payload.1, payload.2.1, payload.2.2, fullHistory, conservation,
-    prefixFrames.1, fullFrames, prefixFrames.2, entries.trans conservation,
-    fullRep, excessLe, countLe, headLe, tailLe, lengthEq, sumLt, slotLt, fullExcessLe, fullTailLe,
-    prefixSlots, fullSlots⟩
+  rw [block.bodyTrace.transaction_requests_eq_nil, List.nil_append] at payload
+  exact ⟨⟨past, transactionEvents, reset, replay, pastMap, transactionMap, resetKind, resetPre⟩,
+    ⟨init, prefixHistory, prefixRep⟩, ⟨payload.1, payload.2.1, payload.2.2⟩, ⟨init, fullHistory, fullRep⟩,
+    conservation, ⟨fullFrames, prefixPayloads, entries.trans conservation⟩,
+    ⟨excessLe, countLe, headLe, tailLe, lengthEq, sumLt, slotLt, prefixSlots⟩,
+    ⟨fullExcessLe, fullCountLe, fullHeadLe, fullTailLe, fullLengthEq, fullSumLt, fullSlotLt,
+      fullSlots⟩⟩
 
 /-- Form D: the same FIFO with no length premise, or more than
 `wordOccurrenceCap` submission-payment occurrences since the checkpoint. -/
-theorem block_word_fifo_or_overflow
+theorem block_word_fifo_or_overflow_of_checkpoint
     {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
     (block : ConfiguredBlockTrace cfg pre post)
@@ -410,18 +536,18 @@ theorem block_word_fifo_or_overflow
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
     (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
     (init : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial) :
-    BlockWordFifo history block ∨
+    CheckpointBlockWordFifo history block ∨
       wordOccurrenceCap < ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
         submissionFramePayments).length := by
   by_cases occurrences : ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
       submissionFramePayments).length ≤ wordOccurrenceCap
-  · exact Or.inl (block_word_fifo history block installed senders authorities avoid
+  · exact Or.inl (block_word_fifo_of_checkpoint history block installed senders authorities avoid
       systemEmpty init occurrences)
   · exact Or.inr (Nat.lt_of_not_le occurrences)
 
 /-- Corollary: every block of a history of at most `2 ^ 190` blocks since
 the checkpoint satisfies exact word-fee FIFO, with no occurrence premise. -/
-theorem block_word_fifo_of_blockCount
+theorem block_word_fifo_of_blockCount_of_checkpoint
     {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     (history : ConfiguredHistoryTrace cfg checkpoint pre)
     (block : ConfiguredBlockTrace cfg pre post)
@@ -433,8 +559,8 @@ theorem block_word_fifo_of_blockCount
     (systemEmpty : checkpoint.state.getCode systemAddress = ByteArray.empty)
     (init : RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial)
     (blocks : (ConfiguredHistoryTrace.step history block).blockCount ≤ 2 ^ 190) :
-    BlockWordFifo history block := by
-  apply block_word_fifo history block installed senders authorities avoid systemEmpty init
+    CheckpointBlockWordFifo history block := by
+  apply block_word_fifo_of_checkpoint history block installed senders authorities avoid systemEmpty init
   have payments := submissionFramePayments_length_le
     (ConfiguredHistoryTrace.step history block).settledFrames
   have frames := (ConfiguredHistoryTrace.step history block).settledFrames_length_le
@@ -442,5 +568,137 @@ theorem block_word_fifo_of_blockCount
       2 ^ 190 * 2 ^ 64 := Nat.mul_le_mul_right _ blocks
   have cap : (2 : Nat) ^ 190 * 2 ^ 64 = wordOccurrenceCap := by decide
   omega
+
+/-- Installation of the other protocol contracts at the activation checkpoint.
+EIP-7002 deployment supplies its own runtime; it does not deploy these three. -/
+structure OtherSystemCodeInstalled (state : Jaune.State) : Prop where
+  beaconRoots : state.getCode beaconRootsAddress = beaconRootsCode
+  historyStorage : state.getCode historyStorageAddress = historyStorageCode
+  consolidation : state.getCode consolidationRequestPredeployAddress = consolidationRequestCode
+
+/-- Combine the independent protocol installations with the proved EIP-7002 runtime. -/
+theorem OtherSystemCodeInstalled.with_withdrawal {state : Jaune.State}
+    (other : OtherSystemCodeInstalled state)
+    (withdrawal : state.getCode withdrawalRequestPredeployAddress = withdrawalRequestCode) :
+    SystemCodeInstalled state := by
+  intro pair member
+  simp only [systemContracts, List.mem_cons, List.not_mem_nil, or_false] at member
+  rcases member with rfl | rfl | rfl | rfl
+  · exact other.beaconRoots
+  · exact other.historyStorage
+  · exact withdrawal
+  · exact other.consolidation
+
+/-- FIFO from the actual canonical deployment. The initialization component
+identifies the deployment transaction, proves its committed runtime/storage,
+and transports INIT through the same preactivation prefix. That prefix has no
+committed submissions (derived from `Initialized.noDynamicTargets` by
+`observed_submissionFramePayments` in `blockWordFifo_iff_checkpoint`). The prefix
+selects Cancun throughout; the modern suffix uses `CoveredFork`. The checkpoint
+component then follows this very modern
+history into the block: abstract transitions correspond to concrete storage,
+the emitted bytes occupy the block's type-1 request batch, and emitted entries
+plus the remaining queue are precisely the committed submissions in order.
+Its provenance and word-safety layers retain the exact frames and slot bounds.
+
+In particular, INIT is connected to the observed deployment and the starting
+storage here, as well as explicitly inside `BoundaryModel` and `AfterReset`. -/
+def BlockWordFifo {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post) : Prop :=
+  deployment.Initialized ∧
+    deployment.prefix.settledFrames.flatMap submissionFramePayments = [] ∧
+    CheckpointBlockWordFifo history block
+
+/-- The deployment theorem includes the checkpoint result used by existing
+drain/delivery arguments. This implication does not assert that every arbitrary
+INIT checkpoint arose from a canonical deployment. -/
+theorem BlockWordFifo.checkpoint {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    {deployment : DeploymentHistory cfg checkpoint}
+    {history : ConfiguredHistoryTrace cfg checkpoint pre}
+    {block : ConfiguredBlockTrace cfg pre post}
+    (fifo : BlockWordFifo deployment history block) : CheckpointBlockWordFifo history block :=
+  fifo.2.2
+
+/-- Under the proved deployment bridge, the remaining conclusion is exactly the
+checkpoint FIFO result. The bridge itself is not inferred from an arbitrary checkpoint. -/
+theorem blockWordFifo_iff_checkpoint {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (initialized : deployment.Initialized) :
+    BlockWordFifo deployment history block ↔ CheckpointBlockWordFifo history block := by
+  refine ⟨BlockWordFifo.checkpoint, fun fifo => ⟨initialized, ?_, fifo⟩⟩
+  rw [← observed_submissionFramePayments, initialized.noDynamicTargets, List.flatMap_nil]
+
+/-- For a configured history rooted in canonical Cancun deployment, every
+modern block satisfies exact word-fee FIFO within the occurrence bound.
+The prefix selects Cancun throughout and the suffix uses `CoveredFork`.
+Deployment and its actual admitted preactivation history derive INIT, the
+EIP-7002 runtime and checkpoint SYSTEM emptiness. The other protocol code,
+modern sender/authority/CREATE exclusions and capacity remain explicit. -/
+theorem block_word_fifo
+    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap) :
+    BlockWordFifo deployment history block := by
+  have initialized := deployment.initialized admission
+  apply (blockWordFifo_iff_checkpoint deployment history block initialized).2
+  exact block_word_fifo_of_checkpoint history block
+    (otherInstalled.with_withdrawal initialized.checkpointCode) senders authorities avoid
+    initialized.systemEmpty initialized.checkpointStorage occurrences
+
+/-- The deployment-rooted result, or an explicit capacity overflow; the
+preactivation prefix contributes no submission occurrences. -/
+theorem block_word_fifo_or_overflow
+    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) :
+    BlockWordFifo deployment history block ∨
+      wordOccurrenceCap < ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+        submissionFramePayments).length := by
+  by_cases occurrences : ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap
+  · exact Or.inl (block_word_fifo deployment admission history block otherInstalled
+      senders authorities avoid occurrences)
+  · exact Or.inr (Nat.lt_of_not_le occurrences)
+
+/-- Up to `2 ^ 190` modern blocks after the preactivation prefix need no
+separate occurrence bound. INIT and EIP-7002 code still come from deployment. -/
+theorem block_word_fifo_of_blockCount
+    {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint)
+    (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint pre)
+    (block : ConfiguredBlockTrace cfg pre post)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (blocks : (ConfiguredHistoryTrace.step history block).blockCount ≤ 2 ^ 190) :
+    BlockWordFifo deployment history block := by
+  have initialized := deployment.initialized admission
+  apply (blockWordFifo_iff_checkpoint deployment history block initialized).2
+  exact block_word_fifo_of_blockCount_of_checkpoint history block
+    (otherInstalled.with_withdrawal initialized.checkpointCode) senders authorities avoid
+    initialized.systemEmpty initialized.checkpointStorage blocks
 
 end Blanc.Lift.WithdrawalRequest
