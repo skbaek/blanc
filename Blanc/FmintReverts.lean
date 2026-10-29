@@ -121,7 +121,7 @@ separately, and nothing needs to.
 The one obligation the walk hands back is the terminal `REVERT`, which ends the
 frame and so has no successor for a walk to name. -/
 
-set_option maxRecDepth 674 in
+set_option maxRecDepth 603 in
 /-- A call on `fmint` carrying a selector it does not have has a gas-exact walk
 that reverts, with empty revert data. -/
 theorem unknownSelector_runCompiledTo {sevm : Sevm} {pre : Devm}
@@ -266,7 +266,7 @@ cannot know that this comparison fails, so it hands the value obligation back
 and it is discharged from `h_dec` and `h_ne`, which is the tactic working as
 designed.  The other is the terminal `REVERT`. -/
 
-set_option maxRecDepth 674 in
+set_option maxRecDepth 603 in
 /-- A `flashLoan` call on `fmint` whose `token` is not `fmint` itself has a
 gas-exact walk that reverts, with empty revert data. -/
 theorem tokenNeSelf_runCompiledTo {sevm : Sevm} {pre : Devm}

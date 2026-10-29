@@ -59,7 +59,7 @@ it.  The two obligations the walk hands back are the justification for that `3`
 and the terminal `RETURN`, which ends the frame and so has no successor for a
 walk to name. -/
 
-set_option maxRecDepth 674 in
+set_option maxRecDepth 603 in
 /-- A `totalSupply()` call on `fmint` has a gas-exact run, and it returns the
 supply slot.
 

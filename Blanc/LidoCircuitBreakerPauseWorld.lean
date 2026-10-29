@@ -1380,7 +1380,7 @@ theorem pauseWorld_dataWord_target (stor : Stor) (gas : Nat) :
   rw [Sevm.argWord] at h
   rwa [show 32 * (0 : B256) + 4 = 4 from by decide] at h
 
-set_option maxRecDepth 1021 in
+set_option maxRecDepth 1001 in
 /-- The dispatcher's selector at this world's calldata.  Stated at the
 concrete target because `Sevm.dataWord` reads a whole word: the selector
 occupies the first four bytes and the argument the next twenty-eight of the

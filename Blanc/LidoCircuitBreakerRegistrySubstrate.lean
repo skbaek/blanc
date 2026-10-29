@@ -248,7 +248,7 @@ theorem temporalSstorePost_logs
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).logs = base.logs := rfl
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 7629 in
 /-- Generic `finishSetPauser` walk, chronology-independent: reads the three
 scratch words (`target`, `previousPauser`, `newPauser` — unconstrained), emits
 the `LOG3` whose topics are exactly those words, reads the continuation word
@@ -773,7 +773,7 @@ theorem previousCountKey_prepend_runCompiled
   all_goals first | omega |
     (simp only [Devm.stack_setMach, List.length_cons]; omega)
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 5620 in
 /-- Generic **old-last** arm of `registerAfterSet`: the previous pauser is
 nonzero and its remaining assignment count is zero, so the walk clears that
 pauser's heartbeat expiry to `0`, writes `0` into the event scratch word, and
@@ -996,7 +996,7 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     rw [hg]
     exact holdTail
 
-set_option maxRecDepth 8192 in
+set_option maxRecDepth 607 in
 /-- The checked expiry `SSTORE` and the `HeartbeatUpdated(newPauser)` record that
 close every nonzero-new-pauser `registerAfterSet` arm, entered with the expiry
 key and the computed expiry on the stack and the expiry already staged as the
@@ -2311,7 +2311,7 @@ theorem registerMemory_spec (target newPauser : B256) :
 `registerPauser(address,address)`. -/
 def registerPauserDispatchGas : Nat := 175
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 664 in
 theorem registerPauser_dispatch_runCompiledTo
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (bodyGas G : Nat) (out : Execution)

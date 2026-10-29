@@ -3158,7 +3158,7 @@ private theorem officialConstructorValidationBody_eq_staged :
     officialConstructorValidationFinish
   rfl
 
-set_option maxRecDepth 929 in
+set_option maxRecDepth 924 in
 private theorem officialConstructorValidationFinish_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3177,7 +3177,7 @@ private theorem officialConstructorValidationFinish_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3224,7 +3224,7 @@ private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3271,7 +3271,7 @@ private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorInitialPauseMaxStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3318,7 +3318,7 @@ private theorem officialConstructorInitialPauseMaxStage_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorInitialPauseMinStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3365,7 +3365,7 @@ private theorem officialConstructorInitialPauseMinStage_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorHeartbeatBoundsStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3412,7 +3412,7 @@ private theorem officialConstructorHeartbeatBoundsStage_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3443,7 +3443,7 @@ private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorPauseBoundsStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3490,7 +3490,7 @@ private theorem officialConstructorPauseBoundsStage_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorMinPauseNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3521,7 +3521,7 @@ private theorem officialConstructorMinPauseNonzeroStage_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorAdminNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3553,7 +3553,7 @@ private theorem officialConstructorAdminNonzeroStage_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 930 in
+set_option maxRecDepth 925 in
 private theorem officialConstructorCanonicalAdminStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm

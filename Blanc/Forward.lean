@@ -2797,23 +2797,23 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
   let i' ← whnfR i
   -- Activation and schedule fields come from the actual rules, not from
   -- absence of the independent state-gas meter.
-  let access ← `(tactic| first | assumption | rfl |
-    exact CoveredFork.rules_access (by assumption))
-  let surcharge ← `(tactic| first | assumption | rfl |
+  let access ← `(tactic| first | with_reducible assumption | rfl |
+    exact CoveredFork.rules_access (by with_reducible assumption))
+  let surcharge ← `(tactic| first | with_reducible assumption | rfl |
     exact (congrArg GasSchedule.codeReadSurcharge
-      (BenvStat.gas_eq_prague_of_covered (by assumption))).trans
+      (BenvStat.gas_eq_prague_of_covered (by with_reducible assumption))).trans
         pragueRules_gas_codeReadSurcharge)
-  let coldCost ← `(tactic| first | assumption | rfl |
+  let coldCost ← `(tactic| first | with_reducible assumption | rfl |
     exact (congrArg GasSchedule.coldAccountAccess
-      (BenvStat.gas_eq_prague_of_covered (by assumption))).trans
+      (BenvStat.gas_eq_prague_of_covered (by with_reducible assumption))).trans
         pragueRules_gas_coldAccountAccess)
-  let sstoreRules ← `(tactic| first | assumption | rfl |
-    exact CoveredFork.rules_sstore (by assumption))
+  let sstoreRules ← `(tactic| first | with_reducible assumption | rfl |
+    exact CoveredFork.rules_sstore (by with_reducible assumption))
   let push0 ← `(tactic|
     first
-    | assumption
-    | intro _; assumption
-    | intro empty; exact CoveredFork.rules_push0 (by assumption)
+    | with_reducible assumption
+    | intro _; with_reducible assumption
+    | intro empty; exact CoveredFork.rules_push0 (by with_reducible assumption)
     | intro empty; rfl
     | intro empty; exact absurd empty (List.cons_ne_nil _ _)
     | intro empty; refine absurd empty (B256.toBytes_sig_ne_nil ?_); decide
@@ -3487,8 +3487,8 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
           let lemId := mkIdent lem
           let factId := mkIdent fact
           `(tactic| first
-              | exact $lemId (by assumption)
-              | exact $lemId ($factId (by assumption)))
+              | exact $lemId (by with_reducible assumption)
+              | exact $lemId ($factId (by with_reducible assumption)))
         | none => `(tactic| rfl)
       match core.getAppFnArgs with
       | (``Jaune.applyBinary, #[f, costE, _]) => do

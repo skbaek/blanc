@@ -14629,7 +14629,7 @@ private def hybridPauseDispatchCost
 /- The outer pause pivot compares equal and takes the right half; the inner
 fourth-group pivot is greater than the pause selector and takes the textual
 third group.  Neither unselected half is executed. -/
-set_option maxRecDepth 2048 in
+set_option maxRecDepth 604 in
 private theorem hybrid_pause_dispatch_runCompiledTo
     (dp : DeployParams)
     {fs : List Func} {sevm : Sevm} {pre : Devm}
@@ -16528,7 +16528,7 @@ private theorem directPauseControl_codeBytes :
     directPauseControlBaseMsg, initSevm, directPauseControlCode] using
     byteArray_ofList_toList (lidoCircuitBreakerCode officialParams)
 
-set_option maxRecDepth 2048 in
+set_option maxRecDepth 1004 in
 private theorem directPauseControl_dataFacts :
     directPauseControlSevm.data.length = 36 ∧
     Sevm.dataWord directPauseControlSevm 4 = directPauseControlTarget ∧
@@ -16546,7 +16546,7 @@ private theorem directPauseControl_dataFacts :
     · rfl
   · decide
 
-set_option maxRecDepth 4096 in
+set_option maxRecDepth 3280 in
 private theorem directPauseControl_gas :
     directPauseControlPre.gasLeft =
       runtimePauseCost officialParams directPauseControlPre 0
@@ -16809,7 +16809,7 @@ theorem directPause_zeroCode_postWrite_error_control :
   · simpa only [directPauseControlTarget] using
       directPauseControl_zeroCode
 
-set_option maxRecDepth 4096 in
+set_option maxRecDepth 892 in
 /-- Every canonical target-zero kernel entry satisfying the explicit emitted
 code, stack, memory, and exact-gas premises reaches the exact `PausableZero`
 revert before any raw `SSTORE` occurrence.  This is a forward construction,
@@ -16874,7 +16874,7 @@ theorem setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
   apply executionFree.noSstoreAt occurrence.node occurrence.reached
   simpa only [instructionEq] using occurrence.decoded
 
-set_option maxRecDepth 2048 in
+set_option maxRecDepth 892 in
 /-- Invert an actual successful execution at the exact emitted kernel slice
 to the source `Func.Run`.  This is the success-only direction; error paths use
 forward `RunCompiledTo` constructions instead. -/

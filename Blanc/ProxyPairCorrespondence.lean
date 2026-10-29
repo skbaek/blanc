@@ -1119,6 +1119,7 @@ private theorem proxy_error_tail
     have hbase_returnData : base.returnData = [] := by
       dsimp only [base]
       rw [incorporateChildOnError_returnData, hout]
+    have hpush0 : (initSevm m).benvStat.rules.op.push0 = true := hfork.rules_push0
     func_run [3]
     all_goals simp_all only [proxyErrorTailGas32, Devm.setMach_gasLeft, gBase, Devm.returnData_setMach, List.length_nil, gVerylow, gReturnDataCopy, ceilDiv, nonpos_iff_eq_zero, Nat.add_eq_zero_iff, gHigh, Nat.reduceAdd]
     all_goals try decide

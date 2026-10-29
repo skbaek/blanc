@@ -82,7 +82,7 @@ def decimalsGas : Nat :=
 under WETH's `decimals()`, which takes one more fork arm. -/
 theorem decimalsGas_eq : decimalsGas = 138 := by decide
 
-set_option maxRecDepth 674 in
+set_option maxRecDepth 603 in
 /-- A `decimals()` call on `fmint` has a gas-exact run; it costs exactly
 `decimalsGas` and returns `0x12`.
 
@@ -176,7 +176,7 @@ theorem decimals_gas_exact {sevm : Sevm} {pre : Devm}
     decimals_runCompiled hfork h_sel h_stack h_mem h_gas
   exact ⟨post, Prog.exec_of_runCompiled h_run h_code, h_gas_eq, h_out⟩
 
-set_option maxRecDepth 674 in
+set_option maxRecDepth 603 in
 /-- **`fmint`'s `totalSupply()` call costs exactly `totalSupplyGas`.**
 
 The exactness theorem at the `exec` altitude, by the same route as
@@ -286,7 +286,7 @@ def totalSupplyGasWarm : Nat :=
 not change when a key warms. -/
 theorem totalSupplyGasWarm_eq : totalSupplyGasWarm = 218 := by decide
 
-set_option maxRecDepth 674 in
+set_option maxRecDepth 603 in
 /-- A `totalSupply()` call on `fmint` whose `supplySlot` is **already warm** has
 a gas-exact run; it costs exactly `totalSupplyGasWarm` and returns the supply.
 

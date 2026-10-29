@@ -108,7 +108,7 @@ theorem Func.runCompiled_pushB256_covered {fs : List Func} {sevm : Sevm}
   .next (Ninst.runCompiled_pushB256 (pushCost_of_ne_zero hw) h_gas h_room
     (fun _ => hfork.rules_push0)) h_rest
 
-set_option maxRecDepth 674 in
+set_option maxRecDepth 613 in
 /-- A `balanceOf(guy)` call on `weth` has a gas-exact run, and it returns
 `guy`'s balance slot.
 

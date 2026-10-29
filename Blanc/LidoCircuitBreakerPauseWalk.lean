@@ -255,7 +255,7 @@ pivots, `25` for the group's first — and matching — comparison and its `POP`
 plus the program's entry `JUMPDEST`. -/
 def pauseDispatchGas : Nat := 108
 
-set_option maxRecDepth 692 in
+set_option maxRecDepth 659 in
 theorem pause_dispatch_runCompiledTo
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (bodyGas G : Nat) (out : Execution)
@@ -696,7 +696,7 @@ private theorem pauseExpirySlotCaller_prepend_runCompiled
   case h_val => rw [hcaller]; rfl
   case a => exact htail
 
-set_option maxRecDepth 1177 in
+set_option maxRecDepth 143 in
 /-- `pause`'s complete body, from the endpoint's entry to the internal
 `.call setPauserSlot` burn.  The walk crosses all five guards on their taken
 arms — the one-word calldata test, the canonical-address decoder, the

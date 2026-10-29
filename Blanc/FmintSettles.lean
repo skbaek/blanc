@@ -1394,7 +1394,7 @@ def flashLoanReturnDataHead (d : Devm) (M : Mem) : B256 :=
     (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32) (0 : UInt8))).read
       ((0 * 32 : B256)).toNat 32).1.toB256
 
-set_option maxRecDepth 608 in
+set_option maxRecDepth 597 in
 /-- **The magic-mismatch leaf.**  The callback settled clean with a full word
 of returndata, but the head word is not `erc3156Magic`: `flashLoan` reads the
 word back through `returndatacopy`/`mload` and deliberately reverts. -/
@@ -1479,7 +1479,7 @@ lemma flashLoanReturnDataImage_size {d : Devm} {M : Mem} (h_msz : 64 ≤ M.size)
     show ((0 * 32 : B256)).toNat + B256.toNat 32 = 32 from by decide]
   omega
 
-set_option maxRecDepth 605 in
+set_option maxRecDepth 594 in
 /-- **Into the repayment.**  The flag is `1` and both returndata checks pass:
 the walk crosses `returnDataShorterThan 32` and `checkReturnDataHead erc3156Magic 0`
 and hands the continuation the state entering `spendAllowanceThenBurn` — the
@@ -1855,7 +1855,7 @@ lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
             omega)
     · exact hP _
 
-set_option maxRecDepth 629 in
+set_option maxRecDepth 618 in
 /-- **The success leaf.**  The balance covers the burn: the pair is written —
 each `SSTORE` warm behind its own `SLOAD` (F28), each clearing the EIP-2200
 sentry because `gasStorageSet ≤ gasLeft` subsumes it — the burn `Transfer` is
@@ -2350,7 +2350,7 @@ def receiverNotAddressGas : Nat :=
 
 theorem receiverNotAddressGas_eq : receiverNotAddressGas = 167 := by decide
 
-set_option maxRecDepth 674 in
+set_option maxRecDepth 626 in
 /-- A `flashLoan` call whose `token` is fmint but whose `receiver` word is not
 address-shaped has a gas-exact walk that reverts, with empty revert data. -/
 theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
@@ -2481,7 +2481,7 @@ def amountOverBoundGas : Nat :=
 /-- 2 300 gas: 200 of walking and one cold `SLOAD`. -/
 theorem amountOverBoundGas_eq : amountOverBoundGas = 2300 := by decide
 
-set_option maxRecDepth 672 in
+set_option maxRecDepth 624 in
 /-- A `flashLoan` call past the first two guards whose `amount` exceeds
 `maxFlashLoan = 2^256 - 1 - totalSupply` reverts, with empty revert data. -/
 theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}

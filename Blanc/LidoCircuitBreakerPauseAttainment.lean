@@ -83,7 +83,7 @@ theorem pauseCalldata_facts {sevm : Sevm} {target : B256}
     · rw [hd]
       rfl
 
-set_option maxRecDepth 1021 in
+set_option maxRecDepth 1001 in
 /-- The dispatcher's selector, at the control world's own calldata.  Stated at
 the concrete target because `Sevm.dataWord` reads a whole word: the selector
 occupies the first four bytes and the argument the next twenty-eight of the

@@ -409,7 +409,7 @@ theorem prefix_of_lastLinearTest {sevm : Sevm} {s s' : Devm} {sel word : B256}
   cases r2
   exact prefix_of_eq hop (prefix_of_push (of_run_pushB256 hpush) hp)
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 609 in
 /-- The six selector crossings of `hybridDispatchWith`, on a walk whose
 calldata selects `registerPauser`: two `splitDispatch` pivots taken jumped,
 then three `linearDispatchWith` misses and the match.
@@ -2255,7 +2255,7 @@ consumer. -/
 private theorem configWorld_getStorVal_addLog {d : Devm} {l : Log} {a : Adr}
     {k : B256} : (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 608 in
 /-- Exact successful `setPauseDuration` body: the static-argument guard, the
 admin guard and both configured-bound guards fall the right way, the
 configuration cell is read for the event and then set, and the whole body costs
@@ -2318,7 +2318,7 @@ theorem setPauseDuration_body_runCompiledTo
 subtree, two selector misses, the match, and the chain's `POP`. -/
 def setPauseDurationDispatchGas : Nat := 151
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 659 in
 /-- Exact dispatcher bridge for any terminal outcome of the selected
 pause-duration setter body. -/
 theorem setPauseDuration_dispatch_runCompiledTo
@@ -2443,7 +2443,7 @@ def setPauseDurationConfigPath : Prog.SourcePath :=
       sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
       sourceRests 15⟩
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 602 in
 /-- The complete route from program entry to the `setPauseDuration.config`
 `SSTORE`, across all ten branches.  Only the calldata selector is an execution
 premise: five crossings are decided on it and the other five have
@@ -2754,7 +2754,7 @@ def setHeartbeatIntervalConfigPath : Prog.SourcePath :=
       sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
       sourceRests 15⟩
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 606 in
 /-- The complete route from program entry to the `setHeartbeatInterval.config`
 `SSTORE`, across all eleven branches.  Only the calldata selector is an
 execution premise, exactly as on the pause-duration route.
@@ -3191,7 +3191,7 @@ def heartbeatExpiryPath : Prog.SourcePath :=
       sourceRests 8 ++ [Prog.SourceStep.branchLeft] ++
       sourceRests 6⟩
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 609 in
 /-- The complete route from program entry to the `heartbeat.expiry` `SSTORE`,
 across all eleven branches.  Only the calldata selector is an execution
 premise: the registered-caller and strict-liveness facts this row's authority

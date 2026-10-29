@@ -527,7 +527,7 @@ def heartbeatBodySuccessGas
     heartbeatSloadCost sevm (heartbeatAfterExpiryLoad sevm base)
       heartbeatIntervalSlot
 
-set_option maxRecDepth 8192 in
+set_option maxRecDepth 600 in
 private theorem heartbeat_storeLogTail_runCompiled_update
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -608,7 +608,7 @@ private theorem heartbeat_storeLogTail_runCompiled_update
         show ((1 : B256) * 32).toNat = 32 by decide]
       rw [Mem.read_write_word]
 
-set_option maxRecDepth 8192 in
+set_option maxRecDepth 600 in
 private theorem heartbeat_storeLogTail_runCompiled_other
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -828,7 +828,7 @@ private theorem heartbeat_body_runCompiled_generic
   · simpa only [heartbeatAfterIntervalLoad, heartbeatAfterExpiryLoad, heartbeatAfterCountLoad,
     heartbeatSloadBase_logs] using hlogs
 
-set_option maxRecDepth 8192 in
+set_option maxRecDepth 600 in
 /-- A successful direct heartbeat-body execution in the warm, nonzero-to-
 nonzero storage-update case.  The run fixes the checked sum, the exact expiry
 write, and the single `HeartbeatUpdated` log emitted after that write. -/
@@ -993,7 +993,7 @@ theorem isPauserLive_body_runCompiled_at_expiry
   rcases temporalReturnWord_runCompiled fs sevm base (0 : B256) G with
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
-  set_option maxRecDepth 4096 in
+  set_option maxRecDepth 764 in
     func_run [0, ~~~(0 : B256), addressMask, 0, expirySlot pauser, 0, 3]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try { rw [hword0]; exact hcanonical }
@@ -1013,7 +1013,7 @@ theorem isPauserLive_body_runCompiled_at_expiry
 
 def isPauserLiveDispatchGas : Nat := 168
 
-set_option maxRecDepth 4096 in
+set_option maxRecDepth 664 in
 /-- Exact public-dispatch representative at the strict expiry boundary.  The
 result fixes the deployed program/compiler identity in addition to the decoded
 body semantics. -/
@@ -1124,7 +1124,7 @@ theorem isPauserLive_body_runCompiled
       (pauserLiveWord sevm.benvStat.time expiry) G with
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
-  set_option maxRecDepth 4096 in
+  set_option maxRecDepth 764 in
     func_run [0, ~~~(0 : B256), addressMask, 0, expirySlot pauser,
       pauserLiveWord sevm.benvStat.time expiry, 3]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -1143,7 +1143,7 @@ theorem isPauserLive_body_runCompiled
       hgasFinal]
     exact hreturn
 
-set_option maxRecDepth 4096 in
+set_option maxRecDepth 664 in
 /-- Exact direct public execution of `isPauserLive(address)` for an arbitrary
 stored expiry. -/
 theorem isPauserLive_runCompiled
@@ -1248,7 +1248,7 @@ theorem heartbeatInterval_body_runCompiled
       Devm.getStorVal_setMach, hinterval, hgasFinal]
     exact hreturn
 
-set_option maxRecDepth 4096 in
+set_option maxRecDepth 664 in
 /-- Exact direct public execution of `heartbeatInterval()`. -/
 theorem heartbeatInterval_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
@@ -1341,7 +1341,7 @@ theorem heartbeatExpiry_body_runCompiled
   rcases temporalReturnWord_runCompiled fs sevm base expiry G with
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
-  set_option maxRecDepth 4096 in
+  set_option maxRecDepth 744 in
     func_run [0, ~~~(0 : B256), addressMask, 0, expirySlot pauser, 3]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try { rw [hword0]; exact hcanonical }
@@ -1354,7 +1354,7 @@ theorem heartbeatExpiry_body_runCompiled
       Devm.getStorVal_setMach, hexpiry, hgasFinal]
     exact hreturn
 
-set_option maxRecDepth 4096 in
+set_option maxRecDepth 659 in
 /-- Exact direct public execution of canonical `heartbeatExpiry(address)`. -/
 theorem heartbeatExpiry_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
@@ -2124,7 +2124,7 @@ private theorem setHeartbeatIntervalUpdatePrefix_runCompiled_then
     simp only [hwarm, ite_eq_left]
   simpa only [hcost, gasWarmAccess] using hload
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 591 in
 /-- The successful event suffix emits the exact old/new record and then runs
 the named store suffix.  Thus the source chronology is represented directly:
 the `LOG1` predecessor is constructed before the `SSTORE` continuation. -/
@@ -2187,7 +2187,7 @@ private theorem setHeartbeatIntervalEventTail_runCompiled
     rw [hexpiries pauser hpauser]
     rfl
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 591 in
 private theorem setHeartbeatIntervalEventTail_runCompiled_zero
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -2248,7 +2248,7 @@ private theorem setHeartbeatIntervalEventTail_runCompiled_zero
     rw [hexpiries pauser hpauser]
     rfl
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 591 in
 private theorem setHeartbeatIntervalEventTail_runCompiled_noop
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -2306,7 +2306,7 @@ private theorem setHeartbeatIntervalEventTail_runCompiled_noop
     rw [hexpiries pauser hpauser]
     rfl
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 592 in
 /-- Generic event-before-store suffix under the worst successful SSTORE
 envelope.  The production `LOG1` appends the exact old/new payload before the
 generic interval store runs. -/
@@ -2818,7 +2818,7 @@ theorem setHeartbeatInterval_body_runCompiled_noop_of_inclusive
   simpa only [setHeartbeatIntervalBodyGasWarmUpdate,
     setHeartbeatIntervalUpdateTailGasWarmUpdate] using hprefix
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 664 in
 /-- Exact public-dispatch success for `setHeartbeatInterval(uint256)` in the
 warm nonzero-to-different-nonzero update case.  The result pins invocation
 identity to the generated runtime/compiler image as well as the exact temporal
@@ -3031,7 +3031,7 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_above_max
   · intro a k
     rfl
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 664 in
 /-- Exact dispatcher bridge for any terminal outcome of the selected
 heartbeat-interval setter body. -/
 theorem setHeartbeatInterval_dispatch_runCompiledTo
@@ -3807,7 +3807,7 @@ theorem heartbeat_body_runCompiledTo_error_of_expired
 
 def heartbeatDispatchGas : Nat := 192
 
-set_option maxRecDepth 16384 in
+set_option maxRecDepth 664 in
 /-- Exact emitted-runtime dispatcher bridge for any terminal heartbeat body
 outcome. -/
 theorem heartbeat_dispatch_runCompiledTo

@@ -1253,7 +1253,7 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
           exact hsub
         · simpa only [toAdr_toB256] using hstate
 
-set_option maxRecDepth 621 in
+set_option maxRecDepth 610 in
 /-- The actual compiled `withdrawTo` body reaches a successful outcome for an
 admitted code-free recipient.  `ExecSat` keeps that outcome existential while
 the storage/log walk introduces its deterministic intermediate states. -/
@@ -1494,7 +1494,7 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         · rcases hs with ⟨debit, hsub, hcallState⟩
           exact ⟨debit, hsub, htailState.trans hcallState⟩
 
-set_option maxRecDepth 621 in
+set_option maxRecDepth 610 in
 /-- The direct-holder `withdraw` body, proved by walking that body itself.  Its
 recipient is the caller opcode rather than a calldata word, so this is not
 inferred from `withdrawTo`. -/
@@ -1842,7 +1842,7 @@ theorem weth10Main_eq_withdraw (dp : DeployParams) :
     (weth10 dp).main = withdrawMain dp := by
   simp only [weth10, weth10Main, withdrawDispatch_eq, withdrawMain]
 
-set_option maxRecDepth 568 in
+set_option maxRecDepth 561 in
 /-- Dispatcher, nonpayability guard, and actual `withdrawTo` body composed at
 program altitude.  The balanced-tree path costs 182 gas including entry. -/
 theorem withdrawTo_progExecSat (dp : DeployParams)
@@ -1920,7 +1920,7 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
   simpa only [Devm.setMach_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach,
     weth10Main_eq_withdrawTo] using hbody
 
-set_option maxRecDepth 568 in
+set_option maxRecDepth 561 in
 /-- Dispatcher composition for direct-holder `withdraw`; it follows its own
 five comparison outcomes and then invokes the actual `withdraw` body walk. -/
 theorem withdraw_progExecSat (dp : DeployParams)

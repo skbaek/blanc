@@ -27,7 +27,7 @@ The production helpers remain private.  These proof-valued equations expose
 their exact reductions without publishing or duplicating an executable helper.
 All downstream computation uses this namespace-owned interface. -/
 
-set_option maxRecDepth 100000 in
+set_option maxRecDepth 8564 in
 set_option linter.defProp false in
 /-- One-way proof certificate for the private constructor assembly.  This
 belongs to the proof owner rather than the pre-existing executable owner so its
