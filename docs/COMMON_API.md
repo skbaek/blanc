@@ -10767,5 +10767,9 @@ In `ProxyCompleteAvailable.lean`,
 last interval once all allowed implementation addresses have available runtimes;
 it needs no later upgrade census. The concrete chain derives that availability
 at the V2.2 cut using its original constructor observations.
+The live consumer's `originalModernWorldEntries_conditions` in
+`Blanc/Composition/LiveUsdcWeth9B26213219P1.lean` connects these entries to
+`originalV1WorldEntries`: moving V1 to the front preserves exact membership,
+and the checked code family and actual library entry follow from the chain.
 The observation correspondence and source-registration decisions remain open.
 

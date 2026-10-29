@@ -1,5 +1,6 @@
 import Blanc.Composition.LiveUsdcWeth9B26213219Anchor
 import Blanc.Composition.UniswapV2PairUsdcWeth9P1
+import Blanc.Lift.Usdc.CreationHistory
 
 /-!
 # Original USDC history inputs for the concrete live Pair
@@ -15,6 +16,42 @@ namespace Blanc.Composition.LiveUsdcWeth9B26213219
 
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Usdc
   Blanc.Composition.UniswapV2PairUsdcWeth9
+
+/-- Actual modern creation entries in the order consumed by the original V1
+world constructor. Each entry retains its original cut and complete prefix. -/
+noncomputable def originalModernWorldEntries {checkpoint start finish : BlockChain}
+    (chain : OriginalModernCreationChain start finish)
+    (before : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint start) :
+    List UsdcDeployedEntry :=
+  [chain.v22Entry before, chain.libraryEntry before, chain.v21Entry before,
+    chain.v2Entry before]
+
+/-- Moving the original V1 entry to the front preserves the chronology's entry
+population. Code-family and library membership follow from the concrete
+creation entries; no installed-runtime or historical-boundary premise is added. -/
+theorem originalModernWorldEntries_conditions {checkpoint start finish : BlockChain}
+    (chain : OriginalModernCreationChain start finish)
+    (before : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint start)
+    (state : State) :
+    (∀ e, e ∈ chain.entries before
+        ⟨ProxyCreation.initialImplementation.toAdr, ImplV1.code, state, []⟩ ↔
+      e ∈ originalV1WorldEntries state (originalModernWorldEntries chain before)) ∧
+    (∀ e ∈ originalV1WorldEntries state (originalModernWorldEntries chain before),
+      UsdcImplCode e.code) ∧
+    (∃ l ∈ originalV1WorldEntries state (originalModernWorldEntries chain before),
+      l.adr = usdcLib ∧ l.code = Lib.code) := by
+  have same : ∀ e, e ∈ chain.entries before
+        ⟨ProxyCreation.initialImplementation.toAdr, ImplV1.code, state, []⟩ ↔
+      e ∈ originalV1WorldEntries state (originalModernWorldEntries chain before) := by
+    intro e
+    simp only [OriginalModernCreationChain.entries, originalV1WorldEntries,
+      originalModernWorldEntries, List.mem_cons, List.not_mem_nil, or_false]
+    tauto
+  refine ⟨same, ?_, ?_⟩
+  · intro e member
+    exact chain.entries_impls before _ rfl e ((same e).mpr member)
+  · exact ⟨chain.libraryEntry before,
+      List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self), rfl, rfl⟩
 
 /-- Original producer inputs, all tied to the endpoint B and the consumed future
 trace. Historical query populations and transaction cuts are unchanged. -/
