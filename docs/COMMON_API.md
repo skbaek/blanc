@@ -1932,6 +1932,8 @@ Keccak digest; `HasIndex`, `byteIndex` and `bitMask` expose an individual bit.
 `LogBloom.containsAddress_of_mem` proves that a member of `logs` has all three
 bits in `logsBloom logs`; `address_ne_of_missing` is its exclusion form. OR
 updates preserve existing bits, including through later logs and topics.
+The index bound and bit preservation use kernel-checked natural-number and
+Boolean algebra; no native bitvector decision axiom is required.
 No hash injectivity or cryptographic exclusion premise is needed.
 [`Blanc/ExecutionBlockLogExclusion.lean`](../Blanc/ExecutionBlockLogExclusion.lean)
 connects this to the original configured execution:

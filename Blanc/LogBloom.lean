@@ -1,6 +1,5 @@
 import Blanc.Basic
 import Jaune.Execution
-import Std.Tactic.BVDecide
 
 /-! Address membership in Jaune's log bloom has no false negatives. The
 three positions use the actual Keccak digest; no hash injectivity is needed. -/
@@ -38,7 +37,11 @@ private theorem byteIndex_lt (hash : Bytes) (index : Nat) :
   have bound : bitIndex hash index < 2048 := by
     unfold bitIndex
     generalize UInt16.ofBytes (hash.getD index 0) (hash.getD (index + 1) 0) = x
-    bv_decide
+    have masked : x &&& 2047 ≤ (2047 : UInt16) := UInt16.and_le_right
+    change ((2047 : UInt16) - (x &&& 2047)).toNat < 2048
+    rw [UInt16.toNat_sub_of_le _ _ masked]
+    change 2047 - (x &&& 2047).toNat < 2048
+    omega
   change (bitIndex hash index / 8).toNat < 256
   rw [UInt16.toNat_div]
   change (bitIndex hash index).toNat / 8 < 256
@@ -61,7 +64,14 @@ private theorem addIndex_preserves (bloom hash : Bytes) (index : Nat) :
       change (bloom.getD (byteIndex hash index) 0 ||| bitMask hash index) &&& mask = mask
       generalize bloom.getD (byteIndex hash index) 0 = x at *
       generalize bitMask hash index = y
-      bv_decide
+      apply UInt8.toBitVec_inj.mp
+      apply BitVec.eq_of_getElem_eq
+      intro i hi
+      have bit := congrArg (fun n : UInt8 => n.toBitVec[i]) present
+      simp only [UInt8.toBitVec_and, UInt8.toBitVec_or,
+        BitVec.getElem_and, BitVec.getElem_or,
+        Bool.and_eq_right_iff_imp, Bool.or_eq_true] at bit ⊢
+      exact fun hm => Or.inl (bit hm)
     · simp only [List.getD_eq_getElem?_getD, List.getElem?_set,
         ↓reduceIte, bound, Option.getD_none]
       simpa only [List.getD_eq_getElem?_getD,
@@ -79,7 +89,13 @@ private theorem addIndex_has (bloom hash : Bytes) (index : Nat)
   change (bloom.getD (byteIndex hash index) 0 ||| bitMask hash index) &&& bitMask hash index = bitMask hash index
   generalize bloom.getD (byteIndex hash index) 0 = x
   generalize bitMask hash index = y
-  bv_decide
+  apply UInt8.toBitVec_inj.mp
+  apply BitVec.eq_of_getElem_eq
+  intro i hi
+  simp only [UInt8.toBitVec_and, UInt8.toBitVec_or,
+    BitVec.getElem_and, BitVec.getElem_or,
+    Bool.and_eq_right_iff_imp, Bool.or_eq_true]
+  exact fun hy => Or.inr hy
 
 private theorem preserves_trans {a b c : Bytes}
     (ab : Preserves a b) (bc : Preserves b c) : Preserves a c :=
