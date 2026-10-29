@@ -10771,5 +10771,14 @@ The live consumer's `originalModernWorldEntries_conditions` in
 `Blanc/Composition/LiveUsdcWeth9B26213219P1.lean` connects these entries to
 `originalV1WorldEntries`: moving V1 to the front preserves exact membership,
 and the checked code family and actual library entry follow from the chain.
+`OriginalUsdcHistory` now keeps the original post-D trace and ties the creation
+chain to it by equality. Its four original receipt censuses and retained F2prime
+field replace the supplied world/boundary/runtime fields and raw upgrade check.
+`OriginalUsdcHistory.quiet` derives initial V1 availability using
+`original_v1_ready_at_pair_cut`, obtains all later origins/installations from the
+creation chronology, and applies the retained actual-key endpoint in
+`Blanc/Composition/UniswapV2PairUsdcRetainedP1.lean`. The 50 remaining original
+fields retain their complete raw-key, initializer, native-query and R4 populations;
+no final origin, readiness or zero field is supplied.
 The observation correspondence and source-registration decisions remain open.
 

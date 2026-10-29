@@ -1,5 +1,5 @@
 import Blanc.Composition.LiveUsdcWeth9B26213219Anchor
-import Blanc.Composition.UniswapV2PairUsdcWeth9P1
+import Blanc.Composition.UniswapV2PairUsdcRetainedP1
 import Blanc.Lift.Usdc.CreationHistory
 
 /-!
@@ -7,9 +7,11 @@ import Blanc.Lift.Usdc.CreationHistory
 
 This record contains the existing constructor-to-Pair-to-B producer inputs,
 including the actual original histories, finite checks and evidence boundaries.
-It contains no final allowance-zero or joint-checkpoint premise. Packaging these
-inputs does not establish their truth. In particular, the raw upgrade check is
-still unresolved and is not implied by retained-only governance evidence.
+The actual creation-chain decomposition and four original receipt censuses
+derive runtime origins and installations; approved F2prime governs the original
+post-Pair retained frames. No final allowance-zero, runtime-readiness or joint
+checkpoint premise is supplied. Packaging the original correspondence inputs
+does not establish their truth.
 -/
 
 namespace Blanc.Composition.LiveUsdcWeth9B26213219
@@ -59,7 +61,6 @@ structure OriginalUsdcHistory {B future : BlockChain}
     (trace : ConfiguredHistoryTrace mainnetChainConfig B future) where
   checkpoint : BlockChain
   initial : HistoricalMappingKey → Prop
-  W : List UsdcDeployedEntry
   v1Origin : BlockChain
   v1Completed : BlockChain
   origin : BlockChain
@@ -76,6 +77,11 @@ structure OriginalUsdcHistory {B future : BlockChain}
   last : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post
   beforeCut : last.bodyTrace.transactions.TxSplit 38
   postD : ConfiguredHistoryTraceIn HistFork mainnetChainConfig post B
+  creations : OriginalModernCreationChain post B
+  creationTrace : creations.trace = postD
+  censuses : creations.Censuses
+      ((((beforeV1.step v1Block).append v1ToC).step first).append later) last
+      ⟨ProxyCreation.initialImplementation.toAdr, ImplV1.code, completed.state, []⟩
   initialApart : SlotFootprint.Apart HistoricalMappingKey.slot fixedSlots initial
   v1Fresh : V1MappingFreshKeys usdcProxy ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD) initial
   cBody : first.block.txs = HistoryAnchorBody.cBody
@@ -136,15 +142,8 @@ structure OriginalUsdcHistory {B future : BlockChain}
        0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48,
        0xc02aaa39b223fe8d0a0e5c4f27ead9083c756cc2],
       UniswapV2Pair.Creation.pairAddress.toB256.toBytes ++ (1 : B256).toBytes⟩]
-  boundary : ∀ e ∈ W, ((later.step last).append postD).BoundaryAt e.base e.pre
-  installed : ∀ e ∈ W, e.base.getCode e.adr = e.code
-  impls : ∀ e ∈ W, UsdcImplCode e.code
-  apart : ∀ e ∈ W, e.adr ≠ usdcProxy
-  lib : ∀ e ∈ W, e.code = Impl.code →
-      ∃ l ∈ originalV1WorldEntries completed.state W,
-        l.adr = usdcLib ∧ l.code = Lib.code ∧ l.Active e.pre
-  upgradeCheck : checkUpgradesWithinFrom usdcProxy (originalV1WorldEntries completed.state W)
-      ((later.step last).append postD).rawNodes = true
+  governance : UsdcGovernanceF2primeOn usdcProxy
+      ((MidHistoryTraceIn.tail last beforeCut).append postD).settledFrames
   modernFresh : ∀ version, ModernMappingFreshKeys version usdcProxy
       ((((((beforeV1.step v1Block).append v1ToC).step first).append later).step last).append postD) initial
   senderExcluded : ∀ query ∈ ((MidHistoryTraceIn.tail last beforeCut).append postD).senderQueries,
@@ -234,7 +233,20 @@ theorem OriginalUsdcHistory.quiet {B future : BlockChain}
     {trace : ConfiguredHistoryTrace mainnetChainConfig B future}
     (history : OriginalUsdcHistory trace) : PairUsdcAllowQuiet pair usdc trace := by
   rw [pair_creation_address, usdc_history_address]
-  exact pairUsdcAllowQuiet_of_connected_original_receipts_of_actualKeys_constructor_bootstrap
+  let prior := ((((history.beforeV1.step history.v1Block).append history.v1ToC).step
+    history.first).append history.later)
+  let entries := originalModernWorldEntries history.creations (prior.step history.last)
+  obtain ⟨same, impls, library⟩ := originalModernWorldEntries_conditions
+    history.creations (prior.step history.last) history.completed.state
+  have ready := original_v1_ready_at_pair_cut history.v1Block history.v1Cut history.v1ToC
+    history.first history.later history.last history.beforeCut history.constructorOutput
+  have produced := history.creations.origins_and_available_of_censuses
+    prior history.last history.beforeCut
+    ⟨ProxyCreation.initialImplementation.toAdr, ImplV1.code, history.completed.state, []⟩ rfl
+    (fun e member => (same e).mp member) history.censuses ready
+  rw [history.creationTrace] at produced
+  exact pairUsdcAllowQuiet_of_connected_original_receipts_of_retained_actualKeys_constructor_bootstrap
+    (entries := entries)
     history.beforeV1 history.v1Block history.v1Cut history.v1ToC history.first
     history.afterCut history.later history.last history.beforeCut history.postD
     trace history.initialApart history.v1Fresh history.cBody history.dBody
@@ -242,8 +254,7 @@ theorem OriginalUsdcHistory.quiet {B future : BlockChain}
     history.constructorOutput history.noUpgraded history.v1Faithful history.v1FixedApart history.v2Faithful
     history.v21Faithful history.v22Faithful history.modernFixedApart history.initCheck history.approveEvidence
     history.hnumber history.htime history.hfactory history.dReceiptAt history.dSucceeded
-    history.dLogs history.boundary history.installed history.impls history.apart
-    history.lib history.upgradeCheck history.modernFresh history.senderExcluded history.pairFresh
-    history.excluded history.oldReady
+    history.dLogs impls (fun _ _ _ => library) history.governance produced.1 produced.2.1
+    history.modernFresh history.senderExcluded history.pairFresh history.excluded history.oldReady
 
 end Blanc.Composition.LiveUsdcWeth9B26213219
