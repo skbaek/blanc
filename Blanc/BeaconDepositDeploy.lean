@@ -1,5 +1,6 @@
 import Blanc.BeaconDepositCode
 import Blanc.CreationArtifact
+import Blanc.Lift.KernelBatch
 
 /-!
 # Beacon deposit constructor and creation artifact
@@ -247,6 +248,25 @@ theorem mem_constructorSstoreSourceSites_iff
   cases regular <;>
     simp only [Bool.false_eq_true, reduceCtorEq, implies_true]
 
+/-- The source-site facts below and the SSTORE site's coordinates, in one kernel
+check: all of them filter the same `constructorProgram.sourceSites`, which the
+kernel then evaluates once. -/
+private theorem constructorSourceSiteFactsAndCoordinates :
+    constructorSstoreSourceSites.length = 1 ∧
+    Prog.SourceSite.pcs constructorSstoreSourceSites = [137] ∧
+    constructorStaticcallSourceSites.length = 1 ∧
+    Prog.SourceSite.pcs constructorStaticcallSourceSites = [98] ∧
+    constructorCodecopySourceSites.length = 1 ∧
+    Prog.SourceSite.pcs constructorCodecopySourceSites = [57] ∧
+    (constructorExternalExecutionSourceSites.all fun site =>
+      match site.instruction with
+      | .exec .staticcall => true
+      | _ => false) = true ∧
+    constructorExternalExecutionSourceSites.length = 1 ∧
+    Prog.SourceSite.pcs constructorExternalExecutionSourceSites = [98] ∧
+    Prog.SourceSite.coordinates constructorSstoreSourceSites = [(4, 137)] := by
+  kernel_rfl_and
+
 private theorem constructorSourceSiteFacts :
     constructorSstoreSourceSites.length = 1 ∧
     Prog.SourceSite.pcs constructorSstoreSourceSites = [137] ∧
@@ -260,12 +280,13 @@ private theorem constructorSourceSiteFacts :
       | _ => false) = true ∧
     constructorExternalExecutionSourceSites.length = 1 ∧
     Prog.SourceSite.pcs constructorExternalExecutionSourceSites = [98] := by
-  decide +kernel
+  obtain ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9, -⟩ := constructorSourceSiteFactsAndCoordinates
+  exact ⟨h1, h2, h3, h4, h5, h6, h7, h8, h9⟩
 
 
 theorem constructorSstoreSourceSites_coordinates :
-    Prog.SourceSite.coordinates constructorSstoreSourceSites = [(4, 137)] := by
-  decide +kernel
+    Prog.SourceSite.coordinates constructorSstoreSourceSites = [(4, 137)] :=
+  constructorSourceSiteFactsAndCoordinates.2.2.2.2.2.2.2.2.2
 
 theorem constructorSstoreSourceSite_coordinate
     {site : Prog.SourceSite}
