@@ -1,5 +1,6 @@
 import Blanc.Lift.BeaconDeposit.Cert
 import Blanc.Lift.CheckFast
+import Blanc.Lift.BeaconDeposit.CheckTries
 
 /-! The deployed beacon deposit certificate checks against the pinned runtime bytes: one
 kernel decision per entry, assembled into `cert_check`.  Each decision runs on the trie-reading copy
@@ -9,7 +10,7 @@ namespace Blanc.Lift.BeaconDeposit
 
 /-- The code's byte and instruction-start tries (depth 13: 8192 ≥ 6358 positions). -/
 def codeTries : CodeTries code 13 :=
-  CodeTries.ofCode code 13 (by decide +kernel) (by decide +kernel)
+  TrieData.codeTries
 
 theorem entry_0 :
     checkNode code (Cert.entries cert) 0 0x0 [] t_0000_c0 = true := by

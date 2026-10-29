@@ -275,7 +275,7 @@ theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : 
 
 /-- `jumpdestOk`, reading the code byte and the instruction-start flag from the tries. -/
 def jumpdestOkT (code : ByteArray) (d : Nat) (T : CodeTries code d) (k : Nat) : Bool :=
-  decide (k < code.size) && LTrie.get? d T.bytes k == some (Jinst.toUInt8 .jumpdest) &&
+  LTrie.get? d T.bytes k == some (Jinst.toUInt8 .jumpdest) &&
     (LTrie.get? d T.starts k).getD false
 
 theorem jumpdestOkT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (k : Nat) :
@@ -296,11 +296,17 @@ theorem jumpdestOkT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (k : 
       rfl
     have hbeq : (code[k] == Jinst.toUInt8 .jumpdest) =
         decide (code[k] = Jinst.toUInt8 .jumpdest) := by rfl
-    simp only [jumpdestOkT, hk, decide_true, T.bytes_eq, Array.length_toList, ByteArray.size_data,
-      getElem?_pos, Array.getElem_toList, hdata, Option.some_beq_some, hbeq, Bool.true_and,
+    simp only [jumpdestOkT, hk, T.bytes_eq, Array.length_toList, ByteArray.size_data,
+      getElem?_pos, Array.getElem_toList, hdata, Option.some_beq_some, hbeq,
       T.starts_eq, List.getD_eq_getElem?_getD, jumpdestOk, ↓reduceDIte, instStartAt,
       Bool.decide_and, Bool.decide_eq_true]
-  · simp only [jumpdestOkT, hk, decide_false, Bool.false_and, jumpdestOk, ↓reduceDIte]
+  · have hlist : ¬ k < code.data.toList.length := by
+      simpa only [Array.length_toList, ByteArray.size_data] using hk
+    have hnone : LTrie.get? d T.bytes k = none := by
+      rw [T.bytes_eq]
+      exact getElem?_neg code.data.toList k hlist
+    simp only [jumpdestOkT, hnone, Option.none_beq_some, Bool.false_and, jumpdestOk, hk,
+      ↓reduceDIte]
 
 /-- `jumpsOkNode` with `jumpdestOk` replaced by `jumpdestOkT` (every other arm identical). -/
 def jumpsOkNodeT (code : ByteArray) (d : Nat) (T : CodeTries code d) (es : List Entry) :

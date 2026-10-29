@@ -50,21 +50,71 @@ structure OfficialDeploymentTransactionResult
     some (post.getCode consolidationRequestPredeployAddress).toList =
       Prog.compile deploymentSystemProgram
 
-/-- The exact official message is threaded through validation, checking,
-upfront debit, refund/tip settlement, account cleanup, and receipt insertion.
-The receipt's own success bit and logs are exposed independently of the outer
-transaction result. -/
-theorem canonicalDeploymentTransaction_succeeds
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+/-- Selected-fork result of threading the exact official constructor message
+through transaction checking, fee/refund settlement, account cleanup, and
+receipt insertion. -/
+structure OfficialDeploymentTransactionResultAt
+    (fork : Fork) (chainId : UInt64) (ca : Adr)
+    (ctx : PreparedDeploymentContextAt fork chainId base cb tx sender ca)
+    (post : State) (bout : BlockOutput) : Prop where
+  run : processTransaction ctx.txInput .init tx 0 = .ok (post, bout)
+  message : ∃ messagePost out,
+    OfficialConstructorMessageResult ca ctx.msg messagePost out
+  installed : some (post.getCode ca).toList =
+    Prog.compile (runtime officialParams)
+  pauseDuration : (post.getStor ca).get pauseDurationSlot =
+    officialConstructorArgs.initialPauseDuration
+  heartbeatInterval : (post.getStor ca).get heartbeatIntervalSlot =
+    officialConstructorArgs.initialHeartbeatInterval
+  emptyRegistry : RegistryWitness
+    (logicalStorageOfStor (post.getStor ca)) []
+  stable : RegistryStable officialParams ca post
+  blockLogs : bout.blockLogs = officialConstructorLogs ca
+  requests : bout.requests = []
+  blockAccessList : bout.blockAccessList = []
+  depositRequests : parseDepositRequests bout = .ok []
+  receiptKeys : bout.receiptKeys = [deploymentReceiptKey 0]
+  receiptEntry : ∃ entry,
+    Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0) = some entry ∧
+    entry.2.logs = officialConstructorLogs ca ∧
+    entry.2.succeeded = true
+  receiptLogs :
+    (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
+      (fun entry => entry.2.logs) = some (officialConstructorLogs ca)
+  receiptSucceeded :
+    (Std.TreeMap.get? bout.receiptsTrie (deploymentReceiptKey 0)).map
+      (fun entry => entry.2.succeeded) = some true
+  withdrawalRequestCode :
+    some (post.getCode withdrawalRequestPredeployAddress).toList =
+      Prog.compile deploymentSystemProgram
+  consolidationRequestCode :
+    some (post.getCode consolidationRequestPredeployAddress).toList =
+      Prog.compile deploymentSystemProgram
+
+/-- The 4,282-byte official runtime fits every covered fork's code-size
+limit. -/
+theorem officialRuntime_fits_maxCodeSize {fork : Fork} (hfork : CoveredFork fork) :
+    4282 ≤ (Fork.ruleSet fork).code.maxCodeSize :=
+  hfork.cases (motive := fun f => 4282 ≤ (Fork.ruleSet f).code.maxCodeSize)
+    (by decide) (by decide) (by decide) (by decide)
+
+/-- Under the selected covered fork, the exact official message is threaded
+through validation against the selected rules, checking, upfront debit,
+refund/tip settlement, account cleanup, and receipt insertion. The receipt's
+own success bit and logs are exposed independently of the outer transaction
+result. -/
+theorem canonicalDeploymentTransactionAt_succeeds
+    (fork : Fork) (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
-    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase fork chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlockAt fork chainId base cb
       txBytes tx sender ca)
-    (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
+    (ctx : PreparedDeploymentContextAt fork chainId base cb tx sender ca)
+    (hfork : CoveredFork fork) :
     ∃ post bout,
-      OfficialDeploymentTransactionResult chainId ca ctx post bout := by
+      OfficialDeploymentTransactionResultAt fork chainId ca ctx post bout := by
   have hintrinsicEq : deploymentIntrinsicGas ctx.msg.benv tx sender =
-      deploymentIntrinsicGas (initBenv .prague base cb.block.header) tx sender := by
+      deploymentIntrinsicGas (initBenv fork base cb.block.header) tx sender := by
     unfold deploymentIntrinsicGas
     rw [ctx.msg_rules_eq]
     rfl
@@ -77,10 +127,10 @@ theorem canonicalDeploymentTransaction_succeeds
     omega
   have hmax : 4282 ≤ ctx.msg.benv.stat.rules.code.maxCodeSize := by
     rw [ctx.msg_rules_eq]
-    decide
-  have hfork : CoveredFork ctx.msg.benv.stat.fork := by
-    rw [ctx.msg_benv_eq, ctx.begun_eq, ctx.systemPrefix.environment_eq]
-    exact CoveredFork.prague
+    exact officialRuntime_fits_maxCodeSize hfork
+  have hmsgFork : CoveredFork ctx.msg.benv.stat.fork := by
+    rw [ctx.msg_fork_eq]
+    exact hfork
   have hinherited : ctx.msg.inheritedDeletions = .emptyWithCapacity := by
     have prepared := ctx.prepare_eq
     unfold prepareMessage at prepared
@@ -93,7 +143,7 @@ theorem canonicalDeploymentTransaction_succeeds
       (by simpa only [ctx.target_eq] using ctx.pauseOriginal)
       (by simpa only [ctx.target_eq] using ctx.heartbeatCold)
       (by simpa only [ctx.target_eq] using ctx.heartbeatOriginal)
-      ctx.msg_static_eq hfork hinherited
+      ctx.msg_static_eq hmsgFork hinherited
   obtain ⟨createPost, hcreate, hmessagePost, hmessageOut⟩ :=
     hmessage.creation
   let usedGas := deploymentUsedGasFromMessage ctx.txInput tx sender messageOut
@@ -111,14 +161,14 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [Std.HashSet.isEmpty_toList, hmessage.accountsToDelete]
     rfl
   obtain ⟨maxPriorityFee, maxFee, htype⟩ := henv.type_eq
-  have hrules : ctx.txInput.beginTransaction.stat.rules = pragueRules := by
+  have hrules : ctx.txInput.beginTransaction.stat.rules = Fork.ruleSet fork := by
     rw [ctx.systemPrefix.environment_eq]
     rfl
-  have htxRules : ctx.txInput.stat.rules = pragueRules := by
+  have htxRules : ctx.txInput.stat.rules = Fork.ruleSet fork := by
     rw [ctx.systemPrefix.environment_eq]
     rfl
   have hprice : deploymentEffectiveGasPrice
-      (initBenv .prague base cb.block.header) tx =
+      (initBenv fork base cb.block.header) tx =
       deploymentEffectiveGasPrice ctx.txInput tx := by
     rw [ctx.systemPrefix.environment_eq]
   have hchecked :
@@ -133,16 +183,14 @@ theorem canonicalDeploymentTransaction_succeeds
       ctx.txInput.beginTransaction.stat.rules.stateGas = none := by
     change ctx.txInput.stat.rules.stateGas = none
     rw [ctx.systemPrefix.environment_eq]
-    rfl
-  have hforkStateGas : pragueRules.stateGas = none :=
-    CoveredFork.prague.stateGas_none
+    exact hfork.rules_stateGas_none
+  have hforkStateGas : (Fork.ruleSet fork).stateGas = none :=
+    hfork.stateGas_none
   have hintrinsic :
-      calculateIntrinsicCost pragueRules tx 0 =
-        calculateIntrinsicCost pragueRules tx sender := by
-    simp only [calculateIntrinsicCost, pragueRules_gas_txBase, htype, pragueRules_gas_createAccess,
-      pragueRules_stateGas, Option.isNone_iff_eq_none, pragueRules_gas_txAccessListAddress,
-      pragueRules_gas_txAccessListStorageKey, List.map_nil, List.sum_nil, add_zero,
-      pragueRules_gas_floorTokenCost]
+      calculateIntrinsicCost (Fork.ruleSet fork) tx 0 =
+        calculateIntrinsicCost (Fork.ruleSet fork) tx sender := by
+    simp only [calculateIntrinsicCost, htype, hforkStateGas, Option.isNone_iff_eq_none,
+      List.map_nil, List.sum_nil, add_zero]
   have hprepare := ctx.prepare_eq
   rw [ctx.begun_eq, ctx.tenv_eq] at hprepare
   have hrun : processTransaction ctx.txInput .init tx 0 =
@@ -179,30 +227,39 @@ theorem canonicalDeploymentTransaction_succeeds
     rw [hintrinsic]
     simp only [allocateEvmGas, hforkStateGas]
     simp only [deploymentEffectiveGasPrice] at hprepare ⊢
-    simp only [show pragueRules.txr.warmCoinbase = true from rfl, ↓reduceIte]
+    simp only [show (Fork.ruleSet fork).txr.warmCoinbase = true from
+      hfork.cases (motive := fun f => (Fork.ruleSet f).txr.warmCoinbase = true)
+        rfl rfl rfl rfl, ↓reduceIte]
     rw [hprepare]
     simp only [hmessage.run]
     rw [hrefund]
     simp only [hdelete]
     have hsettlement :
-        settleTransactionGas pragueRules tx.gas
-          (calculateIntrinsicCost pragueRules tx sender).2
+        settleTransactionGas (Fork.ruleSet fork) tx.gas
+          (calculateIntrinsicCost (Fork.ruleSet fork) tx sender).2
           messageOut.gasLeft messageOut.stateGasLeft messageOut.refundCounter.toNat
           messageOut.stateGasUsed =
           ⟨usedGas, tx.gas - usedGas, usedGas, 0⟩ := by
-      simp only [settleTransactionGas, pragueRules_stateGas, deploymentUsedGasFromMessage,
+      simp only [settleTransactionGas, hforkStateGas, deploymentUsedGasFromMessage,
         deploymentCalldataFloorGas, TransactionGasSettlement.mk.injEq, and_true, usedGas]
       rw [htxRules]
-      exact ⟨rfl, rfl, rfl⟩
+      have hquotient : (Fork.ruleSet fork).settle.refundQuotient = 5 :=
+        hfork.cases (motive := fun f => (Fork.ruleSet f).settle.refundQuotient = 5)
+          rfl rfl rfl rfl
+      simp only [hquotient, and_self]
     rw [hsettlement]
-    have hforkBalNone : pragueRules.bal = none := by
-      rfl
+    have hforkBalNone : (Fork.ruleSet fork).bal = none :=
+      hfork.bal_none
     simp only [BlockOutput.withGasSettlement, hforkBalNone,
       Nat.add_zero]
     simp only [post, bout, deploymentFinalState, deploymentFinalBout,
       deploymentEffectiveGasPrice, deploymentTxPreludeBout,
       ExecutionTrace.transactionPreludeBout, BlockOutput.init, deploymentReceiptKey]
-    rfl
+    have hsweep : (Fork.ruleSet fork).settle.touchedSweep = false :=
+      hfork.cases (motive := fun f => (Fork.ruleSet f).settle.touchedSweep = false)
+        rfl rfl rfl rfl
+    simp only [settleSelfdestructs, hforkStateGas, List.foldl_nil,
+      sweepTouchedAccounts_of_not_touchedSweep hsweep]
   have hinstalled : some (post.getCode ca).toList =
       Prog.compile (runtime officialParams) := by
     dsimp only [post, deploymentFinalState]
@@ -389,6 +446,25 @@ theorem canonicalDeploymentTransaction_succeeds
     receiptSucceeded := hreceiptSucceeded
     withdrawalRequestCode := hwithdrawalCode
     consolidationRequestCode := hconsolidationCode }⟩
+
+/-- Fixed Prague compatibility specialization of
+`canonicalDeploymentTransactionAt_succeeds`. -/
+theorem canonicalDeploymentTransaction_succeeds
+    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+      txBytes tx sender ca)
+    (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
+    ∃ post bout,
+      OfficialDeploymentTransactionResult chainId ca ctx post bout := by
+  obtain ⟨post, bout, h⟩ := canonicalDeploymentTransactionAt_succeeds .prague
+    chainId base cb tx sender ca hbase henv.toAt ctx.toAt CoveredFork.prague
+  exact ⟨post, bout, ⟨h.run, h.message, h.installed, h.pauseDuration,
+    h.heartbeatInterval, h.emptyRegistry, h.stable, h.blockLogs, h.requests,
+    h.blockAccessList, h.depositRequests, h.receiptKeys, h.receiptEntry,
+    h.receiptLogs, h.receiptSucceeded, h.withdrawalRequestCode,
+    h.consolidationRequestCode⟩⟩
 
 end LidoCircuitBreaker
 

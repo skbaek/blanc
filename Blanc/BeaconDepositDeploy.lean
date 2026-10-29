@@ -138,6 +138,9 @@ def eip3860InitcodeLimit : Nat :=
 
 theorem constructorProgram_compiles :
     Prog.compiles constructorProgram = true := by
+  unfold constructorProgram constructorRuntimeOffset provisionalConstructorPrefix
+    provisionalConstructorProgram
+  rw [codeSize_exact]
   decide +kernel
 
 theorem constructorInitPrefix_compile :
@@ -147,6 +150,8 @@ theorem constructorInitPrefix_compile :
 
 private theorem provisionalConstructorPrefix_length :
     provisionalConstructorPrefix.length = 146 := by
+  unfold provisionalConstructorPrefix provisionalConstructorProgram
+  rw [codeSize_exact]
   decide +kernel
 
 theorem constructorRuntimeOffset_exact :
@@ -157,6 +162,8 @@ theorem constructorRuntimeOffset_exact :
 provisional offset embedded into it. -/
 theorem constructorInitPrefix_length_eq_provisionalOffset :
     constructorInitPrefix.length = constructorRuntimeOffset := by
+  rw [Prog.length_compile constructorInitPrefix_compile]
+  simp only [constructorProgram, constructorRuntimeOffset_exact, codeSize_exact]
   decide +kernel
 
 theorem constructorInitPrefix_length_exact :

@@ -2,6 +2,7 @@
 -- inherited Registry-history consequences.
 
 import Blanc.LidoCircuitBreakerDeploymentBlock
+import Blanc.LadderReached
 
 namespace Blanc
 
@@ -44,37 +45,106 @@ structure DeploymentRoot
   deployed_validContext : deployed.ValidContext
   deployed_chainId : chainId = deployed.chainId
 
-/-- A successful configured Prague-only step over the strict official
-envelope establishes the Lido deployment root. -/
-theorem canonicalDeploymentStep_establishes_root
-    (chainId : UInt64) (base deployed : BlockChain)
+/-! ## Selected-fork configured deployment root -/
+
+/-- The exact official deployment witness at a successful transition under a
+supplied chain configuration. The configuration's lookup at the deployment
+block's own number and timestamp selects the covered fork whose rules execute
+the block. Every execution, receipt, code, storage, and Registry fact is
+reconstructed by the producer; the configured transition equation is its only
+premise about the named deployed chain. -/
+structure DeploymentRootAt
+    (cfg : ChainConfig) (base deployed : BlockChain) (ca : Adr) : Prop where
+  execution : ∃ (fork : Fork) (cb : CanonicalBlock) (txBytes : Bytes) (tx : Tx)
+      (sender : Adr)
+      (ctx : PreparedDeploymentContextAt fork cfg.chainId base cb tx sender ca)
+      (post : State) (bout : BlockOutput),
+    CoveredFork fork ∧
+    cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork ∧
+    cfg.rulesAt cb.block.header.number cb.block.header.timestamp =
+      .ok (Fork.ruleSet fork) ∧
+    CanonicalDeploymentBase fork cfg.chainId base sender ca ∧
+    CanonicalOfficialDeploymentBlockAt fork cfg.chainId base cb txBytes tx
+      sender ca ∧
+    OfficialDeploymentTransactionResultAt fork cfg.chainId ca ctx post bout ∧
+    Nonempty (OfficialDeploymentSuffixResultAt fork cfg.chainId ca ctx post bout) ∧
+    stateTransitionUsing cfg base cb.block = .ok deployed ∧
+    stateTransitionAt fork base cb.block = .ok deployed ∧
+    applyBody (initBenv fork base cb.block.header)
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) ∧
+    post = deployed.state
+  configValid : cfg.Valid
+  target_ne_zero : ca ≠ 0
+  target_not_precompile : ∀ {tip rules},
+    deployed.blocks.getLast? = some tip →
+    cfg.rulesAt tip.header.number tip.header.timestamp = .ok rules →
+    ¬ rules.isPrecomp ca
+  installed : some (deployed.state.getCode ca).toList =
+    Prog.compile (runtime officialParams)
+  pauseDuration : (deployed.state.getStor ca).get pauseDurationSlot =
+    officialConstructorArgs.initialPauseDuration
+  heartbeatInterval : (deployed.state.getStor ca).get heartbeatIntervalSlot =
+    officialConstructorArgs.initialHeartbeatInterval
+  emptyRegistry : RegistryWitness
+    (logicalStorageOfStor (deployed.state.getStor ca)) []
+  stable : RegistryStable officialParams ca deployed.state
+  deployed_validContext : deployed.ValidContext
+  deployed_chainId : cfg.chainId = deployed.chainId
+
+/-- A successful configured step over the strict official envelope, at the
+covered fork the configuration selects for the deployment block's own number
+and timestamp, establishes the selected-fork Lido deployment root. The
+schedule lookup and coverage are explicit; no execution, receipt, code,
+storage, or Registry fact is a premise. -/
+theorem canonicalDeploymentStepAt_establishes_root
+    (cfg : ChainConfig) (fork : Fork) (base deployed : BlockChain)
     (cb : CanonicalBlock) (txBytes : Bytes)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
-    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+    (hbase : CanonicalDeploymentBase fork cfg.chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlockAt fork cfg.chainId base cb
       txBytes tx sender ca)
-    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
-      base cb.block = .ok deployed) :
-    DeploymentRoot chainId base deployed ca := by
-  obtain ⟨ctx⟩ :=
-    prepareCanonicalDeploymentContext chainId base cb tx sender ca hbase henv
-  obtain ⟨post, bout, htx⟩ :=
-    canonicalDeploymentTransaction_succeeds chainId base cb tx sender ca
-      hbase henv ctx
-  obtain ⟨suffix⟩ :=
-    canonicalDeploymentSuffix_succeeds chainId base cb tx sender ca
-      ctx post bout htx
-  have happly : applyBody (initBenv .prague base cb.block.header)
+    (hfork : CoveredFork fork)
+    (hforkAt :
+      cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork)
+    (hstep : stateTransitionUsing cfg base cb.block = .ok deployed) :
+    DeploymentRootAt cfg base deployed ca := by
+  obtain ⟨ctx⟩ := prepareCanonicalDeploymentContextAt fork cfg.chainId base cb
+    tx sender ca hbase henv hfork
+  obtain ⟨post, bout, htx⟩ := canonicalDeploymentTransactionAt_succeeds fork
+    cfg.chainId base cb tx sender ca hbase henv ctx hfork
+  obtain ⟨suffix⟩ := canonicalDeploymentSuffixAt_succeeds fork cfg.chainId
+    base cb tx sender ca ctx post bout htx hfork
+  have happly : applyBody (initBenv fork base cb.block.header)
       cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) :=
-    canonicalDeploymentApplyBody_succeeds chainId base cb txBytes tx sender ca
-      henv ctx post bout htx suffix
-  have hwith : stateTransitionAt .prague base cb.block = .ok deployed := by
+    canonicalDeploymentApplyBodyAt_succeeds fork cfg.chainId base cb txBytes
+      tx sender ca henv hfork ctx post bout htx suffix
+  have hconfigValid : cfg.Valid := by
+    rw [ChainConfig.valid_iff]
+    unfold ChainConfig.forkAt at hforkAt
+    cases hv : cfg.validate with
+    | error e =>
+      rw [hv] at hforkAt
+      simp only [Except.mapError, bind, Except.bind] at hforkAt
+      cases hforkAt
+    | ok u => rfl
+  have hrulesAt : cfg.rulesAt cb.block.header.number cb.block.header.timestamp =
+      .ok (Fork.ruleSet fork) := by
+    unfold ChainConfig.rulesAt
+    rw [hforkAt]
+    exact hfork.cases
+      (motive := fun f =>
+        (do Except.mapError RulesLookupError.support (← (Except.ok f :
+          Except RulesLookupError Fork)).rules) = .ok (Fork.ruleSet f))
+      rfl rfl rfl rfl
+  have hwith : stateTransitionAt fork base cb.block = .ok deployed := by
     have h := hstep
     rw [stateTransitionUsing_eq_of_chainId_eq
-      (cfg := ChainConfig.pragueOnly chainId) (ch := base)
-      (show chainId = base.chainId from hbase.chainId_eq)] at h
-    simp only [Except.bind, Except.mapError, ChainConfig.pragueOnly_forkAt] at h
-    rw [stateTransitionScheduledE_of_pow_none _ .prague base cb.block rfl] at h
+      (cfg := cfg) (ch := base) hbase.chainId_eq] at h
+    rw [hforkAt] at h
+    have hpowNone : (Fork.ruleSet fork).pow = none :=
+      hfork.cases (motive := fun f => (Fork.ruleSet f).pow = none) rfl rfl rfl rfl
+    simp only [Except.bind, Except.mapError] at h
+    rw [stateTransitionScheduledE_of_pow_none cfg fork base cb.block hpowNone] at h
     exact h
   have hstate : post = deployed.state := by
     have hinvert := hwith
@@ -89,11 +159,12 @@ theorem canonicalDeploymentStep_establishes_root
     subst bout'
     dsimp only at hinvert
     obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
+    obtain ⟨_, _, hinvert⟩ := Except.bind_eq_ok hinvert
     rw [← Except.ok.inj hinvert]
   let checkedBase := CheckedBlockChain.ofValidContext hbase.validContext
   have hwithChecked :
-      stateTransitionAt .prague checkedBase.val cb.block = .ok deployed := by
-    change stateTransitionAt .prague base cb.block = .ok deployed
+      stateTransitionAt fork checkedBase.val cb.block = .ok deployed := by
+    change stateTransitionAt fork base cb.block = .ok deployed
     exact hwith
   have hcontext := BlockChain.validContext_of_transition
     (cc := checkedBase) (cb := cb) hwithChecked
@@ -101,12 +172,21 @@ theorem canonicalDeploymentStep_establishes_root
     let checkedDeployed := CheckedBlockChain.ofEvidence deployed cb.block
       hcontext.1 hcontext.2.1 hcontext.2.2.1 hcontext.2.2.2
     exact checkedDeployed.validContext
-  have hchain : chainId = deployed.chainId :=
+  have hchain : cfg.chainId = deployed.chainId :=
     hbase.chainId_eq.trans (stateTransitionAt_preserves_chainId hwith).symm
-  refine ⟨?_, hbase.target_ne_zero, hbase.target_not_precompile,
+  have hnotPrecomp : ∀ {tip rules}, deployed.blocks.getLast? = some tip →
+      cfg.rulesAt tip.header.number tip.header.timestamp = .ok rules →
+      ¬ rules.isPrecomp ca := by
+    intro tip rules htip hrules
+    obtain ⟨_, _, _, _, hnew⟩ := stateTransitionUsing_reachedStep hstep
+    obtain rfl := Option.some.inj (hnew.symm.trans htip)
+    rw [hrulesAt] at hrules
+    obtain rfl := Except.ok.inj hrules
+    exact hbase.target_not_precompile
+  refine ⟨?_, hconfigValid, hbase.target_ne_zero, hnotPrecomp,
     ?_, ?_, ?_, ?_, ?_, hvalid, hchain⟩
-  · exact ⟨cb, txBytes, tx, sender, ctx, post, bout, hbase, henv, htx,
-      ⟨suffix⟩, hstep, happly, hstate⟩
+  · exact ⟨fork, cb, txBytes, tx, sender, ctx, post, bout, hfork, hforkAt,
+      hrulesAt, hbase, henv, htx, ⟨suffix⟩, hstep, hwith, happly, hstate⟩
   · rw [← hstate]
     exact htx.installed
   · rw [← hstate]
@@ -117,6 +197,54 @@ theorem canonicalDeploymentStep_establishes_root
     exact htx.emptyRegistry
   · rw [← hstate]
     exact suffix.stable
+
+/-- A successful configured Prague-only step over the strict official
+envelope establishes the Lido deployment root. Fixed Prague compatibility
+specialization: the post-state facts, validity and chain id are read off the
+selected-fork root at the Prague-only schedule, and the Prague execution
+witness is tied to that root's deployed state. -/
+theorem canonicalDeploymentStep_establishes_root
+    (chainId : UInt64) (base deployed : BlockChain)
+    (cb : CanonicalBlock) (txBytes : Bytes)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+      txBytes tx sender ca)
+    (hstep : stateTransitionUsing (ChainConfig.pragueOnly chainId)
+      base cb.block = .ok deployed) :
+    DeploymentRoot chainId base deployed ca := by
+  have hroot := canonicalDeploymentStepAt_establishes_root
+    (ChainConfig.pragueOnly chainId) .prague base deployed cb txBytes tx
+    sender ca hbase henv.toAt CoveredFork.prague
+    (ChainConfig.pragueOnly_forkAt chainId _ _) hstep
+  obtain ⟨ctx⟩ :=
+    prepareCanonicalDeploymentContext chainId base cb tx sender ca hbase henv
+  obtain ⟨post, bout, htx⟩ :=
+    canonicalDeploymentTransaction_succeeds chainId base cb tx sender ca
+      hbase henv ctx
+  obtain ⟨suffix⟩ :=
+    canonicalDeploymentSuffix_succeeds chainId base cb tx sender ca
+      ctx post bout htx
+  have happly : applyBody (initBenv .prague base cb.block.header)
+      cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) :=
+    canonicalDeploymentApplyBody_succeeds chainId base cb txBytes tx sender ca
+      henv ctx post bout htx suffix
+  have hstate : post = deployed.state := by
+    obtain ⟨fork', cb', _, _, _, _, post', bout', _, hforkAt', _, _, _, _, _,
+      hstep', _, happly', hstate'⟩ := hroot.execution
+    obtain ⟨_, _, _, _, hnew⟩ := stateTransitionUsing_reachedStep hstep
+    obtain ⟨_, _, _, _, hnew'⟩ := stateTransitionUsing_reachedStep hstep'
+    have hblock : cb'.block = cb.block := Option.some.inj (hnew'.symm.trans hnew)
+    rw [ChainConfig.pragueOnly_forkAt] at hforkAt'
+    obtain rfl := (Except.ok.inj hforkAt').symm
+    rw [hblock, happly] at happly'
+    obtain ⟨hpost, -⟩ := Prod.mk.inj (Except.ok.inj happly')
+    rw [hpost, hstate']
+  exact ⟨⟨cb, txBytes, tx, sender, ctx, post, bout, hbase, henv, htx,
+      ⟨suffix⟩, hstep, happly, hstate⟩,
+    hroot.target_ne_zero, hbase.target_not_precompile, hroot.installed,
+    hroot.pauseDuration, hroot.heartbeatInterval, hroot.emptyRegistry,
+    hroot.stable, hroot.deployed_validContext, hroot.deployed_chainId⟩
 
 /-! ## Deployment-rooted configured histories -/
 
@@ -210,6 +338,124 @@ theorem DeploymentRoot.reachable_countConservation
         ((future.state.getStor ca).get (countSlot pauser)).toNat) =
           entries.length :=
   (hroot.reachable_registryStable hreach).countConservation
+
+/-! ## Selected-fork deployment-rooted configured histories
+
+The supplied schedule may select uncovered historical forks before the
+deployment.  Coverage is therefore asked only at or after a timestamp floor
+that the deployed tip has reached; every block a configured history then
+accepts is strictly later than its parent, so each actual successor's selected
+fork is covered (`ContractSpec.chainUsing_preserves_inv_of_reached`).  The
+total-wei-plus-withdrawals bound of every step stays inside `ReachUsing`. -/
+
+/-- The deployed checkpoint itself is a configured reachable future under the
+supplied schedule. -/
+theorem DeploymentRootAt.reflReach
+    (hroot : DeploymentRootAt cfg base deployed ca) :
+    BlockChain.ReachUsing cfg deployed deployed :=
+  .refl deployed hroot.configValid hroot.deployed_validContext
+    hroot.deployed_chainId
+
+/-- The deployment seed is transported through every configured future of the
+supplied schedule whose selections at or after a floor the deployed tip has
+reached are covered. -/
+theorem DeploymentRootAt.reachable_registryStable
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    RegistryStable officialParams ca future.state :=
+  (registryStable_iff_stateInv officialParams ca future.state).mpr
+    (ContractSpec.chainUsing_preserves_inv_of_reached ca
+      (registrySpec_preserves officialParams ca) cfg T hcov hreach
+      ((registryStable_iff_stateInv officialParams ca deployed.state).mp
+        hroot.stable) hstart).1
+
+/-- Every reachable future retains the exact compiled official runtime. -/
+theorem DeploymentRootAt.reachable_code
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    some (future.state.getCode ca).toList =
+      Prog.compile (runtime officialParams) :=
+  (hroot.reachable_registryStable hreach T hcov hstart).code
+
+/-- Byte-oriented form of the exact installed-code consequence. -/
+theorem DeploymentRootAt.reachable_installedCode
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    (future.state.getCode ca).toList =
+      lidoCircuitBreakerCode officialParams :=
+  (hroot.reachable_registryStable hreach T hcov hstart).installedCode
+
+/-- A reachable future has some coherent Registry entry list; the deployment
+root does not freeze that list to its initial empty value. -/
+theorem DeploymentRootAt.reachable_witness
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries :=
+  (hroot.reachable_registryStable hreach T hcov hstart).witness
+
+/-- Reader-facing assignment/index membership consequences at an arbitrary
+canonical target in any reachable future. -/
+theorem DeploymentRootAt.reachable_membership
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    {target : B256} (htarget : canonicalAddress target) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      ((future.state.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ((future.state.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ∀ index pauser, findEntry entries target = some (index, pauser) →
+        (future.state.getStor ca).get (assignmentSlot target) = pauser ∧
+        (future.state.getStor ca).get (indexSlot target) =
+          Nat.toB256 (index + 1) ∧
+        targetAt entries index = target ∧
+        ∀ otherIndex, otherIndex < entries.length →
+          targetAt entries otherIndex = target → otherIndex = index :=
+  (hroot.reachable_registryStable hreach T hcov hstart).membership htarget
+
+/-- Reader-facing global pauser-count conservation in any reachable future. -/
+theorem DeploymentRootAt.reachable_countConservation
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      (∀ pauser, canonicalAddress pauser →
+        (future.state.getStor ca).get (countSlot pauser) =
+          Nat.toB256 (assignmentCount entries pauser)) ∧
+      (future.state.getStor ca).get (countSlot 0) = 0 ∧
+      (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+        ((future.state.getStor ca).get (countSlot pauser)).toNat) =
+          entries.length :=
+  (hroot.reachable_registryStable hreach T hcov hstart).countConservation
 
 end LidoCircuitBreaker
 

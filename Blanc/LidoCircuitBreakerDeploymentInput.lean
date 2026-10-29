@@ -119,19 +119,133 @@ structure PreparedDeploymentContext
     (msg.benv.stat.origState.get ca).stor.get heartbeatIntervalSlot = 0
   msg_static_eq : msg.isStatic = false
 
-/-- Produce the real transaction input, transaction-local original-state
+/-! ## Selected-fork strict inputs and prepared context
+
+The fork-generic carriers below select the deployment block's rules as an
+explicit `fork`; the fixed Prague carriers above are their compatibility
+specializations. Decoding and transaction validation are stated against the
+selected rule record, never against Prague's. -/
+
+/-- Strict singleton block and byte-retaining, round-tripping type-2 official
+creation transaction under the selected fork `fork`. -/
+structure CanonicalOfficialDeploymentBlockAt
+    (fork : Fork) (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (txBytes : Bytes) (tx : Tx) (sender ca : Adr) : Prop where
+  txs_eq : cb.block.txs = [.inl txBytes]
+  decode_eq : decodeTx (Fork.ruleSet fork) (.inl txBytes) = .ok tx
+  ommers_eq : cb.block.ommers = []
+  withdrawals_eq : cb.block.wds = []
+  type_eq : ∃ maxPriorityFee maxFee,
+    tx.type = .two chainId maxPriorityFee maxFee none []
+  value_eq : tx.value = 0
+  data_eq : tx.data = officialFullCreateInput
+  nonce_eq : tx.nonce = base.state.getNonce sender
+  nonce_not_max : tx.nonce ≠ UInt64.max
+  recoveredSender : recoverSender chainId tx = .ok sender
+  validated : validateTransaction (Fork.ruleSet fork) tx 0 =
+    .ok (calculateIntrinsicCost (Fork.ruleSet fork) tx 0)
+  checked :
+    let benv := initBenv fork base cb.block.header
+    checkTransaction benv.beginTransaction
+      (deploymentTxPreludeBout .init tx 0) tx =
+      .ok (sender, deploymentEffectiveGasPrice benv tx, [], 0)
+  upfront_funded :
+    tx.gas * deploymentEffectiveGasPrice
+        (initBenv fork base cb.block.header) tx ≤
+      (base.state.bal sender).toNat
+  gas_bound :
+    deploymentTransactionGasBound (initBenv fork base cb.block.header) tx sender ≤
+      tx.gas
+  block_gas_room : tx.gas ≤ cb.block.header.gasLimit
+  target_eq : ca = computeContractAddress sender tx.nonce
+
+/-- The actual transaction-local environments and prepared creation message
+under the selected fork. All cold/original-storage and collision facts are
+proof-produced at this message state. -/
+structure PreparedDeploymentContextAt
+    (fork : Fork) (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (tx : Tx) (sender ca : Adr) : Type where
+  txInput : Benv
+  begun : Benv
+  debit : State
+  tenv : Tenv
+  msg : Msg
+  systemPrefix : DeploymentSystemPrefix fork base cb.block txInput
+  begun_eq : begun = txInput.beginTransaction
+  debit_eq :
+    (begun.state.incrNonce sender).subBal sender
+      (tx.gas * deploymentEffectiveGasPrice txInput tx).toB256 = some debit
+  tenv_eq : tenv = deploymentTenv txInput tx sender 0
+  prepare_eq : prepareMessage {begun with state := debit} tenv tx = .ok msg
+  msg_benv_eq : msg.benv = {begun with state := debit}
+  msg_caller_eq : msg.caller = sender
+  msg_target_eq : msg.target = none
+  msg_gas_eq : msg.gas = tx.gas - deploymentIntrinsicGas msg.benv tx sender
+  msg_value_eq : msg.value = 0
+  msg_data_eq : msg.data = []
+  msg_code_eq : msg.code.toList = officialFullCreateInput
+  msg_codeAddress_eq : msg.codeAddress = none
+  msg_shouldTransferValue_eq : msg.shouldTransferValue = true
+  msg_auths_eq : msg.tenv.stat.auths = []
+  msg_rules_eq : msg.benv.stat.rules = Fork.ruleSet fork
+  msg_fork_eq : msg.benv.stat.fork = fork
+  msg_chainId_eq : msg.benv.stat.chainId = chainId
+  target_eq : msg.currentTarget = ca
+  noCodeOrNonce : accountHasCodeOrNonce msg.benv.state ca = false
+  noStorage : accountHasStorage msg.benv.state ca = false
+  originalState_eq : msg.benv.stat.origState = base.state
+  pauseCold : (ca, pauseDurationSlot) ∉ msg.accessedStorageKeys
+  heartbeatCold : (ca, heartbeatIntervalSlot) ∉ msg.accessedStorageKeys
+  pauseOriginal :
+    (msg.benv.stat.origState.get ca).stor.get pauseDurationSlot = 0
+  heartbeatOriginal :
+    (msg.benv.stat.origState.get ca).stor.get heartbeatIntervalSlot = 0
+  msg_static_eq : msg.isStatic = false
+
+/-- The fixed Prague strict input is the selected-fork input at Prague. -/
+theorem CanonicalOfficialDeploymentBlock.toAt
+    {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+    {txBytes : Bytes} {tx : Tx} {sender ca : Adr}
+    (henv : CanonicalOfficialDeploymentBlock chainId base cb txBytes tx sender ca) :
+    CanonicalOfficialDeploymentBlockAt .prague chainId base cb txBytes tx sender ca :=
+  ⟨henv.txs_eq, henv.decode_eq, henv.ommers_eq, henv.withdrawals_eq, henv.type_eq,
+    henv.value_eq, henv.data_eq, henv.nonce_eq, henv.nonce_not_max,
+    henv.recoveredSender, henv.validated, henv.checked, henv.upfront_funded,
+    henv.gas_bound, henv.block_gas_room, henv.target_eq⟩
+
+/-- A fixed Prague prepared context is the selected-fork context at Prague;
+the selected fork is recovered from the proof-produced system prefix. -/
+def PreparedDeploymentContext.toAt
+    {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+    {tx : Tx} {sender ca : Adr}
+    (ctx : PreparedDeploymentContext chainId base cb tx sender ca) :
+    PreparedDeploymentContextAt .prague chainId base cb tx sender ca :=
+  { ctx with
+    msg_fork_eq := by
+      rw [ctx.msg_benv_eq, ctx.begun_eq, ctx.systemPrefix.environment_eq]
+      rfl }
+
+/-- The selected-fork prepared context at Prague is a fixed Prague context. -/
+def PreparedDeploymentContextAt.toPrague
+    {chainId : UInt64} {base : BlockChain} {cb : CanonicalBlock}
+    {tx : Tx} {sender ca : Adr}
+    (ctx : PreparedDeploymentContextAt .prague chainId base cb tx sender ca) :
+    PreparedDeploymentContext chainId base cb tx sender ca :=
+  { ctx with }
+
+/-- Produce, under the selected covered fork, the real transaction input, transaction-local original-state
 boundary, upfront nonce/fee debit, and the message returned by
 `prepareMessage`. Prepared collision/cold/original facts are all derived. -/
-theorem prepareCanonicalDeploymentContext
-    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+theorem prepareCanonicalDeploymentContextAt
+    (fork : Fork) (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
     (tx : Tx) (sender ca : Adr)
-    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
-    (henv : CanonicalOfficialDeploymentBlock chainId base cb
-      txBytes tx sender ca) :
-    Nonempty (PreparedDeploymentContext chainId base cb tx sender ca) := by
+    (hbase : CanonicalDeploymentBase fork chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlockAt fork chainId base cb
+      txBytes tx sender ca)
+    (hfork : CoveredFork fork) :
+    Nonempty (PreparedDeploymentContextAt fork chainId base cb tx sender ca) := by
   obtain ⟨⟨txInput, hprefix⟩⟩ :=
-    canonicalDeploymentSystemPrefix .prague chainId base cb sender ca hbase
-      CoveredFork.prague
+    canonicalDeploymentSystemPrefix fork chainId base cb sender ca hbase hfork
   let begun := txInput.beginTransaction
   let fee := tx.gas * deploymentEffectiveGasPrice txInput tx
   have hbegunState : begun.state = base.state := by
@@ -140,7 +254,7 @@ theorem prepareCanonicalDeploymentContext
     rw [hbegunState]
     have hprice : deploymentEffectiveGasPrice txInput tx =
         deploymentEffectiveGasPrice
-          (initBenv .prague base cb.block.header) tx := by
+          (initBenv fork base cb.block.header) tx := by
       rw [hprefix.txInput_eq]
       rfl
     simpa only [fee, hprice, ge_iff_le] using henv.upfront_funded
@@ -214,13 +328,14 @@ theorem prepareCanonicalDeploymentContext
   have htxChain : txInput.stat.chainId = base.chainId := by
     rw [hprefix.txInput_eq]
     rfl
-  have htxRules : txInput.stat.rules = pragueRules := by
-    rw [hprefix.environment_eq]
-    rfl
   have hmsgChain : msg.benv.stat.chainId = chainId := by
     dsimp only [msg, msgBenv, begun]
     simpa only [Benv.beginTransaction] using htxChain.trans hbase.chainId_eq.symm
-  have hmsgRules : msg.benv.stat.rules = pragueRules := by
+  have hmsgRules : msg.benv.stat.rules = Fork.ruleSet fork := by
+    dsimp only [msg, msgBenv, begun]
+    rw [hprefix.environment_eq]
+    rfl
+  have hmsgFork : msg.benv.stat.fork = fork := by
     dsimp only [msg, msgBenv, begun]
     rw [hprefix.environment_eq]
     rfl
@@ -293,6 +408,7 @@ theorem prepareCanonicalDeploymentContext
     msg_shouldTransferValue_eq := rfl
     msg_auths_eq := rfl
     msg_rules_eq := hmsgRules
+    msg_fork_eq := hmsgFork
     msg_chainId_eq := hmsgChain
     target_eq := htarget
     noCodeOrNonce := hnocode
@@ -303,6 +419,19 @@ theorem prepareCanonicalDeploymentContext
     pauseOriginal := hpauseOriginal
     heartbeatOriginal := hheartbeatOriginal
     msg_static_eq := rfl }⟩
+
+/-- Fixed Prague compatibility specialization of
+`prepareCanonicalDeploymentContextAt`. -/
+theorem prepareCanonicalDeploymentContext
+    (chainId : UInt64) (base : BlockChain) (cb : CanonicalBlock)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase .prague chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlock chainId base cb
+      txBytes tx sender ca) :
+    Nonempty (PreparedDeploymentContext chainId base cb tx sender ca) := by
+  obtain ⟨ctx⟩ := prepareCanonicalDeploymentContextAt .prague chainId base cb tx
+    sender ca hbase henv.toAt CoveredFork.prague
+  exact ⟨ctx.toPrague⟩
 
 end LidoCircuitBreaker
 

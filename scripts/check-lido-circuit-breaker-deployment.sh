@@ -7,10 +7,10 @@
 # planning record outside this repository): the repository axiom
 # audit this gate used to rerun is the `axiom-audit` row's (`check.sh
 # --no-build`, one union walk over the whole library), which the deployment
-# checker ties to by freezing the four stricter axiom claims. The 66 source
+# checker ties to by freezing the four stricter axiom claims. The 99 source
 # falsifiers mutate temporary copies and run
 # only the Python checker, so they run under `--self-test`, when the harness
-# changes; the two compiled Lean controls stay here.
+# changes; the five compiled Lean controls stay here.
 
 set -eu
 
@@ -23,7 +23,7 @@ if [ "${1:-}" = "--self-test" ]; then
     echo "REGRESSION — Lido CircuitBreaker deployment self-test: source falsifier controls failed" >&2
     exit 1
   fi
-  echo "OK — Lido CircuitBreaker deployment self-test: 66 source falsifiers each rejected by their named checker control"
+  echo "OK — Lido CircuitBreaker deployment self-test: 99 source falsifiers each rejected by their named checker control"
   exit 0
 fi
 . "$SCRIPT_DIR/read-audit/launch.sh"
@@ -102,4 +102,4 @@ if ! "$JAUNE_BIN" "$FIXTURE" --network Prague >"$LOG" 2>&1; then
   fail "strict Jaune replay of the pinned-EELS fixture failed"
 fi
 
-echo "OK — Lido CircuitBreaker direct deployment root (21 pins; 13 reduction certificates; 213 fragments; 163 public theorems under the union walk; 4 stricter claims; 2 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"
+echo "OK — Lido CircuitBreaker direct deployment root (34 pins + 17 mainnet pins; 13 reduction certificates; 386 fragments; 178 + 13 mainnet public theorems under the union walk; 3 coordinates bound to the reference manifest; 4 stricter claims; 5 Lean controls; 18 finite assertions + 26 finite mutants; 1 strict block)"

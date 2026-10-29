@@ -12,6 +12,7 @@ open Jaune AbstractStackSafety
 
 theorem subtree379_rows_checked :
     subtree379.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree379, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree379_layout_checked :
@@ -20,6 +21,7 @@ theorem subtree379_layout_checked :
 
 theorem subtree411_rows_checked :
     subtree411.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree411, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree411_layout_checked :
@@ -29,7 +31,8 @@ theorem subtree411_layout_checked :
 theorem subtree387_rows_checked :
     subtree387.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree379_rows_checked
   · exact subtree411_rows_checked
 
@@ -43,6 +46,7 @@ theorem subtree387_layout_checked :
 
 theorem subtree473_rows_checked :
     subtree473.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree473, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree473_layout_checked :
@@ -51,6 +55,7 @@ theorem subtree473_layout_checked :
 
 theorem subtree508_rows_checked :
     subtree508.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree508, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree508_layout_checked :
@@ -60,7 +65,8 @@ theorem subtree508_layout_checked :
 theorem subtree498_rows_checked :
     subtree498.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree473_rows_checked
   · exact subtree508_rows_checked
 
@@ -75,7 +81,8 @@ theorem subtree498_layout_checked :
 theorem subtree433_rows_checked :
     subtree433.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree387_rows_checked
   · exact subtree498_rows_checked
 
@@ -89,6 +96,7 @@ theorem subtree433_layout_checked :
 
 theorem subtree525_rows_checked :
     subtree525.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree525, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree525_layout_checked :
@@ -97,6 +105,7 @@ theorem subtree525_layout_checked :
 
 theorem subtree539_rows_checked :
     subtree539.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree539, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree539_layout_checked :
@@ -106,7 +115,8 @@ theorem subtree539_layout_checked :
 theorem subtree533_rows_checked :
     subtree533.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree525_rows_checked
   · exact subtree539_rows_checked
 
@@ -120,6 +130,7 @@ theorem subtree533_layout_checked :
 
 theorem subtree550_rows_checked :
     subtree550.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree550, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree550_layout_checked :
@@ -128,6 +139,7 @@ theorem subtree550_layout_checked :
 
 theorem subtree570_rows_checked :
     subtree570.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree570, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree570_layout_checked :
@@ -137,7 +149,8 @@ theorem subtree570_layout_checked :
 theorem subtree562_rows_checked :
     subtree562.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree550_rows_checked
   · exact subtree570_rows_checked
 
@@ -152,7 +165,8 @@ theorem subtree562_layout_checked :
 theorem subtree544_rows_checked :
     subtree544.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree533_rows_checked
   · exact subtree562_rows_checked
 
@@ -167,7 +181,8 @@ theorem subtree544_layout_checked :
 theorem subtree515_rows_checked :
     subtree515.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree433_rows_checked
   · exact subtree544_rows_checked
 
@@ -181,6 +196,7 @@ theorem subtree515_layout_checked :
 
 theorem subtree584_rows_checked :
     subtree584.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree584, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree584_layout_checked :
@@ -189,6 +205,7 @@ theorem subtree584_layout_checked :
 
 theorem subtree617_rows_checked :
     subtree617.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree617, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree617_layout_checked :
@@ -198,7 +215,8 @@ theorem subtree617_layout_checked :
 theorem subtree592_rows_checked :
     subtree592.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree584_rows_checked
   · exact subtree617_rows_checked
 
@@ -212,6 +230,7 @@ theorem subtree592_layout_checked :
 
 theorem subtree663_rows_checked :
     subtree663.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree663, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree663_layout_checked :
@@ -220,6 +239,7 @@ theorem subtree663_layout_checked :
 
 theorem subtree708_rows_checked :
     subtree708.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree708, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree708_layout_checked :
@@ -229,7 +249,8 @@ theorem subtree708_layout_checked :
 theorem subtree683_rows_checked :
     subtree683.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree663_rows_checked
   · exact subtree708_rows_checked
 
@@ -244,7 +265,8 @@ theorem subtree683_layout_checked :
 theorem subtree625_rows_checked :
     subtree625.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree592_rows_checked
   · exact subtree683_rows_checked
 
@@ -258,6 +280,7 @@ theorem subtree625_layout_checked :
 
 theorem subtree755_rows_checked :
     subtree755.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree755, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree755_layout_checked :
@@ -266,6 +289,7 @@ theorem subtree755_layout_checked :
 
 theorem subtree776_rows_checked :
     subtree776.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree776, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree776_layout_checked :
@@ -275,7 +299,8 @@ theorem subtree776_layout_checked :
 theorem subtree764_rows_checked :
     subtree764.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree755_rows_checked
   · exact subtree776_rows_checked
 
@@ -289,6 +314,7 @@ theorem subtree764_layout_checked :
 
 theorem subtree802_rows_checked :
     subtree802.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree802, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree802_layout_checked :
@@ -297,6 +323,7 @@ theorem subtree802_layout_checked :
 
 theorem subtree833_rows_checked :
     subtree833.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree833, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem subtree833_layout_checked :
@@ -306,7 +333,8 @@ theorem subtree833_layout_checked :
 theorem subtree811_rows_checked :
     subtree811.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree802_rows_checked
   · exact subtree833_rows_checked
 
@@ -321,7 +349,8 @@ theorem subtree811_layout_checked :
 theorem subtree794_rows_checked :
     subtree794.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree764_rows_checked
   · exact subtree811_rows_checked
 
@@ -336,7 +365,8 @@ theorem subtree794_layout_checked :
 theorem subtree716_rows_checked :
     subtree716.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree625_rows_checked
   · exact subtree794_rows_checked
 
@@ -351,7 +381,8 @@ theorem subtree716_layout_checked :
 theorem subtree576_rows_checked :
     subtree576.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact subtree515_rows_checked
   · exact subtree716_rows_checked
 

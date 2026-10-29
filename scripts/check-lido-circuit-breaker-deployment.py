@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import json
 import re
 import sys
 from pathlib import Path
@@ -45,10 +46,18 @@ SOURCES = {
     "root": "Blanc/LidoCircuitBreakerDeploymentRoot.lean",
 }
 
+# The mainnet specialization is deliberately outside the nine-owner family:
+# that family keeps its blanket `mainnet` ban and stays schedule-parametric.
+# This one module is scanned separately below, with its own pins, premise
+# discipline, inventory, and a binding of its coordinate literals to the
+# committed reference manifest.
+MAINNET_SOURCE = "Blanc/LidoCircuitBreakerMainnetDeployment.lean"
+REFERENCE = "scripts/lido-circuit-breaker-reference.json"
+
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
-PUBLIC_THEOREM_COUNT = 163
+PUBLIC_THEOREM_COUNT = 178
 PUBLIC_THEOREM_INVENTORY_SHA256 = (
-    "0840e08eb738944185bd1a73888f2b6689ed4f3fc3ddf3af7dd8e07f9c808d0f"
+    "6b80a310d71deac8ad0f3c52b3158655ecd451f968d564f56d397f6d6ea52a55"
 )
 # The whole axiom claim of this family. Every public deployment theorem is covered by the
 # repository's one union walk (`scripts/AxiomCheck.lean`, `scripts/check.sh`), which bounds the
@@ -87,7 +96,7 @@ PINS = {
     "OfficialDeploymentTransactionResult": "4123d37aa90ea893ad37cbcf73184a94b0dcb2146b7c021a086487935364c62f",
     "OfficialDeploymentSuffixResult": "3c359fd060bd6c981d177062d40bc52e4e7ce5d9d69220e31966b5a02e0f4977",
     "DeploymentRoot": "44c6dc4d3b9ba323222c1fdccbcc40b1679bde862aa6ed74f5b849e33353b04e",
-    "canonicalDeploymentStep_establishes_root": "ca826c1707045cf9399a1975ac9a6feea91de2d44b86847e7d697b9c563d5660",
+    "canonicalDeploymentStep_establishes_root": "131af7276bc73b82a830489af5300def5716f08c45316f184124928af6947d7e",
     "DeploymentRoot.reflReach": "9df07c7df5c23375cee939340a5af51ea9fbb6a619f2ed9f41fd41b0c9af4926",
     "DeploymentRoot.reachable_registryStable": "218ea1e950cd17776c128b974915ebd3b9810b6fbcb3556c1c7f046b1ffd0081",
     "DeploymentRoot.reachable_code": "81a6786d083b03c2385428f6ca09a79e935ac1ce73242349fe4ecbf136fabbbd",
@@ -95,6 +104,53 @@ PINS = {
     "DeploymentRoot.reachable_witness": "2c7ac7c5246432ba6a0f1b08270f3937641417d5f6c0ca29c2d72774770f0ac1",
     "DeploymentRoot.reachable_membership": "f210b1b06d95c79a9f88e3313ae33a158e2d7fe52b21a423ed9a46ecba05b983",
     "DeploymentRoot.reachable_countConservation": "fa121124d70ca1d41dad767e50c8943c6f1027952e0a04d61ea18bdc4221711e",
+    # Selected-fork carriers, root, producer, and reachable family.
+    "CanonicalOfficialDeploymentBlockAt": "b6b5ac79b948d1ad37c18278124da9720e07dc630967a793a61f53278fb2eaff",
+    "PreparedDeploymentContextAt": "aedd3d0701a396625c84488997ecadde447c234cc8586dfc8ca2282f02e73634",
+    "OfficialDeploymentTransactionResultAt": "0a2ed5a117abcdb8297f055be5d7ddcd2d378508c3868d5c58f355ec17c050cc",
+    "OfficialDeploymentSuffixResultAt": "e95b09a451db1d73c5bf71fed45eb088519db9d77d4098f65906971b4ec586c6",
+    "DeploymentRootAt": "deb41a5a317c98ce5c9627722be2cc8c89a5c107a24e5a78af6d682aa38daf0b",
+    "canonicalDeploymentStepAt_establishes_root": "d03be52a5d51d6d960fbc3f41e954aefbf5152ac9f60b6c0d4163c0113ec4f8b",
+    "DeploymentRootAt.reflReach": "c1f83b86db89c79b253b8c451bb2895ffeb6c2d6dbf6b170d22d4509eb69b686",
+    "DeploymentRootAt.reachable_registryStable": "381a70e663da00964e13b1e44a14fa6fc50a9874bd39aa794e1a6ed81fc62d9b",
+    "DeploymentRootAt.reachable_code": "aeebc549abc34458a38bf0c990ac1391fdf794eef7ae477f8dd5b5ce4c3896b6",
+    "DeploymentRootAt.reachable_installedCode": "5284daa96b40cb5a23b831f56b1e8f10a60169ed5d1c89f175e1999735d4d926",
+    "DeploymentRootAt.reachable_witness": "b1a4a3e9d8399e3ddf6b95f2a7d04f49279e8c479eb0eef1a39babca2d6067fd",
+    "DeploymentRootAt.reachable_membership": "52251bd06b362fffa098fb2c9062a7dfd646933a56b4528b9b85037d9f576fc8",
+    "DeploymentRootAt.reachable_countConservation": "12e052a5376b3b9c8d0748c7f977774dacfee55d5a033f252272a46b3b37a718",
+}
+
+# Complete normalised bodies of every declaration of the mainnet module.
+MAINNET_PINS = {
+    "officialMainnetDeploymentChainId": "2f6ce48f059b44b098b96e5bbd926e7912a2a45b20e3fe2eeed415ad9a077cc3",
+    "officialMainnetDeploymentBlockNumber": "9ff95ef049d11698146f70eb11a8b5f585fba9e981b746da597dc77e71d61afb",
+    "officialMainnetDeploymentTimestamp": "529111981b25d17d187bbbe70a08f3b0b6d8c597f46d8d3d86b8adbff8d98e0c",
+    "mainnetChainConfig_chainId_eq_officialDeployment": "e93ff444aff2c9fc1bea03d7b34b717d4f4b14f861bad630ef0e8f5cf3c779e4",
+    "officialMainnetDeployment_forkAt": "93f5064bdf581555905b74963c2c99d948513a4806e52666aeb7ec6768db2e91",
+    "mainnetPragueTimestamp_le_officialDeployment": "63f54fda9bf88e9c2a82e5550b35cfb04a56101e6e848cf2724d16dc2f1aa9c5",
+    "MainnetDeploymentRoot": "85580733631bfd2deae2fe9dd309513c16933a61d2418ecb72ba8f6e3c4c5121",
+    "canonicalMainnetDeploymentStep_establishes_root": "3616e8365d0804b1fb4a62468dd9d6fbd5e8f9dafbf9ff2076f02709ccfba0fc",
+    "mainnetChainConfig_covered_from_officialDeployment": "17615fea4cd3ac127c79d0797a4a48d1e769a42e48581677fd2ff5f1e22cdd5e",
+    "MainnetDeploymentRoot.tip_floor": "287dfad2de5d5e8e2ab39ea37e9d215aaf457113efa37aaa4451eceee9bc938e",
+    "MainnetDeploymentRoot.reflReach": "1fddcbea9e0532e5aee9ad372764650d666e97d0ab7bb3dfb60cedd07262ba03",
+    "MainnetDeploymentRoot.reachable_registryStable": "40b72d554f36212fe5469fb7cb8d352dfda42e0bb96fd365f6b0139e45988bb1",
+    "MainnetDeploymentRoot.reachable_code": "c003a3bf61cb8ae6073729dc588d2a6efbec5cad4d6ca606e21e8c3d081065c5",
+    "MainnetDeploymentRoot.reachable_installedCode": "f9024936efe520bcbf6a05d1181c2d0b2f49b1753e89211093009042a3ce6aa2",
+    "MainnetDeploymentRoot.reachable_witness": "321d6ad3489417f4310d2d4f1035654f127e65c054cf5710edd5013da105db3e",
+    "MainnetDeploymentRoot.reachable_membership": "36079ac0668e914456e1c094342c2fb12ed45c81b83e333f7260101872b63166",
+    "MainnetDeploymentRoot.reachable_countConservation": "b75f0a16b46efc4b949bca2d458957b3e471c5e78b09e9eaea2ddd69d0bd343e",
+}
+MAINNET_PUBLIC_THEOREM_COUNT = 13
+MAINNET_PUBLIC_THEOREM_INVENTORY_SHA256 = (
+    "af230e7211e3e9b04290340a587ab17e752ad5519b14c0e6aa0cf6223ca20f8a"
+)
+
+# Lean coordinate definitions and the `deployment.manifest.meta` keys of the
+# committed reference manifest they must equal.
+MAINNET_COORDINATES = {
+    "officialMainnetDeploymentChainId": ("chainId", "UInt64"),
+    "officialMainnetDeploymentBlockNumber": ("blockNumber", "Nat"),
+    "officialMainnetDeploymentTimestamp": ("timestamp", "Nat"),
 }
 
 # Every channel is exact source vocabulary with independent security meaning.
@@ -200,6 +256,9 @@ CHANNELS = {
         "prepareCanonicalDeploymentContext", "canonicalDeploymentTransaction_succeeds",
         "canonicalDeploymentSuffix_succeeds", "canonicalDeploymentApplyBody_succeeds",
         "stateTransitionUsing", "DeploymentRoot",
+        # Fixed Prague compatibility specialization of the selected-fork root.
+        "canonicalDeploymentStepAt_establishes_root", "CoveredFork.prague",
+        "hroot.installed", "hroot.stable",
     ),
     "DeploymentRoot.reflReach": ("ReachUsing", "ChainConfig.pragueOnly", "deployed"),
     "DeploymentRoot.reachable_registryStable": (
@@ -215,6 +274,133 @@ CHANNELS = {
     ),
     "DeploymentRoot.reachable_countConservation": (
         "ReachUsing", "countSlot", "assignmentCount", "entries.length",
+    ),
+    "CanonicalOfficialDeploymentBlockAt": (
+        "txs_eq", "decode_eq", "decodeTx (Fork.ruleSet fork)", "ommers_eq",
+        "withdrawals_eq", "type_eq", ".two", "none []", "value_eq",
+        "officialFullCreateInput", "nonce_eq", "recoveredSender", "validated",
+        "validateTransaction (Fork.ruleSet fork)", "checked",
+        "initBenv fork base cb.block.header", "upfront_funded", "gas_bound",
+        "block_gas_room", "target_eq",
+    ),
+    "PreparedDeploymentContextAt": (
+        "DeploymentSystemPrefix fork", "beginTransaction", "incrNonce", "subBal",
+        "prepareMessage", "msg_target_eq", "msg_code_eq", "officialFullCreateInput",
+        "msg_rules_eq : msg.benv.stat.rules = Fork.ruleSet fork",
+        "msg_fork_eq : msg.benv.stat.fork = fork",
+        "noCodeOrNonce", "noStorage", "originalState_eq", "pauseCold",
+        "heartbeatCold", "pauseOriginal", "heartbeatOriginal", "msg_static_eq",
+    ),
+    "OfficialDeploymentTransactionResultAt": (
+        "processTransaction", "OfficialConstructorMessageResult", "installed",
+        "pauseDuration", "heartbeatInterval", "emptyRegistry", "RegistryStable",
+        "blockLogs :", "officialConstructorLogs", "requests", "depositRequests",
+        "receiptKeys", "receiptEntry", "receiptLogs", "receiptSucceeded :",
+        "withdrawalRequestCode", "consolidationRequestCode",
+    ),
+    "OfficialDeploymentSuffixResultAt": (
+        "withdrawalRun", "withdrawalReturnData", "consolidationRun",
+        "consolidationReturnData", "processGeneralPurposeRequests", "RegistryStable",
+    ),
+    "DeploymentRootAt": (
+        "CoveredFork fork",
+        "cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork",
+        "cfg.rulesAt cb.block.header.number cb.block.header.timestamp =",
+        "CanonicalDeploymentBase fork cfg.chainId",
+        "CanonicalOfficialDeploymentBlockAt fork cfg.chainId",
+        "OfficialDeploymentTransactionResultAt", "OfficialDeploymentSuffixResultAt",
+        "stateTransitionUsing cfg base cb.block = .ok deployed",
+        "stateTransitionAt fork base cb.block = .ok deployed",
+        "applyBody (initBenv fork", "post = deployed.state",
+        "configValid : cfg.Valid", "target_ne_zero", "target_not_precompile",
+        "deployed.blocks.getLast? = some tip",
+        "cfg.rulesAt tip.header.number tip.header.timestamp = .ok rules",
+        "¬ rules.isPrecomp ca",
+        "installed", "pauseDuration", "heartbeatInterval", "emptyRegistry",
+        "RegistryStable", "deployed_validContext",
+        "deployed_chainId : cfg.chainId = deployed.chainId",
+    ),
+    "canonicalDeploymentStepAt_establishes_root": (
+        "prepareCanonicalDeploymentContextAt", "canonicalDeploymentTransactionAt_succeeds",
+        "canonicalDeploymentSuffixAt_succeeds", "canonicalDeploymentApplyBodyAt_succeeds",
+        "stateTransitionUsing", "stateTransitionUsing_reachedStep",
+        "hbase.target_not_precompile", "DeploymentRootAt",
+    ),
+    "DeploymentRootAt.reflReach": ("ReachUsing cfg", "hroot.configValid", "deployed"),
+    "DeploymentRootAt.reachable_registryStable": (
+        "ReachUsing cfg", "T ≤ timestamp →", "CoveredFork f",
+        "T ≤ tip.header.timestamp", "registryStable_iff_stateInv",
+        "chainUsing_preserves_inv_of_reached", "registrySpec_preserves",
+        "hroot.stable", "RegistryStable",
+    ),
+    "DeploymentRootAt.reachable_code": ("ReachUsing cfg", "Prog.compile", "runtime officialParams"),
+    "DeploymentRootAt.reachable_installedCode": (
+        "ReachUsing cfg", "lidoCircuitBreakerCode officialParams",
+    ),
+    "DeploymentRootAt.reachable_witness": ("ReachUsing cfg", "∃ entries", "RegistryWitness"),
+    "DeploymentRootAt.reachable_membership": (
+        "ReachUsing cfg", "canonicalAddress", "assignmentSlot", "indexSlot", "findEntry",
+    ),
+    "DeploymentRootAt.reachable_countConservation": (
+        "ReachUsing cfg", "countSlot", "assignmentCount", "entries.length",
+    ),
+}
+
+MAINNET_CHANNELS = {
+    "officialMainnetDeployment_forkAt": (
+        "mainnetChainConfig.forkAt officialMainnetDeploymentBlockNumber",
+        "officialMainnetDeploymentTimestamp = .ok .bpo2", "decide",
+    ),
+    "mainnetChainConfig_chainId_eq_officialDeployment": (
+        "mainnetChainConfig.chainId = officialMainnetDeploymentChainId",
+    ),
+    "MainnetDeploymentRoot": (
+        "root : DeploymentRootAt mainnetChainConfig base deployed ca",
+        "deployed.blocks.getLast? = some tip",
+        "tip.header.number = officialMainnetDeploymentBlockNumber",
+        "tip.header.timestamp = officialMainnetDeploymentTimestamp",
+    ),
+    "canonicalMainnetDeploymentStep_establishes_root": (
+        "CanonicalDeploymentBase .bpo2 officialMainnetDeploymentChainId",
+        "mainnetChainConfig_chainId_eq_officialDeployment",
+        "officialMainnetDeployment_forkAt",
+        "canonicalDeploymentStepAt_establishes_root mainnetChainConfig .bpo2",
+        "CoveredFork.bpo2", "stateTransitionUsing_reachedStep",
+        "MainnetDeploymentRoot",
+    ),
+    "mainnetChainConfig_covered_from_officialDeployment": (
+        "officialMainnetDeploymentTimestamp ≤ timestamp",
+        "mainnetChainConfig.forkAt number timestamp = .ok f", "CoveredFork f",
+        "mainnetChainConfig_covered", "mainnetPragueTimestamp_le_officialDeployment",
+    ),
+    "MainnetDeploymentRoot.tip_floor": (
+        "hroot.tip", "officialMainnetDeploymentTimestamp ≤ tip.header.timestamp",
+    ),
+    "MainnetDeploymentRoot.reflReach": (
+        "ReachUsing mainnetChainConfig deployed deployed", "hroot.root.reflReach",
+    ),
+    "MainnetDeploymentRoot.reachable_registryStable": (
+        "ReachUsing mainnetChainConfig deployed future",
+        "hroot.root.reachable_registryStable", "officialMainnetDeploymentTimestamp",
+        "mainnetChainConfig_covered_from_officialDeployment", "hroot.tip_floor",
+        "RegistryStable",
+    ),
+    "MainnetDeploymentRoot.reachable_code": (
+        "ReachUsing mainnetChainConfig", "Prog.compile", "runtime officialParams",
+    ),
+    "MainnetDeploymentRoot.reachable_installedCode": (
+        "ReachUsing mainnetChainConfig", "lidoCircuitBreakerCode officialParams",
+    ),
+    "MainnetDeploymentRoot.reachable_witness": (
+        "ReachUsing mainnetChainConfig", "∃ entries", "RegistryWitness",
+    ),
+    "MainnetDeploymentRoot.reachable_membership": (
+        "ReachUsing mainnetChainConfig", "canonicalAddress", "assignmentSlot",
+        "indexSlot", "findEntry",
+    ),
+    "MainnetDeploymentRoot.reachable_countConservation": (
+        "ReachUsing mainnetChainConfig", "countSlot", "assignmentCount",
+        "entries.length",
     ),
 }
 
@@ -401,6 +587,14 @@ def source_map(root: Path) -> dict[str, str]:
     return result
 
 
+def mainnet_source(root: Path) -> str:
+    """The mainnet specialization, read apart from the nine-owner family."""
+    path = root / MAINNET_SOURCE
+    if not path.is_file():
+        fail(f"missing required mainnet deployment owner: {MAINNET_SOURCE}")
+    return path.read_text()
+
+
 def all_declarations(sources: dict[str, str]) -> dict[str, str]:
     result = {}
     for owner, source in sources.items():
@@ -434,12 +628,13 @@ def public_theorem_names(sources: dict[str, str]) -> list[str]:
     return result
 
 
-def require_axiom_inventory(root: Path, sources: dict[str, str]) -> None:
+def require_axiom_inventory(root: Path, sources: dict[str, str], mainnet_text: str) -> None:
     """Tie this source family to the repository's axiom audit.
 
     The constructor owner is included only to enforce the private-to-proof
     façade below.  Its pre-existing theorem inventory is outside the nine
-    deployment proof owners and therefore outside this exact 163-name set.
+    deployment proof owners and therefore outside this exact 178-name set.
+    The mainnet module's public theorems are a separate exact inventory.
     """
     names = public_theorem_names({
         owner: source for owner, source in sources.items()
@@ -461,20 +656,35 @@ def require_axiom_inventory(root: Path, sources: dict[str, str]) -> None:
         claims = axiom_audit.stricter_claims(root, AXIOM_CHECK)
     except axiom_audit.AuditError as exc:
         fail(f"the repository axiom audit source is not valid: {exc}")
-    family = set(names) | set(STRICTER_CLAIMS)
+    mainnet_names = public_theorem_names({"mainnet": mainnet_text})
+    if len(mainnet_names) != MAINNET_PUBLIC_THEOREM_COUNT or \
+            len(set(mainnet_names)) != len(mainnet_names):
+        fail(
+            "mainnet public theorem inventory changed "
+            f"(expected {MAINNET_PUBLIC_THEOREM_COUNT} unique names, got "
+            f"{len(mainnet_names)} names/{len(set(mainnet_names))} unique)"
+        )
+    mainnet_inventory = "\n".join(sorted(mainnet_names)) + "\n"
+    if hashlib.sha256(mainnet_inventory.encode()).hexdigest() != \
+            MAINNET_PUBLIC_THEOREM_INVENTORY_SHA256:
+        fail("mainnet public theorem inventory changed")
+
+    family = set(names) | set(mainnet_names) | set(STRICTER_CLAIMS)
     observed = {name: axioms for name, axioms in claims.items() if name in family}
     if observed != STRICTER_CLAIMS:
         fail("deployment stricter axiom claims changed")
 
 
-def require_channels(decls: dict[str, str]) -> None:
-    for name, tokens in CHANNELS.items():
-        text = decls.get(name)
-        if text is None:
-            fail(f"missing required public declaration {name}")
-        for token in tokens:
-            if token not in text:
-                fail(f"{name}: missing required semantic fragment {token!r}")
+def require_channels(decls: dict[str, str], mainnet: dict[str, str]) -> None:
+    for table, source in ((CHANNELS, decls), (MAINNET_CHANNELS, mainnet)):
+        for name, tokens in table.items():
+            text = source.get(name)
+            if text is None:
+                fail(f"missing required public declaration {name}")
+            flat = normalise(text)
+            for token in tokens:
+                if token not in text and token not in flat:
+                    fail(f"{name}: missing required semantic fragment {token!r}")
     for name, tokens in ORDERED_CHANNELS.items():
         text = decls[name]
         positions = [text.index(token) for token in tokens]
@@ -520,9 +730,11 @@ def require_private_proof_facade(decls: dict[str, str]) -> None:
             )
 
 
-def require_pins(decls: dict[str, str]) -> None:
-    for name, expected in PINS.items():
-        actual = decls.get(name)
+def require_pins(decls: dict[str, str], mainnet: dict[str, str]) -> None:
+    for name, expected, actual in (
+        *((name, expected, decls.get(name)) for name, expected in PINS.items()),
+        *((name, expected, mainnet.get(name)) for name, expected in MAINNET_PINS.items()),
+    ):
         if actual is None:
             fail(f"missing pinned declaration {name}")
         if not expected:
@@ -560,6 +772,125 @@ def premise_discipline(decls: dict[str, str]) -> None:
         if token in head:
             fail(f"root theorem: separate result/receipt premise {token!r} is forbidden")
 
+    blockAt = decls["CanonicalOfficialDeploymentBlockAt"]
+    for token in forbidden_inputs:
+        if token in blockAt:
+            fail(f"CanonicalOfficialDeploymentBlockAt: forbidden execution/result smuggling token {token!r}")
+
+    # The selected-fork producer: the schedule lookup and its coverage are the
+    # only additions; the configured transition stays the one chain premise.
+    label = "selected-fork root theorem"
+    head = premise_head(decls["canonicalDeploymentStepAt_establishes_root"])
+    expect_binders(label, head, ["hbase", "henv", "hfork", "hforkAt", "hstep"])
+    for fragment in (
+        "hbase : CanonicalDeploymentBase fork cfg.chainId base sender ca",
+        "henv : CanonicalOfficialDeploymentBlockAt fork cfg.chainId base cb txBytes tx sender ca",
+        "hfork : CoveredFork fork",
+        "hforkAt : cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork",
+        "hstep : stateTransitionUsing cfg base cb.block = .ok deployed",
+    ):
+        if fragment not in head:
+            fail(f"{label}: premise is not exactly {fragment!r}")
+    forbid_premises(label, head, forbidden_premises)
+
+    # The selected-fork reachable family takes coverage only at or after a
+    # timestamp floor the deployed tip has reached.
+    for name in (
+        "DeploymentRootAt.reachable_registryStable", "DeploymentRootAt.reachable_code",
+        "DeploymentRootAt.reachable_installedCode", "DeploymentRootAt.reachable_witness",
+        "DeploymentRootAt.reachable_membership", "DeploymentRootAt.reachable_countConservation",
+    ):
+        head = premise_head(decls[name])
+        expected = ["hroot", "hreach", "hcov", "hstart"]
+        if name.endswith("reachable_membership"):
+            expected.append("htarget")
+        expect_binders(name, head, expected)
+        for fragment in (
+            "hroot : DeploymentRootAt cfg base deployed ca",
+            "hreach : BlockChain.ReachUsing cfg deployed future",
+            "(T : Nat)",
+            "hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp → "
+            "cfg.forkAt number timestamp = .ok f → CoveredFork f",
+            "hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧ T ≤ tip.header.timestamp",
+        ):
+            if fragment not in head:
+                fail(f"{name}: premise is not exactly {fragment!r}")
+
+
+def premise_head(text: str) -> str:
+    """The normalised statement of a theorem, before its proof."""
+    return normalise(text.split(":=", 1)[0])
+
+
+def expect_binders(label: str, head: str, expected: list[str]) -> None:
+    binders = re.findall(r"\((h\w+)\s*:", head)
+    if binders != expected:
+        fail(f"{label}: expected only {', '.join(expected)} proof premises; got {binders!r}")
+
+
+def forbid_premises(label: str, head: str, forbidden: tuple[str, ...]) -> None:
+    for token in forbidden:
+        if token in head:
+            fail(f"{label}: separate result/receipt premise {token!r} is forbidden")
+
+
+def mainnet_discipline(mainnet: dict[str, str], root: Path) -> None:
+    """The mainnet producer derives BPO2 from the pinned schedule; its
+    consequences carry no coverage premise; its coordinates are the
+    reference manifest's."""
+    label = "mainnet root theorem"
+    head = premise_head(mainnet["canonicalMainnetDeploymentStep_establishes_root"])
+    expect_binders(label, head, ["hnumber", "htimestamp", "hbase", "henv", "hstep"])
+    for fragment in (
+        "hnumber : cb.block.header.number = officialMainnetDeploymentBlockNumber",
+        "htimestamp : cb.block.header.timestamp = officialMainnetDeploymentTimestamp",
+        "hbase : CanonicalDeploymentBase .bpo2 officialMainnetDeploymentChainId base sender ca",
+        "henv : CanonicalOfficialDeploymentBlockAt .bpo2 officialMainnetDeploymentChainId base cb txBytes tx sender ca",
+        "hstep : stateTransitionUsing mainnetChainConfig base cb.block = .ok deployed",
+    ):
+        if fragment not in head:
+            fail(f"{label}: premise is not exactly {fragment!r}")
+    forbid_premises(label, head, (
+        "receipt", "OfficialDeploymentTransactionResult", "OfficialConstructorMessageResult",
+        "RegistryStable", "RegistryCoherent", "applyBody", "forkAt", "CoveredFork",
+    ))
+
+    for name in (
+        "MainnetDeploymentRoot.reflReach",
+        "MainnetDeploymentRoot.reachable_registryStable", "MainnetDeploymentRoot.reachable_code",
+        "MainnetDeploymentRoot.reachable_installedCode", "MainnetDeploymentRoot.reachable_witness",
+        "MainnetDeploymentRoot.reachable_membership",
+        "MainnetDeploymentRoot.reachable_countConservation",
+    ):
+        head = premise_head(mainnet[name])
+        expected = ["hroot"] if name.endswith("reflReach") else ["hroot", "hreach"]
+        if name.endswith("reachable_membership"):
+            expected.append("htarget")
+        expect_binders(name, head, expected)
+        if "hroot : MainnetDeploymentRoot base deployed ca" not in head:
+            fail(f"{name}: root premise is not the mainnet deployment root")
+        if "reflReach" not in name and \
+                "hreach : BlockChain.ReachUsing mainnetChainConfig deployed future" not in head:
+            fail(f"{name}: reachability is not over the full mainnet schedule")
+
+    try:
+        meta = json.loads((root / REFERENCE).read_text())["deployment"]["manifest"]["meta"]
+    except (KeyError, TypeError, ValueError) as exc:
+        fail(f"cannot read deployment.manifest.meta from {REFERENCE}: {exc}")
+    for name, (key, typ) in MAINNET_COORDINATES.items():
+        text = normalise(mainnet[name])
+        match = re.fullmatch(
+            r"def " + re.escape(name) + r" : " + re.escape(typ) + r" := ([0-9_]+)", text)
+        if match is None:
+            fail(f"{name}: coordinate is not a plain {typ} literal definition")
+        value = int(match.group(1).replace("_", ""))
+        if not isinstance(meta.get(key), int) or isinstance(meta.get(key), bool) or \
+                value != meta[key]:
+            fail(
+                f"{name}: coordinate {value} does not match the reference manifest's "
+                f"deployment.manifest.meta.{key} ({meta.get(key)!r})"
+            )
+
 
 def trust_and_scope(sources: dict[str, str]) -> None:
     joined = "\n".join(sources.values())
@@ -583,6 +914,28 @@ def trust_and_scope(sources: dict[str, str]) -> None:
             fail(f"deployment family makes forbidden scope/identity claim {token!r}")
 
 
+def mainnet_trust_and_scope(source: str) -> None:
+    """The family's trust and scope bans, except that this module may name
+    mainnet, which is its whole subject."""
+    code = strip_comments(source)
+    for token in (
+        "sorry", "admit", "axiom", "opaque", "native_decide",
+        "implemented_by", "unsafe", "AXIOM_EXCEPTIONS",
+    ):
+        if re.search(r"\b" + re.escape(token) + r"\b", source, re.I):
+            fail(f"mainnet deployment module contains forbidden trust token {token!r}")
+    if re.search(r"\b(?:Weth|WETH)\w*\b", code):
+        fail("mainnet deployment module imports or names WETH; Lido contracts are siblings")
+    if re.search(r"(?m)^\s*partial\s+(?:def|theorem|lemma|instance)\b", code):
+        fail("mainnet deployment module contains a forbidden object-level partial declaration")
+    for token in ("factory", "proxy", "CREATE2", "CREATE3", "clone"):
+        if re.search(r"\b" + token + r"\b", source, re.I):
+            fail(f"mainnet deployment module makes forbidden scope/identity claim {token!r}")
+    imports = re.findall(r"(?m)^import\s+(\S+)", code)
+    if imports != ["Blanc.LidoCircuitBreakerDeploymentRoot", "Blanc.LadderReached"]:
+        fail(f"mainnet deployment module imports changed: {imports!r}")
+
+
 def actual_execution_sites(decls: dict[str, str]) -> None:
     """Cross-boundary checks that cannot be satisfied by isolated field names."""
     requirements = {
@@ -592,6 +945,13 @@ def actual_execution_sites(decls: dict[str, str]) -> None:
         "OfficialDeploymentTransactionResult": ("processTransaction ctx.txInput .init tx 0 = .ok (post, bout)",),
         "OfficialDeploymentSuffixResult": ("processCheckedSystemTransaction", "processGeneralPurposeRequests"),
         "DeploymentRoot": ("stateTransitionUsing", "applyBody", "Nonempty (OfficialDeploymentSuffixResult"),
+        "OfficialDeploymentTransactionResultAt": ("processTransaction ctx.txInput .init tx 0 = .ok (post, bout)",),
+        "OfficialDeploymentSuffixResultAt": ("processCheckedSystemTransaction", "processGeneralPurposeRequests"),
+        "DeploymentRootAt": (
+            "stateTransitionUsing cfg base cb.block = .ok deployed",
+            "applyBody (initBenv fork base cb.block.header)",
+            "Nonempty (OfficialDeploymentSuffixResultAt",
+        ),
     }
     for name, fragments in requirements.items():
         for fragment in fragments:
@@ -601,14 +961,18 @@ def actual_execution_sites(decls: dict[str, str]) -> None:
 
 def run(root: Path) -> None:
     sources = source_map(root)
+    mainnet_text = mainnet_source(root)
     decls = all_declarations(sources)
-    require_pins(decls)
-    require_channels(decls)
+    mainnet = declarations(mainnet_text)
+    require_pins(decls, mainnet)
+    require_channels(decls, mainnet)
     require_private_proof_facade(decls)
     premise_discipline(decls)
+    mainnet_discipline(mainnet, root)
     actual_execution_sites(decls)
     trust_and_scope(sources)
-    require_axiom_inventory(root, sources)
+    mainnet_trust_and_scope(mainnet_text)
+    require_axiom_inventory(root, sources, mainnet_text)
 
 
 def main(argv: list[str]) -> int:
@@ -619,13 +983,14 @@ def main(argv: list[str]) -> int:
                         help="print observed pins; review aid, never a passing check")
     args = parser.parse_args(argv)
     try:
-        sources = source_map(args.root)
-        decls = all_declarations(sources)
+        decls = all_declarations(source_map(args.root))
+        mainnet = declarations(mainnet_source(args.root))
         if args.print_pins:
-            for name in PINS:
-                if name not in decls:
-                    fail(f"missing pinned declaration {name}")
-                print(f"{name} {digest(decls[name])}")
+            for table, found in ((PINS, decls), (MAINNET_PINS, mainnet)):
+                for name in table:
+                    if name not in found:
+                        fail(f"missing pinned declaration {name}")
+                    print(f"{name} {digest(found[name])}")
             return 0
         run(args.root)
     except (Failure, OSError, UnicodeError) as exc:
@@ -633,10 +998,13 @@ def main(argv: list[str]) -> int:
         print(f"{VERDICT}: FAIL", file=sys.stderr)
         return 1
     print(
-        f"{VERDICT}: PASS ({len(PINS)} full pins, "
+        f"{VERDICT}: PASS ({len(PINS)} full pins + {len(MAINNET_PINS)} mainnet pins, "
         f"{len(REDUCTION_CERTIFICATE_PINS)} reduction certificates, "
-        f"{sum(map(len, CHANNELS.values()))} semantic fragments, "
-        f"{PUBLIC_THEOREM_COUNT} public theorems under the union axiom walk, "
+        f"{sum(map(len, CHANNELS.values())) + sum(map(len, MAINNET_CHANNELS.values()))} "
+        f"semantic fragments, "
+        f"{PUBLIC_THEOREM_COUNT} + {MAINNET_PUBLIC_THEOREM_COUNT} mainnet public theorems "
+        f"under the union axiom walk, "
+        f"{len(MAINNET_COORDINATES)} coordinates bound to the reference manifest, "
         f"{len(STRICTER_CLAIMS)} stricter claims)"
     )
     return 0

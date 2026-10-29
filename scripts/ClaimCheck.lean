@@ -40,6 +40,7 @@ import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerDeploymentRoot
+import Blanc.LidoCircuitBreakerMainnetDeployment
 import Blanc.ProxyPairOssifiableDeploymentFixture
 import Blanc.ProxyPairOssifiableConstructorNonempty
 import Blanc.ProxyPairOssifiableBothSlotFixture
@@ -4582,6 +4583,280 @@ example {chainId : UInt64} {base deployed future : BlockChain} {ca : Adr}
         ((future.state.getStor ca).get (countSlot pauser)).toNat) =
           entries.length :=
   DeploymentRoot.reachable_countConservation hroot hreach
+
+/-! Selected-fork direct-deployment root pins. The constructor pin freezes
+every field of the selected-fork root package, including the selected rules'
+target non-precompile fact at the deployed tip; the producer pin freezes its
+exact premises (the schedule lookup at the block's own number and timestamp,
+coverage, and the configured transition as the only chain premise); the method
+pins freeze the floor-relative reachable consequences. -/
+
+example {cfg : ChainConfig} {base deployed : BlockChain} {ca : Adr}
+    (execution : ∃ (fork : Fork) (cb : CanonicalBlock) (txBytes : Bytes)
+        (tx : Tx) (sender : Adr)
+        (ctx : PreparedDeploymentContextAt fork cfg.chainId base cb tx sender ca)
+        (post : State) (bout : BlockOutput),
+      CoveredFork fork ∧
+      cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork ∧
+      cfg.rulesAt cb.block.header.number cb.block.header.timestamp =
+        .ok (Fork.ruleSet fork) ∧
+      CanonicalDeploymentBase fork cfg.chainId base sender ca ∧
+      CanonicalOfficialDeploymentBlockAt fork cfg.chainId base cb txBytes tx
+        sender ca ∧
+      OfficialDeploymentTransactionResultAt fork cfg.chainId ca ctx post bout ∧
+      Nonempty
+        (OfficialDeploymentSuffixResultAt fork cfg.chainId ca ctx post bout) ∧
+      stateTransitionUsing cfg base cb.block = .ok deployed ∧
+      stateTransitionAt fork base cb.block = .ok deployed ∧
+      applyBody (initBenv fork base cb.block.header)
+        cb.block.txs cb.block.ommers cb.block.wds = .ok (post, bout) ∧
+      post = deployed.state)
+    (configValid : cfg.Valid)
+    (target_ne_zero : ca ≠ 0)
+    (target_not_precompile : ∀ {tip rules},
+      deployed.blocks.getLast? = some tip →
+      cfg.rulesAt tip.header.number tip.header.timestamp = .ok rules →
+      ¬ rules.isPrecomp ca)
+    (installed : some (deployed.state.getCode ca).toList =
+      Prog.compile (runtime officialParams))
+    (pauseDuration : (deployed.state.getStor ca).get pauseDurationSlot =
+      officialConstructorArgs.initialPauseDuration)
+    (heartbeatInterval :
+      (deployed.state.getStor ca).get heartbeatIntervalSlot =
+        officialConstructorArgs.initialHeartbeatInterval)
+    (emptyRegistry : RegistryWitness
+      (logicalStorageOfStor (deployed.state.getStor ca)) [])
+    (stable : RegistryStable officialParams ca deployed.state)
+    (deployed_validContext : deployed.ValidContext)
+    (deployed_chainId : cfg.chainId = deployed.chainId) :
+    DeploymentRootAt cfg base deployed ca :=
+  { execution := execution
+    configValid := configValid
+    target_ne_zero := target_ne_zero
+    target_not_precompile := target_not_precompile
+    installed := installed
+    pauseDuration := pauseDuration
+    heartbeatInterval := heartbeatInterval
+    emptyRegistry := emptyRegistry
+    stable := stable
+    deployed_validContext := deployed_validContext
+    deployed_chainId := deployed_chainId }
+
+example (cfg : ChainConfig) (fork : Fork) (base deployed : BlockChain)
+    (cb : CanonicalBlock) (txBytes : Bytes)
+    (tx : Tx) (sender ca : Adr)
+    (hbase : CanonicalDeploymentBase fork cfg.chainId base sender ca)
+    (henv : CanonicalOfficialDeploymentBlockAt fork cfg.chainId base cb
+      txBytes tx sender ca)
+    (hfork : CoveredFork fork)
+    (hforkAt :
+      cfg.forkAt cb.block.header.number cb.block.header.timestamp = .ok fork)
+    (hstep : stateTransitionUsing cfg base cb.block = .ok deployed) :
+    DeploymentRootAt cfg base deployed ca :=
+  canonicalDeploymentStepAt_establishes_root cfg fork base deployed cb txBytes
+    tx sender ca hbase henv hfork hforkAt hstep
+
+example {cfg : ChainConfig} {base deployed : BlockChain} {ca : Adr}
+    (hroot : DeploymentRootAt cfg base deployed ca) :
+    BlockChain.ReachUsing cfg deployed deployed :=
+  DeploymentRootAt.reflReach hroot
+
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    RegistryStable officialParams ca future.state :=
+  DeploymentRootAt.reachable_registryStable hroot hreach T hcov hstart
+
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    some (future.state.getCode ca).toList =
+      Prog.compile (runtime officialParams) :=
+  DeploymentRootAt.reachable_code hroot hreach T hcov hstart
+
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    (future.state.getCode ca).toList =
+      lidoCircuitBreakerCode officialParams :=
+  DeploymentRootAt.reachable_installedCode hroot hreach T hcov hstart
+
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries :=
+  DeploymentRootAt.reachable_witness hroot hreach T hcov hstart
+
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp)
+    {target : B256} (htarget : canonicalAddress target) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      ((future.state.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ((future.state.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ∀ index pauser, findEntry entries target = some (index, pauser) →
+        (future.state.getStor ca).get (assignmentSlot target) = pauser ∧
+        (future.state.getStor ca).get (indexSlot target) =
+          Nat.toB256 (index + 1) ∧
+        targetAt entries index = target ∧
+        ∀ otherIndex, otherIndex < entries.length →
+          targetAt entries otherIndex = target → otherIndex = index :=
+  DeploymentRootAt.reachable_membership hroot hreach T hcov hstart htarget
+
+example {cfg : ChainConfig} {base deployed future : BlockChain} {ca : Adr}
+    (hroot : DeploymentRootAt cfg base deployed ca)
+    (hreach : BlockChain.ReachUsing cfg deployed future) (T : Nat)
+    (hcov : ∀ (number timestamp : Nat) (f : Fork), T ≤ timestamp →
+      cfg.forkAt number timestamp = .ok f → CoveredFork f)
+    (hstart : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      T ≤ tip.header.timestamp) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      (∀ pauser, canonicalAddress pauser →
+        (future.state.getStor ca).get (countSlot pauser) =
+          Nat.toB256 (assignmentCount entries pauser)) ∧
+      (future.state.getStor ca).get (countSlot 0) = 0 ∧
+      (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+        ((future.state.getStor ca).get (countSlot pauser)).toNat) =
+          entries.length :=
+  DeploymentRootAt.reachable_countConservation hroot hreach T hcov hstart
+
+/-! Mainnet specialization pins. The three registered coordinates are pinned
+by unfolding (the deployment gate binds the same literals to the reference
+manifest); the BPO2 selection is pinned against the full historical mainnet
+schedule; the root package, producer and consequences are pinned exactly, the
+consequences taking reachability under that schedule and no coverage
+premise. -/
+
+example : officialMainnetDeploymentChainId = 1 := rfl
+
+example : officialMainnetDeploymentBlockNumber = 24_993_190 := rfl
+
+example : officialMainnetDeploymentTimestamp = 1_777_555_319 := rfl
+
+example :
+    mainnetChainConfig.forkAt officialMainnetDeploymentBlockNumber
+      officialMainnetDeploymentTimestamp = .ok .bpo2 :=
+  officialMainnetDeployment_forkAt
+
+example {base deployed : BlockChain} {ca : Adr}
+    (root : DeploymentRootAt mainnetChainConfig base deployed ca)
+    (tip : ∃ tip, deployed.blocks.getLast? = some tip ∧
+      tip.header.number = officialMainnetDeploymentBlockNumber ∧
+      tip.header.timestamp = officialMainnetDeploymentTimestamp) :
+    MainnetDeploymentRoot base deployed ca :=
+  { root := root
+    tip := tip }
+
+example (base deployed : BlockChain) (cb : CanonicalBlock) (txBytes : Bytes)
+    (tx : Tx) (sender ca : Adr)
+    (hnumber : cb.block.header.number = officialMainnetDeploymentBlockNumber)
+    (htimestamp :
+      cb.block.header.timestamp = officialMainnetDeploymentTimestamp)
+    (hbase : CanonicalDeploymentBase .bpo2 officialMainnetDeploymentChainId
+      base sender ca)
+    (henv : CanonicalOfficialDeploymentBlockAt .bpo2
+      officialMainnetDeploymentChainId base cb txBytes tx sender ca)
+    (hstep : stateTransitionUsing mainnetChainConfig base cb.block =
+      .ok deployed) :
+    MainnetDeploymentRoot base deployed ca :=
+  canonicalMainnetDeploymentStep_establishes_root base deployed cb txBytes tx
+    sender ca hnumber htimestamp hbase henv hstep
+
+example {base deployed : BlockChain} {ca : Adr}
+    (hroot : MainnetDeploymentRoot base deployed ca) :
+    BlockChain.ReachUsing mainnetChainConfig deployed deployed :=
+  MainnetDeploymentRoot.reflReach hroot
+
+example {base deployed future : BlockChain} {ca : Adr}
+    (hroot : MainnetDeploymentRoot base deployed ca)
+    (hreach : BlockChain.ReachUsing mainnetChainConfig deployed future) :
+    RegistryStable officialParams ca future.state :=
+  MainnetDeploymentRoot.reachable_registryStable hroot hreach
+
+example {base deployed future : BlockChain} {ca : Adr}
+    (hroot : MainnetDeploymentRoot base deployed ca)
+    (hreach : BlockChain.ReachUsing mainnetChainConfig deployed future) :
+    some (future.state.getCode ca).toList =
+      Prog.compile (runtime officialParams) :=
+  MainnetDeploymentRoot.reachable_code hroot hreach
+
+example {base deployed future : BlockChain} {ca : Adr}
+    (hroot : MainnetDeploymentRoot base deployed ca)
+    (hreach : BlockChain.ReachUsing mainnetChainConfig deployed future) :
+    (future.state.getCode ca).toList =
+      lidoCircuitBreakerCode officialParams :=
+  MainnetDeploymentRoot.reachable_installedCode hroot hreach
+
+example {base deployed future : BlockChain} {ca : Adr}
+    (hroot : MainnetDeploymentRoot base deployed ca)
+    (hreach : BlockChain.ReachUsing mainnetChainConfig deployed future) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries :=
+  MainnetDeploymentRoot.reachable_witness hroot hreach
+
+example {base deployed future : BlockChain} {ca : Adr}
+    (hroot : MainnetDeploymentRoot base deployed ca)
+    (hreach : BlockChain.ReachUsing mainnetChainConfig deployed future)
+    {target : B256} (htarget : canonicalAddress target) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      ((future.state.getStor ca).get (assignmentSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ((future.state.getStor ca).get (indexSlot target) ≠ 0 ↔
+        target ∈ entries.map Prod.fst) ∧
+      ∀ index pauser, findEntry entries target = some (index, pauser) →
+        (future.state.getStor ca).get (assignmentSlot target) = pauser ∧
+        (future.state.getStor ca).get (indexSlot target) =
+          Nat.toB256 (index + 1) ∧
+        targetAt entries index = target ∧
+        ∀ otherIndex, otherIndex < entries.length →
+          targetAt entries otherIndex = target → otherIndex = index :=
+  MainnetDeploymentRoot.reachable_membership hroot hreach htarget
+
+example {base deployed future : BlockChain} {ca : Adr}
+    (hroot : MainnetDeploymentRoot base deployed ca)
+    (hreach : BlockChain.ReachUsing mainnetChainConfig deployed future) :
+    ∃ entries,
+      RegistryWitness
+        (logicalStorageOfStor (future.state.getStor ca)) entries ∧
+      (∀ pauser, canonicalAddress pauser →
+        (future.state.getStor ca).get (countSlot pauser) =
+          Nat.toB256 (assignmentCount entries pauser)) ∧
+      (future.state.getStor ca).get (countSlot 0) = 0 ∧
+      (∑ pauser ∈ (entries.map Prod.snd).toFinset,
+        ((future.state.getStor ca).get (countSlot pauser)).toNat) =
+          entries.length :=
+  MainnetDeploymentRoot.reachable_countConservation hroot hreach
 
 end LidoCircuitBreaker
 

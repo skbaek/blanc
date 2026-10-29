@@ -12,6 +12,7 @@ open Jaune AbstractStackSafety
 
 theorem region1459_subtree1208_rows_checked :
     subtree1208.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1208, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1208_layout_checked :
@@ -20,6 +21,7 @@ theorem region1459_subtree1208_layout_checked :
 
 theorem region1459_subtree1221_rows_checked :
     subtree1221.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1221, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1221_layout_checked :
@@ -29,7 +31,8 @@ theorem region1459_subtree1221_layout_checked :
 theorem region1459_subtree1214_rows_checked :
     subtree1214.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1208_rows_checked
   · exact region1459_subtree1221_rows_checked
 
@@ -43,6 +46,7 @@ theorem region1459_subtree1214_layout_checked :
 
 theorem region1459_subtree1239_rows_checked :
     subtree1239.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1239, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1239_layout_checked :
@@ -51,6 +55,7 @@ theorem region1459_subtree1239_layout_checked :
 
 theorem region1459_subtree1259_rows_checked :
     subtree1259.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1259, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1259_layout_checked :
@@ -60,7 +65,8 @@ theorem region1459_subtree1259_layout_checked :
 theorem region1459_subtree1248_rows_checked :
     subtree1248.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1239_rows_checked
   · exact region1459_subtree1259_rows_checked
 
@@ -75,7 +81,8 @@ theorem region1459_subtree1248_layout_checked :
 theorem region1459_subtree1229_rows_checked :
     subtree1229.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1214_rows_checked
   · exact region1459_subtree1248_rows_checked
 
@@ -89,6 +96,7 @@ theorem region1459_subtree1229_layout_checked :
 
 theorem region1459_subtree1283_rows_checked :
     subtree1283.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1283, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1283_layout_checked :
@@ -97,6 +105,7 @@ theorem region1459_subtree1283_layout_checked :
 
 theorem region1459_subtree1315_rows_checked :
     subtree1315.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1315, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1315_layout_checked :
@@ -106,7 +115,8 @@ theorem region1459_subtree1315_layout_checked :
 theorem region1459_subtree1306_rows_checked :
     subtree1306.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1283_rows_checked
   · exact region1459_subtree1315_rows_checked
 
@@ -120,6 +130,7 @@ theorem region1459_subtree1306_layout_checked :
 
 theorem region1459_subtree1377_rows_checked :
     subtree1377.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1377, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1377_layout_checked :
@@ -128,6 +139,7 @@ theorem region1459_subtree1377_layout_checked :
 
 theorem region1459_subtree1454_rows_checked :
     subtree1454.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1454, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1454_layout_checked :
@@ -137,7 +149,8 @@ theorem region1459_subtree1454_layout_checked :
 theorem region1459_subtree1447_rows_checked :
     subtree1447.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1377_rows_checked
   · exact region1459_subtree1454_rows_checked
 
@@ -152,7 +165,8 @@ theorem region1459_subtree1447_layout_checked :
 theorem region1459_subtree1338_rows_checked :
     subtree1338.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1306_rows_checked
   · exact region1459_subtree1447_rows_checked
 
@@ -167,7 +181,8 @@ theorem region1459_subtree1338_layout_checked :
 theorem region1459_subtree1265_rows_checked :
     subtree1265.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1229_rows_checked
   · exact region1459_subtree1338_rows_checked
 
@@ -181,6 +196,7 @@ theorem region1459_subtree1265_layout_checked :
 
 theorem region1459_subtree1465_rows_checked :
     subtree1465.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1465, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1465_layout_checked :
@@ -189,6 +205,7 @@ theorem region1459_subtree1465_layout_checked :
 
 theorem region1459_subtree1543_rows_checked :
     subtree1543.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1543, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1543_layout_checked :
@@ -198,7 +215,8 @@ theorem region1459_subtree1543_layout_checked :
 theorem region1459_subtree1536_rows_checked :
     subtree1536.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1465_rows_checked
   · exact region1459_subtree1543_rows_checked
 
@@ -212,6 +230,7 @@ theorem region1459_subtree1536_layout_checked :
 
 theorem region1459_subtree1568_rows_checked :
     subtree1568.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1568, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1568_layout_checked :
@@ -220,6 +239,7 @@ theorem region1459_subtree1568_layout_checked :
 
 theorem region1459_subtree1625_rows_checked :
     subtree1625.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1625, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1625_layout_checked :
@@ -229,7 +249,8 @@ theorem region1459_subtree1625_layout_checked :
 theorem region1459_subtree1575_rows_checked :
     subtree1575.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1568_rows_checked
   · exact region1459_subtree1625_rows_checked
 
@@ -244,7 +265,8 @@ theorem region1459_subtree1575_layout_checked :
 theorem region1459_subtree1561_rows_checked :
     subtree1561.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1536_rows_checked
   · exact region1459_subtree1575_rows_checked
 
@@ -258,6 +280,7 @@ theorem region1459_subtree1561_layout_checked :
 
 theorem region1459_subtree1671_rows_checked :
     subtree1671.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1671, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1671_layout_checked :
@@ -266,6 +289,7 @@ theorem region1459_subtree1671_layout_checked :
 
 theorem region1459_subtree1717_rows_checked :
     subtree1717.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1717, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1717_layout_checked :
@@ -275,7 +299,8 @@ theorem region1459_subtree1717_layout_checked :
 theorem region1459_subtree1711_rows_checked :
     subtree1711.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1671_rows_checked
   · exact region1459_subtree1717_rows_checked
 
@@ -289,6 +314,7 @@ theorem region1459_subtree1711_layout_checked :
 
 theorem region1459_subtree1730_rows_checked :
     subtree1730.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1730, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1730_layout_checked :
@@ -297,6 +323,7 @@ theorem region1459_subtree1730_layout_checked :
 
 theorem region1459_subtree1756_rows_checked :
     subtree1756.all (checkRow code.toByteArray table 8) = true := by
+  simp only [subtree1756, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
   decide +kernel
 
 theorem region1459_subtree1756_layout_checked :
@@ -306,7 +333,8 @@ theorem region1459_subtree1756_layout_checked :
 theorem region1459_subtree1737_rows_checked :
     subtree1737.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1730_rows_checked
   · exact region1459_subtree1756_rows_checked
 
@@ -321,7 +349,8 @@ theorem region1459_subtree1737_layout_checked :
 theorem region1459_subtree1724_rows_checked :
     subtree1724.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1711_rows_checked
   · exact region1459_subtree1737_rows_checked
 
@@ -336,7 +365,8 @@ theorem region1459_subtree1724_layout_checked :
 theorem region1459_subtree1664_rows_checked :
     subtree1664.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1561_rows_checked
   · exact region1459_subtree1724_rows_checked
 
@@ -351,7 +381,8 @@ theorem region1459_subtree1664_layout_checked :
 theorem subtree1459_rows_checked :
     subtree1459.all (checkRow code.toByteArray table 8) = true := by
   apply Table.all_node
-  · decide +kernel
+  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
+    decide +kernel
   · exact region1459_subtree1265_rows_checked
   · exact region1459_subtree1664_rows_checked
 

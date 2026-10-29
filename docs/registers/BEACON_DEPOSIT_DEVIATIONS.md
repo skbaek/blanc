@@ -24,8 +24,11 @@ by an unfinished evidence marker.  The compiled proof families named below now
 close the port's mandatory P1--P6 boundaries, and both committed differential
 lanes close their stated finite matrices.  A row backed only by differential
 evidence says so explicitly; finite agreement is never promoted to a universal
-theorem.  Deployment-root and open-history claims remain explicit exclusions
-owned by the nominated closure successor.
+theorem. The native deployment-root and open-history results are stated in
+`Blanc/BeaconDepositDeploymentRoot.lean` and
+`Blanc/BeaconDepositHistoryChain.lean`. They retain the successful configured
+Prague-only deployment premise and, for histories, native SHA admission for
+the actual retained frame roots; the exclusions below describe their limits.
 
 ## Implementation differences and behavioral decisions
 
@@ -132,8 +135,8 @@ gate.
 |---|---|---|
 | Verification of the deployed reference | Lean theorems concern Blanc's own named program and exact compiled artifacts under their stated premises. The deployed runtime is executed only as the finite differential oracle; this port does not prove that artifact correct. | A separate reference-bytecode verification project. |
 | Universal reference/Blanc equivalence or liveness | Differential agreement applies only to the committed matrix and is not a proof, an exhaustive behavioral comparison, a gas-parity theorem, or evidence that a call or deployment will eventually succeed or be included. | A separately stated universal theorem or operational programme. |
-| P7 deployment-root transition | This goal includes the constructor program, its exact creation artifact, write classification, and abstraction-establishing postcondition. It does **not** prove a transaction/block/state-transition deployment root, historical inclusion, propagation, signing, CREATE/CREATE2 variants, factory deployment, co-blocks, arbitrary forks, or endowment shapes. | The nominated beacon-deposit closure successor. |
-| P8 history/open-frame family | No theorem in this goal carries the storage abstraction or monotone count through arbitrary future transactions, re-entry shapes, blocks, or configured-chain reachability. | The nominated beacon-deposit closure successor. |
+| P7 deployment-root limits | `BeaconDeposit.canonicalDeploymentStep_establishes_root` derives the native deployment root from a canonical base, the strict deployment envelope, and a successful configured Prague-only transition. It retains actual message, transaction, block-body, receipt, installed-code, storage and constructor-occurrence evidence. It does not establish historical inclusion, propagation, signing, arbitrary CREATE/CREATE2 or factory paths, co-blocks, arbitrary deployment forks, or endowment shapes. | `Blanc/BeaconDepositDeploymentRoot.lean`; broader deployment claims remain outside this result. |
+| P8 history/open-frame limits | `BeaconDeposit.reachUsing_history_extends` carries the storage abstraction of a checkpoint at which the native runtime is installed through configured reachability, given `ReachNativeShaAdmitted` evidence for the actual retained frame roots, extending its entry list by an existential suffix. `BeaconDeposit.reachUsing_future_count_root` derives count monotonicity and the mixed-root equation for an existential appended suffix; `BeaconDeposit.DeploymentRoot.future_count_root` specializes this to the Prague-only deployment root. The suffix is not claimed unique or transaction-indexed, and native SHA admission is not discharged unconditionally. | `Blanc/BeaconDepositHistoryChain.lean`; operational liveness and unauthenticated histories remain outside this result. |
 | Raw implementation identity | No source, dispatcher, instruction, runtime-byte, creation-byte, code-hash, raw-slot, storage-root/proof, or exact-gas identity with the reference is claimed. | Permanently outside the Blanc port claim, except finite measurements as evidence. |
 
 No exclusion authorizes a known in-scope observable mismatch. The completed

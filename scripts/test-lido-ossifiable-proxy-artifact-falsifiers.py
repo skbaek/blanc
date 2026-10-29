@@ -362,8 +362,10 @@ def manifest_keccak(root: Path) -> None:
 def aggregate_order(root: Path) -> None:
     edit_once(
         root / LEAN_OWNER,
-        "creationBaselineArtifactBytes ++ runtimeBaselineArtifactBytes",
-        "runtimeBaselineArtifactBytes ++ creationBaselineArtifactBytes",
+        "def creationTemplateArtifactBytes : Bytes :=\n"
+        "  creationBaselineArtifactBytes ++ runtimeBaselineArtifactBytes",
+        "def creationTemplateArtifactBytes : Bytes :=\n"
+        "  runtimeBaselineArtifactBytes ++ creationBaselineArtifactBytes",
     )
 
 

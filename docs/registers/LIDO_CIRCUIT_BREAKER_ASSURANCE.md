@@ -124,11 +124,18 @@ lost.
 - **No parameter-generic deployment root.** The root is one exact official
   direct creation: frozen official constructor arguments and full CREATE
   input, zero value, one collision-free top-level creation, a strict singleton
-  type-2 Prague block. No co-block, clone, factory, proxy, or CREATE2 path, no
-  nonzero endowment, no arbitrary fork.
+  type-2 block executed at a covered fork (Prague, Osaka, BPO1 or BPO2) that
+  the supplied schedule selects at the block's own number and timestamp. No
+  co-block, clone, factory, proxy, or CREATE2 path, no nonzero endowment, no
+  uncovered fork (no Amsterdam and no pre-Prague era).
 - **No signature, inclusion, or historical-mainnet claim.** The root theorem
   constructs and authenticates no signing key or signature and proves no
-  historical inclusion.
+  historical inclusion. The mainnet specialization is a theorem about
+  executing Blanc's compiled official artifact at the registered coordinates
+  (chain id 1, block 24,993,190, timestamp 1,777,555,319) under the strict
+  premises; it is not an attestation that those bytes were installed by that
+  block, and the registered transaction's position within its historical block
+  is not modelled.
 - **The history witness is existential, not the same list.** An admin
   re-entering during a callback may legitimately register a pauser, so the
   guarantee is that *some* coherent registration list describes the storage.
@@ -832,34 +839,34 @@ Deployment and history rows are covered by the union axiom walk of
 three axioms; `scripts/check-lido-circuit-breaker-history.sh` pins the family's
 statements and probes no axioms of its own.
 
-#### DEP-1 — For the exact official constructor input, a successful configured Prague-only transition over the strict singleton envelope establishes the deployment root
+#### DEP-1 — For the exact official constructor input, a successful configured transition over the strict singleton envelope, at the covered fork the schedule selects for that block, establishes the deployment root; the fixed-Prague root and the mainnet root at the registered coordinates are its specializations
 
-- **Declarations:** `Blanc.LidoCircuitBreaker.canonicalDeploymentStep_establishes_root`
-- **Premises:** exactly three. **(1)** a canonical deployment base — seventeen pre-execution fields including that the target address is the address computed from the sender and its nonce, and four system-code equalities. **(2)** the canonical official envelope — the block's transaction list is the single transaction, no ommers, no withdrawals, a type-2 transaction on this chain, zero value, data exactly the official full CREATE input, with recovered, validated, and checked sender and the gas and funding bounds. **(3)** `hstep`, the successful configured Prague-only transition — **the theorem's only premise about the named deployed chain**. Everything else — the prepared message, the collision check, the constructor, message and transaction results, receipt success, poststate, installed code, witness, and stability — is **derived, not assumed**. The root record itself is a structure outside the axiom audit and is named here as vocabulary.
+- **Declarations:** `Blanc.LidoCircuitBreaker.canonicalDeploymentStepAt_establishes_root`, `Blanc.LidoCircuitBreaker.canonicalDeploymentStep_establishes_root`, `Blanc.LidoCircuitBreaker.canonicalMainnetDeploymentStep_establishes_root`, `Blanc.LidoCircuitBreaker.officialMainnetDeployment_forkAt`
+- **Premises:** for the selected-fork producer `canonicalDeploymentStepAt_establishes_root`, exactly five. **(1)** a canonical deployment base at the selected fork — seventeen pre-execution fields including that the target address is the address computed from the sender and its nonce, that it is not a precompile of the selected rules, and four system-code equalities. **(2)** the canonical official envelope at the selected fork — the block's transaction list is the single transaction, no ommers, no withdrawals, a type-2 transaction on this chain, zero value, data exactly the official full CREATE input, decoded, validated and checked against the selected rules, with recovered sender and the gas and funding bounds. **(3)** `hfork : CoveredFork fork` and **(4)** `hforkAt`, the supplied schedule's lookup at the deployment block's own number and timestamp returning that fork. **(5)** `hstep : stateTransitionUsing cfg base cb.block = .ok deployed`, the successful configured transition — **the theorem's only premise about the named deployed chain**. Configuration validity, the selected rules, the prepared message, the collision check, the constructor, message and transaction results, receipt success, the request suffix, the block body, poststate, installed code, witness, stability, and the target's non-precompile membership under the rules selected at the deployed tip are **derived, not assumed**. `canonicalDeploymentStep_establishes_root` keeps its three premises (base, Prague envelope, and the configured Prague-only transition) and reads its post-state facts off the selected-fork root at the Prague-only schedule. `canonicalMainnetDeploymentStep_establishes_root` takes the registered block number and timestamp, the base and envelope at BPO2 stated at the registered chain id (which `mainnetChainConfig_chainId_eq_officialDeployment` identifies with the schedule's), and the configured transition under the full historical `mainnetChainConfig`; BPO2 is not assumed but read off the pinned schedule by `officialMainnetDeployment_forkAt` (kernel `decide`). The root records themselves are structures outside the axiom audit and are named here as vocabulary.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** no direct oracle channel for the theorem. The gate carries a **separate** finite replay — one temporary strict singleton Prague block through pinned EELS with 18 positive assertions and 26 live finite mutants — which is feasibility and cross-evaluator evidence only and is **never** a Lean premise.
-- **Non-claims:** not the deployed Solidity bytecode at `0x6019CB557978296BA3C08a7B73225C0975DFB2F7`; no signature, propagation, or inclusion claim; **not parameter-generic**; no co-block, clone, factory, proxy, or CREATE2 path; no nonzero endowment; no arbitrary fork; no universal patch or gas claim. It does not strengthen the history theorem and does not remove its reach bound.
-- **Source:** the deployment root report; `Blanc/LidoCircuitBreakerDeploymentRoot.lean:49-58`
+- **Non-claims:** not the deployed Solidity bytecode at `0x6019CB557978296BA3C08a7B73225C0975DFB2F7`; no signature, propagation, or inclusion claim; the mainnet root is a theorem about executing Blanc's compiled artifact at the registered coordinates, **not an attestation that those bytes were historically installed there**, and the registered transaction's position within its historical block is not modelled; **not parameter-generic**; no co-block, clone, factory, proxy, or CREATE2 path; no nonzero endowment; no uncovered fork; no universal patch or gas claim. It does not strengthen the history theorem and does not remove its reach bound.
+- **Source:** the deployment root report; `Blanc/LidoCircuitBreakerDeploymentRoot.lean:99-110`, `Blanc/LidoCircuitBreakerDeploymentRoot.lean:206-215`, `Blanc/LidoCircuitBreakerMainnetDeployment.lean:55-58`, `Blanc/LidoCircuitBreakerMainnetDeployment.lean:83-95`
 
 #### DEP-2 — The official transaction runs end to end through the real pipeline to a receipt whose own success bit is set, with three ordered logs, no requests, and a singleton receipt key
 
-- **Declarations:** `Blanc.LidoCircuitBreaker.canonicalDeploymentTransaction_succeeds`
-- **Premises:** the canonical base, the official envelope, and a prepared deployment context.
+- **Declarations:** `Blanc.LidoCircuitBreaker.canonicalDeploymentTransactionAt_succeeds`, `Blanc.LidoCircuitBreaker.canonicalDeploymentTransaction_succeeds`
+- **Premises:** the canonical base, the official envelope, and a prepared deployment context, all at the selected fork, and `CoveredFork fork`; the Prague declaration is the specialization at Prague.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** no direct oracle channel — the differential campaign has no receipts at all; it compares slot readings, status, returndata, logs, and call traces, and never builds a block or a receipt
 - **Non-claims:** it does not claim the three logs parse as deposit requests. The opposite is proved: the parsed request list is empty.
 - **Source:** the deployment root report, the history h12 report (lines 20-22); `Blanc/LidoCircuitBreakerDeploymentTransaction.lean`
 
-#### DEP-3 — Both checked Prague request-system suffix calls return empty request bytes and preserve state and output, and the whole block body composes to the deployed state
+#### DEP-3 — Both checked request-system suffix calls of the selected covered fork return empty request bytes and preserve state and output, and the whole block body composes to the deployed state
 
-- **Declarations:** `Blanc.LidoCircuitBreaker.canonicalDeploymentSuffix_succeeds`, `Blanc.LidoCircuitBreaker.canonicalDeploymentApplyBody_succeeds`
-- **Premises:** the prepared context and the transaction result.
+- **Declarations:** `Blanc.LidoCircuitBreaker.canonicalDeploymentSuffixAt_succeeds`, `Blanc.LidoCircuitBreaker.canonicalDeploymentApplyBodyAt_succeeds`, `Blanc.LidoCircuitBreaker.canonicalDeploymentSuffix_succeeds`, `Blanc.LidoCircuitBreaker.canonicalDeploymentApplyBody_succeeds`
+- **Premises:** the prepared context and the transaction result at the selected fork, and `CoveredFork fork` (the body also takes the envelope); the request list, precompile set and body flags are those of the selected rules. The Prague declarations are the specializations at Prague.
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** the finite replay's empty-requests and system-program assertions; no direct oracle channel for the Lean statement
-- **Non-claims:** **Prague-only.** The withdrawal- and consolidation-request predeploy addresses are pinned to the system program's code as a *base premise*, not proved.
+- **Non-claims:** **covered forks only** (Prague, Osaka, BPO1, BPO2). The withdrawal- and consolidation-request predeploy addresses are pinned to the system program's code as a *base premise*, not proved.
 - **Source:** the deployment root report; `Blanc/LidoCircuitBreakerDeploymentBlock.lean`
 
 #### DEP-4 — The fresh-frame constructor execution is walked in full: source-ordered validation, all twelve untaken error arms, the runtime copy and its twelve patches, exactly two configuration stores, three ordered logs, and a terminal return under a named sufficient gas
@@ -882,15 +889,15 @@ statements and probes no axioms of its own.
 - **Non-claims:** **the synthetic stable world receives no deployment credit.** The gate's second compiled control starts from that world, obtains only stability plus reflexive reach, and provably *cannot* manufacture the execution or receipt witness.
 - **Source:** the deployment root report, the history h12 report (lines 67-69); `Blanc/LidoCircuitBreakerDeploymentMessage.lean:346`
 
-#### DEP-6 — Every configured reachable future of the root keeps the exact runtime, admits some Registry witness, satisfies membership and index equivalence at any canonical target, and conserves the global count
+#### DEP-6 — Every configured reachable future of the root keeps the exact runtime, admits some Registry witness, satisfies membership and index equivalence at any canonical target, and conserves the global count — under the Prague-only schedule, under a supplied schedule covered from a floor the deployed tip has reached, and under the full historical mainnet schedule with no coverage premise
 
-- **Declarations:** `Blanc.LidoCircuitBreaker.DeploymentRoot.reflReach`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_registryStable`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_code`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_installedCode`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_witness`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_membership`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_countConservation`
-- **Premises:** a deployment root, and configured reachability from it. **The total-wei-plus-withdrawals bound is inherited at every step and is not discharged here.**
+- **Declarations:** `Blanc.LidoCircuitBreaker.DeploymentRoot.reflReach`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_registryStable`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_code`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_installedCode`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_witness`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_membership`, `Blanc.LidoCircuitBreaker.DeploymentRoot.reachable_countConservation`, `Blanc.LidoCircuitBreaker.DeploymentRootAt.reflReach`, `Blanc.LidoCircuitBreaker.DeploymentRootAt.reachable_registryStable`, `Blanc.LidoCircuitBreaker.DeploymentRootAt.reachable_code`, `Blanc.LidoCircuitBreaker.DeploymentRootAt.reachable_installedCode`, `Blanc.LidoCircuitBreaker.DeploymentRootAt.reachable_witness`, `Blanc.LidoCircuitBreaker.DeploymentRootAt.reachable_membership`, `Blanc.LidoCircuitBreaker.DeploymentRootAt.reachable_countConservation`, `Blanc.LidoCircuitBreaker.MainnetDeploymentRoot.reflReach`, `Blanc.LidoCircuitBreaker.MainnetDeploymentRoot.reachable_registryStable`, `Blanc.LidoCircuitBreaker.MainnetDeploymentRoot.reachable_code`, `Blanc.LidoCircuitBreaker.MainnetDeploymentRoot.reachable_installedCode`, `Blanc.LidoCircuitBreaker.MainnetDeploymentRoot.reachable_witness`, `Blanc.LidoCircuitBreaker.MainnetDeploymentRoot.reachable_membership`, `Blanc.LidoCircuitBreaker.MainnetDeploymentRoot.reachable_countConservation`
+- **Premises:** a deployment root, and configured reachability from it. For `DeploymentRootAt`, additionally a timestamp `T`, coverage of every schedule lookup at or after `T`, and a deployed tip at or after `T`; coverage of each actual successor is then derived by the shared ladder (`ContractSpec.chainUsing_preserves_inv_of_reached`) from strictly increasing block timestamps. For `MainnetDeploymentRoot`, reachability under `mainnetChainConfig` alone: the floor is the registered deployment timestamp, at which the schedule's later lookups are all covered; no theorem asks that every historical mainnet lookup be modern. **The total-wei-plus-withdrawals bound is inherited at every step and is not discharged here.**
 - **Axioms:** `propext`, `Classical.choice`, `Quot.sound`
 - **Gate:** `scripts/check-lido-circuit-breaker-deployment.sh`
 - **Differential channel:** no direct oracle channel, and unreachable in principle by any campaign — there is no artifact a chain-reachability claim could be checked against
 - **Non-claims:** the witness is **existential**, not the checkpoint's list. No gas claim, no liveness, and nothing about any callee.
-- **Source:** the deployment root report; `Blanc/LidoCircuitBreakerDeploymentRoot.lean`
+- **Source:** the deployment root report; `Blanc/LidoCircuitBreakerDeploymentRoot.lean`, `Blanc/LidoCircuitBreakerMainnetDeployment.lean`
 
 #### HIST-1 — From a checkpoint with the exact runtime installed and coherent storage, every reachable state is still stable — over arbitrary callee bytecode, arbitrary depth including same-instance re-entry, and arbitrary finite chains
 
