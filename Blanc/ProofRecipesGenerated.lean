@@ -505,6 +505,22 @@ def recipes : List Recipe := [
     symbols := ["module:Blanc/Lift/Deploy.lean", "declaration:Blanc.Lift.solcRuntimeReturn", "declaration:Blanc.Lift.solcRuntimeReturn_runExact", "declaration:Blanc.Lift.solcRuntimeReturn_effects"]
     boundary := "Advice matches only a direct SFunc.RunExact goal whose body is the named solcRuntimeReturn and whose outcome is halted. It does not unfold arbitrary certificate entries, match an arbitrary exact walk or returned outcome, prove literal bytecode identity, or establish CREATE settlement or historical installation. Concrete consumers identify their registered source tree with this body and discharge word encodings separately."
   },
+  {
+    id := "historical-creation-metadata"
+    status := "active"
+    triggers := ["goal-head:CreateRunMeta"]
+    preferredPath := "Use CreateRunMeta.st and CreateRunMeta.returnPost across register and RETURN replacements. Use CreateRunMeta.of_meta_eq for exact metadata equality. For a fresh SSTORE, use CreateRunMeta.afterSstoreH with the current zero-slot equation; created-target membership supplies its original zero value and sstoreRefundH_zero_zero leaves the refund unchanged. Historical Muir SHA steps supply ShaCallPostDelete, retaining refund, logs, created accounts and deletions."
+    symbols := ["module:Blanc/Lift/CreateSettlementMeta.lean", "declaration:Blanc.Lift.CreateRunMeta", "declaration:Blanc.Lift.CreateRunMeta.st", "declaration:Blanc.Lift.CreateRunMeta.returnPost", "declaration:Blanc.Lift.CreateRunMeta.of_meta_eq", "declaration:Blanc.Lift.CreateRunMeta.afterSstoreH", "declaration:Blanc.Lift.sstoreRefundH_zero_zero", "declaration:Blanc.Lift.ShaCallPostDelete"]
+    boundary := "The carrier supplies zero refund, empty logs, the inherited deletion set and created-target membership only. It does not establish execution, gas, code installation, storage contents, an empty inherited deletion set, transaction settlement or historical inclusion. Store preservation requires the actual current zero-slot equation."
+  },
+  {
+    id := "sha-readiness-selected-rules"
+    status := "active"
+    triggers := ["goal-head:ShaReadyRules"]
+    preferredPath := "For selected rules with delegation disabled, apply Lift.ShaReadyRules.of_disabled; supply warmth, SHA precompile membership, stateGas = none and bal = none from the actual frame environment. Transport readiness across unchanged code and warm addresses with ShaReadyRules.of_eq. A stronger legacy ShaReadyH gives ShaReadyH.toRules. The historical SHA call, copy and pack inversions consume the conditional nondelegation premise through their _of_delegation forms."
+    symbols := ["declaration:Blanc.Lift.ShaReadyRules", "declaration:Blanc.Lift.ShaReadyRules.of_eq", "declaration:Blanc.Lift.ShaReadyRules.of_disabled", "declaration:Blanc.Lift.ShaReadyH.toRules", "declaration:Blanc.Lift.ri_staticcall_shaH_of_delegation", "declaration:Blanc.Lift.ric_shaCallH_of_delegation", "declaration:Blanc.Lift.ric_copy_shaH_of_delegation", "declaration:Blanc.Lift.ric_pack_shaH_of_delegation"]
+    boundary := "Disabled delegation does not imply empty code at address 2. With delegation enabled, actual nondelegation remains required. This readiness carrier proves neither a contract invariant nor frame admission, and does not identify a historical observation with an execution state. Warmth is explicit even under flat access."
+  },
 ]
 
 end Blanc.ProofRecipes

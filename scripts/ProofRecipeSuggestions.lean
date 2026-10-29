@@ -2,6 +2,8 @@ import Blanc.Lift.Deploy
 import Blanc.ExecutionHistoryInEraBounds
 import Blanc.ProofRecipeTactic
 import Blanc.Lift.CursorKeccakOrder
+import Blanc.Lift.HistShaWalk
+import Blanc.Lift.CreateSettlementMeta
 import Blanc.Lift.CallProfileTransport
 import Blanc.Lift.FrameWalk
 import Blanc.MachineDataFacts
@@ -1786,5 +1788,43 @@ example : True := by
   expect_no_recipe_trigger "goal-shape:solc-runtime-return"
   expect_no_recipe_offered "solc-runtime-return"
   trivial
+
+-- EXPECT: historical-creation-metadata
+-- Matcher controls only; the carrier theorem owns metadata preservation.
+example {sevm : Sevm} {b : Devm} {key value : B256} {deletions : AdrSet}
+    (initial : Lift.CreateRunMeta sevm.currentTarget deletions b)
+    (zero : b.getStorVal sevm.currentTarget key = 0) :
+    Lift.CreateRunMeta sevm.currentTarget deletions (Lift.afterSstoreH sevm b key value) := by
+  expect_recipe_trigger "goal-head:CreateRunMeta"
+  expect_recipe_offered "historical-creation-metadata"
+  blanc_suggest
+  exact initial.afterSstoreH zero
+
+-- A projected refund equation is not the metadata carrier.
+example (b : Devm) (zero : b.refundCounter = 0) : b.refundCounter = 0 := by
+  expect_no_recipe_trigger "goal-head:CreateRunMeta"
+  expect_no_recipe_offered "historical-creation-metadata"
+  exact zero
+
+
+-- EXPECT: sha-readiness-selected-rules
+-- Matcher controls; the shared theorem owns disabled-delegation readiness.
+example {sevm : Sevm} {b : Devm}
+    (disabled : sevm.benvStat.rules.delegationEnabled = false)
+    (warm : (2 : Adr) ∈ b.accessedAddresses)
+    (pre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (sg : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) : Lift.ShaReadyRules sevm b := by
+  expect_recipe_trigger "goal-head:ShaReadyRules"
+  expect_recipe_offered "sha-readiness-selected-rules"
+  blanc_suggest
+  exact Lift.ShaReadyRules.of_disabled disabled warm pre sg bal
+
+-- The stronger legacy carrier must not receive conditional-readiness advice.
+example {sevm : Sevm} {b : Devm} (ready : Lift.ShaReadyH sevm b) :
+    Lift.ShaReadyH sevm b := by
+  expect_no_recipe_trigger "goal-head:ShaReadyRules"
+  expect_no_recipe_offered "sha-readiness-selected-rules"
+  exact ready
 
 end Blanc

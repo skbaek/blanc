@@ -56,6 +56,10 @@ def proofRecipeLeafTriggerMatches (target : Lean.Expr) (trigger : String) : Tact
                     payload.getAppArgs.size == 3))
           | _ => return false
       | _ => return false
+  | "goal-head:ShaReadyRules" =>
+      return head == some `Blanc.Lift.ShaReadyRules
+  | "goal-head:CreateRunMeta" =>
+      return head == some `Blanc.Lift.CreateRunMeta
   | "goal-head:Blanc.Lift.NodeClaimNoStateGas" =>
       return head == some `Blanc.Lift.NodeClaimNoStateGas
   | "goal-head:Blanc.Lift.NodeClaim0NoStateGas" =>

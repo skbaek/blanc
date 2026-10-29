@@ -751,6 +751,8 @@ REACHABILITY_WITNESSED_TRIGGERS = frozenset({
     "goal-head:ExecutionTrace.ConfiguredHistoryTrace.NoSenderAt",
     "goal-head:ExecutionTrace.ConfiguredHistoryTraceIn.NoSenderAt",
     "goal-head:Lift.WriteSite.ZeroSlots",
+    "goal-head:ShaReadyRules",
+    "goal-head:CreateRunMeta",
     "goal-head:Blanc.Lift.NodeClaimNoStateGas",
     "goal-head:Blanc.Lift.NodeClaim0NoStateGas",
     "goal-head:Blanc.Xinst.ShapeCovered",
