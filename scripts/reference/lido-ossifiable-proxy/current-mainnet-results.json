@@ -2326,8 +2326,8 @@
     "testingBackend": "cancun"
   },
   "provenance": {
-    "artifactGeneratorSha256": "6adadcf66d2d848a17531b1266f289204e48cdaaf7ce7568fc7aa592ebda268a",
-    "artifactLeanSha256": "350790dbcca7fa49beb2379a2ac67647cc3e5dc59f5b6ff76832449b0b14cf6d",
+    "artifactGeneratorSha256": "bf3833ac137b360081b64999f374883a93e51d529b79d154a3b93d89b77007f6",
+    "artifactLeanSha256": "426c603796c3f4932d1e29ecd22ab7db40a59d63a65c009e7e667330b226f1bb",
     "artifactManifestSha256": "5dc2d5aac806580978388efba9439e174411b0760a616def2b225b395e8966ed",
     "currentMainnetHelperSha256": "50e8291412c4ef54fb76411dd89502beec607266c9cf372a2e7cb65b5c80e008",
     "generatorSha256": "8938490da1cc65e3ada6d6651a090a05d999fe2f703dc30af01fae5648810176",

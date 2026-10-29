@@ -1254,7 +1254,7 @@
     "equalityClaim": false,
     "publicPathIncreases": [],
     "registryFile": "docs/registers/BEACON_DEPOSIT_DEVIATIONS.md",
-    "registryFileSha256": "26ae9a95855b3bfd3f9728809c0bc33f069473d337850328a65a12b67a15b2e3",
+    "registryFileSha256": "b16c7f4fe58ce8858b6540e80b8b75a20fb719c1e0f464c49a0417d7133363a7",
     "registryObligation": "every positive public-path delta is linked to a completed BEACON_DEPOSIT_DEVIATIONS.md row",
     "registryProtocol": "one exact beacon-deposit-gas-v1 marker on one non-PENDING table row per positive delta; no stale markers"
   },
