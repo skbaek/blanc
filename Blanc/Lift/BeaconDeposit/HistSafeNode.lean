@@ -4,7 +4,7 @@ import Blanc.Lift.BeaconDeposit.SafeNode
 /-!
 # Safety segment B5 over a historical frame: the deposit data node, inverted
 
-`safe_dataNode` and its three SHA sites over `ShaReadyH`: each site by `ric_copy_shaH` from
+`safe_dataNode` and its three SHA sites over `ShaReadyRules`: each site by `ric_copy_shaH_of_delegation` from
 `rules.stateGas = none`.
 -/
 
@@ -15,7 +15,7 @@ open Jaune
 /-- **Site 1, inverted** (converse of `node_site1`). -/
 private theorem inv_node1H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {a rt sP wP pkR sR : B256} {R : List B256} {r : Seg}
-    (hsha : ShaReadyH sevm b)
+    (hsha : ShaReadyRules sevm b)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 640).toBytes)
     (hsR : img.sliceD 640 32 0 = sR.toBytes)
@@ -165,7 +165,7 @@ private theorem inv_node1H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   rw [t_0b9c_c16_eq] at run
-  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH (s := 672) (d := 736) (n := 832)
+  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH_of_delegation (s := 672) (d := 736) (n := 832)
     (x1 := Nat.toB256 672) (x3 := Nat.toB256 736) (x4 := Nat.toB256 640)
     (R := 2 :: 0 :: sR :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: 32 :: wP :: R)
     prog_17 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
@@ -176,7 +176,7 @@ private theorem inv_node1H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
 /-- **Site 2, inverted** (converse of `node_site2`). -/
 private theorem inv_node2H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {a rt sP wP pkR sR n1 : B256} {R : List B256} {r : Seg}
-    (hsha : ShaReadyH sevm b)
+    (hsha : ShaReadyRules sevm b)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 736).toBytes)
     (hn1 : img.sliceD 736 32 0 = n1.toBytes)
@@ -388,7 +388,7 @@ private theorem inv_node2H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   rw [t_0d11_c17_eq] at run
-  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH (s := 768) (d := 832) (n := 832)
+  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH_of_delegation (s := 768) (d := 832) (n := 832)
     (x1 := Nat.toB256 768) (x3 := Nat.toB256 832) (x4 := Nat.toB256 736)
     (R := n1 :: 2 :: 0 :: sR :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: 32 :: wP :: R)
     prog_19 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf5 hr5 hs5 (by decide) (by decide) (by decide) (by decide)
@@ -400,7 +400,7 @@ private theorem inv_node2H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
 /-- **Site 3, inverted** (converse of `node_site3`). -/
 private theorem inv_node3H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {h1 h2 : B256} {R : List B256} {r : Seg}
-    (hsha : ShaReadyH sevm b)
+    (hsha : ShaReadyRules sevm b)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 928)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 832).toBytes)
     (hh2 : img.sliceD 832 32 0 = h2.toBytes)
@@ -527,7 +527,7 @@ private theorem inv_node3H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   rw [t_0df7_c19_eq] at run
-  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH (s := 864) (d := 928) (n := 928)
+  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH_of_delegation (s := 864) (d := 928) (n := 928)
     (x1 := Nat.toB256 864) (x3 := Nat.toB256 928) (x4 := Nat.toB256 832) (R := R)
     prog_20 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.sg run
@@ -538,9 +538,9 @@ private theorem inv_node3H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
 Proof sketch.  Three instances of the inverted precompile block (segment B3's sketch); the
 amount copy (`mload 0x80 = 8`: the count-down loop makes no pass, the merge keeps the top 8
 bytes of `le64 a`) as in `body_dataNode`. -/
-theorem safe_dataNodeH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256} {G : Nat}
+theorem safe_dataNodeH_of_rules {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256} {G : Nat}
     {M : Mem} {o : Outcome}
-    (hsha : ShaReadyH sevm b)
+    (hsha : ShaReadyRules sevm b)
     (hM : BodyMem M 832 0x280
       [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x280, sR.toBytes)])
     (run : SFunc.Run prog sevm
@@ -631,5 +631,26 @@ theorem safe_dataNodeH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256
     simp only [node3Img]
     rw [shaImg_digest]
     rfl
+
+
+/-- Compatibility form with the original historical readiness premise. -/
+theorem safe_dataNodeH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256} {G : Nat}
+    {M : Mem} {o : Outcome}
+    (hsha : ShaReadyH sevm b)
+    (hM : BodyMem M 832 0x280
+      [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x280, sR.toBytes)])
+    (run : SFunc.Run prog sevm
+      (St b [0x20, 0x280, 0, pkR, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M G)
+      t_0b4c_c16 o) :
+    ∃ b' M' G', Keep b b' ∧
+      BodyMem M' 1024 0x3a0
+        [(0x3a0, (BeaconDeposit.hashPair Bytes.sha256
+          (Bytes.sha256 (pkR.toBytes ++ sevm.data.sliceD wP.toNat 32 0))
+          (Bytes.sha256 (BeaconDeposit.le64 a.toNat ++ BeaconDeposit.zeros 24 ++
+            sR.toBytes))).toBytes)] ∧
+      SFunc.Run prog sevm
+        (St b' [0x20, 0x3a0, 0, sR, pkR, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G')
+        t_0ea6_c20 o :=
+  safe_dataNodeH_of_rules hsha.toRules hM run
 
 end Blanc.Lift.BeaconDeposit

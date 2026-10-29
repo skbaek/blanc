@@ -168,22 +168,33 @@ namespace ExecutionAccountingReplay
 
 section Entry
 
-variable (ca : Adr) (sem : CodeSem) (entry : Sevm → Devm → Prop) (I : Stor → Prop)
+variable (F : Fork → Prop) (ca : Adr) (sem : CodeSem)
+    (entry : Sevm → Devm → Prop) (I : Stor → Prop)
+
+/-- An observed committed frame: it starts at pc `0` on the selected fork domain at the
+contract's code, satisfies the admission, and `I` holds at its entry storage. -/
+def EntryGoodIn (f : Exec.Frame) : Prop :=
+  f.pc = 0 ∧ F f.sevm.benvStat.fork ∧ sem.At ca 0 f.sevm f.pre ∧
+    entry f.sevm f.pre ∧ I (f.pre.state.getStor ca)
 
 /-- An observed committed frame: it starts at pc `0` on a covered fork at the
 contract's code, satisfies the admission, and `I` holds at its entry storage. -/
 def EntryGood (f : Exec.Frame) : Prop :=
-  f.pc = 0 ∧ CoveredFork f.sevm.benvStat.fork ∧ sem.At ca 0 f.sevm f.pre ∧
-    entry f.sevm f.pre ∧ I (f.pre.state.getStor ca)
+  EntryGoodIn CoveredFork ca sem entry I f
+
+/-- The entry replay: `I` at the start gives `I` at the end and `EntryGood` of
+every step. -/
+def EntryReplayIn (a : Stor) (fs : List Exec.Frame) (b : Stor) : Prop :=
+  I a → I b ∧ ∀ f ∈ fs, EntryGoodIn F ca sem entry I f
 
 /-- The entry replay: `I` at the start gives `I` at the end and `EntryGood` of
 every step. -/
 def EntryReplay (a : Stor) (fs : List Exec.Frame) (b : Stor) : Prop :=
-  I a → I b ∧ ∀ f ∈ fs, EntryGood ca sem entry I f
+  EntryReplayIn CoveredFork ca sem entry I a fs b
 
-theorem EntryReplay.append {a b c : Stor} {xs ys : List Exec.Frame}
-    (left : EntryReplay ca sem entry I a xs b) (right : EntryReplay ca sem entry I b ys c) :
-    EntryReplay ca sem entry I a (xs ++ ys) c := by
+theorem EntryReplayIn.append {a b c : Stor} {xs ys : List Exec.Frame}
+    (left : EntryReplayIn F ca sem entry I a xs b) (right : EntryReplayIn F ca sem entry I b ys c) :
+    EntryReplayIn F ca sem entry I a (xs ++ ys) c := by
   intro ha
   obtain ⟨hb, hxs⟩ := left ha
   obtain ⟨hc, hys⟩ := right hb
@@ -192,13 +203,18 @@ theorem EntryReplay.append {a b c : Stor} {xs ys : List Exec.Frame}
   · exact hxs f hf
   · exact hys f hf
 
+theorem EntryReplay.append {a b c : Stor} {xs ys : List Exec.Frame}
+    (left : EntryReplay ca sem entry I a xs b) (right : EntryReplay ca sem entry I b ys c) :
+    EntryReplay ca sem entry I a (xs ++ ys) c := by
+  exact EntryReplayIn.append CoveredFork ca sem entry I left right
+
 /-- The storage boundary at `ca`, with committed frames as steps. -/
-def entryCarrier : ReplayCarrier ca where
+def entryCarrierIn : ReplayCarrier ca where
   readsStorage := true
   Snap := Stor
   Step := Exec.Frame
   Tag := Unit
-  Replay := EntryReplay ca sem entry I
+  Replay := EntryReplayIn F ca sem entry I
   ofState state := state.getStor ca
   frameEntry _ state := state.getStor ca
   nil := fun _ h => ⟨h, fun _ hf => absurd hf List.not_mem_nil⟩
@@ -213,8 +229,12 @@ def entryCarrier : ReplayCarrier ca where
     exact benvAfterTransfer_getStor_eq_of_safe transfer sum_nof
       (fun transfers _ => Or.inl (caller_ne transfers))
 
+/-- The storage boundary at `ca`, with committed frames as steps. -/
+def entryCarrier : ReplayCarrier ca :=
+  entryCarrierIn CoveredFork ca sem entry I
+
 /-- Every non-static committed frame at `ca` is observed, as itself. -/
-def entryObservation : ReplayObservation (entryCarrier ca sem entry I) where
+def entryObservationIn : ReplayObservation (entryCarrierIn F ca sem entry I) where
   O := Exec.Frame
   obs := id
   obs_nil := rfl
@@ -226,6 +246,10 @@ def entryObservation : ReplayObservation (entryCarrier ca sem entry I) where
     change I (post.getStor ca)
     rw [storage]
     exact h
+
+/-- Every non-static committed frame at `ca` is observed, as itself. -/
+def entryObservation : ReplayObservation (entryCarrier ca sem entry I) :=
+  entryObservationIn CoveredFork ca sem entry I
 
 end Entry
 
@@ -452,14 +476,14 @@ theorem entryTarget (preserve : FramePreserves ca sem entry I) (kinds : SpawnKin
     rw [Exec.committedFrames, dite_eq_left committed, List.flatMap_cons]
   refine ⟨fun static => ?_, fun bound => ⟨_, fun hI => ⟨?_, fun f member => ?_⟩, rfl⟩⟩
   · rw [self, descStatic static, List.append_nil]
-    simp only [entryObservation, Exec.Frame.ofRun, static, Bool.true_eq_false, and_false,
+    simp only [entryObservation, entryObservationIn, Exec.Frame.ofRun, static, Bool.true_eq_false, and_false,
       ↓reduceIte]
   · exact preserve run hrun target fork installed admitted bound hI
   · change f ∈ (Exec.committedFrames run).flatMap (entryObservation ca sem entry I).frameObs
       at member
     rw [self] at member
     rcases List.mem_append.mp member with member | member
-    · simp only [entryObservation, Exec.Frame.ofRun] at member
+    · simp only [entryObservation, entryObservationIn, Exec.Frame.ofRun] at member
       split at member
       · rw [List.mem_singleton] at member
         subst member

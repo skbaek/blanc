@@ -1737,6 +1737,50 @@ and constructor families cover every modelled wrapper layer:
   through the semantic `settleTransactionGas`, and keeps the touched sweep
   symbolic. The older form's covered-fork premise supplies refund quotient 5
   and the absence of a touched-account sweep.
+- [`Blanc/TransactionAdmissionProjection.lean`](../Blanc/TransactionAdmissionProjection.lean)
+  exposes the actual successful checker stages through `checkTransaction_admission_parts`;
+  `checkTransactionSenderAccountFor_code_empty`, `_funds`, and
+  `checkTransactionGasLimits_room` project disabled-delegation code emptiness,
+  the admitted fee/value balance bound, and no-state-gas block capacity. These are
+  facts about the pinned executable checker.
+- [`Blanc/ExecutionTransactionLogProjection.lean`](../Blanc/ExecutionTransactionLogProjection.lean)
+  provides `TransactionTrace.logs_receipt`: selected settlement appends the exact
+  retained message logs and inserts its exact typed receipt at the actual index.
+  `TransactionTrace.message_success_of_receipt` derives the same message's success
+  from a successful receipt explicitly bound to that output trie. The actual
+  receipt binding remains an input. `ApplyTransactionsTrace.messageLogs` and
+  `.blockLogs_eq_messageLogs` preserve the exact ordered concatenation through the list wrapper.
+  These admission/log projections are registry-only: their fee/receipt/storage
+  conjunctions and arithmetic conclusions do not provide a narrow reusable goal
+  head for recipe dispatch.
+- [`Blanc/ExecutionSettledReceiptLogs.lean`](../Blanc/ExecutionSettledReceiptLogs.lean)
+  provides `MessageCallTrace.logs_eq_settledRoots`: the actual message output
+  contains each completely settled root's logs exactly once, including CREATE
+  code-deposit failure filtering. Its receipt APIs retain actual status and gas,
+  and preserve the encoded receipt key through later transaction indices and
+  final body stages. `RlpConcrete.receipt_key_ne_of_small` supplies key separation
+  for a positive index below 128 against any distinct natural index; it uses
+  the actual codec and assumes no hash or codec injectivity.
+- [`Blanc/ExecutionRetainedLogMembership.lean`](../Blanc/ExecutionRetainedLogMembership.lean)
+  provides `MessageCallTrace.retained_log_mem`, `TransactionTrace.retained_log_mem`
+  and `ApplyTransactionsTrace.retained_log_mem`: a canonical log of a retained
+  frame belongs to that same message or transaction fold's output.
+  `StagedBodyTrace.blockLogs_eq_transactionBout` transports the output through
+  actual withdrawals, requests and finalization. The shared
+  [`ExecutionTraceSettledOrigin.lean`](../Blanc/ExecutionTraceSettledOrigin.lean)
+  exposes `MessageCallTrace.mem_rawFrames_of_mem_settledFrames` for the same
+  occurrence's entry facts. These context-dependent equality and membership
+  adapters are registry-only: a general list-membership goal does not identify
+  the retained trace reliably.
+  The Beacon consumer `transactionListIn_node_block_log` in
+  `Blanc/Lift/BeaconDeposit/HistDepositLogs.lean` combines these shared adapters
+  with its derived deposit-entry invariant. Empty target-filtered actual block
+  logs exclude nodes in the same actual transaction suffix. Its admitted Muir
+  suffix corollary carries code and SolInv through actual proof-of-work rewards
+  without an extra reward-funding premise. The exact replay wrapper
+  `transactionListIn_code_solInv_admitted` lives beside the existing historical
+  ladder in `HistCommittedHistory.lean`. Admission is still explicit here;
+  this does not establish the deployment observation bindings or Muir readiness.
 - `ExecutionTrace.ApplyTransactionsTrace`, `SystemMessageTrace`,
   `RequestsTrace`, and `AppliedBodyTrace`, together with their `exists_*Trace`
   theorems, retain transaction lists, system messages, requests, and the full
@@ -2393,6 +2437,46 @@ code along every all-Cancun-onwards history
 `ConfiguredHistoryTraceIn.beaconRootsCode_keep_of_cancunOnwards` discharging the
 beacon-roots character facts once and for all.
 
+Actual block-opening system installations and system-target exclusion for retained
+historical traces are in
+[`Blanc/ExecutionHistoryInSystemEnvironment.lean`](../Blanc/ExecutionHistoryInSystemEnvironment.lean).
+`ConfiguredBlockTraceIn.SystemCodeAtOpening` and
+`ConfiguredHistoryTraceIn.SystemCodeAtOpenings` select `installedAt` at each
+actual opening state; they require no installed code before Cancun.
+`ConfiguredBlockTraceIn.systemFrames_target_of_installedAt` derives the active
+target set from those installations and the existing no-authority/no-CREATE
+trace scopes, using reachable instruction positions (`SpawnFreeReach`) for
+canonical system code. `rawFrames_system_or_tx` partitions the actual raw
+frames; `not_mem_installedAt_of_size` excludes a differently sized installed
+contract from the active system addresses. These are trace-level inputs for
+composition; the C/P seams must supply the opening installations.
+This is a registry branch rather than a proof recipe: target-set conclusions
+alone do not identify the matching installed-code and trace-scope witnesses,
+and a general list-membership or raw-frame trigger is not selective.
+
+To produce those opening obligations from actual checkpoint cuts, use
+[`Blanc/ExecutionHistoryInSystemOpenings.lean`](../Blanc/ExecutionHistoryInSystemOpenings.lean).
+`ConfiguredHistoryTraceIn.ForksSatisfy` records a predicate of each selected
+fork; `tip_fork_mono` and `forksSatisfy_between` derive actual schedule bounds
+from the endpoint tips, via Jaune's `stateTransitionUsing_fork_mono` and each
+retained block's exact post-state equation. `systemCodeAtOpenings_of_preCancun`
+requires no code; `systemCodeAtOpenings_of_cancun` threads one initial beacon-roots
+installation through the actual Cancun spine with the existing code-keep laws.
+`SystemCodeAtOpenings_append` and `NoAuthorityAt_append` compose actual opening
+and authorization predicates. These remain registry entries: the opening goal
+alone does not distinguish the eras or identify the endpoint lookup and initial
+code witnesses. Do not replace those witnesses by an unexplained per-block
+installation premise.
+The Beacon seam consumer is
+`Blanc/Lift/BeaconDeposit/HistoricalSeam.lean`: it binds the actual first Cancun
+step to the successor already contained in the adopted C observation, derives
+all historical openings, and joins the ordered historical and unchanged modern
+extractors with `DepositReplay.append`. The additive
+`HistBeaconEnv.configuredHistoryIn_environment` wrapper exposes admission,
+endpoint invariant and empty code at 2 for such downstream joins; it preserves
+all existing historical headline statements. Concrete anchor specialization is
+separate from the generic empty-prefix/modern specialization.
+
 To identify the literal block in a retained configured transition, use
 `ExecutionTrace.ConfiguredBlockTrace.block_eq_of_transition` in
 [`Blanc/ExecutionHistoryExact.lean`](../Blanc/ExecutionHistoryExact.lean).
@@ -2655,6 +2739,13 @@ For a fold that must also see the actual foreign LOGs in order (the turn queue o
 a mutable external call), use `Exec.targetLogEventsFrom` in
 [`Blanc/Lift/TargetLogEvents.lean`](../Blanc/Lift/TargetLogEvents.lean): retained
 target frames interleaved with each foreign frame's successful `Exec.logAt?`.
+`Exec.committedFrame_ownLogs_subset` embeds each settlement-retained frame's
+canonical own-log ledger into its enclosing ledger by membership. Its proof
+relates the existing tree/list projections, preserving complete-settlement
+pruning, with no instruction-effect proof. `Exec.committedFrame_log_mem_noStateGas`
+then places such a log in that same enclosing committed output through the
+canonical log equation. These membership projections are registry-only because
+a general list-membership goal does not identify this chronology reliably.
 `Exec.targetLogEventsFrom_frames` proves its frame projection equals
 `Exec.retainedTargetFramesFromAt`, with matching `_target`, `_halt`, `_cont`,
 `_doneOk` and `_runOk` equations. The same module transports one foreign step for
@@ -6629,6 +6720,15 @@ by `STATICCALL` shares one descendant argument,
 descendant of a target frame from that restriction and the ladder's lower-depth
 hypothesis. The static callee may be the contract itself; it is then a static
 lower-depth target frame closed by the same hypothesis.
+The selected-domain form is
+[`Blanc/Lift/StaticOnlyFramesIn.lean`](../Blanc/Lift/StaticOnlyFramesIn.lean):
+`parentPrefix_exec_staticcall_of_cert_noStateGas` uses a frame's neutral gas
+schedule, and `Exec.staticOnly_descendantFrames_flatMap_eq_nilIn` carries the
+selected fork predicate through actual child environments. Both reuse the
+existing certificate restriction and descendant-accounting route; the latter
+needs the same lower-depth observation hypothesis. This remains a registry
+branch: a flat-map equality alone does not identify the certificate, fork
+predicate, or lower-depth hypothesis required to apply it.
 The raw (all entered frames, committed or not) form is
 [`Blanc/Lift/StaticOnlyRoots.lean`](../Blanc/Lift/StaticOnlyRoots.lean): a static frame is
 never a CREATE frame (`Xinst.step_spawn_codeAddress_of_static`), every frame a static execution
@@ -6659,6 +6759,16 @@ successful target frame, a prefix fact); `entryLadder` and
 supports: `Evm.step_spawn_child_world` (a child opens on its parent's storage at
 code-bearing accounts, balance total not growing), `Xinst.step_spawn_world`,
 `Exec.Deriv.ParentStep.balSum_le`, `Exec.Deriv.ParentPrefix.balSum_le_getCode`.
+For a selected fork domain, `EntryGoodIn F`, `EntryReplayIn F` and
+`EntryReplayIn.append`, `entryCarrierIn F` and `entryObservationIn F` in the
+same owner provide the carrier and its exact frame observations. The older
+interfaces are their `CoveredFork` instances. This generalizes the carrier;
+it does not port the reentrant `entryTarget`/`SpawnEntry` handler. A contract
+whose actual target subtrees have no observed descendants can use the
+existing historical accounting core with its own observation filter,
+retaining `obs = id` and the same actual settled frame list. These
+arbitrary-invariant carrier interfaces are registry-only because there is
+no narrow fixed goal head for recipe dispatch.
 The same-target direct-code facts are `Xinst.step_call_sameTarget_code` and
 `Xinst.step_staticcall_sameTarget_code` in
 [`Blanc/ExecutionDirectCode.lean`](../Blanc/ExecutionDirectCode.lean), which
@@ -6894,6 +7004,31 @@ sender-account part is the rule-selected `checkTransactionSenderAccountFor`, and
 `calculateIntrinsicCost_two_call` takes the nonzero-byte price and calldata floor
 (`CoveredFork.rules_dataNonZero`, `CoveredFork.rules_calldataFloor`).  Worked use:
 `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Tx/Envelope.lean`.
+
+For historical refund and sweep rules, use
+[`Blanc/TransactionHistoricalForward.lean`](../Blanc/TransactionHistoricalForward.lean).
+`processTransaction_of_stages_selected_receipts` consumes the same actual validation,
+admission, debit, preparation and message-call stages under `stateGas = none` and
+`bal = none`. `selectedTxGasUsed` retains the selected refund quotient;
+`selectedTxFinalState` retains the two fee credits, deletion fold and actual
+touched-account sweep. The result also identifies both gas counters, the appended
+receipt key, its receipt and block logs. `processMessageCall_create_of_message`
+constructs the clean ordinary CREATE wrapper from its no-collision core execution,
+error and nonnegative-refund equations, including touched accounts. These staged
+premises are joint obligations, so this forward chronology remains a registry route.
+
+`dataCost_le_sixteen_length` bounds the actual byte-fold cost without evaluating a concrete payload.
+`calculateIntrinsicCost_legacy_create` and `calculateIntrinsicCost_legacy_create_le`
+are its symbolic legacy CREATE equation and structural bound, requiring no state gas,
+16-gas nonzero bytes, no calldata floor or init-code word charge, and base/create charges
+21000/32000. `allocateEvmGas_bounds_of_intrinsic_le` transports a proved intrinsic cap to
+execution-allocation lower/upper bounds and a zero state reservoir under `stateGas = none`.
+These supply no transaction validation, sender recovery or successful execution.
+`validateTransaction_ok_of_noInitcodeLimit` derives validation from direct intrinsic projections,
+a gas bound, a nonmaximal nonce and the selected transaction cap when state gas and init-code
+limits are disabled. Passing the projections directly avoids concrete CREATE payload normalization;
+the helper supplies no sender recovery or execution result.
+
 For a *symbolic* type-2 call to a contract (no concrete transaction to evaluate) the same module discharges
 the whole envelope from field-level facts: `processTransaction_call_value_of_exec` takes the fee, nonce, funds,
 code-free sender, gas and signature facts (`hrecover` the only cryptographic premise) and the message's
@@ -9283,7 +9418,20 @@ contract-neutral.
   `ri_staticcall_sha_of_charge`, `ri_staticcall_shaH` cased on access schedule and delegation
   flag, and `ri_staticcall_shaH_covered`; the solc packed-SHA site `ric_shaCallH`,
   `ric_copy_shaH`, `ric_pack_shaH`) in
-  [`Blanc/Lift/HistShaWalk.lean`](../Blanc/Lift/HistShaWalk.lean);
+  [`Blanc/Lift/HistShaWalk.lean`](../Blanc/Lift/HistShaWalk.lean).
+  For a historical frame whose selected rules disable delegation, use
+  `ShaReadyRules.of_disabled`: it needs no code observation at address 2.
+  `ShaReadyRules` makes nondelegation conditional on `delegationEnabled = true`,
+  while retaining explicit warmth, precompile, state-gas and BAL premises.
+  Transport it with `ShaReadyRules.of_eq`, or obtain it from the stronger
+  legacy readiness with `ShaReadyH.toRules`. The generalized consumers are
+  `ri_staticcall_shaH_of_delegation`, `ric_shaCallH_of_delegation`,
+  `ric_copy_shaH_of_delegation` and `ric_pack_shaH_of_delegation` in that same
+  owner. The original H signatures remain compatibility wrappers; the actual
+  access schedule and delegation flag still select the execution branches.
+  Recipe `sha-readiness-selected-rules` matches the readiness goal; the call
+  inversions themselves require a specific SHA input window and actual run;
+
   the SHA-256 precompile call (`ri_staticcall_sha`) and the solc packed-SHA
   site (`ric_copy_sha`, the converse of `copy_sha_gen`) in
   [`Blanc/Lift/InvWalkSha.lean`](../Blanc/Lift/InvWalkSha.lean).
@@ -10042,6 +10190,39 @@ contract-neutral.
   block with historical C, authenticating its receipt commitment and placing
   it in the consumed history remain caller obligations. No C-to-D continuity
   or pre-D governance restriction follows from this seed adapter.
+  For exact creation walks under the selected historical schedule, use
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
+  `Ninst.runCompiled_sload_selectedH`/`runCompiled_sstore_selectedH`,
+  `rx_sload_selH`/`rx_sstoreH` and `rxc_sload_selH`/`rxc_sstoreH` charge
+  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`.
+  `sstoreCostH_congr` transports only the actual price inputs. `sloadCostH_muir_eq`
+  and `sstoreCostH_muir_le` give the actual 800-gas read and at-most-20000 write
+  under Muir rules. `liftCreate_postH`
+  and `liftCreate_okH` lift a checked exact constructor run from `stateGas = none`,
+  retaining the historical target touch. Code admissibility, deposit gas, size,
+  value transfer and the run remain explicit obligations.
+
+  For the size-optimized two-word packed-SHA site under actual Muir Glacier rules,
+  [`Blanc/Lift/HistPackedShaSize.lean`](../Blanc/Lift/HistPackedShaSize.lean)
+  provides `staticcall_sha_stepMuir`, `copy_shaNMuir_gen`, `copy_shaNMuir`, and
+  `packed_sha_pairNMuir`. The exact call costs 784 gas, copy/merge/call costs
+  1207 plus expansion, and packing costs 1336 plus expansion. The hash stays
+  symbolic; these forward constructors require no successful-run premise.
+  No reliable single goal-head trigger distinguishes this rule-specific site.
+
+- To retain constructor metadata through symbolic historical walks, use
+  [`Blanc/Lift/CreateSettlementMeta.lean`](../Blanc/Lift/CreateSettlementMeta.lean).
+  `CreateRunMeta` records a zero refund, empty logs, the inherited deletion set and
+  created-target membership. Its `st`, `returnPost`, `of_meta_eq` and `afterSstoreH`
+  operations preserve these facts; the store operation needs a currently zero slot
+  and uses created membership to justify its original zero value.
+  `sstoreRefundH_zero_zero` covers all selected refund schedules without evaluating
+  a hash. `ShaCallPostDelete` extends the SHA successor facts with deletion-set
+  equality; the Muir packed-SHA constructors retain this stronger record.
+  `shaResume_accountsToDelete`, `recordTouch_accountsToDelete` and
+  `afterSstoreH_accountsToDelete` are symbolic projections, and `St_meta` projects
+  metadata before any concrete memory image is substituted.
+
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry

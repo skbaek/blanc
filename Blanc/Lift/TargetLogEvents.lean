@@ -455,6 +455,73 @@ private theorem Exec.stateBoundariesOfCommits_ownLogs_path
         List.nil_append]
       exact nextIh committed path path' (counter + 1) (counter' + 1)
 
+/-- Every settlement-retained descendant's canonical log observations occur in the
+same enclosing ledger. This is only compatibility of the existing tree projections. -/
+private theorem Exec.descendantFrame_ownLogs_subset
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (path : List Nat) (counter : Nat) {frame : Exec.Frame}
+    (member : frame ∈ Exec.descendantFrames run) :
+    (Exec.committedStateBoundaries frame.run).flatMap Exec.boundaryOwnLogs ⊆
+      (Exec.stateBoundariesOfCommits path counter run committed).flatMap
+        Exec.boundaryOwnLogs := by
+  induction run generalizing path counter with
+  | halt step => simp only [Exec.descendantFrames, List.not_mem_nil] at member
+  | cont step next ih =>
+    simp only [Exec.descendantFrames] at member
+    simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons]
+    exact List.subset_append_of_subset_right _ (ih committed path counter member)
+  | doneErr step enter resume =>
+    simp only [Execution.commits, Bool.false_eq_true] at committed
+  | doneOk step enter resume next ih =>
+    simp only [Exec.descendantFrames] at member
+    simp only [Exec.stateBoundariesOfCommits, List.flatMap_cons,
+      Exec.boundaryOwnLogs, Exec.stateBoundary, List.nil_append]
+    exact ih committed path (counter + 1) member
+  | runErr step enter child resume ih =>
+    simp only [Execution.commits, Bool.false_eq_true] at committed
+  | runOk step enter child resume next childIh nextIh =>
+    rename_i nodePc nodeSevm nodePre childFrame rsm nextPc cevm raw inter final
+    by_cases settles : Frame.settlementCommits childFrame raw = true
+    · rw [Exec.descendantFrames_runOk_of_settlementCommits step enter child resume next settles]
+        at member
+      simp only [List.mem_cons, List.mem_append] at member
+      simp only [Exec.stateBoundariesOfCommits, dite_eq_left settles, List.flatMap_cons,
+        List.flatMap_append, Exec.boundaryOwnLogs, Exec.stateBoundary, List.nil_append]
+      rcases member with (rfl | inChild) | inNext
+      · intro log logged
+        have childCommitted := Frame.raw_commits_of_settlementCommits settles
+        change log ∈ (Exec.committedStateBoundaries child).flatMap Exec.boundaryOwnLogs at logged
+        simp only [Exec.committedStateBoundaries, childCommitted, dite_true] at logged
+        rw [Exec.stateBoundariesOfCommits_ownLogs_path child childCommitted []
+          (path ++ [counter]) 0 0] at logged
+        exact List.mem_append_left _ logged
+      · exact List.subset_append_of_subset_left _
+          (childIh (Frame.raw_commits_of_settlementCommits settles) (path ++ [counter]) 0 inChild)
+      · exact List.subset_append_of_subset_right _
+          (nextIh committed path (counter + 1) inNext)
+    · rw [Exec.descendantFrames_runOk_of_not_settlementCommits step enter child resume next settles]
+        at member
+      simp only [Exec.stateBoundariesOfCommits, dite_eq_right settles, List.flatMap_cons,
+        Exec.boundaryOwnLogs, Exec.stateBoundary, List.nil_append]
+      exact nextIh committed path (counter + 1) member
+
+/-- A committed frame's log ledger embeds in the same enclosing committed ledger.
+Whole target frames, foreign frames, and discarded child subtrees use the canonical projections. -/
+theorem Exec.committedFrame_ownLogs_subset
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) {frame : Exec.Frame}
+    (member : frame ∈ Exec.committedFrames run) :
+    (Exec.committedStateBoundaries frame.run).flatMap Exec.boundaryOwnLogs ⊆
+      (Exec.committedStateBoundaries run).flatMap Exec.boundaryOwnLogs := by
+  by_cases committed : Execution.commits out = true
+  · simp only [Exec.committedFrames, dite_eq_left committed, List.mem_cons] at member
+    rcases member with rfl | descendant
+    · exact fun _ logged => logged
+    · simp only [Exec.committedStateBoundaries, dite_eq_left committed]
+      exact Exec.descendantFrame_ownLogs_subset run committed [] 0 descendant
+  · simp only [Exec.committedFrames, dite_eq_right committed, List.not_mem_nil] at member
+
 /-- Committed endpoint logs at any original path and counter. -/
 theorem Exec.committed_logs_at_noStateGas
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
@@ -469,6 +536,18 @@ theorem Exec.committed_logs_at_noStateGas
   have logs := Exec.committed_logs_noStateGas run committed hsg hdel hacc
   simp only [Exec.committedStateBoundaries, committed, dite_true] at logs
   rw [logs, Exec.stateBoundariesOfCommits_ownLogs_path run committed [] path 0 counter]
+
+/-- A log observed in any settlement-retained frame occurs in the same enclosing
+committed output. Canonical chronology supplies the endpoint equation. -/
+theorem Exec.committedFrame_log_mem_noStateGas
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (committed : Execution.commits out = true)
+    (hsg : sevm.benvStat.rules.stateGas = none) {frame : Exec.Frame}
+    (member : frame ∈ Exec.committedFrames run) {log : Log}
+    (logged : log ∈ (Exec.committedStateBoundaries frame.run).flatMap Exec.boundaryOwnLogs) :
+    log ∈ (Execution.committedPost out committed).logs := by
+  rw [Exec.committed_logs_noStateGas run committed hsg rfl rfl]
+  exact List.mem_append_right _ (Exec.committedFrame_ownLogs_subset run member logged)
 
 theorem Exec.committed_logs_at
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}

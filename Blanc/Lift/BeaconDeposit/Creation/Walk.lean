@@ -310,19 +310,18 @@ theorem memAt_31 : memAt 31 = 3200 := by decide
 
 /-- **The last pass** (`i = 31`): the loop test fails, the constructor copies the appended
 runtime to memory `0` and returns it. -/
-theorem exit {sevm : Sevm} (hcode : sevm.code = code) {b : Devm} {M : Mem}
-    (inv : LoopInv sevm 31 b M) (G : Nat) :
+theorem exit_of_memory {sevm : Sevm} (hcode : sevm.code = code) {b : Devm} {M : Mem}
+    (herr : b.error = none) (hwf : Mem.Wf M) {img : Bytes} (hr : Mem.Reads M img)
+    (hs : M.size = 3200) (G : Nat) :
     ∃ post, SFunc.RunExactCut prog sevm [2] (St b [Nat.toB256 31] M (G + exitCost)) t_0014_c2
         (.done (.halted post)) ∧
       post.output = runtimeWindow ∧ post.error = none ∧
       Devm.getStor post sevm.currentTarget = Devm.getStor b sevm.currentTarget ∧
       post.gasLeft = G := by
-  obtain ⟨img, hr, -⟩ := inv.img
-  have hs : M.size = 3200 := inv.size.trans memAt_31
   set M2 := M.write 0 runtimeWindow with hM2
   have hs2 : M2.size = 6368 := by
     rw [hM2, Mem.size_write_of_size hs (by decide) runtimeWindow_length]; decide
-  have hr2 : Mem.Reads M2 (Bytes.writeAt img 0 runtimeWindow) := hr.write inv.wf 0 _
+  have hr2 : Mem.Reads M2 (Bytes.writeAt img 0 runtimeWindow) := hr.write hwf 0 _
   have hout : (M2.read 0 6358).1 = runtimeWindow := by
     rw [hr2.read]
     have := Bytes.sliceD_writeAt img runtimeWindow 0
@@ -332,7 +331,7 @@ theorem exit {sevm : Sevm} (hcode : sevm.code = code) {b : Devm} {M : Mem}
   simp only [St.memory, toNat_toB256' (show 6358 < 2 ^ 256 by decide),
     toNat_toB256' (show 0 < 2 ^ 256 by decide), hout] at p1
   refine ⟨returnPost (St b [Nat.toB256 0, Nat.toB256 6358] M2 G) (Nat.toB256 0) (Nat.toB256 6358)
-    [], ?_, p1, p2.trans inv.error, p3 _, p4⟩
+    [], ?_, p1, p2.trans herr, p3 _, p4⟩
   rw [show G + exitCost = G + 3 + copyCost + 41 by unfold exitCost; omega]
   unfold t_0014_c2
   refine rxc_dest ?_
@@ -373,6 +372,17 @@ theorem exit {sevm : Sevm} (hcode : sevm.code = code) {b : Devm} {M : Mem}
   simp only [toNat_toB256' (show 6358 < 2 ^ 256 by decide),
     toNat_toB256' (show 0 < 2 ^ 256 by decide)]
   decide
+
+/-- The modern loop-invariant interface to the shared constructor return proof. -/
+theorem exit {sevm : Sevm} (hcode : sevm.code = code) {b : Devm} {M : Mem}
+    (inv : LoopInv sevm 31 b M) (G : Nat) :
+    ∃ post, SFunc.RunExactCut prog sevm [2] (St b [Nat.toB256 31] M (G + exitCost)) t_0014_c2
+        (.done (.halted post)) ∧
+      post.output = runtimeWindow ∧ post.error = none ∧
+      Devm.getStor post sevm.currentTarget = Devm.getStor b sevm.currentTarget ∧
+      post.gasLeft = G := by
+  obtain ⟨img, hr, -⟩ := inv.img
+  exact exit_of_memory hcode inv.error inv.wf hr (inv.size.trans memAt_31) G
 
 /-! ## The whole constructor -/
 

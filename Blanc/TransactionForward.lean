@@ -207,6 +207,29 @@ theorem validateTransaction_ok_of_facts {rules : ForkRules} {tx : Tx} {sender : 
   | some m =>
     simp only [bind, Except.bind, hinit, hlimit, hcap, hnonce, ↓reduceIte]
 
+/-- Validation without a state-gas dimension when init-code limits are disabled.
+Direct intrinsic projections keep concrete CREATE payloads out of pair conversion. -/
+theorem validateTransaction_ok_of_noInitcodeLimit
+    {rules : ForkRules} {tx : Tx} {sender : Adr} {f : Nat}
+    (hsg : rules.stateGas = none) (hinit : rules.creation.initCodeLimit = false)
+    (hfloor : (calculateIntrinsicCost rules tx sender).2 = f)
+    (hgas : max (calculateIntrinsicCost rules tx sender).1 f ≤ tx.gas)
+    (hnonce : tx.nonce ≠ UInt64.max)
+    (hcap : checkTransactionGasCap rules.tx tx.gas = .ok ()) :
+    validateTransaction rules tx sender =
+      .ok ((calculateIntrinsicCost rules tx sender).1, f) := by
+  have hlimit : checkInitcodeLimit rules tx.type.receiver? tx.data.length = .ok () := by
+    simp only [checkInitcodeLimit, hinit, Bool.false_eq_true, ↓reduceIte]
+  cases hcost : calculateIntrinsicCost rules tx sender with
+  | mk i g =>
+    simp only [hcost] at hfloor hgas ⊢
+    subst f
+    unfold validateTransaction
+    simp only [hsg, hcost, Nat.not_lt.mpr hgas, ↓reduceIte]
+    cases hm : rules.tx.maxGas with
+    | none => simp only [hnonce, ↓reduceIte, bind, Except.bind, hlimit]
+    | some m => simp only [bind, Except.bind, hlimit, hcap, hnonce, ↓reduceIte]
+
 /-- The message a call transaction with receiver `t` prepares: it calls `t`'s current code with the
 transaction's data and value, from the origin, at the outermost depth, with the origin, the receiver
 and the precompiles pre-warmed on top of the transaction's access list. -/
@@ -790,6 +813,52 @@ private theorem dataCost_eq_tokens_mul (l : Bytes) :
         rw [show c * 4 + 16 = (c + 4) * 4 by omega]
         exact h
   simpa only [zero_mul, standardCallDataTokenCost] using aux 0 l
+
+/-- A sixteen-gas nonzero-byte schedule charges at most sixteen gas per input byte. -/
+theorem dataCost_le_sixteen_length (data : Bytes) :
+    data.foldl (fun acc x => acc + (if x = 0 then standardCallDataTokenCost else 16)) 0 ≤
+      16 * data.length := by
+  rw [dataCost_eq_tokens_mul]
+  have h := calldataTokens_le data
+  change calldataTokens data * 4 ≤ 16 * data.length
+  omega
+
+/-- Symbolic intrinsic-cost cut for an ordinary pre-initcode-metering legacy CREATE.
+Keeping calldata symbolic prevents normalization from traversing its concrete bytes. -/
+theorem calculateIntrinsicCost_legacy_create {rules : ForkRules} {tx : Tx} {sender : Adr}
+    {price : Nat} (htype : tx.type = .zero price none)
+    (hsg : rules.stateGas = none) (hnz : rules.txr.dataNonZero = 16)
+    (hfloor : rules.txr.calldataFloor = false) (hinit : rules.creation.initCodeLimit = false)
+    (hbase : rules.gas.txBase = 21000) (hcreate : rules.gas.createAccess = 32000) :
+    calculateIntrinsicCost rules tx sender =
+      (53000 + tx.data.foldl
+        (fun acc x => acc + (if x = 0 then standardCallDataTokenCost else 16)) 0, 0) := by
+  unfold calculateIntrinsicCost
+  simp only [htype, TxType.receiver?, hsg, hnz, hfloor, hinit, hbase, hcreate,
+    Bool.false_eq_true, ↓reduceIte, List.map_nil, List.sum_nil, add_zero, Nat.reduceAdd]
+
+/-- Structural upper bound for a legacy CREATE's intrinsic cost, before substituting
+any concrete payload. The selected schedule is stated by its actual rule fields. -/
+theorem calculateIntrinsicCost_legacy_create_le {rules : ForkRules} {tx : Tx} {sender : Adr}
+    {price n : Nat} (htype : tx.type = .zero price none)
+    (hsg : rules.stateGas = none) (hnz : rules.txr.dataNonZero = 16)
+    (hfloor : rules.txr.calldataFloor = false) (hinit : rules.creation.initCodeLimit = false)
+    (hbase : rules.gas.txBase = 21000) (hcreate : rules.gas.createAccess = 32000)
+    (hlen : tx.data.length ≤ n) :
+    (calculateIntrinsicCost rules tx sender).1 ≤ 53000 + 16 * n ∧
+      (calculateIntrinsicCost rules tx sender).2 = 0 := by
+  rw [calculateIntrinsicCost_legacy_create htype hsg hnz hfloor hinit hbase hcreate]
+  have hd := dataCost_le_sixteen_length tx.data
+  exact ⟨by dsimp only [Prod.fst]; omega, rfl⟩
+
+/-- Allocation bounds from a proved intrinsic cap on the ordinary gas lane. -/
+theorem allocateEvmGas_bounds_of_intrinsic_le {rules : ForkRules} {txGas intrinsic cap : Nat}
+    (hsg : rules.stateGas = none) (hcost : intrinsic ≤ cap) :
+    txGas - cap ≤ (allocateEvmGas rules txGas intrinsic).executionGas ∧
+    (allocateEvmGas rules txGas intrinsic).executionGas ≤ txGas ∧
+    (allocateEvmGas rules txGas intrinsic).stateGasReservoir = 0 := by
+  simp only [allocateEvmGas, hsg]
+  exact ⟨by omega, Nat.sub_le _ _, True.intro⟩
 
 /-- **The intrinsic cost of a plain type-2 call** (a receiver, no access list, no state-gas dimension):
 the transaction base cost plus four gas per calldata token, and the calldata floor of the tokens at the

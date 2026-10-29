@@ -5,8 +5,8 @@ import Blanc.Lift.BeaconDeposit.SafeInsertLive
 /-!
 # Safety segments L1/L2 over a historical frame: the insertion loop's two passes, inverted
 
-`safe_insertDead` over `ShaReadyH` (its `SLOAD` by `ri_sloadH`, its packed SHA site by
-`ric_pack_shaH`) and `safe_insertLive` with its `SSTORE` by `ri_sstoreH`; the successors are
+`safe_insertDead` over `ShaReadyRules` (its `SLOAD` by `ri_sloadH`, its packed SHA site by
+`ric_pack_shaH_of_delegation`) and `safe_insertLive` with its `SSTORE` by `ri_sstoreH`; the successors are
 `afterSloadH`/`afterSstoreH`.
 -/
 
@@ -24,9 +24,9 @@ The head test `h < 32` has `t_10a9_c23 = POP; undefined` as its failing arm (no 
 test is decided by `hsz` (`Nat.and_one_is_mod` through `B256.toNat_and`, as in
 `body_insertLive`).  The precompile block as in segment B3's sketch; the `SLOAD` of
 `Nat.toB256 h + 0 = solBranchSlot h` has successor `afterSloadH`. -/
-theorem safe_insertDeadH {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} {h G : Nat}
+theorem safe_insertDeadH_of_rules {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} {h G : Nat}
     {M : Mem} {r : Seg}
-    (hsha : ShaReadyH sevm b) (hh : h ≤ 32) (hsz : sz.toNat % 2 = 0) (hR : R.length ≤ 16)
+    (hsha : ShaReadyRules sevm b) (hh : h ≤ 32) (hsz : sz.toNat % 2 = 0) (hR : R.length ≤ 16)
     (hM : BodyMem M (1024 + 96 * h) (Nat.toB256 (928 + 96 * h)) [])
     (run : SFunc.RunCut prog sevm [23] (St b (Nat.toB256 h :: sz :: nd :: R) M G) t_0f6e_c23 r) :
     h < 32 ∧ ∃ b' M' G', Keep (afterSloadH sevm b (solBranchSlot h)) b' ∧
@@ -115,11 +115,11 @@ theorem safe_insertDeadH {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sloadH hsha.bal s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   set b1 := afterSloadH sevm b (solBranchSlot h) with hb1
-  have hok1 : ShaReadyH sevm b1 := ⟨by rw [hb1, afterSloadH_getCode]; exact hsha.nodeleg,
+  have hok1 : ShaReadyRules sevm b1 := ⟨by rw [hb1, afterSloadH_getCode]; exact hsha.nodeleg,
     by rw [hb1, afterSloadH_accessedAddresses]; exact hsha.warm, hsha.pre, hsha.sg, hsha.bal⟩
   set br := b.getStorVal sevm.currentTarget (solBranchSlot h) with hbr
   have hfp' : img.sliceD 64 32 0 = (Nat.toB256 (928 + 96 * h)).toBytes := hfp
-  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_pack_shaH (a := br) (bw := nd)
+  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_pack_shaH_of_delegation (a := br) (bw := nd)
     (n := 1024 + 96 * h) (f := 928 + 96 * h)
     (show prog[22]? = some (mcpyTree 0x10 0x25 0x0f 0xe8 22
       (mergeTree (shaCallTree 0x10 0x82 0x10 0x97 t_1079_c22 t_1093_c22 t_1097_c22))) from rfl)
@@ -154,6 +154,20 @@ theorem safe_insertDeadH {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256}
   rw [shaImg_out (by omega), packImg_word64 (by omega)]
   congr 2
   omega
+
+
+/-- Compatibility form with the original historical readiness premise. -/
+theorem safe_insertDeadH {sevm : Sevm} {b : Devm} {sz nd : B256} {R : List B256} {h G : Nat}
+    {M : Mem} {r : Seg}
+    (hsha : ShaReadyH sevm b) (hh : h ≤ 32) (hsz : sz.toNat % 2 = 0) (hR : R.length ≤ 16)
+    (hM : BodyMem M (1024 + 96 * h) (Nat.toB256 (928 + 96 * h)) [])
+    (run : SFunc.RunCut prog sevm [23] (St b (Nat.toB256 h :: sz :: nd :: R) M G) t_0f6e_c23 r) :
+    h < 32 ∧ ∃ b' M' G', Keep (afterSloadH sevm b (solBranchSlot h)) b' ∧
+      BodyMem M' (1120 + 96 * h) (Nat.toB256 (1024 + 96 * h)) [] ∧
+      r = .at 23 (St b' (Nat.toB256 (h + 1) :: sz / 2 ::
+        BeaconDeposit.hashPair Bytes.sha256
+          (b.getStorVal sevm.currentTarget (solBranchSlot h)) nd :: R) M' G') :=
+  safe_insertDeadH_of_rules hsha.toRules hh hsz hR hM run
 
 /-- **Inversion of the storing pass (`t_0f6e_c23` cut at entry 23) over a historical frame.**  From the loop head at a
 height `h ≤ 32` with `size` odd, every successful cut run passes the head test (so `h < 32`),

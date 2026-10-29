@@ -25,6 +25,11 @@ theorem _root_.Blanc.Lift.ShaReadyH.keep {sevm : Sevm} {b b' : Devm} (h : ShaRea
     (hk : Keep b b') : ShaReadyH sevm b' :=
   h.of_eq hk.code hk.addrs
 
+/-- Preserve selected-rule SHA readiness across the Beacon world frame. -/
+theorem _root_.Blanc.Lift.ShaReadyRules.keep {sevm : Sevm} {b b' : Devm}
+    (h : ShaReadyRules sevm b) (hk : Keep b b') : ShaReadyRules sevm b' :=
+  h.of_eq hk.code hk.addrs
+
 /-- What the insertion loop keeps of the base `b₀` it started from over a historical frame:
 storage, code, the warm accounts, logs, output and error. -/
 structure LoopBaseH (b₀ b : Devm) : Prop where

@@ -4,7 +4,7 @@ import Blanc.Lift.BeaconDeposit.SafeSignatureRoot
 /-!
 # Safety segment B4 over a historical frame: the signature root, inverted
 
-`safe_signatureRoot` and its three SHA sites over `ShaReadyH` (each by `ric_copy_shaH` from
+`safe_signatureRoot` and its three SHA sites over `ShaReadyRules` (each by `ric_copy_shaH_of_delegation` from
 `rules.stateGas = none`), reusing the fork-free slice helpers `ri_slice13`/`ric_slice13`.
 -/
 
@@ -15,7 +15,7 @@ open Jaune
 /-- **Site 1, inverted** (converse of `sig_site1`). -/
 private theorem inv_site1H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {a rt sP pkR : B256} {R : List B256} {r : Seg}
-    (hsha : ShaReadyH sevm b)
+    (hsha : ShaReadyRules sevm b)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 352).toBytes)
     (hpk : img.sliceD 352 32 0 = pkR.toBytes)
@@ -146,7 +146,7 @@ private theorem inv_site1H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   rw [t_08bb_c12_eq] at run
-  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH (s := 384) (d := 448) (n := 832)
+  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH_of_delegation (s := 384) (d := 448) (n := 832)
     (x1 := Nat.toB256 384) (x3 := Nat.toB256 448) (x4 := Nat.toB256 352)
     (R := 2 :: 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
     prog_14 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf3 hr3 hs3 (by decide) (by decide) (by decide) (by decide)
@@ -157,7 +157,7 @@ private theorem inv_site1H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
 /-- **Site 2, inverted** (converse of `sig_site2`). -/
 private theorem inv_site2H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {a rt sP pkR h1 : B256} {R : List B256} {r : Seg}
-    (hsha : ShaReadyH sevm b) (hsP : sP.toNat + 96 < 2 ^ 256)
+    (hsha : ShaReadyRules sevm b) (hsP : sP.toNat + 96 < 2 ^ 256)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 448).toBytes)
     (hh1 : img.sliceD 448 32 0 = h1.toBytes)
@@ -304,7 +304,7 @@ private theorem inv_site2H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   rw [t_09b7_c14_eq] at run
-  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH (s := 480) (d := 544) (n := 832)
+  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH_of_delegation (s := 480) (d := 544) (n := 832)
     (x1 := Nat.toB256 480) (x3 := Nat.toB256 544) (x4 := Nat.toB256 448)
     (R := h1 :: 2 :: 0 :: pkR :: 0x80 :: a :: rt :: 96 :: sP :: R)
     prog_15 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
@@ -315,7 +315,7 @@ private theorem inv_site2H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
 /-- **Site 3, inverted** (converse of `sig_site3`). -/
 private theorem inv_site3H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
     {h1 h2 : B256} {R : List B256} {r : Seg}
-    (hsha : ShaReadyH sevm b)
+    (hsha : ShaReadyRules sevm b)
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hs : M.size = 832)
     (hfp : img.sliceD 64 32 0 = (Nat.toB256 544).toBytes)
     (hh2 : img.sliceD 544 32 0 = h2.toBytes)
@@ -442,7 +442,7 @@ private theorem inv_site3H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   rw [t_0a9d_c15_eq] at run
-  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH (s := 576) (d := 640) (n := 832)
+  obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH_of_delegation (s := 576) (d := 640) (n := 832)
     (x1 := Nat.toB256 576) (x3 := Nat.toB256 640) (x4 := Nat.toB256 544) (R := R)
     prog_16 (by simp only [List.not_mem_nil, not_false_eq_true]) (by decide) hwf4 hr4 hs4 (by decide) (by decide) (by decide) (by decide)
     (by decide) (by decide) hfp4 hw1 hw2 hsha.nodeleg hsha.warm hsha.pre hsha.sg run
@@ -454,9 +454,9 @@ Proof sketch.  Three instances of the inverted precompile block (segment B3's sk
 slice helper (entry 13) inverted twice: its two bound checks `GT … REVERT` pass on the constants
 `0 ≤ 64 ≤ 96`, `64 ≤ 96 ≤ 96`, and it returns `sP + start, end - start`.  `hsP` keeps `sP + 64`
 from wrapping, so the second slice reads `sliceD (sP + 64) 32`. -/
-theorem safe_signatureRootH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B256} {G : Nat}
+theorem safe_signatureRootH_of_rules {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B256} {G : Nat}
     {M : Mem} {o : Outcome}
-    (hsha : ShaReadyH sevm b) (hsP : sP.toNat + 96 < 2 ^ 256)
+    (hsha : ShaReadyRules sevm b) (hsP : sP.toNat + 96 < 2 ^ 256)
     (hM : BodyMem M 832 0x160
       [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x160, pkR.toBytes)])
     (run : SFunc.Run prog sevm
@@ -550,5 +550,25 @@ theorem safe_signatureRootH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B2
     · rw [B256.length_toBytes]
       simp only [I3, sig3Img]
       rw [shaImg_digest, signatureRoot_eq]
+
+
+/-- Compatibility form with the original historical readiness premise. -/
+theorem safe_signatureRootH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B256} {G : Nat}
+    {M : Mem} {o : Outcome}
+    (hsha : ShaReadyH sevm b) (hsP : sP.toNat + 96 < 2 ^ 256)
+    (hM : BodyMem M 832 0x160
+      [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x160, pkR.toBytes)])
+    (run : SFunc.Run prog sevm
+      (St b [0x20, 0x160, 0, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M G)
+      t_086e_c12 o) :
+    ∃ b' M' G', Keep b b' ∧
+      BodyMem M' 832 0x280
+        [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat),
+          (0x280, (BeaconDeposit.signatureRoot Bytes.sha256
+            (sevm.data.sliceD sP.toNat 96 0)).toBytes)] ∧
+      SFunc.Run prog sevm
+        (St b' [0x20, 0x280, 0, pkR, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G')
+        t_0b4c_c16 o :=
+  safe_signatureRootH_of_rules hsha.toRules hsP hM run
 
 end Blanc.Lift.BeaconDeposit
