@@ -55,9 +55,9 @@ MAINNET_SOURCE = "Blanc/LidoCircuitBreakerMainnetDeployment.lean"
 REFERENCE = "scripts/lido-circuit-breaker-reference.json"
 
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
-PUBLIC_THEOREM_COUNT = 178
+PUBLIC_THEOREM_COUNT = 179
 PUBLIC_THEOREM_INVENTORY_SHA256 = (
-    "6b80a310d71deac8ad0f3c52b3158655ecd451f968d564f56d397f6d6ea52a55"
+    "1deffbff00e45490377687c0e82b817ee2666c841c962586478c4fc1639e54dc"
 )
 # The whole axiom claim of this family. Every public deployment theorem is covered by the
 # repository's one union walk (`scripts/AxiomCheck.lean`, `scripts/check.sh`), which bounds the
@@ -633,7 +633,7 @@ def require_axiom_inventory(root: Path, sources: dict[str, str], mainnet_text: s
 
     The constructor owner is included only to enforce the private-to-proof
     façade below.  Its pre-existing theorem inventory is outside the nine
-    deployment proof owners and therefore outside this exact 178-name set.
+    deployment proof owners and therefore outside this exact 179-name set.
     The mainnet module's public theorems are a separate exact inventory.
     """
     names = public_theorem_names({
