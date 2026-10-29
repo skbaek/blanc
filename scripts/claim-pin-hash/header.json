@@ -3,22 +3,22 @@
  "digest": "sha256",
  "verdict": "roots.tsv only; constants.tsv, boundary.tsv and these counts are diagnostic",
  "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon); a repeated label gets #<statement digest prefix>",
- "pins": 991,
- "entries": 19016,
+ "pins": 1035,
+ "entries": 19180,
  "kinds": {
-  "block": 628,
+  "block": 648,
   "boundary": 686,
-  "ctor": 970,
-  "def": 13365,
-  "inductive": 631,
-  "pin": 991,
-  "rec": 136,
+  "ctor": 980,
+  "def": 13474,
+  "inductive": 651,
+  "pin": 1035,
+  "rec": 141,
   "theorem": 2600
  },
  "hashed_constants": {
-  "blanc": 14570,
-  "jaune": 3113,
-  "local": 19
+  "blanc": 14710,
+  "jaune": 3116,
+  "local": 20
  },
  "boundary_identities": {
   "@toolchain": "leanprover/lean4:v4.35.0",
