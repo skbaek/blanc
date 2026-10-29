@@ -430,7 +430,6 @@ SHARED += [
     "ExecutionMidHistoryIn",
     "ExecutionInstalledCertCuts",
     "ExecutionAccountingMidHistoryIn",
-    "ExecutionMidHistoryInCallerExclusion",
     "ExecutionMidHistoryInBeaconCode",
 ]
 
