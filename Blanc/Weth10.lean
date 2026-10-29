@@ -4,6 +4,7 @@
 -- code generation only; the tagged layout and deployment parameters remain in
 -- Weth10Core, and the backing relation remains in Weth10Backed.
 
+import Blanc.Lift.KernelBatch
 import Blanc.RevertPayload
 import Blanc.Weth10Core
 import Blanc.Weth10TemplateCode
@@ -820,13 +821,36 @@ theorem weth10_compileShape_eq_zero (dp : DeployParams) :
     (weth10 dp).compileShape = (weth10 ⟨0, 0⟩).compileShape :=
   weth10_compileShape_eq dp
 
+private def weth10TreeSlice (fuel start count : Nat) : DispatchTree :=
+  DispatchTree.build fuel (((weth10Funcs ⟨0, 0⟩).drop start).take count)
+
+/-- The zero-parameter template's compiler success, call-table locations and
+function and dispatch sizes, in one kernel check: all of them evaluate the same
+`compsize` and `table` terms, which the kernel then reduces once instead of once
+per fact. -/
+private theorem weth10ZeroLayoutFacts :
+    Prog.compiles (weth10 ⟨0, 0⟩) = true ∧
+    (table 0 ((weth10 ⟨0, 0⟩).main :: (weth10 ⟨0, 0⟩).aux)).map Prod.fst =
+      [0, 4001, 4005, 4115, 4261, 4403, 4513, 4655,
+       4801, 4911, 5021, 5167, 5277, 5387, 5395, 5433,
+       5607, 5852, 5962, 6070] ∧
+    compsize (weth10Main ⟨0, 0⟩) = 4000 ∧
+    weth10Aux.map compsize =
+      [3, 109, 145, 141, 109, 141, 145, 109, 109, 145, 109, 109, 7, 37, 173, 244, 109, 107,
+        242] ∧
+    compsize (dispatchWith fallbackSlot (weth10TreeSlice 25 7 7)) = 1307 ∧
+    compsize (dispatchWith fallbackSlot (weth10TreeSlice 25 21 6)) = 935 ∧
+    compsize (dispatchWith fallbackSlot
+      (.fork (weth10TreeSlice 25 14 7) (weth10TreeSlice 25 21 6))) = 1769 := by
+  kernel_rfl_and
+
 /-- The zero-parameter template's direct full kernel evaluation of the WETH10
 compiler.  The structural success witness below decides compilation without
 constructing bytes; `weth10RuntimeTemplate`'s identity in
 `Blanc/Weth10Deploy.lean` derives from this template witness. -/
 private theorem weth10CompilesZero :
-    Prog.compiles (weth10 ⟨0, 0⟩) = true := by
-  decide +kernel
+    Prog.compiles (weth10 ⟨0, 0⟩) = true :=
+  weth10ZeroLayoutFacts.1
 
 private theorem weth10TemplateCode_compile_of_emit
     (h : (weth10 ⟨0, 0⟩).emitUnchecked = weth10TemplateCode) :
@@ -843,8 +867,8 @@ private theorem weth10ZeroTable_locations :
     weth10ZeroTable.map Prod.fst =
       [0, 4001, 4005, 4115, 4261, 4403, 4513, 4655,
        4801, 4911, 5021, 5167, 5277, 5387, 5395, 5433,
-       5607, 5852, 5962, 6070] := by
-  decide +kernel
+       5607, 5852, 5962, 6070] :=
+  weth10ZeroLayoutFacts.2.1
 
 private theorem boolReturn_emit_zero :
     Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 5396 boolReturn =
@@ -858,12 +882,12 @@ private theorem permitRecover_emit_zero :
   rw [weth10ZeroTable_locations]
   decide +kernel
 
-private theorem weth10Main_size : compsize (weth10Main ⟨0, 0⟩) = 4000 := by
-  decide +kernel
+private theorem weth10Main_size : compsize (weth10Main ⟨0, 0⟩) = 4000 :=
+  weth10ZeroLayoutFacts.2.2.1
 
 private theorem weth10Aux_sizes :
-    weth10Aux.map compsize = [3, 109, 145, 141, 109, 141, 145, 109, 109, 145, 109, 109, 7, 37, 173, 244, 109, 107, 242] := by
-  decide +kernel
+    weth10Aux.map compsize = [3, 109, 145, 141, 109, 141, 145, 109, 109, 145, 109, 109, 7, 37, 173, 244, 109, 107, 242] :=
+  weth10ZeroLayoutFacts.2.2.2.1
 
 private theorem revert_emit_zero :
     Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 4002 Func.revert =
@@ -997,9 +1021,6 @@ private theorem weth10ZeroTable_eq :
     h0, h1, h2, h3, h4, h5, h6, h7, h8, h9, h10, h11, h12, h13,
     h14, h15, h16, h17, Nat.reduceAdd]
 
-private def weth10TreeSlice (fuel start count : Nat) : DispatchTree :=
-  DispatchTree.build fuel (((weth10Funcs ⟨0, 0⟩).drop start).take count)
-
 private theorem weth10Tree_quarters :
     weth10Tree ⟨0, 0⟩ =
       .fork (.fork (weth10TreeSlice 25 0 7) (weth10TreeSlice 25 7 7))
@@ -1014,8 +1035,8 @@ private theorem dispatch0_7_emit :
   decide +kernel
 
 private theorem dispatch7_7_size :
-    compsize (dispatchWith fallbackSlot (weth10TreeSlice 25 7 7)) = 1307 := by
-  decide +kernel
+    compsize (dispatchWith fallbackSlot (weth10TreeSlice 25 7 7)) = 1307 :=
+  weth10ZeroLayoutFacts.2.2.2.2.1
 
 private theorem dispatch7_7_emit :
     Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 1804
@@ -1032,8 +1053,8 @@ private theorem dispatch14_7_emit :
   decide +kernel
 
 private theorem dispatch21_6_size :
-    compsize (dispatchWith fallbackSlot (weth10TreeSlice 25 21 6)) = 935 := by
-  decide +kernel
+    compsize (dispatchWith fallbackSlot (weth10TreeSlice 25 21 6)) = 935 :=
+  weth10ZeroLayoutFacts.2.2.2.2.2.1
 
 private theorem dispatch21_6_emit :
     Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 34
@@ -1058,8 +1079,8 @@ private theorem dispatchLeft_emit :
 
 private theorem dispatchRight_size :
     compsize (dispatchWith fallbackSlot
-      (.fork (weth10TreeSlice 25 14 7) (weth10TreeSlice 25 21 6))) = 1769 := by
-  decide +kernel
+      (.fork (weth10TreeSlice 25 14 7) (weth10TreeSlice 25 21 6))) = 1769 :=
+  weth10ZeroLayoutFacts.2.2.2.2.2.2
 
 private theorem dispatchRight_emit :
     Func.emitUnchecked (weth10ZeroTable.map Prod.fst) 23
