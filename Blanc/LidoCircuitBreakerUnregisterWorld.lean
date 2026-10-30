@@ -822,7 +822,6 @@ private theorem unregWorld_warmCost {base : Devm} {key : B256}
     rw [h]
     exact hk
 
-set_option maxRecDepth 52 in
 /-- The chronology's body reserve at this world is the closed numeral the
 message carries. -/
 theorem unregWorld_bodyGasEq :
@@ -970,7 +969,6 @@ theorem unregisterWorld_run :
   exact ⟨post, hrun, hcompile⟩
 
 
-set_option maxRecDepth 29423 in
 /-- Message-altitude settlement at this world.
 
 The chronology exposes the raw poststate's gas, storage and logs but says
@@ -1033,6 +1031,16 @@ theorem unregisterWorld_settles :
     rfl
   rw [hsettle] at hprocess
   refine ⟨hprocess, ?_⟩
+  have hgasEntry : unregWorldMsg.gas = 0 + registerPauserDispatchGas +
+      foundZeroOldLastRegisterBodyGas (initSevm unregWorldMsg) (initDevm unregWorldMsg)
+        unregWorldTarget unregWorldPauser unregWorldResetCost
+        unregWorldResetCost gasWarmAccess gasWarmAccess unregWorldResetCost
+        unregWorldResetCost unregWorldResetCost unregWorldResetCost := by
+    -- Rewrite to the world's names rather than unify through them: a
+    -- definitional check here unfolds the closed body-gas term.
+    rw [show initSevm unregWorldMsg = unregWorldSevm from rfl,
+      show initDevm unregWorldMsg = unregWorldPre from rfl]
+    exact unregWorld_gasEntry
   rcases registerPauser_foundZeroOldLast_success_settled_effects officialParams
       (by change CoveredFork .prague; exact CoveredFork.prague)
       [(unregWorldTarget, unregWorldPauser)] unregWorldTarget 0
@@ -1043,7 +1051,7 @@ theorem unregisterWorld_settles :
       unregWorldResetCost 0
       unregWorld_msgTarget unregWorld_msgOwner unregWorld_msgCodeAddress
       unregWorld_msgCode unregWorld_msgValue unregWorld_msgData
-      unregWorld_gasEntry unregWorld_msgAdmin
+      hgasEntry unregWorld_msgAdmin
       unregWorld_preWitness unregWorld_find unregWorld_last
       unregWorld_targetValid unregWorld_pauserValid (unregWorld_actualOrig unregWorld_origAssignment)
       (unregWorld_resetCost (by decide) (by decide))

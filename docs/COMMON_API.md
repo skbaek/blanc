@@ -148,6 +148,17 @@ registry has identified the likely vocabulary.
 - Ordinary source `Func.Run` walk:
   `func_execute`, `func_execute_with`, and the split lemmas in
   [`Blanc/Tactics.lean`](../Blanc/Tactics.lean).
+- A compiled walk through a dispatcher keyed by `selector "…" […]` terms:
+  never let a tactic evaluate a `selector` (one `String.keccak` in the
+  elaborator overruns the default `maxRecDepth`). Take each word from
+  [`Blanc/SelectorWords.lean`](../Blanc/SelectorWords.lean)
+  (`SelectorWord.decimals`, `SelectorWord.balanceOf`, …, each proved once by
+  `decide +kernel`), restate the program with numeral keys
+  (`Blanc.Fmint.fmint_eq_words`, `Blanc.weth_eq_words`), hint `fsig`'s `SHR`
+  as `Sevm.selector sevm`, and `rw` the selector hypothesis (through the word)
+  before the forks: `func_run (5) [Sevm.selector sevm]; rw [h_sel']; func_run
+  [...]`. A numeral hint against the unevaluated `SHR` application costs a deep
+  `rfl` too; the `Sevm.selector` hint is closed by unfolding alone.
 - Constructive opcode helpers in [`Blanc/Forward.lean`](../Blanc/Forward.lean)
   expose their actual rule requirements: an empty PUSH immediate requires
   `rules.op.push0`, while nonempty immediates do not; the cold/warm SLOAD and
@@ -7316,21 +7327,18 @@ chronology. The selected boundary transactions are excluded. These adapters do
 not authenticate a provider scan or assume earlier target-address emptiness.
 These arbitrary-predicate adapters have no narrower reliable proof-recipe trigger.
 
-For large concrete Keccak computations, use `KeccakBlocks.sixRounds` and
-`KeccakBlocks.f1600_sixRounds` in
-[`Blanc/KeccakBlocks.lean`](../Blanc/KeccakBlocks.lean) to factor the production
-permutation into four six-round groups through its existing reference-equivalence
-theorem. Prove each concrete intermediate-state equation in the kernel, then
-compose them. `squeeze` and `run_empty` expose the original final padding and
-digest projection. These prove no hash injectivity or historical input identity.
-The WETH creation `SigningEncoding` and `SigningHash` modules apply these facts
-to the exact EIP-155 envelope conditional on explicit transaction fields.
-`run_block_of_step` composes the actual symbolic byte-runner step with explicit
-absorption and permutation equations. Use it for each full block after checking
-those equations; it retains the exact bytes and suffix and adds no padding,
-length, or hash assumption. The caller must select the absorption function and
-intermediate state, which the result does not determine.
-Select each state witness explicitly; arbitrary hash goals have no automatic recipe.
+For a concrete Keccak hash of a literal payload (a creation transaction's signing
+payload or raw bytes, up to at least 23.6 KB), unfold the payload, rewrite
+`ByteArray.toList_eq_toList_data` (and unfold a chunked `code` with
+`simp only [code, List.toList_toArray]`), then close the equation with one
+`decide +kernel`; no intermediate-state witnesses are needed. Host-local cost on the
+24 GiB macOS host: 3.5 KB about 7 s and 2.7 GiB, 23.6 KB about 36 s and 9 GiB peak.
+Instances: the 3Crv and Beacon `Creation/HistoricalTxRecover` modules, the WETH
+creation [`SigningHash`](../Blanc/Lift/Weth9/Creation/SigningHash.lean) and the five
+USDC `*Creation/SigningHash` modules, each over the exact signing envelope conditional
+on explicit transaction fields. These prove no hash injectivity or historical input
+identity. Keep the check in a module verified by a narrow owned build, not one the
+language server elaborates.
 The contract-specific `Creation.recoveredSender_of_creation_fields` in
 [`Weth9/Creation/SigningRecover`](../Blanc/Lift/Weth9/Creation/SigningRecover.lean)
 supplies `signingPayload_hash` to recovery while retaining the exact signed

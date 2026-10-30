@@ -905,6 +905,7 @@ import Blanc.Lift.WithdrawalRequest.HeadlineHistory
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl
+import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayRun
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun
 import Blanc.Composition.Weth9WethGas

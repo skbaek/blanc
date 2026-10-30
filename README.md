@@ -82,7 +82,12 @@ verification contract.
 Authors changing Python evidence scripts should use the shared hash, format,
 fixture, and checkout primitives in [the evidence toolkit](docs/EVIDENCE_TOOLKIT.md).
 
+Authoring tools (simp migration, discharge trace, census tools) and a tactic table are in
+[the tools page](docs/TOOLS.md).
+
 ## Optional enhanced agent workflow
+
+Agents start at [`AGENTS.md`](AGENTS.md), a task-to-file map.
 
 Blanc is standalone: its pinned Jaune dependency is fetched by Lake, and Creme
 is not a build dependency. For the optional shared Jaune/Blanc agent workflow,
@@ -478,6 +483,8 @@ This repo contains the following files:
   [`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md)
   maps each claim to its theorem, premises and non-claims, and states the
   deployment caveats.
+  How a deployed contract is lifted and certified:
+  [`docs/LIFT_WORKFLOW.md`](docs/LIFT_WORKFLOW.md).
 
 Each of the ten contracts — seven ports (WETH, WETH10, BeaconDeposit, Lido's
 CircuitBreaker, TriggerableWithdrawalsGateway and OssifiableProxy, and the

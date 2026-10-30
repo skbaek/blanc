@@ -3158,7 +3158,79 @@ private theorem officialConstructorValidationBody_eq_staged :
     officialConstructorValidationFinish
   rfl
 
-set_option maxRecDepth 924 in
+/-- One binary validation stage over an abstract memory image: load argument
+words `i` and `j`, compare them with `op` (`gt` or `lt`), and take the zero arm
+into `next`.  Stated over any `M` so that no proof evaluates the concrete
+decoded image; the instances below supply the image's read facts. -/
+private theorem constructorBinaryStage_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
+    {M : Mem} {i j : Nat} {a b : B256} {op : Ninst} {k : Nat} {next : Func}
+    (hop : op = gt ∨ op = lt)
+    (hsize : M.size = 224)
+    (hpi : pushCost (Nat.toB256 (32 * i)).toBytes.sig = 3)
+    (hpj : pushCost (Nat.toB256 (32 * j)).toBytes.sig = 3)
+    (hzi : (Nat.toB256 (32 * i)).toBytes.sig = [] → sevm.benvStat.rules.op.push0 = true)
+    (hzj : (Nat.toB256 (32 * j)).toBytes.sig = [] → sevm.benvStat.rules.op.push0 = true)
+    (hoi : (Nat.toB256 (32 * i)).toNat = 32 * i)
+    (hoj : (Nat.toB256 (32 * j)).toNat = 32 * j)
+    (hxi : memExtSize 224 (32 * i) 32 = 224)
+    (hxj : memExtSize 224 (32 * j) 32 = 224)
+    (hvi : Bytes.toB256 ((M.read (32 * i) 32).1) = a)
+    (hvj : Bytes.toB256 ((M.read (32 * j) 32).1) = b)
+    (hmi : (M.read (32 * i) 32).2 = M)
+    (hmj : (M.read (32 * j) 32).2 = M)
+    (hgt : op = gt → b >? a = 0)
+    (hlt : op = lt → b <? a = 0)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G, base.stateGas⟩) next post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G + 28, base.stateGas⟩)
+      (loadArgumentIndexForProof i +++ loadArgumentIndexForProof j +++ op :::
+        ((.call k) <?> next)) post := by
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
+  rcases hop with rfl | rfl
+  all_goals
+    func_run (2) [3]
+    all_goals try simp only [hoi]
+    all_goals try simp_rw [hmi, hvi]
+    all_goals try exact Devm.extCost_add_of_size (a := gVerylow) hsize (by rw [hxi, Nat.sub_self]; rfl)
+    func_run (2) [3]
+    all_goals try simp only [hoj]
+    all_goals try simp_rw [hmj, hvj]
+    all_goals try exact Devm.extCost_add_of_size (a := gVerylow) hsize (by rw [hxj, Nat.sub_self]; rfl)
+    func_run (2) [0]
+    all_goals first | exact hrest | exact hgt rfl | exact hlt rfl
+
+/-- One unary validation stage over an abstract memory image: load argument
+word `i`, test it with `iszero`, and take the zero arm into `next`.  The push
+costs `c` (`2` for the `PUSH0` of word `0`, `3` otherwise). -/
+private theorem constructorUnaryStage_runCompiled
+    {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
+    {M : Mem} {i c : Nat} {a : B256} {k : Nat} {next : Func}
+    (hc : c = 2 ∨ c = 3)
+    (hsize : M.size = 224)
+    (hpi : pushCost (Nat.toB256 (32 * i)).toBytes.sig = c)
+    (hzi : (Nat.toB256 (32 * i)).toBytes.sig = [] → sevm.benvStat.rules.op.push0 = true)
+    (hoi : (Nat.toB256 (32 * i)).toNat = 32 * i)
+    (hxi : memExtSize 224 (32 * i) 32 = 224)
+    (hvi : Bytes.toB256 ((M.read (32 * i) 32).1) = a)
+    (hmi : (M.read (32 * i) 32).2 = M)
+    (hres : a =? 0 = 0)
+    (hrest : Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G, base.stateGas⟩) next post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], M, G + (c + 19), base.stateGas⟩)
+      (loadArgumentIndexForProof i +++ iszero ::: ((.call k) <?> next)) post := by
+  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
+  rcases hc with rfl | rfl
+  all_goals
+    func_run (2) [3]
+    all_goals try simp only [hoi]
+    all_goals try simp_rw [hmi, hvi]
+    all_goals try exact Devm.extCost_add_of_size (a := gVerylow) hsize (by rw [hxi, Nat.sub_self]; rfl)
+    func_run (2) [0]
+    all_goals exact hrest
+
 private theorem officialConstructorValidationFinish_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3169,6 +3241,7 @@ private theorem officialConstructorValidationFinish_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 9, base.stateGas⟩)
       officialConstructorValidationFinish post := by
+  generalize officialConstructorDecodedMemory = M at hrest ⊢
   unfold officialConstructorValidationFinish
   simp only [pushCompactNatForProof_eq, pushFixedNatForProof_eq,
     ite_eq_left (show 4282 < 2 ^ 16 by decide),
@@ -3177,7 +3250,6 @@ private theorem officialConstructorValidationFinish_runCompiled
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   exact hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3186,45 +3258,19 @@ private theorem officialConstructorInitialHeartbeatMaxStage_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorInitialHeartbeatMaxStage post := by
-  have hv4 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 128 32).1) =
-      officialParams.maxHeartbeatInterval := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨4, by decide⟩
-  have hv6 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 192 32).1) =
-      officialConstructorArgs.initialHeartbeatInterval := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨6, by decide⟩
-  have hm4 : (officialConstructorDecodedMemory.read 128 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨4, by decide⟩
-  have hm6 : (officialConstructorDecodedMemory.read 192 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩
   unfold officialConstructorInitialHeartbeatMaxStage
-  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 128).toNat = 128 by decide]
-  all_goals try simp_rw [hm4, hv4]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm4, hv4]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 192).toNat = 192 by decide]
-  all_goals try simp_rw [hm6, hv6]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm6, hv6]
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  exact hrest
+  exact constructorBinaryStage_runCompiled (i := 4) (j := 6) (Or.inl rfl)
+    officialConstructorDecodedMemory_size
+    (pushCost_of_ne_zero (by decide)) (pushCost_of_ne_zero (by decide))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (by decide) (by decide) (by decide) (by decide)
+    (officialConstructorDecodedMemory_read_argument ⟨4, by decide⟩)
+    (officialConstructorDecodedMemory_read_argument ⟨6, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨4, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩)
+    (fun _ => by decide) (fun h => absurd h (by decide)) hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3233,45 +3279,19 @@ private theorem officialConstructorInitialHeartbeatMinStage_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorInitialHeartbeatMinStage post := by
-  have hv3 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 96 32).1) =
-      officialParams.minHeartbeatInterval := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨3, by decide⟩
-  have hv6 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 192 32).1) =
-      officialConstructorArgs.initialHeartbeatInterval := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨6, by decide⟩
-  have hm3 : (officialConstructorDecodedMemory.read 96 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
-  have hm6 : (officialConstructorDecodedMemory.read 192 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩
   unfold officialConstructorInitialHeartbeatMinStage
-  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 96).toNat = 96 by decide]
-  all_goals try simp_rw [hm3, hv3]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm3, hv3]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 192).toNat = 192 by decide]
-  all_goals try simp_rw [hm6, hv6]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm6, hv6]
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  exact hrest
+  exact constructorBinaryStage_runCompiled (i := 3) (j := 6) (Or.inr rfl)
+    officialConstructorDecodedMemory_size
+    (pushCost_of_ne_zero (by decide)) (pushCost_of_ne_zero (by decide))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (by decide) (by decide) (by decide) (by decide)
+    (officialConstructorDecodedMemory_read_argument ⟨3, by decide⟩)
+    (officialConstructorDecodedMemory_read_argument ⟨6, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨6, by decide⟩)
+    (fun h => absurd h (by decide)) (fun _ => by decide) hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorInitialPauseMaxStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3280,45 +3300,19 @@ private theorem officialConstructorInitialPauseMaxStage_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorInitialPauseMaxStage post := by
-  have hv2 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 64 32).1) =
-      officialParams.maxPauseDuration := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨2, by decide⟩
-  have hv5 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 160 32).1) =
-      officialConstructorArgs.initialPauseDuration := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨5, by decide⟩
-  have hm2 : (officialConstructorDecodedMemory.read 64 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨2, by decide⟩
-  have hm5 : (officialConstructorDecodedMemory.read 160 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩
   unfold officialConstructorInitialPauseMaxStage
-  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 64).toNat = 64 by decide]
-  all_goals try simp_rw [hm2, hv2]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm2, hv2]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 160).toNat = 160 by decide]
-  all_goals try simp_rw [hm5, hv5]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm5, hv5]
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  exact hrest
+  exact constructorBinaryStage_runCompiled (i := 2) (j := 5) (Or.inl rfl)
+    officialConstructorDecodedMemory_size
+    (pushCost_of_ne_zero (by decide)) (pushCost_of_ne_zero (by decide))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (by decide) (by decide) (by decide) (by decide)
+    (officialConstructorDecodedMemory_read_argument ⟨2, by decide⟩)
+    (officialConstructorDecodedMemory_read_argument ⟨5, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨2, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩)
+    (fun _ => by decide) (fun h => absurd h (by decide)) hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorInitialPauseMinStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3327,45 +3321,19 @@ private theorem officialConstructorInitialPauseMinStage_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorInitialPauseMinStage post := by
-  have hv1 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 32 32).1) =
-      officialParams.minPauseDuration := by
-    simpa only [mul_one, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨1, by decide⟩
-  have hv5 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 160 32).1) =
-      officialConstructorArgs.initialPauseDuration := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨5, by decide⟩
-  have hm1 : (officialConstructorDecodedMemory.read 32 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [mul_one] using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
-  have hm5 : (officialConstructorDecodedMemory.read 160 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩
   unfold officialConstructorInitialPauseMinStage
-  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 32).toNat = 32 by decide]
-  all_goals try simp_rw [hm1, hv1]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm1, hv1]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 160).toNat = 160 by decide]
-  all_goals try simp_rw [hm5, hv5]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm5, hv5]
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  exact hrest
+  exact constructorBinaryStage_runCompiled (i := 1) (j := 5) (Or.inr rfl)
+    officialConstructorDecodedMemory_size
+    (pushCost_of_ne_zero (by decide)) (pushCost_of_ne_zero (by decide))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (by decide) (by decide) (by decide) (by decide)
+    (officialConstructorDecodedMemory_read_argument ⟨1, by decide⟩)
+    (officialConstructorDecodedMemory_read_argument ⟨5, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨5, by decide⟩)
+    (fun h => absurd h (by decide)) (fun _ => by decide) hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorHeartbeatBoundsStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3374,45 +3342,19 @@ private theorem officialConstructorHeartbeatBoundsStage_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorHeartbeatBoundsStage post := by
-  have hv4 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 128 32).1) =
-      officialParams.maxHeartbeatInterval := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨4, by decide⟩
-  have hv3 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 96 32).1) =
-      officialParams.minHeartbeatInterval := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨3, by decide⟩
-  have hm4 : (officialConstructorDecodedMemory.read 128 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨4, by decide⟩
-  have hm3 : (officialConstructorDecodedMemory.read 96 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
   unfold officialConstructorHeartbeatBoundsStage
-  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 128).toNat = 128 by decide]
-  all_goals try simp_rw [hm4, hv4]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm4, hv4]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 96).toNat = 96 by decide]
-  all_goals try simp_rw [hm3, hv3]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm3, hv3]
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  exact hrest
+  exact constructorBinaryStage_runCompiled (i := 4) (j := 3) (Or.inl rfl)
+    officialConstructorDecodedMemory_size
+    (pushCost_of_ne_zero (by decide)) (pushCost_of_ne_zero (by decide))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (by decide) (by decide) (by decide) (by decide)
+    (officialConstructorDecodedMemory_read_argument ⟨4, by decide⟩)
+    (officialConstructorDecodedMemory_read_argument ⟨3, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨4, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩)
+    (fun _ => by decide) (fun h => absurd h (by decide)) hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3421,29 +3363,15 @@ private theorem officialConstructorMinHeartbeatNonzeroStage_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 22, base.stateGas⟩)
       officialConstructorMinHeartbeatNonzeroStage post := by
-  have hv3 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 96 32).1) =
-      officialParams.minHeartbeatInterval := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨3, by decide⟩
-  have hm3 : (officialConstructorDecodedMemory.read 96 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩
   unfold officialConstructorMinHeartbeatNonzeroStage
-  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 96).toNat = 96 by decide]
-  all_goals try simp_rw [hm3, hv3]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm3, hv3]
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  exact hrest
+  exact constructorUnaryStage_runCompiled (i := 3) (Or.inr rfl)
+    officialConstructorDecodedMemory_size (pushCost_of_ne_zero (by decide))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (by decide) (by decide)
+    (officialConstructorDecodedMemory_read_argument ⟨3, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨3, by decide⟩)
+    (by decide) hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorPauseBoundsStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3452,45 +3380,19 @@ private theorem officialConstructorPauseBoundsStage_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 28, base.stateGas⟩)
       officialConstructorPauseBoundsStage post := by
-  have hv2 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 64 32).1) =
-      officialParams.maxPauseDuration := by
-    simpa only [Nat.reduceMul, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨2, by decide⟩
-  have hv1 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 32 32).1) =
-      officialParams.minPauseDuration := by
-    simpa only [mul_one, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨1, by decide⟩
-  have hm2 : (officialConstructorDecodedMemory.read 64 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [Nat.reduceMul] using officialConstructorDecodedMemory_read_memory ⟨2, by decide⟩
-  have hm1 : (officialConstructorDecodedMemory.read 32 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [mul_one] using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
   unfold officialConstructorPauseBoundsStage
-  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 64).toNat = 64 by decide]
-  all_goals try simp_rw [hm2, hv2]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm2, hv2]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 32).toNat = 32 by decide]
-  all_goals try simp_rw [hm1, hv1]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm1, hv1]
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  exact hrest
+  exact constructorBinaryStage_runCompiled (i := 2) (j := 1) (Or.inl rfl)
+    officialConstructorDecodedMemory_size
+    (pushCost_of_ne_zero (by decide)) (pushCost_of_ne_zero (by decide))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (by decide) (by decide) (by decide) (by decide)
+    (officialConstructorDecodedMemory_read_argument ⟨2, by decide⟩)
+    (officialConstructorDecodedMemory_read_argument ⟨1, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨2, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩)
+    (fun _ => by decide) (fun h => absurd h (by decide)) hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorMinPauseNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3499,29 +3401,15 @@ private theorem officialConstructorMinPauseNonzeroStage_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 22, base.stateGas⟩)
       officialConstructorMinPauseNonzeroStage post := by
-  have hv1 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 32 32).1) =
-      officialParams.minPauseDuration := by
-    simpa only [mul_one, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨1, by decide⟩
-  have hm1 : (officialConstructorDecodedMemory.read 32 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [mul_one] using officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩
   unfold officialConstructorMinPauseNonzeroStage
-  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 32).toNat = 32 by decide]
-  all_goals try simp_rw [hm1, hv1]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm1, hv1]
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  exact hrest
+  exact constructorUnaryStage_runCompiled (i := 1) (Or.inr rfl)
+    officialConstructorDecodedMemory_size (pushCost_of_ne_zero (by decide))
+    (fun h => absurd h (B256.toBytes_sig_ne_nil (by decide)))
+    (by decide) (by decide)
+    (officialConstructorDecodedMemory_read_argument ⟨1, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨1, by decide⟩)
+    (by decide) hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorAdminNonzeroStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3531,27 +3419,14 @@ private theorem officialConstructorAdminNonzeroStage_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], officialConstructorDecodedMemory, G + 21, base.stateGas⟩)
       officialConstructorAdminNonzeroStage post := by
-  have hv0 : Bytes.toB256
-      ((officialConstructorDecodedMemory.read 0 32).1) =
-      officialParams.admin := by
-    simpa only [mul_zero, officialConstructorArgumentWord] using
-      officialConstructorDecodedMemory_read_argument ⟨0, by decide⟩
-  have hm0 : (officialConstructorDecodedMemory.read 0 32).2 =
-      officialConstructorDecodedMemory := by
-    simpa only [mul_zero] using officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩
   unfold officialConstructorAdminNonzeroStage
-  simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
-  func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try simp only [show (Nat.toB256 0).toNat = 0 by decide]
-  all_goals try simp_rw [hm0, hv0]
-  all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm0, hv0]
-  func_run (2) [0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  exact hrest
+  exact constructorUnaryStage_runCompiled (i := 0) (Or.inl rfl)
+    officialConstructorDecodedMemory_size (by decide)
+    (fun _ => hfork.rules_push0)
+    (by decide) (by decide)
+    (officialConstructorDecodedMemory_read_argument ⟨0, by decide⟩)
+    (officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩)
+    (by decide) hrest
 
 set_option maxRecDepth 925 in
 private theorem officialConstructorCanonicalAdminStage_runCompiled

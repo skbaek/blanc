@@ -62,8 +62,9 @@ internal `.call` is not an external call. -/
 larger than every entry of `fmintFuncs`.
 
 **Deliberately a bare numeral rather than `selector "…" [...]`.**  A `selector`
-application forces a `String.keccak`, which is the real per-target elaboration
-floor here; the twelve keccaks the dispatch walk cannot avoid are enough. -/
+application that a tactic evaluates forces a `String.keccak` in the elaborator;
+the walk below runs over `fmint_eq_words`, whose pivots are numerals too, so it
+evaluates none. -/
 abbrev unknownSelector : B256 := 0xffffffff
 
 /-- The `.call` arm's table lookup, checked on its own rather than only inside
@@ -104,8 +105,9 @@ theorem unknownSelectorGas_eq : unknownSelectorGas = 113 := by decide
 one `Func.RunCompiledTo` rule per node.  What it has to be told, in the order it
 asks:
 
-* `unknownSelector` — what `fsig`'s `SHR` produced, which is `h_sel`'s
-  right-hand side;
+* `Sevm.selector sevm` — what `fsig`'s `SHR` produced, rewritten to
+  `unknownSelector` by `h_sel` once the program is restated by
+  `fmint_eq_words` (numeral pivots, no keccak for any tactic to evaluate);
 * `0, 0, 0` — the three dispatch forks, each `GT` deciding that `0xffffffff` is
   not below the right subtree's leftmost signature, so each falls through to the
   right;
@@ -121,7 +123,6 @@ separately, and nothing needs to.
 The one obligation the walk hands back is the terminal `REVERT`, which ends the
 frame and so has no successor for a walk to name. -/
 
-set_option maxRecDepth 603 in
 /-- A call on `fmint` carrying a selector it does not have has a gas-exact walk
 that reverts, with empty revert data. -/
 theorem unknownSelector_runCompiledTo {sevm : Sevm} {pre : Devm}
@@ -131,6 +132,8 @@ theorem unknownSelector_runCompiledTo {sevm : Sevm} {pre : Devm}
     (h_gas : unknownSelectorGas ≤ pre.gasLeft) :
     ∃ post, Prog.RunCompiledTo sevm pre fmint (.error (.revert, post)) ∧
       Devm.output post = [] := by
+  have h_sel' := h_sel
+  rw [fmint_eq_words]
   rw [unknownSelectorGas_eq] at h_gas
   set g := pre.gasLeft with hg
   exact
@@ -140,38 +143,9 @@ theorem unknownSelector_runCompiledTo {sevm : Sevm} {pre : Devm}
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack])
         (by
-          -- The selector `PUSH`es are stepped by hand: `func_run`'s `PUSH0`-guard discharge
-          -- tries `assumption` first, which can evaluate a keccak-derived selector past the
-          -- recursion ceiling (the WethLive diagnosis, d14b310b).
-          func_run (5) [unknownSelector]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 18) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [0]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 40) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [0]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 62) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (2) [0]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 81) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run [0]
+          func_run (5) [Sevm.selector sevm]
+          rw [h_sel']
+          func_run [0, 0, 0, 0]
           exact Func.runCompiledTo_revert_of (i := 0) (sz := 0) (s := [])
             (G := g - 113) rfl Devm.extCost_empty_window rfl Devm.memRead_zero),
       rfl⟩
@@ -266,7 +240,6 @@ cannot know that this comparison fails, so it hands the value obligation back
 and it is discharged from `h_dec` and `h_ne`, which is the tactic working as
 designed.  The other is the terminal `REVERT`. -/
 
-set_option maxRecDepth 603 in
 /-- A `flashLoan` call on `fmint` whose `token` is not `fmint` itself has a
 gas-exact walk that reverts, with empty revert data. -/
 theorem tokenNeSelf_runCompiledTo {sevm : Sevm} {pre : Devm}
@@ -280,6 +253,8 @@ theorem tokenNeSelf_runCompiledTo {sevm : Sevm} {pre : Devm}
     (h_gas : tokenNeSelfGas ≤ pre.gasLeft) :
     ∃ post, Prog.RunCompiledTo sevm pre fmint (.error (.revert, post)) ∧
       Devm.output post = [] := by
+  have h_sel' := h_sel.trans SelectorWord.flashLoan
+  rw [fmint_eq_words]
   rw [tokenNeSelfGas_eq] at h_gas
   set g := pre.gasLeft with hg
   exact
@@ -289,45 +264,16 @@ theorem tokenNeSelf_runCompiledTo {sevm : Sevm} {pre : Devm}
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack])
         (by
-          -- The selector `PUSH`es are stepped by hand: `func_run`'s `PUSH0`-guard discharge
-          -- tries `assumption` first, which can evaluate a keccak-derived selector past the
-          -- recursion ceiling (the WethLive diagnosis, d14b310b).
-          func_run (5) [flashLoanSelector]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 18) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 41) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [0]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 63) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (2) [0]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 82) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run [1, 0, 1]
+          func_run (5) [Sevm.selector sevm]
+          rw [h_sel']
+          func_run [1, 0, 0, 1, 0, 1]
           · show B256.eqCheck sevm.currentTarget.toB256 (Sevm.argWord sevm 1) = 0
             rw [argWord_one_of_decodes h_dec]
             show (if sevm.currentTarget.toB256 = token then (1 : B256) else 0) = 0
             rw [ite_eq_right (fun h => h_ne h.symm)]
           · exact Func.runCompiledTo_revert_of (i := 0) (sz := 0) (s := [])
-              (G := g - 131) rfl Devm.extCost_empty_window rfl
-              Devm.memRead_zero),
+              (G := g - 131) rfl Devm.extCost_empty_window
+              (by simp only [Devm.gasLeft_setMach]; omega) Devm.memRead_zero),
       rfl⟩
 
 /-- **`fmint`'s `flashLoan` reverts when `token` is not `fmint`.**

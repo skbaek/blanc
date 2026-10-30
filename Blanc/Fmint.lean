@@ -46,6 +46,7 @@
 -- particular is shared WETH surface and must not change.
 
 import Blanc.CommonCore
+import Blanc.SelectorWords
 
 namespace Blanc
 
@@ -725,6 +726,24 @@ def fmintAux : List Func := [Func.revert, burnAndReturn]
 slot 1, which is `Func.revert`: an unrecognized selector — and a bare value
 transfer — reverts. -/
 def fmint : Prog := ⟨Func.mainWith fallbackSlot fmintTree, fmintAux⟩
+
+/-- `fmint` with every dispatch key written as its numeral word.
+
+A walk rewrites the program with this before `func_run` meets the dispatcher,
+so every pivot it pushes and compares is a literal and no tactic evaluates a
+`String.keccak` (`Blanc/SelectorWords.lean` says why that matters). -/
+theorem fmint_eq_words : fmint =
+    ⟨Func.mainWith fallbackSlot (.ofSorted
+      [((0x06fdde03 : B256), name), ((0x095ea7b3 : B256), approve),
+       ((0x18160ddd : B256), totalSupply), ((0x23b872dd : B256), transferFrom),
+       ((0x313ce567 : B256), decimals), ((0x5cffe9de : B256), flashLoan),
+       ((0x613255ab : B256), maxFlashLoan), ((0x70a08231 : B256), balanceOf),
+       ((0x95d89b41 : B256), symbol), ((0xa9059cbb : B256), transfer),
+       ((0xd9d98ce4 : B256), flashFee), ((0xdd62ed3e : B256), allowance)]), fmintAux⟩ := by
+  simp only [fmint, fmintTree, fmintFuncs, SelectorWord.name, SelectorWord.approve,
+    SelectorWord.totalSupply, SelectorWord.transferFrom, SelectorWord.decimals,
+    SelectorWord.flashLoan, SelectorWord.maxFlashLoan, SelectorWord.balanceOf,
+    SelectorWord.symbol, SelectorWord.transfer, SelectorWord.flashFee, SelectorWord.allowance]
 
 end Fmint
 
