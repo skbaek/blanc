@@ -96,6 +96,7 @@ REQUIRED_HEADLINES = [
     "Blanc.Lift.Curve3Crv.c3crv_history_committed_derived",
     "Blanc.Lift.Curve3Crv.c3crv_frame_refines",
     "Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered",
+    "Blanc.Lift.Curve3Crv.C3crvDeploymentTo.history_from_deployment",
     "Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l1_l3",
     "Blanc.Lift.LidoCircuitBreakerDeployed.lido_history_l2_committed",
     "Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_covered",
