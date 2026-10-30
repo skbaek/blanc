@@ -878,6 +878,7 @@ import Blanc.Lift.WithdrawalRequest.FloodRun
 import Blanc.Lift.WithdrawalRequest.FloodTx
 import Blanc.Composition.WithdrawalRequestFeeCounterexample
 import Blanc.Composition.WithdrawalRequestFeeRefutation
+import Blanc.Composition.WithdrawalRequestFeeHeadline
 import Blanc.Composition.WithdrawalRequestDrainControl
 import Blanc.Lift.WithdrawalRequest.FloodTxRecover
 import Blanc.Lift.WithdrawalRequest.WordModelCount
@@ -894,6 +895,8 @@ import Blanc.Lift.WithdrawalRequest.Creation.HistoricalTxRaw
 import Blanc.Lift.WithdrawalRequest.Creation.HistoricalTxRecover
 import Blanc.Lift.WithdrawalRequest.Creation.HistoricalTxTrace
 import Blanc.Lift.WithdrawalRequest.MainnetDeployment
+import Blanc.Lift.WithdrawalRequest.HeadlineFee
+import Blanc.Lift.WithdrawalRequest.HeadlineSystem
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
