@@ -13,6 +13,8 @@ from that block's state; the model replay that proves it stays below.
 * `weth9_deployment`: the actual creation transaction installs WETH9's runtime and leaves exactly the
   constructor's storage;
 * `weth9_backed`: the balance words of every holder the history touched sum to at most WETH9's ether;
+* `weth9_net_flow`: each such word is the committed writer calls' credits minus debits to that
+  holder, modulo `2 ^ 256`;
 * `pair_ledger`: the Pair's supply word is the sum of the balance words of every LP holder the
   history touched;
 * `live_pair_reserves_backed`: after any mainnet history from the observed block, the reserves stored
@@ -46,6 +48,17 @@ theorem weth9_backed {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint)
   have foot := d.foot.2
   rw [weth_creation_address] at foot ⊢
   exact Weth9.FootInv.etherBacked foot
+
+/-- **WETH9 net flow.**  At any block after WETH9's deployment, every holder the history from the
+creation transaction touched has, as its stored balance word, what the decoded committed writer
+calls of that history credited to it minus what they debited, modulo `2 ^ 256`. -/
+theorem weth9_net_flow {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
+    Weth9.NetFlow (Weth9.midTouchedKeysIn weth d.trace)
+      (Weth9.replayCalls (Weth9.midCommittedInvocationsIn weth d.trace))
+      (checkpoint.state.getStor weth) := by
+  have replay := d.replay
+  rw [← weth_creation_address] at replay
+  exact Weth9.netFlow_of_replay replay
 
 /-- The Pair's actual creation history replays to a model state with the LP ledger, represented
 by the final storage over keys the history touched. -/
