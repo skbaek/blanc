@@ -6,6 +6,7 @@ import Blanc.ExecutionBodyTransactionCut
 import Blanc.ExecutionSettledReceiptLogs
 import Blanc.ExecutionHistoryInSystemOpenings
 import Blanc.ExecutionHistoryInCodeAt
+import Blanc.ExecutionHistoryInCreateAvoid
 
 /-!
 # EIP-7002 at its actual mainnet deployment
@@ -24,7 +25,7 @@ the checkpoint form a `DeploymentHistory`: the canonical deployment input, the C
 the whole prefix, beacon code at every later opening, and SYSTEM emptiness at the
 post-deployment boundary are all derived. The remaining premises are the generic theorems'
 SYSTEM-sender, 7702-authority and CREATE-avoidance exclusions, stated over the same actual
-traces.
+traces; CREATE avoidance at beacon roots is derived from its present code.
 -/
 
 namespace Blanc.Lift.WithdrawalRequest
@@ -257,9 +258,11 @@ def mainnetDeploymentHistory {before after checkpoint : BlockChain}
   following := following
 
 /-- The observations derive the prefix's Cancun forks, beacon code at every later opening and
-SYSTEM emptiness at the post-deployment boundary. The remaining inputs are the SYSTEM-sender
-exclusion over the prefix and CREATE avoidance at SYSTEM and at beacon roots over the
-deployment block and the following blocks. -/
+SYSTEM emptiness at the post-deployment boundary. Beacon code present at the parent excludes
+CREATE at beacon roots by collision, so it is kept through the deployment block and every
+following block. The remaining inputs are the SYSTEM-sender exclusion over the prefix and
+CREATE avoidance at SYSTEM (empty code, so collision does not apply) over the deployment
+block and the following blocks. -/
 theorem mainnetDeploymentHistory_admission {before after checkpoint : BlockChain}
     (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
     (cut : block.bodyTrace.transactions.TxSplit 0)
@@ -267,9 +270,7 @@ theorem mainnetDeploymentHistory_admission {before after checkpoint : BlockChain
     (obs : WithdrawalDeploymentObservation block checkpoint)
     (senders : ((MidHistoryTraceIn.tail block cut).append following).NoSenderAt systemAddress)
     (systemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
-    (beaconAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ beaconRootsAddress) :
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) :
     (mainnetDeploymentHistory block cut following obs).Admission := by
   have fork := obs.fork
   have forks := obs.following_cancun following
@@ -277,10 +278,10 @@ theorem mainnetDeploymentHistory_admission {before after checkpoint : BlockChain
     have facts := systemContracts_facts _ beaconRoots_mem_systemContracts
     exact block.codeAt_keep_of_cancunOnwards BodyStageCapabilities.historical block.forkIn
       (by rw [fork]; decide) (Or.inl (by rw [fork]; rfl))
-      (fun root member => beaconAvoid root (List.mem_append_left _ member))
+      (block.createAvoid_of_cancunOnwards BodyStageCapabilities.historical block.forkIn
+        (by rw [fork]; decide) (Or.inl (by rw [fork]; rfl)) obs.parentBeacon facts.2.2 facts.2.1)
       obs.parentBeacon facts.2.2 facts.2.1
-  have openings := (following.systemCodeAtOpenings_of_cancun forks
-    (fun root member => beaconAvoid root (List.mem_append_right _ member)) afterBeacon).1
+  have openings := (following.systemCodeAtOpenings_of_cancun_present forks afterBeacon).1
   exact {
     forks := MidHistoryTraceIn.allCancun_append (mid := MidHistoryTraceIn.tail block cut)
       fork following forks
@@ -318,8 +319,6 @@ theorem history_fifo_mainnet {before after checkpoint final : BlockChain}
       ((MidHistoryTraceIn.tail block cut).append following).NoSenderAt systemAddress)
     (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
-    (prefixBeaconAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ beaconRootsAddress)
     (senders : history.NoSenderAt systemAddress)
     (authorities : history.NoAuthorityAt systemAddress)
     (avoid : ∀ root ∈ history.rawFrames,
@@ -328,7 +327,7 @@ theorem history_fifo_mainnet {before after checkpoint final : BlockChain}
     HistoryFifo history :=
   history_fifo (mainnetDeploymentHistory block cut following obs)
     (mainnetDeploymentHistory_admission block cut following obs prefixSenders
-      prefixSystemAvoid prefixBeaconAvoid)
+      prefixSystemAvoid)
     history ⟨obs.beaconAtP, obs.historyAtP, obs.consolidationAtP⟩ senders authorities avoid
     occurrences
 
@@ -347,8 +346,6 @@ theorem block_word_delivery_mainnet
       ((MidHistoryTraceIn.tail block cut).append following).NoSenderAt systemAddress)
     (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
-    (prefixBeaconAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ beaconRootsAddress)
     (historyB : ConfiguredHistoryTrace mainnetChainConfig checkpoint preB)
     (blockB : ConfiguredBlockTrace mainnetChainConfig preB postB)
     (historyD : ConfiguredHistoryTrace mainnetChainConfig checkpoint preD)
@@ -375,7 +372,7 @@ theorem block_word_delivery_mainnet
         (modelB.queue.drop (16 * depth)).take (q % 16 + 1) :=
   block_word_delivery_from_deployment (mainnetDeploymentHistory block cut following obs)
     (mainnetDeploymentHistory_admission block cut following obs prefixSenders
-      prefixSystemAvoid prefixBeaconAvoid)
+      prefixSystemAvoid)
     historyB blockB historyD blockD extension
     ⟨obs.beaconAtP, obs.historyAtP, obs.consolidationAtP⟩ senders authorities avoid
     occurrences modelB repB queued exactDepth
