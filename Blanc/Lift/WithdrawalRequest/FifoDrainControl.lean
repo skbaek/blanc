@@ -1,5 +1,6 @@
 import Blanc.Lift.WithdrawalRequest.WordFifo
 import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
+import Blanc.Lift.WithdrawalRequest.HistoryFifo
 
 /-!
 # E5(ii): what a mid-block drain does to the FIFO conclusion
@@ -167,6 +168,27 @@ def SystemEmptyLoadBearing : Prop :=
     ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
       submissionFramePayments).length ≤ wordOccurrenceCap ∧
     ¬ CheckpointBlockWordFifo history block
+
+/-- **The negative control at the public FIFO law, as a proposition.** A configured history
+meeting every premise of `history_fifo_of_checkpoint` except `systemEmpty` (code at
+SYSTEM_ADDRESS instead) for which `HistoryFifo` itself fails.
+
+Scope: this negates the checkpoint form `history_fifo_of_checkpoint`, not the deployment-rooted
+headline `history_fifo`, whose premises contain no `systemEmpty`: there SYSTEM emptiness is
+derived from `DeploymentHistory.Admission`. The control shows that this derivation is
+load-bearing, not that a premise of `history_fifo` is. -/
+def HistoryFifoCheckpointLoadBearing : Prop :=
+  ∃ (cfg : ChainConfig) (checkpoint final : BlockChain)
+    (history : ConfiguredHistoryTrace cfg checkpoint final),
+    SystemCodeInstalled checkpoint.state ∧
+    history.NoSenderAt systemAddress ∧
+    history.NoAuthorityAt systemAddress ∧
+    (∀ root ∈ history.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) ∧
+    checkpoint.state.getCode systemAddress ≠ ByteArray.empty ∧
+    RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial ∧
+    (submissions history).length ≤ wordOccurrenceCap ∧
+    ¬ HistoryFifo history
 
 /-- **E5(ii), the statement.**  The SYSTEM_ADDRESS exclusion `systemEmpty` is load-bearing
 for `block_word_fifo_of_checkpoint` once one configured history satisfies every other hypothesis of

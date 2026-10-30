@@ -95,7 +95,7 @@ private theorem storedQueueRecord_eq {storage : B256 → B256}
     List.take_left]
   rfl
 
-private theorem storedQueue_eq {storage : B256 → B256}
+theorem storedQueue_eq {storage : B256 → B256}
     {state : Blanc.WithdrawalRequest.State} (rep : RepresentsStorage storage state) :
     storedQueue storage = state.queue.map outputRecord := by
   have coherent : state.head + state.queue.length = state.tail := rep.coherent
@@ -109,7 +109,7 @@ private theorem storedQueue_eq {storage : B256 → B256}
     simp only [List.length_map, List.length_range] at hi
     simpa only [List.getElem_map, List.getElem_range] using storedQueueRecord_eq rep i hi
 
-private theorem withdrawalRecords_outputRecords (entries : List Blanc.WithdrawalRequest.Entry) :
+theorem withdrawalRecords_outputRecords (entries : List Blanc.WithdrawalRequest.Entry) :
     withdrawalRecords (outputRecords entries) = entries.map outputRecord := by
   induction entries with
   | nil => rfl
@@ -133,7 +133,7 @@ private theorem withdrawalRecords_outputRecords (entries : List Blanc.Withdrawal
       ← outputRecord_length entry, List.drop_append, Nat.add_sub_cancel_left,
       List.drop_eq_nil_of_le (by omega), List.nil_append]
 
-private theorem withdrawalRequestRecords_optional (tag : UInt8) (payload : Bytes) :
+theorem withdrawalRequestRecords_optional (tag : UInt8) (payload : Bytes) :
     withdrawalRequestRecords (optionalRequestEntry tag payload) =
       if tag = 1 then withdrawalRecords payload else [] := by
   by_cases nonempty : payload.length > 0
@@ -173,7 +173,7 @@ private theorem submissions_eq_replay {cfg : ChainConfig} {checkpoint final : Bl
   have records := submissions_eq_records history (wordSubmissionFrames events) frames.1 frames.2.1
   rwa [wordSubmissionFrames_entries] at records
 
-private theorem emission_eq_records {cfg : ChainConfig} {checkpoint pre post : BlockChain}
+theorem emission_eq_records {cfg : ChainConfig} {checkpoint pre post : BlockChain}
     {history : ConfiguredHistoryTrace cfg checkpoint pre}
     {block : ConfiguredBlockTrace cfg pre post} {r : BlockWordReplay history block}
     (emission : r.Emission) :
