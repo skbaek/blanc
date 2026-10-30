@@ -45,6 +45,30 @@ theorem eq_code_of_image {b : ByteArray} (h : some b.toList = lidoSpec.sem.image
       rw [hb, hk, ByteArray.toList_eq_toList_data, ByteArray.toList_eq_toList_data] at h'
       exact congrArg ByteArray.mk (Array.toList_inj.mp h')
 
+/-- L2 at one committed `registerPauser(t, 0)` frame whose entry is good for the Lido
+accounting carrier: the shared tail of the history L2 theorems. -/
+theorem l2_of_entryGood {ca : Adr} (frame : Exec.Frame)
+    (good : ExecutionAccountingReplay.EntryGood ca lidoSpec.sem (lidoFrameEntry lidoA) (fun s => RegInv s) frame)
+    (target : frame.sevm.currentTarget = ca)
+    (hsig : Sevm.dataWord frame.sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
+    (hnp0 : Sevm.dataWord frame.sevm 36 = 0) :
+    ∃ entries, RegistryWitness (solRegistryStorage (Devm.getStor frame.pre ca)) entries ∧
+      L2Post entries (Sevm.dataWord frame.sevm 4) (Devm.getStor frame.post ca) := by
+  obtain ⟨hpc, fork, installed, ⟨hfresh, -, hA⟩, ⟨entries, hwit⟩⟩ := good
+  obtain ⟨pc, sevm, pre, out, run, committed⟩ := frame
+  dsimp only at hpc fork installed hfresh hA hwit target hsig hnp0 ⊢
+  subst hpc
+  subst target
+  cases out with
+  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
+  | ok post =>
+    have hinstalled : Devm.getCode pre sevm.currentTarget = code := eq_code_of_image installed.1
+    have hcode : sevm.code = Devm.getCode pre sevm.currentTarget := by
+      rw [hinstalled]
+      exact eq_code_of_image (installed.2 rfl).1
+    exact ⟨entries, hwit,
+      l2_registerPauser_zero fork hinstalled hcode hfresh hsig hA hwit hnp0 run⟩
+
 /-- **L2 at every committed `registerPauser(t, 0)` frame of a configured history,
 with the entry witness derived.**  For an admitted history from a checkpoint
 satisfying the Lido state invariant, every settlement-committed non-static frame
@@ -74,20 +98,6 @@ theorem lido_history_l2_committed
     (I := fun s => RegInv s) trace ((trace.freshFrameAdmitted ca).and admitted) inv inv.inv
     (lidoSpec_preservesAdmitted_mem lidoWriterSpecsM ca) (lido_framePreserves ca)
     (lido_spawnKinds ca) (lido_spawnEntry ca)
-  obtain ⟨hpc, fork, installed, ⟨hfresh, -, hA⟩, ⟨entries, hwit⟩⟩ :=
-    good frame member target nonstatic
-  obtain ⟨pc, sevm, pre, out, run, committed⟩ := frame
-  dsimp only at hpc fork installed hfresh hA hwit target hsig hnp0 ⊢
-  subst hpc
-  subst target
-  cases out with
-  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
-  | ok post =>
-    have hinstalled : Devm.getCode pre sevm.currentTarget = code := eq_code_of_image installed.1
-    have hcode : sevm.code = Devm.getCode pre sevm.currentTarget := by
-      rw [hinstalled]
-      exact eq_code_of_image (installed.2 rfl).1
-    exact ⟨entries, hwit,
-      l2_registerPauser_zero fork hinstalled hcode hfresh hsig hA hwit hnp0 run⟩
+  exact l2_of_entryGood frame (good frame member target nonstatic) target hsig hnp0
 
 end Blanc.Lift.LidoCircuitBreakerDeployed

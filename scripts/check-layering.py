@@ -185,7 +185,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
            "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionStagedFrameEnv", "ExecutionStagedRootFacts", "ExecutionStagedSstoreAttribution", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionExistingAccount", "ExecutionDeletionSafety", "ExecutionRetainedDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelSafeHistory", "ExecutionRetainedNoDelTransaction", "ExecutionRetainedNoDelHistory", "ExecutionTraceDeterminism", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
-           "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionModelAccounting", "ExecutionModelAccountingIn", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "FuncMainPrefix", "ExecutionAccountingStepsIn", "ExecutionAccountingCoreIn", "ExecutionAccountingAdmissionIn", "ExecutionAccountingHistoryIn", "ExecutionWholeFrameAccountingIn",
+           "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionEntryAccountingMidHistory", "ExecutionModelAccounting", "ExecutionModelAccountingIn", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "FuncMainPrefix", "ExecutionAccountingStepsIn", "ExecutionAccountingCoreIn", "ExecutionAccountingAdmissionIn", "ExecutionAccountingHistoryIn", "ExecutionWholeFrameAccountingIn",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
 # (solc-bytecode-v1): contract-neutral, no WETH9 name in any of them.
@@ -1396,6 +1396,11 @@ CONTRACTS = {
                              "Lift.LidoCircuitBreakerDeployed.Creation.Cert",
                              "Lift.LidoCircuitBreakerDeployed.Creation.Check",
                              "Lift.LidoCircuitBreakerDeployed.Creation.Deploy",
+                             "Lift.LidoCircuitBreakerDeployed.Creation.Transaction",
+                             "Lift.LidoCircuitBreakerDeployed.DeploymentHistory",
+                             "Lift.LidoCircuitBreakerDeployed.LiveObservation",
+                             "Lift.LidoCircuitBreakerDeployed.LiveRegistry",
+                             "Lift.LidoCircuitBreakerDeployed.SlotsApart",
                              "Lift.LidoCircuitBreakerDeployed.Creation.Walk",
                              "Lift.LidoCircuitBreakerDeployed.Corollaries",
                              "Lift.LidoCircuitBreakerDeployed.Foreign",
