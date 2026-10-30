@@ -76,24 +76,19 @@
       <section id="history">
         <p class="eyebrow">Safety, after any history</p>
         <h2>Exactly the committed calls, and conservation.</h2>
-        <p>After any configured history from a checkpoint where the bytes are installed and the storage abstracts a model state, the code is intact and the final storage abstracts the state reached by running the model over exactly the settlement-committed calls to the token’s writers, in order — and that state conserves supply: <code>totalSupply</code> equals the sum of balances. The statement is short enough to read whole:</p>
+        <p>From the token’s actual deployment, at any later checkpoint the supply word equals the sum of the balance words of every holder whose balance the history’s token frames touched. The statement is short enough to read whole:</p>
         <div class="thm">
-          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/CommittedHistory.lean#L211"><code>Blanc.Lift.Curve3Crv.c3crv_history_committed_derived</code> · CommittedHistory.lean:211</a></div>
-<pre class="lean"><span class="kw">theorem</span> <span class="nm">c3crv_history_committed_derived</span> {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}
-    {initialKeys : Key → Prop}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image)
-    (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys)
-    (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) :
-    some (future.state.getCode ca).toList = c3crvSem.image ∧
-      ∃ s, InvRun initial (committedInvocations ca trace) s ∧
-        runInvocations initial (committedInvocations ca trace) = some s ∧
-        VyInv (future.state.getStor ca) s
-          (Key.extend initialKeys (invocationKeys (committedInvocations ca trace))) ∧
-        Blanc.Curve3Crv.Conserved s</pre>
+          <div class="head"><span class="tag">Definition, verbatim</span><a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/Curve3Crv/Headline.lean#L48"><code>SupplyConserved</code> · Headline.lean:48</a></div>
+<pre class="lean"><span class="kw">def</span> <span class="nm">SupplyConserved</span> (stor : Stor) (holders : Finset Adr) : Prop :=
+  (stor.get vySupplySlot).toNat = ledgerSumOn holders fun a =&gt; stor.get (vyBalSlot a)</pre>
         </div>
-        <p>Besides the history itself, two hypotheses about the start and one about the hashes. <code>fresh</code> is trace-local: the mapping rows the history touches — rolled-back frames included — are tracked already or land on unused slots, and distinct rows land on distinct slots. No filter on static frames is needed, because no writer can succeed in one: every writer reaches an <code>SSTORE</code> or a <code>LOG3</code>, which a static frame forbids, and Blanc proves it from the frame’s own run (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/Safe.lean#L202"><code>c3crv_writer_nonstatic</code></a>).</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/Curve3Crv/Headline.lean#L118"><code>Blanc.Lift.Curve3Crv.c3crv_conserved</code> · Headline.lean:118</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">c3crv_conserved</span> {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :
+    SupplyConserved (checkpoint.state.getStor tokenAddress) d.holders</pre>
+        </div>
+        <p>The deployment record is the only premise: the retained block 10,809,467 with the recorded creation transaction at index 76 and its successful receipt, the configured history after it, and freshness of the keys that history touches. Beneath it, after any configured history from a checkpoint where the bytes are installed and the storage abstracts a model state, the code is intact and the final storage abstracts the state reached by running the model over exactly the settlement-committed calls to the token’s writers, in order — and that state conserves supply (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/CommittedHistory.lean#L211"><code>c3crv_history_committed_derived</code></a>).</p>
+        <p>The checkpoint form has, besides the history itself, two hypotheses about the start and one about the hashes. <code>fresh</code> is trace-local: the mapping rows the history touches — rolled-back frames included — are tracked already or land on unused slots, and distinct rows land on distinct slots. No filter on static frames is needed, because no writer can succeed in one: every writer reaches an <code>SSTORE</code> or a <code>LOG3</code>, which a static frame forbids, and Blanc proves it from the frame’s own run (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/Curve3Crv/Safe.lean#L202"><code>c3crv_writer_nonstatic</code></a>).</p>
       </section>
 
       <section id="frames">
@@ -105,7 +100,7 @@
       <section id="policy">
         <p class="eyebrow">Documentation that cannot drift</p>
         <h2>A token’s real policy.</h2>
-        <p>Each of the following is a theorem about the model, carried to the bytes by the refinement theorems above.</p>
+        <p>Each of the following is a theorem about the model, carried to the bytes by the refinement theorems above. Four of them — supply and the minter moved only by the minter, <code>transferFrom</code> spending exactly its allowance, and allowance changes authorized — are also stated over each committed writer frame’s own storage words after the actual deployment (<a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/Curve3Crv/Headline.lean#L146"><code>c3crv_policy</code></a>).</p>
         <ul class="claims">
           <li><b>Every call conserves supply</b>, and the initial state is conserving.<span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Curve3Crv/Properties.lean#L160">Blanc.Curve3Crv.step_conserved</a></span></li>
           <li><b>Only the minter changes the supply</b>, and only through <code>mint</code> or <code>burnFrom</code>; <b>only the minter replaces the minter</b>.<span class="nm"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Curve3Crv/Properties.lean#L183">supply_change_by_minter</a> · <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Curve3Crv/Properties.lean#L202">minter_change_by_minter</a></span></li>

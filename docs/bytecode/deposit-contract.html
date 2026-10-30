@@ -78,26 +78,21 @@
       <section id="history">
         <p class="eyebrow">Safety, after any history</p>
         <h2>Exactly the deposits made.</h2>
-        <p>From a checkpoint at which the contract’s storage is the accumulator of some list of deposits, after any configured history the storage is the accumulator of that list followed by exactly the deposits whose frames were committed, in order. Rolled-back deposits are filtered out by settlement; nothing is added and nothing is lost. For a fresh deployment the initial list is empty.</p>
+        <p>From the contract’s actual deployment block, over the whole retained history to a later block, the count word is the number of committed deposits and the root computed from the stored words is the reference root of exactly those deposits, in order. Rolled-back deposits are filtered out by settlement; nothing is added and nothing is lost.</p>
         <div class="thm">
-          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/BeaconEnv.lean#L155"><code>Blanc.Lift.BeaconDeposit.configuredHistory_solInv_sys</code> · BeaconEnv.lean:155</a></div>
-<pre class="lean"><span class="kw">theorem</span> <span class="nm">configuredHistory_solInv_sys</span> {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (systemInstalled : SystemCodeInstalled checkpoint.state)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace)</pre>
+          <div class="head"><span class="tag">Definition, verbatim</span><a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/BeaconDeposit/HistDeployment.lean#L157"><code>DepositHistory</code> · HistDeployment.lean:157</a></div>
+<pre class="lean"><span class="kw">def</span> <span class="nm">DepositHistory</span> {cfg : ChainConfig} {D B : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork cfg D B) : Prop :=
+  depositCount history = (committedDeposits history).length ∧
+    storedRoot history = BeaconDeposit.mixedRootOf Bytes.sha256 (committedDeposits history)</pre>
         </div>
-        <p>Read the hypotheses. Two concern the contract — its code is installed and its storage accumulates <code>initialHistory</code>. The rest concern the environment it runs in, and every one is trace-local and finite: the four system contracts the protocol calls at every block hold their canonical code at the checkpoint; the SHA-256 precompile’s address, 0x02, holds no code there; and no transaction in the history carries an EIP-7702 authorization signed by any of those five addresses, nor does any creation target one. There is no hash premise at all: the layout is fixed, and the tree uses SHA-256.</p>
-        <p>Two companions read the count and the root off the same list: the count slot holds its length, which stays below 2<sup>32</sup>, and the contract’s root is the reference mixed Merkle root of the list (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/BeaconEnv.lean#L176"><code>configuredHistory_count_sys</code></a>, <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/BeaconEnv.lean#L196"><code>configuredHistory_root_sys</code></a>).</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/BeaconDeposit/HistDeployment.lean#L166"><code>Blanc.Lift.BeaconDeposit.beacon_deposits</code> · HistDeployment.lean:166</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">beacon_deposits</span> {B : BlockChain} (d : BeaconDeploymentTo B) :
+    DepositHistory d.trace</pre>
+        </div>
+        <p>The deployment record <a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/BeaconDeposit/HistDeployment.lean#L40"><code>BeaconDeploymentTo</code></a> is the only premise. Its fields are the retained deployment block, whose slot 2 is the recorded creation transaction with a successful receipt and no log at the contract; the configured histories through the adopted Shanghai, Cancun and Prague anchors to the later block; empty code at the SHA-256 precompile’s address, 0x02, after the deployment block; and exclusions, trace-local and finite, of frames targeting 0x02 and of EIP-7702 authorizations signed by 0x02 or the system contracts. There is no hash premise at all: the layout is fixed, and the tree uses SHA-256.</p>
+        <p>Beneath it lies the checkpoint form: from a checkpoint at which the contract’s storage is the accumulator of some list of deposits, after any configured history the storage is the accumulator of that list followed by exactly the committed deposits, the count slot holds its length, below 2<sup>32</sup>, and the root is the reference mixed Merkle root of the list (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/BeaconEnv.lean#L155"><code>configuredHistory_solInv_sys</code></a>, <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/BeaconEnv.lean#L176"><code>configuredHistory_count_sys</code></a>, <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/BeaconEnv.lean#L196"><code>configuredHistory_root_sys</code></a>).</p>
       </section>
 
       <section id="root">

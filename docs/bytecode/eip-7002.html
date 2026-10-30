@@ -87,20 +87,22 @@
       <section id="totality">
         <p class="eyebrow">Totality</p>
         <h2>A system call that cannot fail.</h2>
-        <p>Whatever the contract’s storage holds, as long as its canonical code is installed, the client’s end-of-block call succeeds without error, at an exact, state-dependent cost that never exceeds 210,000 gas — against the 30,000,000 the protocol supplies. The statement has two hypotheses: a covered fork, and the code.</p>
+        <p>Whatever the contract’s storage holds, as long as its canonical code is installed, the client’s end-of-block call succeeds without error and uses at most 210,000 gas — against the 30,000,000 the protocol supplies. The statement has two hypotheses: a covered fork, and the code.</p>
         <div class="thm">
-          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/SystemProtocol.lean#L245"><code>Blanc.Lift.WithdrawalRequest.checked_system_totality</code> · SystemProtocol.lean:245</a></div>
-<pre class="lean"><span class="kw">theorem</span> <span class="nm">checked_system_totality</span> {benv : Benv} (fork : CoveredFork benv.stat.fork)
-    (installed : benv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode) :
-    processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
-      .ok ((systemProtocolPost benv).state, systemProtocolOutput benv) ∧
-    (systemProtocolOutput benv).error = none ∧
-    (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
-    systemProtocolGas benv ≤ 210000 ∧
-    (systemProtocolOutput benv).returnData = (systemProtocolPost benv).output ∧
-    (systemProtocolOutput benv).refundCounter = (systemProtocolPost benv).refundCounter</pre>
+          <div class="head"><span class="tag">Definition, verbatim</span><a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineSystem.lean#L20"><code>SystemCallOk</code> · HeadlineSystem.lean:20</a></div>
+<pre class="lean"><span class="kw">def</span> <span class="nm">SystemCallOk</span> (benv : Benv) : Prop :=
+  ∃ post out, processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
+      .ok (post, out) ∧
+    systemTransactionGas - out.gasLeft ≤ 210000</pre>
         </div>
-        <p>Its history form, <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/SystemHistory.lean#L14"><code>history_checked_system_totality</code></a>, needs only that the canonical code is installed at a checkpoint: after any configured history from there, the call still succeeds. No history removes the code, and nothing a history does to this contract’s storage can make its end-of-block call fail and the block invalid — in Jaune’s semantics.</p>
+        <div class="thm">
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineSystem.lean#L27"><code>Blanc.Lift.WithdrawalRequest.system_call_succeeds</code> · HeadlineSystem.lean:27</a></div>
+<pre class="lean"><span class="kw">theorem</span> <span class="nm">system_call_succeeds</span> {benv : Benv} (fork : CoveredFork benv.stat.fork)
+    (installed : benv.state.getCode withdrawalRequestPredeployAddress =
+      Blanc.withdrawalRequestCode) :
+    SystemCallOk benv</pre>
+        </div>
+        <p>Its history form, <a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineSystem.lean#L39"><code>history_system_call_succeeds</code></a>, starts from the actual deployment and its admitted prefix: after any configured history from there, the call still succeeds. The exact, state-dependent cost is stated beneath both (<a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/SystemProtocol.lean#L247"><code>checked_system_totality</code></a>, and from a checkpoint with the code installed <a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/SystemHistory.lean#L14"><code>history_checked_system_totality</code></a>). No history removes the code, and nothing a history does to this contract’s storage can make its end-of-block call fail and the block invalid — in Jaune’s semantics.</p>
       </section>
 
       <section id="fifo">
@@ -131,20 +133,20 @@
         </div>
         <p><code>deployment</code> identifies the actual committed canonical creation transaction and the same chain’s preactivation prefix. Its admitted Cancun execution establishes the initial storage and runtime code; these are proved consequences, not separate starting-state assumptions. The subsequent history covers Prague, Osaka, BPO1 and BPO2, including an empty history.</p>
         <p>The remaining premises are explicit. The other three system contracts must have their canonical code at the modern checkpoint. Transactions and authorizations exclude the system address, no entered creation targets it, and its code is empty at the post-deployment boundary. The Cancun prefix also requires canonical beacon code at later block openings. The modern history contains at most 2<sup>254</sup> committed submissions. There is no hash premise or per-frame entry condition, and the theorem does not authenticate historical block inclusion.</p>
-        <p>A companion bounds delivery: an entry at position <i>q</i> when a block’s requests are computed is emitted exactly ⌊<i>q</i>/16⌋ blocks later, counting that block as zero, in every admitted extension that long. Nothing submitted later overtakes it (<a href="https://github.com/skbaek/blanc/blob/b828dd5d1da7626dbc8e9c6625cce9d60d2c91f4/Blanc/Lift/WithdrawalRequest/WordDelivery.lean#L398"><code>block_word_delivery_from_deployment</code></a>). The runtime emits at most sixteen entries per block and uses the fee its word arithmetic computes.</p>
+        <p>A companion bounds delivery: an entry at position <i>q</i> when a block’s requests are computed is emitted exactly ⌊<i>q</i>/16⌋ blocks later, counting that block as zero, in every admitted extension that long. Nothing submitted later overtakes it (<a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean#L172"><code>history_delivery</code></a>). The runtime emits at most sixteen entries per block and uses the fee its word arithmetic computes.</p>
       </section>
 
       <section id="control">
         <p class="eyebrow">Statements that can fail</p>
         <h2>The system-address premise is not decorative.</h2>
-        <p>A closed theorem builds a two-block history from an independently supplied checkpoint that places, at the system address, a contract that calls the queue from inside a user transaction and drains it before the block’s own system call — and FIFO fails (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/WithdrawalRequestDrainControl.lean#L547"><code>systemEmpty_loadBearing_witness</code></a>). This witness does not supply the canonical deployment required by the headline. As far as we know, putting code at that address would take a signature by its key or a 160-bit Keccak preimage, but Blanc does not prove this, and the premise stays.</p>
+        <p>A closed theorem builds a two-block history from an independently supplied checkpoint that places, at the system address, a contract that calls the queue from inside a user transaction and drains it before the block’s own system call — and FIFO fails (<a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Composition/WithdrawalRequestDrainControl.lean#L750"><code>historyFifo_of_checkpoint_needs_systemEmpty</code></a>). This witness does not supply the canonical deployment required by the headline. As far as we know, putting code at that address would take a signature by its key or a 160-bit Keccak preimage, but Blanc does not prove this, and the premise stays.</p>
       </section>
 
       <section id="frames">
         <p class="eyebrow">Refinement and liveness</p>
         <h2>Every successful frame, classified.</h2>
-        <p>A successful frame at this code is exactly one of three things, with exact storage, logs and return bytes: the system call’s dequeue; a submission — not static, from a caller other than the system address, with 56 bytes of input and a value covering the fee the bytecode computes; or a fee read. While the excess holds the inhibitor, no user call succeeds. Which failure a rejected call meets is not stated (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/FrameEffects.lean#L33"><code>exec_frame_effect</code></a>). The contract’s balance never decreases, and the committed submissions add exactly their values to it (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/BalanceHistory.lean#L158"><code>history_balance_nondecreasing</code></a>).</p>
-        <p>After any history that leaves the contract active, a submission paying at least the EIP’s fee and started with more than the 2,300-gas stipend beyond its cost executes at exactly 1,258 + 87·<i>k</i> gas plus its storage accesses, where <i>k</i> counts the iterations of the fee loop; a fee read costs 180 + 87·<i>k</i> plus one read (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/NatLiveness.lean#L59"><code>history_submission_nat_live</code></a>).</p>
+        <p>A successful frame at this code is exactly one of three things, with exact storage, logs and return bytes: the system call’s dequeue; a submission — not static, from a caller other than the system address, with 56 bytes of input and a value covering the fee the bytecode computes; or a fee read. While the excess holds the inhibitor, no user call succeeds. Which failure a rejected call meets is not stated (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/FrameEffects.lean#L33"><code>exec_frame_effect</code></a>). The contract’s balance never decreases, and the committed submissions add exactly their values to it (<a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/BalanceHistory.lean#L158"><code>history_balance_nondecreasing</code></a>; from the deployment, <a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean#L113"><code>history_payments</code></a>).</p>
+        <p>After the deployment and any later history that leaves the contract active, a submission paying at least the EIP’s fee and started with more than the 2,300-gas stipend beyond its cost executes at exactly 1,258 + 87·<i>k</i> gas plus its storage accesses, where <i>k</i> counts the iterations of the fee loop; a fee read costs 180 + 87·<i>k</i> plus one read (<a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineSystem.lean#L77"><code>history_submission_live</code></a>).</p>
       </section>
 
       <section id="fee">
@@ -152,20 +154,20 @@
         <h2>The fee the bytes compute.</h2>
         <p>The EIP specifies its fee as Python pseudocode over unbounded integers. The bytecode computes the same series in 256-bit words, whose intermediate products can overflow. Two pre-deployment audits noted that its fee therefore departs from the EIP’s once the excess passes 2,892: one judged such an excess unreachable under current settings; the other, noting that a higher block gas limit might bring it within reach, rated the finding informational. Blanc states the agreement exactly.</p>
 <div class="thm">
-          <div class="head"><span class="tag">Statements, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/ExactFeeDomain.lean#L51"><code>…WithdrawalRequest.word_fee_le_nat</code> · ExactFeeDomain.lean:51</a> <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/ExactFeeDomain.lean#L27"><code>word_fee_eq_iff_natFeeDomain</code> · :27</a></div>
-<pre class="lean"><span class="kw">theorem</span> <span class="nm">word_fee_le_nat</span> {excess : B256} {iterations : Nat} {output : B256}
-    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output)
-    (model : Blanc.WithdrawalRequest.State) (excessEq : model.excess = excess.toNat) :
-    (output / (17 : B256)).toNat ≤ Blanc.WithdrawalRequest.fee model
+          <div class="head"><span class="tag">Statements, verbatim</span><a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineFee.lean#L41"><code>…WithdrawalRequest.fee_le_spec</code> · HeadlineFee.lean:41</a> <a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineFee.lean#L48"><code>fee_eq_spec_iff</code> · :48</a></div>
+<pre class="lean"><span class="kw">def</span> <span class="nm">SpecFee</span> (excess : B256) : Nat := fakeExp 1 excess.toNat 17
 
-<span class="kw">theorem</span> <span class="nm">word_fee_eq_iff_natFeeDomain</span> {excess : B256} {iterations : Nat}
-    {output : B256}
-    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output)
-    (model : Blanc.WithdrawalRequest.State) (excessEq : model.excess = excess.toNat) :
-    (output / (17 : B256)).toNat = Blanc.WithdrawalRequest.fee model ↔
-      NatFeeDomain excess iterations</pre>
+<span class="kw">def</span> <span class="nm">WordFee</span> (output : B256) : Nat := (output / (17 : B256)).toNat
+
+<span class="kw">theorem</span> <span class="nm">fee_le_spec</span> {excess : B256} {iterations : Nat} {output : B256}
+    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output) :
+    WordFee output ≤ SpecFee excess
+
+<span class="kw">theorem</span> <span class="nm">fee_eq_spec_iff</span> {excess : B256} {iterations : Nat} {output : B256}
+    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output) :
+    WordFee output = SpecFee excess ↔ NatFeeDomain excess iterations</pre>
         </div>
-        <p>The bytecode’s fee never exceeds the EIP’s, and equals it exactly when no intermediate value of the series wraps. Then a closed theorem builds a three-block configured history from an independently supplied checkpoint, in which a submission is committed after paying 2<sup>245</sup> wei: at least the fee the bytecode computes at an excess of 2,893, about 3.2·10<sup>73</sup> wei, but less than the EIP’s, about 8.1·10<sup>73</sup> wei (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Composition/WithdrawalRequestFeeRefutation.lean#L1182"><code>nat_fee_guarantee_refuted</code></a>). This refutes that fee guarantee for the checkpoint model; it does not provide a canonical deployment witness or a mainnet exploit. FIFO uses the fee the bytecode computes.</p>
+        <p>The bytecode’s fee never exceeds the EIP’s, and equals it exactly when no intermediate value of the series wraps. Then a closed theorem builds a three-block configured history from an independently supplied checkpoint, in which a submission is committed after paying 2<sup>245</sup> wei: at least the fee the bytecode computes at an excess of 2,893, about 3.2·10<sup>73</sup> wei, but less than the EIP’s, about 8.1·10<sup>73</sup> wei (<a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Composition/WithdrawalRequestFeeHeadline.lean#L59"><code>fee_guarantee_refuted</code></a>). This refutes that fee guarantee for the checkpoint model; it does not provide a canonical deployment witness or a mainnet exploit. FIFO uses the fee the bytecode computes.</p>
         <p>The divergence begins only where the EIP’s own fee is out of any account’s reach. By direct computation, outside the proofs, the two fees agree at every excess below 2,893, and at 2,892 the fee is already about 7.6·10<sup>73</sup> wei, more than 10<sup>47</sup> times all the ether in existence. The wrapped arithmetic does yield a fee of 1 wei near an excess of 2<sup>252</sup>, but every model state a history reaches from deployment has its effective excess plus its count bounded by the number of submissions, so that excess would take about 2<sup>252</sup> of them. The counterexample reaches its excess with 2,895 submissions in one block, on a synthetic Prague chain whose block gas limit, 2<sup>29</sup>, is about nine times mainnet’s; the retained mainnet scan through block 26,141,229 recorded a peak excess of 666, on 19 December 2025.</p>
       </section>
 
@@ -173,7 +175,7 @@
         <p class="eyebrow">The seventh question</p>
         <h2>Mainnet, when Prague began.</h2>
         <p>The contract was deployed before Prague, but its use began only when Prague activated, so all of it lies in forks Jaune covers. At block 22,431,083, the last before Prague, three providers report that its storage held exactly the model’s initial state — the inhibitor in the excess slot, zeros in the count, head and tail — with the same storage root it had at deployment, 549,694 blocks earlier; that it had logged no request; that the four system contracts held their canonical code; and that the system address held none.</p>
-        <p>These observations support the connection to mainnet, but do not authenticate its history inside Lean. The current FIFO headline instead derives the initial storage and runtime from canonical Cancun deployment and its admitted prefix. Applying it to mainnet still relies on the historical execution being a configured one in Jaune and on the stated environmental conditions. The constructor result establishes the runtime and initial storage without a hash premise (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/WithdrawalRequest/Creation/Deploy.lean#L88"><code>deploy_initial</code></a>).</p>
+        <p>These observations support the connection to mainnet, but do not authenticate its history inside Lean. The current FIFO headline instead derives the initial storage and runtime from canonical Cancun deployment and its admitted prefix. Applying it to mainnet still relies on the historical execution being a configured one in Jaune and on the stated environmental conditions. The deployment theorem reads the runtime and the four bookkeeping words directly, right after the deployment transaction and at the checkpoint (<a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean#L57"><code>deploy</code></a>, at the actual deployment <a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean#L223"><code>deploy_mainnet</code></a>), and the constructor result establishes them without a hash premise (<a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/WithdrawalRequest/HeadlineHistory.lean#L45"><code>deploy_words</code></a>).</p>
       </section>
 
       <section id="limits">
