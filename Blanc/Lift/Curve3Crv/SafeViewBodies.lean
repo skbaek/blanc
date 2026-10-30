@@ -23,14 +23,14 @@ local notation "stor₀" => Devm.getStor b sevm.currentTarget
 
 /-- The tail every word view ends with, inverted: `SLOAD` the key, `mstore(0, word)`,
 `return(0, 32)` returns exactly the stored word and keeps storage and logs. -/
-private theorem safe_wordTail (hfork : CoveredFork sevm.benvStat.fork) {M : Mem} (hwf : Mem.Wf M)
+private theorem safe_wordTail (hsg : sevm.benvStat.rules.stateGas = none) {M : Mem} (hwf : Mem.Wf M)
     {k : B256} {G : Nat} {post : Devm}
     (run : SFunc.RunCut prog sevm [] (St b [k] M G)
       (.next (.reg .sload) (.next (.push [0x00] (by decide)) (.next (.reg .mstore)
         (.next (.push [0x20] (by decide)) (.next (.push [0x00] (by decide)) (.last .return_))))))
       (.done (.halted post))) :
     Lands sevm b post (stor₀, [], some (b.getStorVal sevm.currentTarget k).toBytes) := by
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_mstore s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
@@ -41,15 +41,15 @@ private theorem safe_wordTail (hfork : CoveredFork sevm.benvStat.fork) {M : Mem}
     have h0 : (Bytes.toB256 [0x00]).toNat = 0 := by decide
     have h32 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
     refine ⟨?_, fun a _ => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
-    · rw [hstor, afterSload_getStor]
-    · rw [hstor, afterSload_getStor]
-    · rw [hlogs, afterSload_logs, List.append_nil]
+    · rw [hstor, afterSloadH_getStor]
+    · rw [hstor, afterSloadH_getStor]
+    · rw [hlogs, afterSloadH_logs, List.append_nil]
     · cases ho
       rw [hout, h0, h32, Mem.read_write_word_of_wf hwf]
 
 -- SEGMENT: safeWordViews (the four word views, inverted)
 /-- `totalSupply()`, inverted. -/
-theorem safe_totalSupply (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_totalSupply (hsg : sevm.benvStat.rules.stateGas = none) :
     SafeBody sevm b t_0240_c0 (rawTotalSupply sevm stor₀) := by
   intro G post run
   have run := run.cut
@@ -58,10 +58,10 @@ theorem safe_totalSupply (hfork : CoveredFork sevm.benvStat.fork) :
     (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
   exact ⟨_, by simp only [rawTotalSupply, hv, ite_true]; rfl,
-    safe_wordTail hfork (vyMem_wf Mem.wf_empty _) run⟩
+    safe_wordTail hsg (vyMem_wf Mem.wf_empty _) run⟩
 
 /-- `decimals()`, inverted. -/
-theorem safe_decimals (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_decimals (hsg : sevm.benvStat.rules.stateGas = none) :
     SafeBody sevm b t_087e_c0 (rawDecimals sevm stor₀) := by
   intro G post run
   have run := run.cut
@@ -70,10 +70,10 @@ theorem safe_decimals (hfork : CoveredFork sevm.benvStat.fork) :
     (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
   exact ⟨_, by simp only [rawDecimals, hv, ite_true]; rfl,
-    safe_wordTail hfork (vyMem_wf Mem.wf_empty _) run⟩
+    safe_wordTail hsg (vyMem_wf Mem.wf_empty _) run⟩
 
 /-- `balanceOf(a)`, inverted. -/
-theorem safe_balanceOf (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_balanceOf (hsg : sevm.benvStat.rules.stateGas = none) :
     SafeBody sevm b t_08a5_c0 (rawBalanceOf sevm stor₀) := by
   intro G post run
   have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
@@ -90,10 +90,10 @@ theorem safe_balanceOf (hfork : CoveredFork sevm.benvStat.fork) :
   obtain ⟨G6, run⟩ := ric_vySlot run
   have ha' : (Sevm.argWord sevm 0).toNat < 2 ^ 160 := ha
   exact ⟨_, by simp only [rawBalanceOf, hv, ha', and_self, ite_true]; rfl,
-    safe_wordTail hfork (vySlotMem_wf (vyMem_wf Mem.wf_empty _) _ _) run⟩
+    safe_wordTail hsg (vySlotMem_wf (vyMem_wf Mem.wf_empty _) _ _) run⟩
 
 /-- `allowance(o, p)`, inverted. -/
-theorem safe_allowance (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_allowance (hsg : sevm.benvStat.rules.stateGas = none) :
     SafeBody sevm b t_0267_c0 (rawAllowance sevm stor₀) := by
   intro G post run
   have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
@@ -121,7 +121,7 @@ theorem safe_allowance (hfork : CoveredFork sevm.benvStat.fork) :
   have hq' : (Sevm.argWord sevm 1).toNat < 2 ^ 160 := by rw [← hq4]; exact hq
   rw [hq4] at run
   exact ⟨_, by simp only [rawAllowance, hv, ho', hq', and_self, ite_true]; rfl,
-    safe_wordTail hfork (vySlotMem_wf (vySlotMem_wf (vyMem_wf Mem.wf_empty _) _ _) _ _) run⟩
+    safe_wordTail hsg (vySlotMem_wf (vySlotMem_wf (vyMem_wf Mem.wf_empty _) _ _) _ _) run⟩
 
 end
 
@@ -281,7 +281,7 @@ theorem safe_strJoin (hcd : sevm.data.length < 2 ^ 256) {M : Mem} {sz : Nat} {Lw
 /-- **The string views, inverted**, for either view: a successful halt passed the `CALLVALUE`
 guard and returns exactly `abiString` of the stored string (`n` data words), over storage whose
 length word is within the variable's bound; storage and logs are kept. -/
-theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.length < 2 ^ 256)
+theorem safe_strView (hsg : sevm.benvStat.rules.stateGas = none) (hcd : sevm.data.length < 2 ^ 256)
     {h0 h1 sl cp : UInt8} {fail : SFunc} (hf : fail.noOk = true) {e0 e1 x0 x1 r0 r1 : UInt8}
     {j k n : Nat} {joinT : SFunc} (hjT : joinT = t_0774_c5)
     (hk : prog[k]? = some (vyLoadLoopTree e0 e1 x0 x1 r0 r1 j k joinT))
@@ -325,7 +325,7 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_dup (n := 2) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_add s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_push s1
@@ -344,7 +344,7 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
     show (Lw + Bytes.toB256 [0x20]).toNat = L + 32
     rw [B256.toNat_add, show (Bytes.toB256 [0x20]).toNat = 32 by decide,
       Nat.lo_eq_of_lt (by have := hcase; omega)]
-  set b1 := afterSload sevm b base
+  set b1 := afterSloadH sevm b base
   set M2 := M1.write 288 (Nat.toB256 0).toBytes
   have hM2 : M2.size = 320 := by simp only [M2, Mem.size_write_word_at, hM1]; decide
   have hwf2 : Mem.Wf M2 := hwf1.write _ _
@@ -354,23 +354,23 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
   have hcap1 : Bytes.toB256 [cp] + Nat.toB256 0 ≠ Nat.toB256 (0 + 1) := by
     rcases hcase with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
   -- iteration 0
-  rcases ric_vyLoadIter hfork (i := 0) hM2 (by decide) (by decide) h384 (by decide) (by decide)
+  rcases ric_vyLoadIterH (BenvStat.bal_none_of_stateGas_none hsg) (i := 0) hM2 (by decide) (by decide) h384 (by decide) (by decide)
     (by decide) (by decide) hwf2 hc2 hk hkC hj hjC run with ⟨hlt, -⟩ | ⟨-, G21, run⟩
   · omega
   rw [ite_eq_right_of_eq_false _ _ (eq_false hcap1)] at run
-  set b2 := afterSload sevm b1 (base + Nat.toB256 0)
-  set b3 := afterSload sevm b2 (base + Nat.toB256 1)
+  set b2 := afterSloadH sevm b1 (base + Nat.toB256 0)
+  set b3 := afterSloadH sevm b2 (base + Nat.toB256 1)
   set u0 := b1.getStorVal sevm.currentTarget (base + Nat.toB256 0)
   set u1 := b2.getStorVal sevm.currentTarget (base + Nat.toB256 1)
   have hu0 : u0 = Lw := by
-    show (afterSload sevm b base).getStorVal _ _ = _
-    rw [getStorVal_afterSload, show base + Nat.toB256 0 = base by
+    show (afterSloadH sevm b base).getStorVal _ _ = _
+    rw [getStorVal_afterSloadH, show base + Nat.toB256 0 = base by
       apply B256.toNat_inj
       rw [B256.toNat_add, B256.toNat_toB256_of_lt (by decide), Nat.add_zero,
         Nat.lo_eq_of_lt (B256.toNat_lt _)]]
   have hu1 : u1 = (stor₀).get (base + Nat.toB256 (0 + 1)) := by
-    show (afterSload sevm (afterSload sevm b base) _).getStorVal _ _ = _
-    rw [getStorVal_afterSload, getStorVal_afterSload]; rfl
+    show (afterSloadH sevm (afterSloadH sevm b base) _).getStorVal _ _ = _
+    rw [getStorVal_afterSloadH, getStorVal_afterSloadH]; rfl
   -- The memory images from here on are kept opaque (`generalize`, then `subst` inside each
   -- fact's own proof): a `set` image makes the kernel unfold the concrete write chain whenever a
   -- size or read of it is converted.
@@ -382,7 +382,7 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
   have hc3 : (M3.read 0x120 32).1 = (Nat.toB256 1).toBytes := by
     subst hM3d; exact Mem.read_write_word_of_wf (hwf2.write _ _) _ _
   -- iteration 1
-  rcases ric_vyLoadIter hfork (i := 1) hM3 (by decide) (by decide) h384 (by decide) (by decide)
+  rcases ric_vyLoadIterH (BenvStat.bal_none_of_stateGas_none hsg) (i := 1) hM3 (by decide) (by decide) h384 (by decide) (by decide)
     (by decide) (by decide) hwf3 hc3 hk hkC hj hjC run with ⟨hlt, -⟩ | ⟨-, G22, run⟩
   · omega
   generalize hM4d : (M3.write (384 + 32 * 1) u1.toBytes).write 0x120
@@ -428,11 +428,11 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
     rw [ite_eq_right_of_eq_false _ _ (eq_false (by decide))] at run
     set u2 := b3.getStorVal sevm.currentTarget (base + Nat.toB256 2)
     have hu2 : u2 = (stor₀).get (base + Nat.toB256 (1 + 1)) := by
-      show (afterSload sevm (afterSload sevm (afterSload sevm b base) _) _).getStorVal _ _ = _
-      rw [getStorVal_afterSload, getStorVal_afterSload, getStorVal_afterSload]; rfl
+      show (afterSloadH sevm (afterSloadH sevm (afterSloadH sevm b base) _) _).getStorVal _ _ = _
+      rw [getStorVal_afterSloadH, getStorVal_afterSloadH, getStorVal_afterSloadH]; rfl
     have hW : vyStrWords stor₀ base 2 = u1.toBytes ++ u2.toBytes := by
       rw [hu1, hu2]; rfl
-    rcases ric_vyLoadIter hfork (i := 2) hM4 (by decide) (by decide) h384 (by decide) (by decide)
+    rcases ric_vyLoadIterH (BenvStat.bal_none_of_stateGas_none hsg) (i := 2) hM4 (by decide) (by decide) h384 (by decide) (by decide)
       (by decide) (by decide) hwf4 hc4 hk hkC hj hjC run with ⟨hlt, G23, run⟩ | ⟨hle, G23, run⟩
     · -- the test fails at the third word
       have hstr : (M4.read 416 L).1 = vyStrOf stor₀ base 2 := by
@@ -441,11 +441,11 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
         · omega
       obtain ⟨hst, hlg, hout⟩ := safe_strJoin hcd hwf4 hM4 (by decide)
         (by rw [← hLdef]; omega) (by rw [← hLdef]; omega) hLw4 hstr (by rw [← hstr, hlen4]) b3 run
-      exact hlands post b3 (fun a => by simp only [b3, b2, b1, afterSload_getStor])
-        (by simp only [b3, b2, b1, afterSload_logs]) hst hlg hout
+      exact hlands post b3 (fun a => by simp only [b3, b2, b1, afterSloadH_getStor])
+        (by simp only [b3, b2, b1, afterSloadH_logs]) hst hlg hout
     · -- the third word is copied, and the counter reaches the cap
       rw [ite_eq_left_of_eq_true _ _ (eq_true (by decide))] at run
-      set b4 := afterSload sevm b3 (base + Nat.toB256 2)
+      set b4 := afterSloadH sevm b3 (base + Nat.toB256 2)
       generalize hM5d : (M4.write (384 + 32 * 2) u2.toBytes).write 0x120
         (Nat.toB256 (2 + 1)).toBytes = M5 at run
       have hM5 : M5.size = 480 := by
@@ -483,8 +483,8 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
         rwa [show 32 + (L - 32) = L by omega] at hstr'
       obtain ⟨hst, hlg, hout⟩ := safe_strJoin hcd hwf5 hM5 (by decide)
         (by rw [← hLdef]; omega) (by rw [← hLdef]; omega) hLw5 hstr (by rw [← hstr, hlen5]) b4 run
-      exact hlands post b4 (fun a => by simp only [b4, b3, b2, b1, afterSload_getStor])
-        (by simp only [b4, b3, b2, b1, afterSload_logs]) hst hlg hout
+      exact hlands post b4 (fun a => by simp only [b4, b3, b2, b1, afterSloadH_getStor])
+        (by simp only [b4, b3, b2, b1, afterSloadH_logs]) hst hlg hout
   · -- `symbol`: the counter reached the cap
     rw [ite_eq_left_of_eq_true _ _ (eq_true (by decide))] at run
     have hstr : (M4.read 416 L).1 = vyStrOf stor₀ base 1 := by
@@ -493,32 +493,32 @@ theorem safe_strView (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.l
       · omega
     obtain ⟨hst, hlg, hout⟩ := safe_strJoin hcd hwf4 hM4 (by decide)
       (by rw [← hLdef]; omega) (by rw [← hLdef]; omega) hLw4 hstr (by rw [← hstr, hlen4]) b3 run
-    exact hlands post b3 (fun a => by simp only [b3, b2, b1, afterSload_getStor])
-      (by simp only [b3, b2, b1, afterSload_logs]) hst hlg hout
+    exact hlands post b3 (fun a => by simp only [b3, b2, b1, afterSloadH_getStor])
+      (by simp only [b3, b2, b1, afterSloadH_logs]) hst hlg hout
 
 -- SEGMENT: safeStringViews (`name` and `symbol`, one shape, inverted)
 /-- `name()`, inverted, over storage whose length word is within `String[64]`. -/
-theorem safe_name (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.length < 2 ^ 256)
+theorem safe_name (hsg : sevm.benvStat.rules.stateGas = none) (hcd : sevm.data.length < 2 ^ 256)
     (hL : ((stor₀).get vyNameBase).toNat ≤ 64) :
     SafeBody sevm b t_0716_c0 (rawName sevm stor₀) := by
   intro G post run
   have hb : vyNameBase = (Bytes.toB256 [0x00]).toBytes.keccak := by
     rw [show Bytes.toB256 [0x00] = 0 by decide]; rfl
   obtain ⟨hv, hl⟩ := safe_strView (h0 := 0x07) (h1 := 0x20) (fail := t_071c_c0) (e0 := 0x07)
-    (e1 := 0x52) (x0 := 0x07) (x1 := 0x74) (r0 := 0x07) (r1 := 0x3f) hfork hcd (by decide) rfl rfl
+    (e1 := 0x52) (x0 := 0x07) (x1 := 0x74) (r0 := 0x07) (r1 := 0x3f) hsg hcd (by decide) rfl rfl
     rfl (Or.inl ⟨rfl, rfl, by rw [← hb]; exact hL⟩) run
   rw [← hb] at hl
   exact ⟨_, by simp only [rawName, hv, hL, and_self, ite_true], hl⟩
 
 /-- `symbol()`, inverted, over storage whose length word is within `String[32]`. -/
-theorem safe_symbol (hfork : CoveredFork sevm.benvStat.fork) (hcd : sevm.data.length < 2 ^ 256)
+theorem safe_symbol (hsg : sevm.benvStat.rules.stateGas = none) (hcd : sevm.data.length < 2 ^ 256)
     (hL : ((stor₀).get vySymbolBase).toNat ≤ 32) :
     SafeBody sevm b t_07ca_c0 (rawSymbol sevm stor₀) := by
   intro G post run
   have hb : vySymbolBase = (Bytes.toB256 [0x01]).toBytes.keccak := by
     rw [show Bytes.toB256 [0x01] = 1 by decide]; rfl
   obtain ⟨hv, hl⟩ := safe_strView (h0 := 0x07) (h1 := 0xd4) (fail := t_07d0_c0) (e0 := 0x08)
-    (e1 := 0x06) (x0 := 0x08) (x1 := 0x28) (r0 := 0x07) (r1 := 0xf3) (joinT := t_0828_c6) hfork hcd
+    (e1 := 0x06) (x0 := 0x08) (x1 := 0x28) (r0 := 0x07) (r1 := 0xf3) (joinT := t_0828_c6) hsg hcd
     (by decide) rfl rfl rfl (Or.inr ⟨rfl, rfl, by rw [← hb]; exact hL⟩) run
   rw [← hb] at hl
   exact ⟨_, by simp only [rawSymbol, hv, hL, and_self, ite_true], hl⟩

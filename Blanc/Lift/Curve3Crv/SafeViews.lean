@@ -1,5 +1,6 @@
 import Blanc.Lift.Quiet
 import Blanc.Lift.Curve3Crv.Spec
+import Blanc.Lift.HistAccessWalkFacts
 
 /-!
 # The views are quiet
@@ -29,13 +30,14 @@ theorem viewBodies_quiet : (viewKs.all fun k => match bodies[k]? with
   decide +kernel
 
 /-- A run of a view body keeps every storage map and the log list. -/
-theorem view_world {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {k : Nat} {f : SFunc}
+theorem view_world {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none) {k : Nat}
+    {f : SFunc}
     {d : Devm} {o : Outcome} (hk : k ∈ viewKs) (hf : bodies[k]? = some f)
     (run : SFunc.Run prog sevm d f o) :
     Devm.getStor (Outcome.devm o) = Devm.getStor d ∧ (Outcome.devm o).logs = d.logs := by
   have h := (List.all_eq_true.mp viewBodies_quiet) k hk
   rw [hf] at h
   simp only [Bool.and_eq_true] at h
-  exact SFunc.Run.world_of_quiet viewEntries_quiet hfork h.1 h.2 run
+  exact SFunc.Run.world_of_quietH viewEntries_quiet hsg h.1 h.2 run
 
 end Blanc.Lift.Curve3Crv

@@ -2,6 +2,7 @@ import Blanc.Lift.Curve3Crv.CommittedExec
 import Blanc.ExecutionAccountingAdmission
 import Blanc.ExecutionAccountingCore
 import Blanc.ExecutionTraceCalldata
+import Blanc.ExecutionHistoricalLadder
 
 /-!
 # Curve history identified with its committed writer invocations
@@ -25,10 +26,13 @@ def curveSpec (U : Key → Prop) : ContractSpecSem :=
   ContractSpecSem.ofStorageOnly c3crvSem
     (fun stor => ∃ s K, (∀ k, K k → U k) ∧ VyInv stor s K)
 
-theorem curveSpec_soundAdmitted (ca : Adr) (U : Key → Prop)
+/-- Frame soundness of `curveSpec` over any fork domain without state gas
+(`c3crv_frame_refines_rawH`). -/
+theorem curveSpec_soundAdmittedIn (F : Fork → Prop)
+    (hsgF : ∀ {f : Fork}, F f → (Fork.ruleSet f).stateGas = none) (ca : Adr) (U : Key → Prop)
     (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
     (apart : ∀ k, U k → k.slot ∉ vyFixedSlots) :
-    (curveSpec U).SoundAdmitted ca (carriedFrameEntry U) := by
+    (curveSpec U).SoundAdmittedIn F ca (carriedFrameEntry U) := by
   intro sevm pre post hfork execution deployed target admitted _ _ incoming
   subst target
   obtain ⟨⟨hstack, hmem⟩, hcd, touched⟩ := admitted.root rfl
@@ -36,8 +40,8 @@ theorem curveSpec_soundAdmitted (ca : Adr) (U : Key → Prop)
       ∃ s K, (∀ k, K k → U k) ∧ VyInv (Devm.getStor pre sevm.currentTarget) s K :=
     ContractSpecSem.ofStorageOnly_preInv_iff.mp incoming.inv
   have fresh := FreshKeys.of_universe injective apart included touched
-  have refinement := c3crv_frame_refines_raw deployed hfork hcd hstack hmem invariant fresh
-    execution
+  have refinement := c3crv_frame_refines_rawH deployed (hsgF hfork) hcd hstack hmem invariant
+    fresh execution
   refine ⟨trivial, ?_⟩
   show ∃ s K, (∀ k, K k → U k) ∧ VyInv (Devm.getStor post sevm.currentTarget) s K
   by_cases writer : IsWriter (decodeCall sevm)
@@ -46,6 +50,21 @@ theorem curveSpec_soundAdmitted (ca : Adr) (U : Key → Prop)
   · refine ⟨s, K, included, ?_⟩
     rw [(refinement.2 writer).1 sevm.currentTarget]
     exact invariant
+
+theorem curveSpec_preservesAdmittedIn (F : Fork → Prop)
+    (hsgF : ∀ {f : Fork}, F f → (Fork.ruleSet f).stateGas = none) (ca : Adr) (U : Key → Prop)
+    (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
+    (apart : ∀ k, U k → k.slot ∉ vyFixedSlots) :
+    (curveSpec U).PreservesAdmittedIn F ca (carriedFrameEntry U) :=
+  ContractSpecSem.preserves_inv_admittedIn F hsgF (curveSpec U) ca (carriedFrameEntry U)
+    (curveSpec_soundAdmittedIn F hsgF ca U injective apart)
+
+/-- `curveSpec_soundAdmittedIn` on the covered domain. -/
+theorem curveSpec_soundAdmitted (ca : Adr) (U : Key → Prop)
+    (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
+    (apart : ∀ k, U k → k.slot ∉ vyFixedSlots) :
+    (curveSpec U).SoundAdmitted ca (carriedFrameEntry U) :=
+  curveSpec_soundAdmittedIn CoveredFork (fun h => h.histFork.stateGas_none) ca U injective apart
 
 theorem curveSpec_preservesAdmitted (ca : Adr) (U : Key → Prop)
     (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
