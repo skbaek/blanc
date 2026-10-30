@@ -102,7 +102,6 @@ def decimalsGas : Nat :=
 cheaper than `balanceOfGas`, and the ratio is the storage read. -/
 theorem decimalsGas_eq : decimalsGas = 158 := by decide
 
-set_option maxRecDepth 603 in
 /-- A `decimals()` call on `weth` has a gas-exact run; it costs exactly
 `decimalsGas` and returns `0x12`.
 
@@ -112,8 +111,8 @@ predecessor's two witnesses left inside their constructions. Stating it here
 rather than re-deriving the witness in a separate theorem is deliberate: the
 re-derivation Step 1 of the gas-cost plan had to perform, because
 `weth_balanceOf_runCompiled`'s existential does not expose which witness it
-built, pays this module's dispatch keccak cost a second time. A target whose
-walk is written *inside* this module pays it once. -/
+built, pays this module's dispatch walk a second time. A target whose walk is
+written *inside* this module pays it once. -/
 theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
     (hfork : CoveredFork sevm.benvStat.fork)
     (h_value : sevm.value = 0)
@@ -124,6 +123,8 @@ theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
     ∃ post, Prog.RunCompiled sevm pre weth post ∧
       post.gasLeft + decimalsGas = pre.gasLeft ∧
       Devm.output post = (0x12 : B256).toBytes := by
+  have h_sel' := h_sel.trans SelectorWord.decimals
+  rw [weth_eq_words]
   rw [decimalsGas_eq] at h_gas
   set g := pre.gasLeft with hg
   have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
@@ -136,38 +137,9 @@ theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
         (by
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
             simp only [B256.eqCheck, h_value, ↓reduceIte]
-          -- Selector `PUSH`es by hand: see `Func.runCompiled_pushB256_covered`.
-          func_run (5) [dcSel]
-          apply Func.runCompiled_pushB256_covered (G := g - 18) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [0]
-          apply Func.runCompiled_pushB256_covered (G := g - 40) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.runCompiled_pushB256_covered (G := g - 63) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.runCompiled_pushB256_covered (G := g - 86) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (2) [1]
-          apply Func.runCompiled_pushB256_covered (G := g - 106) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run [1, 1, 3]
+          func_run (5) [Sevm.selector sevm]
+          rw [h_sel']
+          func_run [0, 1, 1, 1, 1, 1, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 158) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
@@ -275,6 +247,8 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
       post.gasLeft + balanceOfGas = pre.gasLeft ∧
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
+  have h_sel' := h_sel.trans SelectorWord.balanceOf
+  rw [weth_eq_words] at h_code
   rw [balanceOfGas_eq] at h_gas
   set g := pre.gasLeft with hg
   have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
@@ -288,38 +262,9 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
           (by
             have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
               simp only [B256.eqCheck, h_value, ↓reduceIte]
-            -- Selector `PUSH`es by hand: see `Func.runCompiled_pushB256_covered`.
-            func_run (5) [boSel]
-            apply Func.runCompiled_pushB256_covered (G := g - 18) hfork (by decide)
-              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-              Devm.stateGas_setMach]
-            func_run (3) [0]
-            apply Func.runCompiled_pushB256_covered (G := g - 40) hfork (by decide)
-              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-              Devm.stateGas_setMach]
-            func_run (3) [1]
-            apply Func.runCompiled_pushB256_covered (G := g - 63) hfork (by decide)
-              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-              Devm.stateGas_setMach]
-            func_run (3) [1]
-            apply Func.runCompiled_pushB256_covered (G := g - 86) hfork (by decide)
-              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-              Devm.stateGas_setMach]
-            func_run (2) [0]
-            apply Func.runCompiled_pushB256_covered (G := g - 105) hfork (by decide)
-              (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-              (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-              Devm.stateGas_setMach]
-            func_run [1, 1, 3]
+            func_run (5) [Sevm.selector sevm]
+            rw [h_sel']
+            func_run [0, 1, 1, 0, 1, 1, 3]
             · exact Devm.extCost_empty_word
             · exact Func.runCompiled_return_word (G := g - 2260) (e := 0) rfl
                 (Devm.extCost_word_word Mem.size_write_word)
@@ -400,6 +345,8 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
       post.gasLeft + balanceOfGasWarm = pre.gasLeft ∧
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
+  have h_sel' := h_sel.trans SelectorWord.balanceOf
+  rw [weth_eq_words]
   rw [balanceOfGasWarm_eq] at h_gas
   set g := pre.gasLeft with hg
   have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
@@ -412,38 +359,9 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
         (by
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
             simp only [B256.eqCheck, h_value, ↓reduceIte]
-          -- Selector `PUSH`es by hand: see `Func.runCompiled_pushB256_covered`.
-          func_run (5) [boSel]
-          apply Func.runCompiled_pushB256_covered (G := g - 18) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [0]
-          apply Func.runCompiled_pushB256_covered (G := g - 40) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.runCompiled_pushB256_covered (G := g - 63) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.runCompiled_pushB256_covered (G := g - 86) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (2) [0]
-          apply Func.runCompiled_pushB256_covered (G := g - 105) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run [1, 1, 3]
+          func_run (5) [Sevm.selector sevm]
+          rw [h_sel']
+          func_run [0, 1, 1, 0, 1, 1, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 260) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
@@ -586,11 +504,13 @@ schedule.** Message-call altitude; these two selectors only; exact under
 def wethGas : B256 → Sevm → Devm → Option Nat :=
   wethGasWith gJumpdest gBase gVerylow gHigh gMemory gasColdSload gasWarmAccess
 
-set_option maxRecDepth 592 in
 /-- The two entrypoints are distinct, which is what makes `wethGasWith`'s
-second branch reachable. Proved once here rather than at each use: deciding it
-forces both `String.keccak` calls behind the selectors. -/
-theorem dcSel_ne_boSel : dcSel ≠ boSel := by decide
+second branch reachable. Proved once here rather than at each use, from the two
+kernel-checked words in `Blanc/SelectorWords.lean`: deciding it straight from
+the signatures would force both `String.keccak` calls in the elaborator. -/
+theorem dcSel_ne_boSel : dcSel ≠ boSel := by
+  rw [show dcSel = _ from SelectorWord.decimals, show boSel = _ from SelectorWord.balanceOf]
+  decide
 
 /-- `wethGas` at `balanceOf(address)`, with the state dependence exposed: the
 cost is `balanceOfGasWarm` or `balanceOfGas` according to the pre-state's

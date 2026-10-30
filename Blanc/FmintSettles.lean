@@ -261,6 +261,8 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
   have h_d0 : Sevm.dataWord sevm (32 * 0 + 4) = receiver := h_arg0
   have h_d2 : Sevm.dataWord sevm (32 * 2 + 4) = amount := h_arg2
   have h_slot : supplySlot ≠ receiver := supplySlot_ne_of_validAdr h_addr
+  have h_sel' := h_sel.trans SelectorWord.flashLoan
+  rw [fmint_eq_words] at h_cont ⊢
   rw [flashLoanMintGas_eq] at h_gas h_cont
   set g := pre.gasLeft with hg
   refine
@@ -270,7 +272,9 @@ theorem flashLoan_runCompiledTo_mint {sevm : Sevm} {pre : Devm}
       (by rw [h_stack, h_mem])
       ?_
   -- the dispatcher, guard (0) and guard (1)
-  func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
+  func_run (5) [Sevm.selector sevm]
+  rw [h_sel']
+  func_run (34) [1, 0, 0, 1, 1, 0,
     ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
@@ -711,6 +715,8 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
   have h_d0 : Sevm.dataWord sevm (32 * 0 + 4) = receiver := h_arg0
   have h_d2 : Sevm.dataWord sevm (32 * 2 + 4) = amount := h_arg2
   have h_slot : supplySlot ≠ receiver := supplySlot_ne_of_validAdr h_addr
+  have h_sel' := h_sel.trans SelectorWord.flashLoan
+  rw [fmint_eq_words] at h_cont ⊢
   rw [flashLoanMintGas_eq] at h_gas h_cont
   set g := pre.gasLeft with hg
   refine Prog.execSat_intro (G := g - 1)
@@ -720,7 +726,9 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     ?_
   apply Func.execSat_segment
   · intro ex hex
-    func_run (39) [flashLoanSelector, 1, 0, 0, 1, 1, 0,
+    func_run (5) [Sevm.selector sevm]
+    rw [h_sel']
+    func_run (34) [1, 0, 0, 1, 1, 0,
       ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
@@ -2367,6 +2375,8 @@ theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
     (h_gas : receiverNotAddressGas ≤ pre.gasLeft) :
     ∃ post, Prog.RunCompiledTo sevm pre fmint (.error (.revert, post)) ∧
       Devm.output post = [] := by
+  have h_sel' := h_sel.trans SelectorWord.flashLoan
+  rw [fmint_eq_words]
   rw [receiverNotAddressGas_eq] at h_gas
   set g := pre.gasLeft with hg
   exact
@@ -2376,37 +2386,9 @@ theorem receiverNotAddress_runCompiledTo {sevm : Sevm} {pre : Devm}
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack])
         (by
-          -- The dispatch's selector `PUSH`es are stepped by hand (the WethLive diagnosis, d14b310b:
-          -- `func_run`'s `PUSH0`-guard `assumption` evaluates keccak selectors past the ceiling).
-          func_run (5) [flashLoanSelector]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 18) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 41) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [0]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 63) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (2) [0]
-          apply Func.RunCompiledTo.next (Ninst.runCompiled_pushB256 (G := g - 82) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (16) [1, 1, 0,
+          func_run (5) [Sevm.selector sevm]
+          rw [h_sel']
+          func_run (28) [1, 0, 0, 1, 1, 0,
             ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, w]
           repeat (case h_legacy => exact hfork.rules_stateGas_none)
           · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1
@@ -2498,6 +2480,8 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
     (h_stack : pre.stack = [])
     (h_gas : amountOverBoundGas ≤ pre.gasLeft) :
     ∃ post, exec ⟨0, sevm, pre⟩ = .error (.revert, post) := by
+  have h_sel' := h_sel.trans SelectorWord.flashLoan
+  rw [fmint_eq_words] at h_code
   have h_arg0 : Sevm.argWord sevm 0 = receiver := argWord_zero_of_decodes h_dec
   have h_arg2 : Sevm.argWord sevm 2 = amount := argWord_two_of_decodes h_dec
   have h_lt : ~~~ (Devm.getStorVal pre sevm.currentTarget supplySlot) < amount :=
@@ -2511,37 +2495,9 @@ theorem fmint_amount_over_bound_reverts {sevm : Sevm} {pre : Devm}
     (by simp only [gJumpdest]; omega) (by rw [h_stack]) ?_
   apply Func.execSat_segment
   · intro ex hex
-    -- The dispatch's selector `PUSH`es are stepped by hand (the WethLive diagnosis, d14b310b:
-    -- `func_run`'s `PUSH0`-guard `assumption` evaluates keccak selectors past the ceiling).
-    func_run (5) [flashLoanSelector]
-    apply Func.ExecWitness.next (Ninst.runCompiled_pushB256 (G := g - 18) (pushCost_of_ne_zero (by decide))
-      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-      (fun _ => hfork.rules_push0))
-    simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-      Devm.stateGas_setMach]
-    func_run (3) [1]
-    apply Func.ExecWitness.next (Ninst.runCompiled_pushB256 (G := g - 41) (pushCost_of_ne_zero (by decide))
-      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-      (fun _ => hfork.rules_push0))
-    simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-      Devm.stateGas_setMach]
-    func_run (3) [0]
-    apply Func.ExecWitness.next (Ninst.runCompiled_pushB256 (G := g - 63) (pushCost_of_ne_zero (by decide))
-      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-      (fun _ => hfork.rules_push0))
-    simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-      Devm.stateGas_setMach]
-    func_run (2) [0]
-    apply Func.ExecWitness.next (Ninst.runCompiled_pushB256 (G := g - 82) (pushCost_of_ne_zero (by decide))
-      (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-      (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-      (fun _ => hfork.rules_push0))
-    simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-      Devm.stateGas_setMach]
-    func_run (22) [1, 1, 0,
+    func_run (5) [Sevm.selector sevm]
+    rw [h_sel']
+    func_run (34) [1, 0, 0, 1, 1, 0,
       ~~~ (0 : B256), (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat, 0, supplySlot]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · show sevm.currentTarget.toB256 =? Sevm.argWord sevm 1 = 1

@@ -14,72 +14,6 @@
       "ceiling": 803
     },
     {
-      "id": "Blanc/FmintGas.lean::Blanc.Fmint.decimals_runCompiled#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/FmintGas.lean",
-      "declaration": "Blanc.Fmint.decimals_runCompiled",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 603,
-      "ceiling": 603
-    },
-    {
-      "id": "Blanc/FmintGas.lean::Blanc.Fmint.totalSupply_gas_exact#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/FmintGas.lean",
-      "declaration": "Blanc.Fmint.totalSupply_gas_exact",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 603,
-      "ceiling": 603
-    },
-    {
-      "id": "Blanc/FmintGas.lean::Blanc.Fmint.totalSupply_warm_runCompiled#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/FmintGas.lean",
-      "declaration": "Blanc.Fmint.totalSupply_warm_runCompiled",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 603,
-      "ceiling": 603
-    },
-    {
-      "id": "Blanc/FmintLive.lean::Blanc.Fmint.totalSupply_runCompiled#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/FmintLive.lean",
-      "declaration": "Blanc.Fmint.totalSupply_runCompiled",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 603,
-      "ceiling": 603
-    },
-    {
-      "id": "Blanc/FmintReverts.lean::Blanc.Fmint.tokenNeSelf_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/FmintReverts.lean",
-      "declaration": "Blanc.Fmint.tokenNeSelf_runCompiledTo",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 603,
-      "ceiling": 603
-    },
-    {
-      "id": "Blanc/FmintReverts.lean::Blanc.Fmint.unknownSelector_runCompiledTo#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/FmintReverts.lean",
-      "declaration": "Blanc.Fmint.unknownSelector_runCompiledTo",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 603,
-      "ceiling": 603
-    },
-    {
       "id": "Blanc/FmintSettles.lean::Blanc.Fmint.execSat_burnOk_leaf#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/FmintSettles.lean",
       "declaration": "Blanc.Fmint.execSat_burnOk_leaf",
@@ -883,17 +817,6 @@
       "ceiling": 610
     },
     {
-      "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdrawTo_progExecSat#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/Weth10Redeemable.lean",
-      "declaration": "Blanc.Weth10.withdrawTo_progExecSat",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 561,
-      "ceiling": 561
-    },
-    {
       "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdraw_execSat#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/Weth10Redeemable.lean",
       "declaration": "Blanc.Weth10.withdraw_execSat",
@@ -903,28 +826,6 @@
       "option": "maxRecDepth",
       "value": 610,
       "ceiling": 610
-    },
-    {
-      "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdraw_progExecSat#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/Weth10Redeemable.lean",
-      "declaration": "Blanc.Weth10.withdraw_progExecSat",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 561,
-      "ceiling": 561
-    },
-    {
-      "id": "Blanc/WethGas.lean::Blanc.dcSel_ne_boSel#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/WethGas.lean",
-      "declaration": "Blanc.dcSel_ne_boSel",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 592,
-      "ceiling": 592
     },
     {
       "id": "Blanc/WethGas.lean::Blanc.weth_balanceOf_gas_exact#1::command_scoped::-::maxRecDepth#1",
@@ -947,17 +848,6 @@
       "option": "maxRecDepth",
       "value": 604,
       "ceiling": 604
-    },
-    {
-      "id": "Blanc/WethGas.lean::Blanc.weth_decimals_runCompiled#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/WethGas.lean",
-      "declaration": "Blanc.weth_decimals_runCompiled",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 603,
-      "ceiling": 603
     },
     {
       "id": "Blanc/WethLive.lean::Blanc.weth_balanceOf_runCompiled#1::command_scoped::-::maxRecDepth#1",

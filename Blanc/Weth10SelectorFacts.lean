@@ -1,5 +1,6 @@
 import Blanc.Weth10Attribution
 import Blanc.Weth10HolderFlowSelectorFacts
+import Blanc.SelectorWords
 
 /-!
 Selector separations for the exact Blanc WETH10 runtime.
@@ -38,30 +39,16 @@ namespace Weth10
 /-! ## The selector words
 
 One kernel keccak per selector this half adds; the other ten words come
-from the lower half.  These are private: the separations below are the
+from the lower half, and the ERC-20 words shared with other contracts from
+`Blanc/SelectorWords.lean`.  These are private: the separations below are the
 module's interface, and a consumer that wanted a selector's literal word
 would be reaching past them. -/
-
-private theorem selector_name_val :
-    selector "name" [] = (0x06fdde03 : B256) := by decide +kernel
-
-private theorem selector_symbol_val :
-    selector "symbol" [] = (0x95d89b41 : B256) := by decide +kernel
-
-private theorem selector_decimals_val :
-    selector "decimals" [] = (0x313ce567 : B256) := by decide +kernel
 
 private theorem selector_PERMIT_TYPEHASH_val :
     selector "PERMIT_TYPEHASH" [] = (0x30adf81f : B256) := by decide +kernel
 
 private theorem selector_CALLBACK_SUCCESS_val :
     selector "CALLBACK_SUCCESS" [] = (0x8237e538 : B256) := by decide +kernel
-
-private theorem selector_totalSupply_val :
-    selector "totalSupply" [] = (0x18160ddd : B256) := by decide +kernel
-
-private theorem selector_balanceOf_val :
-    selector "balanceOf" [.address] = (0x70a08231 : B256) := by decide +kernel
 
 private theorem selector_nonces_val :
     selector "nonces" [.address] = (0x7ecebe00 : B256) := by decide +kernel
@@ -75,19 +62,11 @@ private theorem selector_deploymentChainId_val :
 private theorem selector_DOMAIN_SEPARATOR_val :
     selector "DOMAIN_SEPARATOR" [] = (0x3644e515 : B256) := by decide +kernel
 
-private theorem selector_maxFlashLoan_val :
-    selector "maxFlashLoan" [.address] = (0x613255ab : B256) := by
-  decide +kernel
-
-private theorem selector_flashFee_val :
-    selector "flashFee" [.address, .uint256] = (0xd9d98ce4 : B256) := by
-  decide +kernel
-
 private theorem approveSelector_val :
-    approveSelector = (0x095ea7b3 : B256) := by decide +kernel
+    approveSelector = (0x095ea7b3 : B256) := SelectorWord.approve
 
 private theorem allowanceSelector_val :
-    allowanceSelector = (0xdd62ed3e : B256) := by decide +kernel
+    allowanceSelector = (0xdd62ed3e : B256) := SelectorWord.allowance
 
 private theorem approveAndCallSelector_val :
     approveAndCallSelector = (0xcae9ca51 : B256) := by decide +kernel
@@ -104,91 +83,91 @@ event chain tests, which is what makes its frame's event `none`. -/
 
 theorem selector_name_ne_approveSelector :
     selector "name" [] ≠ approveSelector := by
-  rw [selector_name_val, approveSelector_val]; decide
+  rw [SelectorWord.name, approveSelector_val]; decide
 
 theorem selector_name_ne_approveAndCallSelector :
     selector "name" [] ≠ approveAndCallSelector := by
-  rw [selector_name_val, approveAndCallSelector_val]; decide
+  rw [SelectorWord.name, approveAndCallSelector_val]; decide
 
 theorem selector_name_ne_permitSelector :
     selector "name" [] ≠ permitSelector := by
-  rw [selector_name_val, permitSelector_val]; decide
+  rw [SelectorWord.name, permitSelector_val]; decide
 
 theorem selector_name_ne_transferFromSelector :
     selector "name" [] ≠ transferFromSelector := by
-  rw [selector_name_val, transferFromSelector_val]; decide
+  rw [SelectorWord.name, transferFromSelector_val]; decide
 
 theorem selector_name_ne_withdrawFromSelector :
     selector "name" [] ≠ withdrawFromSelector := by
-  rw [selector_name_val, withdrawFromSelector_val]; decide
+  rw [SelectorWord.name, withdrawFromSelector_val]; decide
 
 theorem selector_name_ne_flashLoanSelector :
     selector "name" [] ≠ flashLoanSelector := by
-  rw [selector_name_val, flashLoanSelector_val]; decide
+  rw [SelectorWord.name, flashLoanSelector_val]; decide
 
 theorem selector_name_ne_allowanceSelector :
     selector "name" [] ≠ allowanceSelector := by
-  rw [selector_name_val, allowanceSelector_val]; decide
+  rw [SelectorWord.name, allowanceSelector_val]; decide
 
 /-! ### `symbol` -/
 
 theorem selector_symbol_ne_approveSelector :
     selector "symbol" [] ≠ approveSelector := by
-  rw [selector_symbol_val, approveSelector_val]; decide
+  rw [SelectorWord.symbol, approveSelector_val]; decide
 
 theorem selector_symbol_ne_approveAndCallSelector :
     selector "symbol" [] ≠ approveAndCallSelector := by
-  rw [selector_symbol_val, approveAndCallSelector_val]; decide
+  rw [SelectorWord.symbol, approveAndCallSelector_val]; decide
 
 theorem selector_symbol_ne_permitSelector :
     selector "symbol" [] ≠ permitSelector := by
-  rw [selector_symbol_val, permitSelector_val]; decide
+  rw [SelectorWord.symbol, permitSelector_val]; decide
 
 theorem selector_symbol_ne_transferFromSelector :
     selector "symbol" [] ≠ transferFromSelector := by
-  rw [selector_symbol_val, transferFromSelector_val]; decide
+  rw [SelectorWord.symbol, transferFromSelector_val]; decide
 
 theorem selector_symbol_ne_withdrawFromSelector :
     selector "symbol" [] ≠ withdrawFromSelector := by
-  rw [selector_symbol_val, withdrawFromSelector_val]; decide
+  rw [SelectorWord.symbol, withdrawFromSelector_val]; decide
 
 theorem selector_symbol_ne_flashLoanSelector :
     selector "symbol" [] ≠ flashLoanSelector := by
-  rw [selector_symbol_val, flashLoanSelector_val]; decide
+  rw [SelectorWord.symbol, flashLoanSelector_val]; decide
 
 theorem selector_symbol_ne_allowanceSelector :
     selector "symbol" [] ≠ allowanceSelector := by
-  rw [selector_symbol_val, allowanceSelector_val]; decide
+  rw [SelectorWord.symbol, allowanceSelector_val]; decide
 
 /-! ### `decimals` -/
 
 theorem selector_decimals_ne_approveSelector :
     selector "decimals" [] ≠ approveSelector := by
-  rw [selector_decimals_val, approveSelector_val]; decide
+  rw [SelectorWord.decimals, approveSelector_val]; decide
 
 theorem selector_decimals_ne_approveAndCallSelector :
     selector "decimals" [] ≠ approveAndCallSelector := by
-  rw [selector_decimals_val, approveAndCallSelector_val]; decide
+  rw [SelectorWord.decimals, approveAndCallSelector_val]; decide
 
 theorem selector_decimals_ne_permitSelector :
     selector "decimals" [] ≠ permitSelector := by
-  rw [selector_decimals_val, permitSelector_val]; decide
+  rw [SelectorWord.decimals, permitSelector_val]; decide
 
 theorem selector_decimals_ne_transferFromSelector :
     selector "decimals" [] ≠ transferFromSelector := by
-  rw [selector_decimals_val, transferFromSelector_val]; decide
+  rw [SelectorWord.decimals, transferFromSelector_val]; decide
 
 theorem selector_decimals_ne_withdrawFromSelector :
     selector "decimals" [] ≠ withdrawFromSelector := by
-  rw [selector_decimals_val, withdrawFromSelector_val]; decide
+  rw [SelectorWord.decimals, withdrawFromSelector_val]; decide
 
 theorem selector_decimals_ne_flashLoanSelector :
     selector "decimals" [] ≠ flashLoanSelector := by
-  rw [selector_decimals_val, flashLoanSelector_val]; decide
+  rw [SelectorWord.decimals, flashLoanSelector_val]; decide
 
 theorem selector_decimals_ne_allowanceSelector :
     selector "decimals" [] ≠ allowanceSelector := by
-  rw [selector_decimals_val, allowanceSelector_val]; decide
+  rw [SelectorWord.decimals, allowanceSelector_val]; decide
 
 /-! ### `PERMIT_TYPEHASH` -/
 
@@ -254,61 +233,61 @@ theorem selector_CALLBACK_SUCCESS_ne_allowanceSelector :
 
 theorem selector_totalSupply_ne_approveSelector :
     selector "totalSupply" [] ≠ approveSelector := by
-  rw [selector_totalSupply_val, approveSelector_val]; decide
+  rw [SelectorWord.totalSupply, approveSelector_val]; decide
 
 theorem selector_totalSupply_ne_approveAndCallSelector :
     selector "totalSupply" [] ≠ approveAndCallSelector := by
-  rw [selector_totalSupply_val, approveAndCallSelector_val]; decide
+  rw [SelectorWord.totalSupply, approveAndCallSelector_val]; decide
 
 theorem selector_totalSupply_ne_permitSelector :
     selector "totalSupply" [] ≠ permitSelector := by
-  rw [selector_totalSupply_val, permitSelector_val]; decide
+  rw [SelectorWord.totalSupply, permitSelector_val]; decide
 
 theorem selector_totalSupply_ne_transferFromSelector :
     selector "totalSupply" [] ≠ transferFromSelector := by
-  rw [selector_totalSupply_val, transferFromSelector_val]; decide
+  rw [SelectorWord.totalSupply, transferFromSelector_val]; decide
 
 theorem selector_totalSupply_ne_withdrawFromSelector :
     selector "totalSupply" [] ≠ withdrawFromSelector := by
-  rw [selector_totalSupply_val, withdrawFromSelector_val]; decide
+  rw [SelectorWord.totalSupply, withdrawFromSelector_val]; decide
 
 theorem selector_totalSupply_ne_flashLoanSelector :
     selector "totalSupply" [] ≠ flashLoanSelector := by
-  rw [selector_totalSupply_val, flashLoanSelector_val]; decide
+  rw [SelectorWord.totalSupply, flashLoanSelector_val]; decide
 
 theorem selector_totalSupply_ne_allowanceSelector :
     selector "totalSupply" [] ≠ allowanceSelector := by
-  rw [selector_totalSupply_val, allowanceSelector_val]; decide
+  rw [SelectorWord.totalSupply, allowanceSelector_val]; decide
 
 /-! ### `balanceOf` -/
 
 theorem selector_balanceOf_ne_approveSelector :
     selector "balanceOf" [.address] ≠ approveSelector := by
-  rw [selector_balanceOf_val, approveSelector_val]; decide
+  rw [SelectorWord.balanceOf, approveSelector_val]; decide
 
 theorem selector_balanceOf_ne_approveAndCallSelector :
     selector "balanceOf" [.address] ≠ approveAndCallSelector := by
-  rw [selector_balanceOf_val, approveAndCallSelector_val]; decide
+  rw [SelectorWord.balanceOf, approveAndCallSelector_val]; decide
 
 theorem selector_balanceOf_ne_permitSelector :
     selector "balanceOf" [.address] ≠ permitSelector := by
-  rw [selector_balanceOf_val, permitSelector_val]; decide
+  rw [SelectorWord.balanceOf, permitSelector_val]; decide
 
 theorem selector_balanceOf_ne_transferFromSelector :
     selector "balanceOf" [.address] ≠ transferFromSelector := by
-  rw [selector_balanceOf_val, transferFromSelector_val]; decide
+  rw [SelectorWord.balanceOf, transferFromSelector_val]; decide
 
 theorem selector_balanceOf_ne_withdrawFromSelector :
     selector "balanceOf" [.address] ≠ withdrawFromSelector := by
-  rw [selector_balanceOf_val, withdrawFromSelector_val]; decide
+  rw [SelectorWord.balanceOf, withdrawFromSelector_val]; decide
 
 theorem selector_balanceOf_ne_flashLoanSelector :
     selector "balanceOf" [.address] ≠ flashLoanSelector := by
-  rw [selector_balanceOf_val, flashLoanSelector_val]; decide
+  rw [SelectorWord.balanceOf, flashLoanSelector_val]; decide
 
 theorem selector_balanceOf_ne_allowanceSelector :
     selector "balanceOf" [.address] ≠ allowanceSelector := by
-  rw [selector_balanceOf_val, allowanceSelector_val]; decide
+  rw [SelectorWord.balanceOf, allowanceSelector_val]; decide
 
 /-! ### `nonces` -/
 
@@ -434,61 +413,61 @@ theorem selector_DOMAIN_SEPARATOR_ne_allowanceSelector :
 
 theorem selector_maxFlashLoan_ne_approveSelector :
     selector "maxFlashLoan" [.address] ≠ approveSelector := by
-  rw [selector_maxFlashLoan_val, approveSelector_val]; decide
+  rw [SelectorWord.maxFlashLoan, approveSelector_val]; decide
 
 theorem selector_maxFlashLoan_ne_approveAndCallSelector :
     selector "maxFlashLoan" [.address] ≠ approveAndCallSelector := by
-  rw [selector_maxFlashLoan_val, approveAndCallSelector_val]; decide
+  rw [SelectorWord.maxFlashLoan, approveAndCallSelector_val]; decide
 
 theorem selector_maxFlashLoan_ne_permitSelector :
     selector "maxFlashLoan" [.address] ≠ permitSelector := by
-  rw [selector_maxFlashLoan_val, permitSelector_val]; decide
+  rw [SelectorWord.maxFlashLoan, permitSelector_val]; decide
 
 theorem selector_maxFlashLoan_ne_transferFromSelector :
     selector "maxFlashLoan" [.address] ≠ transferFromSelector := by
-  rw [selector_maxFlashLoan_val, transferFromSelector_val]; decide
+  rw [SelectorWord.maxFlashLoan, transferFromSelector_val]; decide
 
 theorem selector_maxFlashLoan_ne_withdrawFromSelector :
     selector "maxFlashLoan" [.address] ≠ withdrawFromSelector := by
-  rw [selector_maxFlashLoan_val, withdrawFromSelector_val]; decide
+  rw [SelectorWord.maxFlashLoan, withdrawFromSelector_val]; decide
 
 theorem selector_maxFlashLoan_ne_flashLoanSelector :
     selector "maxFlashLoan" [.address] ≠ flashLoanSelector := by
-  rw [selector_maxFlashLoan_val, flashLoanSelector_val]; decide
+  rw [SelectorWord.maxFlashLoan, flashLoanSelector_val]; decide
 
 theorem selector_maxFlashLoan_ne_allowanceSelector :
     selector "maxFlashLoan" [.address] ≠ allowanceSelector := by
-  rw [selector_maxFlashLoan_val, allowanceSelector_val]; decide
+  rw [SelectorWord.maxFlashLoan, allowanceSelector_val]; decide
 
 /-! ### `flashFee` -/
 
 theorem selector_flashFee_ne_approveSelector :
     selector "flashFee" [.address, .uint256] ≠ approveSelector := by
-  rw [selector_flashFee_val, approveSelector_val]; decide
+  rw [SelectorWord.flashFee, approveSelector_val]; decide
 
 theorem selector_flashFee_ne_approveAndCallSelector :
     selector "flashFee" [.address, .uint256] ≠ approveAndCallSelector := by
-  rw [selector_flashFee_val, approveAndCallSelector_val]; decide
+  rw [SelectorWord.flashFee, approveAndCallSelector_val]; decide
 
 theorem selector_flashFee_ne_permitSelector :
     selector "flashFee" [.address, .uint256] ≠ permitSelector := by
-  rw [selector_flashFee_val, permitSelector_val]; decide
+  rw [SelectorWord.flashFee, permitSelector_val]; decide
 
 theorem selector_flashFee_ne_transferFromSelector :
     selector "flashFee" [.address, .uint256] ≠ transferFromSelector := by
-  rw [selector_flashFee_val, transferFromSelector_val]; decide
+  rw [SelectorWord.flashFee, transferFromSelector_val]; decide
 
 theorem selector_flashFee_ne_withdrawFromSelector :
     selector "flashFee" [.address, .uint256] ≠ withdrawFromSelector := by
-  rw [selector_flashFee_val, withdrawFromSelector_val]; decide
+  rw [SelectorWord.flashFee, withdrawFromSelector_val]; decide
 
 theorem selector_flashFee_ne_flashLoanSelector :
     selector "flashFee" [.address, .uint256] ≠ flashLoanSelector := by
-  rw [selector_flashFee_val, flashLoanSelector_val]; decide
+  rw [SelectorWord.flashFee, flashLoanSelector_val]; decide
 
 theorem selector_flashFee_ne_allowanceSelector :
     selector "flashFee" [.address, .uint256] ≠ allowanceSelector := by
-  rw [selector_flashFee_val, allowanceSelector_val]; decide
+  rw [SelectorWord.flashFee, allowanceSelector_val]; decide
 
 /-! ## The named selectors -/
 

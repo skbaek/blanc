@@ -1,6 +1,7 @@
 -- Weth.lean : proof-of-concept implementation of the Wrapped Ether (WETH) contract
 
 import Blanc.CommonProofs
+import Blanc.SelectorWords
 
 namespace Blanc
 
@@ -240,5 +241,22 @@ theorem wethFuncs_sorted : DispatchTree.sorted wethFuncs = true := by decide +ke
 def wethTree : DispatchTree := .ofSorted wethFuncs
 
 def weth : Prog := ⟨Func.mainWith 1 wethTree, [deposit]⟩
+
+/-- `weth` with every dispatch key written as its numeral word, for the reason
+`Blanc.Fmint.fmint_eq_words` gives: a walk rewrites with it so that no tactic
+evaluates a `String.keccak`. -/
+theorem weth_eq_words : weth =
+    ⟨Func.mainWith 1 (.ofSorted
+      [((0x06fdde03 : B256), nonpayable name), ((0x095ea7b3 : B256), nonpayable approve),
+       ((0x18160ddd : B256), nonpayable totalSupply),
+       ((0x23b872dd : B256), nonpayable transferFrom),
+       ((0x2e1a7d4d : B256), nonpayable withdraw), ((0x313ce567 : B256), nonpayable decimals),
+       ((0x70a08231 : B256), nonpayable balanceOf), ((0x95d89b41 : B256), nonpayable symbol),
+       ((0xa9059cbb : B256), nonpayable transfer),
+       ((0xdd62ed3e : B256), nonpayable allowance)]), [deposit]⟩ := by
+  simp only [weth, wethTree, wethFuncs, SelectorWord.name, SelectorWord.approve,
+    SelectorWord.totalSupply, SelectorWord.transferFrom, SelectorWord.withdraw,
+    SelectorWord.decimals, SelectorWord.balanceOf, SelectorWord.symbol, SelectorWord.transfer,
+    SelectorWord.allowance]
 
 end Blanc

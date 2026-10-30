@@ -148,6 +148,17 @@ registry has identified the likely vocabulary.
 - Ordinary source `Func.Run` walk:
   `func_execute`, `func_execute_with`, and the split lemmas in
   [`Blanc/Tactics.lean`](../Blanc/Tactics.lean).
+- A compiled walk through a dispatcher keyed by `selector "…" […]` terms:
+  never let a tactic evaluate a `selector` (one `String.keccak` in the
+  elaborator overruns the default `maxRecDepth`). Take each word from
+  [`Blanc/SelectorWords.lean`](../Blanc/SelectorWords.lean)
+  (`SelectorWord.decimals`, `SelectorWord.balanceOf`, …, each proved once by
+  `decide +kernel`), restate the program with numeral keys
+  (`Blanc.Fmint.fmint_eq_words`, `Blanc.weth_eq_words`), hint `fsig`'s `SHR`
+  as `Sevm.selector sevm`, and `rw` the selector hypothesis (through the word)
+  before the forks: `func_run (5) [Sevm.selector sevm]; rw [h_sel']; func_run
+  [...]`. A numeral hint against the unevaluated `SHR` application costs a deep
+  `rfl` too; the `Sevm.selector` hint is closed by unfolding alone.
 - Constructive opcode helpers in [`Blanc/Forward.lean`](../Blanc/Forward.lean)
   expose their actual rule requirements: an empty PUSH immediate requires
   `rules.op.push0`, while nonempty immediates do not; the cold/warm SLOAD and

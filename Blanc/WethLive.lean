@@ -73,7 +73,10 @@ abbrev boSel : B256 := selector "balanceOf" [.address]
 `func_run` walks `weth`'s compiled `Func` from the program entry and applies one
 `Func.RunCompiled` rule per node.  What it has to be told, in the order it asks:
 
-* `boSel` — what `fsig`'s `SHR` produced, which is `h_sel`'s right-hand side;
+* `Sevm.selector sevm` — what `fsig`'s `SHR` produced, rewritten to
+  `0x70a08231` by `h_sel` and `SelectorWord.balanceOf` once the program is
+  restated by `weth_eq_words` (numeral pivots, no keccak for any tactic to
+  evaluate);
 * `0, 1, 1, 0` — the four dispatch forks.  `balanceOf()` is entry 6 of ten and
   `DispatchTree.build` splits at `⌈n/2⌉`, so the path is right, left, left,
   right, and `GT` decides each fork by comparing the selector against the right
@@ -88,25 +91,6 @@ abbrev boSel : B256 := selector "balanceOf" [.address]
 Everything else is derived, including the `CALLDATALOAD` that reads the argument:
 its value is `Sevm.dataWord sevm 4` by definition rather than by computation, so
 it consumes no hint. -/
-
-/-- One selector `PUSH` of a compiled walk, stepped by hand at a covered fork.
-
-`func_run` discharges a `PUSH`'s `PUSH0` availability guard by `assumption`
-first. When the pushed word is a keccak-derived selector, unifying that guard
-with a hypothesis (an implication premise once `Not` unfolds, or the guard's own
-antecedent) evaluates the selector past the recursion ceiling, and the
-exception escapes the walk's `first`. A nonzero word's guard is vacuous, and a
-covered fork enables `PUSH0` anyway, so this rule takes the step without
-consulting the context. -/
-theorem Func.runCompiled_pushB256_covered {fs : List Func} {sevm : Sevm}
-    {devm post : Devm} {w : B256} {rest : Func} {G : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hw : w ≠ 0)
-    (h_gas : devm.gasLeft = G + gVerylow) (h_room : devm.stack.length < 1024)
-    (h_rest : Func.RunCompiled fs sevm
-      (devm.setMach ⟨w :: devm.stack, devm.memory, G, devm.stateGas⟩) rest post) :
-    Func.RunCompiled fs sevm devm (Ninst.pushB256 w ::: rest) post :=
-  .next (Ninst.runCompiled_pushB256 (pushCost_of_ne_zero hw) h_gas h_room
-    (fun _ => hfork.rules_push0)) h_rest
 
 set_option maxRecDepth 613 in
 /-- A `balanceOf(guy)` call on `weth` has a gas-exact run, and it returns
@@ -129,6 +113,8 @@ theorem weth_balanceOf_runCompiled {sevm : Sevm} {pre : Devm}
     ∃ post, Prog.RunCompiled sevm pre weth post ∧
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget (Sevm.dataWord sevm 4)).toBytes := by
+  have h_sel' := h_sel.trans SelectorWord.balanceOf
+  rw [weth_eq_words]
   rw [balanceOfGas_eq] at h_gas
   set g := pre.gasLeft with hg
   have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
@@ -141,39 +127,9 @@ theorem weth_balanceOf_runCompiled {sevm : Sevm} {pre : Devm}
         (by
           have h_value_zero : B256.eqCheck sevm.value 0 = 1 := by
             simp only [B256.eqCheck, h_value, ↓reduceIte]
-          -- The five selector `PUSH`es (four dispatch forks and the leaf) are
-          -- stepped by `Func.runCompiled_pushB256_covered`; see its docstring.
-          func_run (5) [boSel]
-          apply Func.runCompiled_pushB256_covered (G := g - 18) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [0]
-          apply Func.runCompiled_pushB256_covered (G := g - 40) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.runCompiled_pushB256_covered (G := g - 63) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.runCompiled_pushB256_covered (G := g - 86) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (2) [0]
-          apply Func.runCompiled_pushB256_covered (G := g - 105) hfork (by decide)
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run [1, 1, 3]
+          func_run (5) [Sevm.selector sevm]
+          rw [h_sel']
+          func_run [0, 1, 1, 0, 1, 1, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 2260) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)

@@ -3,6 +3,7 @@ import Blanc.Weth10TransferFunctional
 import Blanc.Weth10Live
 import Blanc.ForwardCall
 import Blanc.StorageRefund
+import Blanc.SelectorWords
 import Init.Data.Ord.UInt
 
 /-!
@@ -1758,22 +1759,8 @@ theorem withdrawToSelector_eq :
     selector "withdrawTo" [.address, .uint256] = (0x205c2878 : B256) := by
   decide +kernel
 
-theorem withdrawSelector_eq :
-    selector "withdraw" [.uint256] = (0x2e1a7d4d : B256) := by
-  decide +kernel
-
-theorem totalSupplySelector_eq :
-    selector "totalSupply" [] = (0x18160ddd : B256) := by decide +kernel
-
-theorem transferFromSelector_eq :
-    selector "transferFrom" [.address, .address, .uint256] =
-      (0x23b872dd : B256) := by decide +kernel
-
 theorem permitTypehashSelector_eq :
     selector "PERMIT_TYPEHASH" [] = (0x30adf81f : B256) := by decide +kernel
-
-theorem decimalsSelector_eq :
-    selector "decimals" [] = (0x313ce567 : B256) := by decide +kernel
 
 theorem noncesSelector_eq :
     selector "nonces" [.address] = (0x7ecebe00 : B256) := by decide +kernel
@@ -1816,8 +1803,8 @@ def withdrawMain (dp : DeployParams) : Func :=
 
 theorem withdrawToDispatch_eq (dp : DeployParams) :
     dispatchWith fallbackSlot (weth10Tree dp) = withdrawToDispatch dp := by
-  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, totalSupplySelector_eq,
-    withdrawToSelector_eq, transferFromSelector_eq, decimalsSelector_eq, noncesSelector_eq,
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, SelectorWord.totalSupply,
+    withdrawToSelector_eq, SelectorWord.transferFrom, SelectorWord.decimals, noncesSelector_eq,
     List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv,
     List.take_succ_cons, List.take_zero, List.drop_succ_cons, List.drop_zero, dispatchWith,
     Fin.isValue, leftmostFsig, withdrawToDispatch, redemptionDispatch26_14_13, redemptionTreeSlice,
@@ -1826,8 +1813,8 @@ theorem withdrawToDispatch_eq (dp : DeployParams) :
 
 theorem withdrawDispatch_eq (dp : DeployParams) :
     dispatchWith fallbackSlot (weth10Tree dp) = withdrawDispatch dp := by
-  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, transferFromSelector_eq,
-    withdrawSelector_eq, permitTypehashSelector_eq, decimalsSelector_eq, noncesSelector_eq,
+  simp only [weth10Tree, DispatchTree.ofSorted, weth10Funcs, SelectorWord.transferFrom,
+    SelectorWord.withdraw, permitTypehashSelector_eq, SelectorWord.decimals, noncesSelector_eq,
     List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, DispatchTree.build, Nat.reduceDiv,
     List.take_succ_cons, List.take_zero, List.drop_succ_cons, List.drop_zero, dispatchWith,
     Fin.isValue, leftmostFsig, withdrawDispatch, redemptionDispatch26_14_13, redemptionTreeSlice,
@@ -1842,7 +1829,6 @@ theorem weth10Main_eq_withdraw (dp : DeployParams) :
     (weth10 dp).main = withdrawMain dp := by
   simp only [weth10, weth10Main, withdrawDispatch_eq, withdrawMain]
 
-set_option maxRecDepth 561 in
 /-- Dispatcher, nonpayability guard, and actual `withdrawTo` body composed at
 program altitude.  The balanced-tree path costs 182 gas including entry. -/
 theorem withdrawTo_progExecSat (dp : DeployParams)
@@ -1900,7 +1886,9 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
     rw [weth10Main_eq_withdrawTo]
     cases ex <;> simp only [Func.ExecWitness] at hex ⊢
     all_goals
-      func_run (33) [0, (0x205c2878 : B256), 1, 1, 1, 0, 0, 1, 1]
+      func_run (8) [0, Sevm.selector e]
+      rw [h_sel]
+      func_run (25) [1, 1, 1, 0, 0, 1, 1]
       simpa only [weth10Main_eq_withdrawTo] using hex
   have hbody := withdrawTo_execSat
     (fs := withdrawToMain dp :: (weth10 dp).aux) (e := e)
@@ -1920,7 +1908,6 @@ theorem withdrawTo_progExecSat (dp : DeployParams)
   simpa only [Devm.setMach_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach,
     weth10Main_eq_withdrawTo] using hbody
 
-set_option maxRecDepth 561 in
 /-- Dispatcher composition for direct-holder `withdraw`; it follows its own
 five comparison outcomes and then invokes the actual `withdraw` body walk. -/
 theorem withdraw_progExecSat (dp : DeployParams)
@@ -1948,7 +1935,7 @@ theorem withdraw_progExecSat (dp : DeployParams)
         (Sevm.argWord e 0) → P (.ok post))
     (h_fork : CoveredFork e.benvStat.fork) :
     Prog.ExecSat e pre (weth10 dp) P := by
-  rw [withdrawSelector, withdrawSelector_eq] at h_sel
+  rw [withdrawSelector, SelectorWord.withdraw] at h_sel
   set g := pre.gasLeft with hg
   simp only [redemptionExecutionGasFloor, redemptionSelectorDispatchGas,
     redemptionMechanizedBodyGas] at h_gas
@@ -1977,7 +1964,9 @@ theorem withdraw_progExecSat (dp : DeployParams)
     rw [weth10Main_eq_withdraw]
     cases ex <;> simp only [Func.ExecWitness] at hex ⊢
     all_goals
-      func_run (33) [0, (0x2e1a7d4d : B256), 1, 1, 0, 1, 0, 1, 1]
+      func_run (8) [0, Sevm.selector e]
+      rw [h_sel]
+      func_run (25) [1, 1, 0, 1, 0, 1, 1]
       simpa only [weth10Main_eq_withdraw] using hex
   have hbody := withdraw_execSat
     (fs := withdrawMain dp :: (weth10 dp).aux) (e := e)
