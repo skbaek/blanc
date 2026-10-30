@@ -13,7 +13,7 @@ entry (`preS`) and committed exit (`postS`) satisfy `OracleAdvance`:
   `2 ^ 256`;
 * the stored timestamp word stays, or becomes the call's block time modulo `2 ^ 32`.
 
-Re-entered Pair frames inside the call are part of it.  The proof is `pair_history_outer_call`
+Re-entered Pair frames inside the call are part of it.  The proof is `pair_history_outer_call_at`
 (each outer call is one consumed source invocation between the model states its storage
 represents) and the one-invocation model lemma `runTyped_oracle_call`.
 -/
@@ -59,9 +59,10 @@ theorem pair_oracle {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockC
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     ∀ f, OuterPairCall pair trace f →
       OracleAdvance (preS pair f) (postS pair f) f.sevm.benvStat.time := by
-  intro f outer
-  obtain ⟨s, st, st', out, K, K', frameEq, -, consumed, -, outEq, pre, post⟩ :=
-    pair_history_outer_call trace installed initial fresh f outer
+  intro f ⟨target, nonstatic, before, after, split, noOpaque⟩
+  obtain ⟨-, s, st, st', out, K, K', -, -, -, frameEq, -, consumed, -, outEq, -, pre, post⟩ :=
+    pair_history_outer_call_at trace installed initial fresh before f after split target nonstatic
+      noOpaque
   have run := (runTyped_of_exact consumed.positional.forget).1
   have law := runTyped_oracle_call st s.source.context s.source.entry s.transcript
   rw [run, outEq] at law
