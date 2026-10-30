@@ -1462,6 +1462,8 @@ import Blanc.Lift.UniswapV2Pair.ModelControlsSides
 import Blanc.Lift.UniswapV2Pair.PairHistoryShape
 import Blanc.Lift.UniswapV2Pair.PairModelFix
 import Blanc.Lift.UniswapV2Pair.PairOuterCalls
+import Blanc.Lift.UniswapV2Pair.OracleCallReceipt
+import Blanc.Lift.UniswapV2Pair.HeadlineOracle
 import Blanc.Lift.UniswapV2Pair.PairPositionalCalls
 import Blanc.Lift.UniswapV2Pair.PairPositionalCallsIn
 import Blanc.Lift.UniswapV2Pair.PairPositionalState
