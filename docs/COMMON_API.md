@@ -6824,7 +6824,11 @@ invariant `I` at entry); `Exec.CoreAccounting.entryTarget` is the target handler
 `FramePreserves` (the frame theorem), `SpawnKinds` (only `CALL`/`STATICCALL`
 along the frame's own chain) and `SpawnEntry` (`I` at each spawning node of a
 successful target frame, a prefix fact); `entryLadder` and
-`ConfiguredHistoryTrace.entryGood_settled` give the history form. Its generic
+`ConfiguredHistoryTrace.entryGood_settled` give the history form; for a covered-fork history
+rooted right after one transaction (a `MidHistoryTraceIn`, e.g. a deployment cut),
+`MidHistoryTraceIn.entryGood_settled` in
+[`Blanc/ExecutionEntryAccountingMidHistory.lean`](../Blanc/ExecutionEntryAccountingMidHistory.lean)
+gives the same conclusion, additionally taking the code's `InstalledCert`. Its generic
 supports: `Evm.step_spawn_child_world` (a child opens on its parent's storage at
 code-bearing accounts, balance total not growing), `Xinst.step_spawn_world`,
 `Exec.Deriv.ParentStep.balSum_le`, `Exec.Deriv.ParentPrefix.balSum_le_getCode`.
