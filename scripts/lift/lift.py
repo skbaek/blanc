@@ -421,6 +421,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 argv += ["--jumps-out", str(out / "Jumps.lean"), "--jumps-header", jumps["header"]]
                 if jumps.get("assembly") == "chain":
                     argv += ["--jumps-assembly", "chain"]
+                if jumps.get("paired") is True:
+                    argv.append("--jumps-paired")
             lock = row.get("lock")
             if lock:
                 argv += ["--lock-spec", json.dumps(lock["spec"]), "--lock-spec-module", lock["spec_module"],
@@ -550,6 +552,8 @@ parser.add_argument("--tries-header", type=str, default=DEFAULT_HEADER, help="st
 parser.add_argument("--jumps-out", type=Path, default=None,
                     help="optional regular Cert.jumpsOk per-entry proof module (requires --check-out)")
 parser.add_argument("--jumps-header", type=str, default=DEFAULT_HEADER, help="Jumps.lean generator comment")
+parser.add_argument("--jumps-paired", action="store_true",
+                    help="decide each entry's checkNodeT and jumpsOkNodeT in one kernel_rfl_and (entry_jumps_i, in Check/CheckPart*): both walk the same abstract stacks, so the kernel reduces them once; Jumps.lean projects jumps_i and imports Check (registry jumps.paired); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--jumps-assembly", choices=("chain",), default=None,
                     help="assemble jumps_ok as a chain over the certificate's tails (Cert.jumpsAll_drop, Blanc.Lift.CheckChain) instead of one membership case split (registry jumps.assembly); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--check-split-nodes", type=int, default=0,
@@ -2738,6 +2742,20 @@ def check_source() -> Any:
             ]
             blocks.append(block)
             continue
+        if args.jumps_paired:
+            blocks.append([
+                f"theorem entry_jumps_{i} :",
+                f"    checkNodeT code {depth} codeTries.bytes (Cert.entries cert) {rets} {pc} {frame} {tree} = true ∧",
+                f"      jumpsOkNodeT code {depth} codeTries (Cert.entries cert) {tree} {frame} = true := by",
+                "  kernel_rfl_and",
+                "",
+                f"theorem entry_{i} :",
+                f"    checkNode code (Cert.entries cert) {rets} {pc} {frame} {tree} = true := by",
+                "  rw [← checkNodeT_eq codeTries]",
+                f"  exact entry_jumps_{i}.1",
+                "",
+            ])
+            continue
         blocks.append([
             f"theorem entry_{i} :",
             f"    checkNode code (Cert.entries cert) {rets} {pc} {frame} {tree} = true := by",
@@ -2830,7 +2848,8 @@ def split_check(head: List[str], blocks: List[List[str]], assembly: List[str],
         bounds = check_part_bounds(n, args.check_parts)
         for p in range(len(bounds) - 1):
             lo, hi = bounds[p], bounds[p + 1]
-            body = [f"import {ns}.CheckTries"] + [
+            body = [f"import {ns}.CheckTries"] + (
+                ["import Blanc.Lift.KernelBatch"] if args.jumps_paired else []) + [
                 l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
                           f"Entries {lo}..{hi - 1}, each decided against trie-backed reads of the exact runtime.")
                 for l in preamble]
@@ -3039,12 +3058,18 @@ def jumps_source() -> str:
     decisions rewrite through the shared jumpsOkNodeT_eq; assembly has an explicit simp set.
     """
     ns = args.namespace
-    owner = "CheckTries" if args.check_parts >= 2 else "Check"
+    owner = "CheckTries" if args.check_parts >= 2 and not args.jumps_paired else "Check"
+    if args.jumps_paired and (MEMRET or args.check_split_nodes or args.check_parts < 2
+                              or args.jumps_assembly is not None):
+        raise RuntimeError("--jumps-paired supports only a non-memory Check split into parts "
+                           "(--check-parts >= 2) without split nodes or a chain assembly")
     lines = [
         f"import {ns}.{owner}",
         "",
         f"/-! {args.jumps_header}",
-        "Jump destinations are checked against the exact runtime, one kernel decision per entry. -/",
+        ("Jump destinations are checked against the exact runtime, each together with its entry's node "
+         "check in one kernel decision (entry_jumps_i). -/" if args.jumps_paired else
+         "Jump destinations are checked against the exact runtime, one kernel decision per entry. -/"),
         "",
         f"namespace {ns}",
         "",
@@ -3060,7 +3085,7 @@ def jumps_source() -> str:
             f"theorem jumps_{i} :",
             f"    jumpsOkNode code (Cert.entries cert) {tree} {frame} = true := by",
             "  rw [← jumpsOkNodeT_eq codeTries]",
-            "  decide +kernel",
+            f"  exact entry_jumps_{i}.2" if args.jumps_paired else "  decide +kernel",
             "",
         ])
     n = len(cert_entries_lines)

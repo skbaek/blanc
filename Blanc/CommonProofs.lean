@@ -9104,7 +9104,7 @@ instance : Rinst.Hinv Devm.memory Rinst.sstore := ⟨by
         all_goals injection eq with eq _; subst eq; rfl
       have m4 : s₃.memory = s₄.memory := by
         injection h6 with eq; rw [← eq]; rfl
-      injection h9 with eq
+      have eq := Except.ok.inj h9
       rw [← eq]
       show pre.memory = s₅.memory
       exact ((((Devm.pop_of_pop h1).memory.trans (Devm.pop_of_pop h2).memory).trans m3).trans
@@ -9126,7 +9126,7 @@ instance : Rinst.Hinv Devm.memory Rinst.sstore := ⟨by
       simp only [Devm.creditStateGasRefund, Mach.creditStateGasRefund,
         Devm.withRefundCounter, Devm.balReadStorage, Devm.setMach_memory]
       try split <;> (try split) <;> rfl
-    injection h9 with eq
+    have eq := Except.ok.inj h9
     rw [← eq]
     show pre.memory = s₄.memory
     exact (Devm.pop_of_pop h1).memory.trans
@@ -9571,7 +9571,7 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.sstore := ⟨by
         injection h6 with eq
         rw [← eq]
         rfl
-      injection h9 with eq
+      have eq := Except.ok.inj h9
       rw [← eq]
       exact (((((Devm.pop_of_pop h1).logs.trans (Devm.pop_of_pop h2).logs).trans
         l3).trans l4).trans (Devm.burn_of_chargeGas h7).logs).trans (Devm.balReadAccount_logs _ _ _).symm
@@ -9592,7 +9592,7 @@ scoped instance : Rinst.Hinv Devm.logs Rinst.sstore := ⟨by
       simp only [Devm.creditStateGasRefund, Mach.creditStateGasRefund,
         Devm.withRefundCounter, Devm.balReadStorage, Devm.setMach_logs]
       try split <;> (try split) <;> rfl
-    injection h9 with eq
+    have eq := Except.ok.inj h9
     rw [← eq]
     exact ((Devm.pop_of_pop h1).logs.trans
       ((Devm.pop_of_pop h2).logs.trans hmid)).trans
@@ -9622,7 +9622,7 @@ scoped instance : Rinst.Hinv Devm.output Rinst.sstore := ⟨by
         injection h6 with eq
         rw [← eq]
         rfl
-      injection h9 with eq
+      have eq := Except.ok.inj h9
       rw [← eq]
       exact (((((Devm.pop_of_pop h1).output.trans (Devm.pop_of_pop h2).output).trans
         o3).trans o4).trans (Devm.burn_of_chargeGas h7).output).trans (Devm.balReadAccount_output).symm
@@ -9643,7 +9643,7 @@ scoped instance : Rinst.Hinv Devm.output Rinst.sstore := ⟨by
       simp only [Devm.creditStateGasRefund, Mach.creditStateGasRefund,
         Devm.withRefundCounter, Devm.balReadStorage, Devm.setMach_output]
       try split <;> (try split) <;> rfl
-    injection h9 with eq
+    have eq := Except.ok.inj h9
     rw [← eq]
     exact ((Devm.pop_of_pop h1).output.trans
       ((Devm.pop_of_pop h2).output.trans hmid)).trans
@@ -13674,7 +13674,7 @@ lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
       have E' : Devm.getStor s =
             Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₅) :=
         E.trans rfl
-      injection h9 with eq
+      have eq := Except.ok.inj h9
       rw [← eq, setStorVal_getStor_self, hxy.left, hxy.right, E']
   · -- Amsterdam: static check first, state-gas second dimension.
     simp only [hsg] at run
@@ -13706,7 +13706,7 @@ lemma sstore_getStor_set {sevm : Sevm} {s s' : Devm} {x y xs}
     have E' : Devm.getStor s =
         Devm.getStor (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget s₄) :=
       E.trans rfl
-    injection h9 with eq
+    have eq := Except.ok.inj h9
     rw [← eq, setStorVal_getStor_self, hxy.left, hxy.right, E']
 
 syntax "invariance" : tactic

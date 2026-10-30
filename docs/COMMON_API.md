@@ -8228,7 +8228,12 @@ contract-neutral.
   [`Blanc/Lift/CheckFast.lean`](../Blanc/Lift/CheckFast.lean): plain byte reads
   are linear per instruction and a 1,474-node entry of the 6,358-byte beacon
   deposit contract passed 16 GiB, while the trie decides it in 6 s / 3.4 GiB
-  (`Blanc/Lift/BeaconDeposit/Check.lean` is the template).
+  (`Blanc/Lift/BeaconDeposit/Check.lean` is the template). Decide an entry's
+  `checkNodeT` and `jumpsOkNodeT` together with `kernel_rfl_and`
+  ([`Blanc/Lift/KernelBatch.lean`](../Blanc/Lift/KernelBatch.lean)), as that
+  template's `entry_jumps_k` does: both walks evaluate the same abstract stacks,
+  so the jump check costs almost nothing beside the node check (beacon deposit:
+  `Jumps` 49 s to 1.4 s, `Check` unchanged).
   For an individual destination, `jumpdestOkT` and `jumpdestOkT_eq` in the
   same module provide the trie-backed check and its equality to `jumpdestOk`.
 - Assemble a single-entry non-memory certificate with `Cert.check_singleton` in
