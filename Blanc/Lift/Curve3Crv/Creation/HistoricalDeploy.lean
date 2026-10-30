@@ -11,7 +11,7 @@ exactly the certified runtime `Blanc.Lift.Curve3Crv.code`, leaves the storage
 `deployedStor deployer`, no error, refund counter 0, the single log `Transfer(0, deployer, 0)`,
 the inherited deletion set, and exactly `msg.gas - 580351` gas: the constructor's 125,151
 (`ctorCost_muir`) plus the code deposit `200 · 2276 = 455200`. With the transaction's message gas
-580,351 (`HistoricalTx.muir_message_gas`) the gas left is exactly 0; a smaller message gas fails
+580,351 (`678343 - 97992`, `HistoricalTx.muir_intrinsic`) the gas left is exactly 0; a smaller message gas fails
 the gas premise.
 
 The message and its pre-state are explicit premises; transaction validation, sender recovery,

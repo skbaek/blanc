@@ -139,10 +139,6 @@ theorem InvRun.runInvocations_eq {s : Blanc.Curve3Crv.State} {invs : List Writer
     {s' : Blanc.Curve3Crv.State} (h : InvRun s invs s') : runInvocations s invs = some s' :=
   InvRunBy.runInvocations_eq h
 
-theorem InvRun.append {s m s' : Blanc.Curve3Crv.State} {xs ys : List WriterInvocation}
-    (h₁ : InvRun s xs m) (h₂ : InvRun m ys s') : InvRun s (xs ++ ys) s' :=
-  InvRunBy.append h₁ h₂
-
 /-- A step's model acceptance, re-expressed at the canonical owner word. Only
 `set_name` reads the owner, and it is accepted only when the answer is the caller. -/
 theorem step_ownerWordOf {sevm : Sevm} {ow : Option B256} {s : Blanc.Curve3Crv.State}

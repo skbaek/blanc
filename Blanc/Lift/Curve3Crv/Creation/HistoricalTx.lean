@@ -12,7 +12,8 @@ gas 678,343, gas price 120,427,120,878 wei, no receiver, zero value, the 3,151-b
 `muir_intrinsic`: under Muir Glacier the transaction's intrinsic gas is exactly 97,992
 (`53000 + 16 · 2699 + 4 · 452`; no calldata floor, no init-code word charge) and its state-gas
 component is 0. The data fold is evaluated by the kernel over `code.data.toList`.
-`muir_message_gas`: the CREATE message therefore carries `678343 - 97992 = 580351` gas.
+The CREATE message therefore carries `678343 - 97992 = 580351` gas; `HistoricalTxInput` checks that figure
+on the prepared message.
 
 The raw bytes, the decoder, sender recovery and the transaction pipeline are not here.
 -/
@@ -54,16 +55,5 @@ theorem muir_intrinsic (sender : Adr) :
     calculateIntrinsicCost muirGlacierRules tx sender = (97992, 0) := by
   rw [calculateIntrinsicCost_legacy_create (price := 120427120878) rfl rfl rfl rfl rfl rfl rfl,
     tx_data, dataCost]
-
-/-- **The message gas** the transaction allocates under Muir Glacier: `678343 - 97992 = 580351`
-(`125151` for the constructor plus `455200 = 200 · 2276` for the code deposit), no state-gas
-reservoir. -/
-theorem muir_message_gas (sender : Adr) :
-    (allocateEvmGas muirGlacierRules tx.gas
-      (calculateIntrinsicCost muirGlacierRules tx sender).1).executionGas = 580351 ∧
-    (allocateEvmGas muirGlacierRules tx.gas
-      (calculateIntrinsicCost muirGlacierRules tx sender).1).stateGasReservoir = 0 := by
-  rw [muir_intrinsic]
-  exact ⟨rfl, rfl⟩
 
 end Blanc.Lift.Curve3Crv.Creation.HistoricalTx

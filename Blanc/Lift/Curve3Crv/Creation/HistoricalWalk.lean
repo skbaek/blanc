@@ -45,9 +45,6 @@ def stor2 : Stor := stor1.set (vyNameBase + Nat.toB256 1) (curveStrWord curveSha
 /-- The storage after the `symbol` length word. -/
 def stor3 : Stor := stor2.set vySymbolBase (Nat.toB256 4)
 
-theorem stringsStor_eq : stringsStor =
-    stor3.set (vySymbolBase + Nat.toB256 1) (curveStrWord curveShapedSymbol) := rfl
-
 section
 variable {sevm : Sevm} {b : Devm} (hempty : Devm.getStor b sevm.currentTarget = Stor.empty)
 include hempty

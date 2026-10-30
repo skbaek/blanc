@@ -9883,21 +9883,21 @@ contract-neutral.
   `vyImg_clamps`, `VyClamps.clamp`), the non-payable guard and address-argument clamp every body starts with
   (`vyNonpayable`, `vyAddrArg`, their `rx_`/`ric_` forms), and the `HashMap` slot scratch window
   (`vySlot_read`, `vySlot_keccak`) with its whole macro (`vySlot`, `ric_vySlot`, `rx_vySlot`),
-  the checked storage subtract/add macros (`vySubStore`, `vyAddStore`, their `rx_`/`ric_`
-  forms, `B256.nof_iff_not_add_lt`), the selector read (`vyImg_selector`), and word facts
+  the checked storage subtract/add macros (`vySubStore`, `vyAddStore`, their `rx_` and
+  `ric_…H` forms, `B256.nof_iff_not_add_lt`), the selector read (`vyImg_selector`), and word facts
   (`B256.xor_zero`, `B256.xor_eq_zero_iff`, `B256.toAdr_toB256_of_lt`), the `String` copy
   loops with the counter in memory at `0x120`: storage to memory (`vyLoadLoopTree`,
   `rx_vyLoadStep`, `rx_vyLoadLast`, `rx_vyLoadExit`) and memory to storage (`vyStoreLoopTree`,
-  `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIter`
+  `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIterH`
   (a storing pass also proves the frame non-static),
   and the set-up `vyStoreHead` with `rx_`/`ric_vyStoreHead`), unrolled per pass since the cap
-  bounds the count, the load loop's pass inverted (`ric_vyLoadIter`); for a historical fork the
-  four inversions are stated from the rule facts they read, over the actual access schedule's
+  bounds the count, the load loop's pass inverted (`ric_vyLoadIterH`); the
+  four inversions are stated from the rule facts they read (they have no `CoveredFork` form), over the actual access schedule's
   successors `afterSloadH`/`afterSstoreH` (`HistAccessWalk.lean`): `ric_vySubStoreH`,
   `ric_vyAddStoreH`, `ric_vyStoreIterH` (`rules.stateGas = none`) and `ric_vyLoadIterH`
   (`rules.bal = none`), and the forward passes, gas-exact over `sloadCostH`/`sstoreCostH`:
   `rx_vySubStoreH`, `rx_vyAddStoreH`, `rx_vyLoadStepH`, `rx_vyLoadLastH`, `rx_vyStoreStepH`,
-  `rx_vyStoreLastH` (`rules.stateGas = none`), with the `CoveredFork` names their corollaries;
+  `rx_vyStoreLastH` (`rules.stateGas = none`), with the `CoveredFork` names (`rx_vySubStore`, `rx_vyAddStore`, ...) their corollaries;
   a stored-`String` view's
   body up to its load loop (`vyStrView`) with the join's `ceil32_eq` and the zero-fill read
   `sliceD_data_end`, and `sstoreCost_le`, `Mem.read_write_disjoint`, `vy_mul32`, in
