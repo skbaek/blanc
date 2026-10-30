@@ -126,6 +126,25 @@ theorem ConfiguredHistoryTraceIn.SystemCodeAtOpenings_append
   | step prior block ih =>
       simp only [ConfiguredHistoryTraceIn.append, SystemCodeAtOpenings, ih, and_assoc]
 
+/-- Fork properties split across the same retained append. -/
+theorem ConfiguredHistoryTraceIn.ForksSatisfy_append
+    {F : Fork → Prop} {cfg : ChainConfig} {a b c : BlockChain} (G : Fork → Prop)
+    (left : ConfiguredHistoryTraceIn F cfg a b) (right : ConfiguredHistoryTraceIn F cfg b c) :
+    (left.append right).ForksSatisfy G ↔ left.ForksSatisfy G ∧ right.ForksSatisfy G := by
+  induction right with
+  | refl => simp only [ConfiguredHistoryTraceIn.append, ForksSatisfy, and_true]
+  | step prior block ih =>
+      simp only [ConfiguredHistoryTraceIn.append, ForksSatisfy, ih, and_assoc]
+
+/-- A pre-Prague spine needs no authority exclusion: the gated form holds outright. -/
+theorem ConfiguredHistoryTraceIn.pragueNoAuthorityAt_of_prePrague
+    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future)
+    (forks : trace.ForksSatisfy PrePrague) (a : Adr) : trace.PragueNoAuthorityAt a := by
+  induction trace with
+  | refl => trivial
+  | step prior block ih => exact ⟨ih forks.1, fun notPre => (notPre forks.2).elim⟩
+
 /-- Actual authorization scopes split across the same retained append. -/
 theorem ConfiguredHistoryTraceIn.NoAuthorityAt_append
     {F : Fork → Prop} {cfg : ChainConfig} {a b c : BlockChain}

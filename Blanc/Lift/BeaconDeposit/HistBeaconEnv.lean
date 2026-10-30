@@ -3,10 +3,12 @@ import Blanc.ExecutionHistoryInSystemEnvironment
 import Blanc.ExecutionHistoryInWarmth
 import Blanc.ExecutionHistoryInCodeAt
 import Blanc.ExecutionStagedFrameEnv
+import Blanc.ExecutionHistoryInCreateAvoid
 
 /-! Historical committed-history headlines with derived frame environments.
 System installations are explicit at actual block openings, selected by fork:
 none at D before Cancun; beacon roots at Cancun; the canonical set from Prague.
+No frame can CREATE at an installed system contract: the present code collides.
 Seam composition must derive those opening inputs from the accepted C/P anchors. -/
 
 namespace Blanc.Lift.BeaconDeposit
@@ -16,13 +18,10 @@ open Jaune Blanc.ExecutionTrace
 private theorem block_beaconEntry_of_envIn {ca : Adr} {cfg : ChainConfig}
     {pre post : BlockChain} (trace : ConfiguredBlockTraceIn HistFork cfg pre post)
     (systemInstalled : trace.SystemCodeAtOpening)
-    (systemNoAuthority : ∀ p ∈ systemContracts, ∀ q ∈ trace.bodyTrace.decodedTxs.putIndex,
-      ∀ auth ∈ q.2.auths, ∀ authority, recoverAuthority auth = .ok authority → authority ≠ p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
+    (systemNoFrame : trace.InstalledNoFrame)
     (checkpointEmpty : pre.state.getCode 2 = ByteArray.empty)
-    (noAuthority : ∀ q ∈ trace.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ q.2.auths,
-      ∀ authority, recoverAuthority auth = .ok authority → authority ≠ (2 : Adr))
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (installed : pre.state.getCode ca = code) :
@@ -32,7 +31,7 @@ private theorem block_beaconEntry_of_envIn {ca : Adr} {cfg : ChainConfig}
         ∀ authority, recoverAuthority auth = .ok authority → authority ≠ (2 : Adr) := by
     by_cases hpre : PrePrague trace.fork
     · exact Or.inl (trace.forkIn.delegationDisabled_of_prePrague hpre)
-    · exact Or.inr noAuthority
+    · exact Or.inr (noAuthority hpre)
   obtain ⟨emptyFrames, emptyPost⟩ := trace.codeAt_empty_noStateGas
     BodyStageCapabilities.historical hdis noFrame checkpointEmpty
   have hsize : code.size = 6358 := by
@@ -65,11 +64,10 @@ private theorem historicalEnvironment {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
+    (systemNoFrame : trace.InstalledNoFrame)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)
@@ -81,9 +79,7 @@ private theorem historicalEnvironment {ca : Adr} {cfg : ChainConfig}
   | step prior block ih =>
       obtain ⟨priorAdmission, priorInv, priorEmpty⟩ := ih systemInstalled.1
         (fun p hp => (systemNoAuthority p hp).1)
-        (fun p hp root member => systemNoFrame p hp root (by
-          simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
-          exact Or.inl member))
+        systemNoFrame.1
         noAuthority.1
         (fun root member => noFrame root (by
           simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
@@ -93,9 +89,7 @@ private theorem historicalEnvironment {ca : Adr} {cfg : ChainConfig}
         (C := code) rfl priorInv
       obtain ⟨blockAdmission, blockEmpty⟩ := block_beaconEntry_of_envIn block systemInstalled.2
         (fun p hp => (systemNoAuthority p hp).2)
-        (fun p hp root member => systemNoFrame p hp root (by
-          simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
-          exact Or.inr member))
+        systemNoFrame.2
         priorEmpty noAuthority.2
         (fun root member => noFrame root (by
           simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
@@ -111,18 +105,17 @@ theorem configuredHistoryIn_environment {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)
     (initial : beaconSpec.StateInv ca checkpoint.state) :
     trace.FrameAdmitted ca beaconEntry ∧ beaconSpec.StateInv ca future.state ∧
       future.state.getCode 2 = ByteArray.empty :=
-  historicalEnvironment trace systemInstalled systemNoAuthority systemNoFrame
+  historicalEnvironment trace systemInstalled systemNoAuthority
+    (trace.installedNoFrame_of_openings systemInstalled systemNoAuthority)
     checkpointEmpty noAuthority noFrame rewards initial
 
 /-- The final historical headline has no per-frame admission, calldata, warmth or delegation
@@ -131,11 +124,9 @@ theorem configuredHistoryIn_solInv {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {initialHistory : List B256}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)
@@ -145,7 +136,8 @@ theorem configuredHistoryIn_solInv {ca : Adr} {cfg : ChainConfig}
   have initial : beaconSpec.StateInv ca checkpoint.state :=
     ⟨by rw [installed]; rfl, trivial, ⟨initialHistory, invariant⟩⟩
   obtain ⟨admitted, -, -⟩ := historicalEnvironment trace systemInstalled systemNoAuthority
-    systemNoFrame checkpointEmpty noAuthority noFrame rewards initial
+    (trace.installedNoFrame_of_openings systemInstalled systemNoAuthority) checkpointEmpty
+    noAuthority noFrame rewards initial
   exact configuredHistoryIn_solInv_admitted trace admitted rewards installed invariant
 
 /-- The final count word is the length of the same exact extracted node sequence. -/
@@ -153,11 +145,9 @@ theorem configuredHistoryIn_count {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {initialHistory : List B256}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)
@@ -167,18 +157,16 @@ theorem configuredHistoryIn_count {ca : Adr} {cfg : ChainConfig}
       Nat.toB256 (initialHistory ++ committedNodesIn ca trace).length ∧
       (initialHistory ++ committedNodesIn ca trace).length < 2 ^ 32 :=
   solCount_eq_of_solInv (configuredHistoryIn_solInv trace systemInstalled systemNoAuthority
-    systemNoFrame checkpointEmpty noAuthority noFrame rewards installed invariant)
+    checkpointEmpty noAuthority noFrame rewards installed invariant)
 
 /-- The final mixed root belongs to precisely that ordered committed node sequence. -/
 theorem configuredHistoryIn_root {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {initialHistory : List B256}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)
@@ -187,7 +175,7 @@ theorem configuredHistoryIn_root {ca : Adr} {cfg : ChainConfig}
     BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
       BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodesIn ca trace) :=
   BeaconDeposit.root_correct _ _ _
-    (configuredHistoryIn_solInv trace systemInstalled systemNoAuthority systemNoFrame
+    (configuredHistoryIn_solInv trace systemInstalled systemNoAuthority
       checkpointEmpty noAuthority noFrame rewards installed invariant).2
 
 end Blanc.Lift.BeaconDeposit

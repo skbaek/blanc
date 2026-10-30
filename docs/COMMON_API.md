@@ -2469,6 +2469,21 @@ code along every all-Cancun-onwards history
 `ConfiguredHistoryTraceIn.beaconRootsCode_keep_of_cancunOnwards` discharging the
 beacon-roots character facts once and for all.
 
+The CREATE-avoidance premise of that keep chain is derived from the kept code itself in
+[`Blanc/ExecutionHistoryInCreateAvoid.lean`](../Blanc/ExecutionHistoryInCreateAvoid.lean):
+a nested CREATE spawns only after finding empty code at its new address and a top-level
+creation runs only on a false `messageCreateCollision`, so nonempty code at `a` excludes every
+frame without a code address targeting `a` (`Exec.createAvoid_noStateGas`, lifted through
+`MessageCallTrace`, `TransactionTrace`, `ApplyTransactionsTrace`, system messages, stages and
+`StagedBodyTrace.createAvoid_noStateGas` to
+`ConfiguredBlockTraceIn.createAvoid_of_cancunOnwards`). Use
+`ConfiguredBlockTraceIn.installedNoFrame_of_opening` /
+`ConfiguredHistoryTraceIn.installedNoFrame_of_openings` for the installed-target exclusion
+from actual openings, `ConfiguredHistoryTraceIn.systemCodeAtOpenings_of_cancun_present` for a
+Cancun spine from one beacon anchor with no frame premise, and
+`ConfiguredHistoryTrace.systemCreateAvoid` for a modern history from `SystemCodeInstalled`.
+Delegation keeps the code address (`messageCallDelegation_codeAddress`).
+
 Actual block-opening system installations and system-target exclusion for retained
 historical traces are in
 [`Blanc/ExecutionHistoryInSystemEnvironment.lean`](../Blanc/ExecutionHistoryInSystemEnvironment.lean).

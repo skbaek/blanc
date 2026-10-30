@@ -15,28 +15,20 @@ variable {ca : Adr} {D C C1 P B : BlockChain} {initialHistory : List B256}
     (tail : ConfiguredHistoryTraceIn HistFork mainnetChainConfig C1 P)
     (modern : ConfiguredHistoryTrace mainnetChainConfig P B)
     (anchors : HistoricalSeamAnchors D C P first.block)
-    (historicalSystemNoAuthority : ∀ p ∈ systemContracts,
-      ((dc.step first).append tail).NoAuthorityAt p.1)
-    (historicalSystemNoFrame : ∀ p ∈ systemContracts,
-      ∀ root ∈ ((dc.step first).append tail).rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
     (checkpointEmpty : D.state.getCode 2 = ByteArray.empty)
-    (historicalNoAuthority : ((dc.step first).append tail).NoAuthorityAt 2)
     (historicalNoFrame : ∀ root ∈ ((dc.step first).append tail).rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : ((dc.step first).append tail).RewardCreditsFunded)
     (modernSystemNoAuthority : ∀ p ∈ systemContracts, modern.NoAuthorityAt p.1)
-    (modernSystemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ modern.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
     (modernNoAuthority : modern.NoAuthorityAt 2)
     (modernNoFrame : ∀ root ∈ modern.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (installed : D.state.getCode ca = code)
     (invariant : SolInv (D.state.getStor ca) initialHistory)
 
-include anchors historicalSystemNoAuthority historicalSystemNoFrame checkpointEmpty
-  historicalNoAuthority historicalNoFrame rewards modernSystemNoAuthority modernSystemNoFrame
-  modernNoAuthority modernNoFrame installed invariant
+include anchors checkpointEmpty
+  historicalNoFrame rewards modernSystemNoAuthority modernNoAuthority modernNoFrame installed
+  invariant
 
 /-- A model-accepted modern deposit at the same reached B appends precisely one
 model node and event, preserves foreign storage, and leaves exactly residual G.
@@ -76,9 +68,8 @@ theorem historicalSeam_deposit_live (sevm : Sevm) (base : Devm) (G : Nat)
       (∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor base a) ∧
       post.logs = base.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev] := by
   have atFrame := historicalSeam_frame_solInv dc first tail modern anchors
-    historicalSystemNoAuthority historicalSystemNoFrame checkpointEmpty historicalNoAuthority
-    historicalNoFrame rewards modernSystemNoAuthority modernSystemNoFrame modernNoAuthority
-    modernNoFrame installed invariant sevm base target state
+    checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
+    modernNoAuthority modernNoFrame installed invariant sevm base target state
   exact deposit_exec_solInv sevm base G _ s' ev hcode hdataLength hcd hsel hdec atFrame hOk
     hsha hdepth hstatic hsentryLive hsentryCount hbound
 
