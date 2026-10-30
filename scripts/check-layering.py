@@ -1425,6 +1425,7 @@ CONTRACTS = {
                              "Lift.LidoCircuitBreakerDeployed.Prog",
                              "Lift.LidoCircuitBreakerDeployed.RegistryEffects",
                              "Lift.LidoCircuitBreakerDeployed.RegistryLayout",
+                             "Lift.LidoCircuitBreakerDeployed.RegistryObservers",
                              "Lift.LidoCircuitBreakerDeployed.FiniteRegistry",
                              "Lift.LidoCircuitBreakerDeployed.FiniteUpdate",
                              "Lift.LidoCircuitBreakerDeployed.FiniteInit",

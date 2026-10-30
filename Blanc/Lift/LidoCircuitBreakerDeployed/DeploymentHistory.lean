@@ -16,8 +16,9 @@ up to `future`, all on the covered fork domain. Its `remainder` is exact: the re
 the deployment block (suffix transactions, withdrawals, requests, rewards) followed by the later
 blocks.
 
-The headline `lido_deployment_l1_l3` states the raw-slot L1/L3 registry facts of the
-CircuitBreaker's storage at `future`. Its premises are the retained history (the configured
+The headlines `lido_registry_consistent` and `lido_remove_repairs` state the named Props
+`ConsistentRegistry` and `RemovalRepaired` over the storage observers of
+`RegistryObservers.lean`. Their premises are the retained history (the configured
 history premise) and the one universal non-collision hypothesis `LidoSlotsApart`; the installed
 code, the empty Registry after the constructor, every frame entry condition (`lidoEntry lidoA`)
 and the checkpoint `ForeignApart` premises are derived. `lido_deployment_finite_init` states the
@@ -102,66 +103,46 @@ theorem stateInv_future (history : LidoDeploymentTo cfg future) (H : LidoSlotsAp
 
 end LidoDeploymentTo
 
-/-- **L1 and L3 from the actual deployment.** For the CircuitBreaker's actual creation
-transaction and any configured covered-fork history after it up to `future`, under the one
-universal non-collision hypothesis `LidoSlotsApart`, there is a Registry witness `entries` of
-the CircuitBreaker's storage at `future` for which the assignment and index slots are nonzero
-exactly for registered targets (and pin a found entry's pauser, index and array word), every
-canonical pauser's count slot is its number of assignments, the zero pauser's count is zero,
-and the counts of the live pausers sum to the number of entries, which is the array length
-word. -/
-theorem lido_deployment_l1_l3 {cfg : ChainConfig} {future : BlockChain}
+/-- **The CircuitBreaker Registry is consistent after any history from its actual deployment.**
+For the CircuitBreaker's actual creation transaction and any configured covered-fork history
+after it up to `future`, under the one non-collision hypothesis `LidoSlotsApart`, the Registry
+read from the CircuitBreaker's storage at `future` is consistent: the stored targets are
+distinct, a target has a nonzero pauser and index exactly when it is stored, each stored
+target's index is its position plus one, each pauser's guard count is the number of stored
+targets it guards, and the zero address guards nothing. -/
+theorem lido_registry_consistent {cfg : ChainConfig} {future : BlockChain}
     (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart) :
-    ∃ entries,
-      (∀ {t : B256}, canonicalAddress t →
-        (addressSlotReadWord ((future.state.getStor Creation.breakerAddress).get (mapSlot t 3)) ≠ 0 ↔
-          t ∈ entries.map Prod.fst) ∧
-        ((future.state.getStor Creation.breakerAddress).get (mapSlot t 4) ≠ 0 ↔
-          t ∈ entries.map Prod.fst) ∧
-        ∀ index pauser, findEntry entries t = some (index, pauser) →
-          addressSlotReadWord ((future.state.getStor Creation.breakerAddress).get (mapSlot t 3)) =
-            pauser ∧
-          (future.state.getStor Creation.breakerAddress).get (mapSlot t 4) =
-            Nat.toB256 (index + 1) ∧
-          addressSlotReadWord ((future.state.getStor Creation.breakerAddress).get
-            (registryArraySlot index)) = t) ∧
-      (∀ p, canonicalAddress p →
-        (future.state.getStor Creation.breakerAddress).get (mapSlot p 6) =
-          Nat.toB256 (assignmentCount entries p)) ∧
-      (future.state.getStor Creation.breakerAddress).get (mapSlot 0 6) = 0 ∧
-      (∑ p ∈ (entries.map Prod.snd).toFinset,
-        ((future.state.getStor Creation.breakerAddress).get (mapSlot p 6)).toNat) =
-          entries.length ∧
-      (future.state.getStor Creation.breakerAddress).get 5 = Nat.toB256 entries.length := by
+    ConsistentRegistry (future.state.getStor Creation.breakerAddress) := by
   have h := (history.stateInv_future H).inv
   rw [lidoSpec_inv] at h
-  exact registry_l1_l3_of_inv h
+  obtain ⟨entries, hw⟩ := h
+  exact consistentRegistry_of_witness hw
 
-/-- **L2 from the actual deployment.** For the CircuitBreaker's actual creation transaction
-and any configured covered-fork history after it up to `future`, under the one universal
+/-- **Removal repairs the CircuitBreaker Registry.** For the CircuitBreaker's actual creation
+transaction and any configured covered-fork history after it up to `future`, under the one
 non-collision hypothesis `LidoSlotsApart`, every settlement-committed non-static frame at the
-CircuitBreaker along the remainder whose calldata is `registerPauser(t, 0)` — including frames
-re-entered from inside `pause`'s `CALL` — has a Registry witness `entries` of its entry storage,
-and its final storage satisfies `L2Post` relative to it. Frames rolled back by an ancestor are
-not claimed; static frames are not observed by the accounting ladder. -/
-theorem lido_deployment_l2_committed {cfg : ChainConfig} {future : BlockChain}
+CircuitBreaker whose calldata is `registerPauser(t, 0)` (including one re-entered from inside
+`pause`'s `CALL`) clears `t`'s pauser and index, and leaves the stored target array equal to the
+one at the frame's entry with `t` swap-and-popped out (unchanged when `t` was not stored).
+Frames rolled back by an ancestor are not claimed; static frames are not observed. -/
+theorem lido_remove_repairs {cfg : ChainConfig} {future : BlockChain}
     (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart)
     (frame : Exec.Frame) (member : frame ∈ history.remainder.settledFrames)
     (target : frame.sevm.currentTarget = Creation.breakerAddress)
     (nonstatic : frame.sevm.isStatic = false)
     (hsig : Sevm.dataWord frame.sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
     (hnp0 : Sevm.dataWord frame.sevm 36 = 0) :
-    ∃ entries, RegistryWitness
-        (solRegistryStorage (Devm.getStor frame.pre Creation.breakerAddress)) entries ∧
-      L2Post entries (Sevm.dataWord frame.sevm 4)
-        (Devm.getStor frame.post Creation.breakerAddress) := by
+    RemovalRepaired (Devm.getStor frame.pre Creation.breakerAddress)
+      (Devm.getStor frame.post Creation.breakerAddress) (Sevm.dataWord frame.sevm 4) := by
   have inv := history.stateInv_deployed H
   obtain ⟨-, good⟩ := history.remainder.entryGood_settled (c := lidoSpec)
     (I := fun s => RegInv s) (history.admitted H) inv inv.inv
     (lidoSpec_preservesAdmitted_mem lidoWriterSpecsM Creation.breakerAddress)
     (lido_framePreserves Creation.breakerAddress) (lido_spawnKinds Creation.breakerAddress)
     (lido_spawnEntry Creation.breakerAddress) installedCert rfl
-  exact l2_of_entryGood frame (good frame member target nonstatic) target hsig hnp0
+  obtain ⟨entries, hpre, hl2, hpost⟩ :=
+    l2_of_entryGood frame (good frame member target nonstatic) target hsig hnp0
+  exact removalRepaired_of_witness hpre hpost hl2.2.1 hl2.2.2.1
 
 /-- **Finite deployment initialization on the actual creation transaction.** Right after the
 CircuitBreaker's actual creation transaction, its address holds the certified runtime and its

@@ -23,7 +23,11 @@ configured-history traces, the `0x02` frame exclusions and the modern authority 
 No frame can CREATE at an installed system contract: its present code collides.
 
 Derived API: `.trace` / `.deposits` (the committed deposit nodes, in order, over the whole
-retained span from `D` to `B`), `.solInv`, `.count` and `.root`.
+retained span from `D` to `B`) and `.solInv`.
+
+The public headline `beacon_deposits` states `DepositHistory d.trace`: one named Prop over three
+direct observers of the retained history (the count word, the root computed from the stored
+branch words, and the committed deposits), with the deployment record as its only premise.
 -/
 
 namespace Blanc.Lift.BeaconDeposit
@@ -125,19 +129,46 @@ theorem solInv : SolInv (B.state.getStor Creation.depositAddress) d.deposits := 
   rw [List.nil_append] at whole
   exact whole
 
-/-- **The deposit count word from the actual deployment block**: at `B` it is the number of
-deposits committed since deployment, which stays below `2 ^ 32`. -/
-theorem count : (B.state.getStor Creation.depositAddress).get solCountSlot =
-    Nat.toB256 d.deposits.length ∧ d.deposits.length < 2 ^ 32 :=
-  solCount_eq_of_solInv d.solInv
-
-/-- **The stored deposit root from the actual deployment block**: at `B` the stored
-accumulator's mixed root is the mixed root of exactly the deposits committed since deployment. -/
-theorem root : BeaconDeposit.Acc.root Bytes.sha256
-    (solAcc (B.state.getStor Creation.depositAddress)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 d.deposits :=
-  BeaconDeposit.root_correct _ _ _ d.solInv.2
-
 end BeaconDeploymentTo
+
+/-! ## The public headline over direct observers -/
+
+/-- The deposit count word (slot 32) of the deposit contract at the end of a history, as a
+number. -/
+def depositCount {cfg : ChainConfig} {D B : BlockChain}
+    (_history : ConfiguredHistoryTraceIn HistFork cfg D B) : Nat :=
+  ((B.state.getStor Creation.depositAddress).get solCountSlot).toNat
+
+/-- The deposit root at the end of a history, computed from the deposit contract's stored branch
+words and count word by the source's `get_deposit_root` fold and count mix-in. -/
+def storedRoot {cfg : ChainConfig} {D B : BlockChain}
+    (_history : ConfiguredHistoryTraceIn HistFork cfg D B) : B256 :=
+  BeaconDeposit.Acc.root Bytes.sha256 (solAcc (B.state.getStor Creation.depositAddress))
+
+/-- The deposit-data nodes of exactly the settlement-committed `deposit` calls to the deposit
+contract in a history, in execution order (calls inside transactions included, reverted
+effects excluded). -/
+def committedDeposits {cfg : ChainConfig} {D B : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork cfg D B) : List B256 :=
+  committedNodesIn Creation.depositAddress history
+
+/-- The deposit contract's count word is the number of committed deposits, and its stored root
+is the reference root of exactly those deposits, in order. -/
+def DepositHistory {cfg : ChainConfig} {D B : BlockChain}
+    (history : ConfiguredHistoryTraceIn HistFork cfg D B) : Prop :=
+  depositCount history = (committedDeposits history).length ∧
+    storedRoot history = BeaconDeposit.mixedRootOf Bytes.sha256 (committedDeposits history)
+
+/-- **The Beacon deposit contract from its actual deployment block.** Over the whole retained
+history from the actual deployment block to a later modern block `B`, the count word is the
+number of committed deposits and the stored root is the reference root of exactly those
+deposits. The deployment record is the only premise. -/
+theorem beacon_deposits {B : BlockChain} (d : BeaconDeploymentTo B) :
+    DepositHistory d.trace := by
+  obtain ⟨count, bound⟩ := solCount_eq_of_solInv d.solInv
+  refine ⟨?_, BeaconDeposit.root_correct _ _ _ d.solInv.2⟩
+  change ((B.state.getStor Creation.depositAddress).get solCountSlot).toNat = d.deposits.length
+  rw [count]
+  exact B256.toNat_toB256_of_lt (by omega)
 
 end Blanc.Lift.BeaconDeposit
