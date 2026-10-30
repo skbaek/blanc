@@ -43,6 +43,9 @@ structure DeploymentCut {cfg : ChainConfig} {pre post : BlockChain}
   /-- The transaction's position in the block's decoded transaction list. -/
   position : Nat
   cut : block.bodyTrace.transactions.TxSplit position
+  /-- The recorded coordinates: block 24,993,190, transaction index 1,219. -/
+  number : block.block.header.number = 24993190
+  index : position = 1219
   /-- A contract creation: the transaction's `to` field is empty. -/
   creation : cut.tx.type.receiver? = none
   /-- Its input is the certified creation input (constructor, runtime template, arguments). -/

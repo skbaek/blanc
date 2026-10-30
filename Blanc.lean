@@ -637,6 +637,8 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteInit
 import Blanc.Lift.LidoCircuitBreakerDeployed.SlotsApart
 import Blanc.Lift.LidoCircuitBreakerDeployed.Creation.Transaction
 import Blanc.Lift.LidoCircuitBreakerDeployed.DeploymentHistory
+import Blanc.Lift.LidoCircuitBreakerDeployed.LiveObservation
+import Blanc.Lift.LidoCircuitBreakerDeployed.LiveRegistry
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteFrame
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteExample
 import Blanc.Lift.LidoCircuitBreakerDeployed.Removal
