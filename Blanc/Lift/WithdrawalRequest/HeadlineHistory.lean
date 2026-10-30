@@ -39,17 +39,6 @@ theorem initialWords_of_represents {storage : B256 → B256}
   · rw [rep.tail]
     exact B256.toNat_toB256_of_lt zero
 
-/-- **EIP-7002 construction, as a message.** Under every covered fork the recorded
-zero-value constructor message targets the predeploy address, succeeds, installs the
-canonical runtime and leaves the initial words. -/
-theorem deploy_words (fork : Fork) (hfork : CoveredFork fork) :
-    (Creation.deployMsg fork).currentTarget = withdrawalRequestPredeployAddress ∧
-    ∃ post, processCreateMessage (Creation.deployMsg fork) = .ok post ∧
-      post.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
-      InitialWords (post.getStor withdrawalRequestPredeployAddress).get ∧ post.error = none := by
-  obtain ⟨target, post, run, code, rep, error⟩ := Creation.deploy_initial fork hfork
-  exact ⟨target, post, run, code, initialWords_of_represents rep, error⟩
-
 /-- **EIP-7002 deployment.** For a deployment at an actual transaction position followed by
 its admitted preactivation (all-Cancun) history, the committed state right after the
 deployment transaction and the checkpoint state both carry the canonical runtime at the

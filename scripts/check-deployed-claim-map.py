@@ -297,7 +297,6 @@ REQUIRED_HEADLINES = [
     "Blanc.Lift.WithdrawalRequest.history_submission_queued_mainnet",
     "Blanc.Lift.WithdrawalRequest.deploy",
     "Blanc.Lift.WithdrawalRequest.deploy_mainnet",
-    "Blanc.Lift.WithdrawalRequest.deploy_words",
     "Blanc.Lift.WithdrawalRequest.history_payments",
     "Blanc.Lift.WithdrawalRequest.history_payments_mainnet",
     "Blanc.Lift.WithdrawalRequest.history_delivery",

@@ -19174,14 +19174,6 @@ example (storage : B256 → B256) :
         (storage 3).toNat = 0) :=
   Iff.rfl
 
--- EIP-7002: deploy_words
-example (fork : Fork) (hfork : CoveredFork fork) :
-    (Creation.deployMsg fork).currentTarget = withdrawalRequestPredeployAddress ∧
-    ∃ post, processCreateMessage (Creation.deployMsg fork) = .ok post ∧
-      post.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
-      InitialWords (post.getStor withdrawalRequestPredeployAddress).get ∧ post.error = none :=
-  deploy_words fork hfork
-
 -- EIP-7002: deploy
 example {cfg : ChainConfig} {checkpoint : BlockChain}
     (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission) :
