@@ -883,6 +883,10 @@ import Blanc.Lift.WithdrawalRequest.WordHistory
 import Blanc.Lift.WithdrawalRequest.WordFifo
 import Blanc.Lift.WithdrawalRequest.HistoryFifo
 import Blanc.Lift.WithdrawalRequest.WordDelivery
+import Blanc.Lift.WithdrawalRequest.Creation.HistoricalTxRaw
+import Blanc.Lift.WithdrawalRequest.Creation.HistoricalTxRecover
+import Blanc.Lift.WithdrawalRequest.Creation.HistoricalTxTrace
+import Blanc.Lift.WithdrawalRequest.MainnetDeployment
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.
