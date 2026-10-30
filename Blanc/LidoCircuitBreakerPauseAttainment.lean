@@ -83,19 +83,6 @@ theorem pauseCalldata_facts {sevm : Sevm} {target : B256}
     · rw [hd]
       rfl
 
-set_option maxRecDepth 1001 in
-/-- The dispatcher's selector, at the control world's own calldata.  Stated at
-the concrete target because `Sevm.dataWord` reads a whole word: the selector
-occupies the first four bytes and the argument the next twenty-eight of the
-same word, and separating them takes an evaluation rather than a lemma. -/
-theorem pauseCalldata_selector {sevm : Sevm}
-    (hd : sevm.data = pauseCalldata (7 : B256)) :
-    Sevm.selector sevm = selector "pause" [.address] := by
-  show Sevm.dataWord sevm 0 >>> 224 = _
-  unfold Sevm.dataWord
-  rw [hd]
-  decide
-
 /-! ## The four surviving branch words
 
 None of them reads the world.  `runtimeMain`'s entry guard reads the call's
@@ -344,7 +331,7 @@ theorem attainable_setPauserAssignment_pauseRegistry :
       obtain ⟨hlen, hargWord⟩ := pauseCalldata_facts hdata
       exact runtimeMain_routeTo_pauseAssignment officialParams h houtput
         (entryGuard_word hvalue hlen)
-        (pauseCalldata_selector hdata)
+        (pauseCalldata_selector_of_data hdata)
         (staticArgs_word hlen)
         (canonicalArg_word (by rw [hargWord]; exact ⟨(7 : B256).toAdr, by decide⟩)))
 
@@ -422,7 +409,7 @@ theorem attainable_setPauserOldCount_pauseRegistry :
     (fun _sevm _mid _raw hvalue hdata howner hassigned houtput himage h => by
       obtain ⟨hlen, hargWord⟩ := pauseCalldata_facts hdata
       exact runtimeMain_routeTo_pauseKernel officialParams h houtput himage
-        (entryGuard_word hvalue hlen) (pauseCalldata_selector hdata)
+        (entryGuard_word hvalue hlen) (pauseCalldata_selector_of_data hdata)
         (staticArgs_word hlen) (canonicalArg_word (pauseWorld_validAdr hargWord))
         (fun _kernelStart wT wN hstor ktail =>
           setPauserKernel_routeTo_oldCount officialParams ktail houtput wT wN
@@ -435,7 +422,7 @@ theorem attainable_removeArrayHole_pauseRegistry :
     (fun _sevm _mid _raw hvalue hdata howner hassigned houtput himage h => by
       obtain ⟨hlen, hargWord⟩ := pauseCalldata_facts hdata
       exact runtimeMain_routeTo_pauseKernel officialParams h houtput himage
-        (entryGuard_word hvalue hlen) (pauseCalldata_selector hdata)
+        (entryGuard_word hvalue hlen) (pauseCalldata_selector_of_data hdata)
         (staticArgs_word hlen) (canonicalArg_word (pauseWorld_validAdr hargWord))
         (fun _kernelStart wT wN hstor ktail =>
           setPauserKernel_routeTo_removeTarget officialParams ktail houtput wT
@@ -449,7 +436,7 @@ theorem attainable_removeMovedIndex_pauseRegistry :
     (fun _sevm _mid _raw hvalue hdata howner hassigned houtput himage h => by
       obtain ⟨hlen, hargWord⟩ := pauseCalldata_facts hdata
       exact runtimeMain_routeTo_pauseKernel officialParams h houtput himage
-        (entryGuard_word hvalue hlen) (pauseCalldata_selector hdata)
+        (entryGuard_word hvalue hlen) (pauseCalldata_selector_of_data hdata)
         (staticArgs_word hlen) (canonicalArg_word (pauseWorld_validAdr hargWord))
         (fun _kernelStart wT wN hstor ktail =>
           setPauserKernel_routeTo_removeTarget officialParams ktail houtput wT
@@ -463,7 +450,7 @@ theorem attainable_removeClearTail_pauseRegistry :
     (fun _sevm _mid _raw hvalue hdata howner hassigned houtput himage h => by
       obtain ⟨hlen, hargWord⟩ := pauseCalldata_facts hdata
       exact runtimeMain_routeTo_pauseKernel officialParams h houtput himage
-        (entryGuard_word hvalue hlen) (pauseCalldata_selector hdata)
+        (entryGuard_word hvalue hlen) (pauseCalldata_selector_of_data hdata)
         (staticArgs_word hlen) (canonicalArg_word (pauseWorld_validAdr hargWord))
         (fun _kernelStart wT wN hstor ktail =>
           setPauserKernel_routeTo_removeTarget officialParams ktail houtput wT
@@ -477,7 +464,7 @@ theorem attainable_removeArrayLength_pauseRegistry :
     (fun _sevm _mid _raw hvalue hdata howner hassigned houtput himage h => by
       obtain ⟨hlen, hargWord⟩ := pauseCalldata_facts hdata
       exact runtimeMain_routeTo_pauseKernel officialParams h houtput himage
-        (entryGuard_word hvalue hlen) (pauseCalldata_selector hdata)
+        (entryGuard_word hvalue hlen) (pauseCalldata_selector_of_data hdata)
         (staticArgs_word hlen) (canonicalArg_word (pauseWorld_validAdr hargWord))
         (fun _kernelStart wT wN hstor ktail =>
           setPauserKernel_routeTo_removeTarget officialParams ktail houtput wT
@@ -491,7 +478,7 @@ theorem attainable_removeClearTargetIndex_pauseRegistry :
     (fun _sevm _mid _raw hvalue hdata howner hassigned houtput himage h => by
       obtain ⟨hlen, hargWord⟩ := pauseCalldata_facts hdata
       exact runtimeMain_routeTo_pauseKernel officialParams h houtput himage
-        (entryGuard_word hvalue hlen) (pauseCalldata_selector hdata)
+        (entryGuard_word hvalue hlen) (pauseCalldata_selector_of_data hdata)
         (staticArgs_word hlen) (canonicalArg_word (pauseWorld_validAdr hargWord))
         (fun _kernelStart wT wN hstor ktail =>
           setPauserKernel_routeTo_removeTarget officialParams ktail houtput wT
