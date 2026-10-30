@@ -219,6 +219,9 @@ import Blanc.Lift.RootMessages
 import Blanc.Lift.Weth9.Holders
 import Blanc.Lift.UniswapV2Pair.StorageObservers
 import Blanc.Lift.UniswapV2Pair.PairOuterCalls
+import Blanc.Lift.UniswapV2Pair.HeadlineOracle
+import Blanc.Lift.UniswapV2Pair.HeadlineShare
+import Blanc.Composition.PairTwoTokenCallShare
 import Blanc.Composition.LiveUsdcWeth9B26213219Headlines
 import Blanc.Composition.LiveUsdcWeth9B26213219CallShare
 -- `open private` below; no longer reached transitively under mathlib 4.35.
@@ -20210,3 +20213,228 @@ example {checkpoint : BlockChain}
   ⟨between, history⟩
 
 end Blanc.Composition.LiveUsdcWeth9B26213219
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc Blanc.ExecutionTrace
+
+-- Uniswap V2 Pair definition: timestampWord
+example (s : Stor) : timestampWord s = reserveTimestampRead (s.get 8) :=
+  rfl
+
+-- Uniswap V2 Pair definition: price0Word
+example (s : Stor) : price0Word s = s.get 9 :=
+  rfl
+
+-- Uniswap V2 Pair definition: price1Word
+example (s : Stor) : price1Word s = s.get 10 :=
+  rfl
+
+-- Uniswap V2 Pair definition: twapIncrement
+example (r0 r1 elapsed : Nat) :
+    twapIncrement r0 r1 elapsed =
+      (if elapsed > 0 ∧ r0 ≠ 0 ∧ r1 ≠ 0 then r1 * 2 ^ 112 / r0 * elapsed else 0) :=
+  rfl
+
+-- Uniswap V2 Pair definition: wrapElapsed
+example (last last' : Nat) : wrapElapsed last last' = (last' + 2 ^ 32 - last) % 2 ^ 32 :=
+  rfl
+
+-- Uniswap V2 Pair definition: timestampAdvance
+example (pre post : Stor) :
+    timestampAdvance pre post = wrapElapsed (timestampWord pre).toNat (timestampWord post).toNat :=
+  rfl
+
+-- Uniswap V2 Pair definition: OracleAdvance
+example (pre post : Stor) (time : B256) :
+    OracleAdvance pre post time ↔
+      ((price0Word post).toNat = ((price0Word pre).toNat +
+          twapIncrement (reserve0Word pre).toNat (reserve1Word pre).toNat
+            (timestampAdvance pre post)) % 2 ^ 256 ∧
+        (price1Word post).toNat = ((price1Word pre).toNat +
+          twapIncrement (reserve1Word pre).toNat (reserve0Word pre).toNat
+            (timestampAdvance pre post)) % 2 ^ 256 ∧
+        (timestampWord post = timestampWord pre ∨
+          (timestampWord post).toNat = time.toNat % 2 ^ 32)) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair: pair_oracle
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∀ f, OuterPairCall pair trace f →
+      OracleAdvance (preS pair f) (postS pair f) f.sevm.benvStat.time :=
+  pair_oracle trace installed initial fresh
+
+-- Uniswap V2 Pair definition: answerWord
+example (f : Exec.Frame) (i : Nat) :
+    answerWord f i = (childAt f i).map fun c => Bytes.toB256 (c.post.output.take 32) :=
+  rfl
+
+-- Uniswap V2 Pair definition: outputWord
+example (f : Exec.Frame) (i : Nat) :
+    outputWord f i = Bytes.toB256 ((f.post.output.drop (32 * i)).take 32) :=
+  rfl
+
+-- Uniswap V2 Pair definition: BalanceAnswersBacked
+example (pair : Adr) (f : Exec.Frame) :
+    BalanceAnswersBacked pair f ↔
+      ((Blanc.Sevm.selector f.sevm = 0xfff6cae9 →
+        ∃ b0 b1 : B256, answerWord f 0 = some b0 ∧ answerWord f 1 = some b1 ∧
+          (reserve0Word (preS pair f)).toNat ≤ b0.toNat ∧
+          (reserve1Word (preS pair f)).toNat ≤ b1.toNat) ∧
+      (Blanc.Sevm.selector f.sevm = 0x89afcb44 →
+        ∃ b0 b1 final0 final1 : B256, answerWord f 0 = some b0 ∧ answerWord f 1 = some b1 ∧
+          answerWord f 5 = some final0 ∧ answerWord f 6 = some final1 ∧
+          (reserve0Word (preS pair f)).toNat ≤ b0.toNat ∧
+          (reserve1Word (preS pair f)).toNat ≤ b1.toNat ∧
+          b0.toNat ≤ final0.toNat + (outputWord f 0).toNat ∧
+          b1.toNat ≤ final1.toNat + (outputWord f 1).toNat)) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair definition: BalanceAnswersEntered
+example (f : Exec.Frame) :
+    BalanceAnswersEntered f ↔
+      ((Blanc.Sevm.selector f.sevm = 0xfff6cae9 →
+        (childAt f 0).isSome ∧ (childAt f 1).isSome) ∧
+      (Blanc.Sevm.selector f.sevm = 0x89afcb44 →
+        (childAt f 0).isSome ∧ (childAt f 1).isSome ∧ (childAt f 5).isSome ∧
+          (childAt f 6).isSome)) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair: balanceAnswersBacked_iff
+example {pair : Adr} {f : Exec.Frame} {K : WriterKey → Prop}
+    {st : State} {ctx : Context} {entry : Entry} {t : Transcript} {out : RunResult}
+    (rep : WriterRep K (preS pair f) st) (auth : PairEntryAt (Blanc.Exec.Frame.rootDeriv f) entry)
+    (consumed : PositionalConsumes (Blanc.Exec.Frame.rootDeriv f) (Blanc.Exec.Frame.rootDeriv f) 0
+      (startTyped { state := st, logs := [], updates := [] } ctx entry) t out)
+    (success : out.status = .success f.post.output) :
+    BalanceAnswersBacked pair f ↔ EntryNoShrink st ctx entry t ∧ BalanceAnswersEntered f :=
+  balanceAnswersBacked_iff rep auth consumed success
+
+-- Uniswap V2 Pair definition: FeeAnswered
+example (f : Exec.Frame) : FeeAnswered f ↔ (MintOrBurn f → (childAt f 2).isSome) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair definition: FeeToOff
+example (f : Exec.Frame) :
+    FeeToOff f ↔ (MintOrBurn f → (childAt f 2).isSome ∧ feeToAnswer f = 0) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair: pair_share_value
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∀ f, OuterPairCall pair trace f → BalanceAnswersBacked pair f → FeeAnswered f →
+      ShareValueKept (preS pair f) (postS pair f) (callFeeWords pair f) :=
+  pair_share_value trace installed initial fresh
+
+-- Uniswap V2 Pair: pair_share_value_feeOff
+example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {K₀ : WriterKey → Prop} {st₀ : State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
+    ∀ f, OuterPairCall pair trace f → BalanceAnswersBacked pair f → FeeToOff f →
+      ShareValueKept (preS pair f) (postS pair f) 0 :=
+  pair_share_value_feeOff trace installed initial fresh
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Composition.PairTwoToken
+open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.UniswapV2Pair
+
+-- Uniswap V2 Pair x tokens: feeAnswered_of_factoryEntered
+example {pair : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : UniswapV2Pair.State}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
+    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
+    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
+    (unlocked : st₀.unlocked = 1)
+    (factoryQuiet : ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair →
+      G.sevm.isStatic = false → G.sevm.caller ≠ st₀.factory)
+    (factoryEntered : ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair →
+      G.sevm.isStatic = false → ∀ {node : Exec.Deriv},
+        Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv G) node →
+          getDelegatedCodeAddress (node.devm.getCode st₀.factory) = none ∧
+            ¬ node.sevm.benvStat.rules.isPrecomp st₀.factory) :
+    ∀ f, OuterPairCall pair trace f → FeeAnswered f :=
+  feeAnswered_of_factoryEntered trace installed initial fresh unlocked factoryQuiet factoryEntered
+
+end Blanc.Composition.PairTwoToken
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune ExecutionTrace
+
+-- EIP-7002 definition: SubmissionQueued
+example (world : Jaune.State) (sevm : Sevm) (b : Devm) (data : Bytes) :
+    SubmissionQueued world sevm b data ↔
+      let fresh := historySubmissionSevm world sevm data
+      ∀ gas post, Nonempty (Exec 0 fresh (St (b.withState world) [] Mem.empty gas) (.ok post)) →
+        storedQueue (post.getStor withdrawalRequestPredeployAddress).get =
+          storedQueue (world.getStor withdrawalRequestPredeployAddress).get ++
+            [sevm.caller.toBytes ++ data.take 48 ++ (data.drop 48).reverse] :=
+  Iff.rfl
+
+-- EIP-7002: history_submission_queued
+example {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (occurrences : (submissions history).length ≤ wordOccurrenceCap)
+    (sevm : Sevm) (b : Devm) (data : Bytes) (fork : CoveredFork sevm.benvStat.fork)
+    (user : sevm.caller ≠ systemAddress) (length : data.length = 56) :
+    SubmissionQueued future.state sevm b data :=
+  history_submission_queued deployment admission history occurrences sevm b data fork user length
+
+-- EIP-7002: history_system_call_succeeds_mainnet
+example {before after checkpoint future : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
+    (cut : block.bodyTrace.transactions.TxSplit 0)
+    (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
+    (obs : WithdrawalDeploymentObservation block checkpoint)
+    (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (history : ConfiguredHistoryTrace mainnetChainConfig checkpoint future)
+    {benv : Benv} (state : benv.state = future.state) (fork : CoveredFork benv.stat.fork) :
+    SystemCallOk benv :=
+  history_system_call_succeeds_mainnet block cut following obs prefixSystemAvoid history state fork
+
+-- EIP-7002: history_submission_live_mainnet
+example {before after checkpoint future : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
+    (cut : block.bodyTrace.transactions.TxSplit 0)
+    (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
+    (obs : WithdrawalDeploymentObservation block checkpoint)
+    (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (history : ConfiguredHistoryTrace mainnetChainConfig checkpoint future)
+    (sevm : Sevm) (b : Devm) (data : Bytes) (fork : CoveredFork sevm.benvStat.fork)
+    (user : sevm.caller ≠ systemAddress) (length : data.length = 56) :
+    SubmissionLive future.state sevm b data :=
+  history_submission_live_mainnet block cut following obs prefixSystemAvoid history sevm b data
+    fork user length
+
+-- EIP-7002: history_submission_queued_mainnet
+example {before after checkpoint future : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
+    (cut : block.bodyTrace.transactions.TxSplit 0)
+    (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
+    (obs : WithdrawalDeploymentObservation block checkpoint)
+    (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (history : ConfiguredHistoryTrace mainnetChainConfig checkpoint future)
+    (occurrences : (submissions history).length ≤ wordOccurrenceCap)
+    (sevm : Sevm) (b : Devm) (data : Bytes) (fork : CoveredFork sevm.benvStat.fork)
+    (user : sevm.caller ≠ systemAddress) (length : data.length = 56) :
+    SubmissionQueued future.state sevm b data :=
+  history_submission_queued_mainnet block cut following obs prefixSystemAvoid history occurrences
+    sevm b data fork user length
+
+end Blanc.Lift.WithdrawalRequest
