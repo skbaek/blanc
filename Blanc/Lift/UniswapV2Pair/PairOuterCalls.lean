@@ -1,13 +1,14 @@
 import Blanc.Lift.UniswapV2Pair.PairPositionalState
 import Blanc.ExecutionSettledOwnCode
 import Blanc.ExecutionHistoryFrameTime
+import Blanc.ExecutionPath
 
 /-!
 # The Pair's outer calls and their stored words
 
 An *outer Pair call* of a configured history (`OuterPairCall`) is a settled (hence committed),
 non-static frame at the Pair that no earlier settled non-static Pair frame encloses: the Pair is
-unlocked when it starts.  `pair_history_outer_call` gives, for every outer call `f`:
+unlocked when it starts.  `pair_history_outer_call_at` gives, for every outer call `f`:
 
 * model states `st` and `st'` represented by the Pair storage at `f`'s entry and at its committed
   exit (`WriterRep`);
@@ -21,7 +22,9 @@ supply's own outcome at `f`, applied to the positional representation at `f`'s e
 
 The word observers (`supplyWord`, `reserve0Word`, `reserve1Word`, `timestampWord`, `price0Word`,
 `price1Word`, `kLastWord`) read the Pair storage directly; `WriterRep` identifies each with its
-model field (`WriterFixedMatches`).
+model field (`WriterFixedMatches`).  `feeToAnswer f` reads the factory's `feeTo()` answer from the
+frame `f`'s third call entered, `MintOrBurn` the calldata selector, and `callFeeWords` the fee a
+call mints over both; `ShareValueKept` is the share-value inequality over stored words.
 -/
 
 namespace Blanc.Lift.UniswapV2Pair
@@ -126,6 +129,77 @@ def preS (pair : Adr) (f : Exec.Frame) : Stor := f.pre.state.getStor pair
 /-- The Pair storage at a frame's committed exit. -/
 def postS (pair : Adr) (f : Exec.Frame) : Stor := f.post.state.getStor pair
 
+/-! ## The factory's answer and the share value -/
+
+/-- The committed frame `f` entered by its `i`-th call (`none` when that call entered no frame
+or its frame did not commit). -/
+def childAt (f : Exec.Frame) (i : Nat) : Option Exec.Frame :=
+  ((Exec.descendantFramePaths [] 0 f.run).find? (fun c => c.path == [i])).map
+    Exec.LocatedFrame.frame
+
+/-- **The factory's `feeTo()` answer** as a `mint`/`burn` call `f` read it: the first output word
+of the frame entered by `f`'s third call (the factory query), as an address; zero when that call
+left no committed frame. -/
+def feeToAnswer (f : Exec.Frame) : Adr :=
+  match childAt f 2 with
+  | some c => (Bytes.toB256 (c.post.output.take 32)).toAdr
+  | none => 0
+
+/-- `f` calls `mint` or `burn`: its calldata selector is `0x6a627842` or `0x89afcb44`. -/
+def MintOrBurn (f : Exec.Frame) : Prop :=
+  Blanc.Sevm.selector f.sevm = 0x6a627842 ∨ Blanc.Sevm.selector f.sevm = 0x89afcb44
+
+instance (f : Exec.Frame) : Decidable (MintOrBurn f) := inferInstanceAs (Decidable (_ ∨ _))
+
+/-- The protocol fee a Pair call `f` mints, over the Pair's stored words at its entry and the
+factory's actual answer: `feeMintWords` at `feeToAnswer f` for `mint`/`burn`, zero otherwise. -/
+def callFeeWords (pair : Adr) (f : Exec.Frame) : Nat :=
+  if MintOrBurn f then feeMintWords (preS pair f) (feeToAnswer f) else 0
+
+/-- **Share value kept** from Pair storage `pre` to `post` with fee mint `F`: with positive
+incoming supply, `r0 · r1 · T'² ≤ r0' · r1' · (T + F)²` over the stored reserve and supply
+words. -/
+def ShareValueKept (pre post : Stor) (F : Nat) : Prop :=
+  0 < (supplyWord pre).toNat →
+    (reserve0Word pre).toNat * (reserve1Word pre).toNat * (supplyWord post).toNat ^ 2 ≤
+      (reserve0Word post).toNat * (reserve1Word post).toNat * ((supplyWord pre).toNat + F) ^ 2
+
+/-- **The selector observer decodes the fee**: at a Pair call whose entry is authenticated by its
+calldata (`PairEntryAt`), the transcript fee `entryFeeWords` is `callFeeWords`, given that a
+`mint`/`burn` transcript's factory answer is `feeToAnswer f`. -/
+theorem entryFeeWords_eq_callFeeWords {pair : Adr} {f : Exec.Frame} {entry : Entry}
+    {transcript : Transcript} (auth : PairEntryAt (Blanc.Exec.Frame.rootDeriv f) entry)
+    (answer : ((∃ recipient, entry = .mint recipient) ∨ ∃ recipient, entry = .burn recipient) →
+      transcript.ownTail.ownTail.firstWord.toAdr = feeToAnswer f) :
+    entryFeeWords (preS pair f) entry transcript = callFeeWords pair f := by
+  unfold callFeeWords
+  cases auth
+  case mint selector =>
+    have on : MintOrBurn f := Or.inl selector
+    simp only [on, ↓reduceIte, entryFeeWords]
+    rw [answer (Or.inl ⟨_, rfl⟩)]
+  case burn selector =>
+    have on : MintOrBurn f := Or.inr selector
+    simp only [on, ↓reduceIte, entryFeeWords]
+    rw [answer (Or.inr ⟨_, rfl⟩)]
+  case view view selector =>
+    have off : ¬ MintOrBurn f := by
+      unfold MintOrBurn
+      change Blanc.Sevm.selector f.sevm = _ at selector
+      rw [selector]
+      rcases view with ((s | s | s) | s | _ | s | _ | _) <;> (try cases s) <;> decide
+    simp only [off, ↓reduceIte]
+    rcases view with ((s | s | s) | s | _ | s | _ | _) <;> (try cases s) <;> rfl
+  all_goals
+    rename_i selector
+    have off : ¬ MintOrBurn f := by
+      unfold MintOrBurn
+      change Blanc.Sevm.selector f.sevm = _ at selector
+      rw [selector]
+      decide
+    simp only [off, ↓reduceIte]
+    rfl
+
 /-- The Pair runtime spawns only by `CALL`/`STATICCALL`, in the shape `settled_ownCode` takes. -/
 theorem pair_ownSpawns (ca : Adr) : OwnSpawns ca code := fun hpc hcode _ fork chain hat => by
   obtain ⟨_, reach, ok⟩ := Blanc.Lift.cursor_of_parentPrefix cert_check hpc hcode fork chain
@@ -218,27 +292,5 @@ theorem pair_history_outer_call_at {pair : Adr} {cfg : ChainConfig}
     refine ⟨steps, s', st, child.frame.current.state, child, K, K', observed, auth, source, rfl,
       ⟨rfl, committed, rfl, nonstatic, authE⟩, consumed, successful, rfl,
       source.append (.cons consumed successful (.nil _)), preRep, postRep⟩
-
-/-- **Every outer Pair call is one authenticated, consumed source step between model states its entry
-and exit storage represent.** -/
-theorem pair_history_outer_call {pair : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
-    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
-    ∀ f, OuterPairCall pair trace f →
-      ∃ (s : PairStep) (st st' : State) (out : RunResult) (K K' : WriterKey → Prop),
-        s.frame = f ∧ s.AuthenticWith PairEntryAuth pair ∧
-        PairAdmittedConsumes (Blanc.Exec.Frame.rootDeriv s.frame)
-          (startTyped { state := st, logs := [], updates := [] } s.source.context s.source.entry)
-          s.transcript out ∧
-        out.status = .success f.post.output ∧ out.frame.current.state = st' ∧
-        WriterRep K (preS pair f) st ∧ WriterRep K' (postS pair f) st' := by
-  intro f ⟨target, nonstatic, before, after, split, noOpaque⟩
-  obtain ⟨-, s, st, st', out, K, K', -, -, -, frameEq, auth, consumed, success, outEq, -, pre, post⟩ :=
-    pair_history_outer_call_at trace installed initial fresh before f after split target nonstatic
-      noOpaque
-  exact ⟨s, st, st', out, K, K', frameEq, auth, consumed, success, outEq, pre, post⟩
 
 end Blanc.Lift.UniswapV2Pair

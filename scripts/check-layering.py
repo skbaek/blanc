@@ -2064,6 +2064,7 @@ CONTRACTS["uniswap-v2-pair"].extend([
     "Lift.UniswapV2Pair.FiniteCheckpoint",
     "Lift.UniswapV2Pair.ModelControlsSides",
     "Lift.UniswapV2Pair.PairHistoryShape",
+    "Lift.UniswapV2Pair.PairFeeAnswer",
     "Lift.UniswapV2Pair.PairModelFix",
     "Lift.UniswapV2Pair.PairOuterCalls",
     "Lift.UniswapV2Pair.PairPositionalCalls",
