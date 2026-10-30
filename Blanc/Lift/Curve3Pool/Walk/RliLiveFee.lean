@@ -241,21 +241,6 @@ macro "koff" : tactic => `(tactic| first
   | (refine cw_off ?_ (by omega); rw [hmulk]; exact congrArg (· + 32 * k) (by decide))
   | (refine cw_off ?_ (by omega); rw [hmulk, Nat.add_comm]; exact congrArg (· + 32 * k) (by decide)))
 
-set_option hygiene false in
-/-- One step of a carried-word search at offsets in `k`. -/
-macro "wstepK" : tactic => `(tactic| first
-  | refine WordAt.write_other ?_ (by
-      simp only [B256.length_toBytes, List.length_take, List.length_sliceD, List.length_cons,
-        List.length_nil, List.length_append]
-      omega)
-  | exact WordAt.write_eq (by first | decide | omega) (by first | rfl | exact hk1))
-
-macro "wautoK " h:term : tactic => `(tactic| (repeat wstepK) <;> exact $h)
-macro "wautoK0" : tactic => `(tactic| (repeat wstepK) <;> try assumption)
-
-/-- An `MSTORE` charge inside the grown memory. -/
-macro "kmc" : tactic => `(tactic| exact ⟨by rw [memExtSize_of_le (by decide) (by omega), Nat.sub_self]; rfl, by decide⟩)
-
 /-- What a fee iteration at counter `k` hands its continuation at `T`: the balance stored, the
 memory grown to `0x660` with the frame words outside the iteration's writes kept, `new[k]` less
 the fee, `fees[k]` and the bumped counter, the charge `rliFeeCost c0` plus the store's. -/
