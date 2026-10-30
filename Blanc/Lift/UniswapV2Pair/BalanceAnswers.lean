@@ -25,8 +25,8 @@ is the output of the frame the `i`-th call entered whenever that call entered a 
 (`entryNoShrink_of_backed`), and it is exactly `EntryNoShrink` plus "every consulted answer came
 from a committed frame" (`balanceAnswersBacked_iff`).
 
-`SourceReplay.feeOn_product_at` / `feeOff_product_at` are the per-edge forms of
-`SourceReplay.feeOn_product` / `feeOff_product`: each edge's bound uses that edge's answers only.
+The per-call share value built on these facts is `pair_share_value` (`HeadlineShare.lean`); it
+consults only the answers of the call it is about.
 -/
 
 namespace Blanc.Lift.UniswapV2Pair
@@ -527,49 +527,5 @@ theorem balanceAnswersBacked_iff {pair : Adr} {f : Exec.Frame} {K : WriterKey �
     exact ⟨some_of a0, some_of a1⟩
   · obtain ⟨_, _, _, _, a0, a1, a5, a6, -⟩ := backed.2 selector
     exact ⟨some_of a0, some_of a1, some_of a5, some_of a6⟩
-
-/-! ## Per-edge share value of a replay -/
-
-/-- **Per-edge fee-on share value**: each committed source change with positive incoming supply
-whose own invocation satisfies `EntryNoShrink` keeps `r0·r1·T'² ≤ r0'·r1'·(T + F)²`; no other edge's
-answers are consulted. -/
-theorem SourceReplay.feeOn_product_at {st finish : State} {invs : List SourceInvocation}
-    (replay : SourceReplay st invs finish) :
-    ∀ before inv after, (before, inv, after) ∈ sourceReplaySteps st invs →
-      EntryNoShrink before inv.context inv.entry inv.transcript →
-      0 < before.totalSupply.toNat →
-      before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
-        after.reserve0.val * after.reserve1.val *
-          (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2 := by
-  induction replay with
-  | nil st =>
-    intro before inv after member
-    cases member
-  | @cons st finish inv rest out bytes consumed successful tail ih =>
-    have runEq : inv.run st = out := (runTyped_of_exact consumed).1
-    intro before inv' after member here positive
-    rw [sourceReplaySteps, runEq, List.mem_cons] at member
-    rcases member with same | member
-    · cases same
-      have accepted : (runTyped st inv.context inv.entry inv.transcript).status =
-          .success bytes := by rw [(runTyped_of_exact consumed).1]; exact successful
-      have bound := runTyped_product positive here accepted
-      rw [(runTyped_of_exact consumed).1] at bound
-      exact bound
-    · exact ih before inv' after member here positive
-
-/-- **Per-edge fee-off share value**: each committed source change with positive incoming supply
-whose own invocation satisfies `EntryFeeOff` and `EntryNoShrink` keeps `r0·r1·T'² ≤ r0'·r1'·T²`. -/
-theorem SourceReplay.feeOff_product_at {st finish : State} {invs : List SourceInvocation}
-    (replay : SourceReplay st invs finish) :
-    ∀ before inv after, (before, inv, after) ∈ sourceReplaySteps st invs →
-      EntryFeeOff inv.entry inv.transcript →
-      EntryNoShrink before inv.context inv.entry inv.transcript →
-      0 < before.totalSupply.toNat →
-      before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
-        after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2 := by
-  intro before inv after member feeOff here positive
-  have bound := replay.feeOn_product_at before inv after member here positive
-  rwa [entryFeeAmount_eq_zero feeOff, Nat.add_zero] at bound
 
 end Blanc.Lift.UniswapV2Pair
