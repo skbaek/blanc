@@ -19300,6 +19300,34 @@ example {before after checkpoint preB postB preD postD : BlockChain}
   history_delivery_mainnet block cut following obs prefixSystemAvoid historyB blockB historyD
     blockD extension senders authorities avoid occurrences exactDepth
 
+-- EIP-7002 constructor: WithdrawalDeploymentObservation.mk
+example {before after checkpoint : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
+    (number : block.block.header.number = 21881389)
+    (timestamp : block.block.header.timestamp = 1739979863)
+    (hash : block.block.header.hash =
+      0xbffb31041b1839dbdd4cd4531b55f979f1b4f58665ee8de987329b30038ed283)
+    (stateRoot : block.block.header.stateRoot =
+      0x0c5d1c80666c4f618c2d07b4d87c45e5a8e9e601b6745373e223ea8ba3b8843a)
+    (slotZero : block.block.txs[0]? = some (.inr Creation.HistoricalTx.tx))
+    (receipt : ∃ r : Fin 5 × Receipt,
+      block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (0 : Nat).toBytes)]? = some r ∧
+        r.2.succeeded = true)
+    (parentSystemEmpty : before.state.getCode systemAddress = ByteArray.empty)
+    (parentBeacon : before.state.getCode beaconRootsAddress = beaconRootsCode)
+    (checkpointTip : ∃ tip, checkpoint.blocks.getLast? = some tip ∧
+      tip.header.number = 22431083 ∧ tip.header.timestamp = 1746612299 ∧
+      tip.header.hash = 0x28fb2c1d988435955e569451c6ad772f7fb5e61cddd7463c7b60e933ed5ff237 ∧
+      tip.header.stateRoot = 0xab350e0fe349aef68947ede26295f8946c34ce3af5e3ec76f4b26ddeef29c0e3)
+    (beaconAtP : checkpoint.state.getCode beaconRootsAddress = beaconRootsCode)
+    (historyAtP : checkpoint.state.getCode historyStorageAddress = historyStorageCode)
+    (consolidationAtP :
+      checkpoint.state.getCode consolidationRequestPredeployAddress = consolidationRequestCode)
+    (systemNonceAtP : checkpoint.state.getNonce systemAddress = 0) :
+    WithdrawalDeploymentObservation block checkpoint :=
+  ⟨number, timestamp, hash, stateRoot, slotZero, receipt, parentSystemEmpty, parentBeacon,
+    checkpointTip, beaconAtP, historyAtP, consolidationAtP, systemNonceAtP⟩
+
 end Blanc.Lift.WithdrawalRequest
 
 namespace Blanc.Lift.WithdrawalRequest
@@ -19491,6 +19519,33 @@ example {B : BlockChain} (d : BeaconDeploymentTo B) :
     DepositHistory d.trace :=
   beacon_deposits d
 
+-- Beacon deposit constructor: BeaconDeploymentTo.mk
+example {B : BlockChain} (pre D C C1 P : BlockChain)
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre D)
+    (atTwo : block.bodyTrace.decodedTxs[2]? = some Creation.HistoricalTx.tx)
+    (receipt : Fin 5 × Receipt)
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (2 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (emptyLogs : block.blockOutput.blockLogs.filter
+      (fun log => log.address == Creation.depositAddress) = [])
+    (dc : ConfiguredHistoryTraceIn HistFork mainnetChainConfig D C)
+    (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig C C1)
+    (tail : ConfiguredHistoryTraceIn HistFork mainnetChainConfig C1 P)
+    (modern : ConfiguredHistoryTrace mainnetChainConfig P B)
+    (anchors : HistoricalSeamAnchors D C P first.block)
+    (checkpointEmpty : D.state.getCode 2 = ByteArray.empty)
+    (historicalNoFrame : ∀ root ∈ ((dc.step first).append tail).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ (2 : Adr))
+    (modernSystemNoAuthority : ∀ p ∈ systemContracts, modern.NoAuthorityAt p.1)
+    (modernNoAuthority : modern.NoAuthorityAt 2)
+    (modernNoFrame : ∀ root ∈ modern.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ (2 : Adr)) :
+    BeaconDeploymentTo B :=
+  ⟨pre, D, C, C1, P, block, atTwo, receipt, lookup, succeeded, emptyLogs, dc, first, tail, modern,
+    anchors, checkpointEmpty, historicalNoFrame, modernSystemNoAuthority, modernNoAuthority,
+    modernNoFrame⟩
+
 end Blanc.Lift.BeaconDeposit
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
@@ -19584,6 +19639,30 @@ example {cfg : ChainConfig} {future : BlockChain}
     RemovalRepaired (Devm.getStor frame.pre Creation.breakerAddress)
       (Devm.getStor frame.post Creation.breakerAddress) (Sevm.dataWord frame.sevm 4) :=
   lido_remove_repairs history H frame member target nonstatic hsig hnp0
+
+-- Lido CircuitBreaker constructor: LidoDeploymentTo.mk
+example {cfg : ChainConfig} {future : BlockChain} (before after : BlockChain)
+    (block : ConfiguredBlockTraceIn CoveredFork cfg before after)
+    (deployment : Creation.DeploymentCut block)
+    (following : ConfiguredHistoryTraceIn CoveredFork cfg after future) :
+    LidoDeploymentTo cfg future :=
+  ⟨before, after, block, deployment, following⟩
+
+-- Lido CircuitBreaker constructor: Creation.DeploymentCut.mk
+example {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn CoveredFork cfg pre post) (position : Nat)
+    (cut : block.bodyTrace.transactions.TxSplit position)
+    (number : block.block.header.number = 24993190) (index : position = 1219)
+    (creation : cut.tx.type.receiver? = none) (input : cut.tx.data = Creation.code.toList)
+    (sender : cut.head.sender = Creation.deployer) (nonce : cut.tx.nonce = 0)
+    (value : cut.tx.value = 0) (gas : 1000000 ≤ cut.head.msg.gas)
+    (receipt : Fin 5 × Receipt)
+    (receiptAt :
+      block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? = some receipt)
+    (succeeded : receipt.2.succeeded = true) :
+    Creation.DeploymentCut block :=
+  ⟨position, cut, number, index, creation, input, sender, nonce, value, gas, receipt, receiptAt,
+    succeeded⟩
 
 end Blanc.Lift.LidoCircuitBreakerDeployed
 
@@ -20058,5 +20137,76 @@ example {checkpoint future : BlockChain}
       ShareValueKept (preS pair f) (postS pair f) 0 :=
   live_pair_share_value_feeOff anchor wd pd link holderFresh wethSenderExcluded avoid initialPair
     continuation usdcHistory pairFresh usdcFresh wethFresh governance feeOff
+
+end Blanc.Composition.LiveUsdcWeth9B26213219
+
+namespace Blanc.Composition.LiveUsdcWeth9B26213219
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.Lift.UniswapV2Pair
+  Blanc.Composition.UniswapV2PairUsdcWeth9
+
+-- Live Uniswap V2 Pair constructor: WethDeploymentTo.mk
+example {checkpoint : BlockChain} (pre completed : BlockChain)
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (number : block.block.header.number = 4719568)
+    (time : block.block.header.timestamp = 1513077455)
+    (index : Nat) (cut : block.bodyTrace.transactions.TxSplit index) (gasPrice : Nat)
+    (txType : cut.tx.type = .zero gasPrice none)
+    (data : cut.tx.data = Weth9.Creation.code.toList) (value : cut.tx.value = 0)
+    (nonce : cut.tx.nonce = 446) (sender : cut.head.sender = Weth9.Creation.deployer)
+    (funds : (cut.tx.gas * cut.head.effectiveGasPrice).toB256 ≤
+      cut.benv.state.bal Weth9.Creation.deployer)
+    (gas : cut.head.intrinsicGas + 720000 ≤ cut.tx.gas) (gasBound : cut.tx.gas < 2 ^ 64)
+    (empty : accountHasCodeOrNonce cut.benv.state Weth9.Creation.weth9Address = false)
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
+    (fresh : Weth9.KeysFresh (fun _ => False)
+      (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
+        ((MidHistoryTraceIn.tail block cut).append history))) :
+    WethDeploymentTo checkpoint :=
+  ⟨pre, completed, block, number, time, index, cut, gasPrice, txType, data, value, nonce, sender,
+    funds, gas, gasBound, empty, history, fresh⟩
+
+-- Live Uniswap V2 Pair constructor: PairDeploymentTo.mk
+example {checkpoint : BlockChain} (pre completed : BlockChain)
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (number : block.block.header.number = 10008355)
+    (time : block.block.header.timestamp = 1588710145)
+    (cut : block.bodyTrace.transactions.TxSplit 38) (gasPrice : Nat)
+    (txType : cut.tx.type = .zero gasPrice (some UniswapV2Pair.Creation.factory))
+    (data : cut.tx.data = UniswapV2Factory.createPairData) (value : cut.tx.value = 0)
+    (nonce : cut.tx.nonce = 205)
+    (funds : (cut.tx.gas * cut.head.effectiveGasPrice).toB256 ≤ cut.benv.state.bal cut.head.sender)
+    (gas : cut.head.intrinsicGas + 2600000 ≤ cut.tx.gas) (gasBound : cut.tx.gas < 2 ^ 64)
+    (factoryCode : cut.benv.state.getCode UniswapV2Pair.Creation.factory = UniswapV2Factory.code)
+    (factoryNonce : (cut.benv.state.get UniswapV2Pair.Creation.factory).nonce ≠ UInt64.max)
+    (pairNonce : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).nonce = 0)
+    (pairCode : (cut.benv.state.get UniswapV2Pair.Creation.pairAddress).code.size = 0)
+    (slot2 : (cut.benv.state.get UniswapV2Pair.Creation.factory).stor.get UniswapV2Factory.fk2 &&&
+      (0xffffffffffffffffffffffffffffffffffffffff : B256) = 0)
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
+    (fresh : WriterFreshKeys (fun _ => False)
+      (pairMidTouchedKeysIn UniswapV2Pair.Creation.pairAddress
+        ((MidHistoryTraceIn.tail block cut).append history))) :
+    PairDeploymentTo checkpoint :=
+  ⟨pre, completed, block, number, time, cut, gasPrice, txType, data, value, nonce, funds, gas,
+    gasBound, factoryCode, factoryNonce, pairNonce, pairCode, slot2, history, fresh⟩
+
+-- Live Uniswap V2 Pair constructor: ObservedCheckpoint.mk
+example {checkpoint : BlockChain} (tip : Block) (last : checkpoint.blocks.getLast? = some tip)
+    (chain : checkpoint.chainId.toNat = LiveUsdcWeth9B26213219Data.chainId)
+    (number : tip.header.number = LiveUsdcWeth9B26213219Data.blockNumber)
+    (timestamp : tip.header.timestamp = LiveUsdcWeth9B26213219Data.blockTimestamp)
+    (hash : tip.header.hash = LiveUsdcWeth9B26213219Data.blockHash)
+    (stateRoot : tip.header.stateRoot = LiveUsdcWeth9B26213219Data.stateRoot)
+    (reads : ObservedAt checkpoint.state) :
+    ObservedCheckpoint checkpoint :=
+  ⟨tip, last, chain, number, timestamp, hash, stateRoot, reads⟩
+
+-- Live Uniswap V2 Pair constructor: DeploymentHistoryLink.mk
+example {checkpoint : BlockChain}
+    (wd : WethDeploymentTo checkpoint) (pd : PairDeploymentTo checkpoint)
+    (between : ConfiguredHistoryTraceIn HistFork mainnetChainConfig wd.completed pd.pre)
+    (history : wd.history = (between.step pd.block).append pd.history) :
+    DeploymentHistoryLink wd pd :=
+  ⟨between, history⟩
 
 end Blanc.Composition.LiveUsdcWeth9B26213219
