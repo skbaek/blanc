@@ -124,6 +124,28 @@ theorem conserved :
   obtain ⟨-, s, -, hrun, hinv, hcons⟩ := d.history_from_deployment
   exact ⟨s, hrun, hinv, hcons⟩
 
+/-- The keys the raw token frames of the rest of the deployment block and of the history touch,
+including frames that later roll back (the keys `fresh` is about). -/
+noncomputable def touched : List Key :=
+  midTouchedKeysIn tokenAddress d.trace
+
+/-- **The committed replay from the deployment, frame by frame.** The model run from the deployed
+state over exactly the committed invocations, each step justified by `OwnerAnswerH`; every committed
+invocation's own opening and closing token storage abstract the model step it runs over keys among
+`touched`; the checkpoint storage abstracts the final state; and the invocations' keys are among
+`touched`. -/
+theorem frames :
+    ∃ s, InvRunBy OwnerAnswerH (curveDeployedState deployer) d.invocations s ∧
+      (∀ inv ∈ d.invocations,
+        FrameModelBy OwnerAnswerH tokenAddress (Key.extend (fun _ => False) d.touched) inv) ∧
+      VyInv (checkpoint.state.getStor tokenAddress) s d.keys ∧
+      ∀ k ∈ invocationKeys d.invocations, Key.extend (fun _ => False) d.touched k := by
+  obtain ⟨hcode, -, hinv⟩ := d.created
+  have installed : some (d.cut.afterBenv.state.getCode tokenAddress).toList = c3crvSem.image := by
+    rw [hcode]
+    rfl
+  exact (c3crv_mid_history_framesHist d.trace installed hinv d.fresh).2
+
 end C3crvDeploymentTo
 
 end Blanc.Lift.Curve3Crv

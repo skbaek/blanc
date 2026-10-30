@@ -1,4 +1,4 @@
-import Blanc.Lift.Curve3Crv.CommittedHistory
+import Blanc.Lift.Curve3Crv.FrameReplay
 import Blanc.ExecutionAccountingHistoryIn
 import Blanc.ExecutionAccountingMidHistoryIn
 import Blanc.ExecutionAccountingCoreIn
@@ -84,11 +84,11 @@ private theorem target_replayIn {ca : Adr} {U : Key → Prop}
     (sevm.isStatic = true →
       (Exec.committedFrames run).flatMap (committedFrameInvocations ca) = []) ∧
     (sum pre.state.bal < 2 ^ 256 → ∃ steps,
-      (curveCarrierBy OwnerAnswerH ca U).Replay
-        ((curveCarrierBy OwnerAnswerH ca U).frameEntry sevm pre.state) steps
-        ((curveCarrierBy OwnerAnswerH ca U).ofState
+      (curveFrameCarrierBy OwnerAnswerH ca U).Replay
+        ((curveFrameCarrierBy OwnerAnswerH ca U).frameEntry sevm pre.state) steps
+        ((curveFrameCarrierBy OwnerAnswerH ca U).ofState
           (Execution.committedPost (.ok post) committed).state) ∧
-      (curveObservationBy OwnerAnswerH ca U).obs steps =
+      (curveFrameObservationBy OwnerAnswerH ca U).obs steps =
         (Exec.committedFrames run).flatMap (committedFrameInvocations ca)) := by
   obtain ⟨⟨hstack, hmem⟩, hcd, touched⟩ := admitted.root target
   have self : committedFrameInvocations ca (Exec.Frame.ofRun run committed) =
@@ -108,7 +108,7 @@ private theorem target_replayIn {ca : Adr} {U : Key → Prop}
   · by_cases writer : IsWriter (decodeCall sevm)
     · refine ⟨[⟨sevm, pre, post, ownerWordOf sevm⟩], ?_,
         by rw [nodes, self]; simp only [writer, ↓reduceIte]; rfl⟩
-      change CurveReplayBy OwnerAnswerH U (Devm.getStor pre ca)
+      change CurveFrameReplayBy OwnerAnswerH ca U (Devm.getStor pre ca)
         ([⟨sevm, pre, post, ownerWordOf sevm⟩] : List WriterInvocation) (Devm.getStor post ca)
       refine ⟨?_, fun s K included invariant => ?_⟩
       · intro k hk
@@ -119,13 +119,12 @@ private theorem target_replayIn {ca : Adr} {U : Key → Prop}
         obtain ⟨ow, owner, out, accepted, invariant', _⟩ :=
           (c3crv_frame_refines_rawH hcode hsg hcd hstack hmem invariant fresh run).1 writer
         obtain ⟨accepted', canonical⟩ := step_ownerWordOf accepted
-        refine ⟨out.1, ⟨out, ⟨accepted', fun w h => ?_⟩, rfl⟩, ?_⟩
-        · exact owner w (canonical w h)
-        · simpa only [invocationKeys_singleton] using invariant'
+        exact CurveFrameReplayBy.singleton ⟨accepted', fun w h => owner w (canonical w h)⟩
+          included touched fresh invariant invariant'
     · refine ⟨[], ?_, by rw [nodes, self]; simp only [writer, ↓reduceIte]; rfl⟩
-      change CurveReplayBy OwnerAnswerH U (Devm.getStor pre ca) [] (Devm.getStor post ca)
-      refine ⟨by simp only [invocationKeys, List.flatMap_nil, List.not_mem_nil,
-        IsEmpty.forall_iff, implies_true], fun s K included invariant => ⟨s, rfl, ?_⟩⟩
+      change CurveFrameReplayBy OwnerAnswerH ca U (Devm.getStor pre ca) [] (Devm.getStor post ca)
+      refine ⟨(CurveReplayBy.nil OwnerAnswerH U Stor.empty).1, fun s K included invariant =>
+        ⟨s, rfl, (fun _ h => by cases h), ?_⟩⟩
       simp only [invocationKeys, List.flatMap_nil, Key.extend_nil]
       subst target
       have fresh := FreshKeys.of_universe injective apart included touched
@@ -139,10 +138,11 @@ private theorem curve_coreIn (F : Fork → Prop)
     (apart : ∀ k, U k → k.slot ∉ vyFixedSlots) :
     Exec.Fa (Exec.WknSem ca c3crvSem
       (fun pc s d e _ => Blanc.Exec.CoreAccountingIn F ca c3crvSem (carriedFrameEntry U)
-        (curveCarrierBy OwnerAnswerH ca U) (curveObservationBy OwnerAnswerH ca U) pc s d e)) := by
+        (curveFrameCarrierBy OwnerAnswerH ca U) (curveFrameObservationBy OwnerAnswerH ca U)
+          pc s d e)) := by
   apply Blanc.Exec.coreAccountingIn F ca c3crvSem (carriedFrameEntry U)
-    (curveCarrierBy OwnerAnswerH ca U) (curveObservationBy OwnerAnswerH ca U)
-    CurveReplayBy.append (fun _ _ => ())
+    (curveFrameCarrierBy OwnerAnswerH ca U) (curveFrameObservationBy OwnerAnswerH ca U)
+    CurveFrameReplayBy.append (fun _ _ => ())
   · intro sevm state foreign
     rfl
   · intro frame foreign
@@ -164,11 +164,11 @@ def curveAccountingLadderIn (F : Fork → Prop)
     (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
     (apart : ∀ k, U k → k.slot ∉ vyFixedSlots) :
     AccountingLadderAdmittedIn F (curveSpec U) ca (carriedFrameEntry U) where
-  carrier := curveCarrierBy OwnerAnswerH ca U
-  append := CurveReplayBy.append
+  carrier := curveFrameCarrierBy OwnerAnswerH ca U
+  append := CurveFrameReplayBy.append
   tag := fun _ _ => ()
   preserves := curveSpec_preservesAdmittedIn F hsgF ca U injective apart
-  view := curveObservationBy OwnerAnswerH ca U
+  view := curveFrameObservationBy OwnerAnswerH ca U
   root := by
     intro _ _ msg entryBenv pc sevm pre out run transfer evmEq committed
       admitted ready _ fork bound
@@ -220,17 +220,19 @@ theorem c3crv_history_committedHist {ca : Adr} {cfg : ChainConfig}
   obtain ⟨steps, replay, observed⟩ :=
     (curveAccountingLadderIn HistFork HistFork.stateGas_none ca U topology.inj
       topology.apart).configuredHistoryIn trace admitted capabilities rewards start c3crvInstalledCert rfl
-  change CurveReplayBy OwnerAnswerH U (checkpoint.state.getStor ca) steps
+  change CurveFrameReplayBy OwnerAnswerH ca U (checkpoint.state.getStor ca) steps
     (future.state.getStor ca) at replay
   change steps = committedInvocationsIn ca trace at observed
   subst observed
-  obtain ⟨s, run, final⟩ := replay.2 initial initialKeys (fun _ hk => Or.inl hk) invariant
+  obtain ⟨s, run, -, final⟩ := replay.2 initial initialKeys (fun _ hk => Or.inl hk) invariant
   exact ⟨finish.code, s, run, run.runInvocations_eq, final, final.conserved⟩
 
-/-- **The Curve model replays the committed chain of a historical mid history**, one that starts
-right after a transaction of a retained `HistFork` block (`MidHistoryTraceIn`): the statement of
-`c3crv_history_committedHist` from the state `start` after that transaction. -/
-theorem c3crv_mid_history_committedHist {ca : Adr} {cfg : ChainConfig} {start : Benv}
+/-- **The committed chain of a historical mid history, frame by frame.** As
+`c3crv_mid_history_committedHist`, and also: every committed writer invocation's own opening and
+closing storage abstract the model step it runs (`FrameModelBy`, over the collision universe of the
+initial live keys and the keys the raw target entries touch), and the invocations' keys lie in that
+universe. -/
+theorem c3crv_mid_history_framesHist {ca : Adr} {cfg : ChainConfig} {start : Benv}
     {future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop}
     (trace : MidHistoryTraceIn HistFork cfg start future)
     (installed : some (start.state.getCode ca).toList = c3crvSem.image)
@@ -238,10 +240,12 @@ theorem c3crv_mid_history_committedHist {ca : Adr} {cfg : ChainConfig} {start : 
     (fresh : FreshKeys initialKeys (midTouchedKeysIn ca trace)) :
     some (future.state.getCode ca).toList = c3crvSem.image ∧
       ∃ s, InvRunBy OwnerAnswerH initial (midCommittedInvocationsIn ca trace) s ∧
-        runInvocations initial (midCommittedInvocationsIn ca trace) = some s ∧
+        (∀ inv ∈ midCommittedInvocationsIn ca trace,
+          FrameModelBy OwnerAnswerH ca (Key.extend initialKeys (midTouchedKeysIn ca trace)) inv) ∧
         VyInv (future.state.getStor ca) s
           (Key.extend initialKeys (invocationKeys (midCommittedInvocationsIn ca trace))) ∧
-        Blanc.Curve3Crv.Conserved s := by
+        ∀ k ∈ invocationKeys (midCommittedInvocationsIn ca trace),
+          Key.extend initialKeys (midTouchedKeysIn ca trace) k := by
   let U := Key.extend initialKeys (midTouchedKeysIn ca trace)
   have topology : VyInv (start.state.getStor ca) initial U := invariant.extend fresh
   have capabilities := BodyStageCapabilities.historical
@@ -262,11 +266,29 @@ theorem c3crv_mid_history_committedHist {ca : Adr} {cfg : ChainConfig} {start : 
   obtain ⟨steps, replay, observed⟩ :=
     (curveAccountingLadderIn HistFork HistFork.stateGas_none ca U topology.inj
       topology.apart).midHistoryIn trace admitted capabilities rewards startInv c3crvInstalledCert rfl
-  change CurveReplayBy OwnerAnswerH U (start.state.getStor ca) steps
+  change CurveFrameReplayBy OwnerAnswerH ca U (start.state.getStor ca) steps
     (future.state.getStor ca) at replay
   change steps = midCommittedInvocationsIn ca trace at observed
   subst observed
-  obtain ⟨s, run, final⟩ := replay.2 initial initialKeys (fun _ hk => Or.inl hk) invariant
-  exact ⟨finish.code, s, run, run.runInvocations_eq, final, final.conserved⟩
+  obtain ⟨s, run, frames, final⟩ := replay.2 initial initialKeys (fun _ hk => Or.inl hk) invariant
+  exact ⟨finish.code, s, run, frames, final, replay.1⟩
+
+/-- **The Curve model replays the committed chain of a historical mid history**, one that starts
+right after a transaction of a retained `HistFork` block (`MidHistoryTraceIn`): the statement of
+`c3crv_history_committedHist` from the state `start` after that transaction. -/
+theorem c3crv_mid_history_committedHist {ca : Adr} {cfg : ChainConfig} {start : Benv}
+    {future : BlockChain} {initial : Blanc.Curve3Crv.State} {initialKeys : Key → Prop}
+    (trace : MidHistoryTraceIn HistFork cfg start future)
+    (installed : some (start.state.getCode ca).toList = c3crvSem.image)
+    (invariant : VyInv (start.state.getStor ca) initial initialKeys)
+    (fresh : FreshKeys initialKeys (midTouchedKeysIn ca trace)) :
+    some (future.state.getCode ca).toList = c3crvSem.image ∧
+      ∃ s, InvRunBy OwnerAnswerH initial (midCommittedInvocationsIn ca trace) s ∧
+        runInvocations initial (midCommittedInvocationsIn ca trace) = some s ∧
+        VyInv (future.state.getStor ca) s
+          (Key.extend initialKeys (invocationKeys (midCommittedInvocationsIn ca trace))) ∧
+        Blanc.Curve3Crv.Conserved s := by
+  obtain ⟨code, s, run, -, final, -⟩ := c3crv_mid_history_framesHist trace installed invariant fresh
+  exact ⟨code, s, run, run.runInvocations_eq, final, final.conserved⟩
 
 end Blanc.Lift.Curve3Crv
