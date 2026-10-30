@@ -274,8 +274,8 @@ SHARED += ["Lift.Reach", "Lift.ReachWalk", "Lift.ReachLine", "Lift.ReachChain", 
            "Lift.LockCheck", "Lift.LockCheckSound", "Lift.LockCheckFlow", "Lift.CursorStateCuts", "Lift.CursorNoExecSuffix", "Lift.CursorSourceRun", "Lift.CursorSourceRunReturn", "Lift.CursorBalanceReply", "Lift.CursorGasCall", "Lift.CursorQuietReturn", "Lift.CursorJump", "Lift.CursorOccurrenceRoots"]
 # The constant memory map and its checker, code tries as data, and the executable-witness
 # engine with its child runs and spawn facts (deployed-lido-vyper-v1, V-): contract-neutral.
-SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.WitnessArms", "Lift.Witness",
-           "Lift.WitnessChild", "Lift.WitnessSpawn", "Lift.NodeWalk", "Lift.NodeWalkFrames", "Lift.KernelBatch"]
+SHARED += ["Lift.MemMap", "Lift.CheckMem", "Lift.CodeTriesData", "Lift.CodeTriesBuild", "Lift.WitnessArms", "Lift.Witness",
+           "Lift.WitnessChild", "Lift.WitnessSpawn", "Lift.NodeWalk", "Lift.NodeWalkFrames", "Lift.KernelBatch", "Lift.KernelNat", "Lift.WitnessChildMeta"]
 # Chunk boundaries and stage composition of a witness run, the literal-free scaffolding the
 # V- witness's heavy frames instantiate (vminus-tx-v1): contract-neutral.
 SHARED += ["Lift.WitnessBoundary", "TransactionForward", "TransactionForwardH"]

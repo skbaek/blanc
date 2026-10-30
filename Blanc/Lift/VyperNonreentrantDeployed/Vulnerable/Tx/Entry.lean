@@ -1,5 +1,6 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Tx.Run
 import Blanc.Lift.WitnessChild
+import Blanc.Lift.WitnessChildMeta
 
 /-!
 V- as an admitted transaction, the entry facts of the deep chain: each frame's start
@@ -24,9 +25,8 @@ the one the value transfer made. -/
 theorem e1T_meta : ∃ benv, benvAfterTransferS cp0.f.inner callCfg.acs = .ok benv ∧
     e1T.dyna.accessedAddresses = cp0.f.inner.accessedAddresses ∧
     e1T.dyna.accessedStorageKeys = cp0.f.inner.accessedStorageKeys ∧
-    e1T.dyna.state = benv.state := by
-  obtain ⟨benv, hb, he⟩ := frameEnterS_run e1T_eq
-  exact ⟨benv, hb, by rw [he]; rfl, by rw [he]; rfl, by rw [he]; rfl⟩
+    e1T.dyna.state = benv.state :=
+  Blanc.Lift.Witness.frameEnterS_run_meta e1T_eq
 
 /-- The proxy's accessed addresses at entry agree with `adrs1T`. -/
 theorem e1T_adrs : ∀ a, a ∈ e1T.dyna.accessedAddresses ↔ a ∈ adrs1T := by
@@ -104,9 +104,8 @@ theorem cp4T_spec :
 theorem e4T_meta : ∃ benv, benvAfterTransferS cp4T.f.inner aCallT.acs = .ok benv ∧
     e4T.dyna.accessedAddresses = cp4T.f.inner.accessedAddresses ∧
     e4T.dyna.accessedStorageKeys = cp4T.f.inner.accessedStorageKeys ∧
-    e4T.dyna.state = benv.state := by
-  obtain ⟨benv, hb, he⟩ := frameEnterS_run e4T_eq
-  exact ⟨benv, hb, by rw [he]; rfl, by rw [he]; rfl, by rw [he]; rfl⟩
+    e4T.dyna.state = benv.state :=
+  Blanc.Lift.Witness.frameEnterS_run_meta e4T_eq
 
 theorem e4T_adrs : ∀ a, a ∈ e4T.dyna.accessedAddresses ↔ a ∈ adrs4T := by
   obtain ⟨-, hpa, -, -, hia, -, -, -⟩ := cp4T_spec

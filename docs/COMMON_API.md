@@ -1642,7 +1642,16 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   universally quantified conjunction of equalities in one kernel check. Its shared builder
   imports `Lean.Elab.Tactic.ElabTerm` for the tactic elaboration support. Over a free world,
   compare computed values by `decide` (or against literal boundaries, `Boundary.obsD1`), never
-  as terms.
+  as terms. A large natural number (a gas value) computed under free variables is compared by
+  `Blanc.KernelNat.natEqW` instead of `decide`: the kernel accelerates `Nat` arithmetic only on
+  closed terms, and `natEqW` forces both sides to literals first (`decide_eq_of_natEqW`,
+  `eq_of_natEqW`) in [`Blanc/Lift/KernelNat.lean`](../Blanc/Lift/KernelNat.lean) (worked use:
+  `e2StaticFacts` in `.../Vulnerable/Reach/ViolRootRun.lean`).
+  A frame entry's accessed sets and world (`frameEnterS_run_meta`, any frame) are instantiated
+  rather than re-proved by `rfl` on a concrete call preparation, which would make the kernel
+  re-run the frame that produced it, in
+  [`Blanc/Lift/WitnessChildMeta.lean`](../Blanc/Lift/WitnessChildMeta.lean) (worked use:
+  `e4T_meta` in `.../Vulnerable/Tx/Entry.lean`).
 - To make a kernel-checked witness quantify over **every world that agrees on finitely many
   entries** (a checkpoint predicate as a genuine finite read-set agreement, not a world pinned
   everywhere): [`Blanc/Lift/ShadowTail.lean`](../Blanc/Lift/ShadowTail.lean). `storOf_prefix_tail`
@@ -9843,7 +9852,10 @@ contract-neutral.
   `callPairFrom_stages`) in
   [`Blanc/Lift/WitnessBoundary.lean`](../Blanc/Lift/WitnessBoundary.lean). Code tries given as
   generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in
-  [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean). Worked use:
+  [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean); the data checked in one
+  linear pass that also yields the length bound (`LTrie.build`, `LTrie.build_eq`,
+  `LTrie.eq_ofList_of_build`, `LTrie.length_le_of_build`; producer option `check.trie_build`) in
+  [`Blanc/Lift/CodeTriesBuild.lean`](../Blanc/Lift/CodeTriesBuild.lean). Worked use:
   `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean` (`vminus_witness`).
 - Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
   slot and, with the arguments swapped (slot first), Vyper's, in
