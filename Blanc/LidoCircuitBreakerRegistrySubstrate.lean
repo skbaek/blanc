@@ -2531,7 +2531,7 @@ theorem indexClearPost_getOrigStorVal
   unfold indexClearPost
   rw [temporalSstorePost_getOrigStorVal, lengthWritePost_getOrigStorVal]
 
-private theorem removeTarget_restoreTail_runCompiled
+theorem removeTarget_restoreTail_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)
