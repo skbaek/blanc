@@ -22,11 +22,11 @@ Derived API, for the conservation and policy headlines:
 * `.created` — right after the creation transaction the token holds the certified runtime and
   the storage `deployedStor deployer`, with `VyInv` for `curveDeployedState deployer` (minter
   the deployer, supply and balances zero) over no live keys;
-* `.replay` — the model run, from that deployed state, over exactly the committed invocations,
-  each step justified by its frame's `OwnerAnswerH` owner evidence, ending in the state the
-  checkpoint storage represents;
-* `.conserved` — that state's total supply equals the sum of its balances
-  (`.history_from_deployment` states all of it at once).
+* `.history_from_deployment` — the model run, from that deployed state, over exactly the
+  committed invocations, each step justified by its frame's `OwnerAnswerH` owner evidence, ending
+  in the state the checkpoint storage represents, whose total supply equals the sum of its
+  balances; `.frames` carries the same run frame by frame (each committed frame's own opening and
+  closing storage abstract its model step), which the public headlines in `Headline.lean` read.
 -/
 
 namespace Blanc.Lift.Curve3Crv
@@ -108,21 +108,6 @@ theorem history_from_deployment :
     rw [hcode]
     rfl
   exact c3crv_mid_history_committedHist d.trace installed hinv d.fresh
-
-/-- **The committed replay** (policy facts read the minter and allowances from it). -/
-theorem replay :
-    ∃ s, InvRunBy OwnerAnswerH (curveDeployedState deployer) d.invocations s ∧
-      VyInv (checkpoint.state.getStor tokenAddress) s d.keys := by
-  obtain ⟨-, s, hrun, -, hinv, -⟩ := d.history_from_deployment
-  exact ⟨s, hrun, hinv⟩
-
-/-- **Conservation at the checkpoint**: the represented state's supply is the sum of its
-balances. -/
-theorem conserved :
-    ∃ s, runInvocations (curveDeployedState deployer) d.invocations = some s ∧
-      VyInv (checkpoint.state.getStor tokenAddress) s d.keys ∧ Blanc.Curve3Crv.Conserved s := by
-  obtain ⟨-, s, -, hrun, hinv, hcons⟩ := d.history_from_deployment
-  exact ⟨s, hrun, hinv, hcons⟩
 
 /-- The keys the raw token frames of the rest of the deployment block and of the history touch,
 including frames that later roll back (the keys `fresh` is about). -/
