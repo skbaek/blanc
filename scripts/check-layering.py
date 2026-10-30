@@ -2142,6 +2142,7 @@ COMPOSITION = [
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing",
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayRun",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControl",
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun",
