@@ -900,6 +900,7 @@ import Blanc.Lift.Curve3Crv.HistCommittedHistory
 import Blanc.Lift.Curve3Crv.Init
 import Blanc.Lift.Curve3Crv.Creation.Deploy
 import Blanc.Lift.Curve3Crv.Creation.HistoricalDeploy
+import Blanc.Lift.Curve3Crv.Creation.HistoricalTxTrace
 import Blanc.Lift.Curve3Crv.Exec
 import Blanc.Lift.Curve3Crv.Liveness
 import Blanc.Lift.Curve3Crv.CostBounds

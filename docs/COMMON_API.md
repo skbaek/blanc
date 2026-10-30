@@ -5167,6 +5167,12 @@ of arbitrary nested BLT values or a parser/canonicality theorem.
 `encode_bytes_many` selects the ordinary length-prefixed byte encoder;
 `decode_bytes_long_two`, `decode_bytes_short`, `decode_bytes_32`, and `decode_list_long_two`
 apply Jaune's actual parser equations while keeping payload bytes abstract.
+On the encoder side, [`Blanc/RlpListEncode.lean`](../Blanc/RlpListEncode.lean)
+provides `RlpConcrete.toBytesJoin_append` (the joint item encoding of a
+concatenated list) and `RlpConcrete.encode_list_long` (a list whose joint item
+encoding is a known body of at least 56 bytes gets the long-list header over
+that abstract body); a signed creation transaction's canonical re-encoding uses
+them without reducing its payload (3Crv `HistoricalTx.tx_encoded`).
 The additive owner
 [`Blanc/ExecutionBodyTransactionCut.lean`](../Blanc/ExecutionBodyTransactionCut.lean)
 also provides `RlpConcrete.decode_bytes_long_one` and
