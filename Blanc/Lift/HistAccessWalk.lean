@@ -24,6 +24,12 @@ reads, `rules.bal = none` and the access schedule itself; no fork list is assume
   (`afterSstoreH_of_eip2929`), with its storage/log/output/... projections;
   `ri_sstoreH` (`rules.stateGas = none`, `rules.bal = none`), `ri_sstore_nonstaticH`
   (`rules.stateGas = none`), and `ri_sstoreH_covered` recovering the modern successor;
+* `sloadCostH`/`sstoreCostH` — the `SLOAD`/`SSTORE` charges under the actual access schedule and
+  `SSTORE` regime, equal to `sloadCost`/`sstoreCost` under EIP-2929 (`sloadCostH_of_eip2929`,
+  `sstoreCostH_of_eip2929`), and the forward steps `Ninst.runCompiled_sload_selectedH`,
+  `Ninst.runCompiled_sstore_selectedH`, `rx_sload_selH`, `rx_sstoreH`, `rxc_sload_selH`,
+  `rxc_sstoreH` over `afterSloadH`/`afterSstoreH`, from `rules.stateGas = none` (the stipend sentry
+  only where the rules have it); moved here from `HistCreate.lean` so the Vyper kit can use them;
 * `accountAccessH`/`extcodesizeCostH` — the `EXTCODESIZE` account-warming image and charge
   under the actual access and gas schedules; `ri_extcodesizeH`, `extcodesizeH_runCompiled`,
   `rx_extcodesizeH` (`rules.bal = none`), and `_covered` forms recovering the modern
@@ -529,5 +535,194 @@ theorem rx_extcodesizeH_covered {fs : List SFunc} {x : B256} {f : SFunc} {o : Ou
   exact rx_extcodesizeH hfork.rules_bal_none hroom k
 
 end World
+
+/-! ## `SLOAD` and `SSTORE`, forward -/
+
+/-- The charge of one `SLOAD` under the frame's actual access schedule. -/
+def sloadCostH (sevm : Sevm) (base : Devm) (key : B256) : Nat :=
+  match sevm.benvStat.rules.access with
+  | .eip2929 => sloadCost sevm base key
+  | .flat g => g.sload
+
+theorem sloadCostH_of_eip2929 {sevm : Sevm} {base : Devm} {key : B256}
+    (access : sevm.benvStat.rules.access = .eip2929) :
+    sloadCostH sevm base key = sloadCost sevm base key := by
+  unfold sloadCostH
+  rw [access]
+
+/-- The access part of one `SSTORE` charge: the cold surcharge under EIP-2929, nothing under
+flat access. -/
+def storageAccessCostH (sevm : Sevm) (devm : Devm) (key : B256) : Nat :=
+  match sevm.benvStat.rules.access with
+  | .flat _ => 0
+  | .eip2929 =>
+    if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ devm.accessedStorageKeys then 0
+    else gasColdSload
+
+/-- The charge of one `SSTORE` (`stateGas = none` lane) under the frame's actual access schedule
+and `SSTORE` regime. -/
+def sstoreCostH (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
+  sstoreRegimeGasCost sevm.benvStat.rules.sstore sevm.benvStat.rules.access
+    (storageAccessCostH sevm devm key) value
+    (devm.getOrigStorVal sevm sevm.currentTarget key) (devm.getStorVal sevm.currentTarget key)
+
+/-- `sstoreCostH` is the modern `sstoreCost` under EIP-2929 net metering. -/
+theorem sstoreCostH_of_eip2929 {sevm : Sevm} {devm : Devm} {key value : B256}
+    (access : sevm.benvStat.rules.access = .eip2929)
+    (netMetering : sevm.benvStat.rules.sstore.netMetering = true) :
+    sstoreCostH sevm devm key value = sstoreCost sevm devm key value := by
+  unfold sstoreCostH storageAccessCostH sstoreRegimeGasCost sstoreCost
+  simp only [access, netMetering, ↓reduceIte]
+  exact sstoreValueCost_add
+
+/-- One exact `SLOAD` under the frame's actual access schedule, from `rules.stateGas = none`. -/
+theorem Ninst.runCompiled_sload_selectedH
+    {sevm : Sevm} {base : Devm} {key value : B256}
+    {stack : List B256} {memory : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hvalue : base.getStorVal sevm.currentTarget key = value)
+    (hroom : stack.length < 1024) :
+    Ninst.RunCompiled sevm
+      (base.setMach ⟨key :: stack, memory, G + sloadCostH sevm base key, base.stateGas⟩)
+      (.reg .sload)
+      ((afterSloadH sevm base key).setMach ⟨value :: stack, memory, G, base.stateGas⟩) := by
+  cases access : sevm.benvStat.rules.access with
+  | eip2929 =>
+    rw [sloadCostH_of_eip2929 access, afterSloadH_of_eip2929 access]
+    by_cases hwarm : (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys
+    · rw [sloadCost, ite_eq_left hwarm, afterSload, ite_eq_left hwarm]
+      exact Ninst.runCompiled_sload_warm (k := key) (v := value) (s := stack) (G := G)
+        hsg access rfl hwarm hvalue (by simp only [Devm.gasLeft_setMach, gasWarmAccess]) hroom
+    · rw [sloadCost, ite_eq_right hwarm, afterSload, ite_eq_right hwarm]
+      have hcomm : ∀ (m m' : Mach), (addAccessedStorageKey (base.setMach m) sevm.currentTarget
+          key).setMach m' = (addAccessedStorageKey base sevm.currentTarget key).setMach m' :=
+        fun _ _ => rfl
+      simpa only [hcomm, Devm.memory_setMach, Devm.stateGas_setMach] using
+        (Ninst.runCompiled_sload_cold
+          (devm := base.setMach ⟨key :: stack, memory, G + gasColdSload, base.stateGas⟩)
+          (k := key) (v := value) (s := stack) (G := G) hsg access rfl hwarm
+          (by simpa only [Devm.getStorVal_setMach] using hvalue)
+          (by simp only [Devm.gasLeft_setMach, gasColdSload]) hroom)
+  | flat g =>
+    subst hvalue
+    have hbal := BenvStat.bal_none_of_stateGas_none hsg
+    refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
+    simp only [Rinst.runCore, access, Devm.balReadStorage_of_bal_none hbal, sloadCostH,
+      afterSloadH]
+    rw [Devm.pop_eq_ok rfl]
+    simp only [bind, Except.bind]
+    rw [chargeGas_eq_ok (by simp only [Devm.gasLeft_setMach]; omega)]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+      Devm.stateGas_setMach, Devm.stack_setMach, Nat.add_sub_cancel]
+    rw [Devm.push_eq_ok (by simpa only [Devm.stack_setMach] using hroom)]
+    rfl
+
+/-- One exact `SSTORE` under the frame's actual access schedule and `SSTORE` regime, from
+`rules.stateGas = none`. The stipend sentry is required only under rules that have it. -/
+theorem Ninst.runCompiled_sstore_selectedH
+    {sevm : Sevm} {base : Devm} {key value : B256}
+    {stack : List B256} {memory : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hsentry : sevm.benvStat.rules.sstore.stipendSentry = true →
+      gCallStipend < G + sstoreCostH sevm base key value)
+    (hstatic : sevm.isStatic = false) :
+    Ninst.RunCompiled sevm
+      (base.setMach ⟨key :: value :: stack, memory, G + sstoreCostH sevm base key value,
+        base.stateGas⟩)
+      (.reg .sstore)
+      ((afterSstoreH sevm base key value).setMach ⟨stack, memory, G, base.stateGas⟩) := by
+  have hbal := BenvStat.bal_none_of_stateGas_none hsg
+  refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
+  have hO : ∀ m : Mach, (base.setMach m).getOrigStorVal sevm sevm.currentTarget key =
+      base.getOrigStorVal sevm sevm.currentTarget key := fun _ => rfl
+  have hC : ∀ m : Mach, (base.setMach m).getStorVal sevm.currentTarget key =
+      base.getStorVal sevm.currentTarget key := fun _ => rfl
+  have hK : ∀ m : Mach, (base.setMach m).accessedStorageKeys = base.accessedStorageKeys :=
+    fun _ => rfl
+  have hR : ∀ m : Mach, (base.setMach m).refundCounter = base.refundCounter := fun _ => rfl
+  have hA : ∀ (m m' : Mach), (addAccessedStorageKey (base.setMach m) sevm.currentTarget
+      key).setMach m' = (addAccessedStorageKey base sevm.currentTarget key).setMach m' :=
+    fun _ _ => rfl
+  have hG : ∀ (m : Mach) (rc : Int), ((base.setMach m).withRefundCounter rc).gasLeft =
+      m.gasLeft := fun _ _ => rfl
+  have hG' : ∀ (m : Mach) (rc : Int), ((addAccessedStorageKey (base.setMach m)
+      sevm.currentTarget key).withRefundCounter rc).gasLeft = m.gasLeft := fun _ _ => rfl
+  rcases hss : sevm.benvStat.rules.sstore with ⟨nm, ss⟩
+  rw [hss] at hsentry
+  unfold sstoreCostH storageAccessCostH at hsentry ⊢
+  unfold afterSstoreH storageAccessH sstoreRefundH
+  cases access : sevm.benvStat.rules.access <;> cases nm <;> cases ss <;>
+  · simp only [Rinst.runCore, hsg, hss, access, Devm.balReadStorage_of_bal_none hbal,
+      Devm.balReadAccount_of_bal_none hbal] at hsentry ⊢
+    rw [Devm.pop_eq_ok rfl]
+    simp only [bind, Except.bind]
+    rw [Devm.pop_eq_ok rfl]
+    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
+      Devm.stateGas_setMach, hO, hC, hK, hR]
+    try (by_cases hw : (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys <;>
+      simp only [hw, ite_true, ite_false, not_true_eq_false, not_false_eq_true] at hsentry ⊢)
+    all_goals
+      simp only [Except.assert, Bool.false_eq_true, false_implies, forall_const,
+        ite_true] at hsentry ⊢
+      try simp only [hsentry, ite_true]
+      try simp only [sstoreRegimeGasCost, ↓reduceIte]
+      rw [chargeGas_eq_ok (Nat.le_add_left _ _)]
+      simp only [assertDynamic, Except.assert, hstatic, Bool.not_false, ↓reduceIte, hG, hG',
+        Nat.add_sub_cancel]
+      rfl
+
+/-- `SLOAD` of any key in an exact run, under the frame's actual access schedule. -/
+theorem rx_sload_selH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : Outcome}
+    {S : List B256} {M : Mem} {G : Nat} {k' : B256}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hroom : S.length < 1024)
+    (k : SFunc.RunExact fs sevm
+      (St (afterSloadH sevm b k') (b.getStorVal sevm.currentTarget k' :: S) M G) f o) :
+    SFunc.RunExact fs sevm (St b (k' :: S) M (G + sloadCostH sevm b k'))
+      (.next (.reg .sload) f) o := by
+  refine .next ?_ k
+  have h := Ninst.runCompiled_sload_selectedH (sevm := sevm) (base := b) (key := k') (stack := S)
+    (memory := M) (G := G) hsg rfl hroom
+  simpa only [St, afterSloadH_stateGas] using h
+
+/-- `SSTORE` in an exact run, under the frame's actual access schedule and `SSTORE` regime. -/
+theorem rx_sstoreH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : Outcome}
+    {S : List B256} {M : Mem} {G : Nat} {k' v : B256}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hsentry : sevm.benvStat.rules.sstore.stipendSentry = true →
+      gCallStipend < G + sstoreCostH sevm b k' v)
+    (hstatic : sevm.isStatic = false)
+    (k : SFunc.RunExact fs sevm (St (afterSstoreH sevm b k' v) S M G) f o) :
+    SFunc.RunExact fs sevm (St b (k' :: v :: S) M (G + sstoreCostH sevm b k' v))
+      (.next (.reg .sstore) f) o := by
+  refine .next (Ninst.runCompiled_sstore_selectedH hsg hsentry hstatic) ?_
+  rw [← afterSstoreH_stateGas sevm b k' v]
+  exact k
+
+/-- `SLOAD` at the actual selected charge in an exact cut run. -/
+theorem rxc_sload_selH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {r : Seg}
+    {C : List Nat} {S : List B256} {M : Mem} {G : Nat} {key : B256}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hroom : S.length < 1024)
+    (k : SFunc.RunExactCut fs sevm C
+      (St (afterSloadH sevm b key) (b.getStorVal sevm.currentTarget key :: S) M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (key :: S) M (G + sloadCostH sevm b key))
+      (.next (.reg .sload) f) r := by
+  refine .next ?_ k
+  have h := Ninst.runCompiled_sload_selectedH (sevm := sevm) (base := b) (key := key)
+    (stack := S) (memory := M) (G := G) hsg rfl hroom
+  simpa only [St, afterSloadH_stateGas] using h
+
+/-- `SSTORE` at the actual selected charge in an exact cut run. -/
+theorem rxc_sstoreH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {r : Seg}
+    {C : List Nat} {S : List B256} {M : Mem} {G : Nat} {key value : B256}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hsentry : sevm.benvStat.rules.sstore.stipendSentry = true →
+      gCallStipend < G + sstoreCostH sevm b key value)
+    (hstatic : sevm.isStatic = false)
+    (k : SFunc.RunExactCut fs sevm C (St (afterSstoreH sevm b key value) S M G) f r) :
+    SFunc.RunExactCut fs sevm C (St b (key :: value :: S) M (G + sstoreCostH sevm b key value))
+      (.next (.reg .sstore) f) r := by
+  refine .next (Ninst.runCompiled_sstore_selectedH hsg hsentry hstatic) ?_
+  rw [← afterSstoreH_stateGas sevm b key value]
+  exact k
 
 end Blanc.Lift

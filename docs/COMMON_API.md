@@ -9459,7 +9459,9 @@ contract-neutral.
   [`Blanc/Lift/HistAccessFacts.lean`](../Blanc/Lift/HistAccessFacts.lean);
   the forward creation kit under
   historical rule facts (the `SLOAD`/`SSTORE` charges `sloadCostH`/`sstoreCostH` with the
-  `sloadCostH_of_eip2929` equation and their `_le` bounds, the exact steps `rx_sload_selH`/`rx_sstoreH`, the
+  `sloadCostH_of_eip2929`/`sstoreCostH_of_eip2929` equations and the exact steps
+  `rx_sload_selH`/`rx_sstoreH` in
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean); their `_le` bounds, the
   settlement `processMessage_ok_of_execH`/`liftCreate_postH`/`liftCreate_okH` from
   `rules.stateGas = none` with the target's EIP-161 touch recorded, and `CREATE2` as
   `create2ChargeH`/`Xinst.step_create2_spawnH`/`create2_runCompiledH`) in
@@ -9877,7 +9879,10 @@ contract-neutral.
   four inversions are stated from the rule facts they read, over the actual access schedule's
   successors `afterSloadH`/`afterSstoreH` (`HistAccessWalk.lean`): `ric_vySubStoreH`,
   `ric_vyAddStoreH`, `ric_vyStoreIterH` (`rules.stateGas = none`) and `ric_vyLoadIterH`
-  (`rules.bal = none`), with the `CoveredFork` names their corollaries; a stored-`String` view's
+  (`rules.bal = none`), and the forward passes, gas-exact over `sloadCostH`/`sstoreCostH`:
+  `rx_vySubStoreH`, `rx_vyAddStoreH`, `rx_vyLoadStepH`, `rx_vyLoadLastH`, `rx_vyStoreStepH`,
+  `rx_vyStoreLastH` (`rules.stateGas = none`), with the `CoveredFork` names their corollaries;
+  a stored-`String` view's
   body up to its load loop (`vyStrView`) with the join's `ceil32_eq` and the zero-fill read
   `sliceD_data_end`, and `sstoreCost_le`, `Mem.read_write_disjoint`, `vy_mul32`, in
   [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
@@ -10063,10 +10068,11 @@ contract-neutral.
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
   For exact creation walks under the selected historical schedule, use
-  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean):
   `Ninst.runCompiled_sload_selectedH`/`runCompiled_sstore_selectedH`,
   `rx_sload_selH`/`rx_sstoreH` and `rxc_sload_selH`/`rxc_sstoreH` charge
-  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`.
+  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`; then
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
   `sstoreCostH_congr` transports only the actual price inputs. `sloadCostH_muir_eq`
   and `sstoreCostH_muir_le` give the actual 800-gas read and at-most-20000 write
   under Muir rules. `liftCreate_postH`
@@ -10278,10 +10284,11 @@ contract-neutral.
   it in the consumed history remain caller obligations. No C-to-D continuity
   or pre-D governance restriction follows from this seed adapter.
   For exact creation walks under the selected historical schedule, use
-  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean):
   `Ninst.runCompiled_sload_selectedH`/`runCompiled_sstore_selectedH`,
   `rx_sload_selH`/`rx_sstoreH` and `rxc_sload_selH`/`rxc_sstoreH` charge
-  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`.
+  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`; then
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
   `sstoreCostH_congr` transports only the actual price inputs. `sloadCostH_muir_eq`
   and `sstoreCostH_muir_le` give the actual 800-gas read and at-most-20000 write
   under Muir rules. `liftCreate_postH`
