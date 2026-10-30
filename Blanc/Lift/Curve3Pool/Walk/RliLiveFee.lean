@@ -275,12 +275,14 @@ def RliFeeK (sevm : Sevm) (W : Devm → Prop) (σ : Stor) (b : Devm) (S : List B
     SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [6, 0] :: S) M' g) T Q
 
-/-- A back edge at counter `k` from the tail `tl` to the continuation `T`. -/
-def RliFeeB (sevm : Sevm) (S : List B256) (k : Nat) (Q : Outcome → Prop) (tl T : SFunc) : Prop :=
+/-- A back edge of a `remove_liquidity_imbalance` coin loop at counter `k`, over the bound
+`3 + 0` and the stack `S`, jumping to `d`, from the tail `tl` to the continuation `T`. -/
+def RliLoopB (sevm : Sevm) (S : List B256) (d : B256) (k : Nat) (Q : Outcome → Prop)
+    (tl T : SFunc) : Prop :=
   ∀ (b' : Devm) (M' : Mem) (g : Nat), SFunc.RunEx cert.prog sevm (St b' ((Bytes.toB256 [3] +
-    Bytes.toB256 [0]) :: Bytes.toB256 [6, 0] :: S) M' g) T Q →
-  SFunc.RunEx cert.prog sevm (St b' (Bytes.toB256 [0x33, 0x6e] :: rliBack k :: (Bytes.toB256 [3] +
-    Bytes.toB256 [0]) :: Bytes.toB256 [6, 0] :: S) M' (g + 10)) tl Q
+    Bytes.toB256 [0]) :: S) M' g) T Q →
+  SFunc.RunEx cert.prog sevm (St b' (d :: rliBack k :: (Bytes.toB256 [3] + Bytes.toB256 [0]) :: S)
+    M' (g + 10)) tl Q
 
 /-- One fee iteration with `ideal > new`, forward: through the tail at `0x3458`. -/
 theorem rx_rli_feeGZ {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
@@ -294,7 +296,8 @@ theorem rx_rli_feeGZ {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     (hit : RliFeeIter F AF D0 D1 B N f st af) (hlt : N < D1 * B / D0)
     (hG : 26000 + R ≤ G) (hroom : S.length + 20 < 1024)
     (kZ : RliFeeK sevm W σ b S M img G R k c0 D0 D1 B N f st af Q gZ)
-    (hjm : cert.prog[jm]? = some (rliFH_3458 rliRv tlZ)) (hZ : RliFeeB sevm S k Q tlZ gZ) :
+    (hjm : cert.prog[jm]? = some (rliFH_3458 rliRv tlZ)) 
+    (hZ : RliLoopB sevm (Bytes.toB256 [6, 0] :: S) (Bytes.toB256 [0x33, 0x6e]) k Q tlZ gZ) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [6, 0] :: S) M G) (rliFH_336e rv jm tlS) Q := by
   obtain ⟨m1, m2, hmc1, hmc2, hsz2, hs32, hs1, hle, hc0, hm12⟩ := rliFeeSz_facts hs0
@@ -636,7 +639,8 @@ theorem rx_rli_feeGS {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
     (hN : WordAt img (0x2e0 + 32 * k) N) (hF : WordAt img 0x1e0 F) (hAF : WordAt img 0x200 AF)
     (hit : RliFeeIter F AF D0 D1 B N f st af) (hge : ¬ N < D1 * B / D0)
     (hG : 26000 + R ≤ G) (hroom : S.length + 20 < 1024)
-    (kS : RliFeeK sevm W σ b S M img G R k c0 D0 D1 B N f st af Q gS) (hS : RliFeeB sevm S k Q tlS gS) :
+    (kS : RliFeeK sevm W σ b S M img G R k c0 D0 D1 B N f st af Q gS)
+    (hS : RliLoopB sevm (Bytes.toB256 [6, 0] :: S) (Bytes.toB256 [0x33, 0x6e]) k Q tlS gS) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [6, 0] :: S) M G) (rliFH_336e rv jm tlS) Q := by
   obtain ⟨m1, m2, hmc1, hmc2, hsz2, hs32, hs1, hle, hc0, hm12⟩ := rliFeeSz_facts hs0
@@ -977,9 +981,12 @@ theorem rx_rli_feeG {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
     (hN : WordAt img (0x2e0 + 32 * k) N) (hF : WordAt img 0x1e0 F) (hAF : WordAt img 0x200 AF)
     (hit : RliFeeIter F AF D0 D1 B N f st af)
     (hG : 26000 + R ≤ G) (hroom : S.length + 20 < 1024)
-    (kS : RliFeeK sevm W σ b S M img G R k c0 D0 D1 B N f st af Q gS) (kZ : RliFeeK sevm W σ b S M img G R k c0 D0 D1 B N f st af Q gZ)
-    (hjm : cert.prog[jm]? = some (rliFH_3458 rliRv tlZ)) (hS : RliFeeB sevm S k Q tlS gS)
-    (hZ : RliFeeB sevm S k Q tlZ gZ) :
+    (kS : RliFeeK sevm W σ b S M img G R k c0 D0 D1 B N f st af Q gS)
+    (kZ : RliFeeK sevm W σ b S M img G R k c0 D0 D1 B N f st af Q gZ)
+    (hjm : cert.prog[jm]? = some (rliFH_3458 rliRv tlZ))
+    (hS : RliLoopB sevm (Bytes.toB256 [6, 0] :: S) (Bytes.toB256 [0x33, 0x6e]) k Q tlS gS)
+    
+    (hZ : RliLoopB sevm (Bytes.toB256 [6, 0] :: S) (Bytes.toB256 [0x33, 0x6e]) k Q tlZ gZ) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [6, 0] :: S) M G) (rliFH_336e rv jm tlS) Q := by
   by_cases hlt : N < D1 * B / D0
@@ -988,16 +995,19 @@ theorem rx_rli_feeG {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
   · exact rx_rli_feeGS hk3 hs0 hfork hstatic hL hR hW hsz hc hD1 hD0w hB hN hF hAF hit hlt hG hroom
       kS hS
 
-/-- A back edge taken: the counter short of its bound, on to the next iteration's entry. -/
-theorem rli_backS {sevm : Sevm} {S : List B256} {Q : Outcome → Prop} {x g : SFunc} {j k : Nat}
-    (hj : cert.prog[j]? = some g) (hk : rliBack k ≠ 0) : RliFeeB sevm S k Q (.branchTo x j) g := by
+/-- A coin loop's back edge taken: the counter short of its bound, on to the next iteration's
+entry. -/
+theorem rli_backS {sevm : Sevm} {S : List B256} {d : B256} {Q : Outcome → Prop} {x g : SFunc}
+    {j k : Nat}
+    (hj : cert.prog[j]? = some g) (hk : rliBack k ≠ 0) : RliLoopB sevm S d k Q (.branchTo x j) g := by
   intro b' M' G h
   xr (rx_branchTo_succ hk hj ·)
   exact h
 
-/-- A back edge not taken: the counter at its bound, out of the loop. -/
-theorem rli_backX {sevm : Sevm} {S : List B256} {Q : Outcome → Prop} {x : SFunc} {j k : Nat}
-    (hk : rliBack k = 0) : RliFeeB sevm S k Q (.branchTo x j) x := by
+/-- A coin loop's back edge not taken: the counter at its bound, out of the loop. -/
+theorem rli_backX {sevm : Sevm} {S : List B256} {d : B256} {Q : Outcome → Prop} {x : SFunc}
+    {j k : Nat}
+    (hk : rliBack k = 0) : RliLoopB sevm S d k Q (.branchTo x j) x := by
   intro b' M' G h
   xr (rx_branchTo_zero' hk ·)
   exact h
