@@ -1461,6 +1461,8 @@ import Blanc.Lift.UniswapV2Pair.FiniteCheckpoint
 import Blanc.Lift.UniswapV2Pair.ModelControlsSides
 import Blanc.Lift.UniswapV2Pair.PairHistoryShape
 import Blanc.Lift.UniswapV2Pair.PairModelFix
+import Blanc.Lift.UniswapV2Pair.PairOuterCalls
+import Blanc.Lift.UniswapV2Pair.PairFeeAnswer
 import Blanc.Lift.UniswapV2Pair.PairPositionalCalls
 import Blanc.Lift.UniswapV2Pair.PairPositionalCallsIn
 import Blanc.Lift.UniswapV2Pair.PairPositionalState
@@ -1639,6 +1641,7 @@ import Blanc.Lift.UniswapV2Factory.CallShape
 import Blanc.Lift.UniswapV2Factory.Window
 import Blanc.Composition.PairTokenSigned
 import Blanc.Composition.PairTwoToken
+import Blanc.Composition.PairTwoTokenCallShare
 import Blanc.Composition.PairTwoTokenShareValue
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckJoint
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckJointF
@@ -2011,6 +2014,7 @@ import Blanc.Composition.LiveUsdcWeth9B26213219ApprovalObservation
 import Blanc.Composition.LiveUsdcWeth9B26213219Joint
 import Blanc.Composition.LiveUsdcWeth9B26213219Headlines
 import Blanc.Composition.LiveUsdcWeth9B26213219Liquidity
+import Blanc.Composition.LiveUsdcWeth9B26213219CallShare
 import Blanc.Composition.LiveUsdcWeth9B26213219ShareValue
 import Blanc.Composition.LiveUsdcWeth9B26213219Swap
 import Blanc.Composition.LiveUsdcWeth9B26213219UsdcCensus
