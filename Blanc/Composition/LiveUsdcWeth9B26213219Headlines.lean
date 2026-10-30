@@ -1,5 +1,7 @@
 import Blanc.Composition.LiveUsdcWeth9B26213219Joint
 import Blanc.Lift.UniswapV2Pair.StorageObservers
+import Blanc.Lift.UniswapV2Pair.RawCallers
+import Blanc.ExecutionStagedSstoreAttribution
 import Blanc.Lift.Weth9.Holders
 
 /-!
@@ -17,6 +19,8 @@ from that block's state; the model replay that proves it stays below.
   holder, modulo `2 ^ 256`;
 * `pair_ledger`: the Pair's supply word is the sum of the balance words of every LP holder the
   history touched;
+* `pair_minimum_liquidity`: if no frame of that history entered at the Pair has caller zero, the
+  supply word is zero or address zero's LP balance word is at least `1000`;
 * `live_pair_reserves_backed`: after any mainnet history from the observed block, the reserves stored
   in the Pair's slot `8` are at most the Pair's USDC and WETH9 balance words.
 -/
@@ -83,6 +87,59 @@ theorem pair_ledger {checkpoint : BlockChain} (d : PairDeploymentTo checkpoint) 
   have fresh := d.fresh
   rw [← pair_creation_address] at fresh
   exact rep.lpLedgerBalanced sub fresh ledger
+
+/-- The raw frames of a mid history are closed under descent. -/
+private theorem midRawFramesClosed {F : Fork → Prop} {cfg : ChainConfig} {start : Benv}
+    {future : BlockChain} (trace : MidHistoryTraceIn F cfg start future) :
+    RawFramesClosed trace.rawFrames := by
+  induction trace with
+  | tail block cut =>
+    exact RawFramesClosed.append cut.after.rawFrames_closed
+      block.bodyTrace.requests.rawFrames_closed
+  | step prior block ih => exact RawFramesClosed.append ih block.bodyTrace.rawFrames_closed
+
+/-- **Uniswap V2 minimum liquidity.**  At any block after the USDC/WETH9 Pair's deployment, if no
+frame of the history from the `createPair` transaction entered at the Pair has caller zero, the
+stored supply is zero or address zero's stored LP balance is at least `MINIMUM_LIQUIDITY`. -/
+theorem pair_minimum_liquidity {checkpoint : BlockChain} (d : PairDeploymentTo checkpoint)
+    (callers : ∀ D ∈ d.trace.rawFrames, D.sevm.currentTarget = pair → D.sevm.caller ≠ 0) :
+    MinLiquidity (checkpoint.state.getStor pair) := by
+  have created := UniswapV2Factory.pair_history_initialized_from_createPair_block_noCollision
+    d.block d.number d.time d.cut d.txType d.data d.value d.nonce d.funds d.gas d.gasBound
+    d.factoryCode d.factoryNonce d.pairNonce d.pairCode d.slot2
+  obtain ⟨_, steps, observed, auth, finish, K, replay, source, _, _, rep⟩ :=
+    created.2.2 d.history d.fresh
+  rw [pair_creation_address] at callers ⊢
+  have raw : ∀ s ∈ steps, Exec.Frame.rootDeriv s.frame ∈ d.trace.rawFrames := by
+    intro s member
+    obtain ⟨_, _, target, mutable, _⟩ := auth s member
+    have own : s.frame ∈ steps.flatMap
+        (fun s => pairSubtreeFrames UniswapV2Pair.Creation.pairAddress s.frame) :=
+      List.mem_flatMap.mpr ⟨s, member, by
+        rw [PairTokenJoint.pairSubtreeFrames_self target mutable]
+        exact List.mem_cons_self⟩
+    rw [observed] at own
+    obtain ⟨G, settled, obs⟩ := List.mem_flatMap.mp own
+    unfold pairFrameObs at obs
+    split at obs
+    · rw [List.mem_singleton.mp obs]
+      exact d.trace.mem_rawFrames_of_mem_settledFrames G settled
+    · cases obs
+  have floor := (source.supplyFloor ⟨Or.inl B256.toNat_zero, fun _ => rfl⟩
+    (State.initialized_ledgerOn _ _ _ _).ledger
+    (fun inv member => by
+      obtain ⟨s, sMem, rfl⟩ := List.mem_map.mp member
+      change s.frame.sevm.currentTarget ≠ 0
+      rw [(auth s sMem).2.2.1]
+      decide)
+    (fun inv member => by
+      obtain ⟨s, sMem, rfl⟩ := List.mem_map.mp member
+      refine replay.callersNonzero (fun s m => ?_) (fun s m => ?_) s sMem
+      · intro E below same
+        exact callers E (midRawFramesClosed d.trace _ (raw s m) E below)
+          (same.trans (auth s m).2.2.1)
+      · exact callers _ (raw s m) (auth s m).2.2.1)).1
+  exact rep.minLiquidity floor
 
 /-- The Pair's reserves, as stored, are at most its USDC and WETH9 balance words. -/
 def ReservesBacked (w : Jaune.State) : Prop :=

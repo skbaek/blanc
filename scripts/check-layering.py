@@ -546,6 +546,7 @@ CONTRACTS = {
         "Lift.UniswapV2Pair.PairHistoryLiveAdmin",
         "Lift.UniswapV2Pair.PairHistoryMinLiquidity",
         "Lift.UniswapV2Pair.StorageObservers",
+        "Lift.UniswapV2Pair.RawCallers",
         "Lift.UniswapV2Pair.SwapForwardBack",
         "Lift.UniswapV2Pair.SwapForwardBalance",
         "Lift.UniswapV2Pair.SwapForwardCallback",
