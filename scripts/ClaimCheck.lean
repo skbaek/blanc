@@ -206,6 +206,21 @@ import Blanc.Lift.Curve3Pool.HistoryLiveExact
 import Blanc.Composition.Curve3Pool3CrvHeadlinesExact
 import Blanc.Composition.Curve3Pool3CrvExactWitness
 import Blanc.Composition.Curve3Pool3CrvExactLiteralHeadlines
+import Blanc.Lift.WithdrawalRequest.HeadlineFee
+import Blanc.Lift.WithdrawalRequest.HeadlineSystem
+import Blanc.Lift.WithdrawalRequest.HeadlineHistory
+import Blanc.Lift.WithdrawalRequest.FifoDrainControl
+import Blanc.Composition.WithdrawalRequestFeeHeadline
+import Blanc.Lift.Curve3Crv.Headline
+import Blanc.Lift.BeaconDeposit.HistDeployment
+import Blanc.Lift.LidoCircuitBreakerDeployed.RegistryObservers
+import Blanc.Lift.LidoCircuitBreakerDeployed.DeploymentHistory
+import Blanc.Lift.RootMessages
+import Blanc.Lift.Weth9.Holders
+import Blanc.Lift.UniswapV2Pair.StorageObservers
+import Blanc.Lift.UniswapV2Pair.PairOuterCalls
+import Blanc.Composition.LiveUsdcWeth9B26213219Headlines
+import Blanc.Composition.LiveUsdcWeth9B26213219CallShare
 -- `open private` below; no longer reached transitively under mathlib 4.35.
 import Batteries.Tactic.OpenPrivate
 
@@ -19041,3 +19056,1007 @@ example {cfg : ChainConfig} {checkpoint final : BlockChain}
       storedQueue (final.state.getStor withdrawalRequestPredeployAddress).get := rfl
 
 end Blanc.Lift.WithdrawalRequest
+
+/-! Public headlines in their trimmed form (headline facelift): each headline concludes one named
+Prop over observers that read the history directly, and each observer is pinned by unfolding. -/
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune ExecutionTrace
+
+-- EIP-7002: fee_le_spec
+example {excess : B256} {iterations : Nat} {output : B256}
+    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output) :
+    WordFee output ≤ SpecFee excess :=
+  fee_le_spec run
+
+-- EIP-7002: fee_eq_spec_iff
+example {excess : B256} {iterations : Nat} {output : B256}
+    (run : WordFakeExponential.Run excess 17 1 17 0 iterations output) :
+    WordFee output = SpecFee excess ↔ NatFeeDomain excess iterations :=
+  fee_eq_spec_iff run
+
+-- EIP-7002 definition: SpecFee
+example (excess : B256) : SpecFee excess = fakeExp 1 excess.toNat 17 :=
+  rfl
+
+-- EIP-7002 definition: WordFee
+example (output : B256) : WordFee output = (output / (17 : B256)).toNat :=
+  rfl
+
+-- EIP-7002 definition: storedExcess
+example (world : Jaune.State) :
+    storedExcess world = (world.getStor withdrawalRequestPredeployAddress).get 0 :=
+  rfl
+
+-- EIP-7002 definition: paid
+example (frame : Exec.Frame) : paid frame = frame.sevm.value.toNat :=
+  rfl
+
+-- EIP-7002 definition: submissionFrames
+example {cfg : ChainConfig} {checkpoint final : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint final) :
+    submissionFrames history =
+      (history.settledFrames.flatMap submissionFramePayments).map Prod.fst :=
+  rfl
+
+-- EIP-7002 definition: InitialStorage
+example (storage : B256 → B256) :
+    InitialStorage storage ↔
+      (storage 0 = B256.max ∧ storage 1 = 0 ∧ storage 2 = 0 ∧ storage 3 = 0) :=
+  Iff.rfl
+
+-- EIP-7002 definition: SystemCallOk
+example (benv : Benv) :
+    SystemCallOk benv ↔
+      (∃ post out, processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
+          .ok (post, out) ∧
+        systemTransactionGas - out.gasLeft ≤ 210000) :=
+  Iff.rfl
+
+-- EIP-7002: system_call_succeeds
+example {benv : Benv} (fork : CoveredFork benv.stat.fork)
+    (installed : benv.state.getCode withdrawalRequestPredeployAddress =
+      Blanc.withdrawalRequestCode) :
+    SystemCallOk benv :=
+  system_call_succeeds fork installed
+
+-- EIP-7002: history_system_call_succeeds
+example {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    {benv : Benv} (state : benv.state = future.state) (fork : CoveredFork benv.stat.fork) :
+    SystemCallOk benv :=
+  history_system_call_succeeds deployment admission history state fork
+
+-- EIP-7002 definition: submissionCost
+example (fresh : Sevm) (base : Devm) (iterations : Nat) :
+    submissionCost fresh base iterations =
+      1258 + 87 * iterations + sloadScheduleCost fresh (userSubmissionReads fresh base) +
+        submissionStoreGas fresh (afterSload fresh base 0) Mem.empty :=
+  rfl
+
+-- EIP-7002 definition: SubmissionLive
+example (world : Jaune.State) (sevm : Sevm) (b : Devm) (data : Bytes) :
+    SubmissionLive world sevm b data ↔
+      let fresh := historySubmissionSevm world sevm data
+      let base := b.withState world
+      (storedExcess world = B256.max →
+        ∀ gas post, ¬ Nonempty (Exec 0 fresh (St base [] Mem.empty gas) (.ok post))) ∧
+      (storedExcess world ≠ B256.max → SpecFee (storedExcess world) ≤ sevm.value.toNat →
+        ∃! result : Nat × B256,
+          WordFakeExponential.Run (storedExcess world) 17 1 17 0 result.1 result.2 ∧
+          ∀ G, gCallStipend < G →
+            Nonempty (Exec 0 fresh (St base [] Mem.empty (G + submissionCost fresh base result.1))
+              (.ok (submissionPost fresh (afterSload fresh base 0) Mem.empty G)))) :=
+  Iff.rfl
+
+-- EIP-7002: history_submission_live
+example {cfg : ChainConfig} {checkpoint future : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint future)
+    (sevm : Sevm) (b : Devm) (data : Bytes) (fork : CoveredFork sevm.benvStat.fork)
+    (user : sevm.caller ≠ systemAddress) (length : data.length = 56) :
+    SubmissionLive future.state sevm b data :=
+  history_submission_live deployment admission history sevm b data fork user length
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune Blanc.ExecutionTrace Blanc.WithdrawalRequest ExecutionAccountingReplay
+
+-- EIP-7002 definition: InitialWords
+example (storage : B256 → B256) :
+    InitialWords storage ↔
+      ((storage 0).toNat = 2 ^ 256 - 1 ∧ (storage 1).toNat = 0 ∧ (storage 2).toNat = 0 ∧
+        (storage 3).toNat = 0) :=
+  Iff.rfl
+
+-- EIP-7002: deploy_words
+example (fork : Fork) (hfork : CoveredFork fork) :
+    (Creation.deployMsg fork).currentTarget = withdrawalRequestPredeployAddress ∧
+    ∃ post, processCreateMessage (Creation.deployMsg fork) = .ok post ∧
+      post.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
+      InitialWords (post.getStor withdrawalRequestPredeployAddress).get ∧ post.error = none :=
+  deploy_words fork hfork
+
+-- EIP-7002: deploy
+example {cfg : ChainConfig} {checkpoint : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission) :
+    deployment.deployment.cut.afterBenv.state.getCode withdrawalRequestPredeployAddress =
+        Blanc.withdrawalRequestCode ∧
+      InitialWords
+        (deployment.deployment.cut.afterBenv.state.getStor withdrawalRequestPredeployAddress).get ∧
+      checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
+      InitialWords (checkpoint.state.getStor withdrawalRequestPredeployAddress).get :=
+  deploy deployment admission
+
+-- EIP-7002: deploy_mainnet
+example {before after checkpoint : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
+    (cut : block.bodyTrace.transactions.TxSplit 0)
+    (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
+    (obs : WithdrawalDeploymentObservation block checkpoint)
+    (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) :
+    cut.afterBenv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
+      InitialWords (cut.afterBenv.state.getStor withdrawalRequestPredeployAddress).get ∧
+      checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
+      InitialWords (checkpoint.state.getStor withdrawalRequestPredeployAddress).get :=
+  deploy_mainnet block cut following obs prefixSystemAvoid
+
+-- EIP-7002 definition: submissionPaid
+example {cfg : ChainConfig} {checkpoint final : BlockChain}
+    (history : ConfiguredHistoryTrace cfg checkpoint final) :
+    submissionPaid history =
+      ((history.settledFrames.flatMap submissionFramePayments).map Prod.snd).sum :=
+  rfl
+
+-- EIP-7002: history_payments
+example {cfg : ChainConfig} {checkpoint final : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission)
+    (history : ConfiguredHistoryTrace cfg checkpoint final) :
+    (checkpoint.state.bal withdrawalRequestPredeployAddress).toNat + submissionPaid history ≤
+      (final.state.bal withdrawalRequestPredeployAddress).toNat :=
+  history_payments deployment admission history
+
+-- EIP-7002: history_payments_mainnet
+example {before after checkpoint final : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
+    (cut : block.bodyTrace.transactions.TxSplit 0)
+    (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
+    (obs : WithdrawalDeploymentObservation block checkpoint)
+    (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (history : ConfiguredHistoryTrace mainnetChainConfig checkpoint final) :
+    (checkpoint.state.bal withdrawalRequestPredeployAddress).toNat + submissionPaid history ≤
+      (final.state.bal withdrawalRequestPredeployAddress).toNat :=
+  history_payments_mainnet block cut following obs prefixSystemAvoid history
+
+-- EIP-7002 definition: queueAtRequests
+example {cfg : ChainConfig} {pre post : BlockChain} (block : ConfiguredBlockTrace cfg pre post) :
+    queueAtRequests block =
+      storedQueue (block.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress).get :=
+  rfl
+
+-- EIP-7002 definition: blockWithdrawals
+example {cfg : ChainConfig} {pre post : BlockChain} (block : ConfiguredBlockTrace cfg pre post) :
+    blockWithdrawals block = withdrawalRequestRecords block.blockOutput.requests :=
+  rfl
+
+-- EIP-7002 definition: Delivered
+example {cfg : ChainConfig} {preB postB preD postD : BlockChain}
+    (blockB : ConfiguredBlockTrace cfg preB postB) (blockD : ConfiguredBlockTrace cfg preD postD)
+    (q : Nat) :
+    Delivered blockB blockD q ↔
+      (∀ record, (queueAtRequests blockB)[q]? = some record →
+        (blockWithdrawals blockD)[q % 16]? = some record ∧
+        (blockWithdrawals blockD).take (q % 16 + 1) =
+          ((queueAtRequests blockB).drop (16 * (q / 16))).take (q % 16 + 1)) :=
+  Iff.rfl
+
+-- EIP-7002: history_delivery
+example {cfg : ChainConfig} {checkpoint preB postB preD postD : BlockChain}
+    (deployment : DeploymentHistory cfg checkpoint) (admission : deployment.Admission)
+    (historyB : ConfiguredHistoryTrace cfg checkpoint preB)
+    (blockB : ConfiguredBlockTrace cfg preB postB)
+    (historyD : ConfiguredHistoryTrace cfg checkpoint preD)
+    (blockD : ConfiguredBlockTrace cfg preD postD) {depth : Nat}
+    (extension : (ConfiguredHistoryTrace.step historyB blockB).ExtendsBy
+      (ConfiguredHistoryTrace.step historyD blockD) depth)
+    (otherInstalled : OtherSystemCodeInstalled checkpoint.state)
+    (senders : (ConfiguredHistoryTrace.step historyD blockD).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step historyD blockD).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step historyD blockD).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : (submissions (ConfiguredHistoryTrace.step historyD blockD)).length ≤
+      wordOccurrenceCap)
+    {q : Nat} (exactDepth : depth = q / 16) :
+    Delivered blockB blockD q :=
+  history_delivery deployment admission historyB blockB historyD blockD extension otherInstalled
+    senders authorities avoid occurrences exactDepth
+
+-- EIP-7002: history_delivery_mainnet
+example {before after checkpoint preB postB preD postD : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
+    (cut : block.bodyTrace.transactions.TxSplit 0)
+    (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
+    (obs : WithdrawalDeploymentObservation block checkpoint)
+    (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (historyB : ConfiguredHistoryTrace mainnetChainConfig checkpoint preB)
+    (blockB : ConfiguredBlockTrace mainnetChainConfig preB postB)
+    (historyD : ConfiguredHistoryTrace mainnetChainConfig checkpoint preD)
+    (blockD : ConfiguredBlockTrace mainnetChainConfig preD postD) {depth : Nat}
+    (extension : (ConfiguredHistoryTrace.step historyB blockB).ExtendsBy
+      (ConfiguredHistoryTrace.step historyD blockD) depth)
+    (senders : (ConfiguredHistoryTrace.step historyD blockD).NoSenderAt systemAddress)
+    (authorities : (ConfiguredHistoryTrace.step historyD blockD).NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step historyD blockD).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : (submissions (ConfiguredHistoryTrace.step historyD blockD)).length ≤
+      wordOccurrenceCap)
+    {q : Nat} (exactDepth : depth = q / 16) :
+    Delivered blockB blockD q :=
+  history_delivery_mainnet block cut following obs prefixSystemAvoid historyB blockB historyD
+    blockD extension senders authorities avoid occurrences exactDepth
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest
+open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
+
+-- EIP-7002 definition: HistoryFifoCheckpointLoadBearing
+example :
+    HistoryFifoCheckpointLoadBearing ↔
+      (∃ (cfg : ChainConfig) (checkpoint final : BlockChain)
+        (history : ConfiguredHistoryTrace cfg checkpoint final),
+        SystemCodeInstalled checkpoint.state ∧
+        history.NoSenderAt systemAddress ∧
+        history.NoAuthorityAt systemAddress ∧
+        (∀ root ∈ history.rawFrames,
+          root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) ∧
+        checkpoint.state.getCode systemAddress ≠ ByteArray.empty ∧
+        RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial ∧
+        (submissions history).length ≤ wordOccurrenceCap ∧
+        ¬ HistoryFifo history) :=
+  Iff.rfl
+
+end Blanc.Lift.WithdrawalRequest
+
+namespace Blanc.Lift.WithdrawalRequest.DrainControl
+open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward FloodTx FeeCounterexample
+
+-- EIP-7002: historyFifo_of_checkpoint_needs_systemEmpty
+example : HistoryFifoCheckpointLoadBearing :=
+  historyFifo_of_checkpoint_needs_systemEmpty
+
+end Blanc.Lift.WithdrawalRequest.DrainControl
+
+namespace Blanc.Lift.WithdrawalRequest.FeeCounterexample
+open Jaune Blanc.Lift Blanc.ExecutionTrace
+
+-- EIP-7002 definition: FeeGuaranteeRefuted
+example :
+    FeeGuaranteeRefuted ↔
+      (∃ (cfg : ChainConfig) (checkpoint future : BlockChain)
+        (trace : ConfiguredHistoryTrace cfg checkpoint future),
+        SystemCodeInstalled checkpoint.state ∧
+        trace.NoSenderAt systemAddress ∧ trace.NoAuthorityAt systemAddress ∧
+        (∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+          root.sevm.currentTarget ≠ systemAddress) ∧
+        checkpoint.state.getCode systemAddress = ByteArray.empty ∧
+        InitialStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get ∧
+        ∃ frame ∈ submissionFrames trace,
+          (∃ iterations output,
+            WordFakeExponential.Run (storedExcess frame.pre.state) 17 1 17 0 iterations output ∧
+            WordFee output ≤ paid frame) ∧
+          paid frame < SpecFee (storedExcess frame.pre.state)) :=
+  Iff.rfl
+
+-- EIP-7002: feeGuaranteeRefuted_iff
+example : FeeGuaranteeRefuted ↔ NatFeeGuaranteeRefuted :=
+  feeGuaranteeRefuted_iff
+
+-- EIP-7002: fee_guarantee_refuted
+example : FeeGuaranteeRefuted :=
+  fee_guarantee_refuted
+
+end Blanc.Lift.WithdrawalRequest.FeeCounterexample
+
+namespace Blanc.Lift.Curve3Crv
+open Jaune Blanc.ExecutionTrace Blanc.Lift.Curve3Crv.Creation
+
+-- Curve 3Crv definition: Key.holder (bal)
+example (a : Adr) : Key.holder (.bal a) = some a :=
+  rfl
+
+-- Curve 3Crv definition: Key.holder (allow)
+example (o p : Adr) : Key.holder (.allow o p) = none :=
+  rfl
+
+-- Curve 3Crv definition: SupplyConserved
+example (stor : Stor) (holders : Finset Adr) :
+    SupplyConserved stor holders ↔
+      ((stor.get vySupplySlot).toNat = ledgerSumOn holders fun a => stor.get (vyBalSlot a)) :=
+  Iff.rfl
+
+-- Curve 3Crv definition: C3crvDeploymentTo.touched
+example {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :
+    d.touched = midTouchedKeysIn tokenAddress d.trace :=
+  rfl
+
+-- Curve 3Crv definition: C3crvDeploymentTo.holders
+example {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :
+    d.holders = (d.touched.filterMap Key.holder).toFinset :=
+  rfl
+
+-- Curve 3Crv definition: C3crvDeploymentTo.invocations
+example {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :
+    d.invocations = midCommittedInvocationsIn tokenAddress d.trace :=
+  rfl
+
+-- Curve 3Crv definition: WriterInvocation.preWord
+example (inv : WriterInvocation) (x : B256) :
+    inv.preWord x = (Devm.getStor inv.pre tokenAddress).get x :=
+  rfl
+
+-- Curve 3Crv definition: WriterInvocation.postWord
+example (inv : WriterInvocation) (x : B256) :
+    inv.postWord x = (Devm.getStor inv.post tokenAddress).get x :=
+  rfl
+
+-- Curve 3Crv definition: OnlyMinterMovesSupply
+example (inv : WriterInvocation) :
+    OnlyMinterMovesSupply inv ↔
+      (inv.postWord vySupplySlot ≠ inv.preWord vySupplySlot →
+        inv.sevm.caller.toB256 = inv.preWord vyMinterSlot ∧
+          ∃ a v, decodeCall inv.sevm = .mint a v ∨ decodeCall inv.sevm = .burnFrom a v) :=
+  Iff.rfl
+
+-- Curve 3Crv definition: OnlyMinterMovesMinter
+example (inv : WriterInvocation) :
+    OnlyMinterMovesMinter inv ↔
+      (inv.postWord vyMinterSlot ≠ inv.preWord vyMinterSlot →
+        inv.sevm.caller.toB256 = inv.preWord vyMinterSlot) :=
+  Iff.rfl
+
+-- Curve 3Crv definition: TransferFromSpendsAllowance
+example (inv : WriterInvocation) :
+    TransferFromSpendsAllowance inv ↔
+      (∀ f dst v, decodeCall inv.sevm = .transferFrom f dst v →
+        inv.sevm.caller.toB256 ≠ inv.preWord vyMinterSlot →
+          v ≤ inv.preWord (vyAllowSlot f.toAdr inv.sevm.caller) ∧
+            inv.postWord (vyAllowSlot f.toAdr inv.sevm.caller) =
+              inv.preWord (vyAllowSlot f.toAdr inv.sevm.caller) - v) :=
+  Iff.rfl
+
+-- Curve 3Crv definition: AllowanceMovesAuthorized
+example (tracked : List Key) (inv : WriterInvocation) :
+    AllowanceMovesAuthorized tracked inv ↔
+      (∀ o p, Key.allow o p ∈ tracked →
+        inv.postWord (vyAllowSlot o p) ≠ inv.preWord (vyAllowSlot o p) →
+          (inv.sevm.caller = o ∧ ∃ w v, decodeCall inv.sevm = .approve w v ∧ w.toAdr = p) ∨
+            (inv.sevm.caller = p ∧ inv.sevm.caller.toB256 ≠ inv.preWord vyMinterSlot ∧
+              ∃ f dst v, decodeCall inv.sevm = .transferFrom f dst v ∧ f.toAdr = o)) :=
+  Iff.rfl
+
+-- Curve 3Crv definition: C3crvFramePolicy
+example (tracked : List Key) (inv : WriterInvocation) :
+    C3crvFramePolicy tracked inv ↔
+      (OnlyMinterMovesSupply inv ∧ OnlyMinterMovesMinter inv ∧ TransferFromSpendsAllowance inv ∧
+        AllowanceMovesAuthorized tracked inv) :=
+  Iff.rfl
+
+-- Curve 3Crv: c3crv_conserved
+example {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :
+    SupplyConserved (checkpoint.state.getStor tokenAddress) d.holders :=
+  c3crv_conserved d
+
+-- Curve 3Crv: c3crv_policy
+example {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :
+    ∀ inv ∈ d.invocations, C3crvFramePolicy d.touched inv :=
+  c3crv_policy d
+
+end Blanc.Lift.Curve3Crv
+
+namespace Blanc.Lift.BeaconDeposit
+open Jaune Blanc.ExecutionTrace
+
+-- Beacon deposit definition: depositCount
+example {cfg : ChainConfig} {D B : BlockChain} (history : ConfiguredHistoryTraceIn HistFork cfg D B) :
+    depositCount history = ((B.state.getStor Creation.depositAddress).get solCountSlot).toNat :=
+  rfl
+
+-- Beacon deposit definition: storedRoot
+example {cfg : ChainConfig} {D B : BlockChain} (history : ConfiguredHistoryTraceIn HistFork cfg D B) :
+    storedRoot history =
+      BeaconDeposit.Acc.root Bytes.sha256 (solAcc (B.state.getStor Creation.depositAddress)) :=
+  rfl
+
+-- Beacon deposit definition: committedDeposits
+example {cfg : ChainConfig} {D B : BlockChain} (history : ConfiguredHistoryTraceIn HistFork cfg D B) :
+    committedDeposits history = committedNodesIn Creation.depositAddress history :=
+  rfl
+
+-- Beacon deposit definition: DepositHistory
+example {cfg : ChainConfig} {D B : BlockChain} (history : ConfiguredHistoryTraceIn HistFork cfg D B) :
+    DepositHistory history ↔
+      (depositCount history = (committedDeposits history).length ∧
+        storedRoot history =
+          BeaconDeposit.mixedRootOf Bytes.sha256 (committedDeposits history)) :=
+  Iff.rfl
+
+-- Beacon deposit: beacon_deposits
+example {B : BlockChain} (d : BeaconDeploymentTo B) :
+    DepositHistory d.trace :=
+  beacon_deposits d
+
+end Blanc.Lift.BeaconDeposit
+
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc Blanc.LidoCircuitBreaker
+
+-- Lido CircuitBreaker definition: registeredTargets
+example (s : Stor) :
+    registeredTargets s =
+      (List.range (s.get 5).toNat).map fun i => addressSlotReadWord (s.get (registryArraySlot i)) :=
+  rfl
+
+-- Lido CircuitBreaker definition: pauserOf
+example (s : Stor) (t : B256) : pauserOf s t = addressSlotReadWord (s.get (mapSlot t 3)) :=
+  rfl
+
+-- Lido CircuitBreaker definition: indexOf
+example (s : Stor) (t : B256) : indexOf s t = s.get (mapSlot t 4) :=
+  rfl
+
+-- Lido CircuitBreaker definition: guardCount
+example (s : Stor) (p : B256) : guardCount s p = s.get (mapSlot p 6) :=
+  rfl
+
+-- Lido CircuitBreaker definition: ConsistentRegistry
+example (s : Stor) :
+    ConsistentRegistry s ↔
+      ((registeredTargets s).Nodup ∧
+      (∀ t, canonicalAddress t →
+        (pauserOf s t ≠ 0 ↔ t ∈ registeredTargets s) ∧
+        (indexOf s t ≠ 0 ↔ t ∈ registeredTargets s)) ∧
+      (∀ i (h : i < (registeredTargets s).length),
+        indexOf s (registeredTargets s)[i] = Nat.toB256 (i + 1)) ∧
+      (∀ p, canonicalAddress p →
+        guardCount s p = Nat.toB256 ((registeredTargets s).countP (fun t => pauserOf s t = p))) ∧
+      guardCount s 0 = 0) :=
+  Iff.rfl
+
+-- Lido CircuitBreaker definition: targetsSwapPop
+example (ts : List B256) (i : Nat) :
+    targetsSwapPop ts i =
+      (match ts.getLast? with
+      | none => ts
+      | some last => (ts.set i last).dropLast) :=
+  rfl
+
+-- Lido CircuitBreaker definition: RemovalRepaired
+example (pre post : Stor) (t : B256) :
+    RemovalRepaired pre post t ↔
+      (pauserOf post t = 0 ∧ indexOf post t = 0 ∧
+      registeredTargets post =
+        if t ∈ registeredTargets pre then
+          targetsSwapPop (registeredTargets pre) ((registeredTargets pre).idxOf t)
+        else registeredTargets pre) :=
+  Iff.rfl
+
+-- Lido CircuitBreaker definition: mappingBases
+example : mappingBases = [2, 3, 4, 6] :=
+  rfl
+
+-- Lido CircuitBreaker definition: LidoSlotsApart
+example :
+    LidoSlotsApart ↔
+      ((∀ {p q s s' : B256}, canonicalAddress p → canonicalAddress q →
+        s ∈ mappingBases → s' ∈ mappingBases → mapSlot p s = mapSlot q s' → p = q ∧ s = s') ∧
+      (∀ {p s : B256} {i : Nat}, canonicalAddress p → s ∈ mappingBases →
+        i < 2 ^ 160 → mapSlot p s ≠ registryArraySlot i) ∧
+      (∀ {p s : B256}, canonicalAddress p → s ∈ mappingBases →
+        mapSlot p s ≠ 0 ∧ mapSlot p s ≠ 1 ∧ mapSlot p s ≠ 5)) :=
+  ⟨fun h => ⟨h.injective, h.offArray, h.offFixed⟩, fun ⟨h0, h1, h2⟩ => ⟨h0, h1, h2⟩⟩
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+namespace Blanc.Lift.LidoCircuitBreakerDeployed
+open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker Blanc.ExecutionTrace
+open scoped BigOperators
+
+-- Lido CircuitBreaker: lido_registry_consistent
+example {cfg : ChainConfig} {future : BlockChain}
+    (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart) :
+    ConsistentRegistry (future.state.getStor Creation.breakerAddress) :=
+  lido_registry_consistent history H
+
+-- Lido CircuitBreaker: lido_remove_repairs
+example {cfg : ChainConfig} {future : BlockChain}
+    (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart)
+    (frame : Exec.Frame) (member : frame ∈ history.remainder.settledFrames)
+    (target : frame.sevm.currentTarget = Creation.breakerAddress)
+    (nonstatic : frame.sevm.isStatic = false)
+    (hsig : Sevm.dataWord frame.sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
+    (hnp0 : Sevm.dataWord frame.sevm 36 = 0) :
+    RemovalRepaired (Devm.getStor frame.pre Creation.breakerAddress)
+      (Devm.getStor frame.post Creation.breakerAddress) (Sevm.dataWord frame.sevm 4) :=
+  lido_remove_repairs history H frame member target nonstatic hsig hnp0
+
+end Blanc.Lift.LidoCircuitBreakerDeployed
+
+namespace Blanc.Lift
+open Jaune
+
+-- Root messages definition: settledState (ok)
+example (d : Devm) :
+    settledState (.ok d) =
+      (match d.error with
+      | none => some d.state
+      | some _ => none) :=
+  rfl
+
+-- Root messages definition: settledState (error)
+example (e : EvmError × State × AdrSet × Tra) : settledState (.error e) = none :=
+  rfl
+
+-- Root messages definition: RootMsg.result (create)
+example (m : Fork → State → Msg) (fork : Fork) (W : State) :
+    (RootMsg.create m).result fork W = processCreateMessage (m fork W) :=
+  rfl
+
+-- Root messages definition: RootMsg.result (call)
+example (m : Fork → State → Msg) (fork : Fork) (W : State) :
+    (RootMsg.call m).result fork W = processMessage (m fork W) :=
+  rfl
+
+-- Root messages definition: runMessages (nil)
+example (fork : Fork) (W : State) : runMessages fork W [] = some W :=
+  rfl
+
+-- Root messages definition: runMessages (cons)
+example (fork : Fork) (W : State) (m : RootMsg) (ms : List RootMsg) :
+    runMessages fork W (m :: ms) =
+      (settledState (m.result fork W)).bind fun W' => runMessages fork W' ms :=
+  rfl
+
+end Blanc.Lift
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach (initialWorld)
+open Jaune Blanc.Lift Blanc.Lift.Witness
+
+-- Vyper V− definition: supply
+example (W : State) : supply W = storOf W proxyAddr 26 :=
+  rfl
+
+-- Vyper V− definition: lpBalance
+example (W : State) (h : Adr) : lpBalance W h = storOf W proxyAddr (lpSlot h) :=
+  rfl
+
+-- Vyper V− definition: vminusSetup
+example :
+    vminusSetup =
+      [.create implCreateMsg, .create cloneCreateMsg, .call initMsg, .create tokenCreateMsg,
+        .create attackerCreateMsg, .call approveMsg, .call addMsg] :=
+  rfl
+
+-- Vyper V− definition: LedgerSound
+example (W : State) :
+    LedgerSound W ↔ (supply W = 2000 ∧ lpBalance W attackerAddr = 2000) :=
+  Iff.rfl
+
+-- Vyper V− definition: LedgerBroken
+example (W : State) :
+    LedgerBroken W ↔ (supply W = 1800 ∧ lpBalance W attackerAddr = 1906) :=
+  Iff.rfl
+
+-- Vyper V−: vminus_attack
+example (fork : Fork) (hfork : CoveredFork fork) :
+    ∃ W₀ W, runMessages fork initialWorld vminusSetup = some W₀ ∧ LedgerSound W₀ ∧
+      runMessages fork W₀ [.call violMsg] = some W ∧ LedgerBroken W :=
+  vminus_attack fork hfork
+
+end Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol
+
+namespace Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit
+open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk Blanc.LockExclusion
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed.Fund
+open Jaune.Exec.Deriv (ParentPrefix)
+open Blanc.Lift.VyperNonreentrantDeployed.Fixed (ActiveRel lockBodies lockL)
+
+-- Vyper V+ definition: supply
+example (W : State) : supply W = storOf W proxyAddr 0x16 :=
+  rfl
+
+-- Vyper V+ definition: lpBalance
+example (W : State) (h : Adr) : lpBalance W h = storOf W proxyAddr (lpSlot h) :=
+  rfl
+
+-- Vyper V+ definition: vplusSetup
+example :
+    vplusSetup =
+      [.create implCreateMsg, .create cloneCreateMsg, .call initMsg, .call oracleMsg,
+        .create tokenCreateMsg, .create receiverCreateMsg, .call approveMsg, .call addMsg] :=
+  rfl
+
+-- Vyper V+ definition: LedgerSound
+example (W : State) (n : B256) :
+    LedgerSound W n ↔
+      (supply W = n ∧ (supply W).toNat = Blanc.ledgerSumOn {creator} (lpBalance W)) :=
+  Iff.rfl
+
+-- Vyper V+ definition: ReentryRefused
+example (fork : Fork) (W₀ W : State) :
+    ReentryRefused fork W₀ W ↔
+      (∃ (e : Evm) (out : Execution) (R : Exec 0 e.sta e.dyna out) (F h c q G : Exec.Deriv),
+        (Frame.ofCall (removeMsg fork W₀)).enter = .run e ∧ (∃ d, out = .ok d ∧ d.state = W) ∧
+        F ∈ Exec.rawFrameRoots R ∧ ActiveRel proxyAddr F h ∧ Spawns h c ∧
+        c.sevm.currentTarget = receiverAddr ∧
+        q ∈ Exec.rawFrameRoots c.exc ∧ G ∈ Exec.rawFrameRoots q.exc ∧ CPFrame proxyAddr code G ∧
+        G.sevm.data = reentryData ∧ (∃ d, G.exn = .error (.revert, d)) ∧
+        ¬ lockL.Enters proxyAddr G) :=
+  Iff.rfl
+
+-- Vyper V+: vplus_exit
+example (fork : Fork) (hfork : CoveredFork fork) :
+    ∃ W₀ W, runMessages fork initialWorld vplusSetup = some W₀ ∧ LedgerSound W₀ 2000 ∧
+      runMessages fork W₀ [.call removeMsg] = some W ∧ LedgerSound W 1800 ∧
+      (W.get receiverAddr).bal = 100 ∧ ReentryRefused fork W₀ W :=
+  vplus_exit fork hfork
+
+end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit
+
+namespace Blanc.Lift.Weth9
+open Jaune
+open Blanc
+
+-- WETH9 definition: balHolders
+example (keys : List Key) :
+    balHolders keys =
+      (keys.filterMap fun
+        | .bal a => some a
+        | .allow _ _ => none).toFinset :=
+  rfl
+
+-- WETH9 definition: EtherBacked
+example (keys : List Key) (s : Stor) (b : B256) :
+    EtherBacked keys s b ↔
+      ledgerSumOn (balHolders keys) (fun a => s.get (balSlot a)) ≤ b.toNat :=
+  Iff.rfl
+
+-- WETH9 definition: Call.credit
+example (a : Adr) (c : Call) :
+    Call.credit a c =
+      (match c with
+      | .deposit who v => if who = a then v.toNat else 0
+      | .transfer _ dst w => if dst = a then w.toNat else 0
+      | .transferFrom _ _ dst w => if dst = a then w.toNat else 0
+      | _ => 0) :=
+  rfl
+
+-- WETH9 definition: Call.debit
+example (a : Adr) (c : Call) :
+    Call.debit a c =
+      (match c with
+      | .withdraw who w => if who = a then w.toNat else 0
+      | .transfer who _ w => if who = a then w.toNat else 0
+      | .transferFrom _ src _ w => if src = a then w.toNat else 0
+      | _ => 0) :=
+  rfl
+
+-- WETH9 definition: inflow
+example (calls : List Call) (a : Adr) : inflow calls a = (calls.map (Call.credit a)).sum :=
+  rfl
+
+-- WETH9 definition: outflow
+example (calls : List Call) (a : Adr) : outflow calls a = (calls.map (Call.debit a)).sum :=
+  rfl
+
+-- WETH9 definition: NetFlow
+example (keys : List Key) (calls : List Call) (s : Stor) :
+    NetFlow keys calls s ↔
+      (∀ a ∈ balHolders keys,
+        ((s.get (balSlot a)).toNat : Int) ≡ (inflow calls a : Int) - outflow calls a [ZMOD 2 ^ 256]) :=
+  Iff.rfl
+
+end Blanc.Lift.Weth9
+
+namespace Blanc.Lift.Weth9
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- WETH9 definition: replayCalls
+example (invs : List Invocation) :
+    replayCalls invs = invs.filterMap fun inv => decodeCall inv.sevm :=
+  rfl
+
+-- WETH9 definition: midTouchedKeysIn
+example {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {future : BlockChain} (ca : Adr)
+    (trace : MidHistoryTraceIn F cfg start future) :
+    midTouchedKeysIn ca trace =
+      trace.rawFrames.flatMap fun root =>
+        if root.sevm.currentTarget = ca then frameKeys root.sevm else [] :=
+  rfl
+
+-- WETH9 definition: midCommittedInvocationsIn
+example {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {future : BlockChain} (ca : Adr)
+    (trace : MidHistoryTraceIn F cfg start future) :
+    midCommittedInvocationsIn ca trace = trace.settledFrames.flatMap (committedFrameInvocations ca) :=
+  rfl
+
+end Blanc.Lift.Weth9
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune
+
+-- Uniswap V2 Pair definition: pairReserve0
+example (s : Stor) : pairReserve0 s = (reserve0Read (s.get 8)).toNat :=
+  rfl
+
+-- Uniswap V2 Pair definition: pairReserve1
+example (s : Stor) : pairReserve1 s = (reserve1Read (s.get 8)).toNat :=
+  rfl
+
+-- Uniswap V2 Pair definition: lpHolders
+example (keys : List WriterKey) :
+    lpHolders keys =
+      (keys.filterMap fun
+        | .balance a => some a
+        | _ => none).toFinset :=
+  rfl
+
+-- Uniswap V2 Pair definition: LpLedgerBalanced
+example (keys : List WriterKey) (s : Stor) :
+    LpLedgerBalanced keys s ↔
+      ((s.get 0).toNat = ledgerSumOn (lpHolders keys) fun a => s.get (WriterKey.balance a).slot) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair definition: MinLiquidity
+example (s : Stor) :
+    MinLiquidity s ↔ ((s.get 0).toNat = 0 ∨ 1000 ≤ (s.get (WriterKey.balance 0).slot).toNat) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair definition: pairMidTouchedKeysIn
+example {F : Fork → Prop} {cfg : ChainConfig} {start : Benv} {future : BlockChain} (pair : Adr)
+    (trace : MidHistoryTraceIn F cfg start future) :
+    pairMidTouchedKeysIn pair trace =
+      trace.rawFrames.flatMap fun D => if D.sevm.currentTarget = pair then pairDerivKeys D else [] :=
+  rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Lift.UniswapV2Pair
+open Jaune Blanc Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
+
+-- Uniswap V2 Pair definition: supplyWord
+example (s : Stor) : supplyWord s = s.get 0 :=
+  rfl
+
+-- Uniswap V2 Pair definition: reserve0Word
+example (s : Stor) : reserve0Word s = reserve0Read (s.get 8) :=
+  rfl
+
+-- Uniswap V2 Pair definition: reserve1Word
+example (s : Stor) : reserve1Word s = reserve1Read (s.get 8) :=
+  rfl
+
+-- Uniswap V2 Pair definition: kLastWord
+example (s : Stor) : kLastWord s = s.get 11 :=
+  rfl
+
+-- Uniswap V2 Pair definition: feeMintWords
+example (s : Stor) (feeTo : Adr) :
+    feeMintWords s feeTo =
+      (if feeTo = 0 ∨ kLastWord s = 0 then 0
+      else if Nat.sqrt (kLastWord s).toNat <
+          Nat.sqrt ((reserve0Word s).toNat * (reserve1Word s).toNat) then
+        (supplyWord s).toNat * (Nat.sqrt ((reserve0Word s).toNat * (reserve1Word s).toNat) -
+            Nat.sqrt (kLastWord s).toNat) /
+          (Nat.sqrt ((reserve0Word s).toNat * (reserve1Word s).toNat) * 5 +
+            Nat.sqrt (kLastWord s).toNat)
+      else 0) :=
+  rfl
+
+-- Uniswap V2 Pair definition: OuterPairCall
+example {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future) (f : Exec.Frame) :
+    OuterPairCall pair trace f ↔
+      (f.sevm.currentTarget = pair ∧ f.sevm.isStatic = false ∧
+        ∃ before after : List Exec.Frame, trace.settledFrames = before ++ f :: after ∧
+          ∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair definition: preS
+example (pair : Adr) (f : Exec.Frame) : preS pair f = f.pre.state.getStor pair :=
+  rfl
+
+-- Uniswap V2 Pair definition: postS
+example (pair : Adr) (f : Exec.Frame) : postS pair f = f.post.state.getStor pair :=
+  rfl
+
+-- Uniswap V2 Pair definition: childAt
+example (f : Exec.Frame) (i : Nat) :
+    childAt f i =
+      ((Exec.descendantFramePaths [] 0 f.run).find? (fun c => c.path == [i])).map
+        Exec.LocatedFrame.frame :=
+  rfl
+
+-- Uniswap V2 Pair definition: feeToAnswer
+example (f : Exec.Frame) :
+    feeToAnswer f =
+      (match childAt f 2 with
+      | some c => (Bytes.toB256 (c.post.output.take 32)).toAdr
+      | none => 0) :=
+  rfl
+
+-- Uniswap V2 Pair definition: MintOrBurn
+example (f : Exec.Frame) :
+    MintOrBurn f ↔
+      (Blanc.Sevm.selector f.sevm = 0x6a627842 ∨ Blanc.Sevm.selector f.sevm = 0x89afcb44) :=
+  Iff.rfl
+
+-- Uniswap V2 Pair definition: callFeeWords
+example (pair : Adr) (f : Exec.Frame) :
+    callFeeWords pair f = if MintOrBurn f then feeMintWords (preS pair f) (feeToAnswer f) else 0 :=
+  rfl
+
+-- Uniswap V2 Pair definition: ShareValueKept
+example (pre post : Stor) (F : Nat) :
+    ShareValueKept pre post F ↔
+      (0 < (supplyWord pre).toNat →
+        (reserve0Word pre).toNat * (reserve1Word pre).toNat * (supplyWord post).toNat ^ 2 ≤
+          (reserve0Word post).toNat * (reserve1Word post).toNat *
+            ((supplyWord pre).toNat + F) ^ 2) :=
+  Iff.rfl
+
+end Blanc.Lift.UniswapV2Pair
+
+namespace Blanc.Composition.LiveUsdcWeth9B26213219
+open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.UniswapV2Pair
+  Blanc.Composition.UniswapV2PairUsdcWeth9
+
+-- Live WETH9 definition: WethDeployed
+example (w : Jaune.State) :
+    WethDeployed w ↔
+      ((w.getCode weth).toList = Weth9.code.toList ∧
+        w.getStor weth = Weth9.Creation.deployedStor) :=
+  Iff.rfl
+
+-- Live WETH9: weth9_deployment
+example {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
+    WethDeployed d.cut.afterBenv.state :=
+  weth9_deployment d
+
+-- Live WETH9: weth9_backed
+example {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
+    Weth9.EtherBacked (Weth9.midTouchedKeysIn weth d.trace) (checkpoint.state.getStor weth)
+      (checkpoint.state.bal weth) :=
+  weth9_backed d
+
+-- Live WETH9: weth9_net_flow
+example {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
+    Weth9.NetFlow (Weth9.midTouchedKeysIn weth d.trace)
+      (Weth9.replayCalls (Weth9.midCommittedInvocationsIn weth d.trace))
+      (checkpoint.state.getStor weth) :=
+  weth9_net_flow d
+
+-- Live Uniswap V2 Pair: pair_ledger
+example {checkpoint : BlockChain} (d : PairDeploymentTo checkpoint) :
+    LpLedgerBalanced (pairMidTouchedKeysIn pair d.trace) (checkpoint.state.getStor pair) :=
+  pair_ledger d
+
+-- Live Uniswap V2 Pair: pair_minimum_liquidity
+example {checkpoint : BlockChain} (d : PairDeploymentTo checkpoint)
+    (callers : ∀ D ∈ d.trace.rawFrames, D.sevm.currentTarget = pair → D.sevm.caller ≠ 0) :
+    MinLiquidity (checkpoint.state.getStor pair) :=
+  pair_minimum_liquidity d callers
+
+-- Live Uniswap V2 Pair definition: ReservesBacked
+example (w : Jaune.State) :
+    ReservesBacked w ↔
+      (pairReserve0 (w.getStor pair) ≤ Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pair)) ∧
+        pairReserve1 (w.getStor pair) ≤ ((w.getStor weth).get (Weth9.balSlot pair)).toNat) :=
+  Iff.rfl
+
+-- Live Uniswap V2 Pair: live_pair_reserves_backed
+example {checkpoint future : BlockChain}
+    (anchor : ObservedCheckpoint checkpoint)
+    (wd : WethDeploymentTo checkpoint) (pd : PairDeploymentTo checkpoint)
+    (link : DeploymentHistoryLink wd pd)
+    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots wd.keys (.bal pair))
+    (wethSenderExcluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
+    (avoid : ∀ root ∈ link.beforePairFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ pair)
+    (initialPair : wd.cut.afterBenv.state.getCode pair = ByteArray.empty)
+    (continuation : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    (usdcHistory : OriginalUsdcHistory (anchor.futureTrace continuation))
+    (pairFresh : WriterFreshKeys pd.keys
+      (pairHistoryTouchedKeys pair (anchor.futureTrace continuation)))
+    (usdcFresh : Usdc.KeysFresh (FiniteCheckpoint.rowKeys usdcRows)
+      (Usdc.historyTouchedKeys usdc (anchor.futureTrace continuation)))
+    (wethFresh : Weth9.KeysFresh wd.keys
+      (Weth9.historyTouchedKeys weth (anchor.futureTrace continuation)))
+    (governance : Usdc.UsdcGovernance usdc (anchor.futureTrace continuation)) :
+    ReservesBacked future.state :=
+  live_pair_reserves_backed anchor wd pd link holderFresh wethSenderExcluded avoid initialPair
+    continuation usdcHistory pairFresh usdcFresh wethFresh governance
+
+end Blanc.Composition.LiveUsdcWeth9B26213219
+
+namespace Blanc.Composition.LiveUsdcWeth9B26213219
+open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.UniswapV2Pair
+  Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
+  Blanc.Composition.UsdcToken Blanc.Composition.PairTwoToken Blanc.Composition.Weth9Token
+  Blanc.Composition.UniswapV2PairUsdcWeth9
+
+-- Live Uniswap V2 Pair definition: LiveShareValue
+example {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace mainnetChainConfig checkpoint future) :
+    LiveShareValue trace ↔
+      (∀ f, OuterPairCall pair trace f →
+        ShareValueKept (preS pair f) (postS pair f) (callFeeWords pair f)) :=
+  Iff.rfl
+
+-- Live Uniswap V2 Pair definition: FeeOffAlong
+example {checkpoint future : BlockChain}
+    (trace : ConfiguredHistoryTrace mainnetChainConfig checkpoint future) :
+    FeeOffAlong trace ↔ (∀ f, OuterPairCall pair trace f → feeToAnswer f = 0) :=
+  Iff.rfl
+
+-- Live Uniswap V2 Pair: live_pair_share_value
+example {checkpoint future : BlockChain}
+    (anchor : ObservedCheckpoint checkpoint)
+    (wd : WethDeploymentTo checkpoint) (pd : PairDeploymentTo checkpoint)
+    (link : DeploymentHistoryLink wd pd)
+    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots wd.keys (.bal pair))
+    (wethSenderExcluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
+    (avoid : ∀ root ∈ link.beforePairFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ pair)
+    (initialPair : wd.cut.afterBenv.state.getCode pair = ByteArray.empty)
+    (continuation : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    (usdcHistory : OriginalUsdcHistory (anchor.futureTrace continuation))
+    (pairFresh : WriterFreshKeys pd.keys
+      (pairHistoryTouchedKeys pair (anchor.futureTrace continuation)))
+    (usdcFresh : Usdc.KeysFresh (FiniteCheckpoint.rowKeys usdcRows)
+      (Usdc.historyTouchedKeys usdc (anchor.futureTrace continuation)))
+    (wethFresh : Weth9.KeysFresh wd.keys
+      (Weth9.historyTouchedKeys weth (anchor.futureTrace continuation)))
+    (governance : Usdc.UsdcGovernance usdc (anchor.futureTrace continuation)) :
+    LiveShareValue (anchor.futureTrace continuation) :=
+  live_pair_share_value anchor wd pd link holderFresh wethSenderExcluded avoid initialPair
+    continuation usdcHistory pairFresh usdcFresh wethFresh governance
+
+-- Live Uniswap V2 Pair: live_pair_share_value_feeOff
+example {checkpoint future : BlockChain}
+    (anchor : ObservedCheckpoint checkpoint)
+    (wd : WethDeploymentTo checkpoint) (pd : PairDeploymentTo checkpoint)
+    (link : DeploymentHistoryLink wd pd)
+    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots wd.keys (.bal pair))
+    (wethSenderExcluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
+    (avoid : ∀ root ∈ link.beforePairFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ pair)
+    (initialPair : wd.cut.afterBenv.state.getCode pair = ByteArray.empty)
+    (continuation : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future)
+    (usdcHistory : OriginalUsdcHistory (anchor.futureTrace continuation))
+    (pairFresh : WriterFreshKeys pd.keys
+      (pairHistoryTouchedKeys pair (anchor.futureTrace continuation)))
+    (usdcFresh : Usdc.KeysFresh (FiniteCheckpoint.rowKeys usdcRows)
+      (Usdc.historyTouchedKeys usdc (anchor.futureTrace continuation)))
+    (wethFresh : Weth9.KeysFresh wd.keys
+      (Weth9.historyTouchedKeys weth (anchor.futureTrace continuation)))
+    (governance : Usdc.UsdcGovernance usdc (anchor.futureTrace continuation))
+    (feeOff : FeeOffAlong (anchor.futureTrace continuation)) :
+    ∀ f, OuterPairCall pair (anchor.futureTrace continuation) f →
+      ShareValueKept (preS pair f) (postS pair f) 0 :=
+  live_pair_share_value_feeOff anchor wd pd link holderFresh wethSenderExcluded avoid initialPair
+    continuation usdcHistory pairFresh usdcFresh wethFresh governance feeOff
+
+end Blanc.Composition.LiveUsdcWeth9B26213219
