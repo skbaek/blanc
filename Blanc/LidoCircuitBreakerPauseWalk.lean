@@ -880,7 +880,6 @@ theorem pause_body_runCompiled
 
 /-! ## The `finishSetPauser` pause arm -/
 
-set_option maxRecDepth 7629 in
 /-- `finishSetPauser`'s pause arm: the sibling of
 `finishSetPauser_registerAfterSet_runCompiled` in which the continuation word
 is `1` rather than `0`, so `ISZERO` produces zero and the conditional takes its
@@ -918,53 +917,18 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
     ⟨sevm.currentTarget,
       [pauserSetEvent, target, previousPauser, newPauser], []⟩
   let eventBase := base.addLog eventLog
-  have htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size := by
-    have hoff : (targetWord * 32).toNat + 32 ≤ 640 := by decide
-    omega
-  have hpreviousCovered :
-      (previousPauserWord * 32).toNat + 32 ≤ M.size := by
-    have hoff : (previousPauserWord * 32).toNat + 32 ≤ 640 := by decide
-    omega
-  have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
-    have hoff : (newPauserWord * 32).toNat + 32 ≤ 640 := by decide
-    omega
   have hcontinuationCovered :
       (continuationWord * 32).toNat + 32 ≤ M.size := by
     have hoff : (continuationWord * 32).toNat + 32 ≤ 640 := by decide
     omega
-  have htargetMemory :
-      (M.read (targetWord * 32).toNat 32).2 = M := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le halign htargetCovered)]
-  have hpreviousMemory :
-      (M.read (previousPauserWord * 32).toNat 32).2 = M := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hpreviousCovered)]
-  have hnewMemory :
-      (M.read (newPauserWord * 32).toNat 32).2 = M := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
   have hcontinuationMemory :
       (M.read (continuationWord * 32).toNat 32).2 = M := by
     rw [Mem.read_snd_eq_self
       (memExtSize_of_le halign hcontinuationCovered)]
-  have htargetValue :
-      (M.read (targetWord * 32).toNat 32).1.toB256 = target := by
-    rw [Mem.Reads.read hreads]
-    exact htarget
-  have hpreviousValue :
-      (M.read (previousPauserWord * 32).toNat 32).1.toB256 =
-        previousPauser := by
-    rw [Mem.Reads.read hreads]
-    exact hprevious
-  have hnewValue :
-      (M.read (newPauserWord * 32).toNat 32).1.toB256 = newPauser := by
-    rw [Mem.Reads.read hreads]
-    exact hnew
   have hcontinuationValue :
       (M.read (continuationWord * 32).toNat 32).1.toB256 = 1 := by
     rw [Mem.Reads.read hreads]
     exact hcontinuation
-  have hreadZero : M.read 0 0 = ([], M) := by
-    simp only [Mem.read, Mem.extend, memExtSize, ↓reduceIte, Prod.mk.injEq, and_true]
-    rfl
   let fs := (runtime dp).main :: (runtime dp).aux
   have hlookup : fs[pauseAfterSetSlot]? = some pauseAfterSet := by
     simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
@@ -1011,23 +975,9 @@ theorem finishSetPauser_pauseAfterSet_runCompiled
       rw [hcontinuationValue, hcontinuationMemory]
       norm_num only
       exact hbranch
-  simp only [finishSetPauser]
-  func_run (10) [3, 3, 3, 1875]
-  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
-  all_goals try simp_rw [hnewMemory]
-  all_goals try simp_rw [hpreviousMemory]
-  all_goals try simp_rw [htargetMemory]
-  all_goals try {
-    rw [Devm.extCost_zero_of_le halign (by omega)]
-    norm_num only [gVerylow, gLog, gLogdata, gLogtopic] }
-  case h_cost =>
-    simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-    rw [Devm.extCost_zero_of_le halign (by omega)]
-    norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
-  case a =>
-    rw [hnewValue, hpreviousValue, htargetValue]
-    rw [show ((0 : B256) * 32).toNat = 0 by decide, hreadZero]
-    exact hcontinuationRun
-  all_goals exact fun _ => h_push0
+  rw [show G + 1934 = G + 34 + 1900 by omega]
+  exact finishSetPauser_runCompiled_of_continuation dp sevm base M img
+    target previousPauser newPauser stack (G + 34) post hstack hreads htarget
+    hprevious hnew hsize halign hstatic hcontinuationRun h_push0
 
 end Blanc.LidoCircuitBreaker
