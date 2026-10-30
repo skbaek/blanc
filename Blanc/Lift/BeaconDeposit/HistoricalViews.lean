@@ -14,31 +14,28 @@ variable {ca : Adr} {D C C1 P B : BlockChain} {initialHistory : List B256}
     (tail : ConfiguredHistoryTraceIn HistFork mainnetChainConfig C1 P)
     (modern : ConfiguredHistoryTrace mainnetChainConfig P B)
     (anchors : HistoricalSeamAnchors D C P first.block)
-    (historicalSystemNoFrame : ((dc.step first).append tail).InstalledNoFrame)
     (checkpointEmpty : D.state.getCode 2 = ByteArray.empty)
     (historicalNoFrame : ∀ root ∈ ((dc.step first).append tail).rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : ((dc.step first).append tail).RewardCreditsFunded)
     (modernSystemNoAuthority : ∀ p ∈ systemContracts, modern.NoAuthorityAt p.1)
-    (modernSystemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ modern.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
     (modernNoAuthority : modern.NoAuthorityAt 2)
     (modernNoFrame : ∀ root ∈ modern.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (installed : D.state.getCode ca = code)
     (invariant : SolInv (D.state.getStor ca) initialHistory)
 
-include anchors historicalSystemNoFrame checkpointEmpty
-  historicalNoFrame rewards modernSystemNoAuthority modernSystemNoFrame
-  modernNoAuthority modernNoFrame installed invariant
+include anchors checkpointEmpty
+  historicalNoFrame rewards modernSystemNoAuthority modernNoAuthority modernNoFrame installed
+  invariant
 
 /-- The actual seam producer, transported to the current frame at the same reached B. -/
 theorem historicalSeam_frame_solInv (sevm : Sevm) (base : Devm)
     (target : sevm.currentTarget = ca) (state : base.state = B.state) :
     SolInv (Devm.getStor base sevm.currentTarget) (initialHistory ++ committedNodesIn ca (((dc.step first).append tail).append modern.toHistForkIn)) := by
   have reached := historicalSeam_wholeSpan_solInv dc first tail modern anchors
-    historicalSystemNoFrame checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
-    modernSystemNoFrame modernNoAuthority modernNoFrame installed invariant
+    checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
+    modernNoAuthority modernNoFrame installed invariant
   rw [target]
   have storage : Devm.getStor base ca = B.state.getStor ca :=
     congrArg (fun world : State => world.getStor ca) state
@@ -62,8 +59,8 @@ theorem historicalSeam_count_warm (sevm : Sevm) (base : Devm) (G : Nat)
       post.state = base.state ∧ post.accessedStorageKeys = base.accessedStorageKeys ∧
       post.logs = base.logs := by
   have atFrame := historicalSeam_frame_solInv dc first tail modern anchors
-    historicalSystemNoFrame checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
-    modernSystemNoFrame modernNoAuthority modernNoFrame installed invariant sevm base target state
+    checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
+    modernNoAuthority modernNoFrame installed invariant sevm base target state
   obtain ⟨Mf, run⟩ := get_deposit_count_warm_exec_history sevm base _ _ G hcode hdataLength
     hdataBound hvalue hselector hfork hwarm rfl atFrame
   exact ⟨_, run, rfl, rfl, rfl, rfl, rfl⟩
@@ -87,8 +84,8 @@ theorem historicalSeam_count_cold (sevm : Sevm) (base : Devm) (G : Nat)
         (addAccessedStorageKey base sevm.currentTarget countSlot).accessedStorageKeys ∧
       post.logs = base.logs := by
   have atFrame := historicalSeam_frame_solInv dc first tail modern anchors
-    historicalSystemNoFrame checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
-    modernSystemNoFrame modernNoAuthority modernNoFrame installed invariant sevm base target state
+    checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
+    modernNoAuthority modernNoFrame installed invariant sevm base target state
   obtain ⟨countWord, countBound⟩ := solCount_eq_of_solInv atFrame
   have countRead : base.getStorVal sevm.currentTarget countSlot = Nat.toB256 (initialHistory ++ committedNodesIn ca (((dc.step first).append tail).append modern.toHistForkIn)).length :=
     countWord
@@ -118,8 +115,8 @@ theorem historicalSeam_root_view (sevm : Sevm) (base : Devm) (G : Nat)
       post.output = (BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodesIn ca (((dc.step first).append tail).append modern.toHistForkIn))).toBytes ∧
       (∀ a, Devm.getStor post a = Devm.getStor base a) ∧ post.logs = base.logs := by
   have atFrame := historicalSeam_frame_solInv dc first tail modern anchors
-    historicalSystemNoFrame checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
-    modernSystemNoFrame modernNoAuthority modernNoFrame installed invariant sevm base target state
+    checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
+    modernNoAuthority modernNoFrame installed invariant sevm base target state
   exact get_deposit_root_exec_mixedRoot sevm base _ _ G hcode hdataLength hdataBound hvalue
     hselector hfork rfl atFrame hnodeleg hwarm hpre hdepth hbound
 

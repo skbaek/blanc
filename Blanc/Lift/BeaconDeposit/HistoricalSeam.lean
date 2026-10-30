@@ -1,6 +1,7 @@
 import Blanc.Lift.BeaconDeposit.HistBeaconEnv
 import Blanc.Lift.BeaconDeposit.BeaconEnv
 import Blanc.ExecutionHistoryInSystemOpenings
+import Blanc.ExecutionHistoryInCreateAvoid
 
 /-! Exact historical/modern Beacon seams. The generic join is independent of
 concrete anchor identities, so an empty historical prefix recovers the modern
@@ -25,6 +26,24 @@ theorem committedNodesIn_historicalModern {ca : Adr} {cfg : ChainConfig}
       committedNodesIn ca historical ++ committedNodes ca modern := by
   rw [committedNodesIn_append, committedNodesIn_toHistForkIn]
 
+/-- `configuredHistory_solInv_sys` with its system-frame exclusion derived: no frame can
+CREATE at an installed system contract, because the present code collides. -/
+theorem configuredHistory_solInv_sys_present {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initialHistory : List B256}
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (systemInstalled : SystemCodeInstalled checkpoint.state)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
+    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
+    (noAuthority : trace.NoAuthorityAt 2)
+    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ 2)
+    (installed : checkpoint.state.getCode ca = code)
+    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
+    SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace) :=
+  configuredHistory_solInv_sys trace systemInstalled systemNoAuthority
+    (trace.systemCreateAvoid systemInstalled systemNoAuthority).2 checkpointEmpty noAuthority
+    noFrame installed invariant
+
 section Join
 
 variable {ca : Adr} {cfg : ChainConfig} {D P B : BlockChain} {initialHistory : List B256}
@@ -33,24 +52,21 @@ variable {ca : Adr} {cfg : ChainConfig} {D P B : BlockChain} {initialHistory : L
     (openings : historical.SystemCodeAtOpenings)
     (pragueInstalled : SystemCodeInstalled P.state)
     (historicalSystemNoAuthority : ∀ p ∈ systemContracts, historical.PragueNoAuthorityAt p.1)
-    (historicalSystemNoFrame : historical.InstalledNoFrame)
     (checkpointEmpty : D.state.getCode 2 = ByteArray.empty)
     (historicalNoAuthority : historical.PragueNoAuthorityAt 2)
     (historicalNoFrame : ∀ root ∈ historical.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : historical.RewardCreditsFunded)
     (modernSystemNoAuthority : ∀ p ∈ systemContracts, modern.NoAuthorityAt p.1)
-    (modernSystemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ modern.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
     (modernNoAuthority : modern.NoAuthorityAt 2)
     (modernNoFrame : ∀ root ∈ modern.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (installed : D.state.getCode ca = code)
     (invariant : SolInv (D.state.getStor ca) initialHistory)
 
-include openings pragueInstalled historicalSystemNoAuthority historicalSystemNoFrame
-  checkpointEmpty historicalNoAuthority historicalNoFrame rewards modernSystemNoAuthority
-  modernSystemNoFrame modernNoAuthority modernNoFrame installed invariant
+include openings pragueInstalled historicalSystemNoAuthority checkpointEmpty historicalNoAuthority
+  historicalNoFrame rewards modernSystemNoAuthority
+  modernNoAuthority modernNoFrame installed invariant
 
 /-- The historical replay and unchanged modern replay join at their actual shared state. -/
 theorem historicalModern_solInv :
@@ -59,16 +75,16 @@ theorem historicalModern_solInv :
   have initial : beaconSpec.StateInv ca D.state :=
     ⟨by rw [installed]; rfl, trivial, ⟨initialHistory, invariant⟩⟩
   obtain ⟨-, atPrague, pragueEmpty⟩ := configuredHistoryIn_environment historical openings
-    historicalSystemNoAuthority historicalSystemNoFrame checkpointEmpty historicalNoAuthority
+    historicalSystemNoAuthority checkpointEmpty historicalNoAuthority
     historicalNoFrame rewards initial
   have pragueCode := ContractSpecSem.StateInv.getCode_eq_of_image (C := code) rfl atPrague
   have left : DepositReplay (D.state.getStor ca) (committedNodesIn ca historical)
       (P.state.getStor ca) := fun history inv =>
-    configuredHistoryIn_solInv historical openings historicalSystemNoAuthority historicalSystemNoFrame
-      checkpointEmpty historicalNoAuthority historicalNoFrame rewards installed inv
+    configuredHistoryIn_solInv historical openings historicalSystemNoAuthority checkpointEmpty
+      historicalNoAuthority historicalNoFrame rewards installed inv
   have right : DepositReplay (P.state.getStor ca) (committedNodes ca modern)
       (B.state.getStor ca) := fun history inv =>
-    configuredHistory_solInv_sys modern pragueInstalled modernSystemNoAuthority modernSystemNoFrame
+    configuredHistory_solInv_sys_present modern pragueInstalled modernSystemNoAuthority
       pragueEmpty modernNoAuthority modernNoFrame pragueCode inv
   exact DepositReplay.append left right initialHistory invariant
 
@@ -78,8 +94,8 @@ theorem historicalModern_wholeSpan_solInv :
       (initialHistory ++ committedNodesIn ca (historical.append modern.toHistForkIn)) := by
   rw [committedNodesIn_historicalModern]
   exact historicalModern_solInv historical modern openings pragueInstalled
-    historicalSystemNoAuthority historicalSystemNoFrame checkpointEmpty historicalNoAuthority
-    historicalNoFrame rewards modernSystemNoAuthority modernSystemNoFrame modernNoAuthority
+    historicalSystemNoAuthority checkpointEmpty historicalNoAuthority
+    historicalNoFrame rewards modernSystemNoAuthority modernNoAuthority
     modernNoFrame installed invariant
 
 end Join
@@ -201,21 +217,17 @@ theorem HistoricalSeamAnchors.historicalPragueNoAuthorityAt
   decide
 
 /-- The actual pre-Cancun prefix and Cancun step/tail obtain their opening code
-from the C anchor, with no system installation at D and no per-block input. The
-frame exclusion is required only for contracts installed at each block's fork, so
-the system contracts' own creations inside the span are not excluded. -/
+from the C anchor, with no system installation at D and no per-block input. No frame
+exclusion is needed: the present beacon-roots code makes CREATE at it collide. -/
 theorem HistoricalSeamAnchors.historicalOpenings
     {D C C1 P : BlockChain}
     (dc : ConfiguredHistoryTraceIn HistFork mainnetChainConfig D C)
     (first : ConfiguredBlockTraceIn HistFork mainnetChainConfig C C1)
     (tail : ConfiguredHistoryTraceIn HistFork mainnetChainConfig C1 P)
-    (anchors : HistoricalSeamAnchors D C P first.block)
-    (avoid : ((dc.step first).append tail).InstalledNoFrame) :
+    (anchors : HistoricalSeamAnchors D C P first.block) :
     ((dc.step first).append tail).SystemCodeAtOpenings := by
   obtain ⟨dcForks, firstFork, tailForks⟩ := anchors.historicalForks dc first tail
   have dcOpen := dc.systemCodeAtOpenings_of_preCancun dcForks
-  have parts := (ConfiguredHistoryTraceIn.InstalledNoFrame_append _ _).mp avoid
-  have avoidFirst := first.beaconNoFrame_of_cancun firstFork parts.1.2
   have firstOpening : first.SystemCodeAtOpening := by
     intro q member
     rw [HistFork.installedAt_beacon_of_cancun first.forkIn firstFork] at member
@@ -223,11 +235,16 @@ theorem HistoricalSeamAnchors.historicalOpenings
     subst q
     exact anchors.beaconAtC
   have facts := systemContracts_facts _ beaconRoots_mem_systemContracts
+  have hC : CancunOnwards first.fork := by rw [firstFork]; decide
+  have hdis : first.fork.ruleSet.delegationEnabled = false ∨
+      ∀ p ∈ first.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths, ∀ authority,
+        recoverAuthority auth = .ok authority → authority ≠ beaconRootsAddress :=
+    Or.inl (first.forkIn.delegationDisabled_of_prePrague (by rw [firstFork]; decide))
+  have avoidFirst := first.createAvoid_of_cancunOnwards BodyStageCapabilities.historical
+    first.forkIn hC hdis anchors.beaconAtC facts.2.2 facts.2.1
   have c1Code := first.codeAt_keep_of_cancunOnwards BodyStageCapabilities.historical
-    first.forkIn (by rw [firstFork]; decide) (Or.inl (by rw [firstFork]; rfl))
-    avoidFirst anchors.beaconAtC facts.2.2 facts.2.1
-  have tailOpen := (tail.systemCodeAtOpenings_of_cancun tailForks
-    (tail.beaconNoFrame_of_cancun tailForks parts.2) c1Code).1
+    first.forkIn hC hdis avoidFirst anchors.beaconAtC facts.2.2 facts.2.1
+  have tailOpen := (tail.systemCodeAtOpenings_of_cancun_present tailForks c1Code).1
   exact (ConfiguredHistoryTraceIn.SystemCodeAtOpenings_append _ _).mpr
     ⟨⟨dcOpen, firstOpening⟩, tailOpen⟩
 
@@ -239,22 +256,19 @@ variable {ca : Adr} {D C C1 P B : BlockChain} {initialHistory : List B256}
     (tail : ConfiguredHistoryTraceIn HistFork mainnetChainConfig C1 P)
     (modern : ConfiguredHistoryTrace mainnetChainConfig P B)
     (anchors : HistoricalSeamAnchors D C P first.block)
-    (historicalSystemNoFrame : ((dc.step first).append tail).InstalledNoFrame)
     (checkpointEmpty : D.state.getCode 2 = ByteArray.empty)
     (historicalNoFrame : ∀ root ∈ ((dc.step first).append tail).rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : ((dc.step first).append tail).RewardCreditsFunded)
     (modernSystemNoAuthority : ∀ p ∈ systemContracts, modern.NoAuthorityAt p.1)
-    (modernSystemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ modern.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
     (modernNoAuthority : modern.NoAuthorityAt 2)
     (modernNoFrame : ∀ root ∈ modern.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (installed : D.state.getCode ca = code)
     (invariant : SolInv (D.state.getStor ca) initialHistory)
 
-include anchors historicalSystemNoFrame checkpointEmpty historicalNoFrame rewards
-  modernSystemNoAuthority modernSystemNoFrame modernNoAuthority modernNoFrame installed invariant
+include anchors checkpointEmpty historicalNoFrame rewards
+  modernSystemNoAuthority modernNoAuthority modernNoFrame installed invariant
 
 /-- D→C, the actual adopted first Cancun step, the remaining Cancun tail to P,
 and unchanged modern P→B compose with no system-code premise at D and no
@@ -264,20 +278,19 @@ theorem historicalSeam_solInv :
     SolInv (B.state.getStor ca) (initialHistory ++
       (committedNodesIn ca ((dc.step first).append tail) ++ committedNodes ca modern)) :=
   historicalModern_solInv ((dc.step first).append tail) modern
-    (anchors.historicalOpenings dc first tail historicalSystemNoFrame)
+    (anchors.historicalOpenings dc first tail)
     anchors.pragueInstalled (fun p _ => anchors.historicalPragueNoAuthorityAt dc first tail p.1)
-    historicalSystemNoFrame checkpointEmpty (anchors.historicalPragueNoAuthorityAt dc first tail 2)
-    historicalNoFrame rewards modernSystemNoAuthority modernSystemNoFrame
-    modernNoAuthority modernNoFrame installed invariant
+    checkpointEmpty (anchors.historicalPragueNoAuthorityAt dc first tail 2)
+    historicalNoFrame rewards modernSystemNoAuthority modernNoAuthority modernNoFrame installed
+  invariant
 
 /-- The final invariant observes exactly one actual chronological D→B retained trace. -/
 theorem historicalSeam_wholeSpan_solInv :
     SolInv (B.state.getStor ca) (initialHistory ++ committedNodesIn ca
       (((dc.step first).append tail).append modern.toHistForkIn)) := by
   rw [committedNodesIn_historicalModern]
-  exact historicalSeam_solInv dc first tail modern anchors historicalSystemNoFrame
-    checkpointEmpty historicalNoFrame rewards
-    modernSystemNoAuthority modernSystemNoFrame modernNoAuthority modernNoFrame installed invariant
+  exact historicalSeam_solInv dc first tail modern anchors checkpointEmpty historicalNoFrame rewards
+    modernSystemNoAuthority modernNoAuthority modernNoFrame installed invariant
 
 /-- The count is the length of precisely the ordered historical-plus-modern extraction. -/
 theorem historicalSeam_count :
@@ -287,8 +300,8 @@ theorem historicalSeam_count :
       (initialHistory ++ (committedNodesIn ca ((dc.step first).append tail) ++
         committedNodes ca modern)).length < 2 ^ 32 :=
   solCount_eq_of_solInv (historicalSeam_solInv dc first tail modern anchors
-    historicalSystemNoFrame checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
-    modernSystemNoFrame modernNoAuthority modernNoFrame installed invariant)
+    checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
+    modernNoAuthority modernNoFrame installed invariant)
 
 /-- The mixed root belongs to that same exact ordered extraction. -/
 theorem historicalSeam_root :
@@ -296,8 +309,8 @@ theorem historicalSeam_root :
       BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++
         (committedNodesIn ca ((dc.step first).append tail) ++ committedNodes ca modern)) :=
   BeaconDeposit.root_correct _ _ _ (historicalSeam_solInv dc first tail modern anchors
-    historicalSystemNoFrame checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
-    modernSystemNoFrame modernNoAuthority modernNoFrame installed invariant).2
+    checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
+    modernNoAuthority modernNoFrame installed invariant).2
 
 end Anchored
 

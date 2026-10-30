@@ -136,16 +136,6 @@ theorem ConfiguredHistoryTraceIn.ForksSatisfy_append
   | step prior block ih =>
       simp only [ConfiguredHistoryTraceIn.append, ForksSatisfy, ih, and_assoc]
 
-/-- Installed-target frame exclusions split across the same retained append. -/
-theorem ConfiguredHistoryTraceIn.InstalledNoFrame_append
-    {F : Fork → Prop} {cfg : ChainConfig} {a b c : BlockChain}
-    (left : ConfiguredHistoryTraceIn F cfg a b) (right : ConfiguredHistoryTraceIn F cfg b c) :
-    (left.append right).InstalledNoFrame ↔ left.InstalledNoFrame ∧ right.InstalledNoFrame := by
-  induction right with
-  | refl => simp only [ConfiguredHistoryTraceIn.append, InstalledNoFrame, and_true]
-  | step prior block ih =>
-      simp only [ConfiguredHistoryTraceIn.append, InstalledNoFrame, ih, and_assoc]
-
 /-- A pre-Prague spine needs no authority exclusion: the gated form holds outright. -/
 theorem ConfiguredHistoryTraceIn.pragueNoAuthorityAt_of_prePrague
     {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
@@ -154,34 +144,6 @@ theorem ConfiguredHistoryTraceIn.pragueNoAuthorityAt_of_prePrague
   induction trace with
   | refl => trivial
   | step prior block ih => exact ⟨ih forks.1, fun notPre => (notPre forks.2).elim⟩
-
-/-- On a Cancun block the installed-target exclusion is exactly the beacon-roots one. -/
-theorem ConfiguredBlockTraceIn.beaconNoFrame_of_cancun
-    {cfg : ChainConfig} {pre post : BlockChain}
-    (block : ConfiguredBlockTraceIn HistFork cfg pre post) (fork : block.fork = .cancun)
-    (avoid : block.InstalledNoFrame) :
-    ∀ root ∈ block.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ beaconRootsAddress :=
-  avoid (beaconRootsAddress, beaconRootsCode) (by
-    rw [HistFork.installedAt_beacon_of_cancun block.forkIn fork]
-    exact List.mem_cons_self)
-
-/-- Over a Cancun spine the installed-target exclusion is exactly the beacon-roots one. -/
-theorem ConfiguredHistoryTraceIn.beaconNoFrame_of_cancun
-    {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
-    (forks : trace.ForksSatisfy (fun f => f = .cancun)) (avoid : trace.InstalledNoFrame) :
-    ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ beaconRootsAddress := by
-  induction trace with
-  | refl => intro root member; simp only [ConfiguredHistoryTraceIn.rawFrames,
-      List.not_mem_nil] at member
-  | step prior block ih =>
-      intro root member
-      simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append] at member
-      rcases member with member | member
-      · exact ih forks.1 avoid.1 root member
-      · exact block.beaconNoFrame_of_cancun forks.2 avoid.2 root member
 
 /-- Actual authorization scopes split across the same retained append. -/
 theorem ConfiguredHistoryTraceIn.NoAuthorityAt_append

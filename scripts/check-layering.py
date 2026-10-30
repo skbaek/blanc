@@ -452,6 +452,7 @@ SHARED += [
     "ExecutionHistoryInCallerExclusion",
     "ExecutionSenderQueryCuts",
     "ExecutionHistoryInSystemFrames",
+    "ExecutionHistoryInCreateAvoid",
 ]
 
 CONTRACTS = {
