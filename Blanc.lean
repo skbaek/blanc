@@ -505,6 +505,7 @@ import Blanc.DripStackSafetyCertificate
 import Blanc.Lift.Weth9.Solvency
 import Blanc.Lift.Weth9.TerminalSafety
 import Blanc.Lift.Weth9.FootHistory
+import Blanc.Lift.Weth9.Holders
 import Blanc.Lift.Weth9.DeployHistory
 import Blanc.Lift.Weth9.FootPrefix
 import Blanc.Lift.Weth9.Model
@@ -1191,6 +1192,8 @@ import Blanc.Lift.UniswapV2Pair.PropertiesOracleLaw
 import Blanc.Lift.UniswapV2Pair.PropertiesMintBurn
 import Blanc.Lift.UniswapV2Pair.PropertiesMinLiquidity
 import Blanc.Lift.UniswapV2Pair.PairHistoryMinLiquidity
+import Blanc.Lift.UniswapV2Pair.StorageObservers
+import Blanc.Lift.UniswapV2Pair.RawCallers
 import Blanc.Lift.UniswapV2Pair.Creation.DeployInit
 
 -- Exact final second-host return and previously omitted control owners.
@@ -2002,6 +2005,7 @@ import Blanc.Lift.Usdc.HistoryAnchorCSender
 import Blanc.Lift.Usdc.HistoryAnchorCCode
 import Blanc.Composition.LiveUsdcWeth9B26213219ApprovalObservation
 import Blanc.Composition.LiveUsdcWeth9B26213219Joint
+import Blanc.Composition.LiveUsdcWeth9B26213219Headlines
 import Blanc.Composition.LiveUsdcWeth9B26213219Liquidity
 import Blanc.Composition.LiveUsdcWeth9B26213219ShareValue
 import Blanc.Composition.LiveUsdcWeth9B26213219Swap
