@@ -1267,8 +1267,9 @@ private theorem weth10CodeGetD_to_main
         (weth10Main dp) (i - 1) 0 := by
   rw [weth10Code_eq_emitByZeroShape]
   unfold weth10RuntimeLocations weth10ZeroShapes
-  simp only [Prog.emitByShape, Prog.compileShape, weth10,
-    Table.emitByShape, Func.CompileShape.locations]
+  simp only [Prog.emitByShape, Prog.compileShape, weth10]
+  rw [Func.CompileShape.locations]
+  simp only [Table.emitByShape]
   rw [List.getD_append_of_lt]
   · rw [List.getD_cons_of_pos _ _ i 0 (by omega)]
     rw [Func.getD_emitByShape]
@@ -2306,8 +2307,9 @@ private theorem weth10Code_slice_0_372
     weth10RuntimeTemplate_eq_code.trans (weth10Code_eq_emitByShape ⟨0, 0⟩)
   rw [hdp, hzero]
   rw [weth10_compileShape_eq_zero ⟨chainId, domainSeparator⟩]
-  simp only [Prog.emitByShape, Prog.compileShape, Table.emitByShape,
-    Func.CompileShape.locations, weth10]
+  simp only [Prog.emitByShape, Prog.compileShape, weth10]
+  rw [Func.CompileShape.locations]
+  simp only [Table.emitByShape]
   rw [List.take_append_of_le_length (by
     simp only [List.length_cons, Func.length_emitByShape]
     have hmain := weth10ZeroMain_size_lower
