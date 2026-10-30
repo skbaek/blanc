@@ -1380,18 +1380,11 @@ theorem pauseWorld_dataWord_target (stor : Stor) (gas : Nat) :
   rw [Sevm.argWord] at h
   rwa [show 32 * (0 : B256) + 4 = 4 from by decide] at h
 
-set_option maxRecDepth 1001 in
-/-- The dispatcher's selector at this world's calldata.  Stated at the
-concrete target because `Sevm.dataWord` reads a whole word: the selector
-occupies the first four bytes and the argument the next twenty-eight of the
-same word, and separating them takes an evaluation rather than a lemma. -/
+/-- The dispatcher's selector at this world's calldata. -/
 theorem pauseWorld_selector (stor : Stor) (gas : Nat) :
     Sevm.selector (pauseWorldSevm stor gas) =
-      selector "pause" [.address] := by
-  show Sevm.dataWord (pauseWorldSevm stor gas) 0 >>> 224 = _
-  unfold Sevm.dataWord
-  rw [pauseWorld_data]
-  decide
+      selector "pause" [.address] :=
+  pauseCalldata_selector_of_data (pauseWorld_data stor gas)
 
 /-! ### Storage at message entry -/
 

@@ -256,15 +256,107 @@ theorem temporalSstorePost_logs
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).logs = base.logs := rfl
 
-set_option maxRecDepth 7629 in
-/-- Generic `finishSetPauser` walk, chronology-independent: reads the three
-scratch words (`target`, `previousPauser`, `newPauser` — unconstrained), emits
-the `LOG3` whose topics are exactly those words, reads the continuation word
-(pinned to `0`, selecting the `registerAfterSet` arm; the pause arm is out of
-scope), and takes the `registerAfterSet` continuation from the already-logged
-state as a hypothesis.  Glue cost 1935 gas: 1900 for the loads and the `LOG3`,
-9 for the continuation load and `iszero`, 14 for the branch pop, 12 for the
-call burn. -/
+/-- The chronology-independent prefix of `finishSetPauser`: reads the three
+scratch words (`target`, `previousPauser`, `newPauser` — unconstrained) and
+emits the `LOG3` whose topics are exactly those words, then takes the run of
+the continuation load and branch from the already-logged state as a
+hypothesis.  Glue cost 1900 gas for the loads and the `LOG3`.  Both arms
+(`finishSetPauser_registerAfterSet_runCompiled` here and
+`finishSetPauser_pauseAfterSet_runCompiled` in
+`Blanc/LidoCircuitBreakerPauseWalk.lean`) instantiate it. -/
+theorem finishSetPauser_runCompiled_of_continuation
+    (dp : DeployParams) (sevm : Sevm) (base : Devm)
+    (M : Mem) (img : Bytes)
+    (target previousPauser newPauser : B256)
+    (stack : List B256) (G : Nat) (post : Devm)
+    (hstack : stack.length ≤ 1)
+    (hreads : Mem.Reads M img)
+    (htarget : Bytes.toB256
+      (img.sliceD (targetWord * 32).toNat 32 0) = target)
+    (hprevious : Bytes.toB256
+      (img.sliceD (previousPauserWord * 32).toNat 32 0) = previousPauser)
+    (hnew : Bytes.toB256
+      (img.sliceD (newPauserWord * 32).toNat 32 0) = newPauser)
+    (hsize : 640 ≤ M.size) (halign : M.size % 32 = 0)
+    (hstatic : sevm.isStatic = false)
+    (hcontinuation : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      ((base.addLog ⟨sevm.currentTarget,
+          [pauserSetEvent, target, previousPauser, newPauser], []⟩).setMach
+        ⟨stack, M, G, (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, previousPauser, newPauser], []⟩).stateGas⟩)
+      (loadWord continuationWord +++ Ninst.iszero :::
+        ((.call registerAfterSetSlot) <?> (.call pauseAfterSetSlot))) post)
+    (h_push0 : sevm.benvStat.rules.op.push0 = true) :
+    Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
+      (base.setMach ⟨stack, M, G + 1900, base.stateGas⟩) finishSetPauser post := by
+  let eventLog : Log :=
+    ⟨sevm.currentTarget,
+      [pauserSetEvent, target, previousPauser, newPauser], []⟩
+  let eventBase := base.addLog eventLog
+  have htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (targetWord * 32).toNat + 32 ≤ 640 := by decide
+    omega
+  have hpreviousCovered :
+      (previousPauserWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (previousPauserWord * 32).toNat + 32 ≤ 640 := by decide
+    omega
+  have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
+    have hoff : (newPauserWord * 32).toNat + 32 ≤ 640 := by decide
+    omega
+  have htargetMemory :
+      (M.read (targetWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign htargetCovered)]
+  have hpreviousMemory :
+      (M.read (previousPauserWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hpreviousCovered)]
+  have hnewMemory :
+      (M.read (newPauserWord * 32).toNat 32).2 = M := by
+    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
+  have htargetValue :
+      (M.read (targetWord * 32).toNat 32).1.toB256 = target := by
+    rw [Mem.Reads.read hreads]
+    exact htarget
+  have hpreviousValue :
+      (M.read (previousPauserWord * 32).toNat 32).1.toB256 =
+        previousPauser := by
+    rw [Mem.Reads.read hreads]
+    exact hprevious
+  have hnewValue :
+      (M.read (newPauserWord * 32).toNat 32).1.toB256 = newPauser := by
+    rw [Mem.Reads.read hreads]
+    exact hnew
+  have hreadZero : M.read 0 0 = ([], M) := by
+    simp only [Mem.read, Mem.extend, memExtSize, ↓reduceIte, Prod.mk.injEq, and_true]
+    rfl
+  simp only [finishSetPauser]
+  -- The event topic is a keccak: pay for it once in the kernel, then walk an
+  -- opaque word so the elaborator never evaluates the hash.
+  have heventCost : pushCost pauserSetEvent.toBytes.sig = 3 :=
+    pushCost_of_ne_zero (by decide +kernel)
+  generalize pauserSetEvent = event at heventCost hcontinuation ⊢
+  func_run (10) [3, 3, 3, 1875]
+  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
+  all_goals try simp_rw [hnewMemory]
+  all_goals try simp_rw [hpreviousMemory]
+  all_goals try simp_rw [htargetMemory]
+  all_goals try {
+    erw [Devm.extCost_zero_of_le halign (by omega)]
+    norm_num only [gVerylow, gLog, gLogdata, gLogtopic] }
+  case h_cost =>
+    simp only [show ((0 : B256) * 32).toNat = 0 by decide]
+    erw [Devm.extCost_zero_of_le halign (by omega)]
+    norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
+  case a =>
+    rw [hnewValue, hpreviousValue, htargetValue]
+    rw [show ((0 : B256) * 32).toNat = 0 by decide, hreadZero]
+    rw [addLog_setMach, Devm.setMach_setMach, Nat.add_sub_cancel]
+    exact hcontinuation
+  all_goals exact fun _ => h_push0
+
+/-- `finishSetPauser`'s register arm: the continuation word is pinned to `0`,
+selecting `registerAfterSet`, taken from the already-logged state as a
+hypothesis; the prefix is `finishSetPauser_runCompiled_of_continuation`.
+Glue cost 1935 gas: 1900 for the loads and the `LOG3`, 9 for the continuation
+load and `iszero`, 14 for the branch pop, 12 for the call burn. -/
 theorem finishSetPauser_registerAfterSet_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (M : Mem) (img : Bytes)
@@ -293,53 +385,18 @@ theorem finishSetPauser_registerAfterSet_runCompiled
     ⟨sevm.currentTarget,
       [pauserSetEvent, target, previousPauser, newPauser], []⟩
   let eventBase := base.addLog eventLog
-  have htargetCovered : (targetWord * 32).toNat + 32 ≤ M.size := by
-    have hoff : (targetWord * 32).toNat + 32 ≤ 640 := by decide
-    omega
-  have hpreviousCovered :
-      (previousPauserWord * 32).toNat + 32 ≤ M.size := by
-    have hoff : (previousPauserWord * 32).toNat + 32 ≤ 640 := by decide
-    omega
-  have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
-    have hoff : (newPauserWord * 32).toNat + 32 ≤ 640 := by decide
-    omega
   have hcontinuationCovered :
       (continuationWord * 32).toNat + 32 ≤ M.size := by
     have hoff : (continuationWord * 32).toNat + 32 ≤ 640 := by decide
     omega
-  have htargetMemory :
-      (M.read (targetWord * 32).toNat 32).2 = M := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le halign htargetCovered)]
-  have hpreviousMemory :
-      (M.read (previousPauserWord * 32).toNat 32).2 = M := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hpreviousCovered)]
-  have hnewMemory :
-      (M.read (newPauserWord * 32).toNat 32).2 = M := by
-    rw [Mem.read_snd_eq_self (memExtSize_of_le halign hnewCovered)]
   have hcontinuationMemory :
       (M.read (continuationWord * 32).toNat 32).2 = M := by
     rw [Mem.read_snd_eq_self
       (memExtSize_of_le halign hcontinuationCovered)]
-  have htargetValue :
-      (M.read (targetWord * 32).toNat 32).1.toB256 = target := by
-    rw [Mem.Reads.read hreads]
-    exact htarget
-  have hpreviousValue :
-      (M.read (previousPauserWord * 32).toNat 32).1.toB256 =
-        previousPauser := by
-    rw [Mem.Reads.read hreads]
-    exact hprevious
-  have hnewValue :
-      (M.read (newPauserWord * 32).toNat 32).1.toB256 = newPauser := by
-    rw [Mem.Reads.read hreads]
-    exact hnew
   have hcontinuationValue :
       (M.read (continuationWord * 32).toNat 32).1.toB256 = 0 := by
     rw [Mem.Reads.read hreads]
     exact hcontinuation
-  have hreadZero : M.read 0 0 = ([], M) := by
-    simp only [Mem.read, Mem.extend, memExtSize, ↓reduceIte, Prod.mk.injEq, and_true]
-    rfl
   let fs := (runtime dp).main :: (runtime dp).aux
   have hlookup : fs[registerAfterSetSlot]? = some registerAfterSet := by
     simp only [runtime, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, aux,
@@ -386,24 +443,10 @@ theorem finishSetPauser_registerAfterSet_runCompiled
       rw [hcontinuationValue, hcontinuationMemory]
       norm_num only
       exact hbranch
-  simp only [finishSetPauser]
-  func_run (10) [3, 3, 3, 1875]
-  all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
-  all_goals try simp_rw [hnewMemory]
-  all_goals try simp_rw [hpreviousMemory]
-  all_goals try simp_rw [htargetMemory]
-  all_goals try {
-    erw [Devm.extCost_zero_of_le halign (by omega)]
-    norm_num only [gVerylow, gLog, gLogdata, gLogtopic] }
-  case h_cost =>
-    simp only [show ((0 : B256) * 32).toNat = 0 by decide]
-    erw [Devm.extCost_zero_of_le halign (by omega)]
-    norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.coe_ofNat_eq_mod]
-  case a =>
-    rw [hnewValue, hpreviousValue, htargetValue]
-    rw [show ((0 : B256) * 32).toNat = 0 by decide, hreadZero]
-    exact hcontinuationRun
-  all_goals exact fun _ => h_push0
+  rw [show G + 1935 = G + 35 + 1900 by omega]
+  exact finishSetPauser_runCompiled_of_continuation dp sevm base M img
+    target previousPauser newPauser stack (G + 35) post hstack hreads htarget
+    hprevious hnew hsize halign hstatic hcontinuationRun h_push0
 
 /-- Generic zero arm of `afterOldPauser`: the new-pauser scratch word is `0`,
 so the walk branches to `removeTarget`, taken as a hypothesis.  Glue cost
@@ -2531,7 +2574,7 @@ theorem indexClearPost_getOrigStorVal
   unfold indexClearPost
   rw [temporalSstorePost_getOrigStorVal, lengthWritePost_getOrigStorVal]
 
-private theorem removeTarget_restoreTail_runCompiled
+theorem removeTarget_restoreTail_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
     (M : Mem) (img : Bytes)

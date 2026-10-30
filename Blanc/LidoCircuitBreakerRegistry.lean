@@ -5057,6 +5057,14 @@ def registerPauserCalldata (target newPauser : B256) : Bytes :=
 def pauseCalldata (target : B256) : Bytes :=
   abiSelectorBytes (selector "pause" [.address]) ++ target.toBytes
 
+/-- The dispatcher's selector at any `pause(address)` calldata, through the
+shared canonical-selector lemma: one kernel keccak for the canonicality
+premise, none for the target word. -/
+theorem pauseCalldata_selector_of_data {sevm : Sevm} {target : B256}
+    (hd : sevm.data = pauseCalldata target) :
+    Sevm.selector sevm = selector "pause" [.address] :=
+  selector_eq_of_data_eq_abiSelectorBytes_append (by decide +kernel) hd
+
 /-- Message-frame settlement restores every entry-state Registry witness on an
 error outcome, independently of where that error occurred in the raw frame. -/
 theorem RegistryWitness.of_ProcessMessage_error
@@ -16528,7 +16536,6 @@ private theorem directPauseControl_codeBytes :
     directPauseControlBaseMsg, initSevm, directPauseControlCode] using
     byteArray_ofList_toList (lidoCircuitBreakerCode officialParams)
 
-set_option maxRecDepth 1004 in
 private theorem directPauseControl_dataFacts :
     directPauseControlSevm.data.length = 36 ∧
     Sevm.dataWord directPauseControlSevm 4 = directPauseControlTarget ∧
@@ -16544,7 +16551,7 @@ private theorem directPauseControl_dataFacts :
     · rw [abiSelectorBytes_length]
       rfl
     · rfl
-  · decide
+  · exact pauseCalldata_selector_of_data rfl
 
 set_option maxRecDepth 3280 in
 private theorem directPauseControl_gas :
