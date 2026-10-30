@@ -13,8 +13,9 @@ they read.
 
 * the `SLOAD`/`SSTORE` charges `sloadCostH`/`sstoreCostH` and forward steps (`rx_sload_selH`,
   `rx_sstoreH`, ...) are in `HistAccessWalk.lean`; here, their pricing facts
-  (`sstoreCostH_congr`, `sloadCostH_muir_eq`, `sstoreCostH_muir_le`, `sloadCostH_le`,
-  `sstoreCostH_le`);
+  (`sstoreCostH_congr`, `sloadCostH_muir_eq`, `sstoreCostH_muir_le`, the exact Muir writes in
+  a created account `sstoreCostH_muir_fresh_set`/`sstoreCostH_muir_created_zero`,
+  `sloadCostH_le`, `sstoreCostH_le`);
 * `processMessage_ok_of_execH`, `liftCreate_postH`, `liftCreate_okH` — the lifted creation
   settles under `rules.stateGas = none` alone; under the EIP-161 sweep the settled machine is the
   constructor's with the target's touch recorded (`Devm.recordTouch`), which moves no state;
@@ -66,6 +67,36 @@ theorem sstoreCostH_muir_le {sevm : Sevm} (hmuir : sevm.benvStat.rules = muirGla
   unfold sstoreRegimeGasCost
   change (if _ then if _ then 0 + 20000 else 0 + 5000 else 0 + 800) ≤ 20000
   split_ifs <;> decide
+
+/-- Under Muir Glacier, a nonzero write to a slot of an account created in this transaction
+that currently holds zero (a fresh set) costs exactly 20,000. -/
+theorem sstoreCostH_muir_fresh_set {sevm : Sevm} (hmuir : sevm.benvStat.rules = muirGlacierRules)
+    {base : Devm} {key value : B256} (hcreated : sevm.currentTarget ∈ base.createdAccounts)
+    (hcur : base.getStorVal sevm.currentTarget key = 0) (hv : value ≠ 0) :
+    sstoreCostH sevm base key value = 20000 := by
+  have horig : base.getOrigStorVal sevm sevm.currentTarget key = 0 := by
+    unfold Devm.getOrigStorVal
+    rw [ite_eq_left hcreated]
+  unfold sstoreCostH storageAccessCostH
+  rw [hmuir, horig, hcur]
+  unfold sstoreRegimeGasCost
+  change (if _ then if _ then 0 + 20000 else 0 + 5000 else 0 + 800) = 20000
+  rw [ite_eq_left ⟨rfl, Ne.symm hv⟩, ite_eq_left rfl]
+
+/-- Under Muir Glacier, a zero write to a slot of an account created in this transaction costs
+exactly 800, whatever the slot currently holds. -/
+theorem sstoreCostH_muir_created_zero {sevm : Sevm}
+    (hmuir : sevm.benvStat.rules = muirGlacierRules) {base : Devm} {key : B256}
+    (hcreated : sevm.currentTarget ∈ base.createdAccounts) :
+    sstoreCostH sevm base key 0 = 800 := by
+  have horig : base.getOrigStorVal sevm sevm.currentTarget key = 0 := by
+    unfold Devm.getOrigStorVal
+    rw [ite_eq_left hcreated]
+  unfold sstoreCostH storageAccessCostH
+  rw [hmuir, horig]
+  unfold sstoreRegimeGasCost
+  change (if _ then if _ then 0 + 20000 else 0 + 5000 else 0 + 800) = 800
+  rw [ite_eq_right (fun h => h.2 (h.1.symm))]
 
 /-- Under a flat `SLOAD` price of at most 2100 (every historical schedule), one `SLOAD` costs at
 most 2100. -/

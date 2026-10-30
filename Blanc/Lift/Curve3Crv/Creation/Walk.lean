@@ -3,6 +3,7 @@ import Blanc.Lift.Vyper
 import Blanc.Lift.PackedSha
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.Deploy
+import Blanc.Lift.HistCreate
 
 /-!
 # The 3Crv LP token constructor, walked
@@ -23,7 +24,11 @@ The constructor
   `Transfer(0, caller, 0)`, and returns the runtime through the deploy tail after the runtime
   (entry 5).
 
-Gas is exact; the start gas is only bounded below.
+Gas is exact; the start gas is only bounded below. The walk is stated once, for every frame
+whose rules have no state-gas dimension (`CtorFrame`): the `SSTORE` successors and charges are
+the actual-rule `afterSstoreH`/`sstoreCostH` (`Blanc/Lift/HistAccessWalk.lean`), which are the
+modern `afterSstore`/`sstoreCost` under a covered fork and Muir Glacier's flat EIP-2200 pricing
+under that fork (`Creation/HistoricalWalk.lean`).
 -/
 
 namespace Blanc.Lift.Curve3Crv.Creation
@@ -35,7 +40,7 @@ abbrev prog : List SFunc := Cert.prog cert
 
 /-- The frame facts the walk needs of the creation frame. -/
 structure CtorFrame (sevm : Sevm) : Prop where
-  fork : CoveredFork sevm.benvStat.fork
+  sg : sevm.benvStat.rules.stateGas = none
   static : sevm.isStatic = false
 
 /-! ## The loops' shapes -/
@@ -75,12 +80,12 @@ def loopWord (M : Mem) (sl : UInt8) (src : Nat) (i : Nat) : B256 :=
 /-- The world after `n` loop passes. -/
 def loopWorld (sevm : Sevm) (b : Devm) (M : Mem) (sl : UInt8) (src : Nat) : Nat → Devm
   | 0 => b
-  | i + 1 => afterSstore sevm (loopWorld sevm b M sl src i) (strBase sl + Nat.toB256 i)
+  | i + 1 => afterSstoreH sevm (loopWorld sevm b M sl src i) (strBase sl + Nat.toB256 i)
       (loopWord M sl src i)
 
 /-- The charge of pass `i`'s `SSTORE`. -/
 def loopCost (sevm : Sevm) (b : Devm) (M : Mem) (sl : UInt8) (src : Nat) (i : Nat) : Nat :=
-  sstoreCost sevm (loopWorld sevm b M sl src i) (strBase sl + Nat.toB256 i) (loopWord M sl src i)
+  sstoreCostH sevm (loopWorld sevm b M sl src i) (strBase sl + Nat.toB256 i) (loopWord M sl src i)
 
 theorem loopMem_size {M : Mem} {sl : UInt8} (hs : M.size = 704) :
     ∀ i, (loopMem M sl i).size = 704
@@ -124,11 +129,11 @@ theorem storeName {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {M : Mem}
   refine rx_vyStoreHead (sn := 0x1c0) (by simp only [List.length_nil, zero_add, Nat.reduceLT]) hs (by decide) (by decide) hwf (by decide)
     (by decide) (by decide) ?_
   rw [t_0162_c0_eq]
-  refine rx_vyStoreStep (i := 0) fr.fork fr.static (by simp only [List.length_cons, List.length_nil,
+  refine rx_vyStoreStepH (i := 0) fr.sg fr.static (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) (by rw [hlp]; omega) (by decide)
     (loopMem_size hs 0) (by decide) (by decide) (by decide) (by decide) (by decide)
     (loopMem_ctr hwf 0) (by unfold gCallStipend at hX ⊢; omega) prog_3 ?_
-  refine rx_vyStoreStep (i := 1) fr.fork fr.static (by simp only [List.length_cons, List.length_nil,
+  refine rx_vyStoreStepH (i := 1) fr.sg fr.static (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) (by rw [hlp]; omega) (by decide)
     (loopMem_size hs 1) (by decide) (by decide) (by decide) (by decide) (by decide)
     (loopMem_ctr hwf 1) (by unfold gCallStipend at hX ⊢; omega) prog_3 ?_
@@ -165,11 +170,11 @@ theorem storeSymbol {sevm : Sevm} (fr : CtorFrame sevm) {b : Devm} {M : Mem}
   refine rx_vyStoreHead (sn := 0x240) (by simp only [List.length_nil, zero_add, Nat.reduceLT]) hs (by decide) (by decide) hwf (by decide)
     (by decide) (by decide) ?_
   rw [t_01bc_c1_eq]
-  refine rx_vyStoreStep (i := 0) fr.fork fr.static (by simp only [List.length_cons, List.length_nil,
+  refine rx_vyStoreStepH (i := 0) fr.sg fr.static (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) (by rw [hlp]; omega) (by decide)
     (loopMem_size hs 0) (by decide) (by decide) (by decide) (by decide) (by decide)
     (loopMem_ctr hwf 0) (by unfold gCallStipend at hX ⊢; omega) prog_4 ?_
-  exact rx_vyStoreLast (i := 1) fr.fork fr.static (by simp only [List.length_cons, List.length_nil,
+  exact rx_vyStoreLastH (i := 1) fr.sg fr.static (by simp only [List.length_cons, List.length_nil,
     zero_add, Nat.reduceAdd, Nat.reduceLT]) (by rw [hlp]; omega) (by decide)
     (loopMem_size hs 1) (by decide) (by decide) (by decide) (by decide) (by decide)
     (loopMem_ctr hwf 1) (by unfold gCallStipend at hX ⊢; omega) k
@@ -196,21 +201,21 @@ theorem runtimeWindow_length : runtimeWindow.length = 2276 := ByteArray.length_s
 def tailMem3 (M : Mem) (c : B256) : Mem := (tailMem2 M c).write 0 runtimeWindow
 
 /-- The tail's worlds. -/
-def tw4 (sevm : Sevm) (b : Devm) : Devm := afterSstore sevm b 2 18
+def tw4 (sevm : Sevm) (b : Devm) : Devm := afterSstoreH sevm b 2 18
 def tw5 (sevm : Sevm) (b : Devm) : Devm :=
-  afterSstore sevm (tw4 sevm b) (balSlotOf sevm.caller.toB256) 0
-def tw6 (sevm : Sevm) (b : Devm) : Devm := afterSstore sevm (tw5 sevm b) 5 0
-def tw7 (sevm : Sevm) (b : Devm) : Devm := afterSstore sevm (tw6 sevm b) 6 sevm.caller.toB256
+  afterSstoreH sevm (tw4 sevm b) (balSlotOf sevm.caller.toB256) 0
+def tw6 (sevm : Sevm) (b : Devm) : Devm := afterSstoreH sevm (tw5 sevm b) 5 0
+def tw7 (sevm : Sevm) (b : Devm) : Devm := afterSstoreH sevm (tw6 sevm b) 6 sevm.caller.toB256
 def tw8 (sevm : Sevm) (b : Devm) (M : Mem) : Devm :=
   (tw7 sevm b).addLog ⟨sevm.currentTarget, [transferTopic, 0, sevm.caller.toB256],
     ((tailMem2 M sevm.caller.toB256).read 0x2c0 32).1⟩
 
 /-- The tail's exact cost from the world `b`. -/
 def tailCost (sevm : Sevm) (b : Devm) : Nat :=
-  2200 + sstoreCost sevm (tw6 sevm b) 6 sevm.caller.toB256 + 5 +
-    sstoreCost sevm (tw5 sevm b) 5 0 + 9 +
-    sstoreCost sevm (tw4 sevm b) (balSlotOf sevm.caller.toB256) 0 + 71 +
-    sstoreCost sevm b 2 18 + 22
+  2200 + sstoreCostH sevm (tw6 sevm b) 6 sevm.caller.toB256 + 5 +
+    sstoreCostH sevm (tw5 sevm b) 5 0 + 9 +
+    sstoreCostH sevm (tw4 sevm b) (balSlotOf sevm.caller.toB256) 0 + 71 +
+    sstoreCostH sevm b 2 18 + 22
 
 /-- **The tail** (entry 2 after the symbol loop, then entry 5): decimals, `balanceOf[caller]`,
 `total_supply`, `minter`, the `Transfer` event, and the deploy tail's `CODECOPY`/`RETURN` of the
@@ -243,9 +248,9 @@ theorem tail {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code) {b :
       sliceD_word_same, Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]),
       sliceD_word_same]
   have hc0 : (Bytes.toB256 [0xc0]).toNat = 0xc0 := by decide
-  rw [show G + tailCost sevm b = G + 2200 + sstoreCost sevm (tw6 sevm b) 6 sevm.caller.toB256 + 5 +
-    sstoreCost sevm (tw5 sevm b) 5 0 + 9 +
-    sstoreCost sevm (tw4 sevm b) (balSlotOf sevm.caller.toB256) 0 + 71 + sstoreCost sevm b 2 18 + 22 by
+  rw [show G + tailCost sevm b = G + 2200 + sstoreCostH sevm (tw6 sevm b) 6 sevm.caller.toB256 + 5 +
+    sstoreCostH sevm (tw5 sevm b) 5 0 + 9 +
+    sstoreCostH sevm (tw4 sevm b) (balSlotOf sevm.caller.toB256) 0 + 71 + sstoreCostH sevm b 2 18 + 22 by
       unfold tailCost; omega]
   unfold t_01f1_c2
   refine rx_dest ?_
@@ -260,7 +265,7 @@ theorem tail {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code) {b :
     (read_covered hs (by decide) (by decide)) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_push (w := 2) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.one_lt_ofNat]) ?_
-  refine rx_sstore fr.fork (by unfold gCallStipend at hG ⊢; omega) fr.static ?_
+  refine rx_sstoreH fr.sg (fun _ => by unfold gCallStipend at hG ⊢; omega) fr.static ?_
   refine rx_push (w := 0x2a0) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_mload (c := 3) (v := 0) (charge_covered hs (by decide) (by decide)) hsup
     (read_covered hs (by decide) (by decide)) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
@@ -292,17 +297,17 @@ theorem tail {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = code) {b :
       simp only at hs2
       subst hs2
       rw [show memExtSize 704 (B256.toNat 192) (B256.toNat 64) = 704 by decide]
-  refine rx_sstore fr.fork (by unfold gCallStipend at hG ⊢; omega) fr.static ?_
+  refine rx_sstoreH fr.sg (fun _ => by unfold gCallStipend at hG ⊢; omega) fr.static ?_
   refine rx_push (w := 0x2a0) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_mload (c := 3) (v := 0) (charge_covered hs2 (by decide) (by decide)) hsup2
     (read_covered hs2 (by decide) (by decide)) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_push (w := 5) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.one_lt_ofNat]) ?_
-  refine rx_sstore fr.fork (by unfold gCallStipend at hG ⊢; omega) fr.static ?_
+  refine rx_sstoreH fr.sg (fun _ => by unfold gCallStipend at hG ⊢; omega) fr.static ?_
   refine rx_caller (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_push (w := 6) (by decide) (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.one_lt_ofNat]) ?_
-  refine rx_sstore fr.fork (by unfold gCallStipend at hG ⊢; omega) fr.static ?_
+  refine rx_sstoreH fr.sg (fun _ => by unfold gCallStipend at hG ⊢; omega) fr.static ?_
   refine rx_push (w := 0x2a0) (by decide) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   refine rx_mload (c := 3) (v := 0) (charge_covered hs2 (by decide) (by decide)) hsup2
     (read_covered hs2 (by decide) (by decide)) (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
@@ -740,13 +745,13 @@ theorem loopMem_read_other {M : Mem} (hwf : Mem.Wf M) {sl : UInt8} {a : Nat}
 theorem loopWorld_error {sevm : Sevm} {b : Devm} {M : Mem} {sl : UInt8} {src : Nat} :
     ∀ i, (loopWorld sevm b M sl src i).error = b.error
   | 0 => rfl
-  | i + 1 => by rw [loopWorld, afterSstore_error, loopWorld_error i]
+  | i + 1 => by rw [loopWorld, afterSstoreH_error, loopWorld_error i]
 
 theorem loopWorld_stor2 {sevm : Sevm} {b : Devm} {M : Mem} {sl : UInt8} {src : Nat} :
     Devm.getStor (loopWorld sevm b M sl src 2) sevm.currentTarget =
       ((Devm.getStor b sevm.currentTarget).set (strBase sl + Nat.toB256 0) (loopWord M sl src 0)).set
         (strBase sl + Nat.toB256 1) (loopWord M sl src 1) := by
-  simp only [loopWorld, afterSstore_getStor_self]
+  simp only [loopWorld, afterSstoreH_getStor_self]
 
 /-- The name and symbol stores' memories. -/
 def memName : Mem := loopMem mB4 0x00 2
@@ -769,9 +774,11 @@ def ctorCost (sevm : Sevm) (b : Devm) : Nat :=
     loopCost sevm (worldName sevm b) memName 0x01 0x240 0 + 90 + 13 + 48 + 117 +
     loopCost sevm b mB4 0x00 0x1c0 1 + 117 + loopCost sevm b mB4 0x00 0x1c0 0 + 90 + 299 + 236
 
-theorem ctorCost_le (sevm : Sevm) (b : Devm) : ctorCost sevm b ≤ 200000 := by
-  have hs : ∀ (b : Devm) (k v : B256), sstoreCost sevm b k v ≤ 22100 := fun b k v =>
-    le_trans (sstoreCost_le sevm b k v) (by decide)
+theorem ctorCost_le (sevm : Sevm) (b : Devm)
+    (flat : ∀ g, sevm.benvStat.rules.access = .flat g → g.sload ≤ 2100) :
+    ctorCost sevm b ≤ 200000 := by
+  have hs : ∀ (b : Devm) (k v : B256), sstoreCostH sevm b k v ≤ 22100 := fun _ _ _ =>
+    sstoreCostH_le flat
   unfold ctorCost tailCost loopCost
   have := hs (worldSymbol sevm b) 2 18
   have := hs (tw4 sevm (worldSymbol sevm b)) (balSlotOf sevm.caller.toB256) 0
@@ -845,7 +852,7 @@ theorem ctor_run_facts {sevm : Sevm} (fr : CtorFrame sevm) (hcode : sevm.code = 
       toNat_toB256' (show 0 < 2 ^ 256 by decide)]
     exact tailMem3_read memSymbol_wf _
   · rw [p2, St_error]
-    simp only [tw8, Devm.addLog_error, tw7, tw6, tw5, tw4, afterSstore_error, worldSymbol,
+    simp only [tw8, Devm.addLog_error, tw7, tw6, tw5, tw4, afterSstoreH_error, worldSymbol,
       loopWorld_error, worldName]
   · rw [p3, St_getStor]
 
