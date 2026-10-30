@@ -10,8 +10,7 @@ import Blanc.ExecutionAccountingAdmissionIn
 /-!
 # The WETH9 creation transaction under Byzantium
 
-`Creation.weth9_deploy_byzantium` runs the recorded creation input as a CREATE message over
-Jaune's default environment. This module runs it as the recorded creation *transaction*: a legacy
+This module runs WETH9's recorded creation input as the recorded creation *transaction*: a legacy
 transaction with no receiver, the recorded creation input as data, zero value and sender nonce
 446, processed by Jaune's `processTransaction` in a block whose fork the mainnet schedule selects
 at the recorded deployment coordinates (block 4,719,568, timestamp 1,513,077,455: Byzantium,

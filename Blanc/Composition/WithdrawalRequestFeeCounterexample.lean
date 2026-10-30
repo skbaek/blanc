@@ -18,8 +18,8 @@ The witness history is three configured blocks on a Prague chain:
 * **C** carries `txC`, the direct `2 ^ 245`-wei submission at excess `2893`.
 
 This module holds the vocabulary of the witness: the concrete checkpoint and genesis
-chain, the system-call and settlement preservation legs, the statement `NatFeeGuarantee`
-with its refutation `NatFeeGuaranteeRefuted`, and the reduction of a refutation to a
+chain, the system-call and settlement preservation legs, the refutation statement
+`NatFeeGuaranteeRefuted`, and the reduction of a refutation to a
 `RefutationWitness`.  `Blanc/Composition/WithdrawalRequestFeeRefutation.lean` builds the
 three blocks and proves `nat_fee_guarantee_refuted` with no hypotheses.
 -/
@@ -697,31 +697,6 @@ def history_of_three {cfg : ChainConfig} {checkpoint chainA chainB chainC : Bloc
 
 /-! ## The statement -/
 
-/-- **B, the mathematical-fee guarantee**, in the vocabulary of the retained word-fee
-theorem: on every configured history under the original hypotheses, every committed
-submission frame whose word fee loop ran to `output` and was paid at least `output / 17`
-also paid at least the Nat reference fee `fakeExp 1 excess 17` of the model at its incoming
-excess. -/
-def NatFeeGuarantee : Prop :=
-  ∀ (cfg : ChainConfig) (checkpoint future : BlockChain)
-    (trace : ConfiguredHistoryTrace cfg checkpoint future),
-    SystemCodeInstalled checkpoint.state →
-    trace.NoSenderAt systemAddress → trace.NoAuthorityAt systemAddress →
-    (∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ systemAddress) →
-    checkpoint.state.getCode systemAddress = ByteArray.empty →
-    Blanc.WithdrawalRequest.RepresentsStorage
-      (checkpoint.state.getStor withdrawalRequestPredeployAddress).get
-      Blanc.WithdrawalRequest.initial →
-    ∀ frame ∈ trace.settledFrames.flatMap balanceFrameObservation,
-      ∀ (model : Blanc.WithdrawalRequest.State) (iterations : Nat) (output : B256),
-        submissionPaymentFrame frame →
-        model.excess = ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0).toNat →
-        WordFakeExponential.Run ((frame.pre.getStor withdrawalRequestPredeployAddress).get 0)
-          17 1 17 0 iterations output →
-        (output / 17).toNat ≤ frame.sevm.value.toNat →
-        Blanc.WithdrawalRequest.fee model ≤ frame.sevm.value.toNat
-
 /-- **The refutation of B**: a configured history under the original hypotheses with a
 committed submission frame that paid its executed word fee but less than the Nat fee. -/
 def NatFeeGuaranteeRefuted : Prop :=
@@ -743,14 +718,6 @@ def NatFeeGuaranteeRefuted : Prop :=
           17 1 17 0 iterations output ∧
         (output / 17).toNat ≤ frame.sevm.value.toNat ∧
         frame.sevm.value.toNat < Blanc.WithdrawalRequest.fee model
-
-theorem not_natFeeGuarantee_of_refuted (h : NatFeeGuaranteeRefuted) : ¬ NatFeeGuarantee := by
-  intro guarantee
-  obtain ⟨cfg, checkpoint, future, trace, installed, senders, authorities, avoid, systemEmpty,
-    init, frame, member, model, iterations, output, payment, excess, run, paid, below⟩ := h
-  exact Nat.lt_irrefl _ (Nat.lt_of_lt_of_le below
-    (guarantee cfg checkpoint future trace installed senders authorities avoid systemEmpty init
-      frame member model iterations output payment excess run paid))
 
 /-- The witness history's remaining inputs: the three-block configured history with the
 original hypotheses, and block C's submission frame among its settled frames at excess

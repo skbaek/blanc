@@ -30,7 +30,7 @@ This module derives (2) and (3) from premises about the trace as a whole.  The `
   addresses.  Together they give `system`, the exclusion `beaconEntry_of_env` consumes.
   **`systemSpawnFree` is false of the canonical EIP-7002 code** (`0xF4` bytes inside `PUSH`
   data, `withdrawalRequestCode_not_spawnFree`), so the `_env` and `_envDerived` headlines are
-  vacuous on mainnet; the `_sys` headlines at the end of this file are the satisfiable form.
+  vacuous on mainnet; the `_sys` form at the end of this file is the satisfiable one.
 * **No delegation** (`Blanc/ExecutionTraceCodeAt.lean`).  A transaction can install a code
   designator at an account only through an EIP-7702 authorization that recovers to it or
   through a frame that CREATEs it.  `checkpointEmpty` (the precompile account is empty at the
@@ -156,45 +156,5 @@ theorem configuredHistory_solInv_sys {ca : Adr} {cfg : ChainConfig}
       (system_of_installed trace systemInstalled systemNoAuthority systemNoFrame installed)
       checkpointEmpty noAuthority noFrame)
     installed invariant
-
-/-- The final deployed count word is the length of the same exact history. -/
-theorem configuredHistory_count_sys {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (systemInstalled : SystemCodeInstalled checkpoint.state)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    (future.state.getStor ca).get solCountSlot =
-      Nat.toB256 (initialHistory ++ committedNodes ca trace).length ∧
-      (initialHistory ++ committedNodes ca trace).length < 2 ^ 32 :=
-  solCount_eq_of_solInv (configuredHistory_solInv_sys trace systemInstalled systemNoAuthority
-    systemNoFrame checkpointEmpty noAuthority noFrame installed invariant)
-
-/-- The final mixed root belongs to the same exact extracted node sequence. -/
-theorem configuredHistory_root_sys {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (systemInstalled : SystemCodeInstalled checkpoint.state)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
-  BeaconDeposit.root_correct _ _ _
-    (configuredHistory_solInv_sys trace systemInstalled systemNoAuthority systemNoFrame
-      checkpointEmpty noAuthority noFrame installed invariant).2
 
 end Blanc.Lift.BeaconDeposit

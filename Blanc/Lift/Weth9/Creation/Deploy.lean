@@ -8,23 +8,18 @@ import Blanc.ForkUniform
 /-!
 # Deploying WETH9 from its actual creation input
 
-`weth9_create`: executing WETH9's recorded creation input (3,504 bytes, `Creation/Cert.lean`,
-registered in `scripts/lift/certificates.json` as `weth9-creation`) as a CREATE message
-(`processCreateMessage`) under a covered fork succeeds, installs exactly the certified deployed
-runtime `Blanc.Lift.Weth9.code` at the new address, and leaves exactly the constructor's
-storage: `name` (slot 0), `symbol` (slot 1) and `decimals = 18` (slot 2), nothing else.
+`weth9_create_framed` (and `weth9_create_framedH`, from rule facts alone): executing WETH9's
+recorded creation input (3,504 bytes, `Creation/Cert.lean`, registered in
+`scripts/lift/certificates.json` as `weth9-creation`) as a CREATE message
+(`processCreateMessage`) succeeds, installs exactly the certified deployed runtime
+`Blanc.Lift.Weth9.code` at the new address, and leaves exactly the constructor's storage
+`deployedStor`: `name` (slot 0), `symbol` (slot 1) and `decimals = 18` (slot 2), nothing else.
+`deployedStor_metadata`: every nonzero word of it is at a fixed slot `0`, `1` or `2`, the premise
+of the footprint reading's `FootInv.deployed` (no hash fact).
 
-Two readings of the history theorems' initial predicate follow:
-
-* `weth9_create_metadata`: every nonzero word is at a fixed slot `0`, `1` or `2` — the premise of
-  the footprint reading's `FootInv.deployed` (no hash fact);
-* `weth9_create_solvent`: the original solvency invariant `Solvent … 0 _` holds under the explicit
-  hash premise that no address's balance slot is one of the three fixed slots (the constructor
-  writes nonzero words there, so without that premise a colliding address would book them).
-
-**Scope.**  Prague-era rules, although the historical deployment (block 4,719,568, 2017)
-predates Prague; this is the modeled deployment of the recorded input, not historical inclusion.
-Gas: any message gas in `[720000, 2^64)` suffices.
+`deployer`, `weth9Address` (the CREATE address of the deployer at nonce 446, `weth9Address_eq`)
+and the creation message `deployMsg` name the recorded deployment. Gas: any message gas in
+`[720000, 2^64)` suffices.
 -/
 
 namespace Blanc.Lift.Weth9.Creation
@@ -168,19 +163,6 @@ theorem weth9_create_framed (msg : Msg) (hvalue : msg.value = 0)
   weth9_create_framedH msg hvalue hcodeAddress hcode hgas hgasb hfork.rules_stateGas_none
     (fun _ h => by rw [hfork.rules_access] at h; cases h) hstatic hmax
 
-/-- The deployment code/storage interface, retained for existing consumers. -/
-theorem weth9_create (msg : Msg) (hvalue : msg.value = 0)
-    (hcodeAddress : msg.codeAddress = .none) (hcode : msg.code = Blanc.Lift.Weth9.Creation.code)
-    (hgas : 720000 ≤ msg.gas) (hgasb : msg.gas < 2 ^ 64)
-    (hfork : CoveredFork msg.benv.stat.fork) (hstatic : msg.isStatic = false)
-    (hmax : 3124 ≤ msg.benv.stat.rules.code.maxCodeSize) :
-    ∃ post, processCreateMessage msg = .ok post ∧
-      (post.getCode msg.currentTarget).toList = Blanc.Lift.Weth9.code.toList ∧
-      Devm.getStor post msg.currentTarget = deployedStor := by
-  obtain ⟨post, hrun, hcodePost, hstorPost, -⟩ :=
-    weth9_create_framed msg hvalue hcodeAddress hcode hgas hgasb hfork hstatic hmax
-  exact ⟨post, hrun, hcodePost, hstorPost⟩
-
 /-! ## The recorded deployment, closed -/
 
 /-- The recorded deployer of WETH9 (creation transaction `0xb9534341…c5b8442fa3`, block
@@ -226,45 +208,5 @@ def deployMsg : Msg where
   accessedAddresses := .emptyWithCapacity
   accessedStorageKeys := .emptyWithCapacity
   disablePrecompiles := false
-
-/-- **The recorded WETH9 deployment under every covered fork.**  The same conclusion as
-`weth9_deploy` for `deployMsg.withFork f`, by instantiating `weth9_create` at the
-fork-replaced message; the code-size premise discharges by cases on `hf`. -/
-theorem weth9_deploy_covered (f : Fork) (hf : CoveredFork f) :
-    weth9Address = computeContractAddress deployer 446 ∧
-    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
-      (post.getCode weth9Address).toList = Blanc.Lift.Weth9.code.toList ∧
-      Devm.getStor post weth9Address = deployedStor := by
-  refine ⟨weth9Address_eq, ?_⟩
-  exact weth9_create (deployMsg.withFork f) rfl rfl rfl (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide)
-    hf rfl
-    (hf.cases (motive := fun f =>
-      3124 ≤ (deployMsg.withFork f).benv.stat.rules.code.maxCodeSize)
-      (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide) (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide))
-
-/-- **The recorded WETH9 deployment under Byzantium**, the fork the mainnet schedule selects at the
-recorded deployment coordinates (`Blanc.Lift.Weth9.weth9_deployment_fork`): the same conclusion as
-`weth9_deploy_covered` for `deployMsg.withFork .byzantium`, from `weth9_create_framedH`. Byzantium
-charges `SLOAD` at 200 and `SSTORE` under the legacy schedule, has no stipend sentry, and sweeps
-touched accounts (the creation target is touched, which moves no state). This is the recorded
-creation input run as a message over Jaune's default environment, not the historical transaction
-inclusion. -/
-theorem weth9_deploy_byzantium :
-    weth9Address = computeContractAddress deployer 446 ∧
-    ∃ post, processCreateMessage (deployMsg.withFork .byzantium) = .ok post ∧
-      (post.getCode weth9Address).toList = Blanc.Lift.Weth9.code.toList ∧
-      Devm.getStor post weth9Address = deployedStor := by
-  refine ⟨weth9Address_eq, ?_⟩
-  obtain ⟨post, hrun, hcode, hstor, -⟩ := weth9_create_framedH (deployMsg.withFork .byzantium) rfl
-    rfl rfl (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide)
-    (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide)
-    (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide)
-    (fun g h => by
-      rw [show (deployMsg.withFork .byzantium).benv.stat.rules.access =
-        .flat byzantiumAccessGas from rfl] at h
-      cases h
-      decide)
-    rfl (by dsimp only [Msg.withFork, Benv.withFork, BenvStat.withFork]; decide)
-  exact ⟨post, hrun, hcode, hstor⟩
 
 end Blanc.Lift.Weth9.Creation

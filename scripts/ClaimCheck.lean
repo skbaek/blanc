@@ -4,7 +4,6 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteFrame
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteInit
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteExample
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteRegistry
-import Blanc.Lift.UniswapV2Pair.PairHistoryMinLiquidity
 import Blanc.Lift.UniswapV2Pair.Properties
 import Blanc.Lift.UniswapV2Pair.PropertiesMintBurn
 import Blanc.Lift.UniswapV2Pair.PropertiesSwap
@@ -82,7 +81,6 @@ import Blanc.Lift.Weth9.FootHistory
 import Blanc.Lift.Weth9.CommittedHistory
 import Blanc.Lift.Weth9.LiveTx
 import Blanc.Lift.Weth9.Creation.Deploy
-import Blanc.Lift.Weth9.Creation.DeployInit
 import Blanc.Lift.Weth9.PrefixTx
 import Blanc.Lift.Weth9.ClosedExit
 import Blanc.Lift.BeaconDeposit.BeaconEnv
@@ -7445,32 +7443,6 @@ example
 
 end Blanc.Lift.Weth9
 
-namespace Blanc.Lift.Weth9.Creation
-open Jaune Blanc.Lift Blanc.ForkUniform
-
--- WETH9: weth9_deploy_covered
-example (f : Fork) (hf : CoveredFork f) :
-    weth9Address = computeContractAddress deployer 446 ∧
-    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
-      (post.getCode weth9Address).toList = Blanc.Lift.Weth9.code.toList ∧
-      Devm.getStor post weth9Address = deployedStor :=
-  weth9_deploy_covered f hf
-
-end Blanc.Lift.Weth9.Creation
-
-namespace Blanc.Lift.Weth9.Creation
-open Jaune
-
--- WETH9: weth9_deploy_init_covered
-example (f : Fork) (hf : CoveredFork f) :
-    weth9Address = computeContractAddress deployer 446 ∧
-    ∃ post, processCreateMessage (deployMsg.withFork f) = .ok post ∧
-      (post.getCode weth9Address).toList = Blanc.Lift.Weth9.code.toList ∧
-      ∀ b : B256, FootInv (fun _ => False) (Devm.getStor post weth9Address) b :=
-  weth9_deploy_init_covered f hf
-
-end Blanc.Lift.Weth9.Creation
-
 namespace Blanc.Lift.BeaconDeposit
 open Jaune Blanc Blanc.ExecutionTrace
 
@@ -7490,29 +7462,6 @@ example {ca : Adr} {cfg : ChainConfig}
     (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
     SolInv (future.state.getStor ca) (initialHistory ++ committedNodes ca trace) :=
   configuredHistory_solInv_sys trace systemInstalled systemNoAuthority systemNoFrame checkpointEmpty noAuthority noFrame installed invariant
-
-end Blanc.Lift.BeaconDeposit
-
-namespace Blanc.Lift.BeaconDeposit
-open Jaune Blanc Blanc.ExecutionTrace
-
--- Beacon deposit: configuredHistory_root_sys
-example {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (systemInstalled : SystemCodeInstalled checkpoint.state)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ 2)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
-  configuredHistory_root_sys trace systemInstalled systemNoAuthority systemNoFrame checkpointEmpty noAuthority noFrame installed invariant
 
 end Blanc.Lift.BeaconDeposit
 
@@ -7596,31 +7545,6 @@ end Blanc.Lift.Curve3Crv.Creation
 namespace Blanc.Lift.Curve3Crv
 open Jaune Blanc.ExecutionTrace Blanc.Lift.Curve3Crv.Creation
 
--- Curve 3Crv: c3crv_history_committedHist
-example {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}
-    {initialKeys : Key → Prop}
-    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image)
-    (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys)
-    (fresh : FreshKeys initialKeys (historyTouchedKeysIn ca trace)) :
-    some (future.state.getCode ca).toList = c3crvSem.image ∧
-      ∃ s, InvRunBy OwnerAnswerH initial (committedInvocationsIn ca trace) s ∧
-        runInvocations initial (committedInvocationsIn ca trace) = some s ∧
-        VyInv (future.state.getStor ca) s
-          (Key.extend initialKeys (invocationKeys (committedInvocationsIn ca trace))) ∧
-        Blanc.Curve3Crv.Conserved s :=
-  c3crv_history_committedHist trace installed invariant fresh
-
--- Curve 3Crv: C3crvDeploymentTo.history_from_deployment
-example {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :
-    some (checkpoint.state.getCode tokenAddress).toList = c3crvSem.image ∧
-      ∃ s, InvRunBy OwnerAnswerH (curveDeployedState deployer) d.invocations s ∧
-        runInvocations (curveDeployedState deployer) d.invocations = some s ∧
-        VyInv (checkpoint.state.getStor tokenAddress) s d.keys ∧
-        Blanc.Curve3Crv.Conserved s :=
-  d.history_from_deployment
-
 -- Curve 3Crv constructor: C3crvDeploymentTo.mk
 example {checkpoint : BlockChain} (pre completed : BlockChain)
     (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
@@ -7662,64 +7586,6 @@ example {pre D : BlockChain}
   actual_block_cut block number timestamp cut sameTx lookup succeeded
 
 end Blanc.Lift.Curve3Crv.Creation.HistoricalTx
-
-namespace Blanc.Lift.LidoCircuitBreakerDeployed
-open Jaune
-open Blanc
-open Blanc.Lift
-open Blanc.LidoCircuitBreaker
-open Blanc.ExecutionTrace
-open scoped BigOperators
-
--- Lido CircuitBreaker: lido_history_l1_l3
-example
-    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca (lidoEntry lidoA))
-    (hcode : some (checkpoint.state.getCode ca).toList = lidoSpec.sem.image)
-    (hzero : RegistryZeroRaw (checkpoint.state.getStor ca)) :
-    ∃ entries,
-      (∀ {t : B256}, canonicalAddress t →
-        (addressSlotReadWord ((future.state.getStor ca).get (mapSlot t 3)) ≠ 0 ↔
-          t ∈ entries.map Prod.fst) ∧
-        ((future.state.getStor ca).get (mapSlot t 4) ≠ 0 ↔
-          t ∈ entries.map Prod.fst) ∧
-        ∀ index pauser, findEntry entries t = some (index, pauser) →
-          addressSlotReadWord ((future.state.getStor ca).get (mapSlot t 3)) = pauser ∧
-          (future.state.getStor ca).get (mapSlot t 4) = Nat.toB256 (index + 1) ∧
-          addressSlotReadWord ((future.state.getStor ca).get (registryArraySlot index)) = t) ∧
-      (∀ p, canonicalAddress p →
-        (future.state.getStor ca).get (mapSlot p 6) = Nat.toB256 (assignmentCount entries p)) ∧
-      (future.state.getStor ca).get (mapSlot 0 6) = 0 ∧
-      (∑ p ∈ (entries.map Prod.snd).toFinset,
-        ((future.state.getStor ca).get (mapSlot p 6)).toNat) = entries.length ∧
-      (future.state.getStor ca).get 5 = Nat.toB256 entries.length :=
-  lido_history_l1_l3 trace admitted hcode hzero
-
-end Blanc.Lift.LidoCircuitBreakerDeployed
-
-namespace Blanc.Lift.LidoCircuitBreakerDeployed
-open Jaune
-open Blanc
-open Blanc.Lift
-open Blanc.LidoCircuitBreaker
-open Blanc.ExecutionTrace
-
--- Lido CircuitBreaker: lido_history_l2_committed
-example
-    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca (lidoEntry lidoA))
-    (inv : lidoSpec.StateInv ca checkpoint.state)
-    (frame : Exec.Frame) (member : frame ∈ trace.settledFrames)
-    (target : frame.sevm.currentTarget = ca) (nonstatic : frame.sevm.isStatic = false)
-    (hsig : Sevm.dataWord frame.sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
-    (hnp0 : Sevm.dataWord frame.sevm 36 = 0) :
-    ∃ entries, RegistryWitness (solRegistryStorage (Devm.getStor frame.pre ca)) entries ∧
-      L2Post entries (Sevm.dataWord frame.sevm 4) (Devm.getStor frame.post ca) :=
-  lido_history_l2_committed trace admitted inv frame member target nonstatic hsig hnp0
-
-end Blanc.Lift.LidoCircuitBreakerDeployed
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed.Creation
 open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker Blanc.ForkUniform
@@ -8011,31 +7877,6 @@ example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
 
 end Blanc.Lift.WithdrawalRequest
 
-namespace Blanc.Lift.WithdrawalRequest.DrainControl
-open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward FloodTx FeeCounterexample
-
--- EIP-7002: systemEmpty_loadBearing_witness
-example : SystemEmptyLoadBearing :=
-  systemEmpty_loadBearing_witness
-
-end Blanc.Lift.WithdrawalRequest.DrainControl
-
-namespace Blanc.Lift.WithdrawalRequest
-open Jaune Blanc.ExecutionTrace
-
--- EIP-7002: history_checked_system_totality
-example {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (history : ConfiguredHistoryTrace cfg checkpoint future)
-    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
-    {benv : Benv} (state : benv.state = future.state) (fork : CoveredFork benv.stat.fork) :
-    processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
-      .ok ((systemProtocolPost benv).state, systemProtocolOutput benv) ∧
-    (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
-    systemProtocolGas benv ≤ 210000 :=
-  history_checked_system_totality history code state fork
-
-end Blanc.Lift.WithdrawalRequest
-
 namespace Blanc.Lift.WithdrawalRequest
 open Jaune
 
@@ -8086,20 +7927,6 @@ example {cfg : ChainConfig} {checkpoint future : BlockChain}
   history_submission_nat_live history code sevm b data fork user length
 
 end Blanc.Lift.WithdrawalRequest
-
-namespace Blanc.Lift.WithdrawalRequest.Creation
-open Jaune Blanc.Lift Blanc.WithdrawalRequest
-
--- EIP-7002: deploy_initial
-example (fork : Fork) (hfork : CoveredFork fork) :
-    (deployMsg fork).currentTarget = withdrawalRequestPredeployAddress ∧
-    ∃ post, processCreateMessage (deployMsg fork) = .ok post ∧
-      post.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
-      RepresentsStorage (post.getStor withdrawalRequestPredeployAddress).get initial ∧
-      post.error = none :=
-  deploy_initial fork hfork
-
-end Blanc.Lift.WithdrawalRequest.Creation
 
 
 /-! The project definitions those headline statements are stated through, where the definition
@@ -8616,29 +8443,6 @@ example {cfg : ChainConfig} {checkpoint pre post : BlockChain}
 end Blanc.Lift.WithdrawalRequest
 
 namespace Blanc.Lift.WithdrawalRequest
-open Jaune ExecutionTrace ExecutionAccountingReplay Blanc.WithdrawalRequest
-
--- EIP-7002 definition: SystemEmptyLoadBearing
-example :
-    SystemEmptyLoadBearing ↔
-      (∃ (cfg : ChainConfig) (checkpoint pre post : BlockChain)
-    (history : ConfiguredHistoryTrace cfg checkpoint pre)
-    (block : ConfiguredBlockTrace cfg pre post),
-    SystemCodeInstalled checkpoint.state ∧
-    (ConfiguredHistoryTrace.step history block).NoSenderAt systemAddress ∧
-    (ConfiguredHistoryTrace.step history block).NoAuthorityAt systemAddress ∧
-    (∀ root ∈ (ConfiguredHistoryTrace.step history block).rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) ∧
-    checkpoint.state.getCode systemAddress ≠ ByteArray.empty ∧
-    RepresentsStorage (checkpoint.state.getStor withdrawalRequestPredeployAddress).get initial ∧
-    ((ConfiguredHistoryTrace.step history block).settledFrames.flatMap
-      submissionFramePayments).length ≤ wordOccurrenceCap ∧
-    ¬ CheckpointBlockWordFifo history block) :=
-  Iff.rfl
-
-end Blanc.Lift.WithdrawalRequest
-
-namespace Blanc.Lift.WithdrawalRequest
 open Jaune
 
 -- EIP-7002 definition: NatFeeDomain
@@ -8885,116 +8689,6 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
         (∀ k, K' k → k ∈ pairHistoryTouchedKeys pair trace) ∧
         WriterRep K' (future.state.getStor pair) finish :=
   pair_history_initialized trace installed initial fresh
-
-end Blanc.Lift.UniswapV2Pair
-
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
-
--- Uniswap V2 Pair: pair_history_ledger
-example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    {factory token0 token1 : Adr} {domain : B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
-    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
-    ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
-        runSourceInvocations (initializedState factory domain token0 token1) (steps.map PairStep.source) = some finish ∧
-        WriterRep K' (future.state.getStor pair) finish ∧
-        finish.Ledger :=
-  pair_history_ledger trace installed initial fresh
-
-end Blanc.Lift.UniswapV2Pair
-
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
-
--- Uniswap V2 Pair: pair_history_oracle
-example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    {K₀ : WriterKey → Prop} {st₀ : State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
-    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
-    ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
-        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
-        WriterRep K' (future.state.getStor pair) finish ∧
-        finish.price0CumulativeLast.toNat =
-          (st₀.price0CumulativeLast.toNat +
-            oracleSum0 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 ∧
-        finish.price1CumulativeLast.toNat =
-          (st₀.price1CumulativeLast.toNat +
-            oracleSum1 (sourceReplayUpdates st₀ (steps.map PairStep.source))) % 2 ^ 256 ∧
-        (∀ u ∈ sourceReplayUpdates st₀ (steps.map PairStep.source), u.update.Lawful) ∧
-        OracleTimestampChain st₀.blockTimestampLast finish.blockTimestampLast
-          (sourceReplayUpdates st₀ (steps.map PairStep.source)) ∧
-        sourceReplayUpdates st₀ (steps.map PairStep.source) =
-          (sourceReplayReceipts st₀ (steps.map PairStep.source)).flatMap Prod.snd ∧
-        ∀ inv receipts, (inv, receipts) ∈ sourceReplayReceipts st₀ (steps.map PairStep.source) →
-          ∃ s ∈ steps, inv = s.source ∧
-            ∀ u ∈ receipts, u.update.timestamp = s.frame.sevm.benvStat.time :=
-  pair_history_oracle trace installed initial fresh
-
-end Blanc.Lift.UniswapV2Pair
-
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
-
--- Uniswap V2 Pair: pair_history_feeOff_product
-example {pair : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
-    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
-    ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
-        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
-        WriterRep K' (future.state.getStor pair) finish ∧
-        (sourceReplayAnswers st₀ (steps.map PairStep.source) →
-          ∀ before after, (before, after) ∈ sourceReplayEdges st₀ (steps.map PairStep.source) →
-            0 < before.totalSupply.toNat →
-            before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
-              after.reserve0.val * after.reserve1.val * before.totalSupply.toNat ^ 2) :=
-  pair_history_feeOff_product trace installed initial fresh
-
-end Blanc.Lift.UniswapV2Pair
-
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
-
--- Uniswap V2 Pair: pair_history_feeOn_product
-example {pair : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
-    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
-    ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
-        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
-        WriterRep K' (future.state.getStor pair) finish ∧
-        (sourceReplayNoShrink st₀ (steps.map PairStep.source) →
-          ∀ before inv after, (before, inv, after) ∈ sourceReplaySteps st₀ (steps.map PairStep.source) →
-            0 < before.totalSupply.toNat →
-            before.reserve0.val * before.reserve1.val * after.totalSupply.toNat ^ 2 ≤
-              after.reserve0.val * after.reserve1.val *
-                (before.totalSupply.toNat + entryFeeAmount before inv.entry inv.transcript) ^ 2) :=
-  pair_history_feeOn_product trace installed initial fresh
 
 end Blanc.Lift.UniswapV2Pair
 
@@ -11462,16 +11156,6 @@ example {st finish : State} {inv : SourceInvocation} {rest : List SourceInvocati
     SourceReplay st (inv :: rest) finish :=
   SourceReplay.cons consumed successful tail
 
--- Uniswap V2 Pair definition: sourceReplayUpdates
-example (st : State) : sourceReplayUpdates st [] = [] :=
-  rfl
-
-example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
-    sourceReplayUpdates st (inv :: rest) =
-      (inv.run st).frame.current.updates ++
-        sourceReplayUpdates (inv.run st).frame.current.state rest :=
-  rfl
-
 -- Uniswap V2 Pair definition: sourceReplayAnswers
 example (st : State) : sourceReplayAnswers st [] ↔ True :=
   Iff.rfl
@@ -11511,16 +11195,6 @@ example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
     sourceReplaySteps st (inv :: rest) =
       (st, inv, (inv.run st).frame.current.state) ::
         sourceReplaySteps (inv.run st).frame.current.state rest :=
-  rfl
-
--- Uniswap V2 Pair definition: sourceReplayReceipts
-example (st : State) : sourceReplayReceipts st [] = [] :=
-  rfl
-
-example (st : State) (inv : SourceInvocation) (rest : List SourceInvocation) :
-    sourceReplayReceipts st (inv :: rest) =
-      (inv, (inv.run st).frame.current.updates) ::
-        sourceReplayReceipts (inv.run st).frame.current.state rest :=
   rfl
 
 -- Uniswap V2 Pair definition: oracleSum0
@@ -11984,67 +11658,6 @@ example : ∀ {entries : List Entry} {probes : List B256},
   @checkLiveCovered_eq_true
 
 end Blanc.Lift.LidoCircuitBreakerDeployed
-
--- Paper review 2 statement: pair_history_minimum_liquidity
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
-
-example : ∀ {pair : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {factory token0 token1 : Adr} {domain : B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
-    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace))
-    (nonzero : pair ≠ 0),
-    ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
-        runSourceInvocations (initializedState factory domain token0 token1)
-          (steps.map PairStep.source) = some finish ∧
-        WriterRep K' (future.state.getStor pair) finish ∧
-        ((∀ s ∈ steps, s.source.CallersNonzero) →
-          finish.SupplyFloor ∧
-          ∀ before after, (before, after) ∈ sourceReplayEdges
-              (initializedState factory domain token0 token1) (steps.map PairStep.source) →
-            before.SupplyFloor ∧ after.SupplyFloor ∧
-              (0 < before.totalSupply.toNat → 1000 ≤ after.totalSupply.toNat)) :=
-  @pair_history_minimum_liquidity
-
-end Blanc.Lift.UniswapV2Pair
-
--- Paper review 2 statement: pair_history_feeOff_ratio
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
-
-example : ∀ {pair : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {factory token0 token1 : Adr} {domain : B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : InitializedCheckpoint (checkpoint.state.getStor pair) factory domain token0 token1)
-    (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace))
-    (nonzero : pair ≠ 0),
-    ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
-        runSourceInvocations (initializedState factory domain token0 token1)
-          (steps.map PairStep.source) = some finish ∧
-        WriterRep K' (future.state.getStor pair) finish ∧
-        (sourceReplayAnswers (initializedState factory domain token0 token1)
-            (steps.map PairStep.source) →
-          (∀ s ∈ steps, s.source.CallersNonzero) →
-          ∀ before after, (before, after) ∈ sourceReplayEdges
-              (initializedState factory domain token0 token1) (steps.map PairStep.source) →
-            0 < before.totalSupply.toNat →
-            1000 ≤ after.totalSupply.toNat ∧
-              ((before.reserve0.val * before.reserve1.val : ℚ) / (before.totalSupply.toNat : ℚ) ^ 2 ≤
-                (after.reserve0.val * after.reserve1.val : ℚ) / (after.totalSupply.toNat : ℚ) ^ 2)) :=
-  @pair_history_feeOff_ratio
-
-end Blanc.Lift.UniswapV2Pair
 
 -- Paper review 2 statement: runTyped_mint_initial
 namespace Blanc.Lift.UniswapV2Pair
@@ -13848,87 +13461,6 @@ example (pair : Adr) (event : Event) :
             in0.toBytes ++ in1.toBytes ++ out0.toBytes ++ out1.toBytes⟩
       | _ => none) := by
   cases event <;> rfl
-
-end Blanc.Lift.UniswapV2Pair
-
-namespace Blanc.Lift.UniswapV2Pair
-open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
-
--- Paper review 3 statement: pair_history_ledger_from_checkpoint
-example
-    {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    {K₀ : WriterKey → Prop} {st₀ : State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
-    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
-    (ledger : st₀.Ledger) :
-    ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
-        runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
-        WriterRep K' (future.state.getStor pair) finish ∧
-        finish.Ledger :=
-  pair_history_ledger_from_checkpoint trace installed initial fresh ledger
-
--- Paper review 3 statement: pair_history_minimum_liquidity_from_checkpoint
-example
-    {pair : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
-    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
-    (ledger : st₀.Ledger)
-    (floor : st₀.SupplyFloor)
-    (nonzero : pair ≠ 0) :
-    ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
-        runSourceInvocations st₀
-          (steps.map PairStep.source) = some finish ∧
-        WriterRep K' (future.state.getStor pair) finish ∧
-        ((∀ s ∈ steps, s.source.CallersNonzero) →
-          finish.SupplyFloor ∧
-          ∀ before after, (before, after) ∈ sourceReplayEdges
-              st₀ (steps.map PairStep.source) →
-            before.SupplyFloor ∧ after.SupplyFloor ∧
-              (0 < before.totalSupply.toNat → 1000 ≤ after.totalSupply.toNat)) :=
-  pair_history_minimum_liquidity_from_checkpoint trace installed initial fresh ledger floor nonzero
-
--- Paper review 3 statement: pair_history_feeOff_ratio_from_checkpoint
-example
-    {pair : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {K₀ : WriterKey → Prop} {st₀ : State}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode pair).toList = pairSem.image)
-    (initial : WriterRep K₀ (checkpoint.state.getStor pair) st₀)
-    (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
-    (ledger : st₀.Ledger)
-    (floor : st₀.SupplyFloor)
-    (nonzero : pair ≠ 0) :
-    ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
-      (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
-      ∃ (finish : State) (K' : WriterKey → Prop),
-        PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
-        runSourceInvocations st₀
-          (steps.map PairStep.source) = some finish ∧
-        WriterRep K' (future.state.getStor pair) finish ∧
-        (sourceReplayAnswers st₀
-            (steps.map PairStep.source) →
-          (∀ s ∈ steps, s.source.CallersNonzero) →
-          ∀ before after, (before, after) ∈ sourceReplayEdges
-              st₀ (steps.map PairStep.source) →
-            0 < before.totalSupply.toNat →
-            1000 ≤ after.totalSupply.toNat ∧
-              ((before.reserve0.val * before.reserve1.val : ℚ) / (before.totalSupply.toNat : ℚ) ^ 2 ≤
-                (after.reserve0.val * after.reserve1.val : ℚ) / (after.totalSupply.toNat : ℚ) ^ 2)) :=
-  pair_history_feeOff_ratio_from_checkpoint trace installed initial fresh ledger floor nonzero
 
 end Blanc.Lift.UniswapV2Pair
 

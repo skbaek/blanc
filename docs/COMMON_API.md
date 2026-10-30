@@ -1709,9 +1709,7 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   data field kept abstract (only the leading fields' joined bytes are supplied); `recoverSender_pre155`
   gives `recoverSender cid tx = .ok a` at every `cid` from the signing hash, the `r`/`s` range facts
   and one `secp256k1.recover h (tx.v - 27).toBool r s = some a` fact, each a closed `decide +kernel`
-  goal once the fields are substituted; `legacy_decode_pre155` runs the strict nine-field
-  `BLT.toExLegacyTx` from the per-field scalar decoder equations without reducing the data field, and
-  yields `Tx.WireWellFormed`. EIP-155 creations still state their own instances
+  goal once the fields are substituted. EIP-155 creations still state their own instances
   (`Blanc/Lift/Weth9/Creation/SigningRecover.lean`, `Blanc/Lift/BeaconDeposit/Creation/HistoricalTxRaw.lean`).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
@@ -5215,10 +5213,7 @@ of arbitrary nested BLT values or a parser/canonicality theorem.
 apply Jaune's actual parser equations while keeping payload bytes abstract.
 On the encoder side, [`Blanc/RlpListEncode.lean`](../Blanc/RlpListEncode.lean)
 provides `RlpConcrete.toBytesJoin_append` (the joint item encoding of a
-concatenated list) and `RlpConcrete.encode_list_long` (a list whose joint item
-encoding is a known body of at least 56 bytes gets the long-list header over
-that abstract body); a signed creation transaction's canonical re-encoding uses
-them without reducing its payload (3Crv `HistoricalTx.tx_encoded`).
+concatenated list is the concatenation of the joint encodings).
 The additive owner
 [`Blanc/ExecutionBodyTransactionCut.lean`](../Blanc/ExecutionBodyTransactionCut.lean)
 also provides `RlpConcrete.decode_bytes_long_one` and
@@ -6473,8 +6468,8 @@ consumer needs canonical interpreter ingress as one conjunct:
   `gas_le_remaining_noStateGas`, the `rawFrames_gasMeasure_le_noStateGas`
   family, `header_gasLimit_lt_of_transition`, the modern statements unchanged
   as wrappers). Bounds needing a numerical rule value arrive as explicit
-  fork-class hypotheses instead: `ConfiguredHistoryTraceIn.calldata_bound` /
-  `frameAdmitted_calldata` (and staged/block forms) take
+  fork-class hypotheses instead: `ConfiguredHistoryTraceIn.calldata_bound` (and staged/block
+  forms) takes
   `hdata : ∀ f, F f → 16 ≤ (Fork.ruleSet f).txr.dataNonZero`, and the strict
   `rawFrames_gas_lt` chain (`TransactionTrace.msg_gas_succ_le_noStateGas`,
   `intrinsicGas_bounds_noStateGas`, staged/block forms) takes
@@ -6506,8 +6501,7 @@ consumer needs canonical interpreter ingress as one conjunct:
   and `stateGas = none`; it needs no entered-child witness or bounded-output
   premise. The entered-child theorem consumes this same opcode proof.
   `Exec.rawFrameRoots_data_bound` is the execution-level form. Worked
-  consumers: `Lift.BeaconDeposit.configuredHistory_solInv_sys` (and
-  `configuredHistory_count_sys`/`configuredHistory_root_sys`),
+  consumers: `Lift.BeaconDeposit.configuredHistory_solInv_sys`,
   `Lift.Curve3Crv.c3crv_history_committed_derived` and
   `Lift.UniswapV2Pair.pair_trace_admitted`.
 - Every retained carrier from `ProcessMessageTrace` through
@@ -6885,12 +6879,12 @@ invariant `I` at entry); `Exec.CoreAccounting.entryTarget` is the target handler
 (target-parent spawn accounting) from three per-contract obligations —
 `FramePreserves` (the frame theorem), `SpawnKinds` (only `CALL`/`STATICCALL`
 along the frame's own chain) and `SpawnEntry` (`I` at each spawning node of a
-successful target frame, a prefix fact); `entryLadder` and
-`ConfiguredHistoryTrace.entryGood_settled` give the history form; for a covered-fork history
-rooted right after one transaction (a `MidHistoryTraceIn`, e.g. a deployment cut),
+successful target frame, a prefix fact); `entryLadder` gives the ladder; for a covered-fork
+history rooted right after one transaction (a `MidHistoryTraceIn`, e.g. a deployment cut),
 `MidHistoryTraceIn.entryGood_settled` in
 [`Blanc/ExecutionEntryAccountingMidHistory.lean`](../Blanc/ExecutionEntryAccountingMidHistory.lean)
-gives the same conclusion, additionally taking the code's `InstalledCert`. Its generic
+gives the history form (every settlement-committed non-static frame at `ca` has `EntryGood`, and
+`I` holds at the end), taking the code's `InstalledCert`. Its generic
 supports: `Evm.step_spawn_child_world` (a child opens on its parent's storage at
 code-bearing accounts, balance total not growing), `Xinst.step_spawn_world`,
 `Exec.Deriv.ParentStep.balSum_le`, `Exec.Deriv.ParentPrefix.balSum_le_getCode`.
@@ -6934,7 +6928,7 @@ domain `F` without state gas, for code whose frames spawn only by `CALL`/`STATIC
 `stateGas = none`; the create arm is excluded by the decoded instruction),
 `Exec.CoreAccountingIn.modelFrameIn`, `SpawnReplayIn F`, `spawnReplayTargetIn` and
 `ExecutionAccountingReplay.modelLadderIn` producing `AccountingLadderAdmittedIn F`.
-Worked use: `Blanc/Lift/Weth9/CommittedHistoryIn.lean` (`weth9_history_committedIn`).
+Worked use: `Blanc/Lift/Weth9/DeployBlockHistory.lean` (`weth9_mid_history_committedIn`).
 
 When the contract's own frame theorem already consumes the frame's *whole subtree* —
 re-entered frames of the same contract run inside the frame's own model transcript, so

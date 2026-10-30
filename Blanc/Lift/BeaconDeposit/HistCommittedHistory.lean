@@ -171,30 +171,6 @@ theorem configuredHistoryIn_solInv_admitted {ca : Adr} {cfg : ChainConfig}
   rw [observed] at replay
   exact replay initialHistory invariant
 
-theorem configuredHistoryIn_count_admitted {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (rewards : trace.RewardCreditsFunded)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    (future.state.getStor ca).get solCountSlot =
-      Nat.toB256 (initialHistory ++ committedNodesIn ca trace).length ∧
-      (initialHistory ++ committedNodesIn ca trace).length < 2 ^ 32 :=
-  solCount_eq_of_solInv (configuredHistoryIn_solInv_admitted trace admitted rewards installed invariant)
-
-theorem configuredHistoryIn_root_admitted {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (rewards : trace.RewardCreditsFunded)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodesIn ca trace) :=
-  BeaconDeposit.root_correct _ _ _
-    (configuredHistoryIn_solInv_admitted trace admitted rewards installed invariant).2
-
 /-- Ordered extraction composes at an actual historical trace cut. -/
 theorem committedNodesIn_append {ca : Adr} {cfg : ChainConfig}
     {checkpoint middle future : BlockChain}

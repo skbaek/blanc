@@ -20,7 +20,7 @@ This module carries that fact:
   wrapper both the state-stable condition and `MemOK` of the wrapper-entry
   memory.  Everything it needs about an instruction is `memSafe_step`.
 * `LidoWriterSpecsM A`: `LidoWriterSpecs A` with `MemOK d.memory` added to both
-  fields' premises, and the frame, soundness and history rungs over it.
+  fields' premises, and the frame and soundness rungs over it.
 -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
@@ -245,16 +245,5 @@ theorem lidoSpec_soundAdmitted_mem {A : List LidoCircuitBreaker.Entry → Sevm �
 theorem lidoSpec_preservesAdmitted_mem {A : List LidoCircuitBreaker.Entry → Sevm → Prop}
     (W : LidoWriterSpecsM A) (ca : Adr) : lidoSpec.PreservesAdmitted ca (lidoFrameEntry A) :=
   lidoSpec.preserves_inv_admitted ca (lidoFrameEntry A) (lidoSpec_soundAdmitted_mem W ca)
-
-/-- **History rung over `LidoWriterSpecsM`.** -/
-theorem lido_history_preserves_inv_mem {A : List LidoCircuitBreaker.Entry → Sevm → Prop}
-    (W : LidoWriterSpecsM A)
-    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca (lidoEntry A))
-    (inv : lidoSpec.StateInv ca checkpoint.state) :
-    lidoSpec.StateInv ca future.state :=
-  trace.stateInv_admitted_sem (lidoSpec_preservesAdmitted_mem W ca)
-    ((trace.freshFrameAdmitted ca).and admitted) inv
 
 end Blanc.Lift.LidoCircuitBreakerDeployed

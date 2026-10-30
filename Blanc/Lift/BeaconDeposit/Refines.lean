@@ -26,8 +26,8 @@ theorems (`Views.lean`), over real Jaune executions of the deployed bytes:
   frame has `DepositDecodable` calldata on which the model's `deposit` returns `.ok`, so a
   rejected deposit has no successful frame.  No revert data, route, or retained-effect statement
   (the lift bridges only relate successful executions).
-* P4: `get_deposit_count_warm_exec`, `get_deposit_count_cold_exec`, `supportsInterface_exec`,
-  `get_deposit_root_exec` (`Views.lean`).
+* P4: `get_deposit_count_warm_exec`, `supportsInterface_exec`, `get_deposit_root_exec`
+  (`Views.lean`); the cold count read is not stated.
 * P5: `deposit_frame_refines`, the storage-shape conjunct (writes exactly the count slot and one
   branch slot; other accounts unchanged); no raw instruction-occurrence census and no
   constructor counterpart.

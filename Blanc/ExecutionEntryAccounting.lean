@@ -32,7 +32,7 @@ The target handler `Exec.CoreAccounting.entryTarget` needs, per contract:
 The child of such a node opens on the node's storage (`Evm.step_spawn_child_world`),
 so the lower-depth hypothesis delivers `EntryGood` for every committed frame of a
 settling child; children that do not settle contribute no frame.  The history
-headline is `ConfiguredHistoryTrace.entryGood_settled`.
+form is `MidHistoryTraceIn.entryGood_settled` (`ExecutionEntryAccountingMidHistory.lean`).
 -/
 
 namespace Blanc
@@ -526,41 +526,5 @@ def entryLadder (preserves : c.PreservesAdmitted ca entry)
     exact (core pc sevm pre out run installed run committed fork installed admitted).2 entryBound
 
 end ExecutionAccountingReplay
-
-namespace ExecutionTrace
-
-open ExecutionAccountingReplay
-
-/-- **The carried invariant at the entry of every committed target frame.**  In a
-configured history admitted at `ca`, from a checkpoint satisfying the contract's
-state invariant and `I`, every settlement-committed non-static frame at `ca` —
-including frames re-entered below the contract's own non-static calls — starts at
-pc `0` on a covered fork at the contract's code, satisfies the admission, and has
-`I` at its entry storage; `I` also holds at the end.  Per contract: its frame
-theorem (`preserves`, `preserve`), `CALL`/`STATICCALL`-only spawning (`kinds`) and
-`I` at its own spawning nodes (`spawn`).  Rolled-back frames are not claimed. -/
-theorem ConfiguredHistoryTrace.entryGood_settled {c : ContractSpecSem} {ca : Adr}
-    {entry : Sevm → Devm → Prop} {I : Stor → Prop}
-    {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca entry)
-    (inv : c.StateInv ca checkpoint.state) (initial : I (checkpoint.state.getStor ca))
-    (preserves : c.PreservesAdmitted ca entry)
-    (preserve : FramePreserves ca c.sem entry I) (kinds : SpawnKinds ca c.sem)
-    (spawn : SpawnEntry ca c.sem entry I) :
-    I (future.state.getStor ca) ∧
-      ∀ f ∈ trace.settledFrames, f.sevm.currentTarget = ca → f.sevm.isStatic = false →
-        EntryGood ca c.sem entry I f := by
-  obtain ⟨steps, replay, observed⟩ :=
-    (entryLadder preserves preserve kinds spawn).configuredHistory trace admitted inv
-  obtain ⟨final, good⟩ := replay initial
-  change steps = trace.settledFrames.flatMap (fun f : Exec.Frame =>
-    if f.sevm.currentTarget = ca ∧ f.sevm.isStatic = false then [f] else []) at observed
-  refine ⟨final, fun f member target static => good f ?_⟩
-  rw [observed]
-  exact List.mem_flatMap.mpr ⟨f, member, by simp only [target, static, and_self, ↓reduceIte,
-    List.mem_cons, List.not_mem_nil, or_false]⟩
-
-end ExecutionTrace
 
 end Blanc

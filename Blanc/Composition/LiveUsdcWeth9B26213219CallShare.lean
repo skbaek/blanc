@@ -8,8 +8,7 @@ import Blanc.Composition.PairTwoTokenCallShare
 `pair_usdc_weth9_call_product_finite` instantiates `pair_two_token_call_product` at the USDC/WETH9
 Pair over the support-free checkpoint (the arguments of `pair_usdc_weth9_history_feeOn_product_finite`,
 plus the factory being no precompile).  `live_pair_share_value` roots it in the WETH9 and Pair
-deployments (`WethDeploymentTo`, `PairDeploymentTo`) with the premises of
-`feeOn_product_from_original_history`, concluding `LiveShareValue`: every outer Pair call keeps
+deployments (`WethDeploymentTo`, `PairDeploymentTo`) and the observed block, concluding `LiveShareValue`: every outer Pair call keeps
 `ShareValueKept` over the stored words at its entry and committed exit, with the fee `callFeeWords`
 its `mint`/`burn` mints at the factory's actual `feeTo()` answer (`feeToAnswer`, read from the frame
 the call's factory query entered).  `live_pair_share_value_feeOff` is the fee-off reading under
@@ -110,7 +109,7 @@ theorem factory_notPrecompile : ∀ s : BenvStat, CoveredFork s.fork →
     (by decide) (by decide) (by decide) (by decide)
 
 /-- **Share value at every outer call of the live USDC/WETH9 Pair**, from the WETH9 and Pair
-deployments (the premises of `feeOn_product_from_original_history`): every outer Pair call with
+deployments and the observed block: every outer Pair call with
 positive incoming supply word keeps `r0 · r1 · T'² ≤ r0' · r1' · (T + F)²` over the stored words
 at its entry and committed exit, `F` the protocol fee its `mint`/`burn` mints at the factory's
 actual `feeTo()` answer. -/

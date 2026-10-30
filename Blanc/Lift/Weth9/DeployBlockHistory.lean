@@ -1,4 +1,5 @@
-import Blanc.Lift.Weth9.DeployTransactionHistory
+import Blanc.Lift.Weth9.DeployTransaction
+import Blanc.Lift.Weth9.CommittedHistoryIn
 import Blanc.ExecutionAccountingMidHistoryIn
 import Blanc.ExecutionMidHistoryInFacts
 import Blanc.ExecutionIndexedReceipts
@@ -11,12 +12,10 @@ A history that starts right after one transaction of a retained configured block
 (`MidHistoryTraceIn`) and its WETH9 committed replay:
 
 * `midTouchedKeysIn`, `midKeyUniverseIn`, `midCommittedInvocationsIn` — the touched keys, the
-  tracked universe and the settlement-committed writer invocations of a mid history, as
-  `historyTouchedKeysIn`, `historyKeyUniverseIn` and `committedInvocationsIn` over
-  `ConfiguredHistoryTraceIn`;
-* `weth9_mid_history_committedIn` — the statement of `weth9_history_committedIn` over a mid
-  history, with the start state in place of the checkpoint state (`midHistoryIn`,
-  `MidHistoryTraceIn.stateInv_admitted_semIn`);
+  tracked universe and the settlement-committed writer invocations of a mid history;
+* `weth9_mid_history_committedIn` — the statement of `weth9_history_committed`
+  (`CommittedHistory.lean`) over a mid history, with the start state in place of the checkpoint
+  state (`midHistoryIn`, `MidHistoryTraceIn.stateInv_admitted_semIn`);
 * `weth9_history_committed_from_creation_block` — the creation transaction at its position `i`
   of the deployment block (Byzantium, block 4719568), cut by `TxSplit`: the state right after
   it holds the runtime and the constructor's storage, and the rest of the block followed by any
@@ -133,7 +132,7 @@ def midCommittedInvocationsIn {F : Fork → Prop} {cfg : ChainConfig} {start : B
   trace.settledFrames.flatMap (committedFrameInvocations ca)
 
 /-- **The WETH9 model replays the committed chain of a mid history.** The statement of
-`weth9_history_committedIn` for a history that starts right after one transaction of a retained
+`weth9_history_committed` for a history that starts right after one transaction of a retained
 block: from one initial footprint `K₀` at the start state and the trace-local freshness of the
 touched keys, the code stays installed, the ether does not overflow, the future storage carries
 the footprint over `K₀ ∪ touched`, the future footprint ledger is the model run over exactly the

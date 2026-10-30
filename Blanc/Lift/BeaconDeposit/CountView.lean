@@ -16,7 +16,7 @@ The walk of the deployed runtime's `get_deposit_count` path over the lifted prog
   solc copy loop (first pass inlined in entry 33, `copy_step`; loop entry 9, `copy_loop` with the
   `SFunc.RunExactCut.iterate` construction), the padding clean-up and `RETURN` (390 gas).
 
-In all 1514 gas with the count slot warm and 3514 cold, and the output is
+In all 1514 gas with the count slot warm, and the output is
 `abiDynamicBytesReturn (le64 word.toNat)`, the counterpart of the Blanc port's
 `getDepositCount_warm_runCompiled_noRawSstore`.  The statements are over `SProg.RunExact prog`,
 to be composed with the certificate's `exec_of_runExact` once it is checked.
@@ -554,9 +554,6 @@ six), encoding 390 (97 for the head and length words and the operands, 70 for th
 word, 26 for the loop's exit test, 197 for the clean-up and `RETURN`). -/
 def countGasWarm : Nat := 1514
 
-/-- With the slot cold: the `SLOAD` costs 2100 instead of 100. -/
-def countGasCold : Nat := 3514
-
 /-- **`get_deposit_count()` on the deployed bytes, slot warm: a gas-exact lifted run returning
 `abiDynamicBytesReturn (le64 word)`.**  The counterpart of the Blanc port's
 `getDepositCount_warm_runCompiled_noRawSstore`: same premises (calldata at least a selector,
@@ -587,34 +584,6 @@ theorem get_deposit_count_warm_runExact (sevm : Sevm) (base : Devm) (word : B256
     (fun S M G' f o hS k => by
       rw [← hstorage] at k
       exact rx_sload_warm hleg hfork.rules_access hwarm (by omega) k)
-  refine ⟨Mf, hwff, hrf, hsf, _, rfl, ?_⟩
-  exact dispatch_count (b := base) hdataLength hdataBound hsel hrun
-
-/-- **`get_deposit_count()`, slot cold**: 3514 gas, and the slot's key joins the accessed set. -/
-theorem get_deposit_count_cold_runExact (sevm : Sevm) (base : Devm) (word : B256) (G : Nat)
-    (hdataLength : 4 ≤ sevm.data.length)
-    (hdataBound : sevm.data.length < 2 ^ 256)
-    (hvalue : sevm.value = 0)
-    (hselector : Sevm.selector sevm = Blanc.BeaconDeposit.getDepositCountSelector)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hcold : (⟨sevm.currentTarget, countSlot⟩ : Adr × B256) ∉ base.accessedStorageKeys)
-    (hstorage : base.getStorVal sevm.currentTarget countSlot = word) :
-    ∃ Mf, Mem.Wf Mf ∧ Mem.Reads Mf (countImg word) ∧ Mf.size = 288 ∧
-      SProg.RunExact prog sevm
-        (base.setMach ⟨[], Mem.empty, G + countGasCold, base.stateGas⟩)
-        (((addAccessedStorageKey base sevm.currentTarget countSlot).setMach
-          ⟨[Sevm.selector sevm], Mf, G, base.stateGas⟩).withOutput
-          (Blanc.BeaconDeposit.abiDynamicBytesReturn (Blanc.BeaconDeposit.le64 word.toNat))) := by
-  have hleg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
-  have hshifts : sevm.benvStat.rules.op.shifts = true := CoveredFork.rules_shifts hfork
-  have hsel : Sevm.selector sevm = 0x621fd130 :=
-    hselector.trans Blanc.BeaconDeposit.getDepositCountSelector_eq
-  obtain ⟨Mf, hwff, hrf, hsf, hrun⟩ := count_wrapper (sevm := sevm) (b := base)
-    (b' := addAccessedStorageKey base sevm.currentTarget countSlot)
-    (g := G) (sel := Sevm.selector sevm) (sl := 2100) (w := word) hshifts hvalue hdataBound
-    (fun S M G' f o hS k => by
-      rw [← hstorage] at k
-      exact rx_sload_cold hleg hfork.rules_access hcold (by omega) k)
   refine ⟨Mf, hwff, hrf, hsf, _, rfl, ?_⟩
   exact dispatch_count (b := base) hdataLength hdataBound hsel hrun
 

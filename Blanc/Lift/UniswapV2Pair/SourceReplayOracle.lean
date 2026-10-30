@@ -1,10 +1,9 @@
 import Blanc.Lift.UniswapV2Pair.SourceReplay
 import Blanc.Lift.UniswapV2Pair.PropertiesOracleLaw
 
-/-! Oracle receipts of an ordered source replay: every receipt is lawful, the receipts chain the
-stored `blockTimestampLast` from the replay's initial state to its final state, and every receipt's
-timestamp is the timestamp of the invocation that produced it (nested re-entered frames inherit their
-parent's context, so their receipts carry the same block timestamp). -/
+/-! Timestamp provenance of the oracle receipts of a typed run: every receipt's timestamp is the
+timestamp of the invocation that produced it (`runTyped_stamped`; nested re-entered frames inherit
+their parent's context, so their receipts carry the same block timestamp). -/
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
@@ -327,64 +326,5 @@ theorem runTyped_stamped {st : State} {ctx : Context} {entry : Entry} {transcrip
   ((drive_driveTurns_stamped (transcript.work + 2)).1 _ transcript
     (startTyped_stamped (current := { state := st, logs := [], updates := [] })
       (entry := entry) (fun _ member => (nomatch member)))).2.2
-
-/-- One invocation's receipts with the invocation that produced them, in replay order. -/
-def sourceReplayReceipts : State → List SourceInvocation →
-    List (SourceInvocation × List TaggedOracleUpdate)
-  | _, [] => []
-  | st, inv :: rest =>
-    (inv, (inv.run st).frame.current.updates) ::
-      sourceReplayReceipts (inv.run st).frame.current.state rest
-
-theorem sourceReplayUpdates_eq_receipts (st : State) (invs : List SourceInvocation) :
-    sourceReplayUpdates st invs = (sourceReplayReceipts st invs).flatMap Prod.snd := by
-  induction invs generalizing st with
-  | nil => rfl
-  | cons inv rest ih =>
-    rw [sourceReplayUpdates, sourceReplayReceipts, List.flatMap_cons, ih]
-
-/-- **Oracle receipts of a replay.**  Every update receipt of the replay is lawful
-(`Δt = (ts mod 2^32 − last) mod 2^32`, increments `⌊r1·2^112/r0⌋·Δt` and `⌊r0·2^112/r1⌋·Δt` when `Δt`
-and both reserves are nonzero), the receipts chain `last` from the initial state's
-`blockTimestampLast` through each receipt's `ts mod 2^32` to the final state's, and each receipt's
-`ts` is the context timestamp of the invocation that produced it. -/
-theorem SourceReplay.oracle_receipts {st finish : State} {invs : List SourceInvocation}
-    (replay : SourceReplay st invs finish) :
-    (∀ u ∈ sourceReplayUpdates st invs, u.update.Lawful) ∧
-      OracleTimestampChain st.blockTimestampLast finish.blockTimestampLast
-        (sourceReplayUpdates st invs) ∧
-      ∀ inv receipts, (inv, receipts) ∈ sourceReplayReceipts st invs →
-        inv ∈ invs ∧ ∀ u ∈ receipts, u.update.timestamp = inv.context.timestamp := by
-  induction replay with
-  | nil st =>
-    exact ⟨fun _ member => (nomatch member), rfl, fun _ _ member => (nomatch member)⟩
-  | @cons st finish inv rest out bytes consumed successful tail ih =>
-    have runEq : inv.run st = out := (runTyped_of_exact consumed).1
-    have law := runTyped_oracle_law (st := st) (ctx := inv.context) (entry := inv.entry)
-      (transcript := inv.transcript)
-    have stamped := runTyped_stamped (st := st) (ctx := inv.context) (entry := inv.entry)
-      (transcript := inv.transcript)
-    change (∀ u ∈ (inv.run st).frame.current.updates, u.update.Lawful) ∧
-      OracleTimestampChain st.blockTimestampLast (inv.run st).frame.current.state.blockTimestampLast
-        (inv.run st).frame.current.updates ∧ _ ∧ _ at law
-    change ∀ u ∈ (inv.run st).frame.current.updates, u.update.timestamp = inv.context.timestamp
-      at stamped
-    rw [runEq] at law stamped
-    obtain ⟨restLawful, restChain, restStamped⟩ := ih
-    refine ⟨?_, ?_, ?_⟩
-    · intro u member
-      rw [sourceReplayUpdates, runEq, List.mem_append] at member
-      rcases member with here | later
-      · exact law.1 u here
-      · exact restLawful u later
-    · rw [sourceReplayUpdates, runEq]
-      exact OracleTimestampChain_append _ _ _ _ _ law.2.1 restChain
-    · intro inv' receipts member
-      rw [sourceReplayReceipts, runEq, List.mem_cons] at member
-      rcases member with same | later
-      · cases same
-        exact ⟨List.mem_cons_self .., stamped⟩
-      · obtain ⟨mem, hts⟩ := restStamped inv' receipts later
-        exact ⟨List.mem_cons_of_mem _ mem, hts⟩
 
 end Blanc.Lift.UniswapV2Pair

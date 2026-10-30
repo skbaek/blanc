@@ -1260,8 +1260,4 @@ theorem nat_fee_guarantee_refuted : NatFeeGuaranteeRefuted := by
     Blanc.Lift.WithdrawalRequest.fee_2893
     Blanc.Lift.WithdrawalRequest.two_pow_245_lt_nat_fee_2893
 
-/-- **B is false in the model.** -/
-theorem not_natFeeGuarantee : ¬ NatFeeGuarantee :=
-  not_natFeeGuarantee_of_refuted nat_fee_guarantee_refuted
-
 end Blanc.Lift.WithdrawalRequest.FeeCounterexample

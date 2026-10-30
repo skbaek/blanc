@@ -232,14 +232,4 @@ theorem FootInv.balance_le {K : Key → Prop} {s : Stor} {b : B256} (h : FootInv
   rw [tracked_self ha] at this
   exact this.trans h.backed
 
-/-- **The footprint is a complete ledger**: an address whose balance slot is neither fixed nor a
-tracked key's slot books nothing. -/
-theorem FootInv.balance_eq_zero {K : Key → Prop} {s : Stor} {b : B256} (h : FootInv K s b)
-    {a : Adr} (hfix : balSlot a ∉ fixedSlots) (hK : ∀ k, K k → k.slot ≠ balSlot a) :
-    s.get (balSlot a) = 0 := by
-  by_contra hne
-  rcases h.support _ hne with hx | ⟨k, hk, he⟩
-  · exact hfix hx
-  · exact hK k hk he
-
 end Blanc.Lift.Weth9

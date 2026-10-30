@@ -368,18 +368,6 @@ theorem ConfiguredHistoryTraceIn.calldata_bound {F : Fork → Prop} {cfg : Chain
       · exact ih root hmem
       · exact block.calldata_bound capabilities hdata root hmem
 
-/-- Admission corollary: the per-frame calldata premise follows from the
-supplied selected-domain history. -/
-theorem ConfiguredHistoryTraceIn.frameAdmitted_calldata {F : Fork → Prop} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {ca : Adr}
-    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F)
-    (hdata : ∀ f, F f → 16 ≤ (Fork.ruleSet f).txr.dataNonZero) :
-    trace.FrameAdmitted ca (fun sevm _ => sevm.data.length < 2 ^ 256) := by
-  rw [ConfiguredHistoryTraceIn.frameAdmitted_iff_rawFrames]
-  intro root hmem _
-  exact trace.calldata_bound capabilities hdata root hmem
-
 /-- The history calldata bound on the historical domain. -/
 theorem ConfiguredHistoryTraceIn.calldata_bound_hist {cfg : ChainConfig}
     {checkpoint future : BlockChain}
@@ -387,14 +375,6 @@ theorem ConfiguredHistoryTraceIn.calldata_bound_hist {cfg : ChainConfig}
     (capabilities : BodyStageCapabilities HistFork) :
     ∀ root ∈ trace.rawFrames, root.sevm.data.length < 2 ^ 256 :=
   trace.calldata_bound capabilities (fun _ hf => hf.dataNonZero_ge)
-
-/-- The history calldata admission corollary on the historical domain. -/
-theorem ConfiguredHistoryTraceIn.frameAdmitted_calldata_hist {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {ca : Adr}
-    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
-    (capabilities : BodyStageCapabilities HistFork) :
-    trace.FrameAdmitted ca (fun sevm _ => sevm.data.length < 2 ^ 256) :=
-  trace.frameAdmitted_calldata capabilities (fun _ hf => hf.dataNonZero_ge)
 
 /-- The block strict gas bound on the historical domain. -/
 theorem ConfiguredBlockTraceIn.rawFrames_gas_lt_hist {cfg : ChainConfig}

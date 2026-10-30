@@ -22,11 +22,10 @@ Derived API, for the conservation and policy headlines:
 * `.created` — right after the creation transaction the token holds the certified runtime and
   the storage `deployedStor deployer`, with `VyInv` for `curveDeployedState deployer` (minter
   the deployer, supply and balances zero) over no live keys;
-* `.history_from_deployment` — the model run, from that deployed state, over exactly the
-  committed invocations, each step justified by its frame's `OwnerAnswerH` owner evidence, ending
-  in the state the checkpoint storage represents, whose total supply equals the sum of its
-  balances; `.frames` carries the same run frame by frame (each committed frame's own opening and
-  closing storage abstract its model step), which the public headlines in `Headline.lean` read.
+* `.frames` — the model run, from that deployed state, over exactly the committed invocations,
+  each step justified by its frame's `OwnerAnswerH` owner evidence, frame by frame (each
+  committed frame's own opening and closing storage abstract its model step), ending in the
+  state the checkpoint storage represents; the public headlines in `Headline.lean` read it.
 -/
 
 namespace Blanc.Lift.Curve3Crv
@@ -92,22 +91,6 @@ theorem created :
     HistoricalTx.actual_block_cut d.block d.number d.time d.cut sameTx lookup d.succeeded
   have hstor' : d.cut.afterBenv.state.getStor tokenAddress = deployedStor deployer.toB256 := hstor
   exact ⟨hcode, hstor', by rw [hstor']; exact deployedStor_vyInv deployer deployer_balSlot⟩
-
-/-- **3Crv from its actual deployment to the checkpoint.** The runtime stays installed, and the
-model run from the deployed state (`curveDeployedState deployer`) over exactly the committed
-writer invocations after the creation exists, is justified step by step by `OwnerAnswerH`,
-ends in a state the checkpoint storage represents over the touched keys, and conserves supply. -/
-theorem history_from_deployment :
-    some (checkpoint.state.getCode tokenAddress).toList = c3crvSem.image ∧
-      ∃ s, InvRunBy OwnerAnswerH (curveDeployedState deployer) d.invocations s ∧
-        runInvocations (curveDeployedState deployer) d.invocations = some s ∧
-        VyInv (checkpoint.state.getStor tokenAddress) s d.keys ∧
-        Blanc.Curve3Crv.Conserved s := by
-  obtain ⟨hcode, -, hinv⟩ := d.created
-  have installed : some (d.cut.afterBenv.state.getCode tokenAddress).toList = c3crvSem.image := by
-    rw [hcode]
-    rfl
-  exact c3crv_mid_history_committedHist d.trace installed hinv d.fresh
 
 /-- The keys the raw token frames of the rest of the deployment block and of the history touch,
 including frames that later roll back (the keys `fresh` is about). -/

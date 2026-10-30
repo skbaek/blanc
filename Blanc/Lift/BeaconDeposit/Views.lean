@@ -9,8 +9,7 @@ import Blanc.Lift.BeaconDeposit.RootView
 The gas-exact synthetic runs of `get_deposit_count` (`CountView.lean`) and `supportsInterface`
 (`Erc165.lean`) composed with the kernel-checked converse bridge `exec_of_runExact`: each is a real
 Jaune execution of the deployed runtime.  The post states differ from the pre state only in the
-machine (stack, memory, gas), the output, and for the cold count read the accessed-storage set: no
-storage, balance, code or log changes.  Counterparts of the port's
+machine (stack, memory, gas) and the output: no storage, balance, code or log changes.  Counterparts of the port's
 `getDepositCount_warm_runCompiled_noRawSstore` and `supportsInterface_runCompiled_noRawSstore`.
 -/
 
@@ -34,25 +33,6 @@ theorem get_deposit_count_warm_exec (sevm : Sevm) (base : Devm) (word : B256) (G
           (Blanc.BeaconDeposit.abiDynamicBytesReturn (Blanc.BeaconDeposit.le64 word.toNat))))) := by
   obtain ⟨Mf, hwf, hreads, hsize, hrun⟩ := get_deposit_count_warm_runExact sevm base word G
     hdataLength hdataBound hvalue hselector hfork hwarm hstorage
-  exact ⟨Mf, hwf, hreads, hsize, exec_of_runExact hcode hfork hrun⟩
-
-theorem get_deposit_count_cold_exec (sevm : Sevm) (base : Devm) (word : B256) (G : Nat)
-    (hcode : sevm.code = code)
-    (hdataLength : 4 ≤ sevm.data.length)
-    (hdataBound : sevm.data.length < 2 ^ 256)
-    (hvalue : sevm.value = 0)
-    (hselector : Sevm.selector sevm = Blanc.BeaconDeposit.getDepositCountSelector)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hcold : (⟨sevm.currentTarget, countSlot⟩ : Adr × B256) ∉ base.accessedStorageKeys)
-    (hstorage : base.getStorVal sevm.currentTarget countSlot = word) :
-    ∃ Mf, Mem.Wf Mf ∧ Mem.Reads Mf (countImg word) ∧ Mf.size = 288 ∧
-      Nonempty (Exec 0 sevm
-        (base.setMach ⟨[], Mem.empty, G + countGasCold, base.stateGas⟩)
-        (.ok (((addAccessedStorageKey base sevm.currentTarget countSlot).setMach
-          ⟨[Sevm.selector sevm], Mf, G, base.stateGas⟩).withOutput
-          (Blanc.BeaconDeposit.abiDynamicBytesReturn (Blanc.BeaconDeposit.le64 word.toNat))))) := by
-  obtain ⟨Mf, hwf, hreads, hsize, hrun⟩ := get_deposit_count_cold_runExact sevm base word G
-    hdataLength hdataBound hvalue hselector hfork hcold hstorage
   exact ⟨Mf, hwf, hreads, hsize, exec_of_runExact hcode hfork hrun⟩
 
 theorem supportsInterface_exec {sevm : Sevm} {pre : Devm}

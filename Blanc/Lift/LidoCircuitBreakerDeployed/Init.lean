@@ -3,9 +3,8 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.History
 /-!
 # Satisfiability of the Lido CircuitBreaker checkpoint premise
 
-The Lido history theorems (`lido_history_preserves_inv_concrete`, `lido_history_l1_l3`) carry
-`lidoSpec.StateInv ca` (respectively the raw-slot form `RegistryZeroRaw`) at their checkpoint.
-This module shows those premises are inhabited by an explicit concrete world: the account `ca`
+The Lido state invariant `lidoSpec.StateInv ca` and its raw-slot form `RegistryZeroRaw` are
+checkpoint predicates. This module shows they are inhabited by an explicit concrete world: the account `ca`
 holds the deployed CircuitBreaker runtime `code`, a zero ether balance and empty storage, and no
 other account exists.
 

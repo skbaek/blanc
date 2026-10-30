@@ -2,28 +2,12 @@ import Blanc.Lift.WithdrawalRequest.SystemProtocol
 import Blanc.Lift.WithdrawalRequest.BalanceHistory
 import Blanc.RequestsOutput
 
-/-! Reachable checked system totality and actual retained request-output order.
+/-! Actual retained request-output order of the withdrawal system call.
 FIFO encoding below remains conditional on storage representation. -/
 
 namespace Blanc.Lift.WithdrawalRequest
 
 open Jaune Blanc.ExecutionTrace
-
-/-- Canonical checkpoint code suffices for a fresh checked call on any covered
-environment carrying the retained future state. No successful-call premise. -/
-theorem history_checked_system_totality {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (history : ConfiguredHistoryTrace cfg checkpoint future)
-    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode)
-    {benv : Benv} (state : benv.state = future.state) (fork : CoveredFork benv.stat.fork) :
-    processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
-      .ok ((systemProtocolPost benv).state, systemProtocolOutput benv) ∧
-    (systemProtocolOutput benv).gasLeft = systemTransactionGas - systemProtocolGas benv ∧
-    systemProtocolGas benv ≤ 210000 := by
-  have installed : benv.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode := by
-    rw [state]
-    exact history_canonical_code history code
-  exact checked_system_totality fork installed
 
 /-- Functional equality identifies the retained checked withdrawal outcome
 with the independently constructed protocol result. -/
