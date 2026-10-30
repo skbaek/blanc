@@ -1971,6 +1971,7 @@ CONTRACTS = {
 
 # Frozen byte producer and its conditional original-cut consumer.
 SHARED += ["ExecutionBodyTransactionCut"]
+SHARED += ["Lift.LegacyRecover"]
 CONTRACTS["usdc"].extend([
     "Lift.Usdc.HistoryAnchorBody",
     "Lift.Usdc.HistoryAnchorCSigningHash",

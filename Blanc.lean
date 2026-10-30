@@ -567,6 +567,7 @@ import Blanc.Lift.Cursor
 import Blanc.Lift.SpawnKindsM
 import Blanc.Lift.GuardedCalls
 import Blanc.Lift.LogAddresses
+import Blanc.Lift.LegacyRecover
 import Blanc.Lift.ChildFrameCode
 import Blanc.Lift.ChildFrameDepth
 import Blanc.Lift.ReachWalk
