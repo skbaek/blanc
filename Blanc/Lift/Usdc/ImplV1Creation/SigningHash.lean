@@ -1,48 +1,16 @@
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds00
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds01
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds02
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds03
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds04
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds05
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds06
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds07
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds08
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds09
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds10
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds11
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds12
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds13
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds14
-import Blanc.Lift.Usdc.ImplV1Creation.SigningRounds15
+import Blanc.Lift.Usdc.ImplV1Creation.SigningEncoding
 
 /-! Exact hash and signature consumers for the unadopted V1 creation preview. -/
 namespace Blanc.Lift.Usdc.ImplV1Creation
 open Jaune ExecutionTrace
-open SigningBlocks
 
 /-- Kernel hash of the exact conditional EIP-155 signing envelope. -/
 theorem signingPayload_hash : signingPayload.keccak =
     (0x3a424731e9075d7b45dcc6ab92455664e56100fbb6419923723a54aa9d5710ad : B256) := by
-  change KECCAK.Bytes.run 0 signingPayload state00 = _
-  rw [payload_split]
-  unfold segment0 segment1 segment2
-  simp only [List.append_assoc]
-  rewrite [block00, block01, block02, block03, block04, block05]
-  rewrite [block06, block07, block08, block09, block10, block11]
-  rewrite [block12, block13, block14, block15, block16, block17]
-  rewrite [block18, block19, block20, block21, block22, block23]
-  rewrite [block24, block25, block26, block27, block28, block29]
-  rewrite [block30, block31, block32, block33, block34, block35]
-  rewrite [block36, block37, block38, block39, block40, block41]
-  rewrite [block42, block43, block44, block45, block46, block47]
-  rewrite [block48, block49, block50, block51, block52, block53]
-  rewrite [block54, block55, block56, block57, block58, block59]
-  rewrite [block60, block61, block62, block63, block64, block65]
-  rewrite [block66, block67, block68, block69, block70, block71]
-  rewrite [block72, block73, block74, block75, block76, block77]
-  rewrite [block78, block79, block80, block81, block82, block83]
-  rewrite [block84, block85, block86, block87, block88, block89]
-  exact finalHash
+  unfold signingPayload
+  rw [ByteArray.toList_eq_toList_data]
+  simp only [code, List.toList_toArray]
+  decide +kernel
 
 /-- Explicit transaction fields determine the signing hash. -/
 theorem signingHash {tx : Tx}

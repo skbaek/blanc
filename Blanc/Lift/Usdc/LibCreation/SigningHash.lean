@@ -1,22 +1,18 @@
-import Blanc.Lift.Usdc.LibCreation.SigningRounds00
-import Blanc.Lift.Usdc.LibCreation.SigningRounds01
-import Blanc.Lift.Usdc.LibCreation.SigningRounds02
-import Blanc.Lift.Usdc.LibCreation.SigningRounds03
+import Blanc.Lift.Usdc.LibCreation.SigningEncoding
 import Blanc.Lift.Usdc.Constants
 
 /-! Unadopted exact library signing hash, recovered creator and CREATE address.
 Original transaction and historical receipt correspondence remain separate. -/
 namespace Blanc.Lift.Usdc.LibCreation
-open Jaune SigningBlocks
+open Jaune
 
 def originalCreator : Adr := 0x2ba937d2c71d0fbbeda8ce3bf02a8b88727961ec
 
 theorem signingPayload_hash : signingPayload.keccak =
     (0x0b923c20ae300a3a20431bf4781920c212aa03d3894190c1bde5a93411bc8abd : B256) := by
-  change KECCAK.Bytes.run 0 signingPayload state000 = _
-  rw [payload_split]
-  rw [blocks00, blocks01, blocks02]
-  exact blocks03
+  unfold signingPayload
+  rw [ByteArray.toList_eq_toList_data]
+  decide +kernel
 
 theorem signingHash {tx : Tx}
     (htype : tx.type = .zero 22000000000 none)

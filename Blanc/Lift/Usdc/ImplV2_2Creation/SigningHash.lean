@@ -1,32 +1,4 @@
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds00
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds01
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds02
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds03
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds04
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds05
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds06
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds07
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds08
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds09
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds10
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds11
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds12
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds13
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds14
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds15
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds16
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds17
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds18
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds19
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds20
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds21
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds22
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds23
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds24
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds25
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds26
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds27
-import Blanc.Lift.Usdc.ImplV2_2Creation.SigningRounds28
+import Blanc.Lift.Usdc.ImplV2_2Creation.SigningEncoding
 import Blanc.Lift.Usdc.ProxyCreation.Transaction
 import Blanc.ExecutionBodyTransactionCut
 import Blanc.ExecutionMidHistoryInFacts
@@ -34,23 +6,16 @@ import Blanc.ExecutionMidHistoryInFacts
 /-! Exact hash and signature consumers for the unadopted V2.2 creation preview. -/
 namespace Blanc.Lift.Usdc.ImplV2_2Creation
 open Jaune ExecutionTrace
-open SigningBlocks
 
 /-- Explicit creator witness for this unadopted deployment preview. -/
 def originalCreator : Adr := 0x2ba937d2c71d0fbbeda8ce3bf02a8b88727961ec
 
 /-- Kernel hash of the exact EIP155 legacy signing envelope. -/
 theorem signingPayload_hash : signingPayload.keccak = (0x343519a45eb48ace5cbe7daeab09d33857ada1ea478e7f513955b7e5b1db3dc5 : B256) := by
-  change KECCAK.Bytes.run 0 signingPayload state000 = _
-  rw [payload_split]
-  unfold segment0 segment1 segment2 segment3 segment4 segment5
-  simp only [List.append_assoc]
-  rewrite [blocks00, blocks01, blocks02, blocks03, blocks04, blocks05]
-  rewrite [blocks06, blocks07, blocks08, blocks09, blocks10, blocks11]
-  rewrite [blocks12, blocks13, blocks14, blocks15, blocks16, blocks17]
-  rewrite [blocks18, blocks19, blocks20, blocks21, blocks22, blocks23]
-  rewrite [blocks24, blocks25, blocks26, blocks27]
-  exact blocks28
+  unfold signingPayload
+  rw [ByteArray.toList_eq_toList_data]
+  simp only [code, List.toList_toArray]
+  decide +kernel
 
 /-- Explicit original transaction fields determine the signing hash. -/
 theorem signingHash {tx : Tx}
