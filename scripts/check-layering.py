@@ -118,7 +118,7 @@ import tomllib
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "MachineDataFacts", "CreationArtifact", "RlpConcrete", "RlpListEncode", "RlpBytesInjective",
+SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "SelectorWords", "MachineDataFacts", "CreationArtifact", "RlpConcrete", "RlpListEncode", "RlpBytesInjective",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "SlotFootprintSubset", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",

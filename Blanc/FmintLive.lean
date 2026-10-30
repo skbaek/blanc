@@ -46,7 +46,11 @@ abbrev tsSel : B256 := selector "totalSupply" []
 one `Func.RunCompiled` rule per node, naming every intermediate state and gas
 account itself.  What it has to be told, in the order it asks:
 
-* `tsSel` — what `fsig`'s `SHR` produced, which is `h_sel`'s right-hand side;
+* `Sevm.selector sevm` — what `fsig`'s `SHR` produced, kept unevaluated; the
+  walk then rewrites it to `0x18160ddd` by `h_sel` and
+  `SelectorWord.totalSupply`, and the program was first restated by
+  `fmint_eq_words`, so every pivot and comparison is a numeral and no tactic
+  evaluates a `String.keccak` (`Blanc/SelectorWords.lean`);
 * `1, 1, 0` — the three dispatch forks, two jumping and one falling through;
 * `1` — the leaf's `EQ`, which matches, so the selector's own body is taken
   and the `.call fallbackSlot` miss arm is not;
@@ -59,7 +63,6 @@ it.  The two obligations the walk hands back are the justification for that `3`
 and the terminal `RETURN`, which ends the frame and so has no successor for a
 walk to name. -/
 
-set_option maxRecDepth 603 in
 /-- A `totalSupply()` call on `fmint` has a gas-exact run, and it returns the
 supply slot.
 
@@ -77,6 +80,8 @@ theorem totalSupply_runCompiled {sevm : Sevm} {pre : Devm}
     ∃ post, Prog.RunCompiled sevm pre fmint post ∧
       Devm.output post =
         (Devm.getStorVal pre sevm.currentTarget supplySlot).toBytes := by
+  have h_sel' := h_sel.trans SelectorWord.totalSupply
+  rw [fmint_eq_words]
   rw [totalSupplyGas_eq] at h_gas
   set g := pre.gasLeft with hg
   have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
@@ -87,39 +92,9 @@ theorem totalSupply_runCompiled {sevm : Sevm} {pre : Devm}
         (by simp only [gJumpdest]; omega)
         (by rw [h_stack, h_mem])
         (by
-          -- The four selector `PUSH`es (three dispatch forks and the leaf) are stepped by hand:
-          -- `func_run`'s `PUSH0`-guard discharge tries `assumption` first, and unifying the
-          -- guard of a keccak-derived selector with `h_cold` evaluates the selector past the
-          -- recursion ceiling (the WethLive diagnosis, d14b310b).
-          func_run (5) [tsSel]
-          apply Func.RunCompiled.next (Ninst.runCompiled_pushB256 (G := g - 18) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.RunCompiled.next (Ninst.runCompiled_pushB256 (G := g - 41) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (3) [1]
-          apply Func.RunCompiled.next (Ninst.runCompiled_pushB256 (G := g - 64) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run (2) [0]
-          apply Func.RunCompiled.next (Ninst.runCompiled_pushB256 (G := g - 83) (pushCost_of_ne_zero (by decide))
-            (by simp only [Devm.gasLeft_setMach, gVerylow]; omega)
-            (by simp only [Devm.stack_setMach, List.length_cons, List.length_nil]; omega)
-            (fun _ => hfork.rules_push0))
-          simp only [Devm.setMach_setMach, Devm.stack_setMach, Devm.memory_setMach,
-            Devm.stateGas_setMach]
-          func_run [1, supplySlot, 3]
+          func_run (5) [Sevm.selector sevm]
+          rw [h_sel']
+          func_run [1, 1, 0, 1, supplySlot, 3]
           · exact Devm.extCost_empty_word
           · exact Func.runCompiled_return_word (G := g - 2218) (e := 0) rfl
               (Devm.extCost_word_word Mem.size_write_word)
