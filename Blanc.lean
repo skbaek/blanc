@@ -1463,6 +1463,8 @@ import Blanc.Lift.UniswapV2Pair.PairHistoryShape
 import Blanc.Lift.UniswapV2Pair.PairModelFix
 import Blanc.Lift.UniswapV2Pair.PairOuterCalls
 import Blanc.Lift.UniswapV2Pair.PairFeeAnswer
+import Blanc.Lift.UniswapV2Pair.BalanceAnswers
+import Blanc.Lift.UniswapV2Pair.HeadlineShare
 import Blanc.Lift.UniswapV2Pair.PairPositionalCalls
 import Blanc.Lift.UniswapV2Pair.PairPositionalCallsIn
 import Blanc.Lift.UniswapV2Pair.PairPositionalState
