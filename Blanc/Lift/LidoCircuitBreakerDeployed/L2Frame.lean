@@ -1,4 +1,5 @@
 import Blanc.Lift.LidoCircuitBreakerDeployed.Writers
+import Blanc.Lift.LidoCircuitBreakerDeployed.RegistryObservers
 
 /-!
 # L2 for the whole `registerPauser(t, 0)` frame
@@ -98,7 +99,8 @@ the frame's final storage, the removal effects of its first argument `t`
 index cleared and `t` absent from the post witness, and (found) the vacated
 tail's address cleared, length `n - 1`, the moved element at the hole with its
 index repaired unless hole = tail, or (absent) the pushed slot cleared and the
-length unchanged.
+length unchanged. The final storage also has a Registry witness of exactly the removed entry
+list `removedEntries entries t`.
 
 Superseded as a headline by `l2_registerPauser_zero` (a pc-zero concrete execution of the installed runtime) and, at history level, `lido_history_l2_committed`. -/
 theorem l2_registerPauser_zero_wrapper {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
@@ -107,14 +109,18 @@ theorem l2_registerPauser_zero_wrapper {sevm : Sevm} {d : Devm} {o : Outcome} {w
     (hA : EntryAt lidoA sevm d) (hmem : MemOK d.memory)
     (hwit : RegistryWitness (solRegistryStorage (Devm.getStor d sevm.currentTarget)) entries)
     (hnp0 : Sevm.dataWord sevm 36 = 0) (run : SFunc.Run prog sevm d w o) :
-    L2Post entries (Sevm.dataWord sevm 4) (Devm.getStor (Outcome.devm o) sevm.currentTarget) := by
+    L2Post entries (Sevm.dataWord sevm 4) (Devm.getStor (Outcome.devm o) sevm.currentTarget) ∧
+      RegistryWitness (solRegistryStorage (Devm.getStor (Outcome.devm o) sevm.currentTarget))
+        (removedEntries entries (Sevm.dataWord sevm 4)) := by
   have hlen : entries.length < 2 ^ 160 := by
     have := hwit.entries_length_le
     have : 0 < 2 ^ 160 := by norm_num only
     omega
   have hAe := hA entries hwit
-  refine registerPauser_wrapper_foreign (Φ := L2Post entries (Sevm.dataWord sevm 4))
-    (fun hfa h => h.set_foreign hwit.targetsValid hlen hfa) hfork hw hA hmem hwit ?_ run
+  refine registerPauser_wrapper_foreign (Φ := fun s => L2Post entries (Sevm.dataWord sevm 4) s ∧
+      RegistryWitness (solRegistryStorage s) (removedEntries entries (Sevm.dataWord sevm 4)))
+    (fun hfa h => ⟨h.1.set_foreign hwit.targetsValid hlen hfa,
+      RegistryWitness.of_foreign_set_160 hfa h.2⟩) hfork hw hA hmem hwit ?_ run
   intro ht _ ht0 b' M' G' base post hs hm r
   rw [hnp0] at r
   have htn : nonzeroCanonicalAddress (Sevm.dataWord sevm 4) := ⟨ht0, ht⟩
@@ -126,17 +132,19 @@ theorem l2_registerPauser_zero_wrapper {sevm : Sevm} {d : Devm} {o : Outcome} {w
     simp only [setPauserKeys, hf, ↓reduceIte] at hk
     obtain ⟨hwp, hnm, ha, hi, htail, hl⟩ :=
       l2_entry32_absent hfork hm.1 hm.2 hw' htn hf (hk.bound_mono (by omega)) r
-    refine ⟨htn, ha, hi, ⟨entries, hwp, hnm⟩, ?_⟩
-    simp only [hf]
-    exact ⟨htail, hl⟩
+    refine ⟨⟨htn, ha, hi, ⟨entries, hwp, hnm⟩, ?_⟩, ?_⟩
+    · simp only [hf]
+      exact ⟨htail, hl⟩
+    · simpa only [removedEntries, hf] using hwp
   | some val =>
     obtain ⟨index, old⟩ := val
     simp only [setPauserKeys, hf, ↓reduceIte] at hk
     obtain ⟨hwp, hnm, ha, hi, htail, hl, hmv, hal⟩ :=
       l2_entry32_found hfork hm.1 hm.2 hw' htn hf (hk.bound_mono (by omega)) r
-    refine ⟨htn, ha, hi, ⟨_, hwp, hnm⟩, ?_⟩
-    simp only [hf]
-    exact ⟨htail, hl, hmv, hal⟩
+    refine ⟨⟨htn, ha, hi, ⟨_, hwp, hnm⟩, ?_⟩, ?_⟩
+    · simp only [hf]
+      exact ⟨htail, hl, hmv, hal⟩
+    · simpa only [removedEntries, hf] using hwp
 
 /-- The ABI selector used by the deployed `registerPauser(address,address)` route. -/
 private theorem registerPauser_selector_eq :
@@ -240,6 +248,36 @@ theorem registerPauser_dispatch {sevm : Sevm} {pre post : Devm}
     obtain ⟨d, step, run⟩ := ric_next run
     exact False.elim (ric_revert run)
 
+/-- **L2 from concrete entry of the installed deployed runtime, with the post witness.** A
+successful pc-zero execution of `registerPauser(t, 0)` has the removal effects `L2Post` and
+leaves a Registry witness of exactly the removed entry list. -/
+theorem l2_registerPauser_zero_witness {sevm : Sevm} {pre post : Devm}
+    {entries : List Entry}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hinstalled : Devm.getCode pre sevm.currentTarget = code)
+    (hcode : sevm.code = Devm.getCode pre sevm.currentTarget)
+    (hfresh : Exec.FreshEntry sevm pre)
+    (hsig : Sevm.dataWord sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
+    (hA : EntryAt lidoA sevm pre)
+    (hwit : RegistryWitness (solRegistryStorage (Devm.getStor pre sevm.currentTarget)) entries)
+    (hnp0 : Sevm.dataWord sevm 36 = 0)
+    (execution : Exec 0 sevm pre (.ok post)) :
+    L2Post entries (Sevm.dataWord sevm 4) (Devm.getStor post sevm.currentTarget) ∧
+      RegistryWitness (solRegistryStorage (Devm.getStor post sevm.currentTarget))
+        (removedEntries entries (Sevm.dataWord sevm 4)) := by
+  obtain ⟨f, hf, run⟩ := lift_sound cert_check (hcode.trans hinstalled) hfork execution
+  rw [entry0_lookup] at hf
+  cases hf
+  obtain ⟨G, run⟩ := registerPauser_dispatch hsig hfresh run
+  apply l2_registerPauser_zero_wrapper hfork (by rfl) (d := St pre
+    [selector "registerPauser" [.address, .address]]
+    (Mem.empty.write 64 (128 : B256).toBytes) G) (o := .halted post)
+  · simpa only [EntryAt, getStor_St] using hA
+  · exact memOK_empty.write_word 64 128
+  · simpa only [getStor_St] using hwit
+  · exact hnp0
+  · exact run
+
 /-- **L2 from concrete entry of the installed deployed runtime.** A successful
 pc-zero execution of `registerPauser(t, 0)` removes `t` from the Registry and
 has the complete found/last/non-last/absent effects in `L2Post`, relative to the
@@ -257,18 +295,7 @@ theorem l2_registerPauser_zero {sevm : Sevm} {pre post : Devm}
     (hwit : RegistryWitness (solRegistryStorage (Devm.getStor pre sevm.currentTarget)) entries)
     (hnp0 : Sevm.dataWord sevm 36 = 0)
     (execution : Exec 0 sevm pre (.ok post)) :
-    L2Post entries (Sevm.dataWord sevm 4) (Devm.getStor post sevm.currentTarget) := by
-  obtain ⟨f, hf, run⟩ := lift_sound cert_check (hcode.trans hinstalled) hfork execution
-  rw [entry0_lookup] at hf
-  cases hf
-  obtain ⟨G, run⟩ := registerPauser_dispatch hsig hfresh run
-  apply l2_registerPauser_zero_wrapper hfork (by rfl) (d := St pre
-    [selector "registerPauser" [.address, .address]]
-    (Mem.empty.write 64 (128 : B256).toBytes) G) (o := .halted post)
-  · simpa only [EntryAt, getStor_St] using hA
-  · exact memOK_empty.write_word 64 128
-  · simpa only [getStor_St] using hwit
-  · exact hnp0
-  · exact run
+    L2Post entries (Sevm.dataWord sevm 4) (Devm.getStor post sevm.currentTarget) :=
+  (l2_registerPauser_zero_witness hfork hinstalled hcode hfresh hsig hA hwit hnp0 execution).1
 
 end Blanc.Lift.LidoCircuitBreakerDeployed

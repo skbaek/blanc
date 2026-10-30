@@ -53,7 +53,9 @@ theorem l2_of_entryGood {ca : Adr} (frame : Exec.Frame)
     (hsig : Sevm.dataWord frame.sevm 0 >>> 224 = selector "registerPauser" [.address, .address])
     (hnp0 : Sevm.dataWord frame.sevm 36 = 0) :
     ∃ entries, RegistryWitness (solRegistryStorage (Devm.getStor frame.pre ca)) entries ∧
-      L2Post entries (Sevm.dataWord frame.sevm 4) (Devm.getStor frame.post ca) := by
+      L2Post entries (Sevm.dataWord frame.sevm 4) (Devm.getStor frame.post ca) ∧
+      RegistryWitness (solRegistryStorage (Devm.getStor frame.post ca))
+        (removedEntries entries (Sevm.dataWord frame.sevm 4)) := by
   obtain ⟨hpc, fork, installed, ⟨hfresh, -, hA⟩, ⟨entries, hwit⟩⟩ := good
   obtain ⟨pc, sevm, pre, out, run, committed⟩ := frame
   dsimp only at hpc fork installed hfresh hA hwit target hsig hnp0 ⊢
@@ -67,7 +69,7 @@ theorem l2_of_entryGood {ca : Adr} (frame : Exec.Frame)
       rw [hinstalled]
       exact eq_code_of_image (installed.2 rfl).1
     exact ⟨entries, hwit,
-      l2_registerPauser_zero fork hinstalled hcode hfresh hsig hA hwit hnp0 run⟩
+      l2_registerPauser_zero_witness fork hinstalled hcode hfresh hsig hA hwit hnp0 run⟩
 
 /-- **L2 at every committed `registerPauser(t, 0)` frame of a configured history,
 with the entry witness derived.**  For an admitted history from a checkpoint
@@ -98,6 +100,8 @@ theorem lido_history_l2_committed
     (I := fun s => RegInv s) trace ((trace.freshFrameAdmitted ca).and admitted) inv inv.inv
     (lidoSpec_preservesAdmitted_mem lidoWriterSpecsM ca) (lido_framePreserves ca)
     (lido_spawnKinds ca) (lido_spawnEntry ca)
-  exact l2_of_entryGood frame (good frame member target nonstatic) target hsig hnp0
+  obtain ⟨entries, hpre, hpost, -⟩ :=
+    l2_of_entryGood frame (good frame member target nonstatic) target hsig hnp0
+  exact ⟨entries, hpre, hpost⟩
 
 end Blanc.Lift.LidoCircuitBreakerDeployed

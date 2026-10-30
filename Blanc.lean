@@ -633,6 +633,7 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.PauseSteps
 import Blanc.Lift.LidoCircuitBreakerDeployed.Prog
 import Blanc.Lift.LidoCircuitBreakerDeployed.RegistryEffects
 import Blanc.Lift.LidoCircuitBreakerDeployed.RegistryLayout
+import Blanc.Lift.LidoCircuitBreakerDeployed.RegistryObservers
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteRegistry
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteUpdate
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteInit
