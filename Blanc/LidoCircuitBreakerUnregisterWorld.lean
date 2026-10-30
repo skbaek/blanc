@@ -822,7 +822,6 @@ private theorem unregWorld_warmCost {base : Devm} {key : B256}
     rw [h]
     exact hk
 
-set_option maxRecDepth 52 in
 /-- The chronology's body reserve at this world is the closed numeral the
 message carries. -/
 theorem unregWorld_bodyGasEq :

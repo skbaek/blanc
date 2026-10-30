@@ -696,7 +696,6 @@ private theorem pauseExpirySlotCaller_prepend_runCompiled
   case h_val => rw [hcaller]; rfl
   case a => exact htail
 
-set_option maxRecDepth 143 in
 /-- `pause`'s complete body, from the endpoint's entry to the internal
 `.call setPauserSlot` burn.  The walk crosses all five guards on their taken
 arms — the one-word calldata test, the canonical-address decoder, the
