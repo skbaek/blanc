@@ -136,6 +136,8 @@ SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "
           "TransientInvariance", "PinnedPauseTarget",
                                  "ExecutionCreateGuard",
                                  "ExecutionDeletionProvenance",
+                                 "ExecutionEmptyContext",
+                                 "ExecutionNonceKeep",
                                  "ExecutionHistoryInAssociativity",
                                  "ExecutionHistoryInReached",
                                  "ExecutionHistoryInSystemEnvironment",
