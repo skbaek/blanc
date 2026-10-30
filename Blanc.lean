@@ -907,8 +907,12 @@ import Blanc.Curve3Crv.Properties
 import Blanc.Lift.Curve3Crv.Ladder
 import Blanc.Lift.Curve3Crv.CarriedHistory
 import Blanc.Lift.Curve3Crv.CommittedHistory
+import Blanc.Lift.Curve3Crv.HistCommittedHistory
+import Blanc.Lift.Curve3Crv.HistDeployment
 import Blanc.Lift.Curve3Crv.Init
 import Blanc.Lift.Curve3Crv.Creation.Deploy
+import Blanc.Lift.Curve3Crv.Creation.HistoricalDeploy
+import Blanc.Lift.Curve3Crv.Creation.HistoricalTxTrace
 import Blanc.Lift.Curve3Crv.Exec
 import Blanc.Lift.Curve3Crv.Liveness
 import Blanc.Lift.Curve3Crv.CostBounds

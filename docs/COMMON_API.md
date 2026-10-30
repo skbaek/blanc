@@ -5182,6 +5182,12 @@ of arbitrary nested BLT values or a parser/canonicality theorem.
 `encode_bytes_many` selects the ordinary length-prefixed byte encoder;
 `decode_bytes_long_two`, `decode_bytes_short`, `decode_bytes_32`, and `decode_list_long_two`
 apply Jaune's actual parser equations while keeping payload bytes abstract.
+On the encoder side, [`Blanc/RlpListEncode.lean`](../Blanc/RlpListEncode.lean)
+provides `RlpConcrete.toBytesJoin_append` (the joint item encoding of a
+concatenated list) and `RlpConcrete.encode_list_long` (a list whose joint item
+encoding is a known body of at least 56 bytes gets the long-list header over
+that abstract body); a signed creation transaction's canonical re-encoding uses
+them without reducing its payload (3Crv `HistoricalTx.tx_encoded`).
 The additive owner
 [`Blanc/ExecutionBodyTransactionCut.lean`](../Blanc/ExecutionBodyTransactionCut.lean)
 also provides `RlpConcrete.decode_bytes_long_one` and
@@ -9488,7 +9494,9 @@ contract-neutral.
   [`Blanc/Lift/HistAccessFacts.lean`](../Blanc/Lift/HistAccessFacts.lean);
   the forward creation kit under
   historical rule facts (the `SLOAD`/`SSTORE` charges `sloadCostH`/`sstoreCostH` with the
-  `sloadCostH_of_eip2929` equation and their `_le` bounds, the exact steps `rx_sload_selH`/`rx_sstoreH`, the
+  `sloadCostH_of_eip2929`/`sstoreCostH_of_eip2929` equations and the exact steps
+  `rx_sload_selH`/`rx_sstoreH` in
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean); their `_le` bounds, the
   settlement `processMessage_ok_of_execH`/`liftCreate_postH`/`liftCreate_okH` from
   `rules.stateGas = none` with the target's EIP-161 touch recorded, and `CREATE2` as
   `create2ChargeH`/`Xinst.step_create2_spawnH`/`create2_runCompiledH`) in
@@ -9894,15 +9902,22 @@ contract-neutral.
   `vyImg_clamps`, `VyClamps.clamp`), the non-payable guard and address-argument clamp every body starts with
   (`vyNonpayable`, `vyAddrArg`, their `rx_`/`ric_` forms), and the `HashMap` slot scratch window
   (`vySlot_read`, `vySlot_keccak`) with its whole macro (`vySlot`, `ric_vySlot`, `rx_vySlot`),
-  the checked storage subtract/add macros (`vySubStore`, `vyAddStore`, their `rx_`/`ric_`
-  forms, `B256.nof_iff_not_add_lt`), the selector read (`vyImg_selector`), and word facts
+  the checked storage subtract/add macros (`vySubStore`, `vyAddStore`, their `rx_` and
+  `ric_…H` forms, `B256.nof_iff_not_add_lt`), the selector read (`vyImg_selector`), and word facts
   (`B256.xor_zero`, `B256.xor_eq_zero_iff`, `B256.toAdr_toB256_of_lt`), the `String` copy
   loops with the counter in memory at `0x120`: storage to memory (`vyLoadLoopTree`,
   `rx_vyLoadStep`, `rx_vyLoadLast`, `rx_vyLoadExit`) and memory to storage (`vyStoreLoopTree`,
-  `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIter`
+  `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIterH`
   (a storing pass also proves the frame non-static),
   and the set-up `vyStoreHead` with `rx_`/`ric_vyStoreHead`), unrolled per pass since the cap
-  bounds the count, the load loop's pass inverted (`ric_vyLoadIter`), a stored-`String` view's
+  bounds the count, the load loop's pass inverted (`ric_vyLoadIterH`); the
+  four inversions are stated from the rule facts they read (they have no `CoveredFork` form), over the actual access schedule's
+  successors `afterSloadH`/`afterSstoreH` (`HistAccessWalk.lean`): `ric_vySubStoreH`,
+  `ric_vyAddStoreH`, `ric_vyStoreIterH` (`rules.stateGas = none`) and `ric_vyLoadIterH`
+  (`rules.bal = none`), and the forward passes, gas-exact over `sloadCostH`/`sstoreCostH`:
+  `rx_vySubStoreH`, `rx_vyAddStoreH`, `rx_vyLoadStepH`, `rx_vyLoadLastH`, `rx_vyStoreStepH`,
+  `rx_vyStoreLastH` (`rules.stateGas = none`), with the `CoveredFork` names (`rx_vySubStore`, `rx_vyAddStore`, ...) their corollaries;
+  a stored-`String` view's
   body up to its load loop (`vyStrView`) with the join's `ceil32_eq` and the zero-fill read
   `sliceD_data_end`, and `sstoreCost_le`, `Mem.read_write_disjoint`, `vy_mul32`, in
   [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
@@ -10088,13 +10103,16 @@ contract-neutral.
   window of any length inside an aligned image) in
   [`Blanc/Lift/CreationOps.lean`](../Blanc/Lift/CreationOps.lean).
   For exact creation walks under the selected historical schedule, use
-  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean):
   `Ninst.runCompiled_sload_selectedH`/`runCompiled_sstore_selectedH`,
   `rx_sload_selH`/`rx_sstoreH` and `rxc_sload_selH`/`rxc_sstoreH` charge
-  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`.
+  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`; then
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
   `sstoreCostH_congr` transports only the actual price inputs. `sloadCostH_muir_eq`
   and `sstoreCostH_muir_le` give the actual 800-gas read and at-most-20000 write
-  under Muir rules. `liftCreate_postH`
+  under Muir rules; for exact constructor gas in a created account,
+  `sstoreCostH_muir_fresh_set` (nonzero write over a current zero: 20000) and
+  `sstoreCostH_muir_created_zero` (zero write: 800). `liftCreate_postH`
   and `liftCreate_okH` lift a checked exact constructor run from `stateGas = none`,
   retaining the historical target touch. Code admissibility, deposit gas, size,
   value transfer and the run remain explicit obligations.
@@ -10303,13 +10321,16 @@ contract-neutral.
   it in the consumed history remain caller obligations. No C-to-D continuity
   or pre-D governance restriction follows from this seed adapter.
   For exact creation walks under the selected historical schedule, use
-  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
+  [`Blanc/Lift/HistAccessWalk.lean`](../Blanc/Lift/HistAccessWalk.lean):
   `Ninst.runCompiled_sload_selectedH`/`runCompiled_sstore_selectedH`,
   `rx_sload_selH`/`rx_sstoreH` and `rxc_sload_selH`/`rxc_sstoreH` charge
-  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`.
+  `sloadCostH`/`sstoreCostH` and retain `afterSloadH`/`afterSstoreH`; then
+  [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
   `sstoreCostH_congr` transports only the actual price inputs. `sloadCostH_muir_eq`
   and `sstoreCostH_muir_le` give the actual 800-gas read and at-most-20000 write
-  under Muir rules. `liftCreate_postH`
+  under Muir rules; for exact constructor gas in a created account,
+  `sstoreCostH_muir_fresh_set` (nonzero write over a current zero: 20000) and
+  `sstoreCostH_muir_created_zero` (zero write: 800). `liftCreate_postH`
   and `liftCreate_okH` lift a checked exact constructor run from `stateGas = none`,
   retaining the historical target touch. Code admissibility, deposit gas, size,
   value transfer and the run remain explicit obligations.

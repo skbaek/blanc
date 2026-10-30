@@ -90,6 +90,7 @@ import Blanc.Lift.BeaconDeposit.Creation.Deploy
 import Blanc.Lift.Curve3Crv.CommittedHistory
 import Blanc.Lift.Curve3Crv.Safe
 import Blanc.Lift.Curve3Crv.Creation.Deploy
+import Blanc.Lift.Curve3Crv.HistDeployment
 import Blanc.Lift.LidoCircuitBreakerDeployed.History
 import Blanc.Lift.LidoCircuitBreakerDeployed.L2History
 import Blanc.Lift.LidoCircuitBreakerDeployed.Creation.Deploy
@@ -7574,6 +7575,76 @@ example (f : Fork) (hf : CoveredFork f) :
 
 end Blanc.Lift.Curve3Crv.Creation
 
+namespace Blanc.Lift.Curve3Crv
+open Jaune Blanc.ExecutionTrace Blanc.Lift.Curve3Crv.Creation
+
+-- Curve 3Crv: c3crv_history_committedHist
+example {ca : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {initial : Blanc.Curve3Crv.State}
+    {initialKeys : Key → Prop}
+    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
+    (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image)
+    (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys)
+    (fresh : FreshKeys initialKeys (historyTouchedKeysIn ca trace)) :
+    some (future.state.getCode ca).toList = c3crvSem.image ∧
+      ∃ s, InvRunBy OwnerAnswerH initial (committedInvocationsIn ca trace) s ∧
+        runInvocations initial (committedInvocationsIn ca trace) = some s ∧
+        VyInv (future.state.getStor ca) s
+          (Key.extend initialKeys (invocationKeys (committedInvocationsIn ca trace))) ∧
+        Blanc.Curve3Crv.Conserved s :=
+  c3crv_history_committedHist trace installed invariant fresh
+
+-- Curve 3Crv: C3crvDeploymentTo.history_from_deployment
+example {checkpoint : BlockChain} (d : C3crvDeploymentTo checkpoint) :
+    some (checkpoint.state.getCode tokenAddress).toList = c3crvSem.image ∧
+      ∃ s, InvRunBy OwnerAnswerH (curveDeployedState deployer) d.invocations s ∧
+        runInvocations (curveDeployedState deployer) d.invocations = some s ∧
+        VyInv (checkpoint.state.getStor tokenAddress) s d.keys ∧
+        Blanc.Curve3Crv.Conserved s :=
+  d.history_from_deployment
+
+-- Curve 3Crv constructor: C3crvDeploymentTo.mk
+example {checkpoint : BlockChain} (pre completed : BlockChain)
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (number : block.block.header.number = 10809467)
+    (time : block.block.header.timestamp = 1599414946)
+    (entry : Bytes ⊕ Tx) (slot : block.block.txs[76]? = some entry)
+    (decoded : decodeTx block.fork.ruleSet entry = .ok HistoricalTx.tx)
+    (receipt : Fin 5 × Receipt)
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (76 : Nat).toBytes)]? =
+      some receipt)
+    (succeeded : receipt.2.succeeded = true)
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
+    (fresh : FreshKeys (fun _ => False)
+      (midTouchedKeysIn tokenAddress
+        ((MidHistoryTraceIn.tail block (block.bodyTrace.txSplitOfSlot slot decoded)).append
+          history))) :
+    C3crvDeploymentTo checkpoint :=
+  ⟨pre, completed, block, number, time, entry, slot, decoded, receipt, lookup, succeeded,
+    history, fresh⟩
+
+end Blanc.Lift.Curve3Crv
+
+namespace Blanc.Lift.Curve3Crv.Creation.HistoricalTx
+open Jaune Blanc Blanc.ExecutionTrace
+
+-- Curve 3Crv: HistoricalTx.actual_block_cut
+example {pre D : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre D)
+    (number : block.block.header.number = 10809467)
+    (timestamp : block.block.header.timestamp = 1599414946) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (sameTx : cut.tx = tx)
+    {receipt : Fin 5 × Receipt}
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? =
+      some receipt) (succeeded : receipt.2.succeeded = true) :
+    (cut.txState.getCode tokenAddress).toList = Blanc.Lift.Curve3Crv.code.toList ∧
+      cut.txState.getStor tokenAddress = deployedStor deployer.toB256 ∧
+      cut.txBout.blockLogs = cut.bout.blockLogs ++ [creationLog] ∧
+      cut.txBout.blockGasUsed = cut.bout.blockGasUsed + 678343 :=
+  actual_block_cut block number timestamp cut sameTx lookup succeeded
+
+end Blanc.Lift.Curve3Crv.Creation.HistoricalTx
+
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
 open Jaune
 open Blanc
@@ -8108,6 +8179,13 @@ open Blanc.Curve3Crv (Call Ctx Event Ret)
 example (sevm : Sevm) (b : Devm) (m : Adr) (w : B256) :
     OwnerAnswer sevm b m w ↔
       (∃ out, StaticAnswered sevm b m ownerCalldata out ∧ 32 ≤ out.length ∧
+    Bytes.toB256 (out.take 32) = w) :=
+  Iff.rfl
+
+-- Curve 3Crv definition: OwnerAnswerH
+example (sevm : Sevm) (b : Devm) (m : Adr) (w : B256) :
+    OwnerAnswerH sevm b m w ↔
+      (∃ out, StaticAnsweredH sevm b m ownerCalldata out ∧ 32 ≤ out.length ∧
     Bytes.toB256 (out.take 32) = w) :=
   Iff.rfl
 

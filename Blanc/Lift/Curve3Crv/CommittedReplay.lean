@@ -80,18 +80,31 @@ theorem invocationKeys_singleton (inv : WriterInvocation) :
     invocationKeys [inv] = callKeys inv.sevm.caller (decodeCall inv.sevm) := by
   simp only [invocationKeys, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
+/-- One model step of an invocation, with the frame's own static-call evidence under the answer
+predicate `A`: the model accepts the call with the recorded owner word, and a recorded owner word is
+what the frame's `owner()` call on the model's minter answered. The modern predicate is `OwnerAnswer`
+(`ModelStep`); the historical one, under the frame's actual delegation rules, is `OwnerAnswerH`. -/
+def ModelStepBy (A : Sevm → Devm → Adr → B256 → Prop) (inv : WriterInvocation)
+    (s : Blanc.Curve3Crv.State) (o : Blanc.Curve3Crv.Out) : Prop :=
+  Blanc.Curve3Crv.step (c3ctx inv.sevm inv.ownerWord) (decodeCall inv.sevm) s = .ok o ∧
+    ∀ w, inv.ownerWord = some w → A inv.sevm inv.pre s.minter w
+
 /-- One model step of an invocation, with the frame's own static-call evidence:
 the model accepts the call with the recorded owner word, and a recorded owner
 word is what the frame's `owner()` call on the model's minter answered. -/
-def ModelStep (inv : WriterInvocation) (s : Blanc.Curve3Crv.State)
-    (o : Blanc.Curve3Crv.Out) : Prop :=
-  Blanc.Curve3Crv.step (c3ctx inv.sevm inv.ownerWord) (decodeCall inv.sevm) s = .ok o ∧
-    ∀ w, inv.ownerWord = some w → OwnerAnswer inv.sevm inv.pre s.minter w
+abbrev ModelStep : WriterInvocation → Blanc.Curve3Crv.State → Blanc.Curve3Crv.Out → Prop :=
+  ModelStepBy OwnerAnswer
+
+/-- The model run over exactly the given invocations, in order, from `s`, under the answer
+predicate `A`. -/
+def InvRunBy (A : Sevm → Devm → Adr → B256 → Prop) :
+    Blanc.Curve3Crv.State → List WriterInvocation → Blanc.Curve3Crv.State → Prop
+  | s, [], s' => s' = s
+  | s, inv :: rest, s' => ∃ o, ModelStepBy A inv s o ∧ InvRunBy A o.1 rest s'
 
 /-- The model run over exactly the given invocations, in order, from `s`. -/
-def InvRun : Blanc.Curve3Crv.State → List WriterInvocation → Blanc.Curve3Crv.State → Prop
-  | s, [], s' => s' = s
-  | s, inv :: rest, s' => ∃ o, ModelStep inv s o ∧ InvRun o.1 rest s'
+abbrev InvRun : Blanc.Curve3Crv.State → List WriterInvocation → Blanc.Curve3Crv.State → Prop :=
+  InvRunBy OwnerAnswer
 
 /-- The model's final state, by folding `Curve3Crv.step` over the invocations. -/
 def runInvocations : Blanc.Curve3Crv.State → List WriterInvocation →
@@ -102,25 +115,29 @@ def runInvocations : Blanc.Curve3Crv.State → List WriterInvocation →
       | .ok o => runInvocations o.1 rest
       | .error _ => none
 
-theorem InvRun.runInvocations_eq :
+theorem InvRunBy.runInvocations_eq {A : Sevm → Devm → Adr → B256 → Prop} :
     ∀ {s : Blanc.Curve3Crv.State} {invs : List WriterInvocation} {s' : Blanc.Curve3Crv.State},
-      InvRun s invs s' → runInvocations s invs = some s'
-  | s, [], s', h => by rw [InvRun] at h; rw [h]; rfl
+      InvRunBy A s invs s' → runInvocations s invs = some s'
+  | s, [], s', h => by rw [InvRunBy] at h; rw [h]; rfl
   | s, inv :: rest, s', h => by
       obtain ⟨o, ⟨accepted, _⟩, rest⟩ := h
       simp only [runInvocations, accepted]
-      exact InvRun.runInvocations_eq rest
+      exact InvRunBy.runInvocations_eq rest
 
-theorem InvRun.append :
+theorem InvRunBy.append {A : Sevm → Devm → Adr → B256 → Prop} :
     ∀ {s m s' : Blanc.Curve3Crv.State} {xs ys : List WriterInvocation},
-      InvRun s xs m → InvRun m ys s' → InvRun s (xs ++ ys) s'
+      InvRunBy A s xs m → InvRunBy A m ys s' → InvRunBy A s (xs ++ ys) s'
   | s, m, s', [], ys, h₁, h₂ => by
-      rw [InvRun] at h₁
+      rw [InvRunBy] at h₁
       subst h₁
       exact h₂
   | s, m, s', inv :: rest, ys, h₁, h₂ => by
       obtain ⟨o, step, tail⟩ := h₁
-      exact ⟨o, step, InvRun.append tail h₂⟩
+      exact ⟨o, step, InvRunBy.append tail h₂⟩
+
+theorem InvRun.runInvocations_eq {s : Blanc.Curve3Crv.State} {invs : List WriterInvocation}
+    {s' : Blanc.Curve3Crv.State} (h : InvRun s invs s') : runInvocations s invs = some s' :=
+  InvRunBy.runInvocations_eq h
 
 /-- A step's model acceptance, re-expressed at the canonical owner word. Only
 `set_name` reads the owner, and it is accepted only when the answer is the caller. -/
@@ -197,25 +214,32 @@ theorem Key.extend_append (K : Key → Prop) (xs ys : List Key) :
   simp only [extend, SlotFootprint.extendBy, or_assoc, List.mem_append]
 
 /-- The connected replay of committed writer invocations over one storage
-boundary of the contract. It is stated for every model abstraction of the opening
-storage whose live keys lie in the collision universe `U`: the extracted
+boundary of the contract, under the answer predicate `A`. It is stated for every model abstraction
+of the opening storage whose live keys lie in the collision universe `U`: the extracted
 invocations' own keys stay in `U`, the model run of exactly those invocations
 succeeds with the frames' owner evidence, and the closing storage abstracts its
 result over the extended keys. -/
-def CurveReplay (U : Key → Prop) (pre : Stor) (invs : List WriterInvocation)
-    (post : Stor) : Prop :=
+def CurveReplayBy (A : Sevm → Devm → Adr → B256 → Prop) (U : Key → Prop) (pre : Stor)
+    (invs : List WriterInvocation) (post : Stor) : Prop :=
   (∀ k ∈ invocationKeys invs, U k) ∧
     ∀ s K, (∀ k, K k → U k) → VyInv pre s K →
-      ∃ s', InvRun s invs s' ∧ VyInv post s' (Key.extend K (invocationKeys invs))
+      ∃ s', InvRunBy A s invs s' ∧ VyInv post s' (Key.extend K (invocationKeys invs))
 
-theorem CurveReplay.nil (U : Key → Prop) (stor : Stor) : CurveReplay U stor [] stor := by
+/-- `CurveReplayBy` with the modern owner evidence `OwnerAnswer`. -/
+abbrev CurveReplay (U : Key → Prop) (pre : Stor) (invs : List WriterInvocation)
+    (post : Stor) : Prop :=
+  CurveReplayBy OwnerAnswer U pre invs post
+
+theorem CurveReplayBy.nil (A : Sevm → Devm → Adr → B256 → Prop) (U : Key → Prop) (stor : Stor) :
+    CurveReplayBy A U stor [] stor := by
   refine ⟨by simp only [invocationKeys, List.flatMap_nil, List.not_mem_nil, IsEmpty.forall_iff,
     implies_true], fun s K _ h => ⟨s, rfl, ?_⟩⟩
   simpa only [invocationKeys, List.flatMap_nil, Key.extend_nil] using h
 
-theorem CurveReplay.append {U : Key → Prop} {a b c : Stor} {xs ys : List WriterInvocation}
-    (first : CurveReplay U a xs b) (second : CurveReplay U b ys c) :
-    CurveReplay U a (xs ++ ys) c := by
+theorem CurveReplayBy.append {A : Sevm → Devm → Adr → B256 → Prop} {U : Key → Prop}
+    {a b c : Stor} {xs ys : List WriterInvocation}
+    (first : CurveReplayBy A U a xs b) (second : CurveReplayBy A U b ys c) :
+    CurveReplayBy A U a (xs ++ ys) c := by
   refine ⟨?_, fun s K hK h => ?_⟩
   · intro k hk
     simp only [invocationKeys, List.flatMap_append, List.mem_append] at hk
@@ -228,29 +252,43 @@ theorem CurveReplay.append {U : Key → Prop} {a b c : Stor} {xs ys : List Write
     refine ⟨s₂, run₁.append run₂, ?_⟩
     simpa only [Key.extend_append, invocationKeys, List.flatMap_append] using inv₂
 
-/-- The storage-only replay carrier of a Curve history: boundaries are the
-contract's storage, so value credits and foreign frames contribute nothing. -/
-def curveCarrier (ca : Adr) (U : Key → Prop) : ReplayCarrier ca where
+theorem CurveReplay.nil (U : Key → Prop) (stor : Stor) : CurveReplay U stor [] stor :=
+  CurveReplayBy.nil OwnerAnswer U stor
+
+theorem CurveReplay.append {U : Key → Prop} {a b c : Stor} {xs ys : List WriterInvocation}
+    (first : CurveReplay U a xs b) (second : CurveReplay U b ys c) :
+    CurveReplay U a (xs ++ ys) c :=
+  CurveReplayBy.append first second
+
+/-- The storage-only replay carrier of a Curve history under the answer predicate `A`: boundaries
+are the contract's storage, so value credits and foreign frames contribute nothing. -/
+def curveCarrierBy (A : Sevm → Devm → Adr → B256 → Prop) (ca : Adr) (U : Key → Prop) :
+    ReplayCarrier ca where
   readsStorage := true
   Snap := Stor
   Step := WriterInvocation
   Tag := Unit
-  Replay := CurveReplay U
+  Replay := CurveReplayBy A U
   ofState state := state.getStor ca
   frameEntry _ state := state.getStor ca
-  nil := CurveReplay.nil U
+  nil := CurveReplayBy.nil A U
   silent := fun storage _ => storage rfl
   credit := by
     intro _ _ _ _ storage _ _
-    exact ⟨[], by rw [storage]; exact CurveReplay.nil U _⟩
+    exact ⟨[], by rw [storage]; exact CurveReplayBy.nil A U _⟩
   entry_eq_ofState := by
     intro _ _ caller_ne _ transfer sum_nof
     exact benvAfterTransfer_getStor_eq_of_safe transfer sum_nof
       (fun transfers _ => Or.inl (caller_ne transfers))
 
+/-- The storage-only replay carrier of a Curve history with the modern owner evidence. -/
+abbrev curveCarrier (ca : Adr) (U : Key → Prop) : ReplayCarrier ca :=
+  curveCarrierBy OwnerAnswer ca U
+
 /-- Replay steps and committed-frame invocations use the same ordered
 observation. -/
-def curveObservation (ca : Adr) (U : Key → Prop) : ReplayObservation (curveCarrier ca U) where
+def curveObservationBy (A : Sevm → Devm → Adr → B256 → Prop) (ca : Adr) (U : Key → Prop) :
+    ReplayObservation (curveCarrierBy A ca U) where
   O := WriterInvocation
   obs := id
   obs_nil := rfl
@@ -259,8 +297,12 @@ def curveObservation (ca : Adr) (U : Key → Prop) : ReplayObservation (curveCar
   credit := by
     intro _ pre post _ storage _ _
     refine ⟨[], ?_, rfl⟩
-    change CurveReplay U (pre.getStor ca) [] (post.getStor ca)
+    change CurveReplayBy A U (pre.getStor ca) [] (post.getStor ca)
     rw [storage]
-    exact CurveReplay.nil U _
+    exact CurveReplayBy.nil A U _
+
+/-- The ordered observation with the modern owner evidence. -/
+abbrev curveObservation (ca : Adr) (U : Key → Prop) : ReplayObservation (curveCarrier ca U) :=
+  curveObservationBy OwnerAnswer ca U
 
 end Blanc.Lift.Curve3Crv

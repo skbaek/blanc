@@ -1,6 +1,8 @@
 import Blanc.Lift.Curve3Crv.Refine
 import Blanc.Lift.StaticCall
 import Blanc.Lift.WalkSteps
+import Blanc.Lift.HistStaticCall
+import Blanc.Lift.HistAccessWalkFacts
 
 /-!
 # Safety: the writing bodies, inverted
@@ -13,6 +15,11 @@ succeeded and the post state `Lands` as it says.  The kit: `ric_vyNonpayable`,
 `false_of_noOk` for the reverting arms (`push 0; dup; revert`).  The scratch-slot sequence
 `mstore(0xe0, key); mstore(0xc0, slot); keccak(0xc0, 0x40)` inverts to `mapSlot slot key`
 by `vySlot_keccak`.
+
+Every segment assumes only `rules.stateGas = none` (every historical fork and every covered one):
+the storage instructions are the historical forms `ri_sloadH`, `ri_sstoreH`, `ri_staticcallH` and
+the Vyper kit's `…H` inversions, whose successor bases are `afterSloadH`/`afterSstoreH` under the
+frame's actual access schedule; the owner evidence is `OwnerAnswerH`.
 
 Memory: the address clamp at `0x20` is read from the prologue image `vyImg [] w`
 (`vyImg_clamps`, `VyClamps.clamp`) before any scratch write.
@@ -28,6 +35,19 @@ def SafeBody (sevm : Sevm) (b : Devm) (f : SFunc) (raw : Option Raw) : Prop :=
   ∀ G post, SFunc.Run prog sevm (entrySt sevm b G) f (.halted post) →
     ∃ r, raw = some r ∧ Lands sevm b post r
 
+/-- `OwnerAnswer` under the frame's actual delegation rules (`StaticAnsweredH`): the frame's static
+call to `m` for `owner()` succeeded and returned at least a word starting with `w`. On a covered
+fork it is `OwnerAnswer` (`OwnerAnswerH.of_covered`). -/
+def OwnerAnswerH (sevm : Sevm) (b : Devm) (m : Adr) (w : B256) : Prop :=
+  ∃ out, StaticAnsweredH sevm b m ownerCalldata out ∧ 32 ≤ out.length ∧
+    Bytes.toB256 (out.take 32) = w
+
+theorem OwnerAnswerH.of_covered {sevm : Sevm} {b : Devm} {m : Adr} {w : B256}
+    (hfork : CoveredFork sevm.benvStat.fork) (h : OwnerAnswerH sevm b m w) :
+    OwnerAnswer sevm b m w := by
+  obtain ⟨out, hans, hlen, hw⟩ := h
+  exact ⟨out, hans.of_covered hfork, hlen, hw⟩
+
 section
 
 variable {sevm : Sevm} {b : Devm}
@@ -39,9 +59,9 @@ local notation "stor₀" => Devm.getStor b sevm.currentTarget
 `ri_push`, `ri_sload` (slot 6), `ri_caller`, `ri_eq`, `ri_push`, `ric_branch` (fall-through
 `noOk`), `ric_dest`, `ri_push`, `ri_calldataload`, `ri_push`, `ri_sstore`, and the `STOP`
 terminal (`Linst.world_of_ok`-style: `Linst.Run … .stop` keeps the state).  Storage:
-`afterSstore`'s target map is `stor₀.set 6 a0` (`afterSstore_getStor_self`), other accounts
+`afterSstore`'s target map is `stor₀.set 6 a0` (`afterSstoreH_getStor_self`), other accounts
 unchanged, logs unchanged. -/
-theorem safe_setMinter (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_setMinter (hsg : sevm.benvStat.rules.stateGas = none) :
     ∀ G post, SFunc.Run prog sevm (entrySt sevm b G) t_00b0_c0 (.halted post) →
       sevm.isStatic = false ∧ ∃ r, rawSetMinter sevm stor₀ = some r ∧ Lands sevm b post r := by
   intro G post run
@@ -54,7 +74,7 @@ theorem safe_setMinter (hfork : CoveredFork sevm.benvStat.fork) :
     (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
     (by rw [hM]; omega) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_caller s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_eq s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
@@ -65,8 +85,8 @@ theorem safe_setMinter (hfork : CoveredFork sevm.benvStat.fork) :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_calldataload s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  refine ⟨ri_sstore_nonstatic hfork s1, ?_⟩
-  obtain ⟨G13, rfl⟩ := ri_sstore hfork s1
+  refine ⟨ri_sstore_nonstaticH hsg s1, ?_⟩
+  obtain ⟨G13, rfl⟩ := ri_sstoreH hsg (BenvStat.bal_none_of_stateGas_none hsg) s1
   cases run with
   | last hl =>
     cases hl
@@ -80,16 +100,16 @@ theorem safe_setMinter (hfork : CoveredFork sevm.benvStat.fork) :
     refine ⟨((stor₀).set vyMinterSlot (Sevm.argWord sevm 0), [], none),
       by simp only [rawSetMinter, hv, hm', hmin, and_self, ite_true], ?_⟩
     refine ⟨?_, fun a ha => ?_, ?_, (fun o ho => by cases ho), ?_⟩
-    · show Devm.getStor (afterSstore sevm _ _ _) _ = _
-      rw [afterSstore_getStor_self, afterSload_getStor]
+    · show Devm.getStor (afterSstoreH sevm _ _ _) _ = _
+      rw [afterSstoreH_getStor_self, afterSloadH_getStor]
       rfl
-    · show Devm.getStor (afterSstore sevm _ _ _) _ = _
-      rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
-    · show (afterSstore sevm _ _ _).logs = _
-      rw [afterSstore_logs, afterSload_logs, List.append_nil]
+    · show Devm.getStor (afterSstoreH sevm _ _ _) _ = _
+      rw [afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSloadH_getStor]
+    · show (afterSstoreH sevm _ _ _).logs = _
+      rw [afterSstoreH_logs, afterSloadH_logs, List.append_nil]
     · intro _
       rw [show ∀ (d : Devm) S M G, (St d S M G).output = d.output from fun _ _ _ _ => rfl,
-        afterSstore_output, afterSload_output]
+        afterSstoreH_output, afterSloadH_output]
 
 -- SEGMENT: safeTransfer (107 nodes)
 /-- `transfer`.  Proof sketch: guards as `safeSetMinter`; `PUSH1 3 CALLER` and the scratch
@@ -102,7 +122,7 @@ second slot `mapSlot 3 a0` and `DUP2 DUP2 DUP4 ADD LT ISZERO` the overflow guard
 a0)` (`ri_log3`, the window reads back `v.toBytes`); `mstore(0, 1); return(0, 32)`.  The
 second read is over the first write's base (`afterSstore`, `getStorVal`), which is exactly
 `rawTransfer`'s `st1`. -/
-theorem safe_transfer (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_transfer (hsg : sevm.benvStat.rules.stateGas = none) :
     SafeBody sevm b t_02ce_c0 (rawTransfer sevm stor₀) := by
   intro G post run
   have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
@@ -117,14 +137,14 @@ theorem safe_transfer (hfork : CoveredFork sevm.benvStat.fork) :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_caller s1
   obtain ⟨G5, run⟩ := ric_vySlot run
-  obtain ⟨hle, G6, run⟩ := ric_vySubStore (p := 0x24) (h := 0x03) (l := 0x0a) (fail := t_0306_c0)
-    hfork (by decide) run
+  obtain ⟨hle, G6, run⟩ := ric_vySubStoreH (p := 0x24) (h := 0x03) (l := 0x0a) (fail := t_0306_c0)
+    hsg (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_calldataload s1
   obtain ⟨G10, run⟩ := ric_vySlot run
-  obtain ⟨hnof, G11, run⟩ := ric_vyAddStore (p := 0x24) (h := 0x03) (l := 0x38)
-    (fail := t_0334_c0) hfork (by decide) run
+  obtain ⟨hnof, G11, run⟩ := ric_vyAddStoreH (p := 0x24) (h := 0x03) (l := 0x38)
+    (fail := t_0334_c0) hsg (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_calldataload s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
@@ -156,7 +176,7 @@ theorem safe_transfer (hfork : CoveredFork sevm.benvStat.fork) :
         0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5, 0x5a,
         0x4d, 0xf5, 0x23, 0xb3, 0xef] = transferTopic := by decide
     simp only [h3, hv1, hd0] at hle hnof hout hstor hlogs
-    simp only [getStorVal_afterStore] at hnof hstor hlogs
+    simp only [getStorVal_afterStoreH] at hnof hstor hlogs
     simp only [h320, h32, h0] at hout hlogs
     set M2 := vySlotMem (vySlotMem (vyMem Mem.empty (Sevm.dataWord sevm 0)) 3 sevm.caller.toB256) 3
       (Sevm.argWord sevm 0)
@@ -175,10 +195,10 @@ theorem safe_transfer (hfork : CoveredFork sevm.benvStat.fork) :
       ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩⟩
     · simp only [rawTransfer, vyBalSlot]
       exact ite_eq_left ⟨hv, hd', hle, hnof⟩
-    · rw [hstor, getStor_addLog, getStor_afterStore, getStor_afterStore]
+    · rw [hstor, getStor_addLog, getStor_afterStoreH, getStor_afterStoreH]
       rfl
-    · rw [hstor, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha]
-    · rw [hlogs, logs_addLog, logs_afterStore, logs_afterStore, htopic]
+    · rw [hstor, getStor_addLog, getStor_afterStore_neH ha, getStor_afterStore_neH ha]
+    · rw [hlogs, logs_addLog, logs_afterStoreH, logs_afterStoreH, htopic]
     · cases ho
       exact hout
 
@@ -190,7 +210,7 @@ a0) caller`, underflow guard, `SSTORE`, falling into `t_045b_c0`, the inline cop
 Both arms end in the same `LOG3(0x140, 0x20, sig, a0, a1)` and `return(0, 32)`: prove the
 tail once over an arbitrary base (`ric_jump`/`ric_branchTo` hand the run of `t_045b_c3` over
 unchanged). -/
-theorem safe_transferFrom (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_transferFrom (hsg : sevm.benvStat.rules.stateGas = none) :
     SafeBody sevm b t_0390_c0 (rawTransferFrom sevm stor₀) := by
   intro G post run
   have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
@@ -263,16 +283,16 @@ theorem safe_transferFrom (hfork : CoveredFork sevm.benvStat.fork) :
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_calldataload s1
   obtain ⟨G7, run⟩ := ric_vySlot run
-  obtain ⟨hle, G8, run⟩ := ric_vySubStore (p := 0x44) (h := 0x03) (l := 0xe0) (fail := t_03dc_c0)
-    hfork (by decide) run
+  obtain ⟨hle, G8, run⟩ := ric_vySubStoreH (p := 0x44) (h := 0x03) (l := 0xe0) (fail := t_03dc_c0)
+    hsg (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_calldataload s1
   obtain ⟨G12, run⟩ := ric_vySlot run
-  obtain ⟨hnof, G13, run⟩ := ric_vyAddStore (p := 0x44) (h := 0x04) (l := 0x0e)
-    (fail := t_040a_c0) hfork (by decide) run
+  obtain ⟨hnof, G13, run⟩ := ric_vyAddStoreH (p := 0x44) (h := 0x04) (l := 0x0e)
+    (fail := t_040a_c0) hsg (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_caller s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_xor s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_iszero s1
@@ -288,15 +308,15 @@ theorem safe_transferFrom (hfork : CoveredFork sevm.benvStat.fork) :
     obtain ⟨G24, run⟩ := ric_vySlot run
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_caller s1
     obtain ⟨G26, run⟩ := ric_vySlot run
-    obtain ⟨hle2, G27, run⟩ := ric_vySubStore (p := 0x44) (h := 0x04) (l := 0x50)
-      (fail := t_044c_c0) hfork (by decide) run
+    obtain ⟨hle2, G27, run⟩ := ric_vySubStoreH (p := 0x44) (h := 0x04) (l := 0x50)
+      (fail := t_044c_c0) hsg (by decide) run
     obtain ⟨hst, hlg, hout⟩ := tail _ _ _ (vySlotMem_wf (vySlotMem_wf hwf1 _ _) _ _) run
     have gv : ∀ k, b.getStorVal sevm.currentTarget k = (stor₀).get k := fun _ => rfl
     have hf' : (Sevm.argWord sevm 0).toNat < 2 ^ 160 := hf
     have hd' : (Sevm.argWord sevm 1).toNat < 2 ^ 160 := by rw [← hd1]; exact hd
     simp only [hf0, hd1, hv2] at hle hnof hle2 hx hst hlg
     simp only [h3, h4, h6] at hle hnof hle2 hx hst hlg
-    simp only [getStorVal_afterStore, getStorVal_afterSload, getStor_afterStore] at hnof hle2 hx
+    simp only [getStorVal_afterStoreH, getStorVal_afterSloadH, getStor_afterStoreH] at hnof hle2 hx
     simp only [gv] at hle hnof hle2 hx
     have hspend : ((((stor₀).set (mapSlot 3 (Sevm.argWord sevm 0))
         ((stor₀).get (mapSlot 3 (Sevm.argWord sevm 0)) - Sevm.argWord sevm 2)).set
@@ -314,11 +334,11 @@ theorem safe_transferFrom (hfork : CoveredFork sevm.benvStat.fork) :
       simp only [rawTransferFrom]
       rw [ite_eq_left ⟨hv, hf', hd', hle, hnof, fun _ => hle2⟩, ite_eq_left hspend]
     refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
-    · rw [hst, getStor_afterStore, afterSload_getStor, getStor_afterStore, getStor_afterStore]
-      simp only [getStorVal_afterStore, getStorVal_afterSload, getStor_afterStore, gv]
-    · rw [hst, getStor_afterStore_ne ha, afterSload_getStor, getStor_afterStore_ne ha,
-        getStor_afterStore_ne ha]
-    · rw [hlg, logs_afterStore, afterSload_logs, logs_afterStore, logs_afterStore]
+    · rw [hst, getStor_afterStoreH, afterSloadH_getStor, getStor_afterStoreH, getStor_afterStoreH]
+      simp only [getStorVal_afterStoreH, getStorVal_afterSloadH, getStor_afterStoreH, gv]
+    · rw [hst, getStor_afterStore_neH ha, afterSloadH_getStor, getStor_afterStore_neH ha,
+        getStor_afterStore_neH ha]
+    · rw [hlg, logs_afterStoreH, afterSloadH_logs, logs_afterStoreH, logs_afterStoreH]
     · cases ho
       exact hout
   · -- the caller is the minter: no allowance
@@ -328,7 +348,7 @@ theorem safe_transferFrom (hfork : CoveredFork sevm.benvStat.fork) :
     have hd' : (Sevm.argWord sevm 1).toNat < 2 ^ 160 := by rw [← hd1]; exact hd
     simp only [hf0, hd1, hv2] at hle hnof hx hst hlg
     simp only [h3, h6] at hle hnof hx hst hlg
-    simp only [getStorVal_afterStore, getStor_afterStore] at hnof hx
+    simp only [getStorVal_afterStoreH, getStor_afterStoreH] at hnof hx
     simp only [gv] at hle hnof hx
     have hnspend : ¬ (((((stor₀).set (mapSlot 3 (Sevm.argWord sevm 0))
         ((stor₀).get (mapSlot 3 (Sevm.argWord sevm 0)) - Sevm.argWord sevm 2)).set
@@ -347,10 +367,10 @@ theorem safe_transferFrom (hfork : CoveredFork sevm.benvStat.fork) :
       simp only [rawTransferFrom]
       rw [ite_eq_left ⟨hv, hf', hd', hle, hnof, fun h => absurd h hnspend⟩, ite_eq_right hnspend]
     refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
-    · rw [hst, afterSload_getStor, getStor_afterStore, getStor_afterStore]
-      simp only [getStorVal_afterStore, gv]
-    · rw [hst, afterSload_getStor, getStor_afterStore_ne ha, getStor_afterStore_ne ha]
-    · rw [hlg, afterSload_logs, logs_afterStore, logs_afterStore]
+    · rw [hst, afterSloadH_getStor, getStor_afterStoreH, getStor_afterStoreH]
+      simp only [getStorVal_afterStoreH, gv]
+    · rw [hst, afterSloadH_getStor, getStor_afterStore_neH ha, getStor_afterStore_neH ha]
+    · rw [hlg, afterSloadH_logs, logs_afterStoreH, logs_afterStoreH]
     · cases ho
       exact hout
 
@@ -360,7 +380,7 @@ pushes `1` and jumps (`.jump 4`) to the join `t_04f6_c4`; otherwise the allowanc
 `mapSlot (mapSlot 4 caller) a0` is read and `ISZERO`'d, falling into the same join; the join's
 `JUMPI` requires the flag (`noOk` arm).  Then the slot recomputed, `SSTORE v`, `LOG3(0x140,
 0x20, approvalSig, caller, a0)`, `return(0, 32)`. -/
-theorem safe_approve (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_approve (hsg : sevm.benvStat.rules.stateGas = none) :
     SafeBody sevm b t_04ab_c0 (rawApprove sevm stor₀) := by
   intro G post run
   have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
@@ -397,7 +417,7 @@ theorem safe_approve (hfork : CoveredFork sevm.benvStat.fork) :
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_calldataload s1
     obtain ⟨G13, run⟩ := ric_vySlot run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_sstore hfork s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_sstoreH hsg (BenvStat.bal_none_of_stateGas_none hsg) s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_push s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_calldataload s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
@@ -433,9 +453,9 @@ theorem safe_approve (hfork : CoveredFork sevm.benvStat.fork) :
       rw [Mem.read_write_word_of_wf hwf3] at hout
       rw [Mem.read_write_word_of_wf hwf2] at hlogs
       refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
-      · rw [hstor, getStor_addLog, afterSstore_getStor_self, hst]
-      · rw [hstor, getStor_addLog, afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), hst]
-      · rw [hlogs, logs_addLog, afterSstore_logs, hlg, htopic]
+      · rw [hstor, getStor_addLog, afterSstoreH_getStor_self, hst]
+      · rw [hstor, getStor_addLog, afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), hst]
+      · rw [hlogs, logs_addLog, afterSstoreH_logs, hlg, htopic]
       · cases ho
         exact hout
   have run := run.cut
@@ -473,12 +493,12 @@ theorem safe_approve (hfork : CoveredFork sevm.benvStat.fork) :
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_push s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_calldataload s1
     obtain ⟨G15, run⟩ := ric_vySlot run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_sload hfork s1
+    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_iszero s1
     simp only [hd0] at run
     simp only [h4] at run
     obtain ⟨hflag, hl⟩ := tail _ _ _ _ (vySlotMem_wf (vySlotMem_wf hwf0 _ _) _ _)
-      (fun a => afterSload_getStor _ _ _ _) (afterSload_logs _ _ _) run
+      (fun a => afterSloadH_getStor _ _ _ _) (afterSloadH_logs _ _ _) run
     have hcur : (stor₀).get slot = 0 := eq_zero_of_iszero_ne_zero hflag
     exact ⟨_, by simp only [rawApprove]; exact ite_eq_left ⟨hv, hp', .inr hcur⟩, hl⟩
 
@@ -488,7 +508,7 @@ theorem safe_approve (hfork : CoveredFork sevm.benvStat.fork) :
 the supply update with the overflow (mint) or underflow (burn) guard; the balance slot
 `mapSlot 3 a0` read over the supply write's base and its guard and write; `LOG3` with topics
 `[sig, 0, a0]` (mint) or `[sig, a0, 0]` (burn); `return(0, 32)`. -/
-theorem safe_mint (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_mint (hsg : sevm.benvStat.rules.stateGas = none) :
     SafeBody sevm b t_056e_c0 (rawMint sevm stor₀) := by
   intro G post run
   have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
@@ -501,7 +521,7 @@ theorem safe_mint (hfork : CoveredFork sevm.benvStat.fork) :
     (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
     (by rw [hM]; omega) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_caller s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_eq s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
@@ -517,14 +537,14 @@ theorem safe_mint (hfork : CoveredFork sevm.benvStat.fork) :
   · exact (run.false_of_noOk (by decide)).elim
   obtain ⟨G16, run⟩ := ric_dest run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
-  obtain ⟨hnof1, G18, run⟩ := ric_vyAddStore (p := 0x24) (h := 0x05) (l := 0xbd)
-    (fail := t_05b9_c0) hfork (by decide) run
+  obtain ⟨hnof1, G18, run⟩ := ric_vyAddStoreH (p := 0x24) (h := 0x05) (l := 0xbd)
+    (fail := t_05b9_c0) hsg (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_calldataload s1
   obtain ⟨G22, run⟩ := ric_vySlot run
-  obtain ⟨hnof2, G23, run⟩ := ric_vyAddStore (p := 0x24) (h := 0x05) (l := 0xeb)
-    (fail := t_05e7_c0) hfork (by decide) run
+  obtain ⟨hnof2, G23, run⟩ := ric_vyAddStoreH (p := 0x24) (h := 0x05) (l := 0xeb)
+    (fail := t_05e7_c0) hsg (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_calldataload s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
@@ -558,8 +578,8 @@ theorem safe_mint (hfork : CoveredFork sevm.benvStat.fork) :
         0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5, 0x5a,
         0x4d, 0xf5, 0x23, 0xb3, 0xef] = transferTopic := by decide
     simp only [h3, h5, h6, hz, hv1, hd0] at hmin hnz hnof1 hnof2 hout hstor hlogs
-    simp only [getStorVal_afterStore, getStorVal_afterSload,
-      afterSload_getStor] at hnof1 hnof2 hstor hlogs
+    simp only [getStorVal_afterStoreH, getStorVal_afterSloadH,
+      afterSloadH_getStor] at hnof1 hnof2 hstor hlogs
     simp only [h320, h32] at hout hlogs
     set M2 := vySlotMem (vyMem Mem.empty (Sevm.dataWord sevm 0)) 3 (Sevm.argWord sevm 0)
     have hwf2 : Mem.Wf M2 := vySlotMem_wf hwf0 _ _
@@ -584,16 +604,16 @@ theorem safe_mint (hfork : CoveredFork sevm.benvStat.fork) :
       ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩⟩
     · simp only [rawMint]
       exact ite_eq_left ⟨hv, hd', hmin', hnz', hnof1, hnof2⟩
-    · rw [hstor, getStor_addLog, getStor_afterStore, getStor_afterStore, afterSload_getStor]
+    · rw [hstor, getStor_addLog, getStor_afterStoreH, getStor_afterStoreH, afterSloadH_getStor]
       rfl
-    · rw [hstor, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha,
-        afterSload_getStor]
-    · rw [hlogs, logs_addLog, logs_afterStore, logs_afterStore, afterSload_logs, htopic]
+    · rw [hstor, getStor_addLog, getStor_afterStore_neH ha, getStor_afterStore_neH ha,
+        afterSloadH_getStor]
+    · rw [hlogs, logs_addLog, logs_afterStoreH, logs_afterStoreH, afterSloadH_logs, htopic]
     · cases ho
       exact hout
 
 -- SEGMENT: safeMintBurn (see `safe_mint`)
-theorem safe_burnFrom (hfork : CoveredFork sevm.benvStat.fork) :
+theorem safe_burnFrom (hsg : sevm.benvStat.rules.stateGas = none) :
     SafeBody sevm b t_0644_c0 (rawBurnFrom sevm stor₀) := by
   intro G post run
   have hM := vyMem_empty_size (Sevm.dataWord sevm 0)
@@ -606,7 +626,7 @@ theorem safe_burnFrom (hfork : CoveredFork sevm.benvStat.fork) :
     (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
     (by rw [hM]; omega) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_caller s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_eq s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
@@ -622,14 +642,14 @@ theorem safe_burnFrom (hfork : CoveredFork sevm.benvStat.fork) :
   · exact (run.false_of_noOk (by decide)).elim
   obtain ⟨G16, run⟩ := ric_dest run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
-  obtain ⟨hnof1, G18, run⟩ := ric_vySubStore (p := 0x24) (h := 0x06) (l := 0x91)
-    (fail := t_068d_c0) hfork (by decide) run
+  obtain ⟨hnof1, G18, run⟩ := ric_vySubStoreH (p := 0x24) (h := 0x06) (l := 0x91)
+    (fail := t_068d_c0) hsg (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_calldataload s1
   obtain ⟨G22, run⟩ := ric_vySlot run
-  obtain ⟨hnof2, G23, run⟩ := ric_vySubStore (p := 0x24) (h := 0x06) (l := 0xbd)
-    (fail := t_06b9_c0) hfork (by decide) run
+  obtain ⟨hnof2, G23, run⟩ := ric_vySubStoreH (p := 0x24) (h := 0x06) (l := 0xbd)
+    (fail := t_06b9_c0) hsg (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_calldataload s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
@@ -663,8 +683,8 @@ theorem safe_burnFrom (hfork : CoveredFork sevm.benvStat.fork) :
         0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5, 0x5a,
         0x4d, 0xf5, 0x23, 0xb3, 0xef] = transferTopic := by decide
     simp only [h3, h5, h6, hz, hv1, hd0] at hmin hnz hnof1 hnof2 hout hstor hlogs
-    simp only [getStorVal_afterStore, getStorVal_afterSload,
-      afterSload_getStor] at hnof1 hnof2 hstor hlogs
+    simp only [getStorVal_afterStoreH, getStorVal_afterSloadH,
+      afterSloadH_getStor] at hnof1 hnof2 hstor hlogs
     simp only [h320, h32] at hout hlogs
     set M2 := vySlotMem (vyMem Mem.empty (Sevm.dataWord sevm 0)) 3 (Sevm.argWord sevm 0)
     have hwf2 : Mem.Wf M2 := vySlotMem_wf hwf0 _ _
@@ -690,10 +710,10 @@ theorem safe_burnFrom (hfork : CoveredFork sevm.benvStat.fork) :
     · simp only [rawBurnFrom]
       exact ite_eq_left ⟨hv, hd', hmin', hnz', hnof1, hnof2⟩
     · have e : b.getStorVal sevm.currentTarget vySupplySlot = (stor₀).get vySupplySlot := rfl
-      rw [hstor, getStor_addLog, getStor_afterStore, getStor_afterStore, afterSload_getStor, e]
-    · rw [hstor, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha,
-        afterSload_getStor]
-    · rw [hlogs, logs_addLog, logs_afterStore, logs_afterStore, afterSload_logs, htopic]
+      rw [hstor, getStor_addLog, getStor_afterStoreH, getStor_afterStoreH, afterSloadH_getStor, e]
+    · rw [hstor, getStor_addLog, getStor_afterStore_neH ha, getStor_afterStore_neH ha,
+        afterSloadH_getStor]
+    · rw [hlogs, logs_addLog, logs_afterStoreH, logs_afterStoreH, afterSloadH_logs, htopic]
     · cases ho
       exact hout
 
@@ -709,7 +729,7 @@ private theorem storeWord {M : Mem} {sn i : Nat} {src : Bytes}
 `n + 1`) store `min (n + 1) ((32 + L) / 32 + 1)` words of `src` (read at `sn` in memory, `L` its
 first word) at the string's base, and the run goes on at the loop's exit tree `exitT` (entry `j`)
 with six more words on the stack; memory from `0x140` up is kept. -/
-theorem ric_storeSeg (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {S : List B256} {M : Mem}
+theorem ric_storeSeg (hsg : sevm.benvStat.rules.stateGas = none) {d : Devm} {S : List B256} {M : Mem}
     {G : Nat} {o : Outcome} {s0 s1 sl cp e0 e1 x0 x1 r0 r1 : UInt8} {j k n sn : Nat}
     {exitT : SFunc} {src : Bytes}
     (hk : prog[k]? = some (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT))
@@ -762,12 +782,12 @@ theorem ric_storeSeg (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {S : Li
   have hkC : k ∉ ([] : List Nat) := by simp only [List.not_mem_nil, not_false_eq_true]
   have hjC : j ∉ ([] : List Nat) := by simp only [List.not_mem_nil, not_false_eq_true]
   -- iteration 0
-  rcases ric_vyStoreIter hfork (i := 0) hs2 (by decide) (by decide) hsn (by omega) (by decide) hc2
+  rcases ric_vyStoreIterH hsg (i := 0) hs2 (by decide) (by decide) hsn (by omega) (by decide) hc2
     hk hkC hj hjC run with ⟨hlt, -⟩ | ⟨-, hstatic, G2, run⟩
   · omega
   rw [ite_eq_right_of_eq_false _ _ (eq_false hne1)] at run
   rw [hk2 _ _ (by omega), storeWord (hsrc 0 (Nat.zero_le _))] at run
-  set d1 := afterSstore sevm d (base + Nat.toB256 0) (Bytes.toB256 (src.sliceD (32 * 0) 32 0))
+  set d1 := afterSstoreH sevm d (base + Nat.toB256 0) (Bytes.toB256 (src.sliceD (32 * 0) 32 0))
   set M3 := M2.write 0x120 (Nat.toB256 (0 + 1)).toBytes
   have hwf3 : Mem.Wf M3 := hwf2.write _ _
   have hs3 : M3.size = 672 := hsz M2 _ hs2
@@ -775,11 +795,11 @@ theorem ric_storeSeg (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {S : Li
     intro a len ha; rw [hkeep M2 _ _ hwf2 (by omega) a len ha, hk2 a len ha]
   have hc3 : (M3.read 0x120 32).1 = (Nat.toB256 1).toBytes := Mem.read_write_word_of_wf hwf2 _ _
   -- iteration 1
-  rcases ric_vyStoreIter hfork (i := 1) hs3 (by decide) (by decide) hsn (by omega) (by decide) hc3
+  rcases ric_vyStoreIterH hsg (i := 1) hs3 (by decide) (by decide) hsn (by omega) (by decide) hc3
     hk hkC hj hjC run with ⟨hlt, -⟩ | ⟨-, -, G3, run⟩
   · omega
   rw [hk3 _ _ (by omega), storeWord (hsrc 1 (by omega))] at run
-  set d2 := afterSstore sevm d1 (base + Nat.toB256 1) (Bytes.toB256 (src.sliceD (32 * 1) 32 0))
+  set d2 := afterSstoreH sevm d1 (base + Nat.toB256 1) (Bytes.toB256 (src.sliceD (32 * 1) 32 0))
   set M4 := M3.write 0x120 (Nat.toB256 (1 + 1)).toBytes
   have hwf4 : Mem.Wf M4 := hwf3.write _ _
   have hs4 : M4.size = 672 := hsz M3 _ hs3
@@ -787,18 +807,18 @@ theorem ric_storeSeg (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {S : Li
     intro a len ha; rw [hkeep M3 _ _ hwf3 (by omega) a len ha, hk3 a len ha]
   have hst2 : Devm.getStor d2 sevm.currentTarget =
       vyCopyStore (Devm.getStor d sevm.currentTarget) base src 2 := by
-    simp only [d2, d1, afterSstore_getStor_self]; rfl
+    simp only [d2, d1, afterSstoreH_getStor_self]; rfl
   have hot2 : ∀ a, a ≠ sevm.currentTarget → Devm.getStor d2 a = Devm.getStor d a := by
     intro a ha
     simp only [d2, d1]
-    rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha)]
-  have hlg2 : d2.logs = d.logs := by simp only [d2, d1, afterSstore_logs]
-  have hout2 : d2.output = d.output := by simp only [d2, d1, afterSstore_output]
+    rw [afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha)]
+  have hlg2 : d2.logs = d.logs := by simp only [d2, d1, afterSstoreH_logs]
+  have hout2 : d2.output = d.output := by simp only [d2, d1, afterSstoreH_output]
   rcases hcase with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩
   · -- `name`: a third pass
     rw [ite_eq_right_of_eq_false _ _ (eq_false (by decide))] at run
     have hc4 : (M4.read 0x120 32).1 = (Nat.toB256 2).toBytes := Mem.read_write_word_of_wf hwf3 _ _
-    rcases ric_vyStoreIter hfork (i := 2) hs4 (by decide) (by decide) hsn (by omega) (by decide)
+    rcases ric_vyStoreIterH hsg (i := 2) hs4 (by decide) (by decide) hsn (by omega) (by decide)
       hc4 hk hkC hj hjC run with ⟨hlt, G4, run⟩ | ⟨hle, -, G4, run⟩
     · refine ⟨_, _, _, _, _, _, d2, M4, G4, run, ?_, hot2, hlg2, hout2, hs4, hwf4, hk4, hstatic⟩
       rw [hst2]
@@ -808,12 +828,12 @@ theorem ric_storeSeg (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {S : Li
       rw [hk4 _ _ (by omega), storeWord (hsrc 2 le_rfl)] at run
       refine ⟨_, _, _, _, _, _, _, M4.write 0x120 (Nat.toB256 (2 + 1)).toBytes, G4, run, ?_, ?_,
         ?_, ?_, hsz M4 _ hs4, hwf4.write _ _, ?_, hstatic⟩
-      · rw [afterSstore_getStor_self, hst2, show min (2 + 1) ((32 + L) / 32 + 1) = 3 by omega]
+      · rw [afterSstoreH_getStor_self, hst2, show min (2 + 1) ((32 + L) / 32 + 1) = 3 by omega]
         rfl
       · intro a ha
-        rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), hot2 a ha]
-      · rw [afterSstore_logs, hlg2]
-      · rw [afterSstore_output, hout2]
+        rw [afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), hot2 a ha]
+      · rw [afterSstoreH_logs, hlg2]
+      · rw [afterSstoreH_output, hout2]
       · intro a len ha; rw [hkeep M4 _ _ hwf4 (by omega) a len ha, hk4 a len ha]
   · -- `symbol`: the counter reached the cap
     rw [ite_eq_left_of_eq_true _ _ (eq_true (by decide))] at run
@@ -839,9 +859,9 @@ by `SFunc.RunP.loop` with the invariant "counter `i` at `0x120`, storage is `vyC
 `i ≤ cap`, `32 (i - 1) ≤ L + 32`", exiting on `32 i > L + 32` (to the join by `.jump 1`/`2`) or
 `i = cap` (`branchTo` fall-through); the join pops six words, and after the second loop
 `STOP`s.  Neither loop touches `0x140 … 0x200`, the words it copies. -/
-theorem safe_setName (hfork : CoveredFork sevm.benvStat.fork) {G : Nat} {post : Devm}
+theorem safe_setName (hsg : sevm.benvStat.rules.stateGas = none) {G : Nat} {post : Devm}
     (run : SFunc.Run prog sevm (entrySt sevm b G) t_00f1_c0 (.halted post)) :
-    sevm.isStatic = false ∧ ∃ w, OwnerAnswer sevm b ((stor₀).get vyMinterSlot).toAdr w ∧
+    sevm.isStatic = false ∧ ∃ w, OwnerAnswerH sevm b ((stor₀).get vyMinterSlot).toAdr w ∧
       ∃ r, rawSetName sevm stor₀ (some w) = some r ∧ Lands sevm b post r := by
   have hM0 := vyMem_empty_size (Sevm.dataWord sevm 0)
   have hwf0 := vyMem_wf Mem.wf_empty (Sevm.dataWord sevm 0)
@@ -901,10 +921,10 @@ theorem safe_setName (hfork : CoveredFork sevm.benvStat.fork) {G : Nat} {post : 
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G44, rfl⟩ := ri_mstore s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G45, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G46, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G47, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G47, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨gw, G48, rfl⟩ := ri_gas s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨flag, out, hpost, hans⟩ := ri_staticcall hfork s1
+  obtain ⟨flag, out, hpost, hans⟩ := ri_staticcallH hsg s1
   rw [hpost.eq_St] at run
   have n320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
   have n96 : (Bytes.toB256 [0x60]).toNat = 96 := by decide
@@ -1012,7 +1032,7 @@ theorem safe_setName (hfork : CoveredFork sevm.benvStat.fork) {G : Nat} {post : 
       hstatic⟩ :=
     ric_storeSeg (s0 := 0x01) (s1 := 0x40) (sl := 0x00) (cp := 0x03) (e0 := 0x01) (e1 := 0xad)
       (x0 := 0x01) (x1 := 0xcf) (r0 := 0x01) (r1 := 0x9a) (j := 1) (k := 8) (n := 2)
-      (exitT := t_01cf_c1) (src := src0) hfork rfl rfl (Or.inl ⟨rfl, rfl⟩) hs4 hwf4 n320
+      (exitT := t_01cf_c1) (src := src0) hsg rfl rfl (Or.inl ⟨rfl, rfl⟩) hs4 hwf4 n320
       (by decide) (by decide) hsrc0 (by rw [hL0w]; omega) run
   have hsrc1 : ∀ i, i ≤ 1 → (M5.read (448 + 32 * i) 32).1 = src1.sliceD (32 * i) 32 0 := by
     intro i hi
@@ -1031,7 +1051,7 @@ theorem safe_setName (hfork : CoveredFork sevm.benvStat.fork) {G : Nat} {post : 
   obtain ⟨z1, z2, z3, z4, z5, z6, d3, M6, G74, run, hst3, hot3, hlg3, hout3, -, -, -, -⟩ :=
     ric_storeSeg (s0 := 0x01) (s1 := 0xc0) (sl := 0x01) (cp := 0x02) (e0 := 0x02) (e1 := 0x07)
       (x0 := 0x02) (x1 := 0x29) (r0 := 0x01) (r1 := 0xf4) (j := 2) (k := 11) (n := 1)
-      (exitT := t_0229_c2) (src := src1) hfork rfl rfl (Or.inr ⟨rfl, rfl⟩) hs5 hwf5 n448
+      (exitT := t_0229_c2) (src := src1) hsg rfl rfl (Or.inr ⟨rfl, rfl⟩) hs5 hwf5 n448
       (by decide) (by decide) hsrc1 (by rw [hL1w]; omega) run
   unfold t_0229_c2 at run
   obtain ⟨G75, run⟩ := ric_dest run
@@ -1056,7 +1076,7 @@ theorem safe_setName (hfork : CoveredFork sevm.benvStat.fork) {G : Nat} {post : 
     have hsb : (Bytes.toB256 [0x01]).toBytes.keccak = vySymbolBase := by
       rw [show Bytes.toB256 [0x01] = 1 by decide]; rfl
     have hd1 : ∀ a, Devm.getStor d1 a = Devm.getStor b a := by
-      intro a; rw [hpost.stor a, afterSload_getStor]
+      intro a; rw [hpost.stor a, afterSloadH_getStor]
     have hin : (M3.read 572 4).1 = ownerCalldata := by
       rw [((Mem.reads_data M2).write hwf2 544 selw.toBytes).read,
         Bytes.sliceD_writeAt_inside _ _ _ _ _ (by decide) (by rw [B256.length_toBytes])]
@@ -1069,8 +1089,8 @@ theorem safe_setName (hfork : CoveredFork sevm.benvStat.fork) {G : Nat} {post : 
         (min 2 ((32 + (Sevm.dataWord sevm s1B).toNat) / 32 + 1)), [], none), ?_, ?_⟩
     · obtain ⟨parent, child, xl, dp, na, code, gas, hst, hdel, hfill, hproc, hclean, hout⟩ := hans'
       refine ⟨parent, child, xl, dp, na, code, gas, ?_, ?_, hfill, hproc, hclean, hout⟩
-      · rw [hst]; unfold afterSload; split <;> rfl
-      · simp only [afterSload_getCode] at hdel; exact hdel
+      · rw [hst]; unfold afterSloadH afterSload; split <;> (try split) <;> rfl
+      · simp only [CallCodeH, afterSloadH_getCode] at hdel ⊢; exact hdel
     · simp only [rawSetName, ← hs0, ← hs1]
       exact ite_eq_left ⟨hv, hL0, hL1, trivial⟩
     · refine ⟨?_, fun a ha => ?_, ?_, (fun o ho => by cases ho), ?_⟩
@@ -1079,10 +1099,10 @@ theorem safe_setName (hfork : CoveredFork sevm.benvStat.fork) {G : Nat} {post : 
       · show Devm.getStor d3 _ = _
         rw [hot3 a ha, hot2 a ha, hd1]
       · show d3.logs = _
-        rw [hlg3, hlg2, hpost.logs, afterSload_logs, List.append_nil]
+        rw [hlg3, hlg2, hpost.logs, afterSloadH_logs, List.append_nil]
       · intro _
         change d3.output = b.output
-        rw [hout3, hout2, hpost.output hflag, afterSload_output]
+        rw [hout3, hout2, hpost.output hflag, afterSloadH_output]
 
 end
 

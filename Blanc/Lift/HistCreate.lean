@@ -11,12 +11,11 @@ EIP-2929 warm/cold schedule, its settlement assumes no EIP-161 touched sweep, an
 step charges the EIP-3860 init-code words. This module states the same steps from the rule facts
 they read.
 
-* `sloadCostH`, `sstoreCostH` — the charges under the frame's actual access schedule and
-  `SSTORE` regime (legacy, flat net-metered, EIP-2929), equal to `sloadCost`/`sstoreCost` under
-  EIP-2929 (`sloadCostH_of_eip2929`);
-* `Ninst.runCompiled_sload_selectedH`, `Ninst.runCompiled_sstore_selectedH`, `rx_sload_selH`,
-  `rx_sstoreH` — forward steps over `afterSloadH`/`afterSstoreH`, from `rules.stateGas = none`
-  (the `SSTORE` stipend sentry is required only where the rules have it);
+* the `SLOAD`/`SSTORE` charges `sloadCostH`/`sstoreCostH` and forward steps (`rx_sload_selH`,
+  `rx_sstoreH`, ...) are in `HistAccessWalk.lean`; here, their pricing facts
+  (`sstoreCostH_congr`, `sloadCostH_muir_eq`, `sstoreCostH_muir_le`, the exact Muir writes in
+  a created account `sstoreCostH_muir_fresh_set`/`sstoreCostH_muir_created_zero`,
+  `sloadCostH_le`, `sstoreCostH_le`);
 * `processMessage_ok_of_execH`, `liftCreate_postH`, `liftCreate_okH` — the lifted creation
   settles under `rules.stateGas = none` alone; under the EIP-161 sweep the settled machine is the
   constructor's with the target's touch recorded (`Devm.recordTouch`), which moves no state;
@@ -31,185 +30,10 @@ namespace Blanc.Lift
 
 open Jaune
 
-/-! ## `SLOAD` and `SSTORE`, forward -/
+/-! ## `SLOAD` and `SSTORE` pricing facts
 
-/-- The charge of one `SLOAD` under the frame's actual access schedule. -/
-def sloadCostH (sevm : Sevm) (base : Devm) (key : B256) : Nat :=
-  match sevm.benvStat.rules.access with
-  | .eip2929 => sloadCost sevm base key
-  | .flat g => g.sload
-
-theorem sloadCostH_of_eip2929 {sevm : Sevm} {base : Devm} {key : B256}
-    (access : sevm.benvStat.rules.access = .eip2929) :
-    sloadCostH sevm base key = sloadCost sevm base key := by
-  unfold sloadCostH
-  rw [access]
-
-/-- The access part of one `SSTORE` charge: the cold surcharge under EIP-2929, nothing under
-flat access. -/
-def storageAccessCostH (sevm : Sevm) (devm : Devm) (key : B256) : Nat :=
-  match sevm.benvStat.rules.access with
-  | .flat _ => 0
-  | .eip2929 =>
-    if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ devm.accessedStorageKeys then 0
-    else gasColdSload
-
-/-- The charge of one `SSTORE` (`stateGas = none` lane) under the frame's actual access schedule
-and `SSTORE` regime. -/
-def sstoreCostH (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
-  sstoreRegimeGasCost sevm.benvStat.rules.sstore sevm.benvStat.rules.access
-    (storageAccessCostH sevm devm key) value
-    (devm.getOrigStorVal sevm sevm.currentTarget key) (devm.getStorVal sevm.currentTarget key)
-
-/-- One exact `SLOAD` under the frame's actual access schedule, from `rules.stateGas = none`. -/
-theorem Ninst.runCompiled_sload_selectedH
-    {sevm : Sevm} {base : Devm} {key value : B256}
-    {stack : List B256} {memory : Mem} {G : Nat}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hvalue : base.getStorVal sevm.currentTarget key = value)
-    (hroom : stack.length < 1024) :
-    Ninst.RunCompiled sevm
-      (base.setMach ⟨key :: stack, memory, G + sloadCostH sevm base key, base.stateGas⟩)
-      (.reg .sload)
-      ((afterSloadH sevm base key).setMach ⟨value :: stack, memory, G, base.stateGas⟩) := by
-  cases access : sevm.benvStat.rules.access with
-  | eip2929 =>
-    rw [sloadCostH_of_eip2929 access, afterSloadH_of_eip2929 access]
-    by_cases hwarm : (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys
-    · rw [sloadCost, ite_eq_left hwarm, afterSload, ite_eq_left hwarm]
-      exact Ninst.runCompiled_sload_warm (k := key) (v := value) (s := stack) (G := G)
-        hsg access rfl hwarm hvalue (by simp only [Devm.gasLeft_setMach, gasWarmAccess]) hroom
-    · rw [sloadCost, ite_eq_right hwarm, afterSload, ite_eq_right hwarm]
-      have hcomm : ∀ (m m' : Mach), (addAccessedStorageKey (base.setMach m) sevm.currentTarget
-          key).setMach m' = (addAccessedStorageKey base sevm.currentTarget key).setMach m' :=
-        fun _ _ => rfl
-      simpa only [hcomm, Devm.memory_setMach, Devm.stateGas_setMach] using
-        (Ninst.runCompiled_sload_cold
-          (devm := base.setMach ⟨key :: stack, memory, G + gasColdSload, base.stateGas⟩)
-          (k := key) (v := value) (s := stack) (G := G) hsg access rfl hwarm
-          (by simpa only [Devm.getStorVal_setMach] using hvalue)
-          (by simp only [Devm.gasLeft_setMach, gasColdSload]) hroom)
-  | flat g =>
-    subst hvalue
-    have hbal := BenvStat.bal_none_of_stateGas_none hsg
-    refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
-    simp only [Rinst.runCore, access, Devm.balReadStorage_of_bal_none hbal, sloadCostH,
-      afterSloadH]
-    rw [Devm.pop_eq_ok rfl]
-    simp only [bind, Except.bind]
-    rw [chargeGas_eq_ok (by simp only [Devm.gasLeft_setMach]; omega)]
-    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
-      Devm.stateGas_setMach, Devm.stack_setMach, Nat.add_sub_cancel]
-    rw [Devm.push_eq_ok (by simpa only [Devm.stack_setMach] using hroom)]
-    rfl
-
-/-- One exact `SSTORE` under the frame's actual access schedule and `SSTORE` regime, from
-`rules.stateGas = none`. The stipend sentry is required only under rules that have it. -/
-theorem Ninst.runCompiled_sstore_selectedH
-    {sevm : Sevm} {base : Devm} {key value : B256}
-    {stack : List B256} {memory : Mem} {G : Nat}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hsentry : sevm.benvStat.rules.sstore.stipendSentry = true →
-      gCallStipend < G + sstoreCostH sevm base key value)
-    (hstatic : sevm.isStatic = false) :
-    Ninst.RunCompiled sevm
-      (base.setMach ⟨key :: value :: stack, memory, G + sstoreCostH sevm base key value,
-        base.stateGas⟩)
-      (.reg .sstore)
-      ((afterSstoreH sevm base key value).setMach ⟨stack, memory, G, base.stateGas⟩) := by
-  have hbal := BenvStat.bal_none_of_stateGas_none hsg
-  refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
-  have hO : ∀ m : Mach, (base.setMach m).getOrigStorVal sevm sevm.currentTarget key =
-      base.getOrigStorVal sevm sevm.currentTarget key := fun _ => rfl
-  have hC : ∀ m : Mach, (base.setMach m).getStorVal sevm.currentTarget key =
-      base.getStorVal sevm.currentTarget key := fun _ => rfl
-  have hK : ∀ m : Mach, (base.setMach m).accessedStorageKeys = base.accessedStorageKeys :=
-    fun _ => rfl
-  have hR : ∀ m : Mach, (base.setMach m).refundCounter = base.refundCounter := fun _ => rfl
-  have hA : ∀ (m m' : Mach), (addAccessedStorageKey (base.setMach m) sevm.currentTarget
-      key).setMach m' = (addAccessedStorageKey base sevm.currentTarget key).setMach m' :=
-    fun _ _ => rfl
-  have hG : ∀ (m : Mach) (rc : Int), ((base.setMach m).withRefundCounter rc).gasLeft =
-      m.gasLeft := fun _ _ => rfl
-  have hG' : ∀ (m : Mach) (rc : Int), ((addAccessedStorageKey (base.setMach m)
-      sevm.currentTarget key).withRefundCounter rc).gasLeft = m.gasLeft := fun _ _ => rfl
-  rcases hss : sevm.benvStat.rules.sstore with ⟨nm, ss⟩
-  rw [hss] at hsentry
-  unfold sstoreCostH storageAccessCostH at hsentry ⊢
-  unfold afterSstoreH storageAccessH sstoreRefundH
-  cases access : sevm.benvStat.rules.access <;> cases nm <;> cases ss <;>
-  · simp only [Rinst.runCore, hsg, hss, access, Devm.balReadStorage_of_bal_none hbal,
-      Devm.balReadAccount_of_bal_none hbal] at hsentry ⊢
-    rw [Devm.pop_eq_ok rfl]
-    simp only [bind, Except.bind]
-    rw [Devm.pop_eq_ok rfl]
-    simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach,
-      Devm.stateGas_setMach, hO, hC, hK, hR]
-    try (by_cases hw : (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys <;>
-      simp only [hw, ite_true, ite_false, not_true_eq_false, not_false_eq_true] at hsentry ⊢)
-    all_goals
-      simp only [Except.assert, Bool.false_eq_true, false_implies, forall_const,
-        ite_true] at hsentry ⊢
-      try simp only [hsentry, ite_true]
-      try simp only [sstoreRegimeGasCost, ↓reduceIte]
-      rw [chargeGas_eq_ok (Nat.le_add_left _ _)]
-      simp only [assertDynamic, Except.assert, hstatic, Bool.not_false, ↓reduceIte, hG, hG',
-        Nat.add_sub_cancel]
-      rfl
-
-/-- `SLOAD` of any key in an exact run, under the frame's actual access schedule. -/
-theorem rx_sload_selH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : Outcome}
-    {S : List B256} {M : Mem} {G : Nat} {k' : B256}
-    (hsg : sevm.benvStat.rules.stateGas = none) (hroom : S.length < 1024)
-    (k : SFunc.RunExact fs sevm
-      (St (afterSloadH sevm b k') (b.getStorVal sevm.currentTarget k' :: S) M G) f o) :
-    SFunc.RunExact fs sevm (St b (k' :: S) M (G + sloadCostH sevm b k'))
-      (.next (.reg .sload) f) o := by
-  refine .next ?_ k
-  have h := Ninst.runCompiled_sload_selectedH (sevm := sevm) (base := b) (key := k') (stack := S)
-    (memory := M) (G := G) hsg rfl hroom
-  simpa only [St, afterSloadH_stateGas] using h
-
-/-- `SSTORE` in an exact run, under the frame's actual access schedule and `SSTORE` regime. -/
-theorem rx_sstoreH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : Outcome}
-    {S : List B256} {M : Mem} {G : Nat} {k' v : B256}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hsentry : sevm.benvStat.rules.sstore.stipendSentry = true →
-      gCallStipend < G + sstoreCostH sevm b k' v)
-    (hstatic : sevm.isStatic = false)
-    (k : SFunc.RunExact fs sevm (St (afterSstoreH sevm b k' v) S M G) f o) :
-    SFunc.RunExact fs sevm (St b (k' :: v :: S) M (G + sstoreCostH sevm b k' v))
-      (.next (.reg .sstore) f) o := by
-  refine .next (Ninst.runCompiled_sstore_selectedH hsg hsentry hstatic) ?_
-  rw [← afterSstoreH_stateGas sevm b k' v]
-  exact k
-
-/-- `SLOAD` at the actual selected charge in an exact cut run. -/
-theorem rxc_sload_selH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {r : Seg}
-    {C : List Nat} {S : List B256} {M : Mem} {G : Nat} {key : B256}
-    (hsg : sevm.benvStat.rules.stateGas = none) (hroom : S.length < 1024)
-    (k : SFunc.RunExactCut fs sevm C
-      (St (afterSloadH sevm b key) (b.getStorVal sevm.currentTarget key :: S) M G) f r) :
-    SFunc.RunExactCut fs sevm C (St b (key :: S) M (G + sloadCostH sevm b key))
-      (.next (.reg .sload) f) r := by
-  refine .next ?_ k
-  have h := Ninst.runCompiled_sload_selectedH (sevm := sevm) (base := b) (key := key)
-    (stack := S) (memory := M) (G := G) hsg rfl hroom
-  simpa only [St, afterSloadH_stateGas] using h
-
-/-- `SSTORE` at the actual selected charge in an exact cut run. -/
-theorem rxc_sstoreH {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {r : Seg}
-    {C : List Nat} {S : List B256} {M : Mem} {G : Nat} {key value : B256}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hsentry : sevm.benvStat.rules.sstore.stipendSentry = true →
-      gCallStipend < G + sstoreCostH sevm b key value)
-    (hstatic : sevm.isStatic = false)
-    (k : SFunc.RunExactCut fs sevm C (St (afterSstoreH sevm b key value) S M G) f r) :
-    SFunc.RunExactCut fs sevm C (St b (key :: value :: S) M (G + sstoreCostH sevm b key value))
-      (.next (.reg .sstore) f) r := by
-  refine .next (Ninst.runCompiled_sstore_selectedH hsg hsentry hstatic) ?_
-  rw [← afterSstoreH_stateGas sevm b key value]
-  exact k
+The charges `sloadCostH`/`sstoreCostH` and their forward steps live in
+`HistAccessWalk.lean`. -/
 
 /-- Historical SSTORE pricing depends only on the selected price inputs. -/
 theorem sstoreCostH_congr {sevm : Sevm} {d1 d2 : Devm} (key value : B256)
@@ -243,6 +67,36 @@ theorem sstoreCostH_muir_le {sevm : Sevm} (hmuir : sevm.benvStat.rules = muirGla
   unfold sstoreRegimeGasCost
   change (if _ then if _ then 0 + 20000 else 0 + 5000 else 0 + 800) ≤ 20000
   split_ifs <;> decide
+
+/-- Under Muir Glacier, a nonzero write to a slot of an account created in this transaction
+that currently holds zero (a fresh set) costs exactly 20,000. -/
+theorem sstoreCostH_muir_fresh_set {sevm : Sevm} (hmuir : sevm.benvStat.rules = muirGlacierRules)
+    {base : Devm} {key value : B256} (hcreated : sevm.currentTarget ∈ base.createdAccounts)
+    (hcur : base.getStorVal sevm.currentTarget key = 0) (hv : value ≠ 0) :
+    sstoreCostH sevm base key value = 20000 := by
+  have horig : base.getOrigStorVal sevm sevm.currentTarget key = 0 := by
+    unfold Devm.getOrigStorVal
+    rw [ite_eq_left hcreated]
+  unfold sstoreCostH storageAccessCostH
+  rw [hmuir, horig, hcur]
+  unfold sstoreRegimeGasCost
+  change (if _ then if _ then 0 + 20000 else 0 + 5000 else 0 + 800) = 20000
+  rw [ite_eq_left ⟨rfl, Ne.symm hv⟩, ite_eq_left rfl]
+
+/-- Under Muir Glacier, a zero write to a slot of an account created in this transaction costs
+exactly 800, whatever the slot currently holds. -/
+theorem sstoreCostH_muir_created_zero {sevm : Sevm}
+    (hmuir : sevm.benvStat.rules = muirGlacierRules) {base : Devm} {key : B256}
+    (hcreated : sevm.currentTarget ∈ base.createdAccounts) :
+    sstoreCostH sevm base key 0 = 800 := by
+  have horig : base.getOrigStorVal sevm sevm.currentTarget key = 0 := by
+    unfold Devm.getOrigStorVal
+    rw [ite_eq_left hcreated]
+  unfold sstoreCostH storageAccessCostH
+  rw [hmuir, horig]
+  unfold sstoreRegimeGasCost
+  change (if _ then if _ then 0 + 20000 else 0 + 5000 else 0 + 800) = 800
+  rw [ite_eq_right (fun h => h.2 (h.1.symm))]
 
 /-- Under a flat `SLOAD` price of at most 2100 (every historical schedule), one `SLOAD` costs at
 most 2100. -/
