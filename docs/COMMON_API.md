@@ -7944,6 +7944,14 @@ current recipe matchers have no forward-transition shape to bind.
   facts the whole-code bridge cannot, because it requires whole-code equality.
   Bytes in the appended suffix are deliberately granted no source authority
   even when they decode as an instruction also present in the prefix.
+- To state a scenario of root messages, each from the previous settled world, as one fold:
+  [`Blanc/Lift/RootMessages.lean`](../Blanc/Lift/RootMessages.lean). `RootMsg` is a creation
+  (`processCreateMessage`) or a call (`processMessage`) with its input built from the fork and
+  the previous world; `runMessages fork W ms` returns the final world, or `none` at the first
+  message that does not return `.ok` with no error. `runMessages_cons_of_ok` restates one
+  already-proved settlement as one fold step. Message level only: no transaction admission.
+  Worked uses: `vminus_attack` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean`)
+  and `vplus_exit` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Capstone.lean`).
 
 ### C3. I need a parameter-neutral runtime or creation template
 

@@ -1,6 +1,20 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Main
+import Blanc.Lift.RootMessages
 
 /-! # V+ capstone: from deployment to a blocked guarded reentry inside a committing operation
+
+The public headline is `vplus_exit`: on every covered fork, eight setup messages from the
+disclosed initial world reach a pool whose LP ledger is sound over its single holder
+(`totalSupply = Σ_{h ∈ {creator}} balanceOf[h] = 2000`), and the exit `remove_liquidity(200, [0,
+0], R)` then settles with the ledger still sound at 1800 and the receiver paid 100 wei, while the
+receiver's guarded reentry during the exit is refused at the shared lock (`ReentryRefused`). It is
+stated over the message fold `runMessages` and the storage observers `supply`/`lpBalance`. These
+are **synthetic worlds** (synthetic clone, token and receiver code, supplied CREATE targets, a
+creator-only start world): there is no live contract, so no deployment root applies.
+`vplus_exclusion` instantiated for the exit's execution, with every frame rooted in the callback,
+is in the detailed form `vplus_reachable_capstone` below.
+
+The detailed form:
 
 `vplus_reachable_capstone`, on every covered fork: from the disclosed `initialWorld` (only the
 funded, code-free creator), nine messages, each from exactly the previous settled world:
@@ -93,5 +107,70 @@ theorem vplus_reachable_capstone (fork : Fork) (hfork : CoveredFork fork) :
     by rw [hw8]; exact hm, hdT, hgas, by rw [hw8]; exact hent, hw8, rfl, out, R, F, h, c, q, G,
     hF, act, sp, hpc, hct, hcv, hq, hqt, hGq, cpG, hdG, exG, nb, chk, hash, excl, excl G hGc,
     hout, ledX, supX, balR, tR, balP, lockX⟩
+
+/-! ### The headline: the exit over the message fold -/
+
+/-- The pool's `totalSupply` word (storage slot `0x16` of the clone `proxyAddr`). -/
+def supply (W : State) : B256 := storOf W proxyAddr 0x16
+
+/-- The pool's `balanceOf[h]` word. -/
+def lpBalance (W : State) (h : Adr) : B256 := storOf W proxyAddr (lpSlot h)
+
+/-- The eight setup messages, all from the code-free `creator`: implementation and clone creation,
+`initialize` and `set_oracle(0, 0)` through the clone, token and receiver creation, `approve`, and
+`add_liquidity([1000, 1000], 0)` with 1000 wei. -/
+def vplusSetup : List RootMsg :=
+  [.create implCreateMsg, .create cloneCreateMsg, .call initMsg, .call oracleMsg,
+    .create tokenCreateMsg, .create receiverCreateMsg, .call approveMsg, .call addMsg]
+
+/-- The LP ledger is sound over its single holder `creator`, with supply `n`. -/
+def LedgerSound (W : State) (n : B256) : Prop :=
+  supply W = n ∧ (supply W).toNat = Blanc.ledgerSumOn {creator} (lpBalance W)
+
+/-- **The fix refuses the reentry.** In the execution of the exit message from `W₀`, which
+settles to `W`: the pool frame `F` holds the shared lock when it pays the receiver (frame `c`);
+the receiver calls back into the pool through the clone, and the resulting pool frame `G`, running
+the implementation's code with the guarded `add_liquidity` call `reentryData`, reverts without
+entering any lock-guarded body (`¬ lockL.Enters`). -/
+def ReentryRefused (fork : Fork) (W₀ W : State) : Prop :=
+  ∃ (e : Evm) (out : Execution) (R : Exec 0 e.sta e.dyna out) (F h c q G : Exec.Deriv),
+    (Frame.ofCall (removeMsg fork W₀)).enter = .run e ∧ (∃ d, out = .ok d ∧ d.state = W) ∧
+    -- the pool frame holds the lock when it pays the receiver
+    F ∈ Exec.rawFrameRoots R ∧ ActiveRel proxyAddr F h ∧ Spawns h c ∧
+    c.sevm.currentTarget = receiverAddr ∧
+    -- the receiver's guarded call back into the pool is refused at the lock
+    q ∈ Exec.rawFrameRoots c.exc ∧ G ∈ Exec.rawFrameRoots q.exc ∧ CPFrame proxyAddr code G ∧
+    G.sevm.data = reentryData ∧ (∃ d, G.exn = .error (.revert, d)) ∧
+    ¬ lockL.Enters proxyAddr G
+
+/-- **V+: the fixed pool refuses the reentry and its exit keeps the LP ledger sound.** On every covered fork, the setup
+messages run from the disclosed `initialWorld` to a world `W₀` whose ledger is sound at 2000, and
+the exit `removeMsg` (`remove_liquidity(200, [0, 0], receiverAddr)`, whose 100 wei payment lets
+the receiver attempt a guarded re-entry, refused at the shared lock) then settles to a world `W`
+whose ledger is sound at 1800, with the receiver paid 100 wei and its reentry refused
+(`ReentryRefused`). Synthetic worlds: no live contract, so no deployment root; the instantiated
+`vplus_exclusion` is in `vplus_reachable_capstone`. -/
+theorem vplus_exit (fork : Fork) (hfork : CoveredFork fork) :
+    ∃ W₀ W, runMessages fork initialWorld vplusSetup = some W₀ ∧ LedgerSound W₀ 2000 ∧
+      runMessages fork W₀ [.call removeMsg] = some W ∧ LedgerSound W 1800 ∧
+      (W.get receiverAddr).bal = 100 ∧ ReentryRefused fork W₀ W := by
+  obtain ⟨postI, postP, postInit, postOracle, postT, postR, postA, postD, postX, h1, e1, h2, e2,
+    h3, e3, h4, e4, -, h5, e5, h6, e6, h7, e7, h8, e8, -, led, sup, hm, hX, -, hent, -, -,
+    out, R, F, h, c, q, G, hF, act, sp, -, hct, -, hq, -, hGq, cpG, hdG, exG, -, -, -, -, nE, hout,
+    ledX, supX, balR, -⟩ := vplus_reachable_capstone fork hfork
+  refine ⟨postD.state, postX.state, ?_, ⟨sup, led⟩, ?_, ⟨supX, ledX⟩, balR,
+    ⟨eTop.re fork world8, out, R, F, h, c, q, G, hent, ⟨postX, hout, rfl⟩, hF, act, sp, hct, hq,
+      hGq, cpG, hdG, ⟨dRe, exG⟩, nE⟩⟩
+  · rw [vplusSetup, runMessages_cons_of_ok (m := .create implCreateMsg) h1 e1,
+      runMessages_cons_of_ok (m := .create cloneCreateMsg) h2 e2,
+      runMessages_cons_of_ok (m := .call initMsg) h3 e3,
+      runMessages_cons_of_ok (m := .call oracleMsg) h4 e4,
+      runMessages_cons_of_ok (m := .create tokenCreateMsg) h5 e5,
+      runMessages_cons_of_ok (m := .create receiverCreateMsg) h6 e6,
+      runMessages_cons_of_ok (m := .call approveMsg) h7 e7,
+      runMessages_cons_of_ok (m := .call addMsg) h8 e8]
+    rfl
+  · rw [runMessages_cons_of_ok (m := .call removeMsg) hm hX]
+    rfl
 
 end Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit

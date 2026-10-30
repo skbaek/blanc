@@ -768,6 +768,7 @@ import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun2
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun3
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemoveRun4
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRemove
+import Blanc.Lift.RootMessages
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolFinal
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRootRun
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolRoot
