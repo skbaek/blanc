@@ -20,8 +20,8 @@ open Jaune
 theorem toBytesJoin_append (xs ys : List BLT) :
     BLTs.toBytesJoin (xs ++ ys) = BLTs.toBytesJoin xs ++ BLTs.toBytesJoin ys := by
   induction xs with
-  | nil => simp [BLTs.toBytesJoin]
-  | cons x xs ih => simp [BLTs.toBytesJoin, ih]
+  | nil => simp only [List.nil_append, BLTs.toBytesJoin]
+  | cons x xs ih => simp only [List.cons_append, BLTs.toBytesJoin, ih, List.append_assoc]
 
 theorem encode_list_long {xs : List BLT} {body : Bytes}
     (hjoin : BLTs.toBytesJoin xs = body) (hlong : 56 ≤ body.length) :

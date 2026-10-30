@@ -1,4 +1,5 @@
 import Blanc.RlpConcrete
+import Blanc.RlpListEncode
 
 /-!
 # Pre-EIP-155 legacy signing, recovery and strict decoding
@@ -29,7 +30,7 @@ theorem signingHash_pre155 {tx : Tx} {p : Nat} {rcv : Option Adr}
        .bytes ((rcv <&> Adr.toBytes).getD []), .bytes tx.value.toBytes,
        .bytes tx.data]))) := by
   have hb : (tx.v = 27 || tx.v = 28) = true := by
-    rcases hv with h | h <;> simp [h]
+    rcases hv with h | h <;> simp only [h, decide_true, Bool.true_or, Bool.or_true]
   unfold Tx.signingHash
   rw [htype]
   dsimp only
@@ -49,9 +50,7 @@ theorem signingPayload_pre155 {fields : List BLT} {head data : Bytes}
   have hjoin : ∀ xs : List BLT, BLTs.toBytesJoin (xs ++ [.bytes data]) =
       BLTs.toBytesJoin xs ++ (BLT.bytes data).toBytes := by
     intro xs
-    induction xs with
-    | nil => simp [BLTs.toBytesJoin]
-    | cons x xs ih => simp [BLTs.toBytesJoin, ih]
+    rw [RlpConcrete.toBytesJoin_append, BLTs.toBytesJoin, BLTs.toBytesJoin, List.append_nil]
   have hdataEnc : (BLT.bytes data).toBytes =
       (0xB7 + data.length.toBytesPack.length.toUInt8) ::
         (data.length.toBytesPack ++ data) := by
