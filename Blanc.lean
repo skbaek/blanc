@@ -1986,6 +1986,7 @@ import Blanc.Composition.LiveUsdcWeth9B26213219Swap
 import Blanc.Composition.LiveUsdcWeth9B26213219UsdcCensus
 import Blanc.Lift.BeaconDeposit.HistDepositLogs
 import Blanc.Lift.BeaconDeposit.HistoricalLiveness
+import Blanc.Lift.BeaconDeposit.HistDeployment
 import Blanc.Lift.Usdc.ImplV1Creation.Jumps
 import Blanc.Lift.Usdc.ImplV1Creation.Observation
 import Blanc.Lift.Usdc.ImplV2Creation.Jumps

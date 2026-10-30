@@ -917,6 +917,7 @@ CONTRACTS = {
                        "Lift.BeaconDeposit.HistCommittedHistory",
                        "Lift.BeaconDeposit.HistDepositEntries",
                        "Lift.BeaconDeposit.HistDepositLogs",
+                       "Lift.BeaconDeposit.HistDeployment",
                        "Lift.BeaconDeposit.HistoricalLiveness",
                        "Lift.BeaconDeposit.HistoricalSeam",
                        "Lift.BeaconDeposit.HistoricalViews"],
