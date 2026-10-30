@@ -196,7 +196,7 @@ theorem ctor_stor (sevm : Sevm) (b : Devm)
     Devm.getStor (tw8 sevm (worldSymbol sevm b) memSymbol) sevm.currentTarget =
       deployedStor sevm.caller.toB256 := by
   have h0 : (Nat.toB256 0 : B256) = 0 := rfl
-  simp only [tw8, Devm.addLog_getStor, tw7, tw6, tw5, tw4, afterSstore_getStor_self, worldSymbol,
+  simp only [tw8, Devm.addLog_getStor, tw7, tw6, tw5, tw4, afterSstoreH_getStor_self, worldSymbol,
     loopWorld_stor2, worldName, hempty, loopWord_name0, loopWord_name1, loopWord_symbol0,
     loopWord_symbol1, strBase0, strBase1, h0, B256.add_zero]
   rfl
@@ -219,12 +219,13 @@ theorem curve_create (msg : Msg) (hvalue : msg.value = 0)
   have hstat : sevm.benvStat = msg.benv.stat := by
     show benv.stat = (processCreateMessage.msg msg).benv.stat
     exact benvAfterTransfer_stat htransfer
-  have fr : CtorFrame sevm := ⟨by rw [hstat]; exact hfork, hstatic⟩
+  have fr : CtorFrame sevm := ⟨by rw [hstat]; exact hfork.rules_stateGas_none, hstatic⟩
   have hempty : Devm.getStor b sevm.currentTarget = Stor.empty := by
     show benv.state.getStor msg.currentTarget = _
     rw [benvAfterTransfer_ok_getStor htransfer msg.currentTarget (Or.inl hvalue),
       processCreateMessage_msg_getStor_currentTarget]
-  have hle := ctorCost_le sevm b
+  have hle := ctorCost_le sevm b (fun g h => by
+    rw [hstat, hfork.rules_access] at h; cases h)
   obtain ⟨raw, hrun, hout, herr, hst, hgasLeft⟩ :=
     ctor_run_facts fr hcode hvalue hdata (b := b) (G := msg.gas - ctorCost sevm b) (by omega)
   have hpre0 : St b [] Mem.empty (msg.gas - ctorCost sevm b + ctorCost sevm b) = b :=

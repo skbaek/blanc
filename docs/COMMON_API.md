@@ -10075,7 +10075,9 @@ contract-neutral.
   [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
   `sstoreCostH_congr` transports only the actual price inputs. `sloadCostH_muir_eq`
   and `sstoreCostH_muir_le` give the actual 800-gas read and at-most-20000 write
-  under Muir rules. `liftCreate_postH`
+  under Muir rules; for exact constructor gas in a created account,
+  `sstoreCostH_muir_fresh_set` (nonzero write over a current zero: 20000) and
+  `sstoreCostH_muir_created_zero` (zero write: 800). `liftCreate_postH`
   and `liftCreate_okH` lift a checked exact constructor run from `stateGas = none`,
   retaining the historical target touch. Code admissibility, deposit gas, size,
   value transfer and the run remain explicit obligations.
@@ -10291,7 +10293,9 @@ contract-neutral.
   [`Blanc/Lift/HistCreate.lean`](../Blanc/Lift/HistCreate.lean):
   `sstoreCostH_congr` transports only the actual price inputs. `sloadCostH_muir_eq`
   and `sstoreCostH_muir_le` give the actual 800-gas read and at-most-20000 write
-  under Muir rules. `liftCreate_postH`
+  under Muir rules; for exact constructor gas in a created account,
+  `sstoreCostH_muir_fresh_set` (nonzero write over a current zero: 20000) and
+  `sstoreCostH_muir_created_zero` (zero write: 800). `liftCreate_postH`
   and `liftCreate_okH` lift a checked exact constructor run from `stateGas = none`,
   retaining the historical target touch. Code admissibility, deposit gas, size,
   value transfer and the run remain explicit obligations.

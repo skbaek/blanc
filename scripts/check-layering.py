@@ -922,7 +922,7 @@ CONTRACTS = {
                        "Lift.BeaconDeposit.HistoricalViews"],
     # The 3Crv LP token (CurveTokenV2.vy, Vyper 0.2.4): the model from source and the deployed runtime,
     # lifted (vyper-3crv-bytecode-v1).
-    "curve-3crv": ["Curve3Crv.Model", "Curve3Crv.Properties", "Lift.Curve3Crv.Cert", "Lift.Curve3Crv.Check", "Lift.Curve3Crv.Creation.Cert", "Lift.Curve3Crv.Creation.Check", "Lift.Curve3Crv.Creation.Deploy", "Lift.Curve3Crv.Creation.Walk", "Lift.Curve3Crv.Jumps",
+    "curve-3crv": ["Curve3Crv.Model", "Curve3Crv.Properties", "Lift.Curve3Crv.Cert", "Lift.Curve3Crv.Check", "Lift.Curve3Crv.Creation.Cert", "Lift.Curve3Crv.Creation.Check", "Lift.Curve3Crv.Creation.Deploy", "Lift.Curve3Crv.Creation.HistoricalDeploy", "Lift.Curve3Crv.Creation.HistoricalTx", "Lift.Curve3Crv.Creation.HistoricalWalk", "Lift.Curve3Crv.Creation.Walk", "Lift.Curve3Crv.Jumps",
                    "Lift.Curve3Crv.Lift", "Lift.Curve3Crv.Prog", "Lift.Curve3Crv.Layout",
                    "Lift.Curve3Crv.Decode", "Lift.Curve3Crv.Spec", "Lift.Curve3Crv.ViewBodies",
                    "Lift.Curve3Crv.Dispatch", "Lift.Curve3Crv.Refine", "Lift.Curve3Crv.SafeBodies",

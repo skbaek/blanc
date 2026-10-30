@@ -897,6 +897,7 @@ import Blanc.Lift.Curve3Crv.CarriedHistory
 import Blanc.Lift.Curve3Crv.CommittedHistory
 import Blanc.Lift.Curve3Crv.Init
 import Blanc.Lift.Curve3Crv.Creation.Deploy
+import Blanc.Lift.Curve3Crv.Creation.HistoricalDeploy
 import Blanc.Lift.Curve3Crv.Exec
 import Blanc.Lift.Curve3Crv.Liveness
 import Blanc.Lift.Curve3Crv.CostBounds
