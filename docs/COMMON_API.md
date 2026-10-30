@@ -1703,6 +1703,16 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   Its signature premise is discharged for the concrete transaction by `TxC.txC_recoveredSender`
   (`TxCRecover.lean`): the access-list encoding by `toBLT_noKeys`/`join_entries`, the signing hash and
   secp256k1 recovery by `decide +kernel` (the kernel cannot unfold `BLT.toBytes`, so rewrite the encoding first).
+- Pre-EIP-155 legacy transactions (`.zero` type, `v = 27` or `v = 28`, no chain id) for any `Tx`:
+  [`Blanc/Lift/LegacyRecover.lean`](../Blanc/Lift/LegacyRecover.lean). `signingHash_pre155` evaluates
+  `Tx.signingHash` to its six-field payload; `signingPayload_pre155` encodes that payload with a long
+  data field kept abstract (only the leading fields' joined bytes are supplied); `recoverSender_pre155`
+  gives `recoverSender cid tx = .ok a` at every `cid` from the signing hash, the `r`/`s` range facts
+  and one `secp256k1.recover h (tx.v - 27).toBool r s = some a` fact, each a closed `decide +kernel`
+  goal once the fields are substituted; `legacy_decode_pre155` runs the strict nine-field
+  `BLT.toExLegacyTx` from the per-field scalar decoder equations without reducing the data field, and
+  yields `Tx.WireWellFormed`. EIP-155 creations still state their own instances
+  (`Blanc/Lift/Weth9/Creation/SigningRecover.lean`, `Blanc/Lift/BeaconDeposit/Creation/HistoricalTxRaw.lean`).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
 - Identifying an execution's descendant frames across one step (`Exec.descendantFrames_eq_of_nextNone`, `_of_jump`,
