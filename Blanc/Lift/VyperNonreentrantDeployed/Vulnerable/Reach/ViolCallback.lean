@@ -1,6 +1,7 @@
 import Blanc.Lift.KernelBatchForall
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolCallbackRun
 import Blanc.Lift.WitnessChild
+import Blanc.Lift.KernelNat
 
 /-!
 # V− P2, F3 (with F4 as its child and F5 by `ReAddFrame`): the callback frame
@@ -227,7 +228,7 @@ theorem fwd_at_delegatecall : Xinst.At fwdCode 31 .delegatecall := by rfl
 
 /-- F5's entered static gas is the frozen machine's (whatever literal it is). -/
 private theorem e5EntryObservations : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
-    (decide ((e5Cb O tS tA m w).sta.gas = (sRe.withOrig O).gas) = true) ∧
+    (Blanc.KernelNat.natEqW (e5Cb O tS tA m w).sta.gas (sRe.withOrig O).gas = true) ∧
     (decide ((e5Cb O tS tA m w).sta.codeAddress = (sRe.withOrig O).codeAddress) = true) ∧
     (decide ((cpCb5 O tS tA m w).adrs =
       [implAddr, proxyAddr, attackerAddr, (4 : Adr), implAddr, proxyAddr]) = true) := by
@@ -236,7 +237,7 @@ private theorem e5EntryObservations : ∀ (O : State) (tS : StorShadow) (tA : Ac
 theorem e5Cb_sta_gas' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), decide ((e5Cb O tS tA m w).sta.gas = (sRe.withOrig O).gas) = true := by
   intro O tS tA m w
-  exact (e5EntryObservations O tS tA m w).1
+  exact Blanc.KernelNat.decide_eq_of_natEqW (e5EntryObservations O tS tA m w).1
 
 /-- F5's entered code address is the frozen machine's. -/
 theorem e5Cb_sta_codeAddress' : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow)

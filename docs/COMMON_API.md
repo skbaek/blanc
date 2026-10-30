@@ -1642,7 +1642,11 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   universally quantified conjunction of equalities in one kernel check. Its shared builder
   imports `Lean.Elab.Tactic.ElabTerm` for the tactic elaboration support. Over a free world,
   compare computed values by `decide` (or against literal boundaries, `Boundary.obsD1`), never
-  as terms.
+  as terms. A large natural number (a gas value) computed under free variables is compared by
+  `Blanc.KernelNat.natEqW` instead of `decide`: the kernel accelerates `Nat` arithmetic only on
+  closed terms, and `natEqW` forces both sides to literals first (`decide_eq_of_natEqW`,
+  `eq_of_natEqW`) in [`Blanc/Lift/KernelNat.lean`](../Blanc/Lift/KernelNat.lean) (worked use:
+  `e2StaticFacts` in `.../Vulnerable/Reach/ViolRootRun.lean`).
 - To make a kernel-checked witness quantify over **every world that agrees on finitely many
   entries** (a checkpoint predicate as a genuine finite read-set agreement, not a world pinned
   everywhere): [`Blanc/Lift/ShadowTail.lean`](../Blanc/Lift/ShadowTail.lean). `storOf_prefix_tail`

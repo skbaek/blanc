@@ -2,6 +2,7 @@ import Blanc.Lift.KernelBatchForall
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.ViolBoundary
 import Blanc.Lift.NodeWalkFork
 import Blanc.Lift.WitnessChild
+import Blanc.Lift.KernelNat
 
 /-!
 # V− P2, F0/F1 kernel run: the root frame and its forwarder child
@@ -163,7 +164,7 @@ theorem e2_sta_fork : ∀ (g : Fork) (O : State) (tS : StorShadow) (tA : AcctSha
 private theorem e2StaticFacts : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta) (w : World),
     ((e2 O tS tA m w).sta.caller = (sRm.withOrig O).caller) ∧
     ((e2 O tS tA m w).sta.target = (sRm.withOrig O).target) ∧
-    (decide ((e2 O tS tA m w).sta.gas = (sRm.withOrig O).gas) = true) ∧
+    (Blanc.KernelNat.natEqW (e2 O tS tA m w).sta.gas (sRm.withOrig O).gas = true) ∧
     ((e2 O tS tA m w).sta.value = (sRm.withOrig O).value) ∧
     (decide ((e2 O tS tA m w).sta.codeAddress = (sRm.withOrig O).codeAddress) = true) ∧
     ((e2 O tS tA m w).sta.depth = (sRm.withOrig O).depth) ∧
@@ -185,7 +186,7 @@ theorem e2_sta_target : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m :
 theorem e2_sta_gas : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), decide ((e2 O tS tA m w).sta.gas = (sRm.withOrig O).gas) = true := by
   intro O tS tA m w
-  exact (e2StaticFacts O tS tA m w).2.2.1
+  exact Blanc.KernelNat.decide_eq_of_natEqW (e2StaticFacts O tS tA m w).2.2.1
 
 theorem e2_sta_value : ∀ (O : State) (tS : StorShadow) (tA : AcctShadow) (m : Meta)
     (w : World), (e2 O tS tA m w).sta.value = (sRm.withOrig O).value := by
