@@ -1627,6 +1627,7 @@ import Blanc.Lift.UniswapV2Factory.CallShape
 import Blanc.Lift.UniswapV2Factory.Window
 import Blanc.Composition.PairTokenSigned
 import Blanc.Composition.PairTwoToken
+import Blanc.Composition.PairTwoTokenCallShare
 import Blanc.Composition.PairTwoTokenShareValue
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckJoint
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckJointF
@@ -1998,6 +1999,7 @@ import Blanc.Lift.Usdc.HistoryAnchorCCode
 import Blanc.Composition.LiveUsdcWeth9B26213219ApprovalObservation
 import Blanc.Composition.LiveUsdcWeth9B26213219Joint
 import Blanc.Composition.LiveUsdcWeth9B26213219Liquidity
+import Blanc.Composition.LiveUsdcWeth9B26213219CallShare
 import Blanc.Composition.LiveUsdcWeth9B26213219ShareValue
 import Blanc.Composition.LiveUsdcWeth9B26213219Swap
 import Blanc.Composition.LiveUsdcWeth9B26213219UsdcCensus

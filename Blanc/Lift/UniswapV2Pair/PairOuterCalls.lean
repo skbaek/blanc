@@ -51,6 +51,25 @@ def price1Word (s : Stor) : B256 := s.get 10
 /-- The Pair's `kLast` (slot `11`). -/
 def kLastWord (s : Stor) : B256 := s.get 11
 
+/-- The protocol-fee mint `_mintFee` computes from the stored words (`kLast`, supply, reserves) at
+a `feeTo` answer: `feeAmount` over storage. -/
+def feeMintWords (s : Stor) (feeTo : Adr) : Nat :=
+  if feeTo = 0 ∨ kLastWord s = 0 then 0
+  else if Nat.sqrt (kLastWord s).toNat <
+      Nat.sqrt ((reserve0Word s).toNat * (reserve1Word s).toNat) then
+    (supplyWord s).toNat * (Nat.sqrt ((reserve0Word s).toNat * (reserve1Word s).toNat) -
+        Nat.sqrt (kLastWord s).toNat) /
+      (Nat.sqrt ((reserve0Word s).toNat * (reserve1Word s).toNat) * 5 +
+        Nat.sqrt (kLastWord s).toNat)
+  else 0
+
+/-- The fee an invocation mints, over the stored words of its entry storage: `feeMintWords` at
+the `feeTo` answer for `mint` and `burn`, zero otherwise (`entryFeeAmount` over storage). -/
+def entryFeeWords (s : Stor) (entry : Entry) (transcript : Transcript) : Nat :=
+  match entry with
+  | .mint _ | .burn _ => feeMintWords s transcript.ownTail.ownTail.firstWord.toAdr
+  | _ => 0
+
 theorem reserve_lt (r : Fin (2 ^ 112)) : r.val < 2 ^ 256 :=
   Nat.lt_trans r.isLt (Nat.pow_lt_pow_right (by decide) (by decide))
 
@@ -79,6 +98,15 @@ theorem price1Word_eq (rep : WriterRep K s st) : price1Word s = st.price1Cumulat
 
 theorem kLastWord_eq (rep : WriterRep K s st) : kLastWord s = st.kLast :=
   rep.fixed.2.2.2.2.2.2.2.2.2.2.1
+
+theorem feeMintWords_eq (rep : WriterRep K s st) (feeTo : Adr) :
+    feeMintWords s feeTo = feeAmount st feeTo st.reserve0.val st.reserve1.val := by
+  rw [feeMintWords, feeAmount, rep.kLastWord_eq, rep.reserve0Word_toNat, rep.reserve1Word_toNat,
+    supplyWord_eq rep]
+
+theorem entryFeeWords_eq (rep : WriterRep K s st) (entry : Entry) (transcript : Transcript) :
+    entryFeeWords s entry transcript = entryFeeAmount st entry transcript := by
+  cases entry <;> simp only [entryFeeWords, entryFeeAmount, rep.feeMintWords_eq]
 
 end WriterRep
 
