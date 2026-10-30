@@ -2254,6 +2254,21 @@ created-set premise. The premises are trace facts (empty code, CREATE
 avoidance, authorization exclusion), so no automatic recipe trigger is
 registered.
 
+To conclude that an account sent no transaction from its final nonce, use
+[`Blanc/ExecutionNonceKeep.lean`](../Blanc/ExecutionNonceKeep.lean). A settled
+message call keeps every nonzero nonce on every arm
+(`MessageCallTrace.nonce_ne_zero`, from `Exec.nonce_ne_zero_committedPost_noStateGas`
+and the existing message-entry nonce lemmas), and so do system messages,
+withdrawals, request calls and reward credits. Under the empty-code context
+facts above, `TransactionTrace.nonce_ne_zero_of_emptyContext` keeps a nonzero
+nonce through deletion and the empty-account sweep and gives the sender one.
+The folds `ApplyTransactionsTrace.noSender_of_nonce_zero`,
+`StagedBodyTrace.noSender_of_nonce_zero`,
+`ConfiguredBlockTraceIn.noSender_of_nonce_zero` and
+`MidHistoryTraceIn.noSender_of_nonce_zero_cancun` turn a zero nonce at the end
+into the `NoSenderAt` premise over the whole span: a one-block nonce
+observation replaces a census of senders.
+
 For an actual transaction, the initial deletion-absence premise is derived by
 `TransactionTrace.settledRoot_entry_not_deleted` in the same module. Its
 `RetainedXlot`, `ProcessMessageTrace`, `ProcessCreateMessageTrace` and
