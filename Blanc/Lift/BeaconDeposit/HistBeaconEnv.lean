@@ -16,13 +16,10 @@ open Jaune Blanc.ExecutionTrace
 private theorem block_beaconEntry_of_envIn {ca : Adr} {cfg : ChainConfig}
     {pre post : BlockChain} (trace : ConfiguredBlockTraceIn HistFork cfg pre post)
     (systemInstalled : trace.SystemCodeAtOpening)
-    (systemNoAuthority : ∀ p ∈ systemContracts, ∀ q ∈ trace.bodyTrace.decodedTxs.putIndex,
-      ∀ auth ∈ q.2.auths, ∀ authority, recoverAuthority auth = .ok authority → authority ≠ p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
+    (systemNoFrame : trace.InstalledNoFrame)
     (checkpointEmpty : pre.state.getCode 2 = ByteArray.empty)
-    (noAuthority : ∀ q ∈ trace.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ q.2.auths,
-      ∀ authority, recoverAuthority auth = .ok authority → authority ≠ (2 : Adr))
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (installed : pre.state.getCode ca = code) :
@@ -32,7 +29,7 @@ private theorem block_beaconEntry_of_envIn {ca : Adr} {cfg : ChainConfig}
         ∀ authority, recoverAuthority auth = .ok authority → authority ≠ (2 : Adr) := by
     by_cases hpre : PrePrague trace.fork
     · exact Or.inl (trace.forkIn.delegationDisabled_of_prePrague hpre)
-    · exact Or.inr noAuthority
+    · exact Or.inr (noAuthority hpre)
   obtain ⟨emptyFrames, emptyPost⟩ := trace.codeAt_empty_noStateGas
     BodyStageCapabilities.historical hdis noFrame checkpointEmpty
   have hsize : code.size = 6358 := by
@@ -65,11 +62,10 @@ private theorem historicalEnvironment {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
+    (systemNoFrame : trace.InstalledNoFrame)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)
@@ -81,9 +77,7 @@ private theorem historicalEnvironment {ca : Adr} {cfg : ChainConfig}
   | step prior block ih =>
       obtain ⟨priorAdmission, priorInv, priorEmpty⟩ := ih systemInstalled.1
         (fun p hp => (systemNoAuthority p hp).1)
-        (fun p hp root member => systemNoFrame p hp root (by
-          simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
-          exact Or.inl member))
+        systemNoFrame.1
         noAuthority.1
         (fun root member => noFrame root (by
           simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
@@ -93,9 +87,7 @@ private theorem historicalEnvironment {ca : Adr} {cfg : ChainConfig}
         (C := code) rfl priorInv
       obtain ⟨blockAdmission, blockEmpty⟩ := block_beaconEntry_of_envIn block systemInstalled.2
         (fun p hp => (systemNoAuthority p hp).2)
-        (fun p hp root member => systemNoFrame p hp root (by
-          simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
-          exact Or.inr member))
+        systemNoFrame.2
         priorEmpty noAuthority.2
         (fun root member => noFrame root (by
           simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
@@ -111,11 +103,10 @@ theorem configuredHistoryIn_environment {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
+    (systemNoFrame : trace.InstalledNoFrame)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)
@@ -131,11 +122,10 @@ theorem configuredHistoryIn_solInv {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {initialHistory : List B256}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
+    (systemNoFrame : trace.InstalledNoFrame)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)
@@ -153,11 +143,10 @@ theorem configuredHistoryIn_count {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {initialHistory : List B256}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
+    (systemNoFrame : trace.InstalledNoFrame)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)
@@ -174,11 +163,10 @@ theorem configuredHistoryIn_root {ca : Adr} {cfg : ChainConfig}
     {checkpoint future : BlockChain} {initialHistory : List B256}
     (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
+    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
+    (systemNoFrame : trace.InstalledNoFrame)
     (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.NoAuthorityAt 2)
+    (noAuthority : trace.PragueNoAuthorityAt 2)
     (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ (2 : Adr))
     (rewards : trace.RewardCreditsFunded)

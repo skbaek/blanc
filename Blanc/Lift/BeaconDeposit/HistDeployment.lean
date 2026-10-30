@@ -17,8 +17,9 @@ later modern block `B`. It joins the two halves that were previously separate:
 
 The installed code and the empty-history invariant at the deployment boundary `D`, which the
 seam theorems take as premises, are theorems here, and so are the reward-credit budgets of the
-historical span. What remains explicit is listed field by field below: one-block observations,
-the configured-history traces, and the system-address/`0x02` exclusions of the seam.
+historical span; the historical span needs no authority exclusion because it is pre-Prague.
+What remains explicit is listed field by field below: one-block observations, the
+configured-history traces, and the installed-system/`0x02` frame exclusions of the seam.
 
 Derived API: `.trace` / `.deposits` (the committed deposit nodes, in order, over the whole
 retained span from `D` to `B`), `.solInv`, `.count` and `.root`.
@@ -63,17 +64,15 @@ structure BeaconDeploymentTo (B : BlockChain) where
   anchors : HistoricalSeamAnchors D C P first.block
   /-- A (not yet in an adopted packet): `eth_getCode(0x02)` is empty after block 11,052,984. -/
   checkpointEmpty : D.state.getCode 2 = ByteArray.empty
-  /-- D: no authorization of the historical span recovers to a system contract or to `0x02`. -/
-  historicalSystemNoAuthority : ∀ p ∈ systemContracts,
-    ((dc.step first).append tail).NoAuthorityAt p.1
-  historicalNoAuthority : ((dc.step first).append tail).NoAuthorityAt 2
-  /-- D: no top-level creation frame of the historical span targets a system contract or `0x02`. -/
-  historicalSystemNoFrame : ∀ p ∈ systemContracts,
-    ∀ root ∈ ((dc.step first).append tail).rawFrames,
-    root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1
+  /-- D: no frame of the historical span without a code address, at any depth, targets a
+  system contract installed at that block's fork (vacuous before Cancun, beacon roots on
+  Cancun), nor `0x02`. The system contracts' own creations precede their activation and are
+  therefore not excluded. -/
+  historicalSystemNoFrame : ((dc.step first).append tail).InstalledNoFrame
   historicalNoFrame : ∀ root ∈ ((dc.step first).append tail).rawFrames,
     root.sevm.codeAddress = none → root.sevm.currentTarget ≠ (2 : Adr)
-  /-- D: the same exclusions over the modern span `P → B`. -/
+  /-- D: over the modern span `P → B`, no authorization recovers to a system contract or
+  `0x02`, and no frame without a code address, at any depth, targets one. -/
   modernSystemNoAuthority : ∀ p ∈ systemContracts, modern.NoAuthorityAt p.1
   modernNoAuthority : modern.NoAuthorityAt 2
   modernSystemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ modern.rawFrames,
@@ -123,8 +122,8 @@ theorem solInv : SolInv (B.state.getStor Creation.depositAddress) d.deposits := 
   have rewards := ((d.dc.step d.first).append d.tail).rewardCreditsFunded
     BodyStageCapabilities.historical
   have whole := historicalSeam_wholeSpan_solInv (initialHistory := []) d.dc d.first d.tail
-    d.modern d.anchors d.historicalSystemNoAuthority d.historicalSystemNoFrame d.checkpointEmpty
-    d.historicalNoAuthority d.historicalNoFrame rewards d.modernSystemNoAuthority
+    d.modern d.anchors d.historicalSystemNoFrame d.checkpointEmpty d.historicalNoFrame rewards
+    d.modernSystemNoAuthority
     d.modernSystemNoFrame d.modernNoAuthority d.modernNoFrame d.deployed.1 d.deployed.2
   rw [List.nil_append] at whole
   exact whole

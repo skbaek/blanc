@@ -168,16 +168,47 @@ theorem StagedBodyTrace.systemFrames_of_installedIn
   · have target := hRequests root member
     simpa only [systemTargets, List.mem_cons, List.not_mem_nil, or_false] using target
 
+/-- No frame of this block without a code address (at any depth) targets a system
+contract that the block's selected fork installs: vacuous before Cancun, beacon roots on
+Cancun, all four from Prague. Contracts created inside a span before their activation
+are therefore not excluded. -/
+def ConfiguredBlockTraceIn.InstalledNoFrame
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (trace : ConfiguredBlockTraceIn F cfg pre post) : Prop :=
+  ∀ q ∈ installedAt trace.fork, ∀ root ∈ trace.rawFrames,
+    root.sevm.codeAddress = none → root.sevm.currentTarget ≠ q.1
+
+/-- `InstalledNoFrame` at every block of a retained `In`-history. -/
+def ConfiguredHistoryTraceIn.InstalledNoFrame {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint : BlockChain} :
+    {future : BlockChain} → ConfiguredHistoryTraceIn F cfg checkpoint future → Prop
+  | _, .refl _ _ _ => True
+  | _, .step prior block => prior.InstalledNoFrame ∧ block.InstalledNoFrame
+
+/-- No authorization of this block recovers to `a`, required only from Prague on
+(EIP-7702 delegation is disabled on every earlier fork). -/
+def ConfiguredBlockTraceIn.PragueNoAuthorityAt
+    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain} (a : Adr)
+    (trace : ConfiguredBlockTraceIn F cfg pre post) : Prop :=
+  ¬ PrePrague trace.fork → ∀ q ∈ trace.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ q.2.auths,
+    ∀ authority, recoverAuthority auth = .ok authority → authority ≠ a
+
+/-- `PragueNoAuthorityAt` at every block of a retained `In`-history. -/
+def ConfiguredHistoryTraceIn.PragueNoAuthorityAt {F : Fork → Prop} {cfg : ChainConfig}
+    {checkpoint : BlockChain} (a : Adr) :
+    {future : BlockChain} → ConfiguredHistoryTraceIn F cfg checkpoint future → Prop
+  | _, .refl _ _ _ => True
+  | _, .step prior block => prior.PragueNoAuthorityAt a ∧ block.PragueNoAuthorityAt a
+
 /-- System confinement at a real selected block: no installed code is needed before Cancun,
-only beacon-roots code on Cancun, and the canonical modern table from Prague. -/
+only beacon-roots code on Cancun, and the canonical modern table from Prague. Authority and
+frame exclusions are needed only from Prague, and only for the installed contracts. -/
 theorem ConfiguredBlockTraceIn.systemFrames_target_of_installedAt
     {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
     (trace : ConfiguredBlockTraceIn F cfg pre post) (hHist : HistFork trace.fork)
     (installed : trace.SystemCodeAtOpening)
-    (hauth : ∀ p ∈ systemContracts, ∀ q ∈ trace.bodyTrace.decodedTxs.putIndex,
-      ∀ auth ∈ q.2.auths, ∀ authority, recoverAuthority auth = .ok authority → authority ≠ p.1)
-    (avoid : ∀ p ∈ systemContracts, ∀ root ∈ trace.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1) :
+    (hauth : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
+    (avoid : trace.InstalledNoFrame) :
     ∀ root ∈ trace.systemRawFrames,
       root.sevm.currentTarget ∈ (installedAt trace.fork).map Prod.fst := by
   rcases hHist.preCancun_cancun_pragueOnwards with hpre | hcan | hprague
@@ -215,8 +246,13 @@ theorem ConfiguredBlockTraceIn.systemFrames_target_of_installedAt
     have full : SystemCodeInstalled pre.state := by
       intro p hp
       exact installed p (htable.symm ▸ hp)
+    have notPre : ¬ PrePrague trace.fork := by
+      revert hprague
+      generalize trace.fork = f
+      cases f <;> decide
     have targets := trace.bodyTrace.systemFrames_of_installedIn covered full
-      (fun p _ => AdrSet.not_mem_empty) hauth avoid
+      (fun p _ => AdrSet.not_mem_empty) (fun p hp => hauth p hp notPre)
+      (fun p hp => avoid p (htable.symm ▸ hp))
     intro root member
     rw [htable]
     change root.sevm.currentTarget ∈ systemTargets
