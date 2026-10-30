@@ -225,8 +225,6 @@ theorem deploy_mainnet {before after checkpoint : BlockChain}
     (cut : block.bodyTrace.transactions.TxSplit 0)
     (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
     (obs : WithdrawalDeploymentObservation block checkpoint)
-    (prefixSenders :
-      ((MidHistoryTraceIn.tail block cut).append following).NoSenderAt systemAddress)
     (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) :
     cut.afterBenv.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
@@ -234,7 +232,7 @@ theorem deploy_mainnet {before after checkpoint : BlockChain}
       checkpoint.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
       InitialWords (checkpoint.state.getStor withdrawalRequestPredeployAddress).get :=
   deploy (mainnetDeploymentHistory block cut following obs)
-    (mainnetDeploymentHistory_admission block cut following obs prefixSenders prefixSystemAvoid)
+    (mainnetDeploymentHistory_admission block cut following obs prefixSystemAvoid)
 
 /-- **EIP-7002 payments from the actual mainnet deployment**, over the same observed
 deployment, prefix and checkpoint as `history_fifo_mainnet`. -/
@@ -243,15 +241,13 @@ theorem history_payments_mainnet {before after checkpoint final : BlockChain}
     (cut : block.bodyTrace.transactions.TxSplit 0)
     (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
     (obs : WithdrawalDeploymentObservation block checkpoint)
-    (prefixSenders :
-      ((MidHistoryTraceIn.tail block cut).append following).NoSenderAt systemAddress)
     (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
     (history : ConfiguredHistoryTrace mainnetChainConfig checkpoint final) :
     (checkpoint.state.bal withdrawalRequestPredeployAddress).toNat + submissionPaid history ≤
       (final.state.bal withdrawalRequestPredeployAddress).toNat :=
   history_payments (mainnetDeploymentHistory block cut following obs)
-    (mainnetDeploymentHistory_admission block cut following obs prefixSenders prefixSystemAvoid)
+    (mainnetDeploymentHistory_admission block cut following obs prefixSystemAvoid)
     history
 
 /-- **EIP-7002 delivery from the actual mainnet deployment**, over the same observed
@@ -262,8 +258,6 @@ theorem history_delivery_mainnet
     (cut : block.bodyTrace.transactions.TxSplit 0)
     (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
     (obs : WithdrawalDeploymentObservation block checkpoint)
-    (prefixSenders :
-      ((MidHistoryTraceIn.tail block cut).append following).NoSenderAt systemAddress)
     (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
     (historyB : ConfiguredHistoryTrace mainnetChainConfig checkpoint preB)
@@ -281,7 +275,7 @@ theorem history_delivery_mainnet
     {q : Nat} (exactDepth : depth = q / 16) :
     Delivered blockB blockD q :=
   history_delivery (mainnetDeploymentHistory block cut following obs)
-    (mainnetDeploymentHistory_admission block cut following obs prefixSenders prefixSystemAvoid)
+    (mainnetDeploymentHistory_admission block cut following obs prefixSystemAvoid)
     historyB blockB historyD blockD extension ⟨obs.beaconAtP, obs.historyAtP, obs.consolidationAtP⟩
     senders authorities avoid occurrences exactDepth
 
