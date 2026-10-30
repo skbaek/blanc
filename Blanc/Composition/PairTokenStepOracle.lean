@@ -1,4 +1,5 @@
 import Blanc.Composition.PairTokenStepFrames
+import Blanc.Lift.UniswapV2Pair.PairCallSettle
 
 /-!
 # The per-continuation token oracle of a Pair step (C3, consumed by U6c2)
@@ -107,88 +108,6 @@ theorem parentStep_descendantFrames_runOk_eq {N returned : Exec.Deriv}
       dite_eq_left_of_eq_true (eq_true settles)]
   · rw [Exec.descendantFrames_runOk_of_not_settlementCommits spawn enter childRun resumed next
       settles, dite_eq_right_of_eq_false (eq_false settles), List.nil_append]
-
-/-- A committed call frame's settlement is its committed post-machine, with the touch of the
-message's current target recorded. -/
-theorem ofCall_settle_committed {msg : Msg} {raw : Execution}
-    (committed : Execution.commits raw = true) :
-    (Jaune.Frame.ofCall msg).settle raw = .ok ((Execution.committedPost raw committed).recordTouch
-      msg.benv.stat.rules true msg.currentTarget) := by
-  cases raw with
-  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
-  | ok post =>
-    cases errorEq : post.error with
-    | none =>
-      simp only [Jaune.Frame.settle, Jaune.Frame.settleMsg, Jaune.Frame.ofCall,
-        executeCode.handleErrorWith_ok, processMessage.settle, Bind.bind, Except.bind, errorEq,
-        Option.isSome_none, Bool.false_eq_true, ite_false, Execution.committedPost]
-    | some error =>
-      simp only [Execution.commits, errorEq, Option.isNone_some, Bool.false_eq_true] at committed
-
-/-- What the observed reply is, in terms of the processed child. -/
-theorem sourceCallAt_reply_facts {root : Exec.Deriv} {frame : UniswapV2Pair.Frame}
-    {request : Request} {reply : ExternalResult} {index : Nat}
-    (observed : SourceCallAt root frame request reply index) :
-    reply.success = !observed.child.error.isSome ∧ reply.returndata = observed.child.output := by
-  cases observed.replyAt with
-  | bytes _ success returndata => exact ⟨success, returndata⟩
-  | recovery _ success returndata _ => exact ⟨success, returndata⟩
-
-/-- **An observed call to an undelegated non-precompile target enters a code frame**: an empty
-child slot means the call ran an enabled precompile at its code address (the `entered` input of
-`StepOracle`). -/
-theorem sourceCallAt_entered {root : Exec.Deriv} {frame : UniswapV2Pair.Frame}
-    {request : Request} {reply : ExternalResult} {index : Nat}
-    (observed : SourceCallAt root frame request reply index)
-    (undelegated :
-      getDelegatedCodeAddress (observed.call.occurrence.node.devm.getCode request.target) = none)
-    (notPrecomp : ¬ observed.call.occurrence.node.sevm.benvStat.rules.isPrecomp request.target) :
-    observed.call.occurrence.slot.isSome = true := by
-  obtain ⟨x, kind, step⟩ := observed.xstep
-  have targetEq : observed.message.currentTarget = request.target :=
-    Option.some.inj ((Xinst.step_callKind_spawn_target kind step :
-      observed.message.target = _).symm.trans observed.target)
-  have codeAddress : observed.message.codeAddress = some request.target := by
-    have spawned := Xinst.step_callKind_spawn_codeAddress kind step (by
-      change getDelegatedCodeAddress
-        (observed.call.occurrence.node.devm.getCode observed.message.currentTarget) = none
-      rw [targetEq]
-      exact undelegated)
-    rw [← targetEq]
-    exact spawned
-  have stat : observed.message.benv.stat = observed.call.occurrence.node.sevm.benvStat :=
-    Xinst.step_spawn_benvStat step
-  cases slot : observed.call.occurrence.slot with
-  | some _ => rfl
-  | none =>
-    exfalso
-    have response := observed.response
-    rw [slot] at response
-    unfold ProcessMessage RunFrame at response
-    cases entered : (Jaune.Frame.ofCall observed.message).enter with
-    | run evm =>
-      rw [entered] at response
-      obtain ⟨_, impossible, _⟩ := response
-      cases impossible
-    | done result =>
-      rw [entered] at response
-      obtain ⟨_, resultEq⟩ := response
-      unfold Jaune.Frame.enter at entered
-      split at entered
-      · cases entered
-        simp only [Jaune.Frame.settleMsg, Jaune.Frame.ofCall, processMessage.settle, bind,
-          Except.bind, Bool.false_eq_true, ite_false, reduceCtorEq] at resultEq
-      · rename_i benv transfer
-        split at entered
-        · cases entered
-        · rename_i raw entry
-          obtain ⟨adr, routed, -, precomp⟩ := Blanc.executeCode.enter_inr_routing entry
-          have benvStat : benv.stat = observed.message.benv.stat := benvAfterTransfer_stat transfer
-          simp only [Msg.withBenv, Jaune.Frame.ofCall] at routed precomp
-          rw [codeAddress] at routed
-          cases routed
-          rw [benvStat, stat] at precomp
-          exact notPrecomp precomp
 
 /-! ## The oracle -/
 

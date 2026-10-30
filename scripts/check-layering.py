@@ -2077,6 +2077,7 @@ CONTRACTS["uniswap-v2-pair"].extend([
     "Lift.UniswapV2Pair.OracleCallReceipt",
     "Lift.UniswapV2Pair.PairHistoryShape",
     "Lift.UniswapV2Pair.PairFeeAnswer",
+    "Lift.UniswapV2Pair.PairCallSettle",
     "Lift.UniswapV2Pair.BalanceAnswers",
     "Lift.UniswapV2Pair.HeadlineShare",
     "Lift.UniswapV2Pair.PairModelFix",

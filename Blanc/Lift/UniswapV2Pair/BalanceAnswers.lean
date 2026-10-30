@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.PairOuterCalls
 import Blanc.Lift.UniswapV2Pair.PairFeeAnswer
+import Blanc.Lift.UniswapV2Pair.PairCallSettle
 import Blanc.Lift.UniswapV2Pair.BurnForwardAccept
 import Blanc.Lift.UniswapV2Pair.PropertiesMintBurn
 import Blanc.Lift.ReachChain
@@ -131,20 +132,6 @@ theorem ParentStep.enters_of_found {F N : Exec.Deriv} (edge : Exec.Deriv.ParentS
 
 /-! ## One reply is the entered frame's output -/
 
-/-- A committed call frame's settlement is its committed post-machine with the message target's
-touch recorded. -/
-theorem ofCall_settle_of_commits {msg : Msg} {raw : Execution}
-    (committed : Execution.commits raw = true) :
-    (Jaune.Frame.ofCall msg).settle raw = .ok ((Execution.committedPost raw committed).recordTouch
-      msg.benv.stat.rules true msg.currentTarget) := by
-  rcases raw with e | post
-  · cases committed
-  · have clean : post.error = none := by
-      simpa only [Execution.commits, Option.isNone_iff_eq_none] using committed
-    simp only [Jaune.Frame.settle, Jaune.Frame.settleMsg, Jaune.Frame.ofCall,
-      executeCode.handleErrorWith_ok, processMessage.settle, Bind.bind, Except.bind, clean,
-      Option.isSome_none, Bool.false_eq_true, ite_false, Execution.committedPost]
-
 /-- **The reply of an observed call is the output of the frame it entered**, whenever the call's
 child index holds a located (committed) frame. -/
 theorem SourceCallAt.reply_of_found {root : Exec.Deriv} {frame : Frame} {request : Request}
@@ -178,7 +165,7 @@ theorem SourceCallAt.reply_of_found {root : Exec.Deriv} {frame : Frame} {request
         Option.some.injEq] at found
       subst found
       have settled := settleEq.trans
-        (ofCall_settle_of_commits (Jaune.Frame.raw_commits_of_settlementCommits settles))
+        (ofCall_settle_committed (Jaune.Frame.raw_commits_of_settlementCommits settles))
       rw [replyEq, Except.ok.inj settled, Devm.recordTouch_output]
       rfl
     · rw [nodeExc, Exec.descendantFramePaths, dite_eq_right_of_eq_false (eq_false settles),

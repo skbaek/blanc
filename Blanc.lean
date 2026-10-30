@@ -1465,6 +1465,7 @@ import Blanc.Lift.UniswapV2Pair.PairOuterCalls
 import Blanc.Lift.UniswapV2Pair.OracleCallReceipt
 import Blanc.Lift.UniswapV2Pair.HeadlineOracle
 import Blanc.Lift.UniswapV2Pair.PairFeeAnswer
+import Blanc.Lift.UniswapV2Pair.PairCallSettle
 import Blanc.Lift.UniswapV2Pair.BalanceAnswers
 import Blanc.Lift.UniswapV2Pair.HeadlineShare
 import Blanc.Lift.UniswapV2Pair.PairPositionalCalls
