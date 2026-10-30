@@ -605,6 +605,7 @@ import Blanc.Lift.WitnessFork
 -- One kernel check for a conjunction of closed equalities (vplus-witness-v2): shared.
 import Blanc.Lift.KernelBatch
 import Blanc.Lift.KernelNat
+import Blanc.Lift.WitnessChildMeta
 
 -- The deployed Lido CircuitBreaker, lifted from its runtime bytes (deployed-lido-vyper-v1).
 import Blanc.Lift.LidoCircuitBreakerDeployed.Cert

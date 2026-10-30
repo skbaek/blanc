@@ -1647,6 +1647,11 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   closed terms, and `natEqW` forces both sides to literals first (`decide_eq_of_natEqW`,
   `eq_of_natEqW`) in [`Blanc/Lift/KernelNat.lean`](../Blanc/Lift/KernelNat.lean) (worked use:
   `e2StaticFacts` in `.../Vulnerable/Reach/ViolRootRun.lean`).
+  A frame entry's accessed sets and world (`frameEnterS_run_meta`, any frame) are instantiated
+  rather than re-proved by `rfl` on a concrete call preparation, which would make the kernel
+  re-run the frame that produced it, in
+  [`Blanc/Lift/WitnessChildMeta.lean`](../Blanc/Lift/WitnessChildMeta.lean) (worked use:
+  `e4T_meta` in `.../Vulnerable/Tx/Entry.lean`).
 - To make a kernel-checked witness quantify over **every world that agrees on finitely many
   entries** (a checkpoint predicate as a genuine finite read-set agreement, not a world pinned
   everywhere): [`Blanc/Lift/ShadowTail.lean`](../Blanc/Lift/ShadowTail.lean). `storOf_prefix_tail`
