@@ -674,17 +674,6 @@
       "ceiling": 601
     },
     {
-      "id": "Blanc/LidoCircuitBreakerUnregisterWorld.lean::Blanc.LidoCircuitBreaker.unregisterWorld_settles#1::command_scoped::-::maxRecDepth#1",
-      "file": "Blanc/LidoCircuitBreakerUnregisterWorld.lean",
-      "declaration": "Blanc.LidoCircuitBreaker.unregisterWorld_settles",
-      "declaration_ordinal": 1,
-      "scope_kind": "command_scoped",
-      "scope_ordinal": 1,
-      "option": "maxRecDepth",
-      "value": 29423,
-      "ceiling": 29423
-    },
-    {
       "id": "Blanc/Weth10Redeemable.lean::Blanc.Weth10.withdrawTo_execSat#1::command_scoped::-::maxRecDepth#1",
       "file": "Blanc/Weth10Redeemable.lean",
       "declaration": "Blanc.Weth10.withdrawTo_execSat",
