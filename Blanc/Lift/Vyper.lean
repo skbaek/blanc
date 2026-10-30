@@ -1,6 +1,7 @@
 import Blanc.Lift.MapSlot
 import Blanc.Lift.InvWalkOps
 import Blanc.Lift.WalkSteps
+import Blanc.Lift.HistAccessWalk
 
 /-!
 # Vyper 0.2.x front end: the frame prologue and mapping slots
@@ -16,6 +17,11 @@ clamp constants at `0x20 … 0xa0` (`2^160` for address arguments at `0x20`; the
   (`vyImg_clamps` establishes it, `VyClamps.clamp` reads the address clamp);
 * `mapSlot slot key` (`MapSlot.lean`) is Vyper's `HashMap` slot `keccak(slot ‖ key)`, and
   `vySlot_read` the scratch window `mstore(0xe0, key); mstore(0xc0, slot)` hashes.
+
+The world-touching inversions (`ric_vySubStore`, `ric_vyAddStore`, `ric_vyLoadIter`,
+`ric_vyStoreIter`) are proved for any fork from the rule facts they read, as the `…H` forms over
+the actual access schedule's successors (`afterSloadH`, `afterSstoreH`); the `CoveredFork` forms
+are their corollaries over the EIP-2929 successors.
 
 Nothing here mentions a contract.
 -/
@@ -455,19 +461,20 @@ theorem B256.nof_iff_not_add_lt (y v : B256) :
 
 /-- **A checked subtraction store, inverted**: the stored word covered the calldata word, and
 the slot now holds the difference. -/
-theorem ric_vySubStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hf : fail.noOk = true)
+theorem ric_vySubStoreH {slot : B256} {p h l : UInt8} {fail rest : SFunc}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hf : fail.noOk = true)
     (run : SFunc.RunCut fs sevm C (St b (slot :: S) M G) (vySubStore p h l fail rest) r) :
     Sevm.dataWord sevm (Bytes.toB256 [p]) ≤ b.getStorVal sevm.currentTarget slot ∧
       ∃ G', SFunc.RunCut fs sevm C
-        (St (afterSstore sevm (afterSload sevm b slot) slot
+        (St (afterSstoreH sevm (afterSloadH sevm b slot) slot
           (b.getStorVal sevm.currentTarget slot - Sevm.dataWord sevm (Bytes.toB256 [p]))) S M G')
         rest r := by
+  have hbal := BenvStat.bal_none_of_stateGas_none hsg
   unfold vySubStore at run
   set x := b.getStorVal sevm.currentTarget slot
   set v := Sevm.dataWord sevm (Bytes.toB256 [p])
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := slot) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sloadH hbal s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_calldataload s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_dup (w := v) rfl s1
@@ -488,28 +495,42 @@ theorem ric_vySubStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
     slot :: S) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_pop s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_dup (w := slot) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_sstoreH hsg hbal s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_pop s1
   refine ⟨?_, G21, run⟩
   have h0 := eq_zero_of_iszero_ne_zero hw
   have := toNat_ge_of_ltCheck_eq_zero h0
   exact B256.le_iff_toNat_le_toNat.mpr this
 
-/-- **A checked addition store, inverted**: the sum did not wrap, and the slot now holds it. -/
-theorem ric_vyAddStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
+/-- `ric_vySubStoreH` on a covered fork, over the modern successors. -/
+theorem ric_vySubStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
     (hfork : CoveredFork sevm.benvStat.fork) (hf : fail.noOk = true)
+    (run : SFunc.RunCut fs sevm C (St b (slot :: S) M G) (vySubStore p h l fail rest) r) :
+    Sevm.dataWord sevm (Bytes.toB256 [p]) ≤ b.getStorVal sevm.currentTarget slot ∧
+      ∃ G', SFunc.RunCut fs sevm C
+        (St (afterSstore sevm (afterSload sevm b slot) slot
+          (b.getStorVal sevm.currentTarget slot - Sevm.dataWord sevm (Bytes.toB256 [p]))) S M G')
+        rest r := by
+  have h := ric_vySubStoreH hfork.rules_stateGas_none hf run
+  simpa only [afterSloadH_of_eip2929 hfork.rules_access,
+    afterSstoreH_of_eip2929 hfork.rules_access (by rw [hfork.rules_sstore])] using h
+
+/-- **A checked addition store, inverted**: the sum did not wrap, and the slot now holds it. -/
+theorem ric_vyAddStoreH {slot : B256} {p h l : UInt8} {fail rest : SFunc}
+    (hsg : sevm.benvStat.rules.stateGas = none) (hf : fail.noOk = true)
     (run : SFunc.RunCut fs sevm C (St b (slot :: S) M G) (vyAddStore p h l fail rest) r) :
     (b.getStorVal sevm.currentTarget slot).toNat +
         (Sevm.dataWord sevm (Bytes.toB256 [p])).toNat < 2 ^ 256 ∧
       ∃ G', SFunc.RunCut fs sevm C
-        (St (afterSstore sevm (afterSload sevm b slot) slot
+        (St (afterSstoreH sevm (afterSloadH sevm b slot) slot
           (b.getStorVal sevm.currentTarget slot + Sevm.dataWord sevm (Bytes.toB256 [p]))) S M G')
         rest r := by
+  have hbal := BenvStat.bal_none_of_stateGas_none hsg
   unfold vyAddStore at run
   set x := b.getStorVal sevm.currentTarget slot
   set v := Sevm.dataWord sevm (Bytes.toB256 [p])
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := slot) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sloadH hbal s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_calldataload s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_dup (w := x) rfl s1
@@ -532,7 +553,7 @@ theorem ric_vyAddStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
     slot :: S) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_pop s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_dup (w := slot) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_sstoreH hsg hbal s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_pop s1
   refine ⟨?_, G23, run⟩
   have h0 := eq_zero_of_iszero_ne_zero hw
@@ -540,6 +561,20 @@ theorem ric_vyAddStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
   intro hlt
   simp only [B256.ltCheck, hlt, ↓reduceIte] at h0
   exact absurd h0 (by decide)
+
+/-- `ric_vyAddStoreH` on a covered fork, over the modern successors. -/
+theorem ric_vyAddStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
+    (hfork : CoveredFork sevm.benvStat.fork) (hf : fail.noOk = true)
+    (run : SFunc.RunCut fs sevm C (St b (slot :: S) M G) (vyAddStore p h l fail rest) r) :
+    (b.getStorVal sevm.currentTarget slot).toNat +
+        (Sevm.dataWord sevm (Bytes.toB256 [p])).toNat < 2 ^ 256 ∧
+      ∃ G', SFunc.RunCut fs sevm C
+        (St (afterSstore sevm (afterSload sevm b slot) slot
+          (b.getStorVal sevm.currentTarget slot + Sevm.dataWord sevm (Bytes.toB256 [p]))) S M G')
+        rest r := by
+  have h := ric_vyAddStoreH hfork.rules_stateGas_none hf run
+  simpa only [afterSloadH_of_eip2929 hfork.rules_access,
+    afterSstoreH_of_eip2929 hfork.rules_access (by rw [hfork.rules_sstore])] using h
 
 end Stores
 section StoresForward
@@ -889,7 +924,7 @@ theorem rx_vyLoadExit (hroom : R.length + 12 < 1024) {i : Nat} (hi : lp.toNat < 
 /-- **One pass of the load loop, inverted**: either the test fails and the run goes on at
 entry `j`, or storage word `base + i` was copied to memory `dst + 32 i`, the counter bumped,
 and the run goes on at `exitT` (the counter reached `cap`) or back at entry `k`. -/
-theorem ric_vyLoadIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} {r : Seg}
+theorem ric_vyLoadIterH (hbal : sevm.benvStat.rules.bal = none) {C : List Nat} {r : Seg}
     {i : Nat} {s : Nat} (hs : M.size = s) (hs32 : s % 32 = 0) (hs1 : 0x140 ≤ s) {d : Nat}
     (hdd : dst.toNat = d) (hs2 : s ≤ d + 32 * i + 32) (hd32 : d % 32 = 0) (hd : 0x140 ≤ d)
     (hbig : d + 32 * i + 32 < 2 ^ 256) (hwf : Mem.Wf M)
@@ -900,7 +935,7 @@ theorem ric_vyLoadIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} {
     (lp.toNat < 32 * i ∧
       ∃ G', SFunc.RunCut fs sevm C (St b (vyLoadStack cap lp dst base R) M G') gj r) ∨
     (32 * i ≤ lp.toNat ∧ ∃ G', SFunc.RunCut fs sevm C
-      (St (afterSload sevm b (base + Nat.toB256 i)) (vyLoadStack cap lp dst base R)
+      (St (afterSloadH sevm b (base + Nat.toB256 i)) (vyLoadStack cap lp dst base R)
         ((M.write (d + 32 * i)
           (b.getStorVal sevm.currentTarget (base + Nat.toB256 i)).toBytes).write 0x120
           (Nat.toB256 (i + 1)).toBytes) G')
@@ -965,7 +1000,7 @@ theorem ric_vyLoadIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} {
   rw [h120, hM, hi'] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_dup (n := 5) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_sloadH hbal s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_mload s1
   rw [h120, hM, hi'] at run
@@ -1002,6 +1037,27 @@ theorem ric_vyLoadIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} {
       simp only [B256.eqCheck, hc, ↓reduceIte] at hw
       exact hw (by decide)
     exact ⟨G36, by rw [ite_eq_right_of_eq_false _ _ (eq_false hc)]; exact run⟩
+
+/-- `ric_vyLoadIterH` on a covered fork, over the modern `SLOAD` successor. -/
+theorem ric_vyLoadIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} {r : Seg}
+    {i : Nat} {s : Nat} (hs : M.size = s) (hs32 : s % 32 = 0) (hs1 : 0x140 ≤ s) {d : Nat}
+    (hdd : dst.toNat = d) (hs2 : s ≤ d + 32 * i + 32) (hd32 : d % 32 = 0) (hd : 0x140 ≤ d)
+    (hbig : d + 32 * i + 32 < 2 ^ 256) (hwf : Mem.Wf M)
+    (hctr : (M.read 0x120 32).1 = (Nat.toB256 i).toBytes) {gk gj : SFunc}
+    (hk : fs[k]? = some gk) (hkC : k ∉ C) (hj : fs[j]? = some gj) (hjC : j ∉ C)
+    (run : SFunc.RunCut fs sevm C (St b (vyLoadStack cap lp dst base R) M G)
+      (vyLoadLoopTree e0 e1 x0 x1 r0 r1 j k exitT) r) :
+    (lp.toNat < 32 * i ∧
+      ∃ G', SFunc.RunCut fs sevm C (St b (vyLoadStack cap lp dst base R) M G') gj r) ∨
+    (32 * i ≤ lp.toNat ∧ ∃ G', SFunc.RunCut fs sevm C
+      (St (afterSload sevm b (base + Nat.toB256 i)) (vyLoadStack cap lp dst base R)
+        ((M.write (d + 32 * i)
+          (b.getStorVal sevm.currentTarget (base + Nat.toB256 i)).toBytes).write 0x120
+          (Nat.toB256 (i + 1)).toBytes) G')
+      (if cap = Nat.toB256 (i + 1) then exitT else gk) r) := by
+  rw [← afterSloadH_of_eip2929 hfork.rules_access]
+  exact ric_vyLoadIterH hfork.rules_bal_none hs hs32 hs1 hdd hs2 hd32 hd hbig hwf hctr hk hkC hj
+    hjC run
 
 end LoadLoop
 
@@ -1214,7 +1270,7 @@ theorem rx_vyStoreExit (hroom : R.length + 12 < 1024) {i : Nat} (hi : lp.toNat <
 /-- **One pass of the store loop, inverted**: either the test fails and the run goes on at
 entry `j`, or word `i` was stored, the counter bumped, and the run goes on at `exitT` (the
 counter reached `cap`) or back at entry `k`. -/
-theorem ric_vyStoreIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} {r : Seg}
+theorem ric_vyStoreIterH (hsg : sevm.benvStat.rules.stateGas = none) {C : List Nat} {r : Seg}
     {i : Nat} {s : Nat} (hs : M.size = s) (hs32 : s % 32 = 0) (hs1 : 0x140 ≤ s) {sn : Nat}
     (hsn : src.toNat = sn) (hsrc : sn + 32 * i + 32 ≤ s) (hbig : s < 2 ^ 256)
     (hctr : (M.read 0x120 32).1 = (Nat.toB256 i).toBytes) {gk gj : SFunc}
@@ -1224,9 +1280,10 @@ theorem ric_vyStoreIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} 
     (lp.toNat < 32 * i ∧
       ∃ G', SFunc.RunCut fs sevm C (St b (vyStoreStack cap lp base src R) M G') gj r) ∨
     (32 * i ≤ lp.toNat ∧ sevm.isStatic = false ∧ ∃ G', SFunc.RunCut fs sevm C
-      (St (afterSstore sevm b (base + Nat.toB256 i) (Bytes.toB256 (M.read (sn + 32 * i) 32).1))
+      (St (afterSstoreH sevm b (base + Nat.toB256 i) (Bytes.toB256 (M.read (sn + 32 * i) 32).1))
         (vyStoreStack cap lp base src R) (M.write 0x120 (Nat.toB256 (i + 1)).toBytes) G')
       (if cap = Nat.toB256 (i + 1) then exitT else gk) r) := by
+  have hbal := BenvStat.bal_none_of_stateGas_none hsg
   subst hsn
   have h120 : (Bytes.toB256 [0x01, 0x20]).toNat = 0x120 := by decide
   have h120' : (0x120 : B256).toNat = 0x120 := by decide
@@ -1290,8 +1347,8 @@ theorem ric_vyStoreIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} 
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_dup (n := 5) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_add s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  refine ⟨ri_sstore_nonstatic hfork s1, ?_⟩
-  obtain ⟨G23, rfl⟩ := ri_sstore hfork s1
+  refine ⟨ri_sstore_nonstaticH hsg s1, ?_⟩
+  obtain ⟨G23, rfl⟩ := ri_sstoreH hsg hbal s1
   obtain ⟨G24, run⟩ := ric_dest run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_dup (n := 1) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_mload s1
@@ -1318,6 +1375,24 @@ theorem ric_vyStoreIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} 
       simp only [B256.eqCheck, hc, ↓reduceIte] at hw
       exact hw (by decide)
     exact ⟨G36, by rw [ite_eq_right_of_eq_false _ _ (eq_false hc)]; exact run⟩
+
+/-- `ric_vyStoreIterH` on a covered fork, over the modern `SSTORE` successor. -/
+theorem ric_vyStoreIter (hfork : CoveredFork sevm.benvStat.fork) {C : List Nat} {r : Seg}
+    {i : Nat} {s : Nat} (hs : M.size = s) (hs32 : s % 32 = 0) (hs1 : 0x140 ≤ s) {sn : Nat}
+    (hsn : src.toNat = sn) (hsrc : sn + 32 * i + 32 ≤ s) (hbig : s < 2 ^ 256)
+    (hctr : (M.read 0x120 32).1 = (Nat.toB256 i).toBytes) {gk gj : SFunc}
+    (hk : fs[k]? = some gk) (hkC : k ∉ C) (hj : fs[j]? = some gj) (hjC : j ∉ C)
+    (run : SFunc.RunCut fs sevm C (St b (vyStoreStack cap lp base src R) M G)
+      (vyStoreLoopTree e0 e1 x0 x1 r0 r1 j k exitT) r) :
+    (lp.toNat < 32 * i ∧
+      ∃ G', SFunc.RunCut fs sevm C (St b (vyStoreStack cap lp base src R) M G') gj r) ∨
+    (32 * i ≤ lp.toNat ∧ sevm.isStatic = false ∧ ∃ G', SFunc.RunCut fs sevm C
+      (St (afterSstore sevm b (base + Nat.toB256 i) (Bytes.toB256 (M.read (sn + 32 * i) 32).1))
+        (vyStoreStack cap lp base src R) (M.write 0x120 (Nat.toB256 (i + 1)).toBytes) G')
+      (if cap = Nat.toB256 (i + 1) then exitT else gk) r) := by
+  rw [← afterSstoreH_of_eip2929 hfork.rules_access (by rw [hfork.rules_sstore])]
+  exact ric_vyStoreIterH hfork.rules_stateGas_none hs hs32 hs1 hsn hsrc hbig hctr hk hkC hj hjC
+    run
 
 end StoreLoop
 

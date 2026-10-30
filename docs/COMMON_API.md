@@ -9873,7 +9873,11 @@ contract-neutral.
   `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIter`
   (a storing pass also proves the frame non-static),
   and the set-up `vyStoreHead` with `rx_`/`ric_vyStoreHead`), unrolled per pass since the cap
-  bounds the count, the load loop's pass inverted (`ric_vyLoadIter`), a stored-`String` view's
+  bounds the count, the load loop's pass inverted (`ric_vyLoadIter`); for a historical fork the
+  four inversions are stated from the rule facts they read, over the actual access schedule's
+  successors `afterSloadH`/`afterSstoreH` (`HistAccessWalk.lean`): `ric_vySubStoreH`,
+  `ric_vyAddStoreH`, `ric_vyStoreIterH` (`rules.stateGas = none`) and `ric_vyLoadIterH`
+  (`rules.bal = none`), with the `CoveredFork` names their corollaries; a stored-`String` view's
   body up to its load loop (`vyStrView`) with the join's `ceil32_eq` and the zero-fill read
   `sliceD_data_end`, and `sstoreCost_le`, `Mem.read_write_disjoint`, `vy_mul32`, in
   [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
