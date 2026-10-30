@@ -150,7 +150,7 @@ theorem Xinst.avoidsAt_of_code_noStateGas {a : Adr} {sevm : Sevm} {devm : Devm}
     subst hat
     apply hcode
     rw [hf.getCode, empty]
-    simp
+    simp only [ByteArray.toList_empty]
   · exact absurd (genericCall.step_spawn_isCreate_false hs) (by rw [hc]; decide)
 
 /-- **An execution that starts with nonempty code at `a` enters no CREATE frame at `a`**,
