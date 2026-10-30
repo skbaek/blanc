@@ -30,6 +30,14 @@ namespace Blanc.LidoCircuitBreaker
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 
+/-- Scratch-word offsets, kernel-evaluated once. -/
+private theorem targetWord_mul32_toNat : (targetWord * 32).toNat = 512 := by
+  decide
+private theorem newPauserWord_mul32_toNat : (newPauserWord * 32).toNat = 544 := by
+  decide
+private theorem previousPauserWord_mul32_toNat :
+    (previousPauserWord * 32).toNat = 576 := by
+  decide
 
 theorem Bytes.sliceD_writeAt_after
     (bs xs : Bytes) (start len n : Nat)
@@ -5311,19 +5319,19 @@ theorem registerPauser_stageArgs_runCompiled
         .call setPauserSlot) post := by
   have hM1Size (w : B256) :
       (Mem.empty.write (targetWord * 32).toNat w.toBytes).size = 544 := by
-    rw [Mem.size_write_word_at]
-    decide +kernel
+    rw [Mem.size_write_word_at, targetWord_mul32_toNat]
+    decide
   have hM2Size (w₁ w₂ : B256) :
       ((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
         (newPauserWord * 32).toNat w₂.toBytes).size = 576 := by
-    rw [Mem.size_write_word_at, hM1Size]
-    decide +kernel
+    rw [Mem.size_write_word_at, hM1Size, newPauserWord_mul32_toNat]
+    decide
   have hM3Size (w₁ w₂ : B256) :
       (((Mem.empty.write (targetWord * 32).toNat w₁.toBytes).write
         (newPauserWord * 32).toNat w₂.toBytes).write
         (previousPauserWord * 32).toNat (0 : B256).toBytes).size = 608 := by
-    rw [Mem.size_write_word_at, hM2Size]
-    decide +kernel
+    rw [Mem.size_write_word_at, hM2Size, previousPauserWord_mul32_toNat]
+    decide
   unfold arg cdl
   func_run (15) [51, 3, 3, 3]
   -- Each extension goal takes exactly the alternative that fits it, in the
