@@ -2072,7 +2072,9 @@ CONTRACTS["vyper-nonreentrant-deployed"].extend([
 # part of the Uniswap V2 deployment system rather than a sibling of the Pair.
 CONTRACTS["uniswap-v2-pair"].extend([
     "Lift.UniswapV2Pair.FiniteCheckpoint",
+    "Lift.UniswapV2Pair.HeadlineOracle",
     "Lift.UniswapV2Pair.ModelControlsSides",
+    "Lift.UniswapV2Pair.OracleCallReceipt",
     "Lift.UniswapV2Pair.PairHistoryShape",
     "Lift.UniswapV2Pair.PairModelFix",
     "Lift.UniswapV2Pair.PairOuterCalls",
