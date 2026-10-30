@@ -213,6 +213,7 @@ import Blanc.Lift.Curve3Crv.Headline
 import Blanc.Lift.BeaconDeposit.HistDeployment
 import Blanc.Lift.LidoCircuitBreakerDeployed.RegistryObservers
 import Blanc.Lift.LidoCircuitBreakerDeployed.DeploymentHistory
+import Blanc.Lift.LidoCircuitBreakerDeployed.LiveRegistry
 import Blanc.Lift.RootMessages
 import Blanc.Lift.Weth9.Holders
 import Blanc.Lift.UniswapV2Pair.StorageObservers
@@ -18827,6 +18828,28 @@ example {before after checkpoint preB postB preD postD : BlockChain}
   history_delivery_mainnet block cut following obs prefixSystemAvoid historyB blockB historyD
     blockD extension senders authorities avoid occurrences exactDepth
 
+-- EIP-7002: history_fifo_mainnet
+example {before after checkpoint final : BlockChain}
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
+    (cut : block.bodyTrace.transactions.TxSplit 0)
+    (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
+    (obs : WithdrawalDeploymentObservation block checkpoint)
+    (history : ConfiguredHistoryTrace mainnetChainConfig checkpoint final)
+    (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (senders : history.NoSenderAt systemAddress)
+    (authorities : history.NoAuthorityAt systemAddress)
+    (avoid : ∀ root ∈ history.rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
+    (occurrences : (submissions history).length ≤ wordOccurrenceCap) :
+    HistoryFifo history :=
+  history_fifo_mainnet block cut following obs history prefixSystemAvoid senders authorities
+    avoid occurrences
+
+-- EIP-7002 definition: wordOccurrenceCap
+example : wordOccurrenceCap = 2 ^ 254 :=
+  rfl
+
 -- EIP-7002 constructor: WithdrawalDeploymentObservation.mk
 example {before after checkpoint : BlockChain}
     (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
@@ -19190,6 +19213,64 @@ example {cfg : ChainConfig} {pre post : BlockChain}
     Creation.DeploymentCut block :=
   ⟨position, cut, number, index, creation, input, sender, nonce, value, gas, receipt, receiptAt,
     succeeded⟩
+
+-- Lido CircuitBreaker: lido_deployment_finite_init
+example {cfg : ChainConfig} {pre post : BlockChain}
+    {block : ConfiguredBlockTraceIn CoveredFork cfg pre post}
+    (deployment : Creation.DeploymentCut block)
+    {probes : List B256} (hp : ∀ p ∈ probes, canonicalAddress p)
+    (hapart : Blanc.SlotFootprint.checkApartOn solKey
+      (registryQueries probes 0) [0, 1] = true) :
+    (deployment.cut.afterBenv.state.getCode Creation.breakerAddress).toList = code.toList ∧
+      RegistryOn (solRegistryStorage
+        (deployment.cut.afterBenv.state.getStor Creation.breakerAddress)) [] probes :=
+  lido_deployment_finite_init deployment hp hapart
+
+-- Lido CircuitBreaker: Live.lido_live_registryOn
+example (s : Stor) (hobs : ∀ w ∈ Live.words, s.get w.1 = w.2) :
+    RegistryOn (solRegistryStorage s) Live.entries Live.probes :=
+  Live.lido_live_registryOn s hobs
+
+-- Lido CircuitBreaker definition: canonicalAddress
+example (word : B256) : canonicalAddress word ↔ word.toNat < 2 ^ 160 :=
+  Iff.rfl
+
+-- Lido CircuitBreaker definition: solRegistryStorage
+example (raw : Stor) (key : B256) :
+    (solRegistryStorage raw).read key =
+      (let region := key.toNat / 2 ^ 252
+      let payload := Nat.toB256 (key.toNat % 2 ^ 252)
+      if region = assignmentRegion then
+        addressSlotReadWord (raw.get (mapSlot payload 3))
+      else if region = indexRegion then
+        raw.get (mapSlot payload 4)
+      else if region = countRegion then
+        raw.get (mapSlot payload 6)
+      else if region = arrayRegion then
+        if payload = 0 then raw.get 5
+        else addressSlotReadWord
+          (raw.get (registryArrayBase + (payload - 1)))
+      else 0) :=
+  rfl
+
+-- Lido CircuitBreaker definition: solKey
+example (key : B256) :
+    solKey key =
+      (let region := key.toNat / 2 ^ 252
+      let payload := Nat.toB256 (key.toNat % 2 ^ 252)
+      if region = assignmentRegion then mapSlot payload 3
+      else if region = indexRegion then mapSlot payload 4
+      else if region = countRegion then mapSlot payload 6
+      else if region = arrayRegion then
+        if payload = 0 then 5 else registryArrayBase + (payload - 1)
+      else 0) :=
+  rfl
+
+-- Lido CircuitBreaker statement: Blanc.SlotFootprint.checkApartOn_eq_true
+example {κ : Type} {slot : κ → B256} {observed : List κ} {foreign : List B256} :
+    Blanc.SlotFootprint.checkApartOn slot observed foreign = true ↔
+      ∀ w ∈ foreign, ∀ k ∈ observed, slot k ≠ w :=
+  Blanc.SlotFootprint.checkApartOn_eq_true
 
 end Blanc.Lift.LidoCircuitBreakerDeployed
 
