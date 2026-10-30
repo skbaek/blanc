@@ -1709,7 +1709,9 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   data field kept abstract (only the leading fields' joined bytes are supplied); `recoverSender_pre155`
   gives `recoverSender cid tx = .ok a` at every `cid` from the signing hash, the `r`/`s` range facts
   and one `secp256k1.recover h (tx.v - 27).toBool r s = some a` fact, each a closed `decide +kernel`
-  goal once the fields are substituted. EIP-155 creations still state their own instances
+  goal once the fields are substituted; `legacy_decode_pre155` runs the strict nine-field
+  `BLT.toExLegacyTx` from the per-field scalar decoder equations without reducing the data field, and
+  yields `Tx.WireWellFormed`. EIP-155 creations still state their own instances
   (`Blanc/Lift/Weth9/Creation/SigningRecover.lean`, `Blanc/Lift/BeaconDeposit/Creation/HistoricalTxRaw.lean`).
 - Determinism of execution witnesses:
   [`Blanc/ExecDeterminism.lean`](../Blanc/ExecDeterminism.lean).
@@ -5213,7 +5215,10 @@ of arbitrary nested BLT values or a parser/canonicality theorem.
 apply Jaune's actual parser equations while keeping payload bytes abstract.
 On the encoder side, [`Blanc/RlpListEncode.lean`](../Blanc/RlpListEncode.lean)
 provides `RlpConcrete.toBytesJoin_append` (the joint item encoding of a
-concatenated list is the concatenation of the joint encodings).
+concatenated list) and `RlpConcrete.encode_list_long` (a list whose joint item
+encoding is a known body of at least 56 bytes gets the long-list header over
+that abstract body); a signed creation transaction's canonical re-encoding uses
+them without reducing its payload (3Crv `HistoricalTx.tx_encoded`).
 The additive owner
 [`Blanc/ExecutionBodyTransactionCut.lean`](../Blanc/ExecutionBodyTransactionCut.lean)
 also provides `RlpConcrete.decode_bytes_long_one` and

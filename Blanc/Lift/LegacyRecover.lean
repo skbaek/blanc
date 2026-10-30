@@ -13,6 +13,8 @@ transaction, a contract, or an observed mainnet value.
 * `signingPayload_pre155` encodes that payload with the data field abstract.
 * `recoverSender_pre155` reduces `recoverSender` at every chain id to one
   secp256k1 recovery fact on the signing hash.
+* `legacy_decode_pre155` runs the strict nine-field legacy decoder from the
+  per-field scalar decoder equations, and yields wire well-formedness.
 -/
 
 namespace Blanc.Lift.LegacyRecover
@@ -82,5 +84,37 @@ theorem recoverSender_pre155 {tx : Tx} {p : Nat} {rcv : Option Adr}
   unfold recoverSender
   simp only [hr, hs, ite_false, hhash, htype, hv, ite_true]
   simp only [Option.toExcept, bind, Except.bind, hrec]
+
+/-- The strict nine-field legacy decoder from its per-field scalar decoder
+equations, at a pre-EIP-155 `v` byte. The data field is unconstrained and is
+never reduced. The decoded transaction is wire well-formed and legacy. -/
+theorem legacy_decode_pre155 {nonceB gpB gasB rcvB valueB data r s : Bytes}
+    {nonce : UInt64} {gp gas value v : Nat} {rcv : Option Adr} {r' s' : B256}
+    (hn : nonceB.toRlpB64 "legacy transaction nonce" = .ok nonce)
+    (hgp : gpB.toRlpNat "legacy transaction gasPrice" 32 = .ok gp)
+    (hgas : gasB.toRlpNat "legacy transaction gas" 32 = .ok gas)
+    (hrcv : rcvB.toRlpReceiver "legacy transaction receiver" = .ok rcv)
+    (hvalue : valueB.toRlpNat "legacy transaction value" 32 = .ok value)
+    (hv : v = 27 ∨ v = 28)
+    (hr : r.toRlpB256 "legacy transaction r" = .ok r')
+    (hs : s.toRlpB256 "legacy transaction s" = .ok s') :
+    BLT.toExLegacyTx
+        [.bytes nonceB, .bytes gpB, .bytes gasB, .bytes rcvB, .bytes valueB,
+         .bytes data, .bytes [v.toUInt8], .bytes r, .bytes s] =
+      .ok { nonce := nonce, gas := gas, value := value, data := data, v := v,
+            r := r, s := s, type := .zero gp rcv } ∧
+    Tx.WireWellFormed
+      { nonce := nonce, gas := gas, value := value, data := data, v := v,
+        r := r, s := s, type := .zero gp rcv } := by
+  have hvB : Bytes.toRlpNat "legacy transaction v" 32 [v.toUInt8] = .ok v := by
+    rcases hv with rfl | rfl <;> rfl
+  have hdec : BLT.toExLegacyTx
+        [.bytes nonceB, .bytes gpB, .bytes gasB, .bytes rcvB, .bytes valueB,
+         .bytes data, .bytes [v.toUInt8], .bytes r, .bytes s] =
+      .ok { nonce := nonce, gas := gas, value := value, data := data, v := v,
+            r := r, s := s, type := .zero gp rcv } := by
+    simp only [BLT.toExLegacyTx, hn, hgp, hgas, hrcv, hvalue, hvB, hr, hs]
+    rfl
+  exact ⟨hdec, (BLT.toExLegacyTx_wireWellFormed hdec).1⟩
 
 end Blanc.Lift.LegacyRecover
