@@ -2075,6 +2075,7 @@ CONTRACTS["uniswap-v2-pair"].extend([
     "Lift.UniswapV2Pair.ModelControlsSides",
     "Lift.UniswapV2Pair.PairHistoryShape",
     "Lift.UniswapV2Pair.PairModelFix",
+    "Lift.UniswapV2Pair.PairOuterCalls",
     "Lift.UniswapV2Pair.PairPositionalCalls",
     "Lift.UniswapV2Pair.PairPositionalCallsIn",
     "Lift.UniswapV2Pair.PairPositionalState",
@@ -2327,6 +2328,7 @@ COMPOSITION = [
     # signed-token bridges, the USDC x WETH9 joint, share-value rows, legs, checker and deployment.
     "Composition.PairTokenSigned",
     "Composition.PairTwoToken",
+    "Composition.PairTwoTokenCallShare",
     "Composition.PairTwoTokenShareValue",
     "Composition.UniswapV2PairUsdcWeth9CheckJoint",
     "Composition.UniswapV2PairUsdcWeth9Checkpoint",
@@ -2398,6 +2400,7 @@ COMPOSITION = [
     "Composition.LiveUsdcWeth9B26213219P1",
     "Composition.LiveUsdcWeth9B26213219PairObservation",
     "Composition.LiveUsdcWeth9B26213219PrePairCallers",
+    "Composition.LiveUsdcWeth9B26213219CallShare",
     "Composition.LiveUsdcWeth9B26213219ShareValue",
     "Composition.LiveUsdcWeth9B26213219Skim",
     "Composition.LiveUsdcWeth9B26213219Swap",
