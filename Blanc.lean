@@ -897,6 +897,7 @@ import Blanc.Lift.WithdrawalRequest.Creation.HistoricalTxTrace
 import Blanc.Lift.WithdrawalRequest.MainnetDeployment
 import Blanc.Lift.WithdrawalRequest.HeadlineFee
 import Blanc.Lift.WithdrawalRequest.HeadlineSystem
+import Blanc.Lift.WithdrawalRequest.HeadlineHistory
 
 -- The COMPOSITION stratum is strictly downstream of every contract family, so
 -- it is aggregated last. Roots aggregate composition; nothing imports back.

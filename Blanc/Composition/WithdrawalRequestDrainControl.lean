@@ -2,6 +2,7 @@ import Blanc.Composition.WithdrawalRequestFeeRefutation
 import Blanc.Lift.WithdrawalRequest.DrainTx
 import Blanc.Lift.WithdrawalRequest.FifoDrainControl
 import Blanc.Lift.WithdrawalRequest.SubmissionCount
+import Blanc.Lift.WithdrawalRequest.HeadlineHistory
 
 /-!
 # E5(ii): the SYSTEM_ADDRESS exclusion is load-bearing, closed
@@ -155,7 +156,10 @@ structure PreD (w : State) : Prop where
 theorem drain_stageA : ∃ (post : BlockChain)
     (trace : ConfiguredBlockTrace witnessConfig drainChain post) (parent : Block),
     BlockOk trace ∧ PreD post.state ∧ ChainReady post parent ∧
-    trace.settledFrames.flatMap submissionFramePayments = [] := by
+    trace.settledFrames.flatMap submissionFramePayments = [] ∧
+    Blanc.WithdrawalRequest.RepresentsStorage
+      (trace.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial := by
   obtain ⟨lhA, hlA⟩ := blockHashes_getLast_of_ne drain_ready.nonempty
   obtain ⟨hbody, hz, hrep, -, hkeep⟩ := blockA_run (benv := benvAt drainChain drainGenesisBlock)
     prague_covered drain_installed hlA (drainState_getStor_other (by decide) (by decide))
@@ -165,6 +169,45 @@ theorem drain_stageA : ∃ (post : BlockChain)
   have blockEq := Blanc.BlockForward.ConfiguredBlockTrace.block_eq trace rfl
   have decoded : trace.bodyTrace.decodedTxs = [] :=
     AppliedBodyTrace.decodedTxs_nil trace.bodyTrace (by rw [blockEq]; rfl)
+  -- the request boundary still holds the checkpoint's INIT storage
+  have hreqA : Blanc.WithdrawalRequest.RepresentsStorage
+      (trace.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial := by
+    have hfork0 : CoveredFork (initBenv trace.fork drainChain trace.block.header).stat.fork :=
+      trace.covered
+    have installed0 : SystemCodeInstalled
+        (initBenv trace.fork drainChain trace.block.header).state := drain_installed
+    have hl0 : (initBenv trace.fork drainChain trace.block.header).stat.blockHashes.getLast? =
+        some lhA := hlA
+    obtain ⟨-, hH⟩ := AppliedBodyTrace.history_eq trace.bodyTrace hfork0 installed0
+    have boundary : ∀ {txs : List (Nat × Tx)} {start final : Benv} {bout finalBout : BlockOutput},
+        ApplyTransactionsTrace txs start bout final finalBout → txs = [] → final = start := by
+      intro txs start final bout finalBout fold empty
+      subst empty
+      cases fold
+      rfl
+    have htb : trace.bodyTrace.transactionBenv.state = trace.bodyTrace.historyState := by
+      rw [boundary trace.bodyTrace.transactions (by rw [decoded]; rfl)]
+      rfl
+    have hcode : trace.bodyTrace.historyState.getCode withdrawalRequestPredeployAddress =
+        Blanc.withdrawalRequestCode := by
+      rw [hH]
+      exact (stHistory_getCode_inst hfork0 installed0 hl0 _ (by decide) (by decide)).trans
+        (systemCodeInstalled_withdrawal installed0)
+    have hprot : State.Protected trace.bodyTrace.transactionBenv.state
+        withdrawalRequestPredeployAddress := by
+      apply State.Protected.of_code_ne_nil
+      rw [htb, hcode]
+      exact Blanc.Lift.WithdrawalRequest.withdrawalRequestCode_sem_facts.2
+    change Blanc.WithdrawalRequest.RepresentsStorage
+      ((processWithdrawalsState trace.bodyTrace.transactionBenv.state trace.block.wds).getStor
+        _).get _
+    rw [processWithdrawalsState_getStor_eq _ _ _ hprot, htb, hH,
+      stHistory_getStor_inst hfork0 installed0 hl0 _ (by decide) (by decide)]
+    change Blanc.WithdrawalRequest.RepresentsStorage
+      (drainState.getStor withdrawalRequestPredeployAddress).get Blanc.WithdrawalRequest.initial
+    rw [drainState_getStor_other (by decide) (by decide)]
+    exact checkpoint_7002_rep
   have hpre : PreD (bodyPost (benvAt drainChain drainGenesisBlock)
       (stHistory (benvAt drainChain drainGenesisBlock))) := by
     refine ⟨hz, ?_, ?_, hrep⟩
@@ -176,7 +219,7 @@ theorem drain_stageA : ∃ (post : BlockChain)
   refine ⟨_, trace, _, blockOk_of trace drain_callOnly drain_installed drain_sum_bound
     (by rw [blockEq]; rfl) (calls_of_nil _ decoded)
     (ApplyTransactionsTrace.noSender_nil trace.bodyTrace.transactions (by rw [decoded]; rfl) _),
-    hpre, chainReady_mk _ _ _ _ _ rfl (by decide), ?_⟩
+    hpre, chainReady_mk _ _ _ _ _ rfl (by decide), ?_, hreqA⟩
   rw [block_submissions_eq_transactions (.refl witnessConfig_valid drain_validContext rfl) trace
     drain_installed, ApplyTransactionsTrace.settledFrames_nil trace.bodyTrace.transactions
       (by rw [decoded]; rfl)]
@@ -222,7 +265,20 @@ def σ1 : Blanc.WithdrawalRequest.State :=
 /-- One system step empties it: the queue holds one entry, at most `16` leave. -/
 theorem system_σ1_queue : (Blanc.WithdrawalRequest.system σ1).queue = [] := rfl
 
+/-- A second system step leaves it empty. -/
+theorem system_system_σ1_queue :
+    (Blanc.WithdrawalRequest.system (Blanc.WithdrawalRequest.system σ1)).queue = [] := by
+  change (Blanc.WithdrawalRequest.system σ1).queue.drop _ = []
+  rw [system_σ1_queue]
+  rfl
+
 theorem σ1_sum : Blanc.WithdrawalRequest.effectiveExcess σ1 + σ1.count < 2 ^ 256 := by
+  rw [σ1, σA_eq]
+  decide
+
+/-- The reset model's bookkeeping also fits a word, so a second system step is represented. -/
+theorem system_σ1_sum : Blanc.WithdrawalRequest.effectiveExcess (Blanc.WithdrawalRequest.system σ1) +
+    (Blanc.WithdrawalRequest.system σ1).count < 2 ^ 256 := by
   rw [σ1, σA_eq]
   decide
 
@@ -258,7 +314,10 @@ theorem blockD_run {benv : Benv} {lastHash : B256}
       bout.blockGasUsed ≤ 2 ^ 28 ∧
       Blanc.WithdrawalRequest.RepresentsStorage
         (s.getStor withdrawalRequestPredeployAddress).get (Blanc.WithdrawalRequest.system σ1) ∧
-      s.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode := by
+      s.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode ∧
+      Blanc.WithdrawalRequest.RepresentsStorage
+        ((bodyPost benv s).getStor withdrawalRequestPredeployAddress).get
+        (Blanc.WithdrawalRequest.system (Blanc.WithdrawalRequest.system σ1)) := by
   have hsender : (stHistory benv).get senderE = senderE1Acct :=
     (stHistory_get_of_installed hfork installed hlast (by decide) (by decide)).trans hpre.sender
   have hcodeW : (stHistory benv).getCode withdrawalRequestPredeployAddress =
@@ -466,14 +525,16 @@ theorem blockD_run {benv : Benv} {lastHash : B256}
     exact stHistory_getStor_inst hfork installed hlast _ (by decide) (by decide)
   have husedD := txGasUsed_le (gas := txD.gas) (floor := 21000) (left := postD.gasLeft)
     (refund := postD.refundCounter.toNat) (by decide)
-  refine ⟨sD, boutD, htxs, body_of_txs hfork installed hlast rfl htxs hdeposit hWcode hCcode hz,
-    ?_, ?_, hWcode⟩
-  · rw [hblkD, hblkC]
-    change 0 + _ + _ ≤ 2 ^ 28
-    have hgasD : txD.gas = 2 ^ 20 := rfl
-    omega
-  · rw [hsD, settledState_getStor _ _ _ _ _ _ hpD]
+  have hrepD : Blanc.WithdrawalRequest.RepresentsStorage
+      (sD.getStor withdrawalRequestPredeployAddress).get (Blanc.WithdrawalRequest.system σ1) := by
+    rw [hsD, settledState_getStor _ _ _ _ _ _ hpD]
     exact hQD.1
+  refine ⟨sD, boutD, htxs, body_of_txs hfork installed hlast rfl htxs hdeposit hWcode hCcode hz,
+    ?_, hrepD, hWcode, bodyPost_represents hfork hCcode hz hrepD system_σ1_sum⟩
+  rw [hblkD, hblkC]
+  change 0 + _ + _ ≤ 2 ^ 28
+  have hgasD : txD.gas = 2 ^ 20 := rfl
+  omega
 
 /-- **Stage D**: block D as a configured block trace.  It commits `txC`'s submission frame, and
 at its request boundary the predeploy storage represents a model state with an empty queue. -/
@@ -483,13 +544,16 @@ theorem drain_stageD {pre : BlockChain} {parent : Block} (ready : ChainReady pre
     ∃ (post : BlockChain) (trace : ConfiguredBlockTrace witnessConfig pre post),
       BlockOk trace ∧
       trace.bodyTrace.transactions.settledFrames.flatMap submissionFramePayments ≠ [] ∧
-      ∃ s : Blanc.WithdrawalRequest.State,
+      (∃ s : Blanc.WithdrawalRequest.State,
         Blanc.WithdrawalRequest.RepresentsStorage
           (trace.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress).get s ∧
-        s.queue = [] := by
+        s.queue = []) ∧
+      ∃ s : Blanc.WithdrawalRequest.State,
+        Blanc.WithdrawalRequest.RepresentsStorage
+          (post.state.getStor withdrawalRequestPredeployAddress).get s ∧ s.queue = [] := by
   obtain ⟨lh, hl⟩ := blockHashes_getLast_of_ne ready.nonempty
   have hf := benvAt_facts pre parent
-  obtain ⟨sD, boutD, -, hbody, hgas, -, -⟩ := blockD_run (benv := benvAt pre parent) hf.1
+  obtain ⟨sD, boutD, -, hbody, hgas, -, -, hpostD⟩ := blockD_run (benv := benvAt pre parent) hf.1
     installed hl hpre (hf.2.2.1.trans ready.chainId) hf.2.2.2.1
     (by rw [hf.2.2.2.2.1]; decide) hf.2.2.2.2.2.1
   obtain ⟨trace⟩ := witnessBlockTrace ready.last hbound ready.chainId ready.gasLimit
@@ -515,7 +579,7 @@ theorem drain_stageD {pre : BlockChain} {parent : Block} (ready : ChainReady pre
     rw [blockEq]
     show witnessCoinbase ≠ senderE
     decide
-  obtain ⟨s0, bout0, htxs0, -, -, hrep0, hs0code⟩ := blockD_run (benv := benv0) hfork0 installed0 hl0 hpre0
+  obtain ⟨s0, bout0, htxs0, -, -, hrep0, hs0code, -⟩ := blockD_run (benv := benv0) hfork0 installed0 hl0 hpre0
     hchain hbase (by rw [hlimit]; decide) hcb
   obtain ⟨hB, hH⟩ := AppliedBodyTrace.history_eq trace.bodyTrace hfork0 installed0
   have hrun := trace.bodyTrace.transactions.run
@@ -568,7 +632,9 @@ theorem drain_stageD {pre : BlockChain} {parent : Block} (ready : ChainReady pre
       rw [hchainT]
       rcases hp with rfl | rfl
       · exact txC_recoveredSender
-      · exact txD_recoveredSender)), ?_, Blanc.WithdrawalRequest.system σ1, ?_, system_σ1_queue⟩
+      · exact txD_recoveredSender)), ?_, ⟨Blanc.WithdrawalRequest.system σ1, ?_, system_σ1_queue⟩,
+    Blanc.WithdrawalRequest.system (Blanc.WithdrawalRequest.system σ1), ?_,
+    system_system_σ1_queue⟩
   · apply List.ne_nil_of_mem (a := (frame, frame.sevm.value.toNat))
     apply List.mem_flatMap.mpr
     refine ⟨frame, hsub frame hmem, ?_⟩
@@ -588,41 +654,70 @@ theorem drain_stageD {pre : BlockChain} {parent : Block} (ready : ChainReady pre
         _).get _
     rw [processWithdrawalsState_getStor_eq _ _ _ hprotW, htb]
     exact hrep0
+  · dsimp only [mkChain]
+    exact hpostD
 
-/-! ## The negative control -/
+/-! ## The negative controls -/
 
-/-- **E5(ii), closed: the SYSTEM_ADDRESS exclusion of the FIFO headline is load-bearing.**
-With no hypotheses: the two-block history from the drain checkpoint (`drainChain`, the drainer
-at SYSTEM_ADDRESS) keeps every other hypothesis of `block_word_fifo_of_checkpoint` (installed system code, no
-sender or authority at SYSTEM_ADDRESS, no code-free root frame targeting it, INIT, the
-occurrence cap), and block D fails `CheckpointBlockWordFifo`. -/
-theorem systemEmpty_loadBearing_witness : SystemEmptyLoadBearing := by
-  obtain ⟨chainA, traceA, parentA, okA, preD, readyA, beforeA⟩ := drain_stageA
-  obtain ⟨chainD, traceD, okD, committed, drained⟩ :=
+/-- Block A after the drain checkpoint, as a one-block configured history. -/
+def drainPrior {chainA : BlockChain}
+    (traceA : ConfiguredBlockTrace witnessConfig drainChain chainA) :
+    ConfiguredHistoryTrace witnessConfig drainChain chainA :=
+  .step (.refl witnessConfig_valid drain_validContext rfl) traceA
+
+theorem drain_systemCode : drainChain.state.getCode systemAddress ≠ ByteArray.empty := by
+  change drainState.getCode systemAddress ≠ ByteArray.empty
+  rw [drainState_getCode_system]
+  decide
+
+theorem drain_init : Blanc.WithdrawalRequest.RepresentsStorage
+    (drainChain.state.getStor withdrawalRequestPredeployAddress).get
+    Blanc.WithdrawalRequest.initial := by
+  change Blanc.WithdrawalRequest.RepresentsStorage
+    (drainState.getStor withdrawalRequestPredeployAddress).get Blanc.WithdrawalRequest.initial
+  rw [drainState_getStor_other (by decide) (by decide)]
+  exact checkpoint_7002_rep
+
+/-- The two-block drain history (block A, then block D) from the drain checkpoint, with the
+SYSTEM exclusions and occurrence cap of the FIFO theorems, block D's committed submission, and
+empty queues at block A's and block D's request boundaries and after block D. -/
+theorem drain_history : ∃ (chainA chainD : BlockChain)
+    (traceA : ConfiguredBlockTrace witnessConfig drainChain chainA)
+    (traceD : ConfiguredBlockTrace witnessConfig chainA chainD),
+    (ConfiguredHistoryTrace.step (drainPrior traceA) traceD).NoSenderAt systemAddress ∧
+    (ConfiguredHistoryTrace.step (drainPrior traceA) traceD).NoAuthorityAt systemAddress ∧
+    (∀ root ∈ (ConfiguredHistoryTrace.step (drainPrior traceA) traceD).rawFrames,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress) ∧
+    ((ConfiguredHistoryTrace.step (drainPrior traceA) traceD).settledFrames.flatMap
+      submissionFramePayments).length ≤ wordOccurrenceCap ∧
+    (drainPrior traceA).settledFrames.flatMap submissionFramePayments = [] ∧
+    traceD.bodyTrace.transactions.settledFrames.flatMap submissionFramePayments ≠ [] ∧
+    Blanc.WithdrawalRequest.RepresentsStorage
+      (traceA.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress).get
+      Blanc.WithdrawalRequest.initial ∧
+    (∃ s : Blanc.WithdrawalRequest.State,
+      Blanc.WithdrawalRequest.RepresentsStorage
+        (traceD.bodyTrace.requestBenv.state.getStor withdrawalRequestPredeployAddress).get s ∧
+      s.queue = []) ∧
+    ∃ s : Blanc.WithdrawalRequest.State,
+      Blanc.WithdrawalRequest.RepresentsStorage
+        (chainD.state.getStor withdrawalRequestPredeployAddress).get s ∧ s.queue = [] := by
+  obtain ⟨chainA, traceA, parentA, okA, preD, readyA, beforeA, requestA⟩ := drain_stageA
+  obtain ⟨chainD, traceD, okD, committed, drained, after⟩ :=
     drain_stageD readyA okA.installed okA.world okA.bound preD
-  refine systemEmpty_loadBearing
-    (ConfiguredHistoryTrace.step (.refl witnessConfig_valid drain_validContext rfl) traceA) traceD
-    drain_installed ⟨⟨trivial, okA.senders⟩, okD.senders⟩
-    ⟨⟨trivial, okA.authorities⟩, okD.authorities⟩ ?_ ?_ ?_ ?_ ?_ committed drained
+  refine ⟨chainA, chainD, traceA, traceD, ⟨⟨trivial, okA.senders⟩, okD.senders⟩,
+    ⟨⟨trivial, okA.authorities⟩, okD.authorities⟩, ?_, ?_, ?_, committed, requestA, drained,
+    after⟩
   · intro root member
-    simp only [ConfiguredHistoryTrace.rawFrames, List.nil_append, List.mem_append] at member
+    simp only [drainPrior, ConfiguredHistoryTrace.rawFrames, List.nil_append,
+      List.mem_append] at member
     rcases member with hA | hD
     · exact okA.avoid root hA
     · exact okD.avoid root hD
-  · change drainState.getCode systemAddress ≠ ByteArray.empty
-    rw [drainState_getCode_system]
-    decide
-  · change Blanc.WithdrawalRequest.RepresentsStorage
-      (drainState.getStor withdrawalRequestPredeployAddress).get Blanc.WithdrawalRequest.initial
-    rw [drainState_getStor_other (by decide) (by decide)]
-    exact checkpoint_7002_rep
   · have payments := submissionFramePayments_length_le
-      (ConfiguredHistoryTrace.step (ConfiguredHistoryTrace.step
-        (.refl witnessConfig_valid drain_validContext rfl) traceA) traceD).settledFrames
-    have frames := (ConfiguredHistoryTrace.step (ConfiguredHistoryTrace.step
-      (.refl witnessConfig_valid drain_validContext rfl) traceA) traceD).settledFrames_length_le
-    have count : (ConfiguredHistoryTrace.step (ConfiguredHistoryTrace.step
-      (.refl witnessConfig_valid drain_validContext rfl) traceA) traceD).blockCount = 2 := rfl
+      (ConfiguredHistoryTrace.step (drainPrior traceA) traceD).settledFrames
+    have frames := (ConfiguredHistoryTrace.step (drainPrior traceA) traceD).settledFrames_length_le
+    have count : (ConfiguredHistoryTrace.step (drainPrior traceA) traceD).blockCount = 2 := rfl
     have cap : (2 : Nat) * 2 ^ 64 ≤ wordOccurrenceCap := by
       unfold wordOccurrenceCap
       decide
@@ -631,5 +726,53 @@ theorem systemEmpty_loadBearing_witness : SystemEmptyLoadBearing := by
   · change ([] ++ traceA.settledFrames).flatMap submissionFramePayments = []
     rw [List.nil_append]
     exact beforeA
+
+/-- **E5(ii), closed: the SYSTEM_ADDRESS exclusion of the FIFO headline is load-bearing.**
+With no hypotheses: the two-block history from the drain checkpoint (`drainChain`, the drainer
+at SYSTEM_ADDRESS) keeps every other hypothesis of `block_word_fifo_of_checkpoint` (installed system code, no
+sender or authority at SYSTEM_ADDRESS, no code-free root frame targeting it, INIT, the
+occurrence cap), and block D fails `CheckpointBlockWordFifo`. -/
+theorem systemEmpty_loadBearing_witness : SystemEmptyLoadBearing := by
+  obtain ⟨chainA, chainD, traceA, traceD, senders, authorities, avoid, occurrences, before,
+    committed, -, drained, -⟩ := drain_history
+  exact systemEmpty_loadBearing (drainPrior traceA) traceD drain_installed senders authorities
+    avoid drain_systemCode drain_init occurrences before committed drained
+
+/-- **EIP-7002 drain control at the public FIFO law.** With no hypotheses: the same two-block
+drain history meets every premise of `history_fifo_of_checkpoint` except SYSTEM emptiness (the
+drainer runtime sits at SYSTEM_ADDRESS), and `HistoryFifo` fails for it: block D commits a
+submission, the drainer dequeues it before the block's system call, so no block publishes it
+and the final stored queue is empty.
+
+Scope: this negates `history_fifo_of_checkpoint`, not `history_fifo`. The deployment-rooted
+`history_fifo` has no SYSTEM-emptiness premise; it derives emptiness from
+`DeploymentHistory.Admission`, and this control shows that derivation is load-bearing. -/
+theorem historyFifo_of_checkpoint_needs_systemEmpty : HistoryFifoCheckpointLoadBearing := by
+  obtain ⟨chainA, chainD, traceA, traceD, senders, authorities, avoid, occurrences, before,
+    committed, requestA, ⟨s, requestD, drained⟩, ⟨t, final, finalEmpty⟩⟩ := drain_history
+  refine ⟨witnessConfig, drainChain, chainD, .step (drainPrior traceA) traceD, drain_installed,
+    senders, authorities, avoid, drain_systemCode, drain_init,
+    by simpa only [submissions, List.length_map] using occurrences, ?_⟩
+  intro fifo
+  have code : drainChain.state.getCode withdrawalRequestPredeployAddress =
+      Blanc.withdrawalRequestCode := systemCodeInstalled_withdrawal drain_installed
+  have recordsA := blockWithdrawals_eq_of_request_rep
+    (.refl witnessConfig_valid drain_validContext rfl) traceA code _ requestA
+  have recordsD := blockWithdrawals_eq_of_request_rep (drainPrior traceA) traceD code s requestD
+  have remaining : remainingQueue (.step (drainPrior traceA) traceD) = [] := by
+    rw [remainingQueue, storedQueue_eq final, finalEmpty]
+    rfl
+  have published : emissions (.step (drainPrior traceA) traceD) = [] := by
+    change ([] ++ blockWithdrawals traceA) ++ blockWithdrawals traceD = []
+    rw [recordsA, recordsD, Blanc.WithdrawalRequest.emitted, Blanc.WithdrawalRequest.emitted,
+      drained]
+    rfl
+  rw [HistoryFifo, published, remaining, List.append_nil, submissions,
+    List.map_eq_nil_iff] at fifo
+  apply committed
+  rw [← block_submissions_eq_transactions (drainPrior traceA) traceD drain_installed]
+  simp only [ConfiguredHistoryTrace.settledFrames, List.flatMap_append,
+    List.append_eq_nil_iff] at fifo
+  exact fifo.2
 
 end Blanc.Lift.WithdrawalRequest.DrainControl
