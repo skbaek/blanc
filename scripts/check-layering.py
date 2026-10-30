@@ -222,6 +222,8 @@ SHARED += ["Lift.BndInterval", "Lift.ReturnDataKeep", "Lift.DelegateCallChild", 
 # Chain assembly of `fpCert` from per-entry kernel decisions (ns-f5b): imports only
 # Lift.FreePtr; no statement names a contract.
 SHARED += ["Lift.FreePtrChain", "Lift.WriteSiteChain"]
+# The root-message fold used by message-scenario headlines (V± capstones).
+SHARED += ["Lift.RootMessages"]
 # Size-free free-pointer word carrier for moved-pointer walks (uv2nh-skim)
 SHARED += ["Lift.PtrWordMemory"]
 # Retained target frames interleaved with actual foreign LOGs, and per-step storage/log
