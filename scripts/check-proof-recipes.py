@@ -15,9 +15,13 @@ The two source findings remain report-only:
 * a new ``List B256`` selector table with at least three selector/literal rows,
   outside the registry-declared owner of ``local-selector-table``.
 
-Near-duplicates are intentionally invisible. The exact-copy detector also
-requires five substantive lines and 160 bytes after normalization, avoiding
-accidental matches among tiny wrapper declarations.
+The exact-copy detector requires five substantive lines and 160 bytes after
+normalization, avoiding accidental matches among tiny wrapper declarations.
+Near-duplicates are left to the statement-level copy advisor (S3), which adds
+three ADVISORY classes over the same changed declarations -- a rename- and
+qualification-insensitive K1b twin anywhere in the tree, a statement that
+restates a pinned Jaune theorem, and a new generic-shaped theorem in a
+contract module -- none of which is part of the verdict or exceptable.
 
 ``--duplication`` runs a different thing in the same file: the **blocking**
 whole-tree K1 duplication ratchet. K1 is the standing inventory of production
@@ -25,7 +29,8 @@ declarations that are byte-identical after the same normalization and at the
 same floor, grouped into families by their normalized bytes. It is measured
 over the whole ``Blanc/*.lean`` corpus rather than the changed set, compared
 against a shrink-only baseline, and any rise without a matching bounded
-exception exits nonzero. The report-only character of the two findings above is
+exception exits nonzero; it also prints the report-only K1b census of
+cross-file rename-insensitive families. The report-only character of the findings above is
 unchanged and belongs to the ordinary mode alone; ``--duplication`` is reached
 only through ``scripts/check-proof-duplication.sh``.
 
@@ -916,6 +921,275 @@ def selector_findings(
     return findings
 
 
+# ---------------------------------------------------------------------------
+# Statement-level copy advisor (safeguard S3, report-only) and K1b
+#
+# K1 sees only byte-identical copies: a body that references renamed
+# neighbours (`sentinelGatewayPauseWorldSevm` for `gatewayPauseWorldSevm`)
+# or spells the same reference fully qualified (`qualified_refs`, which made
+# generated Curve3Pool obligations spell `Blanc.Lift.Curve3Pool.cert[74]`
+# only to dodge K1) is never byte-identical. K1b normalizes further, so those
+# shapes meet: after K1's name/doc erasure it masks comments and string
+# literals, reduces every dotted identifier to its last component (closing the
+# qualified-name dodge), replaces each identifier declared in the same file by
+# a positional placeholder (closing the sibling-rename dodge), and collapses
+# whitespace. Numeric literals stay exact. A K1b family is two or more
+# substantive declarations in two or more files sharing that key and not all
+# byte-identical (those are K1's). K1b is report-only: the current tree has
+# families, so it cannot be blocking without a grandfather list, which would be
+# baseline growth.
+#
+# The advisor reports, for changed declarations only, a K1b twin anywhere in
+# the tree (`near-copy-twin`), a theorem whose statement restates a pinned
+# Jaune theorem's statement (`jaune-restated`), and a new theorem in a
+# contract module whose statement names nothing that contract declares
+# (`generic-in-contract`, a hoisting candidate). All three are ADVISORY.
+# ---------------------------------------------------------------------------
+
+K1B_IDENT_RE = re.compile(rf"(?<![\w.'?!])({QUALIFIED})")
+WHITESPACE_RE = re.compile(r"\s+")
+STATEMENT_KINDS = {"theorem", "lemma"}
+MIN_STATEMENT_CHARS = 40
+JAUNE_SOURCE_REL = pathlib.Path(".lake/packages/jaune/Jaune")
+LAYERING_REL = pathlib.Path("scripts/check-layering.py")
+ADVISOR_ORIGIN_LIMIT = 3
+
+
+def _last_component(name: str) -> str:
+    return name.rsplit(".", 1)[-1]
+
+
+def _masked_fragment(text: str, source: str) -> str:
+    # The character-level lexer dominates K1b's cost; a fragment with no
+    # comment opener and no string quote has nothing to mask.
+    if "--" not in text and "/-" not in text and '"' not in text:
+        return text
+    try:
+        return mask_comments_and_literals(text, source)
+    except GateError:
+        return text
+
+
+def local_names(parsed: ParsedFile) -> Set[str]:
+    return {_last_component(declaration.name) for declaration in parsed.declarations}
+
+
+def k1b_key(declaration: Declaration, local: Set[str]) -> bytes:
+    masked = _masked_fragment(declaration.normalized.decode("utf-8"), declaration.file)
+    placeholders: Dict[str, str] = {}
+
+    def replace(match: "re.Match[str]") -> str:
+        last = _last_component(match.group(1))
+        if last in local:
+            if last not in placeholders:
+                placeholders[last] = f"$L{len(placeholders)}"
+            return placeholders[last]
+        return last
+
+    return WHITESPACE_RE.sub(" ", K1B_IDENT_RE.sub(replace, masked)).strip().encode("utf-8")
+
+
+@dataclass
+class K1bIndex:
+    keys: Dict[bytes, List[Declaration]]
+    by_declaration: Dict[Tuple[str, str, int], bytes]
+    names_by_file: Dict[str, Set[str]]
+    modules: int
+    unparsable: int
+
+
+def build_k1b_index(root: pathlib.Path, index: SourceIndex) -> K1bIndex:
+    keys: Dict[bytes, List[Declaration]] = {}
+    by_declaration: Dict[Tuple[str, str, int], bytes] = {}
+    names_by_file: Dict[str, Set[str]] = {}
+    modules = production_modules(root)
+    unparsable = 0
+    for rel in modules:
+        try:
+            parsed = index.parse_worktree(rel)
+        except GateError:
+            unparsable += 1
+            continue
+        local = local_names(parsed)
+        names_by_file[rel] = local
+        for declaration in parsed.declarations:
+            if not substantive(declaration.normalized):
+                continue
+            key = k1b_key(declaration, local)
+            keys.setdefault(key, []).append(declaration)
+            by_declaration[(declaration.file, declaration.name, declaration.ordinal)] = key
+    return K1bIndex(keys, by_declaration, names_by_file, len(modules), unparsable)
+
+
+def k1b_families(k1b: K1bIndex) -> List[List[Declaration]]:
+    families = []
+    for members in k1b.keys.values():
+        if len(members) < 2 or len({member.file for member in members}) < 2:
+            continue
+        if len({member.normalized for member in members}) < 2:
+            continue  # byte-identical after K1 normalization: K1 owns it
+        families.append(sorted(members, key=lambda d: (d.file, d.start_line)))
+    return sorted(families, key=lambda members: (members[0].file, members[0].start_line))
+
+
+def statement_key(declaration: Declaration) -> Optional[bytes]:
+    """Rename-insensitive key of a theorem's statement (binders and type)."""
+    if declaration.kind not in STATEMENT_KINDS:
+        return None
+    text = declaration.normalized.decode("utf-8")
+    start = text.find("$DECL")
+    if start < 0:
+        return None
+    masked = _masked_fragment(text, declaration.file)[start + len("$DECL"):]
+    depth = 0
+    end = None
+    for position, char in enumerate(masked):
+        if char in "([{⟨":
+            depth += 1
+        elif char in ")]}⟩":
+            depth -= 1
+        elif depth == 0 and masked.startswith(":=", position):
+            end = position
+            break
+    if end is None:
+        return None
+    statement = K1B_IDENT_RE.sub(lambda m: _last_component(m.group(1)), masked[:end])
+    statement = WHITESPACE_RE.sub(" ", statement).strip()
+    if len(statement) < MIN_STATEMENT_CHARS:
+        return None
+    return statement.encode("utf-8")
+
+
+def jaune_statement_index(root: pathlib.Path) -> Optional[Dict[bytes, List[str]]]:
+    source = root / JAUNE_SOURCE_REL
+    if not source.is_dir():
+        return None
+    statements: Dict[bytes, List[str]] = {}
+    for path in sorted(source.rglob("*.lean")):
+        rel = path.relative_to(root).as_posix()
+        try:
+            parsed = parse_lean_file(path.read_text(encoding="utf-8"), rel)
+        except (GateError, OSError, UnicodeError):
+            continue
+        for declaration in parsed.declarations:
+            key = statement_key(declaration)
+            if key is not None:
+                statements.setdefault(key, []).append(
+                    f"{rel}:{declaration.name}"
+                )
+    return statements
+
+
+def contract_owner(root: pathlib.Path) -> Dict[str, str]:
+    """Module path -> classification, from scripts/check-layering.py's table."""
+    spec = importlib.util.spec_from_file_location(
+        "blanc_layering_for_advisor", root / LAYERING_REL
+    )
+    if spec is None or spec.loader is None:
+        raise GateError(f"cannot load {LAYERING_REL}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    owner = module.classify()
+    return {
+        "Blanc.lean" if name == "Blanc" else "Blanc/" + name.replace(".", "/") + ".lean": category
+        for name, category in owner.items()
+        if name != "Main"
+    }
+
+
+def copy_advisor_findings(
+    root: pathlib.Path,
+    changed: Sequence[ChangedDeclaration],
+    index: SourceIndex,
+    owner: Optional[Dict[str, str]] = None,
+    jaune: Optional[Dict[bytes, List[str]]] = None,
+    jaune_loaded: bool = False,
+) -> Tuple[List[Finding], List[str]]:
+    notes: List[str] = []
+    candidates = [item for item in changed if substantive(item.declaration.normalized)]
+    new_theorems = [
+        item for item in changed
+        if item.is_new and item.declaration.kind in STATEMENT_KINDS
+    ]
+    statement_items = [item for item in changed if statement_key(item.declaration) is not None]
+    if not candidates and not new_theorems and not statement_items:
+        return [], notes
+    findings: List[Finding] = []
+    k1b = build_k1b_index(root, index)
+    for item in candidates:
+        declaration = item.declaration
+        key = k1b.by_declaration.get((declaration.file, declaration.name, declaration.ordinal))
+        if key is None:
+            continue
+        twins = [
+            other for other in k1b.keys.get(key, [])
+            if other.file != declaration.file and other.normalized != declaration.normalized
+        ]
+        if not twins:
+            continue
+        origins = ", ".join(f"{d.file}:{d.name}" for d in twins[:ADVISOR_ORIGIN_LIMIT])
+        more = f" (+{len(twins) - ADVISOR_ORIGIN_LIMIT} more)" if len(twins) > ADVISOR_ORIGIN_LIMIT else ""
+        findings.append(Finding(
+            kind="near-copy-twin", file=declaration.file, declaration=declaration.name,
+            line=declaration.start_line,
+            detail=(f"K1b rename-insensitive twin of {origins}{more}; state it once "
+                    "over the varying part and instantiate"),
+            recipe_id=None, suppressible=False,
+        ))
+    if not jaune_loaded:
+        jaune = jaune_statement_index(root)
+    if jaune is None:
+        notes.append(
+            f"jaune-restated advisor skipped: {JAUNE_SOURCE_REL.as_posix()} is not materialized"
+        )
+    else:
+        for item in statement_items:
+            declaration = item.declaration
+            matches = jaune.get(statement_key(declaration) or b"", [])
+            if matches:
+                findings.append(Finding(
+                    kind="jaune-restated", file=declaration.file,
+                    declaration=declaration.name, line=declaration.start_line,
+                    detail=("statement restates pinned Jaune "
+                            + ", ".join(matches[:ADVISOR_ORIGIN_LIMIT])
+                            + "; use the Jaune lemma"),
+                    recipe_id=None, suppressible=False,
+                ))
+    owner = owner if owner is not None else contract_owner(root)
+    contract_names: Dict[str, Set[str]] = {}
+    for item in new_theorems:
+        declaration = item.declaration
+        category = owner.get(declaration.file)
+        if category in (None, "shared", "root", "composition"):
+            continue
+        if category not in contract_names:
+            names: Set[str] = set()
+            for path, path_category in owner.items():
+                if path_category == category:
+                    names |= k1b.names_by_file.get(path, set())
+            contract_names[category] = names
+        text = declaration.normalized.decode("utf-8")
+        start = text.find("$DECL")
+        masked = _masked_fragment(text, declaration.file)
+        end = masked.find(":=", start)
+        if start < 0 or end < 0:
+            continue
+        mentioned = {
+            _last_component(m.group(1))
+            for m in K1B_IDENT_RE.finditer(masked[start + len("$DECL"):end])
+        }
+        if mentioned and not (mentioned & contract_names[category]):
+            findings.append(Finding(
+                kind="generic-in-contract", file=declaration.file,
+                declaration=declaration.name, line=declaration.start_line,
+                detail=(f"new theorem in a {category} module whose statement names nothing "
+                        f"{category} declares; it is generic-shaped, so its owner is the "
+                        "narrowest shared module below its consumers"),
+                recipe_id=None, suppressible=False,
+            ))
+    return findings, notes
+
+
 EXCEPTION_FIELDS = {
     "id", "file", "declaration", "recipe_id", "boundary", "rationale",
     "alternative_or_removal_trigger", "evidence", "owner", "expires",
@@ -1461,8 +1735,9 @@ def validate_duplication_exceptions(
 
 def evaluate_duplication(
     root: pathlib.Path, today: Optional[dt.date] = None,
+    index: Optional[SourceIndex] = None,
 ) -> DuplicationResult:
-    inventory = duplication_inventory(root)
+    inventory = duplication_inventory(root, index)
     baseline = load_duplication_baseline(root)
     findings, improvements = duplication_findings(inventory, baseline)
     exceptions = validate_duplication_exceptions(
@@ -1556,10 +1831,36 @@ def write_duplication_baseline(root: pathlib.Path) -> int:
     return 0
 
 
+def report_k1b(root: pathlib.Path, index: SourceIndex, list_families: bool) -> None:
+    """Print the report-only K1b census; never part of the K1 verdict."""
+    families = k1b_families(build_k1b_index(root, index))
+    sites = sum(len(members) for members in families)
+    restated = sum(
+        (len(members) - 1) * len(members[0].normalized.decode("utf-8").splitlines())
+        for members in families
+    )
+    files = len({member.file for members in families for member in members})
+    if list_families:
+        for members in families:
+            digest = hashlib.sha256(k1b_key(
+                members[0], index.parse_worktree(members[0].file) and
+                local_names(index.parse_worktree(members[0].file))
+            )).hexdigest()[:16]
+            print(f"  K1B {digest} x{len(members)}: " + ", ".join(
+                f"{member.file}:{member.start_line}:{member.name}" for member in members
+            ))
+    print(
+        f"K1b (report-only): {len(families)} cross-file rename-insensitive families, "
+        f"{sites} site(s) in {files} module(s), {restated} restated line(s) beyond K1"
+    )
+
+
 def run_duplication(root: pathlib.Path, list_families: bool = False) -> int:
-    result = evaluate_duplication(root)
+    index = SourceIndex(root)
+    result = evaluate_duplication(root, index=index)
     inventory = result.inventory
     baseline = result.baseline
+    report_k1b(root, index, list_families)
     print(
         f"duplication scan: {inventory.modules} production module(s), "
         f"{inventory.declarations} declaration(s), "
@@ -2326,6 +2627,121 @@ def mutual_scope_self_test() -> None:
     print("OK — proof recipe mutual parser: 3 exact-name/span/digest and 2 malformed-scope controls passed")
 
 
+COPY_ADVISOR_CONTROL_COUNT = 7
+
+
+def copy_advisor_self_test() -> int:
+    """S3/K1b controls on a disposable fixture tree; returns the control count."""
+    def body(world: str, name: str, cert: str) -> str:
+        return (
+            f"theorem {name} (n : Nat) (h : n = {world}) :\n"
+            f"    n + 0 = {world} + {cert}.size * 0 := by\n"
+            "  rw [h]\n"
+            "  simp only [Nat.add_zero, Nat.mul_zero]\n"
+            "  -- the floor needs five substantive lines and 160 bytes\n"
+            "  exact rfl\n"
+        )
+
+    with tempfile.TemporaryDirectory(prefix="proof-recipe-copy-advisor-") as directory:
+        root = pathlib.Path(directory)
+        blanc = root / "Blanc"
+        blanc.mkdir()
+        jaune = root / JAUNE_SOURCE_REL
+        jaune.mkdir(parents=True)
+        files = {
+            "Blanc/Plain.lean": (
+                "namespace Blanc.Fix\ndef gatewayWorld : Nat := 1\n"
+                + body("gatewayWorld", "gateway_run", "Blanc.Lift.One.cert") + "end Blanc.Fix\n"
+            ),
+            "Blanc/Sentinel.lean": (
+                "namespace Blanc.Fix\ndef sentinelGatewayWorld : Nat := 1\n"
+                + body("sentinelGatewayWorld", "sentinelGateway_run", "Blanc.Lift.Two.cert")
+                + "end Blanc.Fix\n"
+            ),
+            "Blanc/Distinct.lean": (
+                "namespace Blanc.Fix\ndef otherWorld : Nat := 2\n"
+                + body("otherWorld", "other_run", "Blanc.Lift.One.cert").replace(
+                    "Nat.add_zero, Nat.mul_zero", "Nat.mul_zero, Nat.add_zero")
+                + "end Blanc.Fix\n"
+            ),
+            "Blanc/Contract.lean": (
+                "namespace Blanc.Fix\ndef contractWord : Nat := 7\n"
+                "theorem generic_shape (a b : Nat) (h : a = b) : a + 0 = b + 0 * a := by\n"
+                "  simp [h]\n"
+                "theorem contract_shape (a : Nat) (h : a = contractWord) : a + 0 = contractWord := by\n"
+                "  simp [h]\n"
+                "end Blanc.Fix\n"
+            ),
+        }
+        for rel, text in files.items():
+            (root / rel).write_text(text, encoding="utf-8")
+        (jaune / "Restated.lean").write_text(
+            "namespace Jaune\n"
+            "theorem generic_shape' (a b : Nat) (h : a = b) : a + 0 = b + 0 * a := by\n"
+            "  simp [h]\n"
+            "end Jaune\n",
+            encoding="utf-8",
+        )
+        owner = {rel: "shared" for rel in files}
+        owner["Blanc/Contract.lean"] = "Fixture"
+        index = SourceIndex(root)
+
+        def changed(rel: str) -> List[ChangedDeclaration]:
+            return [ChangedDeclaration(d, True) for d in index.parse_worktree(rel).declarations]
+
+        controls = 0
+        findings, _notes = copy_advisor_findings(
+            root, changed("Blanc/Sentinel.lean"), index, owner=owner)
+        twins = [f for f in findings if f.kind == "near-copy-twin"]
+        if len(twins) != 1 or "Blanc/Plain.lean:Blanc.Fix.gateway_run" not in twins[0].detail:
+            raise GateError(f"self-test: sibling-rename + qualified-ref twin not reported: {findings}")
+        if any(f.suppressible for f in findings):
+            raise GateError("self-test: copy-advisor finding is not advisory")
+        controls += 1  # renamed neighbour and Blanc.Lift.One/Two.cert both normalize away
+        families = k1b_families(build_k1b_index(root, index))
+        if [sorted(m.file for m in members) for members in families] != [
+            ["Blanc/Plain.lean", "Blanc/Sentinel.lean"]
+        ]:
+            raise GateError(f"self-test: K1b census wrong: {families}")
+        controls += 1  # the reordered simp list keeps Distinct.lean out
+        (root / "Blanc/Copy.lean").write_text(files["Blanc/Plain.lean"], encoding="utf-8")
+        index = SourceIndex(root)
+        families = k1b_families(build_k1b_index(root, index))
+        if any("Blanc/Copy.lean" in {m.file for m in members} and
+               len({m.normalized for m in members}) < 2 for members in families):
+            raise GateError("self-test: a byte-identical K1 pair was counted as K1b")
+        (root / "Blanc/Copy.lean").unlink()
+        index = SourceIndex(root)
+        controls += 1  # byte-identical copies stay K1's
+        findings, _ = copy_advisor_findings(
+            root, changed("Blanc/Distinct.lean"), index, owner=owner)
+        if findings:
+            raise GateError(f"self-test: distinct body reported: {findings}")
+        controls += 1  # removing the plant restores silence
+        findings, _ = copy_advisor_findings(
+            root, changed("Blanc/Contract.lean"), index, owner=owner)
+        restated = [f for f in findings if f.kind == "jaune-restated"]
+        generic = [f for f in findings if f.kind == "generic-in-contract"]
+        if [f.declaration for f in restated] != ["Blanc.Fix.generic_shape"]:
+            raise GateError(f"self-test: Jaune-restated statement not reported: {findings}")
+        controls += 1
+        if [f.declaration for f in generic] != ["Blanc.Fix.generic_shape"]:
+            raise GateError(f"self-test: generic-in-contract wrong: {findings}")
+        controls += 1  # contract_shape names contractWord and is not reported
+        import shutil as _shutil
+        _shutil.rmtree(root / ".lake")
+        findings, notes = copy_advisor_findings(
+            root, changed("Blanc/Contract.lean"), index, owner=owner)
+        if any(f.kind == "jaune-restated" for f in findings) or not any(
+            "not materialized" in note for note in notes
+        ):
+            raise GateError("self-test: absent Jaune package not reported as skipped")
+        controls += 1
+    if controls != COPY_ADVISOR_CONTROL_COUNT:
+        raise GateError("self-test: copy-advisor control count drifted")
+    return controls
+
+
 def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
     # The generator owns the byte-drift fixture. Invoking its self-test here
     # proves this gate's blocking dependency remains live without mutating the
@@ -2368,6 +2784,7 @@ def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
     parser_controls = parser_header_self_test()
     detector_self_test(sorted(registry.active_ids)[0])
     visibility_controls = visibility_detector_self_test()
+    advisor_controls = copy_advisor_self_test()
     controls = duplication_self_test()
     print(
         "OK — proof-recipe gate self-test: generated drift; parser headers "
@@ -2376,7 +2793,8 @@ def self_test(root: pathlib.Path, registry: RegistryInfo) -> None:
         "(imported copy, selector table, 5 exception controls) passed; "
         f"imported-copy visibility fallback {visibility_controls}/{visibility_controls} "
         "controls passed; "
-        f"duplication ratchet {controls}/{controls} controls passed"
+        f"duplication ratchet {controls}/{controls} controls passed; "
+        f"copy advisor and K1b {advisor_controls}/{advisor_controls} controls passed"
     )
 
 
@@ -2436,9 +2854,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     discovery_regression_check(root, registry)
     index = SourceIndex(root)
     changed = changed_declarations(root, args.base, index)
+    advisor_findings, advisor_notes = copy_advisor_findings(root, changed, index)
     findings = [
         *imported_copy_findings(changed, index),
         *selector_findings(changed, registry),
+        *advisor_findings,
     ]
     exceptions = validate_exceptions(
         root / EXCEPTIONS_REL, findings, set(registry.active_ids)
@@ -2457,9 +2877,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         finding.suppressible and finding.target not in exceptions for finding in findings
     )
     advisory = sum(not finding.suppressible for finding in findings)
+    for note in advisor_notes:
+        print(f"  NOTE {note}")
+    by_kind = {
+        kind: sum(finding.kind == kind for finding in advisor_findings)
+        for kind in ("near-copy-twin", "jaune-restated", "generic-in-contract")
+    }
     print(
         f"OK — proof-recipe gate (report-only): {len(changed)} changed declaration(s); "
-        f"{unexcepted} unexcepted copy finding(s), {advisory} planned advisory finding(s)"
+        f"{unexcepted} unexcepted copy finding(s), {advisory} planned advisory finding(s); "
+        f"copy advisor: {by_kind['near-copy-twin']} near-copy twin(s), "
+        f"{by_kind['jaune-restated']} Jaune-restated, "
+        f"{by_kind['generic-in-contract']} generic-in-contract"
     )
     return 0
 

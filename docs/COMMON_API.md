@@ -11,6 +11,25 @@ print their validated registered symbols. For ordinary Lean search, use
 `exact?`, `apply?`, `library_search`, and editor declaration search after this
 registry has identified the likely vocabulary.
 
+**Method-entry template (rule from 2026-11-01).** Most entries name
+declarations. An entry that instead prescribes a *method* (how to discharge a
+class of goals: a tactic route, a kernel decision, a chunking or batching
+scheme, a generator option) must carry four lines, so that a wrong method
+cannot stand unmeasured the way the hand-chunked Keccak recipe that produced
+37k lines did:
+
+```
+- Probe: <the smallest goal or module the method was tried on, by path>
+- Measured cost: <elaboration seconds and lines on that probe; kernel or heap if relevant; host>
+- Simplest alternative tried: <the plainer route, e.g. one `decide +kernel` or an existing lemma, and its measured cost or why it fails>
+- Date: <YYYY-MM-DD of the measurement>
+```
+
+A new or changed method entry without these lines is unmeasured guidance and
+should not be added; recipes in `scripts/proof-recipes.toml` follow the same
+rule in their `preferred_path` or `boundary` text. Existing entries gain the
+lines when next changed or relied on, not by a wholesale rewrite.
+
 ## Root: what are you trying to do?
 
 - Construct or analyze execution: go to [E — execution](#e--execution).

@@ -203,6 +203,7 @@ RCFILE=""
 PLANFILE=""
 MEASUREDFILE=""
 EXCLUDEFILE=""
+DRIFTFILE=""
 BASELINE_TMP=""
 cleanup() {
   gate_lock_release_all
@@ -211,6 +212,7 @@ cleanup() {
   if [ -n "$PLANFILE" ]; then rm -f "$PLANFILE"; fi
   if [ -n "$MEASUREDFILE" ]; then rm -f "$MEASUREDFILE"; fi
   if [ -n "$EXCLUDEFILE" ]; then rm -f "$EXCLUDEFILE"; fi
+  if [ -n "$DRIFTFILE" ]; then rm -f "$DRIFTFILE"; fi
   if [ -n "$BASELINE_TMP" ]; then rm -f "$BASELINE_TMP"; fi
   return 0
 }
@@ -732,6 +734,8 @@ NEW_ROWS=""
 NNEW=0
 EXCLUDEFILE="$(mktemp)"
 : > "$EXCLUDEFILE"
+DRIFTFILE="$(mktemp)"
+: > "$DRIFTFILE"
 
 for f in $FILES; do
   CUR_ROW="$(printf '%s' "$RESULTS" | awk -F'\t' -v p="$f" '$3==p {print; exit}')"
@@ -782,6 +786,7 @@ for f in $FILES; do
   case "$VERDICT" in
     DRIFT)
       printf '%s\n' "$f" >> "$EXCLUDEFILE"
+      printf '%s\n' "$f" >> "$DRIFTFILE"
       VIOLATIONS="${VIOLATIONS}ELAB — $f: ${CUR_TIME}s vs baseline ${BASE_TIME}s
 "
       ;;
@@ -832,6 +837,10 @@ fi
 
 if [ -n "$VIOLATIONS" ]; then
   printf '%s' "$VIOLATIONS"
+  # S10, report-only: each regressed file's module family total beside it, so a
+  # consolidation into an existing file is read against the family it shrank.
+  python3 "$SELECTOR" family-totals --report "$REPORT" --baseline "$BASELINE" \
+    --regressed "$DRIFTFILE" || true
   NVIO="$(printf '%s' "$VIOLATIONS" | grep -c .)"
   BASE_TOTAL="$(printf '%s' "$BASE_ROWS" | awk -F'\t' 'NF{s+=$2} END {printf "%.1f", s}')"
   for f in $NEW_ROWS; do printf '%s\n' "$f" >> "$EXCLUDEFILE"; done
