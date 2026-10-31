@@ -143,57 +143,16 @@ def row_source(name, raw):
     t += f'def {name}Tx : Tx := {tx}\n\n'
     t += f'/-- Equality to the entire original frozen signed literal, including its first byte. -/\n'
     t += f'theorem {name}_literal : {name}Signed = {lit(raw)} := by\n  decide +kernel\n\n'
-    t += f'theorem {name}_payload_length : {name}Payload.length = {len(payload)} := by\n  decide +kernel\n\n'
-    t += f'theorem {name}_signed_length : {name}Signed.length = {total} := by\n  decide +kernel\n\n'
-    t += f'/-- Nine actual Jaune field-parser steps, with full ordered consumption. -/\n'
-    t += f'theorem {name}_payload_parse (k : Nat) :\n    Bytes.toBLTs? (k + 9) {name}Payload = some {name}Fields := by\n'
-    t += f'  unfold {name}Payload {name}Fields\n  simp only [List.append_assoc, List.cons_append, List.nil_append]\n'
-    for j,f in enumerate(fs):
-        t += '  apply RlpConcrete.parse_cons\n  · '
-        last = j == 8
-        if len(f) == 0:
-            proof = 'RlpConcrete.decode_empty_bytes _ _'
-        elif len(f) == 1 and f[0] <128:
-            proof = 'RlpConcrete.decode_byte _ _ _ (by decide +kernel)'
-        elif len(f)<56:
-            proof = f'RlpConcrete.decode_bytes_short _ {len(f)} {name}F{j} '+('[]' if last else '_')+' (by decide +kernel) rfl'
-        elif len(f)<256:
-            proof = f'RlpConcrete.decode_bytes_long_one _ {len(f)} {name}F{j} '+('[]' if last else '_')+' (by decide +kernel)'
-        else:
-            proof = f'RlpConcrete.decode_bytes_long_two _ {len(f)//256} {len(f)%256} {name}F{j} '+('[]' if last else '_')+' (by decide +kernel)'
-        t += ('simpa only [List.append_nil, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd] using ' if last else 'exact ') + proof+'\n'
-    t += '  rw [Bytes.toBLTs?]\n\n'
+    t += f'/-- Strict Jaune decoding, evaluated in the kernel through Jaune\'s structural twin. -/\n'
     t += f'theorem {name}_parse : {name}Signed.toBLT? = some (.list {name}Fields) := by\n'
-    t += f'  have outer : Bytes.toBLTDiff? {total} {name}Signed = some (.list {name}Fields, []) := by\n'
-    if outer[0] == 0xf8:
-        lemma = f'RlpConcrete.decode_list_long_one {total-1} {outer[1]}'
-    else:
-        lemma = f'RlpConcrete.decode_list_long_two {total-1} {outer[1]} {outer[2]}'
-    t += f'    simpa only [{name}Signed, List.cons_append, List.nil_append, List.append_nil] using\n      {lemma} {name}Payload [] {name}Fields\n        (by rw [{name}_payload_length]; decide +kernel) ({name}_payload_parse {total-10})\n'
-    t += f'  unfold Bytes.toBLT?\n  rw [{name}_signed_length, outer]\n\n'
+    t += '  rw [Bytes.toBLT?_eq_toBLTS]; decide +kernel\n\n'
     t += f'/-- Strict Jaune legacy fields, rather than trusted normalized RPC fields. -/\n'
     t += f'theorem {name}_decode :\n    ({name}Signed.toBLT?.bind (fun blt => blt.toExTx.toOption)) = some {name}Tx := by\n  rw [{name}_parse]\n  decide +kernel\n\n'
     t += f'theorem {name}_blt : {name}Tx.toBLT = .list {name}Fields := by\n'
-    unfold = ', '.join(f'{name}F{j}' for j in range(9) if j !=5)
-    t += f'  norm_num only [{name}Tx, {name}Fields, {unfold}, Tx.toBLT, Nat.toBytes, Nat.toBytes.aux, trimZero, UInt64.toNat_ofNat, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toUInt8_eq, UInt8.reduceOfNat, List.dropWhile_cons, Bool.false_eq_true, ↓reduceIte, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, true_and, and_true]\n'
-    t += '  decide +kernel\n'
-    t += '\n'
-    for j,f in enumerate(fs):
-        prefix = rlp_prefix(f)
-        t += f'theorem {name}_encode{j} : (BLT.bytes {name}F{j}).toBytes = {lit(prefix)} ++ {name}F{j} := by\n'
-        if len(f) == 0:
-            t += f'  unfold {name}F{j}\n  rw [BLT.toBytes]\n  · decide +kernel\n  · intro b impossible\n    cases impossible\n\n'
-        elif len(f) == 1:
-            t += f'  unfold {name}F{j}\n  rw [BLT.toBytes]\n  decide +kernel\n\n'
-        else:
-            t += f'  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),\n    show {name}F{j}.length = {len(f)} from by decide +kernel]\n'
-            t += '  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]\n\n'
+    t += '  simp only [Tx.toBLT, Nat.toBytes_eq_toBytesS]; decide +kernel\n\n'
     t += f'/-- Canonical re-encoding excludes alternate RLP representations. -/\n'
     t += f'theorem {name}_canonical : {name}Tx.toBLT.toBytes = {name}Signed := by\n'
-    t += f'  have encoded : BLTs.toBytesJoin {name}Fields = {name}Payload := by\n'
-    t += f'    simp only [{name}Fields, BLTs.toBytesJoin,\n      '+', '.join(f'{name}_encode{j}' for j in range(9))+f', {name}Payload, List.append_nil, List.append_assoc, List.nil_append]\n'
-    t += f'  rw [{name}_blt, BLT.toBytes, BLTs.toBytes, encoded, {name}_payload_length]\n'
-    t += f'  norm_num only [{name}Signed, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]\n\n'
+    t += f'  rw [{name}_blt, BLT.toBytes_eq_toBytesS]; decide +kernel\n\n'
     return t
 
 
@@ -212,7 +171,7 @@ def generate(inputs):
         for group in range((count+7)//8):
             stem = f'HistoryAnchorBodyGenerated{anchor}{group:02d}'
             modules.append('Blanc.Lift.Usdc.'+stem)
-            text = header(['Blanc.ExecutionBodyTransactionCut'])
+            text = header(['Blanc.ExecutionBodyTransactionCut', 'Jaune.RlpEval'])
             for i in range(group*8, min(count,(group+1)*8)):
                 text += row_source(f'{anchor.lower()}{i:02d}', raw_hex(rows[i]))
             text += 'end Blanc.Lift.Usdc.HistoryAnchorBody\n'

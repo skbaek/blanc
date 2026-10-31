@@ -1,4 +1,5 @@
 import Blanc.ExecutionBodyTransactionCut
+import Jaune.RlpEval
 
 /-! Generated only by scripts/history-anchor-body-generate.py.
 Exact frozen packet bytes; historical observation adoption remains unresolved. -/
@@ -37,44 +38,9 @@ def c16Tx : Tx := { nonce := 49, gas := 250000, value := 0, data := c16F5, v := 
 theorem c16_literal : c16Signed = [0xf8, 0xaa, 0x31, 0x85, 0x01, 0x65, 0xa0, 0xbc, 0x00, 0x83, 0x03, 0xd0, 0x90, 0x94, 0x2a, 0x0c, 0x0d, 0xbe, 0xcc, 0x7e, 0x4d, 0x65, 0x8f, 0x48, 0xe0, 0x1e, 0x3f, 0xa3, 0x53, 0xf4, 0x40, 0x50, 0xc2, 0x08, 0x80, 0xb8, 0x44, 0x33, 0x8b, 0x5d, 0xea, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xd8, 0x95, 0x0f, 0xde, 0xaa, 0x10, 0x30, 0x4b, 0x7a, 0x7f, 0xd0, 0x3a, 0x2f, 0xc6, 0x6b, 0xc3, 0x9f, 0x3c, 0x71, 0x1a, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x01, 0x62, 0xf6, 0x28, 0xaa, 0x6a, 0xdd, 0xdf, 0x26, 0x8b, 0x25, 0xa0, 0x15, 0x9b, 0x1a, 0xb8, 0xfc, 0x92, 0x57, 0x9e, 0xbd, 0x2a, 0xff, 0x15, 0x7c, 0x48, 0x7d, 0xe9, 0x15, 0x95, 0x28, 0xd7, 0x9f, 0x6d, 0xdc, 0x8d, 0x63, 0x45, 0xb5, 0x4f, 0x50, 0xe8, 0x44, 0xbd, 0xa0, 0x74, 0x28, 0x22, 0x60, 0x49, 0x79, 0xaa, 0x54, 0xc5, 0xe2, 0x9c, 0x4b, 0xf4, 0xfd, 0xc0, 0xf1, 0x1e, 0xc3, 0xaa, 0x90, 0x88, 0x19, 0x3b, 0xe9, 0x05, 0x5a, 0x13, 0x31, 0x2f, 0x00, 0xd6, 0x50] := by
   decide +kernel
 
-theorem c16_payload_length : c16Payload.length = 170 := by
-  decide +kernel
-
-theorem c16_signed_length : c16Signed.length = 172 := by
-  decide +kernel
-
-/-- Nine actual Jaune field-parser steps, with full ordered consumption. -/
-theorem c16_payload_parse (k : Nat) :
-    Bytes.toBLTs? (k + 9) c16Payload = some c16Fields := by
-  unfold c16Payload c16Fields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 5 c16F1 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 3 c16F2 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 c16F3 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_long_one _ 68 c16F5 _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 32 c16F7 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd] using RlpConcrete.decode_bytes_short _ 32 c16F8 [] (by decide +kernel) rfl
-  rw [Bytes.toBLTs?]
-
+/-- Strict Jaune decoding, evaluated in the kernel through Jaune's structural twin. -/
 theorem c16_parse : c16Signed.toBLT? = some (.list c16Fields) := by
-  have outer : Bytes.toBLTDiff? 172 c16Signed = some (.list c16Fields, []) := by
-    simpa only [c16Signed, List.cons_append, List.nil_append, List.append_nil] using
-      RlpConcrete.decode_list_long_one 171 170 c16Payload [] c16Fields
-        (by rw [c16_payload_length]; decide +kernel) (c16_payload_parse 162)
-  unfold Bytes.toBLT?
-  rw [c16_signed_length, outer]
+  rw [Bytes.toBLT?_eq_toBLTS]; decide +kernel
 
 /-- Strict Jaune legacy fields, rather than trusted normalized RPC fields. -/
 theorem c16_decode :
@@ -83,63 +49,11 @@ theorem c16_decode :
   decide +kernel
 
 theorem c16_blt : c16Tx.toBLT = .list c16Fields := by
-  norm_num only [c16Tx, c16Fields, c16F0, c16F1, c16F2, c16F3, c16F4, c16F6, c16F7, c16F8, Tx.toBLT, Nat.toBytes, Nat.toBytes.aux, trimZero, UInt64.toNat_ofNat, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toUInt8_eq, UInt8.reduceOfNat, List.dropWhile_cons, Bool.false_eq_true, ↓reduceIte, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, true_and, and_true]
-  decide +kernel
-
-theorem c16_encode0 : (BLT.bytes c16F0).toBytes = [] ++ c16F0 := by
-  unfold c16F0
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c16_encode1 : (BLT.bytes c16F1).toBytes = [0x85] ++ c16F1 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c16F1.length = 5 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c16_encode2 : (BLT.bytes c16F2).toBytes = [0x83] ++ c16F2 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c16F2.length = 3 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c16_encode3 : (BLT.bytes c16F3).toBytes = [0x94] ++ c16F3 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c16F3.length = 20 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c16_encode4 : (BLT.bytes c16F4).toBytes = [0x80] ++ c16F4 := by
-  unfold c16F4
-  rw [BLT.toBytes]
-  · decide +kernel
-  · intro b impossible
-    cases impossible
-
-theorem c16_encode5 : (BLT.bytes c16F5).toBytes = [0xb8, 0x44] ++ c16F5 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c16F5.length = 68 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c16_encode6 : (BLT.bytes c16F6).toBytes = [] ++ c16F6 := by
-  unfold c16F6
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c16_encode7 : (BLT.bytes c16F7).toBytes = [0xa0] ++ c16F7 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c16F7.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c16_encode8 : (BLT.bytes c16F8).toBytes = [0xa0] ++ c16F8 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c16F8.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  simp only [Tx.toBLT, Nat.toBytes_eq_toBytesS]; decide +kernel
 
 /-- Canonical re-encoding excludes alternate RLP representations. -/
 theorem c16_canonical : c16Tx.toBLT.toBytes = c16Signed := by
-  have encoded : BLTs.toBytesJoin c16Fields = c16Payload := by
-    simp only [c16Fields, BLTs.toBytesJoin,
-      c16_encode0, c16_encode1, c16_encode2, c16_encode3, c16_encode4, c16_encode5, c16_encode6, c16_encode7, c16_encode8, c16Payload, List.append_nil, List.append_assoc, List.nil_append]
-  rw [c16_blt, BLT.toBytes, BLTs.toBytes, encoded, c16_payload_length]
-  norm_num only [c16Signed, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  rw [c16_blt, BLT.toBytes_eq_toBytesS]; decide +kernel
 
 def c17F0 : Bytes := [0x01, 0x10]
 
@@ -171,44 +85,9 @@ def c17Tx : Tx := { nonce := 272, gas := 21000, value := 800000000000000000, dat
 theorem c17_literal : c17Signed = [0xf8, 0x6e, 0x82, 0x01, 0x10, 0x85, 0x01, 0x65, 0xa0, 0xbc, 0x00, 0x82, 0x52, 0x08, 0x94, 0xb4, 0x43, 0xdd, 0xb8, 0x93, 0x46, 0xf7, 0xd5, 0x76, 0xa2, 0xae, 0x01, 0x4a, 0xc9, 0x11, 0xaf, 0xe3, 0x93, 0x5e, 0xd0, 0x88, 0x0b, 0x1a, 0x2b, 0xc2, 0xec, 0x50, 0x00, 0x00, 0x80, 0x25, 0xa0, 0xc8, 0x5c, 0xf7, 0x53, 0x96, 0xdb, 0x2b, 0x62, 0x46, 0x97, 0x36, 0x6c, 0x51, 0x48, 0x43, 0xb3, 0x14, 0x6a, 0x8b, 0x95, 0xc0, 0x39, 0x9d, 0x26, 0x7d, 0x89, 0x62, 0x08, 0xba, 0x62, 0xe3, 0xb1, 0xa0, 0x72, 0x6e, 0x7f, 0xe9, 0x01, 0x2d, 0xa9, 0xab, 0x2c, 0x3b, 0xcd, 0x29, 0x95, 0x47, 0xb6, 0x8d, 0x63, 0x30, 0x00, 0xed, 0xeb, 0x5a, 0xf7, 0xcc, 0x6b, 0x92, 0x7b, 0xac, 0xd4, 0xc7, 0xec, 0xb6] := by
   decide +kernel
 
-theorem c17_payload_length : c17Payload.length = 110 := by
-  decide +kernel
-
-theorem c17_signed_length : c17Signed.length = 112 := by
-  decide +kernel
-
-/-- Nine actual Jaune field-parser steps, with full ordered consumption. -/
-theorem c17_payload_parse (k : Nat) :
-    Bytes.toBLTs? (k + 9) c17Payload = some c17Fields := by
-  unfold c17Payload c17Fields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 2 c17F0 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 5 c17F1 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 2 c17F2 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 c17F3 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 8 c17F4 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 32 c17F7 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd] using RlpConcrete.decode_bytes_short _ 32 c17F8 [] (by decide +kernel) rfl
-  rw [Bytes.toBLTs?]
-
+/-- Strict Jaune decoding, evaluated in the kernel through Jaune's structural twin. -/
 theorem c17_parse : c17Signed.toBLT? = some (.list c17Fields) := by
-  have outer : Bytes.toBLTDiff? 112 c17Signed = some (.list c17Fields, []) := by
-    simpa only [c17Signed, List.cons_append, List.nil_append, List.append_nil] using
-      RlpConcrete.decode_list_long_one 111 110 c17Payload [] c17Fields
-        (by rw [c17_payload_length]; decide +kernel) (c17_payload_parse 102)
-  unfold Bytes.toBLT?
-  rw [c17_signed_length, outer]
+  rw [Bytes.toBLT?_eq_toBLTS]; decide +kernel
 
 /-- Strict Jaune legacy fields, rather than trusted normalized RPC fields. -/
 theorem c17_decode :
@@ -217,63 +96,11 @@ theorem c17_decode :
   decide +kernel
 
 theorem c17_blt : c17Tx.toBLT = .list c17Fields := by
-  norm_num only [c17Tx, c17Fields, c17F0, c17F1, c17F2, c17F3, c17F4, c17F6, c17F7, c17F8, Tx.toBLT, Nat.toBytes, Nat.toBytes.aux, trimZero, UInt64.toNat_ofNat, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toUInt8_eq, UInt8.reduceOfNat, List.dropWhile_cons, Bool.false_eq_true, ↓reduceIte, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, true_and, and_true]
-  decide +kernel
-
-theorem c17_encode0 : (BLT.bytes c17F0).toBytes = [0x82] ++ c17F0 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c17F0.length = 2 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c17_encode1 : (BLT.bytes c17F1).toBytes = [0x85] ++ c17F1 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c17F1.length = 5 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c17_encode2 : (BLT.bytes c17F2).toBytes = [0x82] ++ c17F2 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c17F2.length = 2 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c17_encode3 : (BLT.bytes c17F3).toBytes = [0x94] ++ c17F3 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c17F3.length = 20 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c17_encode4 : (BLT.bytes c17F4).toBytes = [0x88] ++ c17F4 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c17F4.length = 8 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c17_encode5 : (BLT.bytes c17F5).toBytes = [0x80] ++ c17F5 := by
-  unfold c17F5
-  rw [BLT.toBytes]
-  · decide +kernel
-  · intro b impossible
-    cases impossible
-
-theorem c17_encode6 : (BLT.bytes c17F6).toBytes = [] ++ c17F6 := by
-  unfold c17F6
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c17_encode7 : (BLT.bytes c17F7).toBytes = [0xa0] ++ c17F7 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c17F7.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c17_encode8 : (BLT.bytes c17F8).toBytes = [0xa0] ++ c17F8 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c17F8.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  simp only [Tx.toBLT, Nat.toBytes_eq_toBytesS]; decide +kernel
 
 /-- Canonical re-encoding excludes alternate RLP representations. -/
 theorem c17_canonical : c17Tx.toBLT.toBytes = c17Signed := by
-  have encoded : BLTs.toBytesJoin c17Fields = c17Payload := by
-    simp only [c17Fields, BLTs.toBytesJoin,
-      c17_encode0, c17_encode1, c17_encode2, c17_encode3, c17_encode4, c17_encode5, c17_encode6, c17_encode7, c17_encode8, c17Payload, List.append_nil, List.append_assoc, List.nil_append]
-  rw [c17_blt, BLT.toBytes, BLTs.toBytes, encoded, c17_payload_length]
-  norm_num only [c17Signed, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  rw [c17_blt, BLT.toBytes_eq_toBytesS]; decide +kernel
 
 def c18F0 : Bytes := [0x03, 0xae, 0x11]
 
@@ -305,44 +132,9 @@ def c18Tx : Tx := { nonce := 241169, gas := 21000, value := 517448000000000000, 
 theorem c18_literal : c18Signed = [0xf8, 0x6f, 0x83, 0x03, 0xae, 0x11, 0x85, 0x01, 0x57, 0xa0, 0x4d, 0xaf, 0x82, 0x52, 0x08, 0x94, 0x15, 0xd5, 0x1f, 0x53, 0xcd, 0x6a, 0x88, 0xf2, 0x04, 0x5b, 0x4e, 0x4f, 0xd6, 0xd3, 0x17, 0xb3, 0x44, 0x67, 0x91, 0x12, 0x88, 0x07, 0x2e, 0x58, 0x36, 0xe5, 0xbc, 0x80, 0x00, 0x80, 0x25, 0xa0, 0x67, 0x24, 0x16, 0xd4, 0xbf, 0xb8, 0x0e, 0x7c, 0x30, 0x5b, 0xb3, 0xfa, 0x2e, 0xcb, 0xf3, 0xa2, 0x8b, 0xd0, 0xda, 0x5e, 0xa9, 0x9c, 0x82, 0x61, 0xee, 0xa2, 0xe5, 0xb7, 0x09, 0x46, 0xf4, 0xbd, 0xa0, 0x58, 0xf4, 0x10, 0x9d, 0xd0, 0xa4, 0x60, 0xfc, 0x53, 0xbb, 0xfa, 0x89, 0x6b, 0x77, 0x86, 0x00, 0x95, 0xc3, 0x00, 0x89, 0xee, 0xa0, 0x11, 0xcc, 0x7a, 0xf6, 0x35, 0x4c, 0xbd, 0xaf, 0x79, 0xe2] := by
   decide +kernel
 
-theorem c18_payload_length : c18Payload.length = 111 := by
-  decide +kernel
-
-theorem c18_signed_length : c18Signed.length = 113 := by
-  decide +kernel
-
-/-- Nine actual Jaune field-parser steps, with full ordered consumption. -/
-theorem c18_payload_parse (k : Nat) :
-    Bytes.toBLTs? (k + 9) c18Payload = some c18Fields := by
-  unfold c18Payload c18Fields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 3 c18F0 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 5 c18F1 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 2 c18F2 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 c18F3 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 8 c18F4 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 32 c18F7 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd] using RlpConcrete.decode_bytes_short _ 32 c18F8 [] (by decide +kernel) rfl
-  rw [Bytes.toBLTs?]
-
+/-- Strict Jaune decoding, evaluated in the kernel through Jaune's structural twin. -/
 theorem c18_parse : c18Signed.toBLT? = some (.list c18Fields) := by
-  have outer : Bytes.toBLTDiff? 113 c18Signed = some (.list c18Fields, []) := by
-    simpa only [c18Signed, List.cons_append, List.nil_append, List.append_nil] using
-      RlpConcrete.decode_list_long_one 112 111 c18Payload [] c18Fields
-        (by rw [c18_payload_length]; decide +kernel) (c18_payload_parse 103)
-  unfold Bytes.toBLT?
-  rw [c18_signed_length, outer]
+  rw [Bytes.toBLT?_eq_toBLTS]; decide +kernel
 
 /-- Strict Jaune legacy fields, rather than trusted normalized RPC fields. -/
 theorem c18_decode :
@@ -351,63 +143,11 @@ theorem c18_decode :
   decide +kernel
 
 theorem c18_blt : c18Tx.toBLT = .list c18Fields := by
-  norm_num only [c18Tx, c18Fields, c18F0, c18F1, c18F2, c18F3, c18F4, c18F6, c18F7, c18F8, Tx.toBLT, Nat.toBytes, Nat.toBytes.aux, trimZero, UInt64.toNat_ofNat, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toUInt8_eq, UInt8.reduceOfNat, List.dropWhile_cons, Bool.false_eq_true, ↓reduceIte, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, true_and, and_true]
-  decide +kernel
-
-theorem c18_encode0 : (BLT.bytes c18F0).toBytes = [0x83] ++ c18F0 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c18F0.length = 3 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c18_encode1 : (BLT.bytes c18F1).toBytes = [0x85] ++ c18F1 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c18F1.length = 5 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c18_encode2 : (BLT.bytes c18F2).toBytes = [0x82] ++ c18F2 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c18F2.length = 2 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c18_encode3 : (BLT.bytes c18F3).toBytes = [0x94] ++ c18F3 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c18F3.length = 20 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c18_encode4 : (BLT.bytes c18F4).toBytes = [0x88] ++ c18F4 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c18F4.length = 8 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c18_encode5 : (BLT.bytes c18F5).toBytes = [0x80] ++ c18F5 := by
-  unfold c18F5
-  rw [BLT.toBytes]
-  · decide +kernel
-  · intro b impossible
-    cases impossible
-
-theorem c18_encode6 : (BLT.bytes c18F6).toBytes = [] ++ c18F6 := by
-  unfold c18F6
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c18_encode7 : (BLT.bytes c18F7).toBytes = [0xa0] ++ c18F7 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c18F7.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c18_encode8 : (BLT.bytes c18F8).toBytes = [0xa0] ++ c18F8 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c18F8.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  simp only [Tx.toBLT, Nat.toBytes_eq_toBytesS]; decide +kernel
 
 /-- Canonical re-encoding excludes alternate RLP representations. -/
 theorem c18_canonical : c18Tx.toBLT.toBytes = c18Signed := by
-  have encoded : BLTs.toBytesJoin c18Fields = c18Payload := by
-    simp only [c18Fields, BLTs.toBytesJoin,
-      c18_encode0, c18_encode1, c18_encode2, c18_encode3, c18_encode4, c18_encode5, c18_encode6, c18_encode7, c18_encode8, c18Payload, List.append_nil, List.append_assoc, List.nil_append]
-  rw [c18_blt, BLT.toBytes, BLTs.toBytes, encoded, c18_payload_length]
-  norm_num only [c18Signed, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  rw [c18_blt, BLT.toBytes_eq_toBytesS]; decide +kernel
 
 def c19F0 : Bytes := [0x16, 0xf8]
 
@@ -439,44 +179,9 @@ def c19Tx : Tx := { nonce := 5880, gas := 160000, value := 0, data := c19F5, v :
 theorem c19_literal : c19Signed = [0xf8, 0x8b, 0x82, 0x16, 0xf8, 0x85, 0x01, 0x2f, 0xfb, 0xd3, 0x64, 0x83, 0x02, 0x71, 0x00, 0x94, 0x8d, 0x12, 0xa1, 0x97, 0xcb, 0x00, 0xd4, 0x74, 0x7a, 0x1f, 0xe0, 0x33, 0x95, 0x09, 0x5c, 0xe2, 0xa5, 0xcc, 0x68, 0x19, 0x80, 0xa4, 0x2e, 0x1a, 0x7d, 0x4d, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1c, 0xa0, 0x97, 0x4c, 0x3a, 0x13, 0x98, 0x03, 0x18, 0x36, 0x5f, 0xcf, 0x2c, 0xbe, 0x91, 0x53, 0x1e, 0x05, 0xa0, 0x7b, 0x47, 0xf1, 0xed, 0x7f, 0x93, 0xce, 0x13, 0x2f, 0x64, 0xd8, 0x68, 0x39, 0x92, 0x1b, 0xa0, 0x25, 0x8d, 0x1f, 0xda, 0x1f, 0x39, 0xce, 0x6a, 0x6b, 0xcf, 0x00, 0x67, 0x40, 0xa7, 0x8c, 0x6c, 0x0c, 0x42, 0x4e, 0x79, 0x78, 0x45, 0x78, 0x97, 0xbe, 0xf4, 0xf4, 0x2f, 0xd9, 0x32, 0x86, 0x59] := by
   decide +kernel
 
-theorem c19_payload_length : c19Payload.length = 139 := by
-  decide +kernel
-
-theorem c19_signed_length : c19Signed.length = 141 := by
-  decide +kernel
-
-/-- Nine actual Jaune field-parser steps, with full ordered consumption. -/
-theorem c19_payload_parse (k : Nat) :
-    Bytes.toBLTs? (k + 9) c19Payload = some c19Fields := by
-  unfold c19Payload c19Fields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 2 c19F0 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 5 c19F1 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 3 c19F2 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 c19F3 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 36 c19F5 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 32 c19F7 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd] using RlpConcrete.decode_bytes_short _ 32 c19F8 [] (by decide +kernel) rfl
-  rw [Bytes.toBLTs?]
-
+/-- Strict Jaune decoding, evaluated in the kernel through Jaune's structural twin. -/
 theorem c19_parse : c19Signed.toBLT? = some (.list c19Fields) := by
-  have outer : Bytes.toBLTDiff? 141 c19Signed = some (.list c19Fields, []) := by
-    simpa only [c19Signed, List.cons_append, List.nil_append, List.append_nil] using
-      RlpConcrete.decode_list_long_one 140 139 c19Payload [] c19Fields
-        (by rw [c19_payload_length]; decide +kernel) (c19_payload_parse 131)
-  unfold Bytes.toBLT?
-  rw [c19_signed_length, outer]
+  rw [Bytes.toBLT?_eq_toBLTS]; decide +kernel
 
 /-- Strict Jaune legacy fields, rather than trusted normalized RPC fields. -/
 theorem c19_decode :
@@ -485,63 +190,11 @@ theorem c19_decode :
   decide +kernel
 
 theorem c19_blt : c19Tx.toBLT = .list c19Fields := by
-  norm_num only [c19Tx, c19Fields, c19F0, c19F1, c19F2, c19F3, c19F4, c19F6, c19F7, c19F8, Tx.toBLT, Nat.toBytes, Nat.toBytes.aux, trimZero, UInt64.toNat_ofNat, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toUInt8_eq, UInt8.reduceOfNat, List.dropWhile_cons, Bool.false_eq_true, ↓reduceIte, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, true_and, and_true]
-  decide +kernel
-
-theorem c19_encode0 : (BLT.bytes c19F0).toBytes = [0x82] ++ c19F0 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c19F0.length = 2 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c19_encode1 : (BLT.bytes c19F1).toBytes = [0x85] ++ c19F1 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c19F1.length = 5 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c19_encode2 : (BLT.bytes c19F2).toBytes = [0x83] ++ c19F2 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c19F2.length = 3 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c19_encode3 : (BLT.bytes c19F3).toBytes = [0x94] ++ c19F3 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c19F3.length = 20 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c19_encode4 : (BLT.bytes c19F4).toBytes = [0x80] ++ c19F4 := by
-  unfold c19F4
-  rw [BLT.toBytes]
-  · decide +kernel
-  · intro b impossible
-    cases impossible
-
-theorem c19_encode5 : (BLT.bytes c19F5).toBytes = [0xa4] ++ c19F5 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c19F5.length = 36 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c19_encode6 : (BLT.bytes c19F6).toBytes = [] ++ c19F6 := by
-  unfold c19F6
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c19_encode7 : (BLT.bytes c19F7).toBytes = [0xa0] ++ c19F7 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c19F7.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c19_encode8 : (BLT.bytes c19F8).toBytes = [0xa0] ++ c19F8 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c19F8.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  simp only [Tx.toBLT, Nat.toBytes_eq_toBytesS]; decide +kernel
 
 /-- Canonical re-encoding excludes alternate RLP representations. -/
 theorem c19_canonical : c19Tx.toBLT.toBytes = c19Signed := by
-  have encoded : BLTs.toBytesJoin c19Fields = c19Payload := by
-    simp only [c19Fields, BLTs.toBytesJoin,
-      c19_encode0, c19_encode1, c19_encode2, c19_encode3, c19_encode4, c19_encode5, c19_encode6, c19_encode7, c19_encode8, c19Payload, List.append_nil, List.append_assoc, List.nil_append]
-  rw [c19_blt, BLT.toBytes, BLTs.toBytes, encoded, c19_payload_length]
-  norm_num only [c19Signed, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  rw [c19_blt, BLT.toBytes_eq_toBytesS]; decide +kernel
 
 def c20F0 : Bytes := [0x5f, 0xd4]
 
@@ -573,44 +226,9 @@ def c20Tx : Tx := { nonce := 24532, gas := 55000, value := 0, data := c20F5, v :
 theorem c20_literal : c20Signed = [0xf8, 0xab, 0x82, 0x5f, 0xd4, 0x85, 0x01, 0x2a, 0x05, 0xf2, 0x00, 0x82, 0xd6, 0xd8, 0x94, 0xd1, 0xce, 0xee, 0xef, 0xa6, 0x8a, 0x6a, 0xf0, 0xa5, 0xf6, 0x04, 0x61, 0x32, 0xd9, 0x86, 0x06, 0x6c, 0x7f, 0x94, 0x26, 0x80, 0xb8, 0x44, 0x0d, 0x2c, 0xbe, 0x13, 0xcc, 0x62, 0xeb, 0xbc, 0x44, 0xc2, 0xe8, 0xeb, 0x0d, 0x65, 0xd6, 0x8b, 0x83, 0x1f, 0xf3, 0x86, 0xca, 0x30, 0xbb, 0x51, 0xf4, 0xfd, 0x0e, 0x46, 0x09, 0x30, 0xf3, 0x32, 0x71, 0x39, 0xe5, 0x48, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x1c, 0xa0, 0x26, 0x2b, 0x50, 0x84, 0x89, 0x8a, 0xd0, 0x82, 0x3a, 0x7e, 0x67, 0x00, 0x58, 0x1a, 0x21, 0xca, 0xd1, 0x55, 0x05, 0x9f, 0x94, 0xb9, 0xd7, 0x2b, 0x75, 0xa7, 0xf0, 0x14, 0x1d, 0x76, 0xe4, 0x17, 0xa0, 0x27, 0xee, 0x9b, 0x89, 0x81, 0xca, 0x66, 0x5f, 0x09, 0xf7, 0x54, 0x5b, 0x4b, 0x9c, 0x24, 0x9b, 0xa8, 0x10, 0x53, 0xc1, 0x49, 0x4a, 0xff, 0xdb, 0x05, 0xe9, 0x46, 0x13, 0x7e, 0xf2, 0x10, 0x2e] := by
   decide +kernel
 
-theorem c20_payload_length : c20Payload.length = 171 := by
-  decide +kernel
-
-theorem c20_signed_length : c20Signed.length = 173 := by
-  decide +kernel
-
-/-- Nine actual Jaune field-parser steps, with full ordered consumption. -/
-theorem c20_payload_parse (k : Nat) :
-    Bytes.toBLTs? (k + 9) c20Payload = some c20Fields := by
-  unfold c20Payload c20Fields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 2 c20F0 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 5 c20F1 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 2 c20F2 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 c20F3 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_long_one _ 68 c20F5 _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 32 c20F7 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd] using RlpConcrete.decode_bytes_short _ 32 c20F8 [] (by decide +kernel) rfl
-  rw [Bytes.toBLTs?]
-
+/-- Strict Jaune decoding, evaluated in the kernel through Jaune's structural twin. -/
 theorem c20_parse : c20Signed.toBLT? = some (.list c20Fields) := by
-  have outer : Bytes.toBLTDiff? 173 c20Signed = some (.list c20Fields, []) := by
-    simpa only [c20Signed, List.cons_append, List.nil_append, List.append_nil] using
-      RlpConcrete.decode_list_long_one 172 171 c20Payload [] c20Fields
-        (by rw [c20_payload_length]; decide +kernel) (c20_payload_parse 163)
-  unfold Bytes.toBLT?
-  rw [c20_signed_length, outer]
+  rw [Bytes.toBLT?_eq_toBLTS]; decide +kernel
 
 /-- Strict Jaune legacy fields, rather than trusted normalized RPC fields. -/
 theorem c20_decode :
@@ -619,63 +237,11 @@ theorem c20_decode :
   decide +kernel
 
 theorem c20_blt : c20Tx.toBLT = .list c20Fields := by
-  norm_num only [c20Tx, c20Fields, c20F0, c20F1, c20F2, c20F3, c20F4, c20F6, c20F7, c20F8, Tx.toBLT, Nat.toBytes, Nat.toBytes.aux, trimZero, UInt64.toNat_ofNat, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toUInt8_eq, UInt8.reduceOfNat, List.dropWhile_cons, Bool.false_eq_true, ↓reduceIte, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, true_and, and_true]
-  decide +kernel
-
-theorem c20_encode0 : (BLT.bytes c20F0).toBytes = [0x82] ++ c20F0 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c20F0.length = 2 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c20_encode1 : (BLT.bytes c20F1).toBytes = [0x85] ++ c20F1 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c20F1.length = 5 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c20_encode2 : (BLT.bytes c20F2).toBytes = [0x82] ++ c20F2 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c20F2.length = 2 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c20_encode3 : (BLT.bytes c20F3).toBytes = [0x94] ++ c20F3 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c20F3.length = 20 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c20_encode4 : (BLT.bytes c20F4).toBytes = [0x80] ++ c20F4 := by
-  unfold c20F4
-  rw [BLT.toBytes]
-  · decide +kernel
-  · intro b impossible
-    cases impossible
-
-theorem c20_encode5 : (BLT.bytes c20F5).toBytes = [0xb8, 0x44] ++ c20F5 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c20F5.length = 68 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c20_encode6 : (BLT.bytes c20F6).toBytes = [] ++ c20F6 := by
-  unfold c20F6
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c20_encode7 : (BLT.bytes c20F7).toBytes = [0xa0] ++ c20F7 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c20F7.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c20_encode8 : (BLT.bytes c20F8).toBytes = [0xa0] ++ c20F8 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c20F8.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  simp only [Tx.toBLT, Nat.toBytes_eq_toBytesS]; decide +kernel
 
 /-- Canonical re-encoding excludes alternate RLP representations. -/
 theorem c20_canonical : c20Tx.toBLT.toBytes = c20Signed := by
-  have encoded : BLTs.toBytesJoin c20Fields = c20Payload := by
-    simp only [c20Fields, BLTs.toBytesJoin,
-      c20_encode0, c20_encode1, c20_encode2, c20_encode3, c20_encode4, c20_encode5, c20_encode6, c20_encode7, c20_encode8, c20Payload, List.append_nil, List.append_assoc, List.nil_append]
-  rw [c20_blt, BLT.toBytes, BLTs.toBytes, encoded, c20_payload_length]
-  norm_num only [c20Signed, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  rw [c20_blt, BLT.toBytes_eq_toBytesS]; decide +kernel
 
 def c21F0 : Bytes := [0x17, 0xc3]
 
@@ -707,44 +273,9 @@ def c21Tx : Tx := { nonce := 6083, gas := 60000, value := 23000000000000000, dat
 theorem c21_literal : c21Signed = [0xf8, 0x90, 0x82, 0x17, 0xc3, 0x84, 0xfa, 0x56, 0xea, 0x00, 0x82, 0xea, 0x60, 0x94, 0x04, 0x79, 0x7c, 0x1a, 0xe8, 0x52, 0xa3, 0x16, 0x65, 0xd8, 0xe5, 0x12, 0xdd, 0xae, 0x33, 0xe6, 0x04, 0x4e, 0xf3, 0x9d, 0x87, 0x51, 0xb6, 0x60, 0xcd, 0xd5, 0x80, 0x00, 0xa4, 0x6b, 0xf0, 0xf4, 0xa1, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0a, 0x26, 0xa0, 0xb5, 0x1d, 0x9f, 0x94, 0x7a, 0x5f, 0xf9, 0x73, 0x23, 0x07, 0xc6, 0x76, 0x1e, 0xa8, 0x7b, 0xea, 0xb2, 0xc1, 0xa3, 0x9f, 0xa1, 0x0a, 0x7b, 0xd6, 0xff, 0x94, 0xbb, 0x7c, 0xfb, 0x5b, 0x97, 0xc6, 0xa0, 0x17, 0x56, 0x9d, 0xfc, 0xfb, 0xb7, 0x16, 0xb5, 0x76, 0x8d, 0xbe, 0x74, 0xff, 0xa0, 0x1d, 0x22, 0x21, 0x82, 0x08, 0x1e, 0xba, 0xe6, 0x88, 0x27, 0xa2, 0xa4, 0x12, 0x7a, 0x6b, 0x2b, 0x6e, 0x30] := by
   decide +kernel
 
-theorem c21_payload_length : c21Payload.length = 144 := by
-  decide +kernel
-
-theorem c21_signed_length : c21Signed.length = 146 := by
-  decide +kernel
-
-/-- Nine actual Jaune field-parser steps, with full ordered consumption. -/
-theorem c21_payload_parse (k : Nat) :
-    Bytes.toBLTs? (k + 9) c21Payload = some c21Fields := by
-  unfold c21Payload c21Fields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 2 c21F0 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 4 c21F1 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 2 c21F2 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 c21F3 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 7 c21F4 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 36 c21F5 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 32 c21F7 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd] using RlpConcrete.decode_bytes_short _ 32 c21F8 [] (by decide +kernel) rfl
-  rw [Bytes.toBLTs?]
-
+/-- Strict Jaune decoding, evaluated in the kernel through Jaune's structural twin. -/
 theorem c21_parse : c21Signed.toBLT? = some (.list c21Fields) := by
-  have outer : Bytes.toBLTDiff? 146 c21Signed = some (.list c21Fields, []) := by
-    simpa only [c21Signed, List.cons_append, List.nil_append, List.append_nil] using
-      RlpConcrete.decode_list_long_one 145 144 c21Payload [] c21Fields
-        (by rw [c21_payload_length]; decide +kernel) (c21_payload_parse 136)
-  unfold Bytes.toBLT?
-  rw [c21_signed_length, outer]
+  rw [Bytes.toBLT?_eq_toBLTS]; decide +kernel
 
 /-- Strict Jaune legacy fields, rather than trusted normalized RPC fields. -/
 theorem c21_decode :
@@ -753,61 +284,11 @@ theorem c21_decode :
   decide +kernel
 
 theorem c21_blt : c21Tx.toBLT = .list c21Fields := by
-  norm_num only [c21Tx, c21Fields, c21F0, c21F1, c21F2, c21F3, c21F4, c21F6, c21F7, c21F8, Tx.toBLT, Nat.toBytes, Nat.toBytes.aux, trimZero, UInt64.toNat_ofNat, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toUInt8_eq, UInt8.reduceOfNat, List.dropWhile_cons, Bool.false_eq_true, ↓reduceIte, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, true_and, and_true]
-  decide +kernel
-
-theorem c21_encode0 : (BLT.bytes c21F0).toBytes = [0x82] ++ c21F0 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c21F0.length = 2 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c21_encode1 : (BLT.bytes c21F1).toBytes = [0x84] ++ c21F1 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c21F1.length = 4 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c21_encode2 : (BLT.bytes c21F2).toBytes = [0x82] ++ c21F2 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c21F2.length = 2 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c21_encode3 : (BLT.bytes c21F3).toBytes = [0x94] ++ c21F3 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c21F3.length = 20 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c21_encode4 : (BLT.bytes c21F4).toBytes = [0x87] ++ c21F4 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c21F4.length = 7 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c21_encode5 : (BLT.bytes c21F5).toBytes = [0xa4] ++ c21F5 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c21F5.length = 36 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c21_encode6 : (BLT.bytes c21F6).toBytes = [] ++ c21F6 := by
-  unfold c21F6
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c21_encode7 : (BLT.bytes c21F7).toBytes = [0xa0] ++ c21F7 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c21F7.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c21_encode8 : (BLT.bytes c21F8).toBytes = [0xa0] ++ c21F8 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c21F8.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  simp only [Tx.toBLT, Nat.toBytes_eq_toBytesS]; decide +kernel
 
 /-- Canonical re-encoding excludes alternate RLP representations. -/
 theorem c21_canonical : c21Tx.toBLT.toBytes = c21Signed := by
-  have encoded : BLTs.toBytesJoin c21Fields = c21Payload := by
-    simp only [c21Fields, BLTs.toBytesJoin,
-      c21_encode0, c21_encode1, c21_encode2, c21_encode3, c21_encode4, c21_encode5, c21_encode6, c21_encode7, c21_encode8, c21Payload, List.append_nil, List.append_assoc, List.nil_append]
-  rw [c21_blt, BLT.toBytes, BLTs.toBytes, encoded, c21_payload_length]
-  norm_num only [c21Signed, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  rw [c21_blt, BLT.toBytes_eq_toBytesS]; decide +kernel
 
 def c22F0 : Bytes := [0x14]
 
@@ -839,44 +320,9 @@ def c22Tx : Tx := { nonce := 20, gas := 6721975, value := 0, data := c22F5, v :=
 theorem c22_literal : c22Signed = [0xf9, 0x0b, 0x9b, 0x14, 0x84, 0xee, 0x6b, 0x28, 0x00, 0x83, 0x66, 0x91, 0xb7, 0x80, 0x80, 0xb9, 0x0b, 0x49, 0x60, 0x80, 0x60, 0x40, 0x52, 0x34, 0x80, 0x15, 0x61, 0x00, 0x10, 0x57, 0x60, 0x00, 0x80, 0xfd, 0x5b, 0x50, 0x60, 0x40, 0x51, 0x60, 0x20, 0x80, 0x61, 0x0b, 0x29, 0x83, 0x39, 0x81, 0x01, 0x80, 0x60, 0x40, 0x52, 0x81, 0x01, 0x90, 0x80, 0x80, 0x51, 0x90, 0x60, 0x20, 0x01, 0x90, 0x92, 0x91, 0x90, 0x50, 0x50, 0x50, 0x80, 0x80, 0x60, 0x40, 0x51, 0x80, 0x80, 0x7f, 0x6f, 0x72, 0x67, 0x2e, 0x7a, 0x65, 0x70, 0x70, 0x65, 0x6c, 0x69, 0x6e, 0x6f, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2e, 0x69, 0x6d, 0x70, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x61, 0x74, 0x81, 0x52, 0x60, 0x20, 0x01, 0x7f, 0x69, 0x6f, 0x6e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x50, 0x60, 0x23, 0x01, 0x90, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0x20, 0x60, 0x00, 0x19, 0x16, 0x7f, 0x70, 0x50, 0xc9, 0xe0, 0xf4, 0xca, 0x76, 0x9c, 0x69, 0xbd, 0x3a, 0x8e, 0xf7, 0x40, 0xbc, 0x37, 0x93, 0x4f, 0x8e, 0x2c, 0x03, 0x6e, 0x5a, 0x72, 0x3f, 0xd8, 0xee, 0x04, 0x8e, 0xd3, 0xf8, 0xc3, 0x60, 0x01, 0x02, 0x60, 0x00, 0x19, 0x16, 0x14, 0x15, 0x15, 0x61, 0x00, 0xc6, 0x57, 0xfe, 0x5b, 0x61, 0x00, 0xde, 0x81, 0x61, 0x01, 0x69, 0x64, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x64, 0x01, 0x00, 0x00, 0x00, 0x00, 0x90, 0x04, 0x56, 0x5b, 0x50, 0x60, 0x40, 0x51, 0x80, 0x80, 0x7f, 0x6f, 0x72, 0x67, 0x2e, 0x7a, 0x65, 0x70, 0x70, 0x65, 0x6c, 0x69, 0x6e, 0x6f, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x2e, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x50, 0x60, 0x1a, 0x01, 0x90, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0x20, 0x60, 0x00, 0x19, 0x16, 0x7f, 0x10, 0xd6, 0xa5, 0x4a, 0x47, 0x54, 0xc8, 0x86, 0x9d, 0x68, 0x86, 0xb5, 0xf5, 0xd7, 0xfb, 0xfa, 0x5b, 0x45, 0x22, 0x23, 0x7e, 0xa5, 0xc6, 0x0d, 0x11, 0xbc, 0x4e, 0x7a, 0x1f, 0xf9, 0x39, 0x0b, 0x60, 0x01, 0x02, 0x60, 0x00, 0x19, 0x16, 0x14, 0x15, 0x15, 0x61, 0x01, 0x4a, 0x57, 0xfe, 0x5b, 0x61, 0x01, 0x62, 0x33, 0x61, 0x02, 0x4e, 0x64, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x64, 0x01, 0x00, 0x00, 0x00, 0x00, 0x90, 0x04, 0x56, 0x5b, 0x50, 0x50, 0x61, 0x02, 0x90, 0x56, 0x5b, 0x60, 0x00, 0x61, 0x01, 0x87, 0x82, 0x61, 0x02, 0x7d, 0x64, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x61, 0x08, 0x4b, 0x17, 0x64, 0x01, 0x00, 0x00, 0x00, 0x00, 0x90, 0x04, 0x56, 0x5b, 0x15, 0x15, 0x61, 0x02, 0x21, 0x57, 0x60, 0x40, 0x51, 0x7f, 0x08, 0xc3, 0x79, 0xa0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x60, 0x04, 0x01, 0x80, 0x80, 0x60, 0x20, 0x01, 0x82, 0x81, 0x03, 0x82, 0x52, 0x60, 0x3b, 0x81, 0x52, 0x60, 0x20, 0x01, 0x80, 0x7f, 0x43, 0x61, 0x6e, 0x6e, 0x6f, 0x74, 0x20, 0x73, 0x65, 0x74, 0x20, 0x61, 0x20, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x20, 0x69, 0x6d, 0x70, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x81, 0x52, 0x60, 0x20, 0x01, 0x7f, 0x6e, 0x20, 0x74, 0x6f, 0x20, 0x61, 0x20, 0x6e, 0x6f, 0x6e, 0x2d, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x61, 0x63, 0x74, 0x20, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x50, 0x60, 0x40, 0x01, 0x91, 0x50, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0xfd, 0x5b, 0x7f, 0x70, 0x50, 0xc9, 0xe0, 0xf4, 0xca, 0x76, 0x9c, 0x69, 0xbd, 0x3a, 0x8e, 0xf7, 0x40, 0xbc, 0x37, 0x93, 0x4f, 0x8e, 0x2c, 0x03, 0x6e, 0x5a, 0x72, 0x3f, 0xd8, 0xee, 0x04, 0x8e, 0xd3, 0xf8, 0xc3, 0x60, 0x01, 0x02, 0x90, 0x50, 0x81, 0x81, 0x55, 0x50, 0x50, 0x56, 0x5b, 0x60, 0x00, 0x7f, 0x10, 0xd6, 0xa5, 0x4a, 0x47, 0x54, 0xc8, 0x86, 0x9d, 0x68, 0x86, 0xb5, 0xf5, 0xd7, 0xfb, 0xfa, 0x5b, 0x45, 0x22, 0x23, 0x7e, 0xa5, 0xc6, 0x0d, 0x11, 0xbc, 0x4e, 0x7a, 0x1f, 0xf9, 0x39, 0x0b, 0x60, 0x01, 0x02, 0x90, 0x50, 0x81, 0x81, 0x55, 0x50, 0x50, 0x56, 0x5b, 0x60, 0x00, 0x80, 0x82, 0x3b, 0x90, 0x50, 0x60, 0x00, 0x81, 0x11, 0x91, 0x50, 0x50, 0x91, 0x90, 0x50, 0x56, 0x5b, 0x61, 0x08, 0x8a, 0x80, 0x61, 0x02, 0x9f, 0x60, 0x00, 0x39, 0x60, 0x00, 0xf3, 0x00, 0x60, 0x80, 0x60, 0x40, 0x52, 0x60, 0x04, 0x36, 0x10, 0x61, 0x00, 0x6d, 0x57, 0x60, 0x00, 0x35, 0x7c, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x90, 0x04, 0x63, 0xff, 0xff, 0xff, 0xff, 0x16, 0x80, 0x63, 0x36, 0x59, 0xcf, 0xe6, 0x14, 0x61, 0x00, 0x77, 0x57, 0x80, 0x63, 0x4f, 0x1e, 0xf2, 0x86, 0x14, 0x61, 0x00, 0xba, 0x57, 0x80, 0x63, 0x5c, 0x60, 0xda, 0x1b, 0x14, 0x61, 0x01, 0x08, 0x57, 0x80, 0x63, 0x8f, 0x28, 0x39, 0x70, 0x14, 0x61, 0x01, 0x5f, 0x57, 0x80, 0x63, 0xf8, 0x51, 0xa4, 0x40, 0x14, 0x61, 0x01, 0xa2, 0x57, 0x5b, 0x61, 0x00, 0x75, 0x61, 0x01, 0xf9, 0x56, 0x5b, 0x00, 0x5b, 0x34, 0x80, 0x15, 0x61, 0x00, 0x83, 0x57, 0x60, 0x00, 0x80, 0xfd, 0x5b, 0x50, 0x61, 0x00, 0xb8, 0x60, 0x04, 0x80, 0x36, 0x03, 0x81, 0x01, 0x90, 0x80, 0x80, 0x35, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x90, 0x60, 0x20, 0x01, 0x90, 0x92, 0x91, 0x90, 0x50, 0x50, 0x50, 0x61, 0x02, 0x13, 0x56, 0x5b, 0x00, 0x5b, 0x61, 0x01, 0x06, 0x60, 0x04, 0x80, 0x36, 0x03, 0x81, 0x01, 0x90, 0x80, 0x80, 0x35, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x90, 0x60, 0x20, 0x01, 0x90, 0x92, 0x91, 0x90, 0x80, 0x35, 0x90, 0x60, 0x20, 0x01, 0x90, 0x82, 0x01, 0x80, 0x35, 0x90, 0x60, 0x20, 0x01, 0x91, 0x90, 0x91, 0x92, 0x93, 0x91, 0x92, 0x93, 0x90, 0x50, 0x50, 0x50, 0x61, 0x02, 0x68, 0x56, 0x5b, 0x00, 0x5b, 0x34, 0x80, 0x15, 0x61, 0x01, 0x14, 0x57, 0x60, 0x00, 0x80, 0xfd, 0x5b, 0x50, 0x61, 0x01, 0x1d, 0x61, 0x03, 0x08, 0x56, 0x5b, 0x60, 0x40, 0x51, 0x80, 0x82, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x81, 0x52, 0x60, 0x20, 0x01, 0x91, 0x50, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0xf3, 0x5b, 0x34, 0x80, 0x15, 0x61, 0x01, 0x6b, 0x57, 0x60, 0x00, 0x80, 0xfd, 0x5b, 0x50, 0x61, 0x01, 0xa0, 0x60, 0x04, 0x80, 0x36, 0x03, 0x81, 0x01, 0x90, 0x80, 0x80, 0x35, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x90, 0x60, 0x20, 0x01, 0x90, 0x92, 0x91, 0x90, 0x50, 0x50, 0x50, 0x61, 0x03, 0x60, 0x56, 0x5b, 0x00, 0x5b, 0x34, 0x80, 0x15, 0x61, 0x01, 0xae, 0x57, 0x60, 0x00, 0x80, 0xfd, 0x5b, 0x50, 0x61, 0x01, 0xb7, 0x61, 0x05, 0x1e, 0x56, 0x5b, 0x60, 0x40, 0x51, 0x80, 0x82, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x81, 0x52, 0x60, 0x20, 0x01, 0x91, 0x50, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0xf3, 0x5b, 0x61, 0x02, 0x01, 0x61, 0x05, 0x76, 0x56, 0x5b, 0x61, 0x02, 0x11, 0x61, 0x02, 0x0c, 0x61, 0x06, 0x51, 0x56, 0x5b, 0x61, 0x06, 0x82, 0x56, 0x5b, 0x56, 0x5b, 0x61, 0x02, 0x1b, 0x61, 0x06, 0xa8, 0x56, 0x5b, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x33, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x14, 0x15, 0x61, 0x02, 0x5c, 0x57, 0x61, 0x02, 0x57, 0x81, 0x61, 0x06, 0xd9, 0x56, 0x5b, 0x61, 0x02, 0x65, 0x56, 0x5b, 0x61, 0x02, 0x64, 0x61, 0x01, 0xf9, 0x56, 0x5b, 0x5b, 0x50, 0x56, 0x5b, 0x61, 0x02, 0x70, 0x61, 0x06, 0xa8, 0x56, 0x5b, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x33, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x14, 0x15, 0x61, 0x02, 0xfa, 0x57, 0x61, 0x02, 0xac, 0x83, 0x61, 0x06, 0xd9, 0x56, 0x5b, 0x30, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x34, 0x83, 0x83, 0x60, 0x40, 0x51, 0x80, 0x83, 0x83, 0x80, 0x82, 0x84, 0x37, 0x82, 0x01, 0x91, 0x50, 0x50, 0x92, 0x50, 0x50, 0x50, 0x60, 0x00, 0x60, 0x40, 0x51, 0x80, 0x83, 0x03, 0x81, 0x85, 0x87, 0x5a, 0xf1, 0x92, 0x50, 0x50, 0x50, 0x15, 0x15, 0x61, 0x02, 0xf5, 0x57, 0x60, 0x00, 0x80, 0xfd, 0x5b, 0x61, 0x03, 0x03, 0x56, 0x5b, 0x61, 0x03, 0x02, 0x61, 0x01, 0xf9, 0x56, 0x5b, 0x5b, 0x50, 0x50, 0x50, 0x56, 0x5b, 0x60, 0x00, 0x61, 0x03, 0x12, 0x61, 0x06, 0xa8, 0x56, 0x5b, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x33, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x14, 0x15, 0x61, 0x03, 0x54, 0x57, 0x61, 0x03, 0x4d, 0x61, 0x06, 0x51, 0x56, 0x5b, 0x90, 0x50, 0x61, 0x03, 0x5d, 0x56, 0x5b, 0x61, 0x03, 0x5c, 0x61, 0x01, 0xf9, 0x56, 0x5b, 0x5b, 0x90, 0x56, 0x5b, 0x61, 0x03, 0x68, 0x61, 0x06, 0xa8, 0x56, 0x5b, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x33, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x14, 0x15, 0x61, 0x05, 0x12, 0x57, 0x60, 0x00, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x81, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x14, 0x15, 0x15, 0x15, 0x61, 0x04, 0x66, 0x57, 0x60, 0x40, 0x51, 0x7f, 0x08, 0xc3, 0x79, 0xa0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x60, 0x04, 0x01, 0x80, 0x80, 0x60, 0x20, 0x01, 0x82, 0x81, 0x03, 0x82, 0x52, 0x60, 0x36, 0x81, 0x52, 0x60, 0x20, 0x01, 0x80, 0x7f, 0x43, 0x61, 0x6e, 0x6e, 0x6f, 0x74, 0x20, 0x63, 0x68, 0x61, 0x6e, 0x67, 0x65, 0x20, 0x74, 0x68, 0x65, 0x20, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x20, 0x6f, 0x66, 0x20, 0x61, 0x20, 0x70, 0x72, 0x6f, 0x81, 0x52, 0x60, 0x20, 0x01, 0x7f, 0x78, 0x79, 0x20, 0x74, 0x6f, 0x20, 0x74, 0x68, 0x65, 0x20, 0x7a, 0x65, 0x72, 0x6f, 0x20, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x50, 0x60, 0x40, 0x01, 0x91, 0x50, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0xfd, 0x5b, 0x7f, 0x7e, 0x64, 0x4d, 0x79, 0x42, 0x2f, 0x17, 0xc0, 0x1e, 0x48, 0x94, 0xb5, 0xf4, 0xf5, 0x88, 0xd3, 0x31, 0xeb, 0xfa, 0x28, 0x65, 0x3d, 0x42, 0xae, 0x83, 0x2d, 0xc5, 0x9e, 0x38, 0xc9, 0x79, 0x8f, 0x61, 0x04, 0x8f, 0x61, 0x06, 0xa8, 0x56, 0x5b, 0x82, 0x60, 0x40, 0x51, 0x80, 0x83, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x81, 0x52, 0x60, 0x20, 0x01, 0x82, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x81, 0x52, 0x60, 0x20, 0x01, 0x92, 0x50, 0x50, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0xa1, 0x61, 0x05, 0x0d, 0x81, 0x61, 0x07, 0x48, 0x56, 0x5b, 0x61, 0x05, 0x1b, 0x56, 0x5b, 0x61, 0x05, 0x1a, 0x61, 0x01, 0xf9, 0x56, 0x5b, 0x5b, 0x50, 0x56, 0x5b, 0x60, 0x00, 0x61, 0x05, 0x28, 0x61, 0x06, 0xa8, 0x56, 0x5b, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x33, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x14, 0x15, 0x61, 0x05, 0x6a, 0x57, 0x61, 0x05, 0x63, 0x61, 0x06, 0xa8, 0x56, 0x5b, 0x90, 0x50, 0x61, 0x05, 0x73, 0x56, 0x5b, 0x61, 0x05, 0x72, 0x61, 0x01, 0xf9, 0x56, 0x5b, 0x5b, 0x90, 0x56, 0x5b, 0x61, 0x05, 0x7e, 0x61, 0x06, 0xa8, 0x56, 0x5b, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x33, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x14, 0x15, 0x15, 0x15, 0x61, 0x06, 0x47, 0x57, 0x60, 0x40, 0x51, 0x7f, 0x08, 0xc3, 0x79, 0xa0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x60, 0x04, 0x01, 0x80, 0x80, 0x60, 0x20, 0x01, 0x82, 0x81, 0x03, 0x82, 0x52, 0x60, 0x32, 0x81, 0x52, 0x60, 0x20, 0x01, 0x80, 0x7f, 0x43, 0x61, 0x6e, 0x6e, 0x6f, 0x74, 0x20, 0x63, 0x61, 0x6c, 0x6c, 0x20, 0x66, 0x61, 0x6c, 0x6c, 0x62, 0x61, 0x63, 0x6b, 0x20, 0x66, 0x75, 0x6e, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x20, 0x66, 0x72, 0x81, 0x52, 0x60, 0x20, 0x01, 0x7f, 0x6f, 0x6d, 0x20, 0x74, 0x68, 0x65, 0x20, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x20, 0x61, 0x64, 0x6d, 0x69, 0x6e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x50, 0x60, 0x40, 0x01, 0x91, 0x50, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0xfd, 0x5b, 0x61, 0x06, 0x4f, 0x61, 0x07, 0x77, 0x56, 0x5b, 0x56, 0x5b, 0x60, 0x00, 0x80, 0x7f, 0x70, 0x50, 0xc9, 0xe0, 0xf4, 0xca, 0x76, 0x9c, 0x69, 0xbd, 0x3a, 0x8e, 0xf7, 0x40, 0xbc, 0x37, 0x93, 0x4f, 0x8e, 0x2c, 0x03, 0x6e, 0x5a, 0x72, 0x3f, 0xd8, 0xee, 0x04, 0x8e, 0xd3, 0xf8, 0xc3, 0x60, 0x01, 0x02, 0x90, 0x50, 0x80, 0x54, 0x91, 0x50, 0x50, 0x90, 0x56, 0x5b, 0x36, 0x60, 0x00, 0x80, 0x37, 0x60, 0x00, 0x80, 0x36, 0x60, 0x00, 0x84, 0x5a, 0xf4, 0x3d, 0x60, 0x00, 0x80, 0x3e, 0x80, 0x60, 0x00, 0x81, 0x14, 0x61, 0x06, 0xa3, 0x57, 0x3d, 0x60, 0x00, 0xf3, 0x5b, 0x3d, 0x60, 0x00, 0xfd, 0x5b, 0x60, 0x00, 0x80, 0x7f, 0x10, 0xd6, 0xa5, 0x4a, 0x47, 0x54, 0xc8, 0x86, 0x9d, 0x68, 0x86, 0xb5, 0xf5, 0xd7, 0xfb, 0xfa, 0x5b, 0x45, 0x22, 0x23, 0x7e, 0xa5, 0xc6, 0x0d, 0x11, 0xbc, 0x4e, 0x7a, 0x1f, 0xf9, 0x39, 0x0b, 0x60, 0x01, 0x02, 0x90, 0x50, 0x80, 0x54, 0x91, 0x50, 0x50, 0x90, 0x56, 0x5b, 0x61, 0x06, 0xe2, 0x81, 0x61, 0x07, 0x79, 0x56, 0x5b, 0x7f, 0xbc, 0x7c, 0xd7, 0x5a, 0x20, 0xee, 0x27, 0xfd, 0x9a, 0xde, 0xba, 0xb3, 0x20, 0x41, 0xf7, 0x55, 0x21, 0x4d, 0xbc, 0x6b, 0xff, 0xa9, 0x0c, 0xc0, 0x22, 0x5b, 0x39, 0xda, 0x2e, 0x5c, 0x2d, 0x3b, 0x81, 0x60, 0x40, 0x51, 0x80, 0x82, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x73, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x16, 0x81, 0x52, 0x60, 0x20, 0x01, 0x91, 0x50, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0xa1, 0x50, 0x56, 0x5b, 0x60, 0x00, 0x7f, 0x10, 0xd6, 0xa5, 0x4a, 0x47, 0x54, 0xc8, 0x86, 0x9d, 0x68, 0x86, 0xb5, 0xf5, 0xd7, 0xfb, 0xfa, 0x5b, 0x45, 0x22, 0x23, 0x7e, 0xa5, 0xc6, 0x0d, 0x11, 0xbc, 0x4e, 0x7a, 0x1f, 0xf9, 0x39, 0x0b, 0x60, 0x01, 0x02, 0x90, 0x50, 0x81, 0x81, 0x55, 0x50, 0x50, 0x56, 0x5b, 0x56, 0x5b, 0x60, 0x00, 0x61, 0x07, 0x84, 0x82, 0x61, 0x08, 0x4b, 0x56, 0x5b, 0x15, 0x15, 0x61, 0x08, 0x1e, 0x57, 0x60, 0x40, 0x51, 0x7f, 0x08, 0xc3, 0x79, 0xa0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x60, 0x04, 0x01, 0x80, 0x80, 0x60, 0x20, 0x01, 0x82, 0x81, 0x03, 0x82, 0x52, 0x60, 0x3b, 0x81, 0x52, 0x60, 0x20, 0x01, 0x80, 0x7f, 0x43, 0x61, 0x6e, 0x6e, 0x6f, 0x74, 0x20, 0x73, 0x65, 0x74, 0x20, 0x61, 0x20, 0x70, 0x72, 0x6f, 0x78, 0x79, 0x20, 0x69, 0x6d, 0x70, 0x6c, 0x65, 0x6d, 0x65, 0x6e, 0x74, 0x61, 0x74, 0x69, 0x6f, 0x81, 0x52, 0x60, 0x20, 0x01, 0x7f, 0x6e, 0x20, 0x74, 0x6f, 0x20, 0x61, 0x20, 0x6e, 0x6f, 0x6e, 0x2d, 0x63, 0x6f, 0x6e, 0x74, 0x72, 0x61, 0x63, 0x74, 0x20, 0x61, 0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x00, 0x00, 0x00, 0x00, 0x00, 0x81, 0x52, 0x50, 0x60, 0x40, 0x01, 0x91, 0x50, 0x50, 0x60, 0x40, 0x51, 0x80, 0x91, 0x03, 0x90, 0xfd, 0x5b, 0x7f, 0x70, 0x50, 0xc9, 0xe0, 0xf4, 0xca, 0x76, 0x9c, 0x69, 0xbd, 0x3a, 0x8e, 0xf7, 0x40, 0xbc, 0x37, 0x93, 0x4f, 0x8e, 0x2c, 0x03, 0x6e, 0x5a, 0x72, 0x3f, 0xd8, 0xee, 0x04, 0x8e, 0xd3, 0xf8, 0xc3, 0x60, 0x01, 0x02, 0x90, 0x50, 0x81, 0x81, 0x55, 0x50, 0x50, 0x56, 0x5b, 0x60, 0x00, 0x80, 0x82, 0x3b, 0x90, 0x50, 0x60, 0x00, 0x81, 0x11, 0x91, 0x50, 0x50, 0x91, 0x90, 0x50, 0x56, 0x00, 0xa1, 0x65, 0x62, 0x7a, 0x7a, 0x72, 0x30, 0x58, 0x20, 0xa4, 0xa5, 0x47, 0xcf, 0xc7, 0x20, 0x2c, 0x5a, 0xca, 0xaa, 0xe7, 0x4d, 0x42, 0x8e, 0x98, 0x8b, 0xc6, 0x2a, 0xd5, 0x02, 0x4e, 0xb0, 0x16, 0x55, 0x32, 0xd3, 0xa8, 0xf9, 0x1d, 0xb4, 0xed, 0x24, 0x00, 0x29, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x08, 0x82, 0x47, 0x7e, 0x78, 0x95, 0xbd, 0xc5, 0xce, 0xa7, 0xcb, 0x15, 0x52, 0xed, 0x91, 0x4a, 0xb1, 0x57, 0xfe, 0x56, 0x25, 0xa0, 0x95, 0x84, 0x25, 0xfb, 0x4b, 0xcd, 0x71, 0xb4, 0x5d, 0x30, 0x23, 0x26, 0xa4, 0x2c, 0x0b, 0x25, 0x38, 0xc7, 0x26, 0x83, 0xe8, 0x75, 0xf2, 0xb8, 0xfe, 0x34, 0xa2, 0x4c, 0xf7, 0xb4, 0x89, 0x65, 0xa0, 0x66, 0xe7, 0x20, 0x98, 0xf5, 0xdd, 0x39, 0xec, 0x70, 0xe7, 0x1f, 0xfd, 0xb4, 0xc4, 0x46, 0xdf, 0xb8, 0x53, 0xa1, 0xc3, 0xbc, 0xb0, 0xc5, 0x05, 0xd8, 0x53, 0x11, 0xe7, 0x2c, 0xc3, 0xb4, 0xff] := by
   decide +kernel
 
-theorem c22_payload_length : c22Payload.length = 2971 := by
-  decide +kernel
-
-theorem c22_signed_length : c22Signed.length = 2974 := by
-  decide +kernel
-
-/-- Nine actual Jaune field-parser steps, with full ordered consumption. -/
-theorem c22_payload_parse (k : Nat) :
-    Bytes.toBLTs? (k + 9) c22Payload = some c22Fields := by
-  unfold c22Payload c22Fields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 4 c22F1 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 3 c22F2 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_long_two _ 11 73 c22F5 _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 32 c22F7 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd] using RlpConcrete.decode_bytes_short _ 32 c22F8 [] (by decide +kernel) rfl
-  rw [Bytes.toBLTs?]
-
+/-- Strict Jaune decoding, evaluated in the kernel through Jaune's structural twin. -/
 theorem c22_parse : c22Signed.toBLT? = some (.list c22Fields) := by
-  have outer : Bytes.toBLTDiff? 2974 c22Signed = some (.list c22Fields, []) := by
-    simpa only [c22Signed, List.cons_append, List.nil_append, List.append_nil] using
-      RlpConcrete.decode_list_long_two 2973 11 155 c22Payload [] c22Fields
-        (by rw [c22_payload_length]; decide +kernel) (c22_payload_parse 2964)
-  unfold Bytes.toBLT?
-  rw [c22_signed_length, outer]
+  rw [Bytes.toBLT?_eq_toBLTS]; decide +kernel
 
 /-- Strict Jaune legacy fields, rather than trusted normalized RPC fields. -/
 theorem c22_decode :
@@ -885,65 +331,11 @@ theorem c22_decode :
   decide +kernel
 
 theorem c22_blt : c22Tx.toBLT = .list c22Fields := by
-  norm_num only [c22Tx, c22Fields, c22F0, c22F1, c22F2, c22F3, c22F4, c22F6, c22F7, c22F8, Tx.toBLT, Nat.toBytes, Nat.toBytes.aux, trimZero, UInt64.toNat_ofNat, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toUInt8_eq, UInt8.reduceOfNat, List.dropWhile_cons, Bool.false_eq_true, ↓reduceIte, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, true_and, and_true]
-  decide +kernel
-
-theorem c22_encode0 : (BLT.bytes c22F0).toBytes = [] ++ c22F0 := by
-  unfold c22F0
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c22_encode1 : (BLT.bytes c22F1).toBytes = [0x84] ++ c22F1 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c22F1.length = 4 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c22_encode2 : (BLT.bytes c22F2).toBytes = [0x83] ++ c22F2 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c22F2.length = 3 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c22_encode3 : (BLT.bytes c22F3).toBytes = [0x80] ++ c22F3 := by
-  unfold c22F3
-  rw [BLT.toBytes]
-  · decide +kernel
-  · intro b impossible
-    cases impossible
-
-theorem c22_encode4 : (BLT.bytes c22F4).toBytes = [0x80] ++ c22F4 := by
-  unfold c22F4
-  rw [BLT.toBytes]
-  · decide +kernel
-  · intro b impossible
-    cases impossible
-
-theorem c22_encode5 : (BLT.bytes c22F5).toBytes = [0xb9, 0x0b, 0x49] ++ c22F5 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c22F5.length = 2889 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c22_encode6 : (BLT.bytes c22F6).toBytes = [] ++ c22F6 := by
-  unfold c22F6
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c22_encode7 : (BLT.bytes c22F7).toBytes = [0xa0] ++ c22F7 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c22F7.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c22_encode8 : (BLT.bytes c22F8).toBytes = [0xa0] ++ c22F8 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c22F8.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  simp only [Tx.toBLT, Nat.toBytes_eq_toBytesS]; decide +kernel
 
 /-- Canonical re-encoding excludes alternate RLP representations. -/
 theorem c22_canonical : c22Tx.toBLT.toBytes = c22Signed := by
-  have encoded : BLTs.toBytesJoin c22Fields = c22Payload := by
-    simp only [c22Fields, BLTs.toBytesJoin,
-      c22_encode0, c22_encode1, c22_encode2, c22_encode3, c22_encode4, c22_encode5, c22_encode6, c22_encode7, c22_encode8, c22Payload, List.append_nil, List.append_assoc, List.nil_append]
-  rw [c22_blt, BLT.toBytes, BLTs.toBytes, encoded, c22_payload_length]
-  norm_num only [c22Signed, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  rw [c22_blt, BLT.toBytes_eq_toBytesS]; decide +kernel
 
 def c23F0 : Bytes := [0xaf]
 
@@ -975,44 +367,9 @@ def c23Tx : Tx := { nonce := 175, gas := 250000, value := 0, data := c23F5, v :=
 theorem c23_literal : c23Signed = [0xf8, 0xa9, 0x81, 0xaf, 0x84, 0xee, 0x6b, 0x28, 0x00, 0x83, 0x03, 0xd0, 0x90, 0x94, 0x2a, 0x0c, 0x0d, 0xbe, 0xcc, 0x7e, 0x4d, 0x65, 0x8f, 0x48, 0xe0, 0x1e, 0x3f, 0xa3, 0x53, 0xf4, 0x40, 0x50, 0xc2, 0x08, 0x80, 0xb8, 0x44, 0x33, 0x8b, 0x5d, 0xea, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xfe, 0xc0, 0xcf, 0x7f, 0xe0, 0x78, 0xa5, 0x00, 0xab, 0xf1, 0x5f, 0x12, 0x84, 0x95, 0x8f, 0x22, 0x04, 0x9c, 0x2c, 0x7e, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x16, 0x9b, 0x09, 0x9a, 0xa3, 0xa9, 0xe4, 0x00, 0x00, 0x1c, 0xa0, 0xf8, 0xaf, 0x24, 0xa7, 0x6b, 0xb2, 0x28, 0x6a, 0xbe, 0x55, 0x3d, 0x88, 0x82, 0xf3, 0x5c, 0x84, 0x78, 0xf1, 0x58, 0xb7, 0x60, 0x6e, 0x75, 0x35, 0x9c, 0xe1, 0x14, 0xdb, 0x89, 0x8a, 0xfc, 0x49, 0x9f, 0x3e, 0x10, 0x83, 0xb0, 0x20, 0xcd, 0x1c, 0x70, 0x29, 0xe8, 0x51, 0x6a, 0x6a, 0xfc, 0xe7, 0xab, 0x75, 0x28, 0x55, 0x7b, 0x91, 0xe4, 0x9e, 0xd7, 0x6f, 0xb8, 0xf1, 0x8d, 0x89, 0xdc, 0xf1] := by
   decide +kernel
 
-theorem c23_payload_length : c23Payload.length = 169 := by
-  decide +kernel
-
-theorem c23_signed_length : c23Signed.length = 171 := by
-  decide +kernel
-
-/-- Nine actual Jaune field-parser steps, with full ordered consumption. -/
-theorem c23_payload_parse (k : Nat) :
-    Bytes.toBLTs? (k + 9) c23Payload = some c23Fields := by
-  unfold c23Payload c23Fields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 1 c23F0 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 4 c23F1 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 3 c23F2 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 c23F3 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_long_one _ 68 c23F5 _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 32 c23F7 _ (by decide +kernel) rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd] using RlpConcrete.decode_bytes_short _ 31 c23F8 [] (by decide +kernel) rfl
-  rw [Bytes.toBLTs?]
-
+/-- Strict Jaune decoding, evaluated in the kernel through Jaune's structural twin. -/
 theorem c23_parse : c23Signed.toBLT? = some (.list c23Fields) := by
-  have outer : Bytes.toBLTDiff? 171 c23Signed = some (.list c23Fields, []) := by
-    simpa only [c23Signed, List.cons_append, List.nil_append, List.append_nil] using
-      RlpConcrete.decode_list_long_one 170 169 c23Payload [] c23Fields
-        (by rw [c23_payload_length]; decide +kernel) (c23_payload_parse 161)
-  unfold Bytes.toBLT?
-  rw [c23_signed_length, outer]
+  rw [Bytes.toBLT?_eq_toBLTS]; decide +kernel
 
 /-- Strict Jaune legacy fields, rather than trusted normalized RPC fields. -/
 theorem c23_decode :
@@ -1021,62 +378,10 @@ theorem c23_decode :
   decide +kernel
 
 theorem c23_blt : c23Tx.toBLT = .list c23Fields := by
-  norm_num only [c23Tx, c23Fields, c23F0, c23F1, c23F2, c23F3, c23F4, c23F6, c23F7, c23F8, Tx.toBLT, Nat.toBytes, Nat.toBytes.aux, trimZero, UInt64.toNat_ofNat, Nat.reducePow, Nat.reduceMod, Nat.reduceDiv, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toUInt8_eq, UInt8.reduceOfNat, List.dropWhile_cons, Bool.false_eq_true, ↓reduceIte, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, true_and, and_true]
-  decide +kernel
-
-theorem c23_encode0 : (BLT.bytes c23F0).toBytes = [0x81] ++ c23F0 := by
-  unfold c23F0
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c23_encode1 : (BLT.bytes c23F1).toBytes = [0x84] ++ c23F1 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c23F1.length = 4 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c23_encode2 : (BLT.bytes c23F2).toBytes = [0x83] ++ c23F2 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c23F2.length = 3 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c23_encode3 : (BLT.bytes c23F3).toBytes = [0x94] ++ c23F3 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c23F3.length = 20 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c23_encode4 : (BLT.bytes c23F4).toBytes = [0x80] ++ c23F4 := by
-  unfold c23F4
-  rw [BLT.toBytes]
-  · decide +kernel
-  · intro b impossible
-    cases impossible
-
-theorem c23_encode5 : (BLT.bytes c23F5).toBytes = [0xb8, 0x44] ++ c23F5 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c23F5.length = 68 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c23_encode6 : (BLT.bytes c23F6).toBytes = [] ++ c23F6 := by
-  unfold c23F6
-  rw [BLT.toBytes]
-  decide +kernel
-
-theorem c23_encode7 : (BLT.bytes c23F7).toBytes = [0xa0] ++ c23F7 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c23F7.length = 32 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
-
-theorem c23_encode8 : (BLT.bytes c23F8).toBytes = [0x9f] ++ c23F8 := by
-  rw [RlpConcrete.encode_bytes_many _ (by decide +kernel),
-    show c23F8.length = 31 from by decide +kernel]
-  norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  simp only [Tx.toBLT, Nat.toBytes_eq_toBytesS]; decide +kernel
 
 /-- Canonical re-encoding excludes alternate RLP representations. -/
 theorem c23_canonical : c23Tx.toBLT.toBytes = c23Signed := by
-  have encoded : BLTs.toBytesJoin c23Fields = c23Payload := by
-    simp only [c23Fields, BLTs.toBytesJoin,
-      c23_encode0, c23_encode1, c23_encode2, c23_encode3, c23_encode4, c23_encode5, c23_encode6, c23_encode7, c23_encode8, c23Payload, List.append_nil, List.append_assoc, List.nil_append]
-  rw [c23_blt, BLT.toBytes, BLTs.toBytes, encoded, c23_payload_length]
-  norm_num only [c23Signed, Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq, UInt8.reduceOfNat, UInt8.reduceAdd, List.length_cons, List.length_nil, ↓reduceIte, List.cons_append, List.nil_append]
+  rw [c23_blt, BLT.toBytes_eq_toBytesS]; decide +kernel
 
 end Blanc.Lift.Usdc.HistoryAnchorBody

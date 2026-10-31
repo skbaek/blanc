@@ -31,23 +31,7 @@ theorem c22_signingEncoded :
   rw [fields]
   apply congrArg some
   apply congrArg Bytes.keccak
-  have joined : BLTs.toBytesJoin
-      [.bytes c22F0, .bytes c22F1, .bytes c22F2, .bytes c22F3,
-        .bytes c22F4, .bytes c22F5, .bytes [1], .bytes [], .bytes []] =
-      [0x14, 0x84, 0xee, 0x6b, 0x28, 0x00, 0x83, 0x66, 0x91, 0xb7,
-        0x80, 0x80, 0xb9, 0x0b, 0x49] ++ c22F5 ++ [0x01, 0x80, 0x80] := by
-    simp only [BLTs.toBytesJoin, c22_encode5, BLT.toBytes,
-      c22F0, c22F1, c22F2, c22F3, c22F4, List.length_cons, List.length_nil,
-      Nat.reduceLT, UInt8.reduceLT, ↓reduceIte, List.cons_append, List.nil_append,
-      List.append_nil]
-    rfl
-  rw [BLT.toBytes, BLTs.toBytes, joined]
-  have len : c22F5.length = 2889 := by decide +kernel
-  norm_num only [List.length_append, List.length_cons, List.length_nil, len,
-    Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one,
-    Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq,
-    UInt8.reduceOfNat, UInt8.reduceAdd, ↓reduceIte, List.cons_append,
-    List.nil_append, c22SigningPayload]
+  rw [BLT.toBytes_eq_toBytesS]; decide +kernel
 
 /-- Kernel-checked Keccak of the exact C transaction's EIP-155 payload. -/
 theorem c22_signingHash :
