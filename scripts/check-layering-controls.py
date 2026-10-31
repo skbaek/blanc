@@ -409,13 +409,36 @@ def shared_coverage_controls() -> None:
     with fixture() as raw:
         root = Path(raw)
         api = root / "docs" / "COMMON_API.md"
-        api.write_text(api.read_text(encoding="utf-8")
-                       + f"\n- Now documented after all: `{exempt_path}`.\n",
+        text = api.read_text(encoding="utf-8")
+        heading = "## C — compilation and deployment\n"
+        if text.count(heading) != 1:
+            fail("shared-coverage controls: need section C heading not found once")
+        api.write_text(text.replace(
+            heading, heading + f"\n- Now documented after all: `{exempt_path}`.\n"),
                        encoding="utf-8")
         must_fail(root, "stale-exemption mutation",
                   f"{exempt} is exempted from the shared-discovery obligation")
     with fixture() as raw:
         must_pass(Path(raw), "stale-exemption restoration")
+
+    # 4. One citation appended below every need branch, or fenced as code
+    #    inside one, does not make a shared module discoverable: no branch
+    #    leads to it (the tightening of 2026-11-01).
+    for label, placement in (
+        ("appended-tail", lambda text, cite: text + f"\n- Appended: {cite}.\n"),
+        ("fenced-code", lambda text, cite: text.replace(
+            "## C — compilation and deployment\n",
+            f"## C — compilation and deployment\n\n```\n{cite}\n```\n", 1)),
+    ):
+        with fixture() as raw:
+            root = Path(raw)
+            api = root / "docs" / "COMMON_API.md"
+            moved = api.read_text(encoding="utf-8").replace(subject, "Blanc.lean")
+            api.write_text(placement(moved, f"`{subject}`"), encoding="utf-8")
+            must_fail(root, f"{label} citation mutation",
+                      f"{subject} is classified SHARED in scripts/check-layering.py")
+    with fixture() as raw:
+        must_pass(Path(raw), "appended-tail/fenced-code citation restoration")
 
     # 3. Anti-vacuity for this check's own population: a registry that still
     #    cites a contract module but no shared one must fail here, not pass
@@ -546,9 +569,10 @@ def main() -> int:
         "and 3 architecture controls plus 1 category-agnostic control bite; "
         "5 composition-edge controls bite around a classified positive witness; "
         "4 discovery controls cover the missing and stale entry directions and "
-        "both empty-population escapes; 3 shared-coverage controls cover a "
+        "both empty-population escapes; 5 shared-coverage controls cover a "
         "recipe-free shared facility losing its only registry entry, an "
-        "exemption going stale by being cited, and the no-shared-citation escape"
+        "exemption going stale by being cited, a citation only in an appended "
+        "tail or a fenced code block, and the no-shared-citation escape"
     )
     return 0
 

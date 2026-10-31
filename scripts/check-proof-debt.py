@@ -6,6 +6,14 @@ ceiling. Exact active exceptions remain green. ``--write-baseline`` refreshes
 the observed inventory and lowers ceilings without admitting debt; a reviewed
 new nonambient finite ceiling is admitted only when its exact stable scope ID
 is also named with ``--admit-new-ceiling``.
+
+Scope of the scan: every ``Blanc/**/*.lean`` production module and every
+``scripts/**/*.lean`` gate control or evaluator. The ``scripts/`` population
+was added on 2026-11-01 (it held 19 scopes, among them a file-wide
+``maxHeartbeats 1000000``). Until the baseline's ``scan_root`` names
+``scripts`` (``--bootstrap-scripts-baseline``, a reviewed one-time
+grandfathering), those scopes are reported but not ratcheted, except that an
+unlimited (``0``) value there is already blocking.
 """
 
 from __future__ import annotations
@@ -33,6 +41,10 @@ DECL_MODIFIERS = {
     "private", "protected", "noncomputable", "unsafe", "partial",
 }
 BASELINE_REL = pathlib.Path("scripts/proof-debt-baseline.json")
+SCRIPTS_PREFIX = "scripts/"
+SCAN_ROOT_LEGACY = "Blanc"
+SCAN_ROOT_WITH_SCRIPTS = ["Blanc", "scripts"]
+SKIPPED_PARTS = {".lake", "__pycache__"}
 EXCEPTIONS_REL = pathlib.Path("scripts/proof-debt-exceptions.json")
 HASH_RE = re.compile(r"^[0-9a-fA-F]{7,40}$")
 DECIMAL_RE = re.compile(r"^[0-9]+$")
@@ -583,6 +595,13 @@ def scan_tree(root: pathlib.Path) -> List[Scope]:
     files = sorted(path for path in source_root.rglob("*.lean") if path.is_file())
     if not files:
         raise GateError(f"no production Lean files found below {source_root}")
+    scripts_root = root / "scripts"
+    if scripts_root.is_dir():
+        files.extend(sorted(
+            path for path in scripts_root.rglob("*.lean")
+            if path.is_file()
+            and not SKIPPED_PARTS.intersection(path.relative_to(root).parts)
+        ))
     scopes: List[Scope] = []
     for path in files:
         rel = path.relative_to(root).as_posix()
@@ -672,14 +691,22 @@ def load_baseline_text(text: str, where: str) -> Dict[str, BaselineEntry]:
         raise GateError(f"{where}: invalid JSON: {error}") from error
     if not isinstance(raw, dict) or set(raw) != {"schema_version", "scan_root", "entries"}:
         raise GateError(f"{where}: expected schema_version, scan_root, and entries")
-    if raw["schema_version"] != SCHEMA_VERSION or raw["scan_root"] != "Blanc":
+    if raw["schema_version"] != SCHEMA_VERSION or raw["scan_root"] not in (
+        SCAN_ROOT_LEGACY, SCAN_ROOT_WITH_SCRIPTS,
+    ):
         raise GateError(f"{where}: unsupported schema version or scan root")
+    covers_scripts = raw["scan_root"] == SCAN_ROOT_WITH_SCRIPTS
     if not isinstance(raw["entries"], list):
         raise GateError(f"{where}: entries must be a list")
     entries: Dict[str, BaselineEntry] = {}
     previous = ""
     for index, item in enumerate(raw["entries"]):
         entry = _entry_from_dict(item, f"{where}:entries[{index}]")
+        if entry.file.startswith(SCRIPTS_PREFIX) and not covers_scripts:
+            raise GateError(
+                f"{where}: entry {entry.scope_id} lies under scripts/ but the "
+                "baseline scan_root does not name scripts"
+            )
         if entry.scope_id in entries:
             raise GateError(f"{where}: duplicate baseline id {entry.scope_id}")
         if entry.scope_id <= previous:
@@ -687,6 +714,19 @@ def load_baseline_text(text: str, where: str) -> Dict[str, BaselineEntry]:
         previous = entry.scope_id
         entries[entry.scope_id] = entry
     return entries
+
+
+def baseline_covers_scripts_text(text: str) -> bool:
+    try:
+        return json.loads(text).get("scan_root") == SCAN_ROOT_WITH_SCRIPTS
+    except (json.JSONDecodeError, AttributeError):
+        return False
+
+
+def split_scripts(scopes: Sequence[Scope]) -> Tuple[List[Scope], List[Scope]]:
+    blanc = [scope for scope in scopes if not scope.file.startswith(SCRIPTS_PREFIX)]
+    scripts = [scope for scope in scopes if scope.file.startswith(SCRIPTS_PREFIX)]
+    return blanc, scripts
 
 
 def load_baseline(path: pathlib.Path) -> Dict[str, BaselineEntry]:
@@ -783,12 +823,17 @@ def baseline_document(
     old: Optional[Dict[str, BaselineEntry]],
     bootstrap: bool,
     admit_new: Sequence[str] = (),
+    scan_root: object = SCAN_ROOT_LEGACY,
+    grandfather_scripts: bool = False,
 ) -> dict:
     admitted = set(admit_new)
     entries = []
     for scope in sorted(scopes, key=lambda item: item.scope_id):
         prior = old.get(scope.scope_id) if old is not None else None
-        if bootstrap:
+        if bootstrap or (
+            grandfather_scripts and prior is None
+            and scope.file.startswith(SCRIPTS_PREFIX)
+        ):
             ceiling: Optional[int] = scope.value
         elif scope.scope_id in admitted:
             ceiling = scope.value
@@ -816,7 +861,7 @@ def baseline_document(
         entries.append(row)
     return {
         "schema_version": SCHEMA_VERSION,
-        "scan_root": "Blanc",
+        "scan_root": scan_root,
         "entries": entries,
     }
 
@@ -839,6 +884,7 @@ def write_json_atomic(path: pathlib.Path, document: dict) -> None:
 def validate_monotone_against_base(
     candidate: Dict[str, BaselineEntry],
     base: Dict[str, BaselineEntry],
+    base_covers_scripts: bool = True,
 ) -> None:
     def valid_admission(entry: BaselineEntry) -> bool:
         return (
@@ -851,6 +897,14 @@ def validate_monotone_against_base(
     failures = []
     for scope_id, entry in candidate.items():
         old = base.get(scope_id)
+        if old is None and not base_covers_scripts and entry.file.startswith(SCRIPTS_PREFIX):
+            # The one-time scripts/ grandfathering pins each control's
+            # current value, ambient ones included; nothing else.
+            if entry.ceiling is not None and (
+                entry.ceiling != entry.value or entry.value == 0
+            ):
+                failures.append(f"invalid scripts/ grandfathering for {scope_id}")
+            continue
         if old is None:
             if entry.ceiling is not None and not valid_admission(entry):
                 failures.append(
@@ -870,7 +924,9 @@ def validate_monotone_against_base(
         raise GateError("baseline is not downward-monotone:\n  " + "\n  ".join(failures))
 
 
-def baseline_from_git(root: pathlib.Path, revision: str) -> Optional[Dict[str, BaselineEntry]]:
+def baseline_from_git(
+    root: pathlib.Path, revision: str,
+) -> Optional[Tuple[Dict[str, BaselineEntry], bool]]:
     result = subprocess.run(
         ["git", "show", f"{revision}:{BASELINE_REL.as_posix()}"],
         cwd=str(root),
@@ -884,7 +940,10 @@ def baseline_from_git(root: pathlib.Path, revision: str) -> Optional[Dict[str, B
         if "does not exist" in result.stderr or "exists on disk, but not in" in result.stderr:
             return None
         raise GateError(f"cannot read baseline from {revision}: {result.stderr.strip()}")
-    return load_baseline_text(result.stdout, f"{revision}:{BASELINE_REL}")
+    return (
+        load_baseline_text(result.stdout, f"{revision}:{BASELINE_REL}"),
+        baseline_covers_scripts_text(result.stdout),
+    )
 
 
 EXCEPTION_FIELDS = {
@@ -1414,9 +1473,106 @@ def afterNamespace : Nat := 0
                 raise AssertionError("invalid cross-base promotion accepted")
         controls += 1
 
+    # scripts/ coverage (2026-11-01): reported, not ratcheted, under a legacy
+    # scan_root; unlimited already blocks; the one-time grandfathering pins
+    # current values and ratchets them like Blanc/ from then on.
+    with tempfile.TemporaryDirectory(prefix="proof-debt-scripts-") as temp:
+        root = pathlib.Path(temp)
+        (root / "Blanc").mkdir()
+        (root / "scripts").mkdir()
+        (root / "Blanc" / "Fixture.lean").write_text(
+            "set_option maxRecDepth 4096 in\ntheorem base : True := by trivial\n",
+            encoding="utf-8",
+        )
+        control_path = root / "scripts" / "Control.lean"
+        control_source = (
+            "set_option maxHeartbeats 1000000\n"
+            "set_option maxRecDepth 32768 in\ntheorem ctl : True := by trivial\n"
+        )
+        baseline_path = root / BASELINE_REL
+        _write_exception_file(root / EXCEPTIONS_REL, [])
+        blanc_only = baseline_document(
+            split_scripts(scan_tree(root))[0], None, bootstrap=True,
+        )
+
+        def run_gate(extra: Sequence[str] = ()) -> Tuple[str, Optional[str]]:
+            output = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(output):
+                    main(["--root", str(root), *extra])
+            except GateError as error:
+                return output.getvalue(), str(error)
+            return output.getvalue(), None
+
+        control_path.write_text(control_source, encoding="utf-8")
+        write_json_atomic(baseline_path, blanc_only)
+        output, error_text = run_gate()
+        assert error_text is None and output.count("REPORT-ONLY scripts/ scope") == 2
+        assert "2 scripts/ control scope(s) reported, not yet baselined" in output
+        controls += 1
+
+        control_path.write_text(control_source.replace("32768", "0"), encoding="utf-8")
+        output, error_text = run_gate()
+        assert error_text is not None and "1 unexcepted" in error_text
+        assert "FINDING unbounded-scripts:" in output
+        controls += 1
+
+        control_path.write_text(control_source, encoding="utf-8")
+        output, error_text = run_gate(["--bootstrap-scripts-baseline"])
+        assert error_text is None and "grandfathered 2 scripts/ scope(s)" in output
+        grandfathered_text = baseline_path.read_text(encoding="utf-8")
+        assert baseline_covers_scripts_text(grandfathered_text)
+        grandfathered = load_baseline(baseline_path)
+        assert all(
+            entry.ceiling == entry.value
+            for entry in grandfathered.values() if entry.file.startswith(SCRIPTS_PREFIX)
+        )
+        _output, error_text = run_gate(["--bootstrap-scripts-baseline"])
+        assert error_text is not None and "already covers scripts/" in error_text
+        controls += 1
+
+        control_path.write_text(control_source.replace("1000000", "2000000"), encoding="utf-8")
+        output, error_text = run_gate()
+        assert error_text is not None and "FINDING increase:" in output
+        control_path.write_text(
+            control_source + "set_option maxRecDepth 9000 in\ntheorem ctl2 : True := by trivial\n",
+            encoding="utf-8",
+        )
+        output, error_text = run_gate()
+        assert error_text is not None and "FINDING new:" in output
+        control_path.write_text(control_source, encoding="utf-8")
+        output, error_text = run_gate()
+        assert error_text is None and "REPORT-ONLY" not in output
+        controls += 1
+
+        legacy = load_baseline_text(json.dumps(blanc_only), "legacy")
+        validate_monotone_against_base(grandfathered, legacy, base_covers_scripts=False)
+        tampered = json.loads(grandfathered_text)
+        for row in tampered["entries"]:
+            if row["file"].startswith(SCRIPTS_PREFIX):
+                row["ceiling"] = row["value"] - 1
+        try:
+            validate_monotone_against_base(
+                load_baseline_text(json.dumps(tampered), "tampered"), legacy,
+                base_covers_scripts=False,
+            )
+        except GateError as error:
+            assert "scripts/ grandfathering" in str(error)
+        else:
+            raise AssertionError("tampered scripts/ grandfathering accepted")
+        smuggled = json.loads(grandfathered_text)
+        smuggled["scan_root"] = SCAN_ROOT_LEGACY
+        try:
+            load_baseline_text(json.dumps(smuggled), "smuggled")
+        except GateError as error:
+            assert "does not name scripts" in str(error)
+        else:
+            raise AssertionError("scripts/ entry accepted under a legacy scan_root")
+        controls += 1
+
     print(
         f"OK — proof-debt self-test: {controls}/{controls} parser, ratchet, "
-        "blocking, exception, admission, and cross-base controls passed"
+        "blocking, exception, admission, cross-base and scripts/-coverage controls passed"
     )
 
 
@@ -1439,6 +1595,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         "--bootstrap-baseline", action="store_true",
         help="one-time creation of the initial grandfathered baseline",
     )
+    parser.add_argument(
+        "--bootstrap-scripts-baseline", action="store_true",
+        help=(
+            "one-time reviewed grandfathering of every current scripts/ scope at "
+            "its value, extending scan_root to scripts (baseline growth)"
+        ),
+    )
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args(argv)
 
@@ -1447,14 +1610,24 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.self_test:
         self_test()
         return 0
-    if args.write_baseline and args.bootstrap_baseline:
-        parser.error("--write-baseline and --bootstrap-baseline are mutually exclusive")
+    if sum((args.write_baseline, args.bootstrap_baseline, args.bootstrap_scripts_baseline)) > 1:
+        parser.error(
+            "--write-baseline, --bootstrap-baseline and --bootstrap-scripts-baseline "
+            "are mutually exclusive"
+        )
 
     default_root = pathlib.Path(__file__).resolve().parent.parent
     root = (args.root or default_root).resolve()
     baseline_path = root / BASELINE_REL
     exceptions_path = root / EXCEPTIONS_REL
-    scopes = scan_tree(root)
+    all_scopes = scan_tree(root)
+    blanc_scopes, script_scopes = split_scripts(all_scopes)
+    covers_scripts = (
+        baseline_path.is_file()
+        and baseline_covers_scripts_text(baseline_path.read_text(encoding="utf-8"))
+    )
+    scopes = all_scopes if covers_scripts else blanc_scopes
+    scan_root: object = SCAN_ROOT_WITH_SCRIPTS if covers_scripts else SCAN_ROOT_LEGACY
     admitted_values: Dict[str, int] = {}
 
     if args.bootstrap_baseline:
@@ -1463,6 +1636,27 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         document = baseline_document(scopes, None, bootstrap=True)
         write_json_atomic(baseline_path, document)
         print(f"wrote initial grandfathered baseline: {len(scopes)} scopes")
+    elif args.bootstrap_scripts_baseline:
+        if covers_scripts:
+            raise GateError("refusing to re-bootstrap: the baseline already covers scripts/")
+        old = load_baseline(baseline_path)
+        pre_findings, pre_regressions = compare(blanc_scopes, old)
+        if pre_findings or pre_regressions:
+            raise GateError(
+                "refusing to grandfather scripts/ over a Blanc/ inventory that is not "
+                "green; fix or ratchet Blanc/ first"
+            )
+        document = baseline_document(
+            all_scopes, old, bootstrap=False,
+            scan_root=SCAN_ROOT_WITH_SCRIPTS, grandfather_scripts=True,
+        )
+        write_json_atomic(baseline_path, document)
+        covers_scripts = True
+        scopes = all_scopes
+        print(
+            f"grandfathered {len(script_scopes)} scripts/ scope(s) at their current "
+            "values; scan_root now names scripts"
+        )
     elif args.write_baseline:
         old = load_baseline(baseline_path)
         if args.admit_new_ceiling:
@@ -1482,6 +1676,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             old,
             bootstrap=False,
             admit_new=tuple(admitted_values),
+            scan_root=scan_root,
         )
         document_rows = {row["id"]: row for row in document["entries"]}
         for scope_id, value in admitted_values.items():
@@ -1498,11 +1693,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     if args.base:
         old_base = baseline_from_git(root, args.base)
         if old_base is not None:
-            validate_monotone_against_base(baseline, old_base)
+            validate_monotone_against_base(baseline, old_base[0], old_base[1])
     findings, regressions = compare(scopes, baseline)
     if regressions:
         raise GateError("baseline drift:\n  " + "\n  ".join(regressions))
-    exceptions = validate_exceptions(exceptions_path, findings, scopes)
+    if not covers_scripts:
+        # Not yet ratcheted, but an unlimited scripts/ scope is already a
+        # finding: the report-only phase may not admit unbounded work.
+        findings.extend(
+            Finding("unbounded-scripts", scope, None)
+            for scope in script_scopes if scope.value == 0
+        )
+    exceptions = validate_exceptions(exceptions_path, findings, all_scopes)
 
     heartbeat_count = sum(scope.option == "maxHeartbeats" for scope in scopes)
     recdepth_count = sum(scope.option == "maxRecDepth" for scope in scopes)
@@ -1513,6 +1715,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     )
     for scope_id, value in admitted_values.items():
         print(f"  ADMITTED: {scope_id} ceiling={value}")
+    if not covers_scripts:
+        for scope in script_scopes:
+            print(
+                f"  REPORT-ONLY scripts/ scope (not yet baselined): {scope.file}:"
+                f"{scope.line} {scope.declaration or '$ambient'} {scope.option}={scope.value}"
+            )
     for finding in findings:
         if finding.scope.scope_id in exceptions:
             print(
@@ -1533,9 +1741,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         raise GateError(
             f"{unexcepted} unexcepted new/increased ceiling finding(s)"
         )
+    scripts_note = (
+        f"; {len(script_scopes)} scripts/ control scope(s) reported, not yet baselined"
+        if not covers_scripts else ""
+    )
     print(
         f"OK — proof-debt: {len(scopes)} scopes inventoried; "
-        "zero unexcepted new/increased findings"
+        f"zero unexcepted new/increased findings{scripts_note}"
     )
     return 0
 

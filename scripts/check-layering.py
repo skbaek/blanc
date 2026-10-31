@@ -57,7 +57,12 @@ Six checks, all falsifiable, all exercised by negative controls:
      to that statement directly, not to whether someone also wrote a recipe.
 
      A shared module satisfies this check when `docs/COMMON_API.md` cites its
-     path. The only other way out is `DISCOVERY_EXEMPT` below, which names each
+     path inside the need-first tree: the Root section or a need section
+     (`## E — ...` through `## C — ...`), outside fenced code. A citation only
+     in the preamble, the closing workflow, or a tail appended below every
+     need branch does not count, because no branch leads to it (check 5's
+     missing-entry direction uses the same rule; its stale-entry direction
+     still reads every citation). The only other way out is `DISCOVERY_EXEMPT` below, which names each
      unreachable shared module together with the concrete reason it is not a
      facility an author could be told to find -- a compatibility re-export that
      declares nothing, the registry's own machinery, or a negative-control
@@ -2613,6 +2618,36 @@ PROOF_RECIPES = os.path.join("scripts", "proof-recipes.toml")
 CITED_MODULE = re.compile(r"`(Blanc/[A-Za-z0-9_/]+\.lean)`")
 
 
+# Check 6 (tightened 2026-11-01): a citation counts toward discovery only when
+# it sits inside the need-first tree -- the Root section or a need section
+# (`## E — execution`, `## I — ...`, ..., `## C — ...`) -- and outside a fenced
+# code block. A path mentioned only in the preamble, in the closing
+# common-library-first workflow, or in an appended tail below every need
+# branch is not reachable by following the branches, which is what the
+# registry promises; one citation appended at the end of the file used to
+# satisfy this check.
+NEED_SECTION = re.compile(r"^## (?:Root\b|[A-Z] — )")
+
+
+def branch_citations(api_text):
+    """Cited module paths that lie inside the need-first tree."""
+    cited = set()
+    in_branch = False
+    in_fence = False
+    for line in api_text.splitlines():
+        if line.startswith("```"):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        if line.startswith("## "):
+            in_branch = bool(NEED_SECTION.match(line))
+            continue
+        if in_branch:
+            cited.update(CITED_MODULE.findall(line))
+    return cited
+
+
 def module_name_of(relative_path):
     """`Blanc/Composition/X.lean` -> `Composition.X`, as the table spells it."""
     trimmed = relative_path[len("Blanc/"):-len(".lean")]
@@ -2679,7 +2714,8 @@ def shared_coverage_failures(owner, found, citations):
             continue
         failures.append(
             f"{path} is classified SHARED in scripts/check-layering.py but "
-            f"{COMMON_API} never cites it — a module the repository calls "
+            f"{COMMON_API} never cites it inside the need-first tree (Root or a "
+            f"need section, outside fenced code) — a module the repository calls "
             f"contract-neutral and reusable that the need-first registry cannot "
             f"reach; add a branch entry for it, or add a DISCOVERY_EXEMPT row "
             f"stating why it is not a facility an author could be told to find"
@@ -2728,6 +2764,7 @@ def discovery_failures(root, owner):
         return ([f"cannot read the proof-recipe registry {PROOF_RECIPES}: {exc}"], 0, 0)
 
     citations = set(CITED_MODULE.findall(api_text))
+    reachable = branch_citations(api_text)
     for cited in sorted(citations):
         if not os.path.isfile(os.path.join(root, cited)):
             failures.append(
@@ -2750,11 +2787,12 @@ def discovery_failures(root, owner):
         if owner.get(module_name_of(owner_module)) != "shared":
             continue
         shared_owned.append(recipe_id)
-        if owner_module not in citations:
+        if owner_module not in reachable:
             failures.append(
                 f"{owner_module} is a shared facility owned by active proof "
-                f"recipe {recipe_id!r} but {COMMON_API} never cites it — a "
-                f"reusable facility that the need-first registry cannot reach"
+                f"recipe {recipe_id!r} but {COMMON_API} never cites it inside "
+                f"the need-first tree (Root or a need section) — a reusable "
+                f"facility that the need-first registry cannot reach"
             )
 
     if not citations:
@@ -2859,7 +2897,7 @@ def main(argv):
     api_path = os.path.join(root, COMMON_API)
     try:
         with open(api_path, encoding="utf-8") as handle:
-            citations = set(CITED_MODULE.findall(handle.read()))
+            citations = branch_citations(handle.read())
     except OSError as exc:
         failures.append(f"cannot read the need-first registry {COMMON_API}: {exc}")
         citations = set()
