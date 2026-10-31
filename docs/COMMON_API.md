@@ -3815,8 +3815,8 @@ unfolding a concrete state tower. Examples include:
   `Devm.setMach_accessedStorageKeys`, and the other `setMach` projections.
 - `Devm.withOutput_state`, `Devm.withOutput_logs`,
   `Devm.withOutput_transientStorage`, and sibling projections.
-- `Devm.memWrite_gasLeft` in Jaune and `Devm.memWrite_memory` /
-  `Devm.memWrite_stack` in `Blanc/CommonProofs.lean`.
+- `Devm.memWrite_gasLeft`, `Devm.memWrite_memory` and `Devm.memWrite_stack`,
+  all in Jaune.
 
 - `Devm.creditBeneficiary_getCode` and `Devm.creditBeneficiary_delSets` in
   `Blanc/CommonProofs.lean` preserve code and the deletion sets under either
@@ -3870,16 +3870,17 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   and log silence of a successful `SLOAD`, including its cold access-list
   warming path.  Use these instead of widening the global `Ninst.Hinv`
   instance set: access metadata changes even though these projections do not.
-- `Devm.getStorVal_setStorVal_self` is persistent storage read-after-write.
+- `Devm.getStorVal_setStorVal_self` (Blanc) is persistent storage read-after-write;
+  Jaune states the same law as `Devm.setStorVal_getStorVal_self`.
 - Jaune's `Devm.setStorVal_getCode` carries account code across a persistent
   storage write, and Jaune's `Devm.setCode_getStor` storage across code
-  installation. `Devm.withRefundCounter_getStor`,
+  installation. Jaune's `Devm.withRefundCounter_getStor`,
   `Devm.withRefundCounter_getCode`, `Devm.withRefundCounter_getBal`, and
   `Devm.withRefundCounter_createdAccounts` cut through the refund-counter
   update of an SSTORE post; `Devm.setStorVal_createdAccounts` carries the
   created-account set across the storage write itself. Rewrite with these
   before unfolding a concrete write tower instead of a `change` or a local
-  `rfl` restatement. `Devm.setCode_logs`,
+  `rfl` restatement. Jaune's `Devm.setCode_logs`,
   `Devm.setCode_output`, `Devm.setCode_error`,
   `Devm.setCode_refundCounter`, and `Devm.setCode_accountsToDelete` carry the
   persistent storage and frame observations that code installation does not
@@ -5677,7 +5678,7 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
 
 ### M2. The goal is an EVM memory update or read
 
-- `Devm.memWrite_memory`, `Devm.memWrite_stack`, and Jaune's
+- Jaune's `Devm.memWrite_memory`, `Devm.memWrite_stack`, and
   `Devm.memWrite_gasLeft` describe the primitive update.
 - For source inversion of primitive word and byte stores, use
   `of_run_mstore_val` / `prefix_of_mstore_val` and
