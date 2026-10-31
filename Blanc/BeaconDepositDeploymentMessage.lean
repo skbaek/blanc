@@ -308,11 +308,11 @@ theorem processCreateMessage_establishes_artifact
     exact hmach.error.symm.trans hrawError
   have hpostRefund : post.refundCounter = 0 := by
     dsimp only [post]
-    rw [_root_.Blanc.Devm.setCode_refundCounter]
+    rw [_root_.Jaune.Devm.setCode_refundCounter]
     exact hmach.refundCounter.symm.trans hrawRefund
   have hpostDelete : post.accountsToDelete.isEmpty = true := by
     dsimp only [post]
-    rw [_root_.Blanc.Devm.setCode_accountsToDelete,
+    rw [_root_.Jaune.Devm.setCode_accountsToDelete,
       ← hmach.accountsToDelete]
     exact hrawDelete
   have htrace : DirectCreateMessageExecution

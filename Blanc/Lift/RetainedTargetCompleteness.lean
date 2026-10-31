@@ -414,7 +414,7 @@ theorem Xinst.step_callKind_spawn_codeAddress {sevm : Sevm} {devm : Devm} {x : X
               (ForkRules.accessDelegation_codeAddress_of_none' ?_)
             first
               | rw [hgc]
-              | rw [← addAccessedAddress_getCode (a := vcallee.1), hgc]
+              | rw [← addAccessedAddress_getCode (x := vcallee.1), hgc]
             exact hnodel
     · -- Amsterdam: delegation priced without warming.
       split at hs
@@ -503,7 +503,7 @@ theorem Xinst.step_callKind_spawn_codeAddress {sevm : Sevm} {devm : Devm} {x : X
               (ForkRules.accessDelegation_codeAddress_of_none' ?_)
             first
               | rw [hgc]
-              | rw [← addAccessedAddress_getCode (a := vtgt.1), hgc]
+              | rw [← addAccessedAddress_getCode (x := vtgt.1), hgc]
             exact hnodel
     · -- Amsterdam: delegation priced without warming.
       split at hs

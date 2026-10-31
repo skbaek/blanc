@@ -105,14 +105,11 @@ theorem pc_step_accKeep {sevm : Sevm} {devm d : Devm} {p q : Nat}
     rename_i hd
     exact accKeep_pushItem hd
 
-theorem keys_addAccessedStorageKey (d : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey d a k).accessedStorageKeys = d.accessedStorageKeys.insert (a, k) := rfl
-
 theorem agree_insert {d : Devm} {keys : List (Adr × B256)} {a : Adr} {k : B256}
     (hc : ∀ x, x ∈ d.accessedStorageKeys ↔ x ∈ keys) :
     ∀ x, x ∈ (addAccessedStorageKey d a k).accessedStorageKeys ↔ x ∈ (a, k) :: keys := by
   intro x
-  rw [keys_addAccessedStorageKey, Std.HashSet.mem_insert, List.mem_cons, hc x, beq_iff_eq]
+  rw [addAccessedStorageKey_accessedStorageKeys, Std.HashSet.mem_insert, List.mem_cons, hc x, beq_iff_eq]
   constructor <;> rintro (h | h) <;> first | exact .inl h.symm | exact .inr h
 
 theorem StepOk.of {fs : List SFunc} {sevm : Sevm} {c c' : Cfg} (hk : Agree c → Agree c')

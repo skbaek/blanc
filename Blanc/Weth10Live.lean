@@ -288,9 +288,6 @@ theorem maxFlashLoanGasCold_eq : maxFlashLoanGasCold = 2330 := by decide
 theorem maxFlashLoanGasWarm_eq : maxFlashLoanGasWarm = 330 := by decide
 theorem maxFlashLoanOtherGas_eq : maxFlashLoanOtherGas = 220 := by decide
 
-private lemma gasLeft_withOutput {devm : Devm} {out : Bytes} :
-    (devm.withOutput out).gasLeft = devm.gasLeft := rfl
-
 private lemma gasLeft_memRead_snd {devm : Devm} {i sz : Nat} :
     (devm.memRead i sz).2.gasLeft = devm.gasLeft := rfl
 
@@ -341,7 +338,7 @@ private theorem returnWord_runCompiled
       (out := word.toBytes) (d' := d.2) rfl h_ext
       (by simp only [returnPre, Devm.gasLeft_setMach, Nat.add_zero])
       h_read
-  · simp only [post, d, returnPre, gasLeft_withOutput,
+  · simp only [post, d, returnPre, Devm.withOutput_gasLeft,
       gasLeft_memRead_snd, Devm.gasLeft_setMach]
     omega
   · rfl
@@ -1034,7 +1031,7 @@ theorem flashFee_runCompiled (dp : DeployParams) {sevm : Sevm} {pre : Devm}
               (Devm.memRead_word_fst
                 (by simp only [Devm.memory_setMach]; rfl))),
       ?_, rfl⟩
-  simp only [gasLeft_withOutput, gasLeft_memRead_snd,
+  simp only [Devm.withOutput_gasLeft, gasLeft_memRead_snd,
     Devm.gasLeft_setMach, flashFeeGas_eq]
   omega
 
@@ -1150,7 +1147,7 @@ theorem balanceOf_warm_runCompiled (dp : DeployParams)
               (Devm.memRead_word_fst
                 (by simp only [Devm.memory_setMach]; rfl))),
       ?_, rfl⟩
-  simp only [gasLeft_withOutput, gasLeft_memRead_snd,
+  simp only [Devm.withOutput_gasLeft, gasLeft_memRead_snd,
     Devm.gasLeft_setMach, balanceOfGasWarm_eq]
   omega
 
@@ -1403,7 +1400,7 @@ theorem maxFlashLoan_warm_runCompiled (dp : DeployParams)
               (Devm.memRead_word_fst
                 (by simp only [Devm.memory_setMach]; rfl))),
       ?_, rfl⟩
-  simp only [gasLeft_withOutput, gasLeft_memRead_snd,
+  simp only [Devm.withOutput_gasLeft, gasLeft_memRead_snd,
     Devm.gasLeft_setMach, maxFlashLoanGasWarm_eq]
   omega
 
@@ -1467,7 +1464,7 @@ theorem maxFlashLoan_other_runCompiled (dp : DeployParams)
               (Devm.memRead_word_fst
                 (by simp only [Devm.memory_setMach]; rfl))),
       ?_, rfl⟩
-  simp only [gasLeft_withOutput, gasLeft_memRead_snd,
+  simp only [Devm.withOutput_gasLeft, gasLeft_memRead_snd,
     Devm.gasLeft_setMach, maxFlashLoanOtherGas_eq]
   omega
 

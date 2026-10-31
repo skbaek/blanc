@@ -73,21 +73,6 @@ private theorem balance_output (rules : ForkRules) (d : Devm) :
   rcases h : Rinst.balanceCore rules d.world d.mach d.meta with ⟨_, _⟩ | ⟨_, _⟩
     <;> rw [h] at core <;> exact core
 
-private theorem memWrite_output (d : Devm) (i : Nat) (v : Bytes) :
-    (d.memWrite i v).output = d.output := rfl
-
-private theorem setStorVal_output (d : Devm) (a : Adr) (k v : B256) :
-    (d.setStorVal a k v).output = d.output := rfl
-
-private theorem refund_output (d : Devm) (n : Int) :
-    (d.withRefundCounter n).output = d.output := rfl
-
-private theorem accessAddress_output (d : Devm) (a : Adr) :
-    (addAccessedAddress d a).output = d.output := rfl
-
-private theorem accessStorage_output (d : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey d a k).output = d.output := rfl
-
 private theorem subBalance_output (d : Devm) (a : Adr) (v : B256) :
     Execution.Rel OutputEq d ((d.subBal a v).toExcept
       (.internal (.invariant (.text "InsufficientBalanceError")), d)) := by
@@ -99,12 +84,6 @@ private theorem delegation_output (g : GasSchedule) (d : Devm) (a : Adr) :
   unfold GasSchedule.accessDelegation
   dsimp only
   split <;> rfl
-
-private theorem extends_output (d : Devm) (regions : List (Nat × Nat)) :
-    (d.memExtends regions).output = d.output := rfl
-
-private theorem nonce_output (d : Devm) (a : Adr) :
-    (d.incrNonce a).output = d.output := rfl
 
 private theorem ruleDelegation_output (r : ForkRules) (d : Devm) (a : Adr) :
     (r.accessDelegation d a).2.2.2.2.output = d.output := by
@@ -118,9 +97,6 @@ private theorem creditBeneficiary_output (r : ForkRules) (a : Adr) (v : B256) (d
   unfold Devm.creditBeneficiary
   split <;> rfl
 
-private theorem setBal_output (d : Devm) (a : Adr) (v : B256) :
-    (d.setBal a v).output = d.output := rfl
-
 private theorem addAccountToDelete_output (d : Devm) (a : Adr) :
     (addAccountToDelete d a).output = d.output := rfl
 
@@ -130,7 +106,7 @@ private theorem selfdestructRefund_output (r : ForkRules) (p : Prop) [Decidable 
   split <;> rfl
 
 macro "output_pure" : tactic => `(tactic|
-  (first | rfl | (simp only [id_eq, ruleDelegation_output, creditBeneficiary_output, selfdestructRefund_output, setBal_output, addAccountToDelete_output, delegation_output, extends_output, nonce_output, refund_output, accessAddress_output, memWrite_output, setStorVal_output, Devm.memRead, Mem.read, Devm.setTransVal, Devm.addLog, Devm.withStack, Devm.withMemory, Devm.balReadAccount_output, Devm.balReadStorage_output] <;> rfl) | ((try simp only [refund_output]); (repeat' split) <;> (first | rfl | (simp only [ruleDelegation_output, accessAddress_output, accessStorage_output, Devm.balReadAccount_output, Devm.balReadStorage_output] <;> rfl)))))
+  (first | rfl | (simp only [id_eq, ruleDelegation_output, creditBeneficiary_output, selfdestructRefund_output, Devm.setBal_output, addAccountToDelete_output, delegation_output, Devm.memExtends_output, Devm.incrNonce_output, Devm.withRefundCounter_output, addAccessedAddress_output, Devm.memWrite_output, Devm.setStorVal_output, Devm.memRead, Mem.read, Devm.setTransVal, Devm.addLog, Devm.withStack, Devm.withMemory, Devm.balReadAccount_output, Devm.balReadStorage_output] <;> rfl) | ((try simp only [Devm.withRefundCounter_output]); (repeat' split) <;> (first | rfl | (simp only [ruleDelegation_output, addAccessedAddress_output, addAccessedStorageKey_output, Devm.balReadAccount_output, Devm.balReadStorage_output] <;> rfl)))))
 
 open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic in
 /-- Deterministic monadic walk. Every simplifier invocation lists its equations. -/

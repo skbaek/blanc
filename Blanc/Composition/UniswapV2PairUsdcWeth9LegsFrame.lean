@@ -64,13 +64,11 @@ theorem implXferPost_output (s : Sevm) (b : Devm) (G : Nat) :
 theorem memRead_withOutput_error (d : Devm) (i n : Nat) (o : Bytes) :
     ((d.memRead i n).2.withOutput o).error = d.error := rfl
 
-theorem addLog_error (d : Devm) (l : Log) : (d.addLog l).error = d.error := rfl
-
 theorem implXferPost_error (s : Sevm) (b : Devm) (G : Nat) : (implXferPost s b G).error = b.error := by
   unfold implXferPost
   rw [memRead_withOutput_error, St_error]
   unfold e93Post e93Debited e37Pre
-  rw [addLog_error, afterSstore_error, afterSload_error, afterSload_error, afterSstore_error,
+  rw [Devm.addLog_error, afterSstore_error, afterSload_error, afterSload_error, afterSstore_error,
     afterSload_error, afterSload_error, afterSload_error, afterSload_error, afterSload_error,
     afterSload_error]
 

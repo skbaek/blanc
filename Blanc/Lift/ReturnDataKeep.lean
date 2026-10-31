@@ -69,21 +69,6 @@ private theorem balance_rd (rules : ForkRules) (d : Devm) :
   rcases h : Rinst.balanceCore rules d.world d.mach d.meta with ⟨_, _⟩ | ⟨_, _⟩
     <;> rw [h] at core <;> exact core
 
-private theorem memWrite_rd (d : Devm) (i : Nat) (v : Bytes) :
-    (d.memWrite i v).returnData = d.returnData := rfl
-
-private theorem setStorVal_rd (d : Devm) (a : Adr) (k v : B256) :
-    (d.setStorVal a k v).returnData = d.returnData := rfl
-
-private theorem refund_rd (d : Devm) (n : Int) :
-    (d.withRefundCounter n).returnData = d.returnData := rfl
-
-private theorem accessAddress_rd (d : Devm) (a : Adr) :
-    (addAccessedAddress d a).returnData = d.returnData := rfl
-
-private theorem accessStorage_rd (d : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey d a k).returnData = d.returnData := rfl
-
 private theorem subBalance_rd (d : Devm) (a : Adr) (v : B256) :
     Execution.Rel RdEq d ((d.subBal a v).toExcept
       (.internal (.invariant (.text "InsufficientBalanceError")), d)) := by
@@ -96,14 +81,8 @@ private theorem delegation_rd (g : GasSchedule) (d : Devm) (a : Adr) :
   dsimp only
   split <;> rfl
 
-private theorem extends_rd (d : Devm) (regions : List (Nat × Nat)) :
-    (d.memExtends regions).returnData = d.returnData := rfl
-
-private theorem nonce_rd (d : Devm) (a : Adr) :
-    (d.incrNonce a).returnData = d.returnData := rfl
-
 macro "rd_pure" : tactic => `(tactic|
-  (first | rfl | (simp only [id_eq, delegation_rd, extends_rd, nonce_rd, refund_rd, accessAddress_rd, memWrite_rd, setStorVal_rd, Devm.memRead, Mem.read, Devm.setTransVal, Devm.addLog, Devm.withStack, Devm.withMemory, balReadAccount_rd, balReadStorage_rd] <;> rfl) | ((try simp only [refund_rd]); (repeat' split) <;> (first | rfl | (simp only [accessAddress_rd, accessStorage_rd, balReadAccount_rd, balReadStorage_rd] <;> rfl)))))
+  (first | rfl | (simp only [id_eq, delegation_rd, Devm.memExtends_returnData, Devm.incrNonce_returnData, Devm.withRefundCounter_returnData, addAccessedAddress_returnData, Devm.memWrite_returnData, Devm.setStorVal_returnData, Devm.memRead, Mem.read, Devm.setTransVal, Devm.addLog, Devm.withStack, Devm.withMemory, balReadAccount_rd, balReadStorage_rd] <;> rfl) | ((try simp only [Devm.withRefundCounter_returnData]); (repeat' split) <;> (first | rfl | (simp only [addAccessedAddress_returnData, addAccessedStorageKey_returnData, balReadAccount_rd, balReadStorage_rd] <;> rfl)))))
 
 open _root_.Lean _root_.Lean.Meta _root_.Lean.Elab _root_.Lean.Elab.Tactic in
 /-- Deterministic monadic walk. Every simplifier invocation lists its equations. -/

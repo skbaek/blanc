@@ -185,21 +185,6 @@ lemma balance (rules : ForkRules) (x : Devm) :
   rcases h : Rinst.balanceCore rules x.world x.mach x.meta with ⟨err, view⟩ | ⟨v, view⟩ <;>
     rw [h] at hcore <;> exact hcore
 
-/-- The meta-only and machine-only pure updates that leave the log list alone. -/
-theorem addAccessedAddress_logs (x : Devm) (a : Adr) :
-    (addAccessedAddress x a).logs = x.logs := rfl
-theorem addAccessedStorageKey_logs (x : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey x a k).logs = x.logs := rfl
-theorem memWrite_logs (x : Devm) (i : Nat) (v : Bytes) :
-    (x.memWrite i v).logs = x.logs := rfl
-theorem memExtends_logs (x : Devm) (r : List (Nat × Nat)) :
-    (x.memExtends r).logs = x.logs := rfl
-theorem withStack_logs (x : Devm) (s : List B256) : (x.withStack s).logs = x.logs := rfl
-theorem withReturnData_logs (x : Devm) (r : Bytes) :
-    (x.withReturnData r).logs = x.logs := rfl
-theorem withGasLeft_logs (x : Devm) (g : Nat) : (x.withGasLeft g).logs = x.logs := rfl
-theorem setTransVal_logs (x : Devm) (a : Adr) (k v : B256) :
-    (x.setTransVal a k v).logs = x.logs := rfl
 theorem balReadStorage_logs (rules : ForkRules) (a : Adr) (k : B256) (x : Devm) :
     (x.balReadStorage rules a k).logs = x.logs := by
   unfold Devm.balReadStorage Meta.readStorage; split <;> rfl
@@ -212,9 +197,9 @@ macro_rules
   | `(tactic| logs_close) => `(tactic| first
       | assumption
       | rfl
-      | (simp only [LogsWalk.addAccessedAddress_logs, LogsWalk.addAccessedStorageKey_logs,
-          LogsWalk.memWrite_logs, LogsWalk.memExtends_logs, LogsWalk.withStack_logs,
-          LogsWalk.withReturnData_logs, LogsWalk.withGasLeft_logs, LogsWalk.setTransVal_logs,
+      | (simp only [addAccessedAddress_logs, addAccessedStorageKey_logs,
+          Devm.memWrite_logs, Devm.memExtends_logs, Devm.withStack_logs,
+          Devm.withReturnData_logs, Devm.withGasLeft_logs, Devm.setTransVal_logs,
           LogsWalk.balReadStorage_logs, Devm.balReadAccount_logs, Devm.memRead_logs, *]
          <;> done))
 

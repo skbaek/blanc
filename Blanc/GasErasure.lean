@@ -128,7 +128,7 @@ theorem Devm.EqModGas.of_memWrite {a b : Devm} {i : Nat} {v : Bytes}
   have hmsw : (a.memWrite i v).world.storageWrites = a.world.storageWrites := rfl
   have hmsr' : (b.memWrite i v).meta.storageReads = b.meta.storageReads := rfl
   have hmsw' : (b.memWrite i v).world.storageWrites = b.world.storageWrites := rfl
-  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, (by change a.meta.touchedAccounts = b.meta.touchedAccounts; assumption)⟩ <;> simp_all only [memWrite_memory, Devm.Rels.eq]
+  refine ⟨?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, (by change a.meta.touchedAccounts = b.meta.touchedAccounts; assumption)⟩ <;> simp_all only [Devm.memWrite_memory, Devm.Rels.eq]
 
 /-- `addAccessedStorageKey` from agreeing states lands agreeing. -/
 theorem Devm.EqModGas.of_addAccessedStorageKey {a b : Devm} {t : Adr} {k : B256}

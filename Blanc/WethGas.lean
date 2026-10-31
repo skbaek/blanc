@@ -36,16 +36,10 @@ prohibits. `func_run`'s own `gasTacs` unfolds these symbols to numerals before
 calling `omega`, so a repricing changes the *proof term* even though it does
 not change the *statement* — never claim more than that. -/
 
-/-- `Devm.gasLeft` through `Devm.withOutput`: the update touches `meta` only,
-so the gas account is untouched.  Kept generic (over an arbitrary `devm`) so
-that using it never forces the state it is applied to — the 22-step
-construction below — to reduce. -/
-lemma Devm.gasLeft_withOutput {devm : Devm} {out : Bytes} :
-    (devm.withOutput out).gasLeft = devm.gasLeft := rfl
-
 /-- `Devm.gasLeft` through the second projection of `Devm.memRead`: the read
 only ever updates `memory`, so the gas account survives it.  The same shallow,
-generic argument as `Devm.gasLeft_withOutput`. -/
+generic argument as Jaune's `Devm.withOutput_gasLeft`, so using it never forces
+the 22-step construction below to reduce. -/
 lemma Devm.gasLeft_memRead_snd {devm : Devm} {i sz : Nat} :
     (devm.memRead i sz).2.gasLeft = devm.gasLeft := rfl
 
@@ -146,7 +140,7 @@ theorem weth_decimals_runCompiled {sevm : Sevm} {pre : Devm}
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
       ?_, rfl⟩
-  simp only [Devm.gasLeft_withOutput, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
+  simp only [Devm.withOutput_gasLeft, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
     decimalsGas_eq]
   omega
 
@@ -272,7 +266,7 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
                 (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))))
         h_code,
       ?_, rfl⟩
-  simp only [Devm.gasLeft_withOutput, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
+  simp only [Devm.withOutput_gasLeft, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
     balanceOfGas_eq]
   omega
 
@@ -368,7 +362,7 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
       ?_, rfl⟩
-  simp only [Devm.gasLeft_withOutput, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
+  simp only [Devm.withOutput_gasLeft, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
     balanceOfGasWarm_eq]
   omega
 

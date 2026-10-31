@@ -59,9 +59,6 @@ private theorem supportsInterfaceWord_eqCheck_or (word : B256) :
 
 def supportsInterfaceEndpointGas : Nat := 67
 
-private lemma gasLeft_withOutput {devm : Devm} {out : Bytes} :
-    (devm.withOutput out).gasLeft = devm.gasLeft := rfl
-
 private lemma gasLeft_memRead_snd {devm : Devm} {i sz : Nat} :
     (devm.memRead i sz).2.gasLeft = devm.gasLeft := rfl
 
@@ -107,7 +104,7 @@ private theorem returnWord_runCompiled
       (out := word.toBytes) (d' := d.2) rfl hext
       (by simp only [returnPre, Devm.gasLeft_setMach, Nat.add_zero])
       hread
-  · simp only [post, d, returnPre, gasLeft_withOutput,
+  · simp only [post, d, returnPre, Devm.withOutput_gasLeft,
       gasLeft_memRead_snd, Devm.gasLeft_setMach]
     omega
   · exact ⟨rfl, rfl⟩

@@ -660,10 +660,6 @@ lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Ad
     exact (congr_fun E' a).symm
 
 
-lemma addAccessedAddress_state {devm : Devm} {a : Adr} :
-    (addAccessedAddress devm a).state = devm.state := by
-  exact (addAccessedAddress_worldEq devm a).1.symm
-
 lemma of_executeCode_noneCode {msg : Msg} {xl : Xlot}
     {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
     (h_ca : msg.codeAddress = .none)
@@ -681,9 +677,6 @@ lemma chargeCodeGas_state_ok {rules : ForkRules} {d d' : Devm}
   have hf := processCreateMessage.chargeCodeGas_instructionFrame rules d
   rw [h] at hf
   exact hf.state.symm
-
-lemma Devm.setCode_state {d : Devm} {adr : Adr} {c : ByteArray} :
-    (d.setCode adr c).state = d.state.setCode adr c := rfl
 
 -- nonempty code is unchanged by a (sub-)execution
 lemma code_eq_of_exec {p : Prog} {sevm' : Sevm} {devm' child : Devm} {wa : Adr}

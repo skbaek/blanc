@@ -2,6 +2,7 @@
 
 import Blanc.Tactics
 import Blanc.ExecutionSettlement
+import Jaune.DevmProjections
 
 namespace Blanc
 
@@ -474,10 +475,6 @@ lemma Devm.WorldEq.getBal {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
   unfold Devm.getBal Devm.getAcct
   rw [h.1]
 
-lemma addAccessedAddress_getCode {devm : Devm} {adr a : Adr} :
-    (addAccessedAddress devm adr).getCode a = devm.getCode a := by
-  exact (addAccessedAddress_worldEq devm adr).getCode a |>.symm
-
 lemma chargeGas_getCode {devm devm' : Devm} {cost : ℕ} {a : Adr}
     (h : chargeGas cost devm = Except.ok devm') :
     devm'.getCode a = devm.getCode a := by
@@ -504,13 +501,6 @@ lemma Devm.popToAdr_getCode {devm devm' : Devm} {val : Adr} {a : Adr}
     (h : devm.popToAdr = Except.ok (val, devm')) :
     devm'.getCode a = devm.getCode a := by
   exact (liftMach_worldEq_of_ok (core := Mach.popToAdr) h).getCode a |>.symm
-
-lemma Devm.memExtends_getCode {devm : Devm} {ranges : List (ℕ × ℕ)} {a : Adr} :
-    (devm.memExtends ranges).getCode a = devm.getCode a := by
-  exact (liftMachPure_worldEq (Mach.memExtends · ranges) devm).getCode a |>.symm
-
-lemma Devm.withReturnData_getCode {devm : Devm} {data : Bytes} {a : Adr} :
-    (devm.withReturnData data).getCode a = devm.getCode a := rfl
 
 lemma Devm.balReadAccount_getCode {rules : ForkRules} {adr : Adr}
     {devm : Devm} {a : Adr} :
@@ -667,26 +657,6 @@ theorem Devm.withCreatedAccounts_of_eq {d : Devm} {E : AdrSet} (h : d.createdAcc
   rcases d with ⟨_, ⟨_, _, _, _, _, _, _, _, _, _, _⟩, _⟩
   simp only [Devm.createdAccounts] at h
   subst h
-  rfl
-
-/-- A refund-counter update leaves account code alone; rewrite with this law
-before unfolding a concrete SSTORE post tower. -/
-lemma Devm.withRefundCounter_getCode (devm : Devm) (refundCounter : Int) (a : Adr) :
-    (devm.withRefundCounter refundCounter).getCode a = devm.getCode a := by
-  rfl
-
-lemma Devm.withRefundCounter_getBal (devm : Devm) (refundCounter : Int) (a : Adr) :
-    (devm.withRefundCounter refundCounter).getBal a = devm.getBal a := by
-  rfl
-
-/-- Neither a refund-counter update nor a persistent storage write changes
-the created-account set. -/
-lemma Devm.withRefundCounter_createdAccounts (devm : Devm) (refundCounter : Int) :
-    (devm.withRefundCounter refundCounter).createdAccounts = devm.createdAccounts := by
-  rfl
-
-lemma Devm.setStorVal_createdAccounts (devm : Devm) (address : Adr) (key value : B256) :
-    (devm.setStorVal address key value).createdAccounts = devm.createdAccounts := by
   rfl
 
 lemma Devm.WorldEq.getStor {d d' : Devm} (h : Devm.WorldEq d d') (a : Adr) :
@@ -2278,9 +2248,6 @@ lemma Devm.push_getCode_gen {v devm} {exn : Execution} (h : Devm.push v devm = e
   | ok d =>
     exact (liftMachExecution_worldEq_of_ok (core := Mach.push v) hp).getCode a |>.symm
 
-
-lemma addAccessedAddress_createdAccounts (pre : Devm) (address : Adr) :
-    (addAccessedAddress pre address).createdAccounts = pre.createdAccounts := rfl
 
 lemma Devm.push_createdAccounts_eq {value : B256} {pre : Devm} {out : Execution}
     (h : pre.push value = out) : Execution.createdAccounts out = pre.createdAccounts := by
@@ -5301,7 +5268,7 @@ lemma Linst.selfdestruct_preserves_code_created {sevm : Sevm} {devm : Devm} {exn
         | eip2929 =>
           dsimp only
           split
-          · exact addAccessedAddress_getCode.trans h_br2
+          · exact (addAccessedAddress_getCode ..).trans h_br2
           · exact h_br2
       have h_acc_ca : (match sevm.benvStat.rules.access with | .eip2929 => (if res1.1 ∉ (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)).accessedAddresses then (addAccessedAddress (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) res1.1, gasSelfDestruct + sevm.benvStat.rules.gas.coldAccountAccess) else ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)), gasSelfDestruct)) | .flat _ => ((Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)), gasSelfDestruct)).1.createdAccounts = res1.2.createdAccounts := by
         cases haccess : sevm.benvStat.rules.access with
@@ -5409,7 +5376,7 @@ lemma Linst.selfdestruct_preserves_code_created {sevm : Sevm} {devm : Devm} {exn
         case ok _ =>
           have h_warm : (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2).getCode adr = res1.2.getCode adr := by
             split
-            · exact addAccessedAddress_getCode
+            · exact addAccessedAddress_getCode ..
             · rfl
           have h_wb : (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2))).getCode adr = res1.2.getCode adr :=
             Devm.balReadAccount_getCode.trans (Devm.balReadAccount_getCode.trans h_warm)
@@ -7126,14 +7093,6 @@ lemma of_run_sstore {e : Sevm} {s s' : Devm} (h : Ninst.Run e s sstore s') :
     show Stack.Pop [x, y] s.stack s₄.stack
     rw [← hmid]
     exact hp
-
-/-- `Devm.memWrite` changes memory to the requested write. -/
-lemma Devm.memWrite_memory (devm : Devm) (i : Nat) (val : Bytes) :
-    (devm.memWrite i val).memory = devm.memory.write i val := rfl
-
-/-- `Devm.memWrite` leaves the operand stack unchanged. -/
-lemma Devm.memWrite_stack (devm : Devm) (i : Nat) (val : Bytes) :
-    (devm.memWrite i val).stack = devm.stack := rfl
 
 /-- `calldatacopy` writes *the calldata slice named by its operands* into memory.
 
@@ -11100,7 +11059,7 @@ lemma Linst.selfdestruct_preserves_noDel_of_onlyCreated_or_foreign {wa : Adr} {s
         | eip2929 =>
           dsimp only
           split
-          · exact addAccessedAddress_getCode.trans h_br2
+          · exact (addAccessedAddress_getCode ..).trans h_br2
           · exact h_br2
       have h_br2_ds : Devm.delSets res1.2 = Devm.delSets (Devm.balReadAccount sevm.benvStat.rules sevm.currentTarget (Devm.balReadAccount sevm.benvStat.rules res1.1 res1.2)) :=
         (Devm.balReadAccount_instructionFrame _ _ _).delSets.trans (Devm.balReadAccount_instructionFrame _ _ _).delSets
@@ -11214,7 +11173,7 @@ lemma Linst.selfdestruct_preserves_noDel_of_onlyCreated_or_foreign {wa : Adr} {s
         case ok _ =>
           have h_warm : (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2).getCode wa = res1.2.getCode wa := by
             split
-            · exact addAccessedAddress_getCode
+            · exact addAccessedAddress_getCode ..
             · rfl
           have h_warm_ds : Devm.delSets res1.2 = Devm.delSets (if res1.1 ∉ res1.2.accessedAddresses then addAccessedAddress res1.2 res1.1 else res1.2) := by
             split
@@ -11444,12 +11403,12 @@ lemma Devm.NoDel.chargeGas {wa : Adr} {d d' : Devm} {cost : Nat}
 
 lemma Devm.NoDel.memExtends {wa : Adr} {d : Devm} {ranges : List (Nat × Nat)}
     (hd : Devm.NoDel wa d) : Devm.NoDel wa (d.memExtends ranges) := by
-  refine hd.of_eqs ?_ Devm.memExtends_getCode.symm
+  refine hd.of_eqs ?_ (Devm.memExtends_getCode ..).symm
   rfl
 
 lemma Devm.NoDel.addAccessedAddress {wa : Adr} {d : Devm} {a : Adr}
     (hd : Devm.NoDel wa d) : Devm.NoDel wa (Jaune.addAccessedAddress d a) := by
-  refine hd.of_eqs ?_ addAccessedAddress_getCode.symm
+  refine hd.of_eqs ?_ (addAccessedAddress_getCode ..).symm
   rfl
 
 def Benv.EquivForDelegation (b1 b2 : Benv) : Prop :=
@@ -13440,36 +13399,6 @@ theorem Devm.getStorVal_setStorVal_self
     (devm.setStorVal adr key val).getStorVal adr key = val := by
   show (Devm.getStor (devm.setStorVal adr key val) adr).get key = val
   rw [setStorVal_getStor_self, Stor.get_set_self]
-
-/-- Installing account code preserves the frame log sequence. -/
-lemma Devm.setCode_logs (devm : Devm) (address : Adr)
-    (code : ByteArray) :
-    (devm.setCode address code).logs = devm.logs := by
-  rfl
-
-/-- Installing account code preserves the frame output bytes. -/
-lemma Devm.setCode_output (devm : Devm) (address : Adr)
-    (code : ByteArray) :
-    (devm.setCode address code).output = devm.output := by
-  rfl
-
-/-- Installing account code preserves the frame error marker. -/
-lemma Devm.setCode_error (devm : Devm) (address : Adr)
-    (code : ByteArray) :
-    (devm.setCode address code).error = devm.error := by
-  rfl
-
-/-- Installing account code preserves the frame refund counter. -/
-lemma Devm.setCode_refundCounter (devm : Devm) (address : Adr)
-    (code : ByteArray) :
-    (devm.setCode address code).refundCounter = devm.refundCounter := by
-  rfl
-
-/-- Installing account code preserves the deletion-set accumulator. -/
-lemma Devm.setCode_accountsToDelete (devm : Devm) (address : Adr)
-    (code : ByteArray) :
-    (devm.setCode address code).accountsToDelete = devm.accountsToDelete := by
-  rfl
 
 /-! ### Reusable projection cuts for compiled RETURN and SSTORE posts -/
 

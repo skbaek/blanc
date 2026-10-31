@@ -611,10 +611,6 @@ private theorem afterSload_state (sevm : Sevm) (b : Devm) (k : B256) :
   unfold afterSload
   split <;> rfl
 
-/-- Setting the output leaves the world state untouched. -/
-private theorem withOutput_state (d : Devm) (out : Bytes) :
-    (d.withOutput out).state = d.state := rfl
-
 /-- Setting the machine leaves the world state untouched. -/
 private theorem setMach_state_eq (d : Devm) (m : Mach) :
     (d.setMach m).state = d.state := rfl
@@ -779,7 +775,7 @@ theorem systemPost_facts (benv : Benv)
                   (setupBase (systemSevm benv) (systemBase benv))))))).state := by
       unfold systemPost returnPost
       simp only [show B256.toNat (0 : B256) = 0 by decide, Devm.memRead_zero,
-        withOutput_state, St, setMach_state_eq]
+        Devm.withOutput_state, St, setMach_state_eq]
     rw [hret, bookBase, storeBase, countBase, excessBase, ptrBase, setupBase,
       afterSstore_state, afterSstore_state, afterSload_state, afterSload_state,
       afterSstore_state, afterSstore_state, afterSload_state, afterSload_state,

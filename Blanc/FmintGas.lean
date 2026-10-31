@@ -21,18 +21,11 @@ schedule-parametric — `Jaune.Fork.ForkRules` carries no opcode gas schedule
 (the gas-cost arc plan, correction C1). A repricing changes the
 number and the proof term, never the statement. -/
 
-/-- `Devm.gasLeft` through `Devm.withOutput`, local to this module. Fmint stays
-a sibling of weth (Blanc's `README.md`, *contracts are siblings*), so this
-cannot import `Blanc.Devm.gasLeft_withOutput` from `Blanc/WethGas.lean`; the
-fact is two lines and generic, so the duplication costs nothing. Same shallow,
-generic argument as `Blanc/WethGas.lean`'s copy: the update touches `meta`
-only, so using it never forces the state it is applied to — the 21-step
-construction below — to reduce. -/
-lemma Devm.gasLeft_withOutput {devm : Devm} {out : Bytes} :
-    (devm.withOutput out).gasLeft = devm.gasLeft := rfl
-
 /-- `Devm.gasLeft` through the second projection of `Devm.memRead`, local to
-this module for the reason `Devm.gasLeft_withOutput` above records. -/
+this module: Fmint stays a sibling of weth (Blanc's `README.md`, *contracts are
+siblings*), so it cannot import `Blanc/WethGas.lean`'s copy. The update touches
+`memory` only, so using it never forces the 21-step construction below to
+reduce; its `withOutput` twin is Jaune's `Devm.withOutput_gasLeft`. -/
 lemma Devm.gasLeft_memRead_snd {devm : Devm} {i sz : Nat} :
     (devm.memRead i sz).2.gasLeft = devm.gasLeft := rfl
 
@@ -118,7 +111,7 @@ theorem decimals_runCompiled {sevm : Sevm} {pre : Devm}
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
       ?_, rfl⟩
-  simp only [Devm.gasLeft_withOutput, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
+  simp only [Devm.withOutput_gasLeft, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
     decimalsGas_eq]
   omega
 
@@ -146,7 +139,7 @@ theorem decimals_gas_exact {sevm : Sevm} {pre : Devm}
 The exactness theorem at the `exec` altitude, by the same route as
 `weth_balanceOf_gas_exact`: `exec` is a function, so the re-derived witness's
 `gasLeft` is a projection through the construction, closed by
-`Blanc.Devm.gasLeft_withOutput`, `Blanc.Devm.gasLeft_memRead_snd` and the
+Jaune's `Devm.withOutput_gasLeft`, `Blanc.Fmint.Devm.gasLeft_memRead_snd` and the
 existing `Devm.gasLeft_setMach` rather than by a blind `rfl` on the 21-step
 construction. -/
 theorem totalSupply_gas_exact {sevm : Sevm} {pre : Devm}
@@ -185,7 +178,7 @@ theorem totalSupply_gas_exact {sevm : Sevm} {pre : Devm}
                 (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))))
         h_code,
       ?_, rfl⟩
-  simp only [Devm.gasLeft_withOutput, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
+  simp only [Devm.withOutput_gasLeft, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
     totalSupplyGas_eq]
   omega
 
@@ -261,7 +254,7 @@ theorem totalSupply_warm_runCompiled {sevm : Sevm} {pre : Devm}
               (by simp only [Devm.gasLeft_setMach]; omega)
               (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
       ?_, rfl⟩
-  simp only [Devm.gasLeft_withOutput, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
+  simp only [Devm.withOutput_gasLeft, Devm.gasLeft_memRead_snd, Devm.gasLeft_setMach,
     totalSupplyGasWarm_eq]
   omega
 

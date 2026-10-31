@@ -408,21 +408,9 @@ private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
 
-private theorem addLog_error (devm : Devm) (l : Log) :
-    (devm.addLog l).error = devm.error := rfl
-
 private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
     (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
   rfl
-
-private theorem setMach_logs (devm : Devm) (m : Mach) :
-    (devm.setMach m).logs = devm.logs := rfl
-
-private theorem setMach_error (devm : Devm) (m : Mach) :
-    (devm.setMach m).error = devm.error := rfl
-
-private theorem setMach_output (devm : Devm) (m : Mach) :
-    (devm.setMach m).output = devm.output := rfl
 
 /-! ## The cold and warm charges, resolved at the row-19 world -/
 
@@ -2350,11 +2338,11 @@ private theorem pauseLastWorld_master :
     (exec_iff_exec_eq 0 pauseLastSevm pauseLastPre (.ok _)).mpr hexec,
     rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hcompile⟩
   · -- error
-    rw [Devm.setTransVal_error, setMach_error, addLog_error,
-      temporalSstorePost_error, temporalSloadBase_error, addLog_error, herrF,
-      addLog_error, lastB6_peel_error, lastRB3_error]
+    rw [Devm.setTransVal_error, Devm.setMach_error, Devm.addLog_error,
+      temporalSstorePost_error, temporalSloadBase_error, Devm.addLog_error, herrF,
+      Devm.addLog_error, lastB6_peel_error, lastRB3_error]
   · -- output
-    rw [Devm.setTransVal_output, setMach_output, Devm.addLog_output,
+    rw [Devm.setTransVal_output, Devm.setMach_output, Devm.addLog_output,
       temporalSstorePost_output, temporalSloadBase_output, Devm.addLog_output,
       houtF, Devm.addLog_output, lastB6_peel_output, lastRB3_output]
   · -- the reentrancy lock is clear
@@ -2427,7 +2415,7 @@ private theorem pauseLastWorld_master :
       lastStor_B6_expiry_other hcanon]
     exact (pauseWorld_getStorVal pauseLastWorldStor pauseLastWorldGas).symm
   · -- the three records, in order
-    rw [Devm.setTransVal_logs, setMach_logs, Devm.addLog_logs, temporalSstorePost_logs,
+    rw [Devm.setTransVal_logs, Devm.setMach_logs, Devm.addLog_logs, temporalSstorePost_logs,
       temporalSloadBase_logs, Devm.addLog_logs, hlogsF, Devm.addLog_logs, lastB6_logs]
     rfl
 
@@ -4440,10 +4428,10 @@ private theorem pauseRetainedWorld_master :
   refine ⟨mid, _, hboundary, hmidCount, hmidInterval, hprog, hexec,
     (exec_iff_exec_eq 0 pauseRetainedSevm pauseRetainedPre (.ok _)).mpr hexec,
     rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hcompile⟩
-  · rw [Devm.setTransVal_error, setMach_error, addLog_error,
+  · rw [Devm.setTransVal_error, Devm.setMach_error, Devm.addLog_error,
       temporalSstorePost_error, temporalSloadBase_error,
-      temporalSloadBase_error, addLog_error, herrF, addLog_error, returnRB6_error]
-  · rw [Devm.setTransVal_output, setMach_output, Devm.addLog_output,
+      temporalSloadBase_error, Devm.addLog_error, herrF, Devm.addLog_error, returnRB6_error]
+  · rw [Devm.setTransVal_output, Devm.setMach_output, Devm.addLog_output,
       temporalSstorePost_output, temporalSloadBase_output,
       temporalSloadBase_output, Devm.addLog_output, houtF, Devm.addLog_output,
       returnRB6_output]
@@ -4512,7 +4500,7 @@ private theorem pauseRetainedWorld_master :
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal,
       returnStor_RB6_expiry_other hcanon]
     exact (pauseWorld_getStorVal pauseRetainedWorldStor pauseRetainedWorldGas).symm
-  · rw [Devm.setTransVal_logs, setMach_logs, Devm.addLog_logs, temporalSstorePost_logs,
+  · rw [Devm.setTransVal_logs, Devm.setMach_logs, Devm.addLog_logs, temporalSstorePost_logs,
       temporalSloadBase_logs, temporalSloadBase_logs, Devm.addLog_logs, hlogsF,
       Devm.addLog_logs, returnRB6_logs]
     rfl
