@@ -257,7 +257,7 @@ theorem updateWorld_logs {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 :
     · simp only [updateAccumulatorPost, logs_afterStore, afterSload_logs]
     · exact afterSload_logs _ _ _
   unfold updateWorld updateSyncPost
-  rw [logs_addLog, updatePackedPost, logs_afterStore, oracleLogs, field0, field1]
+  rw [Devm.addLog_logs, updatePackedPost, logs_afterStore, oracleLogs, field0, field1]
   simp only [encodeWords, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
 theorem updateWorld_logsH {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 : B256}
@@ -279,7 +279,7 @@ theorem updateWorld_logsH {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 
     · simp only [updateAccumulatorPostH, logs_afterStoreH, afterSloadH_logs]
     · exact afterSloadH_logs _ _ _
   unfold updateWorldH updateSyncPost
-  rw [logs_addLog, updatePackedPostH, logs_afterStoreH, oracleLogs, field0, field1]
+  rw [Devm.addLog_logs, updatePackedPostH, logs_afterStoreH, oracleLogs, field0, field1]
   simp only [encodeWords, List.flatMap_cons, List.flatMap_nil, List.append_nil]
 
 theorem updateWorld_account_frameH {sevm : Sevm} {b : Devm} {old0 old1 balance0 balance1 : B256}
@@ -309,7 +309,7 @@ theorem updateWorld_account_frameH {sevm : Sevm} {b : Devm} {old0 old1 balance0 
     · exact afterSload_getAcct _
     · rfl
   unfold updateWorldH updateSyncPost
-  rw [getAcct_addLog]
+  rw [Devm.addLog_getAcct]
   unfold updatePackedPostH
   rw [store, load]
   unfold updateOracleWorldH
@@ -321,7 +321,7 @@ theorem updateWorld_account_frameH {sevm : Sevm} {b : Devm} {old0 old1 balance0 
 theorem updateWorld_outputH (sevm : Sevm) (b : Devm) (old0 old1 balance0 balance1 : B256) :
     (updateWorldH sevm b old0 old1 balance0 balance1).output = b.output := by
   unfold updateWorldH updateSyncPost
-  rw [output_addLog]
+  rw [Devm.addLog_output]
   unfold updatePackedPostH
   rw [afterSstoreH_output, afterSloadH_output]
   unfold updateOracleWorldH

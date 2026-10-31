@@ -413,12 +413,12 @@ theorem xa_rampA_tail {b2 : Devm} {M : Mem} {A : B256}
       afterSstore_getStor_self, afterSstore_getStor_self, afterSstore_getStor_self,
       afterSstore_getStor_self, slot_06, slot_07, slot_08, slot_09]
   · simp only [St, Devm.setMach_logs]
-    rw [logs_addLog, afterSstore_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs,
+    rw [Devm.addLog_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs,
       rampA_topic, show (Bytes.toB256 [1, 160]).toNat = 0x1a0 from rfl,
       show (Bytes.toB256 [128]).toNat = 128 from rfl]
     exact congrArg (fun z => b2.logs ++ [⟨sevm.currentTarget, [topicRampA], z⟩]) hdata
   · simp only [St, Devm.setMach_output]
-    rw [output_addLog, afterSstore_output, afterSstore_output, afterSstore_output,
+    rw [Devm.addLog_output, afterSstore_output, afterSstore_output, afterSstore_output,
       afterSstore_output]
 
 /-- **`ramp_A`'s raw effect**, given the certificate's checkedness. -/

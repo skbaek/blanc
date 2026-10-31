@@ -123,11 +123,11 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
     rw [← getStorVal_eq, Devm.getStorVal_setMach, getStorVal_eq, getStor_addLog, afterSstore_getStor_self, afterSstore_getStor_self, afterSstore_getStor_self,
       afterSstore_getStor_self, hb2.getStor, afterSload_getStor, slot_06, slot_07, slot_08, slot_09]
   · simp only [St, Devm.setMach_logs]
-    rw [logs_addLog, afterSstore_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs, hb2.logs,
+    rw [Devm.addLog_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs, hb2.logs,
       afterSload_logs, stopRamp_topic, show (Bytes.toB256 [1, 160]).toNat = 416 from rfl,
       show (Bytes.toB256 [64]).toNat = 64 from rfl, hdata]
   · simp only [St, Devm.setMach_output]
-    rw [output_addLog, afterSstore_output, afterSstore_output, afterSstore_output, afterSstore_output,
+    rw [Devm.addLog_output, afterSstore_output, afterSstore_output, afterSstore_output, afterSstore_output,
       hb2.output, afterSload_output]
 
 /-- The model's `stop_ramp_A` when the caller is the owner. -/

@@ -198,7 +198,7 @@ theorem safe_transfer (hsg : sevm.benvStat.rules.stateGas = none) :
     · rw [hstor, getStor_addLog, getStor_afterStoreH, getStor_afterStoreH]
       rfl
     · rw [hstor, getStor_addLog, getStor_afterStore_neH ha, getStor_afterStore_neH ha]
-    · rw [hlogs, logs_addLog, logs_afterStoreH, logs_afterStoreH, htopic]
+    · rw [hlogs, Devm.addLog_logs, logs_afterStoreH, logs_afterStoreH, htopic]
     · cases ho
       exact hout
 
@@ -268,7 +268,7 @@ theorem safe_transferFrom (hsg : sevm.benvStat.rules.stateGas = none) :
       rw [Mem.read_write_word_of_wf hwf3] at hout
       rw [Mem.read_write_word_of_wf hwf] at hlogs
       refine ⟨fun a => by rw [hstor, getStor_addLog], ?_, hout⟩
-      rw [hlogs, logs_addLog, htopic]
+      rw [hlogs, Devm.addLog_logs, htopic]
   have run := run.cut
   unfold entrySt at run
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (h := 0x03) (l := 0x9a) (fail := t_0396_c0)
@@ -455,7 +455,7 @@ theorem safe_approve (hsg : sevm.benvStat.rules.stateGas = none) :
       refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
       · rw [hstor, getStor_addLog, afterSstoreH_getStor_self, hst]
       · rw [hstor, getStor_addLog, afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), hst]
-      · rw [hlogs, logs_addLog, afterSstoreH_logs, hlg, htopic]
+      · rw [hlogs, Devm.addLog_logs, afterSstoreH_logs, hlg, htopic]
       · cases ho
         exact hout
   have run := run.cut
@@ -608,7 +608,7 @@ theorem safe_mint (hsg : sevm.benvStat.rules.stateGas = none) :
       rfl
     · rw [hstor, getStor_addLog, getStor_afterStore_neH ha, getStor_afterStore_neH ha,
         afterSloadH_getStor]
-    · rw [hlogs, logs_addLog, logs_afterStoreH, logs_afterStoreH, afterSloadH_logs, htopic]
+    · rw [hlogs, Devm.addLog_logs, logs_afterStoreH, logs_afterStoreH, afterSloadH_logs, htopic]
     · cases ho
       exact hout
 
@@ -713,7 +713,7 @@ theorem safe_burnFrom (hsg : sevm.benvStat.rules.stateGas = none) :
       rw [hstor, getStor_addLog, getStor_afterStoreH, getStor_afterStoreH, afterSloadH_getStor, e]
     · rw [hstor, getStor_addLog, getStor_afterStore_neH ha, getStor_afterStore_neH ha,
         afterSloadH_getStor]
-    · rw [hlogs, logs_addLog, logs_afterStoreH, logs_afterStoreH, afterSloadH_logs, htopic]
+    · rw [hlogs, Devm.addLog_logs, logs_afterStoreH, logs_afterStoreH, afterSloadH_logs, htopic]
     · cases ho
       exact hout
 

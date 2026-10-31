@@ -647,10 +647,6 @@ lemma Devm.addLog_getStor (devm : Devm) (log : Log) :
     Devm.getStor (devm.addLog log) = Devm.getStor devm := by
   rfl
 
-/-- A log append leaves the created-account set unchanged. -/
-lemma Devm.addLog_createdAccounts (devm : Devm) (log : Log) :
-    (devm.addLog log).createdAccounts = devm.createdAccounts := rfl
-
 /-- A machine whose created-account set is `E` is itself with that set replaced by `E`. -/
 theorem Devm.withCreatedAccounts_of_eq {d : Devm} {E : AdrSet} (h : d.createdAccounts = E) :
     d.withCreatedAccounts E = d := by

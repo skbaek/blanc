@@ -181,7 +181,7 @@ private theorem live_transfer_mem (hfork : CoveredFork sevm.benvStat.fork) (hsta
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore, getStor_afterStore, hy]
       rfl
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha]
-    · rw [logs_St_return, logs_addLog, logs_afterStore, logs_afterStore]
+    · rw [logs_St_return, Devm.addLog_logs, logs_afterStore, logs_afterStore]
     · cases ho
       exact output_St_return _ _ _ _ _ _ _
 
@@ -263,7 +263,7 @@ private theorem live_transferFrom_tail (hstatic : sevm.isStatic = false) (f d v 
   · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
     · rw [getStor_St_return, getStor_addLog, hself]
     · rw [getStor_St_return, getStor_addLog, hother a ha]
-    · rw [logs_St_return, logs_addLog, hlogs]
+    · rw [logs_St_return, Devm.addLog_logs, hlogs]
     · cases ho
       exact output_St_return _ _ _ _ _ _ _
 
@@ -696,7 +696,7 @@ private theorem live_approve_mem (hfork : CoveredFork sevm.benvStat.fork) (hstat
     · refine ⟨?_, fun a ha => ?_, ?_, fun o ho => ?_, fun h => by cases h⟩
       · rw [getStor_St_return, getStor_addLog, afterSstore_getStor_self, hst]
       · rw [getStor_St_return, getStor_addLog, afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), hst]
-      · rw [logs_St_return, logs_addLog, afterSstore_logs, hlg]
+      · rw [logs_St_return, Devm.addLog_logs, afterSstore_logs, hlg]
       · cases ho
         exact output_St_return _ _ _ _ _ _ _
   by_cases hv0 : v = 0
@@ -932,7 +932,7 @@ private theorem live_mint_mem (hfork : CoveredFork sevm.benvStat.fork) (hstatic 
         afterSload_getStor, hy, hsup']
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha,
         afterSload_getStor]
-    · rw [logs_St_return, logs_addLog, logs_afterStore, logs_afterStore, afterSload_logs]
+    · rw [logs_St_return, Devm.addLog_logs, logs_afterStore, logs_afterStore, afterSload_logs]
     · cases ho
       exact output_St_return _ _ _ _ _ _ _
 
@@ -1099,7 +1099,7 @@ private theorem live_burnFrom_mem (hfork : CoveredFork sevm.benvStat.fork) (hsta
         afterSload_getStor, hy, hsup']
     · rw [getStor_St_return, getStor_addLog, getStor_afterStore_ne ha, getStor_afterStore_ne ha,
         afterSload_getStor]
-    · rw [logs_St_return, logs_addLog, logs_afterStore, logs_afterStore, afterSload_logs]
+    · rw [logs_St_return, Devm.addLog_logs, logs_afterStore, logs_afterStore, afterSload_logs]
     · cases ho
       exact output_St_return _ _ _ _ _ _ _
 

@@ -128,7 +128,7 @@ theorem tx2_balances {post : Devm}
   obtain ⟨M, gas, image⟩ := r.image
   have postLogs : post.logs = r.balances.finalWorld.logs := by
     simpa only [St, Devm.setMach_logs] using congrArg (fun d : Devm => d.logs) image
-  rw [SwapBalances.finalWorld, afterSstore_logs, logs_addLog,
+  rw [SwapBalances.finalWorld, afterSstore_logs, Devm.addLog_logs,
     updateWorld_logs r.facts.bound0 r.facts.bound1, logs] at postLogs
   have split1 := List.append_inj'
     ((show [wethTransferLog, tx2SyncLog, tx2SwapLog] = [wethTransferLog, tx2SyncLog] ++ [tx2SwapLog]

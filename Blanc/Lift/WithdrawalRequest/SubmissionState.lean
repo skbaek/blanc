@@ -121,7 +121,7 @@ theorem submissionPost_facts (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) :
 /-- Exactly one LOG0 is appended after the three queue-word writes. -/
 theorem submissionBase_logs (sevm : Sevm) (b : Devm) (M : Mem) :
     (submissionBase sevm b M).logs = b.logs ++ [submissionLog sevm M] := by
-  rw [submissionBase, afterSstore_logs, submissionLogged, logs_addLog,
+  rw [submissionBase, afterSstore_logs, submissionLogged, Devm.addLog_logs,
     submissionWordsStore, afterSstore_logs, submissionWord1Store, afterSstore_logs,
     submissionCallerStore, afterSstore_logs, submissionTailRead, afterSload_logs,
     submissionCountStore, afterSstore_logs, submissionCountRead, afterSload_logs]
