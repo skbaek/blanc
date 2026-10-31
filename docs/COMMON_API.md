@@ -8969,7 +8969,7 @@ contract-neutral.
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness
   with `Cursor.DescOf`, `SStep`, `ConfStep` and successor `CursorOK`.
   `cursor_jinst_forward` reuses the decoded jump edge; `cursor_branch_forwardH`
-  (from `rules.stateGas = none`; `cursor_branch_forwardH_covered` is the `CoveredFork` form)
+  (from `rules.stateGas = none`; at `CoveredFork.rules_stateGas_none` it gives the modern form)
   derives the faithful branch disjunction from the checked tree and literal
   abstract target, without choosing the branch as a premise.
   `cursor_nexts_line_cont_free_forward` composes a literal instruction list into
@@ -9008,7 +9008,7 @@ contract-neutral.
   state and return continuation, use
   [`Blanc/Lift/CursorJump.lean`](../Blanc/Lift/CursorJump.lean).
   `CursorOK.jumpAt_of_jump` derives the actual JUMP byte from the checked node;
-  `CursorStateAt.gotoH` (`gotoH_covered` is the `CoveredFork` form) consumes its actual
+  `CursorStateAt.gotoH` consumes its actual
   `ConfStep` and checked lookup,
   retaining the full non-gas state and original K. The joint node/tree/lookup
   premises are discovered here; the existential result is not a reliable
@@ -9528,8 +9528,8 @@ contract-neutral.
   (`CursorOK.quietReturnH`, over the fork-free `SFunc.ReturnRegion`/`ConfStep.returnRegion`) in
   [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean); the GAS-to-call
   and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
-  [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each `_covered`
-  form there is the modern statement from `CoveredFork`; on every fork,
+  [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each modern
+  statement is its `…H` form at `CoveredFork.rules_stateGas_none`; on every fork,
   `ecrecover_activeH` activates address 1 and
   `ecrecover_output_of_processMessage_cleanH` (from `rules.stateGas = none`; its `_covered`
   form is the modern statement) reads a clean address-1 child's output, while

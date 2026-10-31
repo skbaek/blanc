@@ -1774,7 +1774,7 @@ Names that the tables above write unqualified.
 | `FrameAdmitted` | `Blanc.ExecutionTrace.ConfiguredHistoryTrace.FrameAdmitted` (`Blanc/ExecutionHistoryAdmission.lean:27`) | pointwise admission of every interpreter execution retained by a configured history, against a per-frame entry predicate |
 | `SumNof` | `Blanc.SumNof` (`Blanc/LadderBase.lean:8`) | a total below 2^256 |
 | `SystemCodeInstalled` | `Blanc.SystemCodeInstalled` (`Blanc/SystemContracts.lean:165`) | the canonical system-contract bytes are installed at their addresses |
-| `NoAuthorityAt` | `Blanc.ExecutionTrace.ConfiguredHistoryTrace.NoAuthorityAt` (`Blanc/ExecutionTraceCodeAt.lean:462`) | no authorization of any transaction of a configured history recovers to the given address |
+| `NoAuthorityAt` | `Blanc.ExecutionTrace.ConfiguredHistoryTrace.NoAuthorityAt` (`Blanc/ExecutionTraceCodeAt.lean:598`) | no authorization of any transaction of a configured history recovers to the given address |
 | `SpawnFree` | `Blanc.SpawnFree` (`Blanc/ExecutionTraceSystem.lean:24`) | the code has no instruction that could spawn a child frame, read at every offset (false of the canonical EIP-7002 code) |
 | `FootInv` | `Blanc.Lift.Weth9.FootInv` (`Blanc/Lift/Weth9/Footprint.lean:79`) | WETH9's footprint invariant: support, injective and apart tracked slots, and the tracked ledger backed by the contract's ether |
 | `KeysFresh` | `Blanc.Lift.Weth9.KeysFresh` (`Blanc/Lift/Weth9/Footprint.lean:59`) | each touched key is tracked or on an unused slot, and keys sharing a slot are one key (HASH-T) |

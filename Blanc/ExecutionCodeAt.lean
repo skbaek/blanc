@@ -14,6 +14,10 @@ function, which no fixed address can be assumed to avoid.
 The proofs follow the nonempty-code masters step for step; the only place they used the
 nonemptiness of the code was to conclude that a child's CREATE target differs from the address
 watched, which the hypothesis now states for the frames that are entered.
+
+Each step is proved once over `rules.stateGas = none` (the `ExecutionTrace.…_noStateGas` forms,
+through `Xinst.step_shapeNoStateGas`), which every historical fork satisfies; the `CoveredFork`
+statements are their corollaries by `CoveredFork.rules_stateGas_none`.
 -/
 
 namespace Blanc
@@ -274,7 +278,6 @@ lemma GenericCreate.codeAt
     rw [Resume.create_getCode ?_, h_parent a]
     exact hmsg.trans (by rw [createMsg_benv_state_getCode, h_parent a])
 
-
 theorem genericCreate.step_spawn_isCreate
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
     {mi ms : Nat} {f : Frame} {rsm : Resume}
@@ -313,12 +316,15 @@ theorem genericCall.step_spawn_isCreate_false
   all_goals obtain ⟨rfl, -⟩ := hs
   rfl
 
-/-- A CREATE-family child frame has no code address. -/
-theorem Xinst.step_spawn_create_codeAddress {sevm : Sevm} {devm : Devm} {x : Xinst}
-    (hfork : CoveredFork sevm.benvStat.fork) {f : Frame} {rsm : Resume}
+namespace ExecutionTrace
+
+/-- A CREATE-family child frame has no code address, under `stateGas = none`. -/
+theorem Xinst.step_spawn_create_codeAddress_noStateGas {sevm : Sevm} {devm : Devm}
+    {x : Xinst} (hsg : sevm.benvStat.rules.stateGas = none)
+    {f : Frame} {rsm : Resume}
     (hs : Xinst.step sevm devm x = .spawn f rsm) (hc : f.isCreate = true) :
     f.inner.codeAddress = none := by
-  rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hsh, -⟩ |
+  rcases Xinst.step_shapeNoStateGas sevm devm x hsg with ⟨ex, hsh, -⟩ |
     ⟨d, e, na, mi, ms, hf, hsh⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
@@ -327,19 +333,32 @@ theorem Xinst.step_spawn_create_codeAddress {sevm : Sevm} {devm : Devm} {x : Xin
   · exact absurd hc (by rw [genericCall.step_spawn_isCreate_false hs]; simp only [Bool.false_eq_true,
     not_false_eq_true])
 
+end ExecutionTrace
+
+/-- A CREATE-family child frame has no code address. -/
+theorem Xinst.step_spawn_create_codeAddress {sevm : Sevm} {devm : Devm} {x : Xinst}
+    (hfork : CoveredFork sevm.benvStat.fork) {f : Frame} {rsm : Resume}
+    (hs : Xinst.step sevm devm x = .spawn f rsm) (hc : f.isCreate = true) :
+    f.inner.codeAddress = none :=
+  ExecutionTrace.Xinst.step_spawn_create_codeAddress_noStateGas hfork.rules_stateGas_none hs hc
+
 /-- The CREATE frame this instruction enters, if any, never targets `a`. -/
 def Xinst.AvoidsAt (a : Adr) (sevm : Sevm) (devm : Devm) (x : Xinst) : Prop :=
   ∀ f rsm cevm, Xinst.step sevm devm x = .spawn f rsm → f.enter = .run cevm →
     f.isCreate = true → f.inner.currentTarget ≠ a
 
-/-- **The code at `a` along one call-type instruction**, given that its child keeps it and that
-the instruction enters no CREATE frame at `a`. -/
-lemma Xinst.codeAt_effectRecAvoid {a : Adr} (x : Xinst) :
+namespace ExecutionTrace
+
+/-- **The code at `a` along one call-type instruction**, given that its
+child keeps it and that the instruction enters no CREATE frame at `a`.
+Neutral form: the covered step shape is replaced by the
+`stateGas = none` one. -/
+lemma Xinst.codeAt_effectRecAvoid_noStateGas {a : Adr} (x : Xinst) :
     ∀ {sevm : Sevm} {pre : Devm} {xl : Xlot} {out : Execution},
-      CoveredFork sevm.benvStat.fork → Xinst.AvoidsAt a sevm pre x →
+      sevm.benvStat.rules.stateGas = none → Xinst.AvoidsAt a sevm pre x →
       Xlot.Rel (Devm.CodeAt a) xl →
       Xinst.Run sevm pre x xl out → Execution.Rel (Devm.CodeAt a) pre out := by
-  intro sevm devm xl exn hfork havoid hxl run
+  intro sevm devm xl exn hsg havoid hxl run
   have inv := Xlot.invAt_of_rel hxl
   unfold Xinst.Run at run
   have lift : ∀ {d : Devm}, Devm.InstructionFrame devm d →
@@ -348,7 +367,7 @@ lemma Xinst.codeAt_effectRecAvoid {a : Adr} (x : Xinst) :
     cases exn with
     | error e => exact h.trans (hf.getCode a).symm
     | ok d' => exact h.trans (hf.getCode a).symm
-  rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hs, hframe⟩ |
+  rcases Xinst.step_shapeNoStateGas sevm devm x hsg with ⟨ex, hs, hframe⟩ |
     ⟨d, e, na, mi, ms, hf, hs⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, -, -, hs⟩ <;> rw [hs] at run
@@ -363,6 +382,17 @@ lemma Xinst.codeAt_effectRecAvoid {a : Adr} (x : Xinst) :
     intro h
     exact havoid f rsm cevm (hs.trans hsf) henter hcreate (hc.2.1.trans h.symm)
   · exact lift hf (GenericCall.codeAt inv run)
+
+end ExecutionTrace
+
+/-- **The code at `a` along one call-type instruction**, given that its child keeps it and that
+the instruction enters no CREATE frame at `a`. -/
+lemma Xinst.codeAt_effectRecAvoid {a : Adr} (x : Xinst) :
+    ∀ {sevm : Sevm} {pre : Devm} {xl : Xlot} {out : Execution},
+      CoveredFork sevm.benvStat.fork → Xinst.AvoidsAt a sevm pre x →
+      Xlot.Rel (Devm.CodeAt a) xl →
+      Xinst.Run sevm pre x xl out → Execution.Rel (Devm.CodeAt a) pre out :=
+  fun hfork => ExecutionTrace.Xinst.codeAt_effectRecAvoid_noStateGas x hfork.rules_stateGas_none
 
 theorem Devm.codeAt_refl (a : Adr) : ReflexiveRel (Devm.CodeAt a) := fun _ => rfl
 
@@ -386,10 +416,12 @@ lemma Linst.codeAt_effect (a : Adr) (l : Linst) : Linst.Effect (Devm.CodeAt a) l
   have hf := Linst.run_codeFrame hrun
   cases out <;> exact hf a
 
-/-- **One interpreter step keeps the code at `a`**, given that its child keeps it and that it
-enters no CREATE frame at `a`. -/
-lemma Evm.step_codeAt {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot}
-    {out : Execution} (hfork : CoveredFork sevm.benvStat.fork)
+namespace ExecutionTrace
+
+/-- **One interpreter step keeps the code at `a`**, given that its child
+keeps it and that it enters no CREATE frame at `a`. Neutral form. -/
+lemma Evm.step_codeAt_noStateGas {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {xl : Xlot} {out : Execution} (hsg : sevm.benvStat.rules.stateGas = none)
     (hav : ∀ x, Xinst.At sevm.code pc x → Xinst.AvoidsAt a sevm devm x)
     (hxl : Xlot.Rel (Devm.CodeAt a) xl)
     (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
@@ -407,7 +439,8 @@ lemma Evm.step_codeAt {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlo
       | reg r => exact Ninst.effectRec_reg (Rinst.codeAt_effect a r) hxl hrun
       | exec x =>
         simp only [Ninst.step_exec] at hrun
-        exact Xinst.codeAt_effectRecAvoid x hfork (hav x hgi) hxl (XStep.run_toStep.mp hrun)
+        exact Xinst.codeAt_effectRecAvoid_noStateGas x hsg (hav x hgi) hxl
+          (XStep.run_toStep.mp hrun)
       | push xs hxs => exact Ninst.push_effectRec_of_instructionFrame hIR hxl hrun
       | dupn imm => exact Ninst.dupn_effectRec_of_instructionFrame hIR hxl hrun
       | swapn imm => exact Ninst.swapn_effectRec_of_instructionFrame hIR hxl hrun
@@ -423,6 +456,18 @@ lemma Evm.step_codeAt {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlo
       obtain ⟨-, rfl⟩ := hrun
       exact Linst.codeAt_effect a l rfl
 
+end ExecutionTrace
+
+/-- **One interpreter step keeps the code at `a`**, given that its child keeps it and that it
+enters no CREATE frame at `a`. -/
+lemma Evm.step_codeAt {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot}
+    {out : Execution} (hfork : CoveredFork sevm.benvStat.fork)
+    (hav : ∀ x, Xinst.At sevm.code pc x → Xinst.AvoidsAt a sevm devm x)
+    (hxl : Xlot.Rel (Devm.CodeAt a) xl)
+    (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
+    Execution.Rel (Devm.CodeAt a) devm out :=
+  ExecutionTrace.Evm.step_codeAt_noStateGas hfork.rules_stateGas_none hav hxl hrun
+
 lemma Xinst.avoidsAt_of_step {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
     (H : ∀ f rsm pc' cevm, Evm.step ⟨pc, sevm, devm⟩ = .spawn f rsm pc' →
       f.enter = .run cevm → f.isCreate = true → f.inner.currentTarget ≠ a) :
@@ -432,20 +477,24 @@ lemma Xinst.avoidsAt_of_step {a : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
   rw [Evm.step_next hx]
   simp only [Ninst.step, XStep.toStep, hs, Ninst.size]
 
-/-- **An execution keeps the code at `a`, and so does every frame it enters**, when it enters no
-CREATE frame targeting `a` (a frame with no code address is a CREATE frame, the only kind that
-installs code). -/
-theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
+namespace ExecutionTrace
+
+/-- **An execution keeps the code at `a`, and so does every frame it
+enters**, when it enters no CREATE frame targeting `a`. Neutral form of
+`Exec.codeAt_avoid`: coverage is replaced by `stateGas = none`, carried
+to spawned children by the exact spawn environment equality. -/
+theorem Exec.codeAt_avoid_noStateGas {a : Adr} {pc : Nat} {sevm : Sevm}
+    {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (hsg : sevm.benvStat.rules.stateGas = none)
     (avoid : ∀ root ∈ Exec.rawFrameRoots run,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
     Execution.Rel (Devm.CodeAt a) pre out ∧
       ∀ root ∈ Exec.rawFrameRoots run, root.devm.getCode a = pre.getCode a := by
-  revert hfork avoid
+  revert hsg avoid
   induction run with
   | halt hstep =>
-      intro hfork avoid
-      have hc := Evm.step_codeAt (a := a) (xl := .none) hfork
+      intro hsg avoid
+      have hc := Evm.step_codeAt_noStateGas (a := a) (xl := .none) hsg
         (Xinst.avoidsAt_of_step (fun f rsm pc' cevm h => by rw [hstep] at h; cases h))
         trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
       refine ⟨hc, ?_⟩
@@ -455,28 +504,30 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       subst member
       rfl
   | @cont pc sevm devm pc' devm' ex hstep next ih =>
-      intro hfork avoid
+      intro hsg avoid
       have hself : sevm.codeAddress = none → sevm.currentTarget ≠ a :=
         avoid ⟨pc, sevm, devm, ex, Exec.cont hstep next⟩ (List.mem_cons_self ..)
-      have hc : Devm.CodeAt a _ _ := Evm.step_codeAt (xl := .none) (out := .ok _) hfork
+      have hc : Devm.CodeAt a _ _ := Evm.step_codeAt_noStateGas (xl := .none) (out := .ok _)
+        hsg
         (Xinst.avoidsAt_of_step (fun f rsm pc' cevm h => by rw [hstep] at h; cases h))
         trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
-      obtain ⟨hrel, hroots⟩ := ih hfork (by
+      obtain ⟨hrel, hroots⟩ := ih hsg (by
         intro root member
         simp only [Exec.rawFrameRoots, List.mem_cons] at member
         rcases member with rfl | member
         · exact hself
-        · exact avoid root (by simp only [rawFrameRoots, rawFrameDescendants, mem_cons, member,
-          or_true]))
+        · exact avoid root (by simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants,
+          List.mem_cons, member, or_true]))
       refine ⟨Execution.Rel.trans_left (Devm.codeAt_trans a) hc hrel, ?_⟩
       intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · rfl
-      · exact (hroots root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hc
+      · exact (hroots root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+          or_true])).trans hc
   | doneErr hstep henter hresume =>
-      intro hfork avoid
-      have hc := Evm.step_codeAt (a := a) (xl := .none) (out := .error _) hfork
+      intro hsg avoid
+      have hc := Evm.step_codeAt_noStateGas (a := a) (xl := .none) (out := .error _) hsg
         (Xinst.avoidsAt_of_step (fun f' rsm' pc' cevm h hen => by
           rw [hstep] at h; cases h; rw [henter] at hen; cases hen))
         trivial (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hresume.symm⟩)
@@ -487,50 +538,53 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       subst member
       rfl
   | @doneOk pc sevm devm f rsm pc' r devm' ex hstep henter hresume next ih =>
-      intro hfork avoid
+      intro hsg avoid
       have hself : sevm.codeAddress = none → sevm.currentTarget ≠ a :=
         avoid ⟨pc, sevm, devm, ex, Exec.doneOk hstep henter hresume next⟩
           (List.mem_cons_self ..)
-      have hc : Devm.CodeAt a _ _ := Evm.step_codeAt (xl := .none) (out := .ok _) hfork
+      have hc : Devm.CodeAt a _ _ := Evm.step_codeAt_noStateGas (xl := .none) (out := .ok _) hsg
         (Xinst.avoidsAt_of_step (fun f' rsm' pc' cevm h hen => by
           rw [hstep] at h; cases h; rw [henter] at hen; cases hen))
         trivial (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hresume.symm⟩)
-      obtain ⟨hrel, hroots⟩ := ih hfork (by
+      obtain ⟨hrel, hroots⟩ := ih hsg (by
         intro root member
         simp only [Exec.rawFrameRoots, List.mem_cons] at member
         rcases member with rfl | member
         · exact hself
-        · exact avoid root (by simp only [rawFrameRoots, rawFrameDescendants, mem_cons, member,
-          or_true]))
+        · exact avoid root (by simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants,
+          List.mem_cons, member, or_true]))
       refine ⟨Execution.Rel.trans_left (Devm.codeAt_trans a) hc hrel, ?_⟩
       intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
       · rfl
-      · exact (hroots root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hc
+      · exact (hroots root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+          or_true])).trans hc
   | @runErr pc sevm devm f rsm pc' cevm raw e hstep henter child hresume ih =>
-      intro hfork avoid
-      have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
+      intro hsg avoid
+      have hsg_c : cevm.sta.benvStat.rules.stateGas = none := by
+        rw [Evm.step_spawn_child_benvStat hstep henter]
+        exact hsg
       have hstart := (Evm.step_spawn_child hstep henter).2.1 a
       have hcavoid : cevm.sta.codeAddress = none → cevm.sta.currentTarget ≠ a :=
         avoid ⟨cevm.pc, cevm.sta, cevm.dyna, raw, child⟩
-          (by simp only [rawFrameRoots, rawFrameDescendants, mem_cons, Exec.Deriv.mk.injEq,
-            ExceptT.stM_eq, true_or, or_true])
+          (by simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
+            Exec.Deriv.mk.injEq, ExceptT.stM_eq, true_or, or_true])
       have hcode : cevm.sta.codeAddress = f.inner.codeAddress := by
         obtain ⟨benv, -, h⟩ := Frame.enter_run_inv henter
         rw [h]
         rfl
       obtain ⟨x, -, hxs, -⟩ := Evm.step_spawn_inv hstep
-      obtain ⟨hrel, hroots⟩ := ih hfork_c (by
+      obtain ⟨hrel, hroots⟩ := ih hsg_c (by
         intro root member
         exact avoid root (by
           simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member ⊢
           exact Or.inr member))
-      have hc := Evm.step_codeAt (a := a) (xl := .some ⟨_, _⟩) (out := .error _) hfork
+      have hc := Evm.step_codeAt_noStateGas (a := a) (xl := .some ⟨_, _⟩) (out := .error _) hsg
         (Xinst.avoidsAt_of_step (fun f' rsm' pc'' cevm' h hen hcr => by
           rw [hstep] at h; cases h; rw [henter] at hen; cases hen
           rw [← Frame.enter_run_currentTarget henter]
-          exact hcavoid (hcode.trans (Xinst.step_spawn_create_codeAddress hfork hxs hcr))))
+          exact hcavoid (hcode.trans (Xinst.step_spawn_create_codeAddress_noStateGas hsg hxs hcr))))
         hrel (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hresume.symm⟩)
       refine ⟨hc, ?_⟩
       intro root member
@@ -538,25 +592,28 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       rcases member with rfl | rfl | member
       · rfl
       · exact hstart
-      · exact (hroots root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hstart
+      · exact (hroots root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+          or_true])).trans hstart
   | @runOk pc sevm devm f rsm pc' cevm raw devm' ex hstep henter child hresume next
       ihChild ihNext =>
-      intro hfork avoid
+      intro hsg avoid
       have hself : sevm.codeAddress = none → sevm.currentTarget ≠ a :=
         avoid ⟨pc, sevm, devm, ex, Exec.runOk hstep henter child hresume next⟩
           (List.mem_cons_self ..)
-      have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
+      have hsg_c : cevm.sta.benvStat.rules.stateGas = none := by
+        rw [Evm.step_spawn_child_benvStat hstep henter]
+        exact hsg
       have hstart := (Evm.step_spawn_child hstep henter).2.1 a
       have hcavoid : cevm.sta.codeAddress = none → cevm.sta.currentTarget ≠ a :=
         avoid ⟨cevm.pc, cevm.sta, cevm.dyna, raw, child⟩
-          (by simp only [rawFrameRoots, rawFrameDescendants, mem_cons, Exec.Deriv.mk.injEq,
-            ExceptT.stM_eq, mem_append, true_or, or_true])
+          (by simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
+            Exec.Deriv.mk.injEq, ExceptT.stM_eq, List.mem_append, true_or, or_true])
       have hcode : cevm.sta.codeAddress = f.inner.codeAddress := by
         obtain ⟨benv, -, h⟩ := Frame.enter_run_inv henter
         rw [h]
         rfl
       obtain ⟨x, -, hxs, -⟩ := Evm.step_spawn_inv hstep
-      obtain ⟨hrelChild, hrootsChild⟩ := ihChild hfork_c (by
+      obtain ⟨hrelChild, hrootsChild⟩ := ihChild hsg_c (by
         intro root member
         exact avoid root (by
           simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
@@ -564,21 +621,22 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
           rcases member with h | h
           · exact Or.inr (Or.inl h)
           · exact Or.inr (Or.inr (Or.inl h))))
-      have hc : Devm.CodeAt a _ _ := Evm.step_codeAt (xl := .some ⟨_, _⟩) (out := .ok _) hfork
+      have hc : Devm.CodeAt a _ _ := Evm.step_codeAt_noStateGas (xl := .some ⟨_, _⟩)
+        (out := .ok _) hsg
         (Xinst.avoidsAt_of_step (fun f' rsm' pc'' cevm' h hen hcr => by
           rw [hstep] at h; cases h; rw [henter] at hen; cases hen
           rw [← Frame.enter_run_currentTarget henter]
-          exact hcavoid (hcode.trans (Xinst.step_spawn_create_codeAddress hfork hxs hcr))))
+          exact hcavoid (hcode.trans (Xinst.step_spawn_create_codeAddress_noStateGas hsg hxs hcr))))
         hrelChild (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hresume.symm⟩)
-      obtain ⟨hrel, hroots⟩ := ihNext hfork (by
+      obtain ⟨hrel, hroots⟩ := ihNext hsg (by
         intro root member
         simp only [Exec.rawFrameRoots, List.mem_cons] at member
         rcases member with rfl | member
         · exact hself
         · exact avoid root (by
-            simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
-              List.mem_append]
-            exact Or.inr (Or.inr (Or.inr member))))
+          simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
+            List.mem_append]
+          exact Or.inr (Or.inr (Or.inr member))))
       refine ⟨Execution.Rel.trans_left (Devm.codeAt_trans a) hc hrel, ?_⟩
       intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
@@ -586,7 +644,22 @@ theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out :
       rcases member with rfl | rfl | member | member
       · rfl
       · exact hstart
-      · exact (hrootsChild root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hstart
-      · exact (hroots root (by simp only [rawFrameRoots, mem_cons, member, or_true])).trans hc
+      · exact (hrootsChild root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+          or_true])).trans hstart
+      · exact (hroots root (by simp only [Exec.rawFrameRoots, List.mem_cons, member,
+          or_true])).trans hc
+
+end ExecutionTrace
+
+/-- **An execution keeps the code at `a`, and so does every frame it enters**, when it enters no
+CREATE frame targeting `a` (a frame with no code address is a CREATE frame, the only kind that
+installs code). -/
+theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
+    (avoid : ∀ root ∈ Exec.rawFrameRoots run,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
+    Execution.Rel (Devm.CodeAt a) pre out ∧
+      ∀ root ∈ Exec.rawFrameRoots run, root.devm.getCode a = pre.getCode a :=
+  ExecutionTrace.Exec.codeAt_avoid_noStateGas run hfork.rules_stateGas_none avoid
 
 end Blanc

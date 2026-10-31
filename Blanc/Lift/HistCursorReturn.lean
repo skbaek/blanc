@@ -9,7 +9,7 @@ import Blanc.Lift.ReachChain
 `ReachChain.noExec_after_of_cursor` read their `CoveredFork` premise only through
 `node_soundM` and `cursor_stepS`, that is only through `rules.stateGas = none`. The `…H` forms
 here take that fact alone, through `node_soundM_noStateGas`, `cursor_stepS_noStateGas` and the
-cuts of `HistCursorCuts`. Each `_covered` form recovers the modern statement verbatim.
+cuts of `HistCursorCuts`. A modern statement is the `…H` form at `CoveredFork.rules_stateGas_none`.
 
 The fork-free return-region invariant is hoisted here as the public
 `SFunc.ReturnRegion`/`ConfStep.returnRegion`; `CursorQuietReturn` keeps a private copy.
@@ -38,13 +38,6 @@ theorem CursorOK.sourceRunH {code : ByteArray} {c : Cert} {F : Exec.Deriv} {κ :
   rcases source with halted | ⟨_, returned, _, _, _, run, _, _⟩
   · exact ⟨.halted post, halted⟩
   · exact ⟨.returned returned, run⟩
-
-theorem CursorOK.sourceRunH_covered {code : ByteArray} {c : Cert} {F : Exec.Deriv} {κ : Cursor}
-    (checked : Cert.check code c = true) (placed : CursorOK code c F κ)
-    {post : Devm} (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork) :
-    ∃ outcome, SFunc.RunP (StepIn F) c.prog F.sevm F.devm κ.f outcome :=
-  placed.sourceRunH checked success fork.rules_stateGas_none
 
 /-- `CursorOK.sourceRunReturn` from `rules.stateGas = none` alone. -/
 theorem CursorOK.sourceRunReturnH {code : ByteArray} {c : Cert}
@@ -85,14 +78,6 @@ theorem CursorOK.sourceRunReturnH {code : ByteArray} {c : Cert}
           rw [arity, ← count] at unknown
           exact List.rel_append unknown callerFrame
 
-theorem CursorOK.sourceRunReturnH_covered {code : ByteArray} {c : Cert}
-    {F : Exec.Deriv} {κ : Cursor} (checked : Cert.check code c = true)
-    (placed : CursorOK code c F κ) {post : Devm} (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork) :
-    SFunc.RunP (StepIn F) c.prog F.sevm F.devm κ.f (.halted post) ∨
-      CursorSourceReturn code c F κ post :=
-  placed.sourceRunReturnH checked success fork.rules_stateGas_none
-
 /-! ## Exec-free suffixes -/
 
 /-- `cursor_reach_of_parentPrefix` from `rules.stateGas = none` alone. -/
@@ -111,14 +96,6 @@ theorem cursor_reach_of_parentPrefixH {code : ByteArray} {c : Cert}
     refine ⟨last, .head (primitive.mono fun run => run.toRun) ?_, lastPlaced⟩
     simpa only [same] using rest
 
-theorem cursor_reach_of_parentPrefixH_covered {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F N : Exec.Deriv}
-    (path : Exec.Deriv.ParentPrefix F N) {κ : Cursor}
-    (placed : CursorOK code c F κ) (fork : CoveredFork F.sevm.benvStat.fork) :
-    ∃ κ', Reach Ninst.Run c.prog F.sevm (κ.conf F.devm) (κ'.conf N.devm) ∧
-      CursorOK code c N κ' :=
-  cursor_reach_of_parentPrefixH checked path placed fork.rules_stateGas_none
-
 /-- Exclusion of later external instructions from `rules.stateGas = none` alone. -/
 theorem CursorOK.noExecSuffixH {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
@@ -132,16 +109,6 @@ theorem CursorOK.noExecSuffixH {code : ByteArray} {c : Cert}
   obtain ⟨next, reach, nextPlaced⟩ := cursor_reach_of_parentPrefixH checked path placed hsg
   obtain ⟨tail, shape, _⟩ := nextPlaced.tree_of_exec decoded
   exact Reach.false_of_execFree closed reach ⟨x, tail, shape⟩ tree continuations
-
-theorem CursorOK.noExecSuffixH_covered {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (placed : CursorOK code c F κ) (fork : CoveredFork F.sevm.benvStat.fork)
-    {E : List Nat} (closed : ExecFreeSet c.prog E = true)
-    (tree : κ.f.execFreeIn E = true)
-    (continuations : ∀ f ∈ κ.K.map Cont.f, f.execFreeIn E = true) :
-    ∀ N, Exec.Deriv.ParentPrefix F N → ∀ x,
-      ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
-  placed.noExecSuffixH checked fork.rules_stateGas_none closed tree continuations
 
 /-- Exclusion of a successful reverting suffix from `rules.stateGas = none` alone. -/
 theorem CursorOK.revertLineNoOkH {code : ByteArray} {c : Cert}
@@ -159,13 +126,6 @@ theorem CursorOK.revertLineNoOkH {code : ByteArray} {c : Cert}
     rw [lastPlaced.code_eq, lastPlaced.pc_eq]
     exact byteAt_linst_at opcode
   exact Linst.revert_not_ok ((N.exc.last_inv instruction).symm.trans (sameExn.trans success))
-
-theorem CursorOK.revertLineNoOkH_covered {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (placed : CursorOK code c F κ) (fork : CoveredFork F.sevm.benvStat.fork)
-    (ns : List Ninst) (tree : κ.f = ns.foldr SFunc.next (.last .revert))
-    {post : Devm} (success : F.exn = .ok post) : False :=
-  placed.revertLineNoOkH checked fork.rules_stateGas_none ns tree success
 
 /-- `reach_between` from `rules.stateGas = none` alone. -/
 theorem reach_betweenH {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
@@ -212,15 +172,6 @@ theorem noExec_after_of_cursorH {code : ByteArray} {c : Cert} (hc : Cert.check c
   obtain ⟨κ', reach, okN⟩ := reach_betweenH hc hF hp hsg ok
   obtain ⟨g, hg, -⟩ := okN.tree_of_exec hat
   exact Reach.false_of_execFree hE reach ⟨x, g, hg⟩ hf hK
-
-theorem noExec_after_of_cursorH_covered {code : ByteArray} {c : Cert}
-    (hc : Cert.check code c = true)
-    {R F N : Exec.Deriv} (hF : Exec.Deriv.ParentPrefix R F) (hp : Exec.Deriv.ParentPrefix F N)
-    (hfork : CoveredFork R.sevm.benvStat.fork) {κ : Cursor} (ok : CursorOK code c F κ)
-    {E : List Nat} (hE : ExecFreeSet c.prog E = true) (hf : κ.f.execFreeIn E = true)
-    (hK : ∀ s ∈ κ.K.map Cont.f, s.execFreeIn E = true) :
-    ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
-  noExec_after_of_cursorH hc hF hp hfork.rules_stateGas_none ok hE hf hK
 
 /-! ## Call-free internal returns -/
 
@@ -379,19 +330,5 @@ theorem CursorOK.quietReturnH {code : ByteArray} {c : Cert} {F : Exec.Deriv} {κ
       SFunc.Run c.prog F.sevm F.devm κ.f (.returned N.devm) :=
   cursor_quietReturn_scopedH checked free closed F κ [] caller K post placed success hsg
     ⟨bodyFree, bodyNoHalt⟩ (by intro f member; cases member) continuations
-
-theorem CursorOK.quietReturnH_covered {code : ByteArray} {c : Cert} {F : Exec.Deriv}
-    {κ : Cursor} {E : List Nat} {post : Devm} {caller : SFunc} {K : List SFunc}
-    (checked : Cert.check code c = true) (placed : CursorOK code c F κ)
-    (success : F.exn = .ok post) (fork : CoveredFork F.sevm.benvStat.fork)
-    (free : ExecFreeSet c.prog E = true) (closed : NoHaltSet c.prog E = true)
-    (bodyFree : κ.f.execFreeIn E = true) (bodyNoHalt : κ.f.noHalt = true)
-    (continuations : κ.K.map Cont.f = caller :: K) :
-    ∃ (N : Exec.Deriv) (next : Cursor),
-      Exec.Deriv.ExecFreeUntil F N ∧ N.sevm = F.sevm ∧ N.exn = F.exn ∧
-      CursorOK code c N next ∧ next.f = caller ∧ next.K.map Cont.f = K ∧
-      SFunc.Run c.prog F.sevm F.devm κ.f (.returned N.devm) :=
-  placed.quietReturnH checked success fork.rules_stateGas_none free closed bodyFree bodyNoHalt
-    continuations
 
 end Blanc.Lift

@@ -24,8 +24,7 @@ flag:
 * `CoveredFork.rules_delegationEnabled` and `CallCodeH_iff_of_covered`;
 * `StaticAnsweredH` (`StaticAnsweredH.of_covered`, `StaticAnsweredH_iff_of_covered`), `ri_staticcallH`, `ri_staticcall_boundedH`,
   `rx_staticcallH`, and `ri_staticcall_boundedH_covered` recovering the modern statement;
-* the value-carrying `CALL` inversions `of_step_call_val_with_depth_frameH` (with
-  `_covered`), `of_run_call_val_with_depth_frameH`, and `ri_call_postH`.
+* the value-carrying `CALL` inversions `of_step_call_val_with_depth_frameH`, `of_run_call_val_with_depth_frameH`, and `ri_call_postH`.
 
 Nothing here mentions a contract.
 -/
@@ -944,59 +943,6 @@ theorem of_step_call_val_with_depth_frameH
             Resume.call_state h_split.symm, Resume.call_returnData h_split.symm,
             Resume.call_memory h_split.symm,
             by rw [Resume.call_stack_flag h_split.symm, ite_eq_right herr], spawned⟩
-
-/-- The H inversion recovers the modern `of_step_call_val_with_depth_frame` statement on a
-covered fork. -/
-theorem of_step_call_val_with_depth_frameH_covered
-    {pc : Nat} {xl : Xlot} {sevm : Sevm} {s sf : Devm} {g c v ii is oi os : B256}
-    {xs : Stack}
-    (hp : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
-    (h_fill : xl.Filled)
-    (h_run : Ninst.StepRun pc sevm s Ninst.call xl (.ok sf))
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    (((0 : B256) :: xs <<+ sf.stack) ∧ Devm.WorldEq s sf) ∨
-    ∃ (parent child : Devm) (dp : Bool) (na : Adr)
-      (code : ByteArray) (avail : Nat),
-      0 < sevm.depth ∧
-      s.stack = g :: c :: v :: ii :: is :: oi :: os :: parent.stack ∧
-      parent.state = s.state ∧
-      parent.memory
-        = s.memory.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] ∧
-      parent.logs = s.logs ∧
-      parent.output = s.output ∧
-      ((getDelegatedCodeAddress (s.getCode c.toAdr) = none ∧
-          na = c.toAdr ∧ code = s.getCode c.toAdr ∧ dp = false) ∨
-        (∃ d, getDelegatedCodeAddress (s.getCode c.toAdr) = some d ∧
-          na = d ∧ code = s.getCode d ∧ dp = true)) ∧
-      Xlot.Filled xl ∧
-      ProcessMessage
-        (callMsg sevm parent
-          (min g.toNat (except64th avail)
-            + (if v.toNat = 0 then 0 else gCallStipend))
-          v sevm.currentTarget c.toAdr na true false
-          ((s.memory.read ii.toNat is.toNat).1) code dp)
-        xl (.ok child) ∧
-      child.error.isSome = false ∧
-      (Resume.call parent oi.toNat os.toNat).run (.ok child) = .ok sf ∧
-      sf.state = child.state ∧
-      sf.returnData = child.output ∧
-      sf.memory = parent.memory.write oi.toNat (child.output.take os.toNat) ∧
-      sf.stack = (1 : B256) :: parent.stack ∧
-      Ninst.step ⟨pc, sevm, s⟩ Ninst.call =
-        .spawn (Frame.ofCall
-          (callMsg sevm parent
-            (min g.toNat (except64th avail)
-              + (if v.toNat = 0 then 0 else gCallStipend))
-            v sevm.currentTarget c.toAdr na true false
-            ((s.memory.read ii.toNat is.toNat).1) code dp))
-          (Resume.call parent oi.toNat os.toNat) (pc + 1) := by
-  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => f.ruleSet.delegationEnabled = true) rfl rfl rfl rfl
-  rcases of_step_call_val_with_depth_frameH hp h_fill h_run hfork.rules_stateGas_none with
-    hfail | ⟨parent, child, dp, na, code, avail, h1, h2, h3, h4, h5, h6, hdel, rest⟩
-  · exact Or.inl hfail
-  · rw [hdeleg, CallCodeH_enabled] at hdel
-    exact Or.inr ⟨parent, child, dp, na, code, avail, h1, h2, h3, h4, h5, h6, hdel, rest⟩
 
 /-- `of_run_call_val_with_depth_frame` under `rules.stateGas = none` and the actual rules. -/
 theorem of_run_call_val_with_depth_frameH
