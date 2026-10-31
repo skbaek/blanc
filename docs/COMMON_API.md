@@ -3804,6 +3804,13 @@ Use the generic frame lemmas in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.le
 Use Jaune's update-first laws named `Devm.<update>_<projection>` before
 unfolding a concrete state tower. Examples include:
 
+- `Jaune.DevmProjections` (imported by `Blanc/CommonProofs.lean`, so visible in every module
+  downstream of it; otherwise `import Jaune.DevmProjections`) holds the J1
+  pairs `Devm.<update>_<projection>` and
+  `addAccessed{Address,StorageKey}_<projection>` (`addLog`, `setStorVal`,
+  `setTransVal`, `withRefundCounter`, `memWrite`, `memExtends`, `setCode`,
+  `withGasLeft`, `withStack`, `withReturnData`, `withOutput`, `incrNonce`,
+  `setBal`, `setMach`); search it before restating a projection.
 - `Devm.setMach_stack`, `Devm.setMach_memory`,
   `Devm.setMach_accessedStorageKeys`, and the other `setMach` projections.
 - `Devm.withOutput_state`, `Devm.withOutput_logs`,
@@ -5230,12 +5237,6 @@ concatenated list) and `RlpConcrete.encode_list_long` (a list whose joint item
 encoding is a known body of at least 56 bytes gets the long-list header over
 that abstract body); a signed creation transaction's canonical re-encoding uses
 them without reducing its payload (3Crv `HistoricalTx.tx_encoded`).
-The additive owner
-[`Blanc/ExecutionBodyTransactionCut.lean`](../Blanc/ExecutionBodyTransactionCut.lean)
-also provides `RlpConcrete.decode_bytes_long_one` and
-`RlpConcrete.decode_list_long_one` for one-byte long-length headers.
-They preserve the exact payload and suffix, and the list equation retains
-the supplied actual recursive child parse.
 `decode_byte`, `decode_empty_bytes`, `decode_empty_list`, and
 `decode_bytes_three` cover the small field headers; `parse_cons` composes
 the actual first-item and remaining-list equations.
