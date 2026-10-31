@@ -8,6 +8,16 @@ Generated from scripts/proof-recipes.toml; do not edit by hand.
 Consult these recipes before beginning a manual multi-step walk or inversion.
 A suggestion is guidance, not a proof that its recipe applies at a particular goal.
 
+**Method-entry rule.** A recipe prescribes a method, so a new or changed recipe
+(from 2026-11-01 on) states, in its `preferred_path` or `boundary` text in
+`scripts/proof-recipes.toml`, the four lines of the method-entry template in
+`docs/COMMON_API.md`: *Probe* (the smallest goal or module the method was tried
+on, by path), *Measured cost* (elaboration seconds and lines on that probe, and
+the host), *Simplest alternative tried* (the plainer route, such as one
+`decide +kernel` or an existing lemma, with its measured cost or why it fails),
+and *Date*. A recipe without them is unmeasured guidance; existing recipes gain
+the lines when next changed or relied on, not by a wholesale rewrite.
+
 ## `tagged-storage-region-separation`
 
 - Status: `active`
