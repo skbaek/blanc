@@ -88,39 +88,7 @@ theorem historicalModern_solInv :
       pragueEmpty modernNoAuthority modernNoFrame pragueCode inv
   exact DepositReplay.append left right initialHistory invariant
 
-/-- Whole-span form observes exactly the actual appended retained trace. -/
-theorem historicalModern_wholeSpan_solInv :
-    SolInv (B.state.getStor ca)
-      (initialHistory ++ committedNodesIn ca (historical.append modern.toHistForkIn)) := by
-  rw [committedNodesIn_historicalModern]
-  exact historicalModern_solInv historical modern openings pragueInstalled
-    historicalSystemNoAuthority checkpointEmpty historicalNoAuthority
-    historicalNoFrame rewards modernSystemNoAuthority modernNoAuthority
-    modernNoFrame installed invariant
-
 end Join
-
-/-- An honest empty-prefix specialization: its premises are the unchanged modern ones,
-plus the ordinary witnesses needed to form the retained reflexive prefix. -/
-theorem historicalModern_solInv_refl {ca : Adr} {cfg : ChainConfig} {P B : BlockChain}
-    {initialHistory : List B256} (modern : ConfiguredHistoryTrace cfg P B)
-    (hcfg : cfg.Valid) (hctx : P.ValidContext) (hid : cfg.chainId = P.chainId)
-    (systemInstalled : SystemCodeInstalled P.state)
-    (systemNoAuthority : ∀ p ∈ systemContracts, modern.NoAuthorityAt p.1)
-    (systemNoFrame : ∀ p ∈ systemContracts, ∀ root ∈ modern.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ p.1)
-    (checkpointEmpty : P.state.getCode 2 = ByteArray.empty)
-    (noAuthority : modern.NoAuthorityAt 2)
-    (noFrame : ∀ root ∈ modern.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ (2 : Adr))
-    (installed : P.state.getCode ca = code)
-    (invariant : SolInv (P.state.getStor ca) initialHistory) :
-    SolInv (B.state.getStor ca) (initialHistory ++ committedNodesIn ca
-      ((ConfiguredHistoryTraceIn.refl (F := HistFork) hcfg hctx hid).append modern.toHistForkIn)) := by
-  rw [committedNodesIn_historicalModern]
-  change SolInv _ (initialHistory ++ ([] ++ committedNodes ca modern))
-  exact configuredHistory_solInv_sys modern systemInstalled systemNoAuthority systemNoFrame
-    checkpointEmpty noAuthority noFrame installed invariant
 
 /-- Local interpretation of exactly the adopted D/C/P checkpoint and installed-code
 observations (Plans 0e09e208; payload SHA-256 8a3839f2…fddf3a). Header identities
@@ -291,26 +259,6 @@ theorem historicalSeam_wholeSpan_solInv :
   rw [committedNodesIn_historicalModern]
   exact historicalSeam_solInv dc first tail modern anchors checkpointEmpty historicalNoFrame rewards
     modernSystemNoAuthority modernNoAuthority modernNoFrame installed invariant
-
-/-- The count is the length of precisely the ordered historical-plus-modern extraction. -/
-theorem historicalSeam_count :
-    (B.state.getStor ca).get solCountSlot = Nat.toB256
-      (initialHistory ++ (committedNodesIn ca ((dc.step first).append tail) ++
-        committedNodes ca modern)).length ∧
-      (initialHistory ++ (committedNodesIn ca ((dc.step first).append tail) ++
-        committedNodes ca modern)).length < 2 ^ 32 :=
-  solCount_eq_of_solInv (historicalSeam_solInv dc first tail modern anchors
-    checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
-    modernNoAuthority modernNoFrame installed invariant)
-
-/-- The mixed root belongs to that same exact ordered extraction. -/
-theorem historicalSeam_root :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (B.state.getStor ca)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++
-        (committedNodesIn ca ((dc.step first).append tail) ++ committedNodes ca modern)) :=
-  BeaconDeposit.root_correct _ _ _ (historicalSeam_solInv dc first tail modern anchors
-    checkpointEmpty historicalNoFrame rewards modernSystemNoAuthority
-    modernNoAuthority modernNoFrame installed invariant).2
 
 end Anchored
 

@@ -4,8 +4,8 @@ import Blanc.Composition.PairTwoToken
 # C6(b) generic: share value with no token antecedent
 
 `pair_two_token_feeOn_product` / `pair_two_token_feeOff_product` (Appendix A §10): the share-value
-rows of `pair_history_feeOn_product` / `…feeOff…` over a Pair whose two tokens are writer-shadowed
-cores with holder laws for the Pair.  Both token halves of `EntryNoShrink` are theorems
+replay laws `SourceReplay.feeOn_product` / `…feeOff…` over the replay of `pair_history_committed`,
+for a Pair whose two tokens are writer-shadowed cores with holder laws for the Pair.  Both token halves of `EntryNoShrink` are theorems
 (`pair_two_token_joint`); the fee-on row keeps no antecedent, the fee-off row keeps only the
 factory's fee-off answer `sourceReplayFeeOff`.
 -/

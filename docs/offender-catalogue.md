@@ -118,6 +118,8 @@ or an explicit owner request.
 ## Current resource-limit population
 
 Blanc has 91 live scopes in 27 files: 4 heartbeat and 87 recursion-depth.
+(Superseded 2026-10-31: the consolidation landing removed 28 scopes, so 60 remain; `scripts/proof-debt-baseline.json`
+is the authority, and the table below predates that landing.)
 There are no ambient scopes. The generated first-census disposition ledger
 retains its 94 recorded stable IDs:
 

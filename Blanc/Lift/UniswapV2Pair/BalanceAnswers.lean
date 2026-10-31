@@ -332,10 +332,6 @@ theorem encodeWords_two_word1 (a b : B256) :
   rw [List.drop_left' (B256.length_toBytes a), List.take_of_length_le
     (Nat.le_of_eq (B256.length_toBytes b)), B256.toB256_toBytes]
 
-/-- The fee mint of the entry state with the lock taken is that of the entry state. -/
-theorem feeAmount_unlocked (st : State) (u : B256) (feeTo : Adr) (r0 r1 : Nat) :
-    feeAmount { st with unlocked := u } feeTo r0 r1 = feeAmount st feeTo r0 r1 := rfl
-
 /-- **A successful burn returns its two payouts**: the call's output words are
 `⌊L·b_i/(T + F)⌋`, `L` the Pair's own LP balance, `b_i` the transcript's first two answers and `F` the
 fee minted at its third. -/

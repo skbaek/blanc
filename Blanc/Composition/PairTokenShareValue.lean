@@ -4,8 +4,8 @@ import Blanc.Composition.PairTokenJoint
 # C4(a): share value with one token's half discharged (generic token side)
 
 `pair_token_feeOff_product` / `pair_token_feeOn_product` (Appendix A §8, with the C3 hypotheses of
-A8/A11): the share-value rows of `pair_history_feeOff_product_with` / `…feeOn…` over the Pair's
-history, where the per-side answer premise on `side` is a theorem rather than a hypothesis.  Only
+A8/A11): the share-value replay laws `SourceReplay.feeOff_product` / `…feeOn…` over the replay of
+the Pair's history, where the per-side answer premise on `side` is a theorem rather than a hypothesis.  Only
 the other side's half (`sourceReplayAnswersSide side.other` / `sourceReplayNoShrinkSide side.other`)
 stays a premise.
 
@@ -23,7 +23,7 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
   Blanc.Composition.PairTokenJoint
 
 /-- **C4(a), fee off, generic token side, over the writer-shadowed core** (Route R).  The
-share-value row of `pair_history_feeOff_product`
+fee-off share-value replay law `SourceReplay.feeOff_product` over the Pair's history
 with the `side` half of the per-side premise removed: only the other side's half (and the
 fee-recipient answer) stays. -/
 theorem pair_token_feeOff_product_w {pair T : Adr} {B : Book} (C : CoreW T B)
@@ -105,8 +105,8 @@ theorem pair_token_feeOn_product_w {pair T : Adr} {B : Book} (C : CoreW T B)
   · exact ⟨mine, other⟩
   · exact ⟨other, mine⟩
 
-/-- **C4(a), fee off, generic token side.**  The share-value row of `pair_history_feeOff_product`
-with the `side` half of the per-side premise removed: only the other side's half (and the
+/-- **C4(a), fee off, generic token side.**  The fee-off share-value replay law
+`SourceReplay.feeOff_product` over the Pair's history with the `side` half of the per-side premise removed: only the other side's half (and the
 fee-recipient answer) stays. -/
 theorem pair_token_feeOff_product {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
     (abi : Erc20Abi B) (self : SelfCaller C) (side : TokenSide) {cfg : ChainConfig}

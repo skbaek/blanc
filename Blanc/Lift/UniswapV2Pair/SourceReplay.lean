@@ -43,14 +43,6 @@ inductive SourceReplay : State → List SourceInvocation → State → Prop
       (tail : SourceReplay out.frame.current.state rest finish) :
       SourceReplay st (inv :: rest) finish
 
-/-- Update receipts are accumulated in invocation order, preserving each
-invocation's nested committed update order. -/
-def sourceReplayUpdates : State → List SourceInvocation → List TaggedOracleUpdate
-  | _, [] => []
-  | st, inv :: rest =>
-    let out := inv.run st
-    out.frame.current.updates ++ sourceReplayUpdates out.frame.current.state rest
-
 /-- Exact relational replay is realized by the unchanged deterministic driver. -/
 theorem SourceReplay.realizes {st finish : State} {invs : List SourceInvocation}
     (replay : SourceReplay st invs finish) : runSourceInvocations st invs = some finish := by
@@ -80,25 +72,6 @@ theorem SourceReplay.ledger {st finish : State} {invs : List SourceInvocation}
     have one := (runTyped_ledger initial inv.context inv.entry inv.transcript).2
     rw [(runTyped_of_exact consumed).1] at one
     exact ih one
-
-/-- The final two accumulators are the ordered modular folds of exactly the
-update receipts produced by the replay, including nested committed updates. -/
-theorem SourceReplay.oracle {st finish : State} {invs : List SourceInvocation}
-    (replay : SourceReplay st invs finish) :
-    finish.price0CumulativeLast =
-        oracleFold0 st.price0CumulativeLast (sourceReplayUpdates st invs) ∧
-      finish.price1CumulativeLast =
-        oracleFold1 st.price1CumulativeLast (sourceReplayUpdates st invs) := by
-  induction replay with
-  | nil st => exact ⟨rfl, rfl⟩
-  | @cons st finish inv rest out bytes consumed successful tail ih =>
-    have runEq : inv.run st = out := (runTyped_of_exact consumed).1
-    have one := runTyped_oracle_accumulates (st := st) (ctx := inv.context)
-      (entry := inv.entry) (transcript := inv.transcript)
-    rw [(runTyped_of_exact consumed).1] at one
-    rw [sourceReplayUpdates, runEq, oracleFold0_append, oracleFold1_append,
-      ← one.1, ← one.2]
-    exact ih
 
 /-- Independent fee-recipient and backing answer conditions at each carried
 state. No model acceptance or product conclusion is part of these conditions. -/
@@ -191,16 +164,5 @@ theorem SourceReplay.feeOn_product {st finish : State} {invs : List SourceInvoca
       rw [(runTyped_of_exact consumed).1] at bound
       exact bound
     · exact ih later before inv' after member positive
-
-/-- The oracle law over all replayed receipts includes both timestamp and
-accumulator modular arithmetic already present in the exact per-update law. -/
-theorem SourceReplay.oracle_mod {st finish : State} {invs : List SourceInvocation}
-    (replay : SourceReplay st invs finish) :
-    finish.price0CumulativeLast.toNat =
-        (st.price0CumulativeLast.toNat + oracleSum0 (sourceReplayUpdates st invs)) % 2 ^ 256 ∧
-      finish.price1CumulativeLast.toNat =
-        (st.price1CumulativeLast.toNat + oracleSum1 (sourceReplayUpdates st invs)) % 2 ^ 256 := by
-  rw [replay.oracle.1, replay.oracle.2]
-  exact ⟨oracleFold0_law _ _, oracleFold1_law _ _⟩
 
 end Blanc.Lift.UniswapV2Pair

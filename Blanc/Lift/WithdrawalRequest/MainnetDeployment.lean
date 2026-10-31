@@ -339,47 +339,4 @@ theorem history_fifo_mainnet {before after checkpoint final : BlockChain}
     history ⟨obs.beaconAtP, obs.historyAtP, obs.consolidationAtP⟩ senders authorities avoid
     occurrences
 
-/-- **Exact EIP-7002 delivery from the actual mainnet deployment.** Over the same observed
-deployment block, Cancun prefix and checkpoint as `history_fifo_mainnet`, a queue entry at
-index `q` at block B's request boundary is emitted by block D at position `q % 16` when the
-actual post-checkpoint history extension from B to D has depth `q / 16`, after exactly the
-entries ahead of it. -/
-theorem block_word_delivery_mainnet
-    {before after checkpoint preB postB preD postD : BlockChain}
-    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig before after)
-    (cut : block.bodyTrace.transactions.TxSplit 0)
-    (following : ConfiguredHistoryTraceIn HistFork mainnetChainConfig after checkpoint)
-    (obs : WithdrawalDeploymentObservation block checkpoint)
-    (prefixSystemAvoid : ∀ root ∈ block.rawFrames ++ following.rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
-    (historyB : ConfiguredHistoryTrace mainnetChainConfig checkpoint preB)
-    (blockB : ConfiguredBlockTrace mainnetChainConfig preB postB)
-    (historyD : ConfiguredHistoryTrace mainnetChainConfig checkpoint preD)
-    (blockD : ConfiguredBlockTrace mainnetChainConfig preD postD) {depth : Nat}
-    (extension : (ConfiguredHistoryTrace.step historyB blockB).ExtendsBy
-      (ConfiguredHistoryTrace.step historyD blockD) depth)
-    (senders : (ConfiguredHistoryTrace.step historyD blockD).NoSenderAt systemAddress)
-    (authorities : (ConfiguredHistoryTrace.step historyD blockD).NoAuthorityAt systemAddress)
-    (avoid : ∀ root ∈ (ConfiguredHistoryTrace.step historyD blockD).rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ systemAddress)
-    (occurrences : ((ConfiguredHistoryTrace.step historyD blockD).settledFrames.flatMap
-      submissionFramePayments).length ≤ wordOccurrenceCap)
-    (modelB : Blanc.WithdrawalRequest.State)
-    (repB : RepresentsStorage (blockB.bodyTrace.requestBenv.state.getStor
-      withdrawalRequestPredeployAddress).get modelB)
-    {q : Nat} {entry : Blanc.WithdrawalRequest.Entry} (queued : modelB.queue[q]? = some entry)
-    (exactDepth : depth = q / 16) :
-    ∃ modelD : Blanc.WithdrawalRequest.State,
-      RepresentsStorage (blockD.bodyTrace.requestBenv.state.getStor
-        withdrawalRequestPredeployAddress).get modelD ∧
-      blockD.bodyTrace.requests.withdrawalOut.returnData = systemOutput modelD ∧
-      (emitted modelD)[q % 16]? = some entry ∧
-      (emitted modelD).take (q % 16 + 1) =
-        (modelB.queue.drop (16 * depth)).take (q % 16 + 1) :=
-  block_word_delivery_from_deployment (mainnetDeploymentHistory block cut following obs)
-    (mainnetDeploymentHistory_admission block cut following obs prefixSystemAvoid)
-    historyB blockB historyD blockD extension
-    ⟨obs.beaconAtP, obs.historyAtP, obs.consolidationAtP⟩ senders authorities avoid
-    occurrences modelB repB queued exactDepth
-
 end Blanc.Lift.WithdrawalRequest

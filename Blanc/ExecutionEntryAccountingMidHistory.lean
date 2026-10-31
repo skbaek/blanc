@@ -5,10 +5,10 @@ import Blanc.ExecutionMidHistoryInFacts
 /-!
 # The carried invariant at committed target frames of a mid-block history
 
-`ConfiguredHistoryTrace.entryGood_settled` (`ExecutionEntryAccounting.lean`) replays a
-whole-block history from a checkpoint. A history rooted at an actual transaction (a
-deployment, say) starts right after that transaction instead: a `MidHistoryTraceIn` on the
-covered fork domain. This module states the same conclusion for it, through the covered
+The entry carrier of `ExecutionEntryAccounting.lean` observes every non-static committed
+frame at a contract with `EntryGood`. A history rooted at an actual transaction (a
+deployment, say) starts right after that transaction: a `MidHistoryTraceIn` on the covered
+fork domain. This module states the history conclusion for it, through the covered
 instance of the entry ladder (`AccountingLadderAdmitted.toIn`) and the mid-history replay
 rung (`AccountingLadderAdmittedIn.midHistoryIn`). The mid-history rung additionally consumes
 the installed certificate of the contract's code; reward funding is derived from the fork
@@ -22,8 +22,11 @@ open Jaune ExecutionAccountingReplay
 namespace ExecutionTrace
 
 /-- **The carried invariant at the entry of every committed target frame of a mid-block
-history.** As `ConfiguredHistoryTrace.entryGood_settled`, for a covered-fork history starting
-right after one transaction of a retained block. -/
+history.** For a covered-fork history starting right after one transaction of a retained
+block, admitted at `ca`, from a state satisfying the contract's state invariant and `I`: every
+settlement-committed non-static frame at `ca` (including frames re-entered below the contract's
+own non-static calls) has `EntryGood`, and `I` holds at the end. Rolled-back frames are not
+claimed. -/
 theorem MidHistoryTraceIn.entryGood_settled {c : ContractSpecSem} {ca : Adr}
     {entry : Sevm → Devm → Prop} {I : Stor → Prop}
     {cfg : ChainConfig} {start : Benv} {future : BlockChain} {C : ByteArray}

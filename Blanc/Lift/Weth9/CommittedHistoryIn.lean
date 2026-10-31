@@ -1,5 +1,6 @@
 import Blanc.Lift.Weth9.CommittedHistory
-import Blanc.Lift.Weth9.DeployHistory
+import Blanc.Lift.Weth9.FootHistory
+import Blanc.Lift.Weth9.Creation.Deploy
 import Blanc.Lift.HistCursorReturn
 import Blanc.ExecutionModelAccountingIn
 import Blanc.ExecutionAccountingHistoryIn
@@ -15,9 +16,8 @@ The counterpart of `weth9_history_committed` (`CommittedHistory.lean`) for a con
 * `weth9_exec_nodeIn`, `weth9_spawnKindsIn`, `weth9_spawnReplayIn` — the spawn obligations from
   `stateGas = none` (`reach_of_parentPrefix_noStateGas`, `cursor_stepS_noStateGas`,
   `CursorOK.sourceRunReturnH`, `noExec_after_of_cursorH`, `lift_sound_in_noStateGas`);
-* `weth9AccountingLadderIn` (`modelLadderIn`) and `weth9_history_committedIn`, with its
-  `HistFork` instance `weth9_history_committedHist`;
-* `weth9_history_committed_from_byzantium_deployment` — from the Byzantium deployment output.
+* `weth9AccountingLadderIn` (`modelLadderIn`), which `DeployBlockHistory.lean` runs over the
+  history after WETH9's creation transaction (`weth9_mid_history_committedIn`).
 -/
 
 namespace Blanc.Lift.Weth9
@@ -285,147 +285,5 @@ noncomputable def weth9AccountingLadderIn (F : Fork → Prop)
     (fun _ hf => committedFrameInvocations_foreign hf) hsgF
     (weth9_spawnKindsIn F hsgF ca) (weth9_spawnReplayIn F hsgF ca hinj)
     (footSpec_preservesAdmittedIn F hsgF ca hinj)
-
-/-- The settlement-committed WETH9 writer invocations at the contract of a selected-domain
-history, in trace order. -/
-def committedInvocationsIn {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (ca : Adr) (trace : ConfiguredHistoryTraceIn F cfg checkpoint future) : List Invocation :=
-  trace.settledFrames.flatMap (committedFrameInvocations ca)
-
-/-- **The WETH9 model replays the committed chain over a selected fork domain.** The statement of
-`weth9_history_committed` for a `ConfiguredHistoryTraceIn F` history whose forks have no state gas
-(`BodyStageCapabilities F`): from one initial footprint `K₀` and the trace-local freshness of the
-touched keys, the code stays installed, the ether does not overflow, the future storage carries
-the footprint over `K₀ ∪ touched`, the future footprint ledger is the model run over exactly the
-settlement-committed writer invocations at the contract in trace order, and the model run with the
-contract's ether is backed. -/
-theorem weth9_history_committedIn {F : Fork → Prop} (capabilities : BodyStageCapabilities F)
-    {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain} {K₀ : Key → Prop}
-    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
-    (sumNof : SumNof checkpoint.state.bal)
-    (initial : FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca))
-    (fresh : KeysFresh K₀ (historyTouchedKeysIn ca trace)) :
-    some (future.state.getCode ca).toList = weth9Sem.image ∧ SumNof future.state.bal ∧
-      FootInv (historyKeyUniverseIn ca trace K₀) (future.state.getStor ca)
-        (future.state.bal ca) ∧
-      (ledger K₀ (checkpoint.state.getStor ca)).run
-          (replayCalls (committedInvocationsIn ca trace)) =
-        some (ledger (historyKeyUniverseIn ca trace K₀) (future.state.getStor ca)) ∧
-      ∃ s : State,
-        (State.mk (ledger K₀ (checkpoint.state.getStor ca)) (checkpoint.state.bal ca).toNat).run
-            (replayCalls (committedInvocationsIn ca trace)) = some s ∧
-          s.ledger = ledger (historyKeyUniverseIn ca trace K₀) (future.state.getStor ca) ∧
-          s.Backed := by
-  let U := historyKeyUniverseIn ca trace K₀
-  have extended : FootInv U (checkpoint.state.getStor ca) (checkpoint.state.bal ca) :=
-    initial.extend fresh
-  have admitted : trace.FrameAdmitted ca (footEntry U) := by
-    apply (trace.frameAdmitted_iff_rawFrames ca _).2
-    intro root member target k hk
-    exact Or.inr (List.mem_flatMap.mpr ⟨root, member, by simpa only [target, ite_true] using hk⟩)
-  have start : (footSpec U).StateInv ca checkpoint.state :=
-    footSpec_stateInv_iff.mpr ⟨installed, sumNof, extended.support, extended.backed⟩
-  have rewards := trace.rewardCreditsFunded capabilities
-  have finish := trace.stateInv_admitted_semIn
-    (footSpec_preservesAdmittedIn F capabilities.stateGas_none ca extended.inj)
-    capabilities admitted rewards start installedCert rfl
-  obtain ⟨hcode, hside, hsup, hback⟩ := footSpec_stateInv_iff.mp finish
-  obtain ⟨steps, replay, observed⟩ :=
-    (weth9AccountingLadderIn F capabilities.stateGas_none ca extended.inj).configuredHistoryIn
-      trace admitted capabilities rewards start installedCert rfl
-  change LedgerReplay (ledger U (checkpoint.state.getStor ca)) steps
-    (ledger U (future.state.getStor ca)) at replay
-  change steps = trace.settledFrames.flatMap (committedFrameInvocations ca) at observed
-  have hsteps : steps = committedInvocationsIn ca trace := observed
-  subst hsteps
-  have hrun : (ledger K₀ (checkpoint.state.getStor ca)).run
-      (replayCalls (committedInvocationsIn ca trace)) =
-        some (ledger U (future.state.getStor ca)) := by
-    have := replay
-    unfold LedgerReplay at this
-    have hext : ledger U (checkpoint.state.getStor ca) = ledger K₀ (checkpoint.state.getStor ca) :=
-      ledger_extend initial fresh
-    rw [hext] at this
-    exact this
-  refine ⟨hcode, hside, ⟨hsup, extended.inj, extended.apart, hback⟩, hrun, ?_⟩
-  have hmodel := State.run_ledger
-    (State.mk (ledger K₀ (checkpoint.state.getStor ca)) (checkpoint.state.bal ca).toNat)
-    (replayCalls (committedInvocationsIn ca trace))
-  simp only [hrun] at hmodel
-  cases hs : (State.mk (ledger K₀ (checkpoint.state.getStor ca))
-      (checkpoint.state.bal ca).toNat).run (replayCalls (committedInvocationsIn ca trace)) with
-  | none => rw [hs] at hmodel; cases hmodel
-  | some s =>
-    rw [hs] at hmodel
-    simp only [Option.map_some, Option.some.injEq] at hmodel
-    refine ⟨s, rfl, hmodel, ?_⟩
-    exact State.run_backed (s := ⟨ledger K₀ (checkpoint.state.getStor ca),
-      (checkpoint.state.bal ca).toNat⟩) initial.backed hs
-
-/-- `weth9_history_committedIn` on the historical domain `HistFork`. -/
-theorem weth9_history_committedHist {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {K₀ : Key → Prop}
-    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
-    (installed : some (checkpoint.state.getCode ca).toList = weth9Sem.image)
-    (sumNof : SumNof checkpoint.state.bal)
-    (initial : FootInv K₀ (checkpoint.state.getStor ca) (checkpoint.state.bal ca))
-    (fresh : KeysFresh K₀ (historyTouchedKeysIn ca trace)) :
-    some (future.state.getCode ca).toList = weth9Sem.image ∧ SumNof future.state.bal ∧
-      FootInv (historyKeyUniverseIn ca trace K₀) (future.state.getStor ca)
-        (future.state.bal ca) ∧
-      (ledger K₀ (checkpoint.state.getStor ca)).run
-          (replayCalls (committedInvocationsIn ca trace)) =
-        some (ledger (historyKeyUniverseIn ca trace K₀) (future.state.getStor ca)) ∧
-      ∃ s : State,
-        (State.mk (ledger K₀ (checkpoint.state.getStor ca)) (checkpoint.state.bal ca).toNat).run
-            (replayCalls (committedInvocationsIn ca trace)) = some s ∧
-          s.ledger = ledger (historyKeyUniverseIn ca trace K₀) (future.state.getStor ca) ∧
-          s.Backed :=
-  weth9_history_committedIn BodyStageCapabilities.historical trace installed sumNof initial fresh
-
-/-- **WETH9 committed history from its Byzantium deployment.** The recorded creation input, run as
-a CREATE message under Byzantium rules, succeeds with a post-state `post` whose WETH9 storage
-carries the empty footprint; from any checkpoint whose WETH9 account carries `post`'s code and
-storage and whose balances sum below the word bound, every `HistFork` history with trace-local
-freshness of its touched keys keeps the runtime installed and `SumNof`, carries the footprint over
-the touched keys, and its future footprint ledger is the model run, from the deployed ledger, of
-exactly the settlement-committed writer invocations at WETH9, backed by the contract's ether. -/
-theorem weth9_history_committed_from_byzantium_deployment :
-    ∃ post, processCreateMessage (Creation.deployMsg.withFork .byzantium) = .ok post ∧
-      (post.getCode Creation.weth9Address).toList = code.toList ∧
-      ∀ {cfg : ChainConfig} {checkpoint future : BlockChain}
-        (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future),
-        checkpoint.state.getCode Creation.weth9Address = post.getCode Creation.weth9Address →
-        checkpoint.state.getStor Creation.weth9Address =
-          Devm.getStor post Creation.weth9Address →
-        SumNof checkpoint.state.bal →
-        KeysFresh (fun _ => False) (historyTouchedKeysIn Creation.weth9Address trace) →
-        some (future.state.getCode Creation.weth9Address).toList = weth9Sem.image ∧
-          SumNof future.state.bal ∧
-          FootInv (historyKeyUniverseIn Creation.weth9Address trace (fun _ => False))
-            (future.state.getStor Creation.weth9Address)
-            (future.state.bal Creation.weth9Address) ∧
-          (ledger (fun _ => False) (Devm.getStor post Creation.weth9Address)).run
-              (replayCalls (committedInvocationsIn Creation.weth9Address trace)) =
-            some (ledger (historyKeyUniverseIn Creation.weth9Address trace (fun _ => False))
-              (future.state.getStor Creation.weth9Address)) ∧
-          ∃ s : State,
-            (State.mk (ledger (fun _ => False) (Devm.getStor post Creation.weth9Address))
-                (checkpoint.state.bal Creation.weth9Address).toNat).run
-                (replayCalls (committedInvocationsIn Creation.weth9Address trace)) = some s ∧
-              s.ledger = ledger (historyKeyUniverseIn Creation.weth9Address trace (fun _ => False))
-                (future.state.getStor Creation.weth9Address) ∧
-              s.Backed := by
-  obtain ⟨-, post, hpost, hcode, hfoot⟩ := Creation.weth9_deploy_init_byzantium
-  refine ⟨post, hpost, hcode, ?_⟩
-  intro cfg checkpoint future trace hc hs hsum fresh
-  have committed := weth9_history_committedHist trace (K₀ := fun _ => False) ?_ hsum ?_ fresh
-  · rw [hs] at committed
-    exact committed
-  · show some _ = some code.toList
-    rw [hc, hcode]
-  · rw [hs]
-    exact hfoot _
 
 end Blanc.Lift.Weth9

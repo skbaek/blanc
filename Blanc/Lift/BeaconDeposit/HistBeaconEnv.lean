@@ -140,43 +140,5 @@ theorem configuredHistoryIn_solInv {ca : Adr} {cfg : ChainConfig}
     noAuthority noFrame rewards initial
   exact configuredHistoryIn_solInv_admitted trace admitted rewards installed invariant
 
-/-- The final count word is the length of the same exact extracted node sequence. -/
-theorem configuredHistoryIn_count {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
-    (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.PragueNoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ (2 : Adr))
-    (rewards : trace.RewardCreditsFunded)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    (future.state.getStor ca).get solCountSlot =
-      Nat.toB256 (initialHistory ++ committedNodesIn ca trace).length ∧
-      (initialHistory ++ committedNodesIn ca trace).length < 2 ^ 32 :=
-  solCount_eq_of_solInv (configuredHistoryIn_solInv trace systemInstalled systemNoAuthority
-    checkpointEmpty noAuthority noFrame rewards installed invariant)
-
-/-- The final mixed root belongs to precisely that ordered committed node sequence. -/
-theorem configuredHistoryIn_root {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
-    (systemInstalled : trace.SystemCodeAtOpenings)
-    (systemNoAuthority : ∀ p ∈ systemContracts, trace.PragueNoAuthorityAt p.1)
-    (checkpointEmpty : checkpoint.state.getCode 2 = ByteArray.empty)
-    (noAuthority : trace.PragueNoAuthorityAt 2)
-    (noFrame : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ (2 : Adr))
-    (rewards : trace.RewardCreditsFunded)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodesIn ca trace) :=
-  BeaconDeposit.root_correct _ _ _
-    (configuredHistoryIn_solInv trace systemInstalled systemNoAuthority
-      checkpointEmpty noAuthority noFrame rewards installed invariant).2
-
 end Blanc.Lift.BeaconDeposit
 

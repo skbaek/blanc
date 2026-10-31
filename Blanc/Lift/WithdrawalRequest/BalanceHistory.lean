@@ -155,15 +155,6 @@ theorem history_balance_replay {cfg : ChainConfig} {checkpoint future : BlockCha
     some Blanc.withdrawalRequestCode.toList
   rw [code]
 
-theorem history_balance_nondecreasing {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future)
-    (code : checkpoint.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode) :
-    (checkpoint.state.bal withdrawalRequestPredeployAddress).toNat ≤
-      (future.state.bal withdrawalRequestPredeployAddress).toNat := by
-  obtain ⟨steps, replay, _⟩ := history_balance_replay trace code
-  omega
-
 theorem history_message_values_bound {cfg : ChainConfig} {checkpoint future : BlockChain}
     (trace : ExecutionTrace.ConfiguredHistoryTrace cfg checkpoint future)
     (code : checkpoint.state.getCode withdrawalRequestPredeployAddress =

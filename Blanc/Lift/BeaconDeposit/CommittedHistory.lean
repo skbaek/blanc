@@ -87,30 +87,6 @@ theorem configuredHistory_solInv {ca : Adr} {cfg : ChainConfig}
   rw [observed] at replay
   exact replay initialHistory invariant
 
-/-- The final deployed count word is the length of the same exact history. -/
-theorem configuredHistory_count {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    (future.state.getStor ca).get solCountSlot =
-      Nat.toB256 (initialHistory ++ committedNodes ca trace).length ∧
-      (initialHistory ++ committedNodes ca trace).length < 2 ^ 32 :=
-  solCount_eq_of_solInv (configuredHistory_solInv trace admitted installed invariant)
-
-/-- The final mixed root belongs to the same exact extracted node sequence. -/
-theorem configuredHistory_root {ca : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {initialHistory : List B256}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (admitted : trace.FrameAdmitted ca beaconEntry)
-    (installed : checkpoint.state.getCode ca = code)
-    (invariant : SolInv (checkpoint.state.getStor ca) initialHistory) :
-    BeaconDeposit.Acc.root Bytes.sha256 (solAcc (future.state.getStor ca)) =
-      BeaconDeposit.mixedRootOf Bytes.sha256 (initialHistory ++ committedNodes ca trace) :=
-  BeaconDeposit.root_correct _ _ _
-    (configuredHistory_solInv trace admitted installed invariant).2
-
 /-- A deployed warm count read after the configured history returns precisely
 the little-endian length of its initial history and committed deposits. -/
 theorem configuredHistory_count_view {cfg : ChainConfig}

@@ -102,7 +102,7 @@ index repaired unless hole = tail, or (absent) the pushed slot cleared and the
 length unchanged. The final storage also has a Registry witness of exactly the removed entry
 list `removedEntries entries t`.
 
-Superseded as a headline by `l2_registerPauser_zero` (a pc-zero concrete execution of the installed runtime) and, at history level, `lido_history_l2_committed`. -/
+Superseded as a headline by `l2_registerPauser_zero` (a pc-zero concrete execution of the installed runtime) and, at history level, `lido_remove_repairs`. -/
 theorem l2_registerPauser_zero_wrapper {sevm : Sevm} {d : Devm} {o : Outcome} {w : SFunc}
     {entries : List Entry}
     (hfork : CoveredFork sevm.benvStat.fork) (hw : prog[59]? = some w)
