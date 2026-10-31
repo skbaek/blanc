@@ -1,6 +1,7 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsRead
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsXferKeep
 import Blanc.Composition.UniswapV2PairWeth9SkimEnvOne
+import Jaune.DevmProjections
 
 /-!
 # Skim's USDC legs (USDC = token0, WETH9 = token1; U9e)
@@ -213,7 +214,7 @@ theorem skimUsdcLeg0_spec {sevm : Sevm} {b qd0 : Devm} {callGasQ1 : Nat} {U : Us
         (skimLegAmount sevm b qd0) (skimToWord sevm) (skimToken0 sevm b) 0x1a2b
         (skimUsdcLeg0Need sevm b qd0 callGasQ1 + skimUsdcLeg0Charge sevm b qd0)).returnData
   rw [hgas]
-  conv => rhs; rw [hskel, skimLeg0Next_withGasLeft, withGasLeft_returnData]
+  conv => rhs; rw [hskel, skimLeg0Next_withGasLeft, Devm.withGasLeft_returnData]
   have hn : skimUsdcLeg0Need sevm b qd0 callGasQ1 =
       skimLeg0Next sevm b qd0 callGasQ1 (skimUsdcLeg0Skel sevm b qd0) +
         safeTransferPostCharge (skimLegMem sevm qd0).size 128

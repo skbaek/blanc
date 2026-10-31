@@ -2,6 +2,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9LegsRead
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsXferKeep
 import Blanc.Composition.UniswapV2PairWeth9LegsBurn1
 import Blanc.Composition.UniswapV2PairWeth9LegsBurnFinal
+import Jaune.DevmProjections
 
 /-!
 # Burn's three USDC legs (USDC = token0, WETH9 = token1; U9 freeze §3, U9d)
@@ -209,7 +210,7 @@ theorem burnUsdcLeg0_spec {sevm : Sevm} {b : Devm} {M : Mem} {p0 : B256} {w : Bu
       (usdcTransferCall sevm b (burnLegStack w R) M p0 w.amount0 w.recipient w.token0 0x1698
         (burnUsdcLeg0Need sevm b M p0 w R callGas1 + burnUsdcLeg0Charge sevm b M p0 w R)).returnData
   rw [hgas]
-  conv => rhs; rw [hskel, burnLeg0Next_withGasLeft, withGasLeft_returnData]
+  conv => rhs; rw [hskel, burnLeg0Next_withGasLeft, Devm.withGasLeft_returnData]
   have hn : burnUsdcLeg0Need sevm b M p0 w R callGas1 =
       burnLeg0Next M p0 w callGas1 (burnUsdcLeg0Skel sevm b M p0 w R) +
         safeTransferPostCharge M.size p0 (burnUsdcLeg0Skel sevm b M p0 w R).returnData := rfl

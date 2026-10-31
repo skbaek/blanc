@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairWeth9SwapLegs
 import Blanc.Composition.UniswapV2PairWeth9XLegCall
+import Jaune.DevmProjections
 
 /-!
 # The swap's WETH9 transfer leg when both outputs are paid (WETH9 = token1)
@@ -88,7 +89,7 @@ theorem swapWethLeg1_spec_both {sevm : Sevm} {b : Devm} {st : UniswapV2Pair.Stat
         (leg1Ptr sevm d0) (swapAmount1Out sevm) (swapRecipientWord sevm) st.token1.toB256 0x8e1
         (leg1Need sevm b st d0 cgC Gc + leg1Charge sevm b st d0)).returnData
   rw [hgas]
-  conv => rhs; rw [hskel, swapFrontCallbackGas_withGasLeft, withGasLeft_returnData]
+  conv => rhs; rw [hskel, swapFrontCallbackGas_withGasLeft, Devm.withGasLeft_returnData]
   have hn : leg1Need sevm b st d0 cgC Gc = swapFrontCallbackGas sevm b d0 (leg1Skel sevm b st d0) cgC Gc +
       safeTransferPostCharge (leg1Mem sevm d0).size (leg1Ptr sevm d0)
         (leg1Skel sevm b st d0).returnData := rfl

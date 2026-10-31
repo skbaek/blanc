@@ -2,6 +2,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9SwapLiveFacts
 import Blanc.Composition.UniswapV2PairUsdcWeth9JointF
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckpointF
 import Blanc.Lift.Usdc.HistFFacts
+import Jaune.DevmProjections
 
 /-!
 # C6(c): the swap liveness row over the support-free checkpoint (finite twin)
@@ -340,7 +341,7 @@ theorem pair_usdc_weth9_history_swap_live_finite {pair usdc weth : Adr} {cfg : C
       unfold leg1World swapOptWorld
       by_cases amount0 : swapAmount0Out sevm = 0
       · rw [ite_eq_left amount0, ite_eq_left amount0]
-      · rw [ite_eq_right amount0, ite_eq_right amount0, skel0, withGasLeft_state]
+      · rw [ite_eq_right amount0, ite_eq_right amount0, skel0, Devm.withGasLeft_state]
     rw [← world, ← leg1Fst]
     exact keep
   have hT : Usdc.UsdcInstalled usdc (swapFrontTransferWorld sevm pre d0 d1).state ∧
@@ -394,7 +395,7 @@ theorem pair_usdc_weth9_history_swap_live_finite {pair usdc weth : Adr} {cfg : C
   have Dstate : (swapFrontCutWorld sevm pre (usdcLeg0Skel sevm pre finish)
       (leg1Skel sevm pre finish (usdcLeg0Skel sevm pre finish)) dC).state =
       (swapFrontCutWorld sevm pre d0 d1 dC).state := by
-    rw [hy, withGasLeft_state]
+    rw [hy, Devm.withGasLeft_state]
   have tokenAdr0 : (swapTokenWord (swapCutWords sevm finish).token0).toAdr = usdc := by
     change (tokenMask finish.token0.toB256).toAdr = usdc
     rw [tokenMask_toAdr, token0]

@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerPinnedTargetStubCrossing
 import Blanc.LidoCircuitBreakerPublicPauseControl
+import Jaune.DevmProjections
 
 /-!
 # Closed pinned-target public-pause control
@@ -458,16 +459,6 @@ private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
-
-private theorem addLog_accessedStorageKeys (devm : Devm) (l : Log) :
-    (devm.addLog l).accessedStorageKeys = devm.accessedStorageKeys := rfl
-
-private theorem addLog_accessedAddresses (devm : Devm) (l : Log) :
-    (devm.addLog l).accessedAddresses = devm.accessedAddresses := rfl
-
-private theorem addLog_getStorVal (devm : Devm) (l : Log) (a : Adr)
-    (key : B256) : (devm.addLog l).getStorVal a key = devm.getStorVal a key :=
-  rfl
 
 private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
     (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
@@ -1254,7 +1245,7 @@ private theorem stubRunAddrs_B7 :
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).addLog
       ⟨stubPauseWorldSevm.currentTarget,
       [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩).accessedAddresses = Std.HashSet.emptyWithCapacity := by
-  rw [addLog_accessedAddresses,
+  rw [Devm.addLog_accessedAddresses,
     show (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -1625,7 +1616,7 @@ private theorem stubRunAfterSetBase_targetPausedCold :
     (pauseWorldCallee.toB256.toAdr,
       PinnedTargetControl.pausedUntilSlot) ∉
       stubRunAfterSetBase.accessedStorageKeys := by
-  rw [stubRunAfterSetBase, addLog_accessedStorageKeys,
+  rw [stubRunAfterSetBase, Devm.addLog_accessedStorageKeys,
     indexClearPost_accessedStorageKeys, entryClearPost_accessedStorageKeys]
   unfold stubRunRemoveBase3 stubRunCountPost stubRunKernelBase
   rw [stubRunKeys_removeBase3]
@@ -1654,7 +1645,7 @@ private theorem stubRunAfterSetBase_targetPausedZero :
   have haddr : pauseWorldCallee.toB256.toAdr ≠
       stubPauseWorldSevm.currentTarget := stubPauseWorld_target_ne_owner
   unfold stubRunAfterSetBase
-  rw [addLog_getStorVal]
+  rw [Devm.addLog_getStorVal]
   unfold indexClearPost lengthWritePost entryClearPost indexWritePost
     entryWritePost
   rw [temporalSstorePost_getStorVal_otherAddress _ _ _ _ _ _ haddr,
@@ -1680,14 +1671,14 @@ private theorem stubRunAfterSetBase_targetPausedZero :
 private theorem stubRunAfterSetBase_count :
     stubRunAfterSetBase.getStorVal configWorldOwner
       (countSlot pauseWorldPauser) = 0 := by
-  rw [stubRunAfterSetBase, addLog_getStorVal]
+  rw [stubRunAfterSetBase, Devm.addLog_getStorVal]
   simpa only [stubRunRemoveBase3, stubRunCountPost, stubRunKernelBase] using
     stubRunStor_B6_count
 
 private theorem stubRunAfterSetBase_expiry :
     stubRunAfterSetBase.getStorVal configWorldOwner
       (expirySlot pauseWorldPauser) = pauseWorldExpiry := by
-  rw [stubRunAfterSetBase, addLog_getStorVal]
+  rw [stubRunAfterSetBase, Devm.addLog_getStorVal]
   have h := (stubRunStor_B6_other pauseWorld_assignCallee_ne_expiry
     pauseWorld_count_ne_expiry pauseWorld_entryOne_ne_expiry
     pauseWorld_indexCallee_ne_expiry pauseWorld_length_ne_expiry).trans
@@ -1702,7 +1693,7 @@ private theorem stubRunAfterSetBase_accessedAddresses :
 private theorem stubRunAfterSetBase_warmCount :
     (stubPauseWorldSevm.currentTarget, countSlot pauseWorldPauser) ∈
       stubRunAfterSetBase.accessedStorageKeys := by
-  rw [stubRunAfterSetBase, addLog_accessedStorageKeys,
+  rw [stubRunAfterSetBase, Devm.addLog_accessedStorageKeys,
     indexClearPost_accessedStorageKeys, entryClearPost_accessedStorageKeys]
   simpa only [stubRunRemoveBase3, stubRunCountPost, stubRunKernelBase] using
     stubRunWarm_count_rb3
@@ -1710,7 +1701,7 @@ private theorem stubRunAfterSetBase_warmCount :
 private theorem stubRunAfterSetBase_warmExpiry :
     (stubPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) ∈
       stubRunAfterSetBase.accessedStorageKeys := by
-  rw [stubRunAfterSetBase, addLog_accessedStorageKeys,
+  rw [stubRunAfterSetBase, Devm.addLog_accessedStorageKeys,
     indexClearPost_accessedStorageKeys, entryClearPost_accessedStorageKeys]
   simpa only [stubRunRemoveBase3, stubRunCountPost, stubRunKernelBase] using
     stubRunWarm_expiry_rb3
@@ -1842,12 +1833,6 @@ private theorem stubWorld_sload_created (sevm : Sevm) (b : Devm) (k : B256) :
 private theorem stubWorld_sstore_created (sevm : Sevm) (b : Devm) (k v : B256) :
     (temporalSstorePost sevm b k v).createdAccounts = b.createdAccounts := rfl
 
-private theorem stubWorld_addLog_created (b : Devm) (l : Log) :
-    (b.addLog l).createdAccounts = b.createdAccounts := rfl
-
-private theorem stubWorld_transVal_created (b : Devm) (a : Adr) (k v : B256) :
-    (b.setTransVal a k v).createdAccounts = b.createdAccounts := rfl
-
 /-- The stub world's breaker owner is not created in its transaction, so at any
 state with the entry created-account set its actual original read is the entry
 snapshot word. -/
@@ -1858,7 +1843,7 @@ private theorem stubPauseWorld_actualOrigStor {d : Devm} {key : B256}
           lengthWritePost, indexWritePost, entryWritePost, assignmentPost,
           assignmentBase, pauseKernelBase, pauseDurationBase, pauseExpiryBase,
           pauseLockPost, stubWorld_sload_created, stubWorld_sstore_created,
-          stubWorld_addLog_created, stubWorld_transVal_created,
+          Devm.addLog_createdAccounts, Devm.setTransVal_createdAccounts,
           Devm.setMach_createdAccounts]) <;> rfl) :
     d.getOrigStorVal stubPauseWorldSevm configWorldOwner key =
       pauseLastWorldStor.get key := by
@@ -1942,7 +1927,7 @@ private theorem stubPauseWorld_successSuffix :
             lengthWritePost, indexWritePost, entryWritePost, assignmentPost,
             assignmentBase, pauseKernelBase, pauseDurationBase, pauseExpiryBase,
             pauseLockPost, stubWorld_sload_created, stubWorld_sstore_created,
-            stubWorld_addLog_created, stubWorld_transVal_created]) <;> rfl))).trans
+            Devm.addLog_createdAccounts, Devm.setTransVal_createdAccounts]) <;> rfl))).trans
         pauseLastStor_expiry)
     hwarmExpiry
     (stubRunSvc_reset (by decide) (by decide))

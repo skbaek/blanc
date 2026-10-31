@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsXfer
 import Blanc.Composition.UniswapV2PairWeth9SwapLiveFacts
+import Jaune.DevmProjections
 
 /-!
 # What the Pair's USDC `transfer` CALL keeps (U9b)
@@ -33,8 +34,6 @@ theorem implXferPost_state (s : Sevm) (b : Devm) (G : Nat) :
   unfold implXferPost
   rw [Devm.withOutput_state, Devm.memRead_state]
   exact St_state _ _ _ _
-
-theorem addLog_state' (d : Devm) (l : Log) : (d.addLog l).state = d.state := rfl
 
 theorem addLog_getStor' (d : Devm) (l : Log) (a : Adr) :
     Devm.getStor (d.addLog l) a = Devm.getStor d a := rfl
@@ -125,9 +124,9 @@ theorem usdcTransferCall_keeps (cg : Nat) :
     unfold e93Post e93Debited e37Pre
     simp only [addLog_getStor', afterSstore_getStor_ne _ _ _ _ _ ne, afterSload_getStor]
   · unfold e93Post e93Debited e37Pre
-    simp only [addLog_state', UniswapV2PairWeth9Joint.afterSstore_getCode, UniswapV2PairWeth9Joint.afterSload_state]
+    simp only [Devm.addLog_state, UniswapV2PairWeth9Joint.afterSstore_getCode, UniswapV2PairWeth9Joint.afterSload_state]
   · unfold e93Post e93Debited e37Pre
-    simp only [addLog_state', afterSstore_bal, UniswapV2PairWeth9Joint.afterSload_state]
+    simp only [Devm.addLog_state, afterSstore_bal, UniswapV2PairWeth9Joint.afterSload_state]
 
 /-- **At the token, the transfer writes only the two balance words**: any storage word of the token
 off the Pair's and the recipient's balance slots is the staged world's (given the staged request's

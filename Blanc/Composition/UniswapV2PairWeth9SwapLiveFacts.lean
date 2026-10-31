@@ -4,6 +4,7 @@ import Blanc.Composition.UniswapV2PairWeth9LegsSwap0
 import Blanc.Composition.UniswapV2PairWeth9Joint
 import Blanc.Lift.UniswapV2Pair.PairHistoryLive
 import Blanc.StorageAccessGas
+import Jaune.DevmProjections
 
 /-!
 # Frame facts for the history-level swap rows with WETH9 legs (C4(b), U8a2)
@@ -212,7 +213,7 @@ theorem withGasLeft_self (d : Devm) : d.withGasLeft d.gasLeft = d := rfl
 theorem temporalAccountAccessBase_withGasLeft (b : Devm) (x : Nat) (a : Adr) :
     temporalAccountAccessBase (b.withGasLeft x) a = (temporalAccountAccessBase b a).withGasLeft x := by
   unfold temporalAccountAccessBase
-  rw [withGasLeft_accessedAddresses]
+  rw [Devm.withGasLeft_accessedAddresses]
   by_cases h : a ∈ b.accessedAddresses
   · rw [ite_eq_left h, ite_eq_left h]
   · rw [ite_eq_right h, ite_eq_right h]

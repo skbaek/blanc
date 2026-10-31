@@ -2,6 +2,7 @@ import Blanc.ProxyPairOssifiableConstructorNonempty
 import Blanc.MessageExecution
 import Blanc.MachineDataFacts
 import Blanc.ExecutionTerminal
+import Jaune.DevmProjections
 
 namespace Blanc.ProxyPair.OssifiableBothSlotFixture
 
@@ -69,22 +70,6 @@ theorem setupMain_noCalls : setupMain.NoCalls := by
   simp only [setupMain, Func.NoCalls]
 
 def setupBodyGas : Nat := 22218
-
-private theorem getStorVal_setStorVal_ne
-    (d : Devm) (owner : Adr) (writtenKey readKey value : B256)
-    (hne : writtenKey ≠ readKey) :
-    (d.setStorVal owner writtenKey value).getStorVal owner readKey =
-      d.getStorVal owner readKey := by
-  show ((Devm.getStor (d.setStorVal owner writtenKey value) owner).get
-    readKey) = _
-  rw [setStorVal_getStor_self, Stor.get_set_ne _ hne]
-  rfl
-
-private theorem getStorVal_withRefundCounter
-    (d : Devm) (refund : Int) (owner : Adr) (key : B256) :
-    (d.withRefundCounter refund).getStorVal owner key =
-      d.getStorVal owner key := by
-  rfl
 
 private theorem getStorVal_sstoreBase_ne
     (d : Devm) (owner : Adr) (writtenKey readKey value : B256)
@@ -157,9 +142,9 @@ theorem setupMain_runCompiledTo
       rw [himplementationCurrent]
       exact setupImplementationCost_zero
     · simp only [adminOriginal, Devm.getStorVal_setMach,
-        getStorVal_setStorVal_ne _ _ _ _ _
+        Devm.setStorVal_getStorVal_of_ne _ _
           (show implementationSlotLit ≠ adminSlotLit by decide),
-        getStorVal_withRefundCounter]
+        Devm.withRefundCounter_getStorVal]
       rw [hadminCurrent]
       exact setupAdminCost_zero
     · have htailGas : G + setupBodyGas - 22212 = G + 6 := by

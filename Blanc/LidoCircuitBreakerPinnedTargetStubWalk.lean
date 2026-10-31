@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerPinnedTargetComposition
+import Jaune.DevmProjections
 
 /-!
 # Source walks for the pinned-target control stub
@@ -14,11 +15,6 @@ namespace Blanc.LidoCircuitBreaker.PinnedTargetStubWalk
 open Jaune
 open Jaune.Ninst Blanc.Ninst
 open PinnedTargetControl
-
-private lemma withOutput_getStorVal (devm : Devm) (out : Bytes)
-    (owner : Adr) (key : B256) :
-    (devm.withOutput out).getStorVal owner key = devm.getStorVal owner key :=
-  rfl
 
 private lemma memRead_getStorVal (devm : Devm) (index size : Nat)
     (owner : Adr) (key : B256) :
@@ -192,7 +188,7 @@ theorem stubQuery_true_warm_runCompiledTo
         exact Devm.memRead_word_fst
           (by rw [show ((0 : B256) * 32).toNat = 0 by decide]; rfl)
   · refine ⟨rfl, ?_, ?_, rfl, ?_, ?_⟩
-    · rw [withOutput_getStorVal, memRead_getStorVal,
+    · rw [Devm.withOutput_getStorVal, memRead_getStorVal,
         Devm.getStorVal_setMach, Devm.getStorVal_setMach, hstored]
     · rw [Devm.withOutput_gasLeft, Devm.memRead_snd_gasLeft,
         Devm.gasLeft_setMach]

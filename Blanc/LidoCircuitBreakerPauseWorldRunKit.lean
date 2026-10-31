@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerPauseSuffixWalk
+import Jaune.DevmProjections
 
 /-!
 Composition kit for the pause witness-world runs.
@@ -1343,16 +1344,6 @@ private theorem not_mem_hashSet_insert {α : Type _} [BEq α] [Hashable α]
   rcases Std.HashSet.mem_insert.mp hmem with he | hx
   · exact hne (eq_of_beq he)
   · exact h hx
-
-private theorem addAccessedStorageKey_getStorVal (devm : Devm) (a : Adr)
-    (k : B256) (a' : Adr) (key : B256) :
-    (addAccessedStorageKey devm a k).getStorVal a' key =
-      devm.getStorVal a' key := rfl
-
-private theorem addAccessedStorageKey_accessedStorageKeys (devm : Devm)
-    (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).accessedStorageKeys =
-      devm.accessedStorageKeys.insert (a, k) := rfl
 
 private theorem not_mem_temporalSloadBase {sevm : Sevm} {base : Devm}
     {readKey : B256} {p : Adr × B256}

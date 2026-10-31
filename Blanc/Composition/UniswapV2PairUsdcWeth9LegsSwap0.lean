@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsXfer
 import Blanc.Composition.UniswapV2PairWeth9LegsSwap0
+import Jaune.DevmProjections
 
 /-!
 # The swap's USDC `transfer` leg (USDC = token0, WETH9 = token1; §10c, U9a)
@@ -144,7 +145,7 @@ theorem swapUsdcLeg0_spec {sevm : Sevm} {b : Devm} {st : UniswapV2Pair.State} {c
         128 (swapAmount0Out sevm) (swapRecipientWord sevm) st.token0.toB256 0x8d0
         (usdcLeg0Need sevm b st cg1 cgC Gc + usdcLeg0Charge sevm b st)).returnData
   rw [hgas]
-  conv => rhs; rw [hskel, leg0Next_withGasLeft, withGasLeft_returnData]
+  conv => rhs; rw [hskel, leg0Next_withGasLeft, Devm.withGasLeft_returnData]
   have hn : usdcLeg0Need sevm b st cg1 cgC Gc =
       leg0Next sevm b (usdcLeg1Skel sevm b st) cg1 cgC Gc (usdcLeg0Skel sevm b st) +
       safeTransferPostCharge getterInitMemory.size 128 (usdcLeg0Skel sevm b st).returnData := rfl

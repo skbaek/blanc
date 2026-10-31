@@ -3,6 +3,7 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9LegsRead
 import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
 import Blanc.Composition.UniswapV2PairWeth9SwapLive
 import Blanc.Lift.Usdc.HistoryEnd
+import Jaune.DevmProjections
 
 /-!
 # Frame facts for the USDC (token0) / WETH9 (token1) swap row (U9b)
@@ -59,7 +60,7 @@ theorem swapWethRead1_withGasLeft0 (sevm : Sevm) (d : Devm) (M : Mem) (n : Nat) 
     (w : SwapCutWords) (ρ : B256) (R : List B256) (G : Nat) (d0 : Devm) (x : Nat) :
     swapWethRead1 sevm d M n p w ρ R G (d0.withGasLeft x) = swapWethRead1 sevm d M n p w ρ R G d0 := by
   unfold swapWethRead1 readNeed readCharge readUsed readSkel readStack readMem
-  simp only [withGasLeft_returnData, wethBalanceCall_withGasLeft, wethBalanceSkel_withGasLeft,
+  simp only [Devm.withGasLeft_returnData, wethBalanceCall_withGasLeft, wethBalanceSkel_withGasLeft,
     balAcc_withGasLeft, balExt_withGasLeft, balUsed_withGasLeft]
 
 theorem leg1Skel_withGasLeft0 (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.State) (d0 : Devm)
@@ -67,7 +68,7 @@ theorem leg1Skel_withGasLeft0 (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.State
   unfold leg1Skel leg1World leg1Mem leg1Ptr
   by_cases h : swapAmount0Out sevm = 0
   · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte]
-  · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte, withGasLeft_returnData]
+  · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte, Devm.withGasLeft_returnData]
     rfl
 
 /-- WETH9's `transfer` leg reads the USDC transfer's result only off non-gas fields. -/
@@ -78,7 +79,7 @@ theorem swapWethLeg1_withGasLeft0 (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.S
   simp only [swapFrontCallbackGas_withGasLeft0]
   by_cases h : swapAmount0Out sevm = 0
   · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte]
-  · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte, withGasLeft_returnData]
+  · simp only [swapOptWorld, swapOptMem, swapOptPtr, h, ↓reduceIte, Devm.withGasLeft_returnData]
     rfl
 
 /-! ## USDC's runtimes across the frame's crossings -/

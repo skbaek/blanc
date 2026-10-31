@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairWeth9LegsBurn
 import Blanc.Composition.UniswapV2PairWeth9XLegCall
+import Jaune.DevmProjections
 
 /-!
 # The burn suffix's WETH9 `transfer` leg with WETH9 = token1 (C4(b), U8e)
@@ -215,7 +216,7 @@ theorem burnWethLeg1_spec {sevm : Sevm} {d0 : Devm} {M : Mem} {p0 : B256} {w : B
         w.amount1 w.recipient w.token1 0x16a3
         (burnLeg1Need sevm d0 M p0 w R balanceGas0 + burnLeg1Charge sevm d0 M p0 w R)).returnData
   rw [hgas]
-  conv => rhs; rw [hskel, burnLeg1Next_withGasLeft, withGasLeft_returnData]
+  conv => rhs; rw [hskel, burnLeg1Next_withGasLeft, Devm.withGasLeft_returnData]
   have hn : burnLeg1Need sevm d0 M p0 w R balanceGas0 =
       burnLeg1Next M p0 w d0 balanceGas0 (burnLeg1Skel sevm d0 M p0 w R) +
         safeTransferPostCharge (burnLeg1Mem M p0 w d0).size (burnLeg1Ptr p0 d0)

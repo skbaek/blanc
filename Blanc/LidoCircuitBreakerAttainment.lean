@@ -3,6 +3,7 @@ import Blanc.MemoryImage
 import Blanc.LidoCircuitBreakerAuthority
 import Blanc.LidoCircuitBreakerRegistrationWorld
 import Blanc.LidoCircuitBreakerReplacementWorld
+import Jaune.DevmProjections
 
 /-!
 Forward attainment for exact Lido CircuitBreaker runtime persistent writes.
@@ -2252,9 +2253,6 @@ poststate gas are all reachable from these derivations and none of them is
 what `Attainable` consumes, so restating them would be surface without a
 consumer. -/
 
-private theorem configWorld_getStorVal_addLog {d : Devm} {l : Log} {a : Adr}
-    {k : B256} : (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
-
 set_option maxRecDepth 608 in
 /-- Exact successful `setPauseDuration` body: the static-argument guard, the
 admin guard and both configured-bound guards fall the right way, the
@@ -2309,7 +2307,7 @@ theorem setPauseDuration_body_runCompiledTo
     have horig' : ∀ d : Devm,
         d.getOrigStorVal sevm sevm.currentTarget pauseDurationSlot = 0 :=
       fun _ => actualOrigStorVal_eq_zero_of_raw horig
-    simpa only [Devm.getStorVal_setMach, configWorld_getStorVal_addLog, horig',
+    simpa only [Devm.getStorVal_setMach, Devm.addLog_getStorVal, horig',
       hold, harg] using hsstoreCost
   case a => exact Func.RunCompiledTo.last rfl
 

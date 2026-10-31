@@ -1,4 +1,5 @@
 import Blanc.ProxyPairOssifiableConstructorForward
+import Jaune.DevmProjections
 
 /-!
 # OssifiableProxy constructor implementation initialization
@@ -21,27 +22,6 @@ private theorem initialize_addAccessedAddress_setMach_setMach
     (addAccessedAddress (base.setMach mach) address).setMach mach' =
       (addAccessedAddress base address).setMach mach' := rfl
 
-private theorem initialize_addAccessedAddress_getStorVal
-    (base : Devm) (address target : Adr) (key : B256) :
-    (addAccessedAddress base address).getStorVal target key =
-      base.getStorVal target key := rfl
-
-private theorem initialize_addAccessedStorageKey_getStorVal
-    (base : Devm) (address : Adr) (key : B256) (target : Adr)
-    (targetKey : B256) :
-    (addAccessedStorageKey base address key).getStorVal target targetKey =
-      base.getStorVal target targetKey := rfl
-
-private theorem initialize_withRefundCounter_getStorVal
-    (base : Devm) (refund : Int) (target : Adr) (key : B256) :
-    (base.withRefundCounter refund).getStorVal target key =
-      base.getStorVal target key := rfl
-
-private theorem initialize_addLog_getStorVal
-    (base : Devm) (entry : Log) (target : Adr) (key : B256) :
-    (base.addLog entry).getStorVal target key =
-      base.getStorVal target key := rfl
-
 private theorem initialize_refundCounter_setMach
     (base : Devm) (mach : Mach) :
     (base.setMach mach).refundCounter = base.refundCounter := rfl
@@ -54,16 +34,6 @@ private theorem initialize_sstore_log_machine_collapse
       (((base.withRefundCounter refund).setStorVal
           target key value).addLog entry).setMach after := by
   rfl
-
-private theorem initialize_setStorVal_getStorVal_ne
-    (base : Devm) (target : Adr) {writtenKey readKey : B256}
-    (value : B256) (hne : writtenKey ≠ readKey) :
-    (base.setStorVal target writtenKey value).getStorVal target readKey =
-      base.getStorVal target readKey := by
-  show (Jaune.Devm.getStor
-      (base.setStorVal target writtenKey value) target).get readKey =
-    (Jaune.Devm.getStor base target).get readKey
-  rw [setStorVal_getStor_self, Stor.get_set_ne _ hne]
 
 private theorem initialize_not_mem_hashSet_insert
     {α : Type _} [BEq α] [Hashable α] [LawfulBEq α]
@@ -200,7 +170,7 @@ private theorem
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   simp only [Devm.addAccessedStorageKey_setMach_setMach,
-    Devm.getStorVal_setMach, initialize_addAccessedAddress_getStorVal,
+    Devm.getStorVal_setMach, addAccessedAddress_getStorVal,
     Devm.memory_setMach, Devm.stack_setMach]
   rw [himplementationRaw]
   unfold initializeHighMask
@@ -225,16 +195,16 @@ private theorem
   func_run (2) [20000]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · simp only [Devm.getStorVal_setMach,
-      initialize_addAccessedStorageKey_getStorVal,
-      initialize_addAccessedAddress_getStorVal, himplementationRaw,
+      addAccessedStorageKey_getStorVal,
+      addAccessedAddress_getStorVal, himplementationRaw,
       Devm.getOrigStorVal, himplementationOriginal, ite_self, hnew]
     rw [sstoreValueCost,
       ite_eq_left ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
       ite_eq_left rfl]
     norm_num only [gasStorageSet]
   simp only [hnew, Devm.getStorVal_setMach,
-    initialize_addAccessedStorageKey_getStorVal,
-    initialize_addAccessedAddress_getStorVal, himplementationRaw,
+    addAccessedStorageKey_getStorVal,
+    addAccessedAddress_getStorVal, himplementationRaw,
     Devm.getOrigStorVal, himplementationOriginal, ite_self]
   rw [show G + 23252 - 22120 = G + 1132 from by omega]
   unfold initializeLog
@@ -419,13 +389,11 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
       initializedBase.getStorVal sevm.currentTarget adminSlotLit = 0 := by
     have hslots : implementationSlotLit ≠ adminSlotLit := by decide
     unfold initializedBase
-    rw [initialize_addLog_getStorVal]
-    rw [initialize_setStorVal_getStorVal_ne
-      (writtenKey := implementationSlotLit) (readKey := adminSlotLit)
-      _ sevm.currentTarget implementation.toB256 hslots]
-    rw [initialize_withRefundCounter_getStorVal,
-      initialize_addAccessedStorageKey_getStorVal,
-      initialize_addAccessedAddress_getStorVal]
+    rw [Devm.addLog_getStorVal]
+    rw [Devm.setStorVal_getStorVal_of_ne _ sevm.currentTarget hslots implementation.toB256]
+    rw [Devm.withRefundCounter_getStorVal,
+      addAccessedStorageKey_getStorVal,
+      addAccessedAddress_getStorVal]
     exact hadminRaw
   have hadminColdInitialized :
       (sevm.currentTarget, adminSlotLit) ∉
@@ -480,7 +448,7 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     func_run (1)
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     simp only [Devm.addAccessedStorageKey_setMach_setMach,
-      Devm.getStorVal_setMach, initialize_addAccessedAddress_getStorVal,
+      Devm.getStorVal_setMach, addAccessedAddress_getStorVal,
       Devm.memory_setMach, Devm.stack_setMach]
     rw [himplementationRaw]
     unfold initializeHighMask
@@ -505,16 +473,16 @@ theorem ossifiableConstructorInitializeImplementation_zeroSetup_runCompiled
     func_run (2) [20000]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · simp only [Devm.getStorVal_setMach,
-        initialize_addAccessedStorageKey_getStorVal,
-        initialize_addAccessedAddress_getStorVal, himplementationRaw,
+        addAccessedStorageKey_getStorVal,
+        addAccessedAddress_getStorVal, himplementationRaw,
         Devm.getOrigStorVal, himplementationOriginal, ite_self, hnew]
       rw [sstoreValueCost,
         ite_eq_left ⟨rfl, fun h => himplementationWordNonzero h.symm⟩,
         ite_eq_left rfl]
       norm_num only [gasStorageSet]
     simp only [hnew, Devm.getStorVal_setMach,
-      initialize_addAccessedStorageKey_getStorVal,
-      initialize_addAccessedAddress_getStorVal, himplementationRaw,
+      addAccessedStorageKey_getStorVal,
+      addAccessedAddress_getStorVal, himplementationRaw,
       Devm.getOrigStorVal, himplementationOriginal, ite_self]
     obtain ⟨k, hk⟩ : ∃ k, (24750 : Nat) = k := ⟨_, rfl⟩
     rw [hk]

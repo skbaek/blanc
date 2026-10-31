@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsRead
 import Blanc.Composition.UniswapV2PairWeth9LegsSync
+import Jaune.DevmProjections
 
 /-!
 # sync's USDC `balanceOf` query (U9c)
@@ -48,7 +49,7 @@ theorem usdcBalanceSkel_state : (usdcBalanceSkel sevm B S M p t).state = B.state
 (every account's storage, code and balance) as it was. -/
 theorem usdcBalanceCall_state (cg : Nat) : (usdcBalanceCall sevm B S M p t cg).state = B.state := by
   unfold usdcBalanceCall
-  rw [usdcBalanceCallAt_eq, withGasLeft_state]
+  rw [usdcBalanceCallAt_eq, Devm.withGasLeft_state]
   exact usdcBalanceSkel_state sevm B S M p t
 
 end Keeps

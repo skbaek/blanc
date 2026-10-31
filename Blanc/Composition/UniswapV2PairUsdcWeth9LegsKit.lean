@@ -5,6 +5,7 @@ import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.InvWalkStep
 import Blanc.B256CheckFacts
+import Jaune.DevmProjections
 
 /-!
 # A cost-accumulating forward walk kit (U9a)
@@ -27,8 +28,6 @@ Nothing here mentions a contract (hoist candidates for `Blanc/Lift/`).
 namespace Blanc.Composition.UsdcLive
 
 open Jaune Blanc Blanc.Lift
-
-theorem withGasLeft_state (d : Devm) (x : Nat) : (d.withGasLeft x).state = d.state := rfl
 
 theorem withGasLeft_withGasLeft (d : Devm) (x y : Nat) :
     (d.withGasLeft x).withGasLeft y = d.withGasLeft y := rfl

@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerPauseWorldRunKit
+import Jaune.DevmProjections
 
 /-!
 The composed **pause witness-world runs**, rows 19 and 18.
@@ -80,15 +81,6 @@ private theorem pauseWorldRun_sload_created (sevm : Sevm) (b : Devm) (k : B256) 
 private theorem pauseWorldRun_sstore_created (sevm : Sevm) (b : Devm) (k v : B256) :
     (temporalSstorePost sevm b k v).createdAccounts = b.createdAccounts := rfl
 
-private theorem pauseWorldRun_addKey_created (b : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey b a k).createdAccounts = b.createdAccounts := rfl
-
-private theorem pauseWorldRun_addLog_created (b : Devm) (l : Log) :
-    (b.addLog l).createdAccounts = b.createdAccounts := rfl
-
-private theorem pauseWorldRun_transVal_created (b : Devm) (a : Adr) (k v : B256) :
-    (b.setTransVal a k v).createdAccounts = b.createdAccounts := rfl
-
 /-- The witness worlds' breaker owner is not created in its transaction, so at
 any state whose created-account set is still the entry one, the machine's
 actual original read is the entry snapshot word. -/
@@ -98,8 +90,8 @@ theorem pauseWorld_actualOrigStor (stor : Stor) (gas : Nat) {d : Devm} {key : B2
         entryWritePost, swapPopClearPost, assignmentPost, assignmentBase, foundKernelPost,
         pauseKernelBase, pauseDurationBase, pauseExpiryBase, pauseLockPost,
         pauseWorldRun_sload_created, pauseWorldRun_sstore_created,
-        pauseWorldRun_addKey_created, pauseWorldRun_addLog_created,
-        pauseWorldRun_transVal_created, Devm.setMach_createdAccounts]) <;> rfl) :
+        addAccessedStorageKey_createdAccounts, Devm.addLog_createdAccounts,
+        Devm.setTransVal_createdAccounts, Devm.setMach_createdAccounts]) <;> rfl) :
     d.getOrigStorVal (pauseWorldSevm stor gas) configWorldOwner key =
       stor.get key := by
   have hnc : configWorldOwner ∉ d.createdAccounts := by
@@ -141,29 +133,6 @@ private theorem getTransVal_setTransVal_self (devm : Devm) (a : Adr)
     exact Stor.get_set_self _ _ _
 
 /-! ## Slot-pair inequalities lifted to accessed-key pairs -/
-
-private theorem addAccessedStorageKey_getStorVal (devm : Devm) (a : Adr)
-    (k : B256) (a' : Adr) (key : B256) :
-    (addAccessedStorageKey devm a k).getStorVal a' key =
-      devm.getStorVal a' key := rfl
-
-private theorem addAccessedStorageKey_accessedStorageKeys' (devm : Devm)
-    (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).accessedStorageKeys =
-      devm.accessedStorageKeys.insert (a, k) := rfl
-
-private theorem addAccessedStorageKey_accessedAddresses (devm : Devm) (a : Adr)
-    (k : B256) : (addAccessedStorageKey devm a k).accessedAddresses =
-      devm.accessedAddresses := rfl
-
-private theorem addAccessedStorageKey_error (devm : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).error = devm.error := rfl
-
-private theorem addAccessedStorageKey_output (devm : Devm) (a : Adr)
-    (k : B256) : (addAccessedStorageKey devm a k).output = devm.output := rfl
-
-private theorem addAccessedStorageKey_logs (devm : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).logs = devm.logs := rfl
 
 private theorem lengthWritePost_error (sevm : Sevm) (base : Devm) (ol : B256) :
     (lengthWritePost sevm base ol).error = base.error := rfl
@@ -439,40 +408,8 @@ private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
 
-private theorem addLog_getCode (devm : Devm) (l : Log) (x : Adr) :
-    (devm.addLog l).getCode x = devm.getCode x := rfl
-
-private theorem addLog_logs (devm : Devm) (l : Log) :
-    (devm.addLog l).logs = devm.logs ++ [l] := rfl
-
 private theorem addLog_error (devm : Devm) (l : Log) :
     (devm.addLog l).error = devm.error := rfl
-
-private theorem addLog_output (devm : Devm) (l : Log) :
-    (devm.addLog l).output = devm.output := rfl
-
-private theorem addLog_accessedStorageKeys (devm : Devm) (l : Log) :
-    (devm.addLog l).accessedStorageKeys = devm.accessedStorageKeys := rfl
-
-private theorem addLog_accessedAddresses (devm : Devm) (l : Log) :
-    (devm.addLog l).accessedAddresses = devm.accessedAddresses := rfl
-
-private theorem addLog_getStorVal (devm : Devm) (l : Log) (a : Adr)
-    (key : B256) : (devm.addLog l).getStorVal a key = devm.getStorVal a key :=
-  rfl
-
-private theorem setTransVal_getStorVal (devm : Devm) (a : Adr) (k v : B256)
-    (a' : Adr) (key : B256) :
-    (devm.setTransVal a k v).getStorVal a' key = devm.getStorVal a' key := rfl
-
-private theorem setTransVal_logs (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).logs = devm.logs := rfl
-
-private theorem setTransVal_error (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).error = devm.error := rfl
-
-private theorem setTransVal_output (devm : Devm) (a : Adr) (k v : B256) :
-    (devm.setTransVal a k v).output = devm.output := rfl
 
 private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
     (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
@@ -1787,10 +1724,6 @@ private theorem temporalSloadBase_getCode (sevm : Sevm) (base : Devm)
   split <;> rfl
 
 
-private theorem addAccessedStorageKey_getCode (devm : Devm) (a : Adr)
-    (k : B256) (x : Adr) :
-    (addAccessedStorageKey devm a k).getCode x = devm.getCode x := rfl
-
 private theorem lengthWritePost_getCode (sevm : Sevm) (base : Devm) (ol : B256)
     (x : Adr) : (lengthWritePost sevm base ol).getCode x = base.getCode x :=
   temporalSstorePost_getCode sevm base arrayLengthSlot ol x
@@ -1806,7 +1739,7 @@ private theorem lastAddrs_B7 :
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).addLog
       ⟨pauseLastSevm.currentTarget,
       [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩).accessedAddresses = Std.HashSet.emptyWithCapacity := by
-  rw [addLog_accessedAddresses,
+  rw [Devm.addLog_accessedAddresses,
     show (indexClearPost pauseLastSevm (entryClearPost pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSloadBase pauseLastSevm (temporalSstorePost pauseLastSevm (temporalSloadBase pauseLastSevm (assignmentPost pauseLastSevm
       (pauseKernelBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -2189,18 +2122,18 @@ private theorem pauseLastWorld_master :
   -- the boundary facts the dichotomy interface consumes
   have hmidCount : mid.getStorVal configWorldOwner
       (countSlot pauseWorldPauser) = 0 := by
-    rw [seam_getStorVal hchain, addLog_getStorVal]
+    rw [seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_count
   have hmidInterval : mid.getStorVal configWorldOwner heartbeatIntervalSlot =
       pauseWorldInterval := by
-    rw [seam_getStorVal hchain, addLog_getStorVal]
+    rw [seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact (lastStor_B6_other pauseWorld_interval_ne_assignCallee.symm
       pauseWorld_interval_ne_count.symm pauseWorld_interval_ne_entryOne.symm
       pauseWorld_interval_ne_indexCallee.symm
       pauseWorld_interval_ne_length.symm).trans pauseLastStor_interval
   have hmidExpiry : mid.getStorVal configWorldOwner
       (expirySlot pauseWorldPauser) = pauseWorldExpiry := by
-    rw [seam_getStorVal hchain, addLog_getStorVal]
+    rw [seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact (lastStor_B6_other pauseWorld_assignCallee_ne_expiry
       pauseWorld_count_ne_expiry pauseWorld_entryOne_ne_expiry
       pauseWorld_indexCallee_ne_expiry pauseWorld_length_ne_expiry).trans
@@ -2208,13 +2141,13 @@ private theorem pauseLastWorld_master :
   have hmidWarmCount : (pauseLastSevm.currentTarget,
       countSlot pauseWorldPauser) ∈ mid.accessedStorageKeys :=
     (haskF _).mpr (by
-      rw [addLog_accessedStorageKeys, indexClearPost_accessedStorageKeys,
+      rw [Devm.addLog_accessedStorageKeys, indexClearPost_accessedStorageKeys,
         entryClearPost_accessedStorageKeys]
       exact lastWarm_count_rb3)
   have hmidWarmExpiry : (pauseLastSevm.currentTarget,
       expirySlot pauseWorldPauser) ∈ mid.accessedStorageKeys :=
     (haskF _).mpr (by
-      rw [addLog_accessedStorageKeys, indexClearPost_accessedStorageKeys,
+      rw [Devm.addLog_accessedStorageKeys, indexClearPost_accessedStorageKeys,
         entryClearPost_accessedStorageKeys]
       exact lastWarm_expiry_rb3)
   -- the zero-count pauseSuccess walk from the boundary
@@ -2248,8 +2181,8 @@ private theorem pauseLastWorld_master :
           entryWritePost, assignmentPost, assignmentBase,
           pauseKernelBase, pauseDurationBase, pauseExpiryBase, pauseLockPost,
           pauseWorldRun_sload_created, pauseWorldRun_sstore_created,
-          pauseWorldRun_addLog_created,
-          pauseWorldRun_transVal_created]) <;> rfl))).trans
+          Devm.addLog_createdAccounts,
+          Devm.setTransVal_createdAccounts]) <;> rfl))).trans
       pauseLastStor_expiry)
     hmidWarmExpiry
     (lastSvc_reset (by decide) (by decide))
@@ -2417,85 +2350,85 @@ private theorem pauseLastWorld_master :
     (exec_iff_exec_eq 0 pauseLastSevm pauseLastPre (.ok _)).mpr hexec,
     rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hcompile⟩
   · -- error
-    rw [setTransVal_error, setMach_error, addLog_error,
+    rw [Devm.setTransVal_error, setMach_error, addLog_error,
       temporalSstorePost_error, temporalSloadBase_error, addLog_error, herrF,
       addLog_error, lastB6_peel_error, lastRB3_error]
   · -- output
-    rw [setTransVal_output, setMach_output, addLog_output,
-      temporalSstorePost_output, temporalSloadBase_output, addLog_output,
-      houtF, addLog_output, lastB6_peel_output, lastRB3_output]
+    rw [Devm.setTransVal_output, setMach_output, Devm.addLog_output,
+      temporalSstorePost_output, temporalSloadBase_output, Devm.addLog_output,
+      houtF, Devm.addLog_output, lastB6_peel_output, lastRB3_output]
   · -- the reentrancy lock is clear
     exact getTransVal_setTransVal_self _ _ _
   · -- the retired pauser's expiry cell
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal]
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal]
     exact temporalSstorePost_self _ _ _ _
   · -- assignment cleared
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_assignCallee_ne_expiry.symm),
-      temporalSloadBase_getStorVal, addLog_getStorVal,
-      seam_getStorVal hchain, addLog_getStorVal]
+      temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
+      seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_assign
   · -- count cleared
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_count_ne_expiry.symm),
-      temporalSloadBase_getStorVal, addLog_getStorVal,
-      seam_getStorVal hchain, addLog_getStorVal]
+      temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
+      seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_count
   · -- array popped
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_length_ne_expiry.symm),
-      temporalSloadBase_getStorVal, addLog_getStorVal,
-      seam_getStorVal hchain, addLog_getStorVal]
+      temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
+      seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_length
   · -- array slot cleared
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_entryOne_ne_expiry.symm),
-      temporalSloadBase_getStorVal, addLog_getStorVal,
-      seam_getStorVal hchain, addLog_getStorVal]
+      temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
+      seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_entry
   · -- index cleared
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_indexCallee_ne_expiry.symm),
-      temporalSloadBase_getStorVal, addLog_getStorVal,
-      seam_getStorVal hchain, addLog_getStorVal]
+      temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
+      seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_index
   · -- the configured interval is untouched
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_interval_ne_expiry.symm),
-      temporalSloadBase_getStorVal, addLog_getStorVal,
-      seam_getStorVal hchain, addLog_getStorVal]
+      temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
+      seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact (lastStor_B6_other pauseWorld_interval_ne_assignCallee.symm
       pauseWorld_interval_ne_count.symm pauseWorld_interval_ne_entryOne.symm
       pauseWorld_interval_ne_indexCallee.symm
       pauseWorld_interval_ne_length.symm).trans pauseLastStor_interval
   · -- the configured duration is untouched
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_duration_ne_expiry.symm),
-      temporalSloadBase_getStorVal, addLog_getStorVal,
-      seam_getStorVal hchain, addLog_getStorVal]
+      temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
+      seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact (lastStor_B6_other pauseWorld_duration_ne_assignCallee.symm
       pauseWorld_duration_ne_count.symm pauseWorld_duration_ne_entryOne.symm
       pauseWorld_duration_ne_indexCallee.symm
       pauseWorld_duration_ne_length.symm).trans pauseLastStor_duration
   · -- no other canonical pauser's expiry moves
     intro pauser hcanon hne
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe (lastExpiry_ne_of_ne hcanon hne)),
-      temporalSloadBase_getStorVal, addLog_getStorVal,
-      seam_getStorVal hchain, addLog_getStorVal,
+      temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
+      seam_getStorVal hchain, Devm.addLog_getStorVal,
       lastStor_B6_expiry_other hcanon]
     exact (pauseWorld_getStorVal pauseLastWorldStor pauseLastWorldGas).symm
   · -- the three records, in order
-    rw [setTransVal_logs, setMach_logs, addLog_logs, temporalSstorePost_logs,
-      temporalSloadBase_logs, addLog_logs, hlogsF, addLog_logs, lastB6_logs]
+    rw [Devm.setTransVal_logs, setMach_logs, Devm.addLog_logs, temporalSstorePost_logs,
+      temporalSloadBase_logs, Devm.addLog_logs, hlogsF, Devm.addLog_logs, lastB6_logs]
     rfl
 
 /-! ## The public payoff -/
@@ -3696,7 +3629,7 @@ private theorem returnAddrs_RB7 :
       (indexSlot pauseWorldCallee.toB256) 0).addLog
       ⟨pauseRetainedSevm.currentTarget,
       [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩).accessedAddresses = Std.HashSet.emptyWithCapacity := by
-  rw [addLog_accessedAddresses]
+  rw [Devm.addLog_accessedAddresses]
   exact returnAddrs_RB6_peel
 
 private theorem returnCode_RB6_peel :
@@ -3750,7 +3683,7 @@ private theorem returnCode_RB7 :
       (indexSlot pauseWorldCallee.toB256) 0).addLog
       ⟨pauseRetainedSevm.currentTarget,
       [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩).getCode pauseWorldCallee.toB256.toAdr = calleeCode := by
-  rw [addLog_getCode]
+  rw [Devm.addLog_getCode]
   exact returnCode_RB6_peel
 
 private theorem returnRB6_error : (temporalSstorePost pauseRetainedSevm (lengthWritePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm
@@ -3901,9 +3834,9 @@ private theorem returnKeys_RB6_peel :
     temporalSstorePost_accessedStorageKeys,
     temporalSstorePost_accessedStorageKeys,
     temporalSstorePost_accessedStorageKeys,
-    addAccessedStorageKey_accessedStorageKeys',
+    addAccessedStorageKey_accessedStorageKeys,
     temporalSstorePost_accessedStorageKeys,
-    addAccessedStorageKey_accessedStorageKeys']
+    addAccessedStorageKey_accessedStorageKeys]
 
 private theorem returnWarm_count_rb6 :
     (pauseRetainedSevm.currentTarget, countSlot pauseWorldPauser) ∈ (temporalSstorePost pauseRetainedSevm (lengthWritePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm (temporalSstorePost pauseRetainedSevm
@@ -4262,22 +4195,22 @@ private theorem pauseRetainedWorld_master :
       (by norm_num only)
   have hmidCount : mid.getStorVal configWorldOwner
       (countSlot pauseWorldPauser) = 1 := by
-    rw [seam_getStorVal hchain, addLog_getStorVal]
+    rw [seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_count
   have hmidInterval : mid.getStorVal configWorldOwner heartbeatIntervalSlot =
       pauseWorldInterval := by
-    rw [seam_getStorVal hchain, addLog_getStorVal]
+    rw [seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_interval
   have hmidExpiry : mid.getStorVal configWorldOwner
       (expirySlot pauseWorldPauser) = pauseWorldExpiry := by
-    rw [seam_getStorVal hchain, addLog_getStorVal]
+    rw [seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_expiry
   have hmidWarmExpiry : (pauseRetainedSevm.currentTarget,
       expirySlot pauseWorldPauser) ∈ mid.accessedStorageKeys :=
-    (haskF _).mpr (by rw [addLog_accessedStorageKeys]; exact returnWarm_expiry_rb6)
+    (haskF _).mpr (by rw [Devm.addLog_accessedStorageKeys]; exact returnWarm_expiry_rb6)
   have hmidWarmCount : (pauseRetainedSevm.currentTarget,
       countSlot pauseWorldPauser) ∈ mid.accessedStorageKeys :=
-    (haskF _).mpr (by rw [addLog_accessedStorageKeys]; exact returnWarm_count_rb6)
+    (haskF _).mpr (by rw [Devm.addLog_accessedStorageKeys]; exact returnWarm_count_rb6)
   -- the checked-count pauseSuccess walk from the boundary
   have hW8 := pauseSuccess_checkedCount_ok_runCompiled (hfork := hfork)
     ((runtime officialParams).main :: (runtime officialParams).aux)
@@ -4312,7 +4245,7 @@ private theorem pauseRetainedWorld_master :
       unfold temporalSloadCost
       rw [ite_eq_right (show (pauseRetainedSevm.currentTarget,
           heartbeatIntervalSlot) ∉ mid.accessedStorageKeys from by
-        simp only [haskF, addLog_accessedStorageKeys]
+        simp only [haskF, Devm.addLog_accessedStorageKeys]
         rw [returnKeys_RB6_peel, returnKeys_removeBase3]
         simp only [Std.HashSet.mem_insert,
           Std.HashSet.not_mem_emptyWithCapacity, or_false, not_or,
@@ -4329,8 +4262,8 @@ private theorem pauseRetainedWorld_master :
           assignmentPost, assignmentBase,
           pauseKernelBase, pauseDurationBase, pauseExpiryBase, pauseLockPost,
           pauseWorldRun_sload_created, pauseWorldRun_sstore_created,
-          pauseWorldRun_addKey_created, pauseWorldRun_addLog_created,
-          pauseWorldRun_transVal_created]) <;> rfl))).trans pauseRetainedStor_expiry)
+          addAccessedStorageKey_createdAccounts, Devm.addLog_createdAccounts,
+          Devm.setTransVal_createdAccounts]) <;> rfl))).trans pauseRetainedStor_expiry)
     hmidWarmExpiry
     (by
       show sstoreValueCost pauseWorldExpiry pauseWorldExpiry
@@ -4507,81 +4440,81 @@ private theorem pauseRetainedWorld_master :
   refine ⟨mid, _, hboundary, hmidCount, hmidInterval, hprog, hexec,
     (exec_iff_exec_eq 0 pauseRetainedSevm pauseRetainedPre (.ok _)).mpr hexec,
     rfl, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, ?_, hcompile⟩
-  · rw [setTransVal_error, setMach_error, addLog_error,
+  · rw [Devm.setTransVal_error, setMach_error, addLog_error,
       temporalSstorePost_error, temporalSloadBase_error,
       temporalSloadBase_error, addLog_error, herrF, addLog_error, returnRB6_error]
-  · rw [setTransVal_output, setMach_output, addLog_output,
+  · rw [Devm.setTransVal_output, setMach_output, Devm.addLog_output,
       temporalSstorePost_output, temporalSloadBase_output,
-      temporalSloadBase_output, addLog_output, houtF, addLog_output,
+      temporalSloadBase_output, Devm.addLog_output, houtF, Devm.addLog_output,
       returnRB6_output]
   · exact getTransVal_setTransVal_self _ _ _
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal]
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal]
     exact temporalSstorePost_self _ _ _ _
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_assignCallee_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal]
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_assign
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_count_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal]
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_count
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_length_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal]
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_length
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_entryOne_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal]
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_hole
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_entryTwo_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal]
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_tail
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_indexCallee_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal]
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_index
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_indexT2_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal]
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_moved
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_interval_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal]
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_interval
-  · rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_duration_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal]
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_duration
   · intro pauser hcanon hne
-    rw [setTransVal_getStorVal, setMach_getStorVal, addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe (returnExpiry_ne_of_ne hcanon hne)),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-      addLog_getStorVal, seam_getStorVal hchain, addLog_getStorVal,
+      Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal,
       returnStor_RB6_expiry_other hcanon]
     exact (pauseWorld_getStorVal pauseRetainedWorldStor pauseRetainedWorldGas).symm
-  · rw [setTransVal_logs, setMach_logs, addLog_logs, temporalSstorePost_logs,
-      temporalSloadBase_logs, temporalSloadBase_logs, addLog_logs, hlogsF,
-      addLog_logs, returnRB6_logs]
+  · rw [Devm.setTransVal_logs, setMach_logs, Devm.addLog_logs, temporalSstorePost_logs,
+      temporalSloadBase_logs, temporalSloadBase_logs, Devm.addLog_logs, hlogsF,
+      Devm.addLog_logs, returnRB6_logs]
     rfl
 
 /-! ## The public payoff (row 18) -/

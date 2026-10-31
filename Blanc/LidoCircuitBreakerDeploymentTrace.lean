@@ -5,6 +5,7 @@
 -- keeps the deployment family inside its fixed elaboration-owner budget.
 import Blanc.LidoCircuitBreakerDeploymentLayout
 import Blanc.ForwardCall
+import Jaune.DevmProjections
 
 namespace Blanc
 
@@ -1338,10 +1339,6 @@ theorem officialConstructorEffectBase_getStor
 
 /-- The terminal return preserves the exact two-write storage effect. -/
 
-private theorem constructorAddLog_logs (base : Devm) (log : Log) :
-    (base.addLog log).logs = base.logs ++ [log] := by
-  rfl
-
 private theorem officialConstructorColdStore_logs
     (sevm : Sevm) (base : Devm) (key value : B256) :
     (officialConstructorColdStore sevm base key value).logs = base.logs := by
@@ -1363,7 +1360,7 @@ theorem officialConstructorEffectBase_logs
   unfold officialConstructorEffectBase officialConstructorHeartbeatLoggedBase
     officialConstructorPauseStoredBase officialConstructorPauseLoggedBase
     officialConstructorInitializedBase
-  simp only [constructorAddLog_logs, officialConstructorColdStore_logs,
+  simp only [Devm.addLog_logs, officialConstructorColdStore_logs,
     officialConstructorLogs_eq_named, List.append_assoc]
   rfl
 

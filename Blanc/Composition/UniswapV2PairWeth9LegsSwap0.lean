@@ -1,4 +1,5 @@
 import Blanc.Composition.UniswapV2PairWeth9LegsSwap0Read
+import Jaune.DevmProjections
 
 /-!
 # The swap's WETH9 `transfer` leg with WETH9 = token0 (C4(b), U8b1)
@@ -66,7 +67,7 @@ theorem swapFrontCallbackGas_withGasLeft0 (sevm : Sevm) (b d d1 : Devm) (cgC Gc 
   unfold swapFrontCallbackGas swapFrontTransferWorld swapFrontTransferMem swapFrontPtr swapOptWorld
     swapOptMem swapOptPtr swapCallbackGas temporalAccountAccessCost
   by_cases h0 : swapAmount0Out sevm = 0 <;> by_cases h1 : swapAmount1Out sevm = 0 <;>
-    simp only [h0, h1, ↓reduceIte, withGasLeft_accessedAddresses, withGasLeft_returnData]
+    simp only [h0, h1, ↓reduceIte, Devm.withGasLeft_accessedAddresses, Devm.withGasLeft_returnData]
 
 theorem leg0Next_withGasLeft (sevm : Sevm) (b d1 : Devm) (cg1 cgC Gc : Nat) (d : Devm) (x : Nat) :
     leg0Next sevm b d1 cg1 cgC Gc (d.withGasLeft x) = leg0Next sevm b d1 cg1 cgC Gc d := by
@@ -137,7 +138,7 @@ theorem swapWethLeg0_spec {sevm : Sevm} {b : Devm} {st : UniswapV2Pair.State} {d
         128 (swapAmount0Out sevm) (swapRecipientWord sevm) st.token0.toB256 0x8d0
         (leg0Need sevm b st d1 cg1 cgC Gc + leg0Charge sevm b st)).returnData
   rw [hgas]
-  conv => rhs; rw [hskel, leg0Next_withGasLeft, withGasLeft_returnData]
+  conv => rhs; rw [hskel, leg0Next_withGasLeft, Devm.withGasLeft_returnData]
   have hn : leg0Need sevm b st d1 cg1 cgC Gc = leg0Next sevm b d1 cg1 cgC Gc (leg0Skel sevm b st) +
       safeTransferPostCharge getterInitMemory.size 128 (leg0Skel sevm b st).returnData := rfl
   rw [← hn]

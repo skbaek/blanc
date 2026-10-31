@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairWeth9LegsBurn1
 import Blanc.Composition.UniswapV2PairWeth9LegsSkimRead1
+import Jaune.DevmProjections
 
 /-!
 # Skim's WETH9 `transfer` leg with WETH9 = token1 (C4(b), U8e)
@@ -144,7 +145,7 @@ theorem skimWethLeg1_spec {sevm : Sevm} {b qd0 dt0 qd1 : Devm} {g : Nat}
         (skimRead1Ptr dt0) (skimLeg1Amount sevm dt0 qd1) (skimToWord sevm) (skimToken1 sevm b)
         0x1aca (skimLeg1Need sevm b qd0 dt0 qd1 g + skimLeg1Charge sevm b qd0 dt0 qd1)).returnData
   rw [hgas]
-  conv => rhs; rw [hskel, skimLeg1Next_withGasLeft, withGasLeft_returnData]
+  conv => rhs; rw [hskel, skimLeg1Next_withGasLeft, Devm.withGasLeft_returnData]
   have hn : skimLeg1Need sevm b qd0 dt0 qd1 g =
       skimLeg1Next sevm g (skimLeg1Skel sevm b qd0 dt0 qd1) +
         safeTransferPostCharge (skimLeg1Mem sevm b qd0 dt0 qd1).size (skimRead1Ptr dt0)

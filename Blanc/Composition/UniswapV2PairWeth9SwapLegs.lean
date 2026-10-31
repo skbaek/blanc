@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairWeth9SwapLegsRead
 import Blanc.AddressSlotProofs
+import Jaune.DevmProjections
 
 /-!
 # The swap's WETH9 legs (C4(b), WETH9 = token1): definitions and frame-level specs
@@ -74,12 +75,6 @@ def leg1Used (sevm : Sevm) (b : Devm) (st : UniswapV2Pair.State) (d0 : Devm) : N
 
 section Leg1Facts
 
-theorem withGasLeft_accessedAddresses (d : Devm) (x : Nat) :
-    (d.withGasLeft x).accessedAddresses = d.accessedAddresses := rfl
-
-theorem withGasLeft_returnData (d : Devm) (x : Nat) :
-    (d.withGasLeft x).returnData = d.returnData := rfl
-
 /-- The callback branch's gas reads the transfer's result only off the gas column. -/
 theorem swapFrontCallbackGas_withGasLeft (sevm : Sevm) (b d0 d : Devm) (cgC Gc x : Nat) :
     swapFrontCallbackGas sevm b d0 (d.withGasLeft x) cgC Gc = swapFrontCallbackGas sevm b d0 d cgC Gc := by
@@ -87,7 +82,7 @@ theorem swapFrontCallbackGas_withGasLeft (sevm : Sevm) (b d0 d : Devm) (cgC Gc x
     swapOptMem swapOptPtr swapCallbackGas temporalAccountAccessCost
   by_cases h : swapAmount1Out sevm = 0
   · simp only [h, ↓reduceIte]
-  · simp only [h, ↓reduceIte, withGasLeft_accessedAddresses, withGasLeft_returnData]
+  · simp only [h, ↓reduceIte, Devm.withGasLeft_accessedAddresses, Devm.withGasLeft_returnData]
 
 theorem tokenMask_toAdr (a : Adr) : (tokenMask a.toB256).toAdr = a := by
   unfold tokenMask
@@ -177,7 +172,7 @@ theorem swapWethLeg1_spec {sevm : Sevm} {b : Devm} {st : UniswapV2Pair.State} {d
         (leg1Ptr sevm d0) (swapAmount1Out sevm) (swapRecipientWord sevm) st.token1.toB256 0x8e1
         (leg1Need sevm b st d0 cgC Gc + leg1Charge sevm b st d0)).returnData
   rw [hgas]
-  conv => rhs; rw [hskel, swapFrontCallbackGas_withGasLeft, withGasLeft_returnData]
+  conv => rhs; rw [hskel, swapFrontCallbackGas_withGasLeft, Devm.withGasLeft_returnData]
   have hn : leg1Need sevm b st d0 cgC Gc = swapFrontCallbackGas sevm b d0 (leg1Skel sevm b st d0) cgC Gc +
       safeTransferPostCharge (leg1Mem sevm d0).size (leg1Ptr sevm d0)
         (leg1Skel sevm b st d0).returnData := rfl
@@ -315,7 +310,7 @@ theorem swapWethRead1_spec {sevm : Sevm} {d : Devm} {M : Mem} {n : Nat} {p : B25
         (swapBalanceWord (wethBalanceCall sevm d0 (readStack w ρ R d0) (readMem sevm M p d0) p
           w.token1 (readNeed sevm M n p w ρ R G d0 + readCharge sevm M p w ρ R d0)).returnData) G + 64
     rw [hgas]
-    conv => rhs; rw [hskel, swapBackPostGas_withGasLeft, withGasLeft_returnData]
+    conv => rhs; rw [hskel, swapBackPostGas_withGasLeft, Devm.withGasLeft_returnData]
     have hn : readNeed sevm M n p w ρ R G d0 = swapBackPostGas sevm (readSkel sevm M p w ρ R d0)
         (swapRequestSize (swapRequestSize n p) p) p w (swapBalanceWord d0.returnData)
         (swapBalanceWord (readSkel sevm M p w ρ R d0).returnData) G + 64 := rfl

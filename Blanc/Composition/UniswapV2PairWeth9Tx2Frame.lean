@@ -1,4 +1,5 @@
 import Blanc.Composition.UniswapV2PairWeth9Tx2Post
+import Jaune.DevmProjections
 
 /-!
 # The swap frame of `tx2`: the callee records and their gas, closed
@@ -50,7 +51,7 @@ theorem tx2D_view :
 
 theorem tx2D_returnData : (tx2D sevm b).returnData = (1 : B256).toBytes := by
   obtain ⟨y, e⟩ := tx2D_eq h
-  rw [e, withGasLeft_returnData]
+  rw [e, Devm.withGasLeft_returnData]
   rfl
 
 theorem tx2_cutWorld : swapFrontCutWorld sevm b b (tx2D sevm b) b = tx2D sevm b := by

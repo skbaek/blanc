@@ -1,4 +1,5 @@
 import Blanc.Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing
+import Jaune.DevmProjections
 
 /-!
 # One generic executed pause-world run for the CircuitBreaker × gateway composition
@@ -123,11 +124,6 @@ private theorem temporalSloadBase_accessedAddresses (sevm : Sevm) (base : Devm)
   (temporalSloadBase_carriers sevm base key).2.2.1
 
 /-! ## Slot-pair inequalities lifted to accessed-key pairs -/
-
-private theorem addAccessedStorageKey_accessedStorageKeys' (devm : Devm)
-    (a : Adr) (k : B256) :
-    (addAccessedStorageKey devm a k).accessedStorageKeys =
-      devm.accessedStorageKeys.insert (a, k) := rfl
 
 private theorem keyPairNe {a₁ a₂ : Adr} {k₁ k₂ : B256} (h : k₂ ≠ k₁) :
     (a₁, k₁) ≠ (a₂, k₂) := fun hp => h (congrArg Prod.snd hp).symm
@@ -358,16 +354,6 @@ private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (base : Devm) (key value : B256) :
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
-
-private theorem addLog_accessedStorageKeys (devm : Devm) (l : Log) :
-    (devm.addLog l).accessedStorageKeys = devm.accessedStorageKeys := rfl
-
-private theorem addLog_accessedAddresses (devm : Devm) (l : Log) :
-    (devm.addLog l).accessedAddresses = devm.accessedAddresses := rfl
-
-private theorem addLog_getStorVal (devm : Devm) (l : Log) (a : Adr)
-    (key : B256) : (devm.addLog l).getStorVal a key = devm.getStorVal a key :=
-  rfl
 
 private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
     (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
@@ -879,7 +865,7 @@ private theorem gatewayRunAddrs_B7 :
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).addLog
       ⟨w.sevm.currentTarget,
       [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩).accessedAddresses = Std.HashSet.emptyWithCapacity := by
-  rw [addLog_accessedAddresses,
+  rw [Devm.addLog_accessedAddresses,
     show (indexClearPost w.sevm (entryClearPost w.sevm (temporalSloadBase w.sevm (temporalSloadBase w.sevm (temporalSloadBase w.sevm (temporalSstorePost w.sevm (temporalSloadBase w.sevm (assignmentPost w.sevm
       (pauseKernelBase w.sevm w.pre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
@@ -1419,7 +1405,7 @@ private theorem gatewayRunAfterSetBase_targetKeyCold (key : B256) :
     (pauseWorldCallee.toB256.toAdr, key) ∉
       (gatewayRunAfterSetBase w).accessedStorageKeys := by
   have hcallee : pauseWorldCallee.toB256.toAdr = pauseWorldCallee := by decide
-  rw [gatewayRunAfterSetBase, addLog_accessedStorageKeys,
+  rw [gatewayRunAfterSetBase, Devm.addLog_accessedStorageKeys,
     indexClearPost_accessedStorageKeys, entryClearPost_accessedStorageKeys]
   unfold gatewayRunRemoveBase3 gatewayRunCountPost gatewayRunKernelBase
   rw [(gatewayRunKeys_removeBase3 w)]
@@ -1442,7 +1428,7 @@ private theorem gatewayRunAfterSetBase_targetStor (key : B256) :
   have haddr : pauseWorldCallee.toB256.toAdr ≠
       w.sevm.currentTarget := (GWorld.target_ne_owner (w := w))
   unfold gatewayRunAfterSetBase
-  rw [addLog_getStorVal]
+  rw [Devm.addLog_getStorVal]
   unfold indexClearPost lengthWritePost entryClearPost indexWritePost
     entryWritePost
   rw [temporalSstorePost_getStorVal_otherAddress _ _ _ _ _ _ haddr,
@@ -1489,14 +1475,14 @@ private theorem gatewayRunAfterSetBase_count :
     (gatewayRunAfterSetBase w).getStorVal configWorldOwner
       (countSlot pauseWorldPauser) = 0 := by
   have hcount := (gatewayRunStor_B6_count w)
-  rw [gatewayRunAfterSetBase, addLog_getStorVal]
+  rw [gatewayRunAfterSetBase, Devm.addLog_getStorVal]
   simpa only [gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using
     hcount
 
 private theorem gatewayRunAfterSetBase_expiry :
     (gatewayRunAfterSetBase w).getStorVal configWorldOwner
       (expirySlot pauseWorldPauser) = pauseWorldExpiry := by
-  rw [gatewayRunAfterSetBase, addLog_getStorVal]
+  rw [gatewayRunAfterSetBase, Devm.addLog_getStorVal]
   have h := ((gatewayRunStor_B6_other w) pauseWorld_assignCallee_ne_expiry
     pauseWorld_count_ne_expiry pauseWorld_entryOne_ne_expiry
     pauseWorld_indexCallee_ne_expiry pauseWorld_length_ne_expiry).trans
@@ -1514,7 +1500,7 @@ omit [GWorldSpec w] in
 private theorem gatewayRunAfterSetBase_warmCount :
     (w.sevm.currentTarget, countSlot pauseWorldPauser) ∈
       (gatewayRunAfterSetBase w).accessedStorageKeys := by
-  rw [gatewayRunAfterSetBase, addLog_accessedStorageKeys,
+  rw [gatewayRunAfterSetBase, Devm.addLog_accessedStorageKeys,
     indexClearPost_accessedStorageKeys, entryClearPost_accessedStorageKeys]
   simpa only [gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using
     (gatewayRunWarm_count_rb3 w)
@@ -1523,7 +1509,7 @@ omit [GWorldSpec w] in
 private theorem gatewayRunAfterSetBase_warmExpiry :
     (w.sevm.currentTarget, expirySlot pauseWorldPauser) ∈
       (gatewayRunAfterSetBase w).accessedStorageKeys := by
-  rw [gatewayRunAfterSetBase, addLog_accessedStorageKeys,
+  rw [gatewayRunAfterSetBase, Devm.addLog_accessedStorageKeys,
     indexClearPost_accessedStorageKeys, entryClearPost_accessedStorageKeys]
   simpa only [gatewayRunRemoveBase3, gatewayRunCountPost, gatewayRunKernelBase] using
     (gatewayRunWarm_expiry_rb3 w)
@@ -1544,7 +1530,7 @@ private theorem gatewayRunAfterSetBase_resumeCold :
           currentTarget := pauseWorldCallee.toB256.toAdr
           caller := w.sevm.currentTarget }
         (gatewayRunAfterSetBase w)).accessedStorageKeys := by
-  simp only [pauseRoleWarm, addAccessedStorageKey_accessedStorageKeys',
+  simp only [pauseRoleWarm, addAccessedStorageKey_accessedStorageKeys,
     Std.HashSet.mem_insert, beq_iff_eq, not_or]
   exact ⟨by rw [(GWorld.currentTarget (w := w))]; decide +kernel, (gatewayRunAfterSetBase_targetKeyCold w) _⟩
 
@@ -1696,15 +1682,6 @@ private theorem gatewayPauseWorldRun_sload_created (sevm : Sevm) (b : Devm) (k :
 private theorem gatewayPauseWorldRun_sstore_created (sevm : Sevm) (b : Devm) (k v : B256) :
     (temporalSstorePost sevm b k v).createdAccounts = b.createdAccounts := rfl
 
-private theorem gatewayPauseWorldRun_addKey_created (b : Devm) (a : Adr) (k : B256) :
-    (addAccessedStorageKey b a k).createdAccounts = b.createdAccounts := rfl
-
-private theorem gatewayPauseWorldRun_addLog_created (b : Devm) (l : Log) :
-    (b.addLog l).createdAccounts = b.createdAccounts := rfl
-
-private theorem gatewayPauseWorldRun_transVal_created (b : Devm) (a : Adr) (k v : B256) :
-    (b.setTransVal a k v).createdAccounts = b.createdAccounts := rfl
-
 omit [GWorldSpec w] in
 /-- At any state whose created-account set is still the entry one, the
 machine's actual original read at the CircuitBreaker owner is its entry
@@ -1717,8 +1694,8 @@ private theorem gatewayPauseWorld_actualOrigStor {d : Devm} {key : B256}
         entryWritePost, swapPopClearPost, assignmentPost, assignmentBase,
         foundKernelPost, pauseKernelBase, pauseDurationBase, pauseExpiryBase,
         pauseLockPost, gatewayPauseWorldRun_sload_created, gatewayPauseWorldRun_sstore_created,
-        gatewayPauseWorldRun_addKey_created, gatewayPauseWorldRun_addLog_created,
-        gatewayPauseWorldRun_transVal_created, Devm.setMach_createdAccounts]) <;> rfl) :
+        addAccessedStorageKey_createdAccounts, Devm.addLog_createdAccounts,
+        Devm.setTransVal_createdAccounts, Devm.setMach_createdAccounts]) <;> rfl) :
     d.getOrigStorVal w.sevm w.sevm.currentTarget key =
       getOrigStorVal w.sevm configWorldOwner key := by
   have hnc : w.sevm.currentTarget ∉ d.createdAccounts := by
@@ -1737,8 +1714,8 @@ private theorem gatewayRunAfterSetBase_createdAccounts :
     entryWritePost, assignmentPost, assignmentBase,
     pauseKernelBase, pauseDurationBase, pauseExpiryBase,
     pauseLockPost, gatewayPauseWorldRun_sload_created, gatewayPauseWorldRun_sstore_created,
-    gatewayPauseWorldRun_addLog_created,
-    gatewayPauseWorldRun_transVal_created]
+    Devm.addLog_createdAccounts,
+    Devm.setTransVal_createdAccounts]
 
 private theorem gatewayPauseWorld_successSuffix :
     ∃ successPre final : Devm,
