@@ -2994,6 +2994,7 @@
     "files": [
      "scripts/check-elab.sh",
      "scripts/check-elab-selection.py",
+     "scripts/module_family.py",
      "scripts/baseline-elab.txt",
      "scripts/gate-lock.sh",
      "lean-toolchain",

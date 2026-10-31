@@ -395,6 +395,68 @@ def read_baseline(path: Path) -> dict[str, float]:
     return times
 
 
+def read_report_times(path: Path) -> dict[str, float]:
+    """Parse a merged report (status, seconds, path, source) into path -> seconds."""
+    times: dict[str, float] = {}
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        fields = raw.split("\t")
+        if len(fields) >= 3 and valid_time(fields[1]):
+            times[fields[2]] = float(fields[1])
+    return times
+
+
+def family_total_lines(
+    report: dict[str, float], baseline: dict[str, float], regressed: Iterable[str]
+) -> list[str]:
+    """Report-only family totals beside per-file regressions (safeguard S10).
+
+    A consolidation that folds a family's shards into one existing file makes
+    that file slower while the family as a whole gets faster (U2's signing
+    hashes: per file 1.9-3.1 s to 5.9-54 s, family total about 2,900 s to
+    230 s). This prints, for the family of each regressed file, its total now
+    against its baseline total, counting baseline rows whose file is gone. It
+    changes no verdict, threshold or budget.
+    """
+
+    if str(selector_script_dir()) not in sys.path:
+        sys.path.insert(0, str(selector_script_dir()))
+    from module_family import module_family
+
+    families: dict[str, list[str]] = {}
+    for path in sorted(set(regressed)):
+        families.setdefault(module_family(path), []).append(path)
+    lines = []
+    for family, members in sorted(families.items()):
+        now = [p for p in report if module_family(p) == family]
+        before = [p for p in baseline if module_family(p) == family]
+        gone = [p for p in before if p not in report]
+        now_total = sum(report[p] for p in now)
+        before_total = sum(baseline[p] for p in before)
+        ratio = f"{now_total / before_total:.2f}x" if before_total > 0 else "n/a"
+        lines.append(
+            f"FAMILY — elab (report-only): {family}: {len(now)} file(s) {now_total:.1f} s now "
+            f"vs {len(before)} baseline row(s) {before_total:.1f} s ({ratio}; "
+            f"{len(gone)} baseline row(s) for files no longer present); "
+            f"regressed member(s): {', '.join(members)}"
+        )
+    return lines
+
+
+def command_family_totals(args: argparse.Namespace) -> int:
+    regressed = [
+        line.strip()
+        for line in args.regressed.read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
+    if not regressed:
+        return 0
+    for line in family_total_lines(
+        read_report_times(args.report), read_baseline(args.baseline), regressed
+    ):
+        print(line)
+    return 0
+
+
 def file_digest(path: Path) -> str:
     return sha256_bytes(path.read_bytes())
 
@@ -2544,6 +2606,21 @@ exit "${FAKE_LAKE_RC-0}"
     assert load_shared_host_identity() == probe.host_identity()
     controls += 1  # the shared store uses the gate cache's host identity, not its own
 
+    # S10: a consolidated family reads as one regressed file plus a family
+    # total that fell; the total counts baseline rows whose files are gone.
+    assert "family-totals" in shell_source
+    folded = family_total_lines(
+        {"Blanc/F/Hash.lean": 54.0, "Blanc/G/Other.lean": 1.0},
+        {"Blanc/F/Hash.lean": 3.0, "Blanc/F/Rounds00.lean": 1450.0,
+         "Blanc/F/Rounds01.lean": 1450.0, "Blanc/G/Other.lean": 1.0},
+        ["Blanc/F/Hash.lean"],
+    )
+    assert len(folded) == 1, folded
+    assert "Blanc/F/: 1 file(s) 54.0 s now vs 3 baseline row(s) 2903.0 s (0.02x; " \
+        "2 baseline row(s) for files no longer present)" in folded[0], folded
+    assert family_total_lines({"Blanc/G/Other.lean": 1.0}, {"Blanc/G/Other.lean": 1.0}, []) == []
+    controls += 1  # family totals print beside a per-file regression, and only then
+
     print(f"OK — elab selection: {controls} invalidation/cache controls passed")
     return 0
 
@@ -3398,6 +3475,12 @@ def build_parser() -> argparse.ArgumentParser:
     publish_baseline.add_argument("--baseline", type=Path, required=True)
     publish_baseline.add_argument("--environment-id", required=True)
     publish_baseline.set_defaults(function=command_publish_baseline)
+
+    family = subparsers.add_parser("family-totals")
+    family.add_argument("--report", type=Path, required=True)
+    family.add_argument("--baseline", type=Path, required=True)
+    family.add_argument("--regressed", type=Path, required=True)
+    family.set_defaults(function=command_family_totals)
 
     test = subparsers.add_parser("self-test")
     test.set_defaults(function=lambda _args: self_test())
