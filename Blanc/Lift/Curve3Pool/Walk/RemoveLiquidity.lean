@@ -148,7 +148,7 @@ theorem xa_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {
           (0 : B256).toBytes ++ (0 : B256).toBytes ++ (0 : B256).toBytes ++
           (rlSupply c0 - rlAmt sevm).toBytes⟩] ∧
       post.output = b.output := by
-  obtain ⟨G1, h⟩ := xa_dispatch_removeLiquidity hcode hlen hcd hsel h
+  obtain ⟨G1, h⟩ := xa_dispatch (q := 0x2c68) hcode hlen hcd hsel h
   obtain ⟨hlock, hval, c0, L0, b1, M1, G1, img1, rfl, hdepth, h0t, h0d, h0s, h0l, h0g, -,
     -, hs1, -, hl1, ho1, hacc1, h41, hcd1, hR, hW, hT, hz, hctr, h⟩ :=
     xa_rl_pre hcode hfork hcd (vyMem_reads Mem.wf_empty Mem.reads_empty _)

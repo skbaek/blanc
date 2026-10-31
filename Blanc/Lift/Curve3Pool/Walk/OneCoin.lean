@@ -26,26 +26,8 @@ theorem xa_vd_removeLiquidityOneCoin (hcode : sevm.code = code)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
-    ∃ G', XAt sevm post 0x440c (St b [] (vdMem sevm) G') L := by
-  obtain ⟨_, h⟩ := xa_vd_head hcode hlen hcd h
-  obtain ⟨_, h⟩ := (xa_vd_arm_0245 hcode h).miss (by rw [hsel]; decide)
-  obtain ⟨_, h⟩ := xa_vd_skip_027a hcode h
-  obtain ⟨_, h⟩ := xa_vd_skip_039a hcode h
-  obtain ⟨_, h⟩ := xa_vd_skip_04c2 hcode h
-  obtain ⟨_, h⟩ := xa_vd_skip_07b0 hcode h
-  obtain ⟨_, h⟩ := (xa_vd_arm_090e hcode h).miss (by rw [hsel]; decide)
-  obtain ⟨_, h⟩ := (xa_vd_arm_0af9 hcode h).miss (by rw [hsel]; decide)
-  obtain ⟨_, h⟩ := (xa_vd_arm_0e47 hcode h).miss (by rw [hsel]; decide)
-  obtain ⟨_, h⟩ := xa_vd_skip_189d hcode h
-  obtain ⟨_, h⟩ := (xa_vd_arm_1d14 hcode h).miss (by rw [hsel]; decide)
-  obtain ⟨_, h⟩ := (xa_vd_arm_2046 hcode h).miss (by rw [hsel]; decide)
-  obtain ⟨_, h⟩ := (xa_vd_arm_230b hcode h).miss (by rw [hsel]; decide)
-  obtain ⟨_, h⟩ := (xa_vd_arm_2c5a hcode h).miss (by rw [hsel]; decide)
-  obtain ⟨_, h⟩ := (xa_vd_arm_3041 hcode h).miss (by rw [hsel]; decide)
-  obtain ⟨_, h⟩ := xa_vd_skip_3992 hcode h
-  obtain ⟨_, h⟩ := xa_vd_skip_3cc3 hcode h
-  obtain ⟨_, h⟩ := (xa_vd_arm_438a hcode h).miss (by rw [hsel]; decide)
-  exact (xa_vd_arm_43fe hcode h).hit hsel
+    ∃ G', XAt sevm post 0x440c (St b [] (vdMem sevm) G') L :=
+  xa_dispatch hcode hlen hcd hsel h
 
 /-- `balances[i]`'s new word: `balances[i] - (dy + dy_fee * admin_fee / FEE_DENOMINATOR)`. -/
 abbrev ocBal (σ : Stor) (iw dy fee : B256) : B256 :=

@@ -9988,6 +9988,17 @@ contract-neutral.
   body up to its load loop (`vyStrView`) with the join's `ceil32_eq` and the zero-fill read
   `sliceD_data_end`, and `sstoreCost_le`, `Mem.read_write_disjoint`, `vy_mul32`, in
   [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
+- Walk a Vyper 0.2 selector dispatcher on a frame's actual derivation (`XAt`) by evaluation,
+  never test by test: from a sound decoder of the code (`DecSound dec code`, e.g. a trie
+  `decodeT`), `vyChain dec n p` reads the chain of `PUSH4 c PUSH1 0 MLOAD EQ ISZERO PUSH2 t JUMPI`
+  tests and always-taken `PUSH1 0 ISZERO PUSH2 t JUMPI` skips; a contract states it once as a
+  literal list by `decide +kernel` (Curve 3pool: `poolLinks`/`pool_chain`); `xa_vyChain` takes a
+  frame with selector `σ` to `vyHit σ ls e` (the arm past the first equal test, kernel-computed
+  from the list) and `xa_vyChain_miss` takes a selector missing every test to the chain's end,
+  with the prologue's memory `vyMem Mem.empty w` kept (`ri_mload_vy0`, `vyMem_word0_selector`);
+  one test or skip alone is `xa_vyTest`/`xa_vyPass`; in
+  [`Blanc/Lift/VyperDispatchWalk.lean`](../Blanc/Lift/VyperDispatchWalk.lean). Worked use:
+  `Blanc/Lift/Curve3Pool/Walk/Dispatch.lean` (`xa_dispatch`, `xa_dispatch_miss`).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
   `SFunc.RunCutP.loop` (invariant; `SFunc.RunP.loop`), which

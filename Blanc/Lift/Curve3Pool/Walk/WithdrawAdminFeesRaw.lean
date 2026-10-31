@@ -171,10 +171,7 @@ theorem xa_withdraw {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
       post.logs = b.logs ++ Lp0.flatMap (fun p => p.post.logs) ++
         Lp1.flatMap (fun p => p.post.logs) ++ Lp2.flatMap (fun p => p.post.logs) ∧
       post.output = b.output := by
-  obtain ⟨G1, h⟩ := wdx_disp_to_3040 hcode hlen hcd hsel h
-  obtain ⟨G2, h⟩ := wdx_disp_to_test hcode hsel h
-  obtain ⟨G3, h⟩ := wdx_to_withdraw hcode hsel h
-  obtain ⟨G4, h⟩ := wdx_disp_to_body hcode hsel h
+  obtain ⟨G4, h⟩ := xa_dispatch (q := 0x4d3a) hcode hlen hcd hsel h
   obtain ⟨hval, hown, G5, M5, img5, hW5, hR5, hctr5, h⟩ := wdx_guards hcode hfork h
   refine ⟨hval, hown, ?_⟩
   have hs0 : ∀ x, ((afterSload sevm b ownerSlot).getStor sevm.currentTarget).get x =

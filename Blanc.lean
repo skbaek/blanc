@@ -1104,7 +1104,6 @@ import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityExactSchedule
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityExactWalk
 import Blanc.Lift.Curve3Pool.RemoveLiquidityExactFrame
 import Blanc.Lift.Curve3Pool.Walk.ArmChecks
-import Blanc.Lift.Curve3Pool.Walk.DispatchQuiet
 import Blanc.Lift.Curve3Pool.Walk.Fallback
 import Blanc.Lift.Curve3Pool.CommittedReplay
 import Blanc.Lift.Curve3Pool.Ladder
