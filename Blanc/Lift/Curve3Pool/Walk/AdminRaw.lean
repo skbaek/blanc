@@ -1,4 +1,4 @@
-import Blanc.Lift.Curve3Pool.Walk.DispatchQuiet
+import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Curve3Pool.Walk.ArmChecks
 import Blanc.Lift.Curve3Pool.Walk.Admin
 import Blanc.Lift.Curve3Pool.Walk.Getters
@@ -10,7 +10,7 @@ import Blanc.Lift.FrameWalkNode
 # Raw effects of the quiet admin/getter entries
 
 For each admin entry and getter, `<entry>_raw` has the shape of
-`removeLiquidity_rawK`: dispatcher (`DispatchQuiet.lean`) hands the arm's body
+`removeLiquidity_rawK`: dispatcher (`xa_dispatch`, `Dispatch.lean`) hands the arm's body
 pc with the exact `quietSt` state, `xa_node_span` crosses the checked
 exec-free arm tree (the halted branch leaves no children; the returned branch
 is impossible by `admRawRun_halted`), the existing `safe_*` proof gives the
@@ -34,13 +34,7 @@ theorem commitNewFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_arm_commitNewFee hcode hsel hX
+  obtain ⟨G3, hX⟩ := xa_dispatch (q := 0x49aa) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G3).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -67,14 +61,7 @@ theorem applyNewFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_arm_applyNewFee hcode hsel hX
+  obtain ⟨G4, hX⟩ := xa_dispatch (q := 0x4a73) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G4).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -101,15 +88,7 @@ theorem revertNewParameters_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_arm_revertNewParameters hcode hsel hX
+  obtain ⟨G5, hX⟩ := xa_dispatch (q := 0x4b12) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G5).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -136,16 +115,7 @@ theorem commitTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_arm_commitTransferOwnership hcode hsel hX
+  obtain ⟨G6, hX⟩ := xa_dispatch (q := 0x4b40) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G6).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -172,17 +142,7 @@ theorem applyTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_arm_applyTransferOwnership hcode hsel hX
+  obtain ⟨G7, hX⟩ := xa_dispatch (q := 0x4be1) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G7).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -209,18 +169,7 @@ theorem revertTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_arm_revertTransferOwnership hcode hsel hX
+  obtain ⟨G8, hX⟩ := xa_dispatch (q := 0x4c65) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G8).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -247,22 +196,7 @@ theorem killMe_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_arm_killMe hcode hsel hX
+  obtain ⟨G12, hX⟩ := xa_dispatch (q := 0x5019) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G12).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -289,23 +223,7 @@ theorem unkillMe_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_arm_unkillMe hcode hsel hX
+  obtain ⟨G13, hX⟩ := xa_dispatch (q := 0x5055) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G13).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -332,24 +250,7 @@ theorem coins_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_arm_coins hcode hsel hX
+  obtain ⟨G14, hX⟩ := xa_dispatch (q := 0x5083) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G14).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -376,25 +277,7 @@ theorem balances_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_arm_balances hcode hsel hX
+  obtain ⟨G15, hX⟩ := xa_dispatch (q := 0x50c3) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G15).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -421,26 +304,7 @@ theorem fee_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_arm_fee hcode hsel hX
+  obtain ⟨G16, hX⟩ := xa_dispatch (q := 0x5103) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G16).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -467,27 +331,7 @@ theorem adminFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_arm_adminFee hcode hsel hX
+  obtain ⟨G17, hX⟩ := xa_dispatch (q := 0x512a) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G17).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -514,28 +358,7 @@ theorem owner_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_arm_owner hcode hsel hX
+  obtain ⟨G18, hX⟩ := xa_dispatch (q := 0x5151) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G18).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -562,29 +385,7 @@ theorem initialA_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_skip_8da5cb5b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G19, hX⟩ := dq_arm_initialA hcode hsel hX
+  obtain ⟨G19, hX⟩ := xa_dispatch (q := 0x5178) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G19).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -611,30 +412,7 @@ theorem futureA_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_skip_8da5cb5b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G19, hX⟩ := dq_skip_5409491a hcode hX (by rw [hsel]; decide)
-  obtain ⟨G20, hX⟩ := dq_arm_futureA hcode hsel hX
+  obtain ⟨G20, hX⟩ := xa_dispatch (q := 0x519f) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G20).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -661,31 +439,7 @@ theorem initialATime_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_skip_8da5cb5b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G19, hX⟩ := dq_skip_5409491a hcode hX (by rw [hsel]; decide)
-  obtain ⟨G20, hX⟩ := dq_skip_b4b577ad hcode hX (by rw [hsel]; decide)
-  obtain ⟨G21, hX⟩ := dq_arm_initialATime hcode hsel hX
+  obtain ⟨G21, hX⟩ := xa_dispatch (q := 0x51c6) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G21).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -712,32 +466,7 @@ theorem futureATime_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_skip_8da5cb5b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G19, hX⟩ := dq_skip_5409491a hcode hX (by rw [hsel]; decide)
-  obtain ⟨G20, hX⟩ := dq_skip_b4b577ad hcode hX (by rw [hsel]; decide)
-  obtain ⟨G21, hX⟩ := dq_skip_2081066c hcode hX (by rw [hsel]; decide)
-  obtain ⟨G22, hX⟩ := dq_arm_futureATime hcode hsel hX
+  obtain ⟨G22, hX⟩ := xa_dispatch (q := 0x51ed) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G22).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -764,33 +493,7 @@ theorem adminActionsDeadline_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_skip_8da5cb5b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G19, hX⟩ := dq_skip_5409491a hcode hX (by rw [hsel]; decide)
-  obtain ⟨G20, hX⟩ := dq_skip_b4b577ad hcode hX (by rw [hsel]; decide)
-  obtain ⟨G21, hX⟩ := dq_skip_2081066c hcode hX (by rw [hsel]; decide)
-  obtain ⟨G22, hX⟩ := dq_skip_14052288 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G23, hX⟩ := dq_arm_adminActionsDeadline hcode hsel hX
+  obtain ⟨G23, hX⟩ := xa_dispatch (q := 0x5214) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G23).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -818,34 +521,7 @@ theorem transferOwnershipDeadline_raw {sevm : Sevm} {pre post : Devm} {s : State
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_skip_8da5cb5b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G19, hX⟩ := dq_skip_5409491a hcode hX (by rw [hsel]; decide)
-  obtain ⟨G20, hX⟩ := dq_skip_b4b577ad hcode hX (by rw [hsel]; decide)
-  obtain ⟨G21, hX⟩ := dq_skip_2081066c hcode hX (by rw [hsel]; decide)
-  obtain ⟨G22, hX⟩ := dq_skip_14052288 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G23, hX⟩ := dq_skip_405e28f8 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G24, hX⟩ := dq_arm_transferOwnershipDeadline hcode hsel hX
+  obtain ⟨G24, hX⟩ := xa_dispatch (q := 0x523b) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G24).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -873,35 +549,7 @@ theorem futureFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_skip_8da5cb5b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G19, hX⟩ := dq_skip_5409491a hcode hX (by rw [hsel]; decide)
-  obtain ⟨G20, hX⟩ := dq_skip_b4b577ad hcode hX (by rw [hsel]; decide)
-  obtain ⟨G21, hX⟩ := dq_skip_2081066c hcode hX (by rw [hsel]; decide)
-  obtain ⟨G22, hX⟩ := dq_skip_14052288 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G23, hX⟩ := dq_skip_405e28f8 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G24, hX⟩ := dq_skip_e0a0b586 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G25, hX⟩ := dq_arm_futureFee hcode hsel hX
+  obtain ⟨G25, hX⟩ := xa_dispatch (q := 0x5262) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G25).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -928,36 +576,7 @@ theorem futureAdminFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_skip_8da5cb5b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G19, hX⟩ := dq_skip_5409491a hcode hX (by rw [hsel]; decide)
-  obtain ⟨G20, hX⟩ := dq_skip_b4b577ad hcode hX (by rw [hsel]; decide)
-  obtain ⟨G21, hX⟩ := dq_skip_2081066c hcode hX (by rw [hsel]; decide)
-  obtain ⟨G22, hX⟩ := dq_skip_14052288 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G23, hX⟩ := dq_skip_405e28f8 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G24, hX⟩ := dq_skip_e0a0b586 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G25, hX⟩ := dq_skip_58680d0b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G26, hX⟩ := dq_arm_futureAdminFee hcode hsel hX
+  obtain ⟨G26, hX⟩ := xa_dispatch (q := 0x5289) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G26).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil
@@ -984,37 +603,7 @@ theorem futureOwner_raw {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  obtain ⟨G1, hX⟩ := dq_to_3040 hcode hlen hcd hx
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-  obtain ⟨G2, hX⟩ := dq_to_499b hcode hX
-    (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide) (by rw [hsel]; decide)
-    (by rw [hsel]; decide)
-  obtain ⟨G3, hX⟩ := dq_skip_5b5a1467 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G4, hX⟩ := dq_skip_4f12fe97 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G5, hX⟩ := dq_skip_226840fb hcode hX (by rw [hsel]; decide)
-  obtain ⟨G6, hX⟩ := dq_skip_6b441a40 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G7, hX⟩ := dq_skip_6a1c05ae hcode hX (by rw [hsel]; decide)
-  obtain ⟨G8, hX⟩ := dq_skip_86fbf193 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G9, hX⟩ := dq_skip_e2e7d264 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G10, hX⟩ := dq_skip_30c54085 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G11, hX⟩ := dq_skip_524c3901 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G12, hX⟩ := dq_skip_e3698853 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G13, hX⟩ := dq_skip_3046f972 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G14, hX⟩ := dq_skip_c6610657 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G15, hX⟩ := dq_skip_4903b0d1 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G16, hX⟩ := dq_skip_ddca3f43 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G17, hX⟩ := dq_skip_fee3f7f9 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G18, hX⟩ := dq_skip_8da5cb5b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G19, hX⟩ := dq_skip_5409491a hcode hX (by rw [hsel]; decide)
-  obtain ⟨G20, hX⟩ := dq_skip_b4b577ad hcode hX (by rw [hsel]; decide)
-  obtain ⟨G21, hX⟩ := dq_skip_2081066c hcode hX (by rw [hsel]; decide)
-  obtain ⟨G22, hX⟩ := dq_skip_14052288 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G23, hX⟩ := dq_skip_405e28f8 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G24, hX⟩ := dq_skip_e0a0b586 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G25, hX⟩ := dq_skip_58680d0b hcode hX (by rw [hsel]; decide)
-  obtain ⟨G26, hX⟩ := dq_skip_e3824462 hcode hX (by rw [hsel]; decide)
-  obtain ⟨G27, hX⟩ := dq_arm_futureOwner hcode hsel hX
+  obtain ⟨G27, hX⟩ := xa_dispatch (q := 0x52b0) hcode hlen hcd hsel hx
   have hst : (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G27).stack =
       [] ++ ([] : List B256) := rfl
   have hfr : FrameMatches (0 : B256) ([] : List AVal) ([] : List B256) := List.Forall₂.nil

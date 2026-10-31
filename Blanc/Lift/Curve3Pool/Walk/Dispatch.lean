@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.Kit
 import Blanc.Lift.Curve3Pool.Decode
+import Blanc.Lift.VyperDispatchWalk
 
 /-!
 # The prologue and dispatcher, on the actual derivation
@@ -9,44 +10,34 @@ runs the Vyper prologue (`mstore(0x1c, calldataload(0))` and the five clamp cons
 the selector arm by arm, jumping over the internal-function blocks between arms
 (`PUSH1 0; ISZERO; PUSH2 t; JUMPI`, always taken).
 
-`xa_dispatch_removeLiquidity`: with the `remove_liquidity` selector, the frame reaches
-`0x2c68` (the arm's body, past its test) with empty stack, the prologue's memory image, and the
-same remaining children (the dispatcher spawns nothing). The memory is the exact prologue memory
-`vyMem Mem.empty w` (the form `quietSt` uses), so arm-level SFunc walks bridge at this node.
+The test chain is walked by evaluation (`Blanc/Lift/VyperDispatchWalk.lean`) over the runtime's
+trie decoder `poolDec`:
+
+* `dq_prologue`: frame entry through the prologue to the first test at `0x245`;
+* `poolLinks`/`pool_chain`: the chain of tests and skips, decoded once by the kernel;
+* `xa_dispatch`: with selector `σ`, the frame reaches `q = vyHit σ poolLinks 0x52c9` (the
+  arm's body, past its own test; the kernel computes `q` from the list) with empty stack, the prologue's exact
+  memory `vyMem Mem.empty w` (the form `quietSt` uses) and the same remaining children (the
+  dispatcher spawns nothing);
+* `xa_dispatch_miss`: a selector missing every test reaches the shared fall-through at `0x52c9`.
 -/
 
 namespace Blanc.Lift.Curve3Pool
 
-open Jaune Blanc.Lift
+open Jaune Blanc.Lift Blanc.Lift.NodeWalk
 
-/-- The prologue's image over empty memory, with the calldata's first word `w`. -/
-abbrev proImg (w : B256) : Bytes := vyImg [] w
+/-- The runtime's instruction decoder, read off its byte tries. -/
+abbrev poolDec : Nat → Option Inst := decodeT 15 codeTries.bytes
 
-/-- An `MLOAD` at offset `0` of the prologue's memory leaves it unchanged (it is already six
-words long) and reads the image's first word. -/
-theorem ri_mload_vy0 {w : B256}
-    (h : Ninst.Run sevm (St b (Bytes.toB256 [0] :: S) (vyMem Mem.empty w) G) (.reg .mload) d) :
-    ∃ G', d = St b (Bytes.toB256 ((vyImg [] w).sliceD (Bytes.toB256 [0]).toNat 32 0) :: S)
-      (vyMem Mem.empty w) G' := by
-  obtain ⟨G', rfl⟩ := ri_mload h
-  refine ⟨G', ?_⟩
-  have hR := vyMem_reads Mem.wf_empty Mem.reads_empty w
-  have hs := vyMem_empty_size w
-  have hx : (Mem.read (vyMem Mem.empty w) (Bytes.toB256 [0]).toNat 32).2 = vyMem Mem.empty w := by
-    show Mem.mk _ (memExtSize _ _ _) = _
-    rw [hs]
-    cases e : vyMem Mem.empty w with
-    | mk data size => rw [e] at hs; subst hs; rfl
-  rw [Mem.Reads.read hR, hx]
+theorem poolDec_sound {sevm : Sevm} (hcode : sevm.code = code) : DecSound poolDec sevm.code :=
+  fun h => hcode ▸ decodeT_sound codeTries h
 
-/-- **The dispatcher hands `remove_liquidity` its body** (past the arm's own test), with the
-prologue's exact memory and the frame's remaining children unchanged. -/
-theorem xa_dispatch_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
+/-- The shared prefix: frame entry through the prologue to the first test. -/
+theorem dq_prologue {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
     {G : Nat} (hcode : sevm.code = code)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
-    (hsel : Sevm.selector sevm = selRemoveLiquidity)
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
-    ∃ G', XAt sevm post 0x2c68 (St b [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G') L := by
+    ∃ G', XAt sevm post 0x245 (St b [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G') L := by
   xs 0x2 (.push [0x04] (by decide)) ri_push  -- 0000 PUSH1 0x04
   xs 0x3 (.reg .calldatasize) ri_calldatasize  -- 0002 CALLDATASIZE
   xs 0x4 (.reg .lt) ri_lt  -- 0003 LT
@@ -76,116 +67,55 @@ theorem xa_dispatch_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec
   xs 0xa1 (.push [0xa0] (by decide)) ri_push  -- 009f PUSH1 0xa0
   xs 0xa2 (.reg .mstore) ri_mstore  -- 00a1 MSTORE
   replace h : XAt sevm post 0xa2 (St b [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) _) L := h
-  have hsw : Bytes.toB256 ((vyImg [] (Sevm.dataWord sevm 0)).sliceD (Bytes.toB256 [0]).toNat 32 0) =
-      0xecb586a5 := by
-    rw [show (Bytes.toB256 [0]).toNat = 0 from rfl, vyImg_selector]; exact hsel
   xs 0xa4 (.push [0x00] (by decide)) ri_push  -- 00a2 PUSH1 0x00
   xs 0xa5 (.reg .iszero) ri_iszero  -- 00a4 ISZERO
   xs 0xa8 (.push [0x02, 0x44] (by decide)) ri_push  -- 00a5 PUSH2 0x0244
   xji 0xa9 0x244 hw  -- taken
   · exact absurd hw (by decide)
   xjd 0x245
-  xs 0x24a (.push [0xf4, 0x46, 0xc1, 0xd0] (by decide)) ri_push  -- 0245 PUSH4 0xf446c1d0
-  xs 0x24c (.push [0x00] (by decide)) ri_push  -- 024a PUSH1 0x00
-  xs 0x24d (.reg .mload) ri_mload_vy0  -- 024c MLOAD
-  xs 0x24e (.reg .eq) ri_eq  -- 024d EQ
-  xs 0x24f (.reg .iszero) ri_iszero  -- 024e ISZERO
-  xs 0x252 (.push [0x02, 0x79] (by decide)) ri_push  -- 024f PUSH2 0x0279
-  xji 0x253 0x279 hw  -- taken
-  · exact absurd (isNe_fall hw) (by rw [hsw]; decide)
-  xjd 0x27a
-  xs 0x27c (.push [0x00] (by decide)) ri_push  -- 027a PUSH1 0x00
-  xs 0x27d (.reg .iszero) ri_iszero  -- 027c ISZERO
-  xs 0x280 (.push [0x03, 0x99] (by decide)) ri_push  -- 027d PUSH2 0x0399
-  xji 0x281 0x399 hw  -- taken
-  · exact absurd hw (by decide)
-  xjd 0x39a
-  xs 0x39c (.push [0x00] (by decide)) ri_push  -- 039a PUSH1 0x00
-  xs 0x39d (.reg .iszero) ri_iszero  -- 039c ISZERO
-  xs 0x3a0 (.push [0x04, 0xc1] (by decide)) ri_push  -- 039d PUSH2 0x04c1
-  xji 0x3a1 0x4c1 hw  -- taken
-  · exact absurd hw (by decide)
-  xjd 0x4c2
-  xs 0x4c4 (.push [0x00] (by decide)) ri_push  -- 04c2 PUSH1 0x00
-  xs 0x4c5 (.reg .iszero) ri_iszero  -- 04c4 ISZERO
-  xs 0x4c8 (.push [0x07, 0xaf] (by decide)) ri_push  -- 04c5 PUSH2 0x07af
-  xji 0x4c9 0x7af hw  -- taken
-  · exact absurd hw (by decide)
-  xjd 0x7b0
-  xs 0x7b2 (.push [0x00] (by decide)) ri_push  -- 07b0 PUSH1 0x00
-  xs 0x7b3 (.reg .iszero) ri_iszero  -- 07b2 ISZERO
-  xs 0x7b6 (.push [0x09, 0x0d] (by decide)) ri_push  -- 07b3 PUSH2 0x090d
-  xji 0x7b7 0x90d hw  -- taken
-  · exact absurd hw (by decide)
-  xjd 0x90e
-  xs 0x913 (.push [0xbb, 0x7b, 0x8b, 0x80] (by decide)) ri_push  -- 090e PUSH4 0xbb7b8b80
-  xs 0x915 (.push [0x00] (by decide)) ri_push  -- 0913 PUSH1 0x00
-  xs 0x916 (.reg .mload) ri_mload_vy0  -- 0915 MLOAD
-  xs 0x917 (.reg .eq) ri_eq  -- 0916 EQ
-  xs 0x918 (.reg .iszero) ri_iszero  -- 0917 ISZERO
-  xs 0x91b (.push [0x0a, 0xf8] (by decide)) ri_push  -- 0918 PUSH2 0x0af8
-  xji 0x91c 0xaf8 hw  -- taken
-  · exact absurd (isNe_fall hw) (by rw [hsw]; decide)
-  xjd 0xaf9
-  xs 0xafe (.push [0x38, 0x83, 0xe1, 0x19] (by decide)) ri_push  -- 0af9 PUSH4 0x3883e119
-  xs 0xb00 (.push [0x00] (by decide)) ri_push  -- 0afe PUSH1 0x00
-  xs 0xb01 (.reg .mload) ri_mload_vy0  -- 0b00 MLOAD
-  xs 0xb02 (.reg .eq) ri_eq  -- 0b01 EQ
-  xs 0xb03 (.reg .iszero) ri_iszero  -- 0b02 ISZERO
-  xs 0xb06 (.push [0x0e, 0x46] (by decide)) ri_push  -- 0b03 PUSH2 0x0e46
-  xji 0xb07 0xe46 hw  -- taken
-  · exact absurd (isNe_fall hw) (by rw [hsw]; decide)
-  xjd 0xe47
-  xs 0xe4c (.push [0x45, 0x15, 0xce, 0xf3] (by decide)) ri_push  -- 0e47 PUSH4 0x4515cef3
-  xs 0xe4e (.push [0x00] (by decide)) ri_push  -- 0e4c PUSH1 0x00
-  xs 0xe4f (.reg .mload) ri_mload_vy0  -- 0e4e MLOAD
-  xs 0xe50 (.reg .eq) ri_eq  -- 0e4f EQ
-  xs 0xe51 (.reg .iszero) ri_iszero  -- 0e50 ISZERO
-  xs 0xe54 (.push [0x18, 0x9c] (by decide)) ri_push  -- 0e51 PUSH2 0x189c
-  xji 0xe55 0x189c hw  -- taken
-  · exact absurd (isNe_fall hw) (by rw [hsw]; decide)
-  xjd 0x189d
-  xs 0x189f (.push [0x00] (by decide)) ri_push  -- 189d PUSH1 0x00
-  xs 0x18a0 (.reg .iszero) ri_iszero  -- 189f ISZERO
-  xs 0x18a3 (.push [0x1d, 0x13] (by decide)) ri_push  -- 18a0 PUSH2 0x1d13
-  xji 0x18a4 0x1d13 hw  -- taken
-  · exact absurd hw (by decide)
-  xjd 0x1d14
-  xs 0x1d19 (.push [0x5e, 0x0d, 0x44, 0x3f] (by decide)) ri_push  -- 1d14 PUSH4 0x5e0d443f
-  xs 0x1d1b (.push [0x00] (by decide)) ri_push  -- 1d19 PUSH1 0x00
-  xs 0x1d1c (.reg .mload) ri_mload_vy0  -- 1d1b MLOAD
-  xs 0x1d1d (.reg .eq) ri_eq  -- 1d1c EQ
-  xs 0x1d1e (.reg .iszero) ri_iszero  -- 1d1d ISZERO
-  xs 0x1d21 (.push [0x20, 0x45] (by decide)) ri_push  -- 1d1e PUSH2 0x2045
-  xji 0x1d22 0x2045 hw  -- taken
-  · exact absurd (isNe_fall hw) (by rw [hsw]; decide)
-  xjd 0x2046
-  xs 0x204b (.push [0x07, 0x21, 0x1e, 0xf7] (by decide)) ri_push  -- 2046 PUSH4 0x07211ef7
-  xs 0x204d (.push [0x00] (by decide)) ri_push  -- 204b PUSH1 0x00
-  xs 0x204e (.reg .mload) ri_mload_vy0  -- 204d MLOAD
-  xs 0x204f (.reg .eq) ri_eq  -- 204e EQ
-  xs 0x2050 (.reg .iszero) ri_iszero  -- 204f ISZERO
-  xs 0x2053 (.push [0x23, 0x0a] (by decide)) ri_push  -- 2050 PUSH2 0x230a
-  xji 0x2054 0x230a hw  -- taken
-  · exact absurd (isNe_fall hw) (by rw [hsw]; decide)
-  xjd 0x230b
-  xs 0x2310 (.push [0x3d, 0xf0, 0x21, 0x24] (by decide)) ri_push  -- 230b PUSH4 0x3df02124
-  xs 0x2312 (.push [0x00] (by decide)) ri_push  -- 2310 PUSH1 0x00
-  xs 0x2313 (.reg .mload) ri_mload_vy0  -- 2312 MLOAD
-  xs 0x2314 (.reg .eq) ri_eq  -- 2313 EQ
-  xs 0x2315 (.reg .iszero) ri_iszero  -- 2314 ISZERO
-  xs 0x2318 (.push [0x2c, 0x59] (by decide)) ri_push  -- 2315 PUSH2 0x2c59
-  xji 0x2319 0x2c59 hw  -- taken
-  · exact absurd (isNe_fall hw) (by rw [hsw]; decide)
-  xjd 0x2c5a
-  xs 0x2c5f (.push [0xec, 0xb5, 0x86, 0xa5] (by decide)) ri_push  -- 2c5a PUSH4 0xecb586a5
-  xs 0x2c61 (.push [0x00] (by decide)) ri_push  -- 2c5f PUSH1 0x00
-  xs 0x2c62 (.reg .mload) ri_mload_vy0  -- 2c61 MLOAD
-  xs 0x2c63 (.reg .eq) ri_eq  -- 2c62 EQ
-  xs 0x2c64 (.reg .iszero) ri_iszero  -- 2c63 ISZERO
-  xs 0x2c67 (.push [0x30, 0x40] (by decide)) ri_push  -- 2c64 PUSH2 0x3040
-  xji 0x2c68 0x3040 hw  -- fall
-  · exact ⟨_, h⟩
-  · exact absurd (by rw [hsw]; decide) (isNe_jump hw)
+  exact ⟨_, h⟩
+
+/-- The dispatcher's chain from the first test: each test's pc and selector, or each
+always-taken skip's pc. -/
+def poolLinks : List (Nat × Option B256) :=
+  [(0x245, some 0xf446c1d0), (0x27a, none), (0x39a, none), (0x4c2, none), (0x7b0, none),
+    (0x90e, some 0xbb7b8b80), (0xaf9, some 0x3883e119), (0xe47, some 0x4515cef3),
+    (0x189d, none), (0x1d14, some 0x5e0d443f), (0x2046, some 0x07211ef7),
+    (0x230b, some 0x3df02124), (0x2c5a, some 0xecb586a5), (0x3041, some 0x9fdaea0c),
+    (0x3992, none), (0x3cc3, none), (0x438a, some 0xcc2b27d7), (0x43fe, some 0x1a4d01d2),
+    (0x4769, some 0x3c157e64), (0x490c, some 0x551a6588), (0x499c, some 0x5b5a1467),
+    (0x4a65, some 0x4f12fe97), (0x4b04, some 0x226840fb), (0x4b32, some 0x6b441a40),
+    (0x4bd3, some 0x6a1c05ae), (0x4c57, some 0x86fbf193), (0x4c85, some 0xe2e7d264),
+    (0x4d2c, some 0x30c54085), (0x4f52, some 0x524c3901), (0x500b, some 0xe3698853),
+    (0x5047, some 0x3046f972), (0x5075, some 0xc6610657), (0x50b5, some 0x4903b0d1),
+    (0x50f5, some 0xddca3f43), (0x511c, some 0xfee3f7f9), (0x5143, some 0x8da5cb5b),
+    (0x516a, some 0x5409491a), (0x5191, some 0xb4b577ad), (0x51b8, some 0x2081066c),
+    (0x51df, some 0x14052288), (0x5206, some 0x405e28f8), (0x522d, some 0xe0a0b586),
+    (0x5254, some 0x58680d0b), (0x527b, some 0xe3824462), (0x52a2, some 0x1ec0cdc1)]
+
+/-- The chain, decoded once from the runtime: it ends at the shared fall-through `0x52c9`. -/
+theorem pool_chain : vyChain poolDec 64 0x245 = (poolLinks, 0x52c9) := by decide +kernel
+
+/-- **The dispatcher hands the arm of `σ` its body** (past the arm's own test), with the
+prologue's exact memory and the frame's remaining children unchanged. -/
+theorem xa_dispatch {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {σ : B256}
+    {q : Nat} (hcode : sevm.code = code) (hlen : 4 ≤ sevm.data.length)
+    (hcd : sevm.data.length < 2 ^ 256) (hsel : Sevm.selector sevm = σ)
+    (h : XAt sevm post 0 (St b [] Mem.empty G) L)
+    (hq : vyHit σ poolLinks 0x52c9 = q := by decide +kernel) :
+    ∃ G', XAt sevm post q (St b [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G') L := by
+  obtain ⟨_, h⟩ := dq_prologue hcode hlen hcd h
+  exact hq ▸ xa_vyChain (poolDec_sound hcode) hsel 64 pool_chain h
+
+/-- The chain tests the 38 selectors, in `sels`'s order. -/
+theorem poolLinks_sels : poolLinks.filterMap Prod.snd = sels := by decide +kernel
+
+/-- **A selector missing every test** reaches the shared fall-through at `0x52c9`. -/
+theorem xa_dispatch_miss {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
+    (hcode : sevm.code = code) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hmiss : ∀ s ∈ sels, Sevm.selector sevm ≠ s) (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
+    ∃ G', XAt sevm post 0x52c9 (St b [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G') L := by
+  obtain ⟨_, h⟩ := dq_prologue hcode hlen hcd h
+  exact xa_vyChain_miss (poolDec_sound hcode) 64 pool_chain (poolLinks_sels ▸ hmiss) h
 
 end Blanc.Lift.Curve3Pool
