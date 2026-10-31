@@ -1,10 +1,15 @@
+import Blanc.Lift.BeaconDeposit.Body
+import Blanc.Lift.BeaconDeposit.Lift
+import Blanc.Lift.BeaconDeposit.SafeViews
+import Blanc.Lift.BeaconDeposit.SafeDispatch
+import Blanc.Lift.BeaconDeposit.SafeDecoder
+import Blanc.Lift.BeaconDeposit.SafeEvent
 import Blanc.Lift.BeaconDeposit.HistSafeGuards
 import Blanc.Lift.BeaconDeposit.HistSafeCount
 import Blanc.Lift.BeaconDeposit.HistSafeInsert
 import Blanc.Lift.BeaconDeposit.HistSafePubkeyRoot
 import Blanc.Lift.BeaconDeposit.HistSafeNode
 import Blanc.Lift.BeaconDeposit.HistSafeSignatureRoot
-import Blanc.Lift.BeaconDeposit.CommittedExec
 
 /-!
 # The deployed runtime refines the model over a historical frame (B1, safety)
@@ -15,13 +20,42 @@ replaced by the two rule facts every historical fork carries (`rules.stateGas = 
 `ShaReadyRules`.  The conclusion of `deposit_frame_refinesH_of_rules` is `deposit_frame_refines`'s verbatim.
 The route: `lift_sound_noStateGas`; the dispatcher; the views by `SFunc.Run.world_of_quietH`;
 the decoder and the body's historical segments (`safe_guardsH` … `safe_countBumpH`); the
-insertion loop over `LoopBaseH` with `safe_insertDeadH_of_rules`/`safe_insertLiveH`.  Frame tails:
-`frame_solInvH_of_rules`, `successful_deposit_not_staticH`, `frameAccepted_eq_nil_of_staticH`.
+insertion loop over `LoopBaseH` with `safe_insertDeadH_of_rules`/`safe_insertLiveH`.  The modern
+`Safe.lean` forms are corollaries of these; the frame tails are in `HistLadder.lean`.
 -/
 
 namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
+
+/-! ## Arithmetic -/
+
+theorem insertDepth_unique {x h : Nat} (h1 : 1 ≤ x) (h2 : x < 2 ^ 32)
+    (hdead : ∀ j < h, (x / 2 ^ j) % 2 = 0) (hlive : (x / 2 ^ h) % 2 = 1) :
+    h = insertDepth 32 x := by
+  rcases Nat.lt_trichotomy h (insertDepth 32 x) with hlt | heq | hgt
+  · have := insertDepth_dead 32 x h hlt; omega
+  · exact heq
+  · have := hdead _ hgt
+    have := insertDepth_live 32 x h1 h2
+    omega
+
+theorem deposit_ok_of {H : Bytes → B256} {s : BeaconDeposit.Acc} {pk wc sig : Bytes}
+    {root : B256} {v : Nat} {br' : Nat → B256}
+    (h1 : pk.length = 48) (h2 : wc.length = 32) (h3 : sig.length = 96)
+    (h4 : BeaconDeposit.oneEther ≤ v) (h5 : v % BeaconDeposit.oneGwei = 0)
+    (h6 : v / BeaconDeposit.oneGwei < 2 ^ 64)
+    (h7 : BeaconDeposit.depositDataNode H pk wc sig
+      (BeaconDeposit.le64 (v / BeaconDeposit.oneGwei)) = root)
+    (h8 : s.count < 2 ^ 32 - 1)
+    (h9 : BeaconDeposit.walk H s.branch 32 0 (s.count + 1) root = some br') :
+    BeaconDeposit.deposit H s pk wc sig root v =
+      .ok (⟨br', s.count + 1⟩, ⟨pk, wc, BeaconDeposit.le64 (v / BeaconDeposit.oneGwei), sig,
+        BeaconDeposit.le64 s.count⟩) := by
+  have h6' : ¬ 2 ^ 64 - 1 < v / BeaconDeposit.oneGwei := by omega
+  have h4' : ¬ v < BeaconDeposit.oneEther := by omega
+  simp only [BeaconDeposit.deposit, h1, h2, h3, h4', h5, h6', h7, h8, h9, ne_eq, not_true_eq_false,
+    ite_false]
 
 /-! ## The views -/
 
@@ -102,27 +136,6 @@ theorem safe_insert_loopH_of_rules {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 
     · rw [hK.logs, afterSstoreH_logs, afterSstoreH_logs, hL.logs]
     · rw [hK.output, afterSstoreH_output, afterSstoreH_output, hL.output]
     · rw [hK.error, afterSstoreH_error, afterSstoreH_error, hL.error]
-
-
-/-- Compatibility form with the original historical readiness premise. -/
-theorem safe_insert_loopH {sevm : Sevm} {b₀ : Devm} {x : Nat} {node0 : B256}
-    {br : Nat → B256} {stor1 : Stor}
-    {x₁ x₂ x₃ x₄ y₁ y₂ y₃ y₄ y₅ y₆ y₇ d : B256} {rest : List B256}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hbal : sevm.benvStat.rules.bal = none)
-    (hsha : ShaReadyH sevm b₀) (hrest : rest.length ≤ 4) (hx : x < 2 ^ 256)
-    (hstor1 : Devm.getStor b₀ sevm.currentTarget = stor1)
-    (hbr : ∀ h < 32, stor1.get (solBranchSlot h) = br h)
-    {M : Mem} {G : Nat} {o : Outcome}
-    (hM : BodyMem M (1024 + 96 * 0) (Nat.toB256 (928 + 96 * 0)) [])
-    (run : SFunc.Run prog sevm (St b₀ (Nat.toB256 0 :: Nat.toB256 (x / 2 ^ 0) ::
-      insertNode Bytes.sha256 br 0 node0 ::
-      x₁ :: x₂ :: x₃ :: x₄ :: y₁ :: y₂ :: y₃ :: y₄ :: y₅ :: y₆ :: y₇ :: d :: rest) M G)
-      t_0f6e_c23 o) :
-    ∃ h bf Mf Gf, o = .returned (St bf rest Mf Gf) ∧ h < 32 ∧ (∀ j < h, (x / 2 ^ j) % 2 = 0) ∧
-      (x / 2 ^ h) % 2 = 1 ∧
-      BaseRel (afterSstoreH sevm b₀ (solBranchSlot h) (insertNode Bytes.sha256 br h node0)) bf :=
-  safe_insert_loopH_of_rules hsg hbal hsha.toRules hrest hx hstor1 hbr hM run
 
 /-! ## The `deposit` route -/
 
@@ -308,30 +321,6 @@ theorem deposit_routeH_of_rules {sevm : Sevm} {pre post : Devm} {history : List 
     rw [hev]
     rfl
 
-
-
-/-- Compatibility form with the original historical readiness premise. -/
-theorem deposit_routeH {sevm : Sevm} {pre post : Devm} {history : List B256} {G1 : Nat}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hbal : sevm.benvStat.rules.bal = none) (hcd : sevm.data.length < 2 ^ 256)
-    (hsha : ShaReadyH sevm pre)
-    (hinv : SolInv (Devm.getStor pre sevm.currentTarget) history)
-    (run : SFunc.Run prog sevm (St pre [Sevm.selector sevm] mem0 G1) t_00a4_c32 (.halted post)) :
-    DepositDecodable sevm ∧ ∃ s' ev,
-        BeaconDeposit.deposit Bytes.sha256 (solAcc (Devm.getStor pre sevm.currentTarget))
-          (argBytes sevm 0) (argBytes sevm 1) (argBytes sevm 2) (argRoot sevm)
-          sevm.value.toNat = .ok (s', ev) ∧
-        solAcc (Devm.getStor post sevm.currentTarget) = s' ∧
-        SolInv (Devm.getStor post sevm.currentTarget)
-          (history ++ [BeaconDeposit.depositDataNode Bytes.sha256 (argBytes sevm 0)
-            (argBytes sevm 1) (argBytes sevm 2) ev.amount]) ∧
-        (∃ h v, h < 32 ∧ Devm.getStor post sevm.currentTarget =
-          ((Devm.getStor pre sevm.currentTarget).set solCountSlot (1 + bodyCount sevm pre)).set
-            (solBranchSlot h) v) ∧
-        (∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a) ∧
-        post.logs = pre.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev] :=
-  deposit_routeH_of_rules hsg hbal hcd hsha.toRules hinv run
-
 /-! ## The frame -/
 
 /-- **The deployed runtime refines the model (B3, safety).**  For every successful frame
@@ -394,128 +383,5 @@ theorem deposit_frame_refinesH_of_rules {sevm : Sevm} {pre post : Devm} {history
       omega
     have hw := view_worldH hsg hkv hg run
     exact ⟨fun x => (congrFun hw.1 x).trans (hworld x), hw.2⟩
-
-
-
-/-- Compatibility form with the original historical readiness premise. -/
-theorem deposit_frame_refinesH {sevm : Sevm} {pre post : Devm} {history : List B256}
-    (hcode : sevm.code = code) (hsg : sevm.benvStat.rules.stateGas = none)
-    (hbal : sevm.benvStat.rules.bal = none)
-    (hcd : sevm.data.length < 2 ^ 256)
-    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
-    (hsha : ShaReadyH sevm pre)
-    (hinv : SolInv (Devm.getStor pre sevm.currentTarget) history)
-    (exc : Exec 0 sevm pre (.ok post)) :
-    (Sevm.selector sevm = BeaconDeposit.depositSelector →
-      DepositDecodable sevm ∧ ∃ s' ev,
-        BeaconDeposit.deposit Bytes.sha256 (solAcc (Devm.getStor pre sevm.currentTarget))
-          (argBytes sevm 0) (argBytes sevm 1) (argBytes sevm 2) (argRoot sevm)
-          sevm.value.toNat = .ok (s', ev) ∧
-        solAcc (Devm.getStor post sevm.currentTarget) = s' ∧
-        SolInv (Devm.getStor post sevm.currentTarget)
-          (history ++ [BeaconDeposit.depositDataNode Bytes.sha256 (argBytes sevm 0)
-            (argBytes sevm 1) (argBytes sevm 2) ev.amount]) ∧
-        (∃ h v, h < 32 ∧ Devm.getStor post sevm.currentTarget =
-          ((Devm.getStor pre sevm.currentTarget).set solCountSlot (1 + bodyCount sevm pre)).set
-            (solBranchSlot h) v) ∧
-        (∀ a, a ≠ sevm.currentTarget → Devm.getStor post a = Devm.getStor pre a) ∧
-        post.logs = pre.logs ++ [BeaconDeposit.depositEventLog sevm.currentTarget ev]) ∧
-    (Sevm.selector sevm ≠ BeaconDeposit.depositSelector →
-      (∀ a, Devm.getStor post a = Devm.getStor pre a) ∧ post.logs = pre.logs) :=
-  deposit_frame_refinesH_of_rules hcode hsg hbal hcd hstack hmem hsha.toRules hinv exc
-
-/-! ## Frame tails -/
-
-/-- One historical frame extends the storage abstraction by its accepted nodes. -/
-theorem frame_solInvH_of_rules {sevm : Sevm} {pre post : Devm} {history : List B256}
-    (hcode : sevm.code = code) (hsg : sevm.benvStat.rules.stateGas = none)
-    (hbal : sevm.benvStat.rules.bal = none)
-    (hcd : sevm.data.length < 2 ^ 256)
-    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
-    (hsha : ShaReadyRules sevm pre)
-    (hinv : SolInv (Devm.getStor pre sevm.currentTarget) history)
-    (exc : Exec 0 sevm pre (.ok post)) :
-    SolInv (Devm.getStor post sevm.currentTarget) (history ++ frameAccepted sevm) := by
-  have hr := deposit_frame_refinesH_of_rules hcode hsg hbal hcd hstack hmem hsha hinv exc
-  unfold frameAccepted
-  by_cases hsel : Sevm.selector sevm = BeaconDeposit.depositSelector
-  · rw [ite_eq_left hsel]
-    obtain ⟨-, s', ev, hOk, hacc, hinv', -⟩ := hr.1 hsel
-    refine ⟨hinv'.1, ?_⟩
-    show BeaconDeposit.Inv Bytes.sha256 _ _
-    rw [hacc]
-    exact BeaconDeposit.deposit_inv Bytes.sha256 _ _ _ _ _ _ _ _ _ hinv.2 hOk
-  · rw [ite_eq_right hsel, List.append_nil, (hr.2 hsel).1]
-    exact hinv
-
-
-/-- Compatibility form with the original historical readiness premise. -/
-theorem frame_solInvH {sevm : Sevm} {pre post : Devm} {history : List B256}
-    (hcode : sevm.code = code) (hsg : sevm.benvStat.rules.stateGas = none)
-    (hbal : sevm.benvStat.rules.bal = none)
-    (hcd : sevm.data.length < 2 ^ 256)
-    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
-    (hsha : ShaReadyH sevm pre)
-    (hinv : SolInv (Devm.getStor pre sevm.currentTarget) history)
-    (exc : Exec 0 sevm pre (.ok post)) :
-    SolInv (Devm.getStor post sevm.currentTarget) (history ++ frameAccepted sevm) :=
-  frame_solInvH_of_rules hcode hsg hbal hcd hstack hmem hsha.toRules hinv exc
-
-/-- The event segment's mandatory `LOG1` forces a non-static frame on any successful run. -/
-theorem event_suffix_nonstaticH {sevm : Sevm} {pre : Devm} {out : Outcome}
-    (run : SFunc.Run prog sevm pre t_071c_c4 out) : sevm.isStatic = false := by
-  cases static : sevm.isStatic with
-  | false => rfl
-  | true =>
-    unfold t_071c_c4 at run
-    cases run with
-    | dest burn run =>
-      iterate 22 (cases run; rename_i _ step run)
-      cases run with
-      | next step run =>
-        obtain ⟨pc, logRun⟩ := of_run_reg step
-        exact (Rinst.log_not_ok_of_static static logRun).elim
-
-/-- A successful deployed deposit cannot run in a static historical frame. -/
-theorem successful_deposit_not_staticH {sevm : Sevm} {pre post : Devm}
-    (hcode : sevm.code = code) (hsg : sevm.benvStat.rules.stateGas = none)
-    (hbal : sevm.benvStat.rules.bal = none)
-    (hcd : sevm.data.length < 2 ^ 256)
-    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
-    (hsel : Sevm.selector sevm = BeaconDeposit.depositSelector)
-    (run : Exec 0 sevm pre (.ok post)) : sevm.isStatic = false := by
-  obtain ⟨f, hf, lifted⟩ := lift_sound_noStateGas cert_check hcode hsg run
-  have hf0 : prog[0]? = some t_0000_c0 := rfl
-  rw [hf0] at hf
-  cases hf
-  rw [St.self hstack hmem] at lifted
-  obtain ⟨k, G1, g, _, hk32, hg, lifted⟩ := safe_dispatch lifted
-  have hk : k = 32 := hk32.mpr hsel
-  subst k
-  have hg32 : g = t_00a4_c32 := by
-    have heq : prog[32]? = some t_00a4_c32 := rfl
-    rw [heq] at hg
-    exact (Option.some.inj hg).symm
-  subst g
-  obtain ⟨_, G2, d, body, _, _⟩ := safe_decoder hcd lifted
-  obtain ⟨_, _, _, _, _, _, b1, M1, G3, _, memory, body⟩ := safe_guardsH hcd hbal body
-  obtain ⟨b2, M2, G4, _, _, body⟩ := safe_event memory body
-  exact event_suffix_nonstaticH body
-
-/-- Static historical executions of the deployed deposit selector accept nothing. -/
-theorem frameAccepted_eq_nil_of_staticH {sevm : Sevm} {pre post : Devm}
-    (hcode : sevm.code = code) (hsg : sevm.benvStat.rules.stateGas = none)
-    (hbal : sevm.benvStat.rules.bal = none)
-    (hcd : sevm.data.length < 2 ^ 256)
-    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty)
-    (static : sevm.isStatic = true)
-    (run : Exec 0 sevm pre (.ok post)) : frameAccepted sevm = [] := by
-  unfold frameAccepted
-  split
-  next selected =>
-    have impossible := successful_deposit_not_staticH hcode hsg hbal hcd hstack hmem selected run
-    rw [static] at impossible
-    cases impossible
-  next => rfl
 
 end Blanc.Lift.BeaconDeposit

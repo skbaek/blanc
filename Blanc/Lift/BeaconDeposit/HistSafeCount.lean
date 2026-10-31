@@ -1,5 +1,6 @@
+import Blanc.Lift.BeaconDeposit.BodySpec
+import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
-import Blanc.Lift.BeaconDeposit.SafeCount
 
 /-!
 # Safety segment B6 over a historical frame: the root check, the cap guard and the count

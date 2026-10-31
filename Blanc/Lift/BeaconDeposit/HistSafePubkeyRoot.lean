@@ -1,5 +1,5 @@
+import Blanc.Lift.BeaconDeposit.BodyShaKit
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
-import Blanc.Lift.BeaconDeposit.SafePubkeyRoot
 
 /-!
 # Safety segment B3 over a historical frame: the pubkey root, inverted
@@ -230,26 +230,5 @@ theorem safe_pubkeyRootH_of_rules {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : 
       rwa [show (BeaconDeposit.le64 a.toNat).length = 8 from rfl] at this
     · simp only [B256.length_toBytes]
       rw [shaImg_digest, hin]; rfl
-
-
-/-- Compatibility form with the original historical readiness premise. -/
-theorem safe_pubkeyRootH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : B256} {G : Nat} {M : Mem}
-    {data : Bytes} {o : Outcome}
-    (hsha : ShaReadyH sevm b) (hlen : data.length = 576)
-    (hM : BodyMem M 832 0x100
-      [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x100, data)])
-    (run : SFunc.Run prog sevm
-      (St b [8, 0x340, 0x180, 0x160, 0x140, 0x120, 0x100, 0x100, 0xc0, 96, sP, 0x80, 32, wP,
-        48, pP, BeaconDeposit.depositEventTopic, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8,
-        sel] M G) t_071c_c4 o) :
-    ∃ b' M' G', Keep (b.addLog ⟨sevm.currentTarget, [BeaconDeposit.depositEventTopic], data⟩) b' ∧
-      BodyMem M' 832 0x160
-        [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat),
-          (0x160, (BeaconDeposit.pubkeyRoot Bytes.sha256
-            (sevm.data.sliceD pP.toNat 48 0)).toBytes)] ∧
-      SFunc.Run prog sevm
-        (St b' [0x20, 0x160, 0, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G')
-        t_086e_c12 o :=
-  safe_pubkeyRootH_of_rules hsha.toRules hlen hM run
 
 end Blanc.Lift.BeaconDeposit

@@ -8988,7 +8988,7 @@ contract-neutral.
   `cursor_next_forward` derives the actual `ParentStep`, instruction witness
   with `Cursor.DescOf`, `SStep`, `ConfStep` and successor `CursorOK`.
   `cursor_jinst_forward` reuses the decoded jump edge; `cursor_branch_forwardH`
-  (from `rules.stateGas = none`; `cursor_branch_forwardH_covered` is the `CoveredFork` form)
+  (from `rules.stateGas = none`; at `CoveredFork.rules_stateGas_none` it gives the modern form)
   derives the faithful branch disjunction from the checked tree and literal
   abstract target, without choosing the branch as a premise.
   `cursor_nexts_line_cont_free_forward` composes a literal instruction list into
@@ -9027,7 +9027,7 @@ contract-neutral.
   state and return continuation, use
   [`Blanc/Lift/CursorJump.lean`](../Blanc/Lift/CursorJump.lean).
   `CursorOK.jumpAt_of_jump` derives the actual JUMP byte from the checked node;
-  `CursorStateAt.gotoH` (`gotoH_covered` is the `CoveredFork` form) consumes its actual
+  `CursorStateAt.gotoH` consumes its actual
   `ConfStep` and checked lookup,
   retaining the full non-gas state and original K. The joint node/tree/lookup
   premises are discovered here; the existential result is not a reliable
@@ -9547,8 +9547,8 @@ contract-neutral.
   (`CursorOK.quietReturnH`, over the fork-free `SFunc.ReturnRegion`/`ConfStep.returnRegion`) in
   [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean); the GAS-to-call
   and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
-  [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each `_covered`
-  form there is the modern statement from `CoveredFork`; on every fork,
+  [`Blanc/Lift/HistCursorCalls.lean`](../Blanc/Lift/HistCursorCalls.lean); each modern
+  statement is its `…H` form at `CoveredFork.rules_stateGas_none`; on every fork,
   `ecrecover_activeH` activates address 1 and
   `ecrecover_output_of_processMessage_cleanH` (from `rules.stateGas = none`; its `_covered`
   form is the modern statement) reads a clean address-1 child's output, while
@@ -9597,8 +9597,8 @@ contract-neutral.
   `_accessedStorageKeys`, the `ite` form `getStor_afterSstoreH`) and the quiet frame theorem
   `SFunc.Run.world_of_quietH` from `rules.stateGas = none` alone in
   [`Blanc/Lift/HistAccessWalkFacts.lean`](../Blanc/Lift/HistAccessWalkFacts.lean);
-  the historical SHA-256 kit from `rules.stateGas = none`/`rules.bal = none` (`ShaReadyH`,
-  `ShaReady.toH`, `meta_of_processMessage_sha256_64_clean_noStateGas`, the charged tail
+  the historical SHA-256 kit from `rules.stateGas = none`/`rules.bal = none` (`ShaReadyRules`,
+  `ShaReady.toRules`, `meta_of_processMessage_sha256_64_clean_noStateGas`, the charged tail
   `ri_staticcall_sha_of_charge`, `ri_staticcall_shaH` cased on access schedule and delegation
   flag, and `ri_staticcall_shaH_covered`; the solc packed-SHA site `ric_shaCallH`,
   `ric_copy_shaH`, `ric_pack_shaH`) in
@@ -9607,8 +9607,9 @@ contract-neutral.
   `ShaReadyRules.of_disabled`: it needs no code observation at address 2.
   `ShaReadyRules` makes nondelegation conditional on `delegationEnabled = true`,
   while retaining explicit warmth, precompile, state-gas and BAL premises.
-  Transport it with `ShaReadyRules.of_eq`, or obtain it from the stronger
-  legacy readiness with `ShaReadyH.toRules`. The generalized consumers are
+  Transport it with `ShaReadyRules.of_eq`, or obtain it from the covered-fork
+  readiness with `ShaReady.toRules` (the BeaconDeposit `Safe*` segments are such corollaries of
+  their `HistSafe*` proofs). The generalized consumers are
   `ri_staticcall_shaH_of_delegation`, `ric_shaCallH_of_delegation`,
   `ric_copy_shaH_of_delegation` and `ric_pack_shaH_of_delegation` in that same
   owner. The original H signatures remain compatibility wrappers; the actual

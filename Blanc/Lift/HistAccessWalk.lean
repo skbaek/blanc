@@ -32,8 +32,8 @@ reads, `rules.bal = none` and the access schedule itself; no fork list is assume
   only where the rules have it); moved here from `HistCreate.lean` so the Vyper kit can use them;
 * `accountAccessH`/`extcodesizeCostH` — the `EXTCODESIZE` account-warming image and charge
   under the actual access and gas schedules; `ri_extcodesizeH`, `extcodesizeH_runCompiled`,
-  `rx_extcodesizeH` (`rules.bal = none`), and `_covered` forms recovering the modern
-  `ri_extcodesize`/`rx_extcodesize` statements.
+  and `rx_extcodesizeH` (`rules.bal = none`); `extcodesizeCostH_of_covered` gives the modern
+  charge.
 
 Nothing here mentions a contract.
 -/
@@ -452,14 +452,6 @@ theorem ri_extcodesizeH {x : B256} {d : Devm} (bal : sevm.benvStat.rules.bal = n
     rw [e1]
     exact ⟨s1.gasLeft, rfl⟩
 
-/-- `ri_extcodesizeH` recovers the modern `ri_extcodesize` on a covered fork. -/
-theorem ri_extcodesizeH_covered {x : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.fork)
-    (h : Ninst.Run sevm (St b (x :: S) M G) (.reg .extcodesize) d) :
-    ∃ G', d = St (temporalAccountAccessBase b x.toAdr)
-      ((b.getCode x.toAdr).size.toB256 :: S) M G' := by
-  rw [← accountAccessH_of_eip2929 hfork.rules_access]
-  exact ri_extcodesizeH hfork.rules_bal_none h
-
 /-- Exact `EXTCODESIZE` step under the actual access and gas schedules. -/
 theorem extcodesizeH_runCompiled {x : B256} (bal : sevm.benvStat.rules.bal = none)
     (hroom : S.length < 1024) :
@@ -520,19 +512,6 @@ theorem rx_extcodesizeH {fs : List SFunc} {x : B256} {f : SFunc} {o : Outcome}
     SFunc.RunExact fs sevm (St b (x :: S) M (G + extcodesizeCostH sevm b x.toAdr))
       (.next (.reg .extcodesize) f) o :=
   .next (extcodesizeH_runCompiled bal hroom) k
-
-/-- `rx_extcodesizeH` recovers the modern `rx_extcodesize` on a covered fork. -/
-theorem rx_extcodesizeH_covered {fs : List SFunc} {x : B256} {f : SFunc} {o : Outcome}
-    (hfork : CoveredFork sevm.benvStat.fork) (hroom : S.length < 1024)
-    (k : SFunc.RunExact fs sevm
-      (St (temporalAccountAccessBase b x.toAdr)
-        ((b.getCode x.toAdr).size.toB256 :: S) M G) f o) :
-    SFunc.RunExact fs sevm
-      (St b (x :: S) M (G + temporalAccountAccessCost b x.toAdr))
-      (.next (.reg .extcodesize) f) o := by
-  rw [← extcodesizeCostH_of_covered hfork]
-  rw [← accountAccessH_of_eip2929 hfork.rules_access] at k
-  exact rx_extcodesizeH hfork.rules_bal_none hroom k
 
 end World
 

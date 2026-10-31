@@ -10,8 +10,9 @@ The exact-walk SHA kit (`Blanc/Lift/InvWalkSha.lean`, `ShaReady` in
 EIP-2929 access schedule and enabled delegation. This module proves the same
 steps from the rule facts a historical frame carries:
 
-* `ShaReadyH` — the SHA-256 precompile premises with `stateGas = none` and
-  `bal = none` in place of the fork (`ShaReadyH.of_eq`, `ShaReady.toH`);
+* `ShaReadyRules` — the SHA-256 precompile premises with `stateGas = none` and
+  `bal = none` in place of the fork, nondelegation required only when delegation is enabled
+  (`ShaReadyRules.of_eq`, `ShaReady.toRules`);
 * `meta_of_processMessage_sha256_64_clean_noStateGas` — the clean-child
   meta projection over `stateGas = none` alone;
 * `ri_staticcall_shaH` — `STATICCALL` of SHA-256 over a 64-byte window,
@@ -24,7 +25,7 @@ steps from the rule facts a historical frame carries:
 
 `hnodeleg` is used only in the enabled-delegation branch and `hwarm` only in
 the EIP-2929 branch; the `_of_delegation` forms require nondelegation only when the flag is enabled.
-The original theorem signatures and `ShaReadyH` remain compatibility interfaces;
+The original theorem signatures remain compatibility interfaces;
 `ShaReadyRules` packages the conditional premise for historical consumers. Gas is existential, so pricing
 never appears in any conclusion.
 
@@ -36,26 +37,6 @@ namespace Blanc.Lift
 open Jaune
 
 /-! ## The historical SHA-256 precompile premises -/
-
-/-- The SHA-256 precompile premises a historical frame's world carries:
-address 2 undelegated and warm, a precompile of the rules, no state gas and
-no access list. -/
-structure ShaReadyH (sevm : Sevm) (b : Devm) : Prop where
-  nodeleg : getDelegatedCodeAddress (b.getCode 2) = none
-  warm : (2 : Adr) ∈ b.accessedAddresses
-  pre : decide (sevm.benvStat.rules.isPrecomp 2) = true
-  sg : sevm.benvStat.rules.stateGas = none
-  bal : sevm.benvStat.rules.bal = none
-
-theorem ShaReadyH.of_eq {sevm : Sevm} {b b' : Devm} (h : ShaReadyH sevm b)
-    (hc : ∀ a, b'.getCode a = b.getCode a) (ha : b'.accessedAddresses = b.accessedAddresses) :
-    ShaReadyH sevm b' :=
-  ⟨by rw [hc]; exact h.nodeleg, by rw [ha]; exact h.warm, h.pre, h.sg, h.bal⟩
-
-theorem ShaReady.toH {sevm : Sevm} {b : Devm} (h : ShaReady sevm b)
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hbal : sevm.benvStat.rules.bal = none) : ShaReadyH sevm b :=
-  ⟨h.nodeleg, h.warm, h.pre, hsg, hbal⟩
 
 /-- SHA readiness using the selected delegation flag: the code at address 2 matters
 only when delegation is enabled. Warmth is still supplied explicitly. -/
@@ -72,9 +53,11 @@ theorem ShaReadyRules.of_eq {sevm : Sevm} {b b' : Devm} (h : ShaReadyRules sevm 
     ShaReadyRules sevm b' :=
   ⟨by rw [hc]; exact h.nodeleg, by rw [ha]; exact h.warm, h.pre, h.sg, h.bal⟩
 
-theorem ShaReadyH.toRules {sevm : Sevm} {b : Devm} (h : ShaReadyH sevm b) :
+/-- The modern readiness record gives the selected-rule one: a covered fork has no state gas and
+no access list. -/
+theorem ShaReady.toRules {sevm : Sevm} {b : Devm} (h : ShaReady sevm b) :
     ShaReadyRules sevm b :=
-  ⟨fun _ => h.nodeleg, h.warm, h.pre, h.sg, h.bal⟩
+  ⟨fun _ => h.nodeleg, h.warm, h.pre, h.fork.rules_stateGas_none, h.fork.rules_bal_none⟩
 
 /-- With delegation disabled, no observation of the code at address 2 is needed. -/
 theorem ShaReadyRules.of_disabled {sevm : Sevm} {b : Devm}

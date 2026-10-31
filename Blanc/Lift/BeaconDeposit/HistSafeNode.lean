@@ -1,5 +1,5 @@
+import Blanc.Lift.BeaconDeposit.BodyNode
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
-import Blanc.Lift.BeaconDeposit.SafeNode
 
 /-!
 # Safety segment B5 over a historical frame: the deposit data node, inverted
@@ -631,26 +631,5 @@ theorem safe_dataNodeH_of_rules {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR 
     simp only [node3Img]
     rw [shaImg_digest]
     rfl
-
-
-/-- Compatibility form with the original historical readiness premise. -/
-theorem safe_dataNodeH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR : B256} {G : Nat}
-    {M : Mem} {o : Outcome}
-    (hsha : ShaReadyH sevm b)
-    (hM : BodyMem M 832 0x280
-      [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x280, sR.toBytes)])
-    (run : SFunc.Run prog sevm
-      (St b [0x20, 0x280, 0, pkR, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M G)
-      t_0b4c_c16 o) :
-    ∃ b' M' G', Keep b b' ∧
-      BodyMem M' 1024 0x3a0
-        [(0x3a0, (BeaconDeposit.hashPair Bytes.sha256
-          (Bytes.sha256 (pkR.toBytes ++ sevm.data.sliceD wP.toNat 32 0))
-          (Bytes.sha256 (BeaconDeposit.le64 a.toNat ++ BeaconDeposit.zeros 24 ++
-            sR.toBytes))).toBytes)] ∧
-      SFunc.Run prog sevm
-        (St b' [0x20, 0x3a0, 0, sR, pkR, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G')
-        t_0ea6_c20 o :=
-  safe_dataNodeH_of_rules hsha.toRules hM run
 
 end Blanc.Lift.BeaconDeposit

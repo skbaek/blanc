@@ -6,8 +6,7 @@ import Blanc.Lift.CursorBalanceReply
 # Historical GAS-to-call and call-reply cursor forwarders
 
 The forwarders take `rules.stateGas = none` through `HistCursorCuts` and
-`HistCursorReturn`. Each `_covered` form recovers the modern statement from
-`CoveredFork` without duplicating the actual cursor walk.
+`HistCursorReturn`. A modern statement is the `…H` form at `CoveredFork.rules_stateGas_none`.
 
 Nothing here mentions a contract.
 -/
@@ -61,23 +60,6 @@ theorem CursorStateAt.gasCallH {code : ByteArray} {c : Cert}
   · rw [nodeEq]; exact callState
   · simpa only [nodeEq, env] using primitiveCall
   · rw [nextShape.2, sameK]; exact cut.continuations
-
-theorem CursorStateAt.gasCallH_covered {code : ByteArray} {c : Cert}
-    {root start : Exec.Deriv} {b post : Devm} {S : List B256}
-    {M : Mem} {K : List SFunc} {x : Xinst} {tail : SFunc}
-    (cut : CursorStateAt code c start (.next (.reg .gas) (.next (.exec x) tail)) b S M K)
-    (checked : Cert.check code c = true) (reached : Exec.Deriv.ParentPrefix root start)
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork) :
-    ∃ (step : CallOccurrenceStep root x) (cursor : Cursor) (gas : Nat),
-      Exec.Deriv.ExecFreeUntil start step.occurrence.node ∧
-      step.occurrence.node.sevm = start.sevm ∧
-      step.occurrence.node.exn = start.exn ∧
-      step.occurrence.node.devm = St b (gas.toB256 :: S) M gas ∧
-      Ninst.RunWith (Cursor.DescOf step.occurrence.node) start.sevm
-        step.occurrence.node.devm (.exec x) step.returned.devm ∧
-      CursorOK code c step.returned cursor ∧ cursor.f = tail ∧
-      cursor.K.map Cont.f = K :=
-  cut.gasCallH checked reached success fork.rules_stateGas_none
 
 /-- Physical return-word decoding from `rules.stateGas = none` alone. -/
 theorem CursorStateAt.returnWordH {code : ByteArray} {c : Cert} {start : Exec.Deriv}
@@ -153,24 +135,6 @@ theorem CursorStateAt.returnWordH {code : ByteArray} {c : Cert} {start : Exec.De
       exact ⟨gas', state⟩)
   exact ⟨width, ⟨loaded⟩⟩
 
-theorem CursorStateAt.returnWordH_covered {code : ByteArray} {c : Cert} {start : Exec.Deriv}
-    {returnTree shortTree decodeTree tail : SFunc} {b post : Devm}
-    {R : List B256} {M : Mem} {K : List SFunc} {a x y z p : B256} {n : Nat}
-    (cut : CursorStateAt code c start returnTree b (a :: x :: y :: z :: R) M K)
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork)
-    (destination : Bytes) (le : destination.length ≤ 32)
-    (shape : returnTree = .dest ((returnWordGuardLine destination le).foldr
-      SFunc.next (.branch shortTree decodeTree)))
-    (decode : decodeTree = .dest (.next (.reg .pop) (.next (.reg .mload) tail)))
-    (mem : PtrMem p n M) (fit : p.toNat + 32 ≤ n)
-    (bound : b.returnData.length < 2 ^ 256) (noShort : shortTree.noOk = true) :
-    32 ≤ b.returnData.length ∧
-      Nonempty (CursorStateAt code c start tail b
-        (Bytes.toB256 (M.read p.toNat 32).1 :: R) M K) :=
-  cut.returnWordH checked success fork.rules_stateGas_none destination le shape decode mem fit
-    bound noShort
-
 /-- An actual successful call-flag guard from `rules.stateGas = none` alone. -/
 theorem CursorStateAt.callFlagH {code : ByteArray} {c : Cert} {start : Exec.Deriv}
     {f failedTree returnTree : SFunc} {b post : Devm} {R : List B256}
@@ -221,19 +185,5 @@ theorem CursorStateAt.callFlagH {code : ByteArray} {c : Cert} {start : Exec.Deri
       exact ⟨gas', by simpa only [show B256.eqCheck 1 0 = 0 from by decide,
         show B256.eqCheck 0 0 = 1 from by decide] using state⟩)
   exact guard.branchSuccH checked success hsg (by decide : (1 : B256) ≠ 0)
-
-theorem CursorStateAt.callFlagH_covered {code : ByteArray} {c : Cert} {start : Exec.Deriv}
-    {f failedTree returnTree : SFunc} {b post : Devm} {R : List B256}
-    {M : Mem} {K : List SFunc} {flag a x y : B256}
-    (cut : CursorStateAt code c start f b (flag :: a :: x :: y :: R) M K)
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (fork : CoveredFork start.sevm.benvStat.fork)
-    (destination : Bytes) (le : destination.length ≤ 32)
-    (shape : f = (callFlagGuardLine destination le).foldr SFunc.next
-      (.branch failedTree returnTree))
-    (flag01 : flag = 0 ∨ flag = 1) (noFail : failedTree.noOk = true) :
-    flag = 1 ∧
-      Nonempty (CursorStateAt code c start returnTree b (0 :: a :: x :: y :: R) M K) :=
-  cut.callFlagH checked success fork.rules_stateGas_none destination le shape flag01 noFail
 
 end Blanc.Lift

@@ -1,5 +1,10 @@
+import Blanc.Lift.BeaconDeposit.BodySpec
+import Blanc.Lift.BeaconDeposit.SafeLittleEndian
+import Blanc.Lift.InvWalk
+import Blanc.Lift.InvWalkOps
+import Blanc.Lift.InvWalkWorld
+import Jaune.MulDiv
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
-import Blanc.Lift.BeaconDeposit.SafeGuards
 
 /-!
 # Safety segment B1 over a historical frame: the guards, inverted

@@ -1820,9 +1820,9 @@ example {sevm : Sevm} {b : Devm}
   blanc_suggest
   exact Lift.ShaReadyRules.of_disabled disabled warm pre sg bal
 
--- The stronger legacy carrier must not receive conditional-readiness advice.
-example {sevm : Sevm} {b : Devm} (ready : Lift.ShaReadyH sevm b) :
-    Lift.ShaReadyH sevm b := by
+-- The covered-fork carrier must not receive conditional-readiness advice.
+example {sevm : Sevm} {b : Devm} (ready : Lift.ShaReady sevm b) :
+    Lift.ShaReady sevm b := by
   expect_no_recipe_trigger "goal-head:ShaReadyRules"
   expect_no_recipe_offered "sha-readiness-selected-rules"
   exact ready

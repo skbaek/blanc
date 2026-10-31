@@ -5,11 +5,11 @@ import Blanc.Lift.HistShaWalk
 /-!
 # The Beacon body's world frames over a historical frame
 
-The historical counterparts of the world vocabulary the modern safety segments share
-(`Keep`, `LoopBase`, `ShaReady.keep`, `keep_afterSstore_sload_twice`), over the successors
-`afterSloadH`/`afterSstoreH` of the frame's actual access schedule:
+The world vocabulary the safety segments share (`Keep`, `LoopBase`, `ShaReady.keep`) over the
+successors `afterSloadH`/`afterSstoreH` of the frame's actual access schedule; the modern segments
+are corollaries of these:
 
-* `ShaReadyH.keep` — the historical SHA-256 premises across a `Keep`;
+* `ShaReadyRules.keep` — the selected-rule SHA-256 premises across a `Keep`;
 * `LoopBaseH` — what the insertion loop keeps of its starting base: `LoopBase` without the
   key-set field, which is false under flat access (where `afterSloadH` is the base itself) and
   which the loop's closing step never reads; `LoopBaseH.step` over `Keep (afterSloadH …)`;
@@ -20,10 +20,6 @@ The historical counterparts of the world vocabulary the modern safety segments s
 namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
-
-theorem _root_.Blanc.Lift.ShaReadyH.keep {sevm : Sevm} {b b' : Devm} (h : ShaReadyH sevm b)
-    (hk : Keep b b') : ShaReadyH sevm b' :=
-  h.of_eq hk.code hk.addrs
 
 /-- Preserve selected-rule SHA readiness across the Beacon world frame. -/
 theorem _root_.Blanc.Lift.ShaReadyRules.keep {sevm : Sevm} {b b' : Devm}

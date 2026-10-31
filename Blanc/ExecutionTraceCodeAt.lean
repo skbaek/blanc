@@ -25,12 +25,13 @@ open Jaune
 
 namespace ExecutionTrace
 
-/-- A retained slot keeps the code at `a`, and so do the frames it entered. -/
-theorem RetainedXlot.codeAt_of_runFrame
+/-- A retained slot keeps the code at `a`, and so do the frames it entered.
+Neutral form. -/
+theorem RetainedXlot.codeAt_of_runFrame_noStateGas
     {frame : Frame} {slot : Xlot}
     {out : Except (EvmError × State × AdrSet × Tra) Devm} {a : Adr}
     (retained : RetainedXlot slot) (hrun : RunFrame frame slot out)
-    (hfork : CoveredFork frame.inner.benv.stat.fork)
+    (hsg : frame.inner.benv.stat.rules.stateGas = Option.none)
     (avoid : ∀ root ∈ retained.rawFrames, root.sevm.codeAddress = Option.none →
       root.sevm.currentTarget ≠ a) :
     Xlot.InvAt a slot ∧
@@ -42,8 +43,21 @@ theorem RetainedXlot.codeAt_of_runFrame
       obtain ⟨henter, _⟩ := RunFrame.some_inv hrun
       have hstat := Frame.enter_run_benvStat henter
       have hcode := Frame.enter_run_getCode henter a
-      obtain ⟨hrel, hroots⟩ := Exec.codeAt_avoid run (by rw [hstat]; exact hfork) avoid
+      obtain ⟨hrel, hroots⟩ := Exec.codeAt_avoid_noStateGas run
+        (by rw [hstat]; exact hsg) avoid
       exact ⟨Xlot.invAt_of_rel hrel, fun root member => (hroots root member).trans hcode⟩
+
+/-- A retained slot keeps the code at `a`, and so do the frames it entered. -/
+theorem RetainedXlot.codeAt_of_runFrame
+    {frame : Frame} {slot : Xlot}
+    {out : Except (EvmError × State × AdrSet × Tra) Devm} {a : Adr}
+    (retained : RetainedXlot slot) (hrun : RunFrame frame slot out)
+    (hfork : CoveredFork frame.inner.benv.stat.fork)
+    (avoid : ∀ root ∈ retained.rawFrames, root.sevm.codeAddress = Option.none →
+      root.sevm.currentTarget ≠ a) :
+    Xlot.InvAt a slot ∧
+      ∀ root ∈ retained.rawFrames, root.devm.getCode a = frame.inner.benv.state.getCode a :=
+  RetainedXlot.codeAt_of_runFrame_noStateGas retained hrun hfork.rules_stateGas_none avoid
 
 /-! ### EIP-7702 delegation -/
 
@@ -149,6 +163,20 @@ theorem messageCallExecutionMessage_getCode (msg : Msg) (a : Adr) :
 
 /-! ### The message wrappers -/
 
+/-- A settled message keeps the code at `a`, and so does every frame it
+enters. Neutral form. -/
+theorem ProcessMessageTrace.codeAt_noStateGas
+    {a : Adr} {msg : Msg} {post : Devm}
+    (trace : ProcessMessageTrace msg (.ok post))
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
+    post.getCode a = msg.benv.state.getCode a ∧
+      ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a := by
+  obtain ⟨inv, hroots⟩ := RetainedXlot.codeAt_of_runFrame_noStateGas trace.retained
+    trace.run hsg avoid
+  exact ⟨ProcessMessage.codeAt inv trace.run, hroots⟩
+
 theorem ProcessMessageTrace.codeAt
     {a : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessMessageTrace msg (.ok post))
@@ -156,19 +184,21 @@ theorem ProcessMessageTrace.codeAt
     (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ a) :
     post.getCode a = msg.benv.state.getCode a ∧
-      ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a := by
-  obtain ⟨inv, hroots⟩ := RetainedXlot.codeAt_of_runFrame trace.retained trace.run hfork avoid
-  exact ⟨ProcessMessage.codeAt inv trace.run, hroots⟩
+      ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a :=
+  ProcessMessageTrace.codeAt_noStateGas trace hfork.rules_stateGas_none avoid
 
-theorem ProcessCreateMessageTrace.codeAt
+/-- A settled create message keeps the code at `a`, and so does every frame
+it enters. Neutral form. -/
+theorem ProcessCreateMessageTrace.codeAt_noStateGas
     {a : Adr} {msg : Msg} {post : Devm}
     (trace : ProcessCreateMessageTrace msg (.ok post))
-    (hfork : CoveredFork msg.benv.stat.fork) (hca : msg.codeAddress = none)
+    (hsg : msg.benv.stat.rules.stateGas = none) (hca : msg.codeAddress = none)
     (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ a) :
     post.getCode a = msg.benv.state.getCode a ∧
       ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a := by
-  obtain ⟨inv, hroots⟩ := RetainedXlot.codeAt_of_runFrame trace.retained trace.run hfork avoid
+  obtain ⟨inv, hroots⟩ := RetainedXlot.codeAt_of_runFrame_noStateGas trace.retained
+    trace.run hsg avoid
   refine ⟨?_, fun root member =>
     (hroots root member).trans (processCreateMessage.msg_getCode msg a)⟩
   obtain ⟨slot, retained, hrun⟩ := trace
@@ -188,6 +218,62 @@ theorem ProcessCreateMessageTrace.codeAt
         exact hself hcode ((Frame.enter_run_currentTarget henter).trans h.symm)
       exact ProcessCreateMessage.codeAt hne inv hrun
 
+theorem ProcessCreateMessageTrace.codeAt
+    {a : Adr} {msg : Msg} {post : Devm}
+    (trace : ProcessCreateMessageTrace msg (.ok post))
+    (hfork : CoveredFork msg.benv.stat.fork) (hca : msg.codeAddress = none)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
+    post.getCode a = msg.benv.state.getCode a ∧
+      ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a :=
+  ProcessCreateMessageTrace.codeAt_noStateGas trace hfork.rules_stateGas_none hca avoid
+
+/-- **A settled message call keeps the code at `a`, and so does every frame
+it enters**, when it enters no frame targeting `a`. Authority is cased per
+fork: either delegation is disabled (the pre-Prague arm, needing no
+authority premise) or no authorization of the transaction recovers to `a`. -/
+theorem MessageCallTrace.codeAt_noStateGas
+    {a : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
+    (trace : MessageCallTrace msg state out)
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (hca : msg.target.isNone = true → msg.codeAddress = none)
+    (hauth : msg.benv.stat.rules.delegationEnabled = false ∨
+      ∀ auth ∈ msg.tenv.stat.auths, ∀ authority,
+        recoverAuthority auth = .ok authority → authority ≠ a)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a) :
+    state.getCode a = msg.benv.state.getCode a ∧
+      ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a := by
+  cases trace with
+  | createCollision target collision result =>
+      refine ⟨?_, fun root member => by simp only [rawFrames, List.not_mem_nil] at member⟩
+      rw [processMessageCall_createCollision_state_eq_noStateGas target collision result hsg]
+  | createRun target collision evm core coreTrace result =>
+      obtain ⟨hpost, hroots⟩ := coreTrace.codeAt_noStateGas hsg (hca target) avoid
+      refine ⟨?_, hroots⟩
+      rw [processMessageCall_createRun_state_eq_noStateGas target collision core result hsg]
+      exact hpost
+  | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
+      have hsgExec : execMsg.benv.stat.rules.stateGas = none := by
+        rw [execMsgEq, messageCallExecutionMessage_benv_stat,
+          messageCallDelegation_benv_stat delegation]
+        exact hsg
+      have hcode : execMsg.benv.state.getCode a = msg.benv.state.getCode a := by
+        rcases hauth with hdis | hauth
+        · have hleg : messageCallDelegation msg = .ok ⟨msg, 0⟩ :=
+            processMessageCall.legacyAuthorization_disabled msg hdis
+          have hdel : delegated = msg :=
+            (Prod.mk.inj (Except.ok.inj (hleg.symm.trans delegation))).1.symm
+          rw [execMsgEq, hdel]
+          exact messageCallExecutionMessage_getCode msg a
+        · rw [execMsgEq, messageCallExecutionMessage_getCode]
+          exact messageCallDelegation_getCode hauth delegation
+      obtain ⟨hpost, hroots⟩ := coreTrace.codeAt_noStateGas hsgExec avoid
+      refine ⟨?_, fun root member => (hroots root member).trans hcode⟩
+      rw [processMessageCall_callRun_state_eq_noStateGas target delegation execMsgEq core
+        result hsg]
+      exact hpost.trans hcode
+
 /-- **A settled message call keeps the code at `a`, and so does every frame it enters**, when it
 enters no frame targeting `a` and no authorization of its transaction recovers to `a`. -/
 theorem MessageCallTrace.codeAt
@@ -200,28 +286,8 @@ theorem MessageCallTrace.codeAt
     (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ a) :
     state.getCode a = msg.benv.state.getCode a ∧
-      ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a := by
-  cases trace with
-  | createCollision target collision result =>
-      refine ⟨?_, fun root member => by simp only [rawFrames, List.not_mem_nil] at member⟩
-      rw [processMessageCall_createCollision_state_eq target collision result hfork]
-  | createRun target collision evm core coreTrace result =>
-      obtain ⟨hpost, hroots⟩ := coreTrace.codeAt hfork (hca target) avoid
-      refine ⟨?_, hroots⟩
-      rw [processMessageCall_createRun_state_eq target collision core result hfork]
-      exact hpost
-  | callRun target delegated refund delegation execMsg execMsgEq evm core coreTrace result =>
-      have execFork : CoveredFork execMsg.benv.stat.fork := by
-        rw [execMsgEq, messageCallExecutionMessage_benv_stat,
-          messageCallDelegation_benv_stat delegation]
-        exact hfork
-      have hcode : execMsg.benv.state.getCode a = msg.benv.state.getCode a := by
-        rw [execMsgEq, messageCallExecutionMessage_getCode]
-        exact messageCallDelegation_getCode hauth delegation
-      obtain ⟨hpost, hroots⟩ := coreTrace.codeAt execFork avoid
-      refine ⟨?_, fun root member => (hroots root member).trans hcode⟩
-      rw [processMessageCall_callRun_state_eq target delegation execMsgEq core result hfork]
-      exact hpost.trans hcode
+      ∀ root ∈ trace.rawFrames, root.devm.getCode a = msg.benv.state.getCode a :=
+  MessageCallTrace.codeAt_noStateGas trace hfork.rules_stateGas_none hca (Or.inr hauth) avoid
 
 /-! ### Transactions -/
 
@@ -255,16 +321,33 @@ theorem prepareMessage_fields {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
     intro hnone
     simp_all only [Option.isNone_iff_eq_none, Prod.mk.injEq, List.nil_eq]
 
-/-- **A transaction keeps the code at `a`, and so does every frame it enters**, when no frame it
-enters targets `a` and none of its authorizations recovers to `a`.  A transaction that starts
-with empty code at `a` ends with empty code at `a`. -/
-theorem TransactionTrace.codeAt_empty
+/-- Removing touched empty accounts from empty code leaves empty code. -/
+theorem sweepTouchedAccounts_getCode_empty (rules : ForkRules) (addresses : List Adr)
+    {state : State} {a : Adr} (h : state.getCode a = ByteArray.empty) :
+    (sweepTouchedAccounts rules addresses state).getCode a = ByteArray.empty := by
+  unfold sweepTouchedAccounts
+  split
+  · induction addresses generalizing state with
+    | nil => exact h
+    | cons x xs ih =>
+        rw [List.foldl_cons]
+        split
+        · exact ih (destroyAccount_getCode_empty h)
+        · exact ih h
+  · exact h
+
+/-- **A transaction keeps the code at `a`, and so does every frame it
+enters**, when no frame it enters targets `a`. Either delegation is
+disabled or none of its authorizations recovers to `a`. A transaction
+that starts with empty code at `a` ends with empty code at `a`. -/
+theorem TransactionTrace.codeAt_empty_noStateGas
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
     {state : State} {bout' : BlockOutput}
     (trace : TransactionTrace benv bout tx index state bout')
-    (hfork : CoveredFork benv.stat.fork) {a : Adr}
-    (hauth : ∀ auth ∈ tx.auths, ∀ authority, recoverAuthority auth = .ok authority →
-      authority ≠ a)
+    (hsg : benv.stat.rules.stateGas = none) {a : Adr}
+    (hauth : benv.stat.rules.delegationEnabled = false ∨
+      ∀ auth ∈ tx.auths, ∀ authority, recoverAuthority auth = .ok authority →
+        authority ≠ a)
     (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
       root.sevm.currentTarget ≠ a)
     (hempty : benv.state.getCode a = ByteArray.empty) :
@@ -280,20 +363,91 @@ theorem TransactionTrace.codeAt_empty
   have hmsgState : trace.msg.benv.state.getCode a = ByteArray.empty := by
     rw [hbenv]
     exact hdebit.trans hempty
-  have hmsgFork : CoveredFork trace.msg.benv.stat.fork := by
+  have hmsgSg : trace.msg.benv.stat.rules.stateGas = none := by
     rw [hbenv]
-    exact hfork
-  have hmsgAuth : ∀ auth ∈ trace.msg.tenv.stat.auths, ∀ authority,
-      recoverAuthority auth = .ok authority → authority ≠ a := by
-    rw [htenv]
-    simpa only [transactionTenv, Std.TreeMap.empty_eq_emptyc, ne_eq] using hauth
-  obtain ⟨hpost, hroots⟩ := trace.message.codeAt hmsgFork hca hmsgAuth avoid
+    exact hsg
+  have hmsgAuth : trace.msg.benv.stat.rules.delegationEnabled = false ∨
+      ∀ auth ∈ trace.msg.tenv.stat.auths, ∀ authority,
+        recoverAuthority auth = .ok authority → authority ≠ a := by
+    rcases hauth with hdis | hauth
+    · exact Or.inl (by rw [hbenv]; exact hdis)
+    · exact Or.inr (by
+        rw [htenv]
+        simpa only [transactionTenv, Std.TreeMap.empty_eq_emptyc, ne_eq] using hauth)
+  obtain ⟨hpost, hroots⟩ := trace.message.codeAt_noStateGas hmsgSg hca hmsgAuth avoid
   refine ⟨fun root member => (hroots root member).trans hmsgState, ?_⟩
-  obtain ⟨refundCounter, -, hfinal⟩ := trace.exists_finalStateForm hfork
+  obtain ⟨refundCounter, -, hfinal⟩ := trace.exists_selectedFinalStateForm hsg
+  have hcode : ∀ s : State, s.getCode a = ByteArray.empty →
+      (sweepTouchedAccounts benv.stat.rules trace.messageOut.touchedAccounts.toList
+        (trace.messageOut.accountsToDelete.toList.foldl destroyAccount s)).getCode a =
+        ByteArray.empty := fun s hs => by
+    rw [sweepTouchedAccounts_getCode_empty _ _ (foldl_destroyAccount_getCode_empty _ hs)]
   rw [hfinal]
-  refine foldl_destroyAccount_getCode_empty _ ?_
-  rw [State.addBal_getCode, State.addBal_getCode]
-  exact hpost.trans hmsgState
+  exact hcode _ (by
+    rw [State.addBal_getCode, State.addBal_getCode]
+    exact hpost.trans hmsgState)
+
+/-- **A transaction keeps the code at `a`, and so does every frame it enters**, when no frame it
+enters targets `a` and none of its authorizations recovers to `a`.  A transaction that starts
+with empty code at `a` ends with empty code at `a`. -/
+theorem TransactionTrace.codeAt_empty
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat}
+    {state : State} {bout' : BlockOutput}
+    (trace : TransactionTrace benv bout tx index state bout')
+    (hfork : CoveredFork benv.stat.fork) {a : Adr}
+    (hauth : ∀ auth ∈ tx.auths, ∀ authority, recoverAuthority auth = .ok authority →
+      authority ≠ a)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a)
+    (hempty : benv.state.getCode a = ByteArray.empty) :
+    (∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty) ∧
+      state.getCode a = ByteArray.empty :=
+  TransactionTrace.codeAt_empty_noStateGas trace hfork.rules_stateGas_none (Or.inr hauth) avoid hempty
+
+/-- A selected transaction list keeps empty code at `a`, and so does every
+frame it enters. -/
+theorem ApplyTransactionsTrace.codeAt_empty_noStateGas
+    {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput}
+    (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (hsg : benv.stat.rules.stateGas = none) {a : Adr}
+    (hauth : benv.stat.rules.delegationEnabled = false ∨
+      ∀ p ∈ txs, ∀ auth ∈ p.2.auths, ∀ authority,
+        recoverAuthority auth = .ok authority → authority ≠ a)
+    (avoid : ∀ root ∈ trace.rawFrames, root.sevm.codeAddress = none →
+      root.sevm.currentTarget ≠ a)
+    (hempty : benv.state.getCode a = ByteArray.empty) :
+    (∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty) ∧
+      finalBenv.state.getCode a = ByteArray.empty := by
+  induction trace with
+  | nil => exact ⟨fun root member => by simp only [rawFrames, List.not_mem_nil] at member,
+      hempty⟩
+  | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail ih =>
+      have hhead : benv.stat.rules.delegationEnabled = false ∨
+          ∀ auth ∈ tx.auths, ∀ authority,
+            recoverAuthority auth = .ok authority → authority ≠ a := by
+        rcases hauth with hdis | hauth
+        · exact Or.inl hdis
+        · exact Or.inr (hauth _ (List.mem_cons_self ..))
+      have htail : benv.stat.rules.delegationEnabled = false ∨
+          ∀ p ∈ txs, ∀ auth ∈ p.2.auths, ∀ authority,
+            recoverAuthority auth = .ok authority → authority ≠ a := by
+        rcases hauth with hdis | hauth
+        · exact Or.inl hdis
+        · exact Or.inr (fun p hp => hauth p (List.mem_cons_of_mem _ hp))
+      obtain ⟨hroots, hstate⟩ := head.codeAt_empty_noStateGas hsg hhead
+        (fun root member => avoid root (by
+          simp only [ApplyTransactionsTrace.rawFrames, List.mem_append]
+          exact Or.inl member)) hempty
+      obtain ⟨hroots', hfinal⟩ := ih hsg htail
+        (fun root member => avoid root (by
+          simp only [ApplyTransactionsTrace.rawFrames, List.mem_append]
+          exact Or.inr member)) hstate
+      refine ⟨fun root member => ?_, hfinal⟩
+      simp only [ApplyTransactionsTrace.rawFrames, List.mem_append] at member
+      rcases member with member | member
+      · exact hroots root member
+      · exact hroots' root member
 
 theorem ApplyTransactionsTrace.codeAt_empty
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
@@ -306,26 +460,9 @@ theorem ApplyTransactionsTrace.codeAt_empty
       root.sevm.currentTarget ≠ a)
     (hempty : benv.state.getCode a = ByteArray.empty) :
     (∀ root ∈ trace.rawFrames, root.devm.getCode a = ByteArray.empty) ∧
-      finalBenv.state.getCode a = ByteArray.empty := by
-  induction trace with
-  | nil => exact ⟨fun root member => by simp only [rawFrames, List.not_mem_nil] at member,
-      hempty⟩
-  | @cons index tx txs benv bout txState txBout finalBenv finalBout head tail ih =>
-      obtain ⟨hroots, hstate⟩ := head.codeAt_empty hfork
-        (hauth _ (List.mem_cons_self ..))
-        (fun root member => avoid root (by
-          simp only [ApplyTransactionsTrace.rawFrames, List.mem_append]
-          exact Or.inl member)) hempty
-      obtain ⟨hroots', hfinal⟩ := ih hfork
-        (fun p hp => hauth p (List.mem_cons_of_mem _ hp))
-        (fun root member => avoid root (by
-          simp only [ApplyTransactionsTrace.rawFrames, List.mem_append]
-          exact Or.inr member)) hstate
-      refine ⟨fun root member => ?_, hfinal⟩
-      simp only [ApplyTransactionsTrace.rawFrames, List.mem_append] at member
-      rcases member with member | member
-      · exact hroots root member
-      · exact hroots' root member
+      finalBenv.state.getCode a = ByteArray.empty :=
+  ApplyTransactionsTrace.codeAt_empty_noStateGas trace hfork.rules_stateGas_none (Or.inr hauth) avoid
+    hempty
 
 /-! ### Blocks -/
 
