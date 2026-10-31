@@ -9578,8 +9578,8 @@ contract-neutral.
   `_accessedStorageKeys`, the `ite` form `getStor_afterSstoreH`) and the quiet frame theorem
   `SFunc.Run.world_of_quietH` from `rules.stateGas = none` alone in
   [`Blanc/Lift/HistAccessWalkFacts.lean`](../Blanc/Lift/HistAccessWalkFacts.lean);
-  the historical SHA-256 kit from `rules.stateGas = none`/`rules.bal = none` (`ShaReadyH`,
-  `ShaReady.toH`, `meta_of_processMessage_sha256_64_clean_noStateGas`, the charged tail
+  the historical SHA-256 kit from `rules.stateGas = none`/`rules.bal = none` (`ShaReadyRules`,
+  `ShaReady.toRules`, `meta_of_processMessage_sha256_64_clean_noStateGas`, the charged tail
   `ri_staticcall_sha_of_charge`, `ri_staticcall_shaH` cased on access schedule and delegation
   flag, and `ri_staticcall_shaH_covered`; the solc packed-SHA site `ric_shaCallH`,
   `ric_copy_shaH`, `ric_pack_shaH`) in
@@ -9588,8 +9588,9 @@ contract-neutral.
   `ShaReadyRules.of_disabled`: it needs no code observation at address 2.
   `ShaReadyRules` makes nondelegation conditional on `delegationEnabled = true`,
   while retaining explicit warmth, precompile, state-gas and BAL premises.
-  Transport it with `ShaReadyRules.of_eq`, or obtain it from the stronger
-  legacy readiness with `ShaReadyH.toRules`. The generalized consumers are
+  Transport it with `ShaReadyRules.of_eq`, or obtain it from the covered-fork
+  readiness with `ShaReady.toRules` (the BeaconDeposit `Safe*` segments are such corollaries of
+  their `HistSafe*` proofs). The generalized consumers are
   `ri_staticcall_shaH_of_delegation`, `ric_shaCallH_of_delegation`,
   `ric_copy_shaH_of_delegation` and `ric_pack_shaH_of_delegation` in that same
   owner. The original H signatures remain compatibility wrappers; the actual

@@ -1,5 +1,5 @@
+import Blanc.Lift.BeaconDeposit.BodySignatureRoot
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
-import Blanc.Lift.BeaconDeposit.SafeSignatureRoot
 
 /-!
 # Safety segment B4 over a historical frame: the signature root, inverted
@@ -11,6 +11,69 @@ import Blanc.Lift.BeaconDeposit.SafeSignatureRoot
 namespace Blanc.Lift.BeaconDeposit
 
 open Jaune
+
+/-- **The slice helper (entry 13), inverted**: with both bound checks passing, every run
+returns `en - st :: st + x` over the caller's stack. -/
+theorem ri_slice13 {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
+    {x len st en ret dv av : B256} {S : List B256} {o : Outcome}
+    (h1 : B256.gtCheck st en = 0) (h2 : B256.gtCheck en len = 0)
+    (hd : en - st = dv) (ha : st + x = av)
+    (run : SFunc.Run prog sevm (St b (x :: len :: st :: en :: ret :: S) M G) t_16fe_c13 o) :
+    ∃ G', o = .returned (St b (dv :: av :: S) M G') := by
+  subst hd ha
+  have run := run.cut
+  unfold t_16fe_c13 at run
+  obtain ⟨_, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_gt s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  rw [h1, show B256.eqCheck (0 : B256) 0 = 1 by decide] at run
+  rcases ric_branch run with ⟨hw, -⟩ | ⟨-, _, run⟩
+  · exact absurd hw (by decide)
+  unfold t_170d_c13 at run
+  obtain ⟨_, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_gt s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_iszero s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  rw [h2, show B256.eqCheck (0 : B256) 0 = 1 by decide] at run
+  rcases ric_branch run with ⟨hw, -⟩ | ⟨-, _, run⟩
+  · exact absurd hw (by decide)
+  unfold t_1719_c13 at run
+  obtain ⟨_, run⟩ := ric_dest run
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_add s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sub s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
+  obtain ⟨G', hr⟩ := ric_ret run
+  exact ⟨G', Seg.done.inj hr⟩
+
+/-- The slice helper's call site, inverted: the continuation runs from the helper's return. -/
+theorem ric_slice13 {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {f : SFunc} {r : Seg}
+    {dd x len st en ret dv av : B256} {S : List B256}
+    (h1 : B256.gtCheck st en = 0) (h2 : B256.gtCheck en len = 0)
+    (hd : en - st = dv) (ha : st + x = av)
+    (run : SFunc.RunCut prog sevm [] (St b (dd :: x :: len :: st :: en :: ret :: S) M G)
+      (.callNext 13 f) r) :
+    ∃ G', SFunc.RunCut prog sevm [] (St b (dv :: av :: S) M G') f r := by
+  obtain ⟨_, ⟨D, hD, run⟩ | ⟨D, hD, -⟩⟩ := ric_call prog_13 run
+  · obtain ⟨G', e⟩ := ri_slice13 h1 h2 hd ha hD
+    cases e
+    exact ⟨G', run⟩
+  · obtain ⟨G', e⟩ := ri_slice13 h1 h2 hd ha hD
+    cases e
 
 /-- **Site 1, inverted** (converse of `sig_site1`). -/
 private theorem inv_site1H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G : Nat}
@@ -550,25 +613,5 @@ theorem safe_signatureRootH_of_rules {sevm : Sevm} {b : Devm} {sel rt sP wP pP a
     · rw [B256.length_toBytes]
       simp only [I3, sig3Img]
       rw [shaImg_digest, signatureRoot_eq]
-
-
-/-- Compatibility form with the original historical readiness premise. -/
-theorem safe_signatureRootH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR : B256} {G : Nat}
-    {M : Mem} {o : Outcome}
-    (hsha : ShaReadyH sevm b) (hsP : sP.toNat + 96 < 2 ^ 256)
-    (hM : BodyMem M 832 0x160
-      [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat), (0x160, pkR.toBytes)])
-    (run : SFunc.Run prog sevm
-      (St b [0x20, 0x160, 0, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M G)
-      t_086e_c12 o) :
-    ∃ b' M' G', Keep b b' ∧
-      BodyMem M' 832 0x280
-        [(0x80, (8 : B256).toBytes), (0xa0, BeaconDeposit.le64 a.toNat),
-          (0x280, (BeaconDeposit.signatureRoot Bytes.sha256
-            (sevm.data.sliceD sP.toNat 96 0)).toBytes)] ∧
-      SFunc.Run prog sevm
-        (St b' [0x20, 0x280, 0, pkR, 0x80, a, rt, 96, sP, 32, wP, 48, pP, 0x01b8, sel] M' G')
-        t_0b4c_c16 o :=
-  safe_signatureRootH_of_rules hsha.toRules hsP hM run
 
 end Blanc.Lift.BeaconDeposit
