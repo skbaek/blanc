@@ -845,10 +845,6 @@ theorem and_mask_toAdr (v : B256) : (v &&& maskAddr).toAdr = v.toAdr := by
     show (18446744073709551615 : UInt64) = -1 from rfl, UInt32.and_neg_one, UInt64.and_neg_one,
     UInt64.and_neg_one]
 
-theorem access_getCode (b : Devm) (a x : Adr) :
-    (temporalAccountAccessBase b a).getCode x = b.getCode x := by
-  simp only [Devm.getCode, Devm.getAcct, Blanc.Lift.temporalAccountAccessBase_state]
-
 theorem mask_toAdr (x : B256) : (maskAddr &&& x).toAdr = x.toAdr := by
   rw [ff20_and_word, toAdr_toB256]
 
