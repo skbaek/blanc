@@ -446,7 +446,6 @@ The conclusion is the exact state the crossing starts from: the seven `CALL`
 operands with `gw` the frame's own remaining gas, the memory image as a named
 chain, the mint pair, the log, and a two-sided gas account. -/
 
-set_option maxRecDepth 796 in
 /-- **`fmint`'s `flashLoan` reaches its `CALL`**, on a call whose three guards
 pass.
 
@@ -508,9 +507,14 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
     simp only [flashLoanLogGas, flashLoanCallbackGas, flashLoanCopyGas, gVerylow,
       gBase, gMemory, gLog, gLogdata, gLogtopic] at hG₀ ⊢
     omega
+  have hev : pushCost transferEvent.toBytes.sig = gVerylow :=
+    pushCost_of_ne_zero (by decide +kernel)
+  unfold flashLoanFromMintLog
+  generalize hevq : transferEvent = ev at hev ⊢
   func_run (8) [gMemory]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   · exact Devm.extCost_empty_word
+  subst hevq
   refine Func.runCompiledTo_log_step (topics := [transferEvent, 0, receiver])
     (s := [amount, receiver]) rfl rfl h_static
     (M := Mem.empty.write 0 amount.toBytes) rfl
@@ -538,8 +542,13 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
     rw [show (132 : B256) = Nat.toB256 132 from rfl,
       ← tailPtr_three_of_decodes h_dec]
     exact tailLen_three_of_decodes h_dec
+  have hsel : pushCost onFlashLoanSelector.toBytes.sig = gVerylow :=
+    pushCost_of_ne_zero (by decide +kernel)
+  unfold flashLoanFromCallbackArgs storeCallbackHead
+  generalize hselq : onFlashLoanSelector = sel at hsel ⊢
   func_run (3)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
+  subst hselq
   refine Func.runCompiledTo_mstore_step
     (M := Mem.empty.write 0 amount.toBytes) (c := 3) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
@@ -548,6 +557,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₁
   have s₁ : M₁.size = 32 := by
     rw [← hM₁, Mem.size_write_word_at, Mem.size_write_word]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   func_run (2)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₁) (c := 6) rfl rfl ?_ ?_ ?_
@@ -557,6 +567,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₂
   have s₂ : M₂.size = 64 := by
     rw [← hM₂, Mem.size_write_word_at, s₁]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   func_run (2)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₂) (c := 6) rfl rfl ?_ ?_ ?_
@@ -566,6 +577,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₃
   have s₃ : M₃.size = 96 := by
     rw [← hM₃, Mem.size_write_word_at, s₂]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   func_run (1)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₃) (c := 6) rfl rfl ?_ ?_ ?_
@@ -575,6 +587,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₄
   have s₄ : M₄.size = 128 := by
     rw [← hM₄, Mem.size_write_word_at, s₃]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   func_run (2)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₄) (c := 6) rfl rfl ?_ ?_ ?_
@@ -584,6 +597,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₅
   have s₅ : M₅.size = 160 := by
     rw [← hM₅, Mem.size_write_word_at, s₄]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   func_run (2)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   refine Func.runCompiledTo_mstore_step (M := M₅) (c := 6) rfl rfl ?_ ?_ ?_
@@ -593,6 +607,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₆
   have s₆ : M₆.size = 192 := by
     rw [← hM₆, Mem.size_write_word_at, s₅]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   func_run (10) [(132 : B256)]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   rw [h_len]
@@ -603,6 +618,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₇
   have s₇ : M₇.size = 224 := by
     rw [← hM₇, Mem.size_write_word_at, s₆]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   func_run (5) [(164 : B256)]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   have h_dl : (Nat.toB256 data.length).toNat = data.length := by
@@ -628,6 +644,7 @@ theorem flashLoan_runCompiledTo_call {sevm : Sevm} {pre : Devm}
   have hG₈ : 31 ≤ G₈ := by
     simp only [flashLoanCallbackGas, gVerylow, gBase, gMemory] at h_gas'
     omega
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   func_run (11)
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   -- the state at the `CALL`, read off the eight named images
@@ -839,7 +856,6 @@ theorem flashLoan_execSat_mint {sevm : Sevm} {pre : Devm}
     simp only [Devm.setMach_accessedStorageKeys, hacc₃]
     exact hacc₂ _ (hacc₁ _ hp)
 
-set_option maxRecDepth 799 in
 /-- `flashLoan_runCompiledTo_call`, existential in the outcome: the exact state
 at the `CALL`, handed to a continuation that will decide the outcome by case
 analysis on the callback's settle. -/
@@ -894,12 +910,17 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
     simp only [flashLoanLogGas, flashLoanCallbackGas, flashLoanCopyGas, gVerylow,
       gBase, gMemory, gLog, gLogdata, gLogtopic] at hG₀ ⊢
     omega
+  have hev : pushCost transferEvent.toBytes.sig = gVerylow :=
+    pushCost_of_ne_zero (by decide +kernel)
+  unfold flashLoanFromMintLog
+  generalize hevq : transferEvent = ev at hev ⊢
   apply Func.execSat_segment
   · intro ex hex
     func_run (8) [gMemory]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     · exact Devm.extCost_empty_word
     exact hex
+  subst hevq
   refine Func.execSat_log_step (topics := [transferEvent, 0, receiver])
     (s := [amount, receiver]) rfl rfl h_static
     (M := Mem.empty.write 0 amount.toBytes) rfl
@@ -928,11 +949,16 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
     rw [show (132 : B256) = Nat.toB256 132 from rfl,
       ← tailPtr_three_of_decodes h_dec]
     exact tailLen_three_of_decodes h_dec
+  have hsel : pushCost onFlashLoanSelector.toBytes.sig = gVerylow :=
+    pushCost_of_ne_zero (by decide +kernel)
+  unfold flashLoanFromCallbackArgs storeCallbackHead
+  generalize hselq : onFlashLoanSelector = sel at hsel ⊢
   apply Func.execSat_segment
   · intro ex hex
     func_run (3)
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     exact hex
+  subst hselq
   refine Func.execSat_mstore_step
     (M := Mem.empty.write 0 amount.toBytes) (c := 3) rfl rfl ?_ ?_ ?_
   · exact Devm.extCost_add_of_size Mem.size_write_word (by decide)
@@ -941,6 +967,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₁
   have s₁ : M₁.size = 32 := by
     rw [← hM₁, Mem.size_write_word_at, Mem.size_write_word]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.execSat_segment
   · intro ex hex
     func_run (2)
@@ -953,6 +980,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₂
   have s₂ : M₂.size = 64 := by
     rw [← hM₂, Mem.size_write_word_at, s₁]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.execSat_segment
   · intro ex hex
     func_run (2)
@@ -965,6 +993,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₃
   have s₃ : M₃.size = 96 := by
     rw [← hM₃, Mem.size_write_word_at, s₂]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.execSat_segment
   · intro ex hex
     func_run (1)
@@ -977,6 +1006,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₄
   have s₄ : M₄.size = 128 := by
     rw [← hM₄, Mem.size_write_word_at, s₃]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.execSat_segment
   · intro ex hex
     func_run (2)
@@ -989,6 +1019,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₅
   have s₅ : M₅.size = 160 := by
     rw [← hM₅, Mem.size_write_word_at, s₄]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.execSat_segment
   · intro ex hex
     func_run (2)
@@ -1001,6 +1032,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₆
   have s₆ : M₆.size = 192 := by
     rw [← hM₆, Mem.size_write_word_at, s₅]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.execSat_segment
   · intro ex hex
     func_run (10) [(132 : B256)]
@@ -1014,6 +1046,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   simp only [Devm.gasLeft_setMach] at hg₇
   have s₇ : M₇.size = 224 := by
     rw [← hM₇, Mem.size_write_word_at, s₆]; decide
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.execSat_segment
   · intro ex hex
     func_run (5) [(164 : B256)]
@@ -1042,6 +1075,7 @@ theorem flashLoan_execSat_call {sevm : Sevm} {pre : Devm}
   have hG₈ : 31 ≤ G₈ := by
     simp only [flashLoanCallbackGas, gVerylow, gBase, gMemory] at h_gas'
     omega
+  simp only [Devm.setMach_setMach, Devm.stateGas_setMach]
   apply Func.execSat_segment
   · intro ex hex
     func_run (11)
@@ -1402,7 +1436,6 @@ def flashLoanReturnDataHead (d : Devm) (M : Mem) : B256 :=
     (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32) (0 : UInt8))).read
       ((0 * 32 : B256)).toNat 32).1.toB256
 
-set_option maxRecDepth 597 in
 /-- **The magic-mismatch leaf.**  The callback settled clean with a full word
 of returndata, but the head word is not `erc3156Magic`: `flashLoan` reads the
 word back through `returndatacopy`/`mload` and deliberately reverts. -/
@@ -1433,6 +1466,12 @@ lemma execSat_magicMismatch_leaf {sevm : Sevm} {d : Devm}
       ((M.write ((0 * 32 : B256)).toNat
         (List.sliceD d.returnData (B256.toNat 0) (B256.toNat 32)
           (0 : UInt8))).read ((0 * 32 : B256)).toNat 32).1.toB256) = 0 := h_neq
+  have hmag : pushCost erc3156Magic.toBytes.sig = gVerylow :=
+    pushCost_of_ne_zero (by decide +kernel)
+  unfold flashLoanFromFlag
+  generalize erc3156Magic = mg at hmag h_neq' ⊢
+  have h_ge' : Nat.toB256 (d.setMach ⟨[32, amount, receiver], M, Gc - 19,
+      d.stateGas⟩).returnData.length <? (32 : B256) = 0 := h_ge
   apply Func.execSat_of_runCompiledTo
   · func_run (16) [0, 0, 6, 3, 0, 1]
     · rw [Devm.extCost_zero_of_le h32 (by
@@ -1487,7 +1526,6 @@ lemma flashLoanReturnDataImage_size {d : Devm} {M : Mem} (h_msz : 64 ≤ M.size)
     show ((0 * 32 : B256)).toNat + B256.toNat 32 = 32 from by decide]
   omega
 
-set_option maxRecDepth 594 in
 /-- **Into the repayment.**  The flag is `1` and both returndata checks pass:
 the walk crosses `returnDataShorterThan 32` and `checkReturnDataHead erc3156Magic 0`
 and hands the continuation the state entering `spendAllowanceThenBurn` — the
@@ -1520,6 +1558,12 @@ lemma execSat_spend_step {sevm : Sevm} {d : Devm}
       (by rw [hs1, show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
           omega),
       hs1]
+  have hmag : pushCost erc3156Magic.toBytes.sig = gVerylow :=
+    pushCost_of_ne_zero (by decide +kernel)
+  unfold flashLoanFromFlag
+  generalize erc3156Magic = mg at hmag h_eq' ⊢
+  have h_ge' : Nat.toB256 (d.setMach ⟨[32, amount, receiver], M, Gc - 19,
+      d.stateGas⟩).returnData.length <? (32 : B256) = 0 := h_ge
   refine Func.execSat_segment ?_ (h_next _ hs')
   intro ex hex
   func_run (16) [0, 0, 6, 3, 1, 0]
@@ -1863,7 +1907,6 @@ lemma execSat_burnLow_leaf {sevm : Sevm} {b : Devm}
             omega)
     · exact hP _
 
-set_option maxRecDepth 618 in
 /-- **The success leaf.**  The balance covers the burn: the pair is written —
 each `SSTORE` warm behind its own `SLOAD` (F28), each clearing the EIP-2200
 sentry because `gasStorageSet ≤ gasLeft` subsumes it — the burn `Transfer` is
@@ -1972,8 +2015,11 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
                 simp only [Devm.gasLeft_setMach] at hgeq4
                 simp only [gasStorageSet] at hle4
                 have hG4 : 1790 ≤ G4 := by omega
+                have hev : pushCost transferEvent.toBytes.sig = gVerylow :=
+                  pushCost_of_ne_zero (by decide +kernel)
+                generalize transferEvent = ev at hev ⊢
                 apply Func.execSat_of_runCompiledTo
-                · func_run (14) [0, 1756, 0]
+                · func_run (9) [0, 1756]
                   · exact Devm.extCost_zero_of_le h32 (by
                       rw [show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]
                       omega)
@@ -1982,6 +2028,8 @@ lemma execSat_burnOk_leaf {sevm : Sevm} {b : Devm}
                         + ((1 * 32 : B256)).toNat = 32 from by decide]
                       omega)]
                     decide
+                  rw [addLog_setMach, Devm.setMach_setMach]
+                  func_run [0]
                   · exact Devm.extCost_zero_of_le (by rw [hs2]; exact h32) (by
                       rw [hs2,
                         show ((0 * 32 : B256)).toNat + 32 = 32 from by decide]

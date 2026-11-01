@@ -137,7 +137,7 @@ SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "DeploymentTouch", "Forward", "ForwardFlatAccess",
           "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "StorageRefundPotential", "ForwardSha256",
           "StaticPrecompileMessage", "StaticStorage", "ForwardNoRawSstore", "ForwardStorageEffects", "TerminalStorage",
-          "ForwardDispatchMiss", "ForwardLog", "CompiledStackSafety", "AbstractStackSafety",
+          "ForwardDispatchMiss", "ForwardLog", "ForwardBalanceOf", "CompiledStackSafety", "AbstractStackSafety",
           "AbstractStackTransfer", "AbstractStackCertificate", "CodeTrie", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",
           "RevertPayload", "CompiledWalkInversion", "RevertCause", "CompiledFixedInvariance", "NonpayableInversion",
           "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecIdentification", "ExecutionSettlement", "ExecutionPath",

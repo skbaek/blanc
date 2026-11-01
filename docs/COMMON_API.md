@@ -182,6 +182,28 @@ lines when next changed or relied on, not by a wholesale rewrite.
   before the forks: `func_run (5) [Sevm.selector sevm]; rw [h_sel']; func_run
   [...]`. A numeral hint against the unevaluated `SHR` application costs a deep
   `rfl` too; the `Sevm.selector` hint is closed by unfolding alone.
+- A compiled walk that pushes a closed hash word (`transferEvent`,
+  `erc3156Magic`, `onFlashLoanSelector`, or a word hidden behind a `Line` such
+  as `transferFromLog`): `func_run` evaluates the PUSH cost (and any `rfl`
+  value obligation) by `whnf` before it scans local equations, so unfold the
+  `Line`, prove `pushCost w.toBytes.sig = gVerylow` once by
+  `pushCost_of_ne_zero (by decide +kernel)`, and
+  `generalize hq : w = v at hcost ⊢` *before* `apply Func.execSat_segment` (its
+  end-state metavariable must be created inside the generalized context);
+  `subst hq` once the segment is closed (`FmintSettles`,
+  `Weth10Redeemable.withdraw(To)_execSat`). Three more depth causes recur in
+  the same walks: a dead inner `setMach` left by a lemma step (`simp only
+  [Devm.setMach_setMach, Devm.stateGas_setMach]`, or `rw [addLog_setMach,
+  Devm.setMach_setMach]` after a `LOG`); a stuck `rfl` on a comparison value
+  obligation such as `Nat.toB256 len <? 32 = 0` (state the hypothesis in the
+  walk's exact form so the syntactic local check takes it first); and a
+  `cases r <;> first | rfl | …` over `Rinst` whose failing `rfl` branch runs
+  first (put the cheap refuting branch first, `Rinst.runCore_pc_irrel`).
+- The shared `balanceOf(address)` body (`Blanc.balanceOf`):
+  `Func.balanceOf_runCompiled_cold` (2119 gas) and
+  `Func.balanceOf_runCompiled_warm` (119 gas) in
+  [`Blanc/ForwardBalanceOf.lean`](../Blanc/ForwardBalanceOf.lean), for every
+  function table; walk the dispatcher to the body entry and `exact` the body.
 - Constructive opcode helpers in [`Blanc/Forward.lean`](../Blanc/Forward.lean)
   expose their actual rule requirements: an empty PUSH immediate requires
   `rules.op.push0`, while nonempty immediates do not; the cold/warm SLOAD and
