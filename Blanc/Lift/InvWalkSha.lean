@@ -15,8 +15,8 @@ theorem addAccessedAddress_eq_self_of_mem {d : Devm} {a : Adr} (h : a ∈ d.acce
   simp only [addAccessedAddress, liftMachMetaPure, Meta.addAccessedAddress, h']
 
 /-- A clean 64-byte SHA-256 child keeps the parent's access sets and created-account set and
-logs nothing (the meta-field companion of `output_of_processMessage_sha256_64_clean`). -/
-theorem meta_of_processMessage_sha256_64_clean
+logs nothing, over `rules.stateGas = none` alone. -/
+theorem meta_of_processMessage_sha256_64_clean_noStateGas
     {sevm : Sevm} {parent child : Devm} {gas : Nat} {calldata : Bytes}
     {code : ByteArray} {xl : Xlot}
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
@@ -24,7 +24,8 @@ theorem meta_of_processMessage_sha256_64_clean
     (hpm : ProcessMessage
       (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
         calldata code false) xl (.ok child))
-    (hclean : child.error.isSome = false) (hfork : CoveredFork sevm.benvStat.fork) :
+    (hclean : child.error.isSome = false)
+    (hsg : sevm.benvStat.rules.stateGas = none) :
     child.accessedAddresses = parent.accessedAddresses ∧
       child.accessedStorageKeys = parent.accessedStorageKeys ∧ child.logs = [] ∧
         child.createdAccounts = parent.createdAccounts ∧ child.refundCounter = 0 := by
@@ -65,8 +66,7 @@ theorem meta_of_processMessage_sha256_64_clean
         subst child
         refine ⟨rfl, rfl, ?_, rfl, ?_⟩
         all_goals
-          have hsg := hfork.rules_stateGas_none
-          simp only [initEvm, initDevm, Devm.withOutput_logs, Devm.withOutput_refundCounter]
+          simp only [initEvm, initDevm]
           dsimp only [Devm.withGasLeft, Devm.setMach, Devm.logs, Devm.refundCounter, liftMachPure]
           try split
           all_goals first
@@ -74,6 +74,22 @@ theorem meta_of_processMessage_sha256_64_clean
             | (rename_i heq
                exact absurd (heq.symm.trans hsg) (by simp only [reduceCtorEq, not_false_eq_true]))
     · exact False.elim (hinterp.1 hpre)
+
+/-- A clean 64-byte SHA-256 child keeps the parent's access sets and created-account set and
+logs nothing (the meta-field companion of `output_of_processMessage_sha256_64_clean`). -/
+theorem meta_of_processMessage_sha256_64_clean
+    {sevm : Sevm} {parent child : Devm} {gas : Nat} {calldata : Bytes}
+    {code : ByteArray} {xl : Xlot}
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
+    (hlen : calldata.length = 64)
+    (hpm : ProcessMessage
+      (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
+        calldata code false) xl (.ok child))
+    (hclean : child.error.isSome = false) (hfork : CoveredFork sevm.benvStat.fork) :
+    child.accessedAddresses = parent.accessedAddresses ∧
+      child.accessedStorageKeys = parent.accessedStorageKeys ∧ child.logs = [] ∧
+        child.createdAccounts = parent.createdAccounts ∧ child.refundCounter = 0 :=
+  meta_of_processMessage_sha256_64_clean_noStateGas hpre hlen hpm hclean hfork.rules_stateGas_none
 
 /-- The successful resume of a call: access sets merged, error kept, created-account set
 taken from the child. -/

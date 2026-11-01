@@ -13,7 +13,7 @@ steps from the rule facts a historical frame carries:
 * `ShaReadyRules` — the SHA-256 precompile premises with `stateGas = none` and
   `bal = none` in place of the fork, nondelegation required only when delegation is enabled
   (`ShaReadyRules.of_eq`, `ShaReady.toRules`);
-* `meta_of_processMessage_sha256_64_clean_noStateGas` — the clean-child
+* `meta_of_processMessage_sha256_64_clean_noStateGas` (`InvWalkSha.lean`) — the clean-child
   meta projection over `stateGas = none` alone;
 * `ri_staticcall_shaH` — `STATICCALL` of SHA-256 over a 64-byte window,
   cased once on the access schedule and the delegation flag to a single
@@ -70,69 +70,6 @@ theorem ShaReadyRules.of_disabled {sevm : Sevm} {b : Devm}
   intro enabled
   rw [disabled] at enabled
   cases enabled
-
-/-! ## The clean-child meta projection without state gas -/
-
-/-- A clean 64-byte SHA-256 child keeps the parent's access sets and created-account set and
-logs nothing, over `rules.stateGas = none` alone. -/
-theorem meta_of_processMessage_sha256_64_clean_noStateGas
-    {sevm : Sevm} {parent child : Devm} {gas : Nat} {calldata : Bytes}
-    {code : ByteArray} {xl : Xlot}
-    (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hlen : calldata.length = 64)
-    (hpm : ProcessMessage
-      (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
-        calldata code false) xl (.ok child))
-    (hclean : child.error.isSome = false)
-    (hsg : sevm.benvStat.rules.stateGas = none) :
-    child.accessedAddresses = parent.accessedAddresses ∧
-      child.accessedStorageKeys = parent.accessedStorageKeys ∧ child.logs = [] ∧
-        child.createdAccounts = parent.createdAccounts ∧ child.refundCounter = 0 := by
-  have hgas : 84 ≤ gas :=
-    gasSha25664_le_of_processMessage_clean hpre hlen hpm hclean
-  obtain ⟨r0, hbody, hset⟩ := ProcessMessage.iff_body.mp hpm
-  unfold FrameBody at hbody
-  rcases hbt :
-      (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
-        calldata code false).benvAfterTransfer with e | benv <;>
-    rw [hbt] at hbody
-  · rw [hbody.2] at hset
-    unfold processMessage.settle at hset
-    cases hset
-  · rw [Msg.benvAfterTransfer_of_value_zero (by rfl)] at hbt
-    cases hbt
-    have hca :
-        ((callMsg sevm parent gas 0 sevm.currentTarget 2 2 true true
-          calldata code false).withBenv (callMsg sevm parent gas 0 sevm.currentTarget 2 2 true
-            true calldata code false).benv).codeAddress =
-          some 2 := rfl
-    rcases of_executeCode_someCode hca hbody with hpc | hinterp
-    · have hexec := hpc.2.2
-      rw [executePrecomp_two_of_length_64 (by
-        change calldata.length = 64
-        exact hlen) (by
-        change 84 ≤ gas
-        exact hgas)] at hexec
-      simp only [applyPrecompResult, executeCode.handleErrorWith] at hexec
-      split at hexec <;>
-        simp only [executeCode.handleError,
-          executeCode.handleErrorAmsterdam] at hexec
-      all_goals
-        rw [← hexec] at hset
-        unfold processMessage.settle at hset
-        simp only [bind, Except.bind, Option.isSome] at hset
-        injection hset with hchild
-        subst child
-        refine ⟨rfl, rfl, ?_, rfl, ?_⟩
-        all_goals
-          simp only [initEvm, initDevm]
-          dsimp only [Devm.withGasLeft, Devm.setMach, Devm.logs, Devm.refundCounter, liftMachPure]
-          try split
-          all_goals first
-            | rfl
-            | (rename_i heq
-               exact absurd (heq.symm.trans hsg) (by simp only [reduceCtorEq, not_false_eq_true]))
-    · exact False.elim (hinterp.1 hpre)
 
 /-! ## `STATICCALL` of SHA-256 over a historical frame -/
 

@@ -9601,7 +9601,7 @@ contract-neutral.
   `SFunc.Run.world_of_quietH` from `rules.stateGas = none` alone in
   [`Blanc/Lift/HistAccessWalkFacts.lean`](../Blanc/Lift/HistAccessWalkFacts.lean);
   the historical SHA-256 kit from `rules.stateGas = none`/`rules.bal = none` (`ShaReadyRules`,
-  `ShaReady.toRules`, `meta_of_processMessage_sha256_64_clean_noStateGas`, the charged tail
+  `ShaReady.toRules`, `meta_of_processMessage_sha256_64_clean_noStateGas` (in `InvWalkSha`), the charged tail
   `ri_staticcall_sha_of_charge`, `ri_staticcall_shaH` cased on access schedule and delegation
   flag, and `ri_staticcall_shaH_covered`; the solc packed-SHA site `ric_shaCallH`,
   `ric_copy_shaH`, `ric_pack_shaH`) in

@@ -15,10 +15,9 @@ because some listed node executed a successful `SSTORE` of `v` to `(wa, k)`.
 `CellProv.mono_left`, `CellProv.mono_right` and `CellProv.trans` assemble
 provenance across concatenated chronologies; `CellProv.of_replayCell` turns
 chronological replay of a retained write list into provenance.  The per-step
-facts are state-gas-absence twins of the covered-fork storage lemmas
-(`Evm.step_cont_getStor_get`, `Evm.step_spawn_enter_getStor`), proved in a
-different shape with `Xinst.step_done_getStor_noStateGas` /
-`Xinst.step_shapeNoStateGas` in place of coverage.  `successfulSstore?_sound_raw`
+storage facts are proved once over `rules.stateGas = none` in `Blanc/LockExclusion.lean`
+(`Evm.step_cont_getStor_get_noStateGas`, `Evm.step_spawn_enter_getStor_protected_noStateGas`),
+of which the covered-fork lemmas are corollaries.  `successfulSstore?_sound_raw`
 is the raw-chronology soundness of the SSTORE recognizer.  The level-zero
 results are `Exec.rawNodes_getCode` and
 `Exec.rawNodes_cellProv_noStateGas`, by induction on the run.
@@ -164,111 +163,9 @@ theorem CellProv.of_replayCell {wa : Adr} {k init : B256}
 
 /-! ## State-gas-absence twins of the per-step storage facts -/
 
-/-- The executable-instruction arm under state-gas absence: the instruction
-runs the actual completed execution without state gas, so the post storage
-is the executed storage.  Takes the `Ninst.step` equation (as in the
-original's `nstep`) rather than a run proof. -/
-private theorem Ninst.exec_getStor_get_noStateGas {pc pc' : Nat} {sevm : Sevm}
-    {pre post : Devm} {executable : Xinst}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (nstep : Ninst.step ⟨pc, sevm, pre⟩ (.exec executable) = .cont pc' post)
-    {owner : Adr} {key : B256} :
-    (Devm.getStor post owner).get key = (Devm.getStor pre owner).get key := by
-  simp only [Ninst.step_exec, XStep.toStep] at nstep
-  cases actual : Xinst.step sevm pre executable with
-  | spawn frame resume => rw [actual] at nstep; cases nstep
-  | done out =>
-      rw [actual] at nstep
-      cases out with
-      | error error => cases nstep
-      | ok actualPost =>
-          cases nstep
-          exact congrArg (fun storage => storage.get key)
-            (Xinst.step_done_getStor_noStateGas hsg actual owner)
-
-/-- State-gas-absence twin of `Evm.step_cont_getStor_get`: a successful
-non-matching driver step preserves the observed cell.  The executable arm
-is factored through the helper above, which runs the `Xinst.step_done`
-analysis under `Xinst.step_done_getStor_noStateGas` instead of coverage. -/
-theorem Evm.step_cont_getStor_get_noStateGas {pc pc' : Nat} {sevm : Sevm}
-    {pre post : Devm}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    {owner : Adr} {key : B256}
-    (notStore : sevm.currentTarget = owner →
-      Ninst.At sevm.code pc (.reg .sstore) → pre.stack.head? ≠ some key) :
-    (Devm.getStor post owner).get key = (Devm.getStor pre owner).get key := by
-  cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
-  | none =>
-      unfold Evm.step at step
-      rw [decoded] at step
-      cases step
-  | some instruction =>
-      cases instruction with
-      | last last =>
-          rw [Evm.step_last decoded] at step
-          cases step
-      | jump jumpInst =>
-          rw [Evm.step_jump decoded] at step
-          cases jumpEq : Jinst.run ⟨pc, sevm, pre⟩ jumpInst with
-          | error error =>
-              rw [jumpEq] at step
-              cases step
-          | ok pair =>
-              rcases pair with ⟨actualPc, actualPost⟩
-              rw [jumpEq] at step
-              cases step
-              have frame := Jinst.run_instructionFrame ⟨pc, sevm, pre⟩ jumpInst
-              rw [jumpEq] at frame
-              rw [← frame.getStor owner]
-      | next instruction =>
-          have nstep : Ninst.step ⟨pc, sevm, pre⟩ instruction =
-              .cont pc' post := by
-            rw [← Evm.step_next decoded]
-            exact step
-          have nrun : Ninst.StepRun pc sevm pre instruction .none (.ok post) := by
-            unfold Ninst.StepRun
-            rw [nstep]
-            exact ⟨rfl, rfl⟩
-          cases instruction with
-          | exec executable =>
-              exact Ninst.exec_getStor_get_noStateGas hsg nstep
-          | reg regular =>
-              have run : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
-                ((Step.run_ofExecution (xl := (.none : Xlot))).mp nrun).2.symm
-              by_cases store : regular = .sstore
-              · subst regular
-                by_cases own : sevm.currentTarget = owner
-                · subst owner
-                  have sstoreRun : Ninst.Run sevm pre Ninst.sstore post :=
-                    ⟨.none, trivial, pc, nrun⟩
-                  rcases of_run_sstore sstoreRun with ⟨written, value, popped⟩
-                  rcases pref_of_split popped with ⟨rest, stackEq⟩
-                  rw [sstore_getStor_set sstoreRun ⟨rest, stackEq⟩]
-                  apply Stor.get_set_ne
-                  intro same
-                  apply notStore rfl decoded
-                  simp only [Split, List.cons_append, List.nil_append] at stackEq
-                  rw [stackEq, same]
-                  rfl
-                · rw [sstore_preserves_getStor_ne run own]
-              · rw [← congrFun (Rinst.preserves_stor store run) owner]
-          | push bytes bound =>
-              exact congrArg (fun storage => storage.get key) ((Ninst.push_instructionFrame_effectRec
-                (hxs := bound) (xl := .none) trivial nrun).getStor owner).symm
-          | dupn imm =>
-              exact congrArg (fun storage => storage.get key) ((Ninst.dupn_instructionFrame_effectRec
-                (xl := .none) trivial nrun).getStor owner).symm
-          | swapn imm =>
-              exact congrArg (fun storage => storage.get key) ((Ninst.swapn_instructionFrame_effectRec
-                (xl := .none) trivial nrun).getStor owner).symm
-          | exchange imm =>
-              exact congrArg (fun storage => storage.get key) ((Ninst.exchange_instructionFrame_effectRec
-                (xl := .none) trivial nrun).getStor owner).symm
-
 /-- State-gas-absence twin of `Evm.step_spawn_enter_getStor`: the entered
 child opens on the spawning world's storage at every code-bearing owner.
-Corollary of `Evm.step_spawn_child_world_noStateGas` (shared library first);
+Corollary of `Evm.step_spawn_enter_getStor_protected_noStateGas` (`LockExclusion.lean`);
 the code-nonempty premise is the `toList` form used by the L0 induction. -/
 theorem Evm.step_spawn_enter_getStor_noStateGas {pc pc' : Nat} {sevm : Sevm}
     {pre : Devm} {frame : Frame} {resume : Resume} {child : Evm}
@@ -276,13 +173,9 @@ theorem Evm.step_spawn_enter_getStor_noStateGas {pc pc' : Nat} {sevm : Sevm}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
     (enter : frame.enter = .run child)
     {owner : Adr} (hcode : (pre.getCode owner).toList ≠ []) :
-    Devm.getStor child.dyna owner = Devm.getStor pre owner := by
-  have hne : pre.getCode owner ≠ .empty := by
-    intro hempty
-    apply hcode
-    rw [hempty, ByteArray.toList_empty]
-  have hstor := (Evm.step_spawn_child_world_noStateGas hsg step enter hne).1
-  simpa only [Devm.getStor, Devm.getAcct, State.getStor] using hstor
+    Devm.getStor child.dyna owner = Devm.getStor pre owner :=
+  Evm.step_spawn_enter_getStor_protected_noStateGas hsg step enter owner
+    (State.Protected.of_code_ne_nil hcode)
 
 /-! ## Small storage twins for the upper levels -/
 
