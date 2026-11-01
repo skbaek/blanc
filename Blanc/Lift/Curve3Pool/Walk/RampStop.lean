@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.RampKit
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `stop_ramp_A()` on the derivation, with `_A` bridged
@@ -41,30 +42,23 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
   obtain ⟨_, h⟩ := xa_vd_stopRampA hcode hlen hcd hsel h
   have hV : VW (vdMem sevm) [] := ⟨Words.nil _, vyMem_wf Mem.wf_empty _,
     by rw [vyMem_empty_size]⟩
-  xs 0x491b (.reg .callvalue) ri_callvalue  -- 491a CALLVALUE
-  xs 0x491c (.reg .iszero) ri_iszero  -- 491b ISZERO
-  xs 0x491f (.push [0x49, 0x24] (by decide)) ri_push  -- 491c PUSH2 0x4924
+  xa 3
   xji 0x4920 0x4924 hw
   · xdead
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
-  xjd 0x4925  -- 4924 JUMPDEST
-  xs 0x4927 (.push [0x04] (by decide)) ri_push  -- 4925 PUSH1 0x04
+  xa 2
   xw 0x4928 (.reg .sload) ri_sload  -- 4927 SLOAD
-  xs 0x4929 (.reg .caller) ri_caller  -- 4928 CALLER
-  xs 0x492a (.reg .eq) ri_eq  -- 4929 EQ
-  xs 0x492d (.push [0x49, 0x32] (by decide)) ri_push  -- 492a PUSH2 0x4932
+  xa 3
   xji 0x492e 0x4932 hw
   · xdead
   have hown := B256.eq_of_eqCheck_ne_zero hw
   clear hw
-  xjd 0x4933  -- 4932 JUMPDEST
-  xs 0x4936 (.push [0x01, 0x40] (by decide)) ri_push  -- 4933 PUSH2 0x0140
+  xa 2
   xlu 0x4937  -- 4936 MLOAD
   xs 0x4939 (.push [0x06] (by decide)) ri_push  -- 4937 PUSH1 0x06
   cvpc 0x493a  -- 4939 PC
-  xs 0x493b (.reg .add) ri_add  -- 493a ADD
-  xs 0x493e (.push [0x00, 0xa9] (by decide)) ri_push  -- 493b PUSH2 0x00a9
+  xa 2
   xjmp 0xa9  -- 493e JUMP
   have ha1 : Abstracts ((afterSload sevm b (Bytes.toB256 [4])).getStor sevm.currentTarget) s := by
     rw [afterSload_getStor]; exact ha
@@ -73,8 +67,7 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
   have hV := hV1
   clear hV1
   vnorm
-  xjd 0x4940  -- 493f JUMPDEST
-  xs 0x4943 (.push [0x01, 0x80] (by decide)) ri_push  -- 4940 PUSH2 0x0180
+  xa 2
   xsw 0x4944 0x180  -- 4943 MSTORE
   xs 0x4947 (.push [0x01, 0x40] (by decide)) ri_push  -- 4944 PUSH2 0x0140
   xsw 0x4948 0x140  -- 4947 MSTORE
@@ -90,23 +83,18 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
   xl 0x495b 0x140  -- 495a MLOAD
   xs 0x495d (.push [0x07] (by decide)) ri_push  -- 495b PUSH1 0x07
   xw 0x495e (.reg .sstore) ri_sstore  -- 495d SSTORE
-  xs 0x495f (.reg .timestamp) ri_timestamp  -- 495e TIMESTAMP
-  xs 0x4961 (.push [0x08] (by decide)) ri_push  -- 495f PUSH1 0x08
+  xa 2
   xw 0x4962 (.reg .sstore) ri_sstore  -- 4961 SSTORE
-  xs 0x4963 (.reg .timestamp) ri_timestamp  -- 4962 TIMESTAMP
-  xs 0x4965 (.push [0x09] (by decide)) ri_push  -- 4963 PUSH1 0x09
+  xa 2
   xw 0x4966 (.reg .sstore) ri_sstore  -- 4965 SSTORE
   xs 0x4969 (.push [0x01, 0x40] (by decide)) ri_push  -- 4966 PUSH2 0x0140
   xl 0x496a 0x140  -- 4969 MLOAD
   xs 0x496d (.push [0x01, 0xa0] (by decide)) ri_push  -- 496a PUSH2 0x01a0
   have hlogwf := hV.wf
   xsw 0x496e 0x1a0  -- 496d MSTORE
-  xs 0x496f (.reg .timestamp) ri_timestamp  -- 496e TIMESTAMP
-  xs 0x4972 (.push [0x01, 0xc0] (by decide)) ri_push  -- 496f PUSH2 0x01c0
+  xa 2
   xsw 0x4973 0x1c0  -- 4972 MSTORE
-  xs 0x4994 (.push [0x46, 0xe2, 0x2f, 0xb3, 0x70, 0x9a, 0xd2, 0x89, 0xf6, 0x2c, 0xe6, 0x3d, 0x46, 0x92, 0x48, 0x53, 0x6d, 0xbc, 0x78, 0xd8, 0x2b, 0x84, 0xa3, 0xd7, 0xe7, 0x4a, 0xd6, 0x06, 0xdc, 0x20, 0x19, 0x38] (by decide)) ri_push  -- 4973 PUSH32 0x46e22fb3709ad289f62ce63d469248536dbc78d82b84a3d7e74ad606dc201938
-  xs 0x4996 (.push [0x40] (by decide)) ri_push  -- 4994 PUSH1 0x40
-  xs 0x4999 (.push [0x01, 0xa0] (by decide)) ri_push  -- 4996 PUSH2 0x01a0
+  xa 3
   have hdata := Mem.read_two_word_writes_wf' hlogwf (s := 0x1a0) (t := 0x1c0)
     (by decide) A sevm.benvStat.time
   replace h := xa_nextAt (n := .reg (.log 1)) (pc' := 0x499a) (atN hcode (by kernel_rfl))

@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD2
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-! # `add_liquidity`: minted shares and the LP token call -/
 
@@ -19,15 +20,11 @@ theorem xa_al_mintAmount {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G 
       Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       (∀ o w, WordAt img o w → o + 32 ≤ 0xba0 → WordAt img' o w) ∧
       WordAt img' 0xba0 mint ∧ XAt sevm post 0x177d (St b [] M' G') L := by
-  xjd 0x170c
-  xs 0x170e (.push [0x00] (by decide)) ri_push
-  xs 0x1711 (.push [0x0b, 0xa0] (by decide)) ri_push
+  xa 3
   xma 0x1712 (.reg .mstore) (ri_mstore_imgAtA (o := 0xba0) rfl)
   xs 0x1715 (.push [0x02, 0x40] (by decide)) ri_push
   xml 0x1716 0x240 ht
-  xs 0x1717 (.reg .iszero) ri_iszero
-  xs 0x1718 (.reg .iszero) ri_iszero
-  xs 0x171b (.push [0x17, 0x28] (by decide)) ri_push
+  xa 3
   xji 0x171c 0x1728 hw
   · xs 0x171f (.push [0x09, 0x00] (by decide)) ri_push
     xml 0x1720 0x900 hd1
@@ -40,67 +37,26 @@ theorem xa_al_mintAmount {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G 
     exact (hw.write_other (by simp only [B256.length_toBytes]; omega)).write_other
       (by simp only [B256.length_toBytes]; omega)
   · have hT := isNe_jump hw
-    xjd 0x1729
-    xs 0x172c (.push [0x02, 0x40] (by decide)) ri_push
+    xa 2
     xml 0x172d 0x240 ht
     xs 0x1730 (.push [0x0a, 0x20] (by decide)) ri_push
     xml 0x1731 0xa20 hd2
     xs 0x1734 (.push [0x02, 0xe0] (by decide)) ri_push
     xml 0x1735 0x2e0 hd0
-    xs 0x1736 (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0x1737 (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0x1738 (.reg .lt) ri_lt
-    xs 0x1739 (.reg .iszero) ri_iszero
-    xs 0x173c (.push [0x17, 0x41] (by decide)) ri_push
+    xa 5
     xji 0x173d 0x1741 hsub
     · xdead
     have hge := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hsub)
-    xjd 0x1742
-    xs 0x1743 (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0x1744 (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0x1745 (.reg .sub) ri_sub
-    xs 0x1746 (.reg (.swap 0)) (ri_swap (by rfl))
-    xs 0x1747 (.reg .pop) ri_pop
-    xs 0x1748 (.reg (.swap 0)) (ri_swap (by rfl))
-    xs 0x1749 (.reg .pop) ri_pop
-    xs 0x174a (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0x174b (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0x174c (.reg .mul) ri_mul
-    xs 0x174d (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0x174e (.reg .iszero) ri_iszero
-    xs 0x174f (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0x1750 (.reg (.dup 4)) (ri_dup (by rfl))
-    xs 0x1751 (.reg (.dup 3)) (ri_dup (by rfl))
-    xs 0x1752 (.reg .div) ri_div
-    xs 0x1753 (.reg .eq) ri_eq
-    xs 0x1754 (.reg .or) ri_or
-    xs 0x1757 (.push [0x17, 0x5c] (by decide)) ri_push
+    xa 20
     xji 0x1758 0x175c hmul
     · xdead
     have hm := (or_ne_zero hmul).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero
-    xjd 0x175d
-    xs 0x175e (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0x175f (.reg (.swap 0)) (ri_swap (by rfl))
-    xs 0x1760 (.reg .pop) ri_pop
-    xs 0x1761 (.reg (.swap 0)) (ri_swap (by rfl))
-    xs 0x1762 (.reg .pop) ri_pop
-    xs 0x1763 (.reg (.swap 0)) (ri_swap (by rfl))
-    xs 0x1764 (.reg .pop) ri_pop
-    xs 0x1767 (.push [0x02, 0xe0] (by decide)) ri_push
+    xa 9
     xml 0x1768 0x2e0 hd0
-    xs 0x1769 (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0x176a (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0x176d (.push [0x17, 0x72] (by decide)) ri_push
+    xa 3
     xji 0x176e 0x1772 hd
     · xdead
-    xjd 0x1773
-    xs 0x1774 (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0x1775 (.reg .div) ri_div
-    xs 0x1776 (.reg (.swap 0)) (ri_swap (by rfl))
-    xs 0x1777 (.reg .pop) ri_pop
-    xs 0x1778 (.reg (.swap 0)) (ri_swap (by rfl))
-    xs 0x1779 (.reg .pop) ri_pop
-    xs 0x177c (.push [0x0b, 0xa0] (by decide)) ri_push
+    xa 8
     xma 0x177d (.reg .mstore) (ri_mstore_imgAtA (o := 0xba0) rfl)
     refine ⟨_, _, _, _, .inr ⟨hT, hge, hm, hd, rfl⟩, hR, hW, hA, ?_, WordAt.write_self _ _ _, h⟩
     intro o w hw ho
@@ -117,28 +73,17 @@ theorem xa_al_slippage {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
     ∃ M' img' G', Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       (∀ o w, WordAt img o w → o + 32 ≤ 0xbc0 → WordAt img' o w) ∧
       XAt sevm post 0x17cf (St b [] M' G') L := by
-  xjd 0x177e
-  xs 0x1783 (.push [0x08, 0xc3, 0x79, 0xa0] (by decide)) ri_push
-  xs 0x1786 (.push [0x0b, 0xc0] (by decide)) ri_push
+  xa 3
   xma 0x1787 (.reg .mstore) (ri_mstore_imgAtA (o := 0xbc0) rfl)
-  xs 0x1789 (.push [0x20] (by decide)) ri_push
-  xs 0x178c (.push [0x0b, 0xe0] (by decide)) ri_push
+  xa 2
   xma 0x178d (.reg .mstore) (ri_mstore_imgAtA (o := 0xbe0) rfl)
-  xs 0x178f (.push [0x14] (by decide)) ri_push
-  xs 0x1792 (.push [0x0c, 0x00] (by decide)) ri_push
+  xa 2
   xma 0x1793 (.reg .mstore) (ri_mstore_imgAtA (o := 0xc00) rfl)
-  xs 0x17b4 (.push [0x53, 0x6c, 0x69, 0x70, 0x70, 0x61, 0x67, 0x65, 0x20, 0x73, 0x63, 0x72, 0x65, 0x77, 0x65, 0x64, 0x20, 0x79, 0x6f, 0x75, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00] (by decide)) ri_push
-  xs 0x17b7 (.push [0x0c, 0x20] (by decide)) ri_push
+  xa 2
   xma 0x17b8 (.reg .mstore) (ri_mstore_imgAtA (o := 0xc20) rfl)
-  xs 0x17bb (.push [0x0c, 0x00] (by decide)) ri_push
-  xs 0x17bc (.reg .pop) ri_pop
-  xs 0x17be (.push [0x64] (by decide)) ri_push
-  xs 0x17bf (.reg .calldataload) ri_calldataload
-  xs 0x17c2 (.push [0x0b, 0xa0] (by decide)) ri_push
+  xa 5
   xml 0x17c3 0xba0 hmint
-  xs 0x17c4 (.reg .lt) ri_lt
-  xs 0x17c5 (.reg .iszero) ri_iszero
-  xs 0x17c8 (.push [0x17, 0xcf] (by decide)) ri_push
+  xa 3
   xji 0x17c9 0x17cf hw
   · xs 0x17cb (.push [0x64] (by decide)) ri_push
     xs 0x17ce (.push [0x0b, 0xdc] (by decide)) ri_push
@@ -187,23 +132,15 @@ theorem xa_al_mintCallC {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G :
       Mem.Reads d.memory img' ∧ Mem.Wf d.memory ∧ d.memory.size % 32 = 0 ∧
       (∀ o w, WordAt img o w → o + 32 ≤ 0xc60 → WordAt img' o w) ∧
       XAt sevm post 0x180c (St d [] d.memory G') L' := by
-  xjd 0x17d0
-  xs 0x17d2 (.push [0x20] (by decide)) ri_push
-  xs 0x17d5 (.push [0x0d, 0x00] (by decide)) ri_push
-  xs 0x17d7 (.push [0x44] (by decide)) ri_push
-  xs 0x17dc (.push [0x40, 0xc1, 0x0f, 0x19] (by decide)) ri_push
-  xs 0x17df (.push [0x0c, 0x60] (by decide)) ri_push
+  xa 6
   xma 0x17e0 (.reg .mstore) (ri_mstore_imgAtA (o := 0xc60) rfl)
-  xs 0x17e1 (.reg .caller) ri_caller
-  xs 0x17e4 (.push [0x0c, 0x80] (by decide)) ri_push
+  xa 2
   xma 0x17e5 (.reg .mstore) (ri_mstore_imgAtA (o := 0xc80) rfl)
   xs 0x17e8 (.push [0x0b, 0xa0] (by decide)) ri_push
   xml 0x17e9 0xba0 hmint
   xs 0x17ec (.push [0x0c, 0xa0] (by decide)) ri_push
   xma 0x17ed (.reg .mstore) (ri_mstore_imgAtA (o := 0xca0) rfl)
-  xs 0x17f0 (.push [0x0c, 0x7c] (by decide)) ri_push
-  xs 0x17f2 (.push [0x00] (by decide)) ri_push
-  xs 0x17f4 (.push [0x05] (by decide)) ri_push
+  xa 3
   xw 0x17f5 (.reg .sload) ri_sload
   rw [tokenSlot_lit, getStorVal_eq, htw] at h
   xs 0x17f6 (.reg .gas) ri_gas_remaining
@@ -228,11 +165,7 @@ theorem xa_al_mintCallC {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G :
   have hdk : ∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x :=
     fun x => by
       rw [hc'.storPost _ hpc x, hkeep c List.mem_cons_self hc'.target x, hc'.storPre _ hpc]
-  xjd 0x1800
-  xs 0x1802 (.push [0x1f] (by decide)) ri_push
-  xs 0x1803 (.reg .returndatasize) ri_returndatasize
-  xs 0x1804 (.reg .gt) ri_gt
-  xs 0x1807 (.push [0x18, 0x0c] (by decide)) ri_push
+  xa 5
   xji 0x1808 0x180c hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by

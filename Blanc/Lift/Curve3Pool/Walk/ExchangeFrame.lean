@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.Kit
 import Blanc.Lift.InvWalkCallNext
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `exchange`: the frame save and restore around `get_y`, on the actual derivation
@@ -209,27 +210,22 @@ theorem xa_ex_saveStep {sevm : Sevm} {post : Devm} {L : List Exec.Frame} {b : De
     (h : XAt sevm post 0x2754 (St b S M G) L) :
     ∃ M' G', Mem.Reads M' (Bytes.writeAt img 0x7e0 (Nat.toB256 (p + 32)).toBytes) ∧ Mem.Wf M' ∧
       XAt sevm post (if p + 32 = 0x7e0 then 0x2777 else 0x2754) (St b (v :: S) M' G') L := by
-  xjd 0x2755
-  xs 0x2758 (.push [0x07, 0xe0] (by decide)) ri_push
+  xa 2
   xmo 0x2759 (.reg .mload) (ri_mload_imgAt (o := 0x7e0) rfl)
   rw [hctr.read] at h
   xmo 0x275a (.reg .mload) ri_mload_img
   rw [B256.toNat_toB256_of_lt (by omega), hv.read] at h
-  xs 0x275c (.push [0x20] (by decide)) ri_push
-  xs 0x275f (.push [0x07, 0xe0] (by decide)) ri_push
+  xa 2
   xmo 0x2760 (.reg .mload) (ri_mload_imgAt (o := 0x7e0) rfl)
   rw [hctr.read] at h
   xs 0x2761 (.reg .add) ri_add
   rw [ex_add32 (by omega)] at h
   xs 0x2764 (.push [0x07, 0xe0] (by decide)) ri_push
   xmo 0x2765 (.reg .mstore) (ri_mstore_imgAt (o := 0x7e0) rfl)
-  xs 0x2768 (.push [0x07, 0xe0] (by decide)) ri_push
-  xs 0x276b (.push [0x07, 0xe0] (by decide)) ri_push
+  xa 2
   xmo 0x276c (.reg .mload) (ri_mload_imgAt (o := 0x7e0) rfl)
   rw [(WordAt.write_self _ _ _).read] at h
-  xs 0x276d (.reg .lt) ri_lt
-  xs 0x276e (.reg .iszero) ri_iszero
-  xs 0x2771 (.push [0x27, 0x76] (by decide)) ri_push
+  xa 3
   xji 0x2772 0x2776 hw
   · have hlt : p + 32 < 0x7e0 := by
       have e := ne_of_eqCheck_eq_zero hw
@@ -290,29 +286,23 @@ theorem xa_ex_restoreStep {sevm : Sevm} {post : Devm} {L : List Exec.Frame} {b :
     ∃ M' G', Mem.Reads M' (Bytes.writeAt (Bytes.writeAt img q v.toBytes) 0x7e0
         (Nat.toB256 (q - 32)).toBytes) ∧ Mem.Wf M' ∧
       XAt sevm post (if q < 0x160 then 0x27fd else 0x27d9) (St b S M' G') L := by
-  xjd 0x27da
-  xs 0x27dd (.push [0x07, 0xe0] (by decide)) ri_push
+  xa 2
   xmo 0x27de (.reg .mload) (ri_mload_imgAt (o := 0x7e0) rfl)
   rw [hctr.read] at h
   xmo 0x27df (.reg .mstore) (ri_mstore_imgAt (o := q) (B256.toNat_toB256_of_lt (by omega)))
   have hctr1 : WordAt (Bytes.writeAt img q v.toBytes) 0x7e0 (Nat.toB256 q) :=
     hctr.write_other (by simp only [B256.length_toBytes]; omega)
-  xs 0x27e1 (.push [0x20] (by decide)) ri_push
-  xs 0x27e4 (.push [0x07, 0xe0] (by decide)) ri_push
+  xa 2
   xmo 0x27e5 (.reg .mload) (ri_mload_imgAt (o := 0x7e0) rfl)
   rw [hctr1.read] at h
   xs 0x27e6 (.reg .sub) ri_sub
   rw [ex_sub32 (by omega) (by omega)] at h
   xs 0x27e9 (.push [0x07, 0xe0] (by decide)) ri_push
   xmo 0x27ea (.reg .mstore) (ri_mstore_imgAt (o := 0x7e0) rfl)
-  xs 0x27ed (.push [0x01, 0x40] (by decide)) ri_push
-  xs 0x27f0 (.push [0x07, 0xe0] (by decide)) ri_push
+  xa 2
   xmo 0x27f1 (.reg .mload) (ri_mload_imgAt (o := 0x7e0) rfl)
   rw [(WordAt.write_self _ _ _).read] at h
-  xs 0x27f2 (.reg .lt) ri_lt
-  xs 0x27f3 (.reg .iszero) ri_iszero
-  xs 0x27f4 (.reg .iszero) ri_iszero
-  xs 0x27f7 (.push [0x27, 0xfc] (by decide)) ri_push
+  xa 4
   xji 0x27f8 0x27fc hw
   · have hge : ¬ q - 32 < 0x140 := (ex_ltCheck (q := 0x140) (by omega) (by decide)).mp
       (B256.eq_of_eqCheck_ne_zero (ne_of_eqCheck_eq_zero hw))

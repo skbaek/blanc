@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Pool.Walk.ViewsKit
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvp
 import Blanc.Lift.Curve3Pool.Callee.GetYD
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `_calc_withdraw_one_coin(_token_amount, i)` on the derivation: the prologue
@@ -84,8 +85,7 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
         (0x1a0, A), (0x180, ρ), (0x160, i), (0x140, a)] ∧
       d.output = b.output ∧ (∀ x, b.getCode x ≠ .empty → d.getCode x = b.getCode x) ∧
       (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm d) := by
-  xjd 0x3ccb  -- 3cca JUMPDEST
-  xs 0x3cce (.push [0x01, 0x80] (by decide)) ri_push  -- 3ccb PUSH2 0x0180
+  xa 2
   xsw 0x3ccf 0x180  -- 3cce MSTORE
   xs 0x3cd2 (.push [0x01, 0x40] (by decide)) ri_push  -- 3ccf PUSH2 0x0140
   xsw 0x3cd3 0x140  -- 3cd2 MSTORE
@@ -101,16 +101,14 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   xlu 0x3ce7  -- 3ce6 MLOAD
   xs 0x3ce9 (.push [0x06] (by decide)) ri_push  -- 3ce7 PUSH1 0x06
   cvpc 0x3cea  -- 3ce9 PC
-  xs 0x3ceb (.reg .add) ri_add  -- 3cea ADD
-  xs 0x3cee (.push [0x00, 0xa9] (by decide)) ri_push  -- 3ceb PUSH2 0x00a9
+  xa 2
   xjmp 0xa9  -- 3cee JUMP
   obtain ⟨A, b1, M1, _, hb1, h, hA, hV1⟩ := xa_vAV hc hcode hfork ha hV h
   clear hV
   have hV := hV1
   clear hV1
   vnorm
-  xjd 0x3cf0  -- 3cef JUMPDEST
-  xs 0x3cf3 (.push [0x01, 0xe0] (by decide)) ri_push  -- 3cf0 PUSH2 0x01e0
+  xa 2
   xsw 0x3cf4 0x1e0  -- 3cf3 MSTORE
   xs 0x3cf7 (.push [0x01, 0xa0] (by decide)) ri_push  -- 3cf4 PUSH2 0x01a0
   xsw 0x3cf8 0x1a0  -- 3cf7 MSTORE
@@ -126,71 +124,27 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   xsw 0x3d0c 0x1a0  -- 3d0b MSTORE
   xs 0x3d0e (.push [0x02] (by decide)) ri_push  -- 3d0c PUSH1 0x02
   xw 0x3d0f (.reg .sload) ri_sload  -- 3d0e SLOAD
-  xs 0x3d11 (.push [0x03] (by decide)) ri_push  -- 3d0f PUSH1 0x03
-  xs 0x3d12 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3d11 DUP1
-  xs 0x3d13 (.reg (.dup 2)) (ri_dup (by rfl))  -- 3d12 DUP3
-  xs 0x3d14 (.reg .mul) ri_mul  -- 3d13 MUL
-  xs 0x3d15 (.reg (.dup 2)) (ri_dup (by rfl))  -- 3d14 DUP3
-  xs 0x3d16 (.reg .iszero) ri_iszero  -- 3d15 ISZERO
-  xs 0x3d17 (.reg (.dup 2)) (ri_dup (by rfl))  -- 3d16 DUP3
-  xs 0x3d18 (.reg (.dup 4)) (ri_dup (by rfl))  -- 3d17 DUP5
-  xs 0x3d19 (.reg (.dup 3)) (ri_dup (by rfl))  -- 3d18 DUP4
-  xs 0x3d1a (.reg .div) ri_div  -- 3d19 DIV
-  xs 0x3d1b (.reg .eq) ri_eq  -- 3d1a EQ
-  xs 0x3d1c (.reg .or) ri_or  -- 3d1b OR
-  xs 0x3d1f (.push [0x3d, 0x24] (by decide)) ri_push  -- 3d1c PUSH2 0x3d24
+  xa 13
   xji 0x3d20 0x3d24 hw
   · xdead
   have hm3 := B256.nofm_of_mulGuard (B256.or_eqCheck_ne_zero hw)
   clear hw
-  xjd 0x3d25  -- 3d24 JUMPDEST
-  xs 0x3d26 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3d25 DUP1
-  xs 0x3d27 (.reg (.swap 0)) (ri_swap (by rfl))  -- 3d26 SWAP1
-  xs 0x3d28 (.reg .pop) ri_pop  -- 3d27 POP
-  xs 0x3d29 (.reg (.swap 0)) (ri_swap (by rfl))  -- 3d28 SWAP1
-  xs 0x3d2a (.reg .pop) ri_pop  -- 3d29 POP
-  xs 0x3d2b (.reg (.swap 0)) (ri_swap (by rfl))  -- 3d2a SWAP1
-  xs 0x3d2c (.reg .pop) ri_pop  -- 3d2b POP
-  xs 0x3d2e (.push [0x08] (by decide)) ri_push  -- 3d2c PUSH1 0x08
-  xs 0x3d2f (.reg (.dup 0)) (ri_dup (by rfl))  -- 3d2e DUP1
-  xs 0x3d30 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3d2f DUP1
-  xs 0x3d33 (.push [0x3d, 0x38] (by decide)) ri_push  -- 3d30 PUSH2 0x3d38
+  xa 12
   xji 0x3d34 0x3d38 hw
   · xdead
   clear hw
-  xjd 0x3d39  -- 3d38 JUMPDEST
-  xs 0x3d3a (.reg (.dup 2)) (ri_dup (by rfl))  -- 3d39 DUP3
-  xs 0x3d3b (.reg .div) ri_div  -- 3d3a DIV
-  xs 0x3d3c (.reg (.swap 0)) (ri_swap (by rfl))  -- 3d3b SWAP1
-  xs 0x3d3d (.reg .pop) ri_pop  -- 3d3c POP
-  xs 0x3d3e (.reg (.swap 0)) (ri_swap (by rfl))  -- 3d3d SWAP1
-  xs 0x3d3f (.reg .pop) ri_pop  -- 3d3e POP
-  xs 0x3d42 (.push [0x02, 0x00] (by decide)) ri_push  -- 3d3f PUSH2 0x0200
+  xa 8
   xsw 0x3d43 0x200  -- 3d42 MSTORE
-  xs 0x3d46 (.push [0x02, 0x20] (by decide)) ri_push  -- 3d43 PUSH2 0x0220
-  xs 0x3d48 (.push [0x01] (by decide)) ri_push  -- 3d46 PUSH1 0x01
-  xs 0x3d49 (.reg (.dup 1)) (ri_dup (by rfl))  -- 3d48 DUP2
+  xa 3
   xsw 0x3d4a 0x220  -- 3d49 MSTORE
-  xs 0x3d50 (.push [0xe8, 0xd4, 0xa5, 0x10, 0x00] (by decide)) ri_push  -- 3d4a PUSH5 0xe8d4a51000
-  xs 0x3d51 (.reg (.dup 1)) (ri_dup (by rfl))  -- 3d50 DUP2
-  xs 0x3d53 (.push [0x20] (by decide)) ri_push  -- 3d51 PUSH1 0x20
-  xs 0x3d54 (.reg .add) ri_add  -- 3d53 ADD
+  xa 4
   xsw 0x3d55 0x240  -- 3d54 MSTORE
-  xs 0x3d5b (.push [0xe8, 0xd4, 0xa5, 0x10, 0x00] (by decide)) ri_push  -- 3d55 PUSH5 0xe8d4a51000
-  xs 0x3d5c (.reg (.dup 1)) (ri_dup (by rfl))  -- 3d5b DUP2
-  xs 0x3d5e (.push [0x40] (by decide)) ri_push  -- 3d5c PUSH1 0x40
-  xs 0x3d5f (.reg .add) ri_add  -- 3d5e ADD
+  xa 4
   xsw 0x3d60 0x260  -- 3d5f MSTORE
-  xs 0x3d61 (.reg .pop) ri_pop  -- 3d60 POP
-  xs 0x3d63 (.push [0x20] (by decide)) ri_push  -- 3d61 PUSH1 0x20
-  xs 0x3d66 (.push [0x03, 0x00] (by decide)) ri_push  -- 3d63 PUSH2 0x0300
-  xs 0x3d68 (.push [0x04] (by decide)) ri_push  -- 3d66 PUSH1 0x04
-  xs 0x3d6d (.push [0x18, 0x16, 0x0d, 0xdd] (by decide)) ri_push  -- 3d68 PUSH4 0x18160ddd
-  xs 0x3d70 (.push [0x02, 0xa0] (by decide)) ri_push  -- 3d6d PUSH2 0x02a0
+  xa 6
   have hW0 := hV.wf
   xsw 0x3d71 0x2a0  -- 3d70 MSTORE
-  xs 0x3d74 (.push [0x02, 0xbc] (by decide)) ri_push  -- 3d71 PUSH2 0x02bc
-  xs 0x3d76 (.push [0x05] (by decide)) ri_push  -- 3d74 PUSH1 0x05
+  xa 2
   xw 0x3d77 (.reg .sload) ri_sload  -- 3d76 SLOAD
   xs 0x3d78 (.reg .gas) ri_gas_remaining  -- 3d77 GAS
   obtain ⟨d, flag, out, M', L1, h, hVo, hrd, hob, hstor, hlogs, hk⟩ :=
@@ -199,11 +153,7 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   xs 0x3d7c (.push [0x3d, 0x81] (by decide)) ri_push  -- 3d79 PUSH2 0x3d81
   xji 0x3d7d 0x3d81 hw
   · xdead
-  xjd 0x3d82  -- 3d81 JUMPDEST
-  xs 0x3d84 (.push [0x1f] (by decide)) ri_push  -- 3d82 PUSH1 0x1f
-  xs 0x3d85 (.reg .returndatasize) ri_returndatasize  -- 3d84 RETURNDATASIZE
-  xs 0x3d86 (.reg .gt) ri_gt  -- 3d85 GT
-  xs 0x3d89 (.push [0x3d, 0x8e] (by decide)) ri_push  -- 3d86 PUSH2 0x3d8e
+  xa 5
   have hwf := hw
   clear hw
   rcases hk hwf with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout,
@@ -221,10 +171,7 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   have hV := hVo hlen
   clear hVo
   vnorm
-  xjd 0x3d8f  -- 3d8e JUMPDEST
-  xs 0x3d91 (.push [0x00] (by decide)) ri_push  -- 3d8f PUSH1 0x00
-  xs 0x3d92 (.reg .pop) ri_pop  -- 3d91 POP
-  xs 0x3d95 (.push [0x03, 0x00] (by decide)) ri_push  -- 3d92 PUSH2 0x0300
+  xa 4
   xl 0x3d96 0x300  -- 3d95 MLOAD
   xs 0x3d99 (.push [0x02, 0x80] (by decide)) ri_push  -- 3d96 PUSH2 0x0280
   xsw 0x3d9a 0x280  -- 3d99 MSTORE
