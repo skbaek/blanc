@@ -1337,24 +1337,6 @@ the temporal convention, stores the hole and the moved index through
 at the entry state in their place.  Fixed charge `139 = 439 - 300` plus the
 two explicit `gasColdSload` surcharges. -/
 
-private theorem not_mem_hashSet_insert {α : Type _} [BEq α] [Hashable α]
-    [LawfulBEq α] {s : Std.HashSet α} {x p : α}
-    (h : p ∉ s) (hne : x ≠ p) : p ∉ s.insert x := by
-  intro hmem
-  rcases Std.HashSet.mem_insert.mp hmem with he | hx
-  · exact hne (eq_of_beq he)
-  · exact h hx
-
-private theorem not_mem_afterSload {sevm : Sevm} {base : Devm}
-    {readKey : B256} {p : Adr × B256}
-    (h : p ∉ base.accessedStorageKeys)
-    (hne : (sevm.currentTarget, readKey) ≠ p) :
-    p ∉ (afterSload sevm base readKey).accessedStorageKeys := by
-  unfold afterSload
-  split
-  · exact h
-  · exact not_mem_hashSet_insert h hne
-
 private theorem removeTarget_holeStorePrefix_runCompiled
     {fs : List Func} {sevm : Sevm} {base : Devm} {M : Mem}
     {idx lastTarget : B256} {stack : List B256} {G : Nat}
@@ -1488,7 +1470,6 @@ private theorem removeTarget_tailClearPrefix_runCompiled
     rw [hg]
     exact hlength
 
-set_option maxHeartbeats 1600000 in
 theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)

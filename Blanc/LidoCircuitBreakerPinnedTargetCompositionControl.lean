@@ -178,21 +178,6 @@ private theorem stubPauseWorld_target_not_precompile :
 Small `rfl`-or-split lemmas for reading fields through the tower layers the
 composition threads. -/
 
-/-- Both arms of `afterSload` return the base world with at most the
-accessed-key set changed, so the error, output, accessed-address and code
-fields all pass through; the named projections below read this one case
-split. -/
-theorem afterSload_carriers (sevm : Sevm) (base : Devm)
-    (key : B256) :
-    (afterSload sevm base key).error = base.error ∧
-      (afterSload sevm base key).output = base.output ∧
-      (afterSload sevm base key).accessedAddresses =
-        base.accessedAddresses ∧
-      ∀ a : Adr, (afterSload sevm base key).getCode a =
-        base.getCode a := by
-  unfold afterSload
-  split <;> exact ⟨rfl, rfl, rfl, fun _ => rfl⟩
-
 private theorem keyPairNe {a₁ a₂ : Adr} {k₁ k₂ : B256} (h : k₂ ≠ k₁) :
     (a₁, k₁) ≠ (a₂, k₂) := fun hp => h (congrArg Prod.snd hp).symm
 
@@ -204,22 +189,6 @@ grows by exactly the read key.  These shapes are what the cold cost equations
 below read off; every non-membership is settled by slot separation, never by
 deciding a `HashSet`. -/
 
-
-private theorem afterSload_keys (sevm : Sevm) (base : Devm)
-    (key : B256) :
-    (afterSload sevm base key).accessedStorageKeys =
-      if (sevm.currentTarget, key) ∈ base.accessedStorageKeys
-        then base.accessedStorageKeys
-        else base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
-  unfold afterSload
-  split <;> rfl
-
-theorem afterSload_cold_keys (sevm : Sevm) (base : Devm)
-    (key : B256)
-    (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
-    (afterSload sevm base key).accessedStorageKeys =
-      base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
-  rw [afterSload_keys, ite_eq_right h]
 
 private theorem stubRunKeys_expiryBase :
     (pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre

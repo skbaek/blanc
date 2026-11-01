@@ -143,15 +143,6 @@ below read off; every non-membership is settled by slot separation, never by
 deciding a `HashSet`. -/
 
 
-private theorem afterSload_cold_keys (sevm : Sevm) (base : Devm)
-    (key : B256)
-    (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
-    (afterSload sevm base key).accessedStorageKeys =
-      base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
-  unfold afterSload
-  rw [ite_eq_right h]
-  rfl
-
 private theorem lastKeys_expiryBase :
     (pauseExpiryBase pauseLastSevm pauseLastPre
       pauseWorldCallee.toB256).accessedStorageKeys =

@@ -331,6 +331,14 @@ lines when next changed or relied on, not by a wholesale rewrite.
   instead of broadening that trigger or unfolding a concrete state tower. The lower
   one-write primitive is `setStorVal_getStor_ne` in
   [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
+- Read-through laws of a selected `SLOAD`, in the same module:
+  `afterSload_getStorVal` / `afterSload_getOrigStorVal` /
+  `afterSload_getTransVal` (reads pass through), `afterSload_warm` (the read
+  key is warm after), `afterSload_preserves_warm` and `not_mem_afterSload` /
+  `afterSload_preserves_cold` (other keys keep their status),
+  `afterSload_cold_keys` (a cold read inserts exactly its key),
+  `afterSload_accessedStorageKeys_addLog`, `sloadCost_congr` (the charge reads
+  only the key set) and the `Std.HashSet` helper `not_mem_hashSet_insert`.
 - For exact ordered SLOAD accounting, `SloadSchedule` retains the incoming
   state and key at each read. `sloadScheduleCost_eq` separates the warm base
   cost from the cold surcharge, and `sloadColdCount_le` /

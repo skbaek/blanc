@@ -248,6 +248,11 @@ private def ConstructorEffectCounts.add
    left.2.1 + right.2.1,
    left.2.2 + right.2.2)
 
+/-- Adds two literal count triples; as a simp lemma it fires only once both
+sides are evaluated, keeping intermediate sums small. -/
+private theorem ConstructorEffectCounts.add_mk (a b c d e f : Nat) :
+    ConstructorEffectCounts.add (a, b, c) (d, e, f) = (a + d, b + e, c + f) := rfl
+
 private def constructorInstructionEffectCounts :
     Ninst → ConstructorEffectCounts
   | .reg .sstore => (1, 0, 0)
@@ -439,12 +444,13 @@ private theorem constructorProgramEffectCounts_eq (program : Prog) :
   simp only [constructorProgramEffectCounts, ConstructorEffectCounts.add,
     constructorFuncEffectCounts_eq, constructorEffectCountsSum_eq, programSiteCount]
 
-set_option maxRecDepth 628 in
 theorem constructor_program_site_counts_exact :
     constructorProgramSiteCounts = (2, 0, 0) := by
   unfold constructorProgramSiteCounts
   rw [← constructorProgramEffectCounts_eq]
-  simp only [constructorProgramEffectCounts, ConstructorEffectCounts.add,
+  -- `add_mk` adds only evaluated triples; unfolding `ConstructorEffectCounts.add`
+  -- instead nests a projection chain as deep as the program.
+  simp only [constructorProgramEffectCounts, ConstructorEffectCounts.add_mk,
     lidoCircuitBreakerConstructorProgram, CreationArtifact.finalizedConstructorProgram,
     constructorProgram, constructorBody, loadArgumentIndex, mul_zero, checkNonAddress,
     pushAddressMask, List.cons_append, List.nil_append, mul_one, Nat.reduceMul, logWith,
