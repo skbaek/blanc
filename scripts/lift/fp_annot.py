@@ -741,6 +741,12 @@ def lean_module(path: Path) -> str:
     return ".".join(Path(path).with_suffix("").parts)
 
 
+# Summed producer cost proxy per kernel decision of the generated Check<i> modules (one
+# `decide +kernel` per range, `Blanc/Lift/FreePtrChain.lean` `chainRange`); measured on WSL
+# (blanc-jaune-consolidation-v1, 2026-11-01).
+CHECK_RANGE_BUDGET = 4000
+
+
 def split_parts(costs: List[int], parts: int) -> List[Tuple[int, int]]:
     """Contiguous entry ranges [a, b) of roughly equal total cost."""
     n = len(costs)
@@ -757,16 +763,32 @@ def split_parts(costs: List[int], parts: int) -> List[Tuple[int, int]]:
     return bounds
 
 
+def range_groups(costs: List[int], a: int, b: int, budget: int) -> List[Tuple[int, int]]:
+    """Contiguous ranges [k, e) covering [a, b), each of at most `budget` summed cost proxy (an
+    entry above the budget alone)."""
+    groups, k = [], a
+    while k < b:
+        e, acc = k + 1, costs[k]
+        while e < b and acc + costs[e] <= budget:
+            acc += costs[e]
+            e += 1
+        groups.append((k, e))
+        k = e
+    return groups
+
+
 def emit_checks(checker: Checker, parts: int, namespace: str, cert_ref: str,
-                cert_module: str, ann_module: str) -> Dict[str, str]:
-    """Kernel-decide modules for `fpCert`: `Check<i>.lean` decides
-    `fpEntry cert implFpAnn k` for one contiguous entry range each;
-    `Check.lean` chains them (`FreePtrChain.fpFrom_step`) into
+                cert_module: str, ann_module: str,
+                budget: int = CHECK_RANGE_BUDGET) -> Dict[str, str]:
+    """Kernel-decide modules for `fpCert`: `Check<i>.lean` decides, for one contiguous entry
+    range of the certificate each, `fpRange cert implFpAnn k n` for ranges of at most `budget`
+    summed cost proxy; `Check.lean` chains them (`FreePtrChain.fpFrom_range`) into
     `fp_rest_0 : fpFrom cert implFpAnn 0 = true`."""
     n = len(checker.entries)
     costs = [checker.cost.get(k, 1) for k in range(n)]
     files: Dict[str, str] = {}
     ranges = split_parts(costs, parts)
+    groups: List[Tuple[int, int]] = []
     for i, (a, b) in enumerate(ranges):
         lines = [
             "import Blanc.Lift.FreePtrChain",
@@ -774,8 +796,8 @@ def emit_checks(checker: Checker, parts: int, namespace: str, cert_ref: str,
             f"import {ann_module}",
             "",
             f"/-! {CHECK_HEADER}",
-            f"Entries {a}..{b - 1} of `fpCert {cert_ref} implFpAnn`, each decided by the",
-            "kernel (`FreePtrChain.fpEntry`); `Check.lean` chains them.",
+            f"Entries {a}..{b - 1} of `fpCert {cert_ref} implFpAnn`, decided by the kernel in ranges",
+            "(`FreePtrChain.fpRange`); `Check.lean` chains them.",
             f"Producer cost proxy for this part: {sum(costs[a:b])}. -/",
             "",
             f"namespace {namespace}",
@@ -783,9 +805,10 @@ def emit_checks(checker: Checker, parts: int, namespace: str, cert_ref: str,
             "open Blanc.Lift.FreePtr",
             "",
         ]
-        for k in range(a, b):
+        for k, e in range_groups(costs, a, b, budget):
+            groups.append((k, e))
             lines += [
-                f"theorem fp_entry_{k} : fpEntry {cert_ref} implFpAnn {k} = true := by",
+                f"theorem fp_range_{k} : fpRange {cert_ref} implFpAnn {k} {e - k} = true := by",
                 "  decide +kernel",
                 "",
             ]
@@ -796,24 +819,22 @@ def emit_checks(checker: Checker, parts: int, namespace: str, cert_ref: str,
     lines += [
         "",
         f"/-! {CHECK_HEADER}",
-        "Chains the per-entry decisions of the Check<i> modules over the tails",
-        f"of `{cert_ref}.zip implFpAnn`, from the end. -/",
+        "Chains the range decisions of the Check<i> modules over the tails",
+        f"of `{cert_ref}.zip implFpAnn`. -/",
         "",
         f"namespace {namespace}",
         "",
         "open Blanc.Lift.FreePtr",
         "",
-        f"theorem fp_rest_{n} : fpFrom {cert_ref} implFpAnn {n} = true :=",
+        f"theorem fp_rest_0 : fpFrom {cert_ref} implFpAnn 0 = true :=",
+    ]
+    lines += [f"  fpFrom_range {k} {e - k} fp_range_{k} <|" for k, e in groups]
+    lines += [
         "  fpFrom_of_le (by decide +kernel)",
         "",
+        f"end {namespace}",
+        "",
     ]
-    for k in range(n - 1, -1, -1):
-        lines += [
-            f"theorem fp_rest_{k} : fpFrom {cert_ref} implFpAnn {k} = true :=",
-            f"  fpFrom_step {k} fp_entry_{k} fp_rest_{k + 1}",
-            "",
-        ]
-    lines += [f"end {namespace}", ""]
     files["Check.lean"] = "\n".join(lines)
     return files
 

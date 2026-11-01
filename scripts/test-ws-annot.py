@@ -28,7 +28,7 @@ from ws_annot import (
     wst_param, prov_of, compat_w, site_covers, site_of,
     wstep, refine_w, popped_w, eq_guard, inst_site, resume_w, ret_ok,
     resolve_args, lean_term, lean_site, lean_b256,
-    emit_ann, emit_checks, split_parts, ret_arg_free,
+    emit_ann, emit_checks, split_parts, range_groups, ret_arg_free,
 )
 from symcore import goto_compat, ninst_kind
 
@@ -378,10 +378,12 @@ require("Nat.toB256" not in text, "no unqualified Nat.toB256 in the module")
 checks = emit_checks(c4, 2, "T", "C.cert", "C.Cert", "T.Ann")
 require(sorted(checks) == ["Check.lean", "Check0.lean", "Check1.lean"],
         "two parts and the chain")
-require("theorem ws_entry_1 : wsEntry C.cert implWsAnn 1 = true := by" in checks["Check1.lean"]
-        and "wsFrom_step 0 ws_entry_0 ws_rest_1" in checks["Check.lean"]
-        and "ws_rest_2 : wsFrom C.cert implWsAnn 2 = true" in checks["Check.lean"],
-        "per-entry kernel decides and the chain from the end")
+require("theorem ws_range_1 : wsRange C.cert implWsAnn 1 1 = true := by" in checks["Check1.lean"]
+        and "wsFrom_range 0 1 ws_range_0 <|" in checks["Check.lean"]
+        and "ws_rest_0 : wsFrom C.cert implWsAnn 0 = true" in checks["Check.lean"],
+        "range kernel decides and their chain")
+require(range_groups([3, 3, 3, 9, 1], 0, 5, 6) == [(0, 2), (2, 3), (3, 4), (4, 5)],
+        "ranges bounded by the cost budget, an entry above it alone")
 require(split_parts([1, 1, 1, 1], 2) == [(0, 2), (2, 4)], "balanced split")
 
 # -- the A9 relaxations, and the pre-A9 walk they replace --
