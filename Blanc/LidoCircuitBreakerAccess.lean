@@ -527,7 +527,6 @@ def heartbeatBodySuccessGas
     heartbeatSloadCost sevm (heartbeatAfterExpiryLoad sevm base)
       heartbeatIntervalSlot
 
-set_option maxRecDepth 600 in
 private theorem heartbeat_storeLogTail_runCompiled_update
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -564,6 +563,8 @@ private theorem heartbeat_storeLogTail_runCompiled_update
       _ = _ := horigExpiry
   unfold storeHeartbeatExpiryFromStack mstoreAt tagTop logWith
     heartbeatStoreLogTailGasWarmUpdate
+  have hevent := heartbeatUpdatedEvent_pushCost
+  generalize heartbeatUpdatedEvent = event at hevent ⊢
   apply Exists.intro
   constructor
   · func_run [3, expirySlot sevm.caller.toB256, 2900, 1381]
@@ -608,7 +609,6 @@ private theorem heartbeat_storeLogTail_runCompiled_update
         show ((1 : B256) * 32).toNat = 32 by decide]
       rw [Mem.read_write_word]
 
-set_option maxRecDepth 600 in
 private theorem heartbeat_storeLogTail_runCompiled_other
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -645,6 +645,8 @@ private theorem heartbeat_storeLogTail_runCompiled_other
       _ = _ := horigExpiry
   unfold storeHeartbeatExpiryFromStack mstoreAt tagTop logWith
     heartbeatStoreLogTailGasWarmOther
+  have hevent := heartbeatUpdatedEvent_pushCost
+  generalize heartbeatUpdatedEvent = event at hevent ⊢
   apply Exists.intro
   constructor
   · func_run [3, expirySlot sevm.caller.toB256, 100, 1381]
@@ -828,7 +830,6 @@ private theorem heartbeat_body_runCompiled_generic
   · simpa only [heartbeatAfterIntervalLoad, heartbeatAfterExpiryLoad, heartbeatAfterCountLoad,
     heartbeatSloadBase_logs] using hlogs
 
-set_option maxRecDepth 600 in
 /-- A successful direct heartbeat-body execution in the warm, nonzero-to-
 nonzero storage-update case.  The run fixes the checked sum, the exact expiry
 write, and the single `HeartbeatUpdated` log emitted after that write. -/
@@ -888,6 +889,8 @@ theorem heartbeat_body_runCompiled_of_checkedExtension
     omega
   unfold heartbeat checkedHeartbeatExpiry storeHeartbeatExpiryFromStack
     tagTop mstoreAt logWith heartbeatBodySuccessGasWarmUpdate
+  have hevent := heartbeatUpdatedEvent_pushCost
+  generalize heartbeatUpdatedEvent = event at hevent ⊢
   apply Exists.intro
   constructor
   · func_run [countSlot sevm.caller.toB256, 0,
@@ -989,26 +992,31 @@ theorem isPauserLive_body_runCompiled_at_expiry
     checkNonAddress pushAddressMask tagTop returnWord mstoreAt
     returnMemoryRange pushList temporalLiveBodyGasWarm
   have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := hword
-  have hgasFinal : G + 184 - 184 = G := by omega
   rcases temporalReturnWord_runCompiled fs sevm base (0 : B256) G with
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
-  set_option maxRecDepth 764 in
-    func_run [0, ~~~(0 : B256), addressMask, 0, expirySlot pauser, 0, 3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try { rw [hword0]; exact hcanonical }
-  all_goals try { rw [hword0]; rfl }
-  case h_val =>
-    change sevm.benvStat.time <? Devm.getStorVal base sevm.currentTarget
-      (expirySlot pauser) = 0
-    rw [hexpiry]
+  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
+  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
+    addressMask_eq_shl.symm
+  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
+    rw [hword0]; exact hcanonical
+  have hslot : (regionWord expiryRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
+      expirySlot pauser := by
+    rw [hword0]; rfl
+  have hlive : sevm.benvStat.time <?
+      (base.setMach ⟨[expirySlot pauser], Mem.empty, G + 184 - 66, base.stateGas⟩).getStorVal
+        sevm.currentTarget (expirySlot pauser) = 0 := by
+    rw [Devm.getStorVal_setMach, hexpiry]
     simp only [B256.ltCheck, lt_self_iff_false, ↓reduceIte]
+  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), expirySlot pauser,
+    (0 : B256), 3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_ext =>
     rw [show ((0 : B256) * 32).toNat = 0 by decide]
     exact Devm.extCost_empty_word
   case a =>
     rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      hgasFinal]
+      Nat.add_sub_cancel]
     exact hreturn
 
 def isPauserLiveDispatchGas : Nat := 168
@@ -1091,28 +1099,33 @@ theorem isPauserLive_body_runCompiled
     checkNonAddress pushAddressMask tagTop returnWord mstoreAt
     returnMemoryRange pushList temporalLiveBodyGasWarm
   have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := hword
-  have hgasFinal : G + 184 - 184 = G := by omega
   rcases temporalReturnWord_runCompiled fs sevm base
       (pauserLiveWord sevm.benvStat.time expiry) G with
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
-  set_option maxRecDepth 764 in
-    func_run [0, ~~~(0 : B256), addressMask, 0, expirySlot pauser,
-      pauserLiveWord sevm.benvStat.time expiry, 3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try { rw [hword0]; exact hcanonical }
-  all_goals try { rw [hword0]; rfl }
-  case h_val =>
-    change sevm.benvStat.time <? Devm.getStorVal base sevm.currentTarget
-      (expirySlot pauser) = pauserLiveWord sevm.benvStat.time expiry
-    rw [hexpiry]
+  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
+  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
+    addressMask_eq_shl.symm
+  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
+    rw [hword0]; exact hcanonical
+  have hslot : (regionWord expiryRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
+      expirySlot pauser := by
+    rw [hword0]; rfl
+  have hlive : sevm.benvStat.time <?
+      (base.setMach ⟨[expirySlot pauser], Mem.empty, G + 184 - 66, base.stateGas⟩).getStorVal
+        sevm.currentTarget (expirySlot pauser) =
+        pauserLiveWord sevm.benvStat.time expiry := by
+    rw [Devm.getStorVal_setMach, hexpiry]
     rfl
+  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), expirySlot pauser,
+    pauserLiveWord sevm.benvStat.time expiry, 3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_ext =>
     rw [show ((0 : B256) * 32).toNat = 0 by decide]
     exact Devm.extCost_empty_word
   case a =>
     rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      hgasFinal]
+      Nat.add_sub_cancel]
     exact hreturn
 
 /-- Exact direct public execution of `isPauserLive(address)` for an arbitrary
@@ -1251,21 +1264,25 @@ theorem heartbeatExpiry_body_runCompiled
     checkNonAddress pushAddressMask tagTop returnWord mstoreAt
     returnMemoryRange pushList heartbeatExpiryBodyGasWarm
   have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := hword
-  have hgasFinal : G + 179 - 179 = G := by omega
   rcases temporalReturnWord_runCompiled fs sevm base expiry G with
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
-  set_option maxRecDepth 744 in
-    func_run [0, ~~~(0 : B256), addressMask, 0, expirySlot pauser, 3]
-    repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try { rw [hword0]; exact hcanonical }
-  all_goals try { rw [hword0]; rfl }
+  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
+  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
+    addressMask_eq_shl.symm
+  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
+    rw [hword0]; exact hcanonical
+  have hslot : (regionWord expiryRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
+      expirySlot pauser := by
+    rw [hword0]; rfl
+  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), expirySlot pauser, 3]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_ext =>
     rw [show ((0 : B256) * 32).toNat = 0 by decide]
     exact Devm.extCost_empty_word
   case a =>
     rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Devm.getStorVal_setMach, hexpiry, hgasFinal]
+      Devm.getStorVal_setMach, hexpiry, Nat.add_sub_cancel]
     exact hreturn
 
 /-- Exact direct public execution of canonical `heartbeatExpiry(address)`. -/
@@ -2009,7 +2026,6 @@ private theorem setHeartbeatIntervalUpdatePrefix_runCompiled_then
     simp only [hwarm, ite_eq_left]
   simpa only [hcost, gasWarmAccess] using hload
 
-set_option maxRecDepth 591 in
 /-- The successful event suffix emits the exact old/new record and then runs
 the named store suffix.  Thus the source chronology is represented directly:
 the `LOG1` predecessor is constructed before the `SSTORE` continuation. -/
@@ -2062,7 +2078,7 @@ private theorem setHeartbeatIntervalEventTail_runCompiled
         rw [Mem.size_write_word_at, Mem.size_write_word]
         decide)
       (hdata := setHeartbeatIntervalEventData old newInterval)
-      (hstatic := hstatic) (htopic := by decide)
+      (hstatic := hstatic) (htopic := heartbeatIntervalUpdatedEvent_ne_zero)
       (htail := by simpa only [event] using htail)
     simpa only [setHeartbeatIntervalEventTailGasWarmUpdate, Fin.isValue,
       setHeartbeatIntervalStoreTailGasWarmUpdate] using hprefix
@@ -2072,7 +2088,6 @@ private theorem setHeartbeatIntervalEventTail_runCompiled
     rw [hexpiries pauser hpauser]
     rfl
 
-set_option maxRecDepth 591 in
 private theorem setHeartbeatIntervalEventTail_runCompiled_zero
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -2123,7 +2138,7 @@ private theorem setHeartbeatIntervalEventTail_runCompiled_zero
         rw [Mem.size_write_word_at, Mem.size_write_word]
         decide)
       (hdata := setHeartbeatIntervalEventData 0 newInterval)
-      (hstatic := hstatic) (htopic := by decide)
+      (hstatic := hstatic) (htopic := heartbeatIntervalUpdatedEvent_ne_zero)
       (htail := by simpa only [event] using htail)
     simpa only [setHeartbeatIntervalEventTailGasWarmSet, Fin.isValue,
       setHeartbeatIntervalStoreTailGasWarmSet] using hprefix
@@ -2133,7 +2148,6 @@ private theorem setHeartbeatIntervalEventTail_runCompiled_zero
     rw [hexpiries pauser hpauser]
     rfl
 
-set_option maxRecDepth 591 in
 private theorem setHeartbeatIntervalEventTail_runCompiled_noop
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -2181,7 +2195,7 @@ private theorem setHeartbeatIntervalEventTail_runCompiled_noop
         rw [Mem.size_write_word_at, Mem.size_write_word]
         decide)
       (hdata := setHeartbeatIntervalEventData interval interval)
-      (hstatic := hstatic) (htopic := by decide)
+      (hstatic := hstatic) (htopic := heartbeatIntervalUpdatedEvent_ne_zero)
       (htail := by simpa only [event] using htail)
     simpa only [setHeartbeatIntervalEventTailGasWarmUpdate, Fin.isValue,
       setHeartbeatIntervalStoreTailGasWarmUpdate] using hprefix
@@ -2191,7 +2205,6 @@ private theorem setHeartbeatIntervalEventTail_runCompiled_noop
     rw [hexpiries pauser hpauser]
     rfl
 
-set_option maxRecDepth 592 in
 /-- Generic event-before-store suffix under the worst successful SSTORE
 envelope.  The production `LOG1` appends the exact old/new payload before the
 generic interval store runs. -/
@@ -2244,7 +2257,7 @@ private theorem setHeartbeatIntervalEventTail_runCompiled_generic
         rw [Mem.size_write_word_at, Mem.size_write_word]
         decide)
       (hdata := setHeartbeatIntervalEventData old newInterval)
-      (hstatic := hstatic) (htopic := by decide)
+      (hstatic := hstatic) (htopic := heartbeatIntervalUpdatedEvent_ne_zero)
       (htail := by simpa only [event] using htail)
     simpa only [event] using hprefix
   · rw [hlogs]

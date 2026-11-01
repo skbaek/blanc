@@ -1011,7 +1011,6 @@ theorem registryScalarReturn_runCompiled
     (Devm.extCost_word_word Mem.size_write_word) rfl hread
   · exact ⟨rfl, rfl⟩
 
-set_option maxRecDepth 741 in
 /-- Exact compiled-body result for the assignment view on a canonical ABI
 address word and the same concrete Registry owner used by enumeration. -/
 theorem getPauser_body_runCompiled
@@ -1045,24 +1044,27 @@ theorem getPauser_body_runCompiled
     returnMemoryRange pushList registryScalarBodyGasWarm
   have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = target := by
     exact hword
-  have hgasFinal : G + 179 - 179 = G := by omega
   have hdataWalk : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
   rcases registryScalarReturn_runCompiled fs sevm base
       (assignmentAt entries target) G with ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
-  func_run [0, ~~~(0 : B256), addressMask, 0, assignmentSlot target, 3]
+  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
+    addressMask_eq_shl.symm
+  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
+    rw [hword0]; exact hcanonical
+  have hslot : (regionWord assignmentRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
+      assignmentSlot target := by
+    rw [hword0]; rfl
+  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), assignmentSlot target, 3]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try { rw [hword0]; exact hcanonical }
-  all_goals try { rw [hword0]; rfl }
   all_goals try {
     rw [show ((0 : B256) * 32).toNat = 0 by decide]
     exact Devm.extCost_empty_word }
   all_goals try {
     rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Devm.getStorVal_setMach, hstorage, hgasFinal]
+      Devm.getStorVal_setMach, hstorage, Nat.add_sub_cancel]
     exact hreturn }
 
-set_option maxRecDepth 741 in
 /-- Exact compiled-body result for the per-pauser multiplicity view on a
 canonical ABI address word and the same concrete Registry owner. -/
 theorem getPausableCount_body_runCompiled
@@ -1097,22 +1099,26 @@ theorem getPausableCount_body_runCompiled
     returnMemoryRange pushList registryScalarBodyGasWarm
   have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := by
     exact hword
-  have hgasFinal : G + 179 - 179 = G := by omega
   have hdataWalk : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
   rcases registryScalarReturn_runCompiled fs sevm base
       (Nat.toB256 (assignmentCount entries pauser)) G with
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
-  func_run [0, ~~~(0 : B256), addressMask, 0, countSlot pauser, 3]
+  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
+    addressMask_eq_shl.symm
+  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
+    rw [hword0]; exact hcanonical
+  have hslot : (regionWord countRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
+      countSlot pauser := by
+    rw [hword0]; rfl
+  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), countSlot pauser, 3]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try { rw [hword0]; exact hcanonical }
-  all_goals try { rw [hword0]; rfl }
   all_goals try {
     rw [show ((0 : B256) * 32).toNat = 0 by decide]
     exact Devm.extCost_empty_word }
   all_goals try {
     rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Devm.getStorVal_setMach, hstorage, hgasFinal]
+      Devm.getStorVal_setMach, hstorage, Nat.add_sub_cancel]
     exact hreturn }
 
 theorem assignmentCount_eq_multiplicity (entries : List Entry)

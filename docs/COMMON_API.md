@@ -449,7 +449,12 @@ registry has identified the likely vocabulary.
   difference respectively.  When the route also needs the exact operand stack,
   use `stack_of_pushBurn`, `stack_of_popBurnBy`,
   `stack_of_diffBurn_one`, and `stack_of_diffBurn_two` against the known input
-  stack equation.
+  stack equation.  To build a selected-body walk forward through a family's own dispatcher
+  without unfolding its table into the goal, compose
+  `linearEntry_miss_runCompiledTo`, `linearEntry_hit_runCompiledTo`, and
+  `linearLast_hit_runCompiledTo` (same file): one entry each, over an abstract
+  function table, word and body, at exact costs 22, 25 and 20 for a nonzero
+  word.  `Blanc/LidoCircuitBreakerDispatch.lean` is the worked instance.
 - **Solidity address-slot reads and writes.** `Blanc.loadAddressWordAt` and
   `Blanc.storeAddressWordAt` in
   [`Blanc/AddressSlot.lean`](../Blanc/AddressSlot.lean) implements the raw storage

@@ -832,4 +832,56 @@ theorem Func.execWitness_linearDispatchWith_fallback
             (Func.ExecWitness.next hpush
               (Func.ExecWitness.next heq hbranch))
 
+/-! ## Forward arms of `linearDispatchWith`
+
+One forward step per entry shape, over an abstract function table, an abstract
+word and an abstract body: a missed entry keeps the selector and costs 22, a
+matched non-final entry pops it and costs 25, a matched final entry costs 20.
+A family's own dispatcher walk composes these instead of unfolding its table
+into the goal (see `Blanc.LidoCircuitBreaker.runtimeMain_dispatch_runCompiledTo`). -/
+
+section LinearArms
+
+open Jaune.Ninst Ninst
+
+variable {fs : List Func} {sevm : Sevm} {base : Devm} {tail : Stack}
+    {mem : Mem} {sg : StateGasMeter} {ex : Execution} {G : Nat}
+
+/-- A `linearDispatchWith` entry whose word matches: `DUP`, `PUSH`, `EQ`, the
+taken arm and its `POP`. -/
+theorem linearEntry_hit_runCompiledTo {w : B256} {body other : Func}
+    (hw : w ≠ 0) (hroom : tail.length < 1022)
+    (hbody : Func.RunCompiledTo fs sevm (base.setMach ⟨tail, mem, G, sg⟩) body ex) :
+    Func.RunCompiledTo fs sevm (base.setMach ⟨w :: tail, mem, G + 25, sg⟩)
+      (dup 0 ::: pushB256 w ::: eq ::: ((pop ::: body) <?> other)) ex := by
+  have hpush : pushCost w.toBytes.sig = 3 := pushCost_of_ne_zero hw
+  func_run (5) [1]
+  case h_val => simp only [B256.eqCheck, ↓reduceIte]
+  case a => simpa only [Nat.add_sub_cancel] using hbody
+
+/-- A `linearDispatchWith` entry whose word misses: the selector stays. -/
+theorem linearEntry_miss_runCompiledTo {w sel : B256} {body other : Func}
+    (hw : w ≠ 0) (hne : w ≠ sel) (hroom : tail.length < 1022)
+    (hother : Func.RunCompiledTo fs sevm (base.setMach ⟨sel :: tail, mem, G, sg⟩) other ex) :
+    Func.RunCompiledTo fs sevm (base.setMach ⟨sel :: tail, mem, G + 22, sg⟩)
+      (dup 0 ::: pushB256 w ::: eq ::: ((pop ::: body) <?> other)) ex := by
+  have hpush : pushCost w.toBytes.sig = 3 := pushCost_of_ne_zero hw
+  func_run (4) [0]
+  case h_val => simp only [B256.eqCheck, hne, ↓reduceIte]
+  case h_arm => simpa only [Nat.add_sub_cancel] using hother
+
+/-- The last entry of a `linearDispatchWith` chain matches: no `DUP`, no `POP`. -/
+theorem linearLast_hit_runCompiledTo {w : B256} {body : Func} {k : Nat}
+    (hw : w ≠ 0) (hroom : tail.length < 1022)
+    (hbody : Func.RunCompiledTo fs sevm (base.setMach ⟨tail, mem, G, sg⟩) body ex) :
+    Func.RunCompiledTo fs sevm (base.setMach ⟨w :: tail, mem, G + 20, sg⟩)
+      (pushB256 w ::: eq ::: (body <?> .call k)) ex := by
+  have hpush : pushCost w.toBytes.sig = 3 := pushCost_of_ne_zero hw
+  func_run (3) [1]
+  case h_val => simp only [B256.eqCheck, ↓reduceIte]
+  case h_room => omega
+  case h_arm => simpa only [Nat.add_sub_cancel] using hbody
+
+end LinearArms
+
 end Blanc
