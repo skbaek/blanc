@@ -78,9 +78,6 @@ theorem dataWord_eq_of_append {e : Sevm} {pre rest : Bytes} {w i : B256}
     List.takeD_eq_take 0 (by simp only [List.length_append, B256.length_toBytes]; omega),
     List.take_left' (B256.length_toBytes w), B256.toB256_toBytes]
 
-theorem abiSelectorBytes_length' (sel : B256) : (abiSelectorBytes sel).length = 4 := by
-  simp only [abiSelectorBytes, List.length_drop, B256.length_toBytes]
-
 /-- The pool's selector byte strings are the ABI selector bytes of 3Crv's selectors. -/
 theorem mintSel_eq : Curve3Pool.mintSel = abiSelectorBytes selMint := by decide
 theorem burnFromSel_eq : Curve3Pool.burnFromSel = abiSelectorBytes selBurnFrom := by decide

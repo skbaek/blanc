@@ -34,9 +34,6 @@ theorem rlw_len : 4 ≤ (cSevm rlwData).data.length ∧ (cSevm rlwData).data.len
 theorem rlw_sel : Sevm.selector (cSevm rlwData) = selRemoveLiquidity := by
   decide +kernel
 
-theorem rlw_amt : rlAmt (cSevm rlwData) = 600 := by
-  decide +kernel
-
 theorem rlw_decode : decodeCall (cSevm rlwData) = .removeLiquidity 600 ⟨0, 0, 0⟩ := by
   rw [decodeCall_at (k := 7) rfl rlw_sel rlw_len.1]
   decide +kernel

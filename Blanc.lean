@@ -1641,7 +1641,6 @@ import Blanc.Lift.CursorWindow
 import Blanc.Lift.PrefixTransfer
 import Blanc.Lift.UniswapV2Factory.CallShape
 import Blanc.Lift.UniswapV2Factory.Window
-import Blanc.Composition.PairTokenSigned
 import Blanc.Composition.PairTwoToken
 import Blanc.Composition.PairTwoTokenCallShare
 import Blanc.Composition.PairTwoTokenShareValue
@@ -1653,9 +1652,6 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9P1
 import Blanc.Composition.UniswapV2PairUsdcOriginSeed
 import Blanc.Composition.UniswapV2PairUsdcCallersIn
 import Blanc.Composition.UniswapV2PairUsdcOwnersIn
-import Blanc.Composition.UniswapV2PairUsdcZeroIn
-import Blanc.Composition.UniswapV2PairUsdcNoDelIn
-import Blanc.Composition.UniswapV2PairUsdcHistoryZeroIn
 import Blanc.Composition.UniswapV2PairUsdcWeth9Deploy
 import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
 import Blanc.Composition.UniswapV2PairUsdcWeth9JointF

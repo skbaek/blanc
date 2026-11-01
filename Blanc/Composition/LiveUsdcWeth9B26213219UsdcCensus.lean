@@ -57,22 +57,4 @@ theorem OriginalMiddleCensus.noUpgraded
       ¬ (entry.address = usdcProxy ∧ entry.topics = [Proxy.upgradedTopic]) :=
   c.middle_receipts_of_census d middle UsdcUpgradeExcluded census.upgraded
 
-/-- Absence of all Pair Approval events implies the existing value-aware
-predicate for any tracked spender set; zero and unrelated approvals need not
-be assumed absent by that downstream predicate itself. -/
-theorem OriginalMiddleCensus.approvalZero
-    {cpre cpost dpre dpost : BlockChain}
-    {first : ConfiguredBlockTraceIn HistFork mainnetChainConfig cpre cpost}
-    {last : ConfiguredBlockTraceIn HistFork mainnetChainConfig dpre dpost}
-    {middle : ConfiguredHistoryTraceIn HistFork mainnetChainConfig cpost dpre}
-    (census : OriginalMiddleCensus middle) (c : OriginalC first) (d : OriginalD last)
-    (tracked : Adr → Prop) :
-    ∀ entry ∈ middle.receiptLogs,
-      V1ApprovalZeroFor usdcProxy UniswapV2Pair.Creation.pairAddress tracked entry := by
-  intro entry member spender value _ shape
-  have excluded := c.middle_receipts_of_census d middle UsdcPairApprovalExcluded
-    census.approval entry member
-  subst entry
-  exact (excluded ⟨rfl, rfl⟩).elim
-
 end Blanc.Composition.LiveUsdcWeth9B26213219.CDObservation

@@ -9,27 +9,6 @@ namespace Blanc.Composition.LiveUsdcWeth9B26213219
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Weth9.Creation
 
-/-- The recorded wire is the exact strict-decoder input. -/
-theorem weth_observed_signed_bytes :
-    SignedInput.signedBytes = ObservationData.signedBytes := by
-  unfold SignedInput.signedBytes SignedInput.payload
-  rw [ByteArray.toList_eq_toList_data]
-  apply eq_of_beq
-  decide +kernel
-
-/-- Strict signed decoding of the observed original transaction bytes. -/
-theorem weth_observed_signed_decode :
-    ObservationData.signedBytes.toBLT?.bind (fun blt => blt.toExTx.toOption) =
-      some SignedInput.tx := by
-  rw [← weth_observed_signed_bytes]
-  exact SignedInput.signed_decode
-
-/-- The original deployment coordinates select Byzantium. -/
-theorem weth_observed_fork :
-    mainnetChainConfig.forkAt ObservationData.blockNumber ObservationData.blockTimestamp =
-      .ok .byzantium := by
-  decide +kernel
-
 /-- Fetched correspondence for the actual original block and receipt. Header
 roots identify observed fields, not a recomputation over the supplied world. -/
 structure WethOriginalObservation {pre completed : BlockChain}

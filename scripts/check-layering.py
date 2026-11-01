@@ -2181,7 +2181,6 @@ COMPOSITION = [
     "Composition.UniswapV2PairWeth9XLegWeth",
     # usdc-weth9-pair-composition-v1: the two-token Pair, the USDC token core and liveness, the
     # signed-token bridges, the USDC x WETH9 joint, share-value rows, legs, checker and deployment.
-    "Composition.PairTokenSigned",
     "Composition.PairTwoToken",
     "Composition.PairTwoTokenCallShare",
     "Composition.PairTwoTokenShareValue",
@@ -2227,9 +2226,6 @@ COMPOSITION = [
     "Composition.UniswapV2PairUsdcOriginSeed",
     "Composition.UniswapV2PairUsdcCallersIn",
     "Composition.UniswapV2PairUsdcOwnersIn",
-    "Composition.UniswapV2PairUsdcZeroIn",
-    "Composition.UniswapV2PairUsdcNoDelIn",
-    "Composition.UniswapV2PairUsdcHistoryZeroIn",
     "Composition.UniswapV2PairUsdcWeth9JointF",
     "Composition.UniswapV2PairUsdcWeth9MintLiveF",
     "Composition.UniswapV2PairUsdcWeth9ShareValueF",

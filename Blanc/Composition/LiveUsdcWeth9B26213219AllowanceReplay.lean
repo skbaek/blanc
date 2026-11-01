@@ -233,25 +233,6 @@ theorem DeploymentHistoryLink.allowance_zero_of_before_pair {checkpoint : BlockC
       exact provenance accepted.1 caller accepted.2.1
     · cases selected
 
-open Blanc.Composition.UniswapV2PairUsdcWeth9 in
-/-- The hybrid checkpoint consumes the derived zero allowances. Its only
-remaining WETH caller obligation is strictly before genuine Pair creation. -/
-theorem checkpoint_from_linked_histories {checkpoint : BlockChain}
-    (reads : ObservedAt checkpoint.state) (wd : WethDeploymentTo checkpoint)
-    (pd : PairDeploymentTo checkpoint) (link : DeploymentHistoryLink wd pd)
-    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots wd.keys (.bal pair))
-    (excluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
-    (earlier : ∀ G ∈ link.beforePairFrames,
-      CallerTarget pair weth (fun s => s.isStatic = false → Sevm.selector s ≠ 0x095ea7b3)
-        G.sevm) :
-    ∃ (st : UniswapV2Pair.State) (KP : UniswapV2Pair.WriterKey → Prop),
-      JointCheckpoint2F pair usdc weth (FiniteCheckpoint.rowKeys usdcRows) wd.keys KP st
-        checkpoint.state := by
-  obtain ⟨st, KP, rep⟩ := pd.represented
-  obtain ⟨sumNof, foot⟩ := wd.foot
-  exact ⟨st, KP, checkpoint_of_history reads rep foot sumNof
-    (reads.weth_tracked foot holderFresh) (link.allowance_zero_of_before_pair excluded earlier)⟩
-
 /-- Every retained frame strictly before createPair belongs to the original
 WETH deployment history, with the same code and entry capability evidence. -/
 theorem DeploymentHistoryLink.beforePairFrames_subset {checkpoint : BlockChain}
@@ -343,25 +324,6 @@ theorem DeploymentHistoryLink.allowance_zero_of_before_pair_noApprovalLogs
         exact link.afterPair_callerTarget excluded G after accepted.1 caller accepted.2.1 selector
     · cases selected
 
-open Blanc.Composition.UniswapV2PairUsdcWeth9 in
-/-- The same live checkpoint accepts the pre-createPair log-absence route.
-No finite storage sample substitutes for the original retained history. -/
-theorem checkpoint_from_linked_histories_noApprovalLogs {checkpoint : BlockChain}
-    (reads : ObservedAt checkpoint.state) (wd : WethDeploymentTo checkpoint)
-    (pd : PairDeploymentTo checkpoint) (link : DeploymentHistoryLink wd pd)
-    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots wd.keys (.bal pair))
-    (excluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
-    (earlier : ∀ G ∈ link.beforePairFrames, ∀ (spender : Adr) (data : Bytes),
-      Log.mk weth [Weth9.approvalTopic, pair.toB256, spender.toB256] data ∉ G.post.logs) :
-    ∃ (st : UniswapV2Pair.State) (KP : UniswapV2Pair.WriterKey → Prop),
-      JointCheckpoint2F pair usdc weth (FiniteCheckpoint.rowKeys usdcRows) wd.keys KP st
-        checkpoint.state := by
-  obtain ⟨st, KP, rep⟩ := pd.represented
-  obtain ⟨sumNof, foot⟩ := wd.foot
-  exact ⟨st, KP, checkpoint_of_history reads rep foot sumNof
-    (reads.weth_tracked foot holderFresh)
-    (link.allowance_zero_of_before_pair_noApprovalLogs excluded earlier)⟩
-
 /-- Actual original receipts strictly after WETH creation and strictly before
 the genuine Pair-creation transaction, including both partial boundary blocks. -/
 def DeploymentHistoryLink.beforePairReceiptLogs {checkpoint : BlockChain}
@@ -398,27 +360,6 @@ theorem DeploymentHistoryLink.noApprovalLogs_of_before_pair_receipts
     · exact List.mem_append_left _ first
     · exact List.mem_append_right _ (List.mem_append_right _ last)
   exact covered root inInterval _ event spender data rfl
-
-open Blanc.Composition.UniswapV2PairUsdcWeth9 in
-/-- The hybrid checkpoint and future factory premises from the original
-strict receipt interval. Receipt absence remains a named evidence obligation;
-no unproved prior-incarnation exclusion or final allowance value is supplied. -/
-theorem checkpoint_from_linked_receipts {checkpoint : BlockChain}
-    (reads : ObservedAt checkpoint.state) (wd : WethDeploymentTo checkpoint)
-    (pd : PairDeploymentTo checkpoint) (link : DeploymentHistoryLink wd pd)
-    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots wd.keys (.bal pair))
-    (excluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
-    (logs : ∀ (spender : Adr) (data : Bytes),
-      Log.mk weth [Weth9.approvalTopic, pair.toB256, spender.toB256] data ∉
-        link.beforePairReceiptLogs) :
-    ∃ (st : UniswapV2Pair.State) (KP : UniswapV2Pair.WriterKey → Prop),
-      JointCheckpoint2F pair usdc weth (FiniteCheckpoint.rowKeys usdcRows) wd.keys KP st
-        checkpoint.state ∧
-      some (checkpoint.state.getCode st.factory).toList = UniswapV2Factory.factorySem.image ∧
-      st.factory ≠ systemAddress := by
-  obtain ⟨st, KP, joint⟩ := checkpoint_from_linked_histories_noApprovalLogs reads wd pd link
-    holderFresh excluded (link.noApprovalLogs_of_before_pair_receipts logs)
-  exact ⟨st, KP, joint, reads.factory_facts joint.weth9.pairRep⟩
 
 open Blanc.Composition.UniswapV2PairUsdcWeth9 in
 /-- Fix the historical Pair witness once, so future freshness premises and

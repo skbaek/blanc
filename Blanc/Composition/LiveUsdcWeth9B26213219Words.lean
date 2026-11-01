@@ -91,22 +91,12 @@ theorem token0_eq : finiteModel.token0 = usdc := by decide +kernel
 theorem token1_eq : finiteModel.token1 = weth := by decide +kernel
 theorem unlocked_eq : finiteModel.unlocked = 1 := by decide +kernel
 
-theorem usdc_notFrozen : Usdc.frozenBit usdcPairBalanceWord = false := by
-  decide +kernel
-
-theorem usdc_reserve : finiteModel.reserve0.val ≤ Usdc.balanceBits usdcPairBalanceWord := by
-  decide +kernel
-
 theorem weth_reserve : finiteModel.reserve1.val ≤ wethPairBalanceWord.toNat := by
   decide +kernel
 
 theorem usdc_initialized : Usdc.flag20 usdcInitializedWord = true := by decide +kernel
 theorem usdc_version : usdcVersionWord.toNat % 256 = 3 := by decide +kernel
 theorem usdc_implementation : usdcImplementationWord = Usdc.usdcImpl.toB256 := by
-  decide +kernel
-
-/-- The finite holder rows use the actual hashed storage coordinates. -/
-theorem usdc_balance_slot : Usdc.balSlot pair = usdcPairBalanceWordSlot := by
   decide +kernel
 
 theorem weth_balance_slot : Weth9.balSlot pair = wethPairBalanceWordSlot := by
@@ -141,31 +131,6 @@ theorem usdc_holder_checked {s : Stor}
     decide (finiteModel.reserve0.val ≤ Usdc.balanceBits (s.get usdcPairBalanceWordSlot))) ||
     false) && (true && true) = true
   rw [read]
-  decide +kernel
-
-/-- Generated account coordinates agree with the addresses used by the proofs. -/
-theorem code_coordinates :
-    pairCodeAccount = pair.toB256 ∧ weth9CodeAccount = weth.toB256 ∧
-    usdcProxyCodeAccount = usdc.toB256 ∧
-    usdcImplementationCodeAccount = Usdc.usdcImpl.toB256 ∧
-    usdcLibraryCodeAccount = Usdc.usdcLib.toB256 ∧
-    factoryCodeAccount = finiteModel.factory.toB256 := by
-  decide +kernel
-
-theorem pair_word_accounts :
-    [pairSlot0WordAccount, pairSlot3WordAccount, pairSlot5WordAccount,
-      pairSlot6WordAccount, pairSlot7WordAccount, pairSlot8WordAccount,
-      pairSlot9WordAccount, pairSlot10WordAccount, pairSlot11WordAccount,
-      pairSlot12WordAccount].all (fun a => decide (a = pair.toB256)) = true := by
-  decide +kernel
-
-theorem token_word_coordinates :
-    [usdcImplementationWordAccount, usdcInitializedWordAccount, usdcVersionWordAccount,
-      usdcAdminWordAccount, usdcPairBalanceWordAccount].all
-        (fun a => decide (a = usdc.toB256)) = true ∧
-    wethPairBalanceWordAccount = weth.toB256 ∧
-    usdcImplementationWordSlot = Usdc.implSlot ∧
-    usdcInitializedWordSlot = 8 ∧ usdcVersionWordSlot = 18 := by
   decide +kernel
 
 end Blanc.Composition.LiveUsdcWeth9B26213219

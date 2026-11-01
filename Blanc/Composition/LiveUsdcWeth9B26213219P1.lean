@@ -206,23 +206,6 @@ theorem OriginalUsdcHistory.pairDeployment_trace {B future : BlockChain}
     history.pairDeployment.trace =
       (MidHistoryTraceIn.tail history.last history.beforeCut).append history.postD := rfl
 
-/-- The live checkpoint now uses the same original Pair receipt as the USDC
-history producer. WETH receipt correspondence and sender-query exclusion remain
-explicit; this construction adds no observations or final invariant premise. -/
-theorem OriginalUsdcHistory.checkpoint_of_receipts {B future : BlockChain}
-    {trace : ConfiguredHistoryTrace mainnetChainConfig B future}
-    (history : OriginalUsdcHistory trace) (anchor : ObservedCheckpoint B)
-    (wd : WethDeploymentTo B) (link : DeploymentHistoryLink wd history.pairDeployment)
-    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots wd.keys (.bal pair))
-    (excluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
-    (logs : ∀ (spender : Adr) (data : Bytes),
-      Log.mk weth [Weth9.approvalTopic, pair.toB256, spender.toB256] data ∉
-        link.beforePairReceiptLogs) :
-    JointCheckpoint2F pair usdc weth (FiniteCheckpoint.rowKeys usdcRows) wd.keys
-      history.pairDeployment.keys history.pairDeployment.model B.state :=
-  checkpoint_at_bound_deployment_model_of_receipts anchor wd history.pairDeployment link
-    holderFresh excluded logs
-
 /-- The frozen proxy address is the historical USDC producer's address. -/
 theorem usdc_history_address : usdc = Usdc.usdcProxy := by
   decide +kernel

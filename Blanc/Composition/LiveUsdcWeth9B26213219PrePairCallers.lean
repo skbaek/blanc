@@ -15,12 +15,6 @@ namespace Blanc.Composition.LiveUsdcWeth9B26213219
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 
-/-- The exact raw entries before createPair, excluding the creation transaction. -/
-def DeploymentHistoryLink.beforePairRawFrames {checkpoint : BlockChain}
-    {wd : WethDeploymentTo checkpoint} {pd : PairDeploymentTo checkpoint}
-    (link : DeploymentHistoryLink wd pd) : List Exec.Deriv :=
-  link.earlierTrace.rawFrames ++ pd.cut.before.rawFrames
-
 /-- All earlier sender queries come from the original WETH deployment history,
 including transactions whose VM execution later fails. -/
 theorem DeploymentHistoryLink.beforePairQueries_subset {checkpoint : BlockChain}
@@ -89,25 +83,6 @@ theorem DeploymentHistoryLink.beforePair_callers_of_retained_lifetime {checkpoin
   · exact earlierCallers G earlier
   · exact prefixCallers G before
 
-/-- The caller conclusion for every original retained pre-Pair frame follows
-from the separate lifetime obligations and original sender-query exclusion. -/
-theorem DeploymentHistoryLink.beforePair_callers_of_lifetime {checkpoint : BlockChain}
-    {wd : WethDeploymentTo checkpoint} {pd : PairDeploymentTo checkpoint}
-    (link : DeploymentHistoryLink wd pd)
-    (excluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
-    (avoid : ∀ root ∈ link.beforePairRawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ pair)
-    (initial : wd.cut.afterBenv.state.getCode pair = ByteArray.empty) :
-    ∀ G ∈ link.beforePairFrames, G.sevm.caller ≠ pair := by
-  apply link.beforePair_callers_of_retained_lifetime excluded (initial := initial)
-  intro root member
-  apply avoid (Blanc.Exec.Frame.rootDeriv (frame := root))
-  rcases List.mem_append.mp member with earlier | before
-  · exact List.mem_append_left _
-      (link.earlierTrace.mem_rawFrames_of_mem_settledFrames root earlier)
-  · exact List.mem_append_right _
-      (pd.cut.before.mem_rawFrames_of_mem_settledFrames root before)
-
 /-- Constructor zero, structural earlier callers, exact creation storage
 preservation and later Pair runtime facts jointly prove the tracked zero rows. -/
 theorem DeploymentHistoryLink.allowance_zero_of_retained_lifetime {checkpoint : BlockChain}
@@ -122,21 +97,6 @@ theorem DeploymentHistoryLink.allowance_zero_of_retained_lifetime {checkpoint : 
   apply link.allowance_zero_of_before_pair excluded
   intro G member _ caller
   exact (link.beforePair_callers_of_retained_lifetime excluded avoid initial G member caller).elim
-
-/-- Constructor zero, structural earlier callers, exact creation storage
-preservation and later Pair runtime facts jointly prove the tracked zero rows. -/
-theorem DeploymentHistoryLink.allowance_zero_of_lifetime {checkpoint : BlockChain}
-    {wd : WethDeploymentTo checkpoint} {pd : PairDeploymentTo checkpoint}
-    (link : DeploymentHistoryLink wd pd)
-    (excluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
-    (avoid : ∀ root ∈ link.beforePairRawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ pair)
-    (initial : wd.cut.afterBenv.state.getCode pair = ByteArray.empty) :
-    ∀ g, wd.keys (.allow pair g) →
-      (checkpoint.state.getStor weth).get (Weth9.allowSlot pair g) = 0 := by
-  apply link.allowance_zero_of_before_pair excluded
-  intro G member _ caller
-  exact (link.beforePair_callers_of_lifetime excluded avoid initial G member caller).elim
 
 open Blanc.Composition.UniswapV2PairUsdcWeth9 in
 /-- The same historical Pair model yields a hybrid checkpoint from structural
@@ -154,22 +114,5 @@ theorem checkpoint_at_deployment_model_of_retained_lifetime {checkpoint : BlockC
   obtain ⟨sumNof, foot⟩ := wd.foot
   exact checkpoint_of_history reads pd.rep foot sumNof
     (reads.weth_tracked foot holderFresh) (link.allowance_zero_of_retained_lifetime excluded avoid initial)
-
-open Blanc.Composition.UniswapV2PairUsdcWeth9 in
-/-- The same historical Pair model yields a hybrid checkpoint from structural
-lifetime premises, without a receipt-absence or endpoint allowance premise. -/
-theorem checkpoint_at_deployment_model_of_lifetime {checkpoint : BlockChain}
-    (reads : ObservedAt checkpoint.state) (wd : WethDeploymentTo checkpoint)
-    (pd : PairDeploymentTo checkpoint) (link : DeploymentHistoryLink wd pd)
-    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots wd.keys (.bal pair))
-    (excluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
-    (avoid : ∀ root ∈ link.beforePairRawFrames, root.sevm.codeAddress = none →
-      root.sevm.currentTarget ≠ pair)
-    (initial : wd.cut.afterBenv.state.getCode pair = ByteArray.empty) :
-    JointCheckpoint2F pair usdc weth (FiniteCheckpoint.rowKeys usdcRows) wd.keys pd.keys
-      pd.model checkpoint.state := by
-  obtain ⟨sumNof, foot⟩ := wd.foot
-  exact checkpoint_of_history reads pd.rep foot sumNof
-    (reads.weth_tracked foot holderFresh) (link.allowance_zero_of_lifetime excluded avoid initial)
 
 end Blanc.Composition.LiveUsdcWeth9B26213219

@@ -75,8 +75,8 @@ theorem deposit_body_obligation
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
-      effect⟩ :=
-    deposit_body_effect (hfork := hfork) config memoryWf lookup stack run
+      effect, -⟩ :=
+    deposit_body_effect_linked (hfork := hfork) config memoryWf lookup stack run
   exact inboundEffect_preserves_conserved receiverValid supplyEq stable
     roomFits effect conserved
 
@@ -96,8 +96,8 @@ theorem mint_body_obligation
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨supply, supplyEq, stable, -, -, receiverValid, -, roomFits,
-      effect⟩ :=
-    mint_body_effect (hfork := hfork) config memoryWf lookup stack run
+      effect, -⟩ :=
+    mint_body_effect_linked (hfork := hfork) config memoryWf lookup stack run
   exact inboundEffect_preserves_conserved receiverValid supplyEq stable
     roomFits effect conserved
 
@@ -121,8 +121,8 @@ theorem withdraw_body_obligation
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨_supply, _supplyEq, _stable, -, -, -, -, ownerValid, -, covered, -,
-      effect⟩ :=
-    withdraw_body_effect (hfork := hfork) config memoryWf afterLookup burnLookup stack run
+      effect, -⟩ :=
+    withdraw_body_effect_quiet (hfork := hfork) config memoryWf afterLookup burnLookup stack run
   exact outboundEffect_preserves_conserved ownerValid covered effect conserved
 
 /-- Body-level configured obligation for `redeem`: mirror of `withdraw`. -/
@@ -143,8 +143,8 @@ theorem redeem_body_obligation
     LedgerConserved Blanc.ProrataWethVault.supplySlot
       (Devm.getStor post sevm.currentTarget) := by
   obtain ⟨_supply, _supplyEq, _stable, -, -, -, -, ownerValid, -, covered, -,
-      effect⟩ :=
-    redeem_body_effect (hfork := hfork) config memoryWf afterLookup burnLookup stack run
+      effect, -⟩ :=
+    redeem_body_effect_quiet (hfork := hfork) config memoryWf afterLookup burnLookup stack run
   exact outboundEffect_preserves_conserved ownerValid covered effect conserved
 
 /-- Enter a flow body from a message run, carrying configuration, memory

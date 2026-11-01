@@ -103,73 +103,6 @@ theorem checkJointHybrid_sound {pair usdc weth : Adr} {urows : List (Usdc.Key ×
       usdcNotPrecompile := fun s hf => hprecomp s.fork hf
       pairNotPrecompile := fun s hf => hpairPrecomp s.fork hf }
 
-/-- Equality of exactly the world reads used by the hybrid check. The USDC row
-quantifier ranges only over the supplied finite list, not over all storage. -/
-structure HybridReadsEq (pair usdc weth : Adr) (urows : List (Usdc.Key × B256))
-    (w v : Jaune.State) : Prop where
-  pairCode : w.getCode pair = v.getCode pair
-  wethCode : w.getCode weth = v.getCode weth
-  usdcCode : w.getCode usdc = v.getCode usdc
-  implCode : w.getCode Usdc.usdcImpl = v.getCode Usdc.usdcImpl
-  libCode : w.getCode Usdc.usdcLib = v.getCode Usdc.usdcLib
-  implWord : (w.getStor usdc).get Usdc.implSlot = (v.getStor usdc).get Usdc.implSlot
-  initialized : (w.getStor usdc).get 8 = (v.getStor usdc).get 8
-  version : (w.getStor usdc).get 18 = (v.getStor usdc).get 18
-  usdcRows : ∀ r ∈ urows, (w.getStor usdc).get r.2 = (v.getStor usdc).get r.2
-  wethBalance : (w.getStor weth).get (Weth9.balSlot pair) =
-    (v.getStor weth).get (Weth9.balSlot pair)
-
-/-- The holder check depends only on the words in its finite row list. -/
-theorem checkUsdcHolder_congr {rows : List (Usdc.Key × B256)} {s t : Stor}
-    {a : Adr} {n : Nat} (reads : ∀ r ∈ rows, s.get r.2 = t.get r.2) :
-    checkUsdcHolder rows s a n = checkUsdcHolder rows t a n := by
-  apply Bool.eq_iff_iff.mpr
-  simp only [checkUsdcHolder, Bool.and_eq_true, List.any_eq_true, List.all_eq_true]
-  constructor
-  · rintro ⟨⟨r, hr, hc⟩, ha⟩
-    refine ⟨⟨r, hr, ?_⟩, ?_⟩
-    · rw [← reads r hr]
-      exact hc
-    · intro r hr
-      rw [← reads r hr]
-      exact ha r hr
-  · rintro ⟨⟨r, hr, hc⟩, ha⟩
-    refine ⟨⟨r, hr, ?_⟩, ?_⟩
-    · rw [reads r hr]
-      exact hc
-    · intro r hr
-      rw [reads r hr]
-      exact ha r hr
-
-/-- A finite snapshot can supply the check without supplying the actual world's
-unlisted storage or accounts. Historical premises still refer to the actual world. -/
-theorem checkJointHybrid_congr {pair usdc weth : Adr} {urows : List (Usdc.Key × B256)}
-    {st : UniswapV2Pair.State} {w v : Jaune.State}
-    (reads : HybridReadsEq pair usdc weth urows w v) :
-    checkJointHybrid pair usdc weth urows st w =
-      checkJointHybrid pair usdc weth urows st v := by
-  have holder := checkUsdcHolder_congr (a := pair) (n := st.reserve0.val) reads.usdcRows
-  simp only [checkJointHybrid, checkWeth9PairFinite, Usdc.checkUsdcF,
-    reads.pairCode, reads.wethCode, reads.usdcCode, reads.implCode, reads.libCode,
-    reads.implWord, reads.initialized, reads.version, reads.wethBalance, holder]
-
-/-- Transfer only the finite reads from a checked snapshot; retain all historical
-facts on the actual world. No final checkpoint is an input. -/
-theorem checkJointHybrid_sound_of_reads {pair usdc weth : Adr}
-    {urows : List (Usdc.Key × B256)} {KW : Weth9.Key → Prop} {KP : WriterKey → Prop}
-    {st : UniswapV2Pair.State} {w snapshot : Jaune.State}
-    (reads : HybridReadsEq pair usdc weth urows w snapshot)
-    (pairRep : WriterRep KP (w.getStor pair) st)
-    (wethFoot : Weth9.FootInv KW (w.getStor weth) (w.bal weth))
-    (sumNof : SumNof w.bal) (tracked : KW (.bal pair))
-    (noAllowance : ∀ g, KW (.allow pair g) →
-      (w.getStor weth).get (Weth9.allowSlot pair g) = 0)
-    (checked : checkJointHybrid pair usdc weth urows st snapshot = true) :
-    JointCheckpoint2F pair usdc weth (rowKeys urows) KW KP st w := by
-  apply checkJointHybrid_sound pairRep wethFoot sumNof tracked noAllowance
-  rw [checkJointHybrid_congr reads]
-  exact checked
-
 /-- Only the Pair's ten fixed storage words are compared. No LP mapping row
 is included, and the reserved mapping roots at slots 1, 2 and 4 are not read. -/
 structure PairFixedReadsEq (s t : Stor) : Prop where
@@ -208,32 +141,5 @@ theorem checkJointHybrid_model_congr {pair usdc weth : Adr}
   have ht1 := token1.symm.trans token1'
   have hu := unlocked.symm.trans unlocked'
   simp only [checkJointHybrid, checkWeth9PairFinite, ht0, ht1, hu, reserve0, reserve1]
-
-/-- A fully finite snapshot check: fixed Pair words and the hybrid finite facts.
-The finite model's maps need not represent the actual Pair's mapping storage. -/
-def checkJointHybridSnapshot (pair usdc weth : Adr) (urows : List (Usdc.Key × B256))
-    (finiteSt : UniswapV2Pair.State) (snapshot : Jaune.State) : Bool :=
-  decide (WriterFixedMatches (snapshot.getStor pair) finiteSt) &&
-    checkJointHybrid pair usdc weth urows finiteSt snapshot
-
-/-- Instantiate the historical model from a finite snapshot's fixed fields.
-The conclusion preserves the original historical model and its full maps. -/
-theorem checkJointHybridSnapshot_sound {pair usdc weth : Adr}
-    {urows : List (Usdc.Key × B256)} {KW : Weth9.Key → Prop} {KP : WriterKey → Prop}
-    {st finiteSt : UniswapV2Pair.State} {w snapshot : Jaune.State}
-    (reads : HybridReadsEq pair usdc weth urows w snapshot)
-    (pairReads : PairFixedReadsEq (w.getStor pair) (snapshot.getStor pair))
-    (pairRep : WriterRep KP (w.getStor pair) st)
-    (wethFoot : Weth9.FootInv KW (w.getStor weth) (w.bal weth))
-    (sumNof : SumNof w.bal) (tracked : KW (.bal pair))
-    (noAllowance : ∀ g, KW (.allow pair g) →
-      (w.getStor weth).get (Weth9.allowSlot pair g) = 0)
-    (checked : checkJointHybridSnapshot pair usdc weth urows finiteSt snapshot = true) :
-    JointCheckpoint2F pair usdc weth (rowKeys urows) KW KP st w := by
-  simp only [checkJointHybridSnapshot, Bool.and_eq_true, decide_eq_true_eq] at checked
-  have fixed := pairReads.fixedMatches checked.1
-  apply checkJointHybrid_sound pairRep wethFoot sumNof tracked noAllowance
-  rw [checkJointHybrid_model_congr pairRep.fixed fixed, checkJointHybrid_congr reads]
-  exact checked.2
 
 end Blanc.Composition.UniswapV2PairUsdcWeth9

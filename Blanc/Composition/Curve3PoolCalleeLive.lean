@@ -90,17 +90,6 @@ section Cross
 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {t ii is oi os : B256}
 
-theorem popped_eq :
-    (St b (Nat.toB256 G :: t :: ii :: is :: oi :: os :: S) M G).setMach
-      ⟨S, (St b (Nat.toB256 G :: t :: ii :: is :: oi :: os :: S) M G).memory,
-        (St b (Nat.toB256 G :: t :: ii :: is :: oi :: os :: S) M G).gasLeft,
-        (St b (Nat.toB256 G :: t :: ii :: is :: oi :: os :: S) M G).stateGas⟩ =
-      popped b S M G := rfl
-
-theorem popped_extCost (g : Nat) :
-    (popped b S M g).extCost [⟨ii.toNat, is.toNat⟩, ⟨oi.toNat, os.toNat⟩] =
-      ext b S M ii is oi os := rfl
-
 theorem warmed_delegation (hdel : getDelegatedCodeAddress (b.getCode t.toAdr) = none) :
     accessDelegation (addAccessedAddress (popped b S M G) t.toAdr) t.toAdr =
       ⟨false, t.toAdr, b.getCode t.toAdr, 0, warmed b S M G t⟩ := by
@@ -275,13 +264,9 @@ variable (sevm : Sevm) (b : Devm) (S : List B256) (M : Mem) (G : Nat) (t ii is o
 
 theorem callMsg0_code : (initSevm (callMsg0 sevm b S M G t ii is oi os)).code = b.getCode t.toAdr :=
   rfl
-theorem callMsg0_benvStat :
-    (initSevm (callMsg0 sevm b S M G t ii is oi os)).benvStat = sevm.benvStat := rfl
 theorem callMsg0_codeAddress :
     (initSevm (callMsg0 sevm b S M G t ii is oi os)).codeAddress = some t.toAdr := rfl
 theorem callMsg0_value : (initSevm (callMsg0 sevm b S M G t ii is oi os)).value = 0 := rfl
-theorem callMsg0_caller :
-    (initSevm (callMsg0 sevm b S M G t ii is oi os)).caller = sevm.currentTarget := rfl
 theorem callMsg0_currentTarget :
     (initSevm (callMsg0 sevm b S M G t ii is oi os)).currentTarget = t.toAdr := rfl
 theorem callMsg0_isStatic :
@@ -294,8 +279,6 @@ theorem callMsg0_gas : (callMsg0 sevm b S M G t ii is oi os).gas = fwd b S M G t
   rfl
 theorem callMsg0_getStor (a : Adr) :
     Devm.getStor (initDevm (callMsg0 sevm b S M G t ii is oi os)) a = Devm.getStor b a := rfl
-theorem callMsg0_getCode (a : Adr) :
-    (initDevm (callMsg0 sevm b S M G t ii is oi os)).getCode a = b.getCode a := rfl
 theorem callMsg0_error : (initDevm (callMsg0 sevm b S M G t ii is oi os)).error = none := rfl
 
 theorem staticMsg_code : (initSevm (staticMsg sevm b S M G t ii is oi os)).code = b.getCode t.toAdr :=
@@ -313,14 +296,9 @@ theorem staticMsg_gas : (staticMsg sevm b S M G t ii is oi os).gas = fwd b S M G
   rfl
 theorem staticMsg_getStor (a : Adr) :
     Devm.getStor (initDevm (staticMsg sevm b S M G t ii is oi os)) a = Devm.getStor b a := rfl
-theorem staticMsg_getCode (a : Adr) :
-    (initDevm (staticMsg sevm b S M G t ii is oi os)).getCode a = b.getCode a := rfl
 theorem staticMsg_error : (initDevm (staticMsg sevm b S M G t ii is oi os)).error = none := rfl
 
 theorem parent_stack : (parent b S M G t ii is oi os).stack = S := rfl
-theorem parent_gasLeft :
-    (parent b S M G t ii is oi os).gasLeft =
-      G - (fwd b S M G t ii is oi os + acc b t + ext b S M ii is oi os) := rfl
 theorem parent_mem_warm (a : Adr) (h : a ∈ b.accessedAddresses) :
     a ∈ (parent b S M G t ii is oi os).accessedAddresses :=
   Std.HashSet.mem_insert.2 (Or.inr h)
@@ -334,7 +312,6 @@ section Resumed
 variable (p c : Devm) (oi os : Nat)
 
 theorem callChildPost_stack' : (callChildPost p c oi os).stack = 1 :: p.stack := rfl
-theorem callChildPost_gasLeft' : (callChildPost p c oi os).gasLeft = p.gasLeft + c.gasLeft := rfl
 theorem callChildPost_state' : (callChildPost p c oi os).state = c.state := rfl
 theorem callChildPost_returnData' : (callChildPost p c oi os).returnData = c.output := rfl
 theorem callChildPost_mem_warm (a : Adr) (h : a ∈ p.accessedAddresses) :

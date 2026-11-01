@@ -14,14 +14,6 @@ namespace CDObservation
 
 open HistoryAnchorObservationData
 
-theorem c_fork : mainnetChainConfig.forkAt C.blockNumber C.blockTimestamp =
-    .ok .byzantium := by decide +kernel
-
-theorem d_fork : mainnetChainConfig.forkAt D.blockNumber D.blockTimestamp =
-    .ok .muirGlacier := by decide +kernel
-
-theorem c_bloom : C.bloom = HistoricalBloomExclusion.observedCBloom := by decide +kernel
-theorem d_bloom : D.bloom = HistoricalBloomExclusion.observedDBloom := by decide +kernel
 theorem c_success : C.receipt.2.succeeded = true := rfl
 theorem d_success : D.receipt.2.succeeded = true := rfl
 

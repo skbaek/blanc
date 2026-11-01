@@ -25,8 +25,6 @@ def ccAcc : Nat := AllGasCall.access b S M G t
 
 def ccFwd : Nat := AllGasCall.forwarded b S M G t ii is oi
 
-def ccWarm : Devm := AllGasCall.warmed b S M G t
-
 def ccParent : Devm := AllGasCall.parent b S M G t ii is oi
 
 def ccMsg : Msg := AllGasCall.message sevm b S M G t ii is oi
