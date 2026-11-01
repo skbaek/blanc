@@ -504,18 +504,18 @@ theorem pause_stageArgs_runCompiled
 /-- The world after `pause`'s assignment `SLOAD`: the lock write, then the
 warming that read may have done. -/
 def pauseExpiryBase (sevm : Sevm) (base : Devm) (target : B256) : Devm :=
-  temporalSloadBase sevm (pauseLockPost sevm base) (assignmentSlot target)
+  afterSload sevm (pauseLockPost sevm base) (assignmentSlot target)
 
 /-- The world after `pause`'s liveness `SLOAD`. -/
 def pauseDurationBase (sevm : Sevm) (base : Devm) (target pauser : B256) :
     Devm :=
-  temporalSloadBase sevm (pauseExpiryBase sevm base target) (expirySlot pauser)
+  afterSload sevm (pauseExpiryBase sevm base target) (expirySlot pauser)
 
 /-- The world `pause` hands the Registry kernel: the lock is taken and the
 three read keys are warm. -/
 def pauseKernelBase (sevm : Sevm) (base : Devm) (target pauser : B256) :
     Devm :=
-  temporalSloadBase sevm (pauseDurationBase sevm base target pauser)
+  afterSload sevm (pauseDurationBase sevm base target pauser)
     pauseDurationSlot
 
 private theorem pausePushNotZero_prepend_runCompiled
@@ -678,7 +678,7 @@ takes the lock, stages the five scratch words, and hands the shared Registry
 kernel a generic continuation.  It does **not** enter the kernel.
 
 Reserve `469` plus the three storage reads, whose charges are supplied as
-`temporalSloadCost` equations because warmth is a fact about the frame:
+`sloadCost` equations because warmth is a fact about the frame:
 
 * `21` for `requireStaticArgs 1` and `33` for `canonicalAddressArg 0`;
 * `120` for the lock `TLOAD` and its branch, and `106` for the lock `TSTORE`;
@@ -707,18 +707,18 @@ theorem pause_body_runCompiled
     (hauthorizationStorage :
       (pauseLockPost sevm base).getStorVal sevm.currentTarget
         (assignmentSlot target) = pauser)
-    (hassignmentCost : temporalSloadCost sevm (pauseLockPost sevm base)
+    (hassignmentCost : sloadCost sevm (pauseLockPost sevm base)
       (assignmentSlot target) = assignmentCost)
     (hexpiryStorage :
       (pauseExpiryBase sevm base target).getStorVal sevm.currentTarget
         (expirySlot pauser) = expiry)
-    (hexpiryCost : temporalSloadCost sevm (pauseExpiryBase sevm base target)
+    (hexpiryCost : sloadCost sevm (pauseExpiryBase sevm base target)
       (expirySlot pauser) = expiryCost)
     (hlive : sevm.benvStat.time < expiry)
     (hdurationStorage :
       (pauseDurationBase sevm base target pauser).getStorVal
         sevm.currentTarget pauseDurationSlot = duration)
-    (hdurationCost : temporalSloadCost sevm
+    (hdurationCost : sloadCost sevm
       (pauseDurationBase sevm base target pauser) pauseDurationSlot =
         durationCost)
     (hstatic : sevm.isStatic = false)

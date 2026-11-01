@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerSites
+import Blanc.ForwardStorageAccess
 
 /-!
 Exact access and temporal authority for the Lido CircuitBreaker runtime.
@@ -102,56 +103,36 @@ theorem setHeartbeatInterval_sstoreValueCost_partition
 def heartbeatStoreLogTailGasWarmUpdate : Nat := 4310
 def heartbeatStoreLogTailGasWarmOther : Nat := 4310
 
-/-- The state component produced by one SLOAD's access-list update. -/
-def heartbeatSloadBase (sevm : Sevm) (base : Devm) (key : B256) : Devm :=
-  if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys then
-    base
-  else
-    addAccessedStorageKey base sevm.currentTarget key
-
-/-- The actual warm/cold charge of one SLOAD at its current sequential base. -/
-def heartbeatSloadCost (sevm : Sevm) (base : Devm) (key : B256) : Nat :=
-  if (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys then
-    gasWarmAccess
-  else
-    gasColdSload
-
-theorem heartbeatSloadBase_getStorVal
+theorem afterSload_getStorVal
     (sevm : Sevm) (base : Devm) (key : B256) (a : Adr) (k : B256) :
-    (heartbeatSloadBase sevm base key).getStorVal a k =
+    (afterSload sevm base key).getStorVal a k =
       base.getStorVal a k := by
-  unfold heartbeatSloadBase
+  unfold afterSload
   split_ifs <;> rfl
 
-theorem heartbeatSloadBase_logs
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (heartbeatSloadBase sevm base key).logs = base.logs := by
-  unfold heartbeatSloadBase
-  split_ifs <;> rfl
-
-theorem heartbeatSloadBase_getOrigStorVal
+theorem afterSload_getOrigStorVal
     (sevm : Sevm) (base : Devm) (key : B256) (a : Adr) (k : B256) :
-    (heartbeatSloadBase sevm base key).getOrigStorVal sevm a k =
+    (afterSload sevm base key).getOrigStorVal sevm a k =
       base.getOrigStorVal sevm a k := by
-  unfold heartbeatSloadBase
+  unfold afterSload
   split_ifs <;> rfl
 
-private theorem heartbeatSloadBase_preserves
+private theorem afterSload_preserves
     (sevm : Sevm) (base : Devm) (key : B256) {pair : Adr × B256}
     (hpair : pair ∈ base.accessedStorageKeys) :
-    pair ∈ (heartbeatSloadBase sevm base key).accessedStorageKeys := by
-  unfold heartbeatSloadBase
+    pair ∈ (afterSload sevm base key).accessedStorageKeys := by
+  unfold afterSload
   split_ifs
   · exact hpair
   · change pair ∈ base.accessedStorageKeys.insert
       ⟨sevm.currentTarget, key⟩
     exact Std.HashSet.mem_insert.mpr (Or.inr hpair)
 
-private theorem heartbeatSloadBase_self
+theorem afterSload_warm
     (sevm : Sevm) (base : Devm) (key : B256) :
     (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
-      (heartbeatSloadBase sevm base key).accessedStorageKeys := by
-  unfold heartbeatSloadBase
+      (afterSload sevm base key).accessedStorageKeys := by
+  unfold afterSload
   split_ifs with hwarm
   · exact hwarm
   · change (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
@@ -159,7 +140,7 @@ private theorem heartbeatSloadBase_self
     exact Std.HashSet.mem_insert_self
 
 def heartbeatAfterCountLoad (sevm : Sevm) (base : Devm) : Devm :=
-  heartbeatSloadBase sevm base (countSlot sevm.caller.toB256)
+  afterSload sevm base (countSlot sevm.caller.toB256)
 
 /-- Exact first heartbeat chunk: caller tagging and the count SLOAD map an
 arbitrary warm/cold entry base to `heartbeatAfterCountLoad`, charging the
@@ -172,7 +153,7 @@ private theorem heartbeat_countLoad_runCompiled
       (countSlot sevm.caller.toB256) = count) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], Mem.empty,
-        G + 8 + heartbeatSloadCost sevm base
+        G + 8 + sloadCost sevm base
           (countSlot sevm.caller.toB256), base.stateGas⟩)
       (Ninst.caller ::: tagTop countRegion +++ Ninst.sload ::: Func.stop)
       ((heartbeatAfterCountLoad sevm base).setMach
@@ -180,8 +161,8 @@ private theorem heartbeat_countLoad_runCompiled
   by_cases hwarm : (⟨sevm.currentTarget,
       countSlot sevm.caller.toB256⟩ : Adr × B256) ∈
       base.accessedStorageKeys
-  · unfold tagTop heartbeatAfterCountLoad heartbeatSloadBase
-      heartbeatSloadCost
+  · unfold tagTop heartbeatAfterCountLoad afterSload
+      sloadCost
     simp only [hwarm, ite_eq_left]
     func_run [countSlot sevm.caller.toB256]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -189,8 +170,8 @@ private theorem heartbeat_countLoad_runCompiled
       apply Func.RunCompiled.last
       simp only [Linst.Run, Linst.run, gasWarmAccess, Nat.reduceSubDiff, Devm.stateGas,
         Devm.getStorVal_setMach, hcount]
-  · unfold tagTop heartbeatAfterCountLoad heartbeatSloadBase
-      heartbeatSloadCost
+  · unfold tagTop heartbeatAfterCountLoad afterSload
+      sloadCost
     simp only [hwarm, ↓reduceIte]
     func_run [countSlot sevm.caller.toB256]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -214,7 +195,7 @@ private theorem heartbeat_countLoad_runCompiled_then
         ⟨[count], Mem.empty, G, (heartbeatAfterCountLoad sevm base).stateGas⟩) tail post) :
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], Mem.empty,
-        G + 8 + heartbeatSloadCost sevm base
+        G + 8 + sloadCost sevm base
           (countSlot sevm.caller.toB256), base.stateGas⟩)
       (Ninst.caller ::: tagTop countRegion +++ Ninst.sload ::: tail)
       post := by
@@ -260,7 +241,7 @@ private theorem heartbeat_registeredGuard_runCompiled_then
     exact htail
 
 def heartbeatAfterExpiryLoad (sevm : Sevm) (base : Devm) : Devm :=
-  heartbeatSloadBase sevm (heartbeatAfterCountLoad sevm base)
+  afterSload sevm (heartbeatAfterCountLoad sevm base)
     (expirySlot sevm.caller.toB256)
 
 /-- Exact second heartbeat chunk: the expiry SLOAD advances the sequential
@@ -274,7 +255,7 @@ private theorem heartbeat_expiryLoad_runCompiled
       (expirySlot sevm.caller.toB256) = oldExpiry) :
     Func.RunCompiled fs sevm
       ((heartbeatAfterCountLoad sevm base).setMach ⟨[], Mem.empty,
-        G + 8 + heartbeatSloadCost sevm
+        G + 8 + sloadCost sevm
           (heartbeatAfterCountLoad sevm base)
           (expirySlot sevm.caller.toB256), (heartbeatAfterCountLoad sevm base).stateGas⟩)
       (Ninst.caller ::: tagTop expiryRegion +++ Ninst.sload ::: Func.stop)
@@ -283,24 +264,24 @@ private theorem heartbeat_expiryLoad_runCompiled
   by_cases hwarm : (⟨sevm.currentTarget,
       expirySlot sevm.caller.toB256⟩ : Adr × B256) ∈
       (heartbeatAfterCountLoad sevm base).accessedStorageKeys
-  · unfold tagTop heartbeatAfterExpiryLoad heartbeatSloadBase
-      heartbeatSloadCost
+  · unfold tagTop heartbeatAfterExpiryLoad afterSload
+      sloadCost
     simp only [hwarm, ite_eq_left]
     func_run [expirySlot sevm.caller.toB256]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case a =>
       apply Func.RunCompiled.last
       simp only [Linst.Run, Linst.run, heartbeatAfterCountLoad, gasWarmAccess, Nat.reduceSubDiff,
-        Devm.stateGas, Devm.getStorVal_setMach, heartbeatSloadBase_getStorVal, holdExpiry]
-  · unfold tagTop heartbeatAfterExpiryLoad heartbeatSloadBase
-      heartbeatSloadCost
+        Devm.stateGas, Devm.getStorVal_setMach, afterSload_getStorVal, holdExpiry]
+  · unfold tagTop heartbeatAfterExpiryLoad afterSload
+      sloadCost
     simp only [hwarm, ↓reduceIte]
     func_run [expirySlot sevm.caller.toB256]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     case a =>
       apply Func.RunCompiled.last
       simp only [Linst.Run, Linst.run, heartbeatAfterCountLoad, gasColdSload, Nat.reduceSubDiff,
-        Devm.stateGas, Devm.getStorVal_setMach, heartbeatSloadBase_getStorVal, holdExpiry,
+        Devm.stateGas, Devm.getStorVal_setMach, afterSload_getStorVal, holdExpiry,
         Devm.addAccessedStorageKey_setMach_setMach, addAccessedStorageKey_stateGas]
 
 /-- Continue from the exact expiry-load chunk without changing its source
@@ -317,7 +298,7 @@ private theorem heartbeat_expiryLoad_runCompiled_then
         ⟨[oldExpiry], Mem.empty, G, (heartbeatAfterExpiryLoad sevm base).stateGas⟩) tail post) :
     Func.RunCompiled fs sevm
       ((heartbeatAfterCountLoad sevm base).setMach ⟨[], Mem.empty,
-        G + 8 + heartbeatSloadCost sevm
+        G + 8 + sloadCost sevm
           (heartbeatAfterCountLoad sevm base)
           (expirySlot sevm.caller.toB256), (heartbeatAfterCountLoad sevm base).stateGas⟩)
       (Ninst.caller ::: tagTop expiryRegion +++ Ninst.sload ::: tail)
@@ -367,7 +348,7 @@ private theorem heartbeat_liveGuard_runCompiled_then
     exact htail
 
 def heartbeatAfterIntervalLoad (sevm : Sevm) (base : Devm) : Devm :=
-  heartbeatSloadBase sevm (heartbeatAfterExpiryLoad sevm base)
+  afterSload sevm (heartbeatAfterExpiryLoad sevm base)
     heartbeatIntervalSlot
 
 /-- Exact third heartbeat chunk: pushing and loading the interval advances the
@@ -381,7 +362,7 @@ private theorem heartbeat_intervalLoad_runCompiled
       heartbeatIntervalSlot = interval) :
     Func.RunCompiled fs sevm
       ((heartbeatAfterExpiryLoad sevm base).setMach ⟨[oldExpiry], Mem.empty,
-        G + 3 + heartbeatSloadCost sevm
+        G + 3 + sloadCost sevm
           (heartbeatAfterExpiryLoad sevm base)
           heartbeatIntervalSlot, (heartbeatAfterExpiryLoad sevm base).stateGas⟩)
       (Ninst.pushB256 heartbeatIntervalSlot ::: Ninst.sload ::: Func.stop)
@@ -390,7 +371,7 @@ private theorem heartbeat_intervalLoad_runCompiled
   by_cases hwarm : (⟨sevm.currentTarget,
       heartbeatIntervalSlot⟩ : Adr × B256) ∈
       (heartbeatAfterExpiryLoad sevm base).accessedStorageKeys
-  · unfold heartbeatAfterIntervalLoad heartbeatSloadBase heartbeatSloadCost
+  · unfold heartbeatAfterIntervalLoad afterSload sloadCost
     simp only [hwarm, ite_eq_left]
     func_run
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -398,8 +379,8 @@ private theorem heartbeat_intervalLoad_runCompiled
       apply Func.RunCompiled.last
       simp only [Linst.Run, Linst.run, heartbeatAfterExpiryLoad, heartbeatAfterCountLoad,
         gasWarmAccess, Nat.reduceSubDiff, Devm.stateGas, Devm.getStorVal_setMach,
-        heartbeatSloadBase_getStorVal, hinterval]
-  · unfold heartbeatAfterIntervalLoad heartbeatSloadBase heartbeatSloadCost
+        afterSload_getStorVal, hinterval]
+  · unfold heartbeatAfterIntervalLoad afterSload sloadCost
     simp only [hwarm, ↓reduceIte]
     func_run
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -407,7 +388,7 @@ private theorem heartbeat_intervalLoad_runCompiled
       apply Func.RunCompiled.last
       simp only [Linst.Run, Linst.run, heartbeatAfterExpiryLoad, heartbeatAfterCountLoad,
         gasColdSload, Nat.reduceSubDiff, Devm.stateGas, Devm.getStorVal_setMach,
-        heartbeatSloadBase_getStorVal, hinterval, Devm.addAccessedStorageKey_setMach_setMach,
+        afterSload_getStorVal, hinterval, Devm.addAccessedStorageKey_setMach_setMach,
         addAccessedStorageKey_stateGas]
 
 /-- Continue the already-proved exact interval push/SLOAD with an arbitrary
@@ -425,7 +406,7 @@ private theorem heartbeat_intervalLoad_runCompiled_then
       tail post) :
     Func.RunCompiled fs sevm
       ((heartbeatAfterExpiryLoad sevm base).setMach ⟨[carried], Mem.empty,
-        G + 3 + heartbeatSloadCost sevm
+        G + 3 + sloadCost sevm
           (heartbeatAfterExpiryLoad sevm base)
           heartbeatIntervalSlot, (heartbeatAfterExpiryLoad sevm base).stateGas⟩)
       (Ninst.pushB256 heartbeatIntervalSlot ::: Ninst.sload ::: tail)
@@ -459,7 +440,7 @@ private theorem heartbeat_checkedExpiry_runCompiled_then
         ⟨[expiry], Mem.empty, G, (heartbeatAfterIntervalLoad sevm base).stateGas⟩) continuation post) :
     Func.RunCompiled fs sevm
       ((heartbeatAfterExpiryLoad sevm base).setMach ⟨[], Mem.empty,
-        G + 32 + heartbeatSloadCost sevm
+        G + 32 + sloadCost sevm
           (heartbeatAfterExpiryLoad sevm base)
           heartbeatIntervalSlot, (heartbeatAfterExpiryLoad sevm base).stateGas⟩)
       (checkedHeartbeatExpiry continuation)
@@ -498,9 +479,9 @@ private theorem heartbeat_checkedExpiry_runCompiled_then
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   rw [htime]
   have hgas :
-      G + 32 + heartbeatSloadCost sevm
+      G + 32 + sloadCost sevm
           (heartbeatAfterExpiryLoad sevm base) heartbeatIntervalSlot - 2 =
-        (G + 27) + 3 + heartbeatSloadCost sevm
+        (G + 27) + 3 + sloadCost sevm
           (heartbeatAfterExpiryLoad sevm base) heartbeatIntervalSlot := by
     omega
   rw [hgas]
@@ -511,9 +492,9 @@ theorem heartbeatAfterIntervalLoad_expiry_warm
     (⟨sevm.currentTarget, expirySlot sevm.caller.toB256⟩ : Adr × B256) ∈
       (heartbeatAfterIntervalLoad sevm base).accessedStorageKeys := by
   unfold heartbeatAfterIntervalLoad
-  apply heartbeatSloadBase_preserves
+  apply afterSload_preserves
   unfold heartbeatAfterExpiryLoad
-  exact heartbeatSloadBase_self sevm _ _
+  exact afterSload_warm sevm _ _
 
 /-- Worst-value-case sufficient gas with each SLOAD charged at its actual
 sequential warm/cold state.  A no-op or dirty SSTORE returns the 2800-gas
@@ -521,10 +502,10 @@ difference to the poststate. -/
 def heartbeatBodySuccessGas
     (sevm : Sevm) (base : Devm) : Nat :=
   4393 +
-    heartbeatSloadCost sevm base (countSlot sevm.caller.toB256) +
-    heartbeatSloadCost sevm (heartbeatAfterCountLoad sevm base)
+    sloadCost sevm base (countSlot sevm.caller.toB256) +
+    sloadCost sevm (heartbeatAfterCountLoad sevm base)
       (expirySlot sevm.caller.toB256) +
-    heartbeatSloadCost sevm (heartbeatAfterExpiryLoad sevm base)
+    sloadCost sevm (heartbeatAfterExpiryLoad sevm base)
       heartbeatIntervalSlot
 
 private theorem heartbeat_storeLogTail_runCompiled_update
@@ -759,11 +740,11 @@ private theorem heartbeat_body_runCompiled_generic
       post.logs = base.logs ++
         [⟨sevm.currentTarget,
           [heartbeatUpdatedEvent, sevm.caller.toB256], expiry.toBytes⟩] := by
-  let cCount := heartbeatSloadCost sevm base
+  let cCount := sloadCost sevm base
     (countSlot sevm.caller.toB256)
-  let cExpiry := heartbeatSloadCost sevm
+  let cExpiry := sloadCost sevm
     (heartbeatAfterCountLoad sevm base) (expirySlot sevm.caller.toB256)
-  let cInterval := heartbeatSloadCost sevm
+  let cInterval := sloadCost sevm
     (heartbeatAfterExpiryLoad sevm base) heartbeatIntervalSlot
   let gChecked := G + 4310
   let gLive := gChecked + 32 + cInterval
@@ -773,12 +754,12 @@ private theorem heartbeat_body_runCompiled_generic
   have htailHold : (heartbeatAfterIntervalLoad sevm base).getStorVal
       sevm.currentTarget (expirySlot sevm.caller.toB256) = oldExpiry := by
     simpa only [heartbeatAfterIntervalLoad, heartbeatAfterExpiryLoad, heartbeatAfterCountLoad,
-      heartbeatSloadBase_getStorVal] using holdExpiry
+      afterSload_getStorVal] using holdExpiry
   have htailOrig : (heartbeatAfterIntervalLoad sevm base).getOrigStorVal
       sevm sevm.currentTarget (expirySlot sevm.caller.toB256) =
       originalExpiry := by
     simpa only [heartbeatAfterIntervalLoad, heartbeatAfterExpiryLoad,
-      heartbeatAfterCountLoad, heartbeatSloadBase_getOrigStorVal] using horigExpiry
+      heartbeatAfterCountLoad, afterSload_getOrigStorVal] using horigExpiry
   rcases heartbeat_storeLogTail_runCompiled_partition fs sevm
       (heartbeatAfterIntervalLoad sevm base) hfork timestamp originalExpiry
       oldExpiry expiry G htailHold htailOrig
@@ -824,7 +805,7 @@ private theorem heartbeat_body_runCompiled_generic
   · rw [← hinitial]
     simpa only [heartbeat] using hbody
   · simpa only [heartbeatAfterIntervalLoad, heartbeatAfterExpiryLoad, heartbeatAfterCountLoad,
-    heartbeatSloadBase_logs] using hlogs
+    afterSload_logs] using hlogs
 
 /-- A successful direct heartbeat-body execution in the warm, nonzero-to-
 nonzero storage-update case.  The run fixes the checked sum, the exact expiry
@@ -947,17 +928,6 @@ theorem heartbeat_body_runCompiled_of_checkedExtension
 
 /-! ## Representative strict-liveness compiled cut -/
 
-private theorem temporalReturnWord_runCompiled
-    (fs : List Func) (sevm : Sevm) (base : Devm) (word : B256) (G : Nat) :
-    ∃ post,
-      Func.RunCompiled fs sevm
-        (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G, base.stateGas⟩)
-        Func.return_ post ∧
-      Devm.output post = word.toBytes ∧
-      Devm.WorldEq base post ∧
-      post.logs = base.logs :=
-  registryScalarReturn_runCompiled fs sevm base word G
-
 def temporalLiveBodyGasWarm : Nat := 184
 
 /-- The complete decoded body returns false when the stored expiry equals the
@@ -981,37 +951,21 @@ theorem isPauserLive_body_runCompiled_at_expiry
       Devm.output post = (0 : B256).toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  have hcanonical := canonicalAddress_mask_zero hpauser
-  unfold isPauserLive requireStaticArgs canonicalAddressArg arg cdl
-    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
-    returnMemoryRange pushList temporalLiveBodyGasWarm
-  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := hword
-  rcases temporalReturnWord_runCompiled fs sevm base (0 : B256) G with
-    ⟨post, hreturn, houtput⟩
-  refine ⟨post, ?_, houtput⟩
-  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
-  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
-    addressMask_eq_shl.symm
-  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
-    rw [hword0]; exact hcanonical
-  have hslot : (regionWord expiryRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
-      expirySlot pauser := by
-    rw [hword0]; rfl
-  have hlive : sevm.benvStat.time <?
-      (base.setMach ⟨[expirySlot pauser], Mem.empty, G + 184 - 66, base.stateGas⟩).getStorVal
-        sevm.currentTarget (expirySlot pauser) = 0 := by
-    rw [Devm.getStorVal_setMach, hexpiry]
+  unfold isPauserLive temporalLiveBodyGasWarm
+  rcases returnWord_runCompiled fs sevm base hfork ((0 : B256)) G with
+    ⟨post, hreturn, hrest⟩
+  refine ⟨post, ?_, hrest⟩
+  have hlive : sevm.benvStat.time <? sevm.benvStat.time = 0 := by
     simp only [B256.ltCheck, lt_self_iff_false, ↓reduceIte]
-  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), expirySlot pauser,
-    (0 : B256), 3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_ext =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide]
-    exact Devm.extCost_empty_word
-  case a =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Nat.add_sub_cancel]
-    exact hreturn
+  have htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨[base.getStorVal sevm.currentTarget (expirySlot pauser)], Mem.empty,
+        G + 18, base.stateGas⟩) (Ninst.timestamp ::: Ninst.lt ::: returnWord) post := by
+    rw [hexpiry]
+    func_run (2) [(0 : B256)]
+    case a => exact hreturn
+  have hrun := addressSlotLoad_runCompiled_then hfork (by decide) hdata hword hpauser rfl hwarm htail
+  rw [Nat.add_assoc] at hrun
+  exact hrun
 
 def isPauserLiveDispatchGas : Nat := 168
 
@@ -1088,39 +1042,21 @@ theorem isPauserLive_body_runCompiled
         (pauserLiveWord sevm.benvStat.time expiry).toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  have hcanonical := canonicalAddress_mask_zero hpauser
-  unfold isPauserLive requireStaticArgs canonicalAddressArg arg cdl
-    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
-    returnMemoryRange pushList temporalLiveBodyGasWarm
-  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := hword
-  rcases temporalReturnWord_runCompiled fs sevm base
-      (pauserLiveWord sevm.benvStat.time expiry) G with
-    ⟨post, hreturn, houtput⟩
-  refine ⟨post, ?_, houtput⟩
-  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
-  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
-    addressMask_eq_shl.symm
-  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
-    rw [hword0]; exact hcanonical
-  have hslot : (regionWord expiryRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
-      expirySlot pauser := by
-    rw [hword0]; rfl
-  have hlive : sevm.benvStat.time <?
-      (base.setMach ⟨[expirySlot pauser], Mem.empty, G + 184 - 66, base.stateGas⟩).getStorVal
-        sevm.currentTarget (expirySlot pauser) =
-        pauserLiveWord sevm.benvStat.time expiry := by
-    rw [Devm.getStorVal_setMach, hexpiry]
+  unfold isPauserLive temporalLiveBodyGasWarm
+  rcases returnWord_runCompiled fs sevm base hfork (pauserLiveWord sevm.benvStat.time expiry) G with
+    ⟨post, hreturn, hrest⟩
+  refine ⟨post, ?_, hrest⟩
+  have hlive : sevm.benvStat.time <? expiry = pauserLiveWord sevm.benvStat.time expiry := by
     rfl
-  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), expirySlot pauser,
-    pauserLiveWord sevm.benvStat.time expiry, 3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_ext =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide]
-    exact Devm.extCost_empty_word
-  case a =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Nat.add_sub_cancel]
-    exact hreturn
+  have htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨[base.getStorVal sevm.currentTarget (expirySlot pauser)], Mem.empty,
+        G + 18, base.stateGas⟩) (Ninst.timestamp ::: Ninst.lt ::: returnWord) post := by
+    rw [hexpiry]
+    func_run (2) [pauserLiveWord sevm.benvStat.time expiry]
+    case a => exact hreturn
+  have hrun := addressSlotLoad_runCompiled_then hfork (by decide) hdata hword hpauser rfl hwarm htail
+  rw [Nat.add_assoc] at hrun
+  exact hrun
 
 /-- Exact direct public execution of `isPauserLive(address)` for an arbitrary
 stored expiry. -/
@@ -1186,7 +1122,7 @@ theorem heartbeatInterval_body_runCompiled
   unfold heartbeatInterval returnWord mstoreAt returnMemoryRange pushList
     heartbeatIntervalBodyGasWarm
   have hgasFinal : G + 116 - 116 = G := by omega
-  rcases temporalReturnWord_runCompiled fs sevm base interval G with
+  rcases registryScalarReturn_runCompiled fs sevm base interval G with
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
   func_run [3]
@@ -1253,31 +1189,10 @@ theorem heartbeatExpiry_body_runCompiled
       Devm.output post = expiry.toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  have hcanonical := canonicalAddress_mask_zero hpauser
-  unfold heartbeatExpiry requireStaticArgs canonicalAddressArg arg cdl
-    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
-    returnMemoryRange pushList heartbeatExpiryBodyGasWarm
-  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := hword
-  rcases temporalReturnWord_runCompiled fs sevm base expiry G with
-    ⟨post, hreturn, houtput⟩
-  refine ⟨post, ?_, houtput⟩
-  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
-  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
-    addressMask_eq_shl.symm
-  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
-    rw [hword0]; exact hcanonical
-  have hslot : (regionWord expiryRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
-      expirySlot pauser := by
-    rw [hword0]; rfl
-  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), expirySlot pauser, 3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_ext =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide]
-    exact Devm.extCost_empty_word
-  case a =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Devm.getStorVal_setMach, hexpiry, Nat.add_sub_cancel]
-    exact hreturn
+  unfold heartbeatExpiry heartbeatExpiryBodyGasWarm
+  simpa only [hexpiry] using
+    addressSlotView_runCompiled fs hfork (slot := expirySlot pauser) G (by decide)
+      hdata hword hpauser rfl hwarm
 
 /-- Exact direct public execution of canonical `heartbeatExpiry(address)`. -/
 theorem heartbeatExpiry_runCompiled
@@ -1429,12 +1344,12 @@ private def setHeartbeatIntervalUpdateTail : Func :=
 /-- Setter state immediately after its interval SLOAD. -/
 private def setHeartbeatIntervalAfterLoad
     (sevm : Sevm) (base : Devm) : Devm :=
-  heartbeatSloadBase sevm base heartbeatIntervalSlot
+  afterSload sevm base heartbeatIntervalSlot
 
 /-- Actual warm/cold charge of the setter's initial interval SLOAD. -/
 private def setHeartbeatIntervalLoadCost
     (sevm : Sevm) (base : Devm) : Nat :=
-  heartbeatSloadCost sevm base heartbeatIntervalSlot
+  sloadCost sevm base heartbeatIntervalSlot
 
 /-- Exact setter interval-load chunk.  It leaves the old word on the stack for
 `mstoreAt 0`, preserves empty event-preparation memory, and records a cold
@@ -1454,7 +1369,7 @@ private theorem setHeartbeatInterval_load_runCompiled
   by_cases hwarm : (⟨sevm.currentTarget,
       heartbeatIntervalSlot⟩ : Adr × B256) ∈ base.accessedStorageKeys
   · unfold setHeartbeatIntervalAfterLoad setHeartbeatIntervalLoadCost
-      heartbeatSloadBase heartbeatSloadCost
+      afterSload sloadCost
     simp only [hwarm, ite_eq_left]
     func_run
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -1463,7 +1378,7 @@ private theorem setHeartbeatInterval_load_runCompiled
       simp only [Linst.Run, Linst.run, gasWarmAccess, Nat.reduceSubDiff, Devm.stateGas,
         Devm.getStorVal_setMach, hold]
   · unfold setHeartbeatIntervalAfterLoad setHeartbeatIntervalLoadCost
-      heartbeatSloadBase heartbeatSloadCost
+      afterSload sloadCost
     simp only [hwarm, ↓reduceIte]
     func_run
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -1508,7 +1423,7 @@ private theorem setHeartbeatIntervalAfterLoad_interval_warm
     (⟨sevm.currentTarget, heartbeatIntervalSlot⟩ : Adr × B256) ∈
       (setHeartbeatIntervalAfterLoad sevm base).accessedStorageKeys := by
   unfold setHeartbeatIntervalAfterLoad
-  exact heartbeatSloadBase_self sevm base heartbeatIntervalSlot
+  exact afterSload_warm sevm base heartbeatIntervalSlot
 
 private def setHeartbeatIntervalUpdateTailGasWarmUpdate : Nat := 4305
 
@@ -2005,7 +1920,7 @@ private theorem setHeartbeatIntervalUpdatePrefix_runCompiled_then
         mstoreAt 0 +++ arg 0 +++ mstoreAt 1 +++ tail)
       post := by
   have hafter : setHeartbeatIntervalAfterLoad sevm base = base := by
-    unfold setHeartbeatIntervalAfterLoad heartbeatSloadBase
+    unfold setHeartbeatIntervalAfterLoad afterSload
     simp only [hwarm, ite_eq_left]
   have hstage := setHeartbeatIntervalMemoryStage_runCompiled_then (hfork := hfork)
     (base := setHeartbeatIntervalAfterLoad sevm base)
@@ -2016,7 +1931,7 @@ private theorem setHeartbeatIntervalUpdatePrefix_runCompiled_then
     (G + 23) hold
     (mstoreAt 0 +++ arg 0 +++ mstoreAt 1 +++ tail) post hstage
   have hcost : setHeartbeatIntervalLoadCost sevm base = gasWarmAccess := by
-    unfold setHeartbeatIntervalLoadCost heartbeatSloadCost
+    unfold setHeartbeatIntervalLoadCost sloadCost
     simp only [hwarm, ite_eq_left]
   simpa only [hcost, gasWarmAccess] using hload
 
@@ -2290,10 +2205,10 @@ private theorem setHeartbeatIntervalMemoryStage_runCompiled_generic
           base.getStorVal sevm.currentTarget (expirySlot pauser) := by
   have holdAfter : (setHeartbeatIntervalAfterLoad sevm base).getStorVal
       sevm.currentTarget heartbeatIntervalSlot = old := by
-    simpa only [setHeartbeatIntervalAfterLoad, heartbeatSloadBase_getStorVal] using hold
+    simpa only [setHeartbeatIntervalAfterLoad, afterSload_getStorVal] using hold
   have horigAfter : (setHeartbeatIntervalAfterLoad sevm base).getOrigStorVal
       sevm sevm.currentTarget heartbeatIntervalSlot = original := by
-    simpa only [setHeartbeatIntervalAfterLoad, heartbeatSloadBase_getOrigStorVal] using horig
+    simpa only [setHeartbeatIntervalAfterLoad, afterSload_getOrigStorVal] using horig
   rcases setHeartbeatIntervalEventTail_runCompiled_generic (hfork := hfork) fs sevm
       (setHeartbeatIntervalAfterLoad sevm base) original old newInterval G
       harg holdAfter horigAfter
@@ -2318,10 +2233,10 @@ private theorem setHeartbeatIntervalMemoryStage_runCompiled_generic
             G + 21279, (setHeartbeatIntervalAfterLoad sevm base).stateGas⟩)
         setHeartbeatIntervalEventTail post
       exact htail
-  · simpa only [setHeartbeatIntervalAfterLoad, heartbeatSloadBase_logs] using hlogs
+  · simpa only [setHeartbeatIntervalAfterLoad, afterSload_logs] using hlogs
   · intro pauser hpauser
     rw [hexpiries pauser hpauser]
-    simp only [setHeartbeatIntervalAfterLoad, heartbeatSloadBase_getStorVal]
+    simp only [setHeartbeatIntervalAfterLoad, afterSload_getStorVal]
 
 /-- Generic exact production update tail.  The initial interval read carries
 its actual warm/cold cost; the post-read memory/event/store continuation is
@@ -3764,8 +3679,8 @@ theorem heartbeat_runCompiledTo_of_checkedExtension
       some sevm.code.toList = Prog.compile (runtime dp) := by
   have hbodyGas : heartbeatBodySuccessGas sevm base =
       heartbeatBodySuccessGasWarmUpdate := by
-    simp only [heartbeatBodySuccessGas, heartbeatSloadCost,
-      heartbeatAfterCountLoad, heartbeatAfterExpiryLoad, heartbeatSloadBase,
+    simp only [heartbeatBodySuccessGas, sloadCost,
+      heartbeatAfterCountLoad, heartbeatAfterExpiryLoad, afterSload,
       hwarmCount, hwarmExpiry, hwarmInterval, ↓reduceIte,
       gasWarmAccess, heartbeatBodySuccessGasWarmUpdate]
   rcases heartbeat_runCompiledTo_of_checkedExtension_generic dp sevm base hfork

@@ -983,6 +983,45 @@ theorem canonicalAddress_mask_zero {word : B256}
     (h : canonicalAddress word) : addressMask &&& word = 0 :=
   addressMask_and_eq_zero_of_lt h
 
+/-- The address-argument load prefix shared by the one-address views
+(`getPauser`, `getPausableCount`, `heartbeatExpiry`, `isPauserLive`): the
+static-argument guard and the canonical-address check fall through, the
+argument is tagged into its `region` slot, and the warm `SLOAD` leaves the
+stored word for an arbitrary compiled suffix.  Charge `166`. -/
+theorem addressSlotLoad_runCompiled_then
+    {fs : List Func} {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    {region : Nat} {word slot : B256} {G : Nat} {tail : Func} {post : Devm}
+    (hregion : regionWord region ≠ 0)
+    (hdata : sevm.data.length.toB256 <? 36 = 0)
+    (hword : Sevm.dataWord sevm 4 = word)
+    (hcanonical : canonicalAddress word)
+    (hslot : (regionWord region).or word = slot)
+    (hwarm : (⟨sevm.currentTarget, slot⟩ : Adr × B256) ∈ base.accessedStorageKeys)
+    (htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨[base.getStorVal sevm.currentTarget slot], Mem.empty, G,
+        base.stateGas⟩) tail post) :
+    Func.RunCompiled fs sevm
+      (base.setMach ⟨[], Mem.empty, G + 166, base.stateGas⟩)
+      (requireStaticArgs 1 <| canonicalAddressArg 0 <|
+        arg 0 +++ tagTop region +++ Ninst.sload ::: tail) post := by
+  unfold requireStaticArgs canonicalAddressArg arg cdl checkNonAddress
+    pushAddressMask tagTop
+  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = word := hword
+  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
+  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
+    addressMask_eq_shl.symm
+  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
+    rw [hword0]; exact canonicalAddress_mask_zero hcanonical
+  have hslot' : (regionWord region).or (Sevm.dataWord sevm (32 * 0 + 4)) = slot := by
+    rw [hword0]; exact hslot
+  have hregionCost := pushCost_of_ne_zero hregion
+  func_run (17) [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), slot]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
+  case a =>
+    rw [Devm.getStorVal_setMach, Nat.add_sub_cancel]
+    exact htail
+
 def registryScalarBodyGasWarm : Nat := 179
 
 theorem registryScalarReturn_runCompiled
@@ -1011,6 +1050,57 @@ theorem registryScalarReturn_runCompiled
     (Devm.extCost_word_word Mem.size_write_word) rfl hread
   · exact ⟨rfl, rfl⟩
 
+/-- `returnWord` from a one-word stack: stage the word at offset `0` and
+return it.  Charge `13`. -/
+theorem returnWord_runCompiled
+    (fs : List Func) (sevm : Sevm) (base : Devm)
+    (hfork : CoveredFork sevm.benvStat.fork) (word : B256) (G : Nat) :
+    ∃ post,
+      Func.RunCompiled fs sevm
+        (base.setMach ⟨[word], Mem.empty, G + 13, base.stateGas⟩)
+        returnWord post ∧
+      Devm.output post = word.toBytes ∧
+      Devm.WorldEq base post ∧
+      post.logs = base.logs := by
+  rcases registryScalarReturn_runCompiled fs sevm base word G with
+    ⟨post, hreturn, houtput⟩
+  refine ⟨post, ?_, houtput⟩
+  unfold returnWord mstoreAt returnMemoryRange pushList
+  func_run [3]
+  case h_ext =>
+    rw [show ((0 : B256) * 32).toNat = 0 by decide]
+    exact Devm.extCost_empty_word
+  case a =>
+    rw [show ((0 : B256) * 32).toNat = 0 by decide, Nat.add_sub_cancel]
+    exact hreturn
+
+/-- A one-address view that returns its stored slot word: the shared
+address-argument load prefix followed by `returnWord`.  Charge `179`. -/
+theorem addressSlotView_runCompiled
+    (fs : List Func) {sevm : Sevm} {base : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    {region : Nat} {word slot : B256} (G : Nat)
+    (hregion : regionWord region ≠ 0)
+    (hdata : sevm.data.length.toB256 <? 36 = 0)
+    (hword : Sevm.dataWord sevm 4 = word)
+    (hcanonical : canonicalAddress word)
+    (hslot : (regionWord region).or word = slot)
+    (hwarm : (⟨sevm.currentTarget, slot⟩ : Adr × B256) ∈ base.accessedStorageKeys) :
+    ∃ post,
+      Func.RunCompiled fs sevm
+        (base.setMach ⟨[], Mem.empty, G + 179, base.stateGas⟩)
+        (requireStaticArgs 1 <| canonicalAddressArg 0 <|
+          arg 0 +++ tagTop region +++ Ninst.sload ::: returnWord) post ∧
+      Devm.output post = (base.getStorVal sevm.currentTarget slot).toBytes ∧
+      Devm.WorldEq base post ∧
+      post.logs = base.logs := by
+  rcases returnWord_runCompiled fs sevm base hfork
+      (base.getStorVal sevm.currentTarget slot) G with ⟨post, hreturn, hrest⟩
+  have hrun := addressSlotLoad_runCompiled_then (G := G + 13) hfork hregion hdata hword
+    hcanonical hslot hwarm hreturn
+  rw [Nat.add_assoc] at hrun
+  exact ⟨post, hrun, hrest⟩
+
 /-- Exact compiled-body result for the assignment view on a canonical ABI
 address word and the same concrete Registry owner used by enumeration. -/
 theorem getPauser_body_runCompiled
@@ -1031,7 +1121,6 @@ theorem getPauser_body_runCompiled
       Devm.output post = (assignmentAt entries target).toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  have hcanonical := canonicalAddress_mask_zero htarget
   have hstorage :
       Devm.getStorVal base sevm.currentTarget (assignmentSlot target) =
         assignmentAt entries target := by
@@ -1039,31 +1128,10 @@ theorem getPauser_body_runCompiled
       (Devm.getStor base sevm.currentTarget)).read (assignmentSlot target) =
         assignmentAt entries target
     exact hw.assignments target htarget
-  unfold getPauser requireStaticArgs canonicalAddressArg arg cdl
-    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
-    returnMemoryRange pushList registryScalarBodyGasWarm
-  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = target := by
-    exact hword
-  have hdataWalk : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
-  rcases registryScalarReturn_runCompiled fs sevm base
-      (assignmentAt entries target) G with ⟨post, hreturn, houtput⟩
-  refine ⟨post, ?_, houtput⟩
-  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
-    addressMask_eq_shl.symm
-  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
-    rw [hword0]; exact hcanonical
-  have hslot : (regionWord assignmentRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
-      assignmentSlot target := by
-    rw [hword0]; rfl
-  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), assignmentSlot target, 3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try {
-    rw [show ((0 : B256) * 32).toNat = 0 by decide]
-    exact Devm.extCost_empty_word }
-  all_goals try {
-    rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Devm.getStorVal_setMach, hstorage, Nat.add_sub_cancel]
-    exact hreturn }
+  unfold getPauser registryScalarBodyGasWarm
+  simpa only [hstorage] using
+    addressSlotView_runCompiled fs hfork (slot := assignmentSlot target) G (by decide)
+      hdata hword htarget rfl hwarm
 
 /-- Exact compiled-body result for the per-pauser multiplicity view on a
 canonical ABI address word and the same concrete Registry owner. -/
@@ -1086,7 +1154,6 @@ theorem getPausableCount_body_runCompiled
         (Nat.toB256 (assignmentCount entries pauser)).toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  have hcanonical := canonicalAddress_mask_zero hpauser
   have hstorage :
       Devm.getStorVal base sevm.currentTarget (countSlot pauser) =
         Nat.toB256 (assignmentCount entries pauser) := by
@@ -1094,32 +1161,10 @@ theorem getPausableCount_body_runCompiled
       (Devm.getStor base sevm.currentTarget)).read (countSlot pauser) =
         Nat.toB256 (assignmentCount entries pauser)
     exact hw.counts pauser hpauser
-  unfold getPausableCount requireStaticArgs canonicalAddressArg arg cdl
-    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
-    returnMemoryRange pushList registryScalarBodyGasWarm
-  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := by
-    exact hword
-  have hdataWalk : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
-  rcases registryScalarReturn_runCompiled fs sevm base
-      (Nat.toB256 (assignmentCount entries pauser)) G with
-    ⟨post, hreturn, houtput⟩
-  refine ⟨post, ?_, houtput⟩
-  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
-    addressMask_eq_shl.symm
-  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
-    rw [hword0]; exact hcanonical
-  have hslot : (regionWord countRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
-      countSlot pauser := by
-    rw [hword0]; rfl
-  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), countSlot pauser, 3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  all_goals try {
-    rw [show ((0 : B256) * 32).toNat = 0 by decide]
-    exact Devm.extCost_empty_word }
-  all_goals try {
-    rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Devm.getStorVal_setMach, hstorage, Nat.add_sub_cancel]
-    exact hreturn }
+  unfold getPausableCount registryScalarBodyGasWarm
+  simpa only [hstorage] using
+    addressSlotView_runCompiled fs hfork (slot := countSlot pauser) G (by decide)
+      hdata hword hpauser rfl hwarm
 
 theorem assignmentCount_eq_multiplicity (entries : List Entry)
     (pauser : B256) :

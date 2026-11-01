@@ -2252,7 +2252,39 @@ poststate gas are all reachable from these derivations and none of them is
 what `Attainable` consumes, so restating them would be surface without a
 consumer. -/
 
-set_option maxRecDepth 608 in
+/-- The store tail of the successful `setPauseDuration` body, over an abstract
+state and memory: reload the argument and set the configuration cell.  A
+separate boundary so the walk never carries the body's concrete memory and log
+tower (that term is what exhausted the default recursion depth). -/
+private theorem setPauseDurationStoreTail_runCompiledTo
+    (fs : List Func) (sevm : Sevm) (d : Devm) (M : Mem)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (duration : B256) (G : Nat)
+    (harg : Sevm.dataWord sevm (32 * 0 + 4) = duration)
+    (hnonzero : duration ≠ 0)
+    (hold : d.getStorVal sevm.currentTarget pauseDurationSlot = 0)
+    (horig : getOrigStorVal sevm sevm.currentTarget pauseDurationSlot = 0)
+    (hwarm : (⟨sevm.currentTarget, pauseDurationSlot⟩ : Adr × B256) ∈
+      d.accessedStorageKeys)
+    (hstatic : sevm.isStatic = false) :
+    ∃ post,
+      Func.RunCompiledTo fs sevm
+        (d.setMach ⟨[], M, G + 20009, d.stateGas⟩)
+        (arg 0 +++ Ninst.pushB256 pauseDurationSlot ::: Ninst.sstore ::: Func.stop) (.ok post) := by
+  have hsstoreCost : sstoreValueCost 0 0 duration = 20000 := by
+    rw [sstoreValueCost, ite_eq_left ⟨rfl, hnonzero.symm⟩, ite_eq_left rfl]
+    norm_num only [gasStorageSet]
+  have horig' : ∀ d' : Devm,
+      d'.getOrigStorVal sevm sevm.currentTarget pauseDurationSlot = 0 :=
+    fun _ => actualOrigStorVal_eq_zero_of_raw horig
+  unfold arg cdl
+  apply Exists.intro
+  func_run [20000]
+  repeat (case h_legacy => exact hfork.rules_stateGas_none)
+  case h_cost =>
+    simpa only [Devm.getStorVal_setMach, horig', hold, harg] using hsstoreCost
+  case a => exact Func.RunCompiledTo.last rfl
+
 /-- Exact successful `setPauseDuration` body: the static-argument guard, the
 admin guard and both configured-bound guards fall the right way, the
 configuration cell is read for the event and then set, and the whole body costs
@@ -2277,13 +2309,13 @@ theorem setPauseDuration_body_runCompiledTo
       Func.RunCompiledTo fs sevm
         (base.setMach ⟨[], Mem.empty, G + 21498, base.stateGas⟩)
         (setPauseDuration dp) (.ok post) := by
-  have hsstoreCost : sstoreValueCost 0 0 duration = 20000 := by
-    rw [sstoreValueCost, ite_eq_left ⟨rfl, hnonzero.symm⟩, ite_eq_left rfl]
-    norm_num only [gasStorageSet]
-  apply Exists.intro
+  have hevent : pushCost pauseDurationUpdatedEvent.toBytes.sig = 3 :=
+    pushCost_of_ne_zero (by decide +kernel)
   unfold setPauseDuration requireStaticArgs onlyAdmin arg cdl pushDeployWord
     mstoreAt logWith
-  func_run [0, 1, 0, 0, 3, 3, 1262, 20000]
+  generalize pauseDurationUpdatedEvent = event at hevent ⊢
+  apply Exists.intro
+  func_run (30) [0, 1, 0, 0, 3, 3, 1262]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_val => simp only [B256.eqCheck, hadmin, ↓reduceIte]
   case h_val => rw [harg]; simp only [B256.ltCheck, B256.not_lt.mpr hmin, ↓reduceIte]
@@ -2302,13 +2334,12 @@ theorem setPauseDuration_body_runCompiledTo
     rw [Devm.extCost_of_size (by
       rw [Mem.size_write_word_at, Mem.size_write_word]) rfl]
     decide
-  case h_cost =>
-    have horig' : ∀ d : Devm,
-        d.getOrigStorVal sevm sevm.currentTarget pauseDurationSlot = 0 :=
-      fun _ => actualOrigStorVal_eq_zero_of_raw horig
-    simpa only [Devm.getStorVal_setMach, Devm.addLog_getStorVal, horig',
-      hold, harg] using hsstoreCost
-  case a => exact Func.RunCompiledTo.last rfl
+  case a =>
+    rw [show G + 21498 - 1489 = G + 20009 by omega]
+    refine (setPauseDurationStoreTail_runCompiledTo fs sevm _ _ hfork duration G harg
+      hnonzero ?_ horig ?_ hstatic).choose_spec
+    · simpa only [Devm.getStorVal_setMach, Devm.addLog_getStorVal] using hold
+    · exact hwarm
 
 /-- Dispatcher charge from the runtime's entry `JUMPDEST` to
 `setPauseDuration`'s first body instruction: two pivots taken to the right
