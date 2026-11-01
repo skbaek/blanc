@@ -244,4 +244,109 @@ theorem sstoreCost_congr {sevm : Sevm} {d1 d2 : Devm} (key value : B256)
   rw [hstor]
   rfl
 
+/-! ## Selected `SLOAD`: values, warmth, and key sets
+
+A selected `SLOAD` changes only the accessed-key set, so storage, original and
+transient reads pass through it, the read key is warm afterwards, and every
+other key keeps its warm or cold status. -/
+
+theorem not_mem_hashSet_insert {α : Type _} [BEq α] [Hashable α]
+    [LawfulBEq α] {s : Std.HashSet α} {x p : α}
+    (h : p ∉ s) (hne : x ≠ p) : p ∉ s.insert x := by
+  intro hmem
+  rcases Std.HashSet.mem_insert.mp hmem with he | hp
+  · exact hne (eq_of_beq he)
+  · exact h hp
+
+theorem afterSload_getStorVal
+    (sevm : Sevm) (base : Devm) (key : B256) (a : Adr) (k : B256) :
+    (afterSload sevm base key).getStorVal a k =
+      base.getStorVal a k := by
+  unfold afterSload
+  split_ifs <;> rfl
+
+theorem afterSload_getOrigStorVal
+    (sevm : Sevm) (base : Devm) (key : B256) (a : Adr) (k : B256) :
+    (afterSload sevm base key).getOrigStorVal sevm a k =
+      base.getOrigStorVal sevm a k := by
+  unfold afterSload
+  split_ifs <;> rfl
+
+theorem afterSload_getTransVal (sevm : Sevm) (base : Devm)
+    (key : B256) (a : Adr) (k : B256) :
+    (afterSload sevm base key).getTransVal a k =
+      base.getTransVal a k := by
+  unfold afterSload
+  split <;> rfl
+
+theorem afterSload_warm
+    (sevm : Sevm) (base : Devm) (key : B256) :
+    (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      (afterSload sevm base key).accessedStorageKeys := by
+  unfold afterSload
+  split_ifs with hwarm
+  · exact hwarm
+  · change (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
+      base.accessedStorageKeys.insert ⟨sevm.currentTarget, key⟩
+    exact Std.HashSet.mem_insert_self
+
+theorem afterSload_preserves_warm
+    (sevm : Sevm) (base : Devm) (readKey key : B256)
+    (h : (sevm.currentTarget, key) ∈ base.accessedStorageKeys) :
+    (sevm.currentTarget, key) ∈
+      (afterSload sevm base readKey).accessedStorageKeys := by
+  unfold afterSload
+  split
+  · exact h
+  · exact Std.HashSet.mem_insert.mpr (Or.inr h)
+
+theorem not_mem_afterSload {sevm : Sevm} {base : Devm}
+    {readKey : B256} {p : Adr × B256}
+    (h : p ∉ base.accessedStorageKeys)
+    (hne : (sevm.currentTarget, readKey) ≠ p) :
+    p ∉ (afterSload sevm base readKey).accessedStorageKeys := by
+  unfold afterSload
+  split
+  · exact h
+  · exact not_mem_hashSet_insert h hne
+
+theorem afterSload_preserves_cold
+    (sevm : Sevm) (base : Devm) (readKey key : B256)
+    (hne : readKey ≠ key)
+    (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
+    (sevm.currentTarget, key) ∉
+      (afterSload sevm base readKey).accessedStorageKeys :=
+  not_mem_afterSload h fun hp => hne (congrArg Prod.snd hp)
+
+theorem afterSload_cold_keys (sevm : Sevm) (base : Devm)
+    (key : B256)
+    (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
+    (afterSload sevm base key).accessedStorageKeys =
+      base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
+  unfold afterSload
+  rw [ite_eq_right h]
+  rfl
+
+theorem afterSload_accessedStorageKeys_addLog
+    (sevm : Sevm) (base : Devm) (l : Log) (k : B256) :
+    (afterSload sevm (base.addLog l) k).accessedStorageKeys =
+      (afterSload sevm base k).accessedStorageKeys := by
+  unfold afterSload
+  by_cases h : (sevm.currentTarget, k) ∈ base.accessedStorageKeys
+  · rw [ite_eq_left (show (sevm.currentTarget, k) ∈
+      (base.addLog l).accessedStorageKeys from h), ite_eq_left h]
+    rfl
+  · rw [ite_eq_right (show ¬ (sevm.currentTarget, k) ∈
+      (base.addLog l).accessedStorageKeys from h), ite_eq_right h]
+    rfl
+
+/-- The selected `SLOAD` charge reads the pre-state only through its
+accessed-key set. -/
+theorem sloadCost_congr
+    (sevm : Sevm) (base base' : Devm) (k : B256)
+    (h : base.accessedStorageKeys = base'.accessedStorageKeys) :
+    sloadCost sevm base k = sloadCost sevm base' k := by
+  unfold sloadCost
+  rw [h]
+
 end Blanc

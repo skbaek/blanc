@@ -125,6 +125,24 @@ elaborator.  Each fact is kernel-checked once here. -/
 theorem heartbeatUpdatedEvent_pushCost : pushCost heartbeatUpdatedEvent.toBytes.sig = 3 :=
   pushCost_of_ne_zero (by decide +kernel)
 
+theorem pauseDurationUpdatedEvent_pushCost :
+    pushCost pauseDurationUpdatedEvent.toBytes.sig = 3 :=
+  pushCost_of_ne_zero (by decide +kernel)
+
+theorem pauserSetEvent_pushCost : pushCost pauserSetEvent.toBytes.sig = 3 :=
+  pushCost_of_ne_zero (by decide +kernel)
+
+theorem pauseTriggeredEvent_pushCost :
+    pushCost pauseTriggeredEvent.toBytes.sig = 3 :=
+  pushCost_of_ne_zero (by decide +kernel)
+
+/-- The pause callback's two selectors are pushed like event words. -/
+theorem isPausedSelector_pushCost : pushCost isPausedSelector.toBytes.sig = 3 :=
+  pushCost_of_ne_zero (by decide +kernel)
+
+theorem pauseForSelector_pushCost : pushCost pauseForSelector.toBytes.sig = 3 :=
+  pushCost_of_ne_zero (by decide +kernel)
+
 theorem heartbeatIntervalUpdatedEvent_ne_zero : heartbeatIntervalUpdatedEvent ≠ 0 := by
   decide +kernel
 

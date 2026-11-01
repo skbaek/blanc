@@ -74,15 +74,6 @@ kernel are `SLOAD`s.  A cold `SLOAD` only warms an accessed-key set, so none
 of them touches transient storage and the lock is still held at the state the
 kernel is entered from. -/
 
-theorem afterSload_getTransVal (sevm : Sevm) (base : Devm)
-    (key : B256) (a : Adr) (k : B256) :
-    (afterSload sevm base key).getTransVal a k =
-      base.getTransVal a k := by
-  unfold afterSload
-  split
-  · rfl
-  · rfl
-
 /-- The lock is held at the state `pause` hands the Registry kernel. -/
 theorem pauseKernelBase_lock (sevm : Sevm) (base : Devm)
     (target pauser : B256) :

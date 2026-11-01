@@ -380,18 +380,6 @@ private lemma responder_staticcall_crossing
     · intro hx
       exact Std.HashSet.mem_insert.mpr (Or.inr hx)
 
-/-- Push charges of the keccak-defined words these walks push, kernel-checked
-once so no walk evaluates the hash (see `heartbeatUpdatedEvent_pushCost`). -/
-private theorem pauseTriggeredEvent_pushCost :
-    pushCost pauseTriggeredEvent.toBytes.sig = 3 :=
-  pushCost_of_ne_zero (by decide +kernel)
-
-private theorem isPausedSelector_pushCost : pushCost isPausedSelector.toBytes.sig = 3 :=
-  pushCost_of_ne_zero (by decide +kernel)
-
-private theorem pauseForSelector_pushCost : pushCost pauseForSelector.toBytes.sig = 3 :=
-  pushCost_of_ne_zero (by decide +kernel)
-
 /-! ## The shared expiry-write finish
 
 Both `pauseSuccess` arms end in `pauseExpiryFinish` and differ only in the
@@ -526,26 +514,6 @@ The count branch is world-dependent, so the two arms are separate lemmas —
 both exercised by the two witness worlds: row 19 retires the pauser (count
 zero, stored expiry zero) and row 18 retains it (count nonzero, stored expiry
 the checked `interval + timestamp`). -/
-
-private theorem sloadCost_congr
-    (sevm : Sevm) (base base' : Devm) (k : B256)
-    (h : base.accessedStorageKeys = base'.accessedStorageKeys) :
-    sloadCost sevm base k = sloadCost sevm base' k := by
-  unfold sloadCost
-  rw [h]
-
-private theorem afterSload_accessedStorageKeys_addLog
-    (sevm : Sevm) (base : Devm) (l : Log) (k : B256) :
-    (afterSload sevm (base.addLog l) k).accessedStorageKeys =
-      (afterSload sevm base k).accessedStorageKeys := by
-  unfold afterSload
-  by_cases h : (sevm.currentTarget, k) ∈ base.accessedStorageKeys
-  · rw [ite_eq_left (show (sevm.currentTarget, k) ∈
-      (base.addLog l).accessedStorageKeys from h), ite_eq_left h]
-    rfl
-  · rw [ite_eq_right (show ¬ (sevm.currentTarget, k) ∈
-      (base.addLog l).accessedStorageKeys from h), ite_eq_right h]
-    rfl
 
 /-- The zero-count arm of `pauseSuccess`: the caller's post-callback assignment
 count reads zero, so the walk stores expiry `0`.  Charge `3322` plus the count

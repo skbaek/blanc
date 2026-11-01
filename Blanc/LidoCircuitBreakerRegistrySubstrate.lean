@@ -169,16 +169,6 @@ theorem temporal_sstore_runCompiled
       temporalSstore_getOrigStorVal_setMach]
   · simp only [Devm.gasLeft_setMach]
 
-theorem afterSload_preserves_warm
-    (sevm : Sevm) (base : Devm) (readKey key : B256)
-    (h : (sevm.currentTarget, key) ∈ base.accessedStorageKeys) :
-    (sevm.currentTarget, key) ∈
-      (afterSload sevm base readKey).accessedStorageKeys := by
-  unfold afterSload
-  split
-  · exact h
-  · exact Std.HashSet.mem_insert.mpr (Or.inr h)
-
 theorem temporalSstorePost_getOrigStorVal
     (sevm : Sevm) (base : Devm) (writeKey value : B256) (a : Adr) (key : B256) :
     (temporalSstorePost sevm base writeKey value).getOrigStorVal sevm a key =
@@ -293,10 +283,9 @@ theorem finishSetPauser_runCompiled_of_continuation
     simp only [Mem.read, Mem.extend, memExtSize, ↓reduceIte, Prod.mk.injEq, and_true]
     rfl
   simp only [finishSetPauser]
-  -- The event topic is a keccak: pay for it once in the kernel, then walk an
+  -- The event topic is a keccak, kernel-checked once in Dispatch; walk an
   -- opaque word so the elaborator never evaluates the hash.
-  have heventCost : pushCost pauserSetEvent.toBytes.sig = 3 :=
-    pushCost_of_ne_zero (by decide +kernel)
+  have heventCost := pauserSetEvent_pushCost
   generalize pauserSetEvent = event at heventCost hcontinuation ⊢
   func_run (10) [3, 3, 3, 1875]
   all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)

@@ -27,20 +27,6 @@ open Jaune
 open Jaune.Ninst Blanc.Ninst
 
 
-private theorem afterSload_preserves_cold
-    (sevm : Sevm) (base : Devm) (readKey key : B256)
-    (hne : readKey ≠ key)
-    (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
-    (sevm.currentTarget, key) ∉
-      (afterSload sevm base readKey).accessedStorageKeys := by
-  unfold afterSload
-  split
-  · exact h
-  · rcases base with ⟨mach, mt, world⟩
-    simpa only [Devm.accessedStorageKeys, addAccessedStorageKey, liftMachMetaPure,
-      Meta.addAccessedStorageKey, Std.HashSet.mem_insert, beq_iff_eq, Prod.mk.injEq, true_and,
-      not_or, ne_eq] using And.intro hne h
-
 /-- The fresh/nonzero model branch determines the exact five-write source
 trace and its refined Registry witness.  This is the semantic target used by
 the forward emitted-kernel construction below; no trace or poststate is

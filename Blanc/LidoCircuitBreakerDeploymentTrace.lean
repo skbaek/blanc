@@ -5,6 +5,7 @@
 -- keeps the deployment family inside its fixed elaboration-owner budget.
 import Blanc.LidoCircuitBreakerDeploymentLayout
 import Blanc.ForwardCall
+import Blanc.ForwardStorageAccess
 import Jaune.DevmProjections
 
 namespace Blanc
@@ -1315,13 +1316,12 @@ theorem officialConstructorHeartbeatLoggedBase_accessedStorageKeys
         (sevm.currentTarget, pauseDurationSlot) := by
   rfl
 
+-- Kept under this name for the S9 deployment gate's exact public-theorem
+-- inventory; the law itself lives in `Blanc/ForwardStorageAccess.lean`.
 theorem not_mem_hashSet_insert {α : Type _} [BEq α] [Hashable α]
     [LawfulBEq α] {s : Std.HashSet α} {x p : α}
-    (h : p ∉ s) (hne : x ≠ p) : p ∉ s.insert x := by
-  intro hmem
-  rcases Std.HashSet.mem_insert.mp hmem with he | hp
-  · exact hne (eq_of_beq he)
-  · exact h hp
+    (h : p ∉ s) (hne : x ≠ p) : p ∉ s.insert x :=
+  Blanc.not_mem_hashSet_insert h hne
 
 /-- The constructor effect changes the target's persistent storage by exactly
 the two source-ordered configuration writes. -/
@@ -3425,7 +3425,6 @@ private theorem officialConstructorAdminNonzeroStage_runCompiled
     (officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩)
     (by decide) hrest
 
-set_option maxRecDepth 925 in
 private theorem officialConstructorCanonicalAdminStage_runCompiled
     {fs : List Func} {sevm : Sevm} {base post : Devm} {G : Nat}
     (hrest : Func.RunCompiled fs sevm
@@ -3443,18 +3442,23 @@ private theorem officialConstructorCanonicalAdminStage_runCompiled
   have hm0 : (officialConstructorDecodedMemory.read 0 32).2 =
       officialConstructorDecodedMemory := by
     simpa only [mul_zero] using officialConstructorDecodedMemory_read_memory ⟨0, by decide⟩
+  have hsize := officialConstructorDecodedMemory_size
   unfold officialConstructorCanonicalAdminStage checkNonAddress pushAddressMask
   simp only [loadArgumentIndexForProof_eq, pushCompactNatForProof_eq]
+  generalize officialConstructorDecodedMemory = M at hsize hv0 hm0 hrest ⊢
   func_run (2) [3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp only [show (Nat.toB256 0).toNat = 0 by decide]
   all_goals try simp_rw [hm0, hv0]
   all_goals try
-    exact Devm.extCost_add_of_size
-      (a := gVerylow) officialConstructorDecodedMemory_size (by decide)
-  try rw [hm0, hv0]
-  func_run (6) [~~~(0 : B256), addressMask, 0]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
+    exact Devm.extCost_add_of_size (a := gVerylow) hsize (by decide)
+  -- The admin word stays abstract: its mask check is kernel-checked once, and
+  -- the shifted mask is named by `addressMask_eq_shl` instead of evaluated.
+  have hand : addressMask &&& officialParams.admin = 0 := by decide +kernel
+  clear hv0
+  generalize officialParams.admin = admin at hand ⊢
+  func_run (4) [~~~(0 : B256), (~~~(0 : B256)) <<< (Nat.toB256 160).toNat]
+  rw [← addressMask_eq_shl]
+  func_run (2) [0]
   exact hrest
 
 private theorem officialConstructorValidationDecode_runCompiled

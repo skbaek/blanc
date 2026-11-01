@@ -16554,7 +16554,6 @@ private theorem directPauseControl_dataFacts :
     · rfl
   · exact pauseCalldata_selector_of_data rfl
 
-set_option maxRecDepth 3280 in
 private theorem directPauseControl_gas :
     directPauseControlPre.gasLeft =
       runtimePauseCost officialParams directPauseControlPre 0
@@ -16568,8 +16567,13 @@ private theorem directPauseControl_gas :
   dsimp only [runtimePauseCost]
   rw [runtimeMainPauseCost_eq_of_memory_accessed
     (left := initDevm directPauseControlBaseMsg)
-    (right := directPauseControlPre) rfl rfl officialParams 0
-    directPauseControlTarget directPauseControlPauser 1 1
+    (right := directPauseControlPre)
+    -- Name each field's value: a bare `rfl` compares the two messages and
+    -- evaluates the concrete gas budget.
+    (show Mem.empty = Mem.empty from rfl)
+    (show directPauseControlBaseMsg.accessedAddresses =
+      directPauseControlBaseMsg.accessedAddresses from rfl)
+    officialParams 0 directPauseControlTarget directPauseControlPauser 1 1
     directPauseControlTarget]
 
 private theorem directPauseControl_machineFacts :
@@ -16817,7 +16821,6 @@ theorem directPause_zeroCode_postWrite_error_control :
   · simpa only [directPauseControlTarget] using
       directPauseControl_zeroCode
 
-set_option maxRecDepth 892 in
 /-- Every canonical target-zero kernel entry satisfying the explicit emitted
 code, stack, memory, and exact-gas premises reaches the exact `PausableZero`
 revert before any raw `SSTORE` occurrence.  This is a forward construction,
@@ -16872,17 +16875,20 @@ theorem setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
   have hcompiled :
       some sevm.code.toList = Prog.compile (runtime dp) := by
     rw [hbytes, lidoCircuitBreakerCode_compile]
-  have hsub := (subcode_of_get?_eq_some hcompiled htable).2
-  have hnoPush := (Prog.jumpable_of_get?_table hcompiled htable).2
+  -- Keep the program abstract: unifying the table lemmas against the concrete
+  -- `runtime dp` unfolds the whole runtime.
+  refine ⟨run, ?_⟩
+  generalize runtime dp = prog at run runFree hcompiled htable ⊢
   rcases Func.RunCompiledTo.exists_exec_targetZeroRawSstoreFree
-      run runFree hcompiled rfl (loc + 1) hsub hnoPush with
+      run runFree hcompiled rfl (loc + 1)
+      (subcode_of_get?_eq_some hcompiled htable).2
+      (Prog.jumpable_of_get?_table hcompiled htable).2 with
     ⟨execution, executionFree⟩
-  refine ⟨run, execution, ?_⟩
+  refine ⟨execution, ?_⟩
   intro occurrence instructionEq
   apply executionFree.noSstoreAt occurrence.node occurrence.reached
   simpa only [instructionEq] using occurrence.decoded
 
-set_option maxRecDepth 892 in
 /-- Invert an actual successful execution at the exact emitted kernel slice
 to the source `Func.Run`.  This is the success-only direction; error paths use
 forward `RunCompiledTo` constructions instead. -/
@@ -16898,13 +16904,14 @@ theorem setPauserKernel_run_of_exec
     (hexec : Exec (loc + 1) sevm pre (.ok final)) :
     Func.Run ((runtime dp).main :: (runtime dp).aux)
       sevm pre setPauserKernel final := by
-  let pk : Exec.Deriv := ⟨loc + 1, sevm, pre, .ok final, hexec⟩
   have hcompiled :
       some sevm.code.toList = Prog.compile (runtime dp) := by
     rw [hbytes, lidoCircuitBreakerCode_compile]
-  have hsub := (subcode_of_get?_eq_some hcompiled htable).2
-  exact correct_core (runtime dp).main (runtime dp).aux
-    pk setPauserKernel hcompiled hsub
+  -- Keep the program abstract: unifying the table lemmas against the concrete
+  -- `runtime dp` unfolds the whole runtime.
+  generalize runtime dp = prog at hcompiled htable ⊢
+  exact correct_core prog.main prog.aux ⟨loc + 1, sevm, pre, .ok final, hexec⟩
+    setPauserKernel hcompiled (subcode_of_get?_eq_some hcompiled htable).2
 
 /-- Every successful execution at the exact production kernel slice exposes
 the source trace's post-Registry boundary before the continuation suffix. -/

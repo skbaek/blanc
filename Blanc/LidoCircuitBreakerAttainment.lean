@@ -2309,8 +2309,7 @@ theorem setPauseDuration_body_runCompiledTo
       Func.RunCompiledTo fs sevm
         (base.setMach ⟨[], Mem.empty, G + 21498, base.stateGas⟩)
         (setPauseDuration dp) (.ok post) := by
-  have hevent : pushCost pauseDurationUpdatedEvent.toBytes.sig = 3 :=
-    pushCost_of_ne_zero (by decide +kernel)
+  have hevent := pauseDurationUpdatedEvent_pushCost
   unfold setPauseDuration requireStaticArgs onlyAdmin arg cdl pushDeployWord
     mstoreAt logWith
   generalize pauseDurationUpdatedEvent = event at hevent ⊢
