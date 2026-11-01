@@ -503,7 +503,11 @@ theorem ric_vyAddStoreH {slot : B256} {p h l : UInt8} {fail rest : SFunc}
   set v := Sevm.dataWord sevm (Bytes.toB256 [p])
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := slot) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sloadH hbal s1
-  winv 9
+  winv 2
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_dup (w := x) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup (w := v) rfl s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup (w := x) rfl s1
+  winv 4
   rcases ric_branch run with ⟨-, G12, run⟩ | ⟨hw, G12, run⟩
   · exact (run.false_of_noOk hf).elim
   winv 4
