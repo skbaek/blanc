@@ -202,7 +202,7 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkO
            "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.AccountAccessState", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistStaticCallGuard", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistCursorCalls", "Lift.HistAccessFacts", "Lift.HistEcrecover", "Lift.HistCreate", "Lift.HistAccessMeta", "Lift.HistCallFlat", "Lift.HistSstoreRefund", "Lift.HistWindow", "Lift.HistAccessWalkFacts", "Lift.HistShaWalk"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
-SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckAssemblyPair", "Lift.WitnessShadow"]
+SHARED += ["Lift.PackedShaSize", "Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckRange", "Lift.WitnessShadow"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
 SHARED += ["Lift.ExactWalkSolc", "Lift.ExactWalkCall", "Lift.ExactCallProfile", "Lift.CallProfileTransport", "Lift.StaticGasTransport", "Lift.StaticGasMessage"]
@@ -378,7 +378,6 @@ SHARED += [
     "ExecutionInRawNodeOriginFrom",
     "ExecutionSpawnFrames",
     "Lift.CertRefine",
-    "Lift.CheckChain",
     "Lift.CursorFrames",
     "Lift.DelegatecallControl",
     "Lift.FrameSkip",
@@ -854,9 +853,6 @@ CONTRACTS = {
                          "Lift.HistoryStorage.Jumps", "Lift.HistoryStorage.Prog",
                          "Lift.HistoryStorage.SystemWalk"],
     "consolidation-request": ["Lift.ConsolidationRequest.Cert", "Lift.ConsolidationRequest.Check",
-                               "Lift.ConsolidationRequest.CheckTries",
-                               "Lift.ConsolidationRequest.CheckPart0",
-                               "Lift.ConsolidationRequest.CheckPart1",
                                "Lift.ConsolidationRequest.Jumps", "Lift.ConsolidationRequest.Prog",
                                "Lift.ConsolidationRequest.SystemWalk"],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
@@ -981,7 +977,6 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Callee.Xp", "Lift.Curve3Pool.Callee.GetD", "Lift.Curve3Pool.Callee.GetDExact", "Lift.Curve3Pool.Callee.GetDLoop", "Lift.Curve3Pool.Callee.GetDMem", "Lift.Curve3Pool.Callee.GetDMemExact", "Lift.Curve3Pool.Callee.GetY", "Lift.Curve3Pool.Callee.GetYCoins", "Lift.Curve3Pool.Callee.GetYExact", "Lift.Curve3Pool.Callee.GetYLoop", "Lift.Curve3Pool.Callee.GetYTrees", "Lift.Curve3Pool.Callee.GetDTrees", "Lift.Curve3Pool.Callee.GetYD", "Lift.Curve3Pool.Callee.GetYDCoins", "Lift.Curve3Pool.Callee.GetYDExact", "Lift.Curve3Pool.Callee.GetYDLoop", "Lift.Curve3Pool.Callee.GetYDTrees",
                     "Lift.Curve3Pool.CheckTries",
                     "Lift.Curve3Pool.Check",
-                    "Lift.Curve3Pool.CheckRest1",
                     "Lift.Curve3Pool.CheckPart0",
                     "Lift.Curve3Pool.CheckPart1",
                     "Lift.Curve3Pool.CheckPart2",
@@ -1786,10 +1781,6 @@ CONTRACTS = {
         "Lift.Usdc.ImplV1Creation.Bindings",
         "Lift.Usdc.ImplV1Creation.Cert",
         "Lift.Usdc.ImplV1Creation.Check",
-        "Lift.Usdc.ImplV1Creation.CheckPart0",
-        "Lift.Usdc.ImplV1Creation.CheckPart1",
-        "Lift.Usdc.ImplV1Creation.CheckPart2",
-        "Lift.Usdc.ImplV1Creation.CheckTries",
         "Lift.Usdc.ImplV1Creation.Jumps",
         "Lift.Usdc.ImplV1Creation.Observation",
         "Lift.Usdc.ImplV1Creation.ObservationData",
@@ -1800,10 +1791,6 @@ CONTRACTS = {
         "Lift.Usdc.ImplV2Creation.Bindings",
         "Lift.Usdc.ImplV2Creation.Cert",
         "Lift.Usdc.ImplV2Creation.Check",
-        "Lift.Usdc.ImplV2Creation.CheckPart0",
-        "Lift.Usdc.ImplV2Creation.CheckPart1",
-        "Lift.Usdc.ImplV2Creation.CheckPart2",
-        "Lift.Usdc.ImplV2Creation.CheckTries",
         "Lift.Usdc.ImplV2Creation.Jumps",
         "Lift.Usdc.ImplV2Creation.Observation",
         "Lift.Usdc.ImplV2Creation.ObservationData",
@@ -1813,10 +1800,6 @@ CONTRACTS = {
         "Lift.Usdc.ImplV2_1Creation.Bindings",
         "Lift.Usdc.ImplV2_1Creation.Cert",
         "Lift.Usdc.ImplV2_1Creation.Check",
-        "Lift.Usdc.ImplV2_1Creation.CheckPart0",
-        "Lift.Usdc.ImplV2_1Creation.CheckPart1",
-        "Lift.Usdc.ImplV2_1Creation.CheckPart2",
-        "Lift.Usdc.ImplV2_1Creation.CheckTries",
         "Lift.Usdc.ImplV2_1Creation.Jumps",
         "Lift.Usdc.ImplV2_1Creation.Observation",
         "Lift.Usdc.ImplV2_1Creation.ObservationData",
@@ -1826,10 +1809,6 @@ CONTRACTS = {
         "Lift.Usdc.ImplV2_2Creation.Bindings",
         "Lift.Usdc.ImplV2_2Creation.Cert",
         "Lift.Usdc.ImplV2_2Creation.Check",
-        "Lift.Usdc.ImplV2_2Creation.CheckPart0",
-        "Lift.Usdc.ImplV2_2Creation.CheckPart1",
-        "Lift.Usdc.ImplV2_2Creation.CheckPart2",
-        "Lift.Usdc.ImplV2_2Creation.CheckTries",
         "Lift.Usdc.ImplV2_2Creation.Jumps",
         "Lift.Usdc.ImplV2_2Creation.Observation",
         "Lift.Usdc.ImplV2_2Creation.ObservationData",

@@ -727,7 +727,6 @@ import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Frames
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Top
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Main
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.Capstone
-import Blanc.Lift.CheckAssemblyPair
 import Blanc.Lift.WitnessShadow
 import Blanc.Lift.Clone1167
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Input
@@ -1711,7 +1710,7 @@ import Blanc.ExecutionInRawNodeOriginFrom
 import Blanc.LadderSemHist
 import Blanc.ExecutionSpawnFrames
 import Blanc.Lift.CertRefine
-import Blanc.Lift.CheckChain
+import Blanc.Lift.CheckRange
 import Blanc.Lift.CursorFrames
 import Blanc.Lift.DelegatecallControl
 import Blanc.Lift.FrameSkip

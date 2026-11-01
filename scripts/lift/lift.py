@@ -310,6 +310,32 @@ def code_reference_error(code_import: Any, code_ref: Any) -> Optional[str]:
     return None
 
 
+# Report-only generation safeguards (register S2, blanc-jaune-consolidation-v1): a row whose
+# generated Check is split into many shards that each hold at most one kernel decision, and a
+# `const_mem` row whose `entry_cap` (the multiplicity of full-constant entries per pc, the
+# root of certificate and walk multiplicity) carries no `entry_cap_reason`.  Each prints one
+# NOTE line and never changes the verdict.
+THIN_SHARD_DECISIONS = 1
+
+
+def generation_notes(ident: str, opts: Dict[str, Any], pairs: List[Tuple[Path, Path]]) -> List[str]:
+    notes: List[str] = []
+    parts = [produced for produced, _ in pairs
+             if re.fullmatch(r"CheckPart\d+\.lean", produced.name)]
+    if len(parts) >= 2:
+        decisions = [len(re.findall(r"^(?:private )?theorem (?:range|entry|jumps_batch)_\d+ ",
+                                    q.read_text(), re.M)) for q in parts]
+        thin = sum(1 for d in decisions if d <= THIN_SHARD_DECISIONS)
+        if thin * 2 >= len(parts):
+            notes.append(f"NOTE shards {ident}: {thin} of {len(parts)} generated Check shards hold at most "
+                         f"{THIN_SHARD_DECISIONS} kernel decision(s) (decisions per shard {decisions}); "
+                         "fewer parts would hold the same checks in fewer modules")
+    if opts.get("const_mem") is True and not isinstance(opts.get("entry_cap_reason"), str):
+        notes.append(f"NOTE entry_cap {ident}: entry_cap {opts.get('entry_cap', 2)} has no stated "
+                     "entry_cap_reason in its registry options")
+    return notes
+
+
 def run_registry(args: argparse.Namespace) -> int:
     """Regenerate every registered certificate and compare with (or write) the committed files."""
     root = args.blanc_root
@@ -322,6 +348,7 @@ def run_registry(args: argparse.Namespace) -> int:
             print(f"lift: unknown --only id among {args.only}", file=sys.stderr)
             return 2
     failures = 0
+    notes: List[str] = []
     with tempfile.TemporaryDirectory(prefix="lift-registry-") as tmp:
         for row in rows:
             ident = row["id"]
@@ -406,10 +433,10 @@ def run_registry(args: argparse.Namespace) -> int:
                     argv.append("--check-literal-tries")
                 if check.get("trie_build") is True:
                     argv.append("--check-trie-build")
-                if "rest_parts" in check:
-                    argv += ["--check-rest-parts", str(check["rest_parts"])]
-                if check.get("assembly") in ("seven", "two", "chain"):
-                    argv += ["--check-assembly", check["assembly"]]
+                if "ranges" in check:
+                    argv += ["--check-ranges", str(check["ranges"])]
+                if "entries" in check:
+                    argv += ["--check-entries", ",".join(str(i) for i in check["entries"])]
             tries = row.get("tries")
             if tries:
                 if check and check.get("parts", 0) >= 2:
@@ -421,10 +448,6 @@ def run_registry(args: argparse.Namespace) -> int:
             jumps = row.get("jumps")
             if jumps:
                 argv += ["--jumps-out", str(out / "Jumps.lean"), "--jumps-header", jumps["header"]]
-                if jumps.get("assembly") == "chain":
-                    argv += ["--jumps-assembly", "chain"]
-                if jumps.get("paired") is True:
-                    argv.append("--jumps-paired")
             lock = row.get("lock")
             if lock:
                 argv += ["--lock-spec", json.dumps(lock["spec"]), "--lock-spec-module", lock["spec_module"],
@@ -446,13 +469,11 @@ def run_registry(args: argparse.Namespace) -> int:
                 if "parts" in check:
                     # split memory-mode Check: CheckTries and CheckPart<i> beside Check.lean
                     check_dir = (root / check["path"]).parent
-                    # (and, with check.rest_parts, the chain-tail modules CheckRest<j>)
                     produced_parts = sorted(out.glob("CheckTries.lean")) + sorted(
-                        out.glob("CheckPart*.lean"), key=lambda q: int(q.stem[len("CheckPart"):])) + sorted(
-                        out.glob("CheckRest*.lean"), key=lambda q: int(q.stem[len("CheckRest"):]))
+                        out.glob("CheckPart*.lean"), key=lambda q: int(q.stem[len("CheckPart"):]))
                     pairs += [(q, check_dir / q.name) for q in produced_parts]
                     names = {q.name for q in produced_parts}
-                    for extra in sorted(check_dir.glob("CheckPart*.lean")) + sorted(check_dir.glob("CheckRest*.lean")):
+                    for extra in sorted(check_dir.glob("CheckPart*.lean")):
                         if extra.name not in names:
                             print(f"FAIL {ident}: {extra.relative_to(root)} is not produced by the registered generator")
                             failures += 1
@@ -497,6 +518,7 @@ def run_registry(args: argparse.Namespace) -> int:
                             failures += 1
             if ann_failed:
                 continue
+            notes.extend(generation_notes(ident, opts, pairs))
             for produced, committed in pairs:
                 rel = committed.relative_to(root)
                 if args.write:
@@ -515,6 +537,8 @@ def run_registry(args: argparse.Namespace) -> int:
                 else:
                     print(f"ok   {ident}: {rel} byte-identical ({committed.stat().st_size} bytes) {summary}")
     total = len(rows)
+    for note in notes:
+        print(note)
     if failures:
         print(f"check-lift-certificates: FAIL ({failures} failure(s) over {total} registered certificate(s))")
         return 1
@@ -554,22 +578,18 @@ parser.add_argument("--tries-header", type=str, default=DEFAULT_HEADER, help="st
 parser.add_argument("--jumps-out", type=Path, default=None,
                     help="optional regular Cert.jumpsOk per-entry proof module (requires --check-out)")
 parser.add_argument("--jumps-header", type=str, default=DEFAULT_HEADER, help="Jumps.lean generator comment")
-parser.add_argument("--jumps-paired", action="store_true",
-                    help="decide each entry's checkNodeT and jumpsOkNodeT in one kernel_rfl_and (entry_jumps_i, in Check/CheckPart*): both walk the same abstract stacks, so the kernel reduces them once; Jumps.lean projects jumps_i and imports Check (registry jumps.paired); opt-in per certificate so other certificates regenerate byte-identically")
-parser.add_argument("--jumps-assembly", choices=("chain",), default=None,
-                    help="assemble jumps_ok as a chain over the certificate's tails (Cert.jumpsAll_drop, Blanc.Lift.CheckChain) instead of one membership case split (registry jumps.assembly); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--check-split-nodes", type=int, default=0,
                     help="Check.lean: decide an entry above this many nodes block by block (0: never)")
 parser.add_argument("--check-parts", type=int, default=0,
                     help="split the generated Check into CheckTries, CheckPart0..N-1 and the assembling Check (N >= 2; registry check.parts)")
-parser.add_argument("--check-rest-parts", type=int, default=0,
-                    help="memory-mode split Check: move the tail of the rest_/jrest_ assembly chain into CheckRest1..CheckRest{K-1}, cut at CheckPart boundaries, so Check keeps only the head of the chain and cert_checkM/cert_jumpsOkM (K >= 2; registry check.rest_parts); opt-in per certificate so other certificates regenerate byte-identically")
+parser.add_argument("--check-ranges", type=int, default=0,
+                    help="decide the entries in contiguous ranges of at most this many summed tree nodes (an entry above it alone), one Cert.rangeOk kernel decision per range with the node and jump checks fused, assembled by one Cert.rangeOk_drop_take chain (Blanc.Lift.CheckRange) instead of per-entry theorems and a per-entry chain (registry check.ranges; 0: off); opt-in per certificate so other certificates regenerate byte-identically")
+parser.add_argument("--check-entries", type=str, default="",
+                    help="with --check-ranges and --memret: also export entry_i (the per-entry checkNodeM fact, from its range by Cert.checkNodeM_of_rangeOk) for these comma-separated entries, for consumers that name one entry (registry check.entries)")
 parser.add_argument("--check-literal-tries", action="store_true",
                     help="emit the code tries as data checked once against LTrie.ofList (registry check.literal_tries)")
 parser.add_argument("--check-trie-build", action="store_true",
                     help="with --check-literal-tries: check each literal trie by one linear LTrie.build pass (Blanc.Lift.CodeTriesBuild), which also yields the length bound, instead of LTrie.ofList parts and two length decisions (registry check.trie_build); opt-in per certificate so other certificates regenerate byte-identically")
-parser.add_argument("--check-assembly", choices=("seven", "two", "chain"), default=None,
-                    help="emit cert_check as a call to the shared seven-entry assembler Cert.check_seven (Blanc.Lift.CheckAssembly) or two-entry assembler Cert.check_two (Blanc.Lift.CheckAssemblyPair), or (chain) as a chain over the certificate's tails (Cert.checkAll_drop, Blanc.Lift.CheckChain) for certificates too long for the membership case split, instead of the generic conjunction (registry check.assembly); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--no-join-entries", action="store_true",
                     help="do not promote multi-predecessor JUMPDESTs to join entries (solc-w3 exploration)")
 parser.add_argument("--wrapper-order", choices=("taken-first", "fall-first"), default="taken-first",
@@ -648,14 +668,17 @@ if args.registry is not None:
 if args.hex is None or args.sha256 is None or args.namespace is None or args.cert_out is None:
     parser.error("lift mode needs --hex, --sha256, --namespace and --cert-out")
 
-if args.jumps_out is not None and (args.check_out is None or MEMRET):
-    parser.error("regular jumps mode needs --check-out and --memret off")
+if args.jumps_out is not None and (args.check_out is None or MEMRET or not args.check_ranges):
+    parser.error("regular jumps mode needs --check-out, --check-ranges and --memret off")
 
-if args.check_rest_parts != 0 and (args.check_rest_parts < 2 or args.check_parts < args.check_rest_parts
-                                   or not MEMRET or args.check_out is None):
-    parser.error("--check-rest-parts K needs K >= 2, --check-out, --memret and --check-parts N >= K")
+if MEMRET and args.check_out is not None and not args.check_ranges:
+    parser.error("a memory-tracking Check (--memret) needs --check-ranges")
 if args.tries_out is not None and args.check_parts >= 2:
     parser.error("standalone tries and split Check both own CheckTries.lean")
+if args.check_ranges and args.check_out is None:
+    parser.error("--check-ranges needs --check-out")
+if args.check_entries and not (args.check_ranges and MEMRET):
+    parser.error("--check-entries needs --check-ranges and --memret")
 if args.check_trie_build and not args.check_literal_tries:
     parser.error("--check-trie-build needs --check-literal-tries")
 
@@ -2639,24 +2662,6 @@ def qualify_refs(text: str) -> str:
     return "\n".join(out)
 
 
-def chain_assembly(n: int, rest: str, step: str, carrier: str, drop: str, end: str,
-                   tail: List[str]) -> List[str]:
-    """`{rest}_k : {carrier} code (Cert.entries cert) (cert.drop k) = true` from `{rest}_n` (the
-    empty tail) down to `{rest}_0`, each step consuming the per-entry decision `{step}_k`."""
-    lines = [
-        f"theorem {rest}_{n} : {carrier} code (Cert.entries cert) (cert.drop {n}) = true :=",
-        f"  {end} cert",
-        "",
-    ]
-    for i in reversed(range(n)):
-        lines.extend([
-            f"theorem {rest}_{i} : {carrier} code (Cert.entries cert) (cert.drop {i}) = true :=",
-            f"  {drop} cert {i} (by decide +kernel) {step}_{i} {rest}_{i + 1}",
-            "",
-        ])
-    return lines + tail
-
-
 def check_source() -> Any:
     depth = max(1, (len(code) - 1).bit_length())
     ns = args.namespace
@@ -2681,8 +2686,8 @@ def check_source() -> Any:
     if args.check_literal_tries and args.check_parts < 2:
         lines[2:2] = ["import Blanc.Lift.CodeTriesData", "import Blanc.ConcreteRun"] + (
             ["import Blanc.Lift.CodeTriesBuild"] if args.check_trie_build else [])
-    if MEMRET:
-        return check_source_mem(lines)
+    if args.check_ranges:
+        return check_source_ranges(lines)
     blocks = []
     for i, line in enumerate(cert_entries_lines):
         m = re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line)
@@ -2760,20 +2765,6 @@ def check_source() -> Any:
             ]
             blocks.append(block)
             continue
-        if args.jumps_paired:
-            blocks.append([
-                f"theorem entry_jumps_{i} :",
-                f"    checkNodeT code {depth} codeTries.bytes (Cert.entries cert) {rets} {pc} {frame} {tree} = true ∧",
-                f"      jumpsOkNodeT code {depth} codeTries (Cert.entries cert) {tree} {frame} = true := by",
-                "  kernel_rfl_and",
-                "",
-                f"theorem entry_{i} :",
-                f"    checkNode code (Cert.entries cert) {rets} {pc} {frame} {tree} = true := by",
-                "  rw [← checkNodeT_eq codeTries]",
-                f"  exact entry_jumps_{i}.1",
-                "",
-            ])
-            continue
         blocks.append([
             f"theorem entry_{i} :",
             f"    checkNode code (Cert.entries cert) {rets} {pc} {frame} {tree} = true := by",
@@ -2782,73 +2773,28 @@ def check_source() -> Any:
             "",
         ])
     n = len(cert_entries_lines)
-    if args.check_assembly == "seven":
-        # Share the seven-entry checker/list assembly; the node decisions stay
-        # local. Opt-in per certificate (registry check.assembly), so every
-        # other certificate regenerates byte-identically.
-        if n != 7:
-            raise RuntimeError(
-                f"--check-assembly seven needs 7 certificate entries, found {n}")
-        assembly = [
-            "theorem cert_check : Cert.check code cert = true :=",
-            "  Cert.check_seven entry_0 entry_1 entry_2 entry_3 entry_4 entry_5 entry_6",
-            "    (by decide +kernel)",
-        ]
-    elif args.check_assembly == "two":
-        # The two-entry counterpart of `seven`; opt-in per certificate.
-        if n != 2:
-            raise RuntimeError(
-                f"--check-assembly two needs 2 certificate entries, found {n}")
-        assembly = [
-            "theorem cert_check : Cert.check code cert = true :=",
-            "  Cert.check_two entry_0 entry_1 (by decide +kernel)",
-        ]
-    elif args.check_assembly == "chain":
-        # A chain over the tails `cert.drop k`, one entry per step, for certificates whose
-        # membership case split exceeds the recursion depth; opt-in per certificate.
-        assembly = chain_assembly(n, "rest", "entry", "Cert.checkAll", "Cert.checkAll_drop",
-                                  "Cert.checkAll_drop_length", [
-            "theorem cert_check : Cert.check code cert = true :=",
-            "  Cert.check_of_checkAll (by decide +kernel) rest_0",
-        ])
-    elif n == 1:
-        # Share the checker/list assembly; the actual node decision stays local.
-        assembly = [
-            "theorem cert_check : Cert.check code cert = true := by",
-            "  exact Cert.check_singleton (by decide +kernel) entry_0",
-        ]
-    else:
-        assembly = [
-            "theorem cert_check : Cert.check code cert = true := by",
-            "  unfold Cert.check",
-            "  rw [Bool.and_eq_true]",
-            "  refine ⟨by decide +kernel, ?_⟩",
-            "  rw [List.all_eq_true]",
-            "  intro p hp",
-            "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
-            "  rcases hp with " + " | ".join(["rfl"] * n),
-        ]
-        assembly.extend(f"  · exact entry_{i}" for i in range(n))
+    # Only a certificate with a split entry (above `--check-split-nodes`) still takes this
+    # per-entry layout; every other registered row uses `--check-ranges`.
+    assembly = [
+        "theorem cert_check : Cert.check code cert = true := by",
+        "  unfold Cert.check",
+        "  rw [Bool.and_eq_true]",
+        "  refine ⟨by decide +kernel, ?_⟩",
+        "  rw [List.all_eq_true]",
+        "  intro p hp",
+        "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
+        "  rcases hp with " + " | ".join(["rfl"] * n),
+    ]
+    assembly.extend(f"  · exact entry_{i}" for i in range(n))
     files = split_check(lines, blocks, assembly)
-    if n == 1 or args.check_assembly == "seven":
-        # Add only to the assembly owner, including a split Check if requested.
-        files["Check"] = "import Blanc.Lift.CheckAssembly\n" + files["Check"]
-    elif args.check_assembly == "two":
-        files["Check"] = "import Blanc.Lift.CheckAssemblyPair\n" + files["Check"]
-    elif args.check_assembly == "chain":
-        files["Check"] = "import Blanc.Lift.CheckChain\n" + files["Check"]
     return files if args.check_parts >= 2 else files["Check"]
 
 
-def split_check(head: List[str], blocks: List[List[str]], assembly: List[str],
-                rest: Optional[List[Tuple[int, int, List[str]]]] = None) -> Dict[str, str]:
+def split_check(head: List[str], blocks: List[List[str]], assembly: List[str]) -> Dict[str, str]:
     """The generated Check as files by name.  With `--check-parts N >= 2` (registry
     `check.parts`): `CheckTries` (the code tries), `CheckPart0`..`CheckPart{N-1}` (contiguous
     ranges of the per-entry decisions, which build in parallel) and `Check` (imports the parts
-    and holds the assembly); otherwise one `Check`.  With `rest` (`--check-rest-parts`, memory
-    mode only), each `(lo, hi, lines)` becomes `CheckRest<j>`: the chain-tail theorems over
-    entries lo..hi-1, importing the parts of that range and the next `CheckRest`; `Check`
-    then imports only the parts below the first cut and `CheckRest1`."""
+    and holds the assembly); otherwise one `Check`."""
     ns = args.namespace
     lines = list(head)
     files: Dict[str, str] = {}
@@ -2867,8 +2813,7 @@ def split_check(head: List[str], blocks: List[List[str]], assembly: List[str],
         bounds = check_part_bounds(n, args.check_parts)
         for p in range(len(bounds) - 1):
             lo, hi = bounds[p], bounds[p + 1]
-            body = [f"import {ns}.CheckTries"] + (
-                ["import Blanc.Lift.KernelBatch"] if args.jumps_paired else []) + [
+            body = [f"import {ns}.CheckTries"] + [
                 l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
                           f"Entries {lo}..{hi - 1}, each decided against trie-backed reads of the exact runtime.")
                 for l in preamble]
@@ -2876,28 +2821,10 @@ def split_check(head: List[str], blocks: List[List[str]], assembly: List[str],
                 body += blocks[i]
             body += [f"end {ns}", ""]
             files[f"CheckPart{p}"] = "\n".join(body)
-        if rest:
-            for j, (lo, hi, rest_lines) in enumerate(rest, start=1):
-                body = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1)
-                         if lo <= bounds[p] < hi] +
-                        ([f"import {ns}.CheckRest{j + 1}"] if j < len(rest) else []) +
-                        [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
-                                   f"Entries {lo}..{hi - 1}: the tail of the assembly chain over the CheckPart decisions.")
-                         for l in preamble])
-                body += rest_lines
-                body.extend(["", f"end {ns}", ""])
-                files[f"CheckRest{j}"] = "\n".join(body)
-            first = rest[0][0]
-            lines = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1) if bounds[p] < first] +
-                     [f"import {ns}.CheckRest1"] +
-                     [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
-                                "Assembles the per-entry decisions of the CheckPart modules.")
-                      for l in preamble])
-        else:
-            lines = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1)] +
-                     [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
-                                "Assembles the per-entry decisions of the CheckPart modules.")
-                      for l in preamble])
+        lines = ([f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1)] +
+                 [l.replace("Each entry is decided against trie-backed reads of the exact runtime.",
+                            "Assembles the per-entry decisions of the CheckPart modules.")
+                  for l in preamble])
     else:
         for b in blocks:
             lines += b
@@ -2922,136 +2849,129 @@ def check_part_bounds(n: int, parts: int) -> List[int]:
     return bounds
 
 
-def entry_decisions_mem(i: int, jump_proof: Optional[str] = None) -> List[str]:
-    """`entry_i`/`jumps_i`, stated over `cert[i]` so the chain step `Cert.checkEntriesM_drop`
-    matches them syntactically: the elaborator never unfolds the certificate list (whose depth
-    would need a raised `maxRecDepth`); only the kernel reads the entry."""
-    e = f"(cert[{i}]'(by decide +kernel))"
-    return [
-        f"theorem entry_{i} :",
-        f"    checkNodeM code (Cert.entries cert) mems true",
-        f"      {e}.1.rets {e}.1.pc",
-        f"      {e}.1.frame (mems.getD {i} []) {e}.2 = true := by",
-        "  rw [← checkNodeMT_eq codeTries]",
-        "  decide +kernel",
-        "",
-        f"theorem jumps_{i} :",
-        f"    jumpsOkNodeM code (Cert.entries cert) true",
-        f"      {e}.2 {e}.1.frame (mems.getD {i} []) = true := by",
-        "  rw [← jumpsOkNodeMT_eq codeTries]",
-        f"  exact {jump_proof}" if jump_proof is not None else "  decide +kernel",
-        "",
-    ]
+def range_groups(lo: int, hi: int, budget: int) -> List[Tuple[int, int]]:
+    """Contiguous entry ranges `[k, e)` covering `[lo, hi)`, each of at most `budget` summed tree
+    nodes; an entry above the budget is a range of its own."""
+    groups: List[Tuple[int, int]] = []
+    start = lo
+    while start < hi:
+        end, nodes = start + 1, entry_node_counts.get(start, 0)
+        while end < hi and nodes + entry_node_counts.get(end, 0) <= budget:
+            nodes += entry_node_counts.get(end, 0)
+            end += 1
+        groups.append((start, end))
+        start = end
+    return groups
 
 
-def jump_decisions_mem_batch(indices: List[int]) -> List[str]:
-    """Share kernel normalization across a bounded group of jump checks."""
-    lines = [f"private theorem jumps_batch_{indices[0]} :"]
-    for pos, i in enumerate(indices):
-        e = f"(cert[{i}]'(by decide +kernel))"
-        tail = " ∧" if pos + 1 < len(indices) else " := by"
-        lines.extend([
-            "    jumpsOkNodeMT code _ codeTries (Cert.entries cert) true",
-            f"      {e}.2 {e}.1.frame (mems.getD {i} []) = true{tail}",
-        ])
-    return lines + ["  kernel_rfl_and", ""]
-
-
-def check_source_mem(head: List[str]) -> Dict[str, str]:
-    """Memory-tracking certificate (`Cert.checkM`, `Cert.jumpsOkM`): per-entry decisions of
-    `checkNodeM` and `jumpsOkNodeM` against trie-backed reads, assembled by a chain over the
-    certificate's tails.  No file needs a raised recursion depth or heartbeat budget."""
-    lines = [l.replace("The generic equality rewrites each result to the unchanged Cert.check.",
-                       "The generic equalities rewrite each result to Cert.checkM / Cert.jumpsOkM.")
-             for l in head]
+def check_source_ranges(head: List[str]) -> Any:
+    """`--check-ranges B`: one kernel decision of `Cert.rangeOk` per range of at most `B` summed
+    tree nodes, the node and (for a memory certificate, or with a Jumps module) jump checks fused,
+    each rewritten from the trie-reading `Cert.rangeOkT` by `Cert.rangeOkT_eq`
+    (`Blanc/Lift/CheckRange.lean`).  `cert_rangeOk` chains the ranges with
+    `Cert.rangeOk_drop_take`; `cert_check`/`cert_checkM`/`cert_jumpsOkM` are assembled from it.
+    No statement indexes into the certificate, so there is no per-entry index proof or chain step.
+    With `--check-parts N` the tries, the ranges of each part and the assembly are separate
+    modules as in the per-entry layout; `CheckTries` is the per-entry layout's byte for byte."""
+    ns = args.namespace
     n = len(cert_entries_lines)
     for i, line in enumerate(cert_entries_lines):
         if re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line) is None:
             raise RuntimeError(f"cannot read certificate entry {i}: {line}")
-    blocks: List[List[str]] = [[] for _ in range(n)]
-    bounds = check_part_bounds(n, args.check_parts) if args.check_parts >= 2 else [0, n]
-    for lo, hi in zip(bounds, bounds[1:]):
-        groups: List[List[int]] = []
-        start = lo
-        while start < hi:
-            end = start + 1
-            nodes = entry_node_counts[start]
-            # Share the fixed runtime normalization only among small trees.
-            # Large entries retain their original individual decision, keeping
-            # multiple large normalized trees out of one kernel declaration.
-            while end < hi and end - start < 8 and nodes + entry_node_counts[end] <= 64:
-                nodes += entry_node_counts[end]
-                end += 1
-            indices = list(range(start, end))
-            groups.append(indices)
-            start = end
-        # Sparse small-tree groups did not pay for their additional proof
-        # declarations in the measured large-entry parts. Require at least a
-        # quarter of the separate jump decisions to disappear in this owner.
-        if sum(len(group) - 1 for group in groups) * 4 < hi - lo:
-            for i in range(lo, hi):
-                blocks[i] += entry_decisions_mem(i)
-            continue
-        for indices in groups:
-            start = indices[0]
-            if len(indices) == 1:
-                blocks[start] += entry_decisions_mem(start)
-                continue
-            blocks[start] += jump_decisions_mem_batch(indices)
-            for pos, i in enumerate(indices):
-                projection = ".2" * pos + (".1" if pos + 1 < len(indices) else "")
-                blocks[i] += entry_decisions_mem(i, f"jumps_batch_{start}{projection}")
-    # Chain over the certificate's tails: each step is syntactic in its premises.
-    chain_end = [
-        f"theorem rest_{n} : Cert.checkEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := by",
-        "  decide +kernel",
-        "",
-        f"theorem jrest_{n} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {n} (cert.drop {n}) = true := by",
-        "  decide +kernel",
+    if args.check_split_nodes and any(entry_node_counts.get(i, 0) > args.check_split_nodes
+                                      for i in range(n)):
+        raise RuntimeError("--check-ranges does not split an entry; an entry exceeds --check-split-nodes")
+    if MEMRET:
+        head = [l.replace("The generic equality rewrites each result to the unchanged Cert.check.",
+                          "The generic equalities rewrite each result to Cert.checkM / Cert.jumpsOkM.")
+                for l in head]
+    ms, b = ("mems", "true") if MEMRET else ("[]", "false")
+    j = "true" if MEMRET or args.jumps_out is not None else "false"
+    exports = sorted({int(x) for x in args.check_entries.split(",") if x.strip()})
+    if any(i >= n for i in exports):
+        raise RuntimeError(f"--check-entries names an entry past the certificate's {n} entries")
+    parts = args.check_parts
+    bounds = check_part_bounds(n, parts) if parts >= 2 else [0, n]
+    groups_by_part = [range_groups(lo, hi, args.check_ranges) for lo, hi in zip(bounds, bounds[1:])]
+
+    def part_body(groups: List[Tuple[int, int]]) -> List[str]:
+        body: List[str] = []
+        for k, e in groups:
+            body += [
+                f"theorem range_{k} : Cert.rangeOk code (Cert.entries cert) {ms} {b} {j} {k} "
+                f"((cert.drop {k}).take {e - k}) = true := by",
+                "  rw [← Cert.rangeOkT_eq codeTries]",
+                "  decide +kernel",
+                "",
+            ]
+            for i in (x for x in exports if k <= x < e):
+                el = f"(cert[{i}]'(by decide +kernel))"
+                body += [
+                    f"theorem entry_{i} :",
+                    f"    checkNodeM code (Cert.entries cert) mems true",
+                    f"      {el}.1.rets {el}.1.pc",
+                    f"      {el}.1.frame (mems.getD {i} []) {el}.2 = true :=",
+                    f"  Cert.checkNodeM_of_rangeOk cert {k} {e - k} {i} range_{k} (by decide +kernel) "
+                    "(by decide) (by decide)",
+                    "",
+                ]
+        return body
+
+    groups = [g for gs in groups_by_part for g in gs]
+    assembly = [
+        f"theorem cert_rangeOk : Cert.rangeOk code (Cert.entries cert) {ms} {b} {j} 0 (cert.drop 0) = true :="
+    ] + [f"  Cert.rangeOk_drop_take cert {k} {e - k} range_{k} <|" for k, e in groups] + [
+        f"  Cert.rangeOk_drop_of_le cert {n} (by decide +kernel)",
         "",
     ]
-    steps: Dict[int, List[str]] = {}
-    for i in reversed(range(n)):
-        steps[i] = ([
-            f"theorem rest_{i} : Cert.checkEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
-            f"  Cert.checkEntriesM_drop cert {i} (by decide +kernel) entry_{i} rest_{i + 1}",
+    if MEMRET:
+        assembly += [
+            "theorem cert_checkM : Cert.checkM code cert mems true = true :=",
+            "  Cert.checkM_of_rangeOk (by decide +kernel) (by decide +kernel) cert_rangeOk",
             "",
-            f"theorem jrest_{i} : Cert.jumpsEntriesM code (Cert.entries cert) mems true {i} (cert.drop {i}) = true :=",
-            f"  Cert.jumpsEntriesM_drop cert {i} (by decide +kernel) jumps_{i} jrest_{i + 1}",
-            "",
-        ])
-    final = ([
-        "theorem cert_checkM : Cert.checkM code cert mems true = true := by",
-        "  unfold Cert.checkM",
-        "  rw [Bool.and_eq_true, Bool.and_eq_true]",
-        "  exact ⟨⟨by decide +kernel, by decide +kernel⟩, rest_0⟩",
-        "",
-        "theorem cert_jumpsOkM : Cert.jumpsOkM code cert mems true = true := jrest_0",
-    ])
-    rest: Optional[List[Tuple[int, int, List[str]]]] = None
-    if args.check_rest_parts >= 2:
-        # Cut the chain at CheckPart boundaries nearest equal entry counts (the chain's
-        # text is linear in the entries); Check keeps the head [0, cuts[1]).
-        cuts = [0]
-        for j in range(1, args.check_rest_parts):
-            target = n * j / args.check_rest_parts
-            cut = min((b for b in bounds[1:-1] if b > cuts[-1]), key=lambda b: abs(b - target))
-            cuts.append(cut)
-        cuts.append(n)
-        rest = []
-        for j in range(1, len(cuts) - 1):
-            lo, hi = cuts[j], cuts[j + 1]
-            seg = list(chain_end) if hi == n else []
-            for i in reversed(range(lo, hi)):
-                seg += steps[i]
-            rest.append((lo, hi, seg))
-        assembly = [l for i in reversed(range(cuts[1])) for l in steps[i]] + final
+            "theorem cert_jumpsOkM : Cert.jumpsOkM code cert mems true = true :=",
+            "  Cert.jumpsOkM_of_rangeOk cert_rangeOk",
+        ]
     else:
-        assembly = chain_end + [l for i in reversed(range(n)) for l in steps[i]] + final
-    files = split_check(lines, blocks, assembly, rest)
-    for name in files:
-        if "  kernel_rfl_and" in files[name]:
-            files[name] = "import Blanc.Lift.KernelBatch\n" + files[name]
+        assembly += [
+            "theorem cert_check : Cert.check code cert = true :=",
+            "  Cert.check_of_rangeOk (by decide +kernel) cert_rangeOk",
+        ]
+    each = "Each entry is decided against trie-backed reads of the exact runtime."
+    generic = ("The generic equalities rewrite each result to Cert.checkM / Cert.jumpsOkM." if MEMRET
+               else "The generic equality rewrites each result to the unchanged Cert.check.")
+    fused = "node and jump checks" if j == "true" else "node checks"
+    rewrite = ("Cert.rangeOkT_eq rewrites each range decision to Cert.rangeOk "
+               "(Blanc/Lift/CheckRange.lean).")
+
+    def doc(lines: List[str], what: str) -> List[str]:
+        return [what if l == each else l.replace(generic, rewrite) for l in lines]
+
+    split = next(k for k, l in enumerate(head) if l.startswith("/-- Depth "))
+    last_import = max(k for k, l in enumerate(head) if l.startswith("import "))
+    if parts < 2:
+        lines = (head[:last_import + 1] + ["import Blanc.Lift.CheckRange"] +
+                 doc(head[last_import + 1:split],
+                     f"The {fused} are decided in ranges against trie-backed reads of the exact runtime.") +
+                 head[split:] + part_body(groups) + assembly + ["", f"end {ns}", ""])
+        return "\n".join(lines)
+    preamble = head[2:split]
+    files: Dict[str, str] = {}
+    files["CheckTries"] = "\n".join(
+        [f"import {ns}.Cert", "import Blanc.Lift.CheckFast"] +
+        (["import Blanc.Lift.CodeTriesData", "import Blanc.ConcreteRun"] if args.check_literal_tries else []) +
+        (["import Blanc.Lift.CodeTriesBuild"] if args.check_trie_build else []) +
+        preamble + head[split:] + [f"end {ns}", ""])
+    for p, ((lo, hi), gs) in enumerate(zip(zip(bounds, bounds[1:]), groups_by_part)):
+        body = ([f"import {ns}.CheckTries", "import Blanc.Lift.CheckRange"] +
+                doc(preamble, f"Entries {lo}..{hi - 1}: the {fused}, decided in ranges against "
+                              "trie-backed reads of the exact runtime.") +
+                part_body(gs) + [f"end {ns}", ""])
+        files[f"CheckPart{p}"] = "\n".join(body)
+    files["Check"] = "\n".join(
+        [f"import {ns}.CheckPart{p}" for p in range(len(bounds) - 1)] +
+        doc(preamble, "Assembles the range decisions of the CheckPart modules.") +
+        assembly + ["", f"end {ns}", ""])
     return files
 
 
@@ -3072,62 +2992,28 @@ if args.check_out is not None:
         args.check_out.write_text(_check)
 
 def jumps_source() -> str:
-    """Regular jump acceptance against the same exact code tries as the registered Check.
-    This optional surface preserves all existing generated outputs. Per-entry kernel
-    decisions rewrite through the shared jumpsOkNodeT_eq; assembly has an explicit simp set.
-    """
+    """Regular jump acceptance: with `--check-ranges` the jump checks run inside the Check
+    module's range decisions (`cert_rangeOk`, jumps on), and Jumps.lean only derives `jumps_ok`."""
     ns = args.namespace
-    owner = "CheckTries" if args.check_parts >= 2 and not args.jumps_paired else "Check"
-    if args.jumps_paired and (MEMRET or args.check_split_nodes or args.check_parts < 2
-                              or args.jumps_assembly is not None):
-        raise RuntimeError("--jumps-paired supports only a non-memory Check split into parts "
-                           "(--check-parts >= 2) without split nodes or a chain assembly")
-    lines = [
-        f"import {ns}.{owner}",
-        "",
-        f"/-! {args.jumps_header}",
-        ("Jump destinations are checked against the exact runtime, each together with its entry's node "
-         "check in one kernel decision (entry_jumps_i). -/" if args.jumps_paired else
-         "Jump destinations are checked against the exact runtime, one kernel decision per entry. -/"),
-        "",
-        f"namespace {ns}",
-        "",
-        "open Jaune",
-        "",
-    ]
-    for i, line in enumerate(cert_entries_lines):
-        m = re.match(r"^  \(⟨(0x[0-9a-f]+), (\[[^\]]*\]), (\d+)⟩, (t_\w+)\)$", line)
-        if m is None:
-            raise RuntimeError(f"cannot read certificate entry {i}: {line}")
-        _pc, frame, _rets, tree = m.groups()
-        lines.extend([
-            f"theorem jumps_{i} :",
-            f"    jumpsOkNode code (Cert.entries cert) {tree} {frame} = true := by",
-            "  rw [← jumpsOkNodeT_eq codeTries]",
-            f"  exact entry_jumps_{i}.2" if args.jumps_paired else "  decide +kernel",
+    if args.check_ranges:
+        return "\n".join([
+            f"import {ns}.Check",
+            "",
+            f"/-! {args.jumps_header}",
+            "Jump destinations are checked against the exact runtime together with the node checks, "
+            "range by range (cert_rangeOk, with jumps on). -/",
+            "",
+            f"namespace {ns}",
+            "",
+            "open Jaune",
+            "",
+            "theorem jumps_ok : Cert.jumpsOk code cert = true :=",
+            "  Cert.jumpsOk_of_rangeOk cert_rangeOk",
+            "",
+            f"end {ns}",
             "",
         ])
-    n = len(cert_entries_lines)
-    if args.jumps_assembly == "chain":
-        lines[0:1] = [lines[0], "import Blanc.Lift.CheckChain"]
-        lines.extend(chain_assembly(n, "jrest", "jumps", "Cert.jumpsAll", "Cert.jumpsAll_drop",
-                                    "Cert.jumpsAll_drop_length", [
-            "theorem jumps_ok : Cert.jumpsOk code cert = true :=",
-            "  Cert.jumpsOk_of_jumpsAll jrest_0",
-        ]))
-        lines.extend(["", f"end {ns}", ""])
-        return "\n".join(lines)
-    lines.extend([
-        "theorem jumps_ok : Cert.jumpsOk code cert = true := by",
-        "  unfold Cert.jumpsOk",
-        "  rw [List.all_eq_true]",
-        "  intro p hp",
-        "  simp only [cert, List.mem_cons, List.not_mem_nil, or_false] at hp",
-        "  rcases hp with " + " | ".join(["rfl"] * n),
-    ])
-    lines.extend(f"  · exact jumps_{i}" for i in range(n))
-    lines.extend(["", f"end {ns}", ""])
-    return "\n".join(lines)
+    raise RuntimeError("a Jumps module needs --check-ranges (the jump checks run inside the range decisions)")
 
 
 if args.jumps_out is not None:

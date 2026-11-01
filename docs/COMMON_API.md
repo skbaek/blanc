@@ -8331,28 +8331,26 @@ contract-neutral.
 - Assemble a single-entry non-memory certificate with `Cert.check_singleton` in
   [`Blanc/Lift/CheckAssembly.lean`](../Blanc/Lift/CheckAssembly.lean). Supply the
   existing startup Boolean and sole `checkNode` result; the theorem preserves
-  the ordinary `Cert.check` proposition. The registered producer uses it for
-  singleton checks, including the final owner of split check files.
+  the ordinary `Cert.check` proposition; hand-written single-entry checks call it
+  (the registered producer uses `Cert.rangeOk`, below).
   Its jump counterpart `Cert.jumpsOk_singleton` takes the sole `jumpsOkNode`
   result; hand-written single-entry `Jumps` modules call it directly.
-- Assemble a seven-entry non-memory certificate with `Cert.check_seven` and its
-  jump counterpart `Cert.jumpsOk_seven` in the same module: supply the seven
-  per-entry `checkNode`/`jumpsOkNode` results plus the startup Boolean (check
-  only). The registered producer emits a call to `check_seven` in its opt-in
-  `seven` assembly mode (`check.assembly`), so sibling seven-entry
-  certificates share the assembly instead of repeating the generic
-  conjunction; hand-written `Jumps` modules call `jumpsOk_seven` directly.
-- Assemble a two-entry non-memory certificate with `Cert.check_two` (the two node checks plus
-  the startup Boolean) in [`Blanc/Lift/CheckAssemblyPair.lean`](../Blanc/Lift/CheckAssemblyPair.lean),
-  emitted by the registered producer in its opt-in `two` assembly mode (`check.assembly`); its own
-  module, so adding it rebuilt no existing certificate.
-- Assemble a long non-memory certificate (180 entries, the USDC implementation) without
-  unfolding its entry list: `Cert.checkAll`/`Cert.jumpsAll` over the tails `c.drop k`, the chain
-  steps `Cert.checkAll_drop`/`Cert.jumpsAll_drop`, the ends `Cert.checkAll_drop_length`/
-  `Cert.jumpsAll_drop_length` and the assemblies `Cert.check_of_checkAll`/`Cert.jumpsOk_of_jumpsAll`
-  in [`Blanc/Lift/CheckChain.lean`](../Blanc/Lift/CheckChain.lean), emitted by the registered producer in its opt-in `chain`
-  assembly mode (`check.assembly`/`jumps.assembly`); the non-memory counterparts of
-  `Cert.checkEntriesM_drop`/`Cert.jumpsEntriesM_drop`. Worked use: `Blanc/Lift/Usdc/Impl/Check.lean`.
+- Assemble a seven-entry jump certificate with `Cert.jumpsOk_seven` in the same module from the
+  seven per-entry `jumpsOkNode` results; hand-written `Jumps` modules call it directly.
+- Decide a certificate in ranges of entries rather than one theorem per entry: `Cert.rangeOk`
+  (the node check and, with its `j` flag, the jump check of every entry of a tail, memory maps
+  included; a non-memory certificate runs it with no maps and tracking off), its trie-reading copy
+  `Cert.rangeOkT` with `Cert.rangeOkT_eq`, the chain link `Cert.rangeOk_drop_take` over
+  `(c.drop k).take n`, the end `Cert.rangeOk_drop_of_le`, the assemblies `Cert.checkM_of_rangeOk`,
+  `Cert.jumpsOkM_of_rangeOk`, `Cert.check_of_rangeOk` and `Cert.jumpsOk_of_rangeOk`, and
+  `Cert.checkNodeM_of_rangeOk` for a consumer that names one entry, in
+  [`Blanc/Lift/CheckRange.lean`](../Blanc/Lift/CheckRange.lean). The registered producer emits it
+  with `check.ranges B` (one `decide +kernel` per range of at most `B` summed tree nodes; `check.entries`
+  re-exports named entries), replacing the per-entry theorems, their `cert[i]'(by decide +kernel)`
+  index proofs and the per-entry `rest_`/`jrest_` chain. Measured on WSL (2026-11-01): Curve3Pool's
+  generated check modules went from about 2,100 s to about 575 s of elaboration and from 30.6k to
+  5.9k lines at `B = 600` (largest part 5.0 GiB, the 4,041-node entry alone). Worked use:
+  `Blanc/Lift/Curve3Pool/Check.lean`.
 - Assemble the free-pointer check of a long certificate from per-entry kernel decisions: `fpEntry`
   (entry `k` under its annotation, `false` past either end), `fpFrom` over the tails
   `(c.zip ann).drop k`, the step `fpFrom_step`, the end `fpFrom_of_le` and the assembly

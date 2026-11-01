@@ -39,7 +39,7 @@ python3 -B scripts/lift/lift.py --hex scripts/lift/inputs/X-runtime.hex --sha256
 
 - It prints `Counts: entries=N, calls=…, nodes=…, loops=…, ext_calls=…, largest_entry=PC:NODES` and
   `Self-check verdict: PASS`. The verdict is the producer's own Python mirror of the checker; only Lean decides acceptance.
-- `entries` chooses the assembly mode (step 4); `largest_entry` and `nodes` choose `split_nodes`; `--report-dir` writes
+- `largest_entry` and `nodes` choose `ranges` and `split_nodes` (step 4); `--report-dir` writes
   `cert.json` and `cfg.json` for inspection.
 - An opcode without a lifted transfer fails the run: the producer checks its opcode table (`LEAN_REG`) on every run
   against the arms of `ninstTransfer`/`liftRegularTransfer` (`Blanc/Lift/Transfer.lean`) and `regularTransfer`
@@ -87,23 +87,18 @@ All are off by default, so every row that omits them regenerates byte-identicall
 
 - `split_nodes: N`: decide an entry above N nodes block by block (at unknown-condition branches). The producer's piece size
   is `CHECK_SPLIT_NODE_BUDGET` = 1000 nodes, the size a `decide +kernel` peaks under about 4 GiB at.
-- `parts: N` (N ≥ 2): split into `CheckTries`, `CheckPart0..N-1` and an assembling `Check`. `rest_parts: K` (memory mode,
-  `2 ≤ K ≤ parts`): move the tail of the `rest_`/`jrest_` assembly chain into `CheckRest1..K-1`.
+- `parts: N` (N ≥ 2): split into `CheckTries`, `CheckPart0..N-1` and an assembling `Check`.
+- `ranges: B`: decide the entries in contiguous ranges of at most B summed tree nodes (an entry above B alone), one
+  `Cert.rangeOk` decision per range with the node and jump checks fused, chained by `Cert.rangeOk_drop_take` into
+  `cert_rangeOk` (`Blanc/Lift/CheckRange.lean`); there are no per-entry theorems. It refuses an entry above
+  `split_nodes` and is required in memory mode and for a generated `jumps` module. `entries: [i, ...]` (memory mode)
+  re-exports `entry_i` for a consumer that names one entry. Measured budgets: 600 (Curve3Pool, USDC), 200 (USDC upgraders), 1000 (0x6326).
 - `literal_tries: true`: emit the code tries as data checked once against `LTrie.ofList`; `trie_build: true` (needs
   `literal_tries`): check each by one linear `LTrie.build` pass (`Blanc/Lift/CodeTriesBuild.lean`).
-- `assembly`: how the per-entry decisions combine into `cert_check`. The choices, by entry count N:
-  - none, N = 1: `Cert.check_singleton` (`Blanc/Lift/CheckAssembly.lean`), the sole `checkNode` decision.
-  - none, N > 1: the generic conjunction, one membership case split; it exceeds the recursion depth for long certificates.
-  - `"two"`: `Cert.check_two` (`CheckAssemblyPair.lean`); the producer insists on N = 2.
-  - `"seven"`: `Cert.check_seven` (`CheckAssembly.lean`); N = 7 exactly.
-  - `"chain"`: a chain over the tails `cert.drop k` (`Cert.checkAll_drop`, `Blanc/Lift/CheckChain.lean`), one entry per step;
-    for certificates too long for the case split (USDC implementation: 180 entries).
-  - Memory mode (`memret`) has no `assembly` choice: it always emits the chain `rest_i`/`jrest_i` over
-    `Cert.checkEntriesM_drop`/`jumpsEntriesM_drop` and proves both `cert_checkM` and `cert_jumpsOkM` in the same modules.
-- `jumps` (regular mode only: needs `check`, and memory mode has its jump decisions inside the Check): `jumps.path`, `jumps.header`; `assembly: "chain"` assembles
-  `jumps_ok` over the tails; `paired: true` decides each entry's `checkNodeT` and `jumpsOkNodeT` in one `kernel_rfl_and`
-  (`entry_jumps_i`; needs `check.parts ≥ 2`, no `split_nodes`, no `jumps.assembly`), because both walks evaluate the same
-  abstract stacks.
+- Without `ranges` (only a certificate with an entry above `split_nodes`, 0x847e) the per-entry decisions combine into
+  `cert_check` by the generic conjunction, one membership case split.
+- `jumps` (regular mode, needs `check.ranges`): `jumps.path`, `jumps.header`; the jump checks run inside the range
+  decisions and `Jumps` derives `jumps_ok` from `cert_rangeOk`. Memory mode has its jump checks inside the Check.
 - `tries` alone (no generated Check): a standalone `CheckTries.lean` beside a handwritten Check/Jumps (the beacon deposit
   contract). It cannot be combined with `check.parts ≥ 2`.
 - A registry row with no `check` key has no generated Check: its Check is handwritten (the WETH9 and Curve 3Crv rows, per
