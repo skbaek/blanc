@@ -6,7 +6,7 @@ siblings" -- every contract's program, compiled-bytes and property modules sit
 at the same level of the import hierarchy, and no contract's module imports
 another contract's, in either direction, at any layer.
 
-Six checks, all falsifiable, all exercised by negative controls:
+Seven checks, all falsifiable, all exercised by negative controls:
 
   1. Classification is total. Every Lean module in the repository appears in
      the table below, wherever it sits in the tree -- discovery is recursive
@@ -76,9 +76,16 @@ Six checks, all falsifiable, all exercised by negative controls:
      and it is not a similarity detector: it binds exactly the
      SHARED-registration-to-registry-entry relation and nothing else. An
      ordinary edit to a shared file that is already cited is unaffected.
+  7. The generated shared-module inventory is current. `docs/MODULE_INVENTORY.md`
+     lists every SHARED module with its own header summary and the registry
+     branches citing it; `scripts/generate-module-inventory.py` renders it from
+     this table, the modules' headers and `docs/COMMON_API.md`, and the gate
+     byte-compares the committed file with that rendering. A hand edit, a new
+     or reclassified shared module, a changed module summary, or a moved
+     registry citation without `--write` FAILS.
 
 Roots (Blanc.lean, Main.lean) exist to import everything and are exempt from 2,
-3 and 4 as importers, never from 1, and are outside 5 and 6.
+3 and 4 as importers, never from 1, and are outside 5, 6 and 7.
 
 Check 4 is what keeps 2 honest once a cross-family theorem exists: without an
 explicit downstream stratum the only ways to state one are an inverted import,
@@ -2777,6 +2784,23 @@ def discovery_failures(root, owner):
     return (failures, len(shared_owned), len(citations))
 
 
+INVENTORY_DOC = os.path.join("docs", "MODULE_INVENTORY.md")
+
+
+def load_inventory_generator():
+    """scripts/generate-module-inventory.py, loaded beside this script."""
+    import importlib.util
+
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                        "generate-module-inventory.py")
+    spec = importlib.util.spec_from_file_location("module_inventory", path)
+    if spec is None or spec.loader is None:
+        raise SystemExit(f"REGRESSION — layering: cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def main(argv):
     root = None
     args = list(argv[1:])
@@ -2875,6 +2899,12 @@ def main(argv):
     )
     failures.extend(coverage)
 
+    # Check 7: the generated shared-module inventory matches its generator,
+    # which renders it from this table, the modules' own headers and the
+    # registry's need-tree citations (scripts/generate-module-inventory.py).
+    inventory = load_inventory_generator()
+    failures.extend(inventory.check(root, sys.modules[__name__], owner))
+
     for line in failures:
         print(f"LAYERING — {line}")
     n_checked = sum(1 for m in found if owner.get(m) not in (None, "root"))
@@ -2893,7 +2923,8 @@ def main(argv):
         f"{n_shared_recipes} shared facility recipe(s) reachable from "
         f"{n_citations} need-first registry citation(s), none stale; "
         f"{n_shared_cited}/{n_shared} shared module(s) cited by the need-first "
-        f"registry, {len(DISCOVERY_EXEMPT)} exempt with a stated reason"
+        f"registry, {len(DISCOVERY_EXEMPT)} exempt with a stated reason; "
+        f"{INVENTORY_DOC} matches its generator"
     )
     return 0
 
