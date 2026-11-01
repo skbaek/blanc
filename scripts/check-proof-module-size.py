@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Report-only proof-module growth ratchet.
+"""Proof-module growth ratchet: report-only, except for hub modules.
+
+A module whose reverse import closure (the production modules that import it,
+directly or transitively) exceeds ``HUB_REVERSE_CLOSURE`` is a *hub*: every
+line it gains is re-elaborated by that many dependents' rebuilds.  Growth of a
+hub past its grandfathered ceiling is BLOCKING (register S7, after the
+CommonProofs split); every other finding stays report-only.
 
 README.md:417-425 records the evidence behind both constants: a 1,244-line
 model answered in about 21 seconds, while an 8,000-line derivation did not
@@ -31,6 +37,10 @@ from module_path_policy import (
 
 WARNING_THRESHOLD = 1250
 NEW_MODULE_HARD_CAP = 8000
+# Register S7: size policy keyed to rebuild cost.  A hub is a module more
+# than this many production modules import (directly or transitively).
+HUB_REVERSE_CLOSURE = 500
+IMPORT_RE = re.compile(r"^import\s+(Blanc(?:\.[A-Za-z0-9_']+)*)\s*$", re.M)
 THRESHOLD_SOURCE = "README.md:417-425"
 SCHEMA_VERSION = 1
 BASELINE_REL = Path("scripts/proof-module-size-baseline.json")
@@ -142,6 +152,48 @@ def production_modules(root: Path) -> Dict[str, int]:
             raise ModuleSizeError(f"cannot read {path}: {exc}") from exc
         result[path.relative_to(canonical_root).as_posix()] = lines
     return result
+
+
+def reverse_closures(root: Path, modules: Dict[str, int]) -> Dict[str, int]:
+    """Number of production modules importing each module, transitively."""
+    canonical_root = root.resolve()
+    by_name = {path[: -len(".lean")].replace("/", "."): path for path in modules}
+    importers: Dict[str, Set[str]] = {path: set() for path in modules}
+    for path in modules:
+        try:
+            text = (canonical_root / path).read_text(encoding="utf-8")
+        except OSError as exc:
+            raise ModuleSizeError(f"cannot read {path}: {exc}") from exc
+        for name in IMPORT_RE.findall(text):
+            target = by_name.get(name)
+            if target is not None and target != path:
+                importers[target].add(path)
+    result: Dict[str, int] = {}
+    for path in modules:
+        seen: Set[str] = set()
+        stack = [path]
+        while stack:
+            for parent in importers[stack.pop()]:
+                if parent not in seen:
+                    seen.add(parent)
+                    stack.append(parent)
+        result[path] = len(seen)
+    return result
+
+
+def blocking_findings(
+    findings: Sequence[Finding],
+    closures: Dict[str, int],
+    applied: Dict[Tuple[str, str], "ExceptionRow"],
+) -> List[Finding]:
+    """Hub growth past a ceiling that no bounded exception covers."""
+    return [
+        finding
+        for finding in findings
+        if finding.kind == "grandfathered-growth"
+        and closures.get(finding.module, 0) > HUB_REVERSE_CLOSURE
+        and (finding.module, finding.kind) not in applied
+    ]
 
 
 def empty_baseline() -> Baseline:
@@ -381,6 +433,8 @@ def ordinary(root: Path) -> int:
     validate_integrity(modules, baseline, False)
     findings, improvements = inventory_findings(modules, baseline)
     applied = validate_exceptions(modules, findings, exceptions)
+    closures = reverse_closures(root, modules)
+    blocking = blocking_findings(findings, closures, applied)
     hard = 0
     growth = 0
     warnings = 0
@@ -404,11 +458,26 @@ def ordinary(root: Path) -> int:
             f"MODULE-SIZE — IMPROVED: {module}: {old} -> {new} lines; "
             "ratchet with --write-baseline"
         )
+    for finding in blocking:
+        print(
+            f"MODULE-SIZE — BLOCKING hub-growth: {finding.module}: {finding.lines} lines, "
+            f"ceiling {finding.ceiling}, reverse closure {closures[finding.module]} "
+            f"> {HUB_REVERSE_CLOSURE}"
+        )
+    if blocking:
+        print(
+            f"REGRESSION — proof module size: {len(blocking)} hub module(s) "
+            f"(reverse closure > {HUB_REVERSE_CLOSURE}) grew past their ceiling; "
+            "shrink them or split them, never raise a ceiling"
+        )
+        return 1
     print(
         f"OK — proof module size (report-only): {len(modules)} modules; "
         f"{len(baseline.ceilings)} grandfathered ceilings; {warnings} warning(s), "
         f"{growth} growth finding(s), {hard} new-module hard-cap breach(es), "
-        f"{len(improvements)} improvement(s); {len(applied)} exception(s) applied"
+        f"{len(improvements)} improvement(s); {len(applied)} exception(s) applied; "
+        f"{sum(1 for count in closures.values() if count > HUB_REVERSE_CLOSURE)} hub module(s) "
+        f"(reverse closure > {HUB_REVERSE_CLOSURE}) held blocking"
     )
     return 0
 
@@ -484,6 +553,28 @@ def self_test() -> int:
             raise ModuleSizeError("self-test: new-module hard-cap breach was not detected")
         controls += 1
 
+        # Hub control: the same growth blocks once enough modules import it,
+        # and only then.
+        grown, _ = inventory_findings(production_modules(root), baseline)
+        if blocking_findings(grown, reverse_closures(root, production_modules(root)), {}):
+            raise ModuleSizeError("self-test: growth of a non-hub module blocked")
+        for index in range(HUB_REVERSE_CLOSURE + 1):
+            path = root / f"Blanc/Importer{index}.lean"
+            path.write_text("import Blanc.Large\n", encoding="utf-8")
+        hub_modules = production_modules(root)
+        hub_findings, _ = inventory_findings(hub_modules, baseline)
+        closures = reverse_closures(root, hub_modules)
+        if closures.get("Blanc/Large.lean") != HUB_REVERSE_CLOSURE + 1:
+            raise ModuleSizeError("self-test: reverse closure miscounted")
+        if not any(
+            row.module == "Blanc/Large.lean"
+            for row in blocking_findings(hub_findings, closures, {})
+        ):
+            raise ModuleSizeError("self-test: hub growth past its ceiling did not block")
+        for index in range(HUB_REVERSE_CLOSURE + 1):
+            (root / f"Blanc/Importer{index}.lean").unlink()
+        controls += 1
+
         write_module(root, "Blanc/Large.lean", 1400)
         lowered = monotone_update(production_modules(root), baseline)
         if lowered.ceilings.get("Blanc/Large.lean") != 1400:
@@ -555,10 +646,10 @@ def self_test() -> int:
         else:
             raise ModuleSizeError("self-test: stale baseline passed")
         controls += 1
-    if controls != 8:
-        raise ModuleSizeError(f"self-test accounting: expected 8 controls, ran {controls}")
+    if controls != 9:
+        raise ModuleSizeError(f"self-test accounting: expected 9 controls, ran {controls}")
     print(
-        "OK — proof module size self-test: 8/8 growth, hard-cap, monotonicity, "
+        "OK — proof module size self-test: 9/9 growth, hub-growth, hard-cap, monotonicity, "
         "exception, and integrity controls live"
     )
     return 0
