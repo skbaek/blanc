@@ -597,13 +597,11 @@ private theorem heartbeat_storeLogTail_runCompiled_update
       rw [setStorVal_getStor_self, Stor.get_set_self]
     · have logs_setMach (d : Devm) (mach : Mach) :
           (d.setMach mach).logs = d.logs := rfl
-      have logs_addLog (d : Devm) (log : Log) :
-          (d.addLog log).logs = d.logs ++ [log] := rfl
       have logs_setStorVal (d : Devm) (a : Adr) (k v : B256) :
           (d.setStorVal a k v).logs = d.logs := rfl
       have logs_withRefundCounter (d : Devm) (rc : Int) :
           (d.withRefundCounter rc).logs = d.logs := rfl
-      rw [logs_setMach, logs_addLog, logs_setMach, logs_setStorVal,
+      rw [logs_setMach, Devm.addLog_logs, logs_setMach, logs_setStorVal,
         logs_withRefundCounter, logs_setMach]
       rw [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
@@ -679,13 +677,11 @@ private theorem heartbeat_storeLogTail_runCompiled_other
       rw [setStorVal_getStor_self, Stor.get_set_self]
     · have logs_setMach (d : Devm) (mach : Mach) :
           (d.setMach mach).logs = d.logs := rfl
-      have logs_addLog (d : Devm) (log : Log) :
-          (d.addLog log).logs = d.logs ++ [log] := rfl
       have logs_setStorVal (d : Devm) (a : Adr) (k v : B256) :
           (d.setStorVal a k v).logs = d.logs := rfl
       have logs_withRefundCounter (d : Devm) (rc : Int) :
           (d.withRefundCounter rc).logs = d.logs := rfl
-      rw [logs_setMach, logs_addLog, logs_setMach, logs_setStorVal,
+      rw [logs_setMach, Devm.addLog_logs, logs_setMach, logs_setStorVal,
         logs_withRefundCounter, logs_setMach]
       rw [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
@@ -939,13 +935,11 @@ theorem heartbeat_body_runCompiled_of_checkedExtension
       rw [setStorVal_getStor_self, Stor.get_set_self]
     · have logs_setMach (d : Devm) (mach : Mach) :
           (d.setMach mach).logs = d.logs := rfl
-      have logs_addLog (d : Devm) (log : Log) :
-          (d.addLog log).logs = d.logs ++ [log] := rfl
       have logs_setStorVal (d : Devm) (a : Adr) (k v : B256) :
           (d.setStorVal a k v).logs = d.logs := rfl
       have logs_withRefundCounter (d : Devm) (rc : Int) :
           (d.withRefundCounter rc).logs = d.logs := rfl
-      rw [logs_setMach, logs_addLog, logs_setMach, logs_setStorVal,
+      rw [logs_setMach, Devm.addLog_logs, logs_setMach, logs_setStorVal,
         logs_withRefundCounter, logs_setMach]
       rw [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]

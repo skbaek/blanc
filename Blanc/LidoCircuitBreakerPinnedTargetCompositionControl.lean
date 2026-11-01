@@ -460,10 +460,6 @@ private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
 
-private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
-    (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
-  rfl
-
 /-! ## The cold and warm charges, resolved at the row-19 world -/
 
 private theorem stubRunCost_assignment :
@@ -1946,8 +1942,8 @@ private theorem stubPauseWorld_successSuffix :
   unfold PauseSuccessNoninterference
   rw [stubPauseWorld_currentTarget, stubPauseWorld_callerWord]
   constructor
-  · rw [hstor, setMach_getStorVal]
-  · rw [hstor, setMach_getStorVal]
+  · rw [hstor, Devm.getStorVal_setMach]
+  · rw [hstor, Devm.getStorVal_setMach]
 
 private theorem stubPauseWorld_productionRun :
     ∃ successPre final : Devm,
@@ -2204,7 +2200,7 @@ private theorem stubPauseWorld_afterSetAt {final : Devm}
     exact stubRunAfterSetBase_code
   · rw [stubPauseWorld_currentTarget, stubPauseWorld_callerWord]
     unfold stubPauseWorldAfterSetEntry
-    rw [setMach_getStorVal, stubRunAfterSetBase_count,
+    rw [Devm.getStorVal_setMach, stubRunAfterSetBase_count,
       stubPauseWorld_getStorVal, pauseLastStor_count]
     decide
 
