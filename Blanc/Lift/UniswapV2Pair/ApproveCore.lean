@@ -3,6 +3,7 @@ import Blanc.Lift.UniswapV2Pair.WriterArithmetic
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.HistAccessWalk
+import Blanc.Lift.WalkKit
 
 /-! The literal internal approval writer, retaining storage metadata and exact event memory. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -99,27 +100,19 @@ theorem approve64_exact_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
   unfold t_259c_c64
   refine rx_dest ?_
   refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_and (v := owner.toB256) (by rw [B256.and_comm]; exact ff20_and_adr owner)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size, memExtSize_of_le mem.n32 (Nat.le_trans (by decide) ge),
       Nat.sub_self]; decide
-  refine rx_push (w := 2) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 4
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq m0.size, memExtSize_of_le mem.n32 (Nat.le_trans (by decide) ge),
       Nat.sub_self]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   simp only [show (32 : B256).toNat = 32 from rfl, show (0 : B256).toNat = 0 from rfl]
   have gas1 : G + e + c + 1944 = (G + e + c + 1902) + 42 := by omega
   rw [gas1]
@@ -133,8 +126,7 @@ theorem approve64_exact_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_dup (n := 7) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_and (v := spender.toB256) (by rw [B256.and_comm]; exact ff20_and_adr spender)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq s1, memExtSize_of_le mem.n32 (Nat.le_trans (by decide) ge),
       Nat.sub_self]; decide
@@ -145,9 +137,7 @@ theorem approve64_exact_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq s2, memExtSize_of_le mem.n32 (Nat.le_trans (by decide) ge),
       Nat.sub_self]; decide
-  refine rx_swap2 ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 3
   simp only [show (32 : B256).toNat = 32 from rfl, show (0 : B256).toNat = 0 from rfl]
   have gas2 : G + e + c + 1866 = (G + e + c + 1824) + 42 := by omega
   rw [gas2]
@@ -158,8 +148,7 @@ theorem approve64_exact_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
   · exact congrArg Bytes.keccak
       (Mem.read_two_word_writes_at_raw (approveOwnerMemory M owner.toB256) 0 spender.toB256
         (mapSlot owner.toB256 2))
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 2
   have gas3 : G + e + c + 1818 = (G + e + 1818) + c := by omega
   rw [gas3]
   refine rx_sstoreC fork cost (by omega) nonstatic ?_
@@ -168,8 +157,7 @@ theorem approve64_exact_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq s3, memExtSize_of_le mem.n32 (Nat.le_trans (by decide) ge),
       Nat.sub_self]; decide
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   have gas4 : G + e + 1806 = (G + 1803) + (3 + e) := by omega
   rw [gas4]
   refine rx_mstore (c := 3 + e) ?_ rfl ?_
@@ -181,12 +169,9 @@ theorem approve64_exact_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
   · rw [St.extCost_eq s4, memExtSize_of_le n4 (Nat.le_trans (Nat.le_trans (by decide) ge) big4),
       Nat.sub_self]; decide
   refine rx_push (w := approvalTopic) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap3 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 3
   refine rx_sub' (v := 0) (B256.sub_self p) (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_swap2 ?_
+  wrun! 2
   refine rx_add' (v := 32) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap1 ?_
   have gas5 : G + 1770 = (G + 14) + 1756 := by omega
@@ -196,9 +181,7 @@ theorem approve64_exact_at {fs : List SFunc} {sevm : Sevm} {b : Devm}
   · rw [St.extCost_eq s4, memExtSize_of_le n4 (by simp only [show (32 : B256).toNat = 32 from rfl]; omega),
       Nat.sub_self]; decide
   · exact Mem.read_write_word_of_wf m3.wf p.toNat v
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
+  wrun! 3
   exact rx_ret
 
 /-- The store sentry is on its actual incoming gas, before the selected charge. -/
@@ -428,22 +411,14 @@ theorem approve51_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     SFunc.RunExact cert.prog sevm (St b (v :: spender.toB256 :: ρ :: R) M (G + c + 2050))
       t_0de5_c51 (.returned (approve51Post sevm b R M spender v G)) := by
   unfold t_0de5_c51
-  refine rx_dest ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x0df2) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_caller (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x259c) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 7
   have gas : G + c + 2032 = ((G + 25) + c + 1999) + 8 := by omega
   rw [gas]
   refine rx_callRet (g := t_259c_c64) (by rfl)
     (approve64_exact fork mem cost (by omega) nonstatic
       (by simp only [List.length_cons]; omega)) ?_
   unfold t_0df2_c51
-  refine rx_dest ?_
-  refine rx_pop ?_
-  refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   exact checked_return_exact
 
 theorem approve51_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
