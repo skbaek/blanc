@@ -507,7 +507,7 @@ theorem helper06_call_range {Q : Sevm → Devm → Ninst → Devm → Prop}
     rw [toB256_toNat]
     exact hL
   have e2 : p + Bytes.toB256 [32] = (p.toNat + 32).toB256 := by
-    rw [← StrStore.toB256_add, toB256_toNat]
+    rw [← Nat.toB256_add_toB256, toB256_toNat]
     rfl
   rw [e1, e2] at run
   rcases StrStore.reach_range erase (by intro h; cases h) (ReachPayload.mload_rdStep eraseQ)
