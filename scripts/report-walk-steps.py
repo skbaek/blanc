@@ -17,8 +17,9 @@ Two finding classes, both report-only:
 
 * **hand-walk**: at least `--min-run` (default 8) consecutive single-instruction step lines at
   one indentation (deeper-indented continuation lines and comment lines do not break a run). The
-  report counts how many of the run's lines `Blanc/Lift/WalkKit.lean`'s `wrun` takes as they are
-  (the forward straight-line `xr` forms); the rest want a step tactic of their own family.
+  report counts how many of the run's lines a kit takes as they are: `Blanc/Lift/WalkKit.lean`'s
+  `wrun` (the forward straight-line `xr` forms) or Curve 3pool's backward `xa`
+  (`Blanc/Lift/Curve3Pool/Walk/AutoStep.lean`); the rest want a step tactic of their own family.
 * **repeated-simp-list**: a `simp only [...]` lemma list of at least three entries that occurs at
   least `--min-repeat` (default 3) times in the scanned files: name it once (a macro or a
   `simp` set argument) instead.
@@ -52,6 +53,15 @@ KIT_RE = re.compile(r"^\s*xr \((?:" + "|".join([
     rf"rx_push rfl {_R}", rf"rx_dup(?: \(n := \d+\))? rfl {_R}", r"rx_swap1",
     r"rx_swap(?: \(n := \d+\))? rfl", r"rx_pop", r"rx_dest", rf"rx_(?:add|sub) {_R}",
     rf"rx_(?:{_VAL}) rfl {_R}", rf"rx_(?:{_ENV}) {_R}"]) + r") ·\)\s*$")
+_H = r"0x[0-9a-fA-F]+"
+_BOPS = ("add|mul|sub|div|lt|gt|eq|iszero|and|or|xor|not|pop|address|caller|callvalue|"
+         "calldataload|calldatasize|returndatasize|timestamp")
+# Backward Curve 3pool steps that `xa` (Blanc/Lift/Curve3Pool/Walk/AutoStep.lean) takes as written.
+XA_RE = re.compile(r"^\s*(?:" + "|".join([
+    rf"xs {_H} \(\.push \[[^\]]*\] \(by decide\)\) ri_push",
+    rf"xs {_H} \(\.reg \(\.(?:dup|swap) \d+\)\) \(ri_(?:dup|swap) \(by rfl\)\)",
+    rf"xs {_H} \(\.reg \.(?P<op>{_BOPS})\) ri_(?P=op)", rf"xs {_H} \(\.reg \.gas\) ri_gas_remaining",
+    rf"xs2 {_H} \(\.reg \.(?P<op2>slt|sgt)\) ri_(?P=op2)", rf"xjd {_H}"]) + r")\s*(?:--.*)?$")
 SIMP_RE = re.compile(r"simp only \[([^\]]*)\]")
 WORKTREE = None
 
@@ -83,7 +93,7 @@ def walk_runs(lines: List[str], min_run: int) -> List[Tuple[int, int, int, int]]
             line = lines[j]
             if STEP_RE.match(line) and indent(line) == ind:
                 steps += 1
-                kit += bool(KIT_RE.match(line))
+                kit += bool(KIT_RE.match(line) or XA_RE.match(line))
                 last = j
             elif not (line.strip().startswith("--") or (line.strip() and indent(line) > ind)):
                 break
@@ -130,7 +140,7 @@ def report(root: pathlib.Path, files: Dict[str, Optional[Set[int]]], head: Optio
             if new is not None and not any(a <= n <= b for n in new):
                 continue
             nruns, nsteps, nkit = nruns + 1, nsteps + steps, nkit + kit
-            print(f"hand-walk {path}:{a}-{b}: {steps} step lines, {kit} taken by `wrun`", file=out)
+            print(f"hand-walk {path}:{a}-{b}: {steps} step lines, {kit} taken by `wrun`/`xa`", file=out)
         for n, key in simp_lists(lines):
             lists[key].append((path, n, new is None or n in new))
     nsimp = 0
@@ -141,7 +151,7 @@ def report(root: pathlib.Path, files: Dict[str, Optional[Set[int]]], head: Optio
         where = ", ".join(f"{p}:{n}" for p, n, _ in sites[:4]) + (" ..." if len(sites) > 4 else "")
         print(f"repeated-simp-list x{len(sites)} [{key}]: {where}", file=out)
     print(f"OK — walk-step report: {nruns} hand-walk runs ({nsteps} step lines, {nkit} taken by "
-          f"`wrun`), {nsimp} repeated simp lists (report-only)", file=out)
+          f"`wrun`/`xa`), {nsimp} repeated simp lists (report-only)", file=out)
     return nruns, nsimp
 
 

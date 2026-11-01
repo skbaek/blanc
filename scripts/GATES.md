@@ -292,8 +292,8 @@ the instruction off the goal, and no check counted them. `python3
 scripts/report-walk-steps.py BASE [HEAD]` (or `BASE --worktree`; `--paths F…`
 or `--all` for whole files) prints every run of at least `--min-run` (8)
 consecutive single-instruction step lines that touches a line added since
-`BASE`, with how many of its lines `Blanc/Lift/WalkKit.lean`'s `wrun` takes as
-written, and every `simp only [...]` list of three or more entries spelled out
+`BASE`, with how many of its lines a kit takes as written (`Blanc/Lift/WalkKit.lean`'s
+`wrun` forward, Curve 3pool's `xa` backward), and every `simp only [...]` list of three or more entries spelled out
 at least `--min-repeat` (3) times of which one occurrence is new. It is not a
 catalogue row and never fails on what it finds; a worker quotes it in its
 growth report, beside the growth ledger. `--self-test` plants an eight-line

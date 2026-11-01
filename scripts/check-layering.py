@@ -1002,7 +1002,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.CheckPart23",
                     "Lift.Curve3Pool.Creation.Input",
                     "Lift.Curve3Pool.Creation.Window",
-                    "Lift.Curve3Pool.Walk.Kit",
+                    "Lift.Curve3Pool.Walk.Kit", "Lift.Curve3Pool.Walk.AutoStep",
                     "Lift.Curve3Pool.Walk.Dispatch", "Lift.Curve3Pool.Walk.DispatchLive",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityPre",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityLoop",
