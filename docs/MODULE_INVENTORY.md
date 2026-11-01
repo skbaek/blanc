@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-611 shared modules, 584 with a module summary.
+612 shared modules, 585 with a module summary.
 
 ## `Blanc/`
 
@@ -244,6 +244,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`FakeExponentialWordDomain.lean`](../Blanc/FakeExponentialWordDomain.lean) | *(no module summary)* | [S9](COMMON_API.md#s9-i-need-the-integer-exponential-recurrence-or-a-finite-loop-witness) |
 | [`ForkUniform.lean`](../Blanc/ForkUniform.lean) | **Fork uniformity between covered forks.** Jaune's machines carry a fork identity and read rule data only through `BenvStat.rules = Fork.ruleSet fork`. | [Root](COMMON_API.md#root-what-are-you-trying-to-do), [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec) |
 | [`Forward.lean`](../Blanc/Forward.lean) | constructing `Func.RunCompiled` derivations, rather than taking them apart. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [C1](COMMON_API.md#c1-i-need-source-to-compiled-execution) |
+| [`ForwardBalanceOf.lean`](../Blanc/ForwardBalanceOf.lean) | **The shared `balanceOf(address)` body, walked once.** `Blanc.balanceOf` (`arg 0`, `SLOAD`, `mstoreAt 0`, `returnMemoryRange 0 32`) is the body behind WETH9's and fmint's `balanceOf` entries. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term) |
 | [`ForwardCall.lean`](../Blanc/ForwardCall.lean) | crossing a `CALL`, forward. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [E2](COMMON_API.md#e2-the-walk-crosses-a-child-frame), [E9](COMMON_API.md#e9-i-need-to-rule-out-an-operand-stack-fault-over-an-actual-walk), [M2](COMMON_API.md#m2-the-goal-is-an-evm-memory-update-or-read), [C1](COMMON_API.md#c1-i-need-source-to-compiled-execution) |
 | [`ForwardDispatchMiss.lean`](../Blanc/ForwardDispatchMiss.lean) | **Exact raw-write-free dispatcher misses.** Selector-dependent construction for a failed binary-search dispatcher walk. | [C1](COMMON_API.md#c1-i-need-source-to-compiled-execution) |
 | [`ForwardFlatAccess.lean`](../Blanc/ForwardFlatAccess.lean) | **Forward steps under flat account-access pricing.** The step keeps the actual code-size word and the complete pre-state base. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [C9.6](COMMON_API.md#c96-i-need-the-calls-child-frames-and-logs-of-a-lifted-frame) |

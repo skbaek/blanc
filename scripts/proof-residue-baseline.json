@@ -5,18 +5,18 @@
   "predicates": {
     "approve-local-selector-separations": 0,
     "ceiling-debt-ambient": 0,
-    "ceiling-debt-lido-core": 53,
-    "ceiling-debt-pause": 11,
-    "ceiling-debt-pre-lido": 27,
-    "ceiling-debt-registration": 3,
+    "ceiling-debt-lido-core": 1,
+    "ceiling-debt-pause": 0,
+    "ceiling-debt-pre-lido": 4,
+    "ceiling-debt-registration": 0,
     "enum-loop-memory-cursor-rfl": 0,
     "registration-inline-staging": 0,
-    "run-core-pc-irrel-depth": 1,
+    "run-core-pc-irrel-depth": 0,
     "selector-decide-kernel": 0,
     "sites-direct-let": 1,
     "weth10-deploy-inline-size-decision": 0,
     "weth10-entry-shapes-rfl": 0
   },
-  "total": 96,
-  "digest": "38a65e7ede1b4621593cbb0115cd55f9812da3e3d19a2868ae0ba5d467c27878"
+  "total": 6,
+  "digest": "5cd1793896e17fdf994de86d2514da24f5661083a3b1ed108c408a209d9cb084"
 }
