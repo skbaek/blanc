@@ -1932,13 +1932,6 @@ theorem Devm.addAccessedStorageKey_setMach_setMach
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
       (addAccessedStorageKey base target key).setMach mach' := rfl
 
-/-- Persistent storage read-after-write at the same address and key. -/
-theorem Devm.getStorVal_setStorVal_self
-    (devm : Devm) (adr : Adr) (key val : B256) :
-    (devm.setStorVal adr key val).getStorVal adr key = val := by
-  show (Devm.getStor (devm.setStorVal adr key val) adr).get key = val
-  rw [setStorVal_getStor_self, Stor.get_set_self]
-
 /-! ### Reusable projection cuts for compiled RETURN and SSTORE posts -/
 
 /-- A `setMach`/`memRead`/`withOutput` return post preserves the base world. -/

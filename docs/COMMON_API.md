@@ -3860,8 +3860,8 @@ unfolding a concrete state tower. Examples include:
   empty accounts; it does not assert equality of raw account presence.
 - For persistent storage setters, use Jaune's
   `State.setStorVal_get_self` / `State.setStorVal_get_ne`, which handle the
-  existing-account `setPresent` branch, and Blanc's
-  `setStorVal_getStor_self` / `Devm.getStorVal_setStorVal_self` projections.
+  existing-account `setPresent` branch, Blanc's `setStorVal_getStor_self`
+  projection, and Jaune's `Devm.setStorVal_getStorVal_self`.
 
 For equality of whole dynamic machines, `Devm.eq_of_proj` in
 [`Blanc/Compiled.lean`](../Blanc/Compiled.lean) requires all nineteen exact
@@ -3898,8 +3898,7 @@ Use [`Blanc/CommonProofs/Base.lean`](../Blanc/CommonProofs/Base.lean):
   and log silence of a successful `SLOAD`, including its cold access-list
   warming path.  Use these instead of widening the global `Ninst.Hinv`
   instance set: access metadata changes even though these projections do not.
-- `Devm.getStorVal_setStorVal_self` (Blanc) is persistent storage read-after-write;
-  Jaune states the same law as `Devm.setStorVal_getStorVal_self`.
+- Jaune's `Devm.setStorVal_getStorVal_self` is persistent storage read-after-write.
 - Jaune's `Devm.setStorVal_getCode` carries account code across a persistent
   storage write, and Jaune's `Devm.setCode_getStor` storage across code
   installation. Jaune's `Devm.withRefundCounter_getStor`,

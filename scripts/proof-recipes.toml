@@ -755,7 +755,6 @@ canonical_example = "Blanc/CommonProofs/Balance.lean:Devm.addAccessedStorageKey_
 symbols = [
   "module:Blanc/CommonProofs/Balance.lean",
   "declaration:Devm.addAccessedStorageKey_setMach_setMach",
-  "declaration:Devm.getStorVal_setStorVal_self",
   "declaration:Devm.returnPost_getStorVal",
   "declaration:Devm.returnPost_accessedStorageKeys",
   "module:Blanc/Lift/Deploy.lean",
