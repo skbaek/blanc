@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.OldTransferBodyReach
+import Blanc.Lift.Usdc.SelTrees
 
 /-! Actual V2 transfer stores and their original successful balance hashes. -/
 namespace Blanc.Lift.Usdc.V2TransferReach
@@ -81,10 +82,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact (body_reach_bounded erase run hT cont).forget
 
 /-- The checked dispatcher routes transfer through its original ABI wrapper. -/
-theorem route_transfer : SFunc.selWalk 0xa9059cbb
-    (.next (.reg (.dup 0)) (.next (.push [0x8a, 0x6d, 0xb9, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xbd] (by decide))
-        (.branch ImplV2.t_002b_c0 ImplV2.t_01bd_c0))))) =
+theorem route_transfer : ImplV2.selTree.selWalk 0xa9059cbb =
     .inl (Bytes.toB256 [0xa9, 0x05, 0x9c, 0xbb], 116) := by
   decide +kernel
 

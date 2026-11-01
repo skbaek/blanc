@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V22TransferWithAuthorizationReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.CursorReturnToward
 
 /-! Original V2.2 receive-authorization stores with observed helper returns. -/
@@ -121,10 +122,7 @@ theorem pack_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
 
 
 /-- The checked dispatcher routes receive authorization through its original ABI wrapper. -/
-theorem route_receive : SFunc.selWalk 0xef55bec6
-    (.next (.reg (.dup 0)) (.next (.push [0x84, 0x56, 0xcb, 0x59] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xd3] (by decide))
-        (.branch Impl.t_002b_c0 Impl.t_01d3_c0))))) =
+theorem route_receive : Impl.selTree.selWalk 0xef55bec6 =
     .inl (Bytes.toB256 [0xef, 0x55, 0xbe, 0xc6], 125) := by
   decide +kernel
 

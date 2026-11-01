@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.InitReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.ImplV2_1.Cert
 
 /-!
@@ -39,14 +40,9 @@ theorem body_eq : ImplV2_1.cert.prog[19]? = some (InitV2Check.body (0x32, 0x65) 
 
 theorem join_eq : ImplV2_1.cert.prog[5]? = some (InitV2Check.join (0x32, 0x6e) (InitV2Tail.tree ν)) := rfl
 
-/-- The dispatcher's comparison tree. -/
-def selTree : SFunc :=
-  .next (.reg (.dup 0)) (.next (.push [0x7f, 0x2e, 0xec, 0xc3] (by decide)) (.next (.reg .gt)
-    (.next (.push [0x01, 0xb2] (by decide)) (.branch ImplV2_1.t_002b_c0 ImplV2_1.t_01b2_c0))))
+theorem root_eq : ImplV2_1.t_0000_c0 = dispatch06 (0x00, 0x10) (0x03, 0x36) ImplV2_1.selTree := rfl
 
-theorem root_eq : ImplV2_1.t_0000_c0 = dispatch06 (0x00, 0x10) (0x03, 0x36) selTree := rfl
-
-theorem route_initV2 : selTree.selWalk 0xd608ea64 =
+theorem route_initV2 : ImplV2_1.selTree.selWalk 0xd608ea64 =
     .inl (Bytes.toB256 [0xd6, 0x08, 0xea, 0x64], 104) := by
   decide +kernel
 

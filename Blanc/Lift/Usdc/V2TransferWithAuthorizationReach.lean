@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V2TransferReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.CursorKeccakOrder
 import Blanc.Lift.FrameSkip
 import Blanc.Lift.ObservedReachSplit
@@ -103,10 +104,7 @@ theorem writes_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact cont f member
 
 /-- The checked dispatcher routes transfer through its original ABI wrapper. -/
-theorem route_authorization : SFunc.selWalk 0xe3ee160e
-    (.next (.reg (.dup 0)) (.next (.push [0x8a, 0x6d, 0xb9, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xbd] (by decide))
-        (.branch ImplV2.t_002b_c0 ImplV2.t_01bd_c0))))) =
+theorem route_authorization : ImplV2.selTree.selWalk 0xe3ee160e =
     .inl (Bytes.toB256 [0xe3, 0xee, 0x16, 0x0e], 104) := by
   decide +kernel
 

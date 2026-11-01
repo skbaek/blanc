@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V1BurnReach
+import Blanc.Lift.Usdc.SelTrees
 
 /-! Actual V1 mint stores and their mapping-key hash occurrences. -/
 namespace Blanc.Lift.Usdc.V1MintReach
@@ -161,9 +162,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact balance_reach_observed erase run hT cont
 
 /-- V1's checked dispatcher selects the mint wrapper. -/
-theorem route_mint : SFunc.selWalk 0x40c10f19
-    (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
-      (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
+theorem route_mint : ImplV1.selTree.selWalk 0x40c10f19 =
     .inl (Bytes.toB256 [0x40, 0xc1, 0x0f, 0x19], 63) := by
   decide +kernel
 

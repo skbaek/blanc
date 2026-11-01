@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V22TransferReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.V2MintReach
 
 /-! Original V2.2 mint stores and each mapping write's own successful hash. -/
@@ -85,10 +86,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact minter_reach_observed erase run hT cont
 
 /-- The checked dispatcher selects the original mint ABI wrapper. -/
-theorem route_mint : SFunc.selWalk 0x40c10f19
-    (.next (.reg (.dup 0)) (.next (.push [0x84, 0x56, 0xcb, 0x59] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xd3] (by decide))
-        (.branch Impl.t_002b_c0 Impl.t_01d3_c0))))) =
+theorem route_mint : Impl.selTree.selWalk 0x40c10f19 =
     .inl (Bytes.toB256 [0x40, 0xc1, 0x0f, 0x19], 160) := by
   decide +kernel
 

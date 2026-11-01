@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.MintSource
+import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.GetterStorageReservesCore
 import Blanc.Lift.UniswapV2Pair.BalanceCallWalk
 import Blanc.Lift.UniswapV2Pair.WriterLockStorage
@@ -1294,35 +1295,8 @@ theorem mintDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (body : SFunc.RunExact cert.prog sevm
       (St b [0x6a627842] getterInitMemory G) t_0469_c86 o)
     (h_shifts : sevm.benvStat.rules.op.shifts = true) :
-    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 165)) t_0000_c0 o := by
-  rw [show G + 165 = (G + 102) + 63 by omega]
-  refine getterString_guards_exact value size ?_
-  unfold t_001a_c0
-  apply rx_push (w := 0) rfl (by decide)
-  apply rx_calldataload (by decide)
-  apply rx_push (w := 224) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_shr (h_shifts := h_shifts) (v := 0x6a627842) selector (by decide)
-  apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x00f9) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_branch_zero
-  unfold t_002b_c0
-  apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0xba9a7a56) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_gt (v := 1) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x0097) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
-  unfold t_0097_c0
-  apply rx_dest
-  apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x7ecebe00) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_gt (v := 1) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x00d3) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
-  unfold t_00d3_c0
-  apply rx_dest
-  exact cmp_hit (tgt := t_0469_c86) rfl rfl body
+    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 165)) t_0000_c0 o :=
+  pair_dispatch_exact value size selector (by kernel_rfl) (by decide +kernel) body h_shifts
 
 /-- Construct token0's actual request, selected load and code warming from the reserve cache. -/
 theorem mintFirstRequest_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}

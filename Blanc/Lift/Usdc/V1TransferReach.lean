@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V1MintReach
+import Blanc.Lift.Usdc.SelTrees
 
 /-! Actual V1 transfer balance stores and their mapping-key hash occurrences. -/
 namespace Blanc.Lift.Usdc.V1TransferReach
@@ -126,9 +127,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact caller_reach_observed erase run hT cont
 
 /-- V1's checked dispatcher selects the transfer wrapper. -/
-theorem route_transfer : SFunc.selWalk 0xa9059cbb
-    (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
-      (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
+theorem route_transfer : ImplV1.selTree.selWalk 0xa9059cbb =
     .inl (Bytes.toB256 [0xa9, 0x05, 0x9c, 0xbb], 74) := by
   decide +kernel
 

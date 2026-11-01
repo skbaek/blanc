@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V2_1TransferWithAuthorizationReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.CursorReturnToward
 
 /-! The original V2.1 receive-authorization prefix and its shared writer suffix. -/
@@ -104,10 +105,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact V2_1TransferWithAuthorizationReach.signature_result_reach_observed erase run hT cont
 
 /-- The checked dispatcher routes receive through its original ABI wrapper. -/
-theorem route_receive : SFunc.selWalk 0xef55bec6
-    (.next (.reg (.dup 0)) (.next (.push [0x7f, 0x2e, 0xec, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xb2] (by decide))
-        (.branch ImplV2_1.t_002b_c0 ImplV2_1.t_01b2_c0))))) =
+theorem route_receive : ImplV2_1.selTree.selWalk 0xef55bec6 =
     .inl (Bytes.toB256 [0xef, 0x55, 0xbe, 0xc6], 97) := by
   decide +kernel
 

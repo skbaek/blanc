@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.OldTransferFromEntry
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.V2TransferFromCallee
 
 /-! Original V2 transferFrom dispatch and guards retain the actual caller stack. -/
@@ -29,10 +30,7 @@ theorem public_to_body {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact OldTransferFromEntry.public_to_body (version := .v2) (by decide) erase run hT cont
 
 /-- The checked dispatcher routes transferFrom through its original ABI wrapper. -/
-theorem route_transferFrom : SFunc.selWalk 0x23b872dd
-    (.next (.reg (.dup 0)) (.next (.push [0x8a, 0x6d, 0xb9, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xbd] (by decide))
-        (.branch ImplV2.t_002b_c0 ImplV2.t_01bd_c0))))) =
+theorem route_transferFrom : ImplV2.selTree.selWalk 0x23b872dd =
     .inl (Bytes.toB256 [0x23, 0xb8, 0x72, 0xdd], 147) := by
   exact OldTransferFromEntry.route_v2
 

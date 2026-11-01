@@ -810,7 +810,7 @@ theorem root06_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
   exact (root06_reach_range eraseQ hw hwrap hb hh E ho hs run hT).to_initStore
 
-theorem route_V2 : InitReachV2.selTree.selWalk 0x3357162b =
+theorem route_V2 : ImplV2.selTree.selWalk 0x3357162b =
     .inl (Bytes.toB256 [0x33, 0x57, 0x16, 0x2b], 139) := by
   decide +kernel
 
@@ -835,7 +835,7 @@ theorem init_reach_V2 {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
   exact (init_reach_V2_range eraseQ hs run hT).to_initStore
 
-theorem route_V2_1 : InitReachV2_1.selTree.selWalk 0x3357162b =
+theorem route_V2_1 : ImplV2_1.selTree.selWalk 0x3357162b =
     .inl (Bytes.toB256 [0x33, 0x57, 0x16, 0x2b], 136) := by
   decide +kernel
 
@@ -860,7 +860,7 @@ theorem init_reach_V2_1 {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hT : AtSstore T) : InitStore (KeysInit06 sevm) T := by
   exact (init_reach_V2_1_range eraseQ hs run hT).to_initStore
 
-theorem route_V2_2 : InitReachV2_2.selTree.selWalk 0x3357162b =
+theorem route_V2_2 : Impl.selTree.selWalk 0x3357162b =
     .inl (Bytes.toB256 [0x33, 0x57, 0x16, 0x2b], 168) := by
   decide +kernel
 

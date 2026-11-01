@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V2PermitReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.Impl.Check
 
 /-! Both original V2.2 permit decoders retain their allowance arguments. -/
@@ -7,18 +8,12 @@ open Jaune Blanc Blanc.Lift
 variable {observe : Conf → Conf → Prop}
 
 /-- The checked dispatcher routes permit through its original ABI wrapper. -/
-theorem route_vrs : SFunc.selWalk 0xd505accf
-    (.next (.reg (.dup 0)) (.next (.push [0x84, 0x56, 0xcb, 0x59] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xd3] (by decide))
-        (.branch Impl.t_002b_c0 Impl.t_01d3_c0))))) =
+theorem route_vrs : Impl.selTree.selWalk 0xd505accf =
     .inl (Bytes.toB256 [0xd5, 0x05, 0xac, 0xcf], 132) := by
   decide +kernel
 
 /-- The checked dispatcher routes permit through its original ABI wrapper. -/
-theorem route_bytes : SFunc.selWalk 0x9fd5a6cf
-    (.next (.reg (.dup 0)) (.next (.push [0x84, 0x56, 0xcb, 0x59] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xd3] (by decide))
-        (.branch Impl.t_002b_c0 Impl.t_01d3_c0))))) =
+theorem route_bytes : Impl.selTree.selWalk 0x9fd5a6cf =
     .inl (Bytes.toB256 [0x9f, 0xd5, 0xa6, 0xcf], 149) := by
   decide +kernel
 

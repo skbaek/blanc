@@ -1,4 +1,5 @@
 import Blanc.Lift.CursorKeccak
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.ImplV1.Check
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.CursorOccurrenceNoStateGas
@@ -55,9 +56,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
     exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
 
 /-- V1's own dispatcher sends unblacklist to its original wrapper. -/
-theorem route_unblacklist : SFunc.selWalk 0x1a895266
-    (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
-      (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
+theorem route_unblacklist : ImplV1.selTree.selWalk 0x1a895266 =
     .inl (Bytes.toB256 [0x1a, 0x89, 0x52, 0x66], 56) := by
   decide +kernel
 
@@ -114,9 +113,7 @@ theorem unblacklist_reach_observed {Q : Sevm → Devm → Ninst → Devm → Pro
   exact body_reach_observed (blocked := false) erase run hT cont
 
 /-- V1's own dispatcher sends blacklist to its original wrapper. -/
-theorem route_blacklist : SFunc.selWalk 0xf9f92be4
-    (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
-      (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
+theorem route_blacklist : ImplV1.selTree.selWalk 0xf9f92be4 =
     .inl (Bytes.toB256 [0xf9, 0xf9, 0x2b, 0xe4], 82) := by
   decide +kernel
 

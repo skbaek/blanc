@@ -1665,7 +1665,7 @@ CONTRACTS = {
         "Lift.Usdc.InitReach",
         "Lift.Usdc.InitReachV2",
         "Lift.Usdc.InitReachV2_1",
-        "Lift.Usdc.InitReachV2_2",
+        "Lift.Usdc.InitReachV2_2", "Lift.Usdc.SelTrees",
         "Lift.Usdc.InitReach06",
         "Lift.Usdc.InitReachV1",
         "Lift.Usdc.InitV1KeyBounds",

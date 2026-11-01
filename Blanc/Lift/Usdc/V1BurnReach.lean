@@ -1,4 +1,5 @@
 import Blanc.BytePattern
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.CursorCheckPrefix
 import Blanc.Lift.CursorKeccak
 import Blanc.Lift.Usdc.ImplV1.Check
@@ -124,9 +125,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact balance_reach_observed erase run hT cont
 
 /-- V1's checked dispatcher selects its original burn wrapper. -/
-theorem route_burn : SFunc.selWalk 0x42966c68
-    (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
-      (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
+theorem route_burn : ImplV1.selTree.selWalk 0x42966c68 =
     .inl (Bytes.toB256 [0x42, 0x96, 0x6c, 0x68], 64) := by
   decide +kernel
 
