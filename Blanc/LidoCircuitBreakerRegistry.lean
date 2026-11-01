@@ -16875,7 +16875,7 @@ theorem setPauser_zero_runCompiledTo_pausableZero_noRegistryWrite
   have hcompiled :
       some sevm.code.toList = Prog.compile (runtime dp) := by
     rw [hbytes, lidoCircuitBreakerCode_compile]
-  -- Keep the program opaque: unifying the table lemmas against the concrete
+  -- Keep the program abstract: unifying the table lemmas against the concrete
   -- `runtime dp` unfolds the whole runtime.
   refine ⟨run, ?_⟩
   generalize runtime dp = prog at run runFree hcompiled htable ⊢
@@ -16907,7 +16907,7 @@ theorem setPauserKernel_run_of_exec
   have hcompiled :
       some sevm.code.toList = Prog.compile (runtime dp) := by
     rw [hbytes, lidoCircuitBreakerCode_compile]
-  -- Keep the program opaque: unifying the table lemmas against the concrete
+  -- Keep the program abstract: unifying the table lemmas against the concrete
   -- `runtime dp` unfolds the whole runtime.
   generalize runtime dp = prog at hcompiled htable ⊢
   exact correct_core prog.main prog.aux ⟨loc + 1, sevm, pre, .ok final, hexec⟩

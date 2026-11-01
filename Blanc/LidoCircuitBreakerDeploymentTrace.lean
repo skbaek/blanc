@@ -1316,6 +1316,13 @@ theorem officialConstructorHeartbeatLoggedBase_accessedStorageKeys
         (sevm.currentTarget, pauseDurationSlot) := by
   rfl
 
+-- Kept under this name for the S9 deployment gate's exact public-theorem
+-- inventory; the law itself lives in `Blanc/ForwardStorageAccess.lean`.
+theorem not_mem_hashSet_insert {α : Type _} [BEq α] [Hashable α]
+    [LawfulBEq α] {s : Std.HashSet α} {x p : α}
+    (h : p ∉ s) (hne : x ≠ p) : p ∉ s.insert x :=
+  Blanc.not_mem_hashSet_insert h hne
+
 /-- The constructor effect changes the target's persistent storage by exactly
 the two source-ordered configuration writes. -/
 theorem officialConstructorEffectBase_getStor
@@ -3444,7 +3451,7 @@ private theorem officialConstructorCanonicalAdminStage_runCompiled
   all_goals try simp_rw [hm0, hv0]
   all_goals try
     exact Devm.extCost_add_of_size (a := gVerylow) hsize (by decide)
-  -- The admin word stays opaque: its mask check is kernel-checked once, and
+  -- The admin word stays abstract: its mask check is kernel-checked once, and
   -- the shifted mask is named by `addressMask_eq_shl` instead of evaluated.
   have hand : addressMask &&& officialParams.admin = 0 := by decide +kernel
   clear hv0
