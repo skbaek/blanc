@@ -10102,6 +10102,12 @@ contract-neutral.
   `xr (rx_push rfl h ·)` / `xrc …` for any fixed-outcome step, `SFunc.runEx_iff_runExCut_nil`,
   and the fresh-state twins `rxce_call_identity`, `rxce_vyRawCallJoin`, `rxce_vyRawCallTail` in
   [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean).
+- Straight-line forward steps without writing them out: `wstep` / `wrun n` / `wrun` read the
+  instruction off the goal's tree (`SFunc.RunExact` or `SFunc.RunEx`) and apply the hand-written
+  term (`rx_push rfl (by wroom)`, `rx_dup rfl …`, `rx_swap1`, `rx_pop`, `rx_dest`, `rx_<op> rfl …`),
+  stopping at a branch, jump, memory, storage or call instruction; `using tac` swaps the
+  stack-room tactic `wroom`. One line replaces a run of `xr (rx_… ·)` lines, in
+  [`Blanc/Lift/WalkKit.lean`](../Blanc/Lift/WalkKit.lean).
 - Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as
   `getDMem_spec` need): `Mem.size_write_mod32`, `Mem.size_extends_mod32`, the image steps
   `ri_mload_imgAtA`/`ri_mstore_imgAtA`/`ri_calldatacopy_imgAtA`/`ri_keccak_imgAtA` and the

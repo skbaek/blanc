@@ -284,6 +284,23 @@ reads it on the merge candidate (`BASE` = the default branch) before merging.
 requires all three tables to report it, then requires a clean tree to report
 nothing.
 
+### Hand-listed walk steps and repeated simp lists (report-only)
+
+Walks were written one instruction per line (`xr (rx_push rfl (by hr) ·)`,
+`xs 0x2234 …`, `obtain … := ric_next run`) after step tactics existed that read
+the instruction off the goal, and no check counted them. `python3
+scripts/report-walk-steps.py BASE [HEAD]` (or `BASE --worktree`; `--paths F…`
+or `--all` for whole files) prints every run of at least `--min-run` (8)
+consecutive single-instruction step lines that touches a line added since
+`BASE`, with how many of its lines `Blanc/Lift/WalkKit.lean`'s `wrun` takes as
+written, and every `simp only [...]` list of three or more entries spelled out
+at least `--min-repeat` (3) times of which one occurrence is new. It is not a
+catalogue row and never fails on what it finds; a worker quotes it in its
+growth report, beside the growth ledger. `--self-test` plants an eight-line
+walk run and a thrice-repeated simp list in a disposable repository and requires
+both to be reported, then requires a clean change, a raised threshold and an
+untouched old run to report nothing.
+
 ## Selective execution — `scripts/check-gates.sh`
 
 The block above is the population. `scripts/check-gates.sh` is the canonical way
