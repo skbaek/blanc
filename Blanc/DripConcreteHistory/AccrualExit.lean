@@ -1278,67 +1278,10 @@ def concreteExitPayload : Bytes :=
 
 def concreteExitTxRlp : Bytes := [2, 0xf8, 0x87] ++ concreteExitPayload
 
-theorem concreteExitPayloadParse (k : Nat) :
-    Bytes.toBLTs? (k + 12) concreteExitPayload = some concreteExitFields := by
-  unfold concreteExitPayload concreteExitFields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 3 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 8 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_three _ [7, 0xa1, 0x20] _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 _ _ (by decide) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 36 [0x7f, 0x86, 0x61, 0xa1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x28] _ (by decide) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_list _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 _ _ _ rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil] using RlpConcrete.decode_bytes_32 k concreteExitTx.s [] rfl
-  rw [Bytes.toBLTs?]
-
-theorem concreteExitPayload_length : concreteExitPayload.length = 135 := by
-  simp only [concreteExitPayload, List.length_append, List.length_cons, List.length_nil]
-  rfl
-
 theorem concreteExitEnvelopeParse :
     Bytes.toBLT? (0xf8 :: 0x87 :: concreteExitPayload) = some (.list concreteExitFields) := by
-  have hsplit : Jaune.List.splitAt? 135 concreteExitPayload = some (concreteExitPayload, []) := by
-    simpa only [concreteExitPayload_length, List.append_nil] using
-      RlpConcrete.splitAt_append concreteExitPayload ([] : Bytes)
-  have hp : Bytes.toBLTDiff? 137 (0xf8 :: 0x87 :: concreteExitPayload) =
-      some (.list concreteExitFields, []) := by
-    rw [Bytes.toBLTDiff?]
-    change (do
-      let p ← Jaune.List.splitAt? 1 ([0x87] ++ concreteExitPayload)
-      let q ← Jaune.List.splitAt? (Bytes.toNat p.1) p.2
-      let rs ← Bytes.toBLTs? 136 q.1
-      pure (BLT.list rs, q.2)) = _
-    rw [show Jaune.List.splitAt? 1 ([0x87] ++ concreteExitPayload) =
-      some ([0x87], concreteExitPayload) from
-        RlpConcrete.splitAt_append [0x87] concreteExitPayload]
-    change (do
-      let q ← Jaune.List.splitAt? 135 concreteExitPayload
-      let rs ← Bytes.toBLTs? 136 q.1
-      pure (BLT.list rs, q.2)) = _
-    rw [hsplit]
-    change (do let rs ← Bytes.toBLTs? 136 concreteExitPayload; pure (BLT.list rs, [])) = _
-    rw [concreteExitPayloadParse 124]
-    rfl
-  unfold Bytes.toBLT?
-  simp only [List.length_cons, concreteExitPayload_length]
-  rw [hp]
+  rw [Bytes.toBLT?_eq_toBLTS]
+  decide +kernel
 
 theorem concreteExitDecode : decodeTx pragueRules (.inl concreteExitTxRlp) = .ok concreteExitTx := by
   simp only [decodeTx, concreteExitTxRlp, List.cons_append, List.nil_append,

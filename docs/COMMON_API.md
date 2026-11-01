@@ -5258,9 +5258,20 @@ extremely long encoding has a valid unwrapped parser tag. `receipt_key_injective
 and `receipt_key_ne` then distinguish every natural index, including zero and
 indices at or above 128. These are byte-payload encoder facts, not injectivity
 of arbitrary nested BLT values or a parser/canonicality theorem.
+To decode a concrete encoding, prove the encoding first and invert it:
+[`Blanc/RlpRoundTrip.lean`](../Blanc/RlpRoundTrip.lean) provides
+`RlpConcrete.toBLT?_toBytes` (`Bytes.toBLT? b.toBytes = some b` for every `BLT`
+encoded in fewer than `2 ^ 64` bytes), with fuel-explicit `decode_encode` and
+`parse_encode` for items inside a larger buffer. Payload bytes stay abstract, so a
+signed creation transaction decodes from its canonical-encoding theorem
+(`tx.toBLT.toBytes = raw`) in three lines; no field-by-field parse chain is needed
+(USDC/WETH9 `SignedInput.envelope_parse`, `HistoricalTxRaw.raw_decode`). When every
+byte is concrete and small (a few thousand bytes), `rw [Bytes.toBLT?_eq_toBLTS];
+decide +kernel` from `Jaune/RlpEval.lean` is shorter still (DRIP
+`concreteJoinEnvelopeParse`, the history-anchor rows).
 `RlpConcrete.splitAt_append` retains an arbitrary payload and suffix;
 `encode_bytes_many` selects the ordinary length-prefixed byte encoder;
-`decode_bytes_long_two`, `decode_bytes_short`, `decode_bytes_32`, and `decode_list_long_two`
+`decode_bytes_short`, `decode_bytes_long`, `decode_list_short`, and `decode_list_long`
 apply Jaune's actual parser equations while keeping payload bytes abstract.
 On the encoder side, [`Blanc/RlpListEncode.lean`](../Blanc/RlpListEncode.lean)
 provides `RlpConcrete.toBytesJoin_append` (the joint item encoding of a
@@ -5268,9 +5279,8 @@ concatenated list) and `RlpConcrete.encode_list_long` (a list whose joint item
 encoding is a known body of at least 56 bytes gets the long-list header over
 that abstract body); a signed creation transaction's canonical re-encoding uses
 them without reducing its payload (3Crv `HistoricalTx.tx_encoded`).
-`decode_byte`, `decode_empty_bytes`, `decode_empty_list`, and
-`decode_bytes_three` cover the small field headers; `parse_cons` composes
-the actual first-item and remaining-list equations.
+`decode_byte` and `decode_empty_bytes` cover the one-byte headers; `parse_cons`
+composes the actual first-item and remaining-list equations.
 `decode_hash` proves the fixed-width header-word roundtrip, including leading
 zero bytes. `header21_roundtrip` keeps the requests commitment and requires
 explicit present base fee, withdrawals root, both blob-gas fields and parent
