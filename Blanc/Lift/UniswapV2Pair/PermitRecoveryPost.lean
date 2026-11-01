@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.PermitRecoverySettlement
 import Blanc.Lift.CursorSourceRunReturn
+import Blanc.Lift.WalkInvKit
 
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
@@ -41,10 +42,7 @@ theorem PermitCallOccurrenceH.suffix_inverse {root : Exec.Deriv} {b post : Devm}
   rw [shape] at run
   have h := run.cut
   unfold permitRecoveryTail at h
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 4
   rcases ric_branch h with ⟨_, _, bad⟩ | ⟨accepted, _, h⟩
   · exact (bad.false_of_noOk (by decide)).elim
   · rw [show B256.eqCheck (1 : B256) 0 = 0 from by decide] at h

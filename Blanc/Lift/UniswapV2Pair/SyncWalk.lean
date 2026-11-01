@@ -6,6 +6,7 @@ import Blanc.Lift.UniswapV2Pair.GetterWalk
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 import Blanc.Lift.CodeSizeWalk
 import Blanc.Lift.InvWalkDispatch
+import Blanc.Lift.WalkInvKit
 
 namespace Blanc.Lift.UniswapV2Pair
 
@@ -20,9 +21,7 @@ theorem syncUnlock_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       o = .returned (St (afterSstoreH sevm b 12 1) R M gas) := by
   have h := run.cut
   unfold t_1fd4_c31 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   have mutable := ri_sstore_nonstaticH stateGas hd
   obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
@@ -341,8 +340,7 @@ theorem syncCodeGuard_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     (fun step => StepIn.toRun step) syncCodeGuardLine run
   obtain ⟨_, state⟩ := syncCodeGuardLine_invH bal line
   rw [state] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 1 using StepIn.toRun
   rcases ric_branchP run with ⟨-, _, failed⟩ | ⟨accepted, gas, tailRun⟩
   · have noFail : site.codeFailureTree.noOk = true := by cases site <;> decide
     exact False.elim (failed.false_of_noOk noFail)
@@ -1015,9 +1013,7 @@ theorem syncLockGuard_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   obtain ⟨_, run⟩ := ric_destP run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sloadH bal (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_eq (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 3 using StepIn.toRun
   rcases ric_branchP run with ⟨-, _, failed⟩ | ⟨accepted, gas, body⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_1e00_c31.noOk = true))
   · change B256.eqCheck (1 : B256) (b.getStorVal sevm.currentTarget 12) ≠ 0 at accepted
@@ -1234,8 +1230,7 @@ theorem syncEntry_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   have h := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_067b_c78 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 2 using StepIn.toRun
   cases h with
   | callHalt dd lookup pop callee =>
     rw [show cert.prog[31]? = some t_1df5_c31 from rfl] at lookup

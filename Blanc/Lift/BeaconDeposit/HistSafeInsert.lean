@@ -1,6 +1,7 @@
 import Blanc.Lift.BeaconDeposit.BodyShaKit
 import Blanc.Lift.InvWalk
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Safety segments L1/L2 over a historical frame: the insertion loop's two passes, inverted
@@ -45,12 +46,9 @@ theorem safe_insertDeadH_of_rules {sevm : Sevm} {b : Devm} {sz nd : B256} {R : L
     rfl
   -- t_0f6e_c23: the head test
   unfold t_0f6e_c23 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+  winv 3
   have hh32 : h < 32 := by
     rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G7, run'⟩
     · by_contra hge
@@ -81,26 +79,18 @@ theorem safe_insertDeadH_of_rules {sevm : Sevm} {b : Devm} {sz nd : B256} {R : L
   -- t_0f78_c23: the bit test
   unfold t_0f78_c23 at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := sz) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  winv 6
   rw [hbit, show B256.eqCheck (Bytes.toB256 [0x01]) 0 = 0 by decide,
     show B256.eqCheck (0 : B256) 0 = 1 by decide] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, _, run⟩
   · exact absurd hw (by decide)
   -- t_0fa0_c23: the bounds check
   unfold t_0fa0_c23 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  winv 2
   rw [hlt] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, _, run⟩
   · exact absurd hw (by decide)
@@ -109,8 +99,7 @@ theorem safe_insertDeadH_of_rules {sevm : Sevm} {b : Devm} {sz nd : B256} {R : L
       (.next (.reg (.dup 4)) (pack2Tree (mcpyTree 0x10 0x25 0x0f 0xe8 22
         (mergeTree (shaCallTree 0x10 0x82 0x10 0x97 t_1079_c22 t_1093_c22 t_1097_c22)))))))
     from rfl] at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_add s1
+  winv 2
   rw [hkey] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sloadH hsha.bal s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
@@ -129,20 +118,13 @@ theorem safe_insertDeadH_of_rules {sevm : Sevm} {b : Devm} {sz nd : B256} {R : L
   have hF : (Nat.toB256 (928 + 96 * h + 96)).toNat = 928 + 96 * h + 96 :=
     toNat_toB256' (by omega)
   unfold t_1097_c22 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 3
   rw [hF, read_word hr' _ shaImg_digest, read_covered hs' (by omega) (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 4
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := sz / 2)
     (by rw [show Bytes.toB256 [0x02] = (2 : B256) by decide]) (ri_div s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (h + 1))
     (by rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, Nat.toB256_add_toB256 _ _,
@@ -181,12 +163,9 @@ theorem safe_insertLiveH {sevm : Sevm} {b : Devm}
     rfl
   -- t_0f6e_c23: the head test
   unfold t_0f6e_c23 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+  winv 3
   have hh32 : h < 32 := by
     rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G7, run'⟩
     · by_contra hge
@@ -212,12 +191,7 @@ theorem safe_insertLiveH {sevm : Sevm} {b : Devm}
   -- t_0f78_c23: the bit test
   unfold t_0f78_c23 at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_dup (w := sz) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+  winv 6
   rw [hbit, show B256.eqCheck (Bytes.toB256 [0x01]) 1 = 1 by decide,
     show B256.eqCheck (1 : B256) 0 = 0 by decide] at run
   rcases ric_branch run with ⟨-, G15, run⟩ | ⟨hw, -⟩
@@ -229,15 +203,13 @@ theorem safe_insertLiveH {sevm : Sevm} {b : Devm}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
+  winv 2
   rw [hlt] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G23, run⟩
   · exact absurd hw (by decide)
   -- t_0f91_c23: the store and the pops
   unfold t_0f91_c23 at run
-  obtain ⟨G24, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_add s1
+  winv 2
   have hkey : Nat.toB256 h + Bytes.toB256 [0x00] = solBranchSlot h := by
     apply B256.toNat_inj
     rw [B256.toNat_add, hhv, show (Bytes.toB256 [0x00]).toNat = 0 from rfl, Nat.add_zero,
@@ -245,25 +217,12 @@ theorem safe_insertLiveH {sevm : Sevm} {b : Devm}
     exact (B256.toNat_toB256_of_lt (by omega)).symm
   rw [hkey] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_sstoreH hsg hbal s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_swap (n := 5) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_pop s1
+  winv 6
   obtain ⟨G36, run⟩ := ric_jump (k := 21) (by decide) rfl run
   unfold t_10ac_c21 at run
-  obtain ⟨G37, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G39, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G40, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G41, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G42, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G43, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G44, rfl⟩ := ri_pop s1
+  winv 8
   obtain ⟨Gf, hr⟩ := ric_ret run
   exact ⟨_, Gf, Keep.refl _, hr⟩
 

@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.GetterScalarCore
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! The actual uint8 and address masks in the Pair's scalar return wrappers. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -68,25 +69,18 @@ theorem getterMasked_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   have outmem := getterWordMemory_ptr mem v
   have h := run.cut
   rw [s.tail_shape] at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from rfl,
     show (64 : B256).toNat = 64 from rfl,
     mem.read_self (by decide : 64 + 32 ≤ 96), show Bytes.toB256 (M.read 64 32).1 = (128 : B256) from mem.word] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_and hd
   rw [clean] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (128 : B256).toNat = 128 from rfl] at hd
@@ -96,25 +90,18 @@ theorem getterMasked_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   simp only [show (64 : B256).toNat = 64 from rfl,
     outmem.read_self (by decide : 64 + 32 ≤ 160), show Bytes.toB256 ((M.write 128 v.toBytes).read 64 32).1 = (128 : B256) from outmem.word] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_sub hd
   simp only [show (128 : B256) - 128 = 0 from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_add hd
   simp only [show Bytes.toB256 [0x20] = (32 : B256) from rfl,
     show (32 : B256) + 0 = 32 from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   cases h with
   | last hr =>
     obtain ⟨hout, hstor, hlogs⟩ := ri_return hr
@@ -210,9 +197,7 @@ theorem getterScalar_entry_invH {sevm : Sevm} {b : Devm}
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
   have h := run.cut
   rw [s.entry_shape] at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   obtain ⟨_, h⟩ := ric_call s.callee_lookup h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
   · obtain ⟨_, eq⟩ := getterScalar_callee_invH s bal hc

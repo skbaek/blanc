@@ -5,6 +5,7 @@ import Blanc.Lift.InvWalkOps
 import Blanc.Lift.InvWalkWorld
 import Jaune.MulDiv
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Safety segment B1 over a historical frame: the guards, inverted
@@ -183,9 +184,7 @@ theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B25
 
   -- First to_little_endian_64 call (entry 25)
   unfold t_0535_c7 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s
+  winv 3
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_dup (w := gweiAmount sevm) rfl s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s
   obtain ⟨G6, ⟨D, hcall1, run⟩ | ⟨D, hcall1, -⟩⟩ := ric_call (fs := prog) (k := 25) (by rfl) run
@@ -199,8 +198,7 @@ theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B25
     unfold t_0540_c7 at run
     obtain ⟨G8, run⟩ := ric_dest run
     obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_swap (n := 0) rfl s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_pop s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s
+    winv 2
     have htopic : Bytes.toB256 [0x64, 0x9b, 0xbc, 0x62, 0xd0, 0xe3, 0x13, 0x42, 0xaf, 0xea, 0x4e, 0x5c, 0xd8, 0x2d, 0x40, 0x49, 0xe7, 0xe1, 0xee, 0x91, 0x2f, 0xc0, 0x88, 0x9a, 0xa7, 0x90, 0x80, 0x3b, 0xe3, 0x90, 0x38, 0xc5] = BeaconDeposit.depositEventTopic := by
       rw [BeaconDeposit.depositEventTopic_eq]; decide
     rw [htopic] at run
@@ -211,8 +209,7 @@ theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B25
     obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_dup (w := Bytes.toB256 [0x80]) rfl s
     obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_dup (w := sP) rfl s
     obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_dup (w := (96 : B256)) rfl s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s
+    winv 2
     have hslot : Bytes.toB256 [0x20] = solCountSlot := rfl
     rw [hslot] at run
     obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_sloadH hbal s

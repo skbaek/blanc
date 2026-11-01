@@ -5,6 +5,7 @@ import Blanc.Lift.UniswapV2Pair.Cert
 import Blanc.Lift.InvWalkOps
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.ExactWalkCutOps
+import Blanc.Lift.WalkInvKit
 
 /-! Actual UQ112x112 helper routines used by the shared reserve update. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -36,12 +37,7 @@ theorem uq_encode_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     ∃ G', o = .returned (St b (uqEncodeWord reserve :: R) M G') := by
   have h := run.cut
   unfold t_2a57_c65 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mul hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 6
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
 
@@ -86,26 +82,11 @@ theorem uq_div_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
       ∃ G', o = .returned (St b (uqDivWord den num :: R) M G') := by
   have h := run.cut
   unfold t_2a7b_c66 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 10
   rcases ric_branch h with ⟨_, _, h⟩ | ⟨nonzero, _, h⟩
   · exact False.elim (ric_undefined h)
   · unfold t_2ab4_c66 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_div hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
+    winv 7
     obtain ⟨g, hg⟩ := ric_ret h
     exact ⟨nonzero, g, Seg.done.inj hg⟩
 

@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.WriterArithmetic
 import Blanc.Lift.InvWalkProvenance
 import Jaune.RPow
+import Blanc.Lift.WalkInvKit
 /-! The literal checked multiplication cuts consumed by fee68. -/
 
 namespace Blanc.Lift.UniswapV2Pair
@@ -88,9 +89,7 @@ theorem mul_return_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     flag ≠ 0 ∧ ∃ G', o = .returned (St b (z :: R) M G') := by
   have h := run.cut
   unfold t_2203_c18 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, hs, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   rcases ric_branchTo (g := t_0df6_c9) (by decide : 9 ∉ []) rfl h with
     ⟨_, _, failed⟩ | ⟨accepted, _, body⟩
   · exact (failed.false_of_noOk (by decide : t_2208_c18.noOk = true)).elim
@@ -104,8 +103,7 @@ theorem mul_body_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     y ≠ 0 ∧ B256.Nofm x y ∧ ∃ G', o = .returned (St b ((x * y) :: R) M G') := by
   have h := run.cut
   unfold t_21f2_c58 at h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
+  winv 2
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hs
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hs
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mul hs
@@ -117,9 +115,7 @@ theorem mul_body_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   rcases ric_branch h with ⟨_, _, failed⟩ | ⟨hy, _, body⟩
   · exact (failed.false_of_noOk (by decide : t_21ff_c58.noOk = true)).elim
   · unfold t_2200_c58 at body
-    obtain ⟨_, body⟩ := ric_dest body
-    obtain ⟨_, hs, body⟩ := ric_next body; obtain ⟨_, rfl⟩ := ri_div hs
-    obtain ⟨_, hs, body⟩ := ric_next body; obtain ⟨_, rfl⟩ := ri_eq hs
+    winv 3
     obtain ⟨flag, returned⟩ := mul_return_inv body.uncut
     have division : (x * y) / y = x := by
       by_contra hn
@@ -134,12 +130,9 @@ theorem mul58_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     B256.Nofm x y ∧ ∃ G', o = .returned (St b ((x * y) :: R) M G') := by
   have h := run.cut
   unfold t_21e8_c58 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   rcases ric_branchTo (g := t_2203_c18) (by decide : 18 ∉ []) rfl h with
     ⟨_, _, body⟩ | ⟨accepted, _, body⟩
   · exact (mul_body_inv body.uncut).2

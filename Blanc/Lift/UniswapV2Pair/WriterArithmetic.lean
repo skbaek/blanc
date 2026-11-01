@@ -2,6 +2,7 @@ import Blanc.Lift.ExactWalkOps
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.Vyper
 import Blanc.Lift.UniswapV2Pair.Cert
+import Blanc.Lift.WalkInvKit
 /-! Actual checked arithmetic cuts 59/72 and their common return 9. -/
 
 namespace Blanc.Lift.UniswapV2Pair
@@ -70,10 +71,7 @@ theorem checked_return_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_swap (S' := ρ :: y :: x :: z :: R) rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap (S' := x :: y :: ρ :: z :: R) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
+  winv 2
   obtain ⟨G', hg⟩ := ric_ret h
   exact ⟨G', Seg.done.inj hg⟩
 
@@ -89,18 +87,12 @@ theorem sub59_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sub hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup (w := x - y) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_gt hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   rcases ric_branchTo (g := t_0df6_c9) (by decide : 9 ∉ []) rfl h with
     ⟨_, _, hf⟩ | ⟨hw, _, hs⟩
   · exact (hf.false_of_noOk (by decide : t_227a_c59.noOk = true)).elim
@@ -128,18 +120,12 @@ theorem add72_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_add hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_dup (w := x + y) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_lt hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   rcases ric_branchTo (g := t_0df6_c9) (by decide : 9 ∉ []) rfl h with
     ⟨_, _, hf⟩ | ⟨hw, _, hs⟩
   · exact (hf.false_of_noOk (by decide : t_2ac8_c72.noOk = true)).elim

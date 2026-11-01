@@ -5,6 +5,7 @@ import Blanc.Lift.SelectorRouteExact
 import Blanc.Lift.InvWalkDispatch
 import Blanc.ConcreteRun
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-!
 # The pair's dispatcher, both ways
@@ -90,12 +91,7 @@ theorem pair_dispatch_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outc
     ∃ residual, SFunc.Run cert.prog sevm (St b [σ] M residual) tgt o := by
   have h := run.cut
   rw [t_001a_eq] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_shr hd
   simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,
@@ -119,10 +115,7 @@ theorem pair_dispatch_invP {P : Sevm → Devm → Ninst → Devm → Prop}
   rw [t_001a_eq] at run
   obtain ⟨d, hd, h⟩ := ric_nextP run
   obtain ⟨_, rfl⟩ := ri_push (hP hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_calldataload (hP hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (hP hd)
+  winv 2 using hP
   obtain ⟨d, hd, h⟩ := ric_nextP h
   obtain ⟨_, hd⟩ := ri_shr (hP hd)
   simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,

@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.SwapBalanceWalk
 import Blanc.Lift.UniswapV2Pair.FeeMintArithmetic
 import Jaune.WordFacts
+import Blanc.Lift.WalkInvKit
 
 /-! The actual swap body after both balance observations: the two amount-in
 ternaries (`t_0af5_c5` .. `t_0b6f_c7`), the `INSUFFICIENT_INPUT_AMOUNT` guard
@@ -32,21 +33,7 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
         (St b (swapInWord bal1 r1 a1 :: swapInWord bal0 r0 a0 :: bal1 :: bal0 :: r1 :: r0 ::
           len :: off :: toW :: a1 :: a0 :: S) M G') t_0bd5_c8 seg := by
   dsimp only [swapBalanceDecodedTail, t_0af5_c5, ite_true] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sub hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_gt hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 15
   rw [B256.and_comm] at run
   -- first ternary: both arms meet at `t_0b35_c6` with `in0` on top
   have first : ∃ G1, SFunc.RunCut cert.prog sevm []
@@ -54,8 +41,7 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
         len :: off :: toW :: a1 :: a0 :: S) M G1) t_0b35_c6 seg := by
     rcases ric_branch run with ⟨zero, _, run⟩ | ⟨nonzero, _, run⟩
     · unfold t_0b19_c5 at run
-      obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-      obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+      winv 2
       obtain ⟨G1, run⟩ := ric_jump (by decide) rfl run
       refine ⟨G1, ?_⟩
       unfold swapInWord
@@ -77,25 +63,13 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   clear run
   obtain ⟨_, run⟩ := first
   unfold t_0b35_c6 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sub hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_gt hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 12
   have second : ∃ G2, SFunc.RunCut cert.prog sevm []
       (St b (swapInWord bal1 r1 a1 :: 0 :: swapInWord bal0 r0 a0 :: bal1 :: bal0 :: r1 :: r0 ::
         len :: off :: toW :: a1 :: a0 :: S) M G2) t_0b6f_c7 seg := by
     rcases ric_branch run with ⟨zero, _, run⟩ | ⟨nonzero, _, run⟩
     · unfold t_0b53_c6 at run
-      obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-      obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+      winv 2
       obtain ⟨G2, run⟩ := ric_jump (by decide) rfl run
       refine ⟨G2, ?_⟩
       unfold swapInWord
@@ -117,29 +91,17 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   clear run
   obtain ⟨_, run⟩ := second
   unfold t_0b6f_c7 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_gt hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 8
   rcases ric_branchTo (g := t_0b80_c8) (by decide) rfl run with ⟨zero, _, run⟩ | ⟨nonzero, _, run⟩
   · unfold t_0b7b_c7 at run
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_gt hs
+    winv 4
     unfold t_0b80_c8 at run
-    obtain ⟨_, run⟩ := ric_dest run
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+    winv 2
     rcases ric_branch run with ⟨_, _, failed⟩ | ⟨accepted, G', run⟩
     · exact (failed.false_of_noOk (by decide : t_0b85_c8.noOk = true)).elim
     · exact ⟨Or.inr (B256.lt_of_gtCheck_ne_zero accepted), G', run⟩
   · unfold t_0b80_c8 at run
-    obtain ⟨_, run⟩ := ric_dest run
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+    winv 2
     rcases ric_branch run with ⟨_, _, failed⟩ | ⟨_, G', run⟩
     · exact (failed.false_of_noOk (by decide : t_0b85_c8.noOk = true)).elim
     · exact ⟨Or.inl (B256.lt_of_gtCheck_ne_zero nonzero), G', run⟩
@@ -156,8 +118,7 @@ theorem swapInputs_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : N
         (St b (swapInWord bal1 r1 a1 :: swapInWord bal0 r0 a0 :: bal1 :: bal0 :: r1 :: r0 ::
           len :: off :: toW :: a1 :: a0 :: S) M G') t_0bd5_c8 seg := by
   unfold t_0af5_c5 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
+  winv 2
   obtain ⟨d, hs, run⟩ := ric_next run
   obtain ⟨_, hd⟩ := ri_mload hs
   rw [word, self] at hd
@@ -210,100 +171,34 @@ theorem swapK_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
         (St b ((bal1 * 1000 - in1 * 3) :: (bal0 * 1000 - in0 * 3) ::
           in1 :: in0 :: bal1 :: bal0 :: r1 :: r0 :: S) M G') t_0cd6_c8 seg := by
   unfold t_0bd5_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 9
   obtain ⟨in0Mul, _, run⟩ := swapMulCall_inv run
   unfold t_0beb_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 7
   obtain ⟨bal0Mul, _, run⟩ := swapMulCall_inv run
   unfold t_0bfd_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 5
   obtain ⟨cover0, _, run⟩ := swapSubCall_inv run
   unfold t_0c09_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 11
   obtain ⟨in1Mul, _, run⟩ := swapMulCall_inv run
   unfold t_0beb_c8_1 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 7
   obtain ⟨bal1Mul, _, run⟩ := swapMulCall_inv run
   unfold t_0bfd_c8_1 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 5
   obtain ⟨cover1, _, run⟩ := swapSubCall_inv run
   unfold t_0c21_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 16
   obtain ⟨_, _, run⟩ := swapMulCall_inv run
   unfold t_0c4d_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 5
   obtain ⟨_, _, run⟩ := swapMulCall_inv run
   unfold t_0c59_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 7
   obtain ⟨adjustedMul, _, run⟩ := swapMulCall_inv run
   unfold t_0c69_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_lt hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 4
   rcases ric_branch run with ⟨_, _, failed⟩ | ⟨accepted, G', run⟩
   · exact (failed.false_of_noOk (by decide : t_0c70_c8.noOk = true)).elim
   · exact ⟨⟨in0Mul, bal0Mul, cover0, in1Mul, bal1Mul, cover1, adjustedMul,
