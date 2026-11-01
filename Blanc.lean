@@ -1698,6 +1698,7 @@ import Blanc.ExecutionReceiptRanges
 import Blanc.ExecutionHistoryReceiptLogs
 import Blanc.ExecutionBlockLogs
 import Blanc.RlpBytesInjective
+import Blanc.RlpRoundTrip
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
 import Blanc.ExecutionInRootOwnCode

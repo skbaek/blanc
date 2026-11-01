@@ -5,7 +5,8 @@
 -- proved by Lean; no fixture result is a theorem premise.
 
 import Blanc.DripDeploy
-import Blanc.RlpConcrete
+import Blanc.RlpRoundTrip
+import Jaune.RlpEval
 import Blanc.DripRpow
 import Blanc.TransactionForward
 
@@ -93,45 +94,6 @@ theorem concreteCreateEncoded :
     Nat.toBytes.aux, Nat.reduceMod, Nat.reduceDiv, concreteCreatePayload, concreteCreateTx,
     List.append_assoc]
 
-theorem concreteCreatePayloadParse (k : Nat) :
-    Bytes.toBLTs? (k + 12) concreteCreatePayload = some concreteCreateFields := by
-  have hrlen : concreteCreateR.length = 32 := by decide +kernel
-  have hslen : concreteCreateS.length = 32 := by decide +kernel
-  have hlen : Bytes.toNat [0x07, 0xd1] = creationCode.length := by
-    rw [show creationCode.length = 2001 from creationCodeSize_exact]
-    decide +kernel
-  unfold concreteCreatePayload concreteCreateFields
-  simp only [List.append_assoc, List.cons_append, List.nil_append, concreteCreateTx]
-  change Bytes.toBLTs? (k + 12)
-    (1 :: 0x80 :: 1 :: 8 :: 0x83 :: 7 :: 0xa1 :: 0x20 :: 0x80 :: 0x80 ::
-      0xb9 :: 7 :: 0xd1 :: (creationCode ++ (0xc0 :: 0x80 :: 0xa0 ::
-        (concreteCreateR ++ (0xa0 :: concreteCreateS))))) = _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by rfl)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by rfl)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ (by rfl)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_three _ [7, 0xa1, 0x20] _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_long_two _ _ _ _ _ hlen
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_list _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 _ _ _ hrlen
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil] using RlpConcrete.decode_bytes_32 k concreteCreateS [] hslen
-  rw [Bytes.toBLTs?]
-
 theorem concreteCreatePayload_length : concreteCreatePayload.length = 2082 := by
   have hlen : creationCode.length = 2001 := creationCodeSize_exact
   simp only [concreteCreatePayload, List.cons_append, List.nil_append, concreteCreateTx,
@@ -141,15 +103,14 @@ theorem concreteCreatePayload_length : concreteCreatePayload.length = 2082 := by
 theorem concreteCreateEnvelopeParse :
     Bytes.toBLT? (0xf9 :: 0x08 :: 0x22 :: concreteCreatePayload) =
       some (.list concreteCreateFields) := by
-  have hlen : Bytes.toNat [0x08, 0x22] = concreteCreatePayload.length := by
-    rw [concreteCreatePayload_length]
-    decide +kernel
-  have hparse := RlpConcrete.decode_list_long_two 2084 0x08 0x22
-    concreteCreatePayload [] concreteCreateFields hlen (concreteCreatePayloadParse 2072)
-  simp only [List.append_nil] at hparse
-  unfold Bytes.toBLT?
-  simp only [List.length_cons, concreteCreatePayload_length]
-  rw [hparse]
+  have encoded : (BLT.list concreteCreateFields).toBytes =
+      0xf9 :: 0x08 :: 0x22 :: concreteCreatePayload := by
+    have h := concreteCreateEncoded
+    rw [concreteCreateTxRlp, concreteCreateBLT] at h
+    simpa only [List.cons_append, List.nil_append, List.cons.injEq, true_and] using h
+  exact RlpConcrete.toBLT?_of_encoded encoded
+    (by rw [List.length_cons, List.length_cons, List.length_cons,
+      concreteCreatePayload_length]; decide)
 
 theorem concreteCreateDecode :
     decodeTx pragueRules (.inl concreteCreateTxRlp) = .ok concreteCreateTx := by
@@ -494,55 +455,6 @@ theorem concreteHeaderEncoded (sr tr rr wr rh : B256) :
   rw [hpack]
   rfl
 
-theorem concreteHeaderPayloadParse (k : Nat) (sr tr rr wr rh : B256) :
-    Bytes.toBLTs? (k + 21) (concreteHeaderPayload sr tr rr wr rh) =
-      some (concreteHeaderFields sr tr rr wr rh) := by
-  unfold concreteHeaderPayload concreteHeaderFields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 (k + 20) _ _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 (k + 19) _ _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short (k + 18) 20 _ _ (by decide) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 (k + 17) _ _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 (k + 16) _ _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 (k + 15) _ _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_long_two (k + 14) 1 0 _ _ (by decide +kernel)
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes (k + 13) _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte (k + 12) 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_three (k + 11) [0x98, 0x96, 0x80] _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_three (k + 10) [7, 0x52, 0xa5] _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte (k + 9) 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes (k + 8) _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 (k + 7) _ _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short (k + 6) 8 _ _ (by decide) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte (k + 5) 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 (k + 4) _ _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes (k + 3) _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes (k + 2) _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 (k + 1) _ _ rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil] using RlpConcrete.decode_bytes_32 k rh.toBytes [] rfl
-  rw [Bytes.toBLTs?]
-
 theorem concreteCreateTxRlp_length : concreteCreateTxRlp.length = 2086 := by
   rw [concreteCreateEncoded]
   simp only [List.length_append, List.length_cons, List.length_nil,
@@ -601,60 +513,11 @@ theorem concreteBlockEncoded (sr tr rr wr rh : B256) :
   simp only [show ¬ (2698 < 56) from by decide, ite_false, hp]
   rfl
 
-theorem concreteHeaderDiff (k : Nat) (sr tr rr wr rh : B256) (tail : Bytes) :
-    Bytes.toBLTDiff? (k + 22)
-      (0xf9 :: 2 :: 0x59 :: (concreteHeaderPayload sr tr rr wr rh ++ tail)) =
-      some ((concreteDeploymentHeader sr tr rr wr rh).toBLT, tail) := by
-  rw [concreteHeaderBLT]
-  exact RlpConcrete.decode_list_long_two (k + 21) 2 0x59 _ _ _
-    (by rw [concreteHeaderPayload_length]; rfl) (concreteHeaderPayloadParse k sr tr rr wr rh)
-
-theorem concreteTxListDiff (k : Nat) (tail : Bytes) :
-    Bytes.toBLTDiff? (k + 2)
-      (0xf9 :: 8 :: 0x29 :: 0xb9 :: 8 :: 0x26 :: (concreteCreateTxRlp ++ tail)) =
-      some (.list [.bytes concreteCreateTxRlp], tail) := by
-  have hparse : Bytes.toBLTs? (k + 1) (0xb9 :: 8 :: 0x26 :: concreteCreateTxRlp) =
-      some [.bytes concreteCreateTxRlp] := by
-    apply RlpConcrete.parse_cons
-    · simpa only [List.append_nil] using
-        RlpConcrete.decode_bytes_long_two k 8 0x26 concreteCreateTxRlp []
-          (by rw [concreteCreateTxRlp_length]; rfl)
-    rw [Bytes.toBLTs?]
-  exact RlpConcrete.decode_list_long_two (k + 1) 8 0x29
-    (0xb9 :: 8 :: 0x26 :: concreteCreateTxRlp) tail _
-    (by simp only [List.length_cons, concreteCreateTxRlp_length]; rfl) hparse
-
-theorem concreteBlockPayloadParse (k : Nat) (sr tr rr wr rh : B256) :
-    Bytes.toBLTs? (k + 24) (concreteBlockPayload sr tr rr wr rh) =
-      some [(concreteDeploymentHeader sr tr rr wr rh).toBLT,
-        .list [.bytes concreteCreateTxRlp], .list [], .list []] := by
-  unfold concreteBlockPayload
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact concreteHeaderDiff (k + 2) sr tr rr wr rh _
-  apply RlpConcrete.parse_cons
-  · exact concreteTxListDiff (k + 21) _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_list (k + 21) _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_list (k + 20) _
-  rw [Bytes.toBLTs?]
-
 theorem concreteBlockParse (sr tr rr wr rh : B256) :
     Bytes.toBLT? ([0xf9, 0x0a, 0x8a] ++ concreteBlockPayload sr tr rr wr rh) =
-      some (concreteDeploymentBlock sr tr rr wr rh).toBLT := by
-  have hp := RlpConcrete.decode_list_long_two 2700 0x0a 0x8a
-    (concreteBlockPayload sr tr rr wr rh) []
-    [(concreteDeploymentHeader sr tr rr wr rh).toBLT,
-      .list [.bytes concreteCreateTxRlp], .list [], .list []]
-    (by rw [concreteBlockPayload_length]; rfl)
-    (concreteBlockPayloadParse 2676 sr tr rr wr rh)
-  simp only [List.append_nil] at hp
-  unfold Bytes.toBLT?
-  simp only [List.length_cons, concreteBlockPayload_length,
-    List.cons_append, List.nil_append]
-  rw [hp]
-  rfl
+      some (concreteDeploymentBlock sr tr rr wr rh).toBLT :=
+  RlpConcrete.toBLT?_of_encoded (concreteBlockEncoded sr tr rr wr rh)
+    (by rw [List.length_append, concreteBlockPayload_length]; decide)
 
 theorem concreteBlockDecode (sr tr rr wr rh : B256) :
     rlpToBlock ([0xf9, 0x0a, 0x8a] ++ concreteBlockPayload sr tr rr wr rh) =
@@ -1094,67 +957,10 @@ def concreteJoinPayload : Bytes :=
 
 def concreteJoinTxRlp : Bytes := [2, 0xf8, 0x67] ++ concreteJoinPayload
 
-theorem concreteJoinPayloadParse (k : Nat) :
-    Bytes.toBLTs? (k + 12) concreteJoinPayload = some concreteJoinFields := by
-  unfold concreteJoinPayload concreteJoinFields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 8 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_three _ [7, 0xa1, 0x20] _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 _ _ (by decide) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 100 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 4 [0xb6, 0x88, 0xa3, 0x63] _ (by decide) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_list _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 _ _ _ rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil] using RlpConcrete.decode_bytes_32 k concreteJoinTx.s [] rfl
-  rw [Bytes.toBLTs?]
-
-theorem concreteJoinPayload_length : concreteJoinPayload.length = 103 := by
-  simp only [concreteJoinPayload, List.length_append, List.length_cons, List.length_nil]
-  rfl
-
 theorem concreteJoinEnvelopeParse :
     Bytes.toBLT? (0xf8 :: 0x67 :: concreteJoinPayload) = some (.list concreteJoinFields) := by
-  have hsplit : Jaune.List.splitAt? 103 concreteJoinPayload = some (concreteJoinPayload, []) := by
-    simpa only [concreteJoinPayload_length, List.append_nil] using
-      RlpConcrete.splitAt_append concreteJoinPayload ([] : Bytes)
-  have hp : Bytes.toBLTDiff? 105 (0xf8 :: 0x67 :: concreteJoinPayload) =
-      some (.list concreteJoinFields, []) := by
-    rw [Bytes.toBLTDiff?]
-    change (do
-      let p ← Jaune.List.splitAt? 1 ([0x67] ++ concreteJoinPayload)
-      let q ← Jaune.List.splitAt? (Bytes.toNat p.1) p.2
-      let rs ← Bytes.toBLTs? 104 q.1
-      pure (BLT.list rs, q.2)) = _
-    rw [show Jaune.List.splitAt? 1 ([0x67] ++ concreteJoinPayload) =
-      some ([0x67], concreteJoinPayload) from
-        RlpConcrete.splitAt_append [0x67] concreteJoinPayload]
-    change (do
-      let q ← Jaune.List.splitAt? 103 concreteJoinPayload
-      let rs ← Bytes.toBLTs? 104 q.1
-      pure (BLT.list rs, q.2)) = _
-    rw [hsplit]
-    change (do let rs ← Bytes.toBLTs? 104 concreteJoinPayload; pure (BLT.list rs, [])) = _
-    rw [concreteJoinPayloadParse 92]
-    rfl
-  unfold Bytes.toBLT?
-  simp only [List.length_cons, concreteJoinPayload_length]
-  rw [hp]
+  rw [Bytes.toBLT?_eq_toBLTS]
+  decide +kernel
 
 theorem concreteJoinDecode : decodeTx pragueRules (.inl concreteJoinTxRlp) = .ok concreteJoinTx := by
   simp only [decodeTx, concreteJoinTxRlp, List.cons_append, List.nil_append,

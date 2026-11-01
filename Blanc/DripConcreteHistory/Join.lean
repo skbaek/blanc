@@ -1864,67 +1864,10 @@ def concreteDripPayload : Bytes :=
 
 def concreteDripTxRlp : Bytes := [2, 0xf8, 0x67] ++ concreteDripPayload
 
-theorem concreteDripPayloadParse (k : Nat) :
-    Bytes.toBLTs? (k + 12) concreteDripPayload = some concreteDripFields := by
-  unfold concreteDripPayload concreteDripFields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 2 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 8 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_three _ [7, 0xa1, 0x20] _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 20 _ _ (by decide) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 4 [0x9f, 0x67, 0x8c, 0xca] _ (by decide) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_list _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ 1 _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 _ _ _ rfl
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil] using RlpConcrete.decode_bytes_32 k concreteDripTx.s [] rfl
-  rw [Bytes.toBLTs?]
-
-theorem concreteDripPayload_length : concreteDripPayload.length = 103 := by
-  simp only [concreteDripPayload, List.length_append, List.length_cons, List.length_nil]
-  rfl
-
 theorem concreteDripEnvelopeParse :
     Bytes.toBLT? (0xf8 :: 0x67 :: concreteDripPayload) = some (.list concreteDripFields) := by
-  have hsplit : Jaune.List.splitAt? 103 concreteDripPayload = some (concreteDripPayload, []) := by
-    simpa only [concreteDripPayload_length, List.append_nil] using
-      RlpConcrete.splitAt_append concreteDripPayload ([] : Bytes)
-  have hp : Bytes.toBLTDiff? 105 (0xf8 :: 0x67 :: concreteDripPayload) =
-      some (.list concreteDripFields, []) := by
-    rw [Bytes.toBLTDiff?]
-    change (do
-      let p ← Jaune.List.splitAt? 1 ([0x67] ++ concreteDripPayload)
-      let q ← Jaune.List.splitAt? (Bytes.toNat p.1) p.2
-      let rs ← Bytes.toBLTs? 104 q.1
-      pure (BLT.list rs, q.2)) = _
-    rw [show Jaune.List.splitAt? 1 ([0x67] ++ concreteDripPayload) =
-      some ([0x67], concreteDripPayload) from
-        RlpConcrete.splitAt_append [0x67] concreteDripPayload]
-    change (do
-      let q ← Jaune.List.splitAt? 103 concreteDripPayload
-      let rs ← Bytes.toBLTs? 104 q.1
-      pure (BLT.list rs, q.2)) = _
-    rw [hsplit]
-    change (do let rs ← Bytes.toBLTs? 104 concreteDripPayload; pure (BLT.list rs, [])) = _
-    rw [concreteDripPayloadParse 92]
-    rfl
-  unfold Bytes.toBLT?
-  simp only [List.length_cons, concreteDripPayload_length]
-  rw [hp]
+  rw [Bytes.toBLT?_eq_toBLTS]
+  decide +kernel
 
 theorem concreteDripDecode : decodeTx pragueRules (.inl concreteDripTxRlp) = .ok concreteDripTx := by
   simp only [decodeTx, concreteDripTxRlp, List.cons_append, List.nil_append,
