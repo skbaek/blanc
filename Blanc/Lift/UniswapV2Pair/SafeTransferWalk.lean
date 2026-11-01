@@ -137,13 +137,7 @@ private theorem safeTransfer_decodeWords_inv {P : Sevm → Devm → Ninst → De
       r = .done (.returned (St b R (M1.read (32 + ptr).toNat 32).2 residual)) := by
   have h := run
   unfold t_215e_c16 at h
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := ptr) rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := ptr) rfl (project hd)
-  winv 5 using project
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_dup (w := Bytes.toB256 (M.read ptr.toNat 32).1) rfl (project hd)
-  winv 3 using project
+  winv 12 using project
   rcases ric_branchP h with ⟨_, _, failed⟩ | ⟨positive, _, body⟩
   · exact (failed.false_of_noOk (by decide : t_216f_c16.noOk = true)).elim
   · have width := toNat_ge_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero positive)
@@ -214,9 +208,7 @@ private theorem safeTransfer_optional_inv {P : Sevm → Devm → Ninst → Devm 
         (St b R ((M1.read ptr.toNat 32).2.read (32 + ptr).toNat 32).2 residual))) := by
   have h := run
   unfold t_2155_c16 at h
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := ptr) rfl (project hd)
-  winv 4 using project
+  winv 6 using project
   by_cases empty : Bytes.toB256 (M.read ptr.toNat 32).1 = 0
   · rw [empty, show B256.eqCheck 0 0 = (1 : B256) from by decide] at h
     cases h with
@@ -326,10 +318,7 @@ theorem safeTransfer_success_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   have h := run
   unfold t_2148_c16 at h
   obtain ⟨_, h⟩ := ric_destP h
-  winv 5 using project
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := success) rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := success) rfl (project hd)
-  winv 2 using project
+  winv 9 using project
   by_cases failed : success = 0
   · rw [failed, show B256.eqCheck 0 0 = (1 : B256) from by decide] at h
     cases h with
@@ -409,13 +398,7 @@ private theorem safeTransfer_allocate_inv {P : Sevm → Devm → Ninst → Devm 
   let ptr := Bytes.toB256 (M.read 64 32).1
   have h := run
   unfold t_2122_c57 at h
-  winv 10 using project
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := ptr) rfl (project hd)
-  winv 4 using project
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := ptr) rfl (project hd)
-  winv 4 using project
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := ptr) rfl (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_add (project hd)
+  winv 22 using project
   obtain ⟨d, hd, h⟩ := ric_nextP h
   obtain ⟨_, _, rfl⟩ := ri_returndatacopy (project hd)
   obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
@@ -545,9 +528,7 @@ private theorem safeTransfer_copyPass_inv {P : Sevm → Devm → Ninst → Devm 
   have h := run
   unfold t_20a4_c57 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := len) rfl (project hd)
-  winv 2 using project
+  winv 4 using project
   simp only [show Bytes.toB256 [32] = (32 : B256) from rfl, B256.ltCheck,
     ite_eq_right enough] at h
   rcases ric_branchP h with ⟨_, _, body⟩ | ⟨nonzero, _, _⟩
@@ -641,9 +622,7 @@ private theorem safeTransfer_copyExit_inv {P : Sevm → Devm → Ninst → Devm 
   have h := run
   unfold t_20a4_c57 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := len) rfl (project hd)
-  winv 2 using project
+  winv 4 using project
   simp only [show Bytes.toB256 [32] = (32 : B256) from rfl, B256.ltCheck,
     ite_eq_left short] at h
   rcases ric_branchP h with ⟨zero, _, _⟩ | ⟨_, _, body⟩

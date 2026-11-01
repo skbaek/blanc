@@ -100,26 +100,21 @@ theorem getterString_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   rw [show (64 : B256).toNat = 64 from rfl, mem.read_self (by decide)] at h
   change SFunc.RunCut fs sevm [] (St b (memWord M 64 :: ρ :: R) M _) _ _ at h
   rw [mem.word] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
-  winv 2
+  winv 3
   rw [show Bytes.toB256 [0x40] + (128 : B256) = 192 from by decide] at h
   winv 2
   rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   rw [s.length_push] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hd
+  winv 2
   rw [show (128 : B256).toNat = 128 from rfl] at h
   winv 2
   rw [show Bytes.toB256 [0x20] + (128 : B256) = 160 from by decide] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   rw [s.word_push] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 160) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hd
+  winv 2
   rw [show (160 : B256).toNat = 160 from rfl] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
+  winv 2
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
 

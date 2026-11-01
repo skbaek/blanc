@@ -5,6 +5,7 @@ import Blanc.Lift.CursorSourceRunReturn
 import Blanc.Lift.InvWalkDispatch
 import Blanc.Lift.InvWalkProvenance
 import Blanc.Lift.InvWalkWorld
+import Blanc.Lift.WalkInvKit
 
 /-!
 # `rescueERC20` without its call keeps the proxy's storage (U6b2)
@@ -71,29 +72,16 @@ theorem rescueQuietEnd : RescueQuietEnd := by
   have run := SFunc.runP_iff_runCutP_nil.mp halted
   clear halted placed
   unfold t_0000_c0 at run
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_mstore (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_callvalue (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (sound s)
+  winv 7 using sound
   rcases ric_branchP run with ⟨-, _, run⟩ | ⟨-, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_0010_c0 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldatasize (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_lt (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (sound s)
+  winv 5 using sound
   rcases ric_branchP run with ⟨-, _, run⟩ | ⟨-, _, run⟩
   swap; · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_001a_c0 at run
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (sound s)
-  obtain ⟨_, s, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_shr (sound s)
+  winv 4 using sound
   rw [hw] at run
   obtain ⟨_, run⟩ := ric_cmp_gtP sound run
   rw [ite_eq_left (by decide)] at run

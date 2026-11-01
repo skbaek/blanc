@@ -34,35 +34,16 @@ theorem ri_lePrefix {K : SFunc} {img : Bytes}
   have hsi : (Nat.toB256 sevm.data.length).toNat = sevm.data.length :=
     B256.toNat_toB256_of_lt hcd
   unfold lePrefix at run
-  winv 2
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := Bytes.toB256 [0x40]) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_mload s
+  winv 4
   have hmload_fst : Bytes.toB256 (M.read (Bytes.toB256 [0x40]).toNat 32).1 = pB := by
     rw [h64, hr.read, hfp]
   have hmload_snd : (M.read (Bytes.toB256 [0x40]).toNat 32).2 = M := by
     rw [h64]; exact Mem.read_snd_eq_self (memExtSize_of_le hn32 hn96)
   rw [hmload_fst, hmload_snd] at run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup (w := Bytes.toB256 [0x08]) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup (w := pB) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_mstore s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_dup (w := pB) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_dup (w := Bytes.toB256 [0x40]) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_add s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_swap (n := 0) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_swap (n := 2) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_mstore s
+  winv 10
   have hM2_addr : (Bytes.toB256 [0x40]).toNat = 64 := h64
   rw [hM2_addr] at run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_push s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_swap (n := 1) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_dup (w := pB) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_add s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_dup (w := Bytes.toB256 [0x08]) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_dup (w := Bytes.toB256 [0x08]) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_calldatasize s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_dup (w := pB + Bytes.toB256 [0x20]) rfl s
+  winv 9
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_calldatacopy s
   have hcc_addr : (pB + Bytes.toB256 [0x20]).toNat = p + 32 := ha
   have hcc_bytes : sevm.data.sliceD (Nat.toB256 sevm.data.length).toNat (Bytes.toB256 [0x08]).toNat 0 =
@@ -92,24 +73,18 @@ theorem ri_leStep {c ib d0 d1 : UInt8} {K : SFunc} {i : Nat} {imgM : Bytes} (hi 
       (St b ((v <<< 192) :: pB :: v :: ret :: rest)
         (M.write (pB.toNat + 32 + i) [(Blanc.BeaconDeposit.le64 v.toNat).getD i 0]) G') K r := by
   unfold leHalf1 at run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := v <<< 192) rfl s
-  winv 2
+  winv 3
   have hbyte : (List.getD (v <<< 192).toBytes (Bytes.toB256 [c]).toNat 0).toB256 =
       ((Blanc.BeaconDeposit.le64 v.toNat).getD i 0).toB256 := by
     rw [hc, shl192_byte v i hi]
   rw [hbyte] at run
-  winv 2
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup (w := pB) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_dup (w := pB) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_mload s
+  winv 6
   have hmload_fst : Bytes.toB256 (M.read pB.toNat 32).1 = 8 := by
     rw [hr.read, h8, B256.toB256_toBytes]
   have hmload_snd : (M.read pB.toNat 32).2 = M :=
     Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le hS hpS)
   rw [hmload_fst, hmload_snd] at run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_dup (w := Bytes.toB256 [ib]) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_lt s
+  winv 2
   have hlt : B256.ltCheck (Bytes.toB256 [ib]) 8 = 1 := by
     rw [B256.ltCheck, ite_eq_left]
     rw [B256.lt_iff_toNat_lt_toNat, hib]
@@ -126,9 +101,7 @@ theorem ri_leStep {c ib d0 d1 : UInt8} {K : SFunc} {i : Nat} {imgM : Bytes} (hi 
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff] = m31 := rfl
   unfold leHalf2 at run
-  winv 4
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_swap (n := 0) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s
+  winv 6
   rw [hm31] at run
   winv 2
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_swap (n := 0) rfl s
@@ -148,10 +121,7 @@ theorem ri_leTail (run : SFunc.RunCut fs sevm C
     (St b ((v <<< 192) :: pB :: v :: ret :: rest) M G) leTail r) :
     ∃ G', r = .done (.returned (St b (pB :: rest) M G')) := by
   unfold leTail at run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_pop s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_swap (n := 1) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_swap (n := 0) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_pop s
+  winv 4
   exact ric_ret run
 
 end Walk

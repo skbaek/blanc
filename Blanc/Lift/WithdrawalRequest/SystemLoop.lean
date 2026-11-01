@@ -1,5 +1,6 @@
 import Blanc.Lift.WithdrawalRequest.SystemBody
 import Blanc.Lift.ExactWalkCutOps
+import Blanc.Lift.WalkInvKit
 
 /-! The bounded certified queue loop, ending before bookkeeping at 0x183.
 The Nat index selects the actual word body; base, memory and selected charges
@@ -86,14 +87,7 @@ private theorem systemLoop_header_inv {sevm : Sevm} {base : Devm} {memory : Mem}
     ∃ gas', SFunc.Run prog sevm (St base [index, count, head, tail] memory gas')
       (if index = count then t_0183_c1 else t_00e9_c1) out := by
   obtain ⟨_, run⟩ := ric_dest run.cut
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := count) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := index) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_eq step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 4
   by_cases same : index = count
   · simp only [B256.eqCheck, ite_eq_left same] at run
     rcases ric_branch run with ⟨flag, _, run⟩ | ⟨_, gas', run⟩

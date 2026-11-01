@@ -10150,9 +10150,10 @@ contract-neutral.
   lives with them: Curve 3pool's `Walk/AutoStep.lean`).
 - Straight-line inversion steps of a cut run without writing them out: `winv n` / `winv` read
   the node off the tree of `h : SFunc.RunCut …` (or `SFunc.RunCutP P …` with `using project`) and
-  run the hand-written pair `obtain ⟨_, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_<op> hd`
-  (`ri_push`, `ri_dup rfl`, `ri_swap rfl`, `ri_pop`, `ri_add`, `ri_mload`, …; `ric_dest` for a
-  `.dest`), stopping at a branch, jump, storage or call node; `at h` names the run (default: the
+  run the hand-written step `replace h := ric_next h; obtain ⟨_, hd, h⟩ := h;
+  obtain ⟨_, rfl⟩ := ri_<op> hd; clear hd` (`ri_push`, `ri_dup rfl`, `ri_swap rfl`, `ri_pop`,
+  `ri_add`, `ri_mload`, …; `ric_dest` for a `.dest`; a `ri_dup`/`ri_swap` implicit such as
+  `(w := x)` is spelled out only where a `set` abbreviation or rewritten shape needs it), stopping at a branch, jump, storage or call node; `at h` names the run (default: the
   most recent cut run); `wskip n` steps over any `n` nodes forgetting the state
   (`obtain ⟨_, _, h⟩ := ric_next h`), in [`Blanc/Lift/WalkInvKit.lean`](../Blanc/Lift/WalkInvKit.lean).
 - Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as

@@ -681,11 +681,7 @@ theorem mintAmount0_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   unfold MintBalanceSite.afterDecodeTree MintBalanceSite.decodeTree t_11db_c41 at run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
   dsimp only [List.set] at run
-  winv 3 using StepIn.toRun
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup (w := b0) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
+  winv 7 using StepIn.toRun
   rw [show r0 &&& Bytes.toB256 [0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff] = r0 from feeReserveWord_eq bound] at run
   winv 3 using StepIn.toRun
   rw [show Bytes.toB256 [0x22,0x6e] &&& Bytes.toB256 [0xff,0xff,0xff,0xff] = (0x226e : B256) from by decide] at run
@@ -717,11 +713,7 @@ theorem mintAmount1_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   obtain ⟨_, run⟩ := ric_destP run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
   dsimp only [List.set] at run
-  winv 3 using StepIn.toRun
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup (w := b1) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup (w := r1) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
+  winv 7 using StepIn.toRun
   rw [show r1 &&& Bytes.toB256 [0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff,0xff] = r1 from feeReserveWord_eq bound] at run
   winv 3 using StepIn.toRun
   rw [show Bytes.toB256 [0x22,0x6e] &&& Bytes.toB256 [0xff,0xff,0xff,0xff] = (0x226e : B256) from by decide] at run
@@ -772,10 +764,7 @@ theorem mintFeeCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   obtain ⟨_, run⟩ := ric_destP run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
   dsimp only [List.set] at run
-  winv 3 using StepIn.toRun
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup (w := r1) rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 6 using StepIn.toRun
   cases run with
   | callHalt d lookup pop callee =>
       change some t_26ec_c68 = _ at lookup

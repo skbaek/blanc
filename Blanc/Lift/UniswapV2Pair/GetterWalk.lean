@@ -39,8 +39,7 @@ theorem totalSupply_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sloadH bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
+  winv 1
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
 

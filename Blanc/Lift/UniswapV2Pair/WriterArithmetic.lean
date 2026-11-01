@@ -66,12 +66,7 @@ theorem checked_return_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     ∃ G', o = .returned (St b (z :: R) M G') := by
   have h := run.cut
   unfold t_0df6_c9 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap (S' := ρ :: y :: x :: z :: R) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap (S' := x :: y :: ρ :: z :: R) rfl hd
-  winv 2
+  winv 5
   obtain ⟨G', hg⟩ := ric_ret h
   exact ⟨G', Seg.done.inj hg⟩
 
@@ -82,17 +77,7 @@ theorem sub59_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     y ≤ x ∧ ∃ G', o = .returned (St b ((x - y) :: R) M G') := by
   have h := run.cut
   unfold t_226e_c59 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hd
-  winv 1
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := x - y) rfl hd
-  winv 3
+  winv 9
   rcases ric_branchTo (g := t_0df6_c9) (by decide : 9 ∉ []) rfl h with
     ⟨_, _, hf⟩ | ⟨hw, _, hs⟩
   · exact (hf.false_of_noOk (by decide : t_227a_c59.noOk = true)).elim
@@ -115,17 +100,7 @@ theorem add72_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       ∃ G', o = .returned (St b ((x + y) :: R) M G') := by
   have h := run.cut
   unfold t_2abc_c72 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hd
-  winv 1
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := x + y) rfl hd
-  winv 3
+  winv 9
   rcases ric_branchTo (g := t_0df6_c9) (by decide : 9 ∉ []) rfl h with
     ⟨_, _, hf⟩ | ⟨hw, _, hs⟩
   · exact (hf.false_of_noOk (by decide : t_2ac8_c72.noOk = true)).elim

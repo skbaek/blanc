@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Callee.GetYDLoop
+import Blanc.Lift.WalkInvKit
 
 /-!
 # `get_y_D` before its Newton loop, inverted
@@ -51,9 +52,7 @@ theorem ric_ydPost {A i x0 x1 x2 D ρ c s ann xv cc w12 w13 w14 w15 : B256}
     (run : SFunc.RunCut progYD sevm [] (St b (ydCStk S) M G) ydPost0 r) :
     ydOut b S M0 (ydPostRes c.toNat s.toNat D.toNat ann.toNat) r := by
   unfold ydPost0 ydPost at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_pop s1
+  winv 3
   obtain ⟨G4, run⟩ := ric_pushMloadF hF 7 (by decide) rfl run
   obtain ⟨G5, run⟩ := ric_pushMloadF hF 5 (by decide) rfl run
   obtain ⟨hm1, G6, run⟩ := ric_vyMulT vyRevertT_noOk run
@@ -72,12 +71,7 @@ theorem ric_ydPost {A i x0 x1 x2 D ρ c s ann xv cc w12 w13 w14 w15 : B256}
   obtain ⟨G19, M3, hF3, run⟩ := ric_pushMstoreF hF2 13 (by decide) (lt16 (by decide)) run
   obtain ⟨G20, run⟩ := ric_pushMloadF hF3 5 (by decide) rfl run
   obtain ⟨G21, M4, hF4, run⟩ := ric_pushMstoreF hF3 14 (by decide) (lt16 (by decide)) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_dup (w := Bytes.toB256 [0x00]) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G26, rfl⟩ := ri_dup (w := Bytes.toB256 [0x03, 0x20]) rfl s1
+  winv 5
   obtain ⟨G27, M5, hF5, run⟩ := ric_mstoreF hF4 15 (by decide) (lt16 (by decide)) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_add s1
   rw [toB256_255, toB256_0x320] at run
@@ -134,15 +128,11 @@ theorem ric_ydCoinTail (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {j
         B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 (j + 1))) 0 :: ydCStk S) M' G')
         jmp r := by
   unfold ydCoinTail at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (w := Nat.toB256 0x2a0) rfl s1
+  winv 2
   obtain ⟨G3, run⟩ := ric_mloadF hF 11 (by decide) hj run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_add s1
+  winv 2
   rw [one_add_toB256 (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_dup (w := Nat.toB256 (j + 1)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup (w := Nat.toB256 0x2a0) rfl s1
+  winv 2
   obtain ⟨G8, M1, hF1, run⟩ := ric_mstoreF hF 11 (by decide) (by rw [hlen]; decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_dup (w := Nat.toB256 3) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_eq s1
@@ -185,15 +175,11 @@ theorem ric_ydAcc (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {c s x 
       WordFrame M0 M' 0x140 ((ws.set 8 s').set 7 c') ∧
       SFunc.RunCut progYD sevm C (St b (ydCStk S) M' G') tail r := by
   unfold ydAcc at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_dup (w := Bytes.toB256 [0x02, 0x40]) rfl s1
+  winv 3
   obtain ⟨G4, run⟩ := ric_mloadF hF 8 (by decide) hs run
   obtain ⟨G5, run⟩ := ric_pushMloadF hF 10 (by decide) hx run
   obtain ⟨ha1, G6, run⟩ := ric_vyAddT vyRevertT_noOk run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_dup (w := Bytes.toB256 [0x02, 0x40]) rfl s1
+  winv 1
   obtain ⟨G8, M1, hF1, run⟩ := ric_mstoreF hF 8 (by decide) (by rw [hlen]; decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_pop s1
   have hc1 : (ws.set 8 (s + x))[7]? = some c := by rw [List.getElem?_set_ne (by decide)]; exact hc
@@ -245,9 +231,7 @@ theorem ric_ydTest (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {i x :
   obtain ⟨G1, run⟩ := ric_dest run
   obtain ⟨G2, run⟩ := ric_pushMloadF hF 1 (by decide) hi run
   obtain ⟨G3, run⟩ := ric_pushMloadF hF 11 (by decide) hj run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_xor s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨hw, G7, run⟩ | ⟨hw, G7, run⟩
   · -- `i ≠ j`: load `xp[j]`
     have hne : i ≠ Nat.toB256 j := by
@@ -258,14 +242,10 @@ theorem ric_ydTest (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {i x :
     obtain ⟨G9, run⟩ := ric_pushMloadF hF 11 (by decide) hj run
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_dup (w := Nat.toB256 j) rfl s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_lt s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_push s1
+    winv 2
     rcases ric_branch run with ⟨-, G14, run⟩ | ⟨-, G14, run⟩
     · exact (ric_undefined run).elim
-    obtain ⟨G15, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_mul s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_add s1
+    winv 4
     obtain ⟨G19, run⟩ := ric_mloadF hF (2 + j) (ydXpAddr hj3) hx run
     obtain ⟨G20, M1, hF1, run⟩ := ric_pushMstoreF hF 10 (by decide) (by rw [hlen]; decide) run
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
@@ -275,8 +255,7 @@ theorem ric_ydTest (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {i x :
     have heq : i = Nat.toB256 j := by
       have := eq_zero_of_iszero_ne_zero hw
       exact ((B256.xor_eq_zero_iff _ _).mp this).symm
-    obtain ⟨G8, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨G10, run⟩ := ric_jump hk2C hk2 run
     exact .inl ⟨heq, G10, run⟩
 

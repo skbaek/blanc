@@ -56,10 +56,7 @@ theorem safe_countBumpH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : 
   rw [hr1, hr2] at run_cut
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G4, rfl⟩ := ri_swap (n := 0) rfl s1
   dsimp only [List.set] at run_cut
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G5, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G6, rfl⟩ := ri_dup (w := rt) rfl s1
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G7, rfl⟩ := ri_dup (w := nd) rfl s1
-  winv 2
+  winv 5
   rcases ric_branch run_cut with ⟨hw, G_fail, run_fail⟩ | ⟨hroot_ne, G10, run_cut⟩
   · exfalso
     exact SFunc.RunCutP.false_of_noOk run_fail (by decide)
@@ -102,8 +99,7 @@ theorem safe_countBumpH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : 
       (Devm.getStor b sevm.currentTarget).get solCountSlot
     rw [afterSloadH_getStor]
   rw [hb1] at run_cut
-  winv 2
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G24, rfl⟩ := ri_swap (n := 0) rfl s1
+  winv 3
   dsimp only [List.set] at run_cut
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut;
     obtain ⟨G25, rfl⟩ := ri_dup (w := 1 + b.getStorVal sevm.currentTarget solCountSlot) rfl s1

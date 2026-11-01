@@ -5,6 +5,7 @@ import Blanc.Lift.Cursor
 import Blanc.Lift.ExactLeaf
 import Blanc.Lift.PackedWord
 import Jaune.MulDiv
+import Blanc.Lift.WalkInvKit
 
 /-!
 # USDC refinement, dispatch family (U6g)
@@ -35,43 +36,15 @@ theorem impl_preamble_cut {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G 
   unfold Impl.t_0000_c0 at run
   obtain ⟨d, hd, h⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_mstore hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_callvalue hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 6
   rcases ric_branch h with ⟨-, _, h⟩ | ⟨nz, _, h⟩
   · exact (h.false_of_noOk (by decide)).elim
   have value : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero nz
   unfold Impl.t_0010_c0 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldatasize hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_lt hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 6
   rcases ric_branch h with ⟨long, _, h⟩ | ⟨-, _, h⟩
   · rw [tree_001a] at h
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_calldataload hd
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_shr hd
+    winv 4
     rw [shr_selector] at h
     exact ⟨value, long, _, _, h⟩
   · exact (h.false_of_noOk (by decide)).elim
@@ -306,21 +279,10 @@ theorem version_body_false {fs : List SFunc} {sevm : Sevm} {d : Devm} {o : Outco
       (.next (.push dst l4) (.branch f g))))))))) o) : False := by
   have h := SFunc.Run.cut run
   rw [St.self (d := d) rfl rfl] at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d', hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sload fork hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_eq hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 5
   rcases ric_branch h with ⟨-, _, h⟩ | ⟨nz, -⟩
   · exact h.false_of_noOk hf
   · exact version_read v hn (B256.eq_of_eqCheck_ne_zero nz)
@@ -333,25 +295,10 @@ theorem initialize_body_false {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := SFunc.Run.cut run
   rw [St.self (d := d) rfl rfl] at h
   unfold Impl.t_19e1_c61 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d', hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sload fork hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_div hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 7
   rcases ric_branch h with ⟨-, _, h⟩ | ⟨nz, -⟩
   · exact h.false_of_noOk (by decide)
   · exact flag20_read flag (B256.eq_of_eqCheck_ne_zero nz)
@@ -366,45 +313,18 @@ theorem initializeV2_body_false {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := SFunc.Run.cut run
   rw [St.self (d := d) rfl rfl] at h
   unfold Impl.t_3744_c25 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d', hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sload fork hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_div hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 8
   rcases ric_branchTo List.not_mem_nil init_lookups.2.2.2.2.2.2.2.2 h with ⟨z, _, h⟩ | ⟨nz, -⟩
   · unfold Impl.t_3769_c25 at h
-    obtain ⟨d', hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d', hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_push hd
+    winv 2
     obtain ⟨d', hd, h⟩ := ric_next h
     obtain ⟨_, rfl⟩ := ri_sload fork hd
-    obtain ⟨d', hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d', hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_and hd
-    obtain ⟨d', hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_iszero hd
+    winv 3
     unfold Impl.t_3771_c5 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d', hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_push hd
+    winv 2
     rcases ric_branch h with ⟨-, _, h⟩ | ⟨nz, -⟩
     · exact h.false_of_noOk (by decide)
     · have e := (B256.eq_of_eqCheck_ne_zero nz).symm

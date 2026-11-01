@@ -1,5 +1,6 @@
 import Blanc.Lift.Deploy
 import Blanc.BytesWrite
+import Blanc.Lift.WalkInvKit
 
 /-! Source effects of Solidity's library constructor: copy a runtime template,
 patch its call-protection address, and return the patched byte window. -/
@@ -41,26 +42,12 @@ theorem solcLibraryReturn_effects
       post.output = (solcLibraryPatchedImage image sevm.currentTarget).sliceD 11 size.toNat 0 := by
   have run := run.cut
   unfold solcLibraryReturn at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_address step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_mstore step
+  winv 4
   have patched := reads.write wf 0 sevm.currentTarget.toB256.toBytes
   have patchedWf := wf.write 0 sevm.currentTarget.toB256.toBytes
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 1) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_mstore8 step
+  winv 3
   have finalReads := patched.write patchedWf 11 [0x73]
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 2) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 1) rfl step
+  winv 2
   cases run with
   | last terminal =>
       have effect := ri_return terminal
@@ -91,35 +78,16 @@ theorem solcLibraryConstructor_effects
   obtain ⟨_, equal⟩ := ri_push step
   rw [offsetWord] at equal
   subst equal
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 2) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 2) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 2) rfl step
+  winv 4
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_codecopy step
   let window := sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop)
   have copied := reads.write wf 11 window
   have copiedWf := wf.write 11 window
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_mload step
+  winv 2
   have loaded := copied.extend 11 32
   have loadedWf := copiedWf.extend 11 32
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_byte step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_eq step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 5
   rcases ric_branch run with ⟨_, _, impossible⟩ | ⟨_, _, returned⟩
   · cases impossible
   · exact solcLibraryReturn_effects loadedWf loaded returned.uncut

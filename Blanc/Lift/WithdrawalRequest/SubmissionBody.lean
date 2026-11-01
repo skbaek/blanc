@@ -1,4 +1,5 @@
 import Blanc.Lift.WithdrawalRequest.SubmissionState
+import Blanc.Lift.WalkInvKit
 
 /-! Actual sequential submission walk, without queue-key disjointness. -/
 
@@ -28,16 +29,10 @@ private theorem submissionCount_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       (St (submissionCountStore sevm b) [] M G') submissionWordsTree out := by
   have run := run.cut
   rw [submissionCount_split] at run
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 1
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := submissionCount sevm b) rfl (ri_sload fork h)
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_add h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 3
   obtain ⟨_, h, run⟩ := ric_next run
   have dynamic := ri_sstore_nonstatic fork h
   obtain ⟨_, rfl⟩ := ri_sstore fork h
@@ -74,48 +69,19 @@ private theorem submissionWords_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       (St (submissionWordsStore sevm b) [submissionTail sevm b] M G') submissionMemoryTree out := by
   have run := run.cut
   rw [submissionWords_split] at run
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 1
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := submissionTail sevm b) rfl (ri_sload fork h)
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_mul h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 4
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := submissionKey sevm b) rfl (ri_add h)
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_caller h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup rfl h
+  winv 2
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_sstore fork h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_add h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_calldataload h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup rfl h
+  winv 5
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_sstore fork h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_add h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_calldataload h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap rfl h
+  winv 5
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_sstore fork h
   exact ⟨_, run.uncut⟩
@@ -183,28 +149,13 @@ private theorem submissionMemory_inv {sevm : Sevm} {base : Devm} {M : Mem} {G : 
       submissionLogTree out := by
   have run := run.cut
   rw [submissionMemory_split] at run
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_caller h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 2
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := sevm.caller.toB256 <<< 96) rfl (ri_shl h)
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_mstore h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 5
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_calldatacopy h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 2
   exact ⟨_, run.uncut⟩
 
 private theorem submissionLog_split : submissionLogTree =
@@ -240,12 +191,7 @@ private theorem submissionLog_inv {sevm : Sevm} {base : Devm} {M : Mem} {G : Nat
   simp only [St.memRead_fst, St.memRead_snd] at run
   change SFunc.RunCut _ _ _ (St (base.addLog (submissionLog sevm M)) [tail]
     (submissionMemory sevm M) s1.gasLeft) _ _ at run
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_add h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 3
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_sstore fork h
   cases run with

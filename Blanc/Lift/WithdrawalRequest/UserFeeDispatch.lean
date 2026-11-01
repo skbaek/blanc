@@ -1,4 +1,5 @@
 import Blanc.Lift.WithdrawalRequest.FeeLoop
+import Blanc.Lift.WalkInvKit
 
 /-!
 Postloop word division and calldata/value guards. Raw CALLDATASIZE is a
@@ -43,31 +44,9 @@ private theorem prefix_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       (St b [output, accumulator, counter, numerator, denominator] M G) t_0068_c0 o) :
     ∃ G', SFunc.Run prog sevm (St b [output / denominator] M G') (feeBranch sevm) o := by
   obtain ⟨_, run⟩ := ric_dest run.cut
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := [accumulator, output, counter, numerator, denominator]) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := [denominator, output, counter, numerator, accumulator]) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := [output, denominator, counter, numerator, accumulator]) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_div h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := [accumulator, counter, numerator, output / denominator]) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_pop h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_pop h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_pop h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_calldatasize h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 10
   change SFunc.RunCut _ _ _ (St b [56, sevm.data.length.toB256, output / denominator] M _) _ _ at run
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_eq h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 2
   rcases ric_branch run with ⟨flag, G', run⟩ | ⟨flag, G', run⟩
   · have hlen : sevm.data.length.toB256 ≠ 56 := by
       intro hlen
@@ -119,15 +98,11 @@ private theorem getter_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     sevm.data.length.toB256 = 0 ∧ sevm.value = 0 ∧
       ∃ G', SFunc.Run prog sevm (St b [fee] M G') t_0082_c0 o := by
   have run := run.cut
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_calldatasize h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 2
   rcases ric_branch run with ⟨empty, _, run⟩ | ⟨_, _, run⟩
   · obtain ⟨_, h, run⟩ := ric_next run
     obtain ⟨_, rfl⟩ := ri_callvalue h
-    obtain ⟨_, h, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_push h
+    winv 1
     rcases ric_branch run with ⟨zero, G', run⟩ | ⟨_, _, run⟩
     · exact ⟨empty, zero, G', run.uncut⟩
     · exact False.elim (revert_tail_no_run run.uncut)
@@ -157,12 +132,7 @@ private theorem submission_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     fee.toNat ≤ sevm.value.toNat ∧
       ∃ G', SFunc.Run prog sevm (St b [] M G') t_008f_c0 o := by
   obtain ⟨_, run⟩ := ric_dest run.cut
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_callvalue h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_lt h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 3
   rcases ric_branch run with ⟨paid, G', run⟩ | ⟨_, _, run⟩
   · exact ⟨toNat_ge_of_ltCheck_eq_zero paid, G', run.uncut⟩
   · exact False.elim (revert_tail_no_run run.uncut)

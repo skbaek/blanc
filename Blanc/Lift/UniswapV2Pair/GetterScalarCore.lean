@@ -66,8 +66,7 @@ theorem constantScalar_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hd⟩ := ri_push hd
   rw [s.bytes_value] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
+  winv 1
   obtain ⟨g, hg⟩ := ric_ret h
   exact ⟨g, Seg.done.inj hg⟩
 

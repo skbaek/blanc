@@ -1,6 +1,7 @@
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.PackedShaCovered
 import Blanc.StaticPrecompileMessage
+import Blanc.Lift.WalkInvKit
 
 namespace Blanc.Lift
 
@@ -241,36 +242,22 @@ theorem ric_mcpy_iter {s d l n : Nat} (hl : 32 ≤ l) (hl' : l < 2 ^ 256) (hs : 
       (St b (Nat.toB256 (s + 32) :: Nat.toB256 (d + 32) :: Nat.toB256 (l - 32) :: R)
         (M.write d (M.read s 32).1) G') T r := by
   unfold mcpyTree mcpyBody at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
+  winv 5
   have hlt : B256.ltCheck (Nat.toB256 l) (Bytes.toB256 [0x20]) = 0 := by
     rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 hl' (by norm_num only)]
     simp only [show ¬l < 32 by omega, ↓reduceIte]
   rw [hlt] at run
   rcases ric_branch run with ⟨-, G6, run⟩ | ⟨hw, -⟩
   swap; · exact absurd rfl hw
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_mload s1
+  winv 2
   rw [toNat_toB256' (by omega), read_covered hs hn hsrc] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_mstore s1
+  winv 2
   rw [toNat_toB256' (by omega), toBytes_read] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_add s1
+  winv 4
   rw [add_minus32 hl hl'] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_add s1
+  winv 5
   rw [push20_add (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_add s1
+  winv 2
   rw [push20_add (by omega)] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
   exact ric_jump hkC hk run
@@ -282,11 +269,7 @@ theorem ric_mcpy_exit {s d l : Nat} (hl : l < 32)
     ∃ G', SFunc.RunCut fs sevm C
       (St b (Nat.toB256 s :: Nat.toB256 d :: Nat.toB256 l :: R) M G') X r := by
   unfold mcpyTree at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
+  winv 5
   have hlt : B256.ltCheck (Nat.toB256 l) (Bytes.toB256 [0x20]) = 1 := by
     rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by omega) (by norm_num only)]
     simp only [hl, ↓reduceIte]
@@ -304,34 +287,19 @@ theorem ric_merge0 {s d n : Nat} {K : SFunc} (hs : M.size = n) (hn : n % 32 = 0)
     ∃ G', SFunc.RunCut fs sevm C
       (St b (Bytes.toB256 [0x20] :: R) ((M.read d 32).2.write d (M.read d 32).1) G') K r := by
   unfold mergeTree at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_mload s1
+  winv 2
   rw [toNat_toB256' hsl, read_covered hs hn hsrc] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_mload s1
+  winv 2
   rw [toNat_toB256' hdl] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_sub s1
+  winv 4
   rw [show Bytes.toB256 [32] - Nat.toB256 0 = Nat.toB256 32 by decide] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_exp s1
+  winv 2
   rw [bexp_256_32] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_add s1
+  winv 2
   rw [show Bytes.toB256 onesPush + 0 = B256.max from ones_add_zero] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_not s1
+  winv 2
   rw [B256.not_max] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_or s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_mstore s1
+  winv 8
   simp only [b256_and_zero, b256_max_and, b256_or_zero, toNat_toB256' hdl, toBytes_read] at run
   exact ⟨_, run⟩
 
@@ -358,24 +326,9 @@ theorem ric_shaCall {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {c0 c1 v0 v1 : U
   have h40 : (Bytes.toB256 [0x40]).toNat = 64 := by decide
   have hd : (Nat.toB256 d).toNat = d := toNat_toB256' (by omega)
   unfold shaCallTree at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_mload s1
+  winv 2
   rw [h40, read_word hr 64 hfp, read_covered hs hn (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_sub s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_dup rfl s1
+  winv 15
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨w, G18, rfl⟩ := ri_gas s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   have e64 : Nat.toB256 d + Nat.toB256 64 - Nat.toB256 d = 64 := by
@@ -391,10 +344,7 @@ theorem ric_shaCall {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {c0 c1 v0 v1 : U
   rcases ri_staticcall_sha hnodeleg hwarm hpre hfork s1' with hfail | ⟨b', G19, hpost, rfl⟩
   · -- the failure flag: the first check's arm
     rw [St.self hfail rfl] at run
-    obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_iszero s2
-    obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_dup rfl s2
-    obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_iszero s2
-    obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s2
+    winv 4
     rw [show B256.eqCheck (B256.eqCheck (0 : B256) 0) 0 = 0 by decide] at run
     rcases ric_branch run with ⟨-, G24, run⟩ | ⟨hw, -⟩
     · exact (run.false_of_noOk hf1).elim
@@ -407,27 +357,15 @@ theorem ric_shaCall {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {c0 c1 v0 v1 : U
     rw [hsha, Mem.size_write_word_aligned (by omega) hd32]; omega
   have hfp' : (Bytes.writeAt img d sha).sliceD 64 32 0 = (Nat.toB256 d).toBytes := by
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega), hfp]
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_iszero s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_iszero s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s2
+  winv 4
   rw [show B256.eqCheck (B256.eqCheck (1 : B256) 0) 0 = 1 by decide] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G24, run⟩
   · exact absurd hw (by decide)
-  obtain ⟨G25, run⟩ := ric_dest run
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_pop s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_pop s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_pop s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_mload s2
+  winv 6
   rw [h40, read_word hr' 64 hfp', read_covered hs' hn (by omega)] at run
   obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_returndatasize s2
   rw [hpost.returnData, B256.length_toBytes] at run
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_lt s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_iszero s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G36, rfl⟩ := ri_push s2
+  winv 5
   have hlt : B256.ltCheck (Nat.toB256 32) (Bytes.toB256 [0x20]) = 0 := by
     rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, lt_toB256 (by norm_num only) (by norm_num only)]
     simp only [lt_self_iff_false, ↓reduceIte]
@@ -572,70 +510,46 @@ theorem ric_pack_sha {img : Bytes} {n f : Nat} {a bw : B256}
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega),
       Bytes.sliceD_writeAt_before _ _ _ _ _ (by omega), hfp]
   unfold pack2Tree at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h40, read_word hr 64 hfp, read_covered hs hn (by omega)] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (f + 32))
     (push20_add (by omega)) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 4
   rw [tf32, ← hM1] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (f + 64))
     (push20_add' rfl (by omega)) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 3
   rw [tf64, ← hM2] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (f + 96))
     (push20_add' rfl (by omega)) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 6
   rw [h40, read_word hr2 64 hfp2, read_covered hs2 (by omega) (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 96)
     (sub_toB256' (by omega) (by omega) (by omega)) (ri_sub s1)
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 64)
     (by decide) (ri_sub s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 2
   rw [tf, ← hM3] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 3
   rw [h40, ← hM4] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h40, read_word hr4 64 (packImg_word64 hf96), read_covered hs4 (by omega) (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 4
   rw [tf, read_word hr4 f (packImg_len hf96), read_covered hs4 (by omega) (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (f + 32))
     (push20_add (by omega)) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 4
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_sha (s := f + 32) (d := f + 96)
     (n := f + 96) hk hkC hf1 hwf4 hr4 hs4 (by omega) (by omega) (by omega) (by omega) (by omega)
     (by omega) (packImg_word64 hf96) (packImg_a hf96)

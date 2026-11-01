@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Callee.GetYLoop
 import Blanc.Lift.Curve3Pool.Callee.GetYD
+import Blanc.Lift.WalkInvKit
 
 /-!
 # `get_y` before its Newton loop, inverted
@@ -173,15 +174,11 @@ theorem ric_gyCoinTail (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 24) {j
         B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 (j + 1))) 0 :: gyCStk S) M' G')
         jmp r := by
   unfold gyCoinTail at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (w := Nat.toB256 0x420) rfl s1
+  winv 2
   obtain ⟨G3, run⟩ := ric_mloadF hF 23 (by decide) hj run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_add s1
+  winv 2
   rw [one_add_toB256 (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_dup (w := Nat.toB256 (j + 1)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup (w := Nat.toB256 0x420) rfl s1
+  winv 2
   obtain ⟨G8, M1, hF1, run⟩ := ric_mstoreF hF 23 (by decide) (by rw [hlen]; decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_dup (w := Nat.toB256 3) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_eq s1
@@ -224,15 +221,11 @@ theorem ric_gyAcc (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 24) {c s x 
       WordFrame M0 M' 0x140 ((ws.set 20 s').set 19 c') ∧
       SFunc.RunCut progYD sevm C (St b (gyCStk S) M' G') tail r := by
   unfold gyAcc at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_dup (w := Bytes.toB256 [0x03, 0xc0]) rfl s1
+  winv 3
   obtain ⟨G4, run⟩ := ric_mloadF hF 20 (by decide) hs run
   obtain ⟨G5, run⟩ := ric_pushMloadF hF 22 (by decide) hx run
   obtain ⟨ha1, G6, run⟩ := ric_vyAddT vyRevertT_noOk run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_dup (w := Bytes.toB256 [0x03, 0xc0]) rfl s1
+  winv 1
   obtain ⟨G8, M1, hF1, run⟩ := ric_mstoreF hF 20 (by decide) (by rw [hlen]; decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_pop s1
   have hc1 : (ws.set 20 (s + x))[19]? = some c := by rw [List.getElem?_set_ne (by decide)]; exact hc
@@ -288,9 +281,7 @@ theorem ric_gyTest {ws : List B256} (hF : WordFrame M0 M 0x140 ws) (hlen : ws.le
   obtain ⟨G1, run⟩ := ric_dest run
   obtain ⟨G2, run⟩ := ric_pushMloadF hF 0 (by decide) hi run
   obtain ⟨G3, run⟩ := ric_pushMloadF hF 23 (by decide) hk run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨hw, G7, run⟩ | ⟨hw, G7, run⟩
   · -- coin `i`: `_x = x`
     have heq := (eq_of_iszero_eqCheck_eq_zero hw).symm
@@ -303,9 +294,7 @@ theorem ric_gyTest {ws : List B256} (hF : WordFrame M0 M 0x140 ws) (hlen : ws.le
     obtain ⟨G8, run⟩ := ric_dest run
     obtain ⟨G9, run⟩ := ric_pushMloadF hF 1 (by decide) hj run
     obtain ⟨G10, run⟩ := ric_pushMloadF hF 23 (by decide) hk run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_xor s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_iszero s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_push s1
+    winv 3
     rcases ric_branch run with ⟨hw2, G14, run⟩ | ⟨hw2, G14, run⟩
     · -- neither: `_x = xp[k]`
       have hnj : j ≠ Nat.toB256 k := by
@@ -317,14 +306,10 @@ theorem ric_gyTest {ws : List B256} (hF : WordFrame M0 M 0x140 ws) (hlen : ws.le
       obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
       obtain ⟨d1, s1, run⟩ := ric_next run
       obtain ⟨G18, rfl⟩ := ri_dup (w := Nat.toB256 k) rfl s1
-      obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_lt s1
-      obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
+      winv 2
       rcases ric_branch run with ⟨-, G21, run⟩ | ⟨-, G21, run⟩
       · exact (ric_undefined run).elim
-      obtain ⟨G22, run⟩ := ric_dest run
-      obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s1
-      obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_mul s1
-      obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_add s1
+      winv 4
       obtain ⟨G26, run⟩ := ric_mloadF hF (3 + k) (gyXpAddr hk3) hxk run
       obtain ⟨G27, M1, hF1, run⟩ := ric_pushMstoreF hF 22 (by decide) (by rw [hlen]; decide) run
       obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_push s1
@@ -334,8 +319,7 @@ theorem ric_gyTest {ws : List B256} (hF : WordFrame M0 M 0x140 ws) (hlen : ws.le
       have hje : j = Nat.toB256 k := by
         have := eq_zero_of_iszero_ne_zero hw2
         exact ((B256.xor_eq_zero_iff _ _).mp this).symm
-      obtain ⟨G15, run⟩ := ric_dest run
-      obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
+      winv 2
       obtain ⟨G17, run⟩ := ric_jump hk3C hk3' run
       exact .inr (.inr ⟨hne, hje, G17, run⟩)
 

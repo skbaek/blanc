@@ -184,9 +184,7 @@ theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B25
 
   -- First to_little_endian_64 call (entry 25)
   unfold t_0535_c7 at run
-  winv 3
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_dup (w := gweiAmount sevm) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s
+  winv 5
   obtain ⟨G6, ⟨D, hcall1, run⟩ | ⟨D, hcall1, -⟩⟩ := ric_call (fs := prog) (k := 25) (by rfl) run
   · obtain ⟨M1, G7, rfl, hwf1, hr1, hs1⟩ := safe_to_little_endian_64_returned hcd wf_mem0 reads_mem0
       (by rw [mem0_size]) (by rw [mem0_size]) img0_fp (by rw [p80]) (by rw [p80]; omega)
@@ -196,20 +194,11 @@ theorem safe_guardsH {sevm : Sevm} {b : Devm} {sel rt sP wP pP pkL wcL sgL : B25
       rw [img1_fp, B256.toB256_toBytes]; decide
     -- t_0540_c7: topic, arguments, SLOAD, second call
     unfold t_0540_c7 at run
-    obtain ⟨G8, run⟩ := ric_dest run
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_swap (n := 0) rfl s
-    winv 2
+    winv 4
     have htopic : Bytes.toB256 [0x64, 0x9b, 0xbc, 0x62, 0xd0, 0xe3, 0x13, 0x42, 0xaf, 0xea, 0x4e, 0x5c, 0xd8, 0x2d, 0x40, 0x49, 0xe7, 0xe1, 0xee, 0x91, 0x2f, 0xc0, 0x88, 0x9a, 0xa7, 0x90, 0x80, 0x3b, 0xe3, 0x90, 0x38, 0xc5] = BeaconDeposit.depositEventTopic := by
       rw [BeaconDeposit.depositEventTopic_eq]; decide
     rw [htopic] at run
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_dup (w := pP) rfl s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_dup (w := (48 : B256)) rfl s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_dup (w := wP) rfl s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_dup (w := (32 : B256)) rfl s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_dup (w := Bytes.toB256 [0x80]) rfl s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_dup (w := sP) rfl s
-    obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_dup (w := (96 : B256)) rfl s
-    winv 2
+    winv 9
     have hslot : Bytes.toB256 [0x20] = solCountSlot := rfl
     rw [hslot] at run
     obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_sloadH hbal s

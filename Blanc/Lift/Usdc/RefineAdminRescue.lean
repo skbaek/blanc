@@ -2,6 +2,7 @@ import Blanc.Lift.Usdc.Impl.Check
 import Blanc.Lift.WalkCutKit
 import Blanc.Lift.ReachFirstExec
 import Blanc.Lift.Usdc.RefineAdminLedger
+import Blanc.Lift.WalkInvKit
 
 /-!
 # `rescueERC20` from the implementation's entry (U6f)
@@ -60,29 +61,15 @@ theorem rescue_facts (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
     rw [show Bytes.toB256 [0x00] = 0 from by decide, show (Bytes.toB256 [0xe0]).toNat = 224 from by decide]
     exact hsel.trans (by decide)
   unfold t_0000_c0 at run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_mstore s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_callvalue s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_dup rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_iszero s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
+  winv 7
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨hv, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_0010_c0 at run
-  replace run := ric_dest run; obtain ⟨_, run⟩ := run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_pop s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_calldatasize s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_lt s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
+  winv 6
   replace run := ric_branch run; rcases run with ⟨hl, _, run⟩ | ⟨-, _, run⟩
   swap; · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_001a_c0 at run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_calldataload s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_shr s; clear s
+  winv 4
   rw [hw] at run
   replace run := ric_gt_le (by decide) run; obtain ⟨_, run⟩ := run
   unfold t_002b_c0 at run
@@ -101,51 +88,17 @@ theorem rescue_facts (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   unfold t_013c_c0 at run
   replace run := ric_eq_hit (g := t_0d6d_c142) (by decide) rfl run; obtain ⟨_, run⟩ := run
   unfold t_0d6d_c142 at run
-  replace run := ric_dest run; obtain ⟨_, run⟩ := run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_dup rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_calldatasize s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sub s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_dup rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_lt s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_iszero s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
+  winv 11
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h1, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_0d83_c142 at run
-  replace run := ric_dest run; obtain ⟨_, run⟩ := run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_pop s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_dup rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_calldataload s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_dup rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_and s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_swap (n := 1) rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_dup rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_add s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_calldataload s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_swap (n := 1) rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_and s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_add s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_calldataload s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
+  winv 20
   replace run := ric_callRet (E := [4, 7, 12, 13, 34, 91, 114, 118, 119, 120, 121, 122, 123, 124]) (g := t_3402_c34) (by decide) (by decide) rfl run; obtain ⟨_, D, run, -⟩ := run
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_3402_c34 at run
-  replace run := ric_dest run; obtain ⟨_, run⟩ := run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
+  winv 2
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_and s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_caller s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_eq s; clear s
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
+  winv 5
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h2, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   exact ⟨B256.eq_of_eqCheck_ne_zero hv, len_of_checks hl h1, Blanc.Lift.Usdc.caller_of_eqCheck h2⟩

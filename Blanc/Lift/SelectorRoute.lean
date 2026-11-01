@@ -1,6 +1,7 @@
 import Blanc.Lift.ReachDispatch
 import Blanc.Lift.InvWalkWorld
 import Jaune.WordFacts
+import Blanc.Lift.WalkInvKit
 
 /-!
 # The route of a selector word through a solc binary-search dispatcher
@@ -187,12 +188,7 @@ theorem ric_cmp_eq_either {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B
         ∃ g G', fs[j]? = some g ∧ SFunc.RunCut fs sevm [] (St b (σ :: S) M G') g r) := by
   obtain ⟨d, hd, h⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_eq hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   cases h with
   | toZero d0 h k =>
       obtain ⟨-, hw, e⟩ := St.of_pop2 h
@@ -333,26 +329,7 @@ theorem SFunc.RunCut.headWord {fs : List SFunc} {sevm : Sevm} {C : List Nat} {t 
     · rename_i cond
       cases hw
       obtain ⟨_, h⟩ := ric_dest run
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_push hd
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_push hd
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_dup rfl hd
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_calldatasize hd
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_sub hd
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_push hd
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_dup rfl hd
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_lt hd
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_iszero hd
-      obtain ⟨d, hd, h⟩ := ric_next h
-      obtain ⟨_, rfl⟩ := ri_push hd
+      winv 10
       rcases ric_branch h with ⟨-, _, h'⟩ | ⟨nz, -⟩
       · exact (h'.false_of_noOk cond.2).elim
       · rw [← cond.1]

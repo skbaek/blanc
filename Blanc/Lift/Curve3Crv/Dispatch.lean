@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Crv.Spec
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.VyperDispatchExact
+import Blanc.Lift.WalkInvKit
 
 /-!
 # The dispatcher (entry 0 up to the thirteen bodies)
@@ -76,13 +77,9 @@ theorem test_inv {C : List Nat} {r : Seg} {G : Nat}
       ∃ G', SFunc.RunCut prog sevm C (St b [] Mv G') nxt r) := by
   obtain ⟨hs, hM⟩ := vyMem_mload_selector (sevm := sevm)
   unfold selTest at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_mload s1
+  winv 3
   rw [hs, hM] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨hw, G7, run⟩ | ⟨hw, G7, run⟩
   · left
     refine ⟨?_, G7, run⟩
@@ -99,11 +96,7 @@ theorem disp_prefix_inv {r : Seg} {G : Nat} (hcd : sevm.data.length < 2 ^ 256)
     (run : SFunc.RunCut prog sevm [] (St b [] Mem.empty G) t_0000_c0 r) :
     4 ≤ sevm.data.length ∧ ∃ G', SFunc.RunCut prog sevm [] (St b [] Mv G') test0 r := by
   unfold t_0000_c0 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_calldatasize s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
+  winv 5
   rcases ric_branch run with ⟨-, G6, run⟩ | ⟨hw, G6, run⟩
   · unfold t_0009_c0 at run
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1

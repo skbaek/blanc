@@ -46,9 +46,7 @@ theorem safe_insertDeadH_of_rules {sevm : Sevm} {b : Devm} {sz nd : B256} {R : L
     rfl
   -- t_0f6e_c23: the head test
   unfold t_0f6e_c23 at run
-  winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  winv 3
+  winv 6
   have hh32 : h < 32 := by
     rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G7, run'⟩
     · by_contra hge
@@ -78,19 +76,14 @@ theorem safe_insertDeadH_of_rules {sevm : Sevm} {b : Devm} {sz nd : B256} {R : L
   swap; · exact absurd hw (by decide)
   -- t_0f78_c23: the bit test
   unfold t_0f78_c23 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := sz) rfl s1
-  winv 6
+  winv 7
   rw [hbit, show B256.eqCheck (Bytes.toB256 [0x01]) 0 = 0 by decide,
     show B256.eqCheck (0 : B256) 0 = 1 by decide] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, _, run⟩
   · exact absurd hw (by decide)
   -- t_0fa0_c23: the bounds check
   unfold t_0fa0_c23 at run
-  winv 3
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  winv 2
+  winv 8
   rw [hlt] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, _, run⟩
   · exact absurd hw (by decide)
@@ -163,9 +156,7 @@ theorem safe_insertLiveH {sevm : Sevm} {b : Devm}
     rfl
   -- t_0f6e_c23: the head test
   unfold t_0f6e_c23 at run
-  winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  winv 3
+  winv 6
   have hh32 : h < 32 := by
     rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G7, run'⟩
     · by_contra hge
@@ -190,20 +181,14 @@ theorem safe_insertLiveH {sevm : Sevm} {b : Devm}
   swap; · exact absurd hw (by decide)
   -- t_0f78_c23: the bit test
   unfold t_0f78_c23 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_dup (w := sz) rfl s1
-  winv 6
+  winv 7
   rw [hbit, show B256.eqCheck (Bytes.toB256 [0x01]) 1 = 1 by decide,
     show B256.eqCheck (1 : B256) 0 = 0 by decide] at run
   rcases ric_branch run with ⟨-, G15, run⟩ | ⟨hw, -⟩
   swap; · exact absurd hw (by decide)
   -- t_0f84_c23: the bounds check
   unfold t_0f84_c23 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_dup (w := nd) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_dup (w := Nat.toB256 h) rfl s1
-  winv 2
+  winv 7
   rw [hlt] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G23, run⟩
   · exact absurd hw (by decide)
@@ -217,9 +202,7 @@ theorem safe_insertLiveH {sevm : Sevm} {b : Devm}
     exact (B256.toNat_toB256_of_lt (by omega)).symm
   rw [hkey] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_sstoreH hsg hbal s1
-  winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_swap (n := 5) rfl s1
-  winv 6
+  winv 9
   obtain ⟨G36, run⟩ := ric_jump (k := 21) (by decide) rfl run
   unfold t_10ac_c21 at run
   winv 8

@@ -59,9 +59,7 @@ theorem pair_fee_decoder_tail_invH {sevm : Sevm} {b : Devm} {R : List B256}
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push hs
   rw [show Bytes.toB256 [0x0b] = (11 : B256) from by decide] at run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup (w := w) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 3
   rw [B256.and_comm w, ff20_and_word] at run
   winv 4
   dsimp only [List.set] at run
