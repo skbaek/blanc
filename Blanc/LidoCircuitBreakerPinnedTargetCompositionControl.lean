@@ -178,25 +178,20 @@ private theorem stubPauseWorld_target_not_precompile :
 Small `rfl`-or-split lemmas for reading fields through the tower layers the
 composition threads. -/
 
-/-- Both arms of `temporalSloadBase` return the base world with at most the
+/-- Both arms of `afterSload` return the base world with at most the
 accessed-key set changed, so the error, output, accessed-address and code
 fields all pass through; the named projections below read this one case
 split. -/
-theorem temporalSloadBase_carriers (sevm : Sevm) (base : Devm)
+theorem afterSload_carriers (sevm : Sevm) (base : Devm)
     (key : B256) :
-    (temporalSloadBase sevm base key).error = base.error ∧
-      (temporalSloadBase sevm base key).output = base.output ∧
-      (temporalSloadBase sevm base key).accessedAddresses =
+    (afterSload sevm base key).error = base.error ∧
+      (afterSload sevm base key).output = base.output ∧
+      (afterSload sevm base key).accessedAddresses =
         base.accessedAddresses ∧
-      ∀ a : Adr, (temporalSloadBase sevm base key).getCode a =
+      ∀ a : Adr, (afterSload sevm base key).getCode a =
         base.getCode a := by
-  unfold temporalSloadBase
+  unfold afterSload
   split <;> exact ⟨rfl, rfl, rfl, fun _ => rfl⟩
-
-private theorem temporalSloadBase_accessedAddresses (sevm : Sevm) (base : Devm)
-    (key : B256) : (temporalSloadBase sevm base key).accessedAddresses =
-      base.accessedAddresses :=
-  (temporalSloadBase_carriers sevm base key).2.2.1
 
 private theorem keyPairNe {a₁ a₂ : Adr} {k₁ k₂ : B256} (h : k₂ ≠ k₁) :
     (a₁, k₁) ≠ (a₂, k₂) := fun hp => h (congrArg Prod.snd hp).symm
@@ -204,34 +199,34 @@ private theorem keyPairNe {a₁ a₂ : Adr} {k₁ k₂ : B256} (h : k₂ ≠ k�
 /-! ## The accessed-key set, stage by stage
 
 The row-19 walk enters with both accessed sets empty, so each
-`temporalSloadBase` layer resolves to its cold arm and the accessed-key set
+`afterSload` layer resolves to its cold arm and the accessed-key set
 grows by exactly the read key.  These shapes are what the cold cost equations
 below read off; every non-membership is settled by slot separation, never by
 deciding a `HashSet`. -/
 
 
-private theorem temporalSloadBase_keys (sevm : Sevm) (base : Devm)
+private theorem afterSload_keys (sevm : Sevm) (base : Devm)
     (key : B256) :
-    (temporalSloadBase sevm base key).accessedStorageKeys =
+    (afterSload sevm base key).accessedStorageKeys =
       if (sevm.currentTarget, key) ∈ base.accessedStorageKeys
         then base.accessedStorageKeys
         else base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
-  unfold temporalSloadBase
+  unfold afterSload
   split <;> rfl
 
-theorem temporalSloadBase_cold_keys (sevm : Sevm) (base : Devm)
+theorem afterSload_cold_keys (sevm : Sevm) (base : Devm)
     (key : B256)
     (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
-    (temporalSloadBase sevm base key).accessedStorageKeys =
+    (afterSload sevm base key).accessedStorageKeys =
       base.accessedStorageKeys.insert (sevm.currentTarget, key) := by
-  rw [temporalSloadBase_keys, ite_eq_right h]
+  rw [afterSload_keys, ite_eq_right h]
 
 private theorem stubRunKeys_expiryBase :
     (pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256).accessedStorageKeys =
     Std.HashSet.emptyWithCapacity.insert
       (configWorldOwner, assignmentSlot pauseWorldCallee.toB256) := by
-  unfold pauseExpiryBase temporalSloadBase
+  unfold pauseExpiryBase afterSload
   rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget,
       assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost stubPauseWorldSevm stubPauseWorldPre).accessedStorageKeys from
@@ -253,7 +248,7 @@ private theorem stubRunKeys_durationBase :
       Prod.mk.injEq, not_and]
     intro _
     exact pauseWorld_assignCallee_ne_expiry
-  unfold pauseDurationBase temporalSloadBase
+  unfold pauseDurationBase afterSload
   rw [ite_eq_right hnot]
   show ((pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre
     pauseWorldCallee.toB256).accessedStorageKeys).insert
@@ -278,7 +273,7 @@ private theorem stubRunKeys_kernelBase :
     refine ⟨fun _ => ?_, fun _ => ?_⟩
     · exact pauseWorld_duration_ne_expiry.symm
     · exact pauseWorld_duration_ne_assignCallee.symm
-  unfold pauseKernelBase temporalSloadBase
+  unfold pauseKernelBase afterSload
   rw [ite_eq_right hnot]
   show ((pauseDurationBase stubPauseWorldSevm stubPauseWorldPre
     pauseWorldCallee.toB256 pauseWorldPauser).accessedStorageKeys).insert
@@ -304,12 +299,12 @@ private theorem stubRunKeys_assignPost :
   show (assignmentBase stubPauseWorldSevm (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser)
     pauseWorldCallee.toB256).accessedStorageKeys = _
-  unfold assignmentBase temporalSloadBase
+  unfold assignmentBase afterSload
   rw [ite_eq_left stubRunWarm_assign_kernelBase]
   exact stubRunKeys_kernelBase
 
 private theorem stubRunKeys_countBase :
-    (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser)).accessedStorageKeys = ((((Std.HashSet.emptyWithCapacity.insert
@@ -329,7 +324,7 @@ private theorem stubRunKeys_countBase :
     · exact pauseWorld_duration_ne_count
     · exact pauseWorld_count_ne_expiry.symm
     · exact pauseWorld_assignCallee_ne_count
-  unfold temporalSloadBase
+  unfold afterSload
   rw [ite_eq_right hnot]
   show ((assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
@@ -339,7 +334,7 @@ private theorem stubRunKeys_countBase :
   rfl
 
 private theorem stubRunKeys_removeBase1 :
-    (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -351,12 +346,12 @@ private theorem stubRunKeys_removeBase1 :
       (configWorldOwner, countSlot pauseWorldPauser)).insert
       (configWorldOwner, indexSlot pauseWorldCallee.toB256)) := by
   have hnot : (stubPauseWorldSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
-      (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
       (countSlot pauseWorldPauser) 0).accessedStorageKeys := by
-    show _ ∉ (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show _ ∉ (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser)).accessedStorageKeys
@@ -369,8 +364,8 @@ private theorem stubRunKeys_removeBase1 :
     · exact pauseWorld_duration_ne_indexCallee
     · exact pauseWorld_indexCallee_ne_expiry.symm
     · exact pauseWorld_assignCallee_ne_indexCallee
-  rw [temporalSloadBase_cold_keys _ _ _ hnot]
-  show ((temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+  rw [afterSload_cold_keys _ _ _ hnot]
+  show ((afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser)).accessedStorageKeys).insert
@@ -379,7 +374,7 @@ private theorem stubRunKeys_removeBase1 :
   rfl
 
 private theorem stubRunKeys_removeBase2 :
-    (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -393,7 +388,7 @@ private theorem stubRunKeys_removeBase2 :
       (configWorldOwner, indexSlot pauseWorldCallee.toB256)).insert
       (configWorldOwner, arrayLengthSlot)) := by
   have hnot : (stubPauseWorldSevm.currentTarget, arrayLengthSlot) ∉
-      (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -409,11 +404,11 @@ private theorem stubRunKeys_removeBase2 :
     · exact pauseWorld_duration_ne_length
     · exact pauseWorld_length_ne_expiry.symm
     · exact pauseWorld_length_ne_assignCallee.symm
-  rw [temporalSloadBase_cold_keys _ _ _ hnot, stubRunKeys_removeBase1]
+  rw [afterSload_cold_keys _ _ _ hnot, stubRunKeys_removeBase1]
   rfl
 
 private theorem stubRunKeys_removeBase3 :
-    (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -429,7 +424,7 @@ private theorem stubRunKeys_removeBase3 :
       (configWorldOwner, arrayLengthSlot)).insert
       (configWorldOwner, arrayEntrySlot 1)) := by
   have hnot : (stubPauseWorldSevm.currentTarget, arrayEntrySlot 1) ∉
-      (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -448,7 +443,7 @@ private theorem stubRunKeys_removeBase3 :
     · exact pauseWorld_duration_ne_entryOne
     · exact pauseWorld_entryOne_ne_expiry.symm
     · exact pauseWorld_entryOne_ne_assignCallee.symm
-  rw [temporalSloadBase_cold_keys _ _ _ hnot, stubRunKeys_removeBase2]
+  rw [afterSload_cold_keys _ _ _ hnot, stubRunKeys_removeBase2]
   rfl
 
 /-! ## One-layer projection helpers -/
@@ -463,19 +458,19 @@ private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
 /-! ## The cold and warm charges, resolved at the row-19 world -/
 
 private theorem stubRunCost_assignment :
-    temporalSloadCost stubPauseWorldSevm (pauseLockPost stubPauseWorldSevm stubPauseWorldPre)
+    sloadCost stubPauseWorldSevm (pauseLockPost stubPauseWorldSevm stubPauseWorldPre)
       (assignmentSlot pauseWorldCallee.toB256) = 2100 := by
-  unfold temporalSloadCost
+  unfold sloadCost
   rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, assignmentSlot pauseWorldCallee.toB256) ∉
     (pauseLockPost stubPauseWorldSevm stubPauseWorldPre).accessedStorageKeys from
     Std.HashSet.not_mem_emptyWithCapacity)]
   rfl
 
 private theorem stubRunCost_expiry :
-    temporalSloadCost stubPauseWorldSevm
+    sloadCost stubPauseWorldSevm
       (pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256)
       (expirySlot pauseWorldPauser) = 2100 := by
-  unfold temporalSloadCost
+  unfold sloadCost
   rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) ∉
       (pauseExpiryBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256).accessedStorageKeys from by
     rw [stubRunKeys_expiryBase]
@@ -487,10 +482,10 @@ private theorem stubRunCost_expiry :
   rfl
 
 private theorem stubRunCost_duration :
-    temporalSloadCost stubPauseWorldSevm
+    sloadCost stubPauseWorldSevm
       (pauseDurationBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256 pauseWorldPauser)
       pauseDurationSlot = 2100 := by
-  unfold temporalSloadCost
+  unfold sloadCost
   rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, pauseDurationSlot) ∉
       (pauseDurationBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256
         pauseWorldPauser).accessedStorageKeys from by
@@ -504,19 +499,19 @@ private theorem stubRunCost_duration :
   rfl
 
 private theorem stubRunCost_assignWarm :
-    temporalSloadCost stubPauseWorldSevm (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
+    sloadCost stubPauseWorldSevm (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser)
       (assignmentSlot pauseWorldCallee.toB256) = 100 := by
-  unfold temporalSloadCost
+  unfold sloadCost
   rw [ite_eq_left stubRunWarm_assign_kernelBase]
   rfl
 
 private theorem stubRunCost_countCold :
-    temporalSloadCost stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    sloadCost stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser) = 2100 := by
-  unfold temporalSloadCost
+  unfold sloadCost
   rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, countSlot pauseWorldPauser) ∉
       (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
@@ -532,20 +527,20 @@ private theorem stubRunCost_countCold :
   rfl
 
 private theorem stubRunCost_idxCold :
-    temporalSloadCost stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    sloadCost stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
       (countSlot pauseWorldPauser) 0)
       (indexSlot pauseWorldCallee.toB256) = 2100 := by
-  unfold temporalSloadCost
+  unfold sloadCost
   rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, indexSlot pauseWorldCallee.toB256) ∉
-      (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
       (countSlot pauseWorldPauser) 0).accessedStorageKeys from by
-    show _ ∉ (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show _ ∉ (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser)).accessedStorageKeys
@@ -561,16 +556,16 @@ private theorem stubRunCost_idxCold :
   rfl
 
 private theorem stubRunCost_lenCold :
-    temporalSloadCost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    sloadCost stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
       (countSlot pauseWorldPauser) 0)
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot = 2100 := by
-  unfold temporalSloadCost
+  unfold sloadCost
   rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, arrayLengthSlot) ∉
-      (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -589,7 +584,7 @@ private theorem stubRunCost_lenCold :
   rfl
 
 private theorem stubRunCost_arrCold :
-    temporalSloadCost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    sloadCost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -597,9 +592,9 @@ private theorem stubRunCost_arrCold :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1) = 2100 := by
-  unfold temporalSloadCost
+  unfold sloadCost
   rw [ite_eq_right (show (stubPauseWorldSevm.currentTarget, arrayEntrySlot 1) ∉
-      (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -622,7 +617,7 @@ private theorem stubRunCost_arrCold :
 
 private theorem stubRunWarm_count_rb3 :
     (stubPauseWorldSevm.currentTarget, countSlot pauseWorldPauser) ∈
-      (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -637,7 +632,7 @@ private theorem stubRunWarm_count_rb3 :
 
 private theorem stubRunWarm_expiry_rb3 :
     (stubPauseWorldSevm.currentTarget, expirySlot pauseWorldPauser) ∈
-      (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -666,8 +661,8 @@ private theorem stubRunStor_kernelBase (key : B256) :
     (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser).getStorVal configWorldOwner key = pauseLastWorldStor.get key := by
   unfold pauseKernelBase pauseDurationBase pauseExpiryBase
-  rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-    temporalSloadBase_getStorVal]
+  rw [afterSload_getStorVal, afterSload_getStorVal,
+    afterSload_getStorVal]
   exact stubRunStor_lockPost key
 
 private theorem stubRunStor_assignPost_other {key : B256}
@@ -678,24 +673,24 @@ private theorem stubRunStor_assignPost_other {key : B256}
   unfold assignmentPost
   rw [temporalSstorePost_other _ _ _ _ _ _ (keyPairNe h)]
   unfold assignmentBase
-  rw [temporalSloadBase_getStorVal]
+  rw [afterSload_getStorVal]
   exact stubRunStor_kernelBase key
 
 
 private theorem stubRunStor_countPost_other {key : B256}
     (ha : assignmentSlot pauseWorldCallee.toB256 ≠ key)
     (hc : countSlot pauseWorldPauser ≠ key) :
-    (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
       (countSlot pauseWorldPauser) 0).getStorVal configWorldOwner key = pauseLastWorldStor.get key := by
   rw [temporalSstorePost_other _ _ _ _ _ _ (keyPairNe hc),
-    temporalSloadBase_getStorVal]
+    afterSload_getStorVal]
   exact stubRunStor_assignPost_other ha
 
 private theorem stubRunStor_countPost_count :
-    (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -705,7 +700,7 @@ private theorem stubRunStor_countPost_count :
 private theorem stubRunStor_removeBase3_other {key : B256}
     (ha : assignmentSlot pauseWorldCallee.toB256 ≠ key)
     (hc : countSlot pauseWorldPauser ≠ key) :
-    (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -713,12 +708,12 @@ private theorem stubRunStor_removeBase3_other {key : B256}
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)).getStorVal configWorldOwner key = pauseLastWorldStor.get key := by
-  rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-    temporalSloadBase_getStorVal]
+  rw [afterSload_getStorVal, afterSload_getStorVal,
+    afterSload_getStorVal]
   exact stubRunStor_countPost_other ha hc
 
 private theorem stubRunStor_removeBase3_count :
-    (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -726,8 +721,8 @@ private theorem stubRunStor_removeBase3_count :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)).getStorVal configWorldOwner (countSlot pauseWorldPauser) = 0 := by
-  rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-    temporalSloadBase_getStorVal]
+  rw [afterSload_getStorVal, afterSload_getStorVal,
+    afterSload_getStorVal]
   exact stubRunStor_countPost_count
 
 /-! The five removal-walk writes, peeled from the outside of `B6`:
@@ -741,7 +736,7 @@ private theorem stubRunStor_B6_other {key : B256}
     (hr : arrayEntrySlot 1 ≠ key)
     (hi : indexSlot pauseWorldCallee.toB256 ≠ key)
     (hl : arrayLengthSlot ≠ key) :
-    (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -749,7 +744,7 @@ private theorem stubRunStor_B6_other {key : B256}
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner key = pauseLastWorldStor.get key := by
-  rw [show (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+  rw [show (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -757,7 +752,7 @@ private theorem stubRunStor_B6_other {key : B256}
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost stubPauseWorldSevm
-      (lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -766,14 +761,14 @@ private theorem stubRunStor_B6_other {key : B256}
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
     temporalSstorePost_other _ _ _ _ _ _ (keyPairNe hi),
-    show lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
       (countSlot pauseWorldPauser) 0)
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -783,7 +778,7 @@ private theorem stubRunStor_B6_other {key : B256}
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1)
       arrayLengthSlot 0 from rfl,
     temporalSstorePost_other _ _ _ _ _ _ (keyPairNe hl),
-    show (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -791,7 +786,7 @@ private theorem stubRunStor_B6_other {key : B256}
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) = temporalSstorePost stubPauseWorldSevm
-      (indexWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (indexWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -800,7 +795,7 @@ private theorem stubRunStor_B6_other {key : B256}
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (arrayEntrySlot 1) 0 from rfl,
     temporalSstorePost_other _ _ _ _ _ _ (keyPairNe hr),
-    show indexWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show indexWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -808,7 +803,7 @@ private theorem stubRunStor_B6_other {key : B256}
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost stubPauseWorldSevm
-      (entryWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (entryWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -817,7 +812,7 @@ private theorem stubRunStor_B6_other {key : B256}
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (indexSlot pauseWorldCallee.toB256) 1 from rfl,
     temporalSstorePost_other _ _ _ _ _ _ (keyPairNe hi),
-    show entryWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show entryWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -825,7 +820,7 @@ private theorem stubRunStor_B6_other {key : B256}
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost stubPauseWorldSevm
-      (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -837,7 +832,7 @@ private theorem stubRunStor_B6_other {key : B256}
   exact stubRunStor_removeBase3_other ha hc
 
 private theorem stubRunStor_B6_count :
-    (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -845,7 +840,7 @@ private theorem stubRunStor_B6_count :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getStorVal configWorldOwner (countSlot pauseWorldPauser) = 0 := by
-  rw [show (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+  rw [show (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -853,7 +848,7 @@ private theorem stubRunStor_B6_count :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost stubPauseWorldSevm
-      (lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -863,14 +858,14 @@ private theorem stubRunStor_B6_count :
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
     temporalSstorePost_other _ _ _ _ _ _
       (keyPairNe pauseWorld_indexCallee_ne_count),
-    show lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
       (countSlot pauseWorldPauser) 0)
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -881,7 +876,7 @@ private theorem stubRunStor_B6_count :
       arrayLengthSlot 0 from rfl,
     temporalSstorePost_other _ _ _ _ _ _
       (keyPairNe pauseWorld_length_ne_count),
-    show (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -889,7 +884,7 @@ private theorem stubRunStor_B6_count :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) = temporalSstorePost stubPauseWorldSevm
-      (indexWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (indexWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -899,7 +894,7 @@ private theorem stubRunStor_B6_count :
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (arrayEntrySlot 1) 0 from rfl,
     temporalSstorePost_other _ _ _ _ _ _
       (keyPairNe pauseWorld_entryOne_ne_count),
-    show indexWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show indexWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -907,7 +902,7 @@ private theorem stubRunStor_B6_count :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost stubPauseWorldSevm
-      (entryWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (entryWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -917,7 +912,7 @@ private theorem stubRunStor_B6_count :
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (indexSlot pauseWorldCallee.toB256) 1 from rfl,
     temporalSstorePost_other _ _ _ _ _ _
       (keyPairNe pauseWorld_indexCallee_ne_count),
-    show entryWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show entryWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -925,7 +920,7 @@ private theorem stubRunStor_B6_count :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost stubPauseWorldSevm
-      (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1224,14 +1219,9 @@ theorem temporalSstorePost_getCode (sevm : Sevm) (base : Devm)
   rw [Devm.setStorVal_getCode]
   rfl
 
-private theorem temporalSloadBase_getCode (sevm : Sevm) (base : Devm)
-    (key : B256) (a : Adr) :
-    (temporalSloadBase sevm base key).getCode a = base.getCode a :=
-  (temporalSloadBase_carriers sevm base key).2.2.2 a
-
 
 private theorem stubRunAddrs_B7 :
-    ((indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    ((indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1242,7 +1232,7 @@ private theorem stubRunAddrs_B7 :
       ⟨stubPauseWorldSevm.currentTarget,
       [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩).accessedAddresses = Std.HashSet.emptyWithCapacity := by
   rw [Devm.addLog_accessedAddresses,
-    show (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1250,7 +1240,7 @@ private theorem stubRunAddrs_B7 :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost stubPauseWorldSevm
-      (lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1259,14 +1249,14 @@ private theorem stubRunAddrs_B7 :
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
     temporalSstorePost_accessedAddresses,
-    show lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
       (countSlot pauseWorldPauser) 0)
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1276,7 +1266,7 @@ private theorem stubRunAddrs_B7 :
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1)
       arrayLengthSlot 0 from rfl,
     temporalSstorePost_accessedAddresses,
-    show (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1284,7 +1274,7 @@ private theorem stubRunAddrs_B7 :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) = temporalSstorePost stubPauseWorldSevm
-      (indexWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (indexWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1293,7 +1283,7 @@ private theorem stubRunAddrs_B7 :
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (arrayEntrySlot 1) 0 from rfl,
     temporalSstorePost_accessedAddresses,
-    show indexWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show indexWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1301,7 +1291,7 @@ private theorem stubRunAddrs_B7 :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost stubPauseWorldSevm
-      (entryWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (entryWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1310,7 +1300,7 @@ private theorem stubRunAddrs_B7 :
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (indexSlot pauseWorldCallee.toB256) 1 from rfl,
     temporalSstorePost_accessedAddresses,
-    show entryWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show entryWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1318,7 +1308,7 @@ private theorem stubRunAddrs_B7 :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost stubPauseWorldSevm
-      (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1327,22 +1317,22 @@ private theorem stubRunAddrs_B7 :
       arrayLengthSlot)
       (arrayEntrySlot 1)) (arrayEntrySlot 1) pauseWorldCallee.toB256 from rfl,
     temporalSstorePost_accessedAddresses,
-    temporalSloadBase_accessedAddresses, temporalSloadBase_accessedAddresses,
-    temporalSloadBase_accessedAddresses, temporalSstorePost_accessedAddresses,
-    temporalSloadBase_accessedAddresses]
+    afterSload_accessedAddresses, afterSload_accessedAddresses,
+    afterSload_accessedAddresses, temporalSstorePost_accessedAddresses,
+    afterSload_accessedAddresses]
   show (assignmentPost stubPauseWorldSevm
     (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).accessedAddresses = _
   unfold assignmentPost
   rw [temporalSstorePost_accessedAddresses]
   unfold assignmentBase
-  rw [temporalSloadBase_accessedAddresses]
+  rw [afterSload_accessedAddresses]
   unfold pauseKernelBase pauseDurationBase pauseExpiryBase
-  rw [temporalSloadBase_accessedAddresses,
-    temporalSloadBase_accessedAddresses, temporalSloadBase_accessedAddresses]
+  rw [afterSload_accessedAddresses,
+    afterSload_accessedAddresses, afterSload_accessedAddresses]
   rfl
 
 private theorem stubRunCode_B7 :
-    ((indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    ((indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1352,7 +1342,7 @@ private theorem stubRunCode_B7 :
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).addLog
       ⟨stubPauseWorldSevm.currentTarget,
       [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩).getCode pauseWorldCallee.toB256.toAdr = PinnedTargetControl.stubCode := by
-  rw [show ((indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+  rw [show ((indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1361,7 +1351,7 @@ private theorem stubRunCode_B7 :
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).addLog
       ⟨stubPauseWorldSevm.currentTarget,
-      [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩).getCode pauseWorldCallee.toB256.toAdr = (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      [pauserSetEvent, pauseWorldCallee.toB256, pauseWorldPauser, 0], []⟩).getCode pauseWorldCallee.toB256.toAdr = (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1369,7 +1359,7 @@ private theorem stubRunCode_B7 :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0).getCode pauseWorldCallee.toB256.toAdr from rfl,
-    show (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show (indexClearPost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1377,7 +1367,7 @@ private theorem stubRunCode_B7 :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) pauseWorldCallee.toB256 0) = temporalSstorePost stubPauseWorldSevm
-      (lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1386,14 +1376,14 @@ private theorem stubRunCode_B7 :
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0) (indexSlot pauseWorldCallee.toB256) 0 from rfl,
     temporalSstorePost_getCode,
-    show lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show lengthWritePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
       (countSlot pauseWorldPauser) 0)
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
-      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) 0 = temporalSstorePost stubPauseWorldSevm (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1403,7 +1393,7 @@ private theorem stubRunCode_B7 :
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1)
       arrayLengthSlot 0 from rfl,
     temporalSstorePost_getCode,
-    show (entryClearPost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show (entryClearPost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1411,7 +1401,7 @@ private theorem stubRunCode_B7 :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) = temporalSstorePost stubPauseWorldSevm
-      (indexWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (indexWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1420,7 +1410,7 @@ private theorem stubRunCode_B7 :
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (arrayEntrySlot 1) 0 from rfl,
     temporalSstorePost_getCode,
-    show indexWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show indexWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1428,7 +1418,7 @@ private theorem stubRunCode_B7 :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost stubPauseWorldSevm
-      (entryWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (entryWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1437,7 +1427,7 @@ private theorem stubRunCode_B7 :
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1) (indexSlot pauseWorldCallee.toB256) 1 from rfl,
     temporalSstorePost_getCode,
-    show entryWritePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+    show entryWritePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1445,7 +1435,7 @@ private theorem stubRunCode_B7 :
       (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
       (arrayEntrySlot 1)) pauseWorldCallee.toB256 1 = temporalSstorePost stubPauseWorldSevm
-      (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (temporalSloadBase stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (afterSload stubPauseWorldSevm (temporalSstorePost stubPauseWorldSevm (afterSload stubPauseWorldSevm (assignmentPost stubPauseWorldSevm
       (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre
       pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
@@ -1454,19 +1444,19 @@ private theorem stubRunCode_B7 :
       arrayLengthSlot)
       (arrayEntrySlot 1)) (arrayEntrySlot 1) pauseWorldCallee.toB256 from rfl,
     temporalSstorePost_getCode,
-    temporalSloadBase_getCode, temporalSloadBase_getCode,
-    temporalSloadBase_getCode, temporalSstorePost_getCode,
-    temporalSloadBase_getCode]
+    afterSload_getCode, afterSload_getCode,
+    afterSload_getCode, temporalSstorePost_getCode,
+    afterSload_getCode]
   show (assignmentPost stubPauseWorldSevm
     (pauseKernelBase stubPauseWorldSevm stubPauseWorldPre pauseWorldCallee.toB256 pauseWorldPauser) pauseWorldCallee.toB256 0).getCode pauseWorldCallee.toB256.toAdr =
     PinnedTargetControl.stubCode
   unfold assignmentPost
   rw [temporalSstorePost_getCode]
   unfold assignmentBase
-  rw [temporalSloadBase_getCode]
+  rw [afterSload_getCode]
   unfold pauseKernelBase pauseDurationBase pauseExpiryBase
-  rw [temporalSloadBase_getCode, temporalSloadBase_getCode,
-    temporalSloadBase_getCode]
+  rw [afterSload_getCode, afterSload_getCode,
+    afterSload_getCode]
   show stubPauseWorldPre.state.getCode pauseWorldCallee.toB256.toAdr = PinnedTargetControl.stubCode
   rw [show pauseWorldCallee.toB256.toAdr = pauseWorldCallee from by decide]
   exact stubPauseWorld_targetCodeAt
@@ -1542,16 +1532,16 @@ private def stubRunKernelBase : Devm :=
 
 private def stubRunCountPost : Devm :=
   temporalSstorePost stubPauseWorldSevm
-    (temporalSloadBase stubPauseWorldSevm
+    (afterSload stubPauseWorldSevm
       (assignmentPost stubPauseWorldSevm stubRunKernelBase
         pauseWorldCallee.toB256 0)
       (countSlot pauseWorldPauser))
     (countSlot pauseWorldPauser) 0
 
 private def stubRunRemoveBase3 : Devm :=
-  temporalSloadBase stubPauseWorldSevm
-    (temporalSloadBase stubPauseWorldSevm
-      (temporalSloadBase stubPauseWorldSevm stubRunCountPost
+  afterSload stubPauseWorldSevm
+    (afterSload stubPauseWorldSevm
+      (afterSload stubPauseWorldSevm stubRunCountPost
         (indexSlot pauseWorldCallee.toB256))
       arrayLengthSlot)
     (arrayEntrySlot 1)
@@ -1650,17 +1640,17 @@ private theorem stubRunAfterSetBase_targetPausedZero :
     temporalSstorePost_getStorVal_otherAddress _ _ _ _ _ _ haddr,
     temporalSstorePost_getStorVal_otherAddress _ _ _ _ _ _ haddr]
   unfold stubRunRemoveBase3
-  rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-    temporalSloadBase_getStorVal]
+  rw [afterSload_getStorVal, afterSload_getStorVal,
+    afterSload_getStorVal]
   unfold stubRunCountPost
   rw [temporalSstorePost_getStorVal_otherAddress _ _ _ _ _ _ haddr,
-    temporalSloadBase_getStorVal]
+    afterSload_getStorVal]
   unfold assignmentPost
   rw [temporalSstorePost_getStorVal_otherAddress _ _ _ _ _ _ haddr]
   unfold assignmentBase stubRunKernelBase pauseKernelBase pauseDurationBase
     pauseExpiryBase
-  rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
-    temporalSloadBase_getStorVal, temporalSloadBase_getStorVal]
+  rw [afterSload_getStorVal, afterSload_getStorVal,
+    afterSload_getStorVal, afterSload_getStorVal]
   rw [show pauseWorldCallee.toB256.toAdr = pauseWorldCallee from by decide]
   exact stubPauseWorld_targetPausedZero
 
@@ -1822,8 +1812,8 @@ private theorem stubPauseWorld_getOrigStorVal (key : B256) :
   rw [stubPauseWorldState_get_breaker]
 
 private theorem stubWorld_sload_created (sevm : Sevm) (b : Devm) (k : B256) :
-    (temporalSloadBase sevm b k).createdAccounts = b.createdAccounts := by
-  unfold temporalSloadBase
+    (afterSload sevm b k).createdAccounts = b.createdAccounts := by
+  unfold afterSload
   split <;> rfl
 
 private theorem stubWorld_sstore_created (sevm : Sevm) (b : Devm) (k v : B256) :
@@ -1911,7 +1901,7 @@ private theorem stubPauseWorld_successSuffix :
           from by rw [stubRunMem_size8]))
     stubPauseWorld_callerWord hmidCount
     (by
-      unfold temporalSloadCost
+      unfold sloadCost
       rw [ite_eq_left hwarmCount]
       rfl)
     hmidExpiry
@@ -2071,13 +2061,13 @@ private theorem stubPauseWorld_productionRun :
     stubRunCost_assignment
     (by
       unfold pauseExpiryBase
-      rw [temporalSloadBase_getStorVal]
+      rw [afterSload_getStorVal]
       exact (stubRunStor_lockPost _).trans pauseLastStor_expiry)
     stubRunCost_expiry
     (by decide)
     (by
       unfold pauseDurationBase pauseExpiryBase
-      rw [temporalSloadBase_getStorVal, temporalSloadBase_getStorVal]
+      rw [afterSload_getStorVal, afterSload_getStorVal]
       exact (stubRunStor_lockPost _).trans pauseLastStor_duration)
     stubRunCost_duration rfl hker
   rw [show (93123 + (469 + 2100 + 2100 + 2100) : Nat) = 99892 from by
@@ -2117,7 +2107,7 @@ private theorem stubPauseWorldAfterSetEntry_ownerCode :
       lengthWritePost, indexWritePost, entryWritePost, assignmentPost,
       assignmentBase, pauseKernelBase, pauseDurationBase, pauseExpiryBase,
       pauseLockPost, Devm.getCode_setMach, addLogCode, transCode,
-      temporalSstorePost_getCode, temporalSloadBase_getCode]
+      temporalSstorePost_getCode, afterSload_getCode]
   rw [stubPauseWorld_currentTarget, hcarry]
   change (stubPauseWorldState.get configWorldOwner).code.toList ≠ []
   rw [stubPauseWorldState_get_breaker]

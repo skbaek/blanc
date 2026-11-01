@@ -17,8 +17,8 @@ consumed there directly, and this leaf carries the bridging material:
   nothing between message entry and `removeTarget` touches the array region.
   The `…_coldEntry_runCompiled` variants below restate the same walks in the
   temporal convention: the read charges are hypothesis-supplied
-  `temporalSloadCost` equations and the walk threads the warmed
-  `temporalSloadBase` successors, so the store suffix runs at a state where the
+  `sloadCost` equations and the walk threads the warmed
+  `afterSload` successors, so the store suffix runs at a state where the
   read keys really are warm.  The swap-pop variant additionally stores its hole
   and moved-index cells through the cold `SSTORE` sibling, because those two
   cells are written but never read on the pause path and so stay cold.  The
@@ -575,7 +575,7 @@ theorem temporal_sstore_cold_runCompiled
 `removeTarget_toFinish_runCompiled` charges its three array-region `SLOAD`s
 warm and demands the keys warm at entry.  This variant is the same walk in the
 temporal convention: the three charges are hypothesis-supplied
-`temporalSloadCost` equations, the walk threads the `temporalSloadBase`
+`sloadCost` equations, the walk threads the `afterSload`
 successors, and the store suffix runs at the threaded state, where all three
 keys are warm.  Fixed charge `139 = 439 - 300`. -/
 
@@ -618,14 +618,14 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       (indexSlot target) = indexOriginal)
     (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
-    (hidxSloadCost : temporalSloadCost sevm base (indexSlot target) =
+    (hidxSloadCost : sloadCost sevm base (indexSlot target) =
       idxSloadCost)
-    (hlenSloadCost : temporalSloadCost sevm
-      (temporalSloadBase sevm base (indexSlot target)) arrayLengthSlot =
+    (hlenSloadCost : sloadCost sevm
+      (afterSload sevm base (indexSlot target)) arrayLengthSlot =
       lenSloadCost)
-    (harrSloadCost : temporalSloadCost sevm
-      (temporalSloadBase sevm
-        (temporalSloadBase sevm base (indexSlot target)) arrayLengthSlot)
+    (harrSloadCost : sloadCost sevm
+      (afterSload sevm
+        (afterSload sevm base (indexSlot target)) arrayLengthSlot)
       (arrayEntrySlot next) = arrSloadCost)
     (hholeCost : sstoreValueCost arrayOriginal target target = holeCost)
     (hmovedIndexCost : sstoreValueCost indexOriginal next next =
@@ -641,9 +641,9 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
     (hstatic : sevm.isStatic = false)
     (post : Devm)
     (hfinish :
-      let coldBase := temporalSloadBase sevm
-        (temporalSloadBase sevm
-          (temporalSloadBase sevm base (indexSlot target)) arrayLengthSlot)
+      let coldBase := afterSload sevm
+        (afterSload sevm
+          (afterSload sevm base (indexSlot target)) arrayLengthSlot)
         (arrayEntrySlot next)
       let MIndex := M.write (removedIndexWord * 32).toNat next.toBytes
       let MLength := MIndex.write (arrayLengthWord * 32).toNat next.toBytes
@@ -663,9 +663,9 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
   dsimp only at hfinish
   let arrayKey := arrayEntrySlot next
   let indexKey := indexSlot target
-  let base1 := temporalSloadBase sevm base (indexSlot target)
-  let base2 := temporalSloadBase sevm base1 arrayLengthSlot
-  let base3 := temporalSloadBase sevm base2 (arrayEntrySlot next)
+  let base1 := afterSload sevm base (indexSlot target)
+  let base2 := afterSload sevm base1 arrayLengthSlot
+  let base3 := afterSload sevm base2 (arrayEntrySlot next)
   let MIndex := M.write (removedIndexWord * 32).toNat next.toBytes
   let imgIndex := Bytes.writeAt img (removedIndexWord * 32).toNat
     next.toBytes
@@ -772,62 +772,62 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       Bytes.sliceD_writeAt, B256.toB256_toBytes]
   have hindex1 : base1.getStorVal sevm.currentTarget arrayLengthSlot =
       next := by
-    show (temporalSloadBase sevm base
+    show (afterSload sevm base
       (indexSlot target)).getStorVal sevm.currentTarget arrayLengthSlot = next
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hlength
   have harray2 : base2.getStorVal sevm.currentTarget
       (arrayEntrySlot next) = target := by
-    show (temporalSloadBase sevm base1
+    show (afterSload sevm base1
       arrayLengthSlot).getStorVal sevm.currentTarget (arrayEntrySlot next) =
       target
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base
+    rw [afterSload_getStorVal]
+    show (afterSload sevm base
       (indexSlot target)).getStorVal sevm.currentTarget (arrayEntrySlot next) =
       target
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact harray
   have harray3 : base3.getStorVal sevm.currentTarget arrayKey = target := by
-    show (temporalSloadBase sevm base2
+    show (afterSload sevm base2
       (arrayEntrySlot next)).getStorVal sevm.currentTarget
       (arrayEntrySlot next) = target
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact harray2
   have hindex3 : base3.getStorVal sevm.currentTarget indexKey = next := by
-    show (temporalSloadBase sevm base2
+    show (afterSload sevm base2
       (arrayEntrySlot next)).getStorVal sevm.currentTarget
       (indexSlot target) = next
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base1
+    rw [afterSload_getStorVal]
+    show (afterSload sevm base1
       arrayLengthSlot).getStorVal sevm.currentTarget (indexSlot target) = next
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base
+    rw [afterSload_getStorVal]
+    show (afterSload sevm base
       (indexSlot target)).getStorVal sevm.currentTarget (indexSlot target) =
       next
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hindex
   have hlength3 : base3.getStorVal sevm.currentTarget arrayLengthSlot =
       next := by
-    show (temporalSloadBase sevm base2
+    show (afterSload sevm base2
       (arrayEntrySlot next)).getStorVal sevm.currentTarget arrayLengthSlot =
       next
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base1
+    rw [afterSload_getStorVal]
+    show (afterSload sevm base1
       arrayLengthSlot).getStorVal sevm.currentTarget arrayLengthSlot = next
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hindex1
   have hwarmIndex3 : (sevm.currentTarget, indexKey) ∈
       base3.accessedStorageKeys :=
-    temporalSloadBase_preserves_warm sevm base2 (arrayEntrySlot next) _
-      (temporalSloadBase_preserves_warm sevm base1 arrayLengthSlot _
-        (temporalSloadBase_warm sevm base (indexSlot target)))
+    afterSload_preserves_warm sevm base2 (arrayEntrySlot next) _
+      (afterSload_preserves_warm sevm base1 arrayLengthSlot _
+        (afterSload_warm sevm base (indexSlot target)))
   have hwarmLength3 : (sevm.currentTarget, arrayLengthSlot) ∈
       base3.accessedStorageKeys :=
-    temporalSloadBase_preserves_warm sevm base2 (arrayEntrySlot next) _
-      (temporalSloadBase_warm sevm base1 arrayLengthSlot)
+    afterSload_preserves_warm sevm base2 (arrayEntrySlot next) _
+      (afterSload_warm sevm base1 arrayLengthSlot)
   have hwarmArray3 : (sevm.currentTarget, arrayKey) ∈
       base3.accessedStorageKeys :=
-    temporalSloadBase_warm sevm base2 (arrayEntrySlot next)
+    afterSload_warm sevm base2 (arrayEntrySlot next)
   let tailPost := entryClearPost sevm base3 target next
   let removePost := indexClearPost sevm tailPost target oldLength
   have hstores := removeTarget_storePrefix_runCompiled (hfork := hfork)
@@ -839,13 +839,13 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
     htargetValid hnextNonzero hnextBound
     (by rw [hsizeLast]; exact Nat.le_max_right _ _) halignLast
     harray3 hindex3
-    hlength3 (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+    hlength3 (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, afterSload_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
           entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
           lengthWritePost_getOrigStorVal] using harrayOrig)
-    (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+    (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, afterSload_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
           entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
           lengthWritePost_getOrigStorVal] using hindexOrig)
-    (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
+    (by simpa only [base3, base2, base1, temporalSstorePost_getOrigStorVal, afterSload_getOrigStorVal, addAccessedStorageKey_getOrigStorVal,
           entryClearPost_getOrigStorVal, indexWritePost_getOrigStorVal, entryWritePost_getOrigStorVal,
           lengthWritePost_getOrigStorVal] using hlengthOrig) hholeCost hmovedIndexCost
     htailClearCost hlengthRestoreCost hindexClearCost hwarmArray3 hwarmIndex3
@@ -918,7 +918,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
       (G := G + finishGas + 100 + lastExtCost + holeCost + movedIndexCost +
         tailClearCost + lengthRestoreCost + indexClearCost)
       harray2 (by omega)
-    rw [show temporalSloadCost sevm base2 (arrayEntrySlot next) =
+    rw [show sloadCost sevm base2 (arrayEntrySlot next) =
       arrSloadCost from harrSloadCost] at h
     exact h
   have hloadLastStorage : Func.RunCompiled fs sevm
@@ -1086,7 +1086,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         movedIndexCost + tailClearCost + lengthRestoreCost +
         indexClearCost + arrSloadCost)
       hindex1 (by omega)
-    rw [show temporalSloadCost sevm base1 arrayLengthSlot =
+    rw [show sloadCost sevm base1 arrayLengthSlot =
       lenSloadCost from hlenSloadCost] at h
     exact h
   have hlengthLoad : Func.RunCompiled fs sevm
@@ -1213,7 +1213,7 @@ theorem removeTarget_toFinish_coldEntry_runCompiled
         holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
         indexClearCost + arrSloadCost + lenSloadCost)
       hindex (by omega)
-    rw [show temporalSloadCost sevm base (indexSlot target) =
+    rw [show sloadCost sevm base (indexSlot target) =
       idxSloadCost from hidxSloadCost] at h
     exact h
   have hindexLoad : Func.RunCompiled fs sevm
@@ -1345,12 +1345,12 @@ private theorem not_mem_hashSet_insert {α : Type _} [BEq α] [Hashable α]
   · exact hne (eq_of_beq he)
   · exact h hx
 
-private theorem not_mem_temporalSloadBase {sevm : Sevm} {base : Devm}
+private theorem not_mem_afterSload {sevm : Sevm} {base : Devm}
     {readKey : B256} {p : Adr × B256}
     (h : p ∉ base.accessedStorageKeys)
     (hne : (sevm.currentTarget, readKey) ≠ p) :
-    p ∉ (temporalSloadBase sevm base readKey).accessedStorageKeys := by
-  unfold temporalSloadBase
+    p ∉ (afterSload sevm base readKey).accessedStorageKeys := by
+  unfold afterSload
   split
   · exact h
   · exact not_mem_hashSet_insert h hne
@@ -1542,14 +1542,14 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
       (indexSlot target) = indexOriginal)
     (hlengthOrig : base.getOrigStorVal sevm sevm.currentTarget
       arrayLengthSlot = lengthOriginal)
-    (hidxSloadCost : temporalSloadCost sevm base (indexSlot target) =
+    (hidxSloadCost : sloadCost sevm base (indexSlot target) =
       idxSloadCost)
-    (hlenSloadCost : temporalSloadCost sevm
-      (temporalSloadBase sevm base (indexSlot target)) arrayLengthSlot =
+    (hlenSloadCost : sloadCost sevm
+      (afterSload sevm base (indexSlot target)) arrayLengthSlot =
       lenSloadCost)
-    (harrSloadCost : temporalSloadCost sevm
-      (temporalSloadBase sevm
-        (temporalSloadBase sevm base (indexSlot target)) arrayLengthSlot)
+    (harrSloadCost : sloadCost sevm
+      (afterSload sevm
+        (afterSload sevm base (indexSlot target)) arrayLengthSlot)
       (arrayEntrySlot len) = arrSloadCost)
     (hholeCold : (sevm.currentTarget, arrayEntrySlot idx) ∉
       base.accessedStorageKeys)
@@ -1570,9 +1570,9 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     (hstatic : sevm.isStatic = false)
     (post : Devm)
     (hfinish :
-      let coldBase := temporalSloadBase sevm
-        (temporalSloadBase sevm
-          (temporalSloadBase sevm base (indexSlot target)) arrayLengthSlot)
+      let coldBase := afterSload sevm
+        (afterSload sevm
+          (afterSload sevm base (indexSlot target)) arrayLengthSlot)
         (arrayEntrySlot len)
       let holePost := temporalSstorePost sevm
         (addAccessedStorageKey coldBase sevm.currentTarget
@@ -1601,9 +1601,9 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
   let movedKey := indexSlot lastTarget
   let tailKey := arrayEntrySlot len
   let indexKey := indexSlot target
-  let base1 := temporalSloadBase sevm base (indexSlot target)
-  let base2 := temporalSloadBase sevm base1 arrayLengthSlot
-  let base3 := temporalSloadBase sevm base2 (arrayEntrySlot len)
+  let base1 := afterSload sevm base (indexSlot target)
+  let base2 := afterSload sevm base1 arrayLengthSlot
+  let base3 := afterSload sevm base2 (arrayEntrySlot len)
   let holePost := temporalSstorePost sevm
     (addAccessedStorageKey base3 sevm.currentTarget (arrayEntrySlot idx))
     (arrayEntrySlot idx) lastTarget
@@ -1667,42 +1667,42 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
   have hbase1Value (key : B256) :
       base1.getStorVal sevm.currentTarget key =
         base.getStorVal sevm.currentTarget key :=
-    temporalSloadBase_getStorVal sevm base indexKey sevm.currentTarget key
+    afterSload_getStorVal sevm base indexKey sevm.currentTarget key
   have hbase2Value (key : B256) :
       base2.getStorVal sevm.currentTarget key =
         base.getStorVal sevm.currentTarget key := by
     clear_value base1
-    change (temporalSloadBase sevm base1 arrayLengthSlot).getStorVal sevm.currentTarget key = base.getStorVal sevm.currentTarget key
+    change (afterSload sevm base1 arrayLengthSlot).getStorVal sevm.currentTarget key = base.getStorVal sevm.currentTarget key
     as_aux_lemma =>
-      exact (temporalSloadBase_getStorVal sevm base1 arrayLengthSlot
+      exact (afterSload_getStorVal sevm base1 arrayLengthSlot
         sevm.currentTarget key).trans (hbase1Value key)
   have hbase3Value (key : B256) :
       base3.getStorVal sevm.currentTarget key =
         base.getStorVal sevm.currentTarget key := by
     clear_value base2 base1
-    change (temporalSloadBase sevm base2 tailKey).getStorVal sevm.currentTarget key = base.getStorVal sevm.currentTarget key
+    change (afterSload sevm base2 tailKey).getStorVal sevm.currentTarget key = base.getStorVal sevm.currentTarget key
     as_aux_lemma =>
-      exact (temporalSloadBase_getStorVal sevm base2 tailKey
+      exact (afterSload_getStorVal sevm base2 tailKey
         sevm.currentTarget key).trans (hbase2Value key)
   have hbase1Original (key : B256) :
       base1.getOrigStorVal sevm sevm.currentTarget key =
         base.getOrigStorVal sevm sevm.currentTarget key :=
-    temporalSloadBase_getOrigStorVal sevm base indexKey sevm.currentTarget key
+    afterSload_getOrigStorVal sevm base indexKey sevm.currentTarget key
   have hbase2Original (key : B256) :
       base2.getOrigStorVal sevm sevm.currentTarget key =
         base.getOrigStorVal sevm sevm.currentTarget key := by
     clear_value base1
-    change (temporalSloadBase sevm base1 arrayLengthSlot).getOrigStorVal sevm sevm.currentTarget key = base.getOrigStorVal sevm sevm.currentTarget key
+    change (afterSload sevm base1 arrayLengthSlot).getOrigStorVal sevm sevm.currentTarget key = base.getOrigStorVal sevm sevm.currentTarget key
     as_aux_lemma =>
-      exact (temporalSloadBase_getOrigStorVal sevm base1 arrayLengthSlot
+      exact (afterSload_getOrigStorVal sevm base1 arrayLengthSlot
         sevm.currentTarget key).trans (hbase1Original key)
   have hbase3Original (key : B256) :
       base3.getOrigStorVal sevm sevm.currentTarget key =
         base.getOrigStorVal sevm sevm.currentTarget key := by
     clear_value base2 base1
-    change (temporalSloadBase sevm base2 tailKey).getOrigStorVal sevm sevm.currentTarget key = base.getOrigStorVal sevm sevm.currentTarget key
+    change (afterSload sevm base2 tailKey).getOrigStorVal sevm sevm.currentTarget key = base.getOrigStorVal sevm sevm.currentTarget key
     as_aux_lemma =>
-      exact (temporalSloadBase_getOrigStorVal sevm base2 tailKey
+      exact (afterSload_getOrigStorVal sevm base2 tailKey
         sevm.currentTarget key).trans (hbase2Original key)
   have hholeOriginal (key : B256) :
       holePost.getOrigStorVal sevm sevm.currentTarget key =
@@ -1749,16 +1749,16 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
     exact (hbase3Value arrayLengthSlot).trans hlength
   have hholeCold3 : (sevm.currentTarget, holeKey) ∉
       base3.accessedStorageKeys :=
-    not_mem_temporalSloadBase
-      (not_mem_temporalSloadBase
-        (not_mem_temporalSloadBase hholeCold (pairNe hindexHoleNe))
+    not_mem_afterSload
+      (not_mem_afterSload
+        (not_mem_afterSload hholeCold (pairNe hindexHoleNe))
         (pairNe hlengthHole))
       (pairNe htailHole)
   have hmovedCold3 : (sevm.currentTarget, movedKey) ∉
       base3.accessedStorageKeys :=
-    not_mem_temporalSloadBase
-      (not_mem_temporalSloadBase
-        (not_mem_temporalSloadBase hmovedCold (pairNe hindexMovedNe))
+    not_mem_afterSload
+      (not_mem_afterSload
+        (not_mem_afterSload hmovedCold (pairNe hindexMovedNe))
         (pairNe hmovedLength.symm))
       (pairNe hmovedTailNe.symm)
   have hmovedColdHole : (sevm.currentTarget, movedKey) ∉
@@ -1844,16 +1844,16 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
   -- Freeze read warmth before transporting it through the cold write tower.
   have hwarmTail3 : (sevm.currentTarget, tailKey) ∈
       base3.accessedStorageKeys :=
-    temporalSloadBase_warm sevm base2 (arrayEntrySlot len)
+    afterSload_warm sevm base2 (arrayEntrySlot len)
   have hwarmLength3 : (sevm.currentTarget, arrayLengthSlot) ∈
       base3.accessedStorageKeys :=
-    temporalSloadBase_preserves_warm sevm base2 (arrayEntrySlot len) _
-      (temporalSloadBase_warm sevm base1 arrayLengthSlot)
+    afterSload_preserves_warm sevm base2 (arrayEntrySlot len) _
+      (afterSload_warm sevm base1 arrayLengthSlot)
   have hwarmIndex3 : (sevm.currentTarget, indexKey) ∈
       base3.accessedStorageKeys :=
-    temporalSloadBase_preserves_warm sevm base2 (arrayEntrySlot len) _
-      (temporalSloadBase_preserves_warm sevm base1 arrayLengthSlot _
-        (temporalSloadBase_warm sevm base (indexSlot target)))
+    afterSload_preserves_warm sevm base2 (arrayEntrySlot len) _
+      (afterSload_preserves_warm sevm base1 arrayLengthSlot _
+        (afterSload_warm sevm base (indexSlot target)))
   have hwarmTailMoved : (sevm.currentTarget, tailKey) ∈
       movedPost.accessedStorageKeys := by
     clear_value base3 base2 base1
@@ -2227,20 +2227,20 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
   -- values at the intermediate read bases
   have hlength1 : base1.getStorVal sevm.currentTarget arrayLengthSlot =
       len := by
-    show (temporalSloadBase sevm base
+    show (afterSload sevm base
       (indexSlot target)).getStorVal sevm.currentTarget arrayLengthSlot = len
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hlength
   have htail2 : base2.getStorVal sevm.currentTarget
       (arrayEntrySlot len) = lastTarget := by
-    show (temporalSloadBase sevm base1
+    show (afterSload sevm base1
       arrayLengthSlot).getStorVal sevm.currentTarget (arrayEntrySlot len) =
       lastTarget
-    rw [temporalSloadBase_getStorVal]
-    show (temporalSloadBase sevm base
+    rw [afterSload_getStorVal]
+    show (afterSload sevm base
       (indexSlot target)).getStorVal sevm.currentTarget (arrayEntrySlot len) =
       lastTarget
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact htail
   -- the staged reads the prefix performs
   have hlengthValueMid :
@@ -2326,7 +2326,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         holeCost + movedIndexCost + tailClearCost + lengthRestoreCost +
         indexClearCost)
       htail2 (by omega)
-    rw [show temporalSloadCost sevm base2 (arrayEntrySlot len) =
+    rw [show sloadCost sevm base2 (arrayEntrySlot len) =
       arrSloadCost from harrSloadCost] at h
     exact h
   have hloadLastStorage : Func.RunCompiled fs sevm
@@ -2483,7 +2483,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         gasColdSload + gasColdSload + holeCost + movedIndexCost +
         tailClearCost + lengthRestoreCost + indexClearCost + arrSloadCost)
       hlength1 (by omega)
-    rw [show temporalSloadCost sevm base1 arrayLengthSlot =
+    rw [show sloadCost sevm base1 arrayLengthSlot =
       lenSloadCost from hlenSloadCost] at h
     exact h
   have hlengthLoad : Func.RunCompiled fs sevm
@@ -2620,7 +2620,7 @@ theorem removeTarget_swapPop_toFinish_coldEntry_runCompiled
         movedIndexCost + tailClearCost + lengthRestoreCost +
         indexClearCost + arrSloadCost + lenSloadCost)
       hindex (by omega)
-    rw [show temporalSloadCost sevm base (indexSlot target) =
+    rw [show sloadCost sevm base (indexSlot target) =
       idxSloadCost from hidxSloadCost] at h
     exact h
   have hindexLoad : Func.RunCompiled fs sevm

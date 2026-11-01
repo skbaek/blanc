@@ -432,7 +432,7 @@ the entry storage only at the assignment slot. -/
 theorem freshWorld_assignmentBase :
     assignmentBase freshWorldSevm freshWorldPre freshWorldTarget =
       freshWorldPre := by
-  rw [assignmentBase, temporalSloadBase]
+  rw [assignmentBase, afterSload]
   split
   · rfl
   · rename_i hcold
@@ -593,8 +593,8 @@ theorem freshWorld_expiryNonzero : freshWorldExpiry ≠ 0 := by decide
 private theorem freshWorld_warmCost {base : Devm} {key : B256}
     (h : base.accessedStorageKeys = freshWorldKeys)
     (hk : (freshWorldOwner, key) ∈ freshWorldKeys) :
-    temporalSloadCost freshWorldSevm base key = gasWarmAccess := by
-  rw [temporalSloadCost]
+    sloadCost freshWorldSevm base key = gasWarmAccess := by
+  rw [sloadCost]
   split
   · rfl
   · rename_i hno
@@ -606,8 +606,8 @@ private theorem freshWorld_warmCost {base : Devm} {key : B256}
 private theorem freshWorld_coldCost {base : Devm} {key : B256}
     (h : base.accessedStorageKeys = freshWorldKeys)
     (hk : (freshWorldOwner, key) ∉ freshWorldKeys) :
-    temporalSloadCost freshWorldSevm base key = gasColdSload := by
-  rw [temporalSloadCost]
+    sloadCost freshWorldSevm base key = gasColdSload := by
+  rw [sloadCost]
   split
   · rename_i hyes
     refine absurd ?_ hk
@@ -617,12 +617,12 @@ private theorem freshWorld_coldCost {base : Devm} {key : B256}
   · rfl
 
 private theorem freshWorld_arrayLengthLoadBase :
-    temporalSloadBase freshWorldSevm
+    afterSload freshWorldSevm
         (assignmentPost freshWorldSevm freshWorldPre freshWorldTarget
           freshWorldPauser) arrayLengthSlot =
       assignmentPost freshWorldSevm freshWorldPre freshWorldTarget
         freshWorldPauser := by
-  rw [temporalSloadBase]
+  rw [afterSload]
   split
   · rfl
   · rename_i hno

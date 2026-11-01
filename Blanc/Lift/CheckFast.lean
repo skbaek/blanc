@@ -1,4 +1,5 @@
 import Blanc.Lift.Exact
+import Blanc.CodeTrie
 
 /-!
 # Kernel-economical certificate checking
@@ -9,8 +10,9 @@ each read is linear in the code size and the kernel keeps every intermediate ter
 large contracts exhaust memory (a 1,474-node entry of the 6,358-byte deployed beacon deposit contract
 passed 16 GiB).
 
-This module adds a balanced binary trie over a list (`LTrie`), whose lookup costs `O(log n)` kernel
-steps, and trie-reading copies of the two checkers.  `checkNodeT_eq` and `jumpsOkNodeT_eq` state that
+This module adds trie-reading copies of the two checkers over the balanced code tries of
+`Blanc/CodeTrie.lean` (`LTrie`, `CodeTries`, `jumpdestOkT`), whose lookups cost `O(log n)` kernel
+steps.  `checkNodeT_eq` and `jumpsOkNodeT_eq` state that
 the copies compute exactly the original checkers when the tries represent the code, so a per-entry
 certificate decision can be made on the fast copy and rewritten back.  The trusted definitions in
 `Check.lean` and `Exact.lean` are not changed.
@@ -19,85 +21,6 @@ certificate decision can be made on the fast copy and rewritten back.  The trust
 namespace Blanc.Lift
 
 open Jaune
-
-/-- A complete binary tree over list positions: at depth `d + 1` the left subtree holds positions
-below `2 ^ d`. -/
-inductive LTrie (α : Type) : Type
-  | leaf : Option α → LTrie α
-  | node : LTrie α → LTrie α → LTrie α
-
-/-- Build the depth-`d` trie of a list (positions `≥ 2 ^ d` are dropped). -/
-def LTrie.ofList {α : Type} : Nat → List α → LTrie α
-  | 0, l => .leaf l.head?
-  | d + 1, l => .node (LTrie.ofList d (l.take (2 ^ d))) (LTrie.ofList d (l.drop (2 ^ d)))
-
-/-- Lookup at position `i` in a depth-`d` trie. -/
-def LTrie.get? {α : Type} : Nat → LTrie α → Nat → Option α
-  | 0, .leaf a, i => if i = 0 then a else none
-  | d + 1, .node l r, i => if i < 2 ^ d then LTrie.get? d l i else LTrie.get? d r (i - 2 ^ d)
-  | _, _, _ => none
-
-theorem LTrie.get?_ofList {α : Type} (d : Nat) (l : List α) (hl : l.length ≤ 2 ^ d) (i : Nat) :
-    LTrie.get? d (LTrie.ofList d l) i = l[i]? := by
-  induction d generalizing l i with
-  | zero =>
-    cases l with
-    | nil => simp only [ofList, List.head?_nil, get?, ite_self, List.length_nil, not_lt_zero,
-      not_false_eq_true, getElem?_neg]
-    | cons x xs =>
-      have hxs : xs.length = 0 := by simpa only [List.length_eq_zero_iff, List.length_cons,
-        pow_zero, add_le_iff_nonpos_left, nonpos_iff_eq_zero] using hl
-      have : xs = [] := List.eq_nil_of_length_eq_zero hxs
-      subst xs
-      cases i <;> simp only [ofList, List.head?_cons, get?, ↓reduceIte, List.length_cons, List.length_nil, zero_add, zero_lt_one, getElem?_pos, List.getElem_cons_zero, Nat.add_eq_zero_iff, one_ne_zero, and_false, add_lt_iff_neg_right, not_lt_zero, not_false_eq_true, getElem?_neg]
-  | succ d ih =>
-    simp only [LTrie.ofList, LTrie.get?]
-    by_cases hi : i < 2 ^ d
-    · rw [ite_eq_left hi]
-      rw [ih (l := l.take (2 ^ d)) (i := i)]
-      · simp only [hi, List.getElem?_take_of_lt]
-      · have htake : (l.take (2 ^ d)).length ≤ 2 ^ d := by
-          rw [List.length_take]
-          exact min_le_left _ _
-        exact htake
-    · rw [ite_eq_right hi]
-      rw [ih (l := l.drop (2 ^ d)) (i := i - 2 ^ d)]
-      · have hdrop : ∀ (n : Nat) (xs : List α) (j : Nat), n ≤ j →
-            (xs.drop n)[j - n]? = xs[j]? := by
-          intro n
-          induction n with
-          | zero => intro xs j _; simp only [List.drop_zero, tsub_zero]
-          | succ n ih =>
-            intro xs j hj
-            cases xs with
-            | nil => simp only [List.drop_nil, List.length_nil, not_lt_zero, not_false_eq_true,
-              getElem?_neg]
-            | cons x xs =>
-              cases j with
-              | zero => omega
-              | succ j =>
-                simp only [List.drop, List.getElem?_cons_succ]
-                rw [show j + 1 - (n + 1) = j - n by omega]
-                apply ih
-                omega
-        exact hdrop (2 ^ d) l i (Nat.le_of_not_gt hi)
-      · simp only [List.length_drop]
-        omega
-
-/-- The code bytes and instruction starts of `code`, as tries of depth `d`. -/
-structure CodeTries (code : ByteArray) (d : Nat) : Type where
-  bytes : LTrie UInt8
-  starts : LTrie Bool
-  bytes_eq : ∀ i, LTrie.get? d bytes i = code.data.toList[i]?
-  starts_eq : ∀ i, (LTrie.get? d starts i).getD false = (instStarts code).getD i false
-
-/-- The canonical tries (when `code` fits in depth `d`). -/
-def CodeTries.ofCode (code : ByteArray) (d : Nat) (hd : code.data.toList.length ≤ 2 ^ d)
-    (hs : (instStarts code).length ≤ 2 ^ d) : CodeTries code d :=
-  { bytes := LTrie.ofList d code.data.toList
-    starts := LTrie.ofList d (instStarts code)
-    bytes_eq := fun i => LTrie.get?_ofList d _ hd i
-    starts_eq := fun i => by rw [LTrie.get?_ofList d _ hs i]; rfl }
 
 def bytesAtT (d : Nat) (t : LTrie UInt8) : Nat → Bytes → Bool
   | _, [] => true
@@ -272,41 +195,6 @@ theorem checkNodeT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es : 
       · intro pc a; rfl
       · simp only
   exact (hall f).1 pc a
-
-/-- `jumpdestOk`, reading the code byte and the instruction-start flag from the tries. -/
-def jumpdestOkT (code : ByteArray) (d : Nat) (T : CodeTries code d) (k : Nat) : Bool :=
-  LTrie.get? d T.bytes k == some (Jinst.toUInt8 .jumpdest) &&
-    (LTrie.get? d T.starts k).getD false
-
-theorem jumpdestOkT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (k : Nat) :
-    jumpdestOkT code d T k = jumpdestOk code k := by
-  by_cases hk : k < code.size
-  · have hlist : k < code.data.toList.length := by
-      simpa only [Array.length_toList, ByteArray.size_data, ByteArray.size_eq_length_toList] using
-        hk
-    have hget : code.data.toList[k]? = some code[k] := by
-      exact List.getElem?_eq_getElem hlist
-    have hdata : code.data[k] = code[k] := by rfl
-    have ha : code.data[k]? = some code[k] := by
-      rw [← hdata]
-      simp only [ByteArray.size_data, hk, getElem?_pos]
-    have hbyte : (code.data[k]? == some (Jinst.toUInt8 .jumpdest)) =
-        decide (code[k] = Jinst.toUInt8 .jumpdest) := by
-      rw [ha]
-      rfl
-    have hbeq : (code[k] == Jinst.toUInt8 .jumpdest) =
-        decide (code[k] = Jinst.toUInt8 .jumpdest) := by rfl
-    simp only [jumpdestOkT, hk, T.bytes_eq, Array.length_toList, ByteArray.size_data,
-      getElem?_pos, Array.getElem_toList, hdata, Option.some_beq_some, hbeq,
-      T.starts_eq, List.getD_eq_getElem?_getD, jumpdestOk, ↓reduceDIte, instStartAt,
-      Bool.decide_and, Bool.decide_eq_true]
-  · have hlist : ¬ k < code.data.toList.length := by
-      simpa only [Array.length_toList, ByteArray.size_data] using hk
-    have hnone : LTrie.get? d T.bytes k = none := by
-      rw [T.bytes_eq]
-      exact getElem?_neg code.data.toList k hlist
-    simp only [jumpdestOkT, hnone, Option.none_beq_some, Bool.false_and, jumpdestOk, hk,
-      ↓reduceDIte]
 
 /-- `jumpsOkNode` with `jumpdestOk` replaced by `jumpdestOkT` (every other arm identical). -/
 def jumpsOkNodeT (code : ByteArray) (d : Nat) (T : CodeTries code d) (es : List Entry) :
@@ -620,28 +508,5 @@ theorem jumpsOkNodeMT_eq {code : ByteArray} {d : Nat} (T : CodeTries code d) (es
       exact ⟨fun a μ => by simp only [jumpsOkNodeMT, ih.1, jumpsOkNodeM, Q], by simp only⟩
     | undefined => exact ⟨fun a μ => rfl, by simp only⟩
   exact (hall f).1 a μ
-
-/-! ## Assembling a memory-tracking certificate from per-entry decisions -/
-
-/-- One step of a chain proof of `Cert.checkEntriesM` over the tails of a long certificate. -/
-theorem Cert.checkEntriesM_drop {code : ByteArray} {es : List Entry} {ms : List MemMap}
-    {b : Bool} (c : Cert) (k : Nat) (hk : k < c.length)
-    (h : checkNodeM code es ms b (c[k]'hk).1.rets (c[k]'hk).1.pc (c[k]'hk).1.frame
-      (ms.getD k []) (c[k]'hk).2 = true)
-    (hrest : Cert.checkEntriesM code es ms b (k + 1) (c.drop (k + 1)) = true) :
-    Cert.checkEntriesM code es ms b k (c.drop k) = true := by
-  rw [List.drop_eq_getElem_cons hk]
-  simp only [Cert.checkEntriesM, Bool.and_eq_true]
-  exact ⟨h, hrest⟩
-
-/-- One step of a chain proof of `Cert.jumpsEntriesM`. -/
-theorem Cert.jumpsEntriesM_drop {code : ByteArray} {es : List Entry} {ms : List MemMap}
-    {b : Bool} (c : Cert) (k : Nat) (hk : k < c.length)
-    (h : jumpsOkNodeM code es b (c[k]'hk).2 (c[k]'hk).1.frame (ms.getD k []) = true)
-    (hrest : Cert.jumpsEntriesM code es ms b (k + 1) (c.drop (k + 1)) = true) :
-    Cert.jumpsEntriesM code es ms b k (c.drop k) = true := by
-  rw [List.drop_eq_getElem_cons hk]
-  simp only [Cert.jumpsEntriesM, Bool.and_eq_true]
-  exact ⟨h, hrest⟩
 
 end Blanc.Lift

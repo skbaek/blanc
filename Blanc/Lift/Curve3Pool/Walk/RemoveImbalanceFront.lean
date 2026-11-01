@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceDispatch
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXSpec
 import Blanc.Lift.Curve3Pool.Walk.Exchange
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `remove_liquidity_imbalance` on the word carrier, part 1: guards, supply, `_A`, balances
@@ -56,8 +57,7 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
     by rw [vyMem_empty_size]⟩
   xs 0x3053 (.push [0xff, 0xff, 0xff] (by decide)) ri_push  -- 304f PUSH3 0xffffff
   xw 0x3054 (.reg .sload) ri_sload  -- 3053 SLOAD
-  xs 0x3055 (.reg .iszero) ri_iszero  -- 3054 ISZERO
-  xs 0x3058 (.push [0x30, 0x5d] (by decide)) ri_push  -- 3055 PUSH2 0x305d
+  xa 2
   xji 0x3059 0x305d hw
   · xdead
   have hlock : (b.getStor sevm.currentTarget).get lockSlot = 0 := by
@@ -65,22 +65,16 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
     rw [lockSlot_lit] at e
     exact e
   clear hw
-  xjd 0x305e  -- 305d JUMPDEST
-  xs 0x3060 (.push [0x01] (by decide)) ri_push  -- 305e PUSH1 0x01
-  xs 0x3064 (.push [0xff, 0xff, 0xff] (by decide)) ri_push  -- 3060 PUSH3 0xffffff
+  xa 3
   xw 0x3065 (.reg .sstore) ri_sstore  -- 3064 SSTORE
-  xs 0x3066 (.reg .callvalue) ri_callvalue  -- 3065 CALLVALUE
-  xs 0x3067 (.reg .iszero) ri_iszero  -- 3066 ISZERO
-  xs 0x306a (.push [0x30, 0x6f] (by decide)) ri_push  -- 3067 PUSH2 0x306f
+  xa 3
   xji 0x306b 0x306f hw
   · xdead
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
-  xjd 0x3070  -- 306f JUMPDEST
-  xs 0x3072 (.push [0x0f] (by decide)) ri_push  -- 3070 PUSH1 0x0f
+  xa 2
   xw 0x3073 (.reg .sload) ri_sload  -- 3072 SLOAD
-  xs 0x3074 (.reg .iszero) ri_iszero  -- 3073 ISZERO
-  xs 0x3077 (.push [0x30, 0x7c] (by decide)) ri_push  -- 3074 PUSH2 0x307c
+  xa 2
   xji 0x3078 0x307c hw
   · xdead
   have hkill : (b.getStor sevm.currentTarget).get isKilledSlot = 0 := by
@@ -89,15 +83,9 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
       getStorVal_eq] at e
     exact e
   clear hw
-  xjd 0x307d  -- 307c JUMPDEST
-  xs 0x307f (.push [0x20] (by decide)) ri_push  -- 307d PUSH1 0x20
-  xs 0x3082 (.push [0x01, 0xc0] (by decide)) ri_push  -- 307f PUSH2 0x01c0
-  xs 0x3084 (.push [0x04] (by decide)) ri_push  -- 3082 PUSH1 0x04
-  xs 0x3089 (.push [0x18, 0x16, 0x0d, 0xdd] (by decide)) ri_push  -- 3084 PUSH4 0x18160ddd
-  xs 0x308c (.push [0x01, 0x60] (by decide)) ri_push  -- 3089 PUSH2 0x0160
+  xa 6
   xsw 0x308d 0x160  -- 308c MSTORE
-  xs 0x3090 (.push [0x01, 0x7c] (by decide)) ri_push  -- 308d PUSH2 0x017c
-  xs 0x3092 (.push [0x05] (by decide)) ri_push  -- 3090 PUSH1 0x05
+  xa 2
   xw 0x3093 (.reg .sload) ri_sload  -- 3092 SLOAD
   xs 0x3094 (.reg .gas) ri_gas_remaining  -- 3093 GAS
   obtain ⟨d, flag, out, M', L1, h, hVo, hrd, hob, hstor, hlogs, hk⟩ :=
@@ -116,11 +104,7 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
       exact htok)
   clear hk hwf
   subst hcout
-  xjd 0x309e  -- 309d JUMPDEST
-  xs 0x30a0 (.push [0x1f] (by decide)) ri_push  -- 309e PUSH1 0x1f
-  xs 0x30a1 (.reg .returndatasize) ri_returndatasize  -- 30a0 RETURNDATASIZE
-  xs 0x30a2 (.reg .gt) ri_gt  -- 30a1 GT
-  xs 0x30a5 (.push [0x30, 0xaa] (by decide)) ri_push  -- 30a2 PUSH2 0x30aa
+  xa 5
   xji 0x30a6 0x30aa hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by
@@ -131,67 +115,31 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
   have hV := hVo hlen
   clear hVo
   vnorm
-  xjd 0x30ab  -- 30aa JUMPDEST
-  xs 0x30ad (.push [0x00] (by decide)) ri_push  -- 30ab PUSH1 0x00
-  xs 0x30ae (.reg .pop) ri_pop  -- 30ad POP
-  xs 0x30b1 (.push [0x01, 0xc0] (by decide)) ri_push  -- 30ae PUSH2 0x01c0
+  xa 4
   xl 0x30b2 0x1c0  -- 30b1 MLOAD
   xs 0x30b5 (.push [0x01, 0x40] (by decide)) ri_push  -- 30b2 PUSH2 0x0140
   xsw 0x30b6 0x140  -- 30b5 MSTORE
-  xs 0x30b8 (.push [0x00] (by decide)) ri_push  -- 30b6 PUSH1 0x00
-  xs 0x30bb (.push [0x01, 0x40] (by decide)) ri_push  -- 30b8 PUSH2 0x0140
+  xa 2
   xl 0x30bc 0x140  -- 30bb MLOAD
-  xs 0x30bd (.reg .xor) ri_xor  -- 30bc XOR
-  xs 0x30c0 (.push [0x30, 0xc5] (by decide)) ri_push  -- 30bd PUSH2 0x30c5
+  xa 2
   xji 0x30c1 0x30c5 hw
   · xdead
   have hT0 : vSupply c ≠ 0 := by
     rw [zero_lit, B256.xor_zero] at hw
     exact hw
   clear hw
-  xjd 0x30c6  -- 30c5 JUMPDEST
-  xs 0x30c8 (.push [0x02] (by decide)) ri_push  -- 30c6 PUSH1 0x02
+  xa 2
   xw 0x30c9 (.reg .sload) ri_sload  -- 30c8 SLOAD
-  xs 0x30cb (.push [0x03] (by decide)) ri_push  -- 30c9 PUSH1 0x03
-  xs 0x30cc (.reg (.dup 0)) (ri_dup (by rfl))  -- 30cb DUP1
-  xs 0x30cd (.reg (.dup 2)) (ri_dup (by rfl))  -- 30cc DUP3
-  xs 0x30ce (.reg .mul) ri_mul  -- 30cd MUL
-  xs 0x30cf (.reg (.dup 2)) (ri_dup (by rfl))  -- 30ce DUP3
-  xs 0x30d0 (.reg .iszero) ri_iszero  -- 30cf ISZERO
-  xs 0x30d1 (.reg (.dup 2)) (ri_dup (by rfl))  -- 30d0 DUP3
-  xs 0x30d2 (.reg (.dup 4)) (ri_dup (by rfl))  -- 30d1 DUP5
-  xs 0x30d3 (.reg (.dup 3)) (ri_dup (by rfl))  -- 30d2 DUP4
-  xs 0x30d4 (.reg .div) ri_div  -- 30d3 DIV
-  xs 0x30d5 (.reg .eq) ri_eq  -- 30d4 EQ
-  xs 0x30d6 (.reg .or) ri_or  -- 30d5 OR
-  xs 0x30d9 (.push [0x30, 0xde] (by decide)) ri_push  -- 30d6 PUSH2 0x30de
+  xa 13
   xji 0x30da 0x30de hw
   · xdead
   have hm3 := B256.nofm_of_mulGuard (B256.or_eqCheck_ne_zero hw)
   clear hw
-  xjd 0x30df  -- 30de JUMPDEST
-  xs 0x30e0 (.reg (.dup 0)) (ri_dup (by rfl))  -- 30df DUP1
-  xs 0x30e1 (.reg (.swap 0)) (ri_swap (by rfl))  -- 30e0 SWAP1
-  xs 0x30e2 (.reg .pop) ri_pop  -- 30e1 POP
-  xs 0x30e3 (.reg (.swap 0)) (ri_swap (by rfl))  -- 30e2 SWAP1
-  xs 0x30e4 (.reg .pop) ri_pop  -- 30e3 POP
-  xs 0x30e5 (.reg (.swap 0)) (ri_swap (by rfl))  -- 30e4 SWAP1
-  xs 0x30e6 (.reg .pop) ri_pop  -- 30e5 POP
-  xs 0x30e8 (.push [0x08] (by decide)) ri_push  -- 30e6 PUSH1 0x08
-  xs 0x30e9 (.reg (.dup 0)) (ri_dup (by rfl))  -- 30e8 DUP1
-  xs 0x30ea (.reg (.dup 0)) (ri_dup (by rfl))  -- 30e9 DUP1
-  xs 0x30ed (.push [0x30, 0xf2] (by decide)) ri_push  -- 30ea PUSH2 0x30f2
+  xa 12
   xji 0x30ee 0x30f2 hw
   · xdead
   clear hw
-  xjd 0x30f3  -- 30f2 JUMPDEST
-  xs 0x30f4 (.reg (.dup 2)) (ri_dup (by rfl))  -- 30f3 DUP3
-  xs 0x30f5 (.reg .div) ri_div  -- 30f4 DIV
-  xs 0x30f6 (.reg (.swap 0)) (ri_swap (by rfl))  -- 30f5 SWAP1
-  xs 0x30f7 (.reg .pop) ri_pop  -- 30f6 POP
-  xs 0x30f8 (.reg (.swap 0)) (ri_swap (by rfl))  -- 30f7 SWAP1
-  xs 0x30f9 (.reg .pop) ri_pop  -- 30f8 POP
-  xs 0x30fc (.push [0x01, 0xe0] (by decide)) ri_push  -- 30f9 PUSH2 0x01e0
+  xa 8
   xsw 0x30fd 0x1e0  -- 30fc MSTORE
   xs 0x30ff (.push [0x03] (by decide)) ri_push  -- 30fd PUSH1 0x03
   xw 0x3100 (.reg .sload) ri_sload  -- 30ff SLOAD
@@ -215,8 +163,7 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
   xlu 0x3124  -- 3123 MLOAD
   xs 0x3126 (.push [0x06] (by decide)) ri_push  -- 3124 PUSH1 0x06
   cvpc 0x3127  -- 3126 PC
-  xs 0x3128 (.reg .add) ri_add  -- 3127 ADD
-  xs 0x312b (.push [0x00, 0xa9] (by decide)) ri_push  -- 3128 PUSH2 0x00a9
+  xa 2
   xjmp 0xa9  -- 312b JUMP
   have hs1 : ∀ x, ((afterSload sevm (afterSload sevm d (Bytes.toB256 [2])) (Bytes.toB256 [3])).getStor
       sevm.currentTarget).get x = ((b.getStor sevm.currentTarget).set lockSlot 1).get x := by
@@ -231,8 +178,7 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
   clear hV1
   vnorm
   rw [show (Nat.toB256 12582 + Bytes.toB256 [6]).toNat = 0x312c from by decide] at h
-  xjd 0x312d  -- 312c JUMPDEST
-  xs 0x3130 (.push [0x02, 0x60] (by decide)) ri_push  -- 312d PUSH2 0x0260
+  xa 2
   xsw 0x3131 0x260  -- 3130 MSTORE
   xs 0x3134 (.push [0x02, 0x20] (by decide)) ri_push  -- 3131 PUSH2 0x0220
   xsw 0x3135 0x220  -- 3134 MSTORE
@@ -254,71 +200,42 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
   xl 0x3155 0x260  -- 3154 MLOAD
   xs 0x3158 (.push [0x02, 0x20] (by decide)) ri_push  -- 3155 PUSH2 0x0220
   xsw 0x3159 0x220  -- 3158 MSTORE
-  xs 0x315c (.push [0x02, 0x80] (by decide)) ri_push  -- 3159 PUSH2 0x0280
-  xs 0x315e (.push [0x01] (by decide)) ri_push  -- 315c PUSH1 0x01
-  xs 0x315f (.reg (.dup 0)) (ri_dup (by rfl))  -- 315e DUP1
-  xs 0x3161 (.push [0xc0] (by decide)) ri_push  -- 315f PUSH1 0xc0
+  xa 4
   xsw 0x3162 0xc0  -- 3161 MSTORE
-  xs 0x3164 (.push [0x20] (by decide)) ri_push  -- 3162 PUSH1 0x20
-  xs 0x3166 (.push [0xc0] (by decide)) ri_push  -- 3164 PUSH1 0xc0
+  xa 2
   xk 0x3167 0xc0  -- 3166 SHA3
   xw 0x3168 (.reg .sload) ri_sload  -- 3167 SLOAD
   xs 0x3169 (.reg (.dup 2)) (ri_dup (by rfl))  -- 3168 DUP3
   xsw 0x316a 0x280  -- 3169 MSTORE
-  xs 0x316c (.push [0x01] (by decide)) ri_push  -- 316a PUSH1 0x01
-  xs 0x316d (.reg (.dup 1)) (ri_dup (by rfl))  -- 316c DUP2
-  xs 0x316f (.push [0xc0] (by decide)) ri_push  -- 316d PUSH1 0xc0
+  xa 3
   xsw 0x3170 0xc0  -- 316f MSTORE
-  xs 0x3172 (.push [0x20] (by decide)) ri_push  -- 3170 PUSH1 0x20
-  xs 0x3174 (.push [0xc0] (by decide)) ri_push  -- 3172 PUSH1 0xc0
+  xa 2
   xk 0x3175 0xc0  -- 3174 SHA3
   xs 0x3176 (.reg .add) ri_add  -- 3175 ADD
   xw 0x3177 (.reg .sload) ri_sload  -- 3176 SLOAD
-  xs 0x3178 (.reg (.dup 2)) (ri_dup (by rfl))  -- 3177 DUP3
-  xs 0x317a (.push [0x20] (by decide)) ri_push  -- 3178 PUSH1 0x20
-  xs 0x317b (.reg .add) ri_add  -- 317a ADD
+  xa 3
   xsw 0x317c 0x2a0  -- 317b MSTORE
-  xs 0x317e (.push [0x02] (by decide)) ri_push  -- 317c PUSH1 0x02
-  xs 0x317f (.reg (.dup 1)) (ri_dup (by rfl))  -- 317e DUP2
-  xs 0x3181 (.push [0xc0] (by decide)) ri_push  -- 317f PUSH1 0xc0
+  xa 3
   xsw 0x3182 0xc0  -- 3181 MSTORE
-  xs 0x3184 (.push [0x20] (by decide)) ri_push  -- 3182 PUSH1 0x20
-  xs 0x3186 (.push [0xc0] (by decide)) ri_push  -- 3184 PUSH1 0xc0
+  xa 2
   xk 0x3187 0xc0  -- 3186 SHA3
   xs 0x3188 (.reg .add) ri_add  -- 3187 ADD
   xw 0x3189 (.reg .sload) ri_sload  -- 3188 SLOAD
-  xs 0x318a (.reg (.dup 2)) (ri_dup (by rfl))  -- 3189 DUP3
-  xs 0x318c (.push [0x40] (by decide)) ri_push  -- 318a PUSH1 0x40
-  xs 0x318d (.reg .add) ri_add  -- 318c ADD
+  xa 3
   xsw 0x318e 0x2c0  -- 318d MSTORE
-  xs 0x318f (.reg .pop) ri_pop  -- 318e POP
-  xs 0x3190 (.reg .pop) ri_pop  -- 318f POP
-  xs 0x3193 (.push [0x02, 0xe0] (by decide)) ri_push  -- 3190 PUSH2 0x02e0
-  xs 0x3196 (.push [0x02, 0x80] (by decide)) ri_push  -- 3193 PUSH2 0x0280
-  xs 0x3197 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3196 DUP1
+  xa 5
   xl 0x3198 0x280  -- 3197 MLOAD
   xs 0x3199 (.reg (.dup 2)) (ri_dup (by rfl))  -- 3198 DUP3
   xsw 0x319a 0x2e0  -- 3199 MSTORE
-  xs 0x319b (.reg (.dup 0)) (ri_dup (by rfl))  -- 319a DUP1
-  xs 0x319d (.push [0x20] (by decide)) ri_push  -- 319b PUSH1 0x20
-  xs 0x319e (.reg .add) ri_add  -- 319d ADD
+  xa 3
   xl 0x319f 0x2a0  -- 319e MLOAD
-  xs 0x31a0 (.reg (.dup 2)) (ri_dup (by rfl))  -- 319f DUP3
-  xs 0x31a2 (.push [0x20] (by decide)) ri_push  -- 31a0 PUSH1 0x20
-  xs 0x31a3 (.reg .add) ri_add  -- 31a2 ADD
+  xa 3
   xsw 0x31a4 0x300  -- 31a3 MSTORE
-  xs 0x31a5 (.reg (.dup 0)) (ri_dup (by rfl))  -- 31a4 DUP1
-  xs 0x31a7 (.push [0x40] (by decide)) ri_push  -- 31a5 PUSH1 0x40
-  xs 0x31a8 (.reg .add) ri_add  -- 31a7 ADD
+  xa 3
   xl 0x31a9 0x2c0  -- 31a8 MLOAD
-  xs 0x31aa (.reg (.dup 2)) (ri_dup (by rfl))  -- 31a9 DUP3
-  xs 0x31ac (.push [0x40] (by decide)) ri_push  -- 31aa PUSH1 0x40
-  xs 0x31ad (.reg .add) ri_add  -- 31ac ADD
+  xa 3
   xsw 0x31ae 0x320  -- 31ad MSTORE
-  xs 0x31af (.reg .pop) ri_pop  -- 31ae POP
-  xs 0x31b0 (.reg .pop) ri_pop  -- 31af POP
-  xs 0x31b3 (.push [0x01, 0x40] (by decide)) ri_push  -- 31b0 PUSH2 0x0140
-  xs 0x31b6 (.push [0x03, 0x60] (by decide)) ri_push  -- 31b3 PUSH2 0x0360
+  xa 4
   xsw 0x31b7 0x360  -- 31b6 MSTORE
   have hd : ∀ x, (d.getStor sevm.currentTarget).get x =
       ((b.getStor sevm.currentTarget).set lockSlot 1).get x := by

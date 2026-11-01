@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.GetterScalarWalk
+import Blanc.Lift.WalkKit
 
 /-! Single-key storage getters use the compiler's exact scratch-write order. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -55,14 +56,11 @@ theorem singleMapping_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (32 : B256).toNat = 32 from rfl]
     rw [St.extCost_eq base.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 2
   simp only [show (32 : B256).toNat = 32 from rfl,
     show (0 : B256).toNat = 0 from rfl]
   have gas : G + c + 53 = (G + c + 11) + 42 := by omega
@@ -155,22 +153,14 @@ theorem allowance_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   rw [show memExtSize 96 32 32 = 96 from by decide] at inner
   have m2 := allowanceScratch2_ptr mem owner spender
   unfold t_1dd8_c30
-  refine rx_dest ?_
-  refine rx_push (w := 2) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 5
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap3 ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (32 : B256).toNat = 32 from rfl]
     rw [St.extCost_eq base.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   simp only [show (32 : B256).toNat = 32 from rfl, show (0 : B256).toNat = 0 from rfl]
   have gas : G + c + 116 = (G + c + 74) + 42 := by omega
   rw [gas]
@@ -179,13 +169,11 @@ theorem allowance_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   · have size : ((M.write 32 (2 : B256).toBytes).write 0 owner.toBytes).size = 96 := m1.size
     rw [St.extCost_eq size]; decide
   · exact congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw_right_first M 0 owner 2)
-  refine rx_swap1 ?_
-  refine rx_swap2 ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · have size : ((M.write 32 (2 : B256).toBytes).write 0 owner.toBytes).size = 96 := m1.size
     rw [St.extCost_eq size]; decide
-  refine rx_swap1 ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (32 : B256).toNat = 32 from rfl]
     have size : (((M.write 32 (2 : B256).toBytes).write 0 owner.toBytes).write 32 (mapSlot owner 2).toBytes).size = 96 := inner.size

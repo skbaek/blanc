@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLivePull
+import Blanc.Lift.WalkKit
 
 /-!
 # `exchange`, forward: the fee coin's two `balanceOf(self)` reads
@@ -34,17 +35,12 @@ theorem rx_ex_bal1_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : 
     SFunc.RunEx cert.prog sevm (St b [] M G) t_24d8_c0 Q := by
   have hW'c := hL.wc
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 44 := ⟨G - 44, by omega⟩
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   refine rxe_mstoreW (o := 0x3c0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x3c0 0x3c0 32 = 0x3e0 by decide] at hsz
   xr (rx_address (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreW (o := 0x3e0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x3e0 0x3e0 32 = 0x400 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x3a0) hR hsz rfl (by decide) (by hr) ·)
   wsimp
   rw [hF.coin.read]
@@ -62,17 +58,10 @@ theorem rx_ex_bal1_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : 
   xr (rx_push rfl (by hr) ·)
   xr (rx_branch_succ (by decide) ·)
   -- tree t_24fe_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_returndatasize (by hr) ·)
-  xr (rx_gt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   xr (rx_branch_succ (by rw [hrd]; exact ex_rds_gt hlen hlt) ·)
   -- tree t_250b_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x440) hR hsz rfl (by decide) (by hr) ·)
   rw [ex_ans_read _ _ _ hlen, hA]
   xr (rx_push rfl (by hr) ·)
@@ -113,17 +102,12 @@ theorem rx_ex_bal2_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : 
   have hW'c := hL.wc
   have hD := hF.dx
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 47 := ⟨G - 47, by omega⟩
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   refine rxe_mstoreW (o := 0x700) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x6e0 0x700 32 = 0x720 by decide] at hsz
   xr (rx_address (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreW (o := 0x720) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x720 0x720 32 = 0x740 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x3a0) hR hsz rfl (by decide) (by hr) ·)
   wsimp
   rw [hF.coin.read]
@@ -141,38 +125,19 @@ theorem rx_ex_bal2_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R U : Nat} {Q : 
   xr (rx_push rfl (by hr) ·)
   xr (rx_branch_succ (by decide) ·)
   -- tree t_2698_c12
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_returndatasize (by hr) ·)
-  xr (rx_gt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   xr (rx_branch_succ (by rw [hrd]; exact ex_rds_gt hlen hlt) ·)
   -- tree t_26a5_c12
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x780) hR hsz rfl (by decide) (by hr) ·)
   rw [ex_ans_read _ _ _ hlen, hA]
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x380) hR hsz rfl (by decide) (by hr) ·); try wsimp
   rw [hD.read]
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   xr (rx_branch_succ (ex_geGuard hsub) ·)
   -- tree t_26bd_c12
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_sub (by hr) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 9
   refine rxe_mstoreW (o := 0x380) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7a0 0x380 32 = 0x7a0 by decide] at hsz
   refine k d _ _ g2 hLd hR hW hsz ⟨fun k hk => by wautoH (hF.rate k hk),
     fun k hk => by wautoH (hF.old k hk), fun k hk => by wautoH (hF.xp k hk),

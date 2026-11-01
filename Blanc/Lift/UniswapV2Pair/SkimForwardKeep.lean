@@ -68,9 +68,6 @@ def SkimForwardEnv.FirstCallFresh {sevm : Sevm} {b : Devm} {g : Nat}
   ∃ R : Exec.Deriv, Blanc.Lift.StepIn R sevm env.firstCallPre (.exec .call) env.dt0 ∧
     WriterFreshKeys U (pairTraceKeys sevm.currentTarget R)
 
-private theorem St_getCode_eq (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
-    (St x S M g).getCode a = x.getCode a := rfl
-
 /-- **The first skim transfer keeps the Pair's lock-guarded fields** (derived, not assumed).  At a
 non-static skim frame whose storage represents `current.state` and whose account holds the Pair
 code, the first transfer `CALL` leaves `totalSupply` (slot 0), the three packed reserve fields
@@ -129,7 +126,7 @@ theorem SkimForwardEnv.firstCall_keeps {K U : WriterKey → Prop} {current : Che
         cases raw <;> exact Exec.preserves_getCode childRun
     have preserve := Ninst.codePreserve_effectRec (.exec .staticcall) slot (steps 0)
     have nonempty := fun h => preserve pair h
-    rw [St_getCode_eq] at nonempty
+    rw [St_getCode] at nonempty
     have nonempty' : ((temporalAccountAccessBase (skimCachedWorld sevm b)
         (skimToken0 sevm b).toAdr).getCode pair).toList ≠ [] := by
       rw [cachedCode]

@@ -3,6 +3,7 @@ import Blanc.Lift.Curve3Pool.Walk.Donate
 import Blanc.Lift.Curve3Pool.Walk.AdminBalancesX
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLoop
 import Blanc.Lift.Curve3Pool.Spec
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `donate_admin_fees`, on the actual derivation
@@ -48,20 +49,15 @@ theorem donX_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
       (vyImg [] (Sevm.dataWord sevm 0)) :=
     vyMem_reads Mem.wf_empty Mem.reads_empty _
   have hW : Mem.Wf (vyMem Mem.empty (Sevm.dataWord sevm 0)) := vyMem_wf Mem.wf_empty _
-  xs 0x4f61 (.reg .callvalue) ri_callvalue
-  xs 0x4f62 (.reg .iszero) ri_iszero
-  xs 0x4f65 (.push [0x4f, 0x6a] (by decide)) ri_push
+  xa 3
   xji 0x4f66 0x4f6a hw
   · xdead
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
-  xjd 0x4f6b
-  xs 0x4f6d (.push [0x04] (by decide)) ri_push
+  xa 2
   xw 0x4f6e (.reg .sload) ri_sload
   rw [show Bytes.toB256 [4] = ownerSlot from by decide] at h
-  xs 0x4f6f (.reg .caller) ri_caller
-  xs 0x4f70 (.reg .eq) ri_eq
-  xs 0x4f73 (.push [0x4f, 0x78] (by decide)) ri_push
+  xa 3
   xji 0x4f74 0x4f78 hw
   · xdead
   have hown : sevm.caller.toB256 = (b.getStor sevm.currentTarget).get ownerSlot := by
@@ -69,12 +65,7 @@ theorem donX_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     rw [getStorVal_eq] at e
     exact e
   clear hw
-  xjd 0x4f79
-  xs 0x4f7c (.push [0x01, 0x40] (by decide)) ri_push
-  xs 0x4f7e (.push [0x00] (by decide)) ri_push
-  xs 0x4f80 (.push [0x03] (by decide)) ri_push
-  xs 0x4f81 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x4f82 (.reg (.dup 3)) (ri_dup (by rfl))
+  xa 6
   xmo 0x4f83 (.reg .mstore) (ri_mstore_imgAt (o := 0x140) rfl)
   have hctrR : Region (Bytes.writeAt (vyImg [] (Sevm.dataWord sevm 0)) 320
       (Bytes.toB256 [0]).toBytes) 0x140 (Nat.toB256 0).toBytes :=
@@ -148,31 +139,24 @@ theorem donX_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
       B256.toNat_toB256_of_lt (by omega : k < 2 ^ 256),
       B256.toNat_toB256_of_lt (by omega : k + 1 < 2 ^ 256)]
     omega
-  xjd 0x4ff7
-  xs 0x4ff8 (.reg (.dup 1)) (ri_dup (by rfl))
+  xa 2
   xmo 0x4ff9 (.reg .mload) (ri_mload_imgAt (o := 0x140) rfl)
   rw [Region.read hctrR (B256.length_toBytes _), B256.toB256_toBytes] at h
-  xs 0x4ffb (.push [0x01] (by decide)) ri_push
-  xs 0x4ffc (.reg .add) ri_add
+  xa 2
   rw [hplus] at h
-  xs 0x4ffd (.reg (.dup 0)) (ri_dup (by rfl))
-  xs 0x4ffe (.reg (.dup 3)) (ri_dup (by rfl))
+  xa 2
   xmo 0x4fff (.reg .mstore) (ri_mstore_imgAt (o := 0x140) rfl)
   have hctrR' : Region (Bytes.writeAt img 0x140 (Nat.toB256 (k + 1)).toBytes) 0x140
       (Nat.toB256 (k + 1)).toBytes :=
     Region.write_self _ _ _
-  xs 0x5000 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x5001 (.reg .eq) ri_eq
-  xs 0x5002 (.reg .iszero) ri_iszero
-  xs 0x5005 (.push [0x4f, 0x84] (by decide)) ri_push
+  xa 4
   have h32 : (Bytes.toB256 [0x03]).toNat = 3 := by decide
   have hkp1 : (Nat.toB256 (k + 1)).toNat = k + 1 :=
     B256.toNat_toB256_of_lt (by omega : k + 1 < 2 ^ 256)
   by_cases hdone : k + 1 = 3
   · xji 0x5006 0x4f84 hw
     · xjd 0x5007
-      xs 0x5008 (.reg .pop) ri_pop
-      xs 0x5009 (.reg .pop) ri_pop
+      xa 2
       exact Or.inr ⟨hdone, _, _, h⟩
     · have hne := isNe_jump hw
       have h3 : (Bytes.toB256 [0x03]).toNat ≠ (Nat.toB256 (k + 1)).toNat :=
@@ -220,31 +204,21 @@ theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
       Mem.Reads M' img' ∧ Mem.Wf M' ∧
       XAt sevm post 0x4ff6
         (St d' [Bytes.toB256 [0x03], Bytes.toB256 [0x01, 0x40]] M' G') L' := by
-  xjd 0x4f85
-  xs 0x4f87 (.push [0x20] (by decide)) ri_push
-  xs 0x4f8a (.push [0x01, 0xe0] (by decide)) ri_push
-  xs 0x4f8c (.push [0x24] (by decide)) ri_push
-  xs 0x4f91 (.push [0x70, 0xa0, 0x82, 0x31] (by decide)) ri_push
-  xs 0x4f94 (.push [0x01, 0x60] (by decide)) ri_push
+  xa 6
   xmo 0x4f95 (.reg .mstore) (ri_mstore_imgAt (o := 0x160) rfl)
   have hctrR_A : Region (Bytes.writeAt img 0x160
       (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes) 0x140 (Nat.toB256 ↑k).toBytes :=
     Region.write_other hctrR (Or.inl (by simp only [B256.length_toBytes]; omega))
-  xs 0x4f96 (.reg .address) ri_address
-  xs 0x4f99 (.push [0x01, 0x80] (by decide)) ri_push
+  xa 2
   xmo 0x4f9a (.reg .mstore) (ri_mstore_imgAt (o := 0x180) rfl)
   have hctrR_B : Region (Bytes.writeAt (Bytes.writeAt img 0x160
       (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes) 0x180
       sevm.currentTarget.toB256.toBytes) 0x140 (Nat.toB256 ↑k).toBytes :=
     Region.write_other hctrR_A (Or.inl (by simp only [B256.length_toBytes]; omega))
-  xs 0x4f9d (.push [0x01, 0x7c] (by decide)) ri_push
-  xs 0x4fa0 (.push [0x01, 0x40] (by decide)) ri_push
+  xa 2
   xmo 0x4fa1 (.reg .mload) (ri_mload_imgAt (o := 0x140) rfl)
   rw [Region.read hctrR_B (B256.length_toBytes _), B256.toB256_toBytes] at h
-  xs 0x4fa3 (.push [0x03] (by decide)) ri_push
-  xs 0x4fa4 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x4fa5 (.reg .lt) ri_lt
-  xs 0x4fa8 (.push [0x4f, 0xad] (by decide)) ri_push
+  xa 4
   have hltK : Nat.toB256 ↑k < Bytes.toB256 [0x03] := by
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt (by omega),
       show (Bytes.toB256 [0x03]).toNat = 3 by decide]
@@ -252,17 +226,14 @@ theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
   xji 0x4fa9 0x4fad hw
   · exact absurd hw (ltCheck_ne_zero_of_lt hltK)
   clear hw
-  xjd 0x4fae
-  xs 0x4fb0 (.push [0x00] (by decide)) ri_push
-  xs 0x4fb2 (.push [0xc0] (by decide)) ri_push
+  xa 3
   xmo 0x4fb3 (.reg .mstore) (ri_mstore_imgAt (o := 0xc0) rfl)
   have hctrR_C : Region (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt img 0x160
       (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes) 0x180
       sevm.currentTarget.toB256.toBytes) 0xc0
       (Bytes.toB256 [0]).toBytes) 0x140 (Nat.toB256 ↑k).toBytes :=
     Region.write_other hctrR_B (Or.inr (by decide))
-  xs 0x4fb5 (.push [0x20] (by decide)) ri_push
-  xs 0x4fb7 (.push [0xc0] (by decide)) ri_push
+  xa 2
   xmo 0x4fb8 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_zero] at h
   xs 0x4fb9 (.reg .add) ri_add
@@ -287,11 +258,7 @@ theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
   · exact absurd hpre hcoinK
   clear hk hw
   rw [donX_input] at hdata
-  xjd 0x4fc5
-  xs 0x4fc7 (.push [0x1f] (by decide)) ri_push
-  xs 0x4fc8 (.reg .returndatasize) ri_returndatasize
-  xs 0x4fc9 (.reg .gt) ri_gt
-  xs 0x4fcc (.push [0x4f, 0xd1] (by decide)) ri_push
+  xa 5
   xji 0x4fcd 0x4fd1 hw
   · xdead
   have hlen32 : 32 ≤ out.length := by
@@ -300,10 +267,7 @@ theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at hgt
     omega
   clear hw
-  xjd 0x4fd2
-  xs 0x4fd4 (.push [0x00] (by decide)) ri_push
-  xs 0x4fd5 (.reg .pop) ri_pop
-  xs 0x4fd8 (.push [0x01, 0xe0] (by decide)) ri_push
+  xa 4
   xmo 0x4fd9 (.reg .mload) (ri_mload_imgAt (o := 0x1e0) rfl)
   have hlen : (out.take 32).length = 32 := by rw [List.length_take]; omega
   rw [donX_read_out _ _ hlen] at h
@@ -311,24 +275,18 @@ theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
   xs 0x4fdc (.push [0x01, 0x40] (by decide)) ri_push
   xmo 0x4fdd (.reg .mload) (ri_mload_imgAt (o := 0x140) rfl)
   rw [Region.read hctrR_D (B256.length_toBytes _), B256.toB256_toBytes] at h
-  xs 0x4fdf (.push [0x03] (by decide)) ri_push
-  xs 0x4fe0 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x4fe1 (.reg .lt) ri_lt
-  xs 0x4fe4 (.push [0x4f, 0xe9] (by decide)) ri_push
+  xa 4
   xji 0x4fe5 0x4fe9 hw
   · exact absurd hw (ltCheck_ne_zero_of_lt hltK)
   clear hw
-  xjd 0x4fea
-  xs 0x4fec (.push [0x01] (by decide)) ri_push
-  xs 0x4fee (.push [0xc0] (by decide)) ri_push
+  xa 3
   xmo 0x4fef (.reg .mstore) (ri_mstore_imgAt (o := 0xc0) rfl)
   have hctrR_E : Region (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
       (Bytes.writeAt img 0x160 (Bytes.toB256 [0x70, 0xa0, 0x82, 0x31]).toBytes) 0x180
       sevm.currentTarget.toB256.toBytes) 0xc0 (Bytes.toB256 [0]).toBytes) 0x1e0
       (out.take 32)) 0xc0 (Bytes.toB256 [1]).toBytes) 0x140 (Nat.toB256 ↑k).toBytes :=
     Region.write_other hctrR_D (Or.inr (by decide))
-  xs 0x4ff1 (.push [0x20] (by decide)) ri_push
-  xs 0x4ff3 (.push [0xc0] (by decide)) ri_push
+  xa 2
   xmo 0x4ff4 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one] at h
   xs 0x4ff5 (.reg .add) ri_add

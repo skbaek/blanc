@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.LPMintCore
 import Blanc.Lift.UniswapV2Pair.WriterArithmetic
+import Blanc.Lift.WalkKit
 
 /-! Literal LP burn 63: balance debit precedes total-supply debit. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -45,20 +46,15 @@ theorem lpBurn_supply_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   have m1 := mem.write 128 value (Or.inr (by decide))
   rw [show memExtSize 192 128 32 = 192 from by decide] at m1
   unfold t_2a02_c63
-  refine rx_dest ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 4
   have gs : G + c + 1831 = (G + 1831) + c := by omega
   rw [gs]
   refine rx_sstoreC fork cost (by omega) nonstatic ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mload (c := 3) ?_ mem.word (mem.read_self (by decide))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
   simp only [show (128 : B256).toNat = 128 from rfl]
@@ -73,10 +69,7 @@ theorem lpBurn_supply_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
     (by simp only [List.length_cons]; omega) ?_
   refine rx_swap2 ?_
   refine rx_push (w := transferTopic) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap2 ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 4
   refine rx_sub' (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_add' (v := 32) (by decide) (by simp only [List.length_cons]; omega) ?_
@@ -86,8 +79,7 @@ theorem lpBurn_supply_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_log3 (data := value.toBytes) nonstatic ?_ ?_ (m1.read_self (by decide)) ?_
   · rw [St.extCost_eq m1.size]; decide
   · exact Mem.read_write_word_of_wf mem.wf 128 value
-  refine rx_pop ?_
-  refine rx_pop ?_
+  wrun! 2
   exact rx_ret
 
 theorem lpBurn_supply_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
@@ -262,18 +254,14 @@ theorem lpBurn_balance_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   refine rx_and (v := fromWord.toAdr.toB256)
     (by rw [B256.and_comm]; exact ff20_and_word fromWord)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq m0.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   simp only [show (0 : B256).toNat = 0 from rfl, show (32 : B256).toNat = 32 from rfl]
   have gh : G + balanceCost + loadCost + supplyCost + 1972 =
     (G + balanceCost + loadCost + supplyCost + 1930) + 42 := by omega
@@ -282,9 +270,7 @@ theorem lpBurn_balance_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     (m1.read_self (by decide)) (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq m1.size]; decide
   · exact congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 fromWord.toAdr.toB256 1)
-  refine rx_swap2 ?_
-  refine rx_swap1 ?_
-  refine rx_swap2 ?_
+  wrun! 3
   have gs : G + balanceCost + loadCost + supplyCost + 1921 =
     (G + loadCost + supplyCost + 1921) + balanceCost := by omega
   rw [gs]
@@ -292,11 +278,7 @@ theorem lpBurn_balance_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   have gl : G + loadCost + supplyCost + 1921 = (G + supplyCost + 1921) + loadCost := by omega
   rw [gl]
   refine rx_sload_selC fork loadEq (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x2a02) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0xffffffff) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x226e) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 5
   refine rx_and (v := 0x226e) (by decide) (by simp only [List.length_cons]; omega) ?_
   have gc : G + supplyCost + 1903 = ((G + supplyCost + 1841) + 54) + 8 := by omega
   rw [gc]
@@ -468,18 +450,14 @@ theorem lpBurn63_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   refine rx_and (v := fromWord.toAdr.toB256)
     (by rw [B256.and_comm]; exact ff20_and_word fromWord)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq m0.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 2
   simp only [show (0 : B256).toNat = 0 from rfl, show (32 : B256).toNat = 32 from rfl]
   have gh : G + sourceCost + balanceCost + loadCost + supplyCost + 2131 =
     (G + sourceCost + balanceCost + loadCost + supplyCost + 2089) + 42 := by omega
@@ -492,11 +470,7 @@ theorem lpBurn63_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     (G + balanceCost + loadCost + supplyCost + 2089) + sourceCost := by omega
   rw [gl]
   refine rx_sload_selC fork sourceEq (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x29c8) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0xffffffff) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x226e) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 5
   refine rx_and (v := 0x226e) (by decide) (by simp only [List.length_cons]; omega) ?_
   have gc : G + balanceCost + loadCost + supplyCost + 2071 =
     ((G + balanceCost + loadCost + supplyCost + 2009) + 54) + 8 := by omega

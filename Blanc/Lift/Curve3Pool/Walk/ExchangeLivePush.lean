@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveStore
+import Blanc.Lift.WalkKit
 
 /-!
 # `exchange`, forward: the `transfer` push, its `raw_call` test, the event, the lock, `STOP`
@@ -52,30 +53,15 @@ theorem rx_ex_push_core {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Ou
     SFunc.RunEx cert.prog sevm (St b [Bytes.toB256 [32] + (Bytes.toB256 [0] + Bytes.toB256 [4] +
       Bytes.toB256 [32] + Bytes.toB256 [32]), Bytes.toB256 [10, 160]] M G) t_2b49_c1174 Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 106 := ⟨G - 106, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rxm_mload (o := 0xb40) hR hsz rfl (by decide) (by hr) ·)
   rw [(Region.word hdata.left).read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 8
   xr (rx_branch_succ (ex_lt3_ne hj) ·)
   -- tree t_2b69_c1174
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreW (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; generalize hMc : M.write 0xc0 (Bytes.toB256 [0]).toBytes = Mc; intro hR hW hsz; rw [show memExtSize 0xbc0 0xc0 32 = 0xbc0 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hr) (by decide) ·)
   rw [keccak_zero]
   xr (rx_add (by hr) ·)
@@ -155,18 +141,11 @@ theorem rx_ex_push_core {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Ou
   replace hL := hLd.sha hsha
   clear hW6 hsz6 hR5 hW5 hmem
   obtain ⟨g8, rfl⟩ : ∃ g, G2 = g + 2232 := ⟨G2 - 2232, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   refine rxe_mstoreW (o := 0xc40) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xc20 0xc40 32 = 0xc60 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreW (o := 0xc60) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xc60 0xc60 32 = 0xc80 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreW (o := 0xc80) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xc80 0xc80 32 = 0xca0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x920) hR hsz rfl (by decide) (by hr) ·)
@@ -174,13 +153,9 @@ theorem rx_ex_push_core {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Ou
   rw [hout6.read]
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreW (o := 0xca0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0xca0 0xca0 32 = 0xcc0 by decide] at hsz
-  xr (rx_caller (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_log2 (c := 2149) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g9 b9 hb9 hg91 hg92 hx_g9; replace hL := (hL.addLogE _).sstoreE hb9
   have hlog : ∀ (x : Devm) (l : Log), sstoreCost sevm (x.addLog l) (Bytes.toB256 [255, 255, 255])
       (Bytes.toB256 [0]) = sstoreCost sevm x (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0]) :=

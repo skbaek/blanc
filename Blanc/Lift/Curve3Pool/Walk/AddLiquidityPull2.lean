@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPull
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `add_liquidity`, part 5: the pull loop after the `transferFrom` call
@@ -29,13 +30,7 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
   have hj : ∃ nW G5, nW.toNat = (d.returnData.take 32).length ∧
       XAt sevm post 0x11fa (St d (nW :: d.returnData.length.toB256 :: Bytes.toB256 [0x20] ::
         [3, 0x4c0]) M G5) L := by
-    xs 0x11e9 (.push [0x20] (by decide)) ri_push
-    xs 0x11ea (.reg .returndatasize) ri_returndatasize
-    xs 0x11eb (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0x11ec (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0x11ed (.reg .gt) ri_gt
-    xs 0x11ee (.reg .iszero) ri_iszero
-    xs 0x11f1 (.push [0x11, 0xf7] (by decide)) ri_push
+    xa 7
     xji 0x11f2 0x11f7 hw
     · xs 0x11f3 (.reg (.dup 0)) (ri_dup (by rfl))
       xs 0x11f6 (.push [0x11, 0xf9] (by decide)) ri_push
@@ -48,8 +43,7 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
       rw [List.length_take, B256.toNat_toB256_of_lt hrd]
       omega
     · xjd 0x11f8
-      xs 0x11f9 (.reg (.dup 1)) (ri_dup (by rfl))
-      xjd 0x11fa
+      xa 2
       refine ⟨_, _, ?_, h⟩
       have hge := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
@@ -57,25 +51,12 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
       rw [List.length_take, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
       omega
   obtain ⟨nW, G5, hn, h⟩ := hj
-  xs 0x11fb (.reg (.swap 0)) (ri_swap (by rfl))
-  xs 0x11fc (.reg .pop) ri_pop
-  xs 0x11fd (.reg (.swap 0)) (ri_swap (by rfl))
-  xs 0x11fe (.reg .pop) ri_pop
-  xs 0x1201 (.push [0x8, 0x0] (by decide)) ri_push
+  xa 5
   xma 0x1202 (.reg .mstore) (ri_mstore_imgAtA (o := 0x800) rfl)
-  xs 0x1205 (.push [0x8, 0x0] (by decide)) ri_push
-  xs 0x1206 (.reg (.dup 0)) (ri_dup (by rfl))
+  xa 2
   xma 0x1207 (.reg .mload) (ri_mload_imgAtA (o := 0x800) rfl)
   rw [(WordAt.write_self _ _ _).read] at h
-  xs 0x1209 (.push [0x20] (by decide)) ri_push
-  xs 0x120a (.reg .add) ri_add
-  xs 0x120b (.reg (.dup 0)) (ri_dup (by rfl))
-  xs 0x120e (.push [0x5, 0xc0] (by decide)) ri_push
-  xs 0x120f (.reg (.dup 2)) (ri_dup (by rfl))
-  xs 0x1210 (.reg (.dup 4)) (ri_dup (by rfl))
-  xs 0x1212 (.push [0x0] (by decide)) ri_push
-  xs 0x1214 (.push [0x4] (by decide)) ri_push
-  xs 0x1215 (.reg .gas) ri_gas_remaining
+  xa 9
   have hn32 : (d.returnData.take 32).length ≤ 32 := by rw [List.length_take]; omega
   have hsz : (Bytes.toB256 [0x20] + nW).toNat = 32 + (d.returnData.take 32).length := by
     rw [B256.toNat_add, hn, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
@@ -117,74 +98,39 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
   xji 0x121a 0x121e hw
   · exact absurd hw (by decide)
   clear hw
-  xjd 0x121f
-  xs 0x1220 (.reg .pop) ri_pop
-  xs 0x1221 (.reg .pop) ri_pop
+  xa 3
   have kr : Region img6 0x5e0 (d.returnData.take 32) := by
     have := k_buf.right; rwa [B256.length_toBytes] at this
   have kn : WordAt img6 0x5c0 nW := Region.word k_buf.left
   have hj2 : RawCallOk d.returnData ∧ ∃ M7 G7, Mem.Reads M7 img6 ∧ Mem.Wf M7 ∧ M7.size % 32 = 0 ∧
       XAt sevm post 0x1272 (St b6 [3, 0x4c0] M7 G7) L := by
-    xs 0x1223 (.push [0x0] (by decide)) ri_push
-    xs 0x1226 (.push [0x5, 0xc0] (by decide)) ri_push
+    xa 2
     xma 0x1227 (.reg .mload) (ri_mload_imgAtA (o := 0x5c0) rfl)
     rw [kn.read] at h
-    xs 0x1228 (.reg .gt) ri_gt
-    xs 0x1229 (.reg .iszero) ri_iszero
-    xs 0x122c (.push [0x12, 0x71] (by decide)) ri_push
+    xa 3
     xji 0x122d 0x1271 hw
     · have hpos := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x0]).toNat = 0 by decide] at hpos
       clear hw
-      xs 0x1230 (.push [0x5, 0xc0] (by decide)) ri_push
-      xs 0x1231 (.reg (.dup 0)) (ri_dup (by rfl))
-      xs 0x1233 (.push [0x20] (by decide)) ri_push
-      xs 0x1234 (.reg .add) ri_add
+      xa 4
       xma 0x1235 (.reg .mload) (ri_mload_imgAtA (o := 0x5e0) (by decide))
-      xs 0x1237 (.push [0x0] (by decide)) ri_push
-      xs 0x1238 (.reg (.dup 2)) (ri_dup (by rfl))
+      xa 2
       xma 0x1239 (.reg .mload) (ri_mload_imgAtA (o := 0x5c0) rfl)
       rw [kn.read] at h
-      xs 0x123a (.reg (.dup 0)) (ri_dup (by rfl))
-      xs 0x123c (.push [0x20] (by decide)) ri_push
-      xs 0x123d (.reg (.swap 0)) (ri_swap (by rfl))
-      xs2 0x123e (.reg .sgt) ri_sgt
-      xs 0x123f (.reg .iszero) ri_iszero
-      xs 0x1242 (.push [0x12, 0x47] (by decide)) ri_push
+      xa 6
       xji 0x1243 0x1247 hw
       · xdead
       clear hw
-      xjd 0x1248
-      xs 0x1249 (.reg (.dup 0)) (ri_dup (by rfl))
-      xs 0x124a (.reg (.swap 1)) (ri_swap (by rfl))
-      xs 0x124b (.reg (.swap 0)) (ri_swap (by rfl))
-      xs2 0x124c (.reg .slt) ri_slt
-      xs 0x124d (.reg .iszero) ri_iszero
-      xs 0x1250 (.push [0x12, 0x55] (by decide)) ri_push
+      xa 7
       xji 0x1251 0x1255 hw
       · xdead
       clear hw
-      xjd 0x1256
-      xs 0x1257 (.reg (.dup 0)) (ri_dup (by rfl))
-      xs 0x1259 (.push [0x20] (by decide)) ri_push
-      xs 0x125a (.reg .sub) ri_sub
-      xs 0x125d (.push [0x1, 0x0] (by decide)) ri_push
+      xa 5
       xs 0x125e (.reg .exp) ri_exp
-      xs 0x125f (.reg (.dup 2)) (ri_dup (by rfl))
-      xs 0x1260 (.reg .div) ri_div
-      xs 0x1261 (.reg (.swap 0)) (ri_swap (by rfl))
-      xs 0x1262 (.reg .pop) ri_pop
-      xs 0x1263 (.reg (.swap 0)) (ri_swap (by rfl))
-      xs 0x1264 (.reg .pop) ri_pop
-      xs 0x1265 (.reg (.swap 0)) (ri_swap (by rfl))
-      xs 0x1266 (.reg .pop) ri_pop
-      xs 0x1267 (.reg .iszero) ri_iszero
-      xs 0x1268 (.reg .iszero) ri_iszero
-      xs 0x126b (.push [0x12, 0x70] (by decide)) ri_push
+      xa 11
       xji 0x126c 0x1270 hq
       · xdead
-      xjd 0x1271
-      xjd 0x1272
+      xa 2
       refine ⟨.inr ?_, _, _, hR, hW, hA, h⟩
       have hq0 := ne_of_eqCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hq)
       have hxs : (img6.sliceD 0x5e0 32 0).length = 32 := List.length_sliceD _ _ _ _
@@ -241,12 +187,9 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
         WordAt img' o w) ∧
       WordAt img' 0x4e0 (Bytes.toB256 (c.post.output.take 32) - v) ∧
       XAt sevm post 0x12d6 (St d [3, 0x4c0] M' G') L') := by
-  xs 0x1274 (.push [0x02] (by decide)) ri_push
-  xs 0x1277 (.push [0x04, 0xc0] (by decide)) ri_push
+  xa 2
   xml 0x1278 0x4c0 hctr
-  xs 0x1279 (.reg .eq) ri_eq
-  xs 0x127a (.reg .iszero) ri_iszero
-  xs 0x127d (.push [0x12, 0xd5] (by decide)) ri_push
+  xa 3
   xji 0x127e 0x12d5 hw
   · have hi2 : i = 2 := by
       have e := isNe_fall hw
@@ -255,17 +198,12 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
       exact e2
     clear hw
     refine .inr ⟨hi2, ?_⟩
-    xs 0x1280 (.push [0x20] (by decide)) ri_push
-    xs 0x1283 (.push [0x08, 0xe0] (by decide)) ri_push
-    xs 0x1285 (.push [0x24] (by decide)) ri_push
-    xs 0x128a (.push [0x70, 0xa0, 0x82, 0x31] (by decide)) ri_push
-    xs 0x128d (.push [0x08, 0x60] (by decide)) ri_push
+    xa 5
     xma 0x128e (.reg .mstore) (ri_mstore_imgAtA (o := 0x860) rfl)
     xs 0x128f (.reg .address) ri_al_address
     xs 0x1292 (.push [0x08, 0x80] (by decide)) ri_push
     xma 0x1293 (.reg .mstore) (ri_mstore_imgAtA (o := 0x880) rfl)
-    xs 0x1296 (.push [0x08, 0x7c] (by decide)) ri_push
-    xs 0x1299 (.push [0x05, 0x00] (by decide)) ri_push
+    xa 2
     xml 0x129a 0x500 hC
     xs 0x129b (.reg .gas) ri_gas_remaining
     replace h := xa_staticcall_imgA (pc' := 0x129c) (i := 0x87c) (n := 0x24) (o := 0x8e0)
@@ -281,11 +219,7 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     clear hk
     have h4 : d1.getCode 4 = b.getCode 4 := by
       rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self) htgt, hcpre]
-    xjd 0x12a5
-    xs 0x12a7 (.push [0x1f] (by decide)) ri_push
-    xs 0x12a8 (.reg .returndatasize) ri_returndatasize
-    xs 0x12a9 (.reg .gt) ri_gt
-    xs 0x12ac (.push [0x12, 0xb1] (by decide)) ri_push
+    xa 5
     xji 0x12ad 0x12b1 hw2
     · xdead
     have hlen : 32 ≤ out.length := by
@@ -293,10 +227,7 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
       rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
       exact e
     clear hw2
-    xjd 0x12b2
-    xs 0x12b4 (.push [0x00] (by decide)) ri_push
-    xs 0x12b5 (.reg .pop) ri_pop
-    xs 0x12b8 (.push [0x08, 0xe0] (by decide)) ri_push
+    xa 4
     xma 0x12b9 (.reg .mload) (ri_mload_imgAtA (o := 0x8e0) rfl)
     rw [Bytes.sliceD_writeAt_inside _ _ _ _ _ (le_refl _) (by rw [List.length_take]; omega),
       Nat.sub_self, List.sliceD_zero_of_length (by rw [List.length_take]; omega)] at h
@@ -306,24 +237,12 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
         0x8e0 (out.take 0x20)) 0x4e0 v := by wchain; exact hv
     xma 0x12bd (.reg .mload) (ri_mload_imgAtA (o := 0x4e0) rfl)
     rw [kv.read] at h
-    xs 0x12be (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0x12bf (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0x12c0 (.reg .lt) ri_lt
-    xs 0x12c1 (.reg .iszero) ri_iszero
-    xs 0x12c4 (.push [0x12, 0xc9] (by decide)) ri_push
+    xa 5
     xji 0x12c5 0x12c9 hw3
     · xdead
     have hge := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw3)
     clear hw3
-    xjd 0x12ca
-    xs 0x12cb (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0x12cc (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0x12cd (.reg .sub) ri_sub
-    xs 0x12ce (.reg (.swap 0)) (ri_swap (by rfl))
-    xs 0x12cf (.reg .pop) ri_pop
-    xs 0x12d0 (.reg (.swap 0)) (ri_swap (by rfl))
-    xs 0x12d1 (.reg .pop) ri_pop
-    xs 0x12d4 (.push [0x04, 0xe0] (by decide)) ri_push
+    xa 9
     xma 0x12d5 (.reg .mstore) (ri_mstore_imgAtA (o := 0x4e0) rfl)
     xjd 0x12d6
     refine ⟨c, L1, d1, M, _, _, hL, ⟨hdepth, htgt, ?_, hstat, by rw [hcout]; exact hlen, hclogs,
@@ -387,72 +306,40 @@ theorem xa_al_pl6 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     ¬ old i + v < old i ∧ ∃ M' img' G', Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       AlPullImg img' (i + 1) F AF A T D0 old (Function.update nv i (old i + v)) ∧
       XAt sevm post (if i + 1 = 3 then 0x1333 else 0x105d) (St b [3, 0x4c0] M' G') L := by
-  xjd 0x12d7
-  xs 0x12da (.push [0x03, 0x00] (by decide)) ri_push
-  xs 0x12dd (.push [0x04, 0xc0] (by decide)) ri_push
+  xa 3
   xml 0x12de 0x4c0 hm.ctr
-  xs 0x12e0 (.push [0x03] (by decide)) ri_push
-  xs 0x12e1 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x12e2 (.reg .lt) ri_lt
-  xs 0x12e5 (.push [0x12, 0xea] (by decide)) ri_push
+  xa 4
   xji 0x12e6 0x12ea hw
   · exact absurd hw (ltCheck_ne_zero_of_lt (lt_three hi))
   clear hw
-  xjd 0x12eb
-  xs 0x12ed (.push [0x20] (by decide)) ri_push
-  xs 0x12ee (.reg .mul) ri_mul
-  xs 0x12ef (.reg .add) ri_add
+  xa 4
   xma 0x12f0 (.reg .mload) (ri_mload_imgAtA (o := 0x300 + 32 * i)
     (al_off hi 0x300 (by decide) _ (by decide)))
   rw [(hm.m0.old hi).read] at h
   xs 0x12f3 (.push [0x04, 0xe0] (by decide)) ri_push
   xml 0x12f4 0x4e0 hv
-  xs 0x12f5 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x12f6 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x12f7 (.reg (.dup 3)) (ri_dup (by rfl))
-  xs 0x12f8 (.reg .add) ri_add
-  xs 0x12f9 (.reg .lt) ri_lt
-  xs 0x12fa (.reg .iszero) ri_iszero
-  xs 0x12fd (.push [0x13, 0x02] (by decide)) ri_push
+  xa 7
   xji 0x12fe 0x1302 hw
   · xdead
   have hadd := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
-  xjd 0x1303
-  xs 0x1304 (.reg (.dup 0)) (ri_dup (by rfl))
-  xs 0x1305 (.reg (.dup 2)) (ri_dup (by rfl))
-  xs 0x1306 (.reg .add) ri_add
-  xs 0x1307 (.reg (.swap 0)) (ri_swap (by rfl))
-  xs 0x1308 (.reg .pop) ri_pop
-  xs 0x1309 (.reg (.swap 0)) (ri_swap (by rfl))
-  xs 0x130a (.reg .pop) ri_pop
-  xs 0x130d (.push [0x04, 0x60] (by decide)) ri_push
-  xs 0x1310 (.push [0x04, 0xc0] (by decide)) ri_push
+  xa 10
   xml 0x1311 0x4c0 hm.ctr
-  xs 0x1313 (.push [0x03] (by decide)) ri_push
-  xs 0x1314 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x1315 (.reg .lt) ri_lt
-  xs 0x1318 (.push [0x13, 0x1d] (by decide)) ri_push
+  xa 4
   xji 0x1319 0x131d hw
   · exact absurd hw (ltCheck_ne_zero_of_lt (lt_three hi))
   clear hw
-  xjd 0x131e
-  xs 0x1320 (.push [0x20] (by decide)) ri_push
-  xs 0x1321 (.reg .mul) ri_mul
-  xs 0x1322 (.reg .add) ri_add
+  xa 4
   xma 0x1323 (.reg .mstore) (ri_mstore_imgAtA (o := 0x460 + 32 * i)
     (al_off hi 0x460 (by decide) _ (by decide)))
   have kc : WordAt (Bytes.writeAt img (0x460 + 32 * i) (old i + v).toBytes) 0x4c0 (Nat.toB256 i) :=
     hm.ctr.write_other (by simp only [B256.length_toBytes]; omega)
-  xjd 0x1324
-  xs 0x1325 (.reg (.dup 1)) (ri_dup (by rfl))
+  xa 2
   xma 0x1326 (.reg .mload) (ri_mload_imgAtA (o := 0x4c0) rfl)
   rw [kc.read] at h
-  xs 0x1328 (.push [0x01] (by decide)) ri_push
-  xs 0x1329 (.reg .add) ri_add
+  xa 2
   rw [succ_lit hi] at h
-  xs 0x132a (.reg (.dup 0)) (ri_dup (by rfl))
-  xs 0x132b (.reg (.dup 3)) (ri_dup (by rfl))
+  xa 2
   xma 0x132c (.reg .mstore) (ri_mstore_imgAtA (o := 0x4c0) rfl)
   have hP : AlPullImg (Bytes.writeAt (Bytes.writeAt img (0x460 + 32 * i) (old i + v).toBytes) 0x4c0
       (Nat.toB256 (i + 1)).toBytes) (i + 1) F AF A T D0 old (Function.update nv i (old i + v)) := by
@@ -472,10 +359,7 @@ theorem xa_al_pl6 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       · rw [Function.update_of_ne (Ne.symm e)]
         exact hm.n2.write_other (by simp only [B256.length_toBytes]; omega)
   refine ⟨hadd, ?_⟩
-  xs 0x132d (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x132e (.reg .eq) ri_eq
-  xs 0x132f (.reg .iszero) ri_iszero
-  xs 0x1332 (.push [0x10, 0x5d] (by decide)) ri_push
+  xa 4
   xji 0x1333 0x105d hw
   · have e : i + 1 = 3 := by
       have := B256.eq_of_eqCheck_ne_zero (ne_of_eqCheck_eq_zero hw)

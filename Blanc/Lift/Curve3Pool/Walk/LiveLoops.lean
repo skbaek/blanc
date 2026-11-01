@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveRestore
+import Blanc.Lift.WalkKit
 
 /-!
 # Vyper's frame save and restore loops, forward, at any counter
@@ -65,12 +66,10 @@ theorem rx_svBodyM {br : SFunc} {S : List B256} {M : Mem} {img : Bytes} {G p : N
   have hCl : C < 2 ^ 256 := hC ▸ B256.toNat_lt _
   have hp' : (Nat.toB256 p).toNat = p := B256.toNat_toB256_of_lt (by omega)
   unfold svItL
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mloadW (o := C) hR hsz hC ⟨by omega, hs⟩ hctr (by hr) ·)
   xr (rxm_mloadW (o := p) hR hsz hp' ⟨by omega, hs⟩ hv (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mloadW (o := C) hR hsz hC ⟨by omega, hs⟩ hctr (by hr) ·)
   xr (rx_add (by hr) ·)
   rw [ex_add32 (by omega)]
@@ -79,12 +78,9 @@ theorem rx_svBodyM {br : SFunc} {S : List B256} {M : Mem} {img : Bytes} {G p : N
     ⟨by rw [memExtSize_of_le hs hCs, Nat.sub_self]; rfl, hs⟩ ?_
   intro M' hM' hR' hW' hsz'
   rw [memExtSize_of_le hs hCs] at hsz'
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mloadW (o := C) hR' hsz' hC ⟨by omega, hs⟩ (WordAt.write_self _ _ _) (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   exact k M' hM' hR' hW' hsz'
 
 /-- One pass of the save's body: the word at the counter `p` pushed, the counter bumped. -/
@@ -230,8 +226,7 @@ theorem rx_rsBodyM {br : SFunc} {S : List B256} {M : Mem} {img : Bytes} {G q : N
   have hCl : C < 2 ^ 256 := hC ▸ B256.toNat_lt _
   have hq' : (Nat.toB256 q).toNat = q := B256.toNat_toB256_of_lt (by omega)
   unfold rsIt
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mloadW (o := C) hR hsz hC ⟨by omega, hs⟩ hctr (by hr) ·)
   refine rxe_mstoreL (o := q) (c := 3) hR hW hsz hq' ⟨by
     rw [memExtSize_of_le hs (by omega), Nat.sub_self]; rfl, hs⟩ ?_
@@ -239,8 +234,7 @@ theorem rx_rsBodyM {br : SFunc} {S : List B256} {M : Mem} {img : Bytes} {G q : N
   rw [memExtSize_of_le hs (by omega)] at hsz1
   have hctr1 : WordAt (Bytes.writeAt img q v.toBytes) C (Nat.toB256 q) :=
     hctr.write_other (by simp only [B256.length_toBytes]; omega)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mloadW (o := C) hR1 hsz1 hC ⟨by omega, hs⟩ hctr1 (by hr) ·)
   xr (rx_sub (by hr) ·)
   rw [ex_sub32 (by omega) (by omega)]
@@ -249,13 +243,9 @@ theorem rx_rsBodyM {br : SFunc} {S : List B256} {M : Mem} {img : Bytes} {G q : N
     ⟨by rw [memExtSize_of_le hs hCs, Nat.sub_self]; rfl, hs⟩ ?_
   intro M2 hM2 hR2 hW2 hsz2
   rw [memExtSize_of_le hs hCs] at hsz2
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mloadW (o := C) hR2 hsz2 hC ⟨by omega, hs⟩ (WordAt.write_self _ _ _) (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   exact k M2 (by rw [hM2, hM1]) hR2 hW2 hsz2
 
 /-- One pass of the restore's body: the stack's top word written at the counter `q`, the

@@ -492,12 +492,8 @@ theorem systemPost_facts (benv : Benv) :
   -- `systemPost` against an `afterSstore` pattern whnf-evaluates the store.
   have stRefund : ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat),
       (St b S M G).refundCounter = b.refundCounter := fun _ _ _ _ => rfl
-  have stError : ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat),
-      (St b S M G).error = b.error := fun _ _ _ _ => rfl
-  have stState : ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat),
-      (St b S M G).state = b.state := fun _ _ _ _ => rfl
   refine ⟨?_, ?_, ?_⟩
-  · rw [systemPost, stError, afterSstore_error, systemMid, afterSstore_error]
+  · rw [systemPost, St_error, afterSstore_error, systemMid, afterSstore_error]
     rfl
   · rw [systemPost, stRefund]
     have safe1 : RefundSafe ((systemBase benv).getOrigStorVal (systemSevm benv)
@@ -521,7 +517,7 @@ theorem systemPost_facts (benv : Benv) :
           Stor.get_set_ne _ (systemKey_ne benv), ← getStorVal_eq_getStor]
         exact Or.inl rfl
     refine first.trans (afterSstore_refundCounter_ge_of_safe _ _ _ _ safe2)
-  · rw [systemPost, stState, afterSstore_state, systemMid, afterSstore_state]
+  · rw [systemPost, St_state, afterSstore_state, systemMid, afterSstore_state]
     rfl
 
 /-- **The EIP-4788 unchecked system call** on the real installed code: it succeeds and

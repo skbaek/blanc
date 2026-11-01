@@ -6,6 +6,7 @@ import Blanc.Lift.UniswapV2Pair.Check
 import Blanc.CommonCore
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.HistAccessWalk
+import Blanc.Lift.WalkKit
 
 /-! Exact execution of the deployed Pair's getter paths. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -19,8 +20,7 @@ theorem totalSupply_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (.returned (St (afterSload sevm b 0)
         (b.getStorVal sevm.currentTarget 0 :: ρ :: R) M G)) := by
   unfold t_0e18_c53
-  refine rx_dest ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   have gas : G + c + 11 = (G + 11) + c := by omega
   rw [gas]
   refine rx_sload_selC fork cost (by simp only [List.length_cons]; omega) ?_
@@ -59,15 +59,12 @@ theorem getterWord_tail_ptr_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   change SFunc.RunExact fs sevm (St b (v :: R) M (G + 43 + expansion)) t_039b_c98 _
   rw [show G + 43 + expansion = (G + expansion) + 43 from by omega]
   unfold t_039b_c98
-  refine rx_dest ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mload (c := 3) ?_ mem.word (mem.read_self (i := 64) (sz := 32) mem.ge)
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq mem.size]
     rw [memExtSize_of_le mem.n32 mem.ge, Nat.sub_self]; rfl
-  refine rx_swap2 ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   rw [show (G + expansion) + 27 = (G + 24) + (3 + expansion) from by omega]
   refine rx_mstore (c := 3 + expansion) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]
@@ -77,9 +74,7 @@ theorem getterWord_tail_ptr_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   · simp only [show (128 : B256).toNat = 128 from rfl]
     rw [St.extCost_eq outmem.size]
     rw [memExtSize_of_le outmem.n32 outmem.ge, Nat.sub_self]; rfl
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 3
   refine rx_sub' (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_add' (v := 32) (by decide) (by simp only [List.length_cons]; omega) ?_
@@ -174,9 +169,7 @@ theorem totalSupply_entry_exact {sevm : Sevm} {b : Devm}
       (.halted (getterWordPost (afterSload sevm b 0) [0x039b, sel] M
         (b.getStorVal sevm.currentTarget 0) G)) := by
   unfold t_0393_c98
-  refine rx_dest ?_
-  refine rx_push (w := 0x039b) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x0e18) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 3
   have gas : G + c + 72 = ((G + 49) + c + 15) + 8 := by omega
   rw [gas]
   refine rx_callRet (g := t_0e18_c53) (by rfl)

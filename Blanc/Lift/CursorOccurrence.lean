@@ -73,4 +73,39 @@ theorem CallOccurrenceStep.retained {root : Exec.Deriv} {x : Xinst}
     by simp only [Exec.committedFrames, committed, ↓reduceDIte, List.mem_cons, true_or],
     step.sameFrame⟩
 
+/-- An actual external-call occurrence cut from `rules.stateGas = none` alone. -/
+theorem cursor_next_call_occurrence_forwardH {code : ByteArray} {c : Cert}
+    (checked : Cert.check code c = true) {root F : Exec.Deriv} {κ : Cursor}
+    (reached : Exec.Deriv.ParentPrefix root F) (ok : CursorOK code c F κ)
+    {x : Xinst} {f : SFunc} (tree : κ.f = .next (.exec x) f)
+    {post : Devm} (success : F.exn = .ok post)
+    (hsg : F.sevm.benvStat.rules.stateGas = none) :
+    ∃ (step : CallOccurrenceStep root x) (κ' : Cursor),
+      step.occurrence.node = F ∧
+      step.returned.pc = F.pc + (.exec x : Ninst).size ∧
+      Ninst.RunWith (Cursor.DescOf F) F.sevm F.devm (.exec x) step.returned.devm ∧
+      SStep c κ κ' ∧
+      ConfStep (Ninst.RunWith (Cursor.DescOf F)) c.prog F.sevm
+        (κ.conf F.devm) (κ'.conf step.returned.devm) ∧
+      CursorOK code c step.returned κ' := by
+  have decoded := ok.ninstAt_of_next tree
+  obtain ⟨before, decomposition⟩ :=
+    Exec.Deriv.ParentPrefix.rawNodes_decomposition reached
+  have member : F ∈ Exec.rawNodes root.exc := by
+    rw [decomposition]
+    exact List.mem_append_right before (Exec.mem_rawNodes_self F.exc)
+  obtain ⟨occurrence, sameNode, instruction⟩ :=
+    Exec.exists_ninstOccurrence_of_mem_rawNodes member decoded
+  obtain ⟨returned, κ', edge, pc, primitive, synthetic, stateful, placed⟩ :=
+    cursor_next_forwardH checked ok tree success hsg
+  have result : occurrence.stepResult = .ok returned.devm := by
+    obtain ⟨slot, filled, stepPc, step⟩ := primitive.toRun
+    have actual : Ninst.StepRun occurrence.node.pc occurrence.node.sevm
+        occurrence.node.devm occurrence.instruction slot (.ok returned.devm) := by
+      rw [sameNode, instruction]
+      exact Ninst.stepRun_pc_irrel rfl step
+    exact (occurrence_stepRun_unique occurrence filled actual).2
+  exact ⟨⟨occurrence, returned, instruction, sameNode ▸ reached, sameNode ▸ edge, result⟩,
+    κ', sameNode, pc, primitive, synthetic, stateful, placed⟩
+
 end Blanc.Lift

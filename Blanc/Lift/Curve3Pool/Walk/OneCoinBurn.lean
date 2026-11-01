@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.OneCoinPre
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityPost
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `remove_liquidity_one_coin`, part 2: the `burnFrom` call
@@ -52,22 +53,13 @@ theorem xa_oc_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   have hv : WordAt M.data.toList 0x140 dy :=
     WordAt.of_memWord hR (hV.words.memWord List.mem_cons_self)
   clear hV
-  xs 0x4590 (.push [0x20] (by decide)) ri_push
-  xs 0x4593 (.push [0x03, 0xa0] (by decide)) ri_push
-  xs 0x4595 (.push [0x44] (by decide)) ri_push
-  xs 0x459a (.push [0x79, 0xcc, 0x67, 0x90] (by decide)) ri_push
-  xs 0x459d (.push [0x03, 0x00] (by decide)) ri_push
+  xa 5
   xmo 0x459e (.reg .mstore) (ri_mstore_imgAt (o := 0x300) rfl)
-  xs 0x459f (.reg .caller) ri_caller
-  xs 0x45a2 (.push [0x03, 0x20] (by decide)) ri_push
+  xa 2
   xmo 0x45a3 (.reg .mstore) (ri_mstore_imgAt (o := 0x320) rfl)
-  xs 0x45a5 (.push [0x04] (by decide)) ri_push
-  xs 0x45a6 (.reg .calldataload) ri_calldataload
-  xs 0x45a9 (.push [0x03, 0x40] (by decide)) ri_push
+  xa 3
   xmo 0x45aa (.reg .mstore) (ri_mstore_imgAt (o := 0x340) rfl)
-  xs 0x45ad (.push [0x03, 0x1c] (by decide)) ri_push
-  xs 0x45af (.push [0x00] (by decide)) ri_push
-  xs 0x45b1 (.push [0x05] (by decide)) ri_push
+  xa 3
   xw 0x45b2 (.reg .sload) ri_sload
   rw [tokenSlot_lit, getStorVal_eq, htw] at h
   xs 0x45b3 (.reg .gas) ri_gas_remaining
@@ -89,11 +81,7 @@ theorem xa_oc_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     exact hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
       (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
   clear hc
-  xjd 0x45bd
-  xs 0x45bf (.push [0x1f] (by decide)) ri_push
-  xs 0x45c0 (.reg .returndatasize) ri_returndatasize
-  xs 0x45c1 (.reg .gt) ri_gt
-  xs 0x45c4 (.push [0x45, 0xc9] (by decide)) ri_push
+  xa 5
   xji 0x45c5 0x45c9 hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by
@@ -105,11 +93,7 @@ theorem xa_oc_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   obtain ⟨img1, hR, hI⟩ := Mem.Reads.forget hR
   have f_v : WordAt img1 0x140 dy := by rw [hI]; wchain; exact hv
   clear hI hv
-  xjd 0x45ca
-  xs 0x45cc (.push [0x00] (by decide)) ri_push
-  xs 0x45cd (.reg .pop) ri_pop
-  xs 0x45d0 (.push [0x03, 0xa0] (by decide)) ri_push
-  xs 0x45d1 (.reg .pop) ri_pop
+  xa 5
   exact ⟨c, _, d, _, img1, _, rfl, hc', hlen, hdepth, hR, hW, f_v, h⟩
 
 end Blanc.Lift.Curve3Pool

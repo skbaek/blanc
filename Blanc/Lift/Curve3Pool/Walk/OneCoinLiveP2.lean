@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Pool.Walk.OneCoinLiveP1
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLivePush
 import Blanc.Lift.Curve3Pool.Walk.OneCoinCalls
+import Blanc.Lift.WalkKit
 
 /-!
 # `remove_liquidity_one_coin`, forward: the push, its `raw_call` test, the event, `STOP`
@@ -85,87 +86,29 @@ theorem rx_oc_p2E {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome 
       Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [] M G) t_45c9_c0 Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 584 := ⟨G - 584, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 8
   refine rxe_mstoreL (o := 0x420) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x920 0x420 32 = 0x920 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x440) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x920 0x440 32 = 0x920 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_gas (by hr) ·)
+  wrun 15
   refine rxe_identityL (i := 0x440) (n := 0x4) (o := 0x4a0) (z := 0x4) (ext := 0) (X := 118) hL.id hdepth hR hW hsz (by decide) (by decide) (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩ rfl (by have : 100 + 0 + 64 * idCost 0x4 = 1252 := (by decide); omega) (by omega) (by hr) ?_; clear hR hW hsz; rename' M => MqI1; intro bI1 M hsha hcan1 hMI1 hR hW hsz; rw [show memExtsSize 0x920 [(0x440, 0x4), (0x4a0, 0x4)] = 0x920 by decide] at hsz; replace hL := hL.sha hsha; clear hsha
   rw [oc_push_sel] at hR
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_dup rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0x420) hR hsz rfl (by decide) (by hr) ·); try wsimp
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 2
   xr (rx_swap2 ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_caller (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 8
   refine rxe_mstoreL (o := 0x4a4) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x920 0x4a4 32 = 0x920 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rxm_mload (o := 0x140) hR hsz rfl (by decide) (by hr) ·); try wsimp
   rw [hdy.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 5
   refine rxe_mstoreL (o := 0x4c4) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x920 0x4c4 32 = 0x920 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 7
   refine rxe_mstoreL (o := 0x480) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x920 0x480 32 = 0x920 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_dup rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x480) hR hsz rfl (by decide) (by hr) ·); try wsimp
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_gas (by hr) ·)
+  wrun 9
   refine rxe_identityL (i := 0x480) (n := 0x64) (o := 0x520) (z := 0x64) (ext := 0) (X := 127) hL.id hdepth hR hW hsz (by decide) (by decide) (by decide) (by decide) ⟨by decide, by decide, by decide, by decide⟩ rfl (by have : 100 + 0 + 64 * idCost 0x64 = 1828 := (by decide); omega) (by omega) (by hr) ?_; clear hR hW hsz; rename' M => MqI2; intro bI M hsha hcan2 hMI2 hR hW hsz; rw [show memExtsSize 0x920 [(0x480, 0x64), (0x520, 0x64)] = 0x920 by decide] at hsz; replace hL := hL.sha hsha; clear hsha
   rw [oc_transfer_copy2] at hR
   obtain ⟨img3, hR3, hI⟩ := Mem.Reads.forget hR
@@ -180,30 +123,15 @@ theorem rx_oc_p2E {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome 
   xr (rx_push rfl (by hr) ·)
   xr (rx_branch_succ (by xbr) ·)
   -- tree t_4666_c0
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rxm_mload (o := 0x520) hR hsz rfl (by decide) (by hr) ·)
   rw [(Region.word hdata.left).read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 8
   xr (rx_branch_succ (ex_lt3_ne hi3) ·)
   -- tree t_4686_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x920 0xc0 32 = 0x920 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hr) (by decide) ·)
   rw [keccak_zero]
   xr (rx_add (by hr) ·)
@@ -285,23 +213,16 @@ theorem rx_oc_p2E {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome 
   replace hL := hLd.sha hsha
   clear hW6 hsz6 hR5 hW5 hmem
   obtain ⟨g8, rfl⟩ : ∃ g, G2 = g + 1679 := ⟨G2 - 1679, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   refine rxe_mstoreL (o := 0x620) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x920 0x620 32 = 0x920 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x140) hR hsz rfl (by decide) (by hr) ·); try wsimp
   rw [hdy6.read]
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreL (o := 0x640) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq8; intro M hMq8 hR hW hsz; rw [show memExtSize 0x920 0x640 32 = 0x920 by decide] at hsz
-  xr (rx_caller (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_log2 (c := 1637) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·); 
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g9 b9 hb9 hg91 hg92 g9x
   have hL2 := (hL.addLogE _).sstoreE hb9
   have hlog : ∀ (x : Devm) (l : Log), sstoreCost sevm (x.addLog l) (Bytes.toB256 [255, 255, 255])

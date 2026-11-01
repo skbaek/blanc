@@ -27,13 +27,13 @@ open Jaune
 open Jaune.Ninst Blanc.Ninst
 
 
-private theorem temporalSloadBase_preserves_cold
+private theorem afterSload_preserves_cold
     (sevm : Sevm) (base : Devm) (readKey key : B256)
     (hne : readKey ≠ key)
     (h : (sevm.currentTarget, key) ∉ base.accessedStorageKeys) :
     (sevm.currentTarget, key) ∉
-      (temporalSloadBase sevm base readKey).accessedStorageKeys := by
-  unfold temporalSloadBase
+      (afterSload sevm base readKey).accessedStorageKeys := by
+  unfold afterSload
   split
   · exact h
   · rcases base with ⟨mach, mt, world⟩
@@ -147,11 +147,11 @@ private theorem registerAfterSet_freshNonzero_runCompiled
   have hrun : Func.RunCompiled fs sevm
       (base.setMach ⟨[carry], M, G + 23592, base.stateGas⟩) registerAfterSet
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm base heartbeatIntervalSlot)
+          (afterSload sevm base heartbeatIntervalSlot)
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨[carry], M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm base heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+        ⟨[carry], M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm base heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
     simp only [registerAfterSet]
     func_run (4) [3, 1]
     case h_cost =>
@@ -173,7 +173,7 @@ private theorem registerAfterSet_freshNonzero_runCompiled
   · have logs_setMach (d : Devm) (mach : Mach) :
         (d.setMach mach).logs = d.logs := rfl
     rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs,
-      temporalSloadBase_logs]
+      afterSload_logs]
 
 private theorem finishSetPauser_freshNonzero_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
@@ -303,7 +303,7 @@ private theorem afterOldPauser_freshNonzero_runCompiled
     ∃ post,
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach ⟨[carry], M,
-          G + 25591 + temporalSloadCost sevm base
+          G + 25591 + sloadCost sevm base
             (countSlot newPauser) + countCost, base.stateGas⟩)
         afterOldPauser post ∧
       post.gasLeft = G ∧
@@ -314,7 +314,7 @@ private theorem afterOldPauser_freshNonzero_runCompiled
          ⟨sevm.currentTarget,
           [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩] := by
   let countKey := countSlot newPauser
-  let countBase := temporalSloadBase sevm base countKey
+  let countBase := afterSload sevm base countKey
   let countPost := temporalSstorePost sevm countBase countKey nextCount
   have hcountInterval : countKey ≠ heartbeatIntervalSlot := by
     simpa only [countKey, countSlot, heartbeatIntervalSlot] using
@@ -334,7 +334,7 @@ private theorem afterOldPauser_freshNonzero_runCompiled
       sevm.currentTarget heartbeatIntervalSlot (by
         intro hpair
         exact hcountInterval (congrArg Prod.snd hpair).symm)]
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hinterval
   have hexpiryPost : countPost.getStorVal sevm.currentTarget
       (expirySlot newPauser) = 0 := by
@@ -342,19 +342,19 @@ private theorem afterOldPauser_freshNonzero_runCompiled
       sevm.currentTarget (expirySlot newPauser) (by
         intro hpair
         exact hcountExpiry (congrArg Prod.snd hpair).symm)]
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hexpiry
   have hintervalColdPost :
       (sevm.currentTarget, heartbeatIntervalSlot) ∉
         countPost.accessedStorageKeys := by
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_cold sevm base countKey
+    exact afterSload_preserves_cold sevm base countKey
       heartbeatIntervalSlot hcountInterval hintervalCold
   have hwarmExpiryPost :
       (sevm.currentTarget, expirySlot newPauser) ∈
         countPost.accessedStorageKeys := by
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_warm sevm base countKey
+    exact afterSload_preserves_warm sevm base countKey
       (expirySlot newPauser) hwarmExpiry
   rcases finishSetPauser_freshNonzero_runCompiled (hfork := hfork) dp sevm countPost M img
       target newPauser timestamp interval expiry carry G hwf hreads htarget
@@ -369,13 +369,13 @@ private theorem afterOldPauser_freshNonzero_runCompiled
       hcountOrig hcountNext hcountCost
       (by norm_num only [gCallStipend]; omega) hstatic hfinish
     have hg : G + 25527 + 64 +
-        temporalSloadCost sevm base (countSlot newPauser) + countCost =
+        sloadCost sevm base (countSlot newPauser) + countCost =
         G + 25591 +
-          temporalSloadCost sevm base (countSlot newPauser) + countCost := by
+          sloadCost sevm base (countSlot newPauser) + countCost := by
       omega
     rw [hg] at h
     exact h
-  · rw [temporalSstorePost_logs, temporalSloadBase_logs] at hlogs
+  · rw [temporalSstorePost_logs, afterSload_logs] at hlogs
     exact hlogs
 
 private theorem appendTarget_freshNonzero_runCompiled
@@ -445,13 +445,13 @@ private theorem appendTarget_freshNonzero_runCompiled
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
         (base.setMach ⟨[], M,
           G + 25666 + arrayLengthMemoryCost M +
-            temporalSloadCost sevm base arrayLengthSlot +
+            sloadCost sevm base arrayLengthSlot +
             arrayCost + indexCost + lengthCost +
-            temporalSloadCost sevm
+            sloadCost sevm
               (temporalSstorePost sevm
                 (temporalSstorePost sevm
                   (temporalSstorePost sevm
-                    (temporalSloadBase sevm base arrayLengthSlot)
+                    (afterSload sevm base arrayLengthSlot)
                     (arrayEntrySlot next) target)
                   (indexSlot target) next)
                 arrayLengthSlot next)
@@ -467,11 +467,11 @@ private theorem appendTarget_freshNonzero_runCompiled
   let arrayKey := arrayEntrySlot next
   let indexKey := indexSlot target
   let countKey := countSlot newPauser
-  let lengthBase := temporalSloadBase sevm base arrayLengthSlot
+  let lengthBase := afterSload sevm base arrayLengthSlot
   let arrayPost := temporalSstorePost sevm lengthBase arrayKey target
   let indexPost := temporalSstorePost sevm arrayPost indexKey next
   let lengthPost := temporalSstorePost sevm indexPost arrayLengthSlot next
-  let afterGas := G + 25591 + temporalSloadCost sevm lengthPost countKey + countCost
+  let afterGas := G + 25591 + sloadCost sevm lengthPost countKey + countCost
   have hfamilies := registryAddressFamilies_pairwise
     htargetValid.2 htargetValid.2 hnewValid.2
   have harrayFamilies := registryAddressFamilies_ne_arrayEntrySlot
@@ -495,27 +495,27 @@ private theorem appendTarget_freshNonzero_runCompiled
     exact h (congrArg Prod.snd hp)
   have hlengthBase : lengthBase.getStorVal sevm.currentTarget
       arrayLengthSlot = length := by
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hlength
   have hwarmLength : (sevm.currentTarget, arrayLengthSlot) ∈
       lengthBase.accessedStorageKeys :=
-    temporalSloadBase_warm sevm base arrayLengthSlot
+    afterSload_warm sevm base arrayLengthSlot
   have harrayBase : lengthBase.getStorVal sevm.currentTarget arrayKey = 0 := by
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact harray
   have hwarmArrayBase : (sevm.currentTarget, arrayKey) ∈
       lengthBase.accessedStorageKeys :=
-    temporalSloadBase_preserves_warm sevm base arrayLengthSlot arrayKey hwarmArray
+    afterSload_preserves_warm sevm base arrayLengthSlot arrayKey hwarmArray
   have hindexArray : arrayPost.getStorVal sevm.currentTarget indexKey = 0 := by
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget indexKey (pairNe (by
         simpa only [arrayKey, indexKey] using harrayFamilies.2.1))]
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hindex
   have hwarmIndexArray : (sevm.currentTarget, indexKey) ∈
       arrayPost.accessedStorageKeys := by
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_warm sevm base arrayLengthSlot
+    exact afterSload_preserves_warm sevm base arrayLengthSlot
       indexKey hwarmIndex
   have hlengthIndex : indexPost.getStorVal sevm.currentTarget
       arrayLengthSlot = length := by
@@ -539,14 +539,14 @@ private theorem appendTarget_freshNonzero_runCompiled
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget countKey (pairNe (by
         simpa only [arrayKey, countKey] using harrayFamilies.2.2))]
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hcount
   have hcountColdPost : (sevm.currentTarget, countKey) ∉
       lengthPost.accessedStorageKeys := by
     rw [temporalSstorePost_accessedStorageKeys,
       temporalSstorePost_accessedStorageKeys,
       temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_cold sevm base arrayLengthSlot countKey
+    exact afterSload_preserves_cold sevm base arrayLengthSlot countKey
       (Ne.symm hlengthFamilies.2.2) hcountCold
   have hintervalPost : lengthPost.getStorVal sevm.currentTarget
       heartbeatIntervalSlot = interval := by
@@ -571,14 +571,14 @@ private theorem appendTarget_freshNonzero_runCompiled
           (by norm_num only [configRegion]) (by norm_num only [arrayRegion])
           (by change (1 : Nat) < 2 ^ 252; norm_num only) hnextBound
           (by norm_num only [configRegion, arrayRegion])))]
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hinterval
   have hintervalColdPost : (sevm.currentTarget, heartbeatIntervalSlot) ∉
       lengthPost.accessedStorageKeys := by
     rw [temporalSstorePost_accessedStorageKeys,
       temporalSstorePost_accessedStorageKeys,
       temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_cold sevm base arrayLengthSlot
+    exact afterSload_preserves_cold sevm base arrayLengthSlot
       heartbeatIntervalSlot hlengthInterval hintervalCold
   have hexpiryPost : lengthPost.getStorVal sevm.currentTarget
       (expirySlot newPauser) = 0 := by
@@ -594,14 +594,14 @@ private theorem appendTarget_freshNonzero_runCompiled
     rw [temporalSstorePost_other sevm lengthBase arrayKey target
       sevm.currentTarget (expirySlot newPauser)
       (pairNe hexpiryArray.2)]
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     exact hexpiry
   have hwarmExpiryPost : (sevm.currentTarget, expirySlot newPauser) ∈
       lengthPost.accessedStorageKeys := by
     rw [temporalSstorePost_accessedStorageKeys,
       temporalSstorePost_accessedStorageKeys,
       temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_warm sevm base arrayLengthSlot
+    exact afterSload_preserves_warm sevm base arrayLengthSlot
       (expirySlot newPauser) hwarmExpiry
   let M' := M.write (arrayLengthWord * 32).toNat next.toBytes
   let img' := Bytes.writeAt img (arrayLengthWord * 32).toNat next.toBytes
@@ -648,7 +648,7 @@ private theorem appendTarget_freshNonzero_runCompiled
       countCost G hwf' hreads' htarget' hprevious' hnew' hcontinuation'
       hnewValid hsize' halign' htime hcountPost
       (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
-          temporalSloadBase_getOrigStorVal] using hcountOrig)
+          afterSload_getOrigStorVal] using hcountOrig)
       hcountNext
       hcountCost hintervalPost hintervalColdPost hexpiryPost hexpiryOrig
       hwarmExpiryPost hstatic hextension hexpiryNonzero with
@@ -679,7 +679,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) hlengthIndex
         (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
-          temporalSloadBase_getOrigStorVal] using hlengthOrig)
+          afterSload_getOrigStorVal] using hlengthOrig)
         hlengthCost
         hwarmLengthIndex (by norm_num only [gCallStipend]; omega) hstatic)
       hafterCall
@@ -716,7 +716,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) hindexArray
         (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
-          temporalSloadBase_getOrigStorVal] using hindexOrig)
+          afterSload_getOrigStorVal] using hindexOrig)
         hindexCost
         hwarmIndexArray (by norm_num only [gCallStipend]; omega) hstatic)
       hlengthTail
@@ -799,7 +799,7 @@ private theorem appendTarget_freshNonzero_runCompiled
     exact Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) harrayBase
         (by simpa only [lengthPost, indexPost, arrayPost, lengthBase, temporalSstorePost_getOrigStorVal,
-          temporalSloadBase_getOrigStorVal] using harrayOrig)
+          afterSload_getOrigStorVal] using harrayOrig)
         harrayCost
         hwarmArrayBase (by norm_num only [gCallStipend]; omega) hstatic)
       hindexTail
@@ -912,7 +912,7 @@ private theorem appendTarget_freshNonzero_runCompiled
       (base.setMach ⟨[arrayLengthSlot], M,
         afterGas + 72 + arrayLengthMemoryCost M +
           arrayCost + indexCost + lengthCost +
-          temporalSloadCost sevm base arrayLengthSlot, base.stateGas⟩)
+          sloadCost sevm base arrayLengthSlot, base.stateGas⟩)
       (Ninst.sload ::: pushB256 1 ::: add ::: dup 0 :::
         mstoreAt arrayLengthWord +++ loadWord targetWord +++
         loadWord arrayLengthWord +++ tagTop arrayRegion +++ Ninst.sstore :::
@@ -924,20 +924,20 @@ private theorem appendTarget_freshNonzero_runCompiled
   refine ⟨post, ?_, hgas, hstoreExpiry, ?_⟩
   · simp only [appendTarget]
     have hg : G + 25666 + arrayLengthMemoryCost M +
-          temporalSloadCost sevm base arrayLengthSlot +
+          sloadCost sevm base arrayLengthSlot +
           arrayCost + indexCost + lengthCost +
-          temporalSloadCost sevm
+          sloadCost sevm
             (temporalSstorePost sevm
               (temporalSstorePost sevm
                 (temporalSstorePost sevm
-                  (temporalSloadBase sevm base arrayLengthSlot)
+                  (afterSload sevm base arrayLengthSlot)
                   (arrayEntrySlot next) target)
                 (indexSlot target) next)
               arrayLengthSlot next)
             (countSlot newPauser) + countCost - 3 =
         afterGas + 72 + arrayLengthMemoryCost M +
           arrayCost + indexCost + lengthCost +
-          temporalSloadCost sevm base arrayLengthSlot := by
+          sloadCost sevm base arrayLengthSlot := by
       dsimp only [afterGas, lengthPost, indexPost, arrayPost, lengthBase,
         countKey, indexKey, arrayKey]
       omega
@@ -947,7 +947,7 @@ private theorem appendTarget_freshNonzero_runCompiled
       rw [hg]
       exact hload
   · rw [temporalSstorePost_logs, temporalSstorePost_logs,
-      temporalSstorePost_logs, temporalSloadBase_logs] at hlogs
+      temporalSstorePost_logs, afterSload_logs] at hlogs
     exact hlogs
 
 /-- Exact fresh-kernel reserve, including actual assignment/length/count read
@@ -958,14 +958,14 @@ def freshSetPauserKernelGas (sevm : Sevm) (base : Devm) (M : Mem)
   let next := Nat.toB256 (entries.length + 1)
   let assigned := assignmentPost sevm base target newPauser
   25756 + arrayLengthMemoryCost M +
-    temporalSloadCost sevm base (assignmentSlot target) +
-    assignmentCost + temporalSloadCost sevm assigned arrayLengthSlot +
+    sloadCost sevm base (assignmentSlot target) +
+    assignmentCost + sloadCost sevm assigned arrayLengthSlot +
     arrayCost + indexCost + lengthCost +
-    temporalSloadCost sevm
+    sloadCost sevm
       (temporalSstorePost sevm
         (temporalSstorePost sevm
           (temporalSstorePost sevm
-            (temporalSloadBase sevm assigned arrayLengthSlot)
+            (afterSload sevm assigned arrayLengthSlot)
             (arrayEntrySlot next) target)
           (indexSlot target) next)
         arrayLengthSlot next)
@@ -1075,13 +1075,13 @@ theorem setPauserKernel_freshNonzero_runCompiled
   let count := Nat.toB256 (assignmentCount entries newPauser)
   let nextCount := Nat.toB256 (assignmentCount entries newPauser + 1)
   let appendGas := G + 25666 + arrayLengthMemoryCost M +
-    temporalSloadCost sevm assignPost arrayLengthSlot +
+    sloadCost sevm assignPost arrayLengthSlot +
     arrayCost + indexCost + lengthCost +
-    temporalSloadCost sevm
+    sloadCost sevm
       (temporalSstorePost sevm
         (temporalSstorePost sevm
           (temporalSstorePost sevm
-            (temporalSloadBase sevm assignPost arrayLengthSlot)
+            (afterSload sevm assignPost arrayLengthSlot)
             (arrayEntrySlot next) target)
           (indexSlot target) next)
         arrayLengthSlot next)
@@ -1093,11 +1093,11 @@ theorem setPauserKernel_freshNonzero_runCompiled
   have hassignmentBase : assignBase.getStorVal sevm.currentTarget
       assignmentKey = 0 := by
     simpa only [assignBase, assignmentBase,
-      temporalSloadBase_getStorVal] using
+      afterSload_getStorVal] using
       hassignment
   have hwarmAssignment : (sevm.currentTarget, assignmentKey) ∈
       assignBase.accessedStorageKeys :=
-    temporalSloadBase_warm sevm base assignmentKey
+    afterSload_warm sevm base assignmentKey
   have hlength : assignPost.getStorVal sevm.currentTarget
       arrayLengthSlot = length := by
     have hne := registryAddressFamilies_ne_arrayLengthSlot
@@ -1108,9 +1108,9 @@ theorem setPauserKernel_freshNonzero_runCompiled
       sevm.currentTarget arrayLengthSlot (by
         intro hp
         exact hne.1 (congrArg Prod.snd hp).symm)]
-    change (temporalSloadBase sevm base assignmentKey).getStorVal
+    change (afterSload sevm base assignmentKey).getStorVal
       sevm.currentTarget arrayLengthSlot = length
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     change (Devm.getStor base sevm.currentTarget).get arrayLengthSlot = length
     simpa only [logicalStorageOfStor] using hw.lengthWord
   have hindex : assignPost.getStorVal sevm.currentTarget
@@ -1123,9 +1123,9 @@ theorem setPauserKernel_freshNonzero_runCompiled
       sevm.currentTarget (indexSlot target) (by
         intro hp
         exact hne.1 (congrArg Prod.snd hp).symm)]
-    change (temporalSloadBase sevm base assignmentKey).getStorVal
+    change (afterSload sevm base assignmentKey).getStorVal
       sevm.currentTarget (indexSlot target) = 0
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     change (Devm.getStor base sevm.currentTarget).get (indexSlot target) = 0
     change (Devm.getStor base sevm.currentTarget).get (indexSlot target) =
       Nat.toB256 0
@@ -1141,9 +1141,9 @@ theorem setPauserKernel_freshNonzero_runCompiled
       sevm.currentTarget (countSlot newPauser) (by
         intro hp
         exact hne.2.1 (congrArg Prod.snd hp).symm)]
-    change (temporalSloadBase sevm base assignmentKey).getStorVal
+    change (afterSload sevm base assignmentKey).getStorVal
       sevm.currentTarget (countSlot newPauser) = count
-    rw [temporalSloadBase_getStorVal]
+    rw [afterSload_getStorVal]
     change (Devm.getStor base sevm.currentTarget).get
       (countSlot newPauser) = count
     simpa only [logicalStorageOfStor] using hw.counts newPauser hnewValid.2
@@ -1249,7 +1249,7 @@ theorem setPauserKernel_freshNonzero_runCompiled
     exact hkernelRun
   · have hbaseLogs : assignPost.logs = base.logs := by
       dsimp only [assignPost, assignmentPost, assignmentBase]
-      rw [temporalSstorePost_logs, temporalSloadBase_logs]
+      rw [temporalSstorePost_logs, afterSload_logs]
     rw [hbaseLogs] at hlogs
     exact hlogs
 

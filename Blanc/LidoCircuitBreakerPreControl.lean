@@ -74,11 +74,11 @@ kernel are `SLOAD`s.  A cold `SLOAD` only warms an accessed-key set, so none
 of them touches transient storage and the lock is still held at the state the
 kernel is entered from. -/
 
-theorem temporalSloadBase_getTransVal (sevm : Sevm) (base : Devm)
+theorem afterSload_getTransVal (sevm : Sevm) (base : Devm)
     (key : B256) (a : Adr) (k : B256) :
-    (temporalSloadBase sevm base key).getTransVal a k =
+    (afterSload sevm base key).getTransVal a k =
       base.getTransVal a k := by
-  unfold temporalSloadBase
+  unfold afterSload
   split
   · rfl
   · rfl
@@ -89,8 +89,8 @@ theorem pauseKernelBase_lock (sevm : Sevm) (base : Devm)
     (pauseKernelBase sevm base target pauser).getTransVal
       sevm.currentTarget lockKey = 1 := by
   unfold pauseKernelBase pauseDurationBase pauseExpiryBase
-  rw [temporalSloadBase_getTransVal, temporalSloadBase_getTransVal,
-    temporalSloadBase_getTransVal]
+  rw [afterSload_getTransVal, afterSload_getTransVal,
+    afterSload_getTransVal]
   exact pauseLockPost_lock sevm base
 
 /-! ## The assignment is cleared before the kernel branches
@@ -216,7 +216,7 @@ theorem foundKernelPost_assignment (sevm : Sevm) (base : Devm)
       sevm.currentTarget (assignmentSlot target) = newPauser := by
   unfold foundKernelPost
   rw [temporalSstorePost_other _ _ _ _ _ _ (pairNe hne),
-    temporalSloadBase_getStorVal]
+    afterSload_getStorVal]
   exact assignmentPost_assignment sevm base target newPauser
 
 /-- Emitting a record and re-seating the machine word are not storage writes. -/

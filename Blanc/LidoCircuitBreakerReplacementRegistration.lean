@@ -183,7 +183,7 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
       (base.setMach ⟨stack, M, G + 5136 + clearCost + storeCost, base.stateGas⟩)
       registerAfterSet
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm
+          (afterSload sevm
             ((temporalSstorePost sevm base (expirySlot oldPauser) 0).addLog
               ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser],
                 (0 : B256).toBytes⟩)
@@ -191,7 +191,7 @@ theorem registerAfterSet_oldLastNonzero_runCompiled
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨stack, (M.write 0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((temporalSstorePost sevm base (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+        ⟨stack, (M.write 0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm ((temporalSstorePost sevm base (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
       (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
   have accessedStorageKeys_addLog (d : Devm) (l : Log) :
@@ -303,7 +303,7 @@ theorem finishSetPauser_oldLastNonzero_runCompiled
       (base.setMach ⟨stack, M, G + 7071 + clearCost + storeCost, base.stateGas⟩)
       finishSetPauser
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm
+          (afterSload sevm
             ((temporalSstorePost sevm
               (base.addLog ⟨sevm.currentTarget,
                 [pauserSetEvent, target, oldPauser, newPauser], []⟩)
@@ -314,7 +314,7 @@ theorem finishSetPauser_oldLastNonzero_runCompiled
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨stack, (M.write 0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((temporalSstorePost sevm (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+        ⟨stack, (M.write 0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm ((temporalSstorePost sevm (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
       (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
   have accessedStorageKeys_addLog (d : Devm) (l : Log) :
@@ -530,11 +530,11 @@ theorem registerAfterSet_retainedNonzero_runCompiled
       (base.setMach ⟨stack, M, G + 3719 + storeCost, base.stateGas⟩)
       registerAfterSet
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm base heartbeatIntervalSlot)
+          (afterSload sevm base heartbeatIntervalSlot)
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨stack, M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm base heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+        ⟨stack, M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm base heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have htail := registerAfterSet_nonzeroNewPauserTail_runCompiled (hfork := hfork) fs sevm base
     M img newPauser timestamp interval expiry currentExpiry expiryOriginal
     stack storeCost G hstack hwf hreads hnew hnewNonzero hsize halign htime
@@ -603,14 +603,14 @@ theorem finishSetPauser_retainedNonzero_runCompiled
       (base.setMach ⟨stack, M, G + 5654 + storeCost, base.stateGas⟩)
       finishSetPauser
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm
+          (afterSload sevm
             (base.addLog ⟨sevm.currentTarget,
               [pauserSetEvent, target, oldPauser, newPauser], []⟩)
             heartbeatIntervalSlot)
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨stack, M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+        ⟨stack, M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm (base.addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have getStorVal_addLog (d : Devm) (l : Log) (a : Adr) (k : B256) :
       (d.addLog l).getStorVal a k = d.getStorVal a k := rfl
   have accessedStorageKeys_addLog (d : Devm) (l : Log) :
@@ -644,7 +644,7 @@ theorem finishSetPauser_retainedNonzero_runCompiled
 /-- State reached by the complete found-nonzero Registry walk: the target's
 assignment has been replaced by `newPauser`, the old pauser's count has been
 decremented and the new pauser's count has been incremented to `nextCount`.
-This is a six-layer `temporalSstorePost`/`temporalSloadBase` tower on top of
+This is a six-layer `temporalSstorePost`/`afterSload` tower on top of
 `foundKernelPost`; keep it folded under this name and never cross it by `exact`,
 `change` or `rfl`.  See README.md, *Proof-performance conventions*.
 
@@ -654,7 +654,7 @@ same-pauser replacement — and nothing in this definition assumes otherwise. -/
 def foundNonzeroKernelPost (sevm : Sevm) (base : Devm)
     (target newPauser oldPauser oldCount nextCount : B256) : Devm :=
   temporalSstorePost sevm
-    (temporalSloadBase sevm
+    (afterSload sevm
       (foundKernelPost sevm base target newPauser oldPauser oldCount)
       (countSlot newPauser))
     (countSlot newPauser) nextCount
@@ -664,7 +664,7 @@ theorem foundNonzeroKernelPost_getOrigStorVal (sevm : Sevm) (base : Devm)
     (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
       nextCount).getOrigStorVal sevm a key = base.getOrigStorVal sevm a key := by
   unfold foundNonzeroKernelPost
-  rw [temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal,
+  rw [temporalSstorePost_getOrigStorVal, afterSload_getOrigStorVal,
     foundKernelPost_getOrigStorVal]
 
 /-- Exact `setPauserKernel` reserve for a retained replacement: the shared
@@ -674,7 +674,7 @@ def replacementRetainedSetPauserKernelGas (sevm : Sevm) (base : Devm)
     (target newPauser oldPauser oldCount : B256)
     (assignmentCost countCost newCountCost storeCost : Nat) : Nat :=
   5654 + storeCost +
-    (64 + temporalSloadCost sevm
+    (64 + sloadCost sevm
         (foundKernelPost sevm base target newPauser oldPauser oldCount)
         (countSlot newPauser) + newCountCost) +
     foundSetPauserKernelPrefixGas sevm base target newPauser oldPauser
@@ -763,7 +763,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
           oldPauser oldCount assignmentCost countCost newCountCost storeCost, base.stateGas⟩)
       setPauserKernel
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm
+          (afterSload sevm
             ((foundNonzeroKernelPost sevm base target newPauser oldPauser
                 oldCount nextCount).addLog
               ⟨sevm.currentTarget,
@@ -773,7 +773,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
         ⟨[], (M.write (previousPauserWord * 32).toNat oldPauser.toBytes).write
-          0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+          0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have hcovered : (previousPauserWord * 32).toNat + 32 ≤ M.size := by
     rw [hsize]
     decide
@@ -815,9 +815,9 @@ theorem setPauserKernel_retainedNonzero_runCompiled
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
         nextCount).accessedStorageKeys := by
     simp only [foundNonzeroKernelPost, temporalSstorePost_accessedStorageKeys]
-    refine temporalSloadBase_preserves_warm _ _ _ _ ?_
+    refine afterSload_preserves_warm _ _ _ _ ?_
     simp only [foundKernelPost, temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_warm _ _ _
+    exact afterSload_warm _ _ _
   have hfinish := finishSetPauser_retainedNonzero_runCompiled (hfork := hfork) dp sevm
     (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
       nextCount)
@@ -843,7 +843,7 @@ theorem setPauserKernel_retainedNonzero_runCompiled
         newPauser oldPauser oldCount assignmentCost countCost newCountCost
         storeCost =
       G + 5654 + storeCost +
-        (64 + temporalSloadCost sevm
+        (64 + sloadCost sevm
           (foundKernelPost sevm base target newPauser oldPauser oldCount)
           (countSlot newPauser) + newCountCost) +
         foundSetPauserKernelPrefixGas sevm base target newPauser oldPauser
@@ -1168,7 +1168,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
           oldPauser oldCount assignmentCost countCost newCountCost storeCost, base.stateGas⟩)
       (registerPauser dp)
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm
+          (afterSload sevm
             ((foundNonzeroKernelPost sevm base target newPauser oldPauser
                 oldCount nextCount).addLog
               ⟨sevm.currentTarget,
@@ -1179,7 +1179,7 @@ theorem registerPauser_body_retainedNonzero_runCompiled
           expiry.toBytes⟩).setMach
         ⟨[], ((registerMemory target newPauser).write
           (previousPauserWord * 32).toNat oldPauser.toBytes).write
-          0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+          0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
     have htargetMask := canonicalAddress_mask_zero htargetValid.2
     have hnewMask := canonicalAddress_mask_zero hnewValid.2
     apply replacementRegisterPauserBody_fromStage_runCompiled (hfork := hfork) dp sevm base _
@@ -1203,15 +1203,15 @@ theorem registerPauser_body_retainedNonzero_runCompiled
     have hkernelLogs : (foundNonzeroKernelPost sevm base target newPauser
         oldPauser oldCount nextCount).logs = base.logs := by
       simp only [foundNonzeroKernelPost]
-      rw [temporalSstorePost_logs, temporalSloadBase_logs]
+      rw [temporalSstorePost_logs, afterSload_logs]
       simp only [foundKernelPost]
-      rw [temporalSstorePost_logs, temporalSloadBase_logs]
+      rw [temporalSstorePost_logs, afterSload_logs]
       simp only [assignmentPost]
       rw [temporalSstorePost_logs]
       simp only [assignmentBase]
-      rw [temporalSloadBase_logs]
+      rw [afterSload_logs]
     rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs,
-      temporalSloadBase_logs, Devm.addLog_logs, hkernelLogs, List.append_assoc]
+      afterSload_logs, Devm.addLog_logs, hkernelLogs, List.append_assoc]
     rfl
   · intro pauser hpauser hne
     have getStorVal_setMach (d : Devm) (mach : Mach) (a : Adr) (k : B256) :
@@ -1234,18 +1234,18 @@ theorem registerPauser_body_retainedNonzero_runCompiled
     rw [getStorVal_setMach, getStorVal_addLog,
       temporalSstorePost_other _ _ (expirySlot newPauser) expiry _
         (expirySlot pauser) (pairNe hexpiryNew),
-      temporalSloadBase_getStorVal, getStorVal_addLog]
+      afterSload_getStorVal, getStorVal_addLog]
     simp only [foundNonzeroKernelPost, foundKernelPost, assignmentPost,
       assignmentBase]
     rw [temporalSstorePost_other _ _ (countSlot newPauser) nextCount _
         (expirySlot pauser) (pairNe hnewFamilies.2.2),
-      temporalSloadBase_getStorVal,
+      afterSload_getStorVal,
       temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _
         (expirySlot pauser) (pairNe hold.2.2),
-      temporalSloadBase_getStorVal,
+      afterSload_getStorVal,
       temporalSstorePost_other _ _ (assignmentSlot target) newPauser _
         (expirySlot pauser) (pairNe hold.1),
-      temporalSloadBase_getStorVal]
+      afterSload_getStorVal]
 
 /-- Exact generated-runtime success for a **retained** replacement: the
 dispatcher's own reserve above `registerPauser_body_retainedNonzero_runCompiled`,
@@ -1560,7 +1560,7 @@ def replacementOldLastSetPauserKernelGas (sevm : Sevm) (base : Devm)
     (target newPauser oldPauser oldCount : B256)
     (assignmentCost countCost newCountCost clearCost storeCost : Nat) : Nat :=
   7071 + clearCost + storeCost +
-    (64 + temporalSloadCost sevm
+    (64 + sloadCost sevm
         (foundKernelPost sevm base target newPauser oldPauser oldCount)
         (countSlot newPauser) + newCountCost) +
     foundSetPauserKernelPrefixGas sevm base target newPauser oldPauser
@@ -1663,7 +1663,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
           storeCost, base.stateGas⟩)
       setPauserKernel
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm
+          (afterSload sevm
             ((temporalSstorePost sevm
               ((foundNonzeroKernelPost sevm base target newPauser oldPauser
                   oldCount nextCount).addLog
@@ -1677,7 +1677,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
         ⟨[], ((M.write (previousPauserWord * 32).toNat oldPauser.toBytes).write
-          0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((temporalSstorePost sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+          0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm ((temporalSstorePost sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have hcovered : (previousPauserWord * 32).toNat + 32 ≤ M.size := by
     rw [hsize]
     decide
@@ -1719,9 +1719,9 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
       (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
         nextCount).accessedStorageKeys := by
     simp only [foundNonzeroKernelPost, temporalSstorePost_accessedStorageKeys]
-    refine temporalSloadBase_preserves_warm _ _ _ _ ?_
+    refine afterSload_preserves_warm _ _ _ _ ?_
     simp only [foundKernelPost, temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_warm _ _ _
+    exact afterSload_warm _ _ _
   have hfinish := finishSetPauser_oldLastNonzero_runCompiled (hfork := hfork) dp sevm
     (foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount
       nextCount)
@@ -1750,7 +1750,7 @@ theorem setPauserKernel_oldLastNonzero_runCompiled
         newPauser oldPauser oldCount assignmentCost countCost newCountCost
         clearCost storeCost =
       G + 7071 + clearCost + storeCost +
-        (64 + temporalSloadCost sevm
+        (64 + sloadCost sevm
           (foundKernelPost sevm base target newPauser oldPauser oldCount)
           (countSlot newPauser) + newCountCost) +
         foundSetPauserKernelPrefixGas sevm base target newPauser oldPauser
@@ -1902,7 +1902,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
           storeCost, base.stateGas⟩)
       (registerPauser dp)
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm
+          (afterSload sevm
             ((temporalSstorePost sevm
               ((foundNonzeroKernelPost sevm base target newPauser oldPauser
                   oldCount nextCount).addLog
@@ -1917,7 +1917,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
           expiry.toBytes⟩).setMach
         ⟨[], (((registerMemory target newPauser).write
           (previousPauserWord * 32).toNat oldPauser.toBytes).write
-          0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm ((temporalSstorePost sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+          0 (0 : B256).toBytes).write 0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm ((temporalSstorePost sevm ((foundNonzeroKernelPost sevm base target newPauser oldPauser oldCount nextCount).addLog ⟨sevm.currentTarget, [pauserSetEvent, target, oldPauser, newPauser], []⟩) (expirySlot oldPauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, oldPauser], (0 : B256).toBytes⟩) heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
     have htargetMask := canonicalAddress_mask_zero htargetValid.2
     have hnewMask := canonicalAddress_mask_zero hnewValid.2
     apply replacementRegisterPauserBody_fromStage_runCompiled (hfork := hfork) dp sevm base _
@@ -1943,15 +1943,15 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
     have hkernelLogs : (foundNonzeroKernelPost sevm base target newPauser
         oldPauser oldCount nextCount).logs = base.logs := by
       simp only [foundNonzeroKernelPost]
-      rw [temporalSstorePost_logs, temporalSloadBase_logs]
+      rw [temporalSstorePost_logs, afterSload_logs]
       simp only [foundKernelPost]
-      rw [temporalSstorePost_logs, temporalSloadBase_logs]
+      rw [temporalSstorePost_logs, afterSload_logs]
       simp only [assignmentPost]
       rw [temporalSstorePost_logs]
       simp only [assignmentBase]
-      rw [temporalSloadBase_logs]
+      rw [afterSload_logs]
     rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs,
-      temporalSloadBase_logs, Devm.addLog_logs, temporalSstorePost_logs,
+      afterSload_logs, Devm.addLog_logs, temporalSstorePost_logs,
       Devm.addLog_logs, hkernelLogs]
     simp only [List.append_assoc]
     rfl
@@ -1974,7 +1974,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
       rw [ite_eq_right hsame, getStorVal_setMach, getStorVal_addLog,
         temporalSstorePost_other _ _ (expirySlot newPauser) expiry _
           (expirySlot oldPauser) (pairNe hexpiryNe),
-        temporalSloadBase_getStorVal, getStorVal_addLog,
+        afterSload_getStorVal, getStorVal_addLog,
         temporalSstorePost_self]
   · intro pauser hpauser hneOld hneNew
     have getStorVal_setMach (d : Devm) (mach : Mach) (a : Adr) (k : B256) :
@@ -1999,7 +1999,7 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
     rw [getStorVal_setMach, getStorVal_addLog,
       temporalSstorePost_other _ _ (expirySlot newPauser) expiry _
         (expirySlot pauser) (pairNe (expirySlotNe hpauser hnewValid.2 hneNew)),
-      temporalSloadBase_getStorVal, getStorVal_addLog,
+      afterSload_getStorVal, getStorVal_addLog,
       temporalSstorePost_other _ _ (expirySlot oldPauser) 0 _
         (expirySlot pauser) (pairNe (expirySlotNe hpauser holdValid.2 hneOld)),
       getStorVal_addLog]
@@ -2007,13 +2007,13 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
       assignmentBase]
     rw [temporalSstorePost_other _ _ (countSlot newPauser) nextCount _
         (expirySlot pauser) (pairNe hnewFamilies.2.2),
-      temporalSloadBase_getStorVal,
+      afterSload_getStorVal,
       temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _
         (expirySlot pauser) (pairNe hold.2.2),
-      temporalSloadBase_getStorVal,
+      afterSload_getStorVal,
       temporalSstorePost_other _ _ (assignmentSlot target) newPauser _
         (expirySlot pauser) (pairNe hold.1),
-      temporalSloadBase_getStorVal]
+      afterSload_getStorVal]
 
 /-- Exact generated-runtime success for an **old-last** replacement: the
 dispatcher's own reserve above `registerPauser_body_oldLastNonzero_runCompiled`,

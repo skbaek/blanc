@@ -321,8 +321,8 @@ theorem entry13_reach {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {M : Mem} {G : N
         ihQ pc' sevm' pre' post' child hq hd hat hf hpw)
       (St_pref _ _ _ _) ?_ trivial (zero_le_B256 _) ?_
     · have hc := congrFun hcode2 sevm.currentTarget
-      rw [getStor_St_code] at hc
-      rw [getStor_St_code, getCode_eq_of_state_eq hst, hc]
+      rw [St_getCode] at hc
+      rw [St_getCode, getCode_eq_of_state_eq hst, hc]
       simpa only [afterSload_getCode, getCode_setTransVal] using hcode
     · show RegInv (Devm.getStor d1 sevm.currentTarget)
       rw [getStor_eq_of_state_eq hst]

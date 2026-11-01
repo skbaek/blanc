@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.Kit
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `remove_liquidity`, part 1: the lock, the value guard and the supply
@@ -44,8 +45,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       XAt sevm post 0x2cdb (St b1 [3, 0x2a0] M1 G1) L' := by
   xs 0x2c6c (.push [0xff, 0xff, 0xff] (by decide)) ri_push
   xw 0x2c6d (.reg .sload) ri_sload
-  xs 0x2c6e (.reg .iszero) ri_iszero
-  xs 0x2c71 (.push [0x2c, 0x76] (by decide)) ri_push
+  xa 2
   xji 0x2c72 0x2c76 hw
   · xdead
   have hlock : (b.getStor sevm.currentTarget).get lockSlot = 0 := by
@@ -53,27 +53,17 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     rw [lockSlot_lit] at e
     exact e
   clear hw
-  xjd 0x2c77
-  xs 0x2c79 (.push [0x01] (by decide)) ri_push
-  xs 0x2c7d (.push [0xff, 0xff, 0xff] (by decide)) ri_push
+  xa 3
   xw 0x2c7e (.reg .sstore) ri_sstore
-  xs 0x2c7f (.reg .callvalue) ri_callvalue
-  xs 0x2c80 (.reg .iszero) ri_iszero
-  xs 0x2c83 (.push [0x2c, 0x88] (by decide)) ri_push
+  xa 3
   xji 0x2c84 0x2c88 hw
   · xdead
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   refine ⟨hlock, hval, ?_⟩
-  xjd 0x2c89
-  xs 0x2c8b (.push [0x20] (by decide)) ri_push
-  xs 0x2c8e (.push [0x01, 0xc0] (by decide)) ri_push
-  xs 0x2c90 (.push [0x04] (by decide)) ri_push
-  xs 0x2c95 (.push [0x18, 0x16, 0x0d, 0xdd] (by decide)) ri_push
-  xs 0x2c98 (.push [0x01, 0x60] (by decide)) ri_push
+  xa 6
   xmo 0x2c99 (.reg .mstore) (ri_mstore_imgAt (o := 0x160) rfl)
-  xs 0x2c9c (.push [0x01, 0x7c] (by decide)) ri_push
-  xs 0x2c9e (.push [0x05] (by decide)) ri_push
+  xa 2
   xw 0x2c9f (.reg .sload) ri_sload
   xs 0x2ca0 (.reg .gas) ri_gas_remaining
   replace h := xa_staticcall_img (pc' := 0x2ca1) (i := 0x17c) (n := 4) (o := 0x1c0) (z := 0x20)
@@ -100,11 +90,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     · rw [hcpost, (hSK c (by rw [hL]; exact List.mem_cons_self)).2, hcpre, afterSload_getCode,
         afterSstore_getCode, afterSload_getCode]
   clear hk
-  xjd 0x2caa
-  xs 0x2cac (.push [0x1f] (by decide)) ri_push
-  xs 0x2cad (.reg .returndatasize) ri_returndatasize
-  xs 0x2cae (.reg .gt) ri_gt
-  xs 0x2cb1 (.push [0x2c, 0xb6] (by decide)) ri_push
+  xa 5
   xji 0x2cb2 0x2cb6 hw2
   · xdead
   have hlen : 32 ≤ out.length := by
@@ -112,26 +98,15 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
     exact e
   clear hw2
-  xjd 0x2cb7
-  xs 0x2cb9 (.push [0x00] (by decide)) ri_push
-  xs 0x2cba (.reg .pop) ri_pop
-  xs 0x2cbd (.push [0x01, 0xc0] (by decide)) ri_push
+  xa 4
   xmo 0x2cbe (.reg .mload) (ri_mload_imgAt (o := 0x1c0) rfl)
   xs 0x2cc1 (.push [0x01, 0x40] (by decide)) ri_push
   xmo 0x2cc2 (.reg .mstore) (ri_mstore_imgAt (o := 0x140) rfl)
-  xs 0x2cc4 (.push [0x60] (by decide)) ri_push
-  xs 0x2cc5 (.reg .calldatasize) ri_calldatasize
-  xs 0x2cc8 (.push [0x01, 0xe0] (by decide)) ri_push
+  xa 3
   xmo 0x2cc9 (.reg .calldatacopy) (ri_calldatacopy_imgAt (o := 0x1e0) (z := 0x60) rfl rfl)
-  xs 0x2ccb (.push [0x60] (by decide)) ri_push
-  xs 0x2ccc (.reg .calldatasize) ri_calldatasize
-  xs 0x2ccf (.push [0x02, 0x40] (by decide)) ri_push
+  xa 3
   xmo 0x2cd0 (.reg .calldatacopy) (ri_calldatacopy_imgAt (o := 0x240) (z := 0x60) rfl rfl)
-  xs 0x2cd3 (.push [0x02, 0xa0] (by decide)) ri_push
-  xs 0x2cd5 (.push [0x00] (by decide)) ri_push
-  xs 0x2cd7 (.push [0x03] (by decide)) ri_push
-  xs 0x2cd8 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x2cd9 (.reg (.dup 3)) (ri_dup (by rfl))
+  xa 5
   xmo 0x2cda (.reg .mstore) (ri_mstore_imgAt (o := 0x2a0) rfl)
   xs 0x2cdb (.reg .add) ri_add
   clear * - h h4 hR hW hL hdepth htgt hdata hstat hcout hlen hclogs hcpre hcpost hstor hlogs hout hacc hcodeK hob

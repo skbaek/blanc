@@ -21,63 +21,6 @@ namespace Blanc.Lift
 
 open Jaune
 
-/-- `CursorOK.sourceRun` from `rules.stateGas = none` alone. -/
-theorem CursorOK.sourceRunH {code : ByteArray} {c : Cert} {F : Exec.Deriv} {κ : Cursor}
-    (checked : Cert.check code c = true) (placed : CursorOK code c F κ)
-    {post : Devm} (success : F.exn = .ok post)
-    (hsg : F.sevm.benvStat.rules.stateGas = none) :
-    ∃ outcome, SFunc.RunP (StepIn F) c.prog F.sevm F.devm κ.f outcome := by
-  obtain ⟨S, base, stack, frame, _⟩ := placed.stack
-  have check : checkNodeM code c.entries [] false κ.m F.pc κ.a [] κ.f = true := by
-    rw [placed.pc_eq, ← checkNode_eq_checkNodeM]
-    exact placed.check
-  have source := node_soundM_noStateGas (Cert.checkedM_of_check checked) F F
-    (fun r member => List.mem_cons_of_mem _ member) post success placed.code_eq hsg
-    κ.m κ.a κ.f (Cont.tagOf κ.K) S base [] check stack frame
-    (memMatches_nil _ _)
-  rcases source with halted | ⟨_, returned, _, _, _, run, _, _⟩
-  · exact ⟨.halted post, halted⟩
-  · exact ⟨.returned returned, run⟩
-
-/-- `CursorOK.sourceRunReturn` from `rules.stateGas = none` alone. -/
-theorem CursorOK.sourceRunReturnH {code : ByteArray} {c : Cert}
-    {F : Exec.Deriv} {κ : Cursor} (checked : Cert.check code c = true)
-    (placed : CursorOK code c F κ) {post : Devm} (success : F.exn = .ok post)
-    (hsg : F.sevm.benvStat.rules.stateGas = none) :
-    SFunc.RunP (StepIn F) c.prog F.sevm F.devm κ.f (.halted post) ∨
-      CursorSourceReturn code c F κ post := by
-  obtain ⟨S, base, stack, frame, continuations⟩ := placed.stack
-  have check : checkNodeM code c.entries [] false κ.m F.pc κ.a [] κ.f = true := by
-    rw [placed.pc_eq, ← checkNode_eq_checkNodeM]
-    exact placed.check
-  have source := node_soundM_noStateGas (Cert.checkedM_of_check checked) F F
-    (fun r member => List.mem_cons_of_mem _ member) post success placed.code_eq hsg
-    κ.m κ.a κ.f (Cont.tagOf κ.K) S base [] check stack frame (memMatches_nil _ _)
-  rcases source with halted | ⟨ret, state, returned, actual, smaller, run, stateStack, arity⟩
-  · exact Or.inl halted
-  · have present : AVal.ret ∈ κ.a := by simpa only [RetIn, List.map_nil,
-      List.not_mem_nil, or_false] using ret
-    obtain ⟨k, K, sameK, live, count⟩ := placed.retOK present
-    rw [sameK] at continuations
-    cases continuations with
-    | @cons k K S0 rest callerFrame callerRet callerCheck restOK =>
-      refine Or.inr ⟨k, K, state, actual, sameK, live, smaller, run, ?_⟩
-      refine ⟨placed.code_eq, ?_, callerCheck live, ?_, ?_⟩
-      · change (Cont.tagOf κ.K).toNat = k.tag.toNat
-        rw [sameK]
-        rfl
-      · intro member
-        apply callerRet
-        exact (List.mem_append.mp member).resolve_left (by
-          intro inUnknown
-          have := List.eq_of_mem_replicate inUnknown
-          cases this)
-      · refine ⟨returned ++ S0, rest, ?_, ?_, restOK⟩
-        · rw [stateStack, List.append_assoc]
-        · have unknown := frameMatches_unk_length (ρ := Cont.tagOf K) returned
-          rw [arity, ← count] at unknown
-          exact List.rel_append unknown callerFrame
-
 /-! ## Exec-free suffixes -/
 
 /-- `cursor_reach_of_parentPrefix` from `rules.stateGas = none` alone. -/
@@ -126,52 +69,6 @@ theorem CursorOK.revertLineNoOkH {code : ByteArray} {c : Cert}
     rw [lastPlaced.code_eq, lastPlaced.pc_eq]
     exact byteAt_linst_at opcode
   exact Linst.revert_not_ok ((N.exc.last_inv instruction).symm.trans (sameExn.trans success))
-
-/-- `reach_between` from `rules.stateGas = none` alone. -/
-theorem reach_betweenH {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {R F N : Exec.Deriv} (hF : Exec.Deriv.ParentPrefix R F) (hp : Exec.Deriv.ParentPrefix F N)
-    (hsg : R.sevm.benvStat.rules.stateGas = none) {κ₀ : Cursor} (ok : CursorOK code c F κ₀) :
-    ∃ κ, Reach (StepIn R) c.prog R.sevm (κ₀.conf F.devm) (κ.conf N.devm) ∧
-      CursorOK code c N κ := by
-  have hsevm : F.sevm = R.sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq hF
-  have hdesc : ∀ r ∈ Exec.rawFrameDescendants F.exc, r ∈ Exec.rawFrameRoots R.exc :=
-    fun r hr => List.mem_cons_of_mem _ (rawFrameDescendants_sub_of_prefix hF r hr)
-  suffices h : ∀ {F n : Exec.Deriv}, Exec.Deriv.ParentPrefix F n →
-      ∀ κ₀, CursorOK code c F κ₀ → F.sevm = R.sevm →
-      (∀ r ∈ Exec.rawFrameDescendants F.exc, r ∈ Exec.rawFrameRoots R.exc) →
-      ∃ κ, Reach (StepIn R) c.prog R.sevm (κ₀.conf F.devm) (κ.conf n.devm) ∧
-        CursorOK code c n κ from
-    h hp κ₀ ok hsevm hdesc
-  intro F n hp
-  induction hp with
-  | refl root => exact fun κ₀ ok _ _ => ⟨κ₀, .refl, ok⟩
-  | step head _ ih =>
-    intro κ₀ ok hsevm hdesc
-    obtain ⟨κ₁, -, hstep, ok₁⟩ := cursor_stepS_noStateGas hc ok head (hsevm ▸ hsg)
-    have hsevm₁ := Cursor.parentStep_sevm head
-    obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁ (hsevm₁.trans hsevm)
-      (fun r hr => hdesc r (by
-        cases head with
-        | cont => simpa only [Exec.rawFrameDescendants] using hr
-        | doneOk => simpa only [Exec.rawFrameDescendants] using hr
-        | runOk =>
-          simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append]
-          exact Or.inr (Or.inr hr)))
-    refine ⟨κ, .head ?_ hreach, ok'⟩
-    rw [← hsevm]
-    exact hstep.mono fun h => h.mono fun _ _ _ _ _ he r hr => hdesc r (he r hr)
-
-/-- `noExec_after_of_cursor` from `rules.stateGas = none` alone. -/
-theorem noExec_after_of_cursorH {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
-    {R F N : Exec.Deriv} (hF : Exec.Deriv.ParentPrefix R F) (hp : Exec.Deriv.ParentPrefix F N)
-    (hsg : R.sevm.benvStat.rules.stateGas = none) {κ : Cursor} (ok : CursorOK code c F κ)
-    {E : List Nat} (hE : ExecFreeSet c.prog E = true) (hf : κ.f.execFreeIn E = true)
-    (hK : ∀ s ∈ κ.K.map Cont.f, s.execFreeIn E = true) :
-    ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) := by
-  intro x hat
-  obtain ⟨κ', reach, okN⟩ := reach_betweenH hc hF hp hsg ok
-  obtain ⟨g, hg, -⟩ := okN.tree_of_exec hat
-  exact Reach.false_of_execFree hE reach ⟨x, g, hg⟩ hf hK
 
 /-! ## Call-free internal returns -/
 

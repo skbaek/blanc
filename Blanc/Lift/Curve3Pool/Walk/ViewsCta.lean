@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.ViewsKit
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `calc_token_amount(amounts, deposit)` on the derivation
@@ -54,68 +55,42 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
         (0x1a0, amp)] := by
   have hV : VW (vdMem sevm) [] := ⟨Words.nil _, vyMem_wf Mem.wf_empty _,
     by rw [vyMem_empty_size]⟩
-  xs 0xb08 (.reg .callvalue) ri_callvalue  -- 0b07 CALLVALUE
-  xs 0xb09 (.reg .iszero) ri_iszero  -- 0b08 ISZERO
-  xs 0xb0c (.push [0x0b, 0x11] (by decide)) ri_push  -- 0b09 PUSH2 0x0b11
+  xa 3
   xji 0xb0d 0xb11 hw
   · xdead  -- 0b0c JUMPI
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
-  xjd 0xb12  -- 0b11 JUMPDEST
-  xs 0xb14 (.push [0x64] (by decide)) ri_push  -- 0b12 PUSH1 0x64
-  xs 0xb15 (.reg .calldataload) ri_calldataload  -- 0b14 CALLDATALOAD
-  xs 0xb17 (.push [0x02] (by decide)) ri_push  -- 0b15 PUSH1 0x02
-  xs 0xb18 (.reg (.dup 1)) (ri_dup (by rfl))  -- 0b17 DUP2
-  xs 0xb19 (.reg .lt) ri_lt  -- 0b18 LT
-  xs 0xb1c (.push [0x0b, 0x21] (by decide)) ri_push  -- 0b19 PUSH2 0x0b21
+  xa 7
   xji 0xb1d 0xb21 hw
   · xdead  -- 0b1c JUMPI
   have hdep : Sevm.dataWord sevm (Bytes.toB256 [100]) < Bytes.toB256 [2] := by
     have e := ltCheck_ne_zero hw
     rwa [← B256.lt_iff_toNat_lt_toNat] at e
   clear hw
-  xjd 0xb22  -- 0b21 JUMPDEST
-  xs 0xb23 (.reg .pop) ri_pop  -- 0b22 POP
-  xs 0xb26 (.push [0x01, 0x40] (by decide)) ri_push  -- 0b23 PUSH2 0x0140
-  xs 0xb28 (.push [0x01] (by decide)) ri_push  -- 0b26 PUSH1 0x01
-  xs 0xb29 (.reg (.dup 0)) (ri_dup (by rfl))  -- 0b28 DUP1
-  xs 0xb2b (.push [0xc0] (by decide)) ri_push  -- 0b29 PUSH1 0xc0
+  xa 6
   xsw 0xb2c 0xc0  -- 0b2b MSTORE
-  xs 0xb2e (.push [0x20] (by decide)) ri_push  -- 0b2c PUSH1 0x20
-  xs 0xb30 (.push [0xc0] (by decide)) ri_push  -- 0b2e PUSH1 0xc0
+  xa 2
   xk 0xb31 0xc0  -- 0b30 SHA3
   xw 0xb32 (.reg .sload) ri_sload  -- 0b31 SLOAD
   xs 0xb33 (.reg (.dup 2)) (ri_dup (by rfl))  -- 0b32 DUP3
   xsw 0xb34 0x140  -- 0b33 MSTORE
-  xs 0xb36 (.push [0x01] (by decide)) ri_push  -- 0b34 PUSH1 0x01
-  xs 0xb37 (.reg (.dup 1)) (ri_dup (by rfl))  -- 0b36 DUP2
-  xs 0xb39 (.push [0xc0] (by decide)) ri_push  -- 0b37 PUSH1 0xc0
+  xa 3
   xsw 0xb3a 0xc0  -- 0b39 MSTORE
-  xs 0xb3c (.push [0x20] (by decide)) ri_push  -- 0b3a PUSH1 0x20
-  xs 0xb3e (.push [0xc0] (by decide)) ri_push  -- 0b3c PUSH1 0xc0
+  xa 2
   xk 0xb3f 0xc0  -- 0b3e SHA3
   xs 0xb40 (.reg .add) ri_add  -- 0b3f ADD
   xw 0xb41 (.reg .sload) ri_sload  -- 0b40 SLOAD
-  xs 0xb42 (.reg (.dup 2)) (ri_dup (by rfl))  -- 0b41 DUP3
-  xs 0xb44 (.push [0x20] (by decide)) ri_push  -- 0b42 PUSH1 0x20
-  xs 0xb45 (.reg .add) ri_add  -- 0b44 ADD
+  xa 3
   xsw 0xb46 0x160  -- 0b45 MSTORE
-  xs 0xb48 (.push [0x02] (by decide)) ri_push  -- 0b46 PUSH1 0x02
-  xs 0xb49 (.reg (.dup 1)) (ri_dup (by rfl))  -- 0b48 DUP2
-  xs 0xb4b (.push [0xc0] (by decide)) ri_push  -- 0b49 PUSH1 0xc0
+  xa 3
   xsw 0xb4c 0xc0  -- 0b4b MSTORE
-  xs 0xb4e (.push [0x20] (by decide)) ri_push  -- 0b4c PUSH1 0x20
-  xs 0xb50 (.push [0xc0] (by decide)) ri_push  -- 0b4e PUSH1 0xc0
+  xa 2
   xk 0xb51 0xc0  -- 0b50 SHA3
   xs 0xb52 (.reg .add) ri_add  -- 0b51 ADD
   xw 0xb53 (.reg .sload) ri_sload  -- 0b52 SLOAD
-  xs 0xb54 (.reg (.dup 2)) (ri_dup (by rfl))  -- 0b53 DUP3
-  xs 0xb56 (.push [0x40] (by decide)) ri_push  -- 0b54 PUSH1 0x40
-  xs 0xb57 (.reg .add) ri_add  -- 0b56 ADD
+  xa 3
   xsw 0xb58 0x180  -- 0b57 MSTORE
-  xs 0xb59 (.reg .pop) ri_pop  -- 0b58 POP
-  xs 0xb5a (.reg .pop) ri_pop  -- 0b59 POP
-  xs 0xb5d (.push [0x01, 0x40] (by decide)) ri_push  -- 0b5a PUSH2 0x0140
+  xa 3
   xlx 0xb5e 0x140  -- 0b5d MLOAD
   xs 0xb61 (.push [0x01, 0x60] (by decide)) ri_push  -- 0b5e PUSH2 0x0160
   xlx 0xb62 0x160  -- 0b61 MLOAD
@@ -125,8 +100,7 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
   xlx 0xb6a 0x1a0  -- 0b69 MLOAD
   xs 0xb6c (.push [0x06] (by decide)) ri_push  -- 0b6a PUSH1 0x06
   cvpc 0xb6d  -- 0b6c PC
-  xs 0xb6e (.reg .add) ri_add  -- 0b6d ADD
-  xs 0xb71 (.push [0x00, 0xa9] (by decide)) ri_push  -- 0b6e PUSH2 0x00a9
+  xa 2
   xjmp 0xa9  -- 0b71 JUMP
   have hb1 := (((SloadsOnly.refl (sevm := sevm) (b := b)).sload
     (Bytes.toB256 [1]).toBytes.keccak).sload ((Bytes.toB256 [1]).toBytes.keccak + Bytes.toB256 [1])).sload
@@ -140,8 +114,7 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
   have hV := hV1
   clear hV1
   vnorm
-  xjd 0xb73  -- 0b72 JUMPDEST
-  xs 0xb76 (.push [0x01, 0xe0] (by decide)) ri_push  -- 0b73 PUSH2 0x01e0
+  xa 2
   xsw 0xb77 0x1e0  -- 0b76 MSTORE
   xs 0xb7a (.push [0x01, 0xa0] (by decide)) ri_push  -- 0b77 PUSH2 0x01a0
   xsw 0xb7b 0x1a0  -- 0b7a MSTORE
@@ -169,31 +142,19 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
   xlx 0xba7 0x1e0  -- 0ba6 MLOAD
   xs 0xbaa (.push [0x02, 0x00] (by decide)) ri_push  -- 0ba7 PUSH2 0x0200
   xlx 0xbab 0x200  -- 0baa MLOAD
-  xs 0xbae (.push [0x02, 0x40] (by decide)) ri_push  -- 0bab PUSH2 0x0240
-  xs 0xbb1 (.push [0x01, 0x40] (by decide)) ri_push  -- 0bae PUSH2 0x0140
-  xs 0xbb2 (.reg (.dup 0)) (ri_dup (by rfl))  -- 0bb1 DUP1
+  xa 3
   xlx 0xbb3 0x140  -- 0bb2 MLOAD
   xs 0xbb4 (.reg (.dup 2)) (ri_dup (by rfl))  -- 0bb3 DUP3
   xsw 0xbb5 0x240  -- 0bb4 MSTORE
-  xs 0xbb6 (.reg (.dup 0)) (ri_dup (by rfl))  -- 0bb5 DUP1
-  xs 0xbb8 (.push [0x20] (by decide)) ri_push  -- 0bb6 PUSH1 0x20
-  xs 0xbb9 (.reg .add) ri_add  -- 0bb8 ADD
+  xa 3
   xlx 0xbba 0x160  -- 0bb9 MLOAD
-  xs 0xbbb (.reg (.dup 2)) (ri_dup (by rfl))  -- 0bba DUP3
-  xs 0xbbd (.push [0x20] (by decide)) ri_push  -- 0bbb PUSH1 0x20
-  xs 0xbbe (.reg .add) ri_add  -- 0bbd ADD
+  xa 3
   xsw 0xbbf 0x260  -- 0bbe MSTORE
-  xs 0xbc0 (.reg (.dup 0)) (ri_dup (by rfl))  -- 0bbf DUP1
-  xs 0xbc2 (.push [0x40] (by decide)) ri_push  -- 0bc0 PUSH1 0x40
-  xs 0xbc3 (.reg .add) ri_add  -- 0bc2 ADD
+  xa 3
   xlx 0xbc4 0x180  -- 0bc3 MLOAD
-  xs 0xbc5 (.reg (.dup 2)) (ri_dup (by rfl))  -- 0bc4 DUP3
-  xs 0xbc7 (.push [0x40] (by decide)) ri_push  -- 0bc5 PUSH1 0x40
-  xs 0xbc8 (.reg .add) ri_add  -- 0bc7 ADD
+  xa 3
   xsw 0xbc9 0x280  -- 0bc8 MSTORE
-  xs 0xbca (.reg .pop) ri_pop  -- 0bc9 POP
-  xs 0xbcb (.reg .pop) ri_pop  -- 0bca POP
-  xs 0xbce (.push [0x01, 0xa0] (by decide)) ri_push  -- 0bcb PUSH2 0x01a0
+  xa 3
   xlx 0xbcf 0x1a0  -- 0bce MLOAD
   xs 0xbd2 (.push [0x02, 0xa0] (by decide)) ri_push  -- 0bcf PUSH2 0x02a0
   xsw 0xbd3 0x2a0  -- 0bd2 MSTORE
@@ -207,16 +168,14 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
   xlx 0xbe3 0x240  -- 0be2 MLOAD
   xs 0xbe5 (.push [0x06] (by decide)) ri_push  -- 0be3 PUSH1 0x06
   cvpc 0xbe6  -- 0be5 PC
-  xs 0xbe7 (.reg .add) ri_add  -- 0be6 ADD
-  xs 0xbea (.push [0x07, 0xb7] (by decide)) ri_push  -- 0be7 PUSH2 0x07b7
+  xa 2
   xjmp 0x7b7  -- 0bea JUMP
   obtain ⟨D0, M, _, h, hD0, hV1⟩ := xa_vGetDMem hc hcode hfork hV h
   clear hV
   have hV := hV1
   clear hV1
   vnorm
-  xjd 0xbec  -- 0beb JUMPDEST
-  xs 0xbef (.push [0x03, 0x00] (by decide)) ri_push  -- 0bec PUSH2 0x0300
+  xa 2
   xsw 0xbf0 0x300  -- 0bef MSTORE
   xs 0xbf3 (.push [0x02, 0x00] (by decide)) ri_push  -- 0bf0 PUSH2 0x0200
   xsw 0xbf4 0x200  -- 0bf3 MSTORE

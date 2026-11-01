@@ -108,7 +108,6 @@ theorem foundZeroRetainedRegistration_sourceTrace_witness
   refine ⟨_, htrace, rfl, rfl, ?_⟩
   exact hw.applyFoundZeroWrites htarget hfind
 
-set_option maxRecDepth 601 in
 private theorem registerAfterSet_retainedOldZero_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -201,7 +200,9 @@ private theorem registerAfterSet_retainedOldZero_runCompiled
     case h_val =>
       rw [Devm.getStorVal_setMach, hcount]
       simp only [B256.eqCheck, hremaining, ↓reduceIte]
-    case h_arm => exact Func.RunCompiled.last rfl
+    case h_arm =>
+      rw [Nat.add_sub_cancel]
+      exact Func.RunCompiled.last rfl
   have holdTail : Func.RunCompiled fs sevm
       (base.setMach ⟨stack, M, G + 151, base.stateGas⟩) oldBranch
       (base.setMach ⟨stack, M, G, base.stateGas⟩) := by
@@ -718,8 +719,8 @@ private def foundZeroRetainedLastSetPauserKernelGas (sevm : Sevm) (base : Devm)
     (target oldPauser : B256)
     (assignmentCost countCost holeCost movedIndexCost tailClearCost
       lengthRestoreCost indexClearCost : Nat) : Nat :=
-  2714 + temporalSloadCost sevm base (assignmentSlot target) + assignmentCost +
-    temporalSloadCost sevm (assignmentPost sevm base target 0)
+  2714 + sloadCost sevm base (assignmentSlot target) + assignmentCost +
+    sloadCost sevm (assignmentPost sevm base target 0)
       (countSlot oldPauser) + countCost + holeCost + movedIndexCost +
     tailClearCost + lengthRestoreCost + indexClearCost
 
@@ -821,14 +822,14 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
   let next : B256 := Nat.toB256 entries.length
   let oldLength : B256 := next - 1
   let assignPost := assignmentPost sevm base target 0
-  let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
+  let countBase := afterSload sevm assignPost (countSlot oldPauser)
   let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
     (oldCount - 1)
   have hcountPostOrig : ∀ (a : Adr) (k : B256),
       countPost.getOrigStorVal sevm a k = base.getOrigStorVal sevm a k := by
     intro a k
     simp only [countPost, countBase, assignPost, temporalSstorePost_getOrigStorVal,
-      temporalSloadBase_getOrigStorVal, assignmentPost_getOrigStorVal]
+      afterSload_getOrigStorVal, assignmentPost_getOrigStorVal]
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
@@ -882,10 +883,10 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
       assignmentBase]
     rw [temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _ k
         (pairNe hcountNe),
-      temporalSloadBase_getStorVal,
+      afterSload_getStorVal,
       temporalSstorePost_other _ _ (assignmentSlot target) 0 _ k
         (pairNe hassignNe),
-      temporalSloadBase_getStorVal]
+      afterSload_getStorVal]
   have harray : countPost.getStorVal sevm.currentTarget
       (arrayEntrySlot next) = target := by
     rw [htransport _ (Ne.symm hentryNe.2.2) (Ne.symm hentryNe.1)]
@@ -909,14 +910,14 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
     dsimp only [countPost, countBase, assignPost, assignmentPost,
       assignmentBase]
     rw [temporalSstorePost_accessedStorageKeys]
-    refine temporalSloadBase_preserves_warm _ _ _ _ ?_
+    refine afterSload_preserves_warm _ _ _ _ ?_
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_warm _ _ _ _ hk
+    exact afterSload_preserves_warm _ _ _ _ hk
   have hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
       countPost.accessedStorageKeys := by
     dsimp only [countPost]
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_warm _ _ _
+    exact afterSload_warm _ _ _
   have hwf' : Mem.Wf M' := hwf.write _ _
   have hreads' : Mem.Reads M' img' := Mem.Reads.write hwf hreads _ _
   have hsizeM' : M'.size = M.size := by
@@ -1018,7 +1019,7 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
     rw [logs_setMach, Devm.addLog_logs]
     simp only [indexClearPost, lengthWritePost,
       entryClearPost, indexWritePost, entryWritePost,
-      temporalSstorePost_logs, temporalSloadBase_logs]
+      temporalSstorePost_logs, afterSload_logs]
   · intro pauser hpauser
     have hexpiryArray := expirySlot_ne_arrayFamily hpauser hnextBound
     have hexpiryRegistry := expirySlot_ne_registryAddressFamilies
@@ -1047,10 +1048,10 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
             (expirySlot pauser) (pairNe hexpiryArray.2),
           temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _
             (expirySlot pauser) (pairNe hexpiryRegistry.2.2),
-          temporalSloadBase_getStorVal,
+          afterSload_getStorVal,
           temporalSstorePost_other _ _ (assignmentSlot target) 0 _
             (expirySlot pauser) (pairNe hexpiryRegistry.1),
-          temporalSloadBase_getStorVal]
+          afterSload_getStorVal]
 
 /-! ## Shared production-body prefix
 
@@ -2049,8 +2050,8 @@ private def foundZeroRetainedSwapPopSetPauserKernelGas (sevm : Sevm)
     (base : Devm) (target oldPauser : B256)
     (assignmentCost countCost holeCost movedIndexCost tailClearCost
       lengthRestoreCost indexClearCost : Nat) : Nat :=
-  2714 + temporalSloadCost sevm base (assignmentSlot target) + assignmentCost +
-    temporalSloadCost sevm (assignmentPost sevm base target 0)
+  2714 + sloadCost sevm base (assignmentSlot target) + assignmentCost +
+    sloadCost sevm (assignmentPost sevm base target 0)
       (countSlot oldPauser) + countCost + holeCost + movedIndexCost +
     tailClearCost + lengthRestoreCost + indexClearCost
 
@@ -2189,14 +2190,14 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
   let lastTarget : B256 := sourceLastTarget entries
   let oldLength : B256 := len - 1
   let assignPost := assignmentPost sevm base target 0
-  let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
+  let countBase := afterSload sevm assignPost (countSlot oldPauser)
   let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
     (oldCount - 1)
   have hcountPostOrig : ∀ (a : Adr) (k : B256),
       countPost.getOrigStorVal sevm a k = base.getOrigStorVal sevm a k := by
     intro a k
     simp only [countPost, countBase, assignPost, temporalSstorePost_getOrigStorVal,
-      temporalSloadBase_getOrigStorVal, assignmentPost_getOrigStorVal]
+      afterSload_getOrigStorVal, assignmentPost_getOrigStorVal]
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
@@ -2285,10 +2286,10 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
       assignmentBase]
     rw [temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _ k
         (pairNe hcountNe),
-      temporalSloadBase_getStorVal,
+      afterSload_getStorVal,
       temporalSstorePost_other _ _ (assignmentSlot target) 0 _ k
         (pairNe hassignNe),
-      temporalSloadBase_getStorVal]
+      afterSload_getStorVal]
   have hhole : countPost.getStorVal sevm.currentTarget
       (arrayEntrySlot idx) = target := by
     rw [htransport _ (Ne.symm hidxFamilies.2.2) (Ne.symm hidxFamilies.1)]
@@ -2320,14 +2321,14 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
     dsimp only [countPost, countBase, assignPost, assignmentPost,
       assignmentBase]
     rw [temporalSstorePost_accessedStorageKeys]
-    refine temporalSloadBase_preserves_warm _ _ _ _ ?_
+    refine afterSload_preserves_warm _ _ _ _ ?_
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_warm _ _ _ _ hk
+    exact afterSload_preserves_warm _ _ _ _ hk
   have hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
       countPost.accessedStorageKeys := by
     dsimp only [countPost]
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_warm _ _ _
+    exact afterSload_warm _ _ _
   have hwf' : Mem.Wf M' := hwf.write _ _
   have hreads' : Mem.Reads M' img' := Mem.Reads.write hwf hreads _ _
   have hsizeM' : M'.size = M.size := by
@@ -2433,7 +2434,7 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
     rw [logs_setMach, Devm.addLog_logs]
     simp only [indexClearPost, lengthWritePost,
       swapPopClearPost, indexWritePost, entryWritePost,
-      temporalSstorePost_logs, temporalSloadBase_logs]
+      temporalSstorePost_logs, afterSload_logs]
   · intro pauser hpauser
     have hexpiryIdx := expirySlot_ne_arrayFamily hpauser hidxBound
     have hexpiryLen := expirySlot_ne_arrayFamily hpauser hlenBound
@@ -2464,10 +2465,10 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
             (expirySlot pauser) (pairNe hexpiryIdx.2),
           temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _
             (expirySlot pauser) (pairNe hexpiryRegistry.2.2),
-          temporalSloadBase_getStorVal,
+          afterSload_getStorVal,
           temporalSstorePost_other _ _ (assignmentSlot target) 0 _
             (expirySlot pauser) (pairNe hexpiryRegistry.1),
-          temporalSloadBase_getStorVal]
+          afterSload_getStorVal]
 
 /-- Exact production-body reserve for unregistering a recorded target that is
 not the array's last entry, with the old pauser retained. -/
@@ -3367,8 +3368,8 @@ private def foundZeroOldLastSetPauserKernelGas (sevm : Sevm) (base : Devm)
     (target oldPauser : B256)
     (assignmentCost countCost holeCost movedIndexCost tailClearCost
       lengthRestoreCost indexClearCost clearCost : Nat) : Nat :=
-  4131 + temporalSloadCost sevm base (assignmentSlot target) + assignmentCost +
-    temporalSloadCost sevm (assignmentPost sevm base target 0)
+  4131 + sloadCost sevm base (assignmentSlot target) + assignmentCost +
+    sloadCost sevm (assignmentPost sevm base target 0)
       (countSlot oldPauser) + countCost + holeCost + movedIndexCost +
     tailClearCost + lengthRestoreCost + indexClearCost + clearCost
 
@@ -3489,14 +3490,14 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
   let next : B256 := Nat.toB256 entries.length
   let oldLength : B256 := next - 1
   let assignPost := assignmentPost sevm base target 0
-  let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
+  let countBase := afterSload sevm assignPost (countSlot oldPauser)
   let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
     (oldCount - 1)
   have hcountPostOrig : ∀ (a : Adr) (k : B256),
       countPost.getOrigStorVal sevm a k = base.getOrigStorVal sevm a k := by
     intro a k
     simp only [countPost, countBase, assignPost, temporalSstorePost_getOrigStorVal,
-      temporalSloadBase_getOrigStorVal, assignmentPost_getOrigStorVal]
+      afterSload_getOrigStorVal, assignmentPost_getOrigStorVal]
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
@@ -3553,10 +3554,10 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
       assignmentBase]
     rw [temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _ k
         (pairNe hcountNe),
-      temporalSloadBase_getStorVal,
+      afterSload_getStorVal,
       temporalSstorePost_other _ _ (assignmentSlot target) 0 _ k
         (pairNe hassignNe),
-      temporalSloadBase_getStorVal]
+      afterSload_getStorVal]
   have harray : countPost.getStorVal sevm.currentTarget
       (arrayEntrySlot next) = target := by
     rw [htransport _ (Ne.symm hentryNe.2.2) (Ne.symm hentryNe.1)]
@@ -3585,14 +3586,14 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
     dsimp only [countPost, countBase, assignPost, assignmentPost,
       assignmentBase]
     rw [temporalSstorePost_accessedStorageKeys]
-    refine temporalSloadBase_preserves_warm _ _ _ _ ?_
+    refine afterSload_preserves_warm _ _ _ _ ?_
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_warm _ _ _ _ hk
+    exact afterSload_preserves_warm _ _ _ _ hk
   have hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
       countPost.accessedStorageKeys := by
     dsimp only [countPost]
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_warm _ _ _
+    exact afterSload_warm _ _ _
   have hwf' : Mem.Wf M' := hwf.write _ _
   have hreads' : Mem.Reads M' img' := Mem.Reads.write hwf hreads _ _
   have hsizeM' : M'.size = M.size := by
@@ -3701,7 +3702,7 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
     rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs, Devm.addLog_logs]
     simp only [indexClearPost, lengthWritePost,
       entryClearPost, indexWritePost, entryWritePost,
-      temporalSstorePost_logs, temporalSloadBase_logs, List.append_assoc,
+      temporalSstorePost_logs, afterSload_logs, List.append_assoc,
       List.cons_append, List.nil_append]
   · dsimp only [post]
     rw [Devm.getStorVal_setMach, getStorVal_addLog]
@@ -3739,10 +3740,10 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
             (expirySlot pauser) (pairNe hexpiryArray.2),
           temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _
             (expirySlot pauser) (pairNe hexpiryRegistry.2.2),
-          temporalSloadBase_getStorVal,
+          afterSload_getStorVal,
           temporalSstorePost_other _ _ (assignmentSlot target) 0 _
             (expirySlot pauser) (pairNe hexpiryRegistry.1),
-          temporalSloadBase_getStorVal]
+          afterSload_getStorVal]
 
 /-- Exact production-body reserve for unregistering a recorded target that is
 already the array's last entry, retiring the old pauser. -/
@@ -4630,8 +4631,8 @@ private def foundZeroOldLastSwapPopSetPauserKernelGas (sevm : Sevm)
     (base : Devm) (target oldPauser : B256)
     (assignmentCost countCost holeCost movedIndexCost tailClearCost
       lengthRestoreCost indexClearCost clearCost : Nat) : Nat :=
-  4131 + temporalSloadCost sevm base (assignmentSlot target) + assignmentCost +
-    temporalSloadCost sevm (assignmentPost sevm base target 0)
+  4131 + sloadCost sevm base (assignmentSlot target) + assignmentCost +
+    sloadCost sevm (assignmentPost sevm base target 0)
       (countSlot oldPauser) + countCost + holeCost + movedIndexCost +
     tailClearCost + lengthRestoreCost + indexClearCost + clearCost
 
@@ -4782,14 +4783,14 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
   let lastTarget : B256 := sourceLastTarget entries
   let oldLength : B256 := len - 1
   let assignPost := assignmentPost sevm base target 0
-  let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
+  let countBase := afterSload sevm assignPost (countSlot oldPauser)
   let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
     (oldCount - 1)
   have hcountPostOrig : ∀ (a : Adr) (k : B256),
       countPost.getOrigStorVal sevm a k = base.getOrigStorVal sevm a k := by
     intro a k
     simp only [countPost, countBase, assignPost, temporalSstorePost_getOrigStorVal,
-      temporalSloadBase_getOrigStorVal, assignmentPost_getOrigStorVal]
+      afterSload_getOrigStorVal, assignmentPost_getOrigStorVal]
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
@@ -4884,10 +4885,10 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
       assignmentBase]
     rw [temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _ k
         (pairNe hcountNe),
-      temporalSloadBase_getStorVal,
+      afterSload_getStorVal,
       temporalSstorePost_other _ _ (assignmentSlot target) 0 _ k
         (pairNe hassignNe),
-      temporalSloadBase_getStorVal]
+      afterSload_getStorVal]
   have hhole : countPost.getStorVal sevm.currentTarget
       (arrayEntrySlot idx) = target := by
     rw [htransport _ (Ne.symm hidxFamilies.2.2) (Ne.symm hidxFamilies.1)]
@@ -4924,14 +4925,14 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
     dsimp only [countPost, countBase, assignPost, assignmentPost,
       assignmentBase]
     rw [temporalSstorePost_accessedStorageKeys]
-    refine temporalSloadBase_preserves_warm _ _ _ _ ?_
+    refine afterSload_preserves_warm _ _ _ _ ?_
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_preserves_warm _ _ _ _ hk
+    exact afterSload_preserves_warm _ _ _ _ hk
   have hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
       countPost.accessedStorageKeys := by
     dsimp only [countPost]
     rw [temporalSstorePost_accessedStorageKeys]
-    exact temporalSloadBase_warm _ _ _
+    exact afterSload_warm _ _ _
   have hwf' : Mem.Wf M' := hwf.write _ _
   have hreads' : Mem.Reads M' img' := Mem.Reads.write hwf hreads _ _
   have hsizeM' : M'.size = M.size := by
@@ -5043,7 +5044,7 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
     rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs, Devm.addLog_logs]
     simp only [indexClearPost, lengthWritePost,
       swapPopClearPost, indexWritePost, entryWritePost,
-      temporalSstorePost_logs, temporalSloadBase_logs, List.append_assoc,
+      temporalSstorePost_logs, afterSload_logs, List.append_assoc,
       List.cons_append, List.nil_append]
   · dsimp only [post]
     rw [Devm.getStorVal_setMach, getStorVal_addLog]
@@ -5084,10 +5085,10 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
             (expirySlot pauser) (pairNe hexpiryIdx.2),
           temporalSstorePost_other _ _ (countSlot oldPauser) (oldCount - 1) _
             (expirySlot pauser) (pairNe hexpiryRegistry.2.2),
-          temporalSloadBase_getStorVal,
+          afterSload_getStorVal,
           temporalSstorePost_other _ _ (assignmentSlot target) 0 _
             (expirySlot pauser) (pairNe hexpiryRegistry.1),
-          temporalSloadBase_getStorVal]
+          afterSload_getStorVal]
 
 /-- Exact production-body reserve for unregistering a recorded target that is
 not the array's last entry, retiring the old pauser. -/

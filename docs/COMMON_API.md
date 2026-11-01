@@ -2512,17 +2512,18 @@ own block fork's installed set). State preservation is complete before
 Cancun (`systemFrames_installed_preCancun`, `SystemCodeInstalledAt.of_preCancun`,
 both vacuous) and through every system message
 (`SystemMessageTrace.installed_keep_noStateGas`); preservation through
-transactions on Cancun and later eras goes through the neutral non-deletion
-chain in
-[`Blanc/ExecutionHistoryInNoDel.lean`](../Blanc/ExecutionHistoryInNoDel.lean):
-neutral (`stateGas = none` plus EIP-6780 flag) twins of the interpreter core
-(`Evm.step_effect_noStateGas`, `Exec.effect_neutralSchedule`,
-`Exec.inv_noDel_noStateGas`), the message/create/call preservation twins
-(`processMessageCall_accountsToDelete_ne_noStateGas`), the settlement-form
-twin (`TransactionTrace.exists_finalStateForm_noStateGas` with explicit
-refund-quotient/touched-sweep hypotheses), and the transaction(-list) keep
-twins (`TransactionTrace.codeAt_keep_noStateGas`,
-`ApplyTransactionsTrace.codeAt_keep_noStateGas`). Era schedule facts
+transactions on Cancun and later eras goes through the non-deletion chain,
+stated once under `stateGas = none` plus the EIP-6780 flag with the
+`CoveredFork` forms derived (`CoveredFork.rules_selfdestructOnlyCreated`): the
+interpreter core (`Evm.step_effect_noStateGas`, `Exec.effect_neutralSchedule`,
+`Exec.inv_noDel_noStateGas`) and message/create/call preservation
+(`processMessageCall_accountsToDelete_ne_noStateGas`) in
+[`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean); the settlement form
+(`TransactionTrace.exists_finalStateForm_noStateGas` with explicit
+refund-quotient/touched-sweep hypotheses) and the transaction(-list) keeps
+(`TransactionTrace.codeAt_keep_noStateGas`,
+`ApplyTransactionsTrace.codeAt_keep_noStateGas`) in
+[`Blanc/ExecutionTraceCodeKeep.lean`](../Blanc/ExecutionTraceCodeKeep.lean). Era schedule facts
 (`CancunOnwards`, EIP-6780/refund-quotient/touched-sweep decisions,
 `HistFork.pragueOnwards_covered`) are in
 [`Blanc/ExecutionHistoryInForkFacts.lean`](../Blanc/ExecutionHistoryInForkFacts.lean).
@@ -2944,6 +2945,15 @@ The four layers, bottom-up:
   is the entry point. `Table` is a finite search tree of rows; `checkTable` runs
   the complete finite validation and `checkTable_certificate` turns a successful
   check into a `Certificate`.
+  The row and layout checks read code only through a `CodeReader` (size, decoded
+  instruction, accepted destination); `checkRow code` and `Table.checkLayout code`
+  are `checkRowWith`/`Table.checkLayoutWith` on `CodeReader.ofCode code`. For a
+  runtime of more than a few hundred bytes, decide each subtree on the trie reader
+  `CodeReader.ofTries` (tries from [`Blanc/CodeTrie.lean`](../Blanc/CodeTrie.lean),
+  equal to the bytes' reader by `CodeReader.ofTries_eq`) with
+  `rw [checkRow_eq_reader reader_eq]` / `rw [Table.checkLayout_eq_reader reader_eq]`
+  before `decide +kernel`: plain reads cost `O(pc)` kernel steps per byte.
+  `Blanc/DripStackSafety.lean` (`codeTries`, `reader`, `reader_eq`) is the template.
 
 The whole minimal use is four declarations, kept live at the end of the owner
 module as `exampleCode`, `exampleTable`, `exampleTable_checked` and
@@ -4140,10 +4150,11 @@ Use the primitive word facts in
 [`Blanc/MachineDataFacts.lean`](../Blanc/MachineDataFacts.lean) before
 destructing a `B256`: `B256.mul_one` preserves a word multiplied by one,
 and `B256.mul_comm` covers word multiplication, including
-wrapping products, and `B256.not_lt_of_ltCheck_eq_zero` turns a zero unsigned
-comparison flag into the negated strict comparison. The latter does not
-assert that arithmetic producing either operand was overflow-free. Import
-this owner directly; CommonProofs and Ladder do not reexport it.
+wrapping products. This owner imports `Jaune.WordFacts`, whose
+`B256.not_lt_of_ltCheck_eq_zero` turns a zero unsigned comparison flag into
+the negated strict comparison (it does not assert that arithmetic producing
+either operand was overflow-free). Import this owner directly; CommonProofs
+and Ladder do not reexport it.
 For every other comparison flag (`eqCheck`, `ltCheck`, `gtCheck`, in either
 direction, including flags discharged from `toNat` bounds at a solc range
 check), import Jaune's `Jaune.WordFacts` and use its `B256.eq_of_eqCheck_ne_zero`,
@@ -8354,8 +8365,10 @@ contract-neutral.
   template's `entry_jumps_k` does: both walks evaluate the same abstract stacks,
   so the jump check costs almost nothing beside the node check (beacon deposit:
   `Jumps` 49 s to 1.4 s, `Check` unchanged).
-  For an individual destination, `jumpdestOkT` and `jumpdestOkT_eq` in the
-  same module provide the trie-backed check and its equality to `jumpdestOk`.
+  `LTrie`, `CodeTries` (`CodeTries.ofCode`) and, for an individual destination,
+  `jumpdestOkT` with its equality `jumpdestOkT_eq` to `jumpdestOk`, live in the
+  Lift-free [`Blanc/CodeTrie.lean`](../Blanc/CodeTrie.lean), with `windowT` and
+  `getInst_windowT` (the instruction at a position, decoded from its 33-byte trie window).
 - Assemble a single-entry non-memory certificate with `Cert.check_singleton` in
   [`Blanc/Lift/CheckAssembly.lean`](../Blanc/Lift/CheckAssembly.lean). Supply the
   existing startup Boolean and sole `checkNode` result; the theorem preserves
@@ -9099,7 +9112,7 @@ contract-neutral.
 - To connect a checked original-bytecode external next node to its actual
   occurrence and returned parent, use
   [`Blanc/Lift/CursorOccurrence.lean`](../Blanc/Lift/CursorOccurrence.lean).
-  `cursor_next_call_occurrence_forwardH` in `HistCursorCuts.lean` derives a
+  `cursor_next_call_occurrence_forwardH` there derives a
   `CallOccurrenceStep root x`
   from the supplied same-frame prefix, checked cursor and successful suffix.
   The carrier keeps the exact `NinstOccurrence`, decoded external instruction,
@@ -9117,11 +9130,10 @@ contract-neutral.
   reuse the canonical witnesses definitionally and retain their ordered
   `ExecFreeUntil` gaps. This joint path/cursor/tree seam is discovered here;
   its existential result does not provide a reliable recipe trigger.
-  On `stateGas = none` (historical forks) use
+  On `stateGas = none` (historical forks) use `cursor_next_forwardH` and
+  `cursor_next_call_occurrence_forwardH`, and
   [`Blanc/Lift/CursorOccurrenceNoStateGas.lean`](../Blanc/Lift/CursorOccurrenceNoStateGas.lean):
-  `cursor_next_forward_noStateGas` and
-  `cursor_next_call_occurrence_forward_noStateGas` take `stateGas = none` in
-  place of `CoveredFork`. At a raw frame of a `ConfiguredHistoryTraceIn`,
+  at a raw frame of a `ConfiguredHistoryTraceIn`,
   `ConfiguredHistoryTraceIn.rawFrame_reach_of_parentPrefix` places every
   same-frame node at a checked cursor reached by `StepIn` steps of that frame
   (entry facts from `rawFrame_entryFacts`), and
@@ -9440,6 +9452,8 @@ contract-neutral.
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
   over the gas-carrying state `St`, a frame's entry state as an `St` (`pre_eq_St`), the
+  `St` projections (`St.stack`, `St.memory`, `St.gasLeft`, `St.returnData`, `St_error`,
+  `St_state`, `St_getCode`, `St_getStor`: `St` replaces only the machine), the
   word read-back facts `sliceD_word_same` and `read_covered`, and one solc dispatcher
   comparison (`cmp_miss`, `cmp_hit`) are in
   [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean). The fixed-cost
@@ -9523,11 +9537,13 @@ contract-neutral.
   (`Evm.step_spawn_child_dataH`; its opening world is `Evm.step_spawn_child_world_noStateGas`) in
   [`Blanc/Lift/HistStaticCallGuard.lean`](../Blanc/Lift/HistStaticCallGuard.lean);
   the forward cursor cuts from `rules.stateGas = none` alone (`cursor_next_forwardH`,
-  `cursor_jinst_forwardH`, `cursor_nexts_line_cont_free_forwardH`, `cursor_nexts_forwardH`,
-  `cursor_branch_forwardH`, `cursor_next_call_occurrence_forwardH`, and the state cuts
-  `CursorStateAt.lineH`/`jumpH`/`destH`/`branchZeroH`/`branchSuccH`/`toZeroH`/`toSuccH`/`callH`/
-  `retH`/`gotoH`) in
-  [`Blanc/Lift/HistCursorCuts.lean`](../Blanc/Lift/HistCursorCuts.lean). For an actual
+  `cursor_jinst_forwardH`, `cursor_nexts_line_cont_free_forwardH` in `CursorCuts.lean`,
+  `CursorStateAt.jumpH`/`callH` in `CursorStateCuts.lean` and
+  `cursor_next_call_occurrence_forwardH` in `CursorOccurrence.lean`, beside the modern forms they
+  derive; `cursor_nexts_forwardH`, `cursor_branch_forwardH` and the state cuts
+  `CursorStateAt.lineH`/`destH`/`branchZeroH`/`branchSuccH`/`toZeroH`/`toSuccH`/
+  `retH`/`gotoH` in
+  [`Blanc/Lift/HistCursorCuts.lean`](../Blanc/Lift/HistCursorCuts.lean)). For an actual
   call return before a later same-frame SSTORE, without a successful final
   outcome, use `cursor_call_occurrence_of_parentStep_noStateGas` or
   `cursor_call_occurrence_toward_sstore_noStateGas` in
@@ -9553,9 +9569,10 @@ contract-neutral.
   single-primitive cut requires a distinct target node, allowing an earlier
   write only after the producer proves its separation from the tracked write.
   Source runs and
-  returns (`CursorOK.sourceRunH`/`sourceRunReturnH`), exec-free suffixes
-  (`cursor_reach_of_parentPrefixH`, `CursorOK.noExecSuffixH`, `CursorOK.revertLineNoOkH`,
-  `reach_betweenH`, `noExec_after_of_cursorH`), call-free internal returns
+  returns (`CursorOK.sourceRunH`/`sourceRunReturnH`, in `CursorSourceRun.lean` and
+  `CursorSourceRunReturn.lean`), exec-free suffixes (`reach_betweenH`, `noExec_after_of_cursorH`
+  in `ReachChain.lean`; `cursor_reach_of_parentPrefixH`, `CursorOK.noExecSuffixH`,
+  `CursorOK.revertLineNoOkH`), call-free internal returns
   (`CursorOK.quietReturnH`, over the fork-free `SFunc.ReturnRegion`/`ConfStep.returnRegion`) in
   [`Blanc/Lift/HistCursorReturn.lean`](../Blanc/Lift/HistCursorReturn.lean); the GAS-to-call
   and reply forwarders `CursorStateAt.gasCallH`/`callFlagH`/`returnWordH` in
@@ -10130,6 +10147,16 @@ contract-neutral.
   `xr (rx_push rfl h ·)` / `xrc …` for any fixed-outcome step, `SFunc.runEx_iff_runExCut_nil`,
   and the fresh-state twins `rxce_call_identity`, `rxce_vyRawCallJoin`, `rxce_vyRawCallTail` in
   [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean).
+- Straight-line forward steps without writing them out: `wstep` / `wrun n` / `wrun` read the
+  instruction off the goal's tree (`SFunc.RunExact` or `SFunc.RunEx`) and apply the hand-written
+  term (`rx_push rfl (by wroom)`, `rx_dup rfl …`, `rx_swap1`, `rx_pop`, `rx_dest`, `rx_<op> rfl …`),
+  stopping at a branch, jump, memory, storage or call instruction; `using tac` swaps the
+  stack-room tactic `wroom`; `wrun! n` states pushed words as numerals (`rx_push (w := 64) rfl …`)
+  and `SWAP2`–`SWAP4` by `rx_swap2`–`rx_swap4`, the convention of the Uniswap V2 pair's walks. One
+  line replaces a run of `xr (rx_… ·)` or `refine rx_… ?_` lines, in
+  [`Blanc/Lift/WalkKit.lean`](../Blanc/Lift/WalkKit.lean). The backward twin for a frame walk
+  `h : XAt …` reads the instruction off the code's byte trie (`xa n`, one family's macros, so it
+  lives with them: Curve 3pool's `Walk/AutoStep.lean`).
 - Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as
   `getDMem_spec` need): `Mem.size_write_mod32`, `Mem.size_extends_mod32`, the image steps
   `ri_mload_imgAtA`/`ri_mstore_imgAtA`/`ri_calldatacopy_imgAtA`/`ri_keccak_imgAtA` and the
@@ -10161,7 +10188,7 @@ contract-neutral.
   final state. The constructor walk steps
   the shared kits lack (`rx_codecopy`, `rxc_sstore`, `rxc_callvalue`, `rx_return_any` and
   `rxc_return_any`, with the halting state `returnPost` named over a variable state;
-  `returnPost_state` and `St_state` project the persistent world before substituting
+  `returnPost_state` projects the persistent world before substituting
   concrete memory images) in
   [`Blanc/Lift/Deploy.lean`](../Blanc/Lift/Deploy.lean); and the further steps solc 0.8
   constructors need (`rx_push0`, `rx_slt`, `rx_codesize`, `rx_log2`, and `read_covered_len`, a

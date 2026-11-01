@@ -131,7 +131,7 @@ SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "
           "ForwardMstore8", "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "StorageRefundPotential", "ForwardSha256",
           "StaticPrecompileMessage", "StaticStorage", "ForwardNoRawSstore", "ForwardStorageEffects", "TerminalStorage",
           "ForwardDispatchMiss", "ForwardLog", "CompiledStackSafety", "AbstractStackSafety",
-          "AbstractStackTransfer", "AbstractStackCertificate", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",
+          "AbstractStackTransfer", "AbstractStackCertificate", "CodeTrie", "GasErasure", "RunPrefix", "ReachDispatchPrefix", "PrefixTransport",
           "RevertPayload", "CompiledWalkInversion", "RevertCause", "CompiledFixedInvariance", "NonpayableInversion",
           "LinearDispatch", "LinearDispatchCorrectness", "ExecDeterminism", "ExecIdentification", "ExecutionSettlement", "ExecutionPath",
           "ExecutionPathLocator", "ExecutionStateTrace", "ExecutionTrace", "ExecutionStagedBodyTrace", "ExecutionStagedBodyStateTrace", "RequestsOutput", "ExecutionMessageStateTrace",
@@ -251,7 +251,7 @@ SHARED += ["Lift.FuelLoopWalk"]
 # Vyper 0.2.x walk kit (array slots, identity copies, raw_call tails, balance differences):
 # contract-neutral.
 SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
-           "Lift.VyperRawCall", "Lift.RunEx", "Lift.FrameWalkAligned"]
+           "Lift.VyperRawCall", "Lift.RunEx", "Lift.WalkKit", "Lift.FrameWalkAligned"]
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
 SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
 SHARED += ["Lift.ThreeWordFrame"]
@@ -446,7 +446,6 @@ SHARED += [
 # In-histories (beacon-deposit-historical-reach-v1): contract-neutral.
 SHARED += [
     "ExecutionHistoryInForkFacts",
-    "ExecutionHistoryInNoDel",
     "ExecutionHistoryInSystemCodeKeep",
     "ExecutionHistoryInWarmth",
     "ExecutionHistoryInCodeAt",
@@ -1002,7 +1001,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.CheckPart23",
                     "Lift.Curve3Pool.Creation.Input",
                     "Lift.Curve3Pool.Creation.Window",
-                    "Lift.Curve3Pool.Walk.Kit",
+                    "Lift.Curve3Pool.Walk.Kit", "Lift.Curve3Pool.Walk.AutoStep",
                     "Lift.Curve3Pool.Walk.Dispatch", "Lift.Curve3Pool.Walk.DispatchLive",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityPre",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityLoop",
