@@ -131,6 +131,9 @@ def fixture() -> tempfile.TemporaryDirectory[str]:
     (target / "docs").mkdir()
     (target / "scripts").mkdir()
     shutil.copy2(ROOT / "docs" / "COMMON_API.md", target / "docs" / "COMMON_API.md")
+    # Check 7 byte-compares the generated inventory under --root.
+    shutil.copy2(ROOT / "docs" / "MODULE_INVENTORY.md",
+                 target / "docs" / "MODULE_INVENTORY.md")
     shutil.copy2(ROOT / "scripts" / "proof-recipes.toml",
                  target / "scripts" / "proof-recipes.toml")
     return raw
@@ -463,6 +466,38 @@ def shared_coverage_controls() -> None:
         must_pass(Path(raw), "no-shared-citation restoration")
 
 
+def inventory_controls() -> None:
+    """Check 7 bites on a hand edit and on a stale rendering.
+
+    The generated inventory is never edited: a hand edit of one row must fail,
+    and so must a shared module whose own summary changed without the
+    generator being rerun. Restoring the bytes restores green.
+    """
+    with fixture() as raw:
+        root = Path(raw)
+        inventory = root / "docs" / "MODULE_INVENTORY.md"
+        text = inventory.read_text(encoding="utf-8")
+        row = "| [`BytePattern.lean`](../Blanc/BytePattern.lean) | "
+        if text.count(row) != 1:
+            fail("inventory controls: the BytePattern row is not present once")
+        inventory.write_text(text.replace(row, row + "Hand-edited. "), encoding="utf-8")
+        must_fail(root, "hand-edited-inventory mutation",
+                  "docs/MODULE_INVENTORY.md differs from")
+    with fixture() as raw:
+        root = Path(raw)
+        source = root / "Blanc" / "BytePattern.lean"
+        text = source.read_text(encoding="utf-8")
+        if "/-!\nExact byte-pattern occurrences." not in text:
+            fail("inventory controls: BytePattern's module summary moved")
+        source.write_text(text.replace("/-!\nExact byte-pattern occurrences.",
+                                       "/-!\nByte-pattern offsets.", 1),
+                          encoding="utf-8")
+        must_fail(root, "stale-inventory mutation",
+                  "docs/MODULE_INVENTORY.md differs from")
+    with fixture() as raw:
+        must_pass(Path(raw), "inventory restoration")
+
+
 def main() -> int:
     positives = [
         ("plain", "import Blanc.Weth\n", ["Weth"], "import Init\n"),
@@ -562,6 +597,7 @@ def main() -> int:
     composition_edge_controls()
     discovery_controls()
     shared_coverage_controls()
+    inventory_controls()
 
     print(
         "OK — layering controls: 11 accepted import forms pair imports_of with Lean; "
@@ -572,7 +608,8 @@ def main() -> int:
         "both empty-population escapes; 5 shared-coverage controls cover a "
         "recipe-free shared facility losing its only registry entry, an "
         "exemption going stale by being cited, a citation only in an appended "
-        "tail or a fenced code block, and the no-shared-citation escape"
+        "tail or a fenced code block, and the no-shared-citation escape; "
+        "2 inventory controls cover a hand-edited and a stale generated inventory"
     )
     return 0
 
