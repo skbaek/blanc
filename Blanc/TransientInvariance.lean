@@ -1,4 +1,5 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Hinv
+import Blanc.CommonProofs.NoDel
 
 /-!
 # `Devm.transientStorage` preservation

@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerObservation
 import Blanc.TransientInvariance
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # What a successful pause commits

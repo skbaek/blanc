@@ -12,6 +12,7 @@
 import Blanc.StaticPrecompileMessage
 import Blanc.Weth10Permit
 import Blanc.Weth10StateSound
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

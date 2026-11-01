@@ -1,5 +1,6 @@
 import Blanc.LidoCircuitBreakerCallBoundary
 import Blanc.CompiledWalkInversion
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # What the CircuitBreaker does with the target's answer

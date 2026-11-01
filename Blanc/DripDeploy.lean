@@ -8,6 +8,7 @@ import Blanc.ExecutionHistory
 import Blanc.ForwardCall
 import Blanc.Ladder
 import Blanc.MessageExecution
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # DRIP deployment source

@@ -1,6 +1,7 @@
 -- WETH10's exact call-free state-changing selector proofs.
 
 import Blanc.Weth10Sound
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

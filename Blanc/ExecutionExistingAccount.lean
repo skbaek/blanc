@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Messages
 
 /-!
 Existing coded accounts remain outside the created-account set on both raw

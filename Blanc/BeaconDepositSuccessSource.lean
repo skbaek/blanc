@@ -1,7 +1,8 @@
 import Blanc.BeaconDepositAbiSource
 import Blanc.BeaconDepositHistory
 import Blanc.BeaconDepositSha
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Balance
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # Source-level Beacon deposit success inversion

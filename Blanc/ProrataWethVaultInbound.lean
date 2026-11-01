@@ -1,6 +1,7 @@
 -- ProrataWethVaultInbound.lean : exact local seams for `deposit` and `mint`.
 
 import Blanc.ProrataWethVaultCapacities
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

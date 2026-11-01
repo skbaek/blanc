@@ -7,6 +7,7 @@ import Blanc.CallSpawnExact
 import Blanc.DripMachine
 import Blanc.MachineDataFacts
 import Blanc.RunPrefix
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

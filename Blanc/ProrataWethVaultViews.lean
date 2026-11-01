@@ -2,6 +2,7 @@
 
 import Blanc.ProrataWethVaultFunctional
 import Blanc.Ladder
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

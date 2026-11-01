@@ -3,6 +3,7 @@
 
 import Blanc.ProrataWethVaultCapacities
 import Blanc.RevertCause
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

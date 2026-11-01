@@ -5,6 +5,7 @@ import Blanc.Weth10StateSound
 import Blanc.Weth10Errors
 import Blanc.Weth10TransferFunctional
 import Blanc.Ladder
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

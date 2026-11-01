@@ -2,6 +2,7 @@
 -- their capacity views revert only through a refused WETH child.
 
 import Blanc.Composition.ProrataWethVaultNonrevertInbound
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc.Composition.ProrataWethVault
 

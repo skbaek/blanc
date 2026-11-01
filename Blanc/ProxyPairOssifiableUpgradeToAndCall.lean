@@ -1,5 +1,6 @@
 import Blanc.ProxyPairOssifiableControlEffects
 import Blanc.DelegatecallEnvelope
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # OssifiableProxy `upgradeToAndCall` execution and settlement

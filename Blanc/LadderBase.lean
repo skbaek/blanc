@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Balance
 import Blanc.MachineDataFacts
 
 namespace Blanc
@@ -4811,108 +4811,6 @@ lemma Linst.noDelCode_effect_of_onlyCreated (wa : Adr) (l : Linst) :
   cases out with
   | error e => exact hnd
   | ok d => exact hnd
-
-/-- One interpreter step preserves any reflexive relation with neutral
-per-instruction effects under `stateGas = none` and the EIP-6780 flag. -/
-lemma Evm.step_effect_noStateGas {R : Devm → Devm → Prop}
-    (hrefl : ReflexiveRel R)
-    (hn : ∀ (n : Ninst) {pc : Nat} {sevm : Sevm} {pre : Devm} {xl : Xlot}
-      {out : Execution},
-      sevm.benvStat.rules.stateGas = none → Xlot.Rel R xl →
-      Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out)
-    (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ (l : Linst) {sevm : Sevm} {pre : Devm} {out : Execution},
-      sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
-      Linst.Run sevm pre l out → Execution.Rel R pre out)
-    {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hflag : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true)
-    (hxl : Xlot.Rel R xl)
-    (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
-    Execution.Rel R devm out := by
-  rcases hgi : (Evm.getInst ⟨pc, sevm, devm⟩) with _ | i
-  · rw [Evm.step_invOp hgi] at hrun
-    obtain ⟨-, rfl⟩ := hrun
-    exact hrefl _
-  · cases i with
-    | next n =>
-      rw [Evm.step_next (n := n) hgi] at hrun
-      exact hn n hsg hxl hrun
-    | jump j =>
-      rw [Evm.step_jump (j := j) hgi] at hrun
-      obtain ⟨-, hcase⟩ := Step.run_ofJump hrun
-      have hjr := hj j (evm := ⟨pc, sevm, devm⟩) (out := j.run ⟨pc, sevm, devm⟩) rfl
-      rcases hcase with ⟨e, hje, rfl⟩ | ⟨pc', d, hje, rfl⟩ <;> rw [hje] at hjr <;>
-        exact hjr
-    | last l =>
-      rw [Evm.step_last (l := l) hgi] at hrun
-      obtain ⟨-, rfl⟩ := hrun
-      exact hl l hflag rfl
-
-/-- Per-instruction neutral effects compose into `Execution.Rel` for a
-complete `Exec` derivation: tails keep the same frame, children transport
-the schedule by the exact spawn environment equality. -/
-theorem Exec.effect_neutralSchedule {R : Devm → Devm → Prop}
-    (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
-    (hn : ∀ (n : Ninst) {pc : Nat} {sevm : Sevm} {pre : Devm} {xl : Xlot}
-      {out : Execution},
-      sevm.benvStat.rules.stateGas = none → Xlot.Rel R xl →
-      Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out)
-    (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ (l : Linst) {sevm : Sevm} {pre : Devm} {out : Execution},
-      sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
-      Linst.Run sevm pre l out → Execution.Rel R pre out)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (hsg : sevm.benvStat.rules.stateGas = none)
-    (hflag : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true) :
-    Execution.Rel R pre out := by
-  have hcomp : ∀ {a b : Devm} {o : Execution},
-      R a b → Execution.Rel R b o → Execution.Rel R a o := by
-    intro a b o hab hbo
-    cases o <;> exact htrans hab hbo
-  have aux : ∀ {pc sevm pre out}, Exec pc sevm pre out →
-      sevm.benvStat.rules.stateGas = none →
-      sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
-      Execution.Rel R pre out := by
-    intro pc sevm pre out run hsg hflag
-    revert hsg hflag
-    induction run with
-    | halt hstep =>
-      intro hsg hflag
-      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
-        trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
-    | cont hstep _ ih =>
-      intro hsg hflag
-      refine hcomp (?_ : R _ _) (ih hsg hflag)
-      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
-        (out := .ok _) trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
-    | doneErr hstep henter hr =>
-      intro hsg hflag
-      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
-        trivial (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
-    | doneOk hstep henter hr _ ih =>
-      intro hsg hflag
-      refine hcomp (?_ : R _ _) (ih hsg hflag)
-      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
-        (out := .ok _) trivial
-        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
-    | runErr hstep henter _ hr ihc =>
-      intro hsg hflag
-      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag
-        (xl := .some ⟨_, _⟩)
-        (ihc (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hsg)
-          (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hflag))
-        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
-    | runOk hstep henter _ hr _ ihc ih =>
-      intro hsg hflag
-      refine hcomp (?_ : R _ _) (ih hsg hflag)
-      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag
-        (xl := .some ⟨_, _⟩) (out := .ok _)
-        (ihc (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hsg)
-          (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hflag))
-        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
-  exact aux run hsg hflag
 
 /-- A complete execution preserves `NoDel` under `stateGas = none` and the
 EIP-6780 flag. -/

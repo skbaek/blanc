@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Walk
 
 /-! Reverse fixed-width limb encoding through the public complete-word codec. -/
 

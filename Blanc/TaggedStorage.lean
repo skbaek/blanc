@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.MemImage
 
 /-! A bounded tag/payload algebra for logical storage keys. -/
 

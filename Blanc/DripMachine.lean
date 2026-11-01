@@ -18,6 +18,7 @@ import Blanc.Ladder
 import Blanc.MachineDataFacts
 import Blanc.RunPrefix
 import Jaune.RPow
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

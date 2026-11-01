@@ -2,6 +2,7 @@ import Blanc.ForwardCall
 import Blanc.ExecutionTrace
 import Blanc.MessageResult
 import Blanc.MessageExecution
+import Blanc.CommonProofs.Messages
 
 /-!
 # Contract-neutral `DELEGATECALL` envelope vocabulary

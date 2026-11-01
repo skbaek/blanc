@@ -35,7 +35,8 @@
 -- be duplication across two modules of the same shared layer.
 
 import Blanc.Compiled
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Walk
+import Blanc.CommonProofs.NoDel
 
 namespace Blanc
 
