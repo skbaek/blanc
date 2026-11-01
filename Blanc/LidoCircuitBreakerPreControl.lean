@@ -106,7 +106,7 @@ theorem temporalSstorePost_getStorVal_self (sevm : Sevm) (base : Devm)
     (temporalSstorePost sevm base key value).getStorVal
       sevm.currentTarget key = value := by
   unfold temporalSstorePost
-  exact Devm.getStorVal_setStorVal_self _ _ _ _
+  exact Devm.setStorVal_getStorVal_self _ _ _ _
 
 /-- The kernel's assignment write, read back.  For a pause this is invoked
 with `newPauser = 0`, which is the clearing this goal is about; the statement

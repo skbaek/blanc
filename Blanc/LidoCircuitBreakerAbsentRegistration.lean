@@ -998,9 +998,7 @@ private theorem appendTarget_absentZero_logs
   dsimp only
   simp only [indexClearPost, lengthWritePost,
     entryClearPost, indexWritePost, entryWritePost]
-  have logs_addLog (d : Devm) (log : Log) :
-      (d.addLog log).logs = d.logs ++ [log] := rfl
-  rw [logs_addLog]
+  rw [Devm.addLog_logs]
   congr 1
   rw [temporalSstorePost_logs, temporalSstorePost_logs,
     temporalSstorePost_logs, temporalSstorePost_logs,

@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreaker
+import Blanc.LinearDispatchCorrectness
 import Blanc.Forward
 import Blanc.Reverts
 import Blanc.ForwardCall
@@ -32,47 +33,14 @@ open Jaune.Ninst Ninst
 
 namespace LidoCircuitBreaker
 
-/-! ## One step of each dispatcher shape -/
+/-! ## One step of each CircuitBreaker-specific dispatcher shape
+
+The linear-chain arms are shared (`Blanc/LinearDispatchCorrectness.lean`). -/
 
 section Arms
 
 variable {fs : List Func} {sevm : Sevm} {base : Devm} {tail : Stack}
     {mem : Mem} {sg : StateGasMeter} {ex : Execution} {G : Nat}
-
-/-- A `linearDispatchWith` entry whose word matches: `DUP`, `PUSH`, `EQ`, the
-taken arm and its `POP`. -/
-theorem linearEntry_hit_runCompiledTo {w : B256} {body other : Func}
-    (hw : w ≠ 0) (hroom : tail.length < 1022)
-    (hbody : Func.RunCompiledTo fs sevm (base.setMach ⟨tail, mem, G, sg⟩) body ex) :
-    Func.RunCompiledTo fs sevm (base.setMach ⟨w :: tail, mem, G + 25, sg⟩)
-      (dup 0 ::: pushB256 w ::: eq ::: ((pop ::: body) <?> other)) ex := by
-  have hpush : pushCost w.toBytes.sig = 3 := pushCost_of_ne_zero hw
-  func_run (5) [1]
-  case h_val => simp only [B256.eqCheck, ↓reduceIte]
-  case a => simpa only [Nat.add_sub_cancel] using hbody
-
-/-- A `linearDispatchWith` entry whose word misses: the selector stays. -/
-theorem linearEntry_miss_runCompiledTo {w sel : B256} {body other : Func}
-    (hw : w ≠ 0) (hne : w ≠ sel) (hroom : tail.length < 1022)
-    (hother : Func.RunCompiledTo fs sevm (base.setMach ⟨sel :: tail, mem, G, sg⟩) other ex) :
-    Func.RunCompiledTo fs sevm (base.setMach ⟨sel :: tail, mem, G + 22, sg⟩)
-      (dup 0 ::: pushB256 w ::: eq ::: ((pop ::: body) <?> other)) ex := by
-  have hpush : pushCost w.toBytes.sig = 3 := pushCost_of_ne_zero hw
-  func_run (4) [0]
-  case h_val => simp only [B256.eqCheck, hne, ↓reduceIte]
-  case h_arm => simpa only [Nat.add_sub_cancel] using hother
-
-/-- The last entry of a `linearDispatchWith` chain matches: no `DUP`, no `POP`. -/
-theorem linearLast_hit_runCompiledTo {w : B256} {body : Func} {k : Nat}
-    (hw : w ≠ 0) (hroom : tail.length < 1022)
-    (hbody : Func.RunCompiledTo fs sevm (base.setMach ⟨tail, mem, G, sg⟩) body ex) :
-    Func.RunCompiledTo fs sevm (base.setMach ⟨w :: tail, mem, G + 20, sg⟩)
-      (pushB256 w ::: eq ::: (body <?> .call k)) ex := by
-  have hpush : pushCost w.toBytes.sig = 3 := pushCost_of_ne_zero hw
-  func_run (3) [1]
-  case h_val => simp only [B256.eqCheck, ↓reduceIte]
-  case h_room => omega
-  case h_arm => simpa only [Nat.add_sub_cancel] using hbody
 
 /-- A `splitDispatch` pivot above the selector takes the left half. -/
 theorem splitDispatch_left_runCompiledTo {p sel : B256} {l r : Func}
@@ -147,6 +115,18 @@ theorem isPauserLive : selector "isPauserLive" [.address] = (0xd10ea321 : B256) 
   decide +kernel
 
 end Word
+
+/-! ## Event words
+
+The event topics are `signatureHash` words too: a walk that pushes one, or a
+premise that asks for one to be nonzero, would evaluate a keccak in the
+elaborator.  Each fact is kernel-checked once here. -/
+
+theorem heartbeatUpdatedEvent_pushCost : pushCost heartbeatUpdatedEvent.toBytes.sig = 3 :=
+  pushCost_of_ne_zero (by decide +kernel)
+
+theorem heartbeatIntervalUpdatedEvent_ne_zero : heartbeatIntervalUpdatedEvent ≠ 0 := by
+  decide +kernel
 
 /-- Decide a closed comparison between selector words of the table: rewrite each
 `selector "…" […]` to its numeral first, so `decide` never evaluates a keccak. -/
