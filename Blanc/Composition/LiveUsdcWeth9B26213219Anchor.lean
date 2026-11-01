@@ -68,50 +68,6 @@ def ObservedCheckpoint.futureTrace {checkpoint future : BlockChain}
     ConfiguredHistoryTrace mainnetChainConfig checkpoint future :=
   (trace.coveredOfReached LiveUsdcWeth9B26213219Data.blockTimestamp covered_after_frozen anchor.tip_floor).toModern
 
-/-- The original raw frames, including failed executions, remain unchanged. -/
-theorem ObservedCheckpoint.futureTrace_rawFrames {checkpoint future : BlockChain}
-    (anchor : ObservedCheckpoint checkpoint)
-    (trace : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future) :
-    (anchor.futureTrace trace).rawFrames = trace.rawFrames := by
-  unfold futureTrace
-  rw [ConfiguredHistoryTraceIn.toModern_rawFrames,
-    ConfiguredHistoryTraceIn.coveredOfReached_rawFrames]
-
-/-- The original complete-settlement forest remains unchanged. -/
-theorem ObservedCheckpoint.futureTrace_settledFrames {checkpoint future : BlockChain}
-    (anchor : ObservedCheckpoint checkpoint)
-    (trace : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future) :
-    (anchor.futureTrace trace).settledFrames = trace.settledFrames := by
-  unfold futureTrace
-  rw [ConfiguredHistoryTraceIn.toModern_settledFrames,
-    ConfiguredHistoryTraceIn.coveredOfReached_settledFrames]
-
-/-- Checked sender occurrences retain exact order and original admission evidence. -/
-theorem ObservedCheckpoint.futureTrace_senderOccurrences {checkpoint future : BlockChain}
-    (anchor : ObservedCheckpoint checkpoint)
-    (trace : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future) :
-    (anchor.futureTrace trace).senderOccurrences = trace.senderOccurrences := by
-  unfold futureTrace
-  rw [ConfiguredHistoryTraceIn.toModern_senderOccurrences,
-    ConfiguredHistoryTraceIn.coveredOfReached_senderOccurrences]
-
-/-- Failed transactions and repeated recovery queries are not filtered away. -/
-theorem ObservedCheckpoint.futureTrace_senderQueries {checkpoint future : BlockChain}
-    (anchor : ObservedCheckpoint checkpoint)
-    (trace : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future) :
-    (anchor.futureTrace trace).senderQueries = trace.senderQueries := by
-  unfold futureTrace
-  rw [ConfiguredHistoryTraceIn.toModern_senderQueries,
-    ConfiguredHistoryTraceIn.coveredOfReached_senderQueries]
-
-/-- Accepted future blocks cannot move the actual tip before the frozen block's
-timestamp, including a reflexive continuation. -/
-theorem ObservedCheckpoint.future_tip_floor {checkpoint future : BlockChain}
-    (anchor : ObservedCheckpoint checkpoint)
-    (trace : ConfiguredHistoryTraceIn HistFork mainnetChainConfig checkpoint future) :
-    ∃ tip, future.blocks.getLast? = some tip ∧ LiveUsdcWeth9B26213219Data.blockTimestamp ≤ tip.header.timestamp :=
-  trace.toReachUsing.tip_floor anchor.tip_floor
-
 /-- The checkpoint theorem consumes finite reads bound to the actual B tip.
 Initial Pair code and retained creation provenance remain separate obligations;
 the binding does not manufacture either history or an allowance seed. -/

@@ -183,73 +183,6 @@ noncomputable def WethDeploymentTo.of_original_creation_receipt
     (block.bodyTrace.txSplitOfSlot atIndex decoded) atIndex decoded txType data value nonce
     recovered gasLimit lookup succeeded history fresh
 
-/-- The original signed creation transaction and successful receipt produce
-the deployment input. Recovery follows from its fields and the fixed payload
-hash, not an additional recovered-sender premise. Original correspondence,
-the later history and HASH-T remain explicit. -/
-noncomputable def WethDeploymentTo.of_original_signed_creation_receipt
-    {checkpoint pre completed : BlockChain}
-    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
-    (number : block.block.header.number = 4719568)
-    (time : block.block.header.timestamp = 1513077455)
-    {slot : Bytes ⊕ Tx} {tx : Tx}
-    (atIndex : block.block.txs[85]? = some slot)
-    (decoded : decodeTx block.fork.ruleSet slot = .ok tx)
-    (txType : tx.type = .zero 21000000000 none)
-    (data : tx.data = Weth9.Creation.code.toList) (value : tx.value = 0)
-    (nonce : tx.nonce = 446) (gasLimit : tx.gas = 1500000)
-    (v : tx.v = 37)
-    (r : tx.r.toB256 =
-      0x7ce08af79f7a6c1b8b336f50890a80602c4dcd1e3cc5ca131373f0e8ff15e278)
-    (s : tx.s.toB256 =
-      0x45e183d91f1e8f31e32d333cf6090990c9bf7d35dd00472cfd2d3a63ca8b1a5)
-    (hashed : Weth9.Creation.signingPayload.keccak =
-      0x1e62afdbf54076edd8083f93eab1bf693f2a5a3675886b669d13d9b3e6221235)
-    {receipt : Fin 5 × Receipt}
-    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (85 : Nat).toBytes)]? =
-      some receipt) (succeeded : receipt.2.succeeded = true)
-    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
-    (fresh : let cut := block.bodyTrace.txSplitOfSlot atIndex decoded
-      Weth9.KeysFresh (fun _ => False)
-        (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
-          ((MidHistoryTraceIn.tail block cut).append history))) :
-    WethDeploymentTo checkpoint := by
-  exact .of_original_creation_receipt block number time atIndex decoded txType data value nonce
-    (Weth9.Creation.recoveredSender_of_fields txType nonce gasLimit value data v r s hashed)
-    gasLimit lookup succeeded history fresh
-
-/-- Original signed fields and the successful original receipt construct the
-deployment record with the payload hash discharged by its kernel proof. The
-original slot/field correspondence, later history and HASH-T stay explicit. -/
-noncomputable def WethDeploymentTo.of_original_creation_fields_receipt
-    {checkpoint pre completed : BlockChain}
-    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
-    (number : block.block.header.number = 4719568)
-    (time : block.block.header.timestamp = 1513077455)
-    {slot : Bytes ⊕ Tx} {tx : Tx}
-    (atIndex : block.block.txs[85]? = some slot)
-    (decoded : decodeTx block.fork.ruleSet slot = .ok tx)
-    (txType : tx.type = .zero 21000000000 none)
-    (data : tx.data = Weth9.Creation.code.toList) (value : tx.value = 0)
-    (nonce : tx.nonce = 446) (gasLimit : tx.gas = 1500000)
-    (v : tx.v = 37)
-    (r : tx.r.toB256 =
-      0x7ce08af79f7a6c1b8b336f50890a80602c4dcd1e3cc5ca131373f0e8ff15e278)
-    (s : tx.s.toB256 =
-      0x45e183d91f1e8f31e32d333cf6090990c9bf7d35dd00472cfd2d3a63ca8b1a5)
-    {receipt : Fin 5 × Receipt}
-    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (85 : Nat).toBytes)]? =
-      some receipt) (succeeded : receipt.2.succeeded = true)
-    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
-    (fresh : let cut := block.bodyTrace.txSplitOfSlot atIndex decoded
-      Weth9.KeysFresh (fun _ => False)
-        (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
-          ((MidHistoryTraceIn.tail block cut).append history))) :
-    WethDeploymentTo checkpoint := by
-  exact .of_original_creation_receipt block number time atIndex decoded txType data value nonce
-    (Weth9.Creation.recoveredSender_of_creation_fields txType nonce gasLimit value data v r s)
-    gasLimit lookup succeeded history fresh
-
 def WethDeploymentTo.trace {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :=
   (MidHistoryTraceIn.tail d.block d.cut).append d.history
 
@@ -400,12 +333,6 @@ theorem ObservedAt.weth_tracked {w : Jaune.State} {K : Weth9.Key → Prop}
   rw [weth_balance_slot, reads.wethBalance] at zero
   exact (by decide +kernel : LiveUsdcWeth9B26213219Data.wethPairBalanceWord ≠ 0) zero
 
-/-- The remaining provenance obligation is about actual retained calls, not an endpoint value. -/
-def WethDeploymentTo.NoPairApproval {checkpoint : BlockChain}
-    (d : WethDeploymentTo checkpoint) : Prop :=
-  ∀ inv ∈ Weth9.midCommittedInvocationsIn Weth9.Creation.weth9Address d.trace,
-    inv.sevm.caller = pair → Sevm.selector inv.sevm ≠ 0x095ea7b3
-
 /-- The actual WETH image supplies its child-caller law on any retained suffix.
 The segment must consist of original frames from this deployment history. -/
 theorem WethDeploymentTo.callerTarget_of_senders_children {checkpoint : BlockChain}
@@ -434,67 +361,5 @@ theorem WethDeploymentTo.callerTarget_of_senders_children {checkpoint : BlockCha
         cases inherited
     · have fromWeth := (d.children_caller G (included member) atWeth c child).trans atWeth
       exact (address_separation.1 (caller.symm.trans fromWeth)).elim
-
-/-- Project retained frame provenance to the actual mutable WETH invocation list. -/
-theorem WethDeploymentTo.noPairApproval_of_callerTarget {checkpoint : BlockChain}
-    (d : WethDeploymentTo checkpoint)
-    (frames : ∀ G ∈ d.trace.settledFrames,
-      CallerTarget pair weth (fun s => s.isStatic = false → Sevm.selector s ≠ 0x095ea7b3)
-        G.sevm) : d.NoPairApproval := by
-  intro inv member caller
-  obtain ⟨G, retained, selected⟩ := List.mem_flatMap.mp member
-  unfold Weth9.committedFrameInvocations at selected
-  split at selected
-  · rename_i accepted
-    have same := List.mem_singleton.mp selected
-    subst inv
-    apply frames G retained
-    · exact accepted.1.trans weth_creation_address.symm
-    · exact caller
-    · exact accepted.2.1
-  · cases selected
-
-/-- The retained caller forest reduces the allowance obligation to message-root
-keylessness and the Pair's direct children. WETH's own children are discharged
-from its actual installed runtime, without any endpoint allowance premise. -/
-theorem WethDeploymentTo.noPairApproval_of_senders_children {checkpoint : BlockChain}
-    (d : WethDeploymentTo checkpoint)
-    (senders : d.trace.NoSenderAt pair)
-    (pairChildren : ∀ G ∈ d.trace.settledFrames,
-      G.sevm.currentTarget = pair → G.sevm.isStatic = false →
-      ∀ c ∈ Exec.childFrames G.run, c.sevm.isStatic = false →
-        Sevm.selector c.sevm ≠ 0x095ea7b3) : d.NoPairApproval := by
-  have frames := d.callerTarget_of_senders_children d.trace (fun _ member => member)
-    senders pairChildren
-  exact d.noPairApproval_of_callerTarget frames
-
-/-- Starting from the constructor's empty mapping, retained call provenance proves zero. -/
-theorem WethDeploymentTo.allowance_zero {checkpoint : BlockChain}
-    (d : WethDeploymentTo checkpoint) (calls : d.NoPairApproval) :
-    ∀ g, d.keys (.allow pair g) →
-      (checkpoint.state.getStor weth).get (Weth9.allowSlot pair g) = 0 := by
-  have zero := Weth9.replay_allow_zero d.replay
-    (h := pair) (fun g => by
-      change Weth9.trackedAllow (fun _ => False) Weth9.Creation.deployedStor pair g = 0
-      exact Weth9.trackedAllow_of_not (fun impossible => impossible)) calls
-  intro g tracked
-  have value := zero g
-  change Weth9.trackedAllow d.keys (checkpoint.state.getStor weth) pair g = 0 at value
-  rwa [Weth9.trackedAllow_self tracked] at value
-
-/-- Creation histories supply representation, backing and world-sum facts.
-Zero WETH allowances follow from replay and the retained caller/selector obligation. -/
-theorem checkpoint_from_deployment_histories {checkpoint : BlockChain}
-    (reads : ObservedAt checkpoint.state) (wd : WethDeploymentTo checkpoint)
-    (pd : PairDeploymentTo checkpoint)
-    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots wd.keys (.bal pair))
-    (calls : wd.NoPairApproval) :
-    ∃ (st : UniswapV2Pair.State) (KP : WriterKey → Prop),
-      JointCheckpoint2F pair usdc weth (FiniteCheckpoint.rowKeys usdcRows) wd.keys KP st
-        checkpoint.state := by
-  obtain ⟨st, KP, rep⟩ := pd.represented
-  obtain ⟨sumNof, foot⟩ := wd.foot
-  exact ⟨st, KP, checkpoint_of_history reads rep foot sumNof
-    (reads.weth_tracked foot holderFresh) (wd.allowance_zero calls)⟩
 
 end Blanc.Composition.LiveUsdcWeth9B26213219

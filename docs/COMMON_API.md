@@ -2377,10 +2377,11 @@ This separates governance timing from the original history used for entry facts;
 it does not supply original upgrade or installation evidence.
 
 
-`mid_allowance_zero_from_pair_history_of_origins_of_scoped_governance` now
-consumes F2′ only on the actual post-cut `mid.settledFrames`. It derives root
-readiness and Pair caller exclusion with that same scope, then uses root-scoped
-allowance non-increase and zero transport. The original full-history raw-key,
+`mid_retained_caller_write_excluded_from_installations_of_mid_roots_of_scoped_governance`
+(`UniswapV2PairUsdcCallersIn`) consumes F2′ only on the actual post-cut
+`mid.settledFrames`; `mid_allowance_zero_from_pair_history_of_retained_origins_of_actualKeys`
+derives root readiness and Pair caller exclusion with that same scope, then uses
+root-scoped allowance non-increase and zero transport. The original full-history raw-key,
 native-query and old-owner routing populations are unchanged. Concrete runtime
 origins/local installations and the original initial seed remain producer duties.
 
@@ -4415,7 +4416,7 @@ from the actual successful constructor receipt at index22. It derives proxy
 code and the initial implementation word from `OriginalConstructorSeed`, then
 returns V1 control and tracked zero rows before the original index38 cut.
 [`UniswapV2PairUsdcOriginSeed.lean`](../Blanc/Composition/UniswapV2PairUsdcOriginSeed.lean)'s
-`original_pair_allowance_seed_of_constructor_receipt` carries those facts
+`original_pair_allowance_seed_of_constructor_receipt_and_approve_evidence_of_v1Class` carries those facts
 through the same actual factory transaction using foreign-account preservation.
 Its result is the settled after-D state, with no supplied zero-at-C or zero-at-D
 hypothesis. It derives the pre-Cancun bound from D's anchored timestamp.
@@ -4423,7 +4424,7 @@ These are internal composition interfaces: actual historical authentication,
 initial V1 implementation code, finite separation and genuine pre-D approve
 safety remain producer obligations. Caller exclusion is not a new final
 assumption and does not follow from R3 or Pair target emptiness.
-`original_pair_allowance_seed_of_boundary_blooms` additionally consumes the
+`original_pair_allowance_seed_of_boundary_blooms_of_v1Class` additionally consumes the
 original C/D body and bloom identities. The checked literals in
 [`Blanc/Lift/Usdc/HistoricalBloomExclusion.lean`](../Blanc/Lift/Usdc/HistoricalBloomExclusion.lean)
 exclude USDC logs in both boundary blocks, so this adapter needs Upgraded
@@ -5072,9 +5073,7 @@ stipend (a proxy forwards only 63/64 of its gas) is `TransferLiveBudget` in
 [`Blanc/Lift/Token/TransferLiveBudget.lean`](../Blanc/Lift/Token/TransferLiveBudget.lean), with `TransferLive.toBudget` (worked use:
 `Blanc/Composition/UsdcTokenLive.lean`).
 
-The generic Pair headlines over these: `pair_token_joint_signed` and
-`pair_token_noShrinkSide_signed` ([`Blanc/Composition/PairTokenSigned.lean`](../Blanc/Composition/PairTokenSigned.lean)) take `BookLawsS`
-and `NeverSigner`; `pair_two_token_joint` ([`Blanc/Composition/PairTwoToken.lean`](../Blanc/Composition/PairTwoToken.lean)) runs the
+The two-token Pair headline: `pair_two_token_joint` ([`Blanc/Composition/PairTwoToken.lean`](../Blanc/Composition/PairTwoToken.lean)) runs the
 walk once per core over the same Pair steps for a Pair whose `token0` and `token1` are `CoreW`
 instances with holder laws for the Pair, so one Pair witness carries both joint relations and the
 two sides combine through `sourceReplayNoShrink_iff_sides`; `pair_two_token_feeOn_product` and
@@ -5488,43 +5487,21 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `transaction_allowance_zero_from_installations_of_transactionCallers` requires
   caller exclusion only over that actual transaction’s settled frames. Existing
   full-history caller interfaces restrict their input to these scopes.
-  `UniswapV2PairUsdcCallers.transaction_allowance_zero_from_pair_history`
-  supplies this transaction-scoped exclusion from the actual post-cut Pair
-  history and derives full-history root membership through the common inclusion
-  lemma. Governance, native-query and old-owner inputs keep their original
-  full-history populations; final selected-runtime readiness remains open.
-  The write-scoped caller input is supplied by `retained_caller_write_excluded`
-  in [`UniswapV2PairUsdcCallersIn.lean`](../Blanc/Composition/UniswapV2PairUsdcCallersIn.lean).
-  `mid_allowance_zero_from_pair_history_of_origins` derives root readiness and
-  deletion exclusion from initial selected readiness and the original guarded
-  origins, then supplies the Pair caller proof and folds each zero allowance
-  row through the actual source-block suffix and later history. Its conclusion
-  includes final selected readiness and every tracked row zero. The original
-  full-history governance, raw-key, R3 native-query and R4 scopes are unchanged;
-  no final-state code or per-root readiness input is required. Historical origin,
-  local installation and initial-zero producers remain explicit obligations.
-  It follows actual retained parents, uses the Pair's historical child-selector
-  theorem and proxy calldata inheritance, and permits the V2_2 library as an
-  intermediate case. The library's no-SSTORE theorem excludes that case only
-  at the original successful write. Actual root caller exclusion, the deployed
-  USDC world, and installed Pair/representation/freshness remain inputs.
-  `mid_retained_caller_write_excluded_of_mid_senderQueries` uses only the actual
-  after-cut sender queries for root exclusion. Pair replay starts at
-  `cut.afterBenv`; USDC world/library facts stay on the original full chronology.
-  It shares the same retained-parent and successful-write proof; actual cut
-  state and finite touched-key freshness remain inputs. The original
-  `mid_retained_caller_write_excluded` is a compatibility wrapper that restricts
-  its full-history exclusion through `senderQueries_subset_full`.
-  `mid_retained_caller_write_excluded_from_installations` derives the same
-  post-cut write exclusion from actual retained root contexts. It consumes
-  ordinary F2prime governance on the original full settled-frame population,
-  proxy and selected-runtime readiness at each actual root entry, and runtime
-  evidence at guarded upgrade writes. It uses no raw-world or raw-upgrade
-  premise. Parent code families and V2_2 library code at same-frame nodes
-  follow from the common retained/committed-frame membership equivalence and
-  `settledRoot_retained_proxyWorld_from_installations`; the old APIs remain
-  compatibility wrappers. Historical readiness/installation producers and
-  actual Pair state, sender exclusion and key freshness remain explicit.
+  In [`UniswapV2PairUsdcCallersIn.lean`](../Blanc/Composition/UniswapV2PairUsdcCallersIn.lean),
+  `mid_retained_caller_write_excluded_from_installations_of_mid_roots_of_scoped_governance`
+  excludes caller-keyed allowance writes on the actual post-cut history from
+  retained USDC root contexts: governance ranges over the original settled
+  frames, while selected-runtime readiness and guarded upgrade installations are
+  needed only at the actual post-cut roots, with no raw-world or raw-upgrade
+  premise. It follows actual retained parents, uses the Pair's historical
+  child-selector theorem and proxy calldata inheritance, and permits the V2_2
+  library as an intermediate case whose no-SSTORE theorem excludes it at the
+  original successful write. `mid_allowance_zero_from_pair_history_of_retained_origins_of_actualKeys`
+  derives root readiness, caller and owner exclusion at retained nodes and folds
+  each zero allowance row through the actual source-block suffix and later
+  history from original successful-store key checks; the full raw-key, R3
+  native-query and R4 populations are unchanged. Historical origin, local
+  installation and initial-zero producers remain explicit obligations.
   Both installation-based caller and Pair transaction interfaces have
   `_of_mid_roots` variants: proxy/selected-runtime readiness, actual guarded
   installations and known implementation-slot separation are needed only on
@@ -6205,8 +6182,8 @@ consumer needs canonical interpreter ingress as one conjunct:
   receipt-derived conditions, `original_pair_checkpoint_of_receipt` identifies
   the same forward transaction result with the actual after-D state and supplies
   its Pair runtime and initialized checkpoint.
-  `pairUsdcAllowQuiet_of_original_receipts` in
-  [`UniswapV2PairUsdcWeth9P1`](../Blanc/Composition/UniswapV2PairUsdcWeth9P1.lean)
+  `pairUsdcAllowQuiet_of_connected_original_receipts_of_retained_actualKeys_constructor_bootstrap` in
+  [`UniswapV2PairUsdcRetainedP1`](../Blanc/Composition/UniswapV2PairUsdcRetainedP1.lean)
   joins this Pair checkpoint and the original allowance seed to P1 for the exact
   post-B touched spenders. Full-history R3/R4 populations and post-D sender scope
   remain unchanged; no zero endpoint or initialized Pair state is supplied.
@@ -7344,11 +7321,11 @@ language server elaborates.
 The contract-specific `Creation.recoveredSender_of_creation_fields` in
 [`Weth9/Creation/SigningRecover`](../Blanc/Lift/Weth9/Creation/SigningRecover.lean)
 supplies `signingPayload_hash` to recovery while retaining the exact signed
-fields. `WethDeploymentTo.of_original_creation_fields_receipt` in the live
-checkpoint history then constructs its original transaction cut and deployment
-record from slot85, decoding and the successful receipt. Neither API requires
-an extra hash or recovered-sender premise; original field correspondence,
-later history and HASH-T remain explicit. The older conditional APIs remain.
+fields, so it requires no extra hash or recovered-sender premise. Its
+recovered sender is what `WethDeploymentTo.of_original_creation_receipt` in the
+live checkpoint history consumes to construct the original transaction cut and
+deployment record from slot85, decoding and the successful receipt; original
+field correspondence, later history and HASH-T remain explicit.
 
 For a successful creation receipt, use
 `StagedBodyTrace.decodedTxs_getElem_of_slot` and `txSplit_tx_eq_of_slot` in
@@ -9769,46 +9746,13 @@ contract-neutral.
   entry-world library/Pair code premises. Its dispatcher adaptation is shared
   with the original covered endpoint.
   `Blanc/Composition/UniswapV2PairUsdcOwnersIn.lean` supplies
-  `mid_retained_owner_excluded` for the same actual retained V2_2 frame: library
-  code comes from the original full-world prefix, and Pair code from the
-  genuine mid-cut installation. It preserves that frame’s execution, entry
-  world and commitment; actual installation and world facts remain inputs.
-  Its `mid_retainedRowWrite_nonInc` removes the V2_2 owner residual from the
-  existing classifier while retaining the same root, frame, write and parent
-  prefix, and the original full-history R3/R4 populations. This is a local
-  retained-write inequality. `mid_root_allowance_zero` in
-  [`UniswapV2PairUsdcZeroIn.lean`](../Blanc/Composition/UniswapV2PairUsdcZeroIn.lean)
-  consumes it through `Exec.cell_zero_of_retained_nonInc_noStateGas`, deriving
-  root code from the full deployed world and caller exclusion from the genuine
-  mid-cut Pair replay. Its incoming-zero premise is an implication for each
-  actual retained root, not a supplied zero at every history boundary. The
-  original full-history sender/native-query exclusions and R4 remain explicit;
-  `mid_history_allowance_zero` in
-  [`UniswapV2PairUsdcHistoryZeroIn.lean`](../Blanc/Composition/UniswapV2PairUsdcHistoryZeroIn.lean)
-  composes that root law over the exact after-cut suffix and later blocks using
-  the existing `MidHistoryTraceIn.cell_property_of_settledRoots`. Its proxy code
-  at the cut and output deletion exclusions come from
-  `mid_proxy_code_and_outputNotDeleted` and the same original full world.
-  The single actual after-cut zero seed remains explicit; no root-by-root zero,
-  replacement block-end cut or additional proxy installation is assumed.
-  `pairUsdcAllowQuiet_of_mid_history` in
-  [`UniswapV2PairUsdcWeth9P1.lean`](../Blanc/Composition/UniswapV2PairUsdcWeth9P1.lean)
-  specializes those tracked rows to the exact `PairTouchedSpenders` of the
-  consumed post-checkpoint trace and returns its existing `PairUsdcAllowQuiet`
-  premise. It retains the same original full-history world/upgrades and R3/R4
-  scope; no broader pre-deployment F2′ restriction or supplied
-  `NoPairExceptionWrites` premise is introduced. Actual cut identity, initial
-  zero and finite freshness remain explicit instance obligations.
-  For an exclusion supplied on the exact post-deployment interval, use
-  `mid_root_allowance_zero_of_mid_senderQueries`,
-  `mid_history_allowance_zero_of_mid_senderQueries`, and
-  `pairUsdcAllowQuiet_of_mid_history_of_mid_senderQueries` in those same modules.
-  Their sender premise is precisely the original after-cut suffix followed by
-  later blocks, including failed/reverted transactions. It excludes neither
-  the selected deployment transaction nor an earlier transaction. The original
-  APIs remain full-history compatibility wrappers. Native-query exclusion, R4,
-  full-world and upgrade premises are unchanged; this restriction of one
-  consumer does not redefine R3 for other consumed intervals.
+  `mid_retained_owner_excluded_from_installations_of_mid_roots` for the same
+  actual retained V2_2 frame (see the owner-exclusion paragraph below). The
+  P1 instance consuming these producers is
+  `pairUsdcAllowQuiet_of_connected_original_receipts_of_retained_actualKeys_constructor_bootstrap`
+  in [`UniswapV2PairUsdcRetainedP1.lean`](../Blanc/Composition/UniswapV2PairUsdcRetainedP1.lean),
+  over the exact `PairTouchedSpenders` of the consumed post-checkpoint trace
+  ([`UniswapV2PairUsdcWeth9P1.lean`](../Blanc/Composition/UniswapV2PairUsdcWeth9P1.lean)).
 - The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
@@ -11026,7 +10970,7 @@ In `RetainedAllowanceWrites`, the `_of_rootFrames` variants of
 `Exec.committedFrames R.run`; the latter two also use root-local governance
 and caller exclusion. Existing full-history APIs remain compatibility wrappers.
 In `UniswapV2PairUsdcCallersIn`,
-`mid_allowance_zero_from_pair_history_of_origins_of_mid_frames` consumes both
+`mid_allowance_zero_from_pair_history_of_retained_origins_of_actualKeys` consumes both
 governance and V2.2 owner exclusion on the actual post-cut settled frames.
 Original raw-key, native-query, initializer and old-owner-routing populations
 remain full-history. This aligns the internal owner producer with Pair code
@@ -11040,7 +10984,7 @@ readiness, root-local guarded installations and mid governance derive the
 library code at the same retained V2.2 permit frame; the installed Pair code
 then rejects that permit. The old world-based owner API remains compatible.
 In `Blanc/Composition/UniswapV2PairUsdcCallersIn.lean`,
-`mid_allowance_zero_from_pair_history_of_retained_origins` combines that
+`mid_allowance_zero_from_pair_history_of_retained_origins_of_actualKeys` combines that
 producer with runtime transport and the scoped allowance fold. It derives
 owner exclusion internally and asks for no per-frame library installation.
 The Pair must be outside the selected fork's precompiles. Concrete original

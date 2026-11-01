@@ -33,13 +33,9 @@ def wMsg (d : Bytes) : Msg :=
 /-- The entry devm of the message `wMsg d`. -/
 abbrev wPre (d : Bytes) : Devm := initDevm (wMsg d)
 
-theorem wSevm_eq (d : Bytes) : initSevm (wMsg d) = cSevm d := rfl
-
 theorem wPre_getStor (d : Bytes) (a : Adr) : (wPre d).getStor a = cState.getStor a := rfl
 
 theorem wPre_getCode (d : Bytes) (a : Adr) : (wPre d).getCode a = cState.getCode a := rfl
-
-theorem wPre_tok (d : Bytes) : tokOf (cSevm d) (wPre d) = c3crvAddr := cPre_tok d
 
 theorem wPre_coin (d : Bytes) (k : Fin 3) : coinOf (cSevm d) (wPre d) k = coinAdr k := cPre_coin d k
 

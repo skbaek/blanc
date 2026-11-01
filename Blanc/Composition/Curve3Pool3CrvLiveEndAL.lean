@@ -40,17 +40,6 @@ theorem al_lenW :
 theorem al_selW : Sevm.selector (cSevm alDataW) = selAddLiquidity := by
   decide +kernel
 
-theorem al_amtsW :
-    alAmt (cSevm alDataW) 0 = 100 ∧ alAmt (cSevm alDataW) 1 = 200 ∧
-      alAmt (cSevm alDataW) 2 = 300 := by
-  decide +kernel
-
-theorem al_posW :
-    0 < (alAmt (cSevm alDataW) 0).toNat ∧ 0 < (alAmt (cSevm alDataW) 1).toNat ∧
-      0 < (alAmt (cSevm alDataW) 2).toNat := by
-  rw [al_amtsW.1, al_amtsW.2.1, al_amtsW.2.2]
-  decide +kernel
-
 theorem al_decodeW :
     decodeCall (cSevm alDataW) = .addLiquidity ⟨100, 200, 300⟩ 599 := by
   rw [decodeCall_at (k := 3) rfl al_selW al_lenW.1]

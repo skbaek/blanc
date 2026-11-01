@@ -170,33 +170,4 @@ theorem DeploymentHistoryLink.afterPair_callerTarget {checkpoint : BlockChain}
       (fun query member => excluded query (link.pairQueries_subset member)))
   exact pd.children_noApprove
 
-/-- Only the pre-deployment interval and createPair transaction remain to classify.
-The post-deployment half is discharged from the original histories and exact queries. -/
-theorem DeploymentHistoryLink.noPairApproval_of_prefix {checkpoint : BlockChain}
-    {wd : WethDeploymentTo checkpoint} {pd : PairDeploymentTo checkpoint}
-    (link : DeploymentHistoryLink wd pd)
-    (excluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
-    (earlier : ∀ G ∈ link.prefixFrames,
-      CallerTarget pair weth (fun s => s.isStatic = false → Sevm.selector s ≠ 0x095ea7b3)
-        G.sevm) : wd.NoPairApproval := by
-  apply wd.noPairApproval_of_callerTarget
-  intro G member
-  rw [link.frames_split] at member
-  rcases List.mem_append.mp member with before | after
-  · exact earlier G before
-  · exact link.afterPair_callerTarget excluded G after
-
-/-- Constructor-derived zero and the same original replay turn that split provenance
-into all tracked Pair allowance rows being zero at the checkpoint. -/
-theorem DeploymentHistoryLink.allowance_zero_of_prefix {checkpoint : BlockChain}
-    {wd : WethDeploymentTo checkpoint} {pd : PairDeploymentTo checkpoint}
-    (link : DeploymentHistoryLink wd pd)
-    (excluded : ∀ query ∈ wd.trace.senderQueries, query.recover ≠ .ok pair)
-    (earlier : ∀ G ∈ link.prefixFrames,
-      CallerTarget pair weth (fun s => s.isStatic = false → Sevm.selector s ≠ 0x095ea7b3)
-        G.sevm) :
-    ∀ g, wd.keys (.allow pair g) →
-      (checkpoint.state.getStor weth).get (Weth9.allowSlot pair g) = 0 :=
-  wd.allowance_zero (link.noPairApproval_of_prefix excluded earlier)
-
 end Blanc.Composition.LiveUsdcWeth9B26213219

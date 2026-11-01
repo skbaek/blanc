@@ -13,18 +13,6 @@ open Jaune Blanc.ExecutionTrace Blanc.Lift
 
 open Blanc.Composition.LiveUsdcWeth9FactoryAnchorData
 
-/-- The observed anchor is exactly one block before the recorded D block. -/
-theorem number_before_d : blockNumber + 1 = Usdc.HistoryAnchorObservationData.D.blockNumber := by
-  decide +kernel
-
-/-- The observed parent precedes the recorded D timestamp. -/
-theorem timestamp_before_d : timestamp < Usdc.HistoryAnchorObservationData.D.blockTimestamp := by
-  decide +kernel
-
-/-- This is the same D block already used by the receipt consumer. -/
-theorem d_hash_eq : dBlockHash = Usdc.HistoryAnchorObservationData.D.blockHash := by
-  decide +kernel
-
 /-- Finite correspondence for the original D prestate. The parent tip and
 header coordinates identify the observation; `runtime` is a read at that
 same state, not an assertion about code at the selected transaction. -/

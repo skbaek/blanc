@@ -384,14 +384,35 @@ theorem outboundEffect_covered
   obtain ⟨-, movement, -, -, -, -, -, -⟩ := effect
   exact B256.toNat_le_toNat movement.1
 
+/-- A supply bounded by the frozen capacity, plus a quote admitted by the
+remaining share room, cannot wrap its supply-row addition. -/
+theorem supplyNof_of_capacity {supply shares : B256}
+    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
+    (room : shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat) :
+    B256.Nof supply shares := by
+  unfold B256.Nof
+  have bounded := Blanc.ProrataWethVault.supply_add_le_maxSupplyN_of_le_shareRoomN
+    stable room
+  unfold Blanc.ProrataWethVault.maxSupplyN Blanc.maxWordN Blanc.wordModulusN at bounded
+  omega
+
+/-! ## Compiled quotes and snapshot boundaries
+
+Every theorem of this section is about one compiled vault run `run` from a
+configured, covered, well-formed entry. -/
+
+section CompiledRun
+
+variable {sevm : Sevm} {pre post : Devm}
+  (config : DirectWethConfiguration sevm.currentTarget sevm pre)
+  (hfork : CoveredFork sevm.benvStat.fork)
+  (memoryWf : Mem.Wf pre.memory)
+  (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
+include config hfork memoryWf run
+
 /-- The actual compiled `mint` occurrence exposes the inverse quote as a
 named natural-number charge and retains its exact configured WETH effect. -/
 theorem mint_compiled_quote
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "mint" [.uint256, .address]) :
     ∃ supply charged : B256,
       supply = Devm.getStorVal pre sevm.currentTarget
@@ -411,11 +432,6 @@ theorem mint_compiled_quote
 /-- The actual compiled `withdraw` occurrence exposes the inverse quote as a
 named natural-number burn and retains its exact configured WETH effect. -/
 theorem withdraw_compiled_quote
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "withdraw" [.uint256, .address, .address]) :
     ∃ supply burned : B256,
@@ -437,11 +453,6 @@ theorem withdraw_compiled_quote
 boundary whenever its receiver differs from the vault; the effect and compiled
 guard already provide its debit bounds. -/
 theorem withdraw_compiled_normal_snapshot
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "withdraw" [.uint256, .address, .address])
     (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr) :
@@ -462,26 +473,9 @@ theorem withdraw_compiled_normal_snapshot
   exact ⟨burned, quote', outboundEffect_normal_snapshot receiverNotVault burnable'
     (outboundEffect_covered effect) effect⟩
 
-/-- A supply bounded by the frozen capacity, plus a quote admitted by the
-remaining share room, cannot wrap its supply-row addition. -/
-theorem supplyNof_of_capacity {supply shares : B256}
-    (stable : supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN)
-    (room : shares.toNat ≤ Blanc.ProrataWethVault.shareRoomN supply.toNat) :
-    B256.Nof supply shares := by
-  unfold B256.Nof
-  have bounded := Blanc.ProrataWethVault.supply_add_le_maxSupplyN_of_le_shareRoomN
-    stable room
-  unfold Blanc.ProrataWethVault.maxSupplyN Blanc.maxWordN Blanc.wordModulusN at bounded
-  omega
-
 /-- The compiled `deposit` occurrence exposes its floor quote together with
 the capacity facts that make the supply-row addition non-wrapping. -/
 theorem deposit_compiled_quote
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "deposit" [.uint256, .address]) :
     ∃ supply shares : B256,
       supply = Devm.getStorVal pre sevm.currentTarget
@@ -500,11 +494,6 @@ theorem deposit_compiled_quote
 /-- The compiled `redeem` occurrence exposes its floor asset quote in the
 same named form as the other three public endpoints. -/
 theorem redeem_compiled_quote
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "redeem" [.uint256, .address, .address]) :
     ∃ supply assets : B256,
@@ -524,11 +513,6 @@ theorem redeem_compiled_quote
 WETH-row addition is known not to wrap; capacity and share-room guards derive
 the supply-row fact. -/
 theorem deposit_compiled_normal_snapshot
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "deposit" [.uint256, .address])
     (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
     (rowNof : B256.Nof (Stor.rest (Devm.getStor pre wethAccount)
@@ -555,11 +539,6 @@ theorem deposit_compiled_normal_snapshot
 /-- A compiled `mint` reaches the same real inbound boundary, retaining the
 inverse ceil quote rather than coercing it to the deposit quote. -/
 theorem mint_compiled_normal_snapshot
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm = selector "mint" [.uint256, .address])
     (depositorNotVault : sevm.caller ≠ sevm.currentTarget)
     (rowNof : ∀ charged : B256,
@@ -591,11 +570,6 @@ theorem mint_compiled_normal_snapshot
 /-- The compiled inverse-withdraw call reaches the retained boundary when it
 pays the vault itself. -/
 theorem withdraw_compiled_retained_snapshot
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "withdraw" [.uint256, .address, .address])
     (receiverIsVault : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget) :
@@ -617,11 +591,6 @@ theorem withdraw_compiled_retained_snapshot
 /-- The compiled `redeem` reaches the real normal debit boundary when its
 receiver differs from the vault. -/
 theorem redeem_compiled_normal_snapshot
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "redeem" [.uint256, .address, .address])
     (receiverNotVault : sevm.currentTarget ≠ (Sevm.argWord sevm 1).toAdr) :
@@ -644,11 +613,6 @@ theorem redeem_compiled_normal_snapshot
 /-- The compiled `redeem` reaches the retained boundary when it pays the vault
 itself. -/
 theorem redeem_compiled_retained_snapshot
-    {sevm : Sevm} {pre post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm pre)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf pre.memory)
-    (run : Prog.RunCompiled sevm pre Blanc.ProrataWethVault.vault post)
     (selectorEq : Sevm.selector sevm =
       selector "redeem" [.uint256, .address, .address])
     (receiverIsVault : (Sevm.argWord sevm 1).toAdr = sevm.currentTarget) :
@@ -666,6 +630,8 @@ theorem redeem_compiled_retained_snapshot
     simpa only [snapshotAt, vaultSnapshot, supplyEq] using quote
   exact ⟨assets, quote', outboundEffect_retained_snapshot receiverIsVault
     (by simpa only [snapshotAt, vaultSnapshot, supplyEq] using burnable) effect⟩
+
+end CompiledRun
 
 /-- A third-party WETH transfer with an unchanged vault supply row reaches the
 credited snapshot boundary.  This is deliberately a raw local effect bridge;

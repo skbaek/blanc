@@ -58,17 +58,4 @@ theorem OriginalApprovalCensus.beforePairReceiptLogs {checkpoint : BlockChain}
   intro spender data member
   exact allLogs _ member ⟨rfl, rfl⟩
 
-/-- Original census correspondence now supplies the checkpoint's receipt
-absence premise. Observation adoption and the remaining cryptographic inputs
-are not discharged by this conditional theorem. -/
-theorem ObservedDeploymentHistory.checkpoint_of_approval_census {checkpoint : BlockChain}
-    (h : ObservedDeploymentHistory checkpoint) (anchor : ObservedCheckpoint checkpoint)
-    (census : OriginalApprovalCensus h)
-    (holderFresh : SlotFootprint.Fresh Weth9.Key.slot Weth9.fixedSlots
-      h.wethDeployment.keys (.bal pair))
-    (excluded : ∀ query ∈ h.wethDeployment.trace.senderQueries, query.recover ≠ .ok pair) :
-    JointCheckpoint2F pair usdc weth (FiniteCheckpoint.rowKeys usdcRows)
-      h.wethDeployment.keys h.pairDeployment.keys h.pairDeployment.model checkpoint.state := by
-  exact h.checkpoint anchor holderFresh excluded census.beforePairReceiptLogs
-
 end Blanc.Composition.LiveUsdcWeth9B26213219

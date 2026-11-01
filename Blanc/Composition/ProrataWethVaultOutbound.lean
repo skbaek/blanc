@@ -658,7 +658,7 @@ private theorem outboundEffect_lift {sevm : Sevm} {pre bodyPre post : Devm}
     rw [foreign account wethNe targetNe, ← congrFun storage account]
   · rw [logged, ← logs]
 
-/-- `outboundBody_effect` together with WETH's kept non-address cells. -/
+/-- The outbound body effect together with WETH's kept non-address cells. -/
 theorem outboundBody_effect_quiet
     {fs : List Func} {sevm : Sevm}
     {entry quotePre afterPre post : Devm} {image afterImage : Bytes}
@@ -799,7 +799,8 @@ theorem outboundBody_effect_quiet
       rw [congrFun entryStorage wethAccount, congrFun quoteStorage wethAccount]
       exact quiet⟩
 
-/-- `withdraw_body_effect` together with WETH's kept non-address cells. -/
+/-- Exact compiled body effect of `withdraw(assets, receiver, owner)`, with
+WETH's kept non-address cells. -/
 theorem withdraw_body_effect_quiet
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
@@ -908,60 +909,8 @@ theorem withdraw_body_effect_quiet
     congrArg B256.toNat supplyEq
   omega
 
-/-- Exact compiled body effect of `withdraw(assets, receiver, owner)`. -/
-theorem withdraw_body_effect
-    {fs : List Func} {sevm : Sevm} {entry post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf entry.memory)
-    (afterLookup : fs[Blanc.ProrataWethVault.withdrawAfterQuoteSlot]? =
-      some Blanc.ProrataWethVault.withdrawAfterQuote)
-    (burnLookup : fs[Blanc.ProrataWethVault.withdrawBurnSlot]? =
-      some Blanc.ProrataWethVault.withdrawBurn)
-    (stack : [] <<+ entry.stack)
-    (run : Func.RunCompiledTo fs sevm entry Blanc.ProrataWethVault.withdraw
-      (.ok post)) :
-    ∃ supply,
-      supply = Devm.getStorVal entry sevm.currentTarget
-        Blanc.ProrataWethVault.supplySlot ∧
-      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
-      Blanc.ProrataWethVault.previewWithdrawN (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
-      sevm.caller.toB256 ≠ 0 ∧
-      ValidAdr (Sevm.argWord sevm 1) ∧
-      Sevm.argWord sevm 1 ≠ 0 ∧
-      ValidAdr (Sevm.argWord sevm 2) ∧
-      Sevm.argWord sevm 2 ≠ 0 ∧
-      (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
-        (Sevm.argWord sevm 0).toNat
-        ((entry.state.getStor wethAccount).get
-          sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤
-        (Devm.getStorVal entry sevm.currentTarget
-          (Sevm.argWord sevm 2)).toNat ∧
-      (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
-        (Sevm.argWord sevm 0).toNat
-        ((entry.state.getStor wethAccount).get
-          sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤
-        supply.toNat ∧
-      OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
-        (Sevm.argWord sevm 0)
-        (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
-          (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat))
-        (Nat.toB256 (Blanc.ProrataWethVault.previewWithdrawN
-          (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat))
-        entry post := by
-  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-      receiverNonzero, ownerValid, ownerNonzero, covered, burnable, effect,
-      -⟩ := withdraw_body_effect_quiet (hfork := hfork) config memoryWf afterLookup burnLookup stack run
-  exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-    receiverNonzero, ownerValid, ownerNonzero, covered, burnable, effect⟩
-
-/-- `redeem_body_effect` together with WETH's kept non-address cells. -/
+/-- Exact compiled body effect of `redeem(shares, receiver, owner)`, with
+WETH's kept non-address cells. -/
 theorem redeem_body_effect_quiet
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
@@ -1058,52 +1007,6 @@ theorem redeem_body_effect_quiet
         Blanc.ProrataWethVault.supplySlot).toNat :=
     congrArg B256.toNat supplyEq
   omega
-
-/-- Exact compiled body effect of `redeem(shares, receiver, owner)`. -/
-theorem redeem_body_effect
-    {fs : List Func} {sevm : Sevm} {entry post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf entry.memory)
-    (afterLookup : fs[Blanc.ProrataWethVault.redeemAfterQuoteSlot]? =
-      some Blanc.ProrataWethVault.redeemAfterQuote)
-    (burnLookup : fs[Blanc.ProrataWethVault.redeemBurnSlot]? =
-      some Blanc.ProrataWethVault.redeemBurn)
-    (stack : [] <<+ entry.stack)
-    (run : Func.RunCompiledTo fs sevm entry Blanc.ProrataWethVault.redeem
-      (.ok post)) :
-    ∃ supply,
-      supply = Devm.getStorVal entry sevm.currentTarget
-        Blanc.ProrataWethVault.supplySlot ∧
-      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
-      Blanc.ProrataWethVault.previewRedeemN (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
-      sevm.caller.toB256 ≠ 0 ∧
-      ValidAdr (Sevm.argWord sevm 1) ∧
-      Sevm.argWord sevm 1 ≠ 0 ∧
-      ValidAdr (Sevm.argWord sevm 2) ∧
-      Sevm.argWord sevm 2 ≠ 0 ∧
-      (Sevm.argWord sevm 0).toNat ≤
-        (Devm.getStorVal entry sevm.currentTarget
-          (Sevm.argWord sevm 2)).toNat ∧
-      (Sevm.argWord sevm 0).toNat ≤ supply.toNat ∧
-      OutboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 2)
-        (Nat.toB256 (Blanc.ProrataWethVault.previewRedeemN
-          (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat))
-        (Sevm.argWord sevm 0)
-        (Nat.toB256 (Blanc.ProrataWethVault.previewRedeemN
-          (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat))
-        entry post := by
-  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-      receiverNonzero, ownerValid, ownerNonzero, covered, burnable, effect,
-      -⟩ := redeem_body_effect_quiet (hfork := hfork) config memoryWf afterLookup burnLookup stack run
-  exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-    receiverNonzero, ownerValid, ownerNonzero, covered, burnable, effect⟩
 
 private theorem withdrawAfterQuote_lookup :
     (Blanc.ProrataWethVault.vault.main ::

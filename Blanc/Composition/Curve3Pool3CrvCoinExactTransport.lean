@@ -21,7 +21,7 @@ its code (`lift_exact`), so the coins' replies are their code's, not premises.
 * `ccExt_le`: the call's two windows inside `[0, 0xc20)` cost at most 309 gas of expansion,
   whatever the memory;
 * `ccMsg_data`: the child's calldata is the input window of the caller's memory;
-* `pull_child`, `push_child`: `Token20`'s `transferFrom` / `transfer` from a pool call site, for
+* `pull_child_exact`, `push_child_exact`: `Token20`'s `transferFrom` / `transfer` from a pool call site, for
   any coin, ledger and amount the call fits (`T20PullFits`, `T20MoveFits`), leaving the coin's
   ledger as `t20Move (t20Allow …)` / `t20Move`;
 * `token20_coinPullOkAt`, `token20_coinPushOkAt`: the pool's `CoinPullOkAt` / `CoinPushOkAt` at
@@ -91,10 +91,6 @@ theorem ccMsg_data (sevm : Sevm) (b : Devm) (S : List B256) (M : Mem) (G : Nat)
   change (ccParent b S M G t ii is oi).memory.data.sliceD ii.toNat is.toNat 0 = _
   unfold ccParent AllGasCall.parent AllGasCall.warmed St
   rw [callSpawnParent_memory_data, addAccessedAddress_setMach_memory]
-
-theorem ccMsg_state (sevm : Sevm) (b : Devm) (S : List B256) (M : Mem) (G : Nat)
-    (t ii is oi : B256) :
-    (initDevm (ccMsg sevm b S M G t ii is oi)).state = b.state := rfl
 
 /-! ## The resumed parent -/
 
@@ -504,29 +500,6 @@ theorem pull_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
             (tfTo (initSevm msg)) (tfVal (initSevm msg))).refundCounter := r5.symm
       _ ≤ _ := r6
 
-/-- The original child interface, projected from the retained exact normal form. -/
-theorem pull_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
-    {c src : Adr} {v : B256} (ht : t.toAdr = c)
-    (hcode : b.state.getCode c = VyperNonreentrantDeployed.Token20.code)
-    (hdata : (M.read ii.toNat (0x64 : B256).toNat).1 = Curve3Pool.transferFromSel ++
-      src.toB256.toBytes ++ sevm.currentTarget.toB256.toBytes ++ v.toBytes)
-    (hfits : T20PullFits (b.getStor c) src sevm.currentTarget sevm.currentTarget v)
-    (hfwd : 75300 ≤ ccFwd b S M G t ii 0x64 oi) :
-    ∃ cpost used, exec (initEvm (ccMsg sevm b S M G t ii 0x64 oi)) = .ok cpost ∧
-      cpost.error = none ∧ cpost.output = (1 : B256).toBytes ∧
-      cpost.gasLeft = ccFwd b S M G t ii 0x64 oi - used ∧ used ≤ 72918 ∧
-      (∀ a, cpost.getCode a = b.getCode a) ∧
-      (∀ a, a ≠ c → cpost.getStor a = b.getStor a) ∧
-      cpost.getStor c = t20Move (t20Allow (b.getStor c) src sevm.currentTarget v) src
-        sevm.currentTarget v ∧
-      cpost.createdAccounts = b.createdAccounts ∧
-      ((getOrigAcct sevm c).stor = b.getStor c → c ∉ b.createdAccounts →
-        allowSlot src sevm.currentTarget ≠ balSlot src →
-        allowSlot src sevm.currentTarget ≠ balSlot sevm.currentTarget →
-        balSlot src ≠ balSlot sevm.currentTarget → 0 ≤ cpost.refundCounter) := by
-  obtain ⟨cpost, used, _, _, h⟩ := pull_child_exact hfork hstatic ht hcode hdata hfits hfwd
-  exact ⟨cpost, used, h⟩
-
 end Pull
 
 /-! ## A coin's `transfer(dst, v)` from a pool call site -/
@@ -724,26 +697,6 @@ theorem push_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
       _ = (mv3 (initSevm msg) (initDevm msg) (initSevm msg).caller (trTo (initSevm msg))
             (trVal (initSevm msg))).refundCounter := r3.symm
       _ ≤ _ := r4
-
-/-- The original child interface, projected from the retained exact normal form. -/
-theorem push_child (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
-    {c dst : Adr} {v : B256} (ht : t.toAdr = c)
-    (hcode : b.state.getCode c = VyperNonreentrantDeployed.Token20.code)
-    (hdata : (M.read ii.toNat (0x44 : B256).toNat).1 =
-      Curve3Pool.transferSel ++ dst.toB256.toBytes ++ v.toBytes)
-    (hfits : T20MoveFits (b.getStor c) sevm.currentTarget dst v)
-    (hfwd : 75300 ≤ ccFwd b S M G t ii 0x44 oi) :
-    ∃ cpost used, exec (initEvm (ccMsg sevm b S M G t ii 0x44 oi)) = .ok cpost ∧
-      cpost.error = none ∧ cpost.output = (1 : B256).toBytes ∧
-      cpost.gasLeft = ccFwd b S M G t ii 0x44 oi - used ∧ used ≤ 72918 ∧
-      (∀ a, cpost.getCode a = b.getCode a) ∧
-      (∀ a, a ≠ c → cpost.getStor a = b.getStor a) ∧
-      cpost.getStor c = t20Move (b.getStor c) sevm.currentTarget dst v ∧
-      cpost.createdAccounts = b.createdAccounts ∧
-      ((getOrigAcct sevm c).stor = b.getStor c → c ∉ b.createdAccounts →
-        balSlot sevm.currentTarget ≠ balSlot dst → 0 ≤ cpost.refundCounter) := by
-  obtain ⟨cpost, used, _, _, h⟩ := push_child_exact hfork hstatic ht hcode hdata hfits hfwd
-  exact ⟨cpost, used, h⟩
 
 end Push
 

@@ -237,17 +237,6 @@ theorem c3crv_supplyProfile {T : B256} (hfork : CoveredFork sevm.benvStat.fork)
       · exact callChildPost_mem_warm _ _ _ _ 4
           (parent_mem_warm b S M G t ii 4 oi 0x20 4 hid.warm)
 
-/-- **`totalSupply()` of the deployed 3Crv has an exact profile** at every call window. -/
-theorem c3crv_supplyExactAt {T : B256} (hfork : CoveredFork sevm.benvStat.fork)
-    (hdepth : sevm.depth ≠ 0) (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false)
-    (hU : 70000 ≤ U) (hii : ii.toNat + 4 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)
-    (hW : ∀ b, W b → b.getCode t.toAdr = Curve3Crv.code ∧
-      (b.getStor t.toAdr).get vySupplySlot = T)
-    (hW' : ∀ b d, W b → (∀ a, Devm.getStor d a = Devm.getStor b a) →
-      (∀ a, d.getCode a = b.getCode a) → W' d) :
-    SupplyExactAt sevm W W' t T U ii oi :=
-  ⟨_, _, c3crv_supplyProfile hfork hdepth hprec hU hii hoi hW hW'⟩
-
 end Supply
 
 /-! ## `mint` and `burnFrom`: exact zero-value `CALL` profiles -/
@@ -467,20 +456,6 @@ theorem c3crv_mintProfile {amt : B256} (hfork : CoveredFork sevm.benvStat.fork)
     (hl.other _ (Ne.symm hne)).trans (callMsg0_getStor ..),
     hW' b _ hWb (fun a ha => hl.other a ha) hs hcode'⟩
 
-/-- **`mint(msg.sender, amt)` into the deployed 3Crv has an exact profile** at every call window
-where the token holds 3Crv's code, is not the pool, and 3Crv accepts the mint. -/
-theorem c3crv_mintExactAt {amt : B256} (hfork : CoveredFork sevm.benvStat.fork)
-    (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
-    (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hU : 70000 ≤ U)
-    (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)
-    (hW : ∀ b, W b → b.getCode t.toAdr = Curve3Crv.code ∧ t.toAdr ≠ sevm.currentTarget ∧
-      MintFits (b.getStor t.toAdr) sevm.currentTarget sevm.caller.toB256 amt)
-    (hW' : ∀ b d, W b → (∀ a, a ≠ t.toAdr → Devm.getStor d a = Devm.getStor b a) →
-      Devm.getStor d t.toAdr = mintStor (b.getStor t.toAdr) sevm.caller.toB256 amt →
-      (∀ a, d.getCode a = b.getCode a) → W' d) :
-    MintExactAt sevm W W' t amt U ii oi :=
-  ⟨_, _, c3crv_mintProfile hfork hstatic hdepth hprec hU hii hoi hW hW'⟩
-
 /-- **`burnFrom(msg.sender, amt)` into the deployed 3Crv, named profile**: the exact `CALL`
 profile at every call window where the token holds 3Crv's code, is not the pool, and 3Crv
 accepts the burn, with its debit `mutDebit burnBodyCost 8` and canonical successor
@@ -523,20 +498,6 @@ theorem c3crv_burnProfile {amt : B256} (hfork : CoveredFork sevm.benvStat.fork)
   refine ⟨by rw [hl.output _ rfl, B256.length_toBytes],
     (hl.other _ (Ne.symm hne)).trans (callMsg0_getStor ..),
     hW' b _ hWb (fun a ha => hl.other a ha) hs hcode'⟩
-
-/-- **`burnFrom(msg.sender, amt)` into the deployed 3Crv has an exact profile** at every call
-window where the token holds 3Crv's code, is not the pool, and 3Crv accepts the burn. -/
-theorem c3crv_burnExactAt {amt : B256} (hfork : CoveredFork sevm.benvStat.fork)
-    (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
-    (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hU : 70000 ≤ U)
-    (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)
-    (hW : ∀ b, W b → b.getCode t.toAdr = Curve3Crv.code ∧ t.toAdr ≠ sevm.currentTarget ∧
-      BurnFits (b.getStor t.toAdr) sevm.currentTarget sevm.caller.toB256 amt)
-    (hW' : ∀ b d, W b → (∀ a, a ≠ t.toAdr → Devm.getStor d a = Devm.getStor b a) →
-      Devm.getStor d t.toAdr = burnStor (b.getStor t.toAdr) sevm.caller.toB256 amt →
-      (∀ a, d.getCode a = b.getCode a) → W' d) :
-    BurnExactAt sevm W W' t amt U ii oi :=
-  ⟨_, _, c3crv_burnProfile hfork hstatic hdepth hprec hU hii hoi hW hW'⟩
 
 end Mutable
 

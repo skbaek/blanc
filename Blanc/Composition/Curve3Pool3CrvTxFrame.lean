@@ -94,8 +94,6 @@ def exDebitState (st : Jaune.State) : Jaune.State :=
 
 theorem ex_gas (v : Nat) (r s : Bytes) : (exchangeTx v r s).gas = 900000 := rfl
 
-theorem ex_value (v : Nat) (r s : Bytes) : (exchangeTx v r s).value = 0 := rfl
-
 theorem ex_intrinsic {rules : ForkRules} (v : Nat) (r s : Bytes)
     (hsg : rules.stateGas = none) (hbase : rules.gas.txBase = 21000)
     (hfloor : rules.gas.floorTokenCost = 10) (hnz : rules.txr.dataNonZero = 16)

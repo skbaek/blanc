@@ -442,7 +442,7 @@ theorem inboundEffect_preserves_conserved
   exact conserved.mint_set Blanc.ProrataWethVault.supplySlot_not_validAdr
     overflow
 
-/-- `inboundBody_effect` together with the flow's linked WETH child. -/
+/-- The inbound body effect together with the flow's linked WETH child. -/
 theorem inboundBody_effect_linked
     {fs : List Func} {sevm : Sevm} {entry quotePre afterPre post : Devm}
     {image afterImage : Bytes}
@@ -554,7 +554,14 @@ theorem inboundBody_effect_linked
       ((congrFun entryStorage wethAccount).trans
         (congrFun quoteStorage wethAccount)) rfl
 
-/-- `deposit_body_effect` together with the flow's linked WETH child. -/
+/-- Exact compiled body effect of `deposit(assets, receiver)`, with the flow's
+linked WETH child.
+
+The minted share amount is the exact G1 full-width floor conversion
+`floor(assets * D / X)` taken from the WETH balance booked *before* the
+inbound transfer and the pre-state share supply.  It fits one word, the caller
+and receiver pass their guards, it fits the remaining supply room, and the
+flow's complete observable effect is `InboundEffect`. -/
 theorem deposit_body_effect_linked
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
@@ -630,55 +637,14 @@ theorem deposit_body_effect_linked
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, roomFits, effect, linked⟩
 
-/-- Exact compiled body effect of `deposit(assets, receiver)`.
+/-- Exact compiled body effect of `mint(shares, receiver)`.
 
-The minted share amount is the exact G1 full-width floor conversion
-`floor(assets * D / X)` taken from the WETH balance booked *before* the
-inbound transfer and the pre-state share supply.  It fits one word, the caller
-and receiver pass their guards, it fits the remaining supply room, and the
-flow's complete observable effect is `InboundEffect`. -/
-theorem deposit_body_effect
-    {fs : List Func} {sevm : Sevm} {entry post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf entry.memory)
-    (lookup : fs[Blanc.ProrataWethVault.depositAfterQuoteSlot]? =
-      some Blanc.ProrataWethVault.depositAfterQuote)
-    (stack : [] <<+ entry.stack)
-    (run : Func.RunCompiledTo fs sevm entry
-      Blanc.ProrataWethVault.deposit (.ok post)) :
-    ∃ supply,
-      supply = Devm.getStorVal entry sevm.currentTarget
-        Blanc.ProrataWethVault.supplySlot ∧
-      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
-      Blanc.ProrataWethVault.convertToSharesN (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
-      sevm.caller.toB256 ≠ 0 ∧
-      ValidAdr (Sevm.argWord sevm 1) ∧
-      Sevm.argWord sevm 1 ≠ 0 ∧
-      (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
-          (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat)).toNat ≤
-        Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
-      InboundEffect sevm (Sevm.argWord sevm 1) (Sevm.argWord sevm 0)
-        (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
-          (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat))
-        (Nat.toB256 (Blanc.ProrataWethVault.convertToSharesN
-          (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat))
-        entry post := by
-  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-      receiverNonzero, roomFits, effect, -⟩ :=
-    deposit_body_effect_linked (hfork := hfork) config memoryWf lookup stack run
-  exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-    receiverNonzero, roomFits, effect⟩
+The charged asset amount is the exact G1 full-width ceiling conversion
+`ceil(shares * X / D)` taken from the pre-transfer booked balance and the
+pre-state share supply; the minted share amount is exactly the requested one,
+and the returned word is the charged assets.
 
-/-- `mint_body_effect` together with the flow's linked WETH child. -/
+The result also carries the flow's linked WETH child. -/
 theorem mint_body_effect_linked
     {fs : List Func} {sevm : Sevm} {entry post : Devm}
     (config : DirectWethConfiguration sevm.currentTarget sevm entry)
@@ -754,51 +720,6 @@ theorem mint_body_effect_linked
       (by decide +kernel) afterRun
   exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
     receiverNonzero, roomFits, effect, linked⟩
-
-/-- Exact compiled body effect of `mint(shares, receiver)`.
-
-The charged asset amount is the exact G1 full-width ceiling conversion
-`ceil(shares * X / D)` taken from the pre-transfer booked balance and the
-pre-state share supply; the minted share amount is exactly the requested one,
-and the returned word is the charged assets. -/
-theorem mint_body_effect
-    {fs : List Func} {sevm : Sevm} {entry post : Devm}
-    (config : DirectWethConfiguration sevm.currentTarget sevm entry)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (memoryWf : Mem.Wf entry.memory)
-    (lookup : fs[Blanc.ProrataWethVault.mintAfterQuoteSlot]? =
-      some Blanc.ProrataWethVault.mintAfterQuote)
-    (stack : [] <<+ entry.stack)
-    (run : Func.RunCompiledTo fs sevm entry
-      Blanc.ProrataWethVault.mint (.ok post)) :
-    ∃ supply,
-      supply = Devm.getStorVal entry sevm.currentTarget
-        Blanc.ProrataWethVault.supplySlot ∧
-      supply.toNat ≤ Blanc.ProrataWethVault.maxSupplyN ∧
-      Blanc.ProrataWethVault.previewMintN (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat < wordModulusN ∧
-      sevm.caller.toB256 ≠ 0 ∧
-      ValidAdr (Sevm.argWord sevm 1) ∧
-      Sevm.argWord sevm 1 ≠ 0 ∧
-      (Sevm.argWord sevm 0).toNat ≤
-        Blanc.ProrataWethVault.shareRoomN supply.toNat ∧
-      InboundEffect sevm (Sevm.argWord sevm 1)
-        (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
-          (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat))
-        (Sevm.argWord sevm 0)
-        (Nat.toB256 (Blanc.ProrataWethVault.previewMintN
-          (Sevm.argWord sevm 0).toNat
-          ((entry.state.getStor wethAccount).get
-            sevm.currentTarget.toB256).toNat supply.toNat))
-        entry post := by
-  obtain ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-      receiverNonzero, roomFits, effect, -⟩ :=
-    mint_body_effect_linked (hfork := hfork) config memoryWf lookup stack run
-  exact ⟨supply, supplyEq, stable, quoteFits, callerNonzero, receiverValid,
-    receiverNonzero, roomFits, effect⟩
 
 /-! ## Public compiled selectors -/
 

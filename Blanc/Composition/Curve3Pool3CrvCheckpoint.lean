@@ -376,9 +376,6 @@ def coin2Addr : Adr := 0x202
 /-- The single synthetic 3Crv holder. -/
 def holderAddr : Adr := 0x300
 
-/-- The synthetic pool owner. -/
-def ownerAddr : Adr := 0x400
-
 /-- The synthetic pool state: A = 100, fee = 4000000, admin_fee = 5000000000
 (`admin_fee < 10^10`, so a later swap can raise D/T), small positive balances. -/
 def poolState : Lift.Curve3Pool.State :=

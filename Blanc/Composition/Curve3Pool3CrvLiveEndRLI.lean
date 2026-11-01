@@ -38,17 +38,6 @@ theorem rli_lenW :
 theorem rli_selW : Sevm.selector (cSevm rliDataW) = selRemoveLiquidityImbalance := by
   decide +kernel
 
-theorem rli_amtsW :
-    rliAmt (cSevm rliDataW) 0 = 90 ∧ rliAmt (cSevm rliDataW) 1 = 180 ∧
-      rliAmt (cSevm rliDataW) 2 = 270 := by
-  decide +kernel
-
-theorem rli_posW :
-    0 < (rliAmt (cSevm rliDataW) 0).toNat ∧ 0 < (rliAmt (cSevm rliDataW) 1).toNat ∧
-      0 < (rliAmt (cSevm rliDataW) 2).toNat := by
-  rw [rli_amtsW.1, rli_amtsW.2.1, rli_amtsW.2.2]
-  decide +kernel
-
 theorem rli_decodeW :
     decodeCall (cSevm rliDataW) = .removeLiquidityImbalance ⟨90, 180, 270⟩ 600 := by
   rw [rli_decode rli_selW rli_lenW.1]
