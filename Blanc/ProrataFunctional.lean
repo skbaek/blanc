@@ -3,6 +3,7 @@
 
 import Blanc.ProrataCode
 import Blanc.Ladder
+import Blanc.CommonProofs.DispatchReach
 
 namespace Blanc
 

@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
+import Blanc.Lift.WalkInvKit
 
 /-! Ten scalar getter paths of the checked Pair runtime. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -116,8 +117,7 @@ theorem storedScalar_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (b.getStorVal sevm.currentTarget s.slot :: ρ :: R) M G') := by
   have h := run.cut
   rw [s.callee_shape] at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := ρ) rfl hd
   obtain ⟨g, hg⟩ := ric_ret h
@@ -171,8 +171,7 @@ theorem addressScalar_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
       ((b.getStorVal sevm.currentTarget s.slot).toAdr.toB256 :: ρ :: R) M G') := by
   have h := run.cut
   rw [s.callee_shape] at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_and hd

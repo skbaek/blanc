@@ -52,7 +52,10 @@ lines when next changed or relied on, not by a wholesale rewrite.
   [C6](#c6-i-need-to-link-an-auxiliary-call-table-by-name-instead-of-by-index),
   the last branch of that section rather than its head.
 - None matches: search public declarations in `Blanc/CommonCore.lean`,
-  `Blanc/CommonProofs.lean`, and the ladder (`Blanc/LadderBase.lean`,
+  the ten `Blanc/CommonProofs/*.lean` pieces (`Base`, `Frames`, `MemImage`,
+  `Messages`, `Walk`, `Hinv`, `DispatchReach`, `NoDel`, `Balance`,
+  `MemEffects`; `Blanc/CommonProofs.lean` only re-exports them, so import the
+  piece you use), and the ladder (`Blanc/LadderBase.lean`,
   `Blanc/LadderSem.lean`, and `Blanc/Ladder.lean`, which states
   `ContractSpec` over them); a helper found only in a
   contract module is a hoisting candidate, not a cross-contract import target.
@@ -250,7 +253,7 @@ lines when next changed or relied on, not by a wholesale rewrite.
   there is no recipe.
 - For a successful source branch whose selected arm calls a known
   nonreturning auxiliary, use `of_run_branch_call_of_not_run` in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).  Its shared
+  [`Blanc/CommonProofs/Balance.lean`](../Blanc/CommonProofs/Balance.lean).  Its shared
   specializations `of_run_branch_call_revert`,
   `of_run_branch_call_revertWith`, and
   `of_run_branch_call_revertReturnData` cover the standard empty,
@@ -270,13 +273,12 @@ lines when next changed or relied on, not by a wholesale rewrite.
   cover flat and warm/cold access without a fork or BAL restriction.
   Their stack-equality conclusions have no reliable dedicated recipe trigger.
 - The common `fsig +++ dispatch` entry preserves logs and output by
-  `fsig_logs` and `fsig_output` in `Blanc/CommonProofs.lean`.
+  `fsig_logs` and `fsig_output` in `Blanc/CommonProofs/DispatchReach.lean`.
 - Recover a known selected body from a sorted tree dispatcher with
-  `reach_of_dispatch` for the inline-revert form or `reach_of_dispatchWith`
-  for the indexed-fallback form in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean). Both consume the
-  exact selector/list membership and return the selected body with the
-  selector removed while preserving world state and memory; neither asserts
+  `reach_of_dispatchWith` for the indexed-fallback form in
+  [`Blanc/CommonProofs/DispatchReach.lean`](../Blanc/CommonProofs/DispatchReach.lean). It consumes the
+  exact selector/list membership and returns the selected body with the
+  selector removed while preserving world state and memory; it does not assert
   that an execution exists.  `reach_of_dispatchWith_logs` is the same
   factorization with the dispatcher's log and output silence carried to the
   selected body.  `reach_of_dispatch_logs` in
@@ -284,15 +286,14 @@ lines when next changed or relied on, not by a wholesale rewrite.
   inline-revert form with log/output silence plus the loose gas-free walk
   prefix reaching the selected body's entry state.
 - Rule a selector *out* at source level with `not_run_dispatch_of_miss` in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean): a selector with no
+  [`Blanc/CommonProofs/DispatchReach.lean`](../Blanc/CommonProofs/DispatchReach.lean): a selector with no
   leaf in the tree has no successful inline-revert dispatcher run at all, so a
   contract's selector census becomes "every successful call is one of these
   entries".  It is the `Func.Run` counterpart of the compiled
   `DispatchTree.dispatchMiss_runCompiledTo_with_path`.
 - Peel the shared `nonpayable` entry wrapper on a source run with
-  `run_body_of_run_nonpayable_frame`, or with `run_body_of_run_nonpayable_logs`
-  when the endpoint's events or returndata must also be related to the public
-  frame's entry.  Both derive zero call value.
+  `run_body_of_run_nonpayable_frame` (in
+  [`Blanc/CommonProofs/Hinv.lean`](../Blanc/CommonProofs/Hinv.lean)); it derives zero call value.
 - Ordinary compiled success walk (`Func.RunCompiled`): `func_run` and the
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
   `MSTORE` and `MSTORE8` each consume the next numeric memory-expansion hint;
@@ -330,8 +331,9 @@ lines when next changed or relied on, not by a wholesale rewrite.
   or `setStorVal`, not these whole carrier equalities; discovery stays here
   instead of broadening that trigger or unfolding a concrete state tower. The lower
   one-write primitive is `setStorVal_getStor_ne` in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
-- Read-through laws of a selected `SLOAD`, in the same module:
+  [`Blanc/CommonProofs/Base.lean`](../Blanc/CommonProofs/Base.lean).
+- Read-through laws of a selected `SLOAD`, also in
+  [`Blanc/ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean):
   `afterSload_getStorVal` / `afterSload_getOrigStorVal` /
   `afterSload_getTransVal` (reads pass through), `afterSload_warm` (the read
   key is warm after), `afterSload_preserves_warm` and `not_mem_afterSload` /
@@ -791,7 +793,7 @@ spawn/resume equations at the consumer:
 
 For the entered child's code and code address at the `Xinst`-step level — from a
 spawn equation without operand knowledge — use the spawn-source family in
-[`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
+[`Blanc/CommonProofs/Messages.lean`](../Blanc/CommonProofs/Messages.lean):
 
 - `Xinst.step_spawn_source`: the trichotomy over any
   `Xinst.step sevm devm x = .spawn f rsm` — empty target code, same target as
@@ -3152,7 +3154,7 @@ branch supplies discovery rather than a single goal-head recipe.
 ### I1. One instruction/line/function preserves an observation
 
 - Coarse outcome-aware instruction frames in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
+  [`Blanc/CommonProofs/Frames.lean`](../Blanc/CommonProofs/Frames.lean):
   `processCreateMessage.chargeCodeGas_instructionFrame` covers code-deposit
   charging on both outcomes, including optional EF rejection and state-gas
   charges. `ForkRules.accessDelegation_instructionFrame` covers the activated
@@ -3205,12 +3207,14 @@ branch supplies discovery rather than a single goal-head recipe.
   retains its modern statement. These stack observations have no reliable
   registered single goal-head trigger.
 - `Ninst.Inv`, `Rinst.Inv`, and `Line.Inv`: use `line_inv` plus the registered
-  `Ninst.Hinv` / `Rinst.Hinv` instances in `Blanc/Tactics.lean`.
+  `Ninst.Hinv` / `Rinst.Hinv` instances in `Blanc/Tactics.lean` and
+  [`Blanc/CommonProofs/Hinv.lean`](../Blanc/CommonProofs/Hinv.lean).
 - `Func.Inv`: use `func_inv`; it intentionally refuses arbitrary `Func.call`.
 - For direct stack-prefix transport through shared line instructions, use the
-  `prefix_of_*` family in [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean),
+  `prefix_of_*` family in [`Blanc/CommonProofs/Walk.lean`](../Blanc/CommonProofs/Walk.lean),
   including `prefix_of_mul`, `prefix_of_div`, `prefix_of_timestamp`,
-  `prefix_of_xor`, and `prefix_of_argCheckNonAddress`. These declarations are
+  `prefix_of_xor`, and `prefix_of_argCheckNonAddress` (in
+  [`Blanc/CommonProofs/Balance.lean`](../Blanc/CommonProofs/Balance.lean)). These declarations are
   also registered with the
   `stack-prefix-transport` recipe.
   - `Devm.state` is preserved by `mstore`, `mload`, `swap`, and the register
@@ -3370,7 +3374,7 @@ branch supplies discovery rather than a single goal-head recipe.
   `afterSstore`). A dispatcher that reaches a non-gas-free entry needs a
   two-run walk to the selected entry first.
 
-`Linst.selfdestruct_preserves_getCode` and `Linst.selfdestruct_balance_effect`
+`Linst.selfdestruct_preserves_code_created` and `Linst.selfdestruct_balance_effect`
 cover the actual beneficiary credit and refund hooks across historical rules.
 The `Linst.selfdestruct_preserves_noDel`, `Linst.run_noDel` and
 `Linst.inv_noDel` helpers instead require
@@ -3380,7 +3384,7 @@ assert a historical-uniform NoDel invariant.
 
 For a weaker actual step condition,
 `Linst.selfdestruct_preserves_noDel_of_onlyCreated_or_foreign` in
-`Blanc/CommonProofs.lean` accepts the modern creation restriction **or**
+`Blanc/CommonProofs/NoDel.lean` accepts the modern creation restriction **or**
 `sevm.currentTarget ≠ wa`. SELFDESTRUCT schedules its executing storage target,
 not its beneficiary. `Linst.run_noDel_of_safe` handles an actual terminal run
 when that target is foreign or the decoded terminal is not SELFDESTRUCT.
@@ -3403,13 +3407,11 @@ This does not exclude scheduling deletion: retained deletion safety still
 needs the terminal and complete-settlement argument. Use the named theorem;
 a bare set-membership goal does not identify this execution-specific route.
 
-- `Linst.EffectFork`, `Evm.step_effectForkTerminal` and
-  `Exec.effectForkTerminal` in `Blanc/CommonProofs.lean` let terminal as well
-  as nonterminal effects use the frame's `CoveredFork` premise. Child
-  coverage follows the actual spawn; the existing unrestricted terminal
-  traversal APIs remain available. `Linst.noDelCode_effectFork` and
-  `Exec.inv_noDel` in `Blanc/LadderBase.lean` consume this interface without
-  assuming historical-uniform no-deletion behavior.
+- `Evm.step_effect_noStateGas` and `Exec.effect_neutralSchedule` in
+  `Blanc/CommonProofs/Messages.lean` compose neutral per-instruction effects
+  under `stateGas = none` and the EIP-6780 flag, transporting the schedule to
+  children by the exact spawn environment; `Exec.inv_noDel_noStateGas` in
+  `Blanc/LadderBase.lean` consumes them.
 - `Xinst.inv_noDel_noStateGas` and `Ninst.inv_noDel_noStateGas` in
   `Blanc/LadderBase.lean` preserve NoDel through actual instruction steps under
   `sevm.benvStat.rules.stateGas = none`. Their explicit `Xlot.InvNoDel` premise
@@ -3880,8 +3882,8 @@ unfolding a concrete state tower. Examples include:
   empty accounts; it does not assert equality of raw account presence.
 - For persistent storage setters, use Jaune's
   `State.setStorVal_get_self` / `State.setStorVal_get_ne`, which handle the
-  existing-account `setPresent` branch, and Blanc's
-  `setStorVal_getStor_self` / `Devm.getStorVal_setStorVal_self` projections.
+  existing-account `setPresent` branch, Blanc's `setStorVal_getStor_self`
+  projection, and Jaune's `Devm.setStorVal_getStorVal_self`.
 
 For equality of whole dynamic machines, `Devm.eq_of_proj` in
 [`Blanc/Compiled.lean`](../Blanc/Compiled.lean) requires all nineteen exact
@@ -3908,7 +3910,7 @@ equality of the whole machine or world. Import that primitive owner directly.
 For the entire storage map at one address, the corresponding adapter is
 `getStor_eq_of_state_eq` in `Blanc/LadderBase.lean`.
 
-Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
+Use [`Blanc/CommonProofs/Base.lean`](../Blanc/CommonProofs/Base.lean):
 
 - `Stor.get_set_ite` exposes a single storage-map update as the equality
   branch at an arbitrary observed key.
@@ -3918,8 +3920,7 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
   and log silence of a successful `SLOAD`, including its cold access-list
   warming path.  Use these instead of widening the global `Ninst.Hinv`
   instance set: access metadata changes even though these projections do not.
-- `Devm.getStorVal_setStorVal_self` (Blanc) is persistent storage read-after-write;
-  Jaune states the same law as `Devm.setStorVal_getStorVal_self`.
+- Jaune's `Devm.setStorVal_getStorVal_self` is persistent storage read-after-write.
 - Jaune's `Devm.setStorVal_getCode` carries account code across a persistent
   storage write, and Jaune's `Devm.setCode_getStor` storage across code
   installation. Jaune's `Devm.withRefundCounter_getStor`,
@@ -3987,7 +3988,7 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 ### S3. I need state-relation or write-frame composition
 
 Use `Devm.StateWriteFrame` and its reflexive/transitive/composition lemmas in
-`Blanc/CommonProofs.lean`, then inspect higher-level relation combinators in
+`Blanc/CommonProofs/Frames.lean`, then inspect higher-level relation combinators in
 [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean).
 
 If the fact is about which holder's balance moved rather than how states
@@ -5317,7 +5318,7 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   ABI's left-aligned four significant bytes before an integer comparison;
   use ordinary `arg` for integer/address head words.
 - Full source from offset zero: `Bytes.sliceD_zero_length` in
-  `Blanc/CommonProofs.lean`.
+  `Blanc/CommonProofs/MemImage.lean`.
 - Recover a selector from calldata described as
   `abiSelectorBytes selected ++ tail` with
   `selector_eq_of_data_eq_abiSelectorBytes_append`; discharge its explicit
@@ -5739,7 +5740,8 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   next numeric hint. `Func.runCompiledTo_mstore_step` covers word stores that
   need an exhibited outcome-general continuation.
 - For scratch decoders that carry a proof image, use
-  `of_run_mstoreAt_image` and `of_run_loadWordAt_image` to advance the stack,
+  `of_run_mstoreAt_image` and `of_run_loadWordAt_image` (in
+  [`Blanc/CommonProofs/MemEffects.lean`](../Blanc/CommonProofs/MemEffects.lean)) to advance the stack,
   `Mem.Wf`, `Mem.Reads`, and the state equation together.  When the proof also
   carries event chronology, `of_run_loadWordAt_logs` supplies the exact
   successful two-instruction log-silence fact; `MLOAD` deliberately has no
@@ -5980,7 +5982,7 @@ Use Jaune's `Jaune/MessageExecution.lean`, imported by
 - `Msg.initDevm_*` and `Msg.initSevm_*` (Jaune's
   `Jaune/MessageExecution.lean`) expose canonical message-entry fields.
 
-`Msg.NoDel.initDevm` in `Blanc/CommonProofs.lean` requires the exact additional
+`Msg.NoDel.initDevm` in `Blanc/CommonProofs/NoDel.lean` requires the exact additional
 fact `wa ∉ msg.inheritedDeletions`; message NoDel alone constrains code and the
 created-account set, not the inherited deletion snapshot. Derive this fact
 from the actual message producer. It is not a default-empty assumption.
@@ -6017,7 +6019,7 @@ Use Jaune's `Jaune/ExecSettlement.lean` and `Jaune/ExecChronology.lean`
 and [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean)) and
 Blanc's [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean):
 
-- `processMessage.settle_ok_cases` in `Blanc/CommonProofs.lean` retains the
+- `processMessage.settle_ok_cases` in `Blanc/CommonProofs/Balance.lean` retains the
   actual `Devm.recordTouch` wrapper on both clean and rolled-back machines.
   Use its exact machine equations, then project unchanged observations.
   Rollback restores entry state, transient storage and storage-write
@@ -7505,7 +7507,7 @@ also works for any actual message whose authorization list is known empty;
 its direct exclusion goal has no registered reliable recipe trigger.
 
 For a whole-state balance preorder under `stateGas = none`,
-`processMessageCall.call_balance_noninc` in `Blanc/CommonProofs.lean` follows
+`processMessageCall.call_balance_noninc` in `Blanc/CommonProofs/Balance.lean` follows
 `legacyAuthorization` and `Msg.resolveCodeDelegation`, preserving the actual
 activation facade and the authorization prefix's balance sum.
 `ForkRules.accessDelegation_of_not_delegation` and
@@ -8139,7 +8141,7 @@ not introduce another compiler-equation matcher or traverse a closed program.
 
 ### C5. I need to preserve a compile-shape equality under a known prefix
 
-Import [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) and apply
+Import [`Blanc/CommonProofs/Base.lean`](../Blanc/CommonProofs/Base.lean) and apply
 `Func.compileShape_prepend_congr l` to an existing equality
 `p.compileShape = q.compileShape`. It returns
 `(l +++ p).compileShape = (l +++ q).compileShape` without re-proving the
@@ -9928,7 +9930,7 @@ contract-neutral.
   itself (`storSetBal_of_nonce`, `lookupA_acsSetBal_nonce` underneath);
   `haltCreated` projects a run's halted created set for a kernel decision. A
   settled child supplied as data is restored by `Devm.withCreatedAccounts_of_eq`
-  (`Blanc/CommonProofs.lean`). The frame-level spawn
+  (`Blanc/CommonProofs/Base.lean`). The frame-level spawn
   fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
   `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
   [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); reading a run's final
@@ -10155,6 +10157,13 @@ contract-neutral.
   [`Blanc/Lift/WalkKit.lean`](../Blanc/Lift/WalkKit.lean). The backward twin for a frame walk
   `h : XAt …` reads the instruction off the code's byte trie (`xa n`, one family's macros, so it
   lives with them: Curve 3pool's `Walk/AutoStep.lean`).
+- Straight-line inversion steps of a cut run without writing them out: `winv n` / `winv` read
+  the node off the tree of `h : SFunc.RunCut …` (or `SFunc.RunCutP P …` with `using project`) and
+  run the hand-written pair `obtain ⟨_, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_<op> hd`
+  (`ri_push`, `ri_dup rfl`, `ri_swap rfl`, `ri_pop`, `ri_add`, `ri_mload`, …; `ric_dest` for a
+  `.dest`), stopping at a branch, jump, storage or call node; `at h` names the run (default: the
+  most recent cut run); `wskip n` steps over any `n` nodes forgetting the state
+  (`obtain ⟨_, _, h⟩ := ric_next h`), in [`Blanc/Lift/WalkInvKit.lean`](../Blanc/Lift/WalkInvKit.lean).
 - Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as
   `getDMem_spec` need): `Mem.size_write_mod32`, `Mem.size_extends_mod32`, the image steps
   `ri_mload_imgAtA`/`ri_mstore_imgAtA`/`ri_calldatacopy_imgAtA`/`ri_keccak_imgAtA` and the
@@ -10989,7 +10998,13 @@ found it, not merely to add the contract.
 4. **Found nowhere: build it in the common library, then use it.** The
    generic shape that motivated the search is the placement decision — a new
    generic declaration is born in a shared module, not in the contract that
-   first needed it.
+   first needed it. Place it in the **narrowest shared owner**: the lowest
+   shared module below every consumer, or a new small module imported only by
+   its consumers. A hub — a module more than 500 production modules import,
+   such as `Blanc/CommonCore.lean`, a `Blanc/CommonProofs/*.lean` piece or the
+   ladder — is not a default destination: every line it gains is re-elaborated
+   by all of its dependents, and `scripts/check-proof-module-size.sh` blocks a
+   hub's growth past its ceiling. The same rule applies when hoisting (step 3).
 5. **Close with discoverability.** Every common-library addition or change —
    built, generalized, or hoisted — updates this registry in the same change:
    add the declaration to the narrowest branch above (or add a sub-branch),

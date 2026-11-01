@@ -4,6 +4,7 @@ import Blanc.MemoryImage
 import Blanc.Composition.ProrataWethVaultEffects
 import Blanc.ProrataWethVaultConversions
 import Blanc.Ladder
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # Source staging and checked WETH returns for the PRORATA vault

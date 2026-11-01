@@ -1,7 +1,7 @@
 -- ProrataWethVaultFunctional.lean : compiled selector entry for the vault.
 
 import Blanc.ProrataWethVaultArithmetic
-import Blanc.CommonProofs
+import Blanc.CommonProofs.DispatchReach
 import Blanc.Compiled
 import Blanc.CompiledWalkInversion
 import Blanc.NonpayableInversion

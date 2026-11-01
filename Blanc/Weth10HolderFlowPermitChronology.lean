@@ -1,4 +1,5 @@
 import Blanc.Weth10HolderFlowCompiled
+import Blanc.CommonProofs.MemEffects
 
 /-!
 Proof-indexed chronology for successful WETH10 `permit` frames.

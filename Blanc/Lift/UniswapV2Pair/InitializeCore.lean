@@ -4,6 +4,7 @@ import Blanc.Lift.WalkSteps
 import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! The literal repeated factory initializer and its two packed address writes. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -128,80 +129,49 @@ theorem initializeWrites_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
       o = .returned (St (initializeWritesBaseH sevm b token0 token1) R M residual) := by
   have h := run.cut
   unfold t_0fb2_c45 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sloadH bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 1
   rw [ff20_eq] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   dsimp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_and hd
+  winv 2
   rw [show (~~~ addressMask) &&& token0.toB256 = token0.toB256 from
     addressSlotReadWord_toB256 token0] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 1
   change SFunc.RunCut fs sevm [] (St (afterSloadH sevm b 6)
     (addressMask :: token0.toB256 :: b.getStorVal sevm.currentTarget 6 :: 6 :: token1.toB256 ::
       (~~~ addressMask) :: ρ :: R) M _) _ _ at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   dsimp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_or hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 4
   dsimp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   dsimp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   have nonstatic := ri_sstore_nonstaticH stateGas hd
   obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sloadH bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   dsimp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   dsimp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   dsimp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_and hd
+  winv 1
   rw [show (~~~ addressMask) &&& token1.toB256 = token1.toB256 from
     addressSlotReadWord_toB256 token1] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   dsimp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_and hd
+  winv 1
   change SFunc.RunCut fs sevm [] (St (initializeLoaded1H sevm b token0)
     (((initializeStored0H sevm b token0).getStorVal sevm.currentTarget 7 &&& addressMask) ::
       token1.toB256 :: 7 :: ρ :: R) M _) _ _ at h
   rw [B256.and_comm ((initializeStored0H sevm b token0).getStorVal sevm.currentTarget 7) addressMask] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_or hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   dsimp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
@@ -274,26 +244,17 @@ theorem initialize45_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
       ∃ residual, o = .returned (St (initializeCoreBaseH sevm b token0 token1) R M residual) := by
   have h := run.cut
   unfold t_0f2c_c45 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   rw [show Bytes.toB256 [5] = (5 : B256) from rfl] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sloadH bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 1
   rw [ff20_eq] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_and hd
+  winv 1
   rw [show (~~~ addressMask) &&& b.getStorVal sevm.currentTarget 5 =
     (b.getStorVal sevm.currentTarget 5).toAdr.toB256 from
     addressSlotReadWord_eq_toAdr_toB256 _] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_caller hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_eq hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   rcases ric_branch h with ⟨_, _, bad⟩ | ⟨nonzero, _, h⟩
   · exact (bad.false_of_noOk (by decide : t_0f4c_c45.noOk = true)).elim
   · have same : sevm.caller.toB256 = (b.getStorVal sevm.currentTarget 5).toAdr.toB256 := by

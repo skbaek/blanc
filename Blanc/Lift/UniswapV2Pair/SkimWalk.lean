@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.SyncWalk
 import Blanc.Lift.UniswapV2Pair.SafeTransferWalk
+import Blanc.Lift.WalkInvKit
 
 /-! Literal skim dispatch, lock, token/reserve caches and first balance query. -/
 
@@ -114,9 +115,7 @@ theorem skimLock_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   obtain ⟨_, run⟩ := ric_destP run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sloadH bal (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_eq (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 3 using StepIn.toRun
   rcases ric_branchP run with ⟨-, _, failed⟩ | ⟨accepted, gas, body⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_18e9_c34.noOk = true))
   · change B256.eqCheck (1 : B256) (b.getStorVal sevm.currentTarget 12) ≠ 0 at accepted
@@ -420,8 +419,7 @@ theorem skimFirstHalf_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) syncCodeGuardLine h
   obtain ⟨_, state⟩ := syncCodeGuardLine_invH bal line
   rw [state] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 1 using StepIn.toRun
   rcases ric_branchP h with ⟨-, _, failed⟩ | ⟨accepted, _, h⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_19ea_c34.noOk = true))
   have zero := eq_zero_of_iszero_ne_zero accepted
@@ -452,10 +450,7 @@ theorem skimFirstHalf_invH {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     balanceReplyMemory_word mem.wf sevm.currentTarget out0 long,
     reply.read_self (by decide : 128 + 32 ≤ 192)] at eq
   subst d
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
+  winv 4 using StepIn.toRun
   rw [show Bytes.toB256 [0x22,0x6e] &&& Bytes.toB256 [0xff,0xff,0xff,0xff] = (0x226e : B256)
     from by decide] at h
   cases h with

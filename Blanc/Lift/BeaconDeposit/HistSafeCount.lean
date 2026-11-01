@@ -1,6 +1,7 @@
 import Blanc.Lift.BeaconDeposit.BodySpec
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Safety segment B6 over a historical frame: the root check, the cap guard and the count
@@ -51,17 +52,14 @@ theorem safe_countBumpH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : 
   have hslot : (Bytes.toB256 [0x20] : B256) = solCountSlot := rfl
   -- t_0ea6_c20: the root check
   unfold t_0ea6_c20 at run_cut
-  obtain ⟨G1, run_cut⟩ := ric_dest run_cut
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G2, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G3, rfl⟩ := ri_mload s1
+  winv 3
   rw [hr1, hr2] at run_cut
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G4, rfl⟩ := ri_swap (n := 0) rfl s1
   dsimp only [List.set] at run_cut
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G5, rfl⟩ := ri_pop s1
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G6, rfl⟩ := ri_dup (w := rt) rfl s1
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G7, rfl⟩ := ri_dup (w := nd) rfl s1
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G8, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G9, rfl⟩ := ri_push s1
+  winv 2
   rcases ric_branch run_cut with ⟨hw, G_fail, run_fail⟩ | ⟨hroot_ne, G10, run_cut⟩
   · exfalso
     exact SFunc.RunCutP.false_of_noOk run_fail (by decide)
@@ -72,13 +70,10 @@ theorem safe_countBumpH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : 
   refine ⟨hroot, ?_⟩
   -- t_0f02_c20: the cap check
   unfold t_0f02_c20 at run_cut
-  obtain ⟨G11, run_cut⟩ := ric_dest run_cut
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G12, rfl⟩ := ri_push s1
+  winv 2
   rw [hslot] at run_cut
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G13, rfl⟩ := ri_sloadH hbal s1
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G14, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G15, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G16, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run_cut with ⟨hw, G_fail, run_fail⟩ | ⟨hgt_ne, G17, run_cut⟩
   · exfalso
     exact SFunc.RunCutP.false_of_noOk run_fail (by decide)
@@ -97,8 +92,7 @@ theorem safe_countBumpH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : 
   refine ⟨hcap, ?_⟩
   -- t_0f60_c20: the count increment and store
   unfold t_0f60_c20 at run_cut
-  obtain ⟨G18, run_cut⟩ := ric_dest run_cut
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G19, rfl⟩ := ri_push s1
+  winv 2
   rw [hslot] at run_cut
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G20, rfl⟩ := ri_dup (w := solCountSlot) rfl s1
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G21, rfl⟩ := ri_sloadH hbal s1
@@ -108,8 +102,7 @@ theorem safe_countBumpH {sevm : Sevm} {b : Devm} {sel rt sP wP pP a pkR sR nd : 
       (Devm.getStor b sevm.currentTarget).get solCountSlot
     rw [afterSloadH_getStor]
   rw [hb1] at run_cut
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G22, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G23, rfl⟩ := ri_add s1
+  winv 2
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut; obtain ⟨G24, rfl⟩ := ri_swap (n := 0) rfl s1
   dsimp only [List.set] at run_cut
   obtain ⟨d1, s1, run_cut⟩ := ric_next run_cut;

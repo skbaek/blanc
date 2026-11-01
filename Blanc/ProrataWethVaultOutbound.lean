@@ -1,6 +1,7 @@
 -- ProrataWethVaultOutbound.lean : exact local seams for `withdraw` and `redeem`.
 
 import Blanc.ProrataWethVaultInbound
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

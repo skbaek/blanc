@@ -3,6 +3,7 @@ import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.GetterWalk
 import Blanc.Lift.CopyLoop
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! Actual constant-string callees and shared ABI wrapper walks. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -93,19 +94,16 @@ theorem getterString_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   have h := run.cut
   rw [s.callee_tree] at h
   unfold getterStringCalleeTree at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   rw [show Bytes.toB256 [0x40] = (64 : B256) from rfl] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mload hd
   rw [show (64 : B256).toNat = 64 from rfl, mem.read_self (by decide)] at h
   change SFunc.RunCut fs sevm [] (St b (memWord M 64 :: ρ :: R) M _) _ _ at h
   rw [mem.word] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  winv 2
   rw [show Bytes.toB256 [0x40] + (128 : B256) = 192 from by decide] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hd
+  winv 2
   rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
@@ -113,8 +111,7 @@ theorem getterString_callee_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hd
   rw [show (128 : B256).toNat = 128 from rfl] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  winv 2
   rw [show Bytes.toB256 [0x20] + (128 : B256) = 160 from by decide] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   rw [s.word_push] at h
@@ -183,21 +180,13 @@ theorem getterString_return_inv {fs : List SFunc} {sevm : Sevm} {C : List Nat} {
     ∃ d, r = .done (.halted d) ∧ d.output = (M.read 192 96).1 ∧
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
   unfold t_02c8_c1 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 7
   rw [show Bytes.toB256 [0x40] = (64 : B256) from rfl] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mload hd
   rw [show (64 : B256).toNat = 64 from rfl, mem.read_self (by decide)] at h
   change SFunc.RunCut fs sevm C (St b (memWord M 64 :: 288 :: R) M _) _ _ at h
   rw [mem.word] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sub hd
+  winv 3
   rw [show (288 : B256) - 192 = 96 from by decide] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
   cases h with
@@ -215,37 +204,26 @@ theorem getterString_padding_inv {fs : List SFunc} {sevm : Sevm} {C : List Nat} 
   have padded := mem.write 256 s.word (Or.inr (by decide))
   rw [show memExtSize 288 256 32 = 288 from by decide] at padded
   unfold t_02af_c39 at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sub hd
+  winv 3
   rw [show (256 + s.length) - s.length = (256 : B256) from by cases s <;> decide] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mload hd
+  winv 2
   rw [show (256 : B256).toNat = 256 from rfl, mem.read_self (by decide)] at h
   change SFunc.RunCut fs sevm C
     (St b (memWord M 256 :: 256 :: s.length :: (256 + s.length) :: 192 :: 192 :: 128 :: R) M _) _ _ at h
   rw [word] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   rw [show Bytes.toB256 [0x01] = (1 : B256) from rfl] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   rw [show Bytes.toB256 [0x20] = (32 : B256) from rfl] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sub hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   rw [show Bytes.toB256 [0x01, 0x00] = (256 : B256) from rfl] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_exp hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sub hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_not hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  winv 4
   rw [s.masked] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hd
+  winv 2
   rw [show (256 : B256).toNat = 256 from rfl] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  winv 2
   rw [show Bytes.toB256 [0x20] + (256 : B256) = 288 from by decide] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
+  winv 2
   exact getterString_return_inv padded h
 
 theorem getterString_exit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
@@ -279,23 +257,11 @@ theorem getterString_exit_inv {sevm : Sevm} {b : Devm}
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
   have h := run.cut
   unfold t_029b_c39 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  winv 10
   rw [show s.length + 256 = (256 + s.length : B256) from by cases s <;> decide] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  winv 3
   rw [show Bytes.toB256 [0x1f] &&& s.length = s.length from by cases s <;> decide] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+  winv 2
   rw [show B256.eqCheck s.length 0 = 0 from by cases s <;> decide] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   rcases ric_branchTo (g := t_02c8_c1) (by intro hh; cases hh) (by rfl) h with h | h
@@ -483,8 +449,7 @@ theorem getterString_wrapper_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : M
   have word2 : Bytes.toB256 ((((getterStringMemory M s.length s.word).write 192 (32 : B256).toBytes).write 224 s.length.toBytes).read 128 32).1 = s.length := len2
   have h := run.cut
   unfold t_0261_c100 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   rw [show Bytes.toB256 [0x40] = (64 : B256) from rfl] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mload hd
@@ -494,18 +459,14 @@ theorem getterString_wrapper_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : M
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   rw [show Bytes.toB256 [0x20] = (32 : B256) from rfl] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hd
+  winv 3
   rw [show (192 : B256).toNat = 192 from rfl] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show (128 : B256).toNat = 128 from rfl,
     read1, word1] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  winv 3
   rw [show (192 : B256) + 32 = 224 from by decide] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hd
   rw [show (224 : B256).toNat = 224 from rfl] at h
@@ -514,23 +475,11 @@ theorem getterString_wrapper_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : M
   simp only [show (128 : B256).toNat = 128 from rfl,
     read2, word2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  winv 7
   rw [show (192 : B256) + 64 = 256 from by decide] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  winv 3
   rw [show (128 : B256) + 32 = 160 from by decide] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 5
   rw [show Bytes.toB256 [0x00] = (0 : B256) from rfl] at h
   exact getterString_copy_inv s mem h.uncut
 
@@ -598,8 +547,7 @@ theorem getterString_entry_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel
   have h := run.cut
   rw [s.entry_shape] at h
   unfold getterStringEntryTree at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   rw [show Bytes.toB256 [0x02, 0x61] = (0x0261 : B256) from rfl] at h
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
   obtain ⟨_, h⟩ := ric_call s.callee_lookup h

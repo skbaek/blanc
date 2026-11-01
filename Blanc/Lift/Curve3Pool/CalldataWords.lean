@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Walk
 
 /-!
 # Calldata words of a fixed-shape call

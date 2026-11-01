@@ -124,7 +124,7 @@ import tomllib
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "SelectorWords", "MachineDataFacts", "CreationArtifact", "RlpConcrete", "RlpListEncode", "RlpBytesInjective", "RlpRoundTrip",
-          "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
+          "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "CommonProofs.Base", "CommonProofs.Frames", "CommonProofs.MemImage", "CommonProofs.Messages", "CommonProofs.Walk", "CommonProofs.Hinv", "CommonProofs.DispatchReach", "CommonProofs.NoDel", "CommonProofs.Balance", "CommonProofs.MemEffects", "Ladder", "Upgrade",
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "SlotFootprintSubset", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "DeploymentTouch", "Forward", "ForwardFlatAccess",
@@ -251,7 +251,7 @@ SHARED += ["Lift.FuelLoopWalk"]
 # Vyper 0.2.x walk kit (array slots, identity copies, raw_call tails, balance differences):
 # contract-neutral.
 SHARED += ["Lift.VyperArraySlot", "Lift.IdentityCall", "Lift.BalanceDiffCall",
-           "Lift.VyperRawCall", "Lift.RunEx", "Lift.WalkKit", "Lift.FrameWalkAligned"]
+           "Lift.VyperRawCall", "Lift.RunEx", "Lift.WalkKit", "Lift.WalkInvKit", "Lift.FrameWalkAligned"]
 # Internal calls through the PC idiom and unrolled Vyper frame save/restore chains: contract-neutral.
 SHARED += ["Lift.InvWalkCallNext", "Lift.VyperFrameLoop"]
 SHARED += ["Lift.ThreeWordFrame"]

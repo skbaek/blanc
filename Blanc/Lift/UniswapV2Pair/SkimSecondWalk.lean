@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.SkimWalk
 import Blanc.Lift.UniswapV2Pair.SkimTransferWalk
 import Blanc.Lift.PtrWordMemory
+import Blanc.Lift.WalkInvKit
 
 /-! Skim's second balance query and second transfer after transfer0 moved the free
 pointer, the unlock tail, and the complete raw pc0 inverse. -/
@@ -244,10 +245,7 @@ theorem skimUnlockTail_invH {D : Exec.Deriv} {sevm : Sevm} {d post : Devm}
     ∃ M' g, post = St (afterSstoreH sevm d 12 1) R0 M' g := by
   unfold t_1aca_c67 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 4 using StepIn.toRun
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal (StepIn.toRun hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
   cases run with
@@ -397,8 +395,7 @@ theorem skimSecondHalf_flag_invH {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
   obtain ⟨_, line, h⟩ := SFunc.RunCutP.split_nexts (fun step => StepIn.toRun step) syncCodeGuardLine h
   obtain ⟨_, state⟩ := syncCodeGuardLine_invH bal line
   rw [state] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 1 using StepIn.toRun
   cases h with
   | toZero _ pop k =>
     obtain ⟨_, _, eq⟩ := St.of_pop2 pop
@@ -431,21 +428,12 @@ theorem skimSecondHalf_flag_invH {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
           (out1.take (32 : B256).toNat))
     unfold t_1a02_c67 at k
     obtain ⟨_, k⟩ := ric_destP k
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_pop (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+    winv 5 using StepIn.toRun
     obtain ⟨d, hs, k⟩ := ric_nextP k
     obtain ⟨_, hd⟩ := ri_mload (StepIn.toRun hs)
     rw [show (Bytes.toB256 [64]).toNat = 64 from by decide, pR1.2] at hd
     subst d
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_returndatasize (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_lt (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+    winv 6 using StepIn.toRun
     rcases ric_branchP k with ⟨_, _, failed⟩ | ⟨accepted, _, k⟩
     · exact (failed.false_of_noOk (by decide : t_1a14_c67.noOk = true)).elim
     have full : d1.returnData.length < 2 ^ 256 := by rw [post1.returnData]; exact bound
@@ -462,10 +450,7 @@ theorem skimSecondHalf_flag_invH {D : Exec.Deriv} {sevm : Sevm} {b post : Devm}
     obtain ⟨_, hd⟩ := ri_mload (StepIn.toRun hs)
     rw [word1] at hd
     subst d
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-    obtain ⟨_, hs, k⟩ := ric_nextP k; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
+    winv 4 using StepIn.toRun
     rw [show Bytes.toB256 [0x22,0x6e] &&& Bytes.toB256 [0xff,0xff,0xff,0xff] = (0x226e : B256)
       from by decide] at k
     cases k with

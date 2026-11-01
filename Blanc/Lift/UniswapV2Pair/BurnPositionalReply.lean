@@ -3,6 +3,7 @@ import Blanc.Lift.CursorSourceRun
 import Blanc.Lift.CursorBalanceReply
 import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.BurnPrefixWalk
+import Blanc.Lift.WalkInvKit
 
 /-! Actual initial Burn replies and their checked decoding continuations. -/
 
@@ -33,10 +34,7 @@ theorem burn_initial_reply_guards {P : Sevm → Devm → Ninst → Devm → Prop
           (.branch (match site with | .first => t_1506_c37 | .second => t_15a4_c37)
             site.returnTree)))) := by cases site <;> rfl
   rw [shape] at run
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (project step)
+  winv 4 using project
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨accepted, tailGas, tail⟩
   · exact (failed.false_of_noOk (by
       cases site with

@@ -7,6 +7,7 @@ import Blanc.Lift.ExactWalkSolc
 import Blanc.AddressSlotProofs
 import Blanc.Lift.UniswapV2Pair.Cert
 import Blanc.Lift.UniswapV2Pair.Execution
+import Blanc.Lift.WalkInvKit
 
 /-! The literal factory feeTo request, retained answer and fee68 call guards. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -216,10 +217,7 @@ theorem feeCodeGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   unfold feeCodeGuardTree at run
   obtain ⟨_, hs, run⟩ := ric_nextP run
   obtain ⟨_, rfl⟩ := ri_extcodesize fork (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 4 using StepIn.toRun
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨accepted, gas, tail⟩
   · exact (failed.false_of_noOk (by decide)).elim
   · have zero := eq_zero_of_iszero_ne_zero accepted
@@ -264,17 +262,12 @@ theorem feePreparation_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
   have h := run
   unfold t_26ec_c68 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
+  winv 5 using StepIn.toRun
   dsimp only [List.set] at h
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sload fork (StepIn.toRun hs)
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
   dsimp only [List.set] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_exp (StepIn.toRun hs)
+  winv 2 using StepIn.toRun
   rw [show B256.bexp (Bytes.toB256 [0x01, 0x00]) (Bytes.toB256 [0x00]) = 1 from B256.bexp_zero _] at h
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (StepIn.toRun hs)
   dsimp only [List.set] at h
@@ -283,36 +276,27 @@ theorem feePreparation_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm}
     b.getStorVal sevm.currentTarget (Bytes.toB256 [5]) from by
       apply B256.toNat_inj
       rw [B256.toNat_div (by decide), show (1 : B256).toNat = 1 from rfl, Nat.div_one]] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
+  winv 2 using StepIn.toRun
   rw [ff20_and_word] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
+  winv 2 using StepIn.toRun
   rw [ff20_and_adr] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 2 using StepIn.toRun
   obtain ⟨d, hs, h⟩ := ric_nextP h
   obtain ⟨_, eq⟩ := ri_mload (StepIn.toRun hs)
   have pointerWord : Bytes.toB256 (M.read 64 32).1 = 128 := mem.word
   rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl, pointerWord, mem.read_self mem.ge] at eq
   subst d
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_and (StepIn.toRun hs)
+  winv 3 using StepIn.toRun
   rw [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff] &&& Bytes.toB256 [0x01, 0x7e, 0x7e, 0x58] =
     Bytes.toB256 [0x01, 0x7e, 0x7e, 0x58] from by decide] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_shl (StepIn.toRun hs)
+  winv 2 using StepIn.toRun
   rw [show Bytes.toB256 [0x01, 0x7e, 0x7e, 0x58] <<< (Bytes.toB256 [0xe0]).toNat =
     feeToSelectorWord from by decide] at h
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
   obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_mstore_nat 128 rfl (StepIn.toRun hs)
   have requestMem := feeRequestMemory_ptr mem
   change PtrMem 128 192 (M.write 128 feeToSelectorWord.toBytes) at requestMem
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_add (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 4 using StepIn.toRun
   obtain ⟨d, hs, h⟩ := ric_nextP h
   obtain ⟨_, eq⟩ := ri_mload (StepIn.toRun hs)
   have requestWord : Bytes.toB256 ((M.write 128 feeToSelectorWord.toBytes).read 64 32).1 = 128 :=

@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.GetterStorageReservesCore
 import Blanc.Lift.UniswapV2Pair.GetterStorageReservesMemory
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! Actual packed-reserve return wrapper and its internal call. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -73,9 +74,7 @@ theorem reserves_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   simp only [getterReservesMemory, getterReservesMemory2, getterReservesMemory1] at m3
   have h := run.cut
   unfold t_02de_c101 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from rfl,
     show (64 : B256).toNat = 64 from rfl, mem.read_self (by decide : 64 + 32 ≤ 96),
@@ -196,9 +195,7 @@ theorem reserves_entry_invH {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel : 
     exact B256.and_idem_right _ _
   have h := run.cut
   unfold t_02d6_c101 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   obtain ⟨_, h⟩ := ric_call (show cert.prog[56]? = some t_0d90_c56 from rfl) h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
   · obtain ⟨_, eq⟩ := reserves_callee_invH bal hc

@@ -1,6 +1,7 @@
 -- ProrataWethVaultCapacities.lean : exact local ERC-4626 capacity seams.
 
 import Blanc.ProrataWethVaultConversions
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

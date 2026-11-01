@@ -4,6 +4,7 @@ import Blanc.Lift.UniswapV2Pair.WriterEntries
 import Blanc.Lift.UniswapV2Pair.TransferFromEntries
 import Blanc.Lift.UniswapV2Pair.InitializeEntries
 import Blanc.Lift.UniswapV2Pair.SyncWalk
+import Blanc.Lift.WalkInvKit
 
 /-! Actual successful static calls to the certified Pair runtime. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -42,33 +43,7 @@ private theorem permitNoncePrefix_nonstatic {sevm : Sevm} {d : Devm} {o : Outcom
   have h := run.cut
   unfold t_1b7b_c29 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 27
   obtain ⟨_, store, _⟩ := ric_next h
   exact Blanc.of_run_sstore_not_static store
 
@@ -77,36 +52,7 @@ private theorem permitExpired_impossible {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_1b15_c29 o) : False := by
   have h := run.cut
   unfold t_1b15_c29 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 30
   exact ric_revert h
 
 private theorem permitGuard_nonstatic {sevm : Sevm} {d : Devm} {o : Outcome}
@@ -114,11 +60,7 @@ private theorem permitGuard_nonstatic {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_1b0c_c29 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 5
   cases h with
   | zero _ _ body => exact (permitExpired_impossible (SFunc.RunCut.uncut body)).elim
   | succ _ _ _ _ body => exact permitNoncePrefix_nonstatic (SFunc.RunCut.uncut body)
@@ -128,68 +70,35 @@ private theorem staticReject_t_01d0_c99 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_01d0_c99 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_01d0_c99 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   exact (ric_revert h).elim
 
 private theorem staticReject_t_0214_c99 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_0214_c99 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_0214_c99 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   exact (ric_revert h).elim
 
 private theorem staticReject_t_0226_c99 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_0226_c99 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_0226_c99 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   exact (ric_revert h).elim
 
 private theorem staticReject_t_0248_c99 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_0248_c99 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_0248_c99 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   exact (ric_revert h).elim
 
 private theorem staticReject_t_068e_c54 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_068e_c54 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_068e_c54 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 30
   exact (ric_revert h).elim
 
 private theorem staticReject_t_06f4_c54 {sevm : Sevm} {d : Devm} {o : Outcome}
@@ -197,8 +106,7 @@ private theorem staticReject_t_06f4_c54 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_06f4_c54 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   obtain ⟨_, store, _⟩ := ric_next h
   exact Blanc.of_run_sstore_not_static store
 
@@ -207,11 +115,7 @@ private theorem staticReject_t_0683_c54 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_0683_c54 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 5
   cases h with
   | zero _ _ body => exact staticReject_t_068e_c54 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_06f4_c54 (SFunc.RunCut.uncut body)
@@ -221,13 +125,7 @@ private theorem staticReject_t_024c_c99 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_024c_c99 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 7
   cases (SFunc.RunCut.uncut h) with
   | callHalt _ lookup _ body =>
       rw [show cert.prog[54]? = some t_0683_c54 from rfl] at lookup
@@ -243,25 +141,7 @@ private theorem staticReject_t_022a_c99 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_022a_c99 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 19
   cases h with
   | zero _ _ body => exact staticReject_t_0248_c99 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_024c_c99 (SFunc.RunCut.uncut body)
@@ -271,15 +151,7 @@ private theorem staticReject_t_0218_c99 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_0218_c99 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 9
   cases h with
   | zero _ _ body => exact staticReject_t_0226_c99 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_022a_c99 (SFunc.RunCut.uncut body)
@@ -289,37 +161,7 @@ private theorem staticReject_t_01d4_c99 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_01d4_c99 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 31
   cases h with
   | zero _ _ body => exact staticReject_t_0214_c99 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_0218_c99 (SFunc.RunCut.uncut body)
@@ -329,16 +171,7 @@ private theorem staticReject_t_01be_c99 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_01be_c99 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 10
   cases h with
   | zero _ _ body => exact staticReject_t_01d0_c99 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_01d4_c99 (SFunc.RunCut.uncut body)
@@ -348,44 +181,14 @@ private theorem staticReject_t_047b_c86 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_047b_c86 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_047b_c86 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   exact (ric_revert h).elim
 
 private theorem staticReject_t_101e_c41 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_101e_c41 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_101e_c41 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 30
   exact (ric_revert h).elim
 
 private theorem staticReject_t_1084_c41 {sevm : Sevm} {d : Devm} {o : Outcome}
@@ -393,10 +196,7 @@ private theorem staticReject_t_1084_c41 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_1084_c41 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 4
   obtain ⟨_, store, _⟩ := ric_next h
   exact Blanc.of_run_sstore_not_static store
 
@@ -405,12 +205,7 @@ private theorem staticReject_t_1011_c41 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_1011_c41 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 6
   cases h with
   | zero _ _ body => exact staticReject_t_101e_c41 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_1084_c41 (SFunc.RunCut.uncut body)
@@ -420,11 +215,7 @@ private theorem staticReject_t_047f_c86 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_047f_c86 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 5
   cases (SFunc.RunCut.uncut h) with
   | callHalt _ lookup _ body =>
       rw [show cert.prog[41]? = some t_1011_c41 from rfl] at lookup
@@ -440,16 +231,7 @@ private theorem staticReject_t_0469_c86 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_0469_c86 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 10
   cases h with
   | zero _ _ body => exact staticReject_t_047b_c86 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_047f_c86 (SFunc.RunCut.uncut body)
@@ -458,44 +240,14 @@ private theorem staticReject_t_051c_c83 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_051c_c83 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_051c_c83 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   exact (ric_revert h).elim
 
 private theorem staticReject_t_1403_c37 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_1403_c37 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_1403_c37 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 30
   exact (ric_revert h).elim
 
 private theorem staticReject_t_1469_c37 {sevm : Sevm} {d : Devm} {o : Outcome}
@@ -503,10 +255,7 @@ private theorem staticReject_t_1469_c37 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_1469_c37 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 4
   obtain ⟨_, store, _⟩ := ric_next h
   exact Blanc.of_run_sstore_not_static store
 
@@ -515,13 +264,7 @@ private theorem staticReject_t_13f5_c37 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_13f5_c37 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 7
   cases h with
   | zero _ _ body => exact staticReject_t_1403_c37 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_1469_c37 (SFunc.RunCut.uncut body)
@@ -531,11 +274,7 @@ private theorem staticReject_t_0520_c83 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_0520_c83 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 5
   cases (SFunc.RunCut.uncut h) with
   | callHalt _ lookup _ body =>
       rw [show cert.prog[37]? = some t_13f5_c37 from rfl] at lookup
@@ -551,16 +290,7 @@ private theorem staticReject_t_050a_c83 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_050a_c83 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 10
   cases h with
   | zero _ _ body => exact staticReject_t_051c_c83 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_0520_c83 (SFunc.RunCut.uncut body)
@@ -569,44 +299,14 @@ private theorem staticReject_t_05b1_c80 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_05b1_c80 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_05b1_c80 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   exact (ric_revert h).elim
 
 private theorem staticReject_t_18e9_c34 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_18e9_c34 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_18e9_c34 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 30
   exact (ric_revert h).elim
 
 private theorem staticReject_t_194f_c34 {sevm : Sevm} {d : Devm} {o : Outcome}
@@ -614,8 +314,7 @@ private theorem staticReject_t_194f_c34 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_194f_c34 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   obtain ⟨_, store, _⟩ := ric_next h
   exact Blanc.of_run_sstore_not_static store
 
@@ -624,11 +323,7 @@ private theorem staticReject_t_18de_c34 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_18de_c34 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 5
   cases h with
   | zero _ _ body => exact staticReject_t_18e9_c34 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_194f_c34 (SFunc.RunCut.uncut body)
@@ -638,11 +333,7 @@ private theorem staticReject_t_05b5_c80 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_05b5_c80 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 5
   cases (SFunc.RunCut.uncut h) with
   | jump _ lookup _ body =>
       rw [show cert.prog[34]? = some t_18de_c34 from rfl] at lookup
@@ -654,16 +345,7 @@ private theorem staticReject_t_059f_c80 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_059f_c80 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 10
   cases h with
   | zero _ _ body => exact staticReject_t_05b1_c80 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_05b5_c80 (SFunc.RunCut.uncut body)
@@ -672,36 +354,7 @@ private theorem staticReject_t_1e00_c31 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_1e00_c31 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_1e00_c31 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 30
   exact (ric_revert h).elim
 
 private theorem staticReject_t_1e66_c31 {sevm : Sevm} {d : Devm} {o : Outcome}
@@ -709,8 +362,7 @@ private theorem staticReject_t_1e66_c31 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_1e66_c31 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   obtain ⟨_, store, _⟩ := ric_next h
   exact Blanc.of_run_sstore_not_static store
 
@@ -719,11 +371,7 @@ private theorem staticReject_t_1df5_c31 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_1df5_c31 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 5
   cases h with
   | zero _ _ body => exact staticReject_t_1e00_c31 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_1e66_c31 (SFunc.RunCut.uncut body)
@@ -733,8 +381,7 @@ private theorem staticReject_t_067b_c78 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_067b_c78 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   cases (SFunc.RunCut.uncut h) with
   | callHalt _ lookup _ body =>
       rw [show cert.prog[31]? = some t_1df5_c31 from rfl] at lookup
@@ -749,8 +396,7 @@ private theorem staticReject_t_05f4_c76 {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run cert.prog sevm d t_05f4_c76 o) : sevm.isStatic = false := by
   have h := run.cut
   unfold t_05f4_c76 at h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 2
   exact (ric_revert h).elim
 
 private theorem staticReject_t_05f8_c76 {sevm : Sevm} {d : Devm} {o : Outcome}
@@ -758,47 +404,7 @@ private theorem staticReject_t_05f8_c76 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_05f8_c76 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 41
   cases (SFunc.RunCut.uncut h) with
   | callHalt _ lookup _ body =>
       rw [show cert.prog[29]? = some t_1b0c_c29 from rfl] at lookup
@@ -814,16 +420,7 @@ private theorem staticReject_t_05e2_c76 {sevm : Sevm} {d : Devm} {o : Outcome}
   have h := run.cut
   unfold t_05e2_c76 at h
   obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
-  obtain ⟨_, _, h⟩ := ric_next h
+  wskip 10
   cases h with
   | zero _ _ body => exact staticReject_t_05f4_c76 (SFunc.RunCut.uncut body)
   | succ _ _ _ _ body => exact staticReject_t_05f8_c76 (SFunc.RunCut.uncut body)
@@ -837,12 +434,7 @@ theorem staticView_selector_invH {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o
     ∃ view : StaticView, Blanc.Sevm.selector sevm = view.selector := by
   have h := run.cut
   unfold t_001a_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_shr hd
   simp only [show Bytes.toB256 [0x00] = (0 : B256) from rfl,
@@ -1217,8 +809,7 @@ theorem staticView_selector_invH {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o
             next miss =>
               unfold t_01b9_c0 at h
               obtain ⟨_, h⟩ := ric_dest h
-              obtain ⟨_, _, h⟩ := ric_next h
-              obtain ⟨_, _, h⟩ := ric_next h
+              wskip 2
               exact (ric_revert h).elim
             next hit =>
               have equal : Bytes.toB256 [0x09, 0x02, 0xf1, 0xac] = Blanc.Sevm.selector sevm := by

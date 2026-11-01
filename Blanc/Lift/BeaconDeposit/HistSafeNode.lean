@@ -1,5 +1,6 @@
 import Blanc.Lift.BeaconDeposit.BodyNode
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Safety segment B5 over a historical frame: the deposit data node, inverted
@@ -78,92 +79,43 @@ private theorem inv_node1H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
   have t672 : (Nat.toB256 672).toNat = 672 := toNat_toB256' (by decide)
   have t704 : (Nat.toB256 704).toNat = 704 := toNat_toB256' (by decide)
   unfold t_0b4c_c16 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 3
   rw [h640, read_word hr 640 hsR, read_covered hs (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 3
   rw [h40, read_word hr 64 hfp, read_covered hs (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 672) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 3
   rw [t672, ← hM1] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  winv 15
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 704) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 5
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_calldatacopy s1
   rw [t704, show (32 : B256).toNat = 32 from rfl, ← hM2] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 736) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 11
   rw [h40, read_word hr2 64 hfp2, read_covered hs2 (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 96) (by decide) (ri_sub s1)
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 64) (by decide) (ri_sub s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 2
   rw [t640, ← hM3] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 3
   rw [h40, ← hM4] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h40, read_word hr4 64 hfp4, read_covered hs4 (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 4
   rw [t640, read_word hr4 640 hlen4, read_covered hs4 (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 672) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 4
   rw [t_0b9c_c16_eq] at run
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH_of_delegation (s := 672) (d := 736) (n := 832)
     (x1 := Nat.toB256 672) (x3 := Nat.toB256 736) (x4 := Nat.toB256 640)
@@ -250,143 +202,79 @@ private theorem inv_node2H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
   have t776 : (Nat.toB256 776).toNat = 776 := toNat_toB256' (by decide)
   have t800 : (Nat.toB256 800).toNat = 800 := toNat_toB256' (by decide)
   unfold t_0c4b_c17 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 3
   rw [h736, read_word hr 736 hn1, read_covered hs (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h40, read_word hr 64 hfp, read_covered hs (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h80', read_word hr 128 h80, read_covered hs (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 11
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 768) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 5
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 160) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 4
   rw [t_0c6c_c17_eq] at run
   obtain ⟨_, run⟩ := ric_mcpy_exit (s := 160) (d := 768) (l := 8) (by omega) run
   unfold t_0ca9_c17 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  winv 4
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 24) (by decide) (ri_sub s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_exp s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := maskLo)
     (by rw [show Nat.toB256 24 = (24 : B256) by decide]; rfl) (ri_sub s1)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := maskTop8) not_maskLo (ri_not s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h160, read_word hr 160 hWb, read_covered hs (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 4
   rw [h768, read_word hr 768 hDb, read_covered hs (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := V) (by rfl) (ri_or s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 2
   rw [h768, ← hM1] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
+  winv 8
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 776) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_not s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := 0) (b256_and_zero _) (ri_and s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_not s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := 0) (b256_and_zero _) (ri_and s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 2
   rw [t776, ← hM2] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 800) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 3
   rw [t800, ← hM3] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 832) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 7
   rw [h40, read_word hr3 64 hfp3, read_covered hs3 (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 96) (by decide) (ri_sub s1)
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 64) (by decide) (ri_sub s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 2
   rw [h736, ← hM4] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 3
   rw [h40, ← hM5] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h40, read_word hr5 64 hfp5, read_covered hs5 (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 4
   rw [h736, read_word hr5 736 hlen5, read_covered hs5 (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 768) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 4
   rw [t_0d11_c17_eq] at run
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH_of_delegation (s := 768) (d := 832) (n := 832)
     (x1 := Nat.toB256 768) (x3 := Nat.toB256 832) (x4 := Nat.toB256 736)
@@ -460,72 +348,41 @@ private theorem inv_node3H {sevm : Sevm} {b : Devm} {M : Mem} {img : Bytes} {G :
   have t864 : (Nat.toB256 864).toNat = 864 := toNat_toB256' (by decide)
   have t896 : (Nat.toB256 896).toNat = 896 := toNat_toB256' (by decide)
   unfold t_0dc0_c19 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 3
   rw [h832, read_word hr 832 hh2, read_covered hs (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 3
   rw [h40, read_word hr 64 hfp, read_covered hs (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 864) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 4
   rw [t864, ← hM1] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 896) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 4
   rw [t896, ← hM2] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h40, read_word hr2 64 hfp2, read_covered hs2 (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 0) (by decide) (ri_sub s1)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 64) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 2
   rw [h832, ← hM3] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 928) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 4
   rw [h40, ← hM4] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h832, read_word hr4 832 hlen4, read_covered hs4 (by decide) (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 7
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 864) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 4
   rw [t_0df7_c19_eq] at run
   obtain ⟨b', M', G', hpost, hwf', hr', hs', run⟩ := ric_copy_shaH_of_delegation (s := 864) (d := 928) (n := 928)
     (x1 := Nat.toB256 864) (x3 := Nat.toB256 928) (x4 := Nat.toB256 832) (R := R)

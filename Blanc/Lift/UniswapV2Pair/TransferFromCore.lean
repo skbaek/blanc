@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.TransferCore
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! Literal transferFrom allowance branches and their shared transfer continuation. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -72,39 +73,20 @@ theorem transferFrom_join_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem
       ∃ residual, o = .returned (transferFromJoinPostH sevm b R M owner recipient amount residual) := by
   have h := run.cut
   unfold t_0ee8_c10 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 6
   obtain ⟨_, call⟩ := ric_call (g := t_260b_c61) rfl h
   rcases call with ⟨d, core, tail⟩ | ⟨d, core, _⟩
   · obtain ⟨cover, nonstatic, nowrap, _, eq⟩ := transfer61_invH stateGas bal mem core
     cases eq
     unfold t_0ef3_c10 at tail
-    obtain ⟨_, tail⟩ := ric_dest tail
-    obtain ⟨d, hd, tail⟩ := ric_next tail
-    obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, tail⟩ := ric_next tail
-    obtain ⟨_, rfl⟩ := ri_push hd
+    winv 3
     obtain ⟨d, hd, tail⟩ := ric_next tail
     obtain ⟨_, rfl⟩ := ri_swap
       (S' := ρ :: amount :: recipient.toB256 :: owner.toB256 :: 1 :: R) rfl hd
     obtain ⟨d, hd, tail⟩ := ric_next tail
     obtain ⟨_, rfl⟩ := ri_swap
       (S' := owner.toB256 :: amount :: recipient.toB256 :: ρ :: 1 :: R) rfl hd
-    obtain ⟨d, hd, tail⟩ := ric_next tail
-    obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, tail⟩ := ric_next tail
-    obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, tail⟩ := ric_next tail
-    obtain ⟨_, rfl⟩ := ri_pop hd
+    winv 3
     obtain ⟨residual, result⟩ := ric_ret tail
     exact ⟨cover, nonstatic, nowrap, residual, Seg.done.inj result⟩
   · obtain ⟨_, _, _, _, eq⟩ := transfer61_invH stateGas bal mem core
@@ -244,42 +226,21 @@ theorem transferFrom_store_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
   dsimp only [approveOwnerMemory] at read2
   have h := run.cut
   unfold t_0eb6_c48 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := owner.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr owner) (ri_and hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 4
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   simp only [show Bytes.toB256 [2] = (2 : B256) from rfl,
@@ -288,24 +249,17 @@ theorem transferFrom_store_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
     m1.read_self (by decide : 0 + 64 ≤ 96),
     Mem.read_two_word_writes_at_raw M 0 owner.toB256 2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_caller hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   change d = St b (((approveScratch M owner.toB256 sevm.caller.toB256).read 0 64).1.keccak :: _)
@@ -464,41 +418,21 @@ theorem transferFrom_finite_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : M
   dsimp only [approveOwnerMemory] at read2
   have h := run.cut
   unfold t_0e76_c48 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := owner.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr owner) (ri_and hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 4
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   simp only [show Bytes.toB256 [2] = (2 : B256) from rfl,
@@ -507,24 +441,17 @@ theorem transferFrom_finite_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : M
     m1.read_self (by decide : 0 + 64 ≤ 96),
     Mem.read_two_word_writes_at_raw M 0 owner.toB256 2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_caller hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   change d = St b (((approveScratch M owner.toB256 sevm.caller.toB256).read 0 64).1.keccak :: _)
@@ -534,16 +461,7 @@ theorem transferFrom_finite_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : M
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sloadH bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 5
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 0x226e) (by decide) (ri_and hd)
   obtain ⟨_, call⟩ := ric_call (g := t_226e_c59) rfl h
@@ -781,42 +699,21 @@ theorem transferFrom48_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   dsimp only [approveOwnerMemory] at read2
   have h := run.cut
   unfold t_0e1e_c48 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := owner.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr owner) (ri_and hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 4
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   simp only [show Bytes.toB256 [2] = (2 : B256) from rfl,
@@ -825,24 +722,17 @@ theorem transferFrom48_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     m1.read_self (by decide : 0 + 64 ≤ 96),
     Mem.read_two_word_writes_at_raw M 0 owner.toB256 2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_caller hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   change d = St b (((approveScratch M owner.toB256 sevm.caller.toB256).read 0 64).1.keccak :: _)
@@ -852,12 +742,7 @@ theorem transferFrom48_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sloadH bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_eq hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   rcases ric_branchTo (by decide) (g := t_0ee8_c10) rfl h with ⟨zero, _, finite⟩ | ⟨nonzero, _, maximal⟩
   · have different : transferFromAllowanceWord sevm b owner ≠ B256.max := by
       intro eq

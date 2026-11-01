@@ -3,6 +3,7 @@ import Blanc.Lift.UniswapV2Pair.BalanceCallWalk
 import Blanc.Lift.CodeSizeWalk
 import Blanc.Lift.PtrWordMemory
 import Blanc.Lift.UniswapV2Pair.SyncWalk
+import Blanc.Lift.WalkInvKit
 
 /-! The two post-callback `balanceOf(pair)` STATICCALLs of the actual swap body,
 from the cut `t_09c3_c5` to the first amount-in ternary `t_0af5_c5`'s tail.
@@ -314,8 +315,7 @@ theorem swapBalanceGuard_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {S : List
       SFunc.RunCutP (StepIn D) cert.prog sevm C
         (St d (out.length.toB256 :: p :: S) (swapBalanceReply M p sevm.currentTarget out) tailGas)
         decodeTree seg := by
-  obtain ⟨_, hs, run⟩ := ric_nextP run
-  obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 1 using StepIn.toRun
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨accepted, _, run⟩
   · exact (failed.false_of_noOk codeNo).elim
   have zero := eq_zero_of_iszero_ne_zero accepted

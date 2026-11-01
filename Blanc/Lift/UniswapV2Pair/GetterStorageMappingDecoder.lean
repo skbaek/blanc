@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.GetterStorageMappingCore
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! The real solc calldata guards and address masks for single-key getters. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -116,10 +117,7 @@ theorem singleMapping_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
   have h := run.cut
   rw [s.decoder_shape] at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 4
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_and hd
   change d = St b ((Bytes.toB256 (List.replicate 20 0xff) &&& (Sevm.dataWord sevm 4)) :: 0x039b :: sel :: []) M _ at hd
   rw [show Bytes.toB256 (List.replicate 20 0xff) = ~~~ addressMask from by decide,
@@ -144,26 +142,19 @@ theorem singleMapping_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
         (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
   have h := run.cut
   rw [s.entry_shape] at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldatasize hd
+  winv 5
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_sub hd
   rw [show Bytes.toB256 [0x04] = (4 : B256) from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_lt hd
   rw [show Bytes.toB256 [0x20] = (32 : B256) from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   rcases ric_branch h with ⟨_, _, bad⟩ | ⟨nonzero, _, h⟩
   · cases s <;> unfold SingleMappingGetter.reject t_04ae_c87 t_04e9_c82 at bad
     all_goals
-      obtain ⟨_, _, bad⟩ := ric_next bad
-      obtain ⟨_, _, bad⟩ := ric_next bad
+      wskip 2
       exact (ric_revert bad).elim
   · have guard : (32 : B256) ≤ sevm.data.length.toB256 - 4 := by
       by_contra ne
@@ -234,20 +225,14 @@ theorem allowance_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
   have h := run.cut
   unfold t_0656_c77 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 6
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_and hd
   change d = St b ((Bytes.toB256 (List.replicate 20 0xff) &&& Sevm.dataWord sevm 4) ::
     Bytes.toB256 (List.replicate 20 0xff) :: 4 :: 0x039b :: sel :: []) M _ at hd
   rw [show Bytes.toB256 (List.replicate 20 0xff) = ~~~ addressMask from by decide,
     show ((~~~ addressMask) &&& Sevm.dataWord sevm 4) = (mappingOwner sevm).toB256 from addressSlotReadWord_eq_toAdr_toB256 _] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_add hd
   rw [show Bytes.toB256 [0x20] + (4 : B256) = 36 from by decide] at hd
   subst d
@@ -278,25 +263,18 @@ theorem allowance_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
         (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
   have h := run.cut
   unfold t_0640_c77 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldatasize hd
+  winv 5
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_sub hd
   rw [show Bytes.toB256 [0x04] = (4 : B256) from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_lt hd
   rw [show Bytes.toB256 [0x40] = (64 : B256) from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   rcases ric_branch h with ⟨_, _, bad⟩ | ⟨nonzero, _, h⟩
   · unfold t_0652_c77 at bad
-    obtain ⟨_, _, bad⟩ := ric_next bad
-    obtain ⟨_, _, bad⟩ := ric_next bad
+    wskip 2
     exact (ric_revert bad).elim
   · have guard : (64 : B256) ≤ sevm.data.length.toB256 - 4 := by
       by_contra ne

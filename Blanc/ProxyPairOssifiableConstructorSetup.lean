@@ -1,5 +1,6 @@
 import Blanc.ProxyPairOssifiableConstructorInitialize
 import Blanc.ProxyPairOssifiableConstructorEffects
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # OssifiableProxy constructor setup child settlement
