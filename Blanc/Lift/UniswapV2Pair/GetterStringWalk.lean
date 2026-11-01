@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.GetterStringMemory
+import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.GetterWalk
 import Blanc.Lift.CopyLoop
 
@@ -649,30 +650,6 @@ theorem getterString_entry_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel
     cases eq
 
 
-theorem getterString_guards_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
-    (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
-    (body : SFunc.RunExact cert.prog sevm (St b [] getterInitMemory G) t_001a_c0 o) :
-    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 63)) t_0000_c0 o := by
-  unfold t_0000_c0
-  refine rx_push (w := 128) rfl (by decide) ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_mstore (c := 12) ?_ rfl ?_
-  · rw [St.extCost_eq (n := 0) rfl]; decide
-  refine rx_callvalue (by decide) ?_
-  rw [value]
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 16) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_succ (by decide) ?_
-  unfold t_0010_c0
-  refine rx_dest ?_
-  refine rx_pop ?_
-  refine rx_push (w := 4) rfl (by decide) ?_
-  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_lt (v := 0) (ltCheck_zero_of_le size) (by decide) ?_
-  refine rx_push (w := 0x01b9) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  exact rx_branch_zero body
-
 def StringGetter.dispatchGas : StringGetter → Nat
   | .name => 188
   | .symbol => 208
@@ -682,72 +659,8 @@ theorem getterString_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outc
     (selector : Blanc.Sevm.selector sevm = s.selector)
     (body : SFunc.RunExact cert.prog sevm (St b [s.selector] getterInitMemory G) s.entryTree o)
     (h_shifts : sevm.benvStat.rules.op.shifts = true) :
-    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + s.dispatchGas)) t_0000_c0 o := by
-  cases s with
-  | name =>
-    simp only [StringGetter.selector, StringGetter.entryTree, StringGetter.dispatchGas] at selector body ⊢
-    refine getterString_guards_exact (G := G + 125) value size ?_
-    unfold t_001a_c0
-    refine rx_push (w := 0) rfl (by decide) ?_
-    refine rx_calldataload (by decide) ?_
-    refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_shr (h_shifts := h_shifts) (v := 0x06fdde03) selector (by decide) ?_
-    refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x00f9) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_branch_succ (by decide) ?_
-    unfold t_00f9_c0
-    refine rx_dest ?_
-    refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x23b872dd) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x0166) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_branch_succ (by decide) ?_
-    unfold t_0166_c0
-    refine rx_dest ?_
-    refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x095ea7b3) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x0197) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_branch_succ (by decide) ?_
-    unfold t_0197_c0
-    refine rx_dest ?_
-    refine cmp_miss (by decide) ?_
-    unfold t_01a3_c0
-    exact cmp_hit (tgt := t_0259_c100) rfl (StringGetter.entry_lookup .name) body
-  | symbol =>
-    simp only [StringGetter.selector, StringGetter.entryTree, StringGetter.dispatchGas] at selector body ⊢
-    refine getterString_guards_exact (G := G + 145) value size ?_
-    unfold t_001a_c0
-    refine rx_push (w := 0) rfl (by decide) ?_
-    refine rx_calldataload (by decide) ?_
-    refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_shr (h_shifts := h_shifts) (v := 0x95d89b41) selector (by decide) ?_
-    refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x00f9) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_branch_zero ?_
-    unfold t_002b_c0
-    refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0xba9a7a56) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x0097) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_branch_succ (by decide) ?_
-    unfold t_0097_c0
-    refine rx_dest ?_
-    refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x7ecebe00) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_push (w := 0x00d3) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-    refine rx_branch_zero ?_
-    unfold t_00a3_c0
-    refine cmp_miss (by decide) ?_
-    unfold t_00ae_c0
-    refine cmp_miss (by decide) ?_
-    unfold t_00b9_c0
-    exact cmp_hit (tgt := t_0556_c84) rfl (StringGetter.entry_lookup .symbol) body
+    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + s.dispatchGas)) t_0000_c0 o :=
+  by cases s <;> exact pair_dispatch_exact value size selector (by kernel_rfl) (by decide +kernel) body h_shifts
 
 theorem getterString_pc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
     (s : StringGetter) (value : sevm.value = 0) (size : (4 : B256) ≤ sevm.data.length.toB256)
@@ -765,126 +678,8 @@ theorem getterString_pc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
 theorem getterString_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
     (s : StringGetter) (selector : Blanc.Sevm.selector sevm = s.selector)
     (run : SFunc.Run cert.prog sevm (St b [] M G) t_001a_c0 o) :
-    ∃ G', SFunc.Run cert.prog sevm (St b [s.selector] M G') s.entryTree o := by
-  have h := run.cut
-  unfold t_001a_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_shr hd
-  simp only [show Bytes.toB256 [0x00] = (0 : B256) from rfl,
-    show Bytes.toB256 [0xe0] = (224 : B256) from rfl,
-    show (224 : B256).toNat = 224 from rfl,
-    show Sevm.dataWord sevm 0 >>> 224 = s.selector from selector] at hd
-  subst d
-  cases s with
-  | name =>
-    simp only [StringGetter.selector, StringGetter.entryTree] at h ⊢
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_gt hd
-    simp only [show B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) (0x06fdde03 : B256) = (1 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branch h).resolve_left
-      (by rintro ⟨bad, _, _⟩; exact (by decide : (1 : B256) ≠ 0) bad)
-    unfold t_00f9_c0 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_gt hd
-    simp only [show B256.gtCheck (Bytes.toB256 [0x23, 0xb8, 0x72, 0xdd]) (0x06fdde03 : B256) = (1 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branch h).resolve_left
-      (by rintro ⟨bad, _, _⟩; exact (by decide : (1 : B256) ≠ 0) bad)
-    unfold t_0166_c0 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_gt hd
-    simp only [show B256.gtCheck (Bytes.toB256 [0x09, 0x5e, 0xa7, 0xb3]) (0x06fdde03 : B256) = (1 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branch h).resolve_left
-      (by rintro ⟨bad, _, _⟩; exact (by decide : (1 : B256) ≠ 0) bad)
-    unfold t_0197_c0 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_eq hd
-    simp only [show B256.eqCheck (Bytes.toB256 [0x02, 0x2c, 0x0d, 0x9f]) (0x06fdde03 : B256) = (0 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branchTo (g := t_01be_c99) (by intro hh; cases hh) (by rfl) h).resolve_right
-      (by rintro ⟨bad, _, _⟩; exact bad rfl)
-    unfold t_01a3_c0 at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_eq hd
-    simp only [show B256.eqCheck (Bytes.toB256 [0x06, 0xfd, 0xde, 0x03]) (0x06fdde03 : B256) = (1 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branchTo (g := t_0259_c100) (by intro hh; cases hh) (by rfl) h).resolve_left
-      (by rintro ⟨bad, _, _⟩; exact (by decide : (1 : B256) ≠ 0) bad)
-    exact ⟨_, h.uncut⟩
-  | symbol =>
-    simp only [StringGetter.selector, StringGetter.entryTree] at h ⊢
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_gt hd
-    simp only [show B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) (0x95d89b41 : B256) = (0 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branch h).resolve_right
-      (by rintro ⟨bad, _, _⟩; exact bad rfl)
-    unfold t_002b_c0 at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_gt hd
-    simp only [show B256.gtCheck (Bytes.toB256 [0xba, 0x9a, 0x7a, 0x56]) (0x95d89b41 : B256) = (1 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branch h).resolve_left
-      (by rintro ⟨bad, _, _⟩; exact (by decide : (1 : B256) ≠ 0) bad)
-    unfold t_0097_c0 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_gt hd
-    simp only [show B256.gtCheck (Bytes.toB256 [0x7e, 0xce, 0xbe, 0x00]) (0x95d89b41 : B256) = (0 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branch h).resolve_right
-      (by rintro ⟨bad, _, _⟩; exact bad rfl)
-    unfold t_00a3_c0 at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_eq hd
-    simp only [show B256.eqCheck (Bytes.toB256 [0x7e, 0xce, 0xbe, 0x00]) (0x95d89b41 : B256) = (0 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branchTo (g := t_04d7_c82) (by intro hh; cases hh) (by rfl) h).resolve_right
-      (by rintro ⟨bad, _, _⟩; exact bad rfl)
-    unfold t_00ae_c0 at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_eq hd
-    simp only [show B256.eqCheck (Bytes.toB256 [0x89, 0xaf, 0xcb, 0x44]) (0x95d89b41 : B256) = (0 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branchTo (g := t_050a_c83) (by intro hh; cases hh) (by rfl) h).resolve_right
-      (by rintro ⟨bad, _, _⟩; exact bad rfl)
-    unfold t_00b9_c0 at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_eq hd
-    simp only [show B256.eqCheck (Bytes.toB256 [0x95, 0xd8, 0x9b, 0x41]) (0x95d89b41 : B256) = (1 : B256) from by decide] at hd
-    subst d
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨_, _, h⟩ := (ric_branchTo (g := t_0556_c84) (by intro hh; cases hh) (by rfl) h).resolve_left
-      (by rintro ⟨bad, _, _⟩; exact (by decide : (1 : B256) ≠ 0) bad)
-    exact ⟨_, h.uncut⟩
+    ∃ G', SFunc.Run cert.prog sevm (St b [s.selector] M G') s.entryTree o :=
+  by cases s <;> exact pair_dispatch_inv selector (by kernel_rfl) run
 
 theorem getterString_pc0_inv {sevm : Sevm} {b post : Devm} {G : Nat}
     (s : StringGetter) (selector : Blanc.Sevm.selector sevm = s.selector)

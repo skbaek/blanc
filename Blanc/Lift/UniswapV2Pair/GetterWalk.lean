@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.GetterMemory
+import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.Execution
 import Blanc.Lift.UniswapV2Pair.Jumps
 import Blanc.Lift.UniswapV2Pair.Check
@@ -211,57 +212,8 @@ theorem totalSupply_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outco
     (body : SFunc.RunExact cert.prog sevm
       (St b [0x18160ddd] getterInitMemory G) t_0393_c98 o)
     (h_shifts : sevm.benvStat.rules.op.shifts = true) :
-    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 209)) t_0000_c0 o := by
-  unfold t_0000_c0
-  refine rx_push (w := 128) rfl (by decide) ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_mstore (c := 12) ?_ rfl ?_
-  · rw [St.extCost_eq (n := 0) rfl]
-    decide
-  refine rx_callvalue (by decide) ?_
-  rw [value]
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 16) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_succ (by decide) ?_
-  unfold t_0010_c0
-  refine rx_dest ?_
-  refine rx_pop ?_
-  refine rx_push (w := 4) rfl (by decide) ?_
-  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_lt (v := 0) (ltCheck_zero_of_le size) (by decide) ?_
-  refine rx_push (w := 0x01b9) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_zero ?_
-  unfold t_001a_c0
-  refine rx_push (w := 0) rfl (by decide) ?_
-  refine rx_calldataload (by decide) ?_
-  refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_shr (h_shifts := h_shifts) (v := 0x18160ddd) selector (by decide) ?_
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x00f9) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_succ (by decide) ?_
-  unfold t_00f9_c0
-  refine rx_dest ?_
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x23b872dd) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x0166) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_succ (by decide) ?_
-  unfold t_0166_c0
-  refine rx_dest ?_
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x095ea7b3) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x0197) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_zero ?_
-  unfold t_0172_c0
-  refine cmp_miss (by decide) ?_
-  unfold t_017d_c0
-  refine cmp_miss (by decide) ?_
-  unfold t_0188_c0
-  exact cmp_hit (tgt := t_0393_c98) rfl (by rfl) body
+    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 209)) t_0000_c0 o :=
+  pair_dispatch_exact value size selector (by kernel_rfl) (by decide +kernel) body h_shifts
 
 /-- Pc-zero exact liveness; selected SLOAD charge includes warm/cold metadata. -/
 theorem totalSupply_pc0_exact {sevm : Sevm} {b : Devm} {G c : Nat}
@@ -360,103 +312,8 @@ theorem getter_guards_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
 theorem totalSupply_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
     (selector : Blanc.Sevm.selector sevm = 0x18160ddd)
     (run : SFunc.Run cert.prog sevm (St b [] M G) t_001a_c0 o) :
-    ∃ G', SFunc.Run cert.prog sevm (St b [0x18160ddd] M G') t_0393_c98 o := by
-  have h := run.cut
-  unfold t_001a_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_shr hd
-  simp only [show Bytes.toB256 [0x00] = (0 : B256) from rfl,
-    show Bytes.toB256 [0xe0] = (224 : B256) from rfl,
-    show (224 : B256).toNat = 224 from rfl,
-    show Sevm.dataWord sevm 0 >>> 224 = (0x18160ddd : B256) from selector] at hd
-  subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_gt hd
-  simp only [show B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) (0x18160ddd : B256) = (1 : B256) from by decide] at hd
-  subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨_, _, h⟩ := (ric_branch h).resolve_left
-    (by rintro ⟨bad, _, _⟩; exact (by decide : (1 : B256) ≠ 0) bad)
-  unfold t_00f9_c0 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_gt hd
-  simp only [show B256.gtCheck (Bytes.toB256 [0x23, 0xb8, 0x72, 0xdd]) (0x18160ddd : B256) = (1 : B256) from by decide] at hd
-  subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨_, _, h⟩ := (ric_branch h).resolve_left
-    (by rintro ⟨bad, _, _⟩; exact (by decide : (1 : B256) ≠ 0) bad)
-  unfold t_0166_c0 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_gt hd
-  simp only [show B256.gtCheck (Bytes.toB256 [0x09, 0x5e, 0xa7, 0xb3]) (0x18160ddd : B256) = (0 : B256) from by decide] at hd
-  subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨_, _, h⟩ := (ric_branch h).resolve_right
-    (by rintro ⟨bad, _, _⟩; exact bad rfl)
-  unfold t_0172_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_eq hd
-  simp only [show B256.eqCheck (Bytes.toB256 [0x09, 0x5e, 0xa7, 0xb3]) (0x18160ddd : B256) = (0 : B256) from by decide] at hd
-  subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨_, _, h⟩ := (ric_branchTo (g := t_0315_c96) (by intro h; cases h) (by rfl) h).resolve_right
-    (by rintro ⟨bad, _, _⟩; exact bad rfl)
-  unfold t_017d_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_eq hd
-  simp only [show B256.eqCheck (Bytes.toB256 [0x0d, 0xfe, 0x16, 0x81]) (0x18160ddd : B256) = (0 : B256) from by decide] at hd
-  subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨_, _, h⟩ := (ric_branchTo (g := t_0362_c97) (by intro h; cases h) (by rfl) h).resolve_right
-    (by rintro ⟨bad, _, _⟩; exact bad rfl)
-  unfold t_0188_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_eq hd
-  simp only [show B256.eqCheck (Bytes.toB256 [0x18, 0x16, 0x0d, 0xdd]) (0x18160ddd : B256) = (1 : B256) from by decide] at hd
-  subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨_, _, h⟩ := (ric_branchTo (g := t_0393_c98) (by intro h; cases h) (by rfl) h).resolve_left
-    (by rintro ⟨bad, _, _⟩; exact (by decide : (1 : B256) ≠ 0) bad)
-  exact ⟨_, h.uncut⟩
-
+    ∃ G', SFunc.Run cert.prog sevm (St b [0x18160ddd] M G') t_0393_c98 o :=
+  pair_dispatch_inv selector (by kernel_rfl) run
 
 theorem totalSupply_pc0_invH {sevm : Sevm} {b post : Devm} {G : Nat}
     (bal : sevm.benvStat.rules.bal = none)

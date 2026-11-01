@@ -9305,7 +9305,12 @@ contract-neutral.
   of a selector word through a solc binary-search dispatcher (`SFunc.selWalk σ f`, computed by the
   kernel for a concrete selector; `Reach.selWalk_inl`/`_inr`, `SFunc.RunCut.selWalk_inl`/`_inr`,
   `SFunc.selWalk_mem_pairs`/`_leaves`; `SFunc.toCall` with `SFunc.RunP.callee_of_toCall` for a
-  wrapper's ABI decoding before its body call) in [`Blanc/Lift/SelectorRoute.lean`](../Blanc/Lift/SelectorRoute.lean); and the
+  wrapper's ABI decoding before its body call) in [`Blanc/Lift/SelectorRoute.lean`](../Blanc/Lift/SelectorRoute.lean), with its
+  forward, gas-exact twin (`SFunc.selCost`, 22 gas per row and 1 per `JUMPDEST`;
+  `SFunc.RunExact.selWalk_inl`/`_inr`; `SFunc.selGoto` naming the entered tree once for both
+  directions, `SFunc.RunExact.selGoto`, `SFunc.selGoto_spec`) in
+  [`Blanc/Lift/SelectorRouteExact.lean`](../Blanc/Lift/SelectorRouteExact.lean) (worked use: the UniswapV2 pair's
+  `pair_dispatch_exact`/`pair_dispatch_inv`, `Blanc/Lift/UniswapV2Pair/PairDispatch.lean`); and the
   reach forms of the two route-C skips below, `rr_shuffle` and `rr_call_silent`, in
   [`Blanc/Lift/ReachSkip.lean`](../Blanc/Lift/ReachSkip.lean). Worked uses: USDC (`Blanc/Lift/Usdc/RefineSignedAuth.lean`,
   `RefineSignedPermitNodes.lean`, `RefineAdminRescue.lean`, `HistoryFamilyProxy.lean`).

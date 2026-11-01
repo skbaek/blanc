@@ -109,45 +109,6 @@ theorem memOut_val {μ : Mem} {bs : Bytes} (hwf : Mem.Wf μ) (hr : Mem.Reads μ 
   rw [memOut, (hr.write hwf 96 v.toBytes).read, sliceD_word_same]
 
 open Blanc.Lift in
-/-- One solc dispatcher comparison that does not match: `DUP1 PUSH4 c EQ PUSH2 d
-JUMPI`, 22 gas. -/
-theorem cmp_miss {sevm : Sevm} {b : Devm} {M : Mem} {g : Nat} {o : Outcome} {sel : B256}
-    {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {nxt : SFunc} {j : Nat}
-    (hne : Bytes.toB256 [c0, c1, c2, c3] ≠ sel)
-    (k : SFunc.RunExact prog sevm (St b [sel] M g) nxt o) :
-    SFunc.RunExact prog sevm (St b [sel] M (g + 22))
-      (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
-        (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
-  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
-    Nat.reduceLT]) ?_
-  refine rx_eq (v := 0) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
-    Nat.one_lt_ofNat]) ?_
-  · simp only [B256.eqCheck, hne, ↓reduceIte]
-  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
-    Nat.reduceLT]) ?_
-  exact rx_branchTo_zero k
-
-open Blanc.Lift in
-/-- One solc dispatcher comparison that matches, jumping to entry `j`. -/
-theorem cmp_hit {sevm : Sevm} {b : Devm} {M : Mem} {g : Nat} {o : Outcome} {sel : B256}
-    {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {nxt tgt : SFunc} {j : Nat}
-    (heq : Bytes.toB256 [c0, c1, c2, c3] = sel) (hj : prog[j]? = some tgt)
-    (k : SFunc.RunExact prog sevm (St b [sel] M g) tgt o) :
-    SFunc.RunExact prog sevm (St b [sel] M (g + 22))
-      (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1) (.next (.reg .eq)
-        (.next (.push [d0, d1] l2) (.branchTo nxt j))))) o := by
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
-  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
-    Nat.reduceLT]) ?_
-  refine rx_eq (v := 1) ?_ (by simp only [List.length_cons, List.length_nil, zero_add,
-    Nat.one_lt_ofNat]) ?_
-  · simp only [B256.eqCheck, heq, ↓reduceIte]
-  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
-    Nat.reduceLT]) ?_
-  exact rx_branchTo_succ (by decide) hj k
-
-open Blanc.Lift in
 /-- The dispatcher up to its first selector comparison (`name()`): the
 free-memory pointer, the `CALLDATASIZE < 4` fallback test, and the selector
 extraction.  84 gas. -/
