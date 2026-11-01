@@ -228,9 +228,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
         SpendStorageFork frame.sevm cursor.pre bodyCursor.pre amount := by
   unfold spendCallerAllowanceThen at cursor
   rcases cursor.peelChildlessLine (line := spendOwnerEqLine)
-      (by simp only [spendOwnerEqLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callerBranchCursor, hcallerLine⟩
   have hcallerPrefix :
       [frame.sevm.caller.toB256 =? Sevm.argWord frame.sevm 0] <<+
@@ -291,10 +289,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
       MemCarried.trans hcallerMem
         (MemCarried.of_eq hallowanceSilent.memory) hwf hreads
     rcases allowanceCursor.peelChildlessLine (line := spendAllowanceLoadLine)
-        (by simp only [spendAllowanceLoadLine, arg, cdl, pushB256, mstoreAt, List.cons_append,
-          List.nil_append, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil,
-          Fin.isValue, isMax, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-          forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨maxBranchCursor, hloadLine⟩
     obtain ⟨allowance, hallowanceVal, hloadPrefix, hwfMax, outMax, hreadsMax⟩ :=
       spendAllowanceLoadLine_effect hwfLoad hreadsLoad hloadLine
@@ -316,8 +311,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
           (by decide) hloadPrefix with
         ⟨maxCursor, _hmaxStack, hmaxSilent⟩
       rcases maxCursor.peelChildlessLine (line := [Ninst.pop, Ninst.pop])
-          (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
-            forall_eq]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨coreCallCursor, hpopLine⟩
       rcases coreCallCursor.enterCallSilent hcode with
         ⟨body, hget, bodyCursor, hbodySilent⟩
@@ -351,9 +345,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
         ⟨finiteCursor, hfiniteStack, hfiniteSilent⟩
       rcases finiteCursor.peelChildlessLine
           (line := spendAllowanceCheckLine amount)
-          (by simp only [spendAllowanceCheckLine, arg, cdl, pushB256, Fin.isValue, List.cons_append,
-            List.nil_append, balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false,
-            or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨spendBranchCursor, hcheckLine⟩
       have hcheckStack :
           (allowance <? Sevm.argWord frame.sevm amount) :: allowance ::
@@ -397,10 +389,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThenFork
             successCursor.pre.stack := cons_pref_cons_inv hcheckStack
       rcases successCursor.peelChildlessLine
           (line := spendAllowanceStoreLine ++ spendAllowanceAfterStoreLine)
-          (by simp only [spendAllowanceStoreLine, Fin.isValue, spendAllowanceAfterStoreLine, arg,
-            cdl, pushB256, List.cons_append, List.nil_append, emitApproval, mstoreAt, logWith,
-            Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
-            forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨coreCallCursor, hspendLine⟩
       rcases of_run_append spendAllowanceStoreLine hspendLine with
         ⟨afterStore, hstoreLine, hafterLine⟩
@@ -547,12 +536,12 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
     (hreads : Mem.Reads cursor.pre.memory img)
     (hcursorCode : some (cursor.pre.getCode ca).toList =
       Prog.compile (weth10 dp))
-    (hsendChildless : ∀ n ∈ sendPrefix, NinstIsChildless n)
+    (hsendChildless : ∀ n ∈ sendPrefix, NonExecInstruction n)
     (hsend : ∀ {sendPre callPre : Devm} {value : B256} {tail : Stack},
       value :: tail <<+ sendPre.stack →
       Line.Run frame.sevm sendPre sendPrefix callPre →
       ValueCallOperandPrefix frame.sevm sendPre callPre value target tail)
-    (hsuccessChildless : ∀ n ∈ successLine, NinstIsChildless n)
+    (hsuccessChildless : ∀ n ∈ successLine, NonExecInstruction n)
     (hsuccessStor : Func.Inv Devm.getStor Devm.getStor
       (successLine +++ Func.last successLast))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -573,10 +562,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
       unfold redeemFromBody at cursor
       rcases cursor.peelChildlessLine
           (line := redeemFromCheckLine ownerArg amountArg)
-          (by simp only [redeemFromCheckLine, loadArgBalanceAmount, addressArg, arg, cdl, pushB256,
-            normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
-            balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨branchCursor, hcheck⟩
       unfold redeemFromCheckLine at hcheck
       rcases of_run_append (loadArgBalanceAmount ownerArg amountArg)
@@ -623,8 +609,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
             hbalancePop.memory)
       -- the owner-key debit
       rcases successCursor.peelChildlessLine (line := debitLoadedBalance)
-          (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
-            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨afterDebitCursor, hdebit⟩
       have hdebitCode : Devm.getCode successCursor.pre =
           Devm.getCode afterDebitCursor.pre :=
@@ -660,10 +645,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceStorage
       -- the burn event and the send operands
       rcases afterDebitCursor.peelChildlessLine
           (line := redeemFromEventLine ownerArg amountArg)
-          (by simp only [redeemFromEventLine, addressArg, arg, cdl, pushB256, normalizeAddress,
-            pushAddressMask, List.cons_append, List.nil_append, emitTransfer, transferFromLog,
-            Fin.isValue, mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil,
-            or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨sendCursor, heventRun⟩
       unfold redeemFromEventLine at heventRun
       rcases of_run_append (addressArg ownerArg) heventRun with
@@ -955,9 +937,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_withdrawFrom
       rw [← congrFun hcodeCore ca,
         ← getCode_eq_of_state_eq hspendSilent.state ca]
       exact context.installed.1)
-    (by simp only [redeemSendToArgPrefix, pushList, List.map_cons, pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, arg, cdl, List.mem_cons, List.not_mem_nil,
-      or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToArgPrefix_effect 1 hp hrun)
@@ -1107,8 +1087,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
     ((arg 1 ++ [iszero]) +++ (transferFromZero <?> transferFromNonzero))
     frame.post at coreCursor
   rcases coreCursor.peelChildlessLine
-      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix : [Sevm.argWord frame.sevm 1 =? 0] <<+
       targetBranchCursor.pre.stack := by
@@ -1151,15 +1130,11 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferFromZero
         ← congrFun hlineCode ca, ← congrFun hcodeCore ca,
         ← getCode_eq_of_state_eq hspendSilent.state ca]
       exact context.installed.1)
-    (by simp only [redeemSendToCallerPrefix, pushList, List.map_cons, pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToCallerPrefix_effect hp hrun)
-    (by simp only [redeemReturnTrueLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
-      pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by func_inv)
     hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by
@@ -1287,12 +1262,12 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
     (hreads : Mem.Reads cursor.pre.memory img)
     (hcursorCode : some (cursor.pre.getCode ca).toList =
       Prog.compile (weth10 dp))
-    (hsendChildless : ∀ n ∈ sendPrefix, NinstIsChildless n)
+    (hsendChildless : ∀ n ∈ sendPrefix, NonExecInstruction n)
     (hsend : ∀ {sendPre callPre : Devm} {value : B256} {tail : Stack},
       value :: tail <<+ sendPre.stack →
       Line.Run frame.sevm sendPre sendPrefix callPre →
       ValueCallOperandPrefix frame.sevm sendPre callPre value target tail)
-    (hsuccessChildless : ∀ n ∈ successLine, NinstIsChildless n)
+    (hsuccessChildless : ∀ n ∈ successLine, NonExecInstruction n)
     (hsuccessStor : Func.Inv Devm.getStor Devm.getStor
       (successLine +++ Func.last successLast))
     (hdeeper : ForallDeeperAt frame.sevm.depth ca (weth10 dp)
@@ -1314,10 +1289,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
       unfold redeemFromBody at cursor
       rcases cursor.peelChildlessLine
           (line := redeemFromCheckLine ownerArg amountArg)
-          (by simp only [redeemFromCheckLine, loadArgBalanceAmount, addressArg, arg, cdl, pushB256,
-            normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
-            balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨branchCursor, hcheck⟩
       unfold redeemFromCheckLine at hcheck
       rcases of_run_append (loadArgBalanceAmount ownerArg amountArg)
@@ -1365,8 +1337,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
             hbalancePop.memory)
       -- the owner-key debit
       rcases successCursor.peelChildlessLine (line := debitLoadedBalance)
-          (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
-            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨afterDebitCursor, hdebit⟩
       have hdebitCode : Devm.getCode successCursor.pre =
           Devm.getCode afterDebitCursor.pre :=
@@ -1402,10 +1373,7 @@ private theorem Exec.Frame.CountedCursor.redeemFromAllowanceSound
       -- the burn event and the send operands
       rcases afterDebitCursor.peelChildlessLine
           (line := redeemFromEventLine ownerArg amountArg)
-          (by simp only [redeemFromEventLine, addressArg, arg, cdl, pushB256, normalizeAddress,
-            pushAddressMask, List.cons_append, List.nil_append, emitTransfer, transferFromLog,
-            Fin.isValue, mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil,
-            or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨sendCursor, heventRun⟩
       unfold redeemFromEventLine at heventRun
       rcases of_run_append (addressArg ownerArg) heventRun with
@@ -1716,9 +1684,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_withdrawFrom
     (by
       rw [← hcoreCode]
       exact context.installed.1)
-    (by simp only [redeemSendToArgPrefix, pushList, List.map_cons, pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, arg, cdl, List.mem_cons, List.not_mem_nil,
-      or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToArgPrefix_effect 1 hp hrun)
@@ -1869,8 +1835,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     ((arg 1 ++ [iszero]) +++ (transferFromZero <?> transferFromNonzero))
     frame.post at coreCursor
   rcases coreCursor.peelChildlessLine
-      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix : [Sevm.argWord frame.sevm 1 =? 0] <<+
       targetBranchCursor.pre.stack := by
@@ -1916,15 +1881,11 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferFromZero
     (by
       rw [← hzeroCode]
       exact context.installed.1)
-    (by simp only [redeemSendToCallerPrefix, pushList, List.map_cons, pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToCallerPrefix_effect hp hrun)
-    (by simp only [redeemReturnTrueLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
-      pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by func_inv)
     hdeeper context.covered
   have hnotlast : ownRecordLast frame.sevm = false := by

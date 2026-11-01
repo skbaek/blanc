@@ -1596,7 +1596,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildless_noFlow
     (classified : Blanc.Weth10.Exec.Frame.flowAction? dp ca frame = none)
     (hmem : (Sevm.selector frame.sevm,
       nonpayable (line +++ Func.last i)) ∈ weth10Funcs dp)
-    (hchildless : ∀ n ∈ line, NinstIsChildless n)
+    (hchildless : ∀ n ∈ line, NonExecInstruction n)
     (balance : Devm.getBal frame.post = Devm.getBal frame.pre) :
     Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   apply Exec.Frame.CompiledBodyEthAccounting.noFlow classified
@@ -1616,9 +1616,9 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_nonpayableChildlessBranches_noFl
       nonpayable (head +++
         ((left +++ Func.last leftLast) <?>
           (right +++ Func.last rightLast)))) ∈ weth10Funcs dp)
-    (hhead : ∀ n ∈ head, NinstIsChildless n)
-    (hleft : ∀ n ∈ left, NinstIsChildless n)
-    (hright : ∀ n ∈ right, NinstIsChildless n)
+    (hhead : ∀ n ∈ head, NonExecInstruction n)
+    (hleft : ∀ n ∈ left, NonExecInstruction n)
+    (hright : ∀ n ∈ right, NonExecInstruction n)
     (balance : Devm.getBal frame.post = Devm.getBal frame.pre) :
     Blanc.Weth10.Exec.Frame.CompiledBodyEthAccounting dp ca frame := by
   apply Exec.Frame.CompiledBodyEthAccounting.noFlow classified
@@ -1668,9 +1668,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_name
       · rw [hselector]
         change (selector "name" [], nonpayable name) ∈ weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or]
-      · simp only [List.append_assoc, Ninst.pushB256, pushList, List.map_cons, List.map_nil,
-        List.cons_append, List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `symbol()`. -/
@@ -1702,9 +1700,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_symbol
         change (selector "symbol" [], nonpayable symbol) ∈ weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [List.append_assoc, Ninst.pushB256, pushList, List.map_cons, List.map_nil,
-        List.cons_append, List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `CALLBACK_SUCCESS()`. -/
@@ -1735,9 +1731,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_callbackSuccess
           weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [List.append_assoc, Ninst.pushB256, mstoreAt, pushList, List.map_cons,
-        List.map_nil, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `PERMIT_TYPEHASH()`. -/
@@ -1768,9 +1762,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_permitTypehash
           weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [List.append_assoc, Ninst.pushB256, mstoreAt, pushList, List.map_cons,
-        List.map_nil, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `decimals()`. -/
@@ -1798,9 +1790,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_decimals
         change (selector "decimals" [], nonpayable decimals) ∈ weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [List.append_assoc, Ninst.pushB256, mstoreAt, pushList, List.map_cons,
-        List.map_nil, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `deploymentChainId()`. -/
@@ -1831,9 +1821,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_deploymentChainId
           nonpayable (deploymentChainId dp)) ∈ weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [List.append_assoc, pushDeployWord, mstoreAt, Ninst.pushB256, pushList,
-        List.map_cons, List.map_nil, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `DOMAIN_SEPARATOR()`, including both
@@ -1873,14 +1861,9 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_domainSeparator
           nonpayable (domainSeparator dp)) ∈ weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [Fin.isValue, pushDeployWord, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, head]
-      · simp only [List.append_assoc, pushDeployWord, mstoreAt, Ninst.pushB256, pushList,
-        List.map_cons, List.map_nil, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, left]
-      · simp only [List.append_assoc, calculateDomainSeparator, mstoreAt, Ninst.pushB256,
-        List.cons_append, List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, right]
+      · exact NonExecInstruction.forall_of_all rfl
+      · exact NonExecInstruction.forall_of_all rfl
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `maxFlashLoan(address)`, including both
@@ -1919,14 +1902,9 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_maxFlashLoan
           nonpayable maxFlashLoan) ∈ weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, head]
-      · simp only [List.append_assoc, pushFlashMintedSlot, Ninst.pushB256, List.cons_append,
-        List.nil_append, mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, left]
-      · simp only [List.append_assoc, Ninst.pushB256, mstoreAt, pushList, List.map_cons,
-        List.map_nil, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, right]
+      · exact NonExecInstruction.forall_of_all rfl
+      · exact NonExecInstruction.forall_of_all rfl
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for successful `flashFee(address,uint256)`.
@@ -1982,9 +1960,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_balanceOf
           nonpayable balanceOfEndpoint) ∈ weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [List.append_assoc, arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append,
-        mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `allowance(address,address)`. -/
@@ -2014,10 +1990,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_allowance
         change (selector "allowance" [.address, .address],
           nonpayable allowance) ∈ weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, or_true]
-      · simp only [List.append_assoc, argCopy, cdc, Ninst.pushB256, allowanceKeyFromMemory,
-        pushList, List.map_cons, List.map_nil, List.cons_append, List.nil_append, mstoreAt,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `nonces(address)`. -/
@@ -2048,9 +2021,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_nonces
           weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [List.append_assoc, arg, cdl, Ninst.pushB256, tagNonceKey, List.cons_append,
-        List.nil_append, mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `flashMinted()`. -/
@@ -2080,9 +2051,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_flashMinted
           weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [List.append_assoc, pushFlashMintedSlot, Ninst.pushB256, List.cons_append,
-        List.nil_append, mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for `totalSupply()`.  The body reads
@@ -2113,9 +2082,7 @@ theorem Exec.Frame.compiledBodyEthAccounting_of_totalSupply
           weth10Funcs dp
         simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
           or_true]
-      · simp only [List.append_assoc, pushFlashMintedSlot, Ninst.pushB256, List.cons_append,
-        List.nil_append, mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self, line]
+      · exact NonExecInstruction.forall_of_all rfl
       · exact heffect.2.2.2.1
 
 /-- Exact no-flow ETH accounting for the call-free `approve` body. -/

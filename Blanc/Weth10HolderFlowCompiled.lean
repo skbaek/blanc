@@ -1,5 +1,6 @@
 import Blanc.ExecutionOccurrence
 import Blanc.ExecDeterminism
+import Blanc.NonExecLine
 import Blanc.SourceSiteCount
 import Blanc.Weth10HolderFlowAuthenticity
 import Blanc.Weth10HolderFlowEth
@@ -1129,21 +1130,12 @@ theorem Exec.Frame.CompiledCursor.alignCommittedCallStep
   exact ⟨tailCursor, hpre, occurrence, by
     rw [hactions, hselected]⟩
 
-/-- Source instructions which cannot create a recursive execution slot. -/
-def NinstIsChildless : Ninst → Prop
-  | .reg _ => True
-  | .push _ _ => True
-  | .dupn _ => True
-  | .swapn _ => True
-  | .exchange _ => True
-  | .exec _ => False
-
 private theorem Exec.Deriv.ParentStepActions.eq_nil_of_isChildless
     {dp : DeployParams} {ca : Adr}
     {n : Ninst} {next : Exec.Deriv} {current : Exec.Deriv}
     {selected : List FlowAction}
     (hat : Ninst.At current.sevm.code current.pc n)
-    (hchildless : NinstIsChildless n)
+    (hchildless : NonExecInstruction n)
     (edge : Exec.Deriv.ParentStepActions dp ca next current selected) :
     selected = [] := by
   cases edge with
@@ -1152,7 +1144,7 @@ private theorem Exec.Deriv.ParentStepActions.eq_nil_of_isChildless
   | runOk hstep henter child hresume tail =>
       have hspawn := (Evm.step_next hat).symm.trans hstep
       rcases Ninst.step_spawn_inv hspawn with ⟨x, rfl, hx⟩
-      exact hchildless.elim
+      exact absurd rfl (hchildless.notExec x)
 
 /-- Advance one childless source instruction without changing the cursor's
 chronological child-action prefix. -/
@@ -1161,7 +1153,7 @@ theorem Exec.Frame.CompiledCursor.selectNextChildless
     {fs : List Func} {table : List (Nat × Func)}
     {n : Ninst} {tail : Func} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (.next n tail) final)
-    (hchildless : NinstIsChildless n) :
+    (hchildless : NonExecInstruction n) :
     ∃ (tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final)
         (xl : Xlot),
       Ninst.Run frame.sevm cursor.pre n tailCursor.pre ∧
@@ -1192,7 +1184,7 @@ theorem Exec.Frame.CompiledCursor.peelChildlessLine
     {fs : List Func} {table : List (Nat × Func)}
     {line : Line} {tail : Func} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table (line +++ tail) final)
-    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    (hchildless : ∀ n ∈ line, NonExecInstruction n) :
     ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final,
       Line.Run frame.sevm cursor.pre line tailCursor.pre ∧
       tailCursor.actions = cursor.actions := by
@@ -1559,8 +1551,7 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchLeafSilent
   change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, hline, hbranchActions⟩
   have hlineSilent : Devm.DispatchSilent cursor.pre branchCursor.pre :=
     Devm.DispatchSilent.of_pushEq hline
@@ -1671,8 +1662,7 @@ private theorem Exec.Frame.CompiledCursor.reachDispatchWithSilent_build :
                   (((w, body) :: y :: ys).drop
                     ((((w, body) :: y :: ys).length + 1) / 2))))) final at cursor
         rcases cursor.peelChildlessLine
-            (by simp only [Fin.isValue, Ninst.pushB256, List.length_cons, List.mem_cons,
-              List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+            (NonExecInstruction.forall_of_all rfl) with
           ⟨branchCursor, hline, hbranchActions⟩
         have hlineSilent :
             Devm.DispatchSilent cursor.pre branchCursor.pre :=
@@ -1817,8 +1807,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorSilent
         (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
     frame.post at mainCursor
   rcases mainCursor.peelChildlessLine
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨entryBranchCursor, hentryLine, hentryActions⟩
   have hentrySilent :
       Devm.DispatchSilent mainCursor.pre entryBranchCursor.pre :=
@@ -1847,9 +1836,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorSilent
     (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
     frame.post at dispatchPrefixCursor
   rcases dispatchPrefixCursor.peelChildlessLine
-      (by simp only [fsig, cdl, Ninst.pushB256, shiftRight, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨dispatchCursor, hfsig, hfsigActions⟩
   have hfsigSilent :
       Devm.DispatchSilent dispatchPrefixCursor.pre dispatchCursor.pre :=
@@ -1906,8 +1893,7 @@ theorem Exec.Frame.CompiledCursor.enterNonpayableSilent
   change Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
     ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.revert)) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, hline, hbranchActions⟩
   have hlineSilent : Devm.DispatchSilent cursor.pre branchCursor.pre :=
     Devm.DispatchSilent.of_callvalueFlag hline
@@ -2001,7 +1987,7 @@ theorem Exec.Frame.CompiledCursor.reachCallBoolCallbackWithPrefix
     {final : Devm} {img : Bytes}
     (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame (f₀ :: aux) table
       (callBoolCallback sel targetArg dataArg value) final)
-    (hvalueChildless : ∀ n ∈ value, NinstIsChildless n)
+    (hvalueChildless : ∀ n ∈ value, NonExecInstruction n)
     (h_value_stack : ∀ {a b : Devm} {xs : Stack},
       xs <<+ a.stack → Line.Run frame.sevm a value b →
         valueWord :: xs <<+ b.stack)
@@ -2022,52 +2008,40 @@ theorem Exec.Frame.CompiledCursor.reachCallBoolCallbackWithPrefix
   rcases cursor.peelChildlessLine
       (line := arg targetArg ++
         [Ninst.dup 0, Ninst.extcodesize, Ninst.iszero])
-      (by simp only [arg, cdl, Ninst.pushB256, Fin.isValue, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, hcheck, hcheckActions⟩
   rcases branchCursor.selectBranchLeftWithBurn
       (fun _ => not_run_revert) with
     ⟨successCursor, hpopCheck, hbranchActions⟩
-  rcases successCursor.selectNextChildless (by
-      simp only [NinstIsChildless]) with
+  rcases successCursor.selectNextChildless (NonExecInstruction.of_isNonExec rfl) with
     ⟨valueCursor, _, hpop, _, hpopActions⟩
   rcases valueCursor.peelChildlessLine hvalueChildless with
     ⟨headCursor, hvalueRun, hvalueActions⟩
   rcases headCursor.peelChildlessLine
       (line := storeTokenCallbackHead sel)
-      (by simp only [storeTokenCallbackHead, Ninst.pushB256, mstoreAt, List.cons_append,
-        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨zerosCursor, hhead, hheadActions⟩
   rcases zerosCursor.peelChildlessLine
       (line := pushList [0, 0])
-      (by simp only [pushList, List.map_cons, Ninst.pushB256, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false, or_self, NinstIsChildless, forall_eq]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨tailCursor, hzeros, hzerosActions⟩
   rcases tailCursor.peelChildlessLine
       (line := forwardArgTail dataArg 4)
-      (by simp only [forwardArgTail, arg, cdl, Ninst.pushB256, Fin.isValue, mstoreAt,
-        List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨sizeCursor, htail, htailActions⟩
   rcases sizeCursor.peelChildlessLine
       (line := tokenCallbackArgsSize)
-      (by simp only [tokenCallbackArgsSize, Ninst.pushB256, List.mem_cons, List.not_mem_nil,
-        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨offsetCursor, hsize, hsizeActions⟩
   rcases offsetCursor.peelChildlessLine
       (line := [Ninst.pushB256 callbackArgsOffset, Ninst.pushB256 0])
-      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetCursor, hoffsets, hoffsetsActions⟩
   rcases targetCursor.peelChildlessLine
       (line := arg targetArg)
-      (by simp only [arg, cdl, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨gasCursor, htarget, htargetActions⟩
-  rcases gasCursor.selectNextChildless (by
-      simp only [NinstIsChildless]) with
+  rcases gasCursor.selectNextChildless (NonExecInstruction.of_isNonExec rfl) with
     ⟨callCursor, _, hgas, _, hgasActions⟩
   have hprefix := rawTokenCallbackCallPrefix_of_runs
     sel targetArg dataArg valueWord value h_value_stack h_value_stor
@@ -2096,7 +2070,7 @@ theorem Exec.Frame.CompiledCursor.finishTerminalChildlessLine
     {line : Line} {i : Linst} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (line +++ Func.last i) final)
-    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    (hchildless : ∀ n ∈ line, NonExecInstruction n) :
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   rcases cursor.peelChildlessLine hchildless with
     ⟨lastCursor, _hline, hactions⟩
@@ -2122,16 +2096,14 @@ theorem Exec.Frame.CompiledCursor.finishBoolReturnCall
       Option.some.injEq] using hget.symm
   subst body
   unfold boolReturn at bodyCursor
-  rcases bodyCursor.selectNextChildless (by
-      simp only [NinstIsChildless]) with
+  rcases bodyCursor.selectNextChildless (NonExecInstruction.of_isNonExec rfl) with
     ⟨firstBranchCursor, _, _hiszero, _, hiszeroActions⟩
   rcases firstBranchCursor.selectBranchWithActions with
       hdecode | hbubble
   · rcases hdecode with ⟨decodePrefixCursor, hdecodeActions⟩
     rcases decodePrefixCursor.peelChildlessLine
         (line := returnDataShorterThan 32)
-        (by simp only [returnDataShorterThan, Ninst.pushB256, List.mem_cons, List.not_mem_nil,
-          or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨secondBranchCursor, _hshort, hshortActions⟩
     rcases secondBranchCursor.selectBranchWithActions with
         hreturn | hrev
@@ -2144,10 +2116,7 @@ theorem Exec.Frame.CompiledCursor.finishBoolReturnCall
             Ninst.iszero, Ninst.iszero] ++
           mstoreAt 0 ++ pushList [32, 0]) +++ Func.return_) final
         at returnCursor
-      have hdesc := returnCursor.finishTerminalChildlessLine (by
-        simp only [pushList, List.map_cons, Ninst.pushB256, List.map_nil, List.cons_append,
-          List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      have hdesc := returnCursor.finishTerminalChildlessLine (NonExecInstruction.forall_of_all rfl)
       exact hdesc.trans (hreturnActions.trans
         (hshortActions.trans (hdecodeActions.trans
           (hiszeroActions.trans hbodyActions))))
@@ -2197,7 +2166,7 @@ theorem Exec.Frame.CompiledCursor.compiledTokenCallbackChronology
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (callBoolCallback sel targetArg dataArg value) final)
-    (hvalueChildless : ∀ n ∈ value, NinstIsChildless n)
+    (hvalueChildless : ∀ n ∈ value, NonExecInstruction n)
     (h_value_stack : ∀ {a b : Devm} {xs : Stack},
       xs <<+ a.stack → Line.Run frame.sevm a value b →
         valueWord :: xs <<+ b.stack)
@@ -2294,10 +2263,7 @@ theorem Exec.Frame.compiledDepositToAndCallChronology
   unfold depositToAndCall at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := mintToPrefix)
-      (by simp only [mintToPrefix, addressArg, arg, cdl, Ninst.pushB256, normalizeAddress,
-        pushAddressMask, List.cons_append, List.nil_append, mstoreAt, logWith, Fin.isValue,
-        Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callbackCursor, hmint, hcallbackActions⟩
   have hwfBody : Mem.Wf bodyCursor.pre.memory := by
     rw [← hentrySilent.memory]
@@ -2313,7 +2279,7 @@ theorem Exec.Frame.compiledDepositToAndCallChronology
     (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 1)
     (valueWord := frame.sevm.value) (value := [Ninst.callvalue])
     (img := frame.sevm.value.toBytes)
-    (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq])
+    (NonExecInstruction.forall_of_all rfl)
     (by
       intro a b xs hp hline
       rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
@@ -2391,10 +2357,7 @@ theorem Exec.Frame.compiledApproveAndCallChronology
   unfold approveAndCall at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := approvePrefix)
-      (by simp only [approvePrefix, mstoreAt, Ninst.pushB256, List.cons_append, List.nil_append,
-        argCopy, cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl,
-        Fin.isValue, logApprove, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callbackCursor, hprefix, hcallbackActions⟩
   have hwfBody : Mem.Wf bodyCursor.pre.memory := by
     rw [← hbodySilent.memory]
@@ -2410,8 +2373,7 @@ theorem Exec.Frame.compiledApproveAndCallChronology
     (sel := onTokenApprovalSelector) (targetArg := 0) (dataArg := 2)
     (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
     (img := callbackImg)
-    (by simp only [arg, cdl, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by
       intro a b xs hp hline
       exact prefix_of_arg hp hline)
@@ -2470,14 +2432,11 @@ private theorem RedemptionOwnerSource.valid
 
 private theorem RedemptionOwnerSource.childless
     (source : RedemptionOwnerSource) :
-    ∀ n ∈ source.line, NinstIsChildless n := by
+    ∀ n ∈ source.line, NonExecInstruction n := by
   cases source with
-  | caller => simp only [line, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-    forall_eq]
+  | caller => exact NonExecInstruction.forall_of_all rfl
   | arg k =>
-      simp only [line, addressArg, Blanc.arg, cdl, Ninst.pushB256, normalizeAddress,
-        pushAddressMask, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil,
-        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+      exact NonExecInstruction.forall_of_all rfl
 
 private theorem RedemptionOwnerSource.prefix_of_line
     (source : RedemptionOwnerSource)
@@ -2533,18 +2492,12 @@ private theorem prefix_of_redemptionLoadBalanceAmount
 private theorem valueRedemptionCheckLine_childless
     (source : RedemptionOwnerSource) (amountArg : B256) :
     ∀ n ∈ valueRedemptionCheckLine source amountArg,
-      NinstIsChildless n := by
+      NonExecInstruction n := by
   cases source with
   | caller =>
-      simp only [valueRedemptionCheckLine, redemptionLoadBalanceAmount, RedemptionOwnerSource.line,
-        Fin.isValue, List.cons_append, List.nil_append, arg, cdl, Ninst.pushB256, balanceTooSmall,
-        List.mem_cons, List.not_mem_nil, or_false, or_self_left, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]
+      exact NonExecInstruction.forall_of_all rfl
   | arg k =>
-      simp only [valueRedemptionCheckLine, redemptionLoadBalanceAmount, RedemptionOwnerSource.line,
-        addressArg, arg, cdl, Ninst.pushB256, normalizeAddress, pushAddressMask, List.cons_append,
-        List.nil_append, Fin.isValue, balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false,
-        or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+      exact NonExecInstruction.forall_of_all rfl
 
 private structure RedemptionLineObservations (pre post : Devm) : Prop where
   storage : Devm.getStor pre = Devm.getStor post
@@ -2931,7 +2884,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
     (hstack : [] <<+ cursor.pre.stack)
     (hwf : Mem.Wf cursor.pre.memory)
     (hreads : Mem.Reads cursor.pre.memory img)
-    (hsendChildless : ∀ n ∈ sendPrefix, NinstIsChildless n)
+    (hsendChildless : ∀ n ∈ sendPrefix, NonExecInstruction n)
     (hsend : ∀ {pre callPre : Devm} {value : B256} {tail : Stack},
       value :: tail <<+ pre.stack →
       Line.Run frame.sevm pre sendPrefix callPre →
@@ -3000,8 +2953,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
     cons_pref_cons_inv hguardStack
   rcases successCursor.peelChildlessLine
       (line := debitLoadedBalance)
-      (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨afterDebitCursor, hdebit, hdebitActions⟩
   have hcheckObs :=
     valueRedemptionCheckLine_observations source amountArg hcheck
@@ -3024,10 +2976,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
       eventCursor.pre.stack := source.prefix_of_line nil_pref howner
   rcases eventCursor.peelChildlessLine
       (line := valueRedemptionEventLine amountArg)
-      (by simp only [valueRedemptionEventLine, arg, cdl, Ninst.pushB256, List.cons_append,
-        List.nil_append, emitTransfer, transferFromLog, Fin.isValue, mstoreAt, logWith,
-        Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨sendCursor, hevent, heventActions⟩
   have hmemoryPreEvent : cursor.pre.memory = eventCursor.pre.memory := by
     calc
@@ -3062,8 +3011,7 @@ private theorem Exec.Frame.CompiledCursor.compiledValueRedemptionContinuation
       actualStep, _actualPrec, _actualEdge'⟩
   have hcall : Ninst.Run frame.sevm callCursor.pre Ninst.call
       testCursor.pre := ⟨actualSlot, actualFilled, actualPc, actualStep⟩
-  rcases testCursor.selectNextChildless (by
-      simp only [NinstIsChildless]) with
+  rcases testCursor.selectNextChildless (NonExecInstruction.of_isNonExec rfl) with
     ⟨guardBranchCursor, _testSlot, hiszero, _testOccurrence,
       htestGuardActions⟩
   rcases guardBranchCursor.selectBranchLeftWithBurn
@@ -3206,8 +3154,8 @@ theorem Exec.Frame.CompiledCursor.compiledValueRedemptionChronology
     (hstack : [] <<+ cursor.pre.stack)
     (hwf : Mem.Wf cursor.pre.memory)
     (hreads : Mem.Reads cursor.pre.memory img)
-    (hsendChildless : ∀ n ∈ sendPrefix, NinstIsChildless n)
-    (hsuccessChildless : ∀ n ∈ successLine, NinstIsChildless n)
+    (hsendChildless : ∀ n ∈ sendPrefix, NonExecInstruction n)
+    (hsuccessChildless : ∀ n ∈ successLine, NonExecInstruction n)
     (hsuccessStor : Func.Inv Devm.getStor Devm.getStor
       (successLine +++ Func.last successLast))
     (hsuccessBal : Func.Inv Devm.getBal Devm.getBal
@@ -3301,9 +3249,7 @@ theorem Exec.Frame.CompiledCursor.enterTransferZeroThen
   rcases cursor.compiledValueRedemptionContinuation
       (sendErrorReason := "WETH: ETH transfer failed")
       hstack hwf hreads
-      (by simp only [sendValueToCallerPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
-        Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-        or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro pre callPre value tail hp hrun
         exact sendValueToCallerPrefix_effect hp hrun)
@@ -3357,9 +3303,7 @@ theorem Exec.Frame.compiledWithdrawChronology
     (successLine := []) (successLast := .stop)
     (sendErrorReason := "WETH: ETH transfer failed")
     hbodyStack hwfBody hreadsBody
-    (by simp only [sendValueToCallerPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])
     (by func_inv)
     (by func_inv)
@@ -3422,9 +3366,7 @@ theorem Exec.Frame.compiledWithdrawToChronology
     (successLine := []) (successLast := .stop)
     (sendErrorReason := "WETH: ETH transfer failed")
     hbodyStack hwfBody hreadsBody
-    (by simp only [sendValueToArgPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, arg, cdl, List.mem_cons, List.not_mem_nil,
-      or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])
     (by func_inv)
     (by func_inv)
@@ -3496,9 +3438,7 @@ theorem Exec.Frame.compiledTransferZeroChronology
       (transferZeroThen returnTrue <?> transferNonzeroThen returnTrue))
     frame.post at bodyCursor
   rcases bodyCursor.peelChildlessLine
-      (by simp only [transferZeroSelectLine, arg, cdl, Ninst.pushB256, List.cons_append,
-        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine, htargetActions⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+
@@ -3557,12 +3497,8 @@ theorem Exec.Frame.compiledTransferZeroChronology
     (successLine := returnTruePrefixCompiled) (successLast := .return_)
     (sendErrorReason := "WETH: ETH transfer failed")
     nil_pref hwfZero hreadsZero
-    (by simp only [sendValueToCallerPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
-    (by simp only [returnTruePrefixCompiled, Ninst.pushB256, mstoreAt, List.cons_append,
-      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
-      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
+    (NonExecInstruction.forall_of_all rfl)
     (by unfold returnTruePrefixCompiled; func_inv)
     (by unfold returnTruePrefixCompiled; func_inv)
     returnTrue_getCode_inv
@@ -3831,8 +3767,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
   unfold spendCallerAllowanceThen at cursor
   rcases cursor.peelChildlessLine
       (line := arg 0 ++ [Ninst.caller, Ninst.eq])
-      (by simp only [arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callerBranchCursor, _hcallerLine, hcallerActions⟩
   rcases callerBranchCursor.selectBranchWithActions with
       hallowance | hdirect
@@ -3841,19 +3776,14 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
         (line := arg 0 ++ mstoreAt 0 ++ [Ninst.caller] ++ mstoreAt 1 ++
           allowanceKeyFromMemory ++
           [Ninst.dup 0, Ninst.sload, Ninst.dup 0] ++ isMax)
-        (by simp only [arg, cdl, Ninst.pushB256, mstoreAt, List.cons_append, List.nil_append,
-          allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, Fin.isValue, isMax,
-          List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-          and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨maxBranchCursor, _hloadLine, hloadActions⟩
     rcases maxBranchCursor.selectBranchWithActions with
         hfinite | hmax
     · rcases hfinite with ⟨finiteCursor, hfiniteActions⟩
       rcases finiteCursor.peelChildlessLine
           (line := arg amount ++ [Ninst.swap 0] ++ balanceTooSmall)
-          (by simp only [arg, cdl, Ninst.pushB256, Fin.isValue, List.cons_append, List.nil_append,
-            balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨spendBranchCursor, _hspendCheck, hspendCheckActions⟩
       rcases spendBranchCursor.selectBranchWithActions with
           hsuccess | herror
@@ -3863,9 +3793,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
                 Ninst.sstore] ++
               arg 0 ++ [Ninst.swap 0, Ninst.caller] ++ emitApproval ++
               [Ninst.pop, Ninst.pop])
-            (by simp only [Fin.isValue, arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append,
-              emitApproval, mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil,
-              or_false, or_self, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+            (NonExecInstruction.forall_of_all rfl) with
           ⟨coreCallCursor, _hwriteLine, hwriteActions⟩
         rcases coreCallCursor.enterCall hcode with
           ⟨body, hget, bodyCursor, hbodyActions⟩
@@ -3886,8 +3814,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThen
     · rcases hmax with ⟨maxCursor, hmaxActions⟩
       rcases maxCursor.peelChildlessLine
           (line := [Ninst.pop, Ninst.pop])
-          (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
-            forall_eq]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨coreCallCursor, _hpopLine, hpopActions⟩
       rcases coreCallCursor.enterCall hcode with
         ⟨body, hget, bodyCursor, hbodyActions⟩
@@ -3924,9 +3851,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
   unfold spendCallerAllowanceThen at cursor
   rcases cursor.peelChildlessLine
       (line := spendOwnerEqLineCompiled)
-      (by simp only [spendOwnerEqLineCompiled, arg, cdl, Ninst.pushB256, List.cons_append,
-        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callerBranchCursor, hcallerLine, hcallerActions⟩
   have hcallerPrefix :
       [frame.sevm.caller.toB256 =? Sevm.argWord frame.sevm 0] <<+
@@ -3960,10 +3885,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
         hallowanceBranchSilent⟩
     rcases allowanceCursor.peelChildlessLine
         (line := spendAllowanceLoadLineCompiled)
-        (by simp only [spendAllowanceLoadLineCompiled, arg, cdl, Ninst.pushB256, mstoreAt,
-          List.cons_append, List.nil_append, allowanceKeyFromMemory, pushList, List.map_cons,
-          List.map_nil, Fin.isValue, isMax, List.mem_cons, List.not_mem_nil, or_false,
-          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨maxBranchCursor, hloadLine, hloadActions⟩
     rcases prefix_of_callerAllowanceIsMax 0 nil_pref hloadLine with
       ⟨hash, allowance, _hallowance, hloadPrefix⟩
@@ -3988,9 +3910,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
           hfiniteBranchSilent⟩
       rcases finiteCursor.peelChildlessLine
           (line := spendAllowanceCheckLineCompiled amount)
-          (by simp only [spendAllowanceCheckLineCompiled, arg, cdl, Ninst.pushB256, Fin.isValue,
-            List.cons_append, List.nil_append, balanceTooSmall, List.mem_cons, List.not_mem_nil,
-            or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨spendBranchCursor, hcheckLine, hcheckActions⟩
       have hguardPrefix :
           (allowance <? Sevm.argWord frame.sevm amount) :: allowance ::
@@ -4027,8 +3947,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
           ⟨0, Devm.PopBurn.of_popBurnBy hsuccessPopBy⟩ hguardPrefix
       rcases successCursor.peelChildlessLine
           (line := spendAllowanceBeforeStoreCompiled)
-          (by simp only [spendAllowanceBeforeStoreCompiled, Fin.isValue, List.mem_cons,
-            List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨storeCursor, hbeforeStore, hbeforeActions⟩
       rcases Line.of_run_cons hbeforeStore with
         ⟨afterSub, hsub, hbeforeStore⟩
@@ -4061,16 +3980,12 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
             (allowance - Sevm.argWord frame.sevm amount) :: []
               <<+ storeCursor.pre.stack :=
         Stack.prefix_of_swap hstoreSwap (of_run_swap hswap) hdupPrefix
-      rcases storeCursor.selectNextChildless (by
-          simp only [NinstIsChildless]) with
+      rcases storeCursor.selectNextChildless (NonExecInstruction.of_isNonExec rfl) with
         ⟨afterStoreCursor, _storeSlot, hstore, _storeOccurrence,
           hstoreActions⟩
       rcases afterStoreCursor.peelChildlessLine
           (line := spendAllowanceAfterStoreCompiled)
-          (by simp only [spendAllowanceAfterStoreCompiled, arg, cdl, Ninst.pushB256, Fin.isValue,
-            List.cons_append, List.nil_append, emitApproval, mstoreAt, logWith, Fin.reduceSucc,
-            List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless, forall_eq_or_imp,
-            forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨coreCallCursor, hafterStore, hafterActions⟩
       have hset : Devm.getStor afterStoreCursor.pre
           frame.sevm.currentTarget =
@@ -4171,8 +4086,7 @@ theorem Exec.Frame.CompiledCursor.enterSpendCallerAllowanceThenWithObservations
         ⟨maxCursor, _hmaxStack, hmaxActions, hmaxBranchSilent⟩
       rcases maxCursor.peelChildlessLine
           (line := [Ninst.pop, Ninst.pop])
-          (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
-            forall_eq]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨coreCallCursor, hpopLine, hpopActions⟩
       rcases coreCallCursor.enterCallSilent hcode with
         ⟨body, hget, bodyCursor, hbodyActions, hcallSilent⟩
@@ -4257,9 +4171,7 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
     (transferFromSelectLine +++
       (transferFromZero <?> transferFromNonzero)) frame.post at coreCursor
   rcases coreCursor.peelChildlessLine
-      (by simp only [transferFromSelectLine, arg, cdl, Ninst.pushB256, List.cons_append,
-        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine, htargetActions⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 1 =? 0] <<+
@@ -4297,12 +4209,8 @@ theorem Exec.Frame.compiledTransferFromZeroChronology
     (successLine := returnTruePrefixCompiled) (successLast := .return_)
     (sendErrorReason := "WETH: ETH transfer failed")
     nil_pref hwfZero hreadsZero
-    (by simp only [sendValueToCallerPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
-    (by simp only [returnTruePrefixCompiled, Ninst.pushB256, mstoreAt, List.cons_append,
-      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
-      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
+    (NonExecInstruction.forall_of_all rfl)
     (by unfold returnTruePrefixCompiled; func_inv)
     (by unfold returnTruePrefixCompiled; func_inv)
     returnTrue_getCode_inv
@@ -4380,9 +4288,7 @@ theorem Exec.Frame.compiledWithdrawFromChronology
     (successLine := []) (successLast := .stop)
     (sendErrorReason := "WETH: Ether transfer failed")
     nil_pref hwfOwn hreadsOwn
-    (by simp only [sendValueToArgPrefix, pushList, List.map_cons, Ninst.pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, arg, cdl, List.mem_cons, List.not_mem_nil,
-      or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by simp only [List.not_mem_nil, IsEmpty.forall_iff, implies_true])
     (by func_inv)
     (by func_inv)
@@ -4451,9 +4357,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
     (transferFromSelectLine +++
       (transferFromZero <?> transferFromNonzero)) frame.post at coreCursor
   rcases coreCursor.peelChildlessLine
-      (by simp only [transferFromSelectLine, arg, cdl, Ninst.pushB256, List.cons_append,
-        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine, htargetActions⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 1 =? 0] <<+
@@ -4478,20 +4382,12 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferFromNonzero
         (transferFromNonzeroSuccessLine +++ Func.return_)))
     frame.post at nonzeroCursor
   rcases nonzeroCursor.peelChildlessLine
-      (by simp only [transferFromBalanceCheckLine, loadArgBalanceAmount, addressArg, arg, cdl,
-        Ninst.pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append,
-        Fin.isValue, balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨balanceBranchCursor, _hbalanceLine, hbalanceActions⟩
   rcases balanceBranchCursor.selectBranchWithActions with
       hsuccess | herror
   · rcases hsuccess with ⟨successCursor, hsuccessActions⟩
-    have hdesc := successCursor.finishTerminalChildlessLine (by
-      simp only [transferFromNonzeroSuccessLine, debitLoadedBalance, Fin.isValue, addressArg, arg,
-        cdl, Ninst.pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append,
-        emitTransfer, transferFromLog, mstoreAt, logWith, Fin.reduceSucc, pushList, List.map_cons,
-        List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self])
+    have hdesc := successCursor.finishTerminalChildlessLine (NonExecInstruction.forall_of_all rfl)
     exact hdesc.trans (hsuccessActions.trans
       (hbalanceActions.trans (hnonzeroActions.trans
         (htargetActions.trans (hcoreActions.trans

@@ -223,7 +223,7 @@ theorem Exec.Deriv.ParentStepActions.counted_of_isChildless
     {selected : List FlowAction}
     (edge : Exec.Deriv.ParentStepActions dp ca next current selected)
     (hat : Ninst.At current.sevm.code current.pc n)
-    (hchildless : NinstIsChildless n) :
+    (hchildless : NonExecInstruction n) :
     Exec.Deriv.ParentStepCounted dp ca next current [] := by
   cases edge with
   | cont hstep next => exact .cont hstep next
@@ -232,7 +232,7 @@ theorem Exec.Deriv.ParentStepActions.counted_of_isChildless
   | runOk hstep henter child hresume next =>
       have hspawn := (Evm.step_next hat).symm.trans hstep
       rcases Ninst.step_spawn_inv hspawn with ⟨x, rfl, hx⟩
-      exact hchildless.elim
+      exact absurd rfl (hchildless.notExec x)
 
 /-- Append one empty-labelled edge to an empty-labelled counted prefix. -/
 private theorem Exec.Deriv.ParentPrefixCounted.snocNil
@@ -310,7 +310,7 @@ theorem Exec.Frame.CountedCursor.selectNextChildless
     {fs : List Func} {table : List (Nat × Func)}
     {n : Ninst} {tail : Func} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table (.next n tail) final)
-    (hchildless : NinstIsChildless n) :
+    (hchildless : NonExecInstruction n) :
     ∃ tailCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table tail final,
       Ninst.Run frame.sevm cursor.pre n tailCursor.pre := by
   have compiled := cursor.run
@@ -337,7 +337,7 @@ theorem Exec.Frame.CountedCursor.peelChildlessLine
     {fs : List Func} {table : List (Nat × Func)}
     {line : Line} {tail : Func} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table (line +++ tail) final)
-    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    (hchildless : ∀ n ∈ line, NonExecInstruction n) :
     ∃ tailCursor : Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table tail final,
       Line.Run frame.sevm cursor.pre line tailCursor.pre := by
   induction line with
@@ -449,8 +449,7 @@ private theorem Exec.Frame.CountedCursor.reachDispatchLeaf
   change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, hline⟩
   have hflag : (sig =? sig) :: stack <<+ branchCursor.pre.stack := by
     rcases Line.of_run_cons hline with ⟨afterPush, hpush, hrest⟩
@@ -558,8 +557,7 @@ private theorem Exec.Frame.CountedCursor.reachDispatchWith_build :
                     ((((w, body) :: y :: ys).length + 1) / 2))))) final
           at cursor
         rcases cursor.peelChildlessLine
-            (by simp only [Fin.isValue, Ninst.pushB256, List.length_cons, List.mem_cons,
-              List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+            (NonExecInstruction.forall_of_all rfl) with
           ⟨branchCursor, hline⟩
         have hflagPrefix :
             (leftmostFsig (DispatchTree.build n
@@ -707,8 +705,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCounted
         (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
     frame.post at mainCursor
   rcases mainCursor.peelChildlessLine
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨entryBranchCursor, hentryLine⟩
   have hflagPrefix :
       [frame.sevm.data.length.toB256 =? 0] <<+
@@ -733,9 +730,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCounted
     (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
     frame.post at dispatchPrefixCursor
   rcases dispatchPrefixCursor.peelChildlessLine
-      (by simp only [fsig, cdl, Ninst.pushB256, shiftRight, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨dispatchCursor, hfsig⟩
   have hselectorPrefix : Sevm.selector frame.sevm :: [] <<+
       dispatchCursor.pre.stack :=
@@ -766,8 +761,7 @@ theorem Exec.Frame.CountedCursor.enterNonpayable
     ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.revert)) final
     at cursor
   rcases cursor.peelChildlessLine
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, hline⟩
   have hflagPrefix : [frame.sevm.value =? 0] <<+
       branchCursor.pre.stack := by
@@ -819,7 +813,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm,
       nonpayable (line +++ Func.last i)) ∈ weth10Funcs dp)
-    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    (hchildless : ∀ n ∈ line, NonExecInstruction n) :
     Exec.attributionInner dp ca frame.run = [] := by
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursorCounted (frame := frame)
       context hnonempty hmem with
@@ -974,8 +968,7 @@ theorem Exec.Frame.CountedCursor.reachDispatchLeafSilent
   change Blanc.Weth10.Exec.Frame.CountedCursor dp ca frame fs table
     ([Ninst.pushB256 sig, Ninst.eq] +++ (f <?> .call k)) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp only [Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, hline⟩
   have hflag : (sig =? sig) :: stack <<+ branchCursor.pre.stack := by
     rcases Line.of_run_cons hline with ⟨afterPush, hpush, hrest⟩
@@ -1084,8 +1077,7 @@ theorem Exec.Frame.CountedCursor.reachDispatchWithSilent_build :
                     ((((w, body) :: y :: ys).length + 1) / 2))))) final
           at cursor
         rcases cursor.peelChildlessLine
-            (by simp only [Fin.isValue, Ninst.pushB256, List.length_cons, List.mem_cons,
-              List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+            (NonExecInstruction.forall_of_all rfl) with
           ⟨branchCursor, hline⟩
         have hlineSilent := Devm.DispatchSilent.of_dupPushGt hline
         have hflagPrefix :
@@ -1226,8 +1218,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCountedSilent
         (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
     frame.post at mainCursor
   rcases mainCursor.peelChildlessLine
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨entryBranchCursor, hentryLine⟩
   have hentrySilent := Devm.DispatchSilent.of_entryFlag hentryLine
   have hflagPrefix :
@@ -1253,9 +1244,7 @@ theorem Exec.Frame.compiledSelectorBodyCursorCountedSilent
     (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))
     frame.post at dispatchPrefixCursor
   rcases dispatchPrefixCursor.peelChildlessLine
-      (by simp only [fsig, cdl, Ninst.pushB256, shiftRight, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨dispatchCursor, hfsig⟩
   have hfsigSilent := Devm.DispatchSilent.of_fsig hfsig
   have hselectorPrefix : Sevm.selector frame.sevm :: [] <<+
@@ -1291,8 +1280,7 @@ theorem Exec.Frame.CountedCursor.enterNonpayableSilent
     ([Ninst.callvalue, Ninst.iszero] +++ (body <?> Func.revert)) final
     at cursor
   rcases cursor.peelChildlessLine
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, hline⟩
   have hlineSilent := Devm.DispatchSilent.of_callvalueFlag hline
   have hflagPrefix : [frame.sevm.value =? 0] <<+

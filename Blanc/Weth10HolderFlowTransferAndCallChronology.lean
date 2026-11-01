@@ -238,9 +238,7 @@ private theorem Exec.Frame.CompiledCursor.selectTransferArm
       (.branch (transferNonzeroThen next) (transferZeroThen next)))
     final at cursor
   rcases cursor.peelChildlessLine
-      (by simp only [transferSelectLine, arg, cdl, Ninst.pushB256, List.cons_append,
-        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, hselect, hselectActions⟩
   have hflagPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+
@@ -343,10 +341,7 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
           transferNonzeroEventPrep +++ emitTransfer +++ next)
         (.call transferBalanceErrorSlot))) final at cursor
   rcases cursor.peelChildlessLine
-      (by simp only [transferNonzeroGuardLine, loadCallerBalanceAmount, Fin.isValue, arg, cdl,
-        Ninst.pushB256, List.cons_append, List.nil_append, balanceTooSmall, List.mem_cons,
-        List.not_mem_nil, or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨guardCursor, hguard, hguardActions⟩
   rcases of_run_append (loadCallerBalanceAmount 1) hguard with
     ⟨afterLoad, hload, hsmall⟩
@@ -397,17 +392,13 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
     rw [hbalance,
       congrFun hstorCursorSuccess frame.sevm.currentTarget]
   rcases successCursor.peelChildlessLine
-      (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨creditCursor, hdebit, hdebitActions⟩
   obtain ⟨hdecrease, hcovered, hflashDebit⟩ :=
     debitLoadedBalance_storage (validAdr_toB256 frame.sevm.caller)
       hbalanceSuccess hcover hsuccessPrefix hdebit
   rcases creditCursor.peelChildlessLine
-      (by simp only [transferNonzeroCreditLine, addressArg, arg, cdl, Ninst.pushB256,
-        normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨eventCursor, hcredit, hcreditActions⟩
   obtain ⟨recipient, hrecipient, hincrease, hflashCredit⟩ :=
     creditAddressArg_storage_at 0 1 hcredit
@@ -423,9 +414,7 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
       by simpa only [toAdr_toB256] using hdecrease,
       hincrease⟩
   rcases eventCursor.peelChildlessLine
-      (by simp only [transferNonzeroEventPrep, arg, cdl, Ninst.pushB256, List.cons_append,
-        List.nil_append, addressArg, normalizeAddress, pushAddressMask, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨emitCursor, hevent, heventActions⟩
   have heventRun := hevent
   unfold transferNonzeroEventPrep at hevent
@@ -445,9 +434,7 @@ private theorem Exec.Frame.CompiledCursor.reachTransferNonzeroCallback
     simpa only [normalizedAddressArg] using
       prefix_of_addressArg hpAmount haddress
   rcases emitCursor.peelChildlessLine
-      (by simp only [emitTransfer, transferFromLog, Fin.isValue, Ninst.pushB256, mstoreAt, logWith,
-        Fin.reduceSucc, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil,
-        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callbackCursor, hemit, hemitActions⟩
   have hmemCursorEmit : cursor.pre.memory = emitCursor.pre.memory := by
     calc
@@ -605,8 +592,7 @@ theorem Exec.Frame.compiledTransferAndCallNonzeroChronology
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 2)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := (Sevm.argWord frame.sevm 1).toBytes)
-      (by simp only [arg, cdl, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)
@@ -699,8 +685,7 @@ theorem Exec.Frame.compiledTransferAndCallZeroChronology
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 2)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := (Sevm.argWord frame.sevm 1).toBytes)
-      (by simp only [arg, cdl, Ninst.pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)

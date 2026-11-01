@@ -73,11 +73,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_approve
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons]
     exact Or.inr (Or.inl (by rfl))
-  have hchildless : ∀ n ∈ approveLine, NinstIsChildless n := by
-    simp only [approveLine, approvePrefix, mstoreAt, pushB256, List.cons_append, List.nil_append,
-      argCopy, cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl,
-      Fin.isValue, logApprove, logWith, Fin.reduceSucc, returnTrueLine, List.mem_cons,
-      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ approveLine, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless
     context hnonempty hmem hchildless
 
@@ -179,10 +176,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_allowance
         nonpayable allowance := rfl
     rw [hshape]
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, or_true]
-  have hchildless : ∀ n ∈ allowanceLine, NinstIsChildless n := by
-    simp only [allowanceLine, argCopy, cdc, pushB256, allowanceKeyFromMemory, pushList,
-      List.map_cons, List.map_nil, List.cons_append, List.nil_append, mstoreAt, List.mem_cons,
-      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ allowanceLine, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless
     context hnonempty hmem hchildless
 

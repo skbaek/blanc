@@ -947,8 +947,7 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
       Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   unfold permitAfterStaticcall at cursor
   rcases cursor.peelChildlessLine (line := permitFirstSignerGuardLine)
-      (by simp only [permitFirstSignerGuardLine, Ninst.pushB256, Fin.isValue, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨firstBranchCursor, hfirstLine, hfirstActions⟩
   rcases firstBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (reason := "WETH: invalid permit") (by
@@ -957,10 +956,7 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
           List.getElem_cons_succ, List.getElem_cons_zero])) with
     ⟨secondGuardCursor, hfirstPop, hfirstBranchActions⟩
   rcases secondGuardCursor.peelChildlessLine
-      (line := permitSecondSignerGuardLine) (by
-        simp only [permitSecondSignerGuardLine, arg, cdl, Ninst.pushB256, List.cons_append,
-          List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-          forall_eq_or_imp, forall_eq, and_self]) with
+      (line := permitSecondSignerGuardLine) (NonExecInstruction.forall_of_all rfl) with
     ⟨secondBranchCursor, hsecondLine, hsecondActions⟩
   rcases secondBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (reason := "WETH: invalid permit") (by
@@ -972,11 +968,7 @@ private theorem Exec.Frame.CompiledCursor.finishPermitAfterStaticcall
     ⟨terminalCursor, _hterminalPre, hterminalActions⟩
   have hdesc : Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame =
       approveCursor.actions :=
-    (terminalCursor.finishTerminalChildlessLine (by
-      simp only [approvePermitLine, argCopy, cdc, Ninst.pushB256, allowanceKeyFromMemory, pushList,
-        List.map_cons, List.map_nil, List.cons_append, List.nil_append, arg, cdl, Fin.isValue,
-        mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])).trans hterminalActions
+    (terminalCursor.finishTerminalChildlessLine (NonExecInstruction.forall_of_all rfl)).trans hterminalActions
   have happroveObs := approvePermit_observations dp
     (Func.Run.of_runCompiled approveCursor.run)
   have hfirstObs : PermitOwnObservations frame.sevm cursor.pre
@@ -1023,9 +1015,7 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
       PermitOwnObservations frame.sevm cursor.pre recoverCursor.pre := by
   rcases cursor.castSourceFrame_permit (permitDomainDispatch_shape dp) with
     ⟨domainCursor, hdomainPre, hdomainActions⟩
-  rcases domainCursor.peelChildlessLine (line := permitDomainTestLine dp) (by
-      simp only [permitDomainTestLine, Fin.isValue, pushDeployWord, List.mem_cons, List.not_mem_nil,
-        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+  rcases domainCursor.peelChildlessLine (line := permitDomainTestLine dp) (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, htest, htestActions⟩
   have htestObs : PermitOwnObservations frame.sevm domainCursor.pre
       branchCursor.pre :=
@@ -1040,11 +1030,7 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
   · rcases hcalculated with
       ⟨calculatedCursor, hcalculatedActions, hbranchObs⟩
     rcases calculatedCursor.peelChildlessLine
-        (line := permitCalculatedDomainPrefix) (by
-          simp only [permitCalculatedDomainPrefix, Fin.isValue, calculateDomainSeparator, mstoreAt,
-            Ninst.pushB256, List.cons_append, List.nil_append, pushList, List.map_cons,
-            List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-            forall_eq_or_imp, forall_eq, and_self]) with
+        (line := permitCalculatedDomainPrefix) (NonExecInstruction.forall_of_all rfl) with
       ⟨callCursor, hcalculatedLine, hlineActions⟩
     have hlineObs : PermitOwnObservations frame.sevm calculatedCursor.pre
         callCursor.pre :=
@@ -1072,9 +1058,7 @@ private theorem Exec.Frame.CompiledCursor.enterPermitDomainDispatch
         htestObs.trans (hbranchObs.trans (hlineObs.trans hcallObs))⟩
   · rcases hcached with ⟨cachedCursor, hcachedActions, hbranchObs⟩
     rcases cachedCursor.peelChildlessLine
-        (line := permitCachedDomainPrefix dp) (by
-          simp only [permitCachedDomainPrefix, Fin.isValue, pushDeployWord, List.mem_cons,
-            List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+        (line := permitCachedDomainPrefix dp) (NonExecInstruction.forall_of_all rfl) with
       ⟨callCursor, hcachedLine, hlineActions⟩
     have hlineObs : PermitOwnObservations frame.sevm cachedCursor.pre
         callCursor.pre :=
@@ -1112,16 +1096,9 @@ private theorem Exec.Frame.CompiledCursor.enterPermitAfterDeadline
       recoverCursor.actions = cursor.actions ∧
       PermitOwnObservations frame.sevm cursor.pre recoverCursor.pre := by
   unfold permitAfterDeadline at cursor
-  rcases cursor.peelChildlessLine (line := permitNoncePrepare) (by
-      simp only [permitNoncePrepare, addressArg, arg, cdl, Ninst.pushB256, normalizeAddress,
-        pushAddressMask, List.cons_append, List.nil_append, Fin.isValue, tagNonceKey, mstoreAt,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+  rcases cursor.peelChildlessLine (line := permitNoncePrepare) (NonExecInstruction.forall_of_all rfl) with
     ⟨structCursor, hnonce, hnonceActions⟩
-  rcases structCursor.peelChildlessLine (line := permitStructPrepare) (by
-      simp only [permitStructPrepare, Ninst.pushB256, mstoreAt, List.cons_append, List.nil_append,
-        argCopy, cdc, arg, cdl, pushList, List.map_cons, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+  rcases structCursor.peelChildlessLine (line := permitStructPrepare) (NonExecInstruction.forall_of_all rfl) with
     ⟨domainCursor, hstruct, hstructActions⟩
   rcases domainCursor.enterPermitDomainDispatch hcode with
     ⟨recoverCursor, hrecoverActions, hdomainObs⟩
@@ -1170,10 +1147,7 @@ private theorem Exec.Frame.reachCompiledPermitRecover
     (permitDeadlineLine +++
       (.branch (permitAfterDeadline dp) (.call expiredPermitErrorSlot)))
     frame.post at permitCursor
-  rcases permitCursor.peelChildlessLine (line := permitDeadlineLine) (by
-      simp only [permitDeadlineLine, arg, cdl, Ninst.pushB256, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+  rcases permitCursor.peelChildlessLine (line := permitDeadlineLine) (NonExecInstruction.forall_of_all rfl) with
     ⟨deadlineBranchCursor, hdeadline, hdeadlineActions⟩
   rcases deadlineBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (reason := "WETH: Expired permit") (by
@@ -1259,11 +1233,7 @@ theorem Exec.Frame.compiledPermitChronology
       recoverCursor.pre := by
     simpa only [hrecoverPre] using hrecoverObs
   rcases recoverCursor.peelChildlessLine
-      (line := permitDigest ++ permitRecoverPrepare) (by
-        simp only [permitDigest, Fin.isValue, Ninst.pushB256, mstoreAt, List.cons_append,
-          List.nil_append, pushList, List.map_cons, List.map_nil, permitRecoverPrepare,
-          permitRecoverWrites, arg, cdl, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (line := permitDigest ++ permitRecoverPrepare) (NonExecInstruction.forall_of_all rfl) with
     ⟨callCursor, hrecoverPrefix, hrecoverPrefixActions⟩
   rcases of_run_append permitDigest hrecoverPrefix with
     ⟨preparePre, hdigest, hprepare⟩

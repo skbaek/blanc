@@ -66,8 +66,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThen
   unfold spendCallerAllowanceThen at cursor
   rcases cursor.peelChildlessLine
       (line := arg 0 ++ [Ninst.caller, Ninst.eq])
-      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callerBranchCursor, -⟩
   rcases callerBranchCursor.selectBranchSplit with hallowance | hdirect
   · rcases hallowance with ⟨allowanceCursor⟩
@@ -75,18 +74,13 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThen
         (line := arg 0 ++ mstoreAt 0 ++ [Ninst.caller] ++ mstoreAt 1 ++
           allowanceKeyFromMemory ++
           [Ninst.dup 0, Ninst.sload, Ninst.dup 0] ++ isMax)
-        (by simp only [arg, cdl, pushB256, mstoreAt, List.cons_append, List.nil_append,
-          allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, Fin.isValue, isMax,
-          List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-          and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨maxBranchCursor, -⟩
     rcases maxBranchCursor.selectBranchSplit with hfinite | hmax
     · rcases hfinite with ⟨finiteCursor⟩
       rcases finiteCursor.peelChildlessLine
           (line := arg amount ++ [Ninst.swap 0] ++ balanceTooSmall)
-          (by simp only [arg, cdl, pushB256, Fin.isValue, List.cons_append, List.nil_append,
-            balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨spendBranchCursor, -⟩
       rcases spendBranchCursor.selectBranchSplit with hsuccess | herror
       · rcases hsuccess with ⟨successCursor⟩
@@ -95,9 +89,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThen
                 Ninst.sstore] ++
               arg 0 ++ [Ninst.swap 0, Ninst.caller] ++ emitApproval ++
               [Ninst.pop, Ninst.pop])
-            (by simp only [Fin.isValue, arg, cdl, pushB256, List.cons_append, List.nil_append,
-              emitApproval, mstoreAt, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil,
-              or_false, or_self, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+            (NonExecInstruction.forall_of_all rfl) with
           ⟨coreCallCursor, -⟩
         exact coreCallCursor.enterCall hcode
       · rcases herror with ⟨errorCursor⟩
@@ -110,8 +102,7 @@ private theorem Exec.Frame.CountedCursor.enterSpendCallerAllowanceThen
     · rcases hmax with ⟨maxCursor⟩
       rcases maxCursor.peelChildlessLine
           (line := [Ninst.pop, Ninst.pop])
-          (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self, NinstIsChildless,
-            forall_eq]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨coreCallCursor, -⟩
       exact coreCallCursor.enterCall hcode
   · rcases hdirect with ⟨directCursor⟩
@@ -330,9 +321,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero
     (transferFromSelectLine +++
       (transferFromZero <?> transferFromNonzero)) frame.post at coreCursor
   rcases coreCursor.peelChildlessLine
-      (by simp only [transferFromSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 1 =? 0] <<+
@@ -357,19 +346,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferFromNonzero
         (transferFromNonzeroSuccessLine +++ Func.last .return_)))
     frame.post at nonzeroCursor
   rcases nonzeroCursor.peelChildlessLine
-      (by simp only [transferFromBalanceCheckLine, loadArgBalanceAmount, addressArg, arg, cdl,
-        pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append, Fin.isValue,
-        balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨balanceBranchCursor, -⟩
   rcases balanceBranchCursor.selectBranchSplit with hsuccess | herror
   · rcases hsuccess with ⟨successCursor⟩
     rcases successCursor.peelChildlessLine
-        (by simp only [transferFromNonzeroSuccessLine, debitLoadedBalance, Fin.isValue, addressArg,
-          arg, cdl, pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append,
-          emitTransfer, transferFromLog, mstoreAt, logWith, Fin.reduceSucc, pushList, List.map_cons,
-          List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-          forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
   · rcases herror with ⟨errorCursor⟩

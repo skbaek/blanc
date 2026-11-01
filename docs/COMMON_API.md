@@ -831,6 +831,11 @@ Use [`Blanc/RootedExecution.lean`](../Blanc/RootedExecution.lean):
 - `rootedRunCompiledTo` mirrors a compiled walk while carrying the predicate.
 - `ninstAllChildRoots_of_not_exec` handles a known childless instruction.
 - `NonExecInstruction` supplies reusable structural childlessness instances.
+  For a concrete line, [`Blanc/NonExecLine.lean`](../Blanc/NonExecLine.lean)'s
+  `NonExecInstruction.forall_of_all rfl` proves
+  `∀ n ∈ line, NonExecInstruction n` by reducing the Boolean `Ninst.isNonExec`
+  (one instruction: `NonExecInstruction.of_isNonExec rfl`); do not unfold the
+  line with a per-site `simp only` list.
 - `ninstAllChildRoots_of_exec_spawn` handles a spawning instruction from a
   predicate over the entered child's `Exec.rawFrameRoots`.
 - `funcExecFree` and `rootedRunCompiledTo_of_execFree` discharge a whole
