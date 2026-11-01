@@ -34,37 +34,9 @@ theorem t09da_inv {oldP newP target R : B256} {base : List B256} {post : Devm}
       t_0a81_c4 (.done (.returned post)) := by
   obtain ⟨hhash, hnoext, -, -⟩ := scratch_mapSlot hmem halign oldP 6
   unfold t_09da_c32 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G1, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_dup (w := oldP) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_and s1
+  winv 3
   rw [mask_and_canonical hold] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_dup (w := Bytes.toB256 []) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_dup (w := (3 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G10, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_dup (w := Bytes.toB256 []) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G15, rfl⟩ := ri_keccak s1
+  winv 12
   simp only [show (Bytes.toB256 [] : B256) = 0 from rfl,
     show (Bytes.toB256 [32] : B256) = 32 from rfl,
     show (Bytes.toB256 [64] : B256) = 64 from rfl,
@@ -73,37 +45,18 @@ theorem t09da_inv {oldP newP target R : B256} {base : List B256} {post : Devm}
     show (32 : B256).toNat = 32 from rfl,
     show (64 : B256).toNat = 64 from rfl,
     hhash, hnoext] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G16, rfl⟩ := ri_dup (w := mapSlot oldP 6) rfl s1
+  winv 1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G17, rfl⟩ := ri_sload hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_swap (n := 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G20, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G21, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G23, rfl⟩ := ri_push s1
+  winv 6
   obtain ⟨G24, ⟨D, callee, run⟩ | ⟨D, -, hr⟩⟩ := ric_call entry40_lookup run
   · obtain ⟨hnz, G25, rfl⟩ := entry40_returned_inv callee
     refine ⟨hnz, ?_⟩
     unfold t_0a0d_c32 at run
-    obtain ⟨G26, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G27, rfl⟩ := ri_swap (n := 0) rfl s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G28, rfl⟩ := ri_swap (n := 1) rfl s1
+    winv 3
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G29, rfl⟩ := ri_sstore hfork s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G30, rfl⟩ := ri_pop s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G31, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨G32, run⟩ := ric_jump (List.not_mem_nil) entry4_lookup run
     exact ⟨G32, run⟩
   · cases hr
@@ -122,18 +75,9 @@ theorem entry4_inv {oldP newP target R : B256} {base : List B256} {post : Devm}
       (St b (oldP :: newP :: target :: 3 :: R :: base) M G')
       t_0ada_c4 (.done (.returned post))) := by
   unfold t_0a81_c4 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_dup (w := newP) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_and s1
+  winv 4
   rw [mask_and_canonical hnew] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_push s1
+  winv 2
   rcases ric_branch run with ⟨hz, G7, run⟩ | ⟨hnz, G7, run⟩
   · refine .inl ⟨?_, G7, run⟩
     rintro rfl
@@ -158,37 +102,9 @@ theorem t0a9e_inv {oldP newP target R : B256} {base : List B256} {post : Devm}
       t_0c5e_c5 (.done (.returned post)) := by
   obtain ⟨hhash, hnoext, -, -⟩ := scratch_mapSlot hmem halign newP 6
   unfold t_0a9e_c4 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G1, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_dup (w := newP) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_and s1
+  winv 3
   rw [mask_and_canonical hnew] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_dup (w := Bytes.toB256 []) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_dup (w := (3 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G10, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_dup (w := Bytes.toB256 []) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G15, rfl⟩ := ri_keccak s1
+  winv 12
   simp only [show (Bytes.toB256 [] : B256) = 0 from rfl,
     show (Bytes.toB256 [32] : B256) = 32 from rfl,
     show (Bytes.toB256 [64] : B256) = 64 from rfl,
@@ -197,37 +113,18 @@ theorem t0a9e_inv {oldP newP target R : B256} {base : List B256} {post : Devm}
     show (32 : B256).toNat = 32 from rfl,
     show (64 : B256).toNat = 64 from rfl,
     hhash, hnoext] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G16, rfl⟩ := ri_dup (w := mapSlot newP 6) rfl s1
+  winv 1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G17, rfl⟩ := ri_sload hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_swap (n := 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G20, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G21, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G23, rfl⟩ := ri_push s1
+  winv 6
   obtain ⟨G24, ⟨D, callee, run⟩ | ⟨D, -, hr⟩⟩ := ric_call entry24_lookup run
   · obtain ⟨hnz, G25, rfl⟩ := entry24_returned_inv callee
     refine ⟨hnz, ?_⟩
     unfold t_0ad1_c4 at run
-    obtain ⟨G26, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G27, rfl⟩ := ri_swap (n := 0) rfl s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G28, rfl⟩ := ri_swap (n := 1) rfl s1
+    winv 3
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G29, rfl⟩ := ri_sstore hfork s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G30, rfl⟩ := ri_pop s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G31, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨G32, run⟩ := ric_jump (List.not_mem_nil) entry5_lookup run
     exact ⟨G32, run⟩
   · cases hr

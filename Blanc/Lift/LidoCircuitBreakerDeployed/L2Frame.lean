@@ -164,80 +164,46 @@ theorem registerPauser_dispatch {sevm : Sevm} {pre post : Devm}
   have run := run.cut
   rw [St.self hfresh.1 hfresh.2] at run
   unfold t_0000_c0 at run
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_callvalue step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_iszero step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
+  winv 7
   rcases ric_branch run with ⟨_, G, run⟩ | ⟨_, G, run⟩
   · unfold t_000c_c0 at run
     obtain ⟨d, step, run⟩ := ric_next run
     obtain ⟨d, step, run⟩ := ric_next run
     exact False.elim (ric_revert run)
   unfold t_000f_c0 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_calldatasize step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_lt step
-  obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
+  winv 6
   rcases ric_branch run with ⟨_, G, run⟩ | ⟨_, G, run⟩
   · unfold t_0019_c0 at run
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_calldataload step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_shr step
+    winv 4
     change Sevm.dataWord sevm 0 >>> (224 : Nat) = _ at hsig
     change SFunc.RunCut prog sevm []
       (St pre [(Sevm.dataWord sevm 0 >>> 224)]
         (Mem.empty.write 64 (128 : B256).toBytes) _) _ _ at run
     rw [hsig, registerPauser_selector_eq] at run
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_gt step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
+    winv 4
     rcases ric_branch run with ⟨hz, _⟩ | ⟨_, G, run⟩
     · exfalso; revert hz; decide
     unfold t_00ad_c0 at run
-    obtain ⟨_, run⟩ := ric_dest run
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_gt step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
+    winv 5
     rcases ric_branch run with ⟨hz, _⟩ | ⟨_, G, run⟩
     · exfalso; revert hz; decide
     unfold t_00e8_c0 at run
-    obtain ⟨_, run⟩ := ric_dest run
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
+    winv 5
     rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) (by rfl) run with ⟨_, G, run⟩ | ⟨hnz, _⟩
     swap
     · exfalso; apply hnz; decide
     unfold t_00f4_c0 at run
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
+    winv 4
     rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) (by rfl) run with ⟨_, G, run⟩ | ⟨hnz, _⟩
     swap
     · exfalso; apply hnz; decide
     unfold t_00ff_c0 at run
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
+    winv 4
     rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) (by rfl) run with ⟨_, G, run⟩ | ⟨hnz, _⟩
     swap
     · exfalso; apply hnz; decide
     unfold t_010a_c0 at run
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq step
-    obtain ⟨d, step, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push step
+    winv 4
     rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) (by rfl) run with ⟨hz, _⟩ | ⟨_, G, run⟩
     · exfalso; revert hz; decide
     refine ⟨G, ?_⟩
