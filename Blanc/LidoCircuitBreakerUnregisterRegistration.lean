@@ -108,7 +108,6 @@ theorem foundZeroRetainedRegistration_sourceTrace_witness
   refine ⟨_, htrace, rfl, rfl, ?_⟩
   exact hw.applyFoundZeroWrites htarget hfind
 
-set_option maxRecDepth 601 in
 private theorem registerAfterSet_retainedOldZero_runCompiled
     (fs : List Func) (sevm : Sevm) (base : Devm)
     (hfork : CoveredFork sevm.benvStat.fork)
@@ -201,7 +200,9 @@ private theorem registerAfterSet_retainedOldZero_runCompiled
     case h_val =>
       rw [Devm.getStorVal_setMach, hcount]
       simp only [B256.eqCheck, hremaining, ↓reduceIte]
-    case h_arm => exact Func.RunCompiled.last rfl
+    case h_arm =>
+      rw [Nat.add_sub_cancel]
+      exact Func.RunCompiled.last rfl
   have holdTail : Func.RunCompiled fs sevm
       (base.setMach ⟨stack, M, G + 151, base.stateGas⟩) oldBranch
       (base.setMach ⟨stack, M, G, base.stateGas⟩) := by

@@ -824,7 +824,6 @@ theorem previousCountKey_prepend_runCompiled
   all_goals first | omega |
     (simp only [Devm.stack_setMach, List.length_cons]; omega)
 
-set_option maxRecDepth 5620 in
 /-- Generic **old-last** arm of `registerAfterSet`: the previous pauser is
 nonzero and its remaining assignment count is zero, so the walk clears that
 pauser's heartbeat expiry to `0`, writes `0` into the event scratch word, and
@@ -944,6 +943,8 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
       (clearPost.setMach ⟨stack, M', G + 1395, clearPost.stateGas⟩)
       (loadWord previousPauserWord +++
         pushB256 heartbeatUpdatedEvent ::: logWith 1 0 1 +++ newTail) post := by
+    have hevent := heartbeatUpdatedEvent_pushCost
+    generalize hev : heartbeatUpdatedEvent = event at hevent ⊢
     func_run (6) [3, 1381]
     all_goals try ((try simp only [Devm.stack_setMach, List.length_cons]); omega)
     case h_cost =>
@@ -959,7 +960,8 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
       rw [hpreviousMemory', hpreviousValue']
       simp only [show ((0 : B256) * 32).toNat = 0 by decide,
         show ((1 : B256) * 32).toNat = 32 by decide]
-      rw [hzeroRead', hzeroMemory']
+      rw [hzeroRead', hzeroMemory', Nat.add_sub_cancel]
+      subst hev
       exact htail
   have hmstore : Func.RunCompiled fs sevm
       (clearPost.setMach ⟨stack, M, G + 1402, clearPost.stateGas⟩)
@@ -1047,7 +1049,6 @@ theorem registerAfterSet_oldLast_newPauserTail_runCompiled
     rw [hg]
     exact holdTail
 
-set_option maxRecDepth 607 in
 /-- The checked expiry `SSTORE` and the `HeartbeatUpdated(newPauser)` record that
 close every nonzero-new-pauser `registerAfterSet` arm, entered with the expiry
 key and the computed expiry on the stack and the expiry already staged as the
@@ -1135,6 +1136,8 @@ private theorem registerAfterSet_expiryStoreLogTail_runCompiled
             expiry.toBytes⟩).setMach ⟨stack, M', G, (storePost.addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩ by
       obtain ⟨out, hrun, heq⟩ := h
       exact heq ▸ hrun
+    have hevent := heartbeatUpdatedEvent_pushCost
+    generalize heartbeatUpdatedEvent = event at hevent ⊢
     apply Exists.intro
     constructor
     · func_run [3, 1381]

@@ -385,7 +385,6 @@ private lemma responder_staticcall_crossing
 Both `pauseSuccess` arms end in `pauseExpiryFinish` and differ only in the
 word they carry into it. -/
 
-set_option maxRecDepth 604 in
 /-- `pauseExpiryFinish` from the carried expiry word: writes the word into the
 caller's expiry cell (`SSTORE` charge supplied in the register-side
 `sstoreValueCost` style), emits `HeartbeatUpdated(caller)` with the word as
@@ -416,9 +415,18 @@ theorem pauseExpiryFinish_ok_runCompiled
             value.toBytes⟩).setMach
         ⟨[], M.write 0 value.toBytes, G, ((temporalSstorePost sevm base (expirySlot pauser) value).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], value.toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
+  show Func.RunCompiled fs sevm
+    (base.setMach ⟨[value], M, G + 1512 + storeCost, base.stateGas⟩)
+    (Ninst.dup 0 ::: pushB256 (0 * 32) ::: Ninst.mstore :::
+      Ninst.caller ::: pushB256 (regionWord expiryRegion) ::: Ninst.or :::
+      Ninst.sstore ::: Ninst.caller ::: pushB256 heartbeatUpdatedEvent :::
+      pushB256 (1 * 32) ::: pushB256 (0 * 32) ::: Ninst.log 2 :::
+      pushB256 0 ::: pushB256 lockKey ::: Ninst.tstore ::: Func.stop) _
+  have hevent := heartbeatUpdatedEvent_pushCost
+  generalize heartbeatUpdatedEvent = event at hevent ⊢
   let storePost := temporalSstorePost sevm base (expirySlot pauser) value
   let hbLog : Log :=
-    ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], value.toBytes⟩
+    ⟨sevm.currentTarget, [event, pauser], value.toBytes⟩
   let M' := M.write 0 value.toBytes
   have hvalueBytes : value.toBytes ≠ [] := by
     intro h
@@ -452,7 +460,7 @@ theorem pauseExpiryFinish_ok_runCompiled
   -- the heartbeat event and the lock words
   have hlogTail : Func.RunCompiled fs sevm
       (storePost.setMach ⟨[], M', G + 1496, storePost.stateGas⟩)
-      (Ninst.caller ::: pushB256 heartbeatUpdatedEvent :::
+      (Ninst.caller ::: pushB256 event :::
         pushB256 (1 * 32) ::: pushB256 (0 * 32) ::: Ninst.log 2 :::
         pushB256 0 ::: pushB256 lockKey ::: Ninst.tstore ::: Func.stop)
       (((storePost.addLog hbLog).setMach ⟨[], M', G, (storePost.addLog hbLog).stateGas⟩).setTransVal
@@ -476,7 +484,7 @@ theorem pauseExpiryFinish_ok_runCompiled
       (base.setMach ⟨[expirySlot pauser, value], M',
         G + 1496 + storeCost, base.stateGas⟩)
       (Ninst.sstore ::: Ninst.caller :::
-        pushB256 heartbeatUpdatedEvent :::
+        pushB256 event :::
         pushB256 (1 * 32) ::: pushB256 (0 * 32) ::: Ninst.log 2 :::
         pushB256 0 ::: pushB256 lockKey ::: Ninst.tstore ::: Func.stop)
       (((storePost.addLog hbLog).setMach ⟨[], M', G, (storePost.addLog hbLog).stateGas⟩).setTransVal
@@ -486,13 +494,6 @@ theorem pauseExpiryFinish_ok_runCompiled
         hwarmExpiry (by omega) hstatic) ?_
     exact hlogTail
   -- the store key and the scratch write
-  show Func.RunCompiled fs sevm
-    (base.setMach ⟨[value], M, G + 1512 + storeCost, base.stateGas⟩)
-    (Ninst.dup 0 ::: pushB256 (0 * 32) ::: Ninst.mstore :::
-      Ninst.caller ::: pushB256 (regionWord expiryRegion) ::: Ninst.or :::
-      Ninst.sstore ::: Ninst.caller ::: pushB256 heartbeatUpdatedEvent :::
-      pushB256 (1 * 32) ::: pushB256 (0 * 32) ::: Ninst.log 2 :::
-      pushB256 0 ::: pushB256 lockKey ::: Ninst.tstore ::: Func.stop) _
   func_run (6) [0, expirySlot pauser]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   case h_ext =>
@@ -534,7 +535,6 @@ private theorem temporalSloadBase_accessedStorageKeys_addLog
       (base.addLog l).accessedStorageKeys from h), ite_eq_right h]
     rfl
 
-set_option maxRecDepth 593 in
 /-- The zero-count arm of `pauseSuccess`: the caller's post-callback assignment
 count reads zero, so the walk stores expiry `0`.  Charge `3322` plus the count
 `SLOAD` and the expiry `SSTORE`, both hypothesis-supplied: `1791` to the count
@@ -578,8 +578,12 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
         ⟨[], (M.write 0 duration.toBytes).write 0 (0 : B256).toBytes,
           G, ((temporalSstorePost sevm (temporalSloadBase sevm (base.addLog ⟨sevm.currentTarget, [pauseTriggeredEvent, target, pauser], duration.toBytes⟩) (countSlot pauser)) (expirySlot pauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (0 : B256).toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
+  have hevent : pushCost pauseTriggeredEvent.toBytes.sig = 3 :=
+    pushCost_of_ne_zero (by decide +kernel)
+  unfold pauseSuccess
+  generalize pauseTriggeredEvent = event at hevent ⊢
   let eventLog : Log := ⟨sevm.currentTarget,
-    [pauseTriggeredEvent, target, pauser], duration.toBytes⟩
+    [event, target, pauser], duration.toBytes⟩
   let eventBase := base.addLog eventLog
   let countBase := temporalSloadBase sevm eventBase (countSlot pauser)
   have hdurationCovered : (durationWord * 32).toNat + 32 ≤ M.size := by
@@ -685,7 +689,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
       countCost from hcountCost] at h
     exact h
   -- the event prefix
-  func_run (14) [3, 0, 3, 1756, countSlot pauser]
+  func_run (12) [3, 0, 3, 1756]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp_rw [hdurationMemory]
   all_goals try simp_rw [hdurationValue]
@@ -703,18 +707,16 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
     rw [Devm.extCost_zero_of_le halign' hzeroCovered']
     norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.val_two]
-  case h_val =>
-    simpa only [countSlot, slot] using
-      congrArg (fun x : B256 => (regionWord countRegion).or x) hcaller
   case a =>
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
-    rw [htargetValue', hlogRead', hlogMemory', hcaller]
-    have hg : G + 3322 + countCost + storeCost - 1791 =
-        G + 1531 + storeCost + countCost := by omega
-    rw [hg]
-    exact Func.RunCompiled.next hsload harm
+    rw [htargetValue', hlogRead', hlogMemory', hcaller,
+      show G + 3322 + countCost + storeCost - 1785 = G + 1531 + storeCost + countCost + 6 by omega]
+    rw [addLog_setMach, Devm.setMach_setMach]
+    func_run (2) [(regionWord countRegion).or pauser]
+    case a =>
+      rw [Nat.add_sub_cancel]
+      exact Func.RunCompiled.next hsload harm
 
-set_option maxRecDepth 593 in
 /-- The checked-count arm of `pauseSuccess`: the caller's post-callback
 assignment count reads nonzero and the checked heartbeat sum does not wrap, so
 the walk stores expiry `interval + timestamp`.  Charge `3351` plus the count
@@ -771,8 +773,12 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
         ⟨[], (M.write 0 duration.toBytes).write 0
           (interval + sevm.benvStat.time).toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm (temporalSloadBase sevm (base.addLog ⟨sevm.currentTarget, [pauseTriggeredEvent, target, pauser], duration.toBytes⟩) (countSlot pauser)) heartbeatIntervalSlot) (expirySlot pauser) (interval + sevm.benvStat.time)).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (interval + sevm.benvStat.time).toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
+  have hevent : pushCost pauseTriggeredEvent.toBytes.sig = 3 :=
+    pushCost_of_ne_zero (by decide +kernel)
+  unfold pauseSuccess
+  generalize pauseTriggeredEvent = event at hevent ⊢
   let eventLog : Log := ⟨sevm.currentTarget,
-    [pauseTriggeredEvent, target, pauser], duration.toBytes⟩
+    [event, target, pauser], duration.toBytes⟩
   let eventBase := base.addLog eventLog
   let countBase := temporalSloadBase sevm eventBase (countSlot pauser)
   let intervalBase := temporalSloadBase sevm countBase heartbeatIntervalSlot
@@ -942,7 +948,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
       countCost from hcountCost] at h
     exact h
   -- the event prefix
-  func_run (14) [3, 0, 3, 1756, countSlot pauser]
+  func_run (12) [3, 0, 3, 1756]
   repeat (case h_legacy => exact hfork.rules_stateGas_none)
   all_goals try simp_rw [hdurationMemory]
   all_goals try simp_rw [hdurationValue]
@@ -960,16 +966,15 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
     rw [Devm.extCost_zero_of_le halign' hzeroCovered']
     norm_num only [gLog, gLogdata, gLogtopic, Fin.val_succ, Fin.val_two]
-  case h_val =>
-    simpa only [countSlot, slot] using
-      congrArg (fun x : B256 => (regionWord countRegion).or x) hcaller
   case a =>
     simp only [show ((1 : B256) * 32).toNat = 32 by decide]
-    rw [htargetValue', hlogRead', hlogMemory', hcaller]
-    have hg : G + 3351 + countCost + intervalCost + storeCost - 1791 =
-        G + 1560 + intervalCost + storeCost + countCost := by omega
-    rw [hg]
-    exact Func.RunCompiled.next hsload harm
+    rw [htargetValue', hlogRead', hlogMemory', hcaller,
+      show G + 3351 + countCost + intervalCost + storeCost - 1785 = G + 1560 + intervalCost + storeCost + countCost + 6 by omega]
+    rw [addLog_setMach, Devm.setMach_setMach]
+    func_run (2) [(regionWord countRegion).or pauser]
+    case a =>
+      rw [Nat.add_sub_cancel]
+      exact Func.RunCompiled.next hsload harm
 
 /-! ## The `pauseAfterSet` leg -/
 
@@ -986,7 +991,6 @@ zero. -/
 def pauseDecodedMemory (M : Mem) (duration : B256) : Mem :=
   (pauseStagedMemory M duration).write 0 (1 : B256).toBytes
 
-set_option maxRecDepth 669 in
 /-- `pauseAfterSet` from its entry to the `pauseSuccess` boundary, `.ok`
 flavour: through the target-code guard (charge hypothesis-supplied, warmth
 being a frame fact), the `pauseFor(uint256)` `CALL` and the `isPaused()`
@@ -1351,6 +1355,9 @@ theorem pauseAfterSet_toSuccess_runCompiled
             pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++
             Ninst.gas ::: Ninst.staticcall ::: Ninst.iszero :::
             ((Func.call bubbleRevertSlot) <?> decodePausedResult)))) post := by
+    have hc1 : pushCost isPausedSelector.toBytes.sig = 3 :=
+      pushCost_of_ne_zero (by decide +kernel)
+    generalize isPausedSelector = sel at *
     func_run (12) [0, 0, 3]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try simp_rw [show ((8 : B256) * 32).toNat = 256 by decide]
@@ -1386,6 +1393,12 @@ theorem pauseAfterSet_toSuccess_runCompiled
                 Ninst.gas ::: Ninst.staticcall ::: Ninst.iszero :::
                 ((Func.call bubbleRevertSlot) <?> decodePausedResult))))))
       post := by
+    have hc1 : pushCost isPausedSelector.toBytes.sig = 3 :=
+      pushCost_of_ne_zero (by decide +kernel)
+    have hc2 : pushCost pauseForSelector.toBytes.sig = 3 :=
+      pushCost_of_ne_zero (by decide +kernel)
+    generalize isPausedSelector = sel at *
+    generalize pauseForSelector = sel2 at *
     func_run (18) [0, 0, 3, 0, 3]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
     all_goals try simp_rw [show ((8 : B256) * 32).toNat = 256 by decide]

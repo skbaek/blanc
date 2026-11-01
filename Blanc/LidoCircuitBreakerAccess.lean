@@ -947,17 +947,6 @@ theorem heartbeat_body_runCompiled_of_checkedExtension
 
 /-! ## Representative strict-liveness compiled cut -/
 
-private theorem temporalReturnWord_runCompiled
-    (fs : List Func) (sevm : Sevm) (base : Devm) (word : B256) (G : Nat) :
-    ∃ post,
-      Func.RunCompiled fs sevm
-        (base.setMach ⟨[0, 32], Mem.empty.write 0 word.toBytes, G, base.stateGas⟩)
-        Func.return_ post ∧
-      Devm.output post = word.toBytes ∧
-      Devm.WorldEq base post ∧
-      post.logs = base.logs :=
-  registryScalarReturn_runCompiled fs sevm base word G
-
 def temporalLiveBodyGasWarm : Nat := 184
 
 /-- The complete decoded body returns false when the stored expiry equals the
@@ -981,37 +970,21 @@ theorem isPauserLive_body_runCompiled_at_expiry
       Devm.output post = (0 : B256).toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  have hcanonical := canonicalAddress_mask_zero hpauser
-  unfold isPauserLive requireStaticArgs canonicalAddressArg arg cdl
-    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
-    returnMemoryRange pushList temporalLiveBodyGasWarm
-  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := hword
-  rcases temporalReturnWord_runCompiled fs sevm base (0 : B256) G with
-    ⟨post, hreturn, houtput⟩
-  refine ⟨post, ?_, houtput⟩
-  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
-  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
-    addressMask_eq_shl.symm
-  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
-    rw [hword0]; exact hcanonical
-  have hslot : (regionWord expiryRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
-      expirySlot pauser := by
-    rw [hword0]; rfl
-  have hlive : sevm.benvStat.time <?
-      (base.setMach ⟨[expirySlot pauser], Mem.empty, G + 184 - 66, base.stateGas⟩).getStorVal
-        sevm.currentTarget (expirySlot pauser) = 0 := by
-    rw [Devm.getStorVal_setMach, hexpiry]
+  unfold isPauserLive temporalLiveBodyGasWarm
+  rcases returnWord_runCompiled fs sevm base hfork ((0 : B256)) G with
+    ⟨post, hreturn, hrest⟩
+  refine ⟨post, ?_, hrest⟩
+  have hlive : sevm.benvStat.time <? sevm.benvStat.time = 0 := by
     simp only [B256.ltCheck, lt_self_iff_false, ↓reduceIte]
-  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), expirySlot pauser,
-    (0 : B256), 3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_ext =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide]
-    exact Devm.extCost_empty_word
-  case a =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Nat.add_sub_cancel]
-    exact hreturn
+  have htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨[base.getStorVal sevm.currentTarget (expirySlot pauser)], Mem.empty,
+        G + 18, base.stateGas⟩) (Ninst.timestamp ::: Ninst.lt ::: returnWord) post := by
+    rw [hexpiry]
+    func_run (2) [(0 : B256)]
+    case a => exact hreturn
+  have hrun := addressSlotLoad_runCompiled_then hfork (by decide) hdata hword hpauser rfl hwarm htail
+  rw [Nat.add_assoc] at hrun
+  exact hrun
 
 def isPauserLiveDispatchGas : Nat := 168
 
@@ -1088,39 +1061,21 @@ theorem isPauserLive_body_runCompiled
         (pauserLiveWord sevm.benvStat.time expiry).toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  have hcanonical := canonicalAddress_mask_zero hpauser
-  unfold isPauserLive requireStaticArgs canonicalAddressArg arg cdl
-    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
-    returnMemoryRange pushList temporalLiveBodyGasWarm
-  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := hword
-  rcases temporalReturnWord_runCompiled fs sevm base
-      (pauserLiveWord sevm.benvStat.time expiry) G with
-    ⟨post, hreturn, houtput⟩
-  refine ⟨post, ?_, houtput⟩
-  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
-  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
-    addressMask_eq_shl.symm
-  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
-    rw [hword0]; exact hcanonical
-  have hslot : (regionWord expiryRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
-      expirySlot pauser := by
-    rw [hword0]; rfl
-  have hlive : sevm.benvStat.time <?
-      (base.setMach ⟨[expirySlot pauser], Mem.empty, G + 184 - 66, base.stateGas⟩).getStorVal
-        sevm.currentTarget (expirySlot pauser) =
-        pauserLiveWord sevm.benvStat.time expiry := by
-    rw [Devm.getStorVal_setMach, hexpiry]
+  unfold isPauserLive temporalLiveBodyGasWarm
+  rcases returnWord_runCompiled fs sevm base hfork (pauserLiveWord sevm.benvStat.time expiry) G with
+    ⟨post, hreturn, hrest⟩
+  refine ⟨post, ?_, hrest⟩
+  have hlive : sevm.benvStat.time <? expiry = pauserLiveWord sevm.benvStat.time expiry := by
     rfl
-  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), expirySlot pauser,
-    pauserLiveWord sevm.benvStat.time expiry, 3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_ext =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide]
-    exact Devm.extCost_empty_word
-  case a =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Nat.add_sub_cancel]
-    exact hreturn
+  have htail : Func.RunCompiled fs sevm
+      (base.setMach ⟨[base.getStorVal sevm.currentTarget (expirySlot pauser)], Mem.empty,
+        G + 18, base.stateGas⟩) (Ninst.timestamp ::: Ninst.lt ::: returnWord) post := by
+    rw [hexpiry]
+    func_run (2) [pauserLiveWord sevm.benvStat.time expiry]
+    case a => exact hreturn
+  have hrun := addressSlotLoad_runCompiled_then hfork (by decide) hdata hword hpauser rfl hwarm htail
+  rw [Nat.add_assoc] at hrun
+  exact hrun
 
 /-- Exact direct public execution of `isPauserLive(address)` for an arbitrary
 stored expiry. -/
@@ -1186,7 +1141,7 @@ theorem heartbeatInterval_body_runCompiled
   unfold heartbeatInterval returnWord mstoreAt returnMemoryRange pushList
     heartbeatIntervalBodyGasWarm
   have hgasFinal : G + 116 - 116 = G := by omega
-  rcases temporalReturnWord_runCompiled fs sevm base interval G with
+  rcases registryScalarReturn_runCompiled fs sevm base interval G with
     ⟨post, hreturn, houtput⟩
   refine ⟨post, ?_, houtput⟩
   func_run [3]
@@ -1253,31 +1208,10 @@ theorem heartbeatExpiry_body_runCompiled
       Devm.output post = expiry.toBytes ∧
       Devm.WorldEq base post ∧
       post.logs = base.logs := by
-  have hcanonical := canonicalAddress_mask_zero hpauser
-  unfold heartbeatExpiry requireStaticArgs canonicalAddressArg arg cdl
-    checkNonAddress pushAddressMask tagTop returnWord mstoreAt
-    returnMemoryRange pushList heartbeatExpiryBodyGasWarm
-  have hword0 : Sevm.dataWord sevm (32 * 0 + 4) = pauser := hword
-  rcases temporalReturnWord_runCompiled fs sevm base expiry G with
-    ⟨post, hreturn, houtput⟩
-  refine ⟨post, ?_, houtput⟩
-  have hdata' : Nat.toB256 sevm.data.length <? Nat.toB256 (4 + 32 * 1) = 0 := hdata
-  have hmask : (~~~ (0 : B256)) <<< (Nat.toB256 160).toNat = addressMask :=
-    addressMask_eq_shl.symm
-  have hand : addressMask.and (Sevm.dataWord sevm (32 * 0 + 4)) = 0 := by
-    rw [hword0]; exact hcanonical
-  have hslot : (regionWord expiryRegion).or (Sevm.dataWord sevm (32 * 0 + 4)) =
-      expirySlot pauser := by
-    rw [hword0]; rfl
-  func_run [(0 : B256), ~~~(0 : B256), addressMask, (0 : B256), expirySlot pauser, 3]
-  repeat (case h_legacy => exact hfork.rules_stateGas_none)
-  case h_ext =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide]
-    exact Devm.extCost_empty_word
-  case a =>
-    rw [show ((0 : B256) * 32).toNat = 0 by decide,
-      Devm.getStorVal_setMach, hexpiry, Nat.add_sub_cancel]
-    exact hreturn
+  unfold heartbeatExpiry heartbeatExpiryBodyGasWarm
+  simpa only [hexpiry] using
+    addressSlotView_runCompiled fs hfork (slot := expirySlot pauser) G (by decide)
+      hdata hword hpauser rfl hwarm
 
 /-- Exact direct public execution of canonical `heartbeatExpiry(address)`. -/
 theorem heartbeatExpiry_runCompiled
