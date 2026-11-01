@@ -1,4 +1,5 @@
 import Blanc.LidoCircuitBreakerCode
+import Blanc.LidoCircuitBreakerDispatch
 import Blanc.ExecutionOccurrence
 import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.TaggedStorage
@@ -14637,7 +14638,6 @@ private def hybridPauseDispatchCost
 /- The outer pause pivot compares equal and takes the right half; the inner
 fourth-group pivot is greater than the pause selector and takes the textual
 third group.  Neither unselected half is executed. -/
-set_option maxRecDepth 604 in
 private theorem hybrid_pause_dispatch_runCompiledTo
     (dp : DeployParams)
     {fs : List Func} {sevm : Sevm} {pre : Devm}
@@ -14778,8 +14778,9 @@ private theorem hybrid_pause_dispatch_runCompiledTo
       hfinishLookup hremoveLookup hafterLookup hsetPauserLookup hthirdGas with
     ⟨raw, thirdRun, rawOutput, thirdPath⟩
   have hinnerValue : B256.gtCheck innerPivot pauseSelector = 1 := by
-    dsimp only [funcs, firstSelector, innerPivot, pauseSelector]
-    rfl
+    simp only [innerPivot, pauseSelector, funcs_eq_words, Word.pause, firstSelector,
+      List.drop_succ_cons, List.drop_zero, List.head?_cons, Option.map_some, Option.getD_some]
+    decide
   have hinnerBranchRoom : innerBranchPre.stack.length < 1024 := by
     simp only [innerBranchPre, Devm.stack_setMach, List.length_cons]
     omega

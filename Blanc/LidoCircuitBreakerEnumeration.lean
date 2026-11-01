@@ -885,7 +885,6 @@ theorem enumerationRuntimeResources_prepared (sevm : Sevm) (base : Devm)
   intro key hkey
   exact prepareEnumerationStorage_warm sevm base entries hkey
 
-set_option maxRecDepth 664 in
 /-- A well-formed direct `getPausables()` call through the exact parameterized
 runtime reaches the verified body, returns the complete ordered ABI image, and
 uses the concrete current target as both code and storage owner.  The code
@@ -910,51 +909,12 @@ theorem getPausables_runCompiled
           (abiAddressArray entries)) ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   constructor
-  · refine Prog.runCompiled_intro
-      (mid := base.setMach ⟨[], Mem.empty,
-        G + 129 + getPausablesGasWarm entries, base.stateGas⟩)
-      (G := G + 129 + getPausablesGasWarm entries) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach, getPausablesDispatchGas, gJumpdest]
-      omega
-    · rfl
-    · have hdataNonzero :
-          B256.eqCheck sevm.data.length.toB256 4 = 1 := by
-        simp only [B256.eqCheck, hdata, ↓reduceIte]
-      have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "getPausables" [] := hselector
-      have htop : B256.gtCheck (selector "pause" [.address])
-          (selector "getPausables" []) = 1 := by decide
-      have hleft : B256.gtCheck (selector "getPauser" [.address])
-          (selector "getPausables" []) = 0 := by decide
-      have hfirst : B256.eqCheck (selector "getPauser" [.address])
-          (selector "getPausables" []) = 0 := by decide
-      have hleaf : B256.eqCheck (selector "getPausables" [])
-          (selector "getPausables" []) = 1 := by decide
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (27) [0, 0, selector "getPausables" [], 1, 0, 0, 1]
-      repeat (case h_legacy => exact hfork.rules_stateGas_none)
-      have hboundary :
-          G + 129 + getPausablesGasWarm entries - 129 =
-            G + getPausablesGasWarm entries := by omega
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-        List.take, List.drop, List.head?, Option.map, Option.getD,
-        linearDispatchWith] using
-        getPausables_body_runCompiled (hfork := hfork)
-          (runtimeMain dp :: aux) sevm base entries G
-            hw hwarm (by rfl)
+  · exact runtime_dispatch_runCompiled dp 6
+      hfork.rules_push0 hfork.rules_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [getPausablesDispatchGas, gJumpdest,
+        show runtimeDispatchCost 6 = 129 from rfl]; omega)
+      (getPausables_body_runCompiled (hfork := hfork)
+        (runtimeMain dp :: aux) sevm base entries G hw hwarm (by rfl))
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 /-- Sufficient runtime resources construct an exact successful public run;

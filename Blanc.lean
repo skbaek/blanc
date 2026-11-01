@@ -154,6 +154,7 @@ import Blanc.TransientInvariance
 import Blanc.LidoCircuitBreakerCore
 import Blanc.LidoCircuitBreakerRegistryModel
 import Blanc.LidoCircuitBreaker
+import Blanc.LidoCircuitBreakerDispatch
 import Blanc.LidoCircuitBreakerRegistry
 import Blanc.LidoCircuitBreakerEnumeration
 import Blanc.LidoCircuitBreakerSites

@@ -1340,6 +1340,7 @@ CONTRACTS = {
     "lido-circuit-breaker": ["LidoCircuitBreakerCore",
                              "LidoCircuitBreakerRegistryModel",
                              "LidoCircuitBreaker",
+                             "LidoCircuitBreakerDispatch",
                              "LidoCircuitBreakerRegistry",
                              "LidoCircuitBreakerEnumeration",
                              "LidoCircuitBreakerSites",

@@ -2362,7 +2362,6 @@ theorem registerMemory_spec (target newPauser : B256) :
 `registerPauser(address,address)`. -/
 def registerPauserDispatchGas : Nat := 175
 
-set_option maxRecDepth 664 in
 theorem registerPauser_dispatch_runCompiledTo
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (bodyGas G : Nat) (out : Execution)
@@ -2382,39 +2381,11 @@ theorem registerPauser_dispatch_runCompiledTo
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
-  · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 174 + bodyGas, base.stateGas⟩)
-      (G := G + 174 + bodyGas) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach, registerPauserDispatchGas,
-        gJumpdest]
-      omega
-    · rfl
-    · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide +kernel
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide +kernel
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "registerPauser" [.address, .address] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (35) [0, 0,
-        selector "registerPauser" [.address, .address],
-        1, 1, 0, 0, 0, 1]
-      case a =>
-        have hboundary : G + 174 + bodyGas - 174 = G + bodyGas := by
-          omega
-        simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-          Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-          runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-          List.take, List.drop, List.head?, Option.map, Option.getD,
-          linearDispatchWith] using hbody
-      all_goals exact fun _ => hfork.rules_push0
+  · exact runtime_dispatch_runCompiledTo dp 3
+      hfork.rules_push0 hfork.rules_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [registerPauserDispatchGas, gJumpdest,
+        show runtimeDispatchCost 3 = 174 from rfl]; omega)
+      hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 theorem registerPauserCalldata_spec (sevm : Sevm)

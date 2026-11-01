@@ -255,7 +255,6 @@ pivots, `25` for the group's first — and matching — comparison and its `POP`
 plus the program's entry `JUMPDEST`. -/
 def pauseDispatchGas : Nat := 108
 
-set_option maxRecDepth 659 in
 theorem pause_dispatch_runCompiledTo
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
     (bodyGas G : Nat) (out : Execution)
@@ -273,36 +272,11 @@ theorem pause_dispatch_runCompiledTo
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
-  · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 107 + bodyGas, base.stateGas⟩)
-      (G := G + 107 + bodyGas) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach, pauseDispatchGas, gJumpdest]
-      omega
-    · rfl
-    · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide +kernel
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide +kernel
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "pause" [.address] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (23) [0, 0, selector "pause" [.address], 0, 1, 1]
-      case a =>
-        have hboundary : G + 107 + bodyGas - 107 = G + bodyGas := by
-          omega
-        simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-          Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-          runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-          List.take, List.drop, List.head?, Option.map, Option.getD,
-          linearDispatchWith] using hbody
-      all_goals exact fun _ => h_push0
+  · exact runtime_dispatch_runCompiledTo dp 9
+      h_push0 h_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [pauseDispatchGas, gJumpdest,
+        show runtimeDispatchCost 9 = 107 from rfl]; omega)
+      hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 /-! ## The staging line -/

@@ -1013,7 +1013,6 @@ theorem isPauserLive_body_runCompiled_at_expiry
 
 def isPauserLiveDispatchGas : Nat := 168
 
-set_option maxRecDepth 664 in
 /-- Exact public-dispatch representative at the strict expiry boundary.  The
 result fixes the deployed program/compiler identity in addition to the decoded
 body semantics. -/
@@ -1050,38 +1049,11 @@ theorem isPauserLive_runCompiled_at_expiry
       hbodyData hword hpauser hexpiry hwarm with
     ⟨post, hbody, houtput, hworld, hlogs⟩
   refine ⟨post, ?_, houtput, hworld, hlogs, ?_⟩
-  · refine Prog.runCompiled_intro
-      (mid := base.setMach ⟨[], Mem.empty,
-        G + 167 + temporalLiveBodyGasWarm, base.stateGas⟩)
-      (G := G + 167 + temporalLiveBodyGasWarm) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach, isPauserLiveDispatchGas, gJumpdest]
-      omega
-    · rfl
-    · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "isPauserLive" [.address] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (33) [0, 0, selector "isPauserLive" [.address],
-        0, 0, 0, 0, 0, 1]
-      repeat (case h_legacy => exact hfork.rules_stateGas_none)
-      have hboundary :
-          G + 167 + temporalLiveBodyGasWarm - 167 =
-            G + temporalLiveBodyGasWarm := by omega
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-        List.take, List.drop, List.head?, Option.map, Option.getD,
-        linearDispatchWith] using hbody
+  · exact runtime_dispatch_runCompiled dp 16
+      hfork.rules_push0 hfork.rules_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [isPauserLiveDispatchGas, gJumpdest,
+        show runtimeDispatchCost 16 = 167 from rfl]; omega)
+      hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 /-! ## Exact temporal views -/
@@ -1143,7 +1115,6 @@ theorem isPauserLive_body_runCompiled
       hgasFinal]
     exact hreturn
 
-set_option maxRecDepth 664 in
 /-- Exact direct public execution of `isPauserLive(address)` for an arbitrary
 stored expiry. -/
 theorem isPauserLive_runCompiled
@@ -1180,39 +1151,11 @@ theorem isPauserLive_runCompiled
       hbodyData hword hpauser hexpiry hwarm with
     ⟨post, hbody, houtput, hworld, hlogs⟩
   refine ⟨post, ?_, houtput, hworld, hlogs, ?_⟩
-  · refine Prog.runCompiled_intro
-      (mid := base.setMach ⟨[], Mem.empty,
-        G + 167 + temporalLiveBodyGasWarm, base.stateGas⟩)
-      (G := G + 167 + temporalLiveBodyGasWarm) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach, isPauserLiveDispatchGas,
-        gJumpdest]
-      omega
-    · rfl
-    · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "isPauserLive" [.address] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (33) [0, 0, selector "isPauserLive" [.address],
-        0, 0, 0, 0, 0, 1]
-      repeat (case h_legacy => exact hfork.rules_stateGas_none)
-      have hboundary :
-          G + 167 + temporalLiveBodyGasWarm - 167 =
-            G + temporalLiveBodyGasWarm := by omega
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-        List.take, List.drop, List.head?, Option.map, Option.getD,
-        linearDispatchWith] using hbody
+  · exact runtime_dispatch_runCompiled dp 16
+      hfork.rules_push0 hfork.rules_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [isPauserLiveDispatchGas, gJumpdest,
+        show runtimeDispatchCost 16 = 167 from rfl]; omega)
+      hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 def heartbeatIntervalBodyGasWarm : Nat := 116
@@ -1248,7 +1191,6 @@ theorem heartbeatInterval_body_runCompiled
       Devm.getStorVal_setMach, hinterval, hgasFinal]
     exact hreturn
 
-set_option maxRecDepth 664 in
 /-- Exact direct public execution of `heartbeatInterval()`. -/
 theorem heartbeatInterval_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
@@ -1276,39 +1218,11 @@ theorem heartbeatInterval_runCompiled
       (runtimeMain dp :: aux) sevm base interval G hinterval hwarm with
     ⟨post, hbody, houtput, hworld, hlogs⟩
   refine ⟨post, ?_, houtput, hworld, hlogs, ?_⟩
-  · refine Prog.runCompiled_intro
-      (mid := base.setMach ⟨[], Mem.empty,
-        G + 151 + heartbeatIntervalBodyGasWarm, base.stateGas⟩)
-      (G := G + 151 + heartbeatIntervalBodyGasWarm) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach, heartbeatIntervalDispatchGas,
-        gJumpdest]
-      omega
-    · rfl
-    · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "heartbeatInterval" [] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (31) [0, 0, selector "heartbeatInterval" [],
-        1, 0, 0, 0, 1]
-      repeat (case h_legacy => exact hfork.rules_stateGas_none)
-      have hboundary :
-          G + 151 + heartbeatIntervalBodyGasWarm - 151 =
-            G + heartbeatIntervalBodyGasWarm := by omega
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-        List.take, List.drop, List.head?, Option.map, Option.getD,
-        linearDispatchWith] using hbody
+  · exact runtime_dispatch_runCompiled dp 7
+      hfork.rules_push0 hfork.rules_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [heartbeatIntervalDispatchGas, gJumpdest,
+        show runtimeDispatchCost 7 = 151 from rfl]; omega)
+      hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 def heartbeatExpiryBodyGasWarm : Nat := 179
@@ -1354,7 +1268,6 @@ theorem heartbeatExpiry_body_runCompiled
       Devm.getStorVal_setMach, hexpiry, hgasFinal]
     exact hreturn
 
-set_option maxRecDepth 659 in
 /-- Exact direct public execution of canonical `heartbeatExpiry(address)`. -/
 theorem heartbeatExpiry_runCompiled
     (dp : DeployParams) (sevm : Sevm) (base : Devm)
@@ -1389,39 +1302,11 @@ theorem heartbeatExpiry_runCompiled
       hbodyData hword hpauser hexpiry hwarm with
     ⟨post, hbody, houtput, hworld, hlogs⟩
   refine ⟨post, ?_, houtput, hworld, hlogs, ?_⟩
-  · refine Prog.runCompiled_intro
-      (mid := base.setMach ⟨[], Mem.empty,
-        G + 128 + heartbeatExpiryBodyGasWarm, base.stateGas⟩)
-      (G := G + 128 + heartbeatExpiryBodyGasWarm) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach, heartbeatExpiryDispatchGas,
-        gJumpdest]
-      omega
-    · rfl
-    · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "heartbeatExpiry" [.address] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (27) [0, 0, selector "heartbeatExpiry" [.address],
-        0, 0, 0, 1]
-      repeat (case h_legacy => exact hfork.rules_stateGas_none)
-      have hboundary :
-          G + 128 + heartbeatExpiryBodyGasWarm - 128 =
-            G + heartbeatExpiryBodyGasWarm := by omega
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-        List.take, List.drop, List.head?, Option.map, Option.getD,
-        linearDispatchWith] using hbody
+  · exact runtime_dispatch_runCompiled dp 14
+      hfork.rules_push0 hfork.rules_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [heartbeatExpiryDispatchGas, gJumpdest,
+        show runtimeDispatchCost 14 = 128 from rfl]; omega)
+      hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 /-! ## Public strict-liveness corollaries -/
@@ -2818,7 +2703,6 @@ theorem setHeartbeatInterval_body_runCompiled_noop_of_inclusive
   simpa only [setHeartbeatIntervalBodyGasWarmUpdate,
     setHeartbeatIntervalUpdateTailGasWarmUpdate] using hprefix
 
-set_option maxRecDepth 664 in
 /-- Exact public-dispatch success for `setHeartbeatInterval(uint256)` in the
 warm nonzero-to-different-nonzero update case.  The result pins invocation
 identity to the generated runtime/compiler image as well as the exact temporal
@@ -2871,40 +2755,11 @@ theorem setHeartbeatInterval_runCompiled_of_inclusive
       holdNonzero hchanged with
     ⟨post, hbody, hgas, hstore, hlogs, hexpiries⟩
   refine ⟨post, ?_, hgas, hstore, hlogs, hexpiries, ?_⟩
-  · refine Prog.runCompiled_intro
-      (mid := base.setMach ⟨[], Mem.empty,
-        G + 168 + setHeartbeatIntervalBodyGasWarmUpdate, base.stateGas⟩)
-      (G := G + 168 + setHeartbeatIntervalBodyGasWarmUpdate) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach,
-        setHeartbeatIntervalDispatchGas, gJumpdest]
-      omega
-    · rfl
-    · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "setHeartbeatInterval" [.uint256] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (33) [0, 0,
-        selector "setHeartbeatInterval" [.uint256],
-        1, 0, 0, 0, 0, 1]
-      repeat (case h_legacy => exact hfork.rules_stateGas_none)
-      have hboundary :
-          G + 168 + setHeartbeatIntervalBodyGasWarmUpdate - 168 =
-            G + setHeartbeatIntervalBodyGasWarmUpdate := by omega
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-        List.take, List.drop, List.head?, Option.map, Option.getD,
-        linearDispatchWith] using hbody
+  · exact runtime_dispatch_runCompiled dp 8
+      hfork.rules_push0 hfork.rules_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [setHeartbeatIntervalDispatchGas, gJumpdest,
+        show runtimeDispatchCost 8 = 168 from rfl]; omega)
+      hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 /-! The three source error arms are proved at the direct endpoint boundary
@@ -3031,7 +2886,6 @@ theorem setHeartbeatInterval_body_runCompiledTo_error_of_above_max
   · intro a k
     rfl
 
-set_option maxRecDepth 664 in
 /-- Exact dispatcher bridge for any terminal outcome of the selected
 heartbeat-interval setter body. -/
 theorem setHeartbeatInterval_dispatch_runCompiledTo
@@ -3053,38 +2907,11 @@ theorem setHeartbeatInterval_dispatch_runCompiledTo
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
-  · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 168 + bodyGas, base.stateGas⟩)
-      (G := G + 168 + bodyGas) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach,
-        setHeartbeatIntervalDispatchGas, gJumpdest]
-      omega
-    · rfl
-    · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "setHeartbeatInterval" [.uint256] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (33) [0, 0,
-        selector "setHeartbeatInterval" [.uint256],
-        1, 0, 0, 0, 0, 1]
-      repeat (case h_legacy => exact hfork.rules_stateGas_none)
-      have hboundary : G + 168 + bodyGas - 168 = G + bodyGas := by
-        omega
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-        List.take, List.drop, List.head?, Option.map, Option.getD,
-        linearDispatchWith] using hbody
+  · exact runtime_dispatch_runCompiledTo dp 8
+      hfork.rules_push0 hfork.rules_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [setHeartbeatIntervalDispatchGas, gJumpdest,
+        show runtimeDispatchCost 8 = 168 from rfl]; omega)
+      hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 /-- Exact generated-runtime inclusive setter success over the actual initial
@@ -3807,7 +3634,6 @@ theorem heartbeat_body_runCompiledTo_error_of_expired
 
 def heartbeatDispatchGas : Nat := 192
 
-set_option maxRecDepth 664 in
 /-- Exact emitted-runtime dispatcher bridge for any terminal heartbeat body
 outcome. -/
 theorem heartbeat_dispatch_runCompiledTo
@@ -3826,38 +3652,10 @@ theorem heartbeat_dispatch_runCompiledTo
         G + heartbeatDispatchGas + bodyGas, base.stateGas⟩)
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
-  refine ⟨?_, ?_⟩
-  · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 191 + bodyGas, base.stateGas⟩)
-      (G := G + 191 + bodyGas) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach, heartbeatDispatchGas, gJumpdest]
-      omega
-    · rfl
-    · have hvalueZero : B256.eqCheck sevm.value 0 = 1 := by
-        simp only [B256.eqCheck, hvalue, ↓reduceIte]
-      have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "heartbeat" [] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (37) [0, 0, selector "heartbeat" [],
-        1, 1, 0, 0, 0, 0, 1]
-      repeat (case h_legacy => exact hfork.rules_stateGas_none)
-      case h_arm =>
-        have hboundary : G + 191 + bodyGas - 191 = G + bodyGas := by
-          omega
-        simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-          Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-          runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-          List.take, List.drop, List.head?, Option.map, Option.getD,
-          linearDispatchWith] using hbody
+  refine ⟨runtime_dispatch_runCompiledTo dp 4
+      hfork.rules_push0 hfork.rules_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [heartbeatDispatchGas, gJumpdest,
+        show runtimeDispatchCost 4 = 191 from rfl]; omega) hbody, ?_⟩
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 /-- Exact generated-runtime heartbeat success over the actual sequential
