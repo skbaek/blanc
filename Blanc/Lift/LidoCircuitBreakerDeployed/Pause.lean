@@ -54,31 +54,10 @@ theorem t0864_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {t dur t2 ra : B2
       (.done (.returned D))) :
     Devm.getStor D sevm.currentTarget = Devm.getStor b sevm.currentTarget := by
   unfold t_0864_c13 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_tload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G10, rfl⟩ := ri_dup rfl s1
+  winv 10
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G11, rfl⟩ := ri_tstore hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_pop s1
+  winv 2
   obtain ⟨G14, hr⟩ := ric_ret run
   injection hr with hr
   injection hr with hr
@@ -101,112 +80,30 @@ theorem t07ec_regInv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {t dur t2 ra :
     fun hfa h => RegInv.set_foreign hfa h
   have hc := canonicalAddress_adr sevm.caller
   unfold t_07ec_c13 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_mload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_caller s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G10, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G11, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G15, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G16, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G17, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_mload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G20, rfl⟩ := ri_swap (n := 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G21, rfl⟩ := ri_sub s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_swap (n := 0) rfl s1
+  winv 22
   try dsimp only [List.set] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G23, rfl⟩ := ri_log3 s1
+  winv 1
   obtain ⟨b1, M1, hb1, run⟩ := ric_forget run
   have hinvb1 : RegInv (Devm.getStor b1 sevm.currentTarget) := by rw [hb1]; exact hinv
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G24, rfl⟩ := ri_caller s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G25, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G26, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G27, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G28, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G29, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G30, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G31, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G32, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G33, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G34, rfl⟩ := ri_keccak s1
+  winv 11
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G35, rfl⟩ := ri_sload hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G36, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G37, rfl⟩ := ri_swap (n := 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G38, rfl⟩ := ri_swap (n := 0) rfl s1
+  winv 3
   try dsimp only [List.set] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G39, rfl⟩ := ri_push s1
+  winv 1
   rcases ric_branch run with ⟨-, G40, run⟩ | ⟨-, G40, run⟩
   · -- no pausables left: `_setHeartbeatExpiry(msg.sender, 0)`
     unfold t_0852_c13 at run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G41, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G42, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨b', M', G', hinv', run⟩ := call22_foreign (Φ := RegInv) hΦ hfork hc hfa
       (by rw [afterSload_getStor]; exact hinvb1) run (fun _ h => by cases h)
     exact (t0864_ret hfork run) ▸ hinv'
   · -- `_setHeartbeatExpiry(msg.sender, now + heartbeatInterval)`
     unfold t_0857_c13 at run
-    obtain ⟨G41, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G42, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨d1, s1, run⟩ := ric_next run
     obtain ⟨G43, rfl⟩ := ri_sload hfork s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G44, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G45, rfl⟩ := ri_swap (n := 0) rfl s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G46, rfl⟩ := ri_timestamp s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G47, rfl⟩ := ri_push s1
+    winv 4
     obtain ⟨G48, hcall⟩ := ric_call (g := t_10a8_c23) rfl run
     rcases hcall with ⟨D23, r23, run⟩ | ⟨D23, -, hh⟩
     swap
@@ -220,9 +117,7 @@ theorem t07ec_regInv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {t dur t2 ra :
       exact hinvb1
     rw [St.self (d := D23) hw rfl] at run
     unfold t_0446_c13 at run
-    obtain ⟨G49, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G50, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨b', M', G', hinv', run⟩ := call22_foreign (Φ := RegInv) hΦ hfork hc hfa hinv23 run
       (fun _ h => by cases h)
     exact (t0864_ret hfork run) ▸ hinv'
@@ -239,61 +134,7 @@ theorem t0745_regInv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       (.done (.returned D))) :
     RegInv (Devm.getStor D sevm.currentTarget) := by
   unfold t_0745_c13 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G10, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G11, rfl⟩ := ri_mload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G15, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G16, rfl⟩ := ri_shl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G17, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G20, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G21, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G23, rfl⟩ := ri_mload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G24, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G25, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G26, rfl⟩ := ri_sub s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G27, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G28, rfl⟩ := ri_dup rfl s1
+  winv 28
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨gw, G29, rfl⟩ := ri_gas s1
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -301,80 +142,20 @@ theorem t0745_regInv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   have hinv1 : RegInv (Devm.getStor d1 sevm.currentTarget) := by
     rw [show Devm.getStor d1 sevm.currentTarget = _ from hsp.stor _]; exact hinv
   rw [hsp.eq_St] at run
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G30, rfl⟩ := ri_iszero s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G31, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G32, rfl⟩ := ri_iszero s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G33, rfl⟩ := ri_push s2
+  winv 4
   rcases ric_branch run with ⟨-, G34, run⟩ | ⟨-, G34, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run (by decide)).elim
   unfold t_0792_c13 at run
-  obtain ⟨G35, run⟩ := ric_dest run
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G36, rfl⟩ := ri_pop s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G37, rfl⟩ := ri_pop s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G38, rfl⟩ := ri_pop s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G39, rfl⟩ := ri_pop s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G40, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G41, rfl⟩ := ri_mload s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G42, rfl⟩ := ri_returndatasize s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G43, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G44, rfl⟩ := ri_not s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G45, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G46, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G47, rfl⟩ := ri_add s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G48, rfl⟩ := ri_and s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G49, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G50, rfl⟩ := ri_add s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G51, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G52, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G53, rfl⟩ := ri_mstore s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G54, rfl⟩ := ri_pop s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G55, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G56, rfl⟩ := ri_add s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G57, rfl⟩ := ri_swap (n := 0) rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G58, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G59, rfl⟩ := ri_swap (n := 1) rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G60, rfl⟩ := ri_swap (n := 0) rfl s2
+  winv 26
   try dsimp only [List.set] at run
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G61, rfl⟩ := ri_push s2
+  winv 1
   obtain ⟨G62, hcall⟩ := ric_call (g := t_10bb_c33) rfl run
   rcases hcall with ⟨D33, r33, run⟩ | ⟨D33, -, hh⟩
   swap
   · cases hh
   obtain ⟨v, M33, G63, rfl⟩ := entry33_ret r33
   unfold t_07b6_c13 at run
-  obtain ⟨G64, run⟩ := ric_dest run
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨G65, rfl⟩ := ri_push s2
+  winv 2
   rcases ric_branch run with ⟨-, G66, run⟩ | ⟨-, G66, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run (by decide)).elim
   exact t07ec_regInv hfork hfa hinv1 run
@@ -678,14 +459,7 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
   obtain ⟨flag, hsf⟩ := call_stack hfork (StepIn.toRun hcall)
   rw [St.self (d := sf) hsf rfl] at run
   have run := SFunc.Run.cut (run.mono StepIn.toRun)
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_iszero s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_iszero s2
-  obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push s2
+  winv 4
   rcases ric_branch run with ⟨-, G13, run⟩ | ⟨-, G13, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run (by decide)).elim
   exact t0745_regInv hfork hfa hinvF run

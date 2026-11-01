@@ -26,15 +26,7 @@ theorem entry32_target_guard_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       t_0981_c32 (.done (.returned post)) := by
   have run := run.cut
   unfold t_0934_c32 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_dup (w := target) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_and s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_push s1
+  winv 5
   rcases ric_branch run with ⟨hz, G6, run⟩ | ⟨hnz, G6, run⟩
   · have hmask : target &&&
         Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -87,47 +79,23 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
         ((M.write 0 target.toBytes).write 32 (3 : B256).toBytes) G')
       t_0a16_c32 (.done (.returned post))) := by
   unfold t_0981_c32 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G3, rfl⟩ := ri_dup (w := Bytes.toB256
     [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_dup (w := target) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_and s1
+  winv 2
   have htargetMask : target &&& Bytes.toB256
       [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = target := by
     rw [B256.and_comm, ff20_and_word,
       B256.toAdr_toB256_of_lt htarget]
   rw [htargetMask] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_dup (w := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G10, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G11, rfl⟩ := ri_dup (w := (3 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_mstore s1
+  winv 8
   dsimp only [List.set] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G15, rfl⟩ := ri_swap (n := 0) rfl s1
+  winv 2
   dsimp only [List.set] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G16, rfl⟩ := ri_keccak s1
+  winv 1
   have hhash :
       ((((M.write 0 target.toBytes).write 32 (3 : B256).toBytes).read 0 64).1).keccak =
         mapSlot target 3 := by
@@ -159,26 +127,22 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     show (32 : B256).toNat = 32 from rfl,
     show (64 : B256).toNat = 64 from rfl,
     hhash, hnoext] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G17, rfl⟩ := ri_dup (w := mapSlot target 3) rfl s1
+  winv 1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G18, rfl⟩ := ri_sload hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_dup (w := newPauser) rfl s1
+  winv 1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G20, rfl⟩ := ri_dup (w := Bytes.toB256
     [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G21, rfl⟩ := ri_and s1
+  winv 1
   have hnewMask : Bytes.toB256
       [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&&
       newPauser = newPauser := by
     rw [ff20_and_word, B256.toAdr_toB256_of_lt hnewPauser]
   rw [hnewMask] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_push s1
+  winv 1
   have hhigh : Bytes.toB256
       [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
        0xff, 0xff, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -188,24 +152,17 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G23, rfl⟩ := ri_dup
     (w := b.getStorVal sevm.currentTarget (mapSlot target 3)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G24, rfl⟩ := ri_and s1
+  winv 1
   have hcomm :
       b.getStorVal sevm.currentTarget (mapSlot target 3) &&& addressMask =
       addressMask &&& b.getStorVal sevm.currentTarget (mapSlot target 3) :=
     B256.and_comm _ _
   rw [hcomm] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G25, rfl⟩ := ri_or s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G26, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G27, rfl⟩ := ri_swap (n := 1) rfl s1
+  winv 3
   dsimp only [List.set] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G28, rfl⟩ := ri_sstore hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G29, rfl⟩ := ri_and s1
+  winv 1
   have haddr : b.getStorVal sevm.currentTarget (mapSlot target 3) &&& Bytes.toB256
       [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
        0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] =
@@ -216,10 +173,7 @@ theorem entry32_assignment_split {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G30, rfl⟩ := ri_dup
     (w := addressSlotReadWord (b.getStorVal sevm.currentTarget (mapSlot target 3))) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G31, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G32, rfl⟩ := ri_push s1
+  winv 2
   rcases ric_branch run with ⟨hz, G33, run⟩ | ⟨hnz, G33, run⟩
   · refine ⟨G33, .inl ⟨fun h0 => ?_, run⟩⟩
     rw [h0] at hz

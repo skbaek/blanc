@@ -193,33 +193,14 @@ theorem entry7_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {cds ra : B256}
     canonicalAddress (Sevm.dataWord sevm 4) ∧ ∃ G', D = St b (Sevm.dataWord sevm 4 :: xs) M G' := by
   have run := run.cut
   unfold t_0fec_c7 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_dup (w := (4 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_dup (w := cds) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_sub s1
+  winv 6
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨z, G7, rfl⟩ := ri_slt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_push s1
+  winv 2
   rcases ric_branch run with ⟨-, G10, run⟩ | ⟨-, G10, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run (by decide)).elim
   unfold t_0ffc_c7 at run
-  obtain ⟨G11, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_dup (w := (4 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_push s1
+  winv 4
   obtain ⟨G15, hcall⟩ := ric_call (g := t_0f93_c29) rfl run
   rcases hcall with ⟨D1, r1, run⟩ | ⟨D1, -, hr⟩
   swap
@@ -227,17 +208,7 @@ theorem entry7_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {cds ra : B256}
   obtain ⟨ht, G16, rfl⟩ := entry29_ret r1
   refine ⟨ht, ?_⟩
   unfold t_1005_c7 at run
-  obtain ⟨G17, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_swap (n := 3) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_swap (n := 2) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G20, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G21, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_pop s1
+  winv 6
   obtain ⟨G23, hr⟩ := ric_ret run
   injection hr with hr
   injection hr with hr
@@ -252,57 +223,18 @@ theorem entry33_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {h e ra : B256}
     ∃ v M' G', D = St b (v :: xs) M' G' := by
   have run := run.cut
   unfold t_10bb_c33 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_dup (w := h) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_dup (w := e) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_sub s1
+  winv 6
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨z, G7, rfl⟩ := ri_slt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_push s1
+  winv 2
   rcases ric_branch run with ⟨-, G10, run⟩ | ⟨-, G10, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run (by decide)).elim
   unfold t_10cb_c33 at run
-  obtain ⟨G11, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_dup (w := h) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_mload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G15, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G16, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G17, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_push s1
+  winv 9
   rcases ric_branch run with ⟨-, G20, run⟩ | ⟨-, G20, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run (by decide)).elim
   unfold t_1005_c33 at run
-  obtain ⟨G21, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_swap (n := 3) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G23, rfl⟩ := ri_swap (n := 2) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G24, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G25, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G26, rfl⟩ := ri_pop s1
+  winv 6
   obtain ⟨G27, hr⟩ := ric_ret run
   injection hr with hr
   injection hr with hr

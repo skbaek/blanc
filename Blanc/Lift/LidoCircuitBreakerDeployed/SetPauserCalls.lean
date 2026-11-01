@@ -87,23 +87,7 @@ theorem panicBlock_not_run {C : List Nat} {S : List B256} {r : Seg}
         (.next (.push p3 h3) (.next (.push p4 h4) (.next (.reg .mstore)
           (.next (.push p5 h5) (.next (.push p6 h6) (.last .revert)))))))))) r) :
     False := by
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_push s1
+  winv 9
   exact ric_revert run
 
 /-- The arithmetic `Panic(0x11)` blocks (entries 38, 39, 42). -/
@@ -140,32 +124,15 @@ theorem entry40_returned_inv {x r : B256} {R : List B256} {D : Devm}
     x ≠ 0 ∧ ∃ G', D = St b ((ffWord + x) :: R) M G' := by
   have run := run.cut
   unfold t_10da_c40 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_push s1
+  winv 4
   rcases ric_branch run with ⟨_, G5, run⟩ | ⟨hnz, G5, run⟩
   · unfold t_10e1_c40 at run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G6, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G7, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨G8, run⟩ := ric_jump (List.not_mem_nil) entry42_lookup run
     exact (panic42_not_run run).elim
   · refine ⟨hnz, ?_⟩
     unfold t_10e8_c40 at run
-    obtain ⟨G6, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G7, rfl⟩ := ri_pop s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G8, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G9, rfl⟩ := ri_add s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G10, rfl⟩ := ri_swap (n := 0) rfl s1
+    winv 5
     obtain ⟨G11, hr⟩ := ric_ret run
     cases hr
     exact ⟨G11, rfl⟩
@@ -177,36 +144,15 @@ theorem entry24_returned_inv {x r : B256} {R : List B256} {D : Devm}
     x - ffWord ≠ 0 ∧ ∃ G', D = St b ((1 + x) :: R) M G' := by
   have run := run.cut
   unfold t_110e_c24 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_sub s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_push s1
+  winv 6
   rcases ric_branch run with ⟨_, G7, run⟩ | ⟨hnz, G7, run⟩
   · unfold t_1137_c24 at run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G8, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G9, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨G10, run⟩ := ric_jump (List.not_mem_nil) entry39_lookup run
     exact (panic39_not_run run).elim
   · refine ⟨hnz, ?_⟩
     unfold t_113e_c24 at run
-    obtain ⟨G8, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G9, rfl⟩ := ri_pop s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G10, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G11, rfl⟩ := ri_add s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G12, rfl⟩ := ri_swap (n := 0) rfl s1
+    winv 5
     obtain ⟨G13, hr⟩ := ric_ret run
     cases hr
     exact ⟨G13, rfl⟩
@@ -219,23 +165,7 @@ theorem entry25_returned_inv {x y r : B256} {R : List B256} {D : Devm}
     B256.eqCheck (B256.gtCheck (x - y) x) 0 ≠ 0 ∧ ∃ G', D = St b ((x - y) :: R) M G' := by
   have run := run.cut
   unfold t_1145_c25 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_dup (w := y) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_sub s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_dup (w := x - y) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_push s1
+  winv 9
   rcases ric_branchTo (List.not_mem_nil) entry3_lookup run with
     ⟨_, G10, run⟩ | ⟨hnz, G10, run⟩
   · unfold t_1151_c25 at run
@@ -247,15 +177,7 @@ theorem entry25_returned_inv {x y r : B256} {R : List B256} {D : Devm}
     exact (panic38_not_run run).elim
   · refine ⟨hnz, ?_⟩
     unfold t_051a_c3 at run
-    obtain ⟨G11, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G12, rfl⟩ := ri_swap (n := 2) rfl s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G13, rfl⟩ := ri_swap (n := 1) rfl s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G14, rfl⟩ := ri_pop s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G15, rfl⟩ := ri_pop s1
+    winv 5
     obtain ⟨G16, hr⟩ := ric_ret run
     cases hr
     exact ⟨G16, rfl⟩
@@ -289,61 +211,19 @@ theorem entry5_inv {C : List Nat} {oldP newP target k ret : B256} {base : List B
     ∃ data M' G', post = St
       (b.addLog ⟨sevm.currentTarget, [pauserSetTopic, target, oldP, newP], data⟩) base M' G' := by
   unfold t_0c5e_c5 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_dup (w := newP) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_and s1
+  winv 4
   rw [ff20_and_canonical hnew] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_dup (w := oldP) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_and s1
+  winv 3
   rw [ff20_and_canonical hold] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_dup (w := target) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G10, rfl⟩ := ri_and s1
+  winv 3
   rw [ff20_and_canonical htarget] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_mload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G15, rfl⟩ := ri_mload s1
+  winv 5
   generalize (Bytes.toB256 [0x40] : B256) = p at run
   generalize hM1 : (M.read p.toNat 32) = r1 at run
   generalize hM2 : (r1.2.read p.toNat 32) = r2 at run
   generalize Bytes.toB256 r1.1 = f1 at run
   generalize Bytes.toB256 r2.1 = f2 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G16, rfl⟩ := ri_dup (w := f2) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G17, rfl⟩ := ri_swap (n := 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_sub s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G20, rfl⟩ := ri_log4 s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G21, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G23, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G24, rfl⟩ := ri_pop s1
+  winv 9
   obtain ⟨G25, hr⟩ := ric_ret run
   cases hr
   exact ⟨_, _, G25, rfl⟩

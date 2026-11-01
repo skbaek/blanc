@@ -40,114 +40,37 @@ theorem t0a16_inv {newP target R : B256} {base : List B256} {post : Devm}
   obtain ⟨hkb, hnoext0, hwf5, hal5⟩ := scratch_word hmem halign 5
   obtain ⟨hhash, hnoext, -, -⟩ := scratch_mapSlot hwf5 hal5 target 4
   unfold t_0a16_c32 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G3, rfl⟩ := ri_dup (w := (3 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_add s1
+  winv 4
   rw [show (3 : B256) + Bytes.toB256 [2] = 5 from rfl] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G5, rfl⟩ := ri_dup (w := (5 : B256)) rfl s1
+  winv 1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G6, rfl⟩ := ri_sload hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G8, rfl⟩ := ri_dup (w := Bytes.toB256 [1]) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G9, rfl⟩ := ri_dup (w := b.getStorVal sevm.currentTarget 5) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G10, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G11, rfl⟩ := ri_dup (w := (5 : B256)) rfl s1
+  winv 5
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G12, rfl⟩ := ri_sstore hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_dup (w := (5 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G15, rfl⟩ := ri_dup (w := Bytes.toB256 []) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G16, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G17, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_dup (w := Bytes.toB256 [32]) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_dup (w := Bytes.toB256 []) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G20, rfl⟩ := ri_keccak s1
+  winv 8
   simp only [show (Bytes.toB256 [] : B256) = 0 from rfl,
     show (Bytes.toB256 [32] : B256) = 32 from rfl,
     show (0 : B256).toNat = 0 from rfl,
     show (32 : B256).toNat = 32 from rfl,
     hkb, hnoext0] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G21, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_swap (n := 3) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G23, rfl⟩ := ri_add s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G24, rfl⟩ := ri_dup (w := b.getStorVal sevm.currentTarget 5 +
     (5 : B256).toBytes.keccak) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G25, rfl⟩ := ri_sload hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G26, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G27, rfl⟩ := ri_and s1
+  winv 2
   rw [hiMask_eq] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G28, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G29, rfl⟩ := ri_dup (w := target) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G30, rfl⟩ := ri_and s1
+  winv 3
   rw [mask_and_canonical htarget] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G31, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G32, rfl⟩ := ri_dup (w := target) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G33, rfl⟩ := ri_or s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G34, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G35, rfl⟩ := ri_swap (n := 1) rfl s1
+  winv 5
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G36, rfl⟩ := ri_sstore hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G37, rfl⟩ := ri_swap (n := 3) rfl s1
+  winv 1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G38, rfl⟩ := ri_sload hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G39, rfl⟩ := ri_swap (n := 3) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G40, rfl⟩ := ri_dup (w := (0 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G41, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G42, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G43, rfl⟩ := ri_dup (w := (3 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G44, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G45, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G46, rfl⟩ := ri_swap (n := 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G47, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G48, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G49, rfl⟩ := ri_swap (n := 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G50, rfl⟩ := ri_keccak s1
+  winv 12
   simp only [show (Bytes.toB256 [64] : B256) = 64 from rfl,
     show (3 : B256) + Bytes.toB256 [1] = 4 from rfl,
     show (0 : B256).toNat = 0 from rfl,
