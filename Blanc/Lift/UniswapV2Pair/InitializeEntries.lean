@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.InitializeCore
+import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 import Blanc.Lift.InvWalkDispatch
 
@@ -226,77 +227,14 @@ theorem initialize_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcom
     (selector : Blanc.Sevm.selector sevm = 0x485cc955)
     (body : SFunc.RunExact cert.prog sevm (St b [0x485cc955] getterInitMemory G) t_041e_c90 o)
     (h_shifts : sevm.benvStat.rules.op.shifts = true) :
-    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 186)) t_0000_c0 o := by
-  refine getterString_guards_exact (G := G + 123) value size ?_
-  unfold t_001a_c0
-  refine rx_push (w := 0) rfl (by decide) ?_
-  refine rx_calldataload (by decide) ?_
-  refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_shr (h_shifts := h_shifts) (v := 0x485cc955) selector (by decide) ?_
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x00f9) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_succ (by decide) ?_
-  unfold t_00f9_c0
-  refine rx_dest ?_
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x23b872dd) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x0166) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_zero ?_
-  unfold t_0105_c0
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x3644e515) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x0140) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_zero ?_
-  unfold t_0110_c0
-  refine cmp_miss (by decide) ?_
-  unfold t_011b_c0
-  exact cmp_hit (tgt := t_041e_c90) rfl rfl body
+    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 186)) t_0000_c0 o :=
+  pair_dispatch_exact value size selector (by kernel_rfl) (by decide +kernel) body h_shifts
 
 theorem initialize_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
     (selector : Blanc.Sevm.selector sevm = 0x485cc955)
     (run : SFunc.Run cert.prog sevm (St b [] M G) t_001a_c0 o) :
-    ∃ residual, SFunc.Run cert.prog sevm (St b [0x485cc955] M residual) t_041e_c90 o := by
-  have h := run.cut
-  unfold t_001a_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, hd⟩ := ri_shr hd
-  simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,
-    show Bytes.toB256 [0xe0] = (224 : B256) from rfl,
-    show (224 : B256).toNat = 224 from rfl,
-    show Sevm.dataWord sevm 0 >>> 224 = (0x485cc955 : B256) from selector] at hd
-  subst d
-  obtain ⟨_, h⟩ := ric_cmp_gt h
-  simp only [show B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) (0x485cc955 : B256)
-    = (1 : B256) from by decide, show (1 : B256) ≠ 0 from by decide, ite_false] at h
-  unfold t_00f9_c0 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, h⟩ := ric_cmp_gt h
-  simp only [show B256.gtCheck (Bytes.toB256 [0x23, 0xb8, 0x72, 0xdd]) (0x485cc955 : B256)
-    = (0 : B256) from by decide, ite_true] at h
-  unfold t_0105_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_gt h
-  simp only [show B256.gtCheck (Bytes.toB256 [0x36, 0x44, 0xe5, 0x15]) (0x485cc955 : B256)
-    = (0 : B256) from by decide, ite_true] at h
-  unfold t_0110_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_eq (g := t_0416_c89) (by intro bad; cases bad) rfl h
-  simp only [show B256.eqCheck (Bytes.toB256 [0x36, 0x44, 0xe5, 0x15]) (0x485cc955 : B256)
-    = (0 : B256) from by decide, ite_true] at h
-  unfold t_011b_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_eq (g := t_041e_c90) (by intro bad; cases bad) rfl h
-  simp only [show B256.eqCheck (Bytes.toB256 [0x48, 0x5c, 0xc9, 0x55]) (0x485cc955 : B256)
-    = (1 : B256) from by decide, show (1 : B256) ≠ 0 from by decide, ite_false] at h
-  exact ⟨_, h.uncut⟩
-
+    ∃ residual, SFunc.Run cert.prog sevm (St b [0x485cc955] M residual) t_041e_c90 o :=
+  pair_dispatch_inv selector (by kernel_rfl) run
 
 theorem initialize_pc0_exact {sevm : Sevm} {b : Devm} {G : Nat}
     (fork : CoveredFork sevm.benvStat.fork) (value : sevm.value = 0)

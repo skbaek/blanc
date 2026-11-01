@@ -1,4 +1,5 @@
 import Blanc.Lift.HistStaticCall
+import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.PermitWalk
 import Blanc.Lift.ByteWindowMemory
 import Blanc.Lift.UniswapV2Pair.WriterEntries
@@ -873,34 +874,8 @@ theorem permit_dispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (selector : Blanc.Sevm.selector sevm = 0xd505accf)
     (body : SFunc.RunExact cert.prog sevm (St b [0xd505accf] getterInitMemory G) t_05e2_c76 o)
     (h_shifts : sevm.benvStat.rules.op.shifts = true) :
-    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 185)) t_0000_c0 o := by
-  refine getterString_guards_exact (G := G + 122) value size ?_
-  unfold t_001a_c0
-  refine rx_push (w := 0) rfl (by decide) ?_
-  refine rx_calldataload (by decide) ?_
-  refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_shr (h_shifts := h_shifts) (v := 0xd505accf) selector (by decide) ?_
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0xf9) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_zero ?_
-  unfold t_002b_c0
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0xba9a7a56) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x97) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_zero ?_
-  unfold t_0036_c0
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0xd21220a7) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x71) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_branch_zero ?_
-  unfold t_0041_c0
-  refine cmp_miss (by decide) ?_
-  unfold t_004c_c0
-  exact cmp_hit (tgt := t_05e2_c76) rfl (by rfl) body
+    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 185)) t_0000_c0 o :=
+  pair_dispatch_exact value size selector (by kernel_rfl) (by decide +kernel) body h_shifts
 
 /-- Pc-zero liveness from the supplied compiled recovery call, with every selected storage
 charge and both store sentries on their actual incoming gas. -/

@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.SkimCanonical
+import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.SkimPositionalRefinement
 import Blanc.Lift.UniswapV2Pair.SwapForwardTransfer
 import Blanc.Lift.UniswapV2Pair.SwapForwardBalance
@@ -50,42 +51,8 @@ theorem skimDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (body : SFunc.RunExact cert.prog sevm
       (St b [0xbc25cf77] getterInitMemory G) t_059f_c80 o)
     (h_shifts : sevm.benvStat.rules.op.shifts = true) :
-    SFunc.RunExact cert.prog sevm (St b [] getterInitMemory (G + 123)) t_001a_c0 o := by
-  unfold t_001a_c0
-  apply rx_push (w := 0) rfl (by decide)
-  apply rx_calldataload (by decide)
-  apply rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_shr (h_shifts := h_shifts) selector (by decide)
-  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0x00f9) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_branch_zero
-  unfold t_002b_c0
-  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0xba9a7a56) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0x0097) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_branch_zero
-  unfold t_0036_c0
-  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0xd21220a7) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_gt (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0x0071) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
-  unfold t_0071_c0
-  apply rx_dest
-  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0xba9a7a56) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_eq (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0x0597) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_branchTo_zero
-  unfold t_007d_c0
-  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0xbc25cf77) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_eq (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0x059f) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  exact rx_branchTo_succ (by decide : (1 : B256) ≠ 0) rfl body
+    SFunc.RunExact cert.prog sevm (St b [] getterInitMemory (G + 123)) t_001a_c0 o :=
+  pair_selector_exact selector (by kernel_rfl) (by decide +kernel) body h_shifts
 
 /-- Wrapper80 forward: under the ABI head guard it masks the recipient word and
 enters entry34; 63 gas. -/

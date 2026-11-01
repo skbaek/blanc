@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.SwapPositionalRefinement
+import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.UniswapV2Pair.SwapForwardFront
@@ -22,36 +23,8 @@ theorem swapDispatch_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome}
     (body : SFunc.RunExact cert.prog sevm
       (St b [0x022c0d9f] getterInitMemory G) t_01be_c99 o)
     (h_shifts : sevm.benvStat.rules.op.shifts = true) :
-    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 166)) t_0000_c0 o := by
-  rw [show G + 166 = (G + 103) + 63 by omega]
-  refine getterString_guards_exact value size ?_
-  unfold t_001a_c0
-  apply rx_push (w := 0) rfl (by decide)
-  apply rx_calldataload (by decide)
-  apply rx_push (w := 224) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_shr (h_shifts := h_shifts) (v := 0x022c0d9f) selector (by decide)
-  apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_gt (v := 1) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x00f9) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
-  unfold t_00f9_c0
-  apply rx_dest
-  apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x23b872dd) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_gt (v := 1) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x0166) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
-  unfold t_0166_c0
-  apply rx_dest
-  apply rx_dup1 (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x095ea7b3) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_gt (v := 1) (by decide) (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_push (w := 0x0197) rfl (by simp only [List.length_cons,List.length_nil]; decide)
-  apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
-  unfold t_0197_c0
-  apply rx_dest
-  exact cmp_hit (tgt := t_01be_c99) rfl rfl body
+    SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 166)) t_0000_c0 o :=
+  pair_dispatch_exact value size selector (by kernel_rfl) (by decide +kernel) body h_shifts
 
 /-- One straight-line forward step of the swap walks: a jump destination, push, dup, swap, pop,
 calldata read, or arithmetic/comparison over the concrete stack. -/

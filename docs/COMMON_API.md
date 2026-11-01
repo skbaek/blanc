@@ -9304,7 +9304,12 @@ contract-neutral.
   of a selector word through a solc binary-search dispatcher (`SFunc.selWalk σ f`, computed by the
   kernel for a concrete selector; `Reach.selWalk_inl`/`_inr`, `SFunc.RunCut.selWalk_inl`/`_inr`,
   `SFunc.selWalk_mem_pairs`/`_leaves`; `SFunc.toCall` with `SFunc.RunP.callee_of_toCall` for a
-  wrapper's ABI decoding before its body call) in [`Blanc/Lift/SelectorRoute.lean`](../Blanc/Lift/SelectorRoute.lean); and the
+  wrapper's ABI decoding before its body call) in [`Blanc/Lift/SelectorRoute.lean`](../Blanc/Lift/SelectorRoute.lean), with its
+  forward, gas-exact twin (`SFunc.selCost`, 22 gas per row and 1 per `JUMPDEST`;
+  `SFunc.RunExact.selWalk_inl`/`_inr`; `SFunc.selGoto` naming the entered tree once for both
+  directions, `SFunc.RunExact.selGoto`, `SFunc.selGoto_spec`) in
+  [`Blanc/Lift/SelectorRouteExact.lean`](../Blanc/Lift/SelectorRouteExact.lean) (worked use: the UniswapV2 pair's
+  `pair_dispatch_exact`/`pair_dispatch_inv`, `Blanc/Lift/UniswapV2Pair/PairDispatch.lean`); and the
   reach forms of the two route-C skips below, `rr_shuffle` and `rr_call_silent`, in
   [`Blanc/Lift/ReachSkip.lean`](../Blanc/Lift/ReachSkip.lean). Worked uses: USDC (`Blanc/Lift/Usdc/RefineSignedAuth.lean`,
   `RefineSignedPermitNodes.lean`, `RefineAdminRescue.lean`, `HistoryFamilyProxy.lean`).
@@ -9947,6 +9952,13 @@ contract-neutral.
   one test or skip alone is `xa_vyTest`/`xa_vyPass`; in
   [`Blanc/Lift/VyperDispatchWalk.lean`](../Blanc/Lift/VyperDispatchWalk.lean). Worked use:
   `Blanc/Lift/Curve3Pool/Walk/Dispatch.lean` (`xa_dispatch`, `xa_dispatch_miss`).
+- The same dispatcher forward and gas-exact over a lifted program's trees: `SFunc.vyFwd σ n t`
+  evaluates the chain of tests (28 gas), always-taken skips (19) and `JUMPDEST`s (1) from the tree
+  `t` for the selector `σ`, returning the arm reached and the gas spent; `rx_vyFwd`/`rxe_vyFwd`
+  turn a run of that arm (prologue memory `vyMem Mem.empty w`) into a run of `t` for that gas
+  more, the pair closed by `kernel_rfl` for a concrete program; in
+  [`Blanc/Lift/VyperDispatchExact.lean`](../Blanc/Lift/VyperDispatchExact.lean). Worked use:
+  `Blanc/Lift/Curve3Pool/Walk/DispatchLive.lean` (`rxe_dispatch`, one line per `rx_dispatch_*`).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
   `SFunc.RunCutP.loop` (invariant; `SFunc.RunP.loop`), which
