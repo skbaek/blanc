@@ -10136,6 +10136,13 @@ contract-neutral.
   [`Blanc/Lift/WalkKit.lean`](../Blanc/Lift/WalkKit.lean). The backward twin for a frame walk
   `h : XAt …` reads the instruction off the code's byte trie (`xa n`, one family's macros, so it
   lives with them: Curve 3pool's `Walk/AutoStep.lean`).
+- Straight-line inversion steps of a cut run without writing them out: `winv n` / `winv` read
+  the node off the tree of `h : SFunc.RunCut …` (or `SFunc.RunCutP P …` with `using project`) and
+  run the hand-written pair `obtain ⟨_, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_<op> hd`
+  (`ri_push`, `ri_dup rfl`, `ri_swap rfl`, `ri_pop`, `ri_add`, `ri_mload`, …; `ric_dest` for a
+  `.dest`), stopping at a branch, jump, storage or call node; `at h` names the run (default: the
+  most recent cut run); `wskip n` steps over any `n` nodes forgetting the state
+  (`obtain ⟨_, _, h⟩ := ric_next h`), in [`Blanc/Lift/WalkInvKit.lean`](../Blanc/Lift/WalkInvKit.lean).
 - Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as
   `getDMem_spec` need): `Mem.size_write_mod32`, `Mem.size_extends_mod32`, the image steps
   `ri_mload_imgAtA`/`ri_mstore_imgAtA`/`ri_calldatacopy_imgAtA`/`ri_keccak_imgAtA` and the
