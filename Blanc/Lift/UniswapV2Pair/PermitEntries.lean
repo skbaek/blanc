@@ -4,6 +4,7 @@ import Blanc.Lift.UniswapV2Pair.PermitWalk
 import Blanc.Lift.ByteWindowMemory
 import Blanc.Lift.UniswapV2Pair.WriterEntries
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! The permit recovery call, the signer guard, the approval core at the moved
 free pointer, and the whole internal permit body. -/
@@ -72,10 +73,7 @@ theorem permitSigner_invH {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G 
   have same1 : (F.read 450 32).2 = F := mem.read_self (by decide)
   have h := run.cut
   unfold t_1cdc_c29 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 4
   obtain ⟨d', hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl, read0, same0] at hd; subst d'
@@ -85,19 +83,11 @@ theorem permitSigner_invH {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G 
   obtain ⟨d', hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   rw [show (450 : B256).toNat = 450 from rfl, same1] at hd; subst d'
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 5
   obtain ⟨d', hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := (Bytes.toB256 (F.read 450 32).1).toAdr.toB256)
     (by rw [B256.and_comm]; exact ff20_and_word _) (ri_and hd)
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 5
   rcases ric_branchTo (k := 15) (g := t_1d57_c15) (by decide) rfl h with
     ⟨zero, _, h⟩ | ⟨nonzero, _, h⟩
   · have recoveredNonzero : (Bytes.toB256 (F.read 450 32).1).toAdr ≠ 0 := by
@@ -105,21 +95,17 @@ theorem permitSigner_invH {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G 
       rw [bad] at zero
       exact (by decide : B256.eqCheck (0 : Adr).toB256 0 ≠ 0) zero
     unfold t_1d27_c29 at h
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    winv 3
     obtain ⟨d', hd, h⟩ := ric_next h
     obtain ⟨_, rfl⟩ := ri_val (w := owner.toB256)
       (ff20_and_adr owner) (ri_and hd)
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    winv 2
     obtain ⟨d', hd, h⟩ := ric_next h
     obtain ⟨_, rfl⟩ := ri_val (w := (Bytes.toB256 (F.read 450 32).1).toAdr.toB256)
       (ff20_and_word _) (ri_and hd)
     obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_eq hd
     unfold t_1d57_c15 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    winv 2
     rcases ric_branch h with ⟨_, _, bad⟩ | ⟨equal, _, h⟩
     · exact (bad.false_of_noOk (by decide)).elim
     have signer : (Bytes.toB256 (F.read 450 32).1).toAdr = owner := by
@@ -130,34 +116,19 @@ theorem permitSigner_invH {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G 
         exact absurd (Adr.toB256_inj same) different
       exact equal flag
     unfold t_1dc2_c15 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    winv 6
     obtain ⟨_, h⟩ := ric_call (g := t_259c_c64) (by rfl) h
     rcases h with ⟨D, hc, h⟩ | ⟨D, hc, _⟩
     · obtain ⟨nonstatic, _, eq⟩ := approve64_inv_atH stateGas bal mem (by decide) hc
       cases eq
       unfold t_1dcd_c15 at h
-      obtain ⟨_, h⟩ := ric_dest h
-      obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-      obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-      obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-      obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-      obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-      obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-      obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-      obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-      obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
+      winv 10
       obtain ⟨G', hg⟩ := ric_ret h
       exact ⟨recoveredNonzero, signer, nonstatic, G', Seg.done.inj hg⟩
     · obtain ⟨_, _, eq⟩ := approve64_inv_atH stateGas bal mem (by decide) hc
       cases eq
   · unfold t_1d57_c15 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d', hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+    winv 2
     rcases ric_branch h with ⟨_, _, bad⟩ | ⟨rejected, _, _⟩
     · exact (bad.false_of_noOk (by decide)).elim
     · exact (nonzero (eq_zero_of_iszero_ne_zero rejected)).elim
@@ -312,11 +283,7 @@ theorem permitBody_invPH {P : Sevm → Devm → Ninst → Devm → Prop} {sevm :
   have h := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_1b0c_c29 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_timestamp (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_lt (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  winv 5 using project
   rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨timely, _, h⟩
   · exact (bad.false_of_noOk (by decide)).elim
   have timely : sevm.benvStat.time ≤ deadline := by
@@ -345,10 +312,7 @@ theorem permitBody_invPH {P : Sevm → Devm → Ninst → Devm → Prop} {sevm :
   obtain ⟨d, hcall, h⟩ := ric_nextP h
   obtain ⟨flag, out, post, bound, answered⟩ := ri_staticcall_boundedH stateGas (project hcall)
   rw [post.eq_St] at h
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  winv 4 using project
   rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨accepted, _, h⟩
   · exact (bad.false_of_noOk (by decide)).elim
   have one : flag = 1 := by
@@ -480,16 +444,7 @@ theorem permitEntry_invPH {P : Sevm → Devm → Ninst → Devm → Prop} {sevm 
   have h := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_05e2_c76 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldatasize (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sub (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_lt (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  winv 10 using project
   rcases ric_branchP h with ⟨_, _, bad⟩ | ⟨long, _, h⟩
   · exact (bad.false_of_noOk (by decide)).elim
   have guard : (224 : B256) ≤ sevm.data.length.toB256 - 4 := by
@@ -502,50 +457,28 @@ theorem permitEntry_invPH {P : Sevm → Devm → Ninst → Devm → Prop} {sevm 
     exact (by decide : (1 : B256) ≠ 0) flag
   unfold t_05f8_c76 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  winv 5 using project
   obtain ⟨d', hd, h⟩ := ric_nextP h
   obtain ⟨_, rfl⟩ := ri_val (w := (permitOwner sevm).toB256) (ff20_and_word _) (ri_and (project hd))
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  winv 3 using project
   obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 36) (by decide) (ri_add (project hd))
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
+  winv 3 using project
   obtain ⟨d', hd, h⟩ := ric_nextP h
   obtain ⟨_, rfl⟩ := ri_val (w := (permitSpender sevm).toB256) (ff20_and_word _) (ri_and (project hd))
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  winv 3 using project
   obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 68) (by decide) (ri_add (project hd))
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  winv 4 using project
   obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 100) (by decide) (ri_add (project hd))
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  winv 5 using project
   obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 132) (by decide) (ri_add (project hd))
   obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
   obtain ⟨d', hd, h⟩ := ric_nextP h
   obtain ⟨_, rfl⟩ := ri_val (w := (permitV sevm).toB256) (B256.and_ff_eq_toUInt8 _) (ri_and (project hd))
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
+  winv 3 using project
   obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 164) (by decide) (ri_add (project hd))
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_swap rfl (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  winv 3 using project
   obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_val (w := 196) (by decide) (ri_add (project hd))
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
-  obtain ⟨d', hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  winv 2 using project
   cases h with
   | callHalt _ lookup pop hc =>
     rw [show cert.prog[29]? = some t_1b0c_c29 from rfl] at lookup

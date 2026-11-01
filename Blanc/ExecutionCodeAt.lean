@@ -1,4 +1,5 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Messages
+import Blanc.CommonProofs.NoDel
 import Blanc.ExecutionWarmth
 
 /-!

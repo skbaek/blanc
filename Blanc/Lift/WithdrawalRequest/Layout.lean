@@ -1,5 +1,5 @@
 import Blanc.Lift.WithdrawalRequest.Model
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Walk
 
 /-!
 # EIP-7002 fields and concrete byte/word representation

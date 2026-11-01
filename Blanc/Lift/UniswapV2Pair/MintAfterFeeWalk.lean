@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.FeeMintSource
 import Blanc.Lift.UniswapV2Pair.UpdateSource
+import Blanc.Lift.WalkInvKit
 
 /-! Complete literal post-fee mint suffix, including both liquidity pricing arms. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -20,9 +21,7 @@ theorem mintMinReturn_inv {sevm : Sevm} {b : Devm} {R : List B256}
   obtain ⟨_, rfl⟩ := ri_swap (S' := ρ :: 0 :: left :: right :: value :: R) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_swap (S' := right :: 0 :: left :: ρ :: value :: R) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
+  winv 3
   exact ric_ret run
 
 /-- The shared min70 cleanup costs21gas. -/
@@ -48,12 +47,10 @@ theorem mintMin70_inv {sevm : Sevm} {b : Devm} {R : List B256}
       (St b (left :: right :: ρ :: R) M G) t_297a_c70 r) :
     ∃ gas, r = .done (.returned (St b (mintMinWord left right :: R) M gas)) := by
   unfold t_297a_c70 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := left) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := right) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_lt hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   by_cases less : right < left
   · simp only [B256.ltCheck, ite_eq_left less] at run
     rcases ric_branch run with ⟨zero, _, _⟩ | ⟨_, _, run⟩
@@ -120,9 +117,7 @@ theorem mintLaterFinish_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List N
       (St b (supply :: f :: amount1 :: amount0 :: b1 :: b0 :: r1 :: r0 ::
         mintMinWord (numerator1 / denominator1) floor0 :: toWord :: ρ :: R) M gas) t_12cd_c11 r := by
   unfold t_12c4_c41 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_div hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   obtain ⟨_, call⟩ := ric_call (g := t_297a_c70) rfl run
   rcases call with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨_, eq⟩ := mintMin70_inv (by decide : 27 ∉ ([] : List Nat)) callee.cut
@@ -176,9 +171,7 @@ theorem mintLaterProduct0_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
       (St b ((amount0 * supply) :: r0 :: 0x12ca :: supply :: f :: amount1 :: amount0 ::
         b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M gas) t_1294_c41 r := by
   unfold t_1270_c41 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
   rw [show r0 &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -186,9 +179,7 @@ theorem mintLaterProduct0_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := amount0) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := supply) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 3
   obtain ⟨_, call⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases call with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨nowrap, _, eq⟩ := mul58_inv callee
@@ -208,9 +199,7 @@ theorem mintLaterProduct1_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
       (St b ((amount1 * supply) :: r1 :: (product0 / r0) :: 0x12ca :: supply :: f :: amount1 :: amount0 ::
         b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M gas) t_12bd_c41 r := by
   unfold t_129b_c41 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_div hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := r1) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
   rw [show r1 &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -218,9 +207,7 @@ theorem mintLaterProduct1_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := amount1) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := supply) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 3
   obtain ⟨_, call⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases call with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨nowrap, _, eq⟩ := mul58_inv callee
@@ -363,15 +350,10 @@ theorem mintInitialProduct_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : Lis
       (St b ((amount0 * amount1) :: 0x0bfd :: 1000 :: 0x125c :: supply :: f :: amount1 :: amount0 ::
         b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M gas) t_1257_c41 r := by
   unfold t_123f_c41 at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 4
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := amount0) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := amount1) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 3
   obtain ⟨_, call⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases call with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨nowrap, _, eq⟩ := mul58_inv callee
@@ -390,19 +372,15 @@ theorem mintInitialRootSub_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : Lis
       (St b (((Nat.sqrt product.toNat).toB256 - 1000) :: supply :: f :: amount1 :: amount0 ::
         b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M gas) t_125c_c41 r := by
   unfold t_1257_c41 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   obtain ⟨_, call⟩ := ric_call (g := t_2878_c69) rfl run
   rcases call with ⟨d, callee, run⟩ | ⟨d, callee, _⟩
   · obtain ⟨_, eq⟩ := sqrt_of_run callee
     cases eq
     unfold t_0bfd_c41 at run
-    obtain ⟨_, run⟩ := ric_dest run
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+    winv 2
     dsimp only [List.set] at run
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+    winv 3
     obtain ⟨_, sub⟩ := ric_call (g := t_226e_c59) rfl run
     rcases sub with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
     · obtain ⟨cover, _, eq⟩ := sub59_inv callee
@@ -599,22 +577,17 @@ theorem mintReturn_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   dsimp only [memWord] at ptr0 ptr2
   have h := run.cut
   unfold t_137e_c12 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   rw [show Bytes.toB256 [0x40] = (64 : B256) from by decide] at h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hs
   obtain ⟨d, hs, h⟩ := ric_next h; obtain ⟨_, eq⟩ := ri_mload hs
   rw [show (64 : B256).toNat = 64 from rfl, ptr0, mem.read_self (by decide)] at eq
   subst d
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hs
+  winv 3
   simp only [show (128 : B256).toNat = 128 from rfl] at h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  winv 2
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 160) (by decide) (ri_add hs)
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hs
   simp only [show (160 : B256).toNat = 160 from rfl] at h
@@ -622,14 +595,11 @@ theorem mintReturn_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨d, hs, h⟩ := ric_next h; obtain ⟨_, eq⟩ := ri_mload hs
   rw [show (64 : B256).toNat = 64 from rfl, ptr2, m2.read_self (by decide)] at eq
   subst d
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_caller hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_sub hs)
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 64) (by decide) (ri_add hs)
@@ -643,26 +613,17 @@ theorem mintReturn_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     m2.read_self (by decide : 128 + 64 ≤ 192),
     Mem.read_two_word_writes_at_raw] at eq
   subst d
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 4
   obtain ⟨_, hs, h⟩ := ric_next h
   have nonstatic := ri_sstore_nonstaticH stateGas hs
   obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hs
   dsimp only [List.set] at h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hs
   dsimp only [List.set] at h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
+  winv 6
   obtain ⟨gas, eq⟩ := ric_ret h
   refine ⟨nonstatic, gas, ?_⟩
   exact Seg.done.inj eq
@@ -708,30 +669,19 @@ theorem mintKLast_invH {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
   unfold t_1343_c11 at run
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 5
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_div hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 5
   obtain ⟨_, call⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases call with ⟨d, callee, run⟩ | ⟨d, callee, _⟩
   · obtain ⟨_, _, eq⟩ := mul58_inv callee
     cases eq
     unfold t_137a_c11 at run
-    obtain ⟨_, run⟩ := ric_dest run
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+    winv 2
     obtain ⟨_, hs, run⟩ := ric_next run
     have mutable := ri_sstore_nonstaticH stateGas hs
     obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hs
@@ -810,8 +760,7 @@ theorem mintAfterUpdate_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   unfold t_133c_c11 at h
   obtain ⟨_, h⟩ := ric_dest h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := f) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   by_cases off : f = 0
   · simp only [B256.eqCheck, ite_eq_left off] at h
     rcases ric_branchTo (g := t_137e_c12) (by decide : 12 ∉ ([] : List Nat)) rfl h with
@@ -918,8 +867,7 @@ theorem mintUpdateCaller_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
         (liquidity :: R) (mintEventMemory (updateMemoryH sevm b M r0 r1 b0 b1) amount0 amount1) gas) := by
   have h := run.cut
   unfold t_1330_c11 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := b0) rfl hs
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := b1) rfl hs
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl hs
@@ -1278,12 +1226,10 @@ theorem mintPriced_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   unfold MintPricedResultH mintPricedPostH
   have h := run.cut
   unfold t_12cd_c11 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   rw [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := liquidity) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_gt hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   rcases ric_branch h with ⟨_, _, bad⟩ | ⟨positive, _, h⟩
   · exact (bad.false_of_noOk (by decide : t_12d6_c11.noOk = true)).elim
   · have gt : (0 : B256) < liquidity := by
@@ -1517,8 +1463,7 @@ theorem mintInitial_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   change SFunc.RunCut cert.prog sevm [] post t_126b_c41 (.done o) at tail
   rw [canonical] at tail
   unfold t_126b_c41 at tail
-  obtain ⟨_, tail⟩ := ric_dest tail
-  obtain ⟨_, hs, tail⟩ := ric_next tail; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   obtain ⟨_, tail⟩ := ric_jump (g := t_12cd_c11) (by decide : 11 ∉ ([] : List Nat)) rfl tail
   have result := mintPriced_invH stateGas bal (mintLPPost_ptrH mem) tail.uncut
   exact ⟨product, cover, minimumGas, residual, callee, accepted, result⟩
@@ -1593,8 +1538,7 @@ theorem mintAfterFee_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     MintAfterFeeResultH sevm b R M f amount1 amount0 b1 b0 r1 r0 toWord ρ o := by
   have h := run.cut
   unfold t_1233_c41 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   rw [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, h⟩ := ric_next h

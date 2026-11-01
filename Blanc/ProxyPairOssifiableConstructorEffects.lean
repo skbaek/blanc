@@ -1,5 +1,6 @@
 import Blanc.ProxyPairOssifiableConstructor
 import Blanc.ProxyPairOssifiableControlEffects
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # OssifiableProxy constructor phase effects

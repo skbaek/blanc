@@ -23,7 +23,9 @@
 
 import Blanc.Fmint
 import Blanc.Conserved
-import Blanc.CommonProofs
+import Blanc.CommonProofs.DispatchReach
+import Blanc.CommonProofs.Balance
+import Blanc.CommonProofs.MemEffects
 import Blanc.Ladder
 
 namespace Blanc

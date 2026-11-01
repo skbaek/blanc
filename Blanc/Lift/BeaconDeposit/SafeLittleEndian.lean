@@ -5,6 +5,7 @@ import Blanc.Lift.InvWalk
 import Blanc.Lift.InvWalkOps
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.BeaconDeposit.LittleEndian
+import Blanc.Lift.WalkInvKit
 
 namespace Blanc.Lift.BeaconDeposit
 
@@ -33,8 +34,7 @@ theorem ri_lePrefix {K : SFunc} {img : Bytes}
   have hsi : (Nat.toB256 sevm.data.length).toNat = sevm.data.length :=
     B256.toNat_toB256_of_lt hcd
   unfold lePrefix at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s
+  winv 2
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := Bytes.toB256 [0x40]) rfl s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_mload s
   have hmload_fst : Bytes.toB256 (M.read (Bytes.toB256 [0x40]).toNat 32).1 = pB := by
@@ -71,11 +71,9 @@ theorem ri_lePrefix {K : SFunc} {img : Bytes}
   rw [hcc_addr, hcc_bytes] at run
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_add s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_swap (n := 0) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_pop s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_pop s
+  winv 2
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_swap (n := 0) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_pop s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_push s
+  winv 2
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_dup (w := v) rfl s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_swap (n := 0) rfl s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_shl s
@@ -95,14 +93,12 @@ theorem ri_leStep {c ib d0 d1 : UInt8} {K : SFunc} {i : Nat} {imgM : Bytes} (hi 
         (M.write (pB.toNat + 32 + i) [(Blanc.BeaconDeposit.le64 v.toNat).getD i 0]) G') K r := by
   unfold leHalf1 at run
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := v <<< 192) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_byte s
+  winv 2
   have hbyte : (List.getD (v <<< 192).toBytes (Bytes.toB256 [c]).toNat 0).toB256 =
       ((Blanc.BeaconDeposit.le64 v.toNat).getD i 0).toB256 := by
     rw [hc, shl192_byte v i hi]
   rw [hbyte] at run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_shl s
+  winv 2
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup (w := pB) rfl s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_dup (w := pB) rfl s
@@ -130,19 +126,14 @@ theorem ri_leStep {c ib d0 d1 : UInt8} {K : SFunc} {i : Nat} {imgM : Bytes} (hi 
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff] = m31 := rfl
   unfold leHalf2 at run
-  obtain ⟨G14, run⟩ := ric_dest run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_push s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_add s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_add s
+  winv 4
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_swap (n := 0) rfl s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s
   rw [hm31] at run
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_not s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_and s
+  winv 2
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_swap (n := 0) rfl s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_dup (w := (~~~ m31) &&& leB v i) rfl s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s
-  obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_byte s
+  winv 2
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_swap (n := 0) rfl s
   obtain ⟨d, s, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_mstore8 s
   have hmstore8_addr : (Bytes.toB256 [0x20] + Bytes.toB256 [ib] + pB).toNat = pB.toNat + 32 + i := hA

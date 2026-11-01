@@ -4,6 +4,7 @@ import Blanc.Lift.CursorStateCuts
 import Blanc.Lift.UniswapV2Pair.PairDispatchCursor
 import Blanc.Lift.UniswapV2Pair.BurnForward
 import Blanc.Lift.UniswapV2Pair.BurnPositionalCuts
+import Blanc.Lift.WalkInvKit
 
 /-! Residual-gas source inverses for actual successful Burn cursor prefixes. -/
 
@@ -116,16 +117,7 @@ theorem burn_abi_size_of_source {P : Sevm → Devm → Ninst → Devm → Prop}
     (32 : B256) ≤ sevm.data.length.toB256 - 4 := by
   unfold t_050a_c83 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldatasize (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_sub (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_lt (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (project step)
-  obtain ⟨_, step, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (project step)
+  winv 10 using project
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨accepted, _, _⟩
   · exact (failed.false_of_noOk (by decide : t_051c_c83.noOk = true)).elim
   · change B256.eqCheck (B256.ltCheck (sevm.data.length.toB256 - 4) 32) 0 ≠ 0 at accepted

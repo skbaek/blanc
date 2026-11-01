@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.StaticViewClassify
+import Blanc.Lift.WalkInvKit
 
 /-! Actual successful calls to the certified Pair runtime, in any context, reach one of its
 twenty-seven published selectors; the fallback and short calldata revert. -/
@@ -25,12 +26,7 @@ theorem pair_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outc
     Blanc.Sevm.selector sevm ∈ pairSelectors := by
   have h := run.cut
   unfold t_001a_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_shr hd
   simp only [show Bytes.toB256 [0x00] = (0 : B256) from rfl,
@@ -306,8 +302,7 @@ theorem pair_selector_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outc
             next miss =>
               unfold t_01b9_c0 at h
               obtain ⟨_, h⟩ := ric_dest h
-              obtain ⟨_, _, h⟩ := ric_next h
-              obtain ⟨_, _, h⟩ := ric_next h
+              wskip 2
               exact (ric_revert h).elim
             next hit =>
               exact pairSelector_of_hit hit (by decide)

@@ -81,7 +81,7 @@ DISCOVERY_RECIPE_ID = "memory-window-transport"
 DISCOVERY_ROUTE_NAMES = ("List.sliceD_add", "Mem.read_two_word_writes_at")
 DISCOVERY_ROUTE_SOURCES = (
     ("Blanc/BytesWrite.lean", "List.sliceD_add"),
-    ("Blanc/CommonProofs.lean", "Mem.read_two_word_writes_at"),
+    ("Blanc/CommonProofs/MemImage.lean", "Mem.read_two_word_writes_at"),
 )
 DISCOVERY_RETIRED_NAME = "constructorPairStage_storageEffectRun"
 DISCOVERY_RENAMED_NAME = "constructorPairWindow_storageEffectRun"

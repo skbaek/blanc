@@ -1,6 +1,7 @@
 import Blanc.Weth10AllowanceArmsRedeem
 import Blanc.Weth10PermitRawEffect
 import Blanc.Weth10StaticSilence
+import Blanc.CommonProofs.MemEffects
 
 /-!
 The ERC-2612 `permit` arm of the allowance-region transport.

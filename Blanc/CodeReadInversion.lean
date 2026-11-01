@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Walk
 
 /-!
 # Exact stack observations for code reads

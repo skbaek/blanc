@@ -1,6 +1,6 @@
 -- NonpayableInversion.lean : contract-neutral source-wrapper inversion.
 
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Hinv
 
 /-!
 # Nonpayable wrapper inversion

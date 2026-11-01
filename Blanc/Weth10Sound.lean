@@ -1,6 +1,6 @@
 -- Weth10Sound.lean : backing-invariant walks for the concrete WETH10 runtime.
 
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Balance
 import Blanc.Weth10
 import Blanc.Weth10Spec
 

@@ -2,6 +2,7 @@
 
 import Blanc.ProrataWethVaultOutbound
 import Blanc.LedgerConservation
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.SwapTransfer
 import Blanc.Lift.MutableCallPost
+import Blanc.Lift.WalkInvKit
 
 /-! The swap's conditional `uniswapV2Call` callback (`t_08e1_c4..t_09c3_c5`). -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -533,10 +534,7 @@ theorem swapCallbackCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List
   obtain ⟨m', mcb⟩ := swapCallbackMem_ptr mem (by omega : 96 ≤ q.toNat) swapCallbackSelectorWord
     sevm.caller.toB256 a0 a1 len data
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_extcodesize fork (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 4 using StepIn.toRun
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨codeNz, _, run⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_09a6_c4.noOk = true))
   unfold t_09aa_c4 at run
@@ -546,10 +544,7 @@ theorem swapCallbackCall_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {R : List
   obtain ⟨d, call, run⟩ := ric_nextP run
   obtain ⟨flag, post⟩ := ri_call_post fork (StepIn.toRun call)
   rw [St.self post.stack rfl] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 4 using StepIn.toRun
   rcases ric_branchP run with ⟨_, _, failed⟩ | ⟨flagNz, _, run⟩
   · exact False.elim (failed.false_of_noOk (by decide : t_09b5_c4.noOk = true))
   unfold t_09be_c4 at run

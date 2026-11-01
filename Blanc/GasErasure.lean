@@ -1,4 +1,5 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Walk
+import Blanc.CommonProofs.NoDel
 
 /-!
 Contract-neutral gas erasure: equality of EVM states modulo `gasLeft`, and

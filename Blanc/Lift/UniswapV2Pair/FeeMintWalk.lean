@@ -3,6 +3,7 @@ import Blanc.Lift.UniswapV2Pair.FeeMintArithmetic
 import Blanc.Lift.UniswapV2Pair.SqrtWalk
 import Blanc.Lift.UniswapV2Pair.LPMintCore
 import Blanc.Lift.PackedWord
+import Blanc.Lift.WalkInvKit
 
 /-! Actual fee68 branches after the genuine factory observation. -/
 
@@ -16,15 +17,12 @@ theorem feeReturn25_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
       (St b (K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_2870_c25 r) :
     ∃ gas, r = .done (.returned (St b (f :: R) M gas)) := by
   unfold t_2870_c25 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
+  winv 3
   obtain ⟨_, hs, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_swap (S' := ρ :: r1 :: r0 :: f :: R) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_swap (S' := r0 :: r1 :: ρ :: f :: R) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
+  winv 2
   exact ric_ret run
 
 /-- Literal final cleanup costs23 and preserves the full world and memory. -/
@@ -50,8 +48,7 @@ theorem feeReturn24_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
       (St b (K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_285f_c24 r) :
     ∃ gas, r = .done (.returned (St b (f :: R) M gas)) := by
   unfold t_285f_c24 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   obtain ⟨_, run⟩ := ric_jump (g := t_2870_c25) h25 rfl run
   exact feeReturn25_inv run
 
@@ -73,9 +70,7 @@ theorem feeReturn23_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
       (St b (z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_285c_c23 r) :
     ∃ gas, r = .done (.returned (St b (f :: R) M gas)) := by
   unfold t_285c_c23 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
+  winv 3
   exact feeReturn24_inv h25 run
 
 /-- Exact two-root cleanup is40gas. -/
@@ -97,10 +92,7 @@ theorem feeReturn2858_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat
       (St b (L :: D :: N :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M G) t_2858_c68 r) :
     ∃ gas, r = .done (.returned (St b (f :: R) M gas)) := by
   unfold t_2858_c68 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
+  winv 4
   exact feeReturn23_inv h25 run
 
 /-- Exact three-word plus root cleanup is47gas. -/
@@ -161,18 +153,13 @@ theorem feeDecoder_inv {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : S
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup (w := w) rfl (project hs)
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and (project hs)
   rw [B256.and_comm w, ff20_and_word] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (project hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (project hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (project hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (project hs)
+  winv 4 using project
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (project hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (project hs)
+  winv 2 using project
   dsimp only [List.set] at run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (project hs)
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop (project hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl (project hs)
+  winv 2 using project
   dsimp only [List.set] at run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (project hs)
   by_cases addressZero : w.toAdr.toB256 = 0
@@ -265,8 +252,7 @@ theorem feeOff_invH {sevm : Sevm} {b : Devm} {R : List B256}
   unfold t_2864_c68 at h
   obtain ⟨_, h⟩ := ric_dest h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := K) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   by_cases zeroK : K = 0
   · simp only [B256.eqCheck, ite_eq_left zeroK] at h
     rcases ric_branchTo (g := t_2870_c25) (by decide : 25 ∉ []) rfl h with
@@ -279,8 +265,7 @@ theorem feeOff_invH {sevm : Sevm} {b : Devm} {R : List B256}
     rcases ric_branchTo (g := t_2870_c25) (by decide : 25 ∉ []) rfl h with
       ⟨_, _, tail⟩ | ⟨bad, _, _⟩
     · unfold t_286b_c68 at tail
-      obtain ⟨_, hs, tail⟩ := ric_next tail; obtain ⟨_, rfl⟩ := ri_push hs
-      obtain ⟨_, hs, tail⟩ := ric_next tail; obtain ⟨_, rfl⟩ := ri_push hs
+      winv 2
       rw [show Bytes.toB256 [0x0b] = (11 : B256) from by decide,
         show Bytes.toB256 [0x00] = (0 : B256) from by decide] at tail
       obtain ⟨_, hs, tail⟩ := ric_next tail
@@ -334,8 +319,7 @@ theorem feeOnZero_inv {sevm : Sevm} {b : Devm} {R : List B256}
   have h := run.cut
   unfold t_27ab_c68 at h
   obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 0) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   simp only [show B256.eqCheck 0 0 = (1 : B256) from by decide] at h
   rcases ric_branchTo (g := t_285f_c24) (by decide : 24 ∉ []) rfl h with
     ⟨bad, _, _⟩ | ⟨_, _, tail⟩
@@ -366,15 +350,12 @@ theorem feeRootCompare_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Na
     (z < a ∧ ∃ gas, SFunc.RunCut cert.prog sevm C
       (St b (z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas) t_27f0_c68 r) := by
   unfold t_27e5_c68 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at run
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := z) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := a) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_gt hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   by_cases growth : z < a
   · simp only [B256.gtCheck, ite_eq_left growth,
       show B256.eqCheck 1 0 = (0 : B256) from by decide] at run
@@ -435,12 +416,9 @@ theorem feeRootKLast_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
       (St b ((Nat.sqrt K.toNat).toB256 :: 0 :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
       t_27e5_c68 r := by
   unfold t_27d8_c68 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := K) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, branch⟩ := ric_call (g := t_2878_c69) rfl run
@@ -481,8 +459,7 @@ theorem feeRootK_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
       (St b ((Nat.sqrt product.toNat).toB256 :: 0 :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
       t_27d8_c68 r := by
   unfold t_1257_c68 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   obtain ⟨_, branch⟩ := ric_call (g := t_2878_c69) rfl run
   rcases branch with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨_, eq⟩ := sqrt_of_run callee
@@ -576,13 +553,9 @@ theorem feeReserveProduct_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
       (St b ((r0 * r1) :: 0x27d8 :: 0 :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
       t_1257_c68 r := by
   unfold t_27b1_c68 at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 4
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 2
   rw [show Bytes.toB256
     [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] &&& r0 =
     r0 from by rw [B256.and_comm]; exact feeReserveWord_eq bound0] at run
@@ -593,9 +566,7 @@ theorem feeReserveProduct_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
   rw [show r1 &&& Bytes.toB256
     [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] =
     r1 from feeReserveWord_eq bound1] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 3
   obtain ⟨_, branch⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases branch with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨_, _, eq⟩ := mul58_inv callee
@@ -643,8 +614,7 @@ theorem feeOnNonzero_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
       (St b (K :: w :: f :: r1 :: r0 :: ρ :: R) M gas) t_27b1_c68 r := by
   unfold t_27ab_c68 at run
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := K) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   simp only [B256.eqCheck, ite_eq_right nonzero] at run
   rcases ric_branchTo (g := t_285f_c24) h24 rfl run with ⟨_, gas, tail⟩ | ⟨bad, _, _⟩
   · exact ⟨gas, tail⟩
@@ -694,14 +664,9 @@ theorem feeLiquidity_invH {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat
     (N / D ≠ 0 → lpMintAcceptsH sevm b w (N / D)) ∧
       ∃ gas, r = .done (.returned (feeLiquidityPostH sevm b R M w f N D gas)) := by
   unfold t_2845_c68 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_div hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 3
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 4
   by_cases zeroL : N / D = 0
   · simp only [B256.eqCheck, ite_eq_left zeroL] at run
     rcases ric_branch run with ⟨bad, _, _⟩ | ⟨_, _, tail⟩
@@ -791,11 +756,9 @@ theorem feeDenominatorGuard_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : Li
       (St b (N :: D :: 0 :: D :: N :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
       t_2845_c68 r := by
   unfold t_2838_c68 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := D) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := N) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := D) rfl hs
@@ -835,12 +798,9 @@ theorem feeDenominatorAdd_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
       (St b ((fiveA + z) :: 0 :: N :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
       t_2838_c68 r := by
   unfold t_282c_c68 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 3
   obtain ⟨_, branch⟩ := ric_call (g := t_2abc_c72) rfl run
   rcases branch with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨nowrap, _, eq⟩ := add72_inv callee
@@ -878,20 +838,15 @@ theorem feeDenominatorMul_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
       (St b ((a * 5) :: z :: 0x2838 :: 0 :: N :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
       t_282c_c68 r := by
   unfold t_2813_c68 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := z) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := a) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
   rw [show Bytes.toB256 [5] = (5 : B256) from by decide] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 3
   obtain ⟨_, branch⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases branch with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨nowrap, _, eq⟩ := mul58_inv callee
@@ -939,15 +894,12 @@ theorem feeNumerator_invH {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat
         ((b.getStorVal sevm.currentTarget 0 * Δ) :: 0 :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
       t_2813_c68 r := by
   unfold t_2804_c68 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 2
   rw [show Bytes.toB256 [0] = (0 : B256) from rfl] at run
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sloadH bal hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 3
   obtain ⟨_, branch⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases branch with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨nowrap, _, eq⟩ := mul58_inv callee
@@ -991,14 +943,10 @@ theorem feeGrowthSub_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Nat}
       (St b ((a - z) :: 0x2813 :: 0 :: z :: a :: K :: w :: f :: r1 :: r0 :: ρ :: R) M gas)
       t_2804_c68 r := by
   unfold t_27f0_c68 at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := a) rfl hs
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := z) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 3
   obtain ⟨_, branch⟩ := ric_call (g := t_226e_c59) rfl run
   rcases branch with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨cover, _, eq⟩ := sub59_inv callee

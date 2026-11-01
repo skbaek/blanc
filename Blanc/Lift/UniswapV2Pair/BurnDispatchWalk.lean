@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.SyncWalk
 import Blanc.Lift.UniswapV2Pair.PairDispatch
+import Blanc.Lift.WalkInvKit
 
 /-! Actual Burn selector and public ABI caller retain the source derivation. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -32,25 +33,12 @@ theorem burnAbi_caller_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   have h := run
   unfold t_050a_c83 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldatasize (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_sub (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_lt (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  winv 10 using project
   rcases ric_branchP h with ⟨_, _, failed⟩ | ⟨_, _, h⟩
   · exact (failed.false_of_noOk (by decide : t_051c_c83.noOk = true)).elim
   unfold t_0520_c83 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_and (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
+  winv 5 using project
   cases h with
   | callRet d lookup pop callee continuation =>
     change some t_13f5_c37 = _ at lookup

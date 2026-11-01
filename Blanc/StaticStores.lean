@@ -1,6 +1,6 @@
 -- StaticStores.lean : a body that must write storage cannot run in a static frame.
 
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Walk
 
 /-!
 # Storing bodies and static frames

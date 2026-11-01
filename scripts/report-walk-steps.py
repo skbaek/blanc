@@ -11,6 +11,7 @@ being named once.
     python3 scripts/report-walk-steps.py BASE --worktree   # ... against the working tree
     python3 scripts/report-walk-steps.py --paths F.lean …  # whole files
     python3 scripts/report-walk-steps.py --all             # every tracked Blanc/**/*.lean
+    python3 scripts/report-walk-steps.py --all --at REV    # ... as committed at REV (a census)
     python3 scripts/report-walk-steps.py --self-test
 
 Two finding classes, both report-only:
@@ -18,8 +19,10 @@ Two finding classes, both report-only:
 * **hand-walk**: at least `--min-run` (default 8) consecutive single-instruction step lines at
   one indentation (deeper-indented continuation lines and comment lines do not break a run). The
   report counts how many of the run's lines a kit takes as they are: `Blanc/Lift/WalkKit.lean`'s
-  `wrun` (the forward straight-line `xr` forms) or Curve 3pool's backward `xa`
-  (`Blanc/Lift/Curve3Pool/Walk/AutoStep.lean`); the rest want a step tactic of their own family.
+  `wrun` (the forward straight-line `xr` forms), Curve 3pool's backward `xa`
+  (`Blanc/Lift/Curve3Pool/Walk/AutoStep.lean`), or `Blanc/Lift/WalkInvKit.lean`'s `winv`/`wskip`
+  (the `ric_next` + `ri_<op>` inversion pairs, one- or two-line, `ric_dest`, and forgetful
+  `obtain ⟨_, _, h⟩ := ric_next h`); the rest want a step tactic of their own family.
 * **repeated-simp-list**: a `simp only [...]` lemma list of at least three entries that occurs at
   least `--min-repeat` (default 3) times in the scanned files: name it once (a macro or a
   `simp` set argument) instead.
@@ -43,7 +46,7 @@ STEP_RE = re.compile(
     r"^\s*(?:"
     r"(?:xr|xrc|xs|xs2|xm|xmo|xw|xjd|xjmp|xl|xsw|istep|xstep|wstep)\b"
     r"|(?:refine|exact|apply) rxc?e?_\w+"
-    r"|obtain .*:= (?:ric_next|ric_nextP|rpw_next|rr_next|ri_\w+)\b"
+    r"|obtain .*:= (?:ric_next|ric_nextP|ric_dest|ric_destP|rpw_next|rr_next|ri_\w+)\b"
     r"|(?:have|replace) \w+ := (?:ric_next|ric_nextP|xa_nextAt|xa_next)\b"
     r")")
 _R = r"\(by (?:hr|hrs|wroom)\)"
@@ -62,6 +65,17 @@ XA_RE = re.compile(r"^\s*(?:" + "|".join([
     rf"xs {_H} \(\.reg \(\.(?:dup|swap) \d+\)\) \(ri_(?:dup|swap) \(by rfl\)\)",
     rf"xs {_H} \(\.reg \.(?P<op>{_BOPS})\) ri_(?P=op)", rf"xs {_H} \(\.reg \.gas\) ri_gas_remaining",
     rf"xs2 {_H} \(\.reg \.(?P<op2>slt|sgt)\) ri_(?P=op2)", rf"xjd {_H}"]) + r")\s*(?:--.*)?$")
+_ID = r"[A-Za-z_][A-Za-z0-9_']*"
+_IOPS = ("add|mul|sub|div|mod|exp|lt|gt|eq|iszero|and|or|xor|not|byte|shl|shr|address|caller|"
+         "callvalue|calldataload|calldatasize|returndatasize|timestamp|pop|mload|mstore|mstore8|"
+         "tload|keccak|log1|log2|log3|log4|push")
+_INEXT = rf"obtain ⟨{_ID}, {_ID}, {_ID}⟩ := ric_nextP? {_ID}"
+_ISEC = (rf"obtain ⟨{_ID}, rfl⟩ := (?:ri_(?:{_IOPS})|ri_(?:dup|swap) rfl) "
+         rf"(?:{_ID}|\({_ID}(?:\.{_ID})* {_ID}\))")
+# Inversion steps that `winv`/`wskip` (Blanc/Lift/WalkInvKit.lean) take as written.
+INV_RE = re.compile(r"^\s*(?:" + "|".join([
+    rf"{_INEXT}; {_ISEC}", _INEXT, _ISEC, rf"obtain ⟨{_ID}, {_ID}⟩ := ric_destP? {_ID}"])
+    + r")\s*$")
 SIMP_RE = re.compile(r"simp only \[([^\]]*)\]")
 WORKTREE = None
 
@@ -93,7 +107,7 @@ def walk_runs(lines: List[str], min_run: int) -> List[Tuple[int, int, int, int]]
             line = lines[j]
             if STEP_RE.match(line) and indent(line) == ind:
                 steps += 1
-                kit += bool(KIT_RE.match(line) or XA_RE.match(line))
+                kit += bool(KIT_RE.match(line) or XA_RE.match(line) or INV_RE.match(line))
                 last = j
             elif not (line.strip().startswith("--") or (line.strip() and indent(line) > ind)):
                 break
@@ -129,6 +143,7 @@ def read(root: pathlib.Path, head: Optional[str], path: str) -> List[str]:
     return git(root, "show", f"{head}:{path}").split("\n")
 
 
+
 def report(root: pathlib.Path, files: Dict[str, Optional[Set[int]]], head: Optional[str],
            min_run: int, min_repeat: int, out=sys.stdout) -> Tuple[int, int]:
     nruns = nsteps = nkit = 0
@@ -140,7 +155,7 @@ def report(root: pathlib.Path, files: Dict[str, Optional[Set[int]]], head: Optio
             if new is not None and not any(a <= n <= b for n in new):
                 continue
             nruns, nsteps, nkit = nruns + 1, nsteps + steps, nkit + kit
-            print(f"hand-walk {path}:{a}-{b}: {steps} step lines, {kit} taken by `wrun`/`xa`", file=out)
+            print(f"hand-walk {path}:{a}-{b}: {steps} step lines, {kit} taken by `wrun`/`xa`/`winv`", file=out)
         for n, key in simp_lists(lines):
             lists[key].append((path, n, new is None or n in new))
     nsimp = 0
@@ -151,7 +166,7 @@ def report(root: pathlib.Path, files: Dict[str, Optional[Set[int]]], head: Optio
         where = ", ".join(f"{p}:{n}" for p, n, _ in sites[:4]) + (" ..." if len(sites) > 4 else "")
         print(f"repeated-simp-list x{len(sites)} [{key}]: {where}", file=out)
     print(f"OK — walk-step report: {nruns} hand-walk runs ({nsteps} step lines, {nkit} taken by "
-          f"`wrun`/`xa`), {nsimp} repeated simp lists (report-only)", file=out)
+          f"`wrun`/`xa`/`winv`), {nsimp} repeated simp lists (report-only)", file=out)
     return nruns, nsimp
 
 
@@ -195,6 +210,11 @@ def self_test() -> int:
         head = git(root, "rev-parse", "HEAD").strip()
         (root / "B.lean").write_text(walk + simp + "theorem z : True := trivial\n")
         checks.append(("untouched", report(root, changed(root, head, WORKTREE), WORKTREE, 8, 3, sink) == (0, 0)))
+    inv = (["  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd"] * 3 +
+           ["  obtain ⟨d, hd, h⟩ := ric_nextP h", "  obtain ⟨_, rfl⟩ := ri_dup rfl (project hd)",
+            "  obtain ⟨_, h⟩ := ric_dest h", "  obtain ⟨_, _, h⟩ := ric_next h",
+            "  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd"])
+    checks.append(("inversion", walk_runs(inv, 8) == [(1, 8, 8, 7)]))
     for name, ok in checks:
         print(f"{'PASS' if ok else 'FAIL'} {name}")
     ok = all(c for _, c in checks)
@@ -210,6 +230,7 @@ def main(argv: List[str]) -> int:
     ap.add_argument("--all", action="store_true")
     ap.add_argument("--min-run", type=int, default=8)
     ap.add_argument("--min-repeat", type=int, default=3)
+    ap.add_argument("--at")
     ap.add_argument("--self-test", action="store_true")
     a = ap.parse_args(argv)
     if a.self_test:
@@ -217,8 +238,11 @@ def main(argv: List[str]) -> int:
     root = pathlib.Path(git(pathlib.Path.cwd(), "rev-parse", "--show-toplevel").strip())
     try:
         if a.paths or a.all:
-            paths = a.paths or [p for p in git(root, "ls-files", "Blanc").split("\n") if p.endswith(".lean")]
-            report(root, {p: None for p in paths}, WORKTREE, a.min_run, a.min_repeat)
+            at = a.at if a.at else WORKTREE
+            listed = git(root, "ls-tree", "-r", "--name-only", a.at, "Blanc") if a.at else \
+                git(root, "ls-files", "Blanc")
+            paths = a.paths or [p for p in listed.split("\n") if p.endswith(".lean")]
+            report(root, {p: None for p in paths}, at, a.min_run, a.min_repeat)
         elif len(a.revs) in (1, 2):
             head = WORKTREE if a.worktree else (a.revs[1] if len(a.revs) == 2 else "HEAD")
             report(root, changed(root, a.revs[0], head), head, a.min_run, a.min_repeat)

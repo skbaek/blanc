@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.CalleeControls
 import Blanc.Lift.UniswapV2Pair.SwapTransfer
 import Blanc.Lift.UniswapV2Pair.SwapCallback
 import Blanc.Lift.UniswapV2Pair.SwapFrontCanonical
+import Blanc.Lift.WalkInvKit
 
 /-!
 # U6 callee-premise controls for `swap`: a failing transfer token or callback recipient
@@ -69,16 +70,10 @@ private theorem secondTransfer_false {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {
       t_08d0_c4 seg) : False := by
   unfold t_08d0_c4 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 3 using StepIn.toRun
   rcases ric_branchP run with ⟨_, _, run⟩ | ⟨skip, _, _⟩
   · unfold t_08d7_c4 at run
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+    winv 5 using StepIn.toRun
     exact transferSite_false fork mem lower (by omega) callee tokenCode notPrecompile run
   · exact amount1 (eq_zero_of_iszero_ne_zero skip)
 
@@ -135,16 +130,10 @@ theorem swap_no_success_of_reverting_token0 {sevm : Sevm} {b post : Devm} {G : N
   obtain ⟨_, _, _, _, _, run⟩ := swapGuards_inv fork run0
   unfold t_08bf_c4 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 3 using StepIn.toRun
   rcases ric_branchP run with ⟨_, _, run⟩ | ⟨skip, _, _⟩
   · unfold t_08c6_c4 at run
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+    winv 5 using StepIn.toRun
     exact transferSite_false fork getterInitMemory_ptr (by decide) (by decide)
       (by rw [masked_slot, prefix_slot sevm b (by decide)]; exact token0)
       (by rw [prefix_code]; exact tokenCode) notPrecompile run
@@ -174,16 +163,10 @@ theorem swap_no_success_of_reverting_token1 {sevm : Sevm} {b post : Devm} {G : N
   have code0 := (prefix_code sevm b tok).trans tokenCode
   unfold t_08bf_c4 at run
   obtain ⟨_, run⟩ := ric_destP run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 3 using StepIn.toRun
   rcases ric_branchP run with ⟨_, _, run⟩ | ⟨_, _, run⟩
   · unfold t_08c6_c4 at run
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl (StepIn.toRun hs)
-    obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+    winv 5 using StepIn.toRun
     simp only [show Bytes.toB256 [0x08, 0xd0] = (0x8d0 : B256) from rfl] at run
     obtain ⟨d, _, call, ⟨_, ptr⟩, cont⟩ :=
       swapTransferSite_inv fork getterInitMemory_ptr (by decide) (by decide) run

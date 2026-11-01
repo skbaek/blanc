@@ -4,6 +4,7 @@ import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! The literal internal approval writer, retaining storage metadata and exact event memory. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -230,44 +231,21 @@ theorem approve64_inv_atH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   dsimp only [memWord] at ptr3 ptr4
   have h := run.cut
   unfold t_259c_c64 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 4
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := owner.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr owner) (ri_and hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 4
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   simp only [show Bytes.toB256 [2] = (2 : B256) from rfl,
@@ -276,37 +254,25 @@ theorem approve64_inv_atH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     m1.read_self (by omega : 0 + 64 ≤ n),
     Mem.read_two_word_writes_at_raw M 0 owner.toB256 2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   dsimp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := spender.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr spender) (ri_and hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   dsimp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   change d = St b (((approveScratch M owner.toB256 spender.toB256).read 0 64).1.keccak :: _)
@@ -314,63 +280,39 @@ theorem approve64_inv_atH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   dsimp only [approveScratch, approveOwnerMemory] at hd
   rw [m3.read_self (by omega : 0 + 64 ≤ n), read2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   have nonstatic := ri_sstore_nonstaticH stateGas hd
   obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show (Bytes.toB256 [0x40]).toNat = 64 from rfl,
     m3.read_self (by omega : 64 + 32 ≤ n), ptr3] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show (Bytes.toB256 [0x40]).toNat = 64 from rfl,
     m4.read_self (by omega : 64 + 32 ≤ memExtSize n p.toNat 32), ptr4] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 4
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 0) (B256.sub_self p) (ri_sub hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 32) (by decide) (ri_add hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_log3 hd
   simp only [show (32 : B256).toNat = 32 from rfl,
     m4.read_self fitP, Mem.read_write_word_of_wf m3.wf p.toNat v] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
+  winv 3
   obtain ⟨G', hg⟩ := ric_ret h
   exact ⟨nonstatic, G', Seg.done.inj hg⟩
 
@@ -429,29 +371,13 @@ theorem approve51_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     sevm.isStatic = false ∧ ∃ G', o = .returned (approve51PostH sevm b R M spender v G') := by
   have h := run.cut
   unfold t_0de5_c51 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_caller hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 7
   obtain ⟨_, h⟩ := ric_call (g := t_259c_c64) (by rfl) h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
   · obtain ⟨nonstatic, _, eq⟩ := approve64_invH stateGas bal mem hc
     cases eq
     unfold t_0df2_c51 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_push hd
+    winv 3
     obtain ⟨G', eq⟩ := checked_return_inv h.uncut
     exact ⟨nonstatic, G', eq⟩
   · obtain ⟨_, _, eq⟩ := approve64_invH stateGas bal mem hc

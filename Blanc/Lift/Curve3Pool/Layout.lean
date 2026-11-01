@@ -1,5 +1,5 @@
 import Blanc.Lift.Curve3Pool.Model
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Base
 
 /-!
 # The deployed 3pool storage layout, its abstraction, and the checkpoint predicate

@@ -2,6 +2,7 @@ import Blanc.Lift.HistCursorReturn
 import Blanc.Lift.CursorQuietReturn
 import Blanc.Lift.UniswapV2Pair.PairFeeObservation
 import Blanc.Lift.UniswapV2Pair.FeeMintWalk
+import Blanc.Lift.WalkInvKit
 
 /-! Actual shared Pair fee body returns through its retained caller. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -62,18 +63,13 @@ theorem pair_fee_decoder_tail_invH {sevm : Sevm} {b : Devm} {R : List B256}
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup (w := w) rfl hs
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_and hs
   rw [B256.and_comm w, ff20_and_word] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_iszero hs
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 4
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
   dsimp only [List.set] at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 2
   dsimp only [List.set] at run
   obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push hs
   by_cases addressZero : w.toAdr.toB256 = 0

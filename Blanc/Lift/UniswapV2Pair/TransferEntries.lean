@@ -3,6 +3,7 @@ import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 import Blanc.Lift.InvWalkDispatch
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! Literal transfer decoder, guarded pc-zero route and exact boolean ABI return. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -152,28 +153,14 @@ theorem transfer_decoder_invH {sevm : Sevm} {b : Devm} {M : Mem}
     (recipient := transferRecipient sevm) (amount := transferAmount sevm) mem
   have h := run.cut
   unfold t_0574_c85 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldataload hd
+  winv 5
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := (transferRecipient sevm).toB256)
     (by rw [B256.and_comm]; exact ff20_and_word _) (ri_and hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 36) (by decide) (ri_add hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldataload hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨_, call⟩ := ric_call (g := t_18cb_c40) rfl h
   rcases call with ⟨d, core, tail⟩ | ⟨d, core, _⟩
   · obtain ⟨cover, nonstatic, nowrap, _, eq⟩ := transfer40_invH stateGas bal mem core
@@ -194,31 +181,10 @@ theorem transfer_entry_invH {sevm : Sevm} {b : Devm} {M : Mem}
       transferCreditSafeH sevm b ∧ ∃ residual, o = .halted (transferPublicPostH sevm b [sel] M residual) := by
   have h := run.cut
   unfold t_055e_c85 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_calldatasize hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_sub hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_lt hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 11
   rcases ric_branch h with ⟨_, _, bad⟩ | ⟨nonzero, _, h⟩
   · unfold t_0570_c85 at bad
-    obtain ⟨_, _, bad⟩ := ric_next bad
-    obtain ⟨_, _, bad⟩ := ric_next bad
+    wskip 2
     exact (ric_revert bad).elim
   · simp only [show Bytes.toB256 [4] = (4 : B256) from rfl,
       show Bytes.toB256 [0x40] = (64 : B256) from rfl] at nonzero

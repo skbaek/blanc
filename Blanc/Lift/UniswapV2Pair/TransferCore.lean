@@ -4,6 +4,7 @@ import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! Actual transfer cuts preserve the debit-before-credit storage and metadata chain. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -143,10 +144,7 @@ theorem transfer_credit_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = (~~~ addressMask : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := recipient.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr recipient) (ri_and hd)
@@ -154,10 +152,7 @@ theorem transfer_credit_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (0 : B256).toNat = 0 from rfl] at hd
@@ -170,10 +165,7 @@ theorem transfer_credit_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x20] = (32 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (32 : B256).toNat = 32 from rfl] at hd
@@ -182,89 +174,53 @@ theorem transfer_credit_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   simp only [show (0 : B256).toNat = 0 from rfl, show (64 : B256).toNat = 64 from rfl,
     m1.read_self (by decide : 0 + 64 ≤ 96), hash] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   have nonstatic := ri_sstore_nonstaticH stateGas hd
   obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show (64 : B256).toNat = 64 from rfl, m1.read_self (by decide : 64 + 32 ≤ 96), ptr1] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (128 : B256).toNat = 128 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show (64 : B256).toNat = 64 from rfl, m2.read_self (by decide : 64 + 32 ≤ 160), ptr2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 4
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := owner.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr owner) (ri_and hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xdd, 0xf2, 0x52, 0xad, 0x1b, 0xe2, 0xc8, 0x9b, 0x69, 0xc2, 0xb0, 0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5, 0x5a, 0x4d, 0xf5, 0x23, 0xb3, 0xef] = (transferTopic : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 4
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_sub hd)
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 32) (by decide) (ri_add hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_log3 hd
   simp only [show (128 : B256).toNat = 128 from rfl,
     show (32 : B256).toNat = 32 from rfl, m2.read_self (by decide : 128 + 32 ≤ 160),
     Mem.read_write_word_of_wf m1.wf 128 amount] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
+  winv 3
   obtain ⟨residual, eq⟩ := ric_ret h
   exact ⟨nonstatic, residual, Seg.done.inj eq⟩
 
@@ -415,10 +371,7 @@ theorem transfer_debit_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = (~~~ addressMask : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := owner.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr owner) (ri_and hd)
@@ -426,10 +379,7 @@ theorem transfer_debit_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (0 : B256).toNat = 0 from rfl] at hd
@@ -450,33 +400,21 @@ theorem transfer_debit_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   simp only [show (0 : B256).toNat = 0 from rfl, show (64 : B256).toNat = 64 from rfl,
     m1.read_self (by decide : 0 + 64 ≤ 96), hash1] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   have nonstatic := ri_sstore_nonstaticH stateGas hd
   obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := recipient.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr recipient) (ri_and hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (0 : B256).toNat = 0 from rfl] at hd
@@ -492,10 +430,7 @@ theorem transfer_debit_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x26, 0x83] = (9859 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff] = (4294967295 : B256) from by decide] at hd
@@ -642,8 +577,7 @@ theorem transfer61_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = (~~~ addressMask : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := owner.toB256)
     (by rw [B256.and_comm]; exact ff20_and_adr owner) (ri_and hd)
@@ -651,10 +585,7 @@ theorem transfer61_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (0 : B256).toNat = 0 from rfl] at hd
@@ -675,8 +606,7 @@ theorem transfer61_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   simp only [show (0 : B256).toNat = 0 from rfl, show (64 : B256).toNat = 64 from rfl,
@@ -688,10 +618,7 @@ theorem transfer61_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x26, 0x41] = (9793 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff] = (4294967295 : B256) from by decide] at hd
@@ -772,29 +699,13 @@ theorem transfer40_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       ∃ residual, o = .returned (transfer40PostH sevm b R M recipient amount residual) := by
   have h := run.cut
   unfold t_18cb_c40 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_caller hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 7
   obtain ⟨_, call⟩ := ric_call (g := t_260b_c61) rfl h
   rcases call with ⟨d, core, tail⟩ | ⟨d, core, _⟩
   · obtain ⟨cover, nonstatic, nowrap, _, eq⟩ := transfer61_invH stateGas bal mem core
     cases eq
     unfold t_0df2_c40 at tail
-    obtain ⟨_, tail⟩ := ric_dest tail
-    obtain ⟨d, hd, tail⟩ := ric_next tail
-    obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, tail⟩ := ric_next tail
-    obtain ⟨_, rfl⟩ := ri_push hd
+    winv 3
     obtain ⟨residual, result⟩ := checked_return_inv tail.uncut
     exact ⟨cover, nonstatic, nowrap, residual, result⟩
   · obtain ⟨_, _, _, _, eq⟩ := transfer61_invH stateGas bal mem core
