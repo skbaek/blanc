@@ -1,4 +1,5 @@
 import Blanc.Lift.CursorKeccak
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.ImplV1.MinterPcSources
 import Blanc.Lift.Usdc.ImplV1.Check
 import Blanc.Lift.Usdc.ProxyForward
@@ -104,9 +105,7 @@ theorem body_reach {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact (body_reach_observed erase (ObservedReach.of_reach run) hT cont).source
 
 /-- V1's own dispatcher sends configureMinter to its original entry 65. -/
-theorem route_configure : SFunc.selWalk 0x4e44d956
-    (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
-      (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
+theorem route_configure : ImplV1.selTree.selWalk 0x4e44d956 =
     .inl (Bytes.toB256 [0x4e, 0x44, 0xd9, 0x56], 65) := by
   decide +kernel
 

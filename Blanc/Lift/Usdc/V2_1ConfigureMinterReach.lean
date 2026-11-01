@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V2ConfigureMinterReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.ImplV2_1.Check
 
 /-! V2.1 configureMinter actual-store keys and hashes, reusing the identical V2 body. -/
@@ -10,10 +11,7 @@ open V2ConfigureMinterReach (ObservedSource flagLine allowanceLine)
 variable {observe : Conf → Conf → Prop}
 
 /-- The checked dispatcher routes configureMinter through its original ABI wrapper. -/
-theorem route_configure : SFunc.selWalk 0x4e44d956
-    (.next (.reg (.dup 0)) (.next (.push [0x7f, 0x2e, 0xec, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xb2] (by decide))
-        (.branch ImplV2_1.t_002b_c0 ImplV2_1.t_01b2_c0))))) =
+theorem route_configure : ImplV2_1.selTree.selWalk 0x4e44d956 =
     .inl (Bytes.toB256 [0x4e, 0x44, 0xd9, 0x56], 126) := by
   decide +kernel
 

@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V2TransferWithAuthorizationReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.V22TransferReach
 import Blanc.Lift.ObservedReachSplit
 
@@ -177,10 +178,7 @@ theorem pack_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
 
 
 /-- The checked dispatcher routes transfer through its original ABI wrapper. -/
-theorem route_authorization : SFunc.selWalk 0xe3ee160e
-    (.next (.reg (.dup 0)) (.next (.push [0x84, 0x56, 0xcb, 0x59] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xd3] (by decide))
-        (.branch Impl.t_002b_c0 Impl.t_01d3_c0))))) =
+theorem route_authorization : Impl.selTree.selWalk 0xe3ee160e =
     .inl (Bytes.toB256 [0xe3, 0xee, 0x16, 0x0e], 129) := by
   decide +kernel
 

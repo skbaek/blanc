@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.InitReach06
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.OldInitializerV1Callee
 import Blanc.Lift.Usdc.ProxyForward
 
@@ -523,9 +524,7 @@ theorem wrapper_reach (eraseQ : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d
   have h := wrapper_reach_range eraseQ hfp hp96 run hT
   exact h.1.capped h.2.1 h.2.2.1 h.2.2.2
 
-theorem route_init : SFunc.selWalk 0x3357162b
-    (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
-      (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
+theorem route_init : ImplV1.selTree.selWalk 0x3357162b =
     .inl (Bytes.toB256 [0x33, 0x57, 0x16, 0x2b], 60) := by
   decide +kernel
 

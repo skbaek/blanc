@@ -1,4 +1,5 @@
 import Blanc.Lift.CursorKeccak
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.CursorCheckPrefix
 import Blanc.Lift.Usdc.ImplV2.Check
 import Blanc.Lift.CursorOccurrenceNoStateGas
@@ -91,10 +92,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact (Reach.false_of_sstoreFree (E := []) rfl run.forget hT (by decide +kernel) cont).elim
 
 /-- The checked dispatcher routes configureMinter through its original ABI wrapper. -/
-theorem route_configure : SFunc.selWalk 0x4e44d956
-    (.next (.reg (.dup 0)) (.next (.push [0x8a, 0x6d, 0xb9, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xbd] (by decide))
-        (.branch ImplV2.t_002b_c0 ImplV2.t_01bd_c0))))) =
+theorem route_configure : ImplV2.selTree.selWalk 0x4e44d956 =
     .inl (Bytes.toB256 [0x4e, 0x44, 0xd9, 0x56], 129) := by
   decide +kernel
 

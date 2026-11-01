@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.OldTransferFromCallee
+import Blanc.Lift.Usdc.SelTrees
 
 /-! Original V2/V2.1 transferFrom dispatch and guards, with exact caller stacks. -/
 namespace Blanc.Lift.Usdc.OldTransferFromEntry
@@ -101,18 +102,12 @@ theorem public_to_body {version : ModernVersion} (old : version ≠ .v2_2)
     exact ⟨_, _, _, run⟩
 
 /-- The checked dispatcher routes transferFrom through its original ABI wrapper. -/
-theorem route_v2 : SFunc.selWalk 0x23b872dd
-    (.next (.reg (.dup 0)) (.next (.push [0x8a, 0x6d, 0xb9, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xbd] (by decide))
-        (.branch ImplV2.t_002b_c0 ImplV2.t_01bd_c0))))) =
+theorem route_v2 : ImplV2.selTree.selWalk 0x23b872dd =
     .inl (Bytes.toB256 [0x23, 0xb8, 0x72, 0xdd], 147) := by
   decide +kernel
 
 /-- The checked dispatcher routes transferFrom through its original ABI wrapper. -/
-theorem route_v21 : SFunc.selWalk 0x23b872dd
-    (.next (.reg (.dup 0)) (.next (.push [0x7f, 0x2e, 0xec, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xb2] (by decide))
-        (.branch ImplV2_1.t_002b_c0 ImplV2_1.t_01b2_c0))))) =
+theorem route_v21 : ImplV2_1.selTree.selWalk 0x23b872dd =
     .inl (Bytes.toB256 [0x23, 0xb8, 0x72, 0xdd], 142) := by
   decide +kernel
 

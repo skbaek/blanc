@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.InitReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.ImplV2.Cert
 
 /-!
@@ -36,14 +37,9 @@ theorem tail_eq : ImplV2.t_3652_c18 = InitV2Tail.tree ν := rfl
 /-- The domain-separator helper (entry `69`) holds no `SSTORE`. -/
 theorem free69 : SstoreFreeSet ImplV2.cert.prog [69] = true := by decide
 
-/-- The dispatcher's comparison tree. -/
-def selTree : SFunc :=
-  .next (.reg (.dup 0)) (.next (.push [0x8a, 0x6d, 0xb9, 0xc3] (by decide)) (.next (.reg .gt)
-    (.next (.push [0x01, 0xbd] (by decide)) (.branch ImplV2.t_002b_c0 ImplV2.t_01bd_c0))))
+theorem root_eq : ImplV2.t_0000_c0 = dispatch06 (0x00, 0x10) (0x03, 0x4c) ImplV2.selTree := rfl
 
-theorem root_eq : ImplV2.t_0000_c0 = dispatch06 (0x00, 0x10) (0x03, 0x4c) selTree := rfl
-
-theorem route_initV2 : selTree.selWalk 0xd608ea64 =
+theorem route_initV2 : ImplV2.selTree.selWalk 0xd608ea64 =
     .inl (Bytes.toB256 [0xd6, 0x08, 0xea, 0x64], 106) := by
   decide +kernel
 

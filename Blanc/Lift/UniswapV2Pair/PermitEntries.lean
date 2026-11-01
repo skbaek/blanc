@@ -575,40 +575,8 @@ theorem permit_selector_invP {P : Sevm → Devm → Ninst → Devm → Prop} {se
     (selector : Blanc.Sevm.selector sevm = 0xd505accf)
     (run : SFunc.RunP P cert.prog sevm (St b [] M G) t_001a_c0 o) :
     ∃ G', SFunc.RunP P cert.prog sevm (St b [0xd505accf] M G') t_05e2_c76 o := by
-  have h := SFunc.runP_iff_runCutP_nil.mp run
-  unfold t_001a_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_calldataload (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, hd⟩ := ri_shr (project hd)
-  simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,
-    show Bytes.toB256 [0xe0] = (224 : B256) from rfl,
-    show (224 : B256).toNat = 224 from rfl,
-    show Sevm.dataWord sevm 0 >>> 224 = (0xd505accf : B256) from selector] at hd
-  subst d
-  obtain ⟨_, h⟩ := ric_cmp_gtP (fun step => project step) h
-  simp only [show B256.gtCheck (Bytes.toB256 [0x6a, 0x62, 0x78, 0x42]) (0xd505accf : B256)
-    = (0 : B256) from by decide, ite_true] at h
-  unfold t_002b_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_gtP (fun step => project step) h
-  simp only [show B256.gtCheck (Bytes.toB256 [0xba, 0x9a, 0x7a, 0x56]) (0xd505accf : B256)
-    = (0 : B256) from by decide, ite_true] at h
-  unfold t_0036_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_gtP (fun step => project step) h
-  simp only [show B256.gtCheck (Bytes.toB256 [0xd2, 0x12, 0x20, 0xa7]) (0xd505accf : B256)
-    = (0 : B256) from by decide, ite_true] at h
-  unfold t_0041_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_eqP (fun step => project step) (g := t_05da_c75) (by intro bad; cases bad) rfl h
-  simp only [show B256.eqCheck (Bytes.toB256 [0xd2, 0x12, 0x20, 0xa7]) (0xd505accf : B256)
-    = (0 : B256) from by decide, ite_true] at h
-  unfold t_004c_c0 at h
-  obtain ⟨_, h⟩ := ric_cmp_eqP (fun step => project step) (g := t_05e2_c76) (by intro bad; cases bad) rfl h
-  simp only [show B256.eqCheck (Bytes.toB256 [0xd5, 0x05, 0xac, 0xcf]) (0xd505accf : B256)
-    = (1 : B256) from by decide, show (1 : B256) ≠ 0 from by decide, ite_false] at h
+  obtain ⟨_, h⟩ := pair_dispatch_invP (tgt := t_05e2_c76) (fun step => project step) selector (by kernel_rfl)
+    (SFunc.runP_iff_runCutP_nil.mp run)
   exact ⟨_, SFunc.runP_iff_runCutP_nil.mpr h⟩
 
 /-- The signer guard, the approval core at pointer 482 (no expansion) and the unwind cost

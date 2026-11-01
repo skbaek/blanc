@@ -1,4 +1,5 @@
 import Blanc.Lift.CursorKeccakOrder
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.ImplV1.Check
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.CursorOccurrenceNoStateGas
@@ -91,9 +92,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   (body_reach_ordered erase run hT cont).forget
 
 /-- V1's checked dispatcher selects its original approve wrapper. -/
-theorem route_approve : SFunc.selWalk 0x095ea7b3
-    (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
-      (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
+theorem route_approve : ImplV1.selTree.selWalk 0x095ea7b3 =
     .inl (Bytes.toB256 [0x09, 0x5e, 0xa7, 0xb3], 54) := by
   decide +kernel
 

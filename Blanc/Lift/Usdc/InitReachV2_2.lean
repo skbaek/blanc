@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.InitReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.Impl.Check
 import Blanc.Lift.CursorKeccak
 import Blanc.Lift.FrameSkip
@@ -42,14 +43,9 @@ theorem body_eq : Impl.cert.prog[25]? = some (InitV2Check.body (0x37, 0x71) (0x3
 
 theorem join_eq : Impl.cert.prog[5]? = some (InitV2Check.join (0x37, 0x7a) (InitV2Tail.tree ν)) := rfl
 
-/-- The dispatcher's comparison tree. -/
-def selTree : SFunc :=
-  .next (.reg (.dup 0)) (.next (.push [0x84, 0x56, 0xcb, 0x59] (by decide)) (.next (.reg .gt)
-    (.next (.push [0x01, 0xd3] (by decide)) (.branch Impl.t_002b_c0 Impl.t_01d3_c0))))
+theorem root_eq : Impl.t_0000_c0 = dispatch06 (0x00, 0x10) (0x03, 0x6d) Impl.selTree := rfl
 
-theorem root_eq : Impl.t_0000_c0 = dispatch06 (0x00, 0x10) (0x03, 0x6d) selTree := rfl
-
-theorem route_initV2 : selTree.selWalk 0xd608ea64 =
+theorem route_initV2 : Impl.selTree.selWalk 0xd608ea64 =
     .inl (Bytes.toB256 [0xd6, 0x08, 0xea, 0x64], 133) := by
   decide +kernel
 
@@ -687,7 +683,7 @@ theorem wrap22_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (hT : AtSstore T) : InitStore (KeysInitV2_2 sevm) T :=
   (wrap22_reach_range erase run hT).to_initStore
 
-theorem route_initV2_2 : selTree.selWalk 0x430239b4 =
+theorem route_initV2_2 : Impl.selTree.selWalk 0x430239b4 =
     .inl (Bytes.toB256 [0x43, 0x02, 0x39, 0xb4], 162) := by
   decide +kernel
 

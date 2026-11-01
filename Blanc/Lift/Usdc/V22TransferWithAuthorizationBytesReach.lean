@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V22ReceiveWithAuthorizationBytesReach
+import Blanc.Lift.Usdc.SelTrees
 
 /-! Original-entry V2.2 bytes-signature transfer stores and hash provenance. -/
 namespace Blanc.Lift.Usdc.V22TransferWithAuthorizationBytesReach
@@ -6,10 +7,7 @@ open Jaune Blanc Blanc.Lift
 variable {observe : Conf → Conf → Prop}
 
 /-- The checked dispatcher routes transfer authorization through its original ABI wrapper. -/
-theorem route_transfer_bytes : SFunc.selWalk 0xcf092995
-    (.next (.reg (.dup 0)) (.next (.push [0x84, 0x56, 0xcb, 0x59] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xd3] (by decide))
-        (.branch Impl.t_002b_c0 Impl.t_01d3_c0))))) =
+theorem route_transfer_bytes : Impl.selTree.selWalk 0xcf092995 =
     .inl (Bytes.toB256 [0xcf, 0x09, 0x29, 0x95], 138) := by
   decide +kernel
 

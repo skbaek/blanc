@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.Consumption
+import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.Properties
 import Blanc.Lift.UniswapV2Pair.BalanceCallWalk
 import Blanc.Lift.UniswapV2Pair.GetterWalk
@@ -1609,37 +1610,8 @@ theorem syncSelector_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Out
     (selector : Blanc.Sevm.selector sevm = 0xfff6cae9)
     (body : SFunc.RunExact cert.prog sevm (St b [0xfff6cae9] M G) t_067b_c78 o)
     (h_shifts : sevm.benvStat.rules.op.shifts = true) :
-    SFunc.RunExact cert.prog sevm (St b [] M (G + 166)) t_001a_c0 o := by
-  unfold t_001a_c0
-  apply rx_push (w := 0) rfl (by decide)
-  apply rx_calldataload (by decide)
-  apply rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_shr (h_shifts := h_shifts) (v := 0xfff6cae9) selector (by decide)
-  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0x6a627842) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0xf9) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_branch_zero
-  unfold t_002b_c0
-  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0xba9a7a56) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0x97) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_branch_zero
-  unfold t_0036_c0
-  apply rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0xd21220a7) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_gt (v := 0) (by decide) (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_push (w := 0x71) rfl (by simp only [List.length_cons, List.length_nil]; decide)
-  apply rx_branch_zero
-  unfold t_0041_c0
-  apply cmp_miss (by decide)
-  unfold t_004c_c0
-  apply cmp_miss (by decide)
-  unfold t_0057_c0
-  apply cmp_miss (by decide)
-  unfold t_0062_c0
-  exact cmp_hit (tgt := t_067b_c78) rfl (by rfl) body
+    SFunc.RunExact cert.prog sevm (St b [] M (G + 166)) t_001a_c0 o :=
+  pair_selector_exact selector (by kernel_rfl) (by decide +kernel) body h_shifts
 
 /-- The actual public guard and sync selector route costs229 gas, with the
 existing scratch initialization and no imposed upper calldata-size premise. -/

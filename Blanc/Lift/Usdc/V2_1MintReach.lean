@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V2MintReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.ImplV2_1.Check
 
 /-! Actual V2.1 mint store classification and original successful mapping hashes. -/
@@ -158,10 +159,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact balance_reach_observed erase enough run hT cont
 
 /-- The checked dispatcher selects the original mint ABI wrapper. -/
-theorem route_mint : SFunc.selWalk 0x40c10f19
-    (.next (.reg (.dup 0)) (.next (.push [0x7f, 0x2e, 0xec, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xb2] (by decide))
-        (.branch ImplV2_1.t_002b_c0 ImplV2_1.t_01b2_c0))))) =
+theorem route_mint : ImplV2_1.selTree.selWalk 0x40c10f19 =
     .inl (Bytes.toB256 [0x40, 0xc1, 0x0f, 0x19], 130) := by
   decide +kernel
 
