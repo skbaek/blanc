@@ -697,9 +697,10 @@ SEMANTIC_CHANNELS = {
 #     `RegistryWitness.*` theorems, not the structure.
 #
 #   * `ContractSpec` and its fields (`Pre`, `PreWf`, `Post`, `Sound`,
-#     `FuncSound`, `Preserves`, `StateInv`, `MsgInv`), `Exec.InvDepth`, and
-#     `BlockChain.Reach`/`ReachUsing` (`Blanc/Ladder.lean`) are named by pinned
-#     S7 statements and pinned by nothing.  The worked exploit: add
+#     `FuncSound`, `Preserves`, `StateInv`, `MsgInv`; `Blanc/Ladder.lean`),
+#     `Exec.InvDepth`, and `BlockChain.Reach`/`ReachUsing`
+#     (`Blanc/LadderBase.lean`) are named by pinned S7 statements and pinned
+#     by nothing.  The worked exploit: add
 #     `block.txs = []` to `BlockChain.ReachUsing.step` and
 #     `chain_preserves_registryStable` still READS "every state reachable by
 #     the configured valid-chain relation", with an unchanged digest, while
@@ -2696,8 +2697,10 @@ SELF_TESTS = (
      "    Devm.getStor r = Devm.getStor s := by",
      "    True := by",
      "no longer mentions"),
+    # `BlockChain.ReachUsing` moved verbatim from `Blanc/Ladder.lean` to
+    # `Blanc/LadderBase.lean` (e92b0b5e); the mutation follows it there.
     ("vocabulary: valid-chain reachability restricted to empty blocks",
-     "vocabulary", "Blanc/Ladder.lean",
+     "vocabulary", "Blanc/LadderBase.lean",
      "      ReachUsing cfg ch ch' →\n"
      "      sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →",
      "      ReachUsing cfg ch ch' →\n"
