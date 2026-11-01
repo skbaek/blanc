@@ -162,7 +162,7 @@ theorem xa_rli_d0 (hc : Cert.CheckedM code cert mems true)
   xs 0x3297 (.push [0x32, 0x9c] (by decide)) ri_push  -- 3294 PUSH2 0x329c
   xji 0x3298 0x329c hw
   · xdead
-  have hs0 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hs0 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x329d  -- 329c JUMPDEST
   xs 0x329e (.reg (.dup 0)) (ri_dup (by rfl))  -- 329d DUP1
@@ -230,7 +230,7 @@ theorem xa_rli_d0 (hc : Cert.CheckedM code cert mems true)
   xs 0x3297 (.push [0x32, 0x9c] (by decide)) ri_push  -- 3294 PUSH2 0x329c
   xji 0x3298 0x329c hw
   · xdead
-  have hs1 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hs1 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x329d  -- 329c JUMPDEST
   xs 0x329e (.reg (.dup 0)) (ri_dup (by rfl))  -- 329d DUP1
@@ -298,7 +298,7 @@ theorem xa_rli_d0 (hc : Cert.CheckedM code cert mems true)
   xs 0x3297 (.push [0x32, 0x9c] (by decide)) ri_push  -- 3294 PUSH2 0x329c
   xji 0x3298 0x329c hw
   · xdead
-  have hs2 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hs2 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x329d  -- 329c JUMPDEST
   xs 0x329e (.reg (.dup 0)) (ri_dup (by rfl))  -- 329d DUP1

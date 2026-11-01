@@ -215,10 +215,6 @@ def pauseEvent (sevm : Sevm) (duration : B256) : Log :=
 def pauseLogged (sevm : Sevm) (base : Devm) (duration : B256) : Devm :=
   (pauseStored sevm base duration).addLog (pauseEvent sevm duration)
 
-private theorem setMach_getStorVal_local
-    (base : Devm) (mach : Mach) (a : Adr) (key : B256) :
-    (base.setMach mach).getStorVal a key = base.getStorVal a key := rfl
-
 /-- Exact finite-pause child post state, including all warmed role/slot keys,
 the storage/refund update, the emitted event, final memory, and residual gas. -/
 def pauseFinitePost (sevm : Sevm) (base : Devm)
@@ -355,7 +351,7 @@ theorem pauseFinitePost_stored
     (sevm : Sevm) (base : Devm) (duration : B256) (G : Nat) :
     (pauseFinitePost sevm base duration G).getStorVal
       sevm.currentTarget resumeSinceSlot = duration + sevm.benvStat.time := by
-  rw [pauseFinitePost, setMach_getStorVal_local, pauseLogged,
+  rw [pauseFinitePost, Devm.getStorVal_setMach, pauseLogged,
     Devm.addLog_getStorVal]
   show (Devm.getStor (pauseStored sevm base duration)
     sevm.currentTarget).get resumeSinceSlot = _
@@ -446,7 +442,7 @@ theorem pauseSentinelPost_stored
     (sevm : Sevm) (base : Devm) (G : Nat) :
     (pauseSentinelPost sevm base G).getStorVal
       sevm.currentTarget resumeSinceSlot = pauseInfinitely := by
-  rw [pauseSentinelPost, setMach_getStorVal_local, Devm.addLog_getStorVal]
+  rw [pauseSentinelPost, Devm.getStorVal_setMach, Devm.addLog_getStorVal]
   show (Devm.getStor
     (afterSstore sevm (pauseResumeWarm sevm base) resumeSinceSlot
       pauseInfinitely) sevm.currentTarget).get resumeSinceSlot = _

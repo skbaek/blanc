@@ -370,7 +370,7 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
       have hne : ρ x ≠ ρ y := by
         intro he
         simp only [B256.eqCheck, he, ↓reduceIte] at h0
-        exact B256.one_ne_zero' h0
+        exact B256.one_ne_zero h0
       simp only [Bool.or_eq_true, Bool.and_eq_true, List.contains_iff_mem,
         decide_eq_true_eq] at hc
       rcases hc with ⟨hl, hk⟩ | ⟨hl, hk⟩
@@ -450,7 +450,7 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
       by_cases hlt : ρ x > ρ y
       · have := B256.lt_iff_toNat_lt_toNat.mp hlt
         simp only [hlt, ite_true]
-        exact ⟨fun h => (B256.one_ne_zero' h).elim, fun _ => by omega⟩
+        exact ⟨fun h => (B256.one_ne_zero h).elim, fun _ => by omega⟩
       · have : ¬ (ρ y).toNat < (ρ x).toNat := fun h =>
           hlt (B256.lt_iff_toNat_lt_toNat.mpr h)
         simp only [hlt, ite_false]
@@ -468,7 +468,7 @@ theorem opFacts_sound {kv : List Nat} {S rest : List B256} {i : Ninst}
     unfold B256.eqCheck
     by_cases h0 : ρ x = 0
     · simp only [h0, ite_true]
-      exact ⟨fun h => (B256.one_ne_zero' h).elim, fun _ => trivial⟩
+      exact ⟨fun h => (B256.one_ne_zero h).elim, fun _ => trivial⟩
     · simp only [h0, ite_false]
       exact ⟨fun _ => h0, fun h => (h rfl).elim⟩
   case xor =>

@@ -251,16 +251,6 @@ end W1
 
 /-! ## X's transfer keeps reserve1 -/
 
-private theorem tAAB_getStor' (base : Devm) (a x : Adr) :
-    Devm.getStor (temporalAccountAccessBase base a) x = Devm.getStor base x := by
-  unfold temporalAccountAccessBase
-  split <;> rfl
-
-private theorem tAAB_getCode' (base : Devm) (a x : Adr) :
-    (temporalAccountAccessBase base a).getCode x = base.getCode x := by
-  unfold temporalAccountAccessBase
-  split <;> rfl
-
 private theorem St_getCode_eq' (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
     (St x S M g).getCode a = x.getCode a := rfl
 
@@ -271,7 +261,7 @@ theorem skimQuery_world {sevm : Sevm} {b qd0 : Devm} {S : List B256} {M : Mem} {
       (skimToken0 sevm b).toAdr) (g :: t :: ii :: is :: oi :: os :: S) M G) (.exec .staticcall) qd0) :
     ∀ a, Devm.getStor qd0 a = Devm.getStor (syncLockedWorld sevm b) a := by
   intro a
-  rw [compiled_staticcall_stor fork call, tAAB_getStor']
+  rw [compiled_staticcall_stor fork call, temporalAccountAccessBase_getStor]
   unfold skimCachedWorld
   rw [afterSload_getStor, afterSload_getStor, afterSload_getStor]
 
@@ -307,7 +297,7 @@ theorem skimFirstCall_reserve1 {K U : WriterKey → Prop} {current : Checkpoint}
     rw [afterSstore_getStor_self, afterSload_getStor]
   have cachedCode : (temporalAccountAccessBase (skimCachedWorld sevm b)
       (skimToken0 sevm b).toAdr).getCode pair = b.getCode pair := by
-    rw [tAAB_getCode']
+    rw [temporalAccountAccessBase_getCode]
     unfold skimCachedWorld syncLockedWorld
     rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
       afterSload_getCode]

@@ -20,7 +20,7 @@ theorem systemAdvancedHead_represented (sevm : Sevm) (base : Devm)
   have tailBound := rep.bounds.tail_lt
   rw [systemAdvancedHead, systemHead_represented sevm base state rep,
     ← toB256_toNat (systemCount sevm base), systemCount_represented sevm base state rep,
-    toB256_add_toB256 (by omega : state.head + min 16 state.queue.length < 2 ^ 256)]
+    Nat.toB256_add_toB256 _ _]
 
 theorem systemPointers_drained_iff (sevm : Sevm) (base : Devm)
     (state : WithdrawalRequest.State)
@@ -129,8 +129,7 @@ theorem systemNewExcess_represented (sevm : Sevm) (base : Devm) (memory : Mem)
       (effectiveExcess state + state.count).toB256 := by
     rw [systemExcessSum, systemPendingCount_represented sevm base memory state rep,
       systemEffectiveExcess_represented sevm base memory state rep,
-      toB256_add_toB256 (by
-        simpa only [Nat.add_comm state.count] using sumBound),
+      Nat.toB256_add_toB256 _ _,
       Nat.add_comm state.count]
   have sumNat := B256.toNat_toB256_of_lt sumBound
   have branch : (2 : B256) < (effectiveExcess state + state.count).toB256 ↔
@@ -140,7 +139,7 @@ theorem systemNewExcess_represented (sevm : Sevm) (base : Devm) (memory : Mem)
   simp only [systemNewExcess, sum, branch, excessNat]
   by_cases positive : 2 < effectiveExcess state + state.count
   · rw [ite_eq_left positive]
-    exact toB256_sub_toB256 (a := effectiveExcess state + state.count) (b := 2)
+    exact Nat.toB256_sub_toB256 (a := effectiveExcess state + state.count) (b := 2)
       (Nat.le_of_lt positive) sumBound
   · rw [ite_eq_right positive, Nat.sub_eq_zero_of_le (Nat.le_of_not_lt positive)]
     rfl

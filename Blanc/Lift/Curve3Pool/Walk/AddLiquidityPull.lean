@@ -127,7 +127,7 @@ theorem xa_al_pl1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     xs 0x1080 (.reg .iszero) ri_iszero
     xs 0x1083 (.push [0x10, 0x94] (by decide)) ri_push
     xji 0x1084 0x1094 hw
-    · have hT : T = 0 := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
+    · have hT : T = 0 := B256.eq_of_eqCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       xs 0x1086 (.push [0x00] (by decide)) ri_push
       xs 0x1089 (.push [0x04, 0xe0] (by decide)) ri_push
       xml 0x108a 0x4e0 (WordAt.write_self _ _ _)
@@ -135,12 +135,12 @@ theorem xa_al_pl1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       xs 0x108e (.push [0x10, 0x93] (by decide)) ri_push
       xji 0x108f 0x1093 hw2
       · xdead
-      have hpos := gtCheck_ne_zero hw2
+      have hpos := B256.lt_of_gtCheck_ne_zero hw2
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0]).toNat = 0 by decide] at hpos
       xjd 0x1094
       xjd 0x1095
       exact ⟨_, _, hR, hW, hA, fun _ => hpos, h⟩
-    · have hT : T ≠ 0 := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+    · have hT : T ≠ 0 := ne_of_eqCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       xjd 0x1095
       exact ⟨_, _, hR, hW, hA, fun e => absurd e hT, h⟩
   clear hR hW hA h
@@ -252,7 +252,7 @@ theorem xa_al_pl2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xs 0x10c1 (.push [0x12, 0xd6] (by decide)) ri_push
   xji 0x10c2 0x12d6 hw
   · have hpos : v ≠ 0 := by
-      have e := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+      have e := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       intro hv0; rw [hv0] at e; exact absurd e (by decide)
     clear hw
     xs 0x10c4 (.push [0x02] (by decide)) ri_push
@@ -303,7 +303,7 @@ theorem xa_al_pl2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
       xji 0x10fd 0x1101 hw2
       · xdead
       have hlen : 32 ≤ out.length := by
-        have e := gtCheck_ne_zero hw2
+        have e := B256.lt_of_gtCheck_ne_zero hw2
         rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
         exact e
       clear hw2
@@ -324,7 +324,7 @@ theorem xa_al_pl2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
         intro e; subst e; exact absurd (isNe_jump hw) (by decide)
       exact .inr (.inl ⟨hpos, hi2, _, _, hR, hW, hA, h⟩)
   · have hv0 : v = 0 := by
-      have e := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have e := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0]).toNat = 0 by decide] at e
       exact B256.toNat_inj _ _ (by rw [show (0 : B256).toNat = 0 from rfl]; omega)
     exact .inl ⟨hv0, _, _, hR, hW, hA, h⟩

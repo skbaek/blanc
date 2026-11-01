@@ -387,7 +387,7 @@ private theorem spawnChild_success
         implementation.toB256
     unfold ossifiableConstructorInitializedBase
       ossifiableConstructorInitializationLog
-    exact Devm.getStorVal_setStorVal_self _ _ _ _
+    exact Devm.setStorVal_getStorVal_self _ _ _ _
   have hchildAdminCurrent :
       (initDevm spawn.child).getStorVal
         (initSevm spawn.child).currentTarget adminSlotLit = 0 := by

@@ -1,4 +1,5 @@
 import Blanc.Lift.WriteSiteStep
+import Jaune.WordFacts
 
 /-!
 # W3: the joins of the write-site checker are sound
@@ -37,12 +38,6 @@ theorem forall₂_map_self (ν : Nat → B256) :
   | _ :: l => .cons rfl (forall₂_map_self ν l)
 
 /-! ## Branches -/
-
-theorem B256.eq_of_eqCheck_ne_zero {a b : B256} (h : B256.eqCheck a b ≠ 0) : a = b := by
-  unfold B256.eqCheck at h
-  split at h
-  · assumption
-  · exact absurd rfl h
 
 /-- The guard a nonzero `EQ` result gives holds. -/
 theorem eqGuard_sound {t u : Term} {a b : B256} {g : Term × B256} (hab : a = b)

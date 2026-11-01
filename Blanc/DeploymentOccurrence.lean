@@ -117,15 +117,6 @@ private theorem Exec.Deriv.ParentNonSstorePrefix.toParentPrefix_appended
   | refl => exact .refl _
   | step edge notStore rest ih => exact .step edge ih
 
-private theorem Exec.Deriv.ParentPrefix.trans_appended
-    {root middle tail : Exec.Deriv}
-    (left : Exec.Deriv.ParentPrefix root middle)
-    (right : Exec.Deriv.ParentPrefix middle tail) :
-    Exec.Deriv.ParentPrefix root tail := by
-  induction right generalizing root with
-  | refl => exact left
-  | step head rest ih => exact ih (left.snoc head)
-
 private theorem Exec.Deriv.ParentPrefix.advancePushToward_appended
     {start target : Exec.Deriv} {xs : Bytes} {targetInstruction : Ninst}
     (reached : Exec.Deriv.ParentPrefix start target)
@@ -389,7 +380,7 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
           let tailChronology :
               Exec.Deriv.SourceCursor.Chronology
                 initial tailCursor target :=
-            ⟨(Blanc.Exec.Deriv.ParentPrefix.trans_appended chronology.initialToCursor)
+            ⟨(Exec.Deriv.ParentPrefix.trans chronology.initialToCursor)
                 (.step tailEdge (.refl _)),
               tailReached⟩
           have rest := ih tailCursor.node tailEdge.lt initial tailCursor rfl
@@ -402,7 +393,7 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
         ⟨arm, compilerPrefix, armReached, decrease⟩
       · let armChronology :
             Exec.Deriv.SourceCursor.Chronology initial arm target :=
-          ⟨(Blanc.Exec.Deriv.ParentPrefix.trans_appended chronology.initialToCursor)
+          ⟨(Exec.Deriv.ParentPrefix.trans chronology.initialToCursor)
               compilerPrefix.toParentPrefix_appended,
             armReached⟩
         have rest := ih arm.node decrease initial arm rfl compiled
@@ -410,7 +401,7 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
         exact .branchLeft cursor chronology arm compilerPrefix rest
       · let armChronology :
             Exec.Deriv.SourceCursor.Chronology initial arm target :=
-          ⟨(Blanc.Exec.Deriv.ParentPrefix.trans_appended chronology.initialToCursor)
+          ⟨(Exec.Deriv.ParentPrefix.trans chronology.initialToCursor)
               compilerPrefix.toParentPrefix_appended,
             armReached⟩
         have rest := ih arm.node decrease initial arm rfl compiled
@@ -422,7 +413,7 @@ private theorem Exec.Deriv.SourceCursor.toward_appended_core :
         ⟨body, lookup, bodyCursor, compilerPrefix, bodyReached, decrease⟩
       let bodyChronology :
           Exec.Deriv.SourceCursor.Chronology initial bodyCursor target :=
-        ⟨(Blanc.Exec.Deriv.ParentPrefix.trans_appended chronology.initialToCursor)
+        ⟨(Exec.Deriv.ParentPrefix.trans chronology.initialToCursor)
             compilerPrefix.toParentPrefix_appended,
           bodyReached⟩
       have rest := ih bodyCursor.node decrease initial bodyCursor rfl compiled

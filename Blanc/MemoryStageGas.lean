@@ -84,9 +84,9 @@ theorem selectedGas_eq (stage : MemoryStage) (memory : Mem)
     have aligned' : (memory.write write.1 write.2).size % 32 = 0 := by
       rw [size]
       exact memExtSize_mod_32 aligned
-    have first := Lift.calculateMemoryGasCost_mono
+    have first := Jaune.calculateMemoryGasCost_mono
       (Lift.memExtSize_ge memory.size write.1 write.2.length)
-    have later := Lift.calculateMemoryGasCost_mono
+    have later := Jaune.calculateMemoryGasCost_mono
       (Lift.memExtsSize_ge (memory.write write.1 write.2).size (footprint rest))
     rw [← applyMemory_size rest _ aligned'] at later
     rw [← size] at first

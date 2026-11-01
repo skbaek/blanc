@@ -453,7 +453,7 @@ private theorem v2NameLong_writeClass
       obtain ⟨next, step, run⟩ := nextCut
       refine .next ⟨step, (by intro impossible; cases impossible), by intro x impossible; cases impossible⟩ ?_
       obtain ⟨gas, nextShape⟩ := ri_add (StepIn.toRun step)
-      rw [toB256_add_toB256 (a := p) (b := v2InitializerNameLength sevm) (by omega)] at nextShape
+      rw [Nat.toB256_add_toB256 p (v2InitializerNameLength sevm)] at nextShape
       dsimp only [List.set, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at nextShape
       subst next
       have sameHead : ImplV2.t_54b6_c68 = ImplV2.t_54b6_c86 := rfl

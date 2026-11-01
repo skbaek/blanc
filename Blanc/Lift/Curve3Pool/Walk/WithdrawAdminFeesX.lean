@@ -48,7 +48,7 @@ theorem wdx_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xs 0x4d3f (.push [0x4d, 0x44] (by decide)) ri_push
   xji 0x4d40 0x4d44 hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x4d45
   xs 0x4d47 (.push [0x04] (by decide)) ri_push
@@ -60,7 +60,7 @@ theorem wdx_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xji 0x4d4e 0x4d52 hw
   · xdead
   have hown : sevm.caller.toB256 = (b.getStor sevm.currentTarget).get ownerSlot := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [getStorVal_eq] at e
     exact e
   clear hw
@@ -276,7 +276,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
   xji 0x4daf 0x4db3 hw
   · xdead
   have hlen32 : 32 ≤ out.length := by
-    have hgt := gtCheck_ne_zero hw
+    have hgt := B256.lt_of_gtCheck_ne_zero hw
     rw [B256.lt_iff_toNat_lt_toNat, hrd, B256.toNat_toB256_of_lt hob,
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at hgt
     omega
@@ -328,12 +328,12 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
   · xdead
   have hge : ((d1.getStor sevm.currentTarget).get (balanceSlot k)).toNat ≤
       (Bytes.toB256 (out.take 32)).toNat := by
-    have hge' := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+    have hge' := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     rw [B256.lt_iff_toNat_lt_toNat] at hge'
     omega
   have hgeB : (d1.getStor sevm.currentTarget).get (balanceSlot k) ≤
       Bytes.toB256 (out.take 32) :=
-    not_lt.mp (ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw))
+    not_lt.mp (B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw))
   clear hw
   xjd 0x4de5
   xs 0x4de6 (.reg (.dup 0)) (ri_dup (by rfl))
@@ -404,7 +404,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
   · have hneFees : B256.gtCheck (Bytes.toB256 (out.take 32) -
         (d1.getStor sevm.currentTarget).get (balanceSlot k)) 0 ≠ 0 :=
       ne_of_eqCheck_eq_zero hw
-    have hpos := gtCheck_ne_zero hneFees
+    have hpos := B256.lt_of_gtCheck_ne_zero hneFees
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero, hfees] at hpos
     have hne : Bytes.toB256 (out.take 32) ≠
         (d1.getStor sevm.currentTarget).get (balanceSlot k) := by
@@ -425,7 +425,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
       Or.inr ⟨hne, h⟩⟩
   · have heqFees : B256.gtCheck (Bytes.toB256 (out.take 32) -
         (d1.getStor sevm.currentTarget).get (balanceSlot k)) 0 = 0 :=
-      eqCheck_ne_zero_eq hw
+      B256.eq_of_eqCheck_ne_zero hw
     have hle := gtCheck_eq_zero heqFees
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_zero, hfees] at hle
     have heq : Bytes.toB256 (out.take 32) =
@@ -892,7 +892,7 @@ theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : N
       xjmp 0x4ec3
       xjd 0x4ec4
       refine ⟨_, _, ?_, h⟩
-      have hlt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+      have hlt := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
         show (Bytes.toB256 [0x20]).toNat = 32 by decide] at hlt
       rw [List.length_take, B256.toNat_toB256_of_lt hrd]
@@ -901,7 +901,7 @@ theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : N
       xs 0x4ec3 (.reg (.dup 1)) (ri_dup (by rfl))
       xjd 0x4ec4
       refine ⟨_, _, ?_, h⟩
-      have hge := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have hge := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
         show (Bytes.toB256 [0x20]).toNat = 32 by decide] at hge
       rw [List.length_take, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
@@ -983,7 +983,7 @@ theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : N
     xs 0x4ef3 (.reg .iszero) ri_iszero
     xs 0x4ef6 (.push [0x4f, 0x3b] (by decide)) ri_push
     xji 0x4ef7 0x4f3b hw
-    · have hpos := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+    · have hpos := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x0]).toNat = 0 by decide] at hpos
       clear hw
       xs 0x4efa (.push [0x2, 0x40] (by decide)) ri_push
@@ -1036,7 +1036,7 @@ theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : N
       xjd 0x4f3b
       xjd 0x4f3c
       refine ⟨.inr ?_, _, _, hR, hW, h⟩
-      have hq0 := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hq)
+      have hq0 := ne_of_eqCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hq)
       have hxs : (img6.sliceD 0x260 32 0).length = 32 := List.length_sliceD _ _ _ _
       have hquot := rawCheck_quot (len := nW) (by omega) (by omega) hxs rfl
       rw [hn, kr.head (by omega)] at hquot
@@ -1044,7 +1044,7 @@ theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : N
         rw [Nat.min_comm, ← List.take_take, List.take_length]]
       rw [← hquot]
       exact fun e => hq0 (B256.toNat_inj _ _ (by rw [e]; rfl))
-    · have hz := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+    · have hz := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x0]).toNat = 0 by decide] at hz
       xjd 0x4f3c
       refine ⟨.inl ?_, _, _, hR, hW, h⟩

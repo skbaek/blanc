@@ -231,7 +231,7 @@ theorem frozenBit_of_le {x : B256} (h : B256.gtCheck x lo255 = 0) : frozenBit x 
 
 theorem flag20_of_notPaused {y : B256} (h : (Bytes.toB256 [255] &&& y / bit160) =? 0 ≠ 0) :
     flag20 y = false := by
-  have e := congrArg B256.toNat (eq_of_eqCheck_ne_zero h)
+  have e := congrArg B256.toNat (B256.eq_of_eqCheck_ne_zero h)
   rw [B256.toNat_and, B256.toNat_div (by decide), show (Bytes.toB256 [255]).toNat = 2 ^ 8 - 1 from
     by decide, show (bit160 : B256).toNat = 2 ^ 160 from by decide +kernel, B256.toNat_zero,
     Nat.and_comm, Nat.and_two_pow_sub_one_eq_mod] at e

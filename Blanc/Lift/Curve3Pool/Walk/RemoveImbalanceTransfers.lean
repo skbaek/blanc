@@ -83,7 +83,7 @@ theorem xa_rli_iter {b0 : Devm} {σ : Stor} {k : Nat}
     simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
   · -- `amounts[k] == 0`: skipped
     have he : rliAmt sevm k = 0 := by
-      have e := eqCheck_ne_zero_eq hw
+      have e := B256.eq_of_eqCheck_ne_zero hw
       rwa [zero_lit, B256.xor_zero] at e
     exact ⟨[], L, b, M, img, _, rfl, hB, by simp only [List.flatMap_nil, List.append_nil],
       .inl ⟨he, rfl⟩, hR, hW, hI, hctr, h⟩
@@ -154,7 +154,7 @@ theorem xa_rli_iterC {b0 : Devm} {σ : Stor} {k : Nat}
     simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
   · -- `amounts[k] == 0`: skipped
     have he : rliAmt sevm k = 0 := by
-      have e := eqCheck_ne_zero_eq hw
+      have e := B256.eq_of_eqCheck_ne_zero hw
       rwa [zero_lit, B256.xor_zero] at e
     exact ⟨[], L, b, M, img, _, rfl, hB, by simp only [List.flatMap_nil, List.append_nil],
       .inl ⟨he, rfl⟩, hR, hW, hI, hctr, h⟩
@@ -189,12 +189,12 @@ theorem xa_rli_next {k : Nat} (hcode : sevm.code = code)
   xs 0x3904 (.reg .iszero) ri_iszero
   xs 0x3907 (.push [0x37, 0x69] (by decide)) ri_push
   xji 0x3908 0x3769 hw
-  · have he := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
+  · have he := B256.eq_of_eqCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
     xjd 0x3909
     xs 0x390a (.reg .pop) ri_pop
     xs 0x390b (.reg .pop) ri_pop
     exact ⟨_, img1, _, hR, hW, hI1, hc1, .inr ⟨he.symm, h⟩⟩
-  · have hne := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+  · have hne := ne_of_eqCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     exact ⟨_, img1, _, hR, hW, hI1, hc1, .inl ⟨Ne.symm hne, h⟩⟩
 
 /-- The `RemoveLiquidityImbalance` topic word. -/
@@ -266,7 +266,7 @@ theorem xa_rli_log (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat
   xs 0x394f (.push [0x39, 0x54] (by decide)) ri_push
   xji 0x3950 0x3954 hw
   · xdead
-  have hTX := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hTX := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x3955
   xs 0x3956 (.reg (.dup 0)) (ri_dup (by rfl))

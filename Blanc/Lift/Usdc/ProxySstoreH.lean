@@ -393,7 +393,7 @@ theorem sel33_reachS_with_data (bal : sevm.benvStat.rules.bal = none) {b : Devm}
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rs_branch run hT with ⟨hz, _, run⟩ | ⟨-, _, run⟩
   · have hadm : sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr :=
-      (masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz))
+      (masked_eq_iff _ _).mp (B256.eq_of_eqCheck_ne_zero (iszero_eq_zero hz))
     unfold t_024f_c1 at run
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
@@ -510,7 +510,7 @@ theorem sel34_reachS_with_data (bal : sevm.benvStat.rules.bal = none) {b : Devm}
   obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rs_branch run hT with ⟨hz, _, run⟩ | ⟨-, _, run⟩
   · have hadm : sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr :=
-      (masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz))
+      (masked_eq_iff _ _).mp (B256.eq_of_eqCheck_ne_zero (iszero_eq_zero hz))
     unfold t_02a4_c2 at run
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
@@ -581,7 +581,7 @@ theorem proxy_sstoreH_with_data (bal : sevm.benvStat.rules.bal = none) {b : Devm
     swap
     · obtain rfl : g = t_0077_c33 := Option.some.inj (hg.symm.trans rfl)
       obtain ⟨rest, hs, hadm, geometry, nonempty⟩ := sel33_reachS_with_data hP bal run hT
-      exact ⟨.inr ⟨rest, hs, .inl (eqCheck_ne_zero h).symm, hadm, geometry.forget⟩,
+      exact ⟨.inr ⟨rest, hs, .inl (B256.eq_of_eqCheck_ne_zero h).symm, hadm, geometry.forget⟩,
         fun _ _ => ⟨nonempty, geometry⟩⟩
     unfold t_0041_c0 at run
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
@@ -592,7 +592,7 @@ theorem proxy_sstoreH_with_data (bal : sevm.benvStat.rules.bal = none) {b : Devm
     swap
     · obtain rfl : g = t_00ba_c34 := Option.some.inj (hg.symm.trans rfl)
       obtain ⟨rest, hs, hadm, geometry, nonempty⟩ := sel34_reachS_with_data hP bal run hT
-      exact ⟨.inr ⟨rest, hs, .inr (eqCheck_ne_zero h).symm, hadm, geometry.forget⟩,
+      exact ⟨.inr ⟨rest, hs, .inr (B256.eq_of_eqCheck_ne_zero h).symm, hadm, geometry.forget⟩,
         fun _ _ => ⟨nonempty, geometry⟩⟩
     unfold t_004c_c0 at run
     obtain ⟨_, s, run⟩ := rs_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)

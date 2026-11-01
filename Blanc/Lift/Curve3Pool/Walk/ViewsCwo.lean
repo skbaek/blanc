@@ -42,7 +42,7 @@ theorem xa_cwo2 (hc : Cert.CheckedM code cert mems true)
   xs 0x439d (.push [0x43, 0xa2] (by decide)) ri_push  -- 439a PUSH2 0x43a2
   xji 0x439e 0x43a2 hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x43a3  -- 43a2 JUMPDEST
   xs 0x43a5 (.push [0x60] (by decide)) ri_push  -- 43a3 PUSH1 0x60

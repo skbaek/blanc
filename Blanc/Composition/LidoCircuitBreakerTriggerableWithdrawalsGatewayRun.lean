@@ -355,10 +355,6 @@ private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
 
-private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
-    (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
-  rfl
-
 /-! ## The cold and warm charges, resolved at the row-19 world -/
 
 private theorem gatewayRunCost_assignment :
@@ -1803,8 +1799,8 @@ private theorem gatewayPauseWorld_successSuffix :
   unfold PauseSuccessNoninterference
   rw [(GWorld.currentTarget (w := w)), (GWorld.callerWord (w := w))]
   constructor
-  · rw [hstor, setMach_getStorVal]
-  · rw [hstor, setMach_getStorVal]
+  · rw [hstor, Devm.getStorVal_setMach]
+  · rw [hstor, Devm.getStorVal_setMach]
 
 private theorem gatewayPauseWorld_productionRun :
     ∃ successPre final : Devm,
@@ -2086,7 +2082,7 @@ private theorem gatewayPauseWorld_afterSetAt {final : Devm}
     exact (gatewayRunAfterSetBase_code w)
   · rw [(GWorld.currentTarget (w := w)), (GWorld.callerWord (w := w))]
     unfold gatewayPauseWorldAfterSetEntry
-    rw [setMach_getStorVal, (gatewayRunAfterSetBase_count w),
+    rw [Devm.getStorVal_setMach, (gatewayRunAfterSetBase_count w),
       (GWorld.getStorVal (w := w)), (GWorldSpec.count (w := w))]
     decide
 

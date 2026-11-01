@@ -47,7 +47,7 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
   xs 0x477c (.push [0x47, 0x81] (by decide)) ri_push  -- 4779 PUSH2 0x4781
   xji 0x477d 0x4781 hw
   · xdead  -- 477c JUMPI
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x4782  -- 4781 JUMPDEST
   xs 0x4784 (.push [0x04] (by decide)) ri_push  -- 4782 PUSH1 0x04
@@ -57,7 +57,7 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
   xs 0x478a (.push [0x47, 0x8f] (by decide)) ri_push  -- 4787 PUSH2 0x478f
   xji 0x478b 0x478f hw
   · xdead  -- 478a JUMPI
-  have hown := eqCheck_ne_zero_eq hw
+  have hown := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x4790  -- 478f JUMPDEST
   xs 0x4792 (.push [0x08] (by decide)) ri_push  -- 4790 PUSH1 0x08
@@ -73,7 +73,7 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
   xji 0x47a1 0x47a5 hw
   · xdead  -- 47a0 JUMPI
   have hn0 := (B256.nof_iff_not_add_lt _ _).mpr
-    (ltCheck_eq_zero_not_lt (eq_zero_of_iszero_ne_zero hw))
+    (B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hw))
   clear hw
   xjd 0x47a6  -- 47a5 JUMPDEST
   xs 0x47a7 (.reg (.dup 0)) (ri_dup (by rfl))  -- 47a6 DUP1
@@ -89,7 +89,7 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
   xs 0x47b3 (.push [0x47, 0xb8] (by decide)) ri_push  -- 47b0 PUSH2 0x47b8
   xji 0x47b4 0x47b8 hw
   · xdead  -- 47b3 JUMPI
-  have ht0 := ltCheck_eq_zero_not_lt (eq_zero_of_iszero_ne_zero hw)
+  have ht0 := B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hw)
   clear hw
   xjd 0x47b9  -- 47b8 JUMPDEST
   xs 0x47ba (.reg .timestamp) ri_timestamp  -- 47b9 TIMESTAMP
@@ -104,7 +104,7 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
   xji 0x47c8 0x47cc hw
   · xdead  -- 47c7 JUMPI
   have hn1 := (B256.nof_iff_not_add_lt _ _).mpr
-    (ltCheck_eq_zero_not_lt (eq_zero_of_iszero_ne_zero hw))
+    (B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hw))
   clear hw
   xjd 0x47cd  -- 47cc JUMPDEST
   xs 0x47ce (.reg (.dup 0)) (ri_dup (by rfl))  -- 47cd DUP1
@@ -121,7 +121,7 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
   xs 0x47dc (.push [0x47, 0xe1] (by decide)) ri_push  -- 47d9 PUSH2 0x47e1
   xji 0x47dd 0x47e1 hw
   · xdead  -- 47dc JUMPI
-  have ht1 := ltCheck_eq_zero_not_lt (eq_zero_of_iszero_ne_zero hw)
+  have ht1 := B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hw)
   clear hw
   xjd 0x47e2  -- 47e1 JUMPDEST
   xs 0x47e5 (.push [0x01, 0x40] (by decide)) ri_push  -- 47e2 PUSH2 0x0140
@@ -228,7 +228,7 @@ theorem xa_rampA_or {b2 : Devm} {M : Mem} {A c : B256}
     xs 0x48ab (.push [0x48, 0xb0] (by decide)) ri_push  -- 48a8 PUSH2 0x48b0
     xji 0x48ac 0x48b0 hw
     · xdead  -- 48ab JUMPI
-    exact ⟨.inr ⟨hlt, hm, ltCheck_eq_zero_not_lt (eq_zero_of_iszero_ne_zero hw)⟩, _, h⟩
+    exact ⟨.inr ⟨hlt, hm, B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hw)⟩, _, h⟩
   · xjd 0x48a3  -- 48a2 JUMPDEST
     xs 0x48a5 (.push [0x00] (by decide)) ri_push  -- 48a3 PUSH1 0x00
     xjd 0x48a6  -- 48a5 JUMPDEST
@@ -327,7 +327,7 @@ theorem xa_rampA_check {b2 : Devm} {M : Mem} {A : B256}
     refine ⟨toNat_lt_of_iszero_gt_eq_zero hpos, hmax, ?_, _, h⟩
     rcases hor with hor | ⟨hl, hm', hn⟩
     · refine .inl ⟨?_, ?_⟩
-      · have e := ltCheck_eq_zero_not_lt (eq_zero_of_iszero2_eq_zero hge)
+      · have e := B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero2_eq_zero hge)
         rw [B256.lt_iff_toNat_lt_toNat] at e
         exact Nat.le_of_not_lt e
       · have e := toNat_le_of_iszero_gt_ne_zero hor

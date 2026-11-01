@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.SwapBalanceWalk
 import Blanc.Lift.UniswapV2Pair.FeeMintArithmetic
+import Jaune.WordFacts
 
 /-! The actual swap body after both balance observations: the two amount-in
 ternaries (`t_0af5_c5` .. `t_0b6f_c7`), the `INSUFFICIENT_INPUT_AMOUNT` guard
@@ -8,20 +9,8 @@ ternaries (`t_0af5_c5` .. `t_0b6f_c7`), the `INSUFFICIENT_INPUT_AMOUNT` guard
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune
 
-theorem swap_gt_of_gtCheck_ne {x y : B256} (h : B256.gtCheck x y ≠ 0) : y < x := by
-  unfold B256.gtCheck at h
-  split at h
-  · assumption
-  · exact absurd rfl h
-
 theorem swap_not_gt_of_gtCheck_eq {x y : B256} (h : B256.gtCheck x y = 0) : ¬ y < x := by
   unfold B256.gtCheck at h
-  split at h
-  · exact absurd h (by decide)
-  · assumption
-
-theorem swap_not_lt_of_ltCheck_eq {x y : B256} (h : B256.ltCheck x y = 0) : ¬ x < y := by
-  unfold B256.ltCheck at h
   split at h
   · exact absurd h (by decide)
   · assumption
@@ -83,7 +72,7 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
       obtain ⟨G1, hs, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_sub hs
       refine ⟨G1, ?_⟩
       unfold swapInWord
-      rw [ite_eq_left (show (reserveMask112 &&& r0) - a0 < bal0 from swap_gt_of_gtCheck_ne nonzero)]
+      rw [ite_eq_left (show (reserveMask112 &&& r0) - a0 < bal0 from B256.lt_of_gtCheck_ne_zero nonzero)]
       exact run
   clear run
   obtain ⟨_, run⟩ := first
@@ -123,7 +112,7 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
       obtain ⟨G2, hs, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sub hs
       refine ⟨G2, ?_⟩
       unfold swapInWord
-      rw [ite_eq_left (show (reserveMask112 &&& r1) - a1 < bal1 from swap_gt_of_gtCheck_ne nonzero)]
+      rw [ite_eq_left (show (reserveMask112 &&& r1) - a1 < bal1 from B256.lt_of_gtCheck_ne_zero nonzero)]
       exact run
   clear run
   obtain ⟨_, run⟩ := second
@@ -147,13 +136,13 @@ theorem swapInputsDecoded_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
     obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
     rcases ric_branch run with ⟨_, _, failed⟩ | ⟨accepted, G', run⟩
     · exact (failed.false_of_noOk (by decide : t_0b85_c8.noOk = true)).elim
-    · exact ⟨Or.inr (swap_gt_of_gtCheck_ne accepted), G', run⟩
+    · exact ⟨Or.inr (B256.lt_of_gtCheck_ne_zero accepted), G', run⟩
   · unfold t_0b80_c8 at run
     obtain ⟨_, run⟩ := ric_dest run
     obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
     rcases ric_branch run with ⟨_, _, failed⟩ | ⟨_, G', run⟩
     · exact (failed.false_of_noOk (by decide : t_0b85_c8.noOk = true)).elim
-    · exact ⟨Or.inl (swap_gt_of_gtCheck_ne nonzero), G', run⟩
+    · exact ⟨Or.inl (B256.lt_of_gtCheck_ne_zero nonzero), G', run⟩
 
 /-- Both actual decoders, input ternaries and the successful input guard. -/
 theorem swapInputs_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
@@ -318,6 +307,6 @@ theorem swapK_inv {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
   rcases ric_branch run with ⟨_, _, failed⟩ | ⟨accepted, G', run⟩
   · exact (failed.false_of_noOk (by decide : t_0c70_c8.noOk = true)).elim
   · exact ⟨⟨in0Mul, bal0Mul, cover0, in1Mul, bal1Mul, cover1, adjustedMul,
-      swap_not_lt_of_ltCheck_eq (eq_zero_of_iszero_ne_zero accepted)⟩, G', run⟩
+      B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero accepted)⟩, G', run⟩
 
 end Blanc.Lift.UniswapV2Pair

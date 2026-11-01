@@ -126,7 +126,7 @@ def pcCallTree (p : Nat) (t0 t1 : UInt8) (k : Nat) (f : SFunc) : SFunc :=
 
 theorem pc_add_six {p : Nat} (hp : p + 6 < 2 ^ 256) :
     Nat.toB256 p + Bytes.toB256 [0x06] = Nat.toB256 (p + 6) := by
-  rw [show Bytes.toB256 [0x06] = Nat.toB256 6 by decide, toB256_add_toB256 hp]
+  rw [show Bytes.toB256 [0x06] = Nat.toB256 6 by decide, Nat.toB256_add_toB256 _ _]
 
 /-- **The call idiom, inverted**: the callee (entry `k`) runs from the return address
 `p + 6` over the caller's stack to `.returned D`, and the continuation runs from `D`. -/

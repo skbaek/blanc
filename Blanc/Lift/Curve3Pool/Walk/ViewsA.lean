@@ -57,7 +57,7 @@ theorem xa_vA_frame (hc : Cert.CheckedM code cert mems true)
   xs 0x258 (.push [0x02, 0x5d] (by decide)) ri_push
   xji 0x259 0x25d hw
   · xdead
-  have hval := eqCheck_ne_zero_eq hw
+  have hval := B256.eq_of_eqCheck_ne_zero hw
   xjd 0x25e
   xs 0x260 (.push [0x06] (by decide)) ri_push
   cvpc 0x261

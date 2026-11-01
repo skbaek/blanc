@@ -18,17 +18,17 @@ open Jaune Blanc.Lift Blanc.StableSwapNewton
 theorem ex_sub_of {x y : B256} {z : Nat} (h : chkSub x.toNat y.toNat = some z) :
     ¬ x < y ∧ (x - y).toNat = z :=
   let ⟨g, v⟩ := fwdChkSub h
-  ⟨ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq g), v⟩
+  ⟨B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero g), v⟩
 
 theorem ex_add_of {x y : B256} {z : Nat} (h : chkAdd x.toNat y.toNat = some z) :
     ¬ x + y < x ∧ (x + y).toNat = z :=
   let ⟨g, v⟩ := fwdChkAdd h
-  ⟨ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq g), v⟩
+  ⟨B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero g), v⟩
 
 theorem ex_mul_of {x y : B256} {z : Nat} (h : chkMul x.toNat y.toNat = some z) :
     (x * y / x = y ∨ x = 0) ∧ (x * y).toNat = z :=
   let ⟨g, v⟩ := fwdChkMul h
-  ⟨(or_ne_zero g).imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq, v⟩
+  ⟨(or_ne_zero g).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero, v⟩
 
 theorem ex_div_of {x y : B256} {z : Nat} (h : chkDiv x.toNat y.toNat = some z) :
     (x / y).toNat = z :=

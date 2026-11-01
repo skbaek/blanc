@@ -1470,7 +1470,7 @@ theorem rx_rl_postE {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide]
     omega
   have hlt : B256.eqCheck (B256.ltCheck T (rlAmt sevm)) 0 ≠ 0 := by
-    rw [ltCheck_eq_zero_of_le hTa]; decide
+    rw [B256.ltCheck_eq_zero_of_toNat_le hTa]; decide
   xr (rx_push rfl (by hr) ·)
   xr (rx_branch_succ (by decide) ·)
   xr (rx_dest ·)

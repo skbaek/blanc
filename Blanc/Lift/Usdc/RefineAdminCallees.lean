@@ -107,7 +107,7 @@ theorem add_ret {t x y : B256} {D : Devm}
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
-  exact ⟨_, rfl, eq_of_eqCheck_ne_zero h1⟩
+  exact ⟨_, rfl, B256.eq_of_eqCheck_ne_zero h1⟩
 
 /-- SafeMath `sub(y, x)` (entry 100): `x ≤ y`. -/
 theorem sub_ret {t x y : B256} {D : Devm}
@@ -133,7 +133,7 @@ theorem sub_ret {t x y : B256} {D : Devm}
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
-  exact ⟨_, rfl, eq_of_eqCheck_ne_zero h1⟩
+  exact ⟨_, rfl, B256.eq_of_eqCheck_ne_zero h1⟩
 
 /-- `_setOwner(a)` (entry 85): the address bits of slot 0. -/
 theorem setOwner_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D : Devm}
@@ -214,7 +214,7 @@ theorem setBalance_ret (hfork : CoveredFork sevm.benvStat.fork) {t x y : B256} {
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
-  exact ⟨_, _, rfl, eq_of_eqCheck_ne_zero h1, eq_of_eqCheck_ne_zero h2⟩
+  exact ⟨_, _, rfl, B256.eq_of_eqCheck_ne_zero h1, B256.eq_of_eqCheck_ne_zero h2⟩
 
 /-- `_setBlacklistState(a, false)` (entry 109): the balance bits only. -/
 theorem setBlacklistState0_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D : Devm}

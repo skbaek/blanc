@@ -379,7 +379,7 @@ theorem ric_shaCall {img : Bytes} {n d : Nat} {x1 x3 x4 : B256} {c0 c1 v0 v1 : U
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨w, G18, rfl⟩ := ri_gas s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   have e64 : Nat.toB256 d + Nat.toB256 64 - Nat.toB256 d = 64 := by
-    rw [toB256_add_toB256 hdb, toB256_sub_toB256 (by omega) hdb, show d + 64 - d = 64 by omega]
+    rw [Nat.toB256_add_toB256 _ _, Nat.toB256_sub_toB256 (by omega) hdb, show d + 64 - d = 64 by omega]
     decide
   have e32 : Bytes.toB256 [32] = 32 := by decide
   have s1' : Ninst.Run sevm (St b (w :: 2 :: Nat.toB256 d :: 64 :: Nat.toB256 d :: 32 ::

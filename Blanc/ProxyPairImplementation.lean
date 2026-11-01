@@ -183,7 +183,7 @@ theorem implGuarded_runCompiledTo_nonzero
   · rw [Devm.withOutput_state, Devm.memRead_state, Devm.setMach_state,
       Devm.setMach_state, Devm.sstoreBase_state, Devm.setMach_state]
   · rw [Devm.returnPost_getStorVal]
-    rw [Devm.getStorVal_setMach, Devm.getStorVal_setStorVal_self]
+    rw [Devm.getStorVal_setMach, Devm.setStorVal_getStorVal_self]
   · rw [Devm.returnPost_transientStorage, Devm.setMach_transientStorage,
       Devm.sstoreBase_transientStorage, Devm.setMach_transientStorage]
   · rw [Devm.withOutput_logs, Devm.memRead_logs, Devm.setMach_logs,

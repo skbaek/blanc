@@ -42,7 +42,7 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
       xjmp 0x11f9
       xjd 0x11fa
       refine ⟨_, _, ?_, h⟩
-      have hlt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+      have hlt := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
         show (Bytes.toB256 [0x20]).toNat = 32 by decide] at hlt
       rw [List.length_take, B256.toNat_toB256_of_lt hrd]
@@ -51,7 +51,7 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
       xs 0x11f9 (.reg (.dup 1)) (ri_dup (by rfl))
       xjd 0x11fa
       refine ⟨_, _, ?_, h⟩
-      have hge := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have hge := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
         show (Bytes.toB256 [0x20]).toNat = 32 by decide] at hge
       rw [List.length_take, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
@@ -133,7 +133,7 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
     xs 0x1229 (.reg .iszero) ri_iszero
     xs 0x122c (.push [0x12, 0x71] (by decide)) ri_push
     xji 0x122d 0x1271 hw
-    · have hpos := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+    · have hpos := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x0]).toNat = 0 by decide] at hpos
       clear hw
       xs 0x1230 (.push [0x5, 0xc0] (by decide)) ri_push
@@ -186,7 +186,7 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
       xjd 0x1271
       xjd 0x1272
       refine ⟨.inr ?_, _, _, hR, hW, hA, h⟩
-      have hq0 := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hq)
+      have hq0 := ne_of_eqCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hq)
       have hxs : (img6.sliceD 0x5e0 32 0).length = 32 := List.length_sliceD _ _ _ _
       have hquot := rawCheck_quot (len := nW) (by omega) (by omega) hxs rfl
       rw [hn, kr.head (by omega)] at hquot
@@ -194,7 +194,7 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
         rw [Nat.min_comm, ← List.take_take, List.take_length]]
       rw [← hquot]
       exact fun e => hq0 (B256.toNat_inj _ _ (by rw [e]; rfl))
-    · have hz := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+    · have hz := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0x0]).toNat = 0 by decide] at hz
       xjd 0x1272
       refine ⟨.inl ?_, _, _, hR, hW, hA, h⟩
@@ -289,7 +289,7 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     xji 0x12ad 0x12b1 hw2
     · xdead
     have hlen : 32 ≤ out.length := by
-      have e := gtCheck_ne_zero hw2
+      have e := B256.lt_of_gtCheck_ne_zero hw2
       rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
       exact e
     clear hw2
@@ -313,7 +313,7 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     xs 0x12c4 (.push [0x12, 0xc9] (by decide)) ri_push
     xji 0x12c5 0x12c9 hw3
     · xdead
-    have hge := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw3)
+    have hge := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw3)
     clear hw3
     xjd 0x12ca
     xs 0x12cb (.reg (.dup 0)) (ri_dup (by rfl))
@@ -416,7 +416,7 @@ theorem xa_al_pl6 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xs 0x12fd (.push [0x13, 0x02] (by decide)) ri_push
   xji 0x12fe 0x1302 hw
   · xdead
-  have hadd := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hadd := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x1303
   xs 0x1304 (.reg (.dup 0)) (ri_dup (by rfl))
@@ -478,7 +478,7 @@ theorem xa_al_pl6 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xs 0x1332 (.push [0x10, 0x5d] (by decide)) ri_push
   xji 0x1333 0x105d hw
   · have e : i + 1 = 3 := by
-      have := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
+      have := B256.eq_of_eqCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rcases (show i = 0 ∨ i = 1 ∨ i = 2 by omega) with rfl | rfl | rfl
       · exact absurd this (by decide)
       · exact absurd this (by decide)
@@ -487,7 +487,7 @@ theorem xa_al_pl6 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     next => exact ⟨_, _, _, hR, hW, hA, hP, h⟩
     next he => exact absurd e he
   · have e : i + 1 ≠ 3 := by
-      have := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have := ne_of_eqCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       intro e; apply this; rw [show i = 2 by omega]; decide
     split
     next he => exact absurd he e

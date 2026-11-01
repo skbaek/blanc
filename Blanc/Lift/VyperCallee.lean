@@ -3,6 +3,7 @@ import Blanc.Lift.MemGlue
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.StableSwapNewton.Defs
 import Blanc.ForwardStorageAccess
+import Jaune.WordFacts
 
 /-!
 # Walking Vyper 0.2.x internal callees: memory windows and checked arithmetic
@@ -359,11 +360,6 @@ end SloadsOnly
 
 /-! ## Checked arithmetic -/
 
-theorem eqCheck_ne_zero {a c : B256} (h : B256.eqCheck a c ≠ 0) : a = c := by
-  unfold B256.eqCheck at h; split at h
-  · assumption
-  · exact absurd rfl h
-
 theorem eqCheck_zero_eq_zero {a : B256} (h : B256.eqCheck a 0 = 0) : a ≠ 0 := by
   unfold B256.eqCheck at h; split at h
   · exact absurd h (by decide)
@@ -382,7 +378,7 @@ theorem ltCheck_ne_zero {x y : B256} (h : B256.ltCheck x y ≠ 0) : x.toNat < y.
 /-- `ISZERO (LT x y)` taken: `y ≤ x`. -/
 theorem ltCheck_iszero_ne {x y : B256} (h : B256.eqCheck (B256.ltCheck x y) 0 ≠ 0) :
     ¬ x.toNat < y.toNat :=
-  ltCheck_eq_zero (eqCheck_ne_zero h)
+  ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero h)
 
 /-- `ISZERO (LT x y)` not taken: `x < y`. -/
 theorem ltCheck_iszero_eq {x y : B256} (h : B256.eqCheck (B256.ltCheck x y) 0 = 0) :
@@ -391,7 +387,7 @@ theorem ltCheck_iszero_eq {x y : B256} (h : B256.eqCheck (B256.ltCheck x y) 0 = 
 
 theorem gtCheck_iszero_ne {x y : B256} (h : B256.eqCheck (B256.gtCheck x y) 0 ≠ 0) :
     ¬ y.toNat < x.toNat := by
-  have h' := eqCheck_ne_zero h
+  have h' := B256.eq_of_eqCheck_ne_zero h
   unfold B256.gtCheck at h'; split at h'
   · exact absurd h' (by decide)
   · rename_i hn; rwa [gt_iff_lt, B256.lt_iff_toNat_lt_toNat] at hn

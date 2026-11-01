@@ -7,6 +7,7 @@ import Blanc.Lift.ExactWalkSolc
 import Blanc.AddressSlotProofs
 import Blanc.Lift.Deploy
 import Blanc.Lift.InvWalkStep
+import Jaune.WordFacts
 
 /-!
 # Cut-run walk kit for certificate-driven inversions
@@ -157,11 +158,6 @@ theorem rr_eq_hit (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {sel 
   exact ⟨G', run⟩
 
 end ReachKit
-
-theorem eq_of_eqCheck_ne_zero {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
-  unfold B256.eqCheck at h
-  by_contra hxy
-  exact h (ite_eq_right hxy)
 
 theorem getStorVal_eq (d : Devm) (a : Adr) (k : B256) : d.getStorVal a k = (d.getStor a).get k := rfl
 

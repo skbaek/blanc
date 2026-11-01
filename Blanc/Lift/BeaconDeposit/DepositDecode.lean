@@ -2,7 +2,7 @@ import Blanc.MachineDataFacts
 import Blanc.Lift.BeaconDeposit.DepositArgs
 import Blanc.Lift.BeaconDeposit.CountView
 import Blanc.Lift.ExactWalkOps
-import Blanc.B256CheckFacts
+import Jaune.WordFacts
 
 namespace Blanc.Lift.BeaconDeposit
 
@@ -48,13 +48,6 @@ lemma toNat_add_of_lt {x y : B256} (h : x.toNat + y.toNat < 2 ^ 256) :
   rw [B256.toNat_add]
   change (x.toNat + y.toNat) % 2 ^ 256 = _
   exact Nat.mod_eq_of_lt h
-
-lemma ltCheck_eq_zero_of_toNat_le {x y : B256} (h : y.toNat ≤ x.toNat) :
-    B256.ltCheck x y = 0 := by
-  rw [B256.ltCheck, ite_eq_right]
-  intro hxy
-  have hxy' := B256.toNat_lt_toNat hxy
-  omega
 
 lemma toNat_sub_of_toNat_le {x y : B256} (h : y.toNat ≤ x.toNat) :
     (x - y).toNat = x.toNat - y.toNat := by
@@ -188,7 +181,7 @@ theorem head_block {sevm : Sevm} {b : Devm} {g : Nat} {o : Outcome} {sel : B256}
     omega
   have h80 : (Bytes.toB256 [0x80] : B256).toNat = 128 := by decide
   have hlt : B256.ltCheck (sevm.data.length.toB256 - 4) (Bytes.toB256 [0x80]) = 0 :=
-    ltCheck_eq_zero_of_toNat_le (by rw [h80, hsub]; omega)
+    B256.ltCheck_eq_zero_of_toNat_le (by rw [h80, hsub]; omega)
   refine rx_dest ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,

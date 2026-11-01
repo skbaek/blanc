@@ -53,7 +53,7 @@ theorem donX_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xs 0x4f65 (.push [0x4f, 0x6a] (by decide)) ri_push
   xji 0x4f66 0x4f6a hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x4f6b
   xs 0x4f6d (.push [0x04] (by decide)) ri_push
@@ -65,7 +65,7 @@ theorem donX_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xji 0x4f74 0x4f78 hw
   · xdead
   have hown : sevm.caller.toB256 = (b.getStor sevm.currentTarget).get ownerSlot := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [getStorVal_eq] at e
     exact e
   clear hw
@@ -295,7 +295,7 @@ theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
   xji 0x4fcd 0x4fd1 hw
   · xdead
   have hlen32 : 32 ≤ out.length := by
-    have hgt := gtCheck_ne_zero hw
+    have hgt := B256.lt_of_gtCheck_ne_zero hw
     rw [B256.lt_iff_toNat_lt_toNat, hrd, B256.toNat_toB256_of_lt hob,
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at hgt
     omega

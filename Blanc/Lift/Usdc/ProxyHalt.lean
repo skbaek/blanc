@@ -171,7 +171,7 @@ theorem ent1_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_iszero (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rpw_branch run with ⟨hz, _, run⟩ | ⟨-, _, run⟩
-  · exact .inl ((masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz)))
+  · exact .inl ((masked_eq_iff _ _).mp (B256.eq_of_eqCheck_ne_zero (iszero_eq_zero hz)))
   unfold t_025c_c1 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -202,7 +202,7 @@ theorem ent2_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_iszero (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rpw_branch run with ⟨hz, _, run⟩ | ⟨-, _, run⟩
-  · exact .inl ((masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz)))
+  · exact .inl ((masked_eq_iff _ _).mp (B256.eq_of_eqCheck_ne_zero (iszero_eq_zero hz)))
   unfold t_02fa_c2 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -235,7 +235,7 @@ theorem ent3_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_iszero (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rpw_branch run with ⟨hz, _, run⟩ | ⟨-, _, run⟩
-  · refine .inl ⟨(masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz)), ?_⟩
+  · refine .inl ⟨(masked_eq_iff _ _).mp (B256.eq_of_eqCheck_ne_zero (iszero_eq_zero hz)), ?_⟩
     rw [(SFunc.Run.world_of_quiet ent3_admin_quiet hfork (by decide) (by decide) (run.mono hP)).1, getStor_St]
     funext a
     exact afterSload_getStor _ _ _ _
@@ -269,7 +269,7 @@ theorem ent4_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_iszero (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rpw_branch run with ⟨hz, _, run⟩ | ⟨-, _, run⟩
-  · exact .inl ((masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz)))
+  · exact .inl ((masked_eq_iff _ _).mp (B256.eq_of_eqCheck_ne_zero (iszero_eq_zero hz)))
   unfold t_0512_c4 at run
   obtain ⟨_, run⟩ := rpw_dest run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -302,7 +302,7 @@ theorem ent5_run (hfork : CoveredFork sevm.benvStat.fork) {b : Devm}
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_iszero (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rpw_branch run with ⟨hz, _, run⟩ | ⟨-, _, run⟩
-  · refine .inl ⟨(masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz)), ?_⟩
+  · refine .inl ⟨(masked_eq_iff _ _).mp (B256.eq_of_eqCheck_ne_zero (iszero_eq_zero hz)), ?_⟩
     rw [(SFunc.Run.world_of_quiet ent5_admin_quiet hfork (by decide) (by decide) (run.mono hP)).1, getStor_St]
     funext a
     exact afterSload_getStor _ _ _ _
@@ -577,7 +577,7 @@ theorem proxy_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {post : D
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_0077_c33 := Option.some.inj (hg.symm.trans rfl)
-      exact (sel33_halt hP hfork run).imp id fun ha => ⟨ha, .inl (eqCheck_ne_zero h).symm⟩
+      exact (sel33_halt hP hfork run).imp id fun ha => ⟨ha, .inl (B256.eq_of_eqCheck_ne_zero h).symm⟩
     unfold t_0041_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -586,7 +586,7 @@ theorem proxy_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {post : D
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_00ba_c34 := Option.some.inj (hg.symm.trans rfl)
-      exact (sel34_halt hP hfork run).imp id fun ha => ⟨ha, .inr (.inl (eqCheck_ne_zero h).symm)⟩
+      exact (sel34_halt hP hfork run).imp id fun ha => ⟨ha, .inr (.inl (B256.eq_of_eqCheck_ne_zero h).symm)⟩
     unfold t_004c_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -605,7 +605,7 @@ theorem proxy_halt (hfork : CoveredFork sevm.benvStat.fork) {b : Devm} {post : D
     swap
     · obtain rfl : g = t_015f_c36 := Option.some.inj (hg.symm.trans rfl)
       exact (sel36_halt hP hfork run).imp id fun ha =>
-        ⟨ha, .inr (.inr (.inl (eqCheck_ne_zero h).symm))⟩
+        ⟨ha, .inr (.inr (.inl (B256.eq_of_eqCheck_ne_zero h).symm))⟩
     unfold t_0062_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
