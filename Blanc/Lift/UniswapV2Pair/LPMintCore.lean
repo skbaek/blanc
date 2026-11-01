@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.TransferCore
 import Blanc.Lift.InvWalkProvenance
+import Blanc.Lift.WalkKit
 
 /-! The actual LP mint stores supply before reading and crediting the recipient. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -72,21 +73,14 @@ theorem lpMint_credit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_and (v := toWord.toAdr.toB256)
     (by rw [B256.and_comm]; exact ff20_and_word toWord)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 4
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq m0.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   simp only [show (0 : B256).toNat = 0 from rfl, show (32 : B256).toNat = 32 from rfl]
   have gh : G + c + 1879 = (G + c + 1837) + 42 := by omega
   rw [gh]
@@ -96,8 +90,7 @@ theorem lpMint_credit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   · exact congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 toWord.toAdr.toB256 1)
   refine rx_swap (n := 4) rfl ?_
   dsimp only [List.set]
-  refine rx_swap1 ?_
-  refine rx_swap (n := 4) rfl ?_
+  wrun! 2
   dsimp only [List.set]
   have gs : G + c + 1828 = (G + 1828) + c := by omega
   rw [gs]
@@ -106,8 +99,7 @@ theorem lpMint_credit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_mload (c := 3) ?_ m1.word (m1.read_self (by decide))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq s1]; decide
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (128 : B256).toNat = 128 from rfl]
     rw [St.extCost_eq s1]; decide
@@ -116,17 +108,11 @@ theorem lpMint_credit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_mload (c := 3) ?_ m2.word (m2.read_self (by decide))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq s2]; decide
-  refine rx_swap3 ?_
-  refine rx_swap4 ?_
-  refine rx_swap2 ?_
-  refine rx_swap3 ?_
+  wrun! 4
   refine rx_push (w := transferTopic) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap3 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 3
   refine rx_sub' (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_swap2 ?_
+  wrun! 2
   refine rx_add' (v := 32) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap1 ?_
   have gl : G + 1768 = (G + 12) + 1756 := by omega
@@ -135,8 +121,7 @@ theorem lpMint_credit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   · simp only [show (128 : B256).toNat = 128 from rfl]
     rw [St.extCost_eq s2]; decide
   · exact Mem.read_write_word_of_wf m1.wf 128 value
-  refine rx_pop ?_
-  refine rx_pop ?_
+  wrun! 2
   exact rx_ret
 
 theorem lpMint_credit_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
@@ -356,10 +341,7 @@ theorem lpMint_supply_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   have m1 := lpMintScratch_ptr mem toWord
   have s1 : ((M.write 0 toWord.toAdr.toB256.toBytes).write 32 (1 : B256).toBytes).size = 192 := m1.size
   unfold t_28dd_c62
-  refine rx_dest ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 4
   have gs : G + supplyCost + loadCost + creditCost + 2077 =
     (G + loadCost + creditCost + 2077) + supplyCost := by omega
   rw [gs]
@@ -371,13 +353,11 @@ theorem lpMint_supply_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq m0.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 2
   simp only [show (0 : B256).toNat = 0 from rfl, show (32 : B256).toNat = 32 from rfl]
   have gh : G + loadCost + creditCost + 2047 = (G + loadCost + creditCost + 2005) + 42 := by omega
   rw [gh]
@@ -388,11 +368,7 @@ theorem lpMint_supply_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   have gl : G + loadCost + creditCost + 2005 = (G + creditCost + 2005) + loadCost := by omega
   rw [gl]
   refine rx_sload_selC fork loadEq (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x2915) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0xffffffff) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x2abc) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 5
   refine rx_and (v := 0x2abc) (by decide) (by simp only [List.length_cons]; omega) ?_
   have gc : G + creditCost + 1987 = ((G + creditCost + 1925) + 54) + 8 := by omega
   rw [gc]
@@ -535,17 +511,12 @@ theorem lpMint62_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       M (G + sourceCost + supplyCost + loadCost + creditCost + 2171)) t_28ca_c62
       (.returned (lpMintPost sevm b R M toWord value G)) := by
   unfold t_28ca_c62
-  refine rx_dest ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   have gs : G + sourceCost + supplyCost + loadCost + creditCost + 2167 =
     (G + supplyCost + loadCost + creditCost + 2167) + sourceCost := by omega
   rw [gs]
   refine rx_sload_selC fork sourceEq (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x28dd) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0xffffffff) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x2abc) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 5
   refine rx_and (v := 0x2abc) (by decide) (by simp only [List.length_cons]; omega) ?_
   have gc : G + supplyCost + loadCost + creditCost + 2149 =
     ((G + supplyCost + loadCost + creditCost + 2087) + 54) + 8 := by omega

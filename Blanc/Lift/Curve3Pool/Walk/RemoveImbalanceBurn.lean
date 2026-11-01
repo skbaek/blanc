@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalancePush
 import Blanc.Lift.Curve3Pool.Walk.OneCoinBurn
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `remove_liquidity_imbalance`, part 7: the `burnFrom` call
@@ -70,15 +71,9 @@ theorem xa_rli_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     refine ⟨?_, ?_, ?_, ?_, ?_, ?_⟩ <;> refine WordAt.of_memWord hR (hV.words.memWord ?_) <;>
       simp only [List.mem_cons, true_or, or_true]
   clear hV
-  xjd 0x371a
-  xs 0x371c (.push [0x20] (by decide)) ri_push
-  xs 0x371f (.push [0x08, 0xe0] (by decide)) ri_push
-  xs 0x3721 (.push [0x44] (by decide)) ri_push
-  xs 0x3726 (.push [0x79, 0xcc, 0x67, 0x90] (by decide)) ri_push
-  xs 0x3729 (.push [0x08, 0x40] (by decide)) ri_push
+  xa 6
   xmo 0x372a (.reg .mstore) (ri_mstore_imgAt (o := 0x840) rfl)
-  xs 0x372b (.reg .caller) ri_caller
-  xs 0x372e (.push [0x08, 0x60] (by decide)) ri_push
+  xa 2
   xmo 0x372f (.reg .mstore) (ri_mstore_imgAt (o := 0x860) rfl)
   xs 0x3732 (.push [0x07, 0x80] (by decide)) ri_push
   xmo 0x3733 (.reg .mload) (ri_mload_imgAt (o := 0x780) rfl)
@@ -86,9 +81,7 @@ theorem xa_rli_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide), hI.x.read] at h
   xs 0x3736 (.push [0x08, 0x80] (by decide)) ri_push
   xmo 0x3737 (.reg .mstore) (ri_mstore_imgAt (o := 0x880) rfl)
-  xs 0x373a (.push [0x08, 0x5c] (by decide)) ri_push
-  xs 0x373c (.push [0x00] (by decide)) ri_push
-  xs 0x373e (.push [0x05] (by decide)) ri_push
+  xa 3
   xw 0x373f (.reg .sload) ri_sload
   rw [tokenSlot_lit, getStorVal_eq, htw] at h
   xs 0x3740 (.reg .gas) ri_gas_remaining
@@ -110,11 +103,7 @@ theorem xa_rli_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     exact hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
       (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
   clear hc
-  xjd 0x374a
-  xs 0x374c (.push [0x1f] (by decide)) ri_push
-  xs 0x374d (.reg .returndatasize) ri_returndatasize
-  xs 0x374e (.reg .gt) ri_gt
-  xs 0x3751 (.push [0x37, 0x56] (by decide)) ri_push
+  xa 5
   xji 0x3752 0x3756 hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by
@@ -123,16 +112,7 @@ theorem xa_rli_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at this
     rw [hc'.output]; omega
   clear hw
-  xjd 0x3757
-  xs 0x3759 (.push [0x00] (by decide)) ri_push
-  xs 0x375a (.reg .pop) ri_pop
-  xs 0x375d (.push [0x08, 0xe0] (by decide)) ri_push
-  xs 0x375e (.reg .pop) ri_pop
-  xs 0x3761 (.push [0x09, 0x00] (by decide)) ri_push
-  xs 0x3763 (.push [0x00] (by decide)) ri_push
-  xs 0x3765 (.push [0x03] (by decide)) ri_push
-  xs 0x3766 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x3767 (.reg (.dup 3)) (ri_dup (by rfl))
+  xa 10
   xmo 0x3768 (.reg .mstore) (ri_mstore_imgAt (o := 0x900) rfl)
   xs 0x3769 (.reg .add) ri_add
   obtain ⟨img1, hR, hE⟩ := Mem.Reads.forget hR

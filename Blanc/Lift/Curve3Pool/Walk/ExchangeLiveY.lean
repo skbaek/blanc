@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveRestore
 import Blanc.Lift.Curve3Pool.Callee.GetYExact
+import Blanc.Lift.WalkKit
 
 /-!
 # `exchange`, forward: `get_y` between the frame save and restore
@@ -89,48 +90,31 @@ theorem rx_ex_y_core {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v
       (exJ sevm).toNat xw.toNat (X 0).toNat (X 1).toNat (X 2).toNat + 19 + 162 :=
     ⟨G - 3906 - costGetY sevm b amp (exI sevm).toNat (exJ sevm).toNat xw.toNat (X 0).toNat
       (X 1).toNat (X 2).toNat, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   refine rxe_mstoreW (o := 0x800) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x800 0x800 32 = 0x820 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreW (o := 0x820) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x820 0x820 32 = 0x840 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mload (o := 0x7a0) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   rw [hx.read]
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreW (o := 0x840) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x840 0x840 32 = 0x860 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x200) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   rw [(hF.xp 0 (by decide)).read]
   xr (rx_dup rfl (by hrs) ·)
   refine rxe_mstoreW (o := 0x860) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x860 0x860 32 = 0x880 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x220) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   rw [(hF.xp 1 (by decide)).read]
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreW (o := 0x880) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x880 0x880 32 = 0x8a0 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x240) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   rw [(hF.xp 2 (by decide)).read]
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreW (o := 0x8a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8a0 0x8a0 32 = 0x8c0 by decide] at hsz
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x8a0) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mload (o := 0x880) hR hsz rfl (by decide) (by hrs) ·); try wsimp
@@ -155,14 +139,12 @@ theorem rx_ex_y_core {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v
   have hW := hW'
   have hsz := hsz'
   clear hW' hsz'
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   have hWM' := hW
   have hszM' := hsz
   refine rxe_mstoreW (o := 0x900) (c := 13) hR hW hsz rfl (by decide) ?_
   clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8c0 0x900 32 = 0x920 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreW (o := 0x7e0) (c := 3) hR hW hsz rfl (by decide) ?_
   clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x920 0x7e0 32 = 0x920 by decide] at hsz
   rw [ex_rest_first, show exSaved w 0x140 53 = exSaved w 0x140 (52 + 1) ++ [] from

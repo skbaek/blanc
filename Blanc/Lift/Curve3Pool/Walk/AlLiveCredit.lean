@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.AlLiveHead
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPull2
+import Blanc.Lift.WalkKit
 
 /-!
 # `add_liquidity`, forward: the pull loop's credit and loop test
@@ -41,63 +42,27 @@ theorem rx_al_creditE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : 
         B256.eqCheck (B256.eqCheck 3 (Nat.toB256 (i + 1))) 0 :: 3 :: 0x4c0 :: S) M' g) fin Q) :
     SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: S) M G) (alCredit a1 a2 a3 fin) Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 150 + 34 := ⟨G - 184, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x4c0) (v := Nat.toB256 i) hR hsz rfl ⟨by omega, hs32⟩ (by wautoH hm.ctr) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 4 using hrs
   xr (rxm_mloadW (o := 0x300 + 32 * i) (v := old i) hR hsz (al_off hi 0x300 (by decide) _ (by decide)) ⟨by omega, hs32⟩ (by wautoH (hm.m0.old hi)) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x4e0) (v := v) hR hsz rfl ⟨by omega, hs32⟩ (by wautoH hv) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 7 using hrs
   xr (rx_branch_succ (by rw [B256.ltCheck_eq_zero_of_toNat_le (by rw [← B256.le_iff_toNat_le_toNat]; exact not_lt.mp hadd)]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 10 using hrs
   xr (rxm_mloadW (o := 0x4c0) (v := Nat.toB256 i) hR hsz rfl ⟨by omega, hs32⟩ (by wautoH hm.ctr) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 4 using hrs
   refine rxe_mstoreKL (o := 0x460 + 32 * i) hR hW hsz (al_off hi 0x460 (by decide) _ (by decide)) ⟨by omega, hs32⟩ ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mloadW (o := 0x4c0) (v := Nat.toB256 i) hR hsz rfl ⟨by omega, hs32⟩ (by wautoH hm.ctr) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 4 using hrs
   refine rxe_mstoreKL (o := 0x4c0) hR hW hsz rfl ⟨by omega, hs32⟩ ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_eq rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   rw [succ_lit hi] at hR ⊢
   refine k M _ g1 hR hW hsz ?_ (by wauto) (by omega) (by omega) (by omega)
     (by rw [hMq2, hMq1, succ_lit hi]; rfl)

@@ -1,5 +1,6 @@
 import Blanc.Lift.FrameWalkCut
 import Blanc.Lift.Curve3Pool.Walk.RliLiveFront
+import Blanc.Lift.WalkKit
 
 /-!
 # `remove_liquidity_imbalance`, forward to its supply call, cut
@@ -58,114 +59,57 @@ theorem rx_rli_toSupply {sevm : Sevm} {pre : Devm} {W : Devm → Prop} {G U : Na
   have hlen4 : B256.eqCheck (B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [0x04]))
       0 ≠ 0 := by
     rw [B256.ltCheck_eq_zero_of_toNat_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldatasize (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   xr (rx_branch_succ hlen4 ·)
   xr (rx_dest ·)
   xr (rx_vyPrologue (by simp only [List.length_nil]; omega) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0) hR0 hsz0 rfl (by decide) (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hX]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0) hR0 hsz0 rfl (by decide) (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hX]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0) hR0 hsz0 rfl (by decide) (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hX]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0) hR0 hsz0 rfl (by decide) (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hX]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0) hR0 hsz0 rfl (by decide) (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hX]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0) hR0 hsz0 rfl (by decide) (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hX]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0) hR0 hsz0 rfl (by decide) (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hX]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0) hR0 hsz0 rfl (by decide) (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hX]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0) hR0 hsz0 rfl (by decide) (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_zero' (by rw [hX]; decide) ·)
 
   have hL : ExLive sevm W pre σ := ⟨fun _ => rfl, hid, hWc, hWb⟩
@@ -180,37 +124,24 @@ theorem rx_rli_toSupply {sevm : Sevm} {pre : Devm} {W : Devm → Prop} {G U : Na
   xr (rx_push rfl (by hrs) ·)
   refine rxe_sloadV hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 23 := ⟨g2 - 23, by omega⟩
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rx_branch_succ (by rw [hv2, lockSlot_lit, hlock]; decide) ·)
   -- tree t_305d_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_sstoreV hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42; replace hL := hL.sstoreE hb4
   obtain ⟨g5, rfl⟩ : ∃ g, g4 = g + 22 := ⟨g4 - 22, by omega⟩
-  xr (rx_callvalue (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rx_branch_succ (by rw [hval]; decide) ·)
   -- tree t_306f_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_sloadV hfork (by hrs) (by omega) ?_; intro g6 b6 v6 hb6 hv6 hg61 hg62; replace hv6 := hL.val hv6; replace hL := hL.sloadE hb6
   obtain ⟨g7, rfl⟩ : ∃ g, g6 = g + 59 := ⟨g6 - 59, by omega⟩
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rx_branch_succ (by rw [hv6, isKilledSlot_lit, Stor.get_set_ne _ (by decide) _, hkill]; decide) ·)
   -- tree t_307c_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 6 using hrs
   refine rxe_mstore (o := 0x160) (c := 21) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xc0 0x160 32 = 0x180 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_sloadV hfork (by hrs) (by omega) ?_; intro g8 b8 v8 hb8 hv8 hg81 hg82; replace hv8 := hL.val hv8; replace hL := hL.sloadE hb8
   rw [show Bytes.toB256 [5] = tokenSlot by decide, Stor.get_set_ne _ (by decide) _] at hv8; subst hv8
   obtain ⟨g9, rfl⟩ : ∃ g, g8 = g + 2 := ⟨g8 - 2, by omega⟩

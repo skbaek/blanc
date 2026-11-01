@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPre
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `add_liquidity`, part 3: `D0`
@@ -41,19 +42,15 @@ theorem xa_al_p3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
       M'.size % 32 = 0 ∧ AlMem0 img' F AF A T D0 old ∧ (T = 0 → D0 = 0) ∧
       (T ≠ 0 → getDMem ⟨(old 0).toNat, (old 1).toNat, (old 2).toNat⟩ A.toNat = some D0.toNat) ∧
       XAt sevm post 0x1031 (St b [] M' G') L := by
-  xs 0xf85 (.push [0x00] (by decide)) ri_push
-  xs 0xf88 (.push [0x02, 0x40] (by decide)) ri_push
+  xa 2
   xml 0xf89 0x240 hm.supply
-  xs 0xf8a (.reg .gt) ri_gt
-  xs 0xf8b (.reg .iszero) ri_iszero
-  xs 0xf8e (.push [0x10, 0x31] (by decide)) ri_push
+  xa 3
   xji 0xf8f 0x1031 hw
   · have hT : T ≠ 0 := by
       have e := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       intro hT0; rw [hT0] at e; exact absurd e (by decide)
     clear hw
-    xs 0xf92 (.push [0x01, 0x40] (by decide)) ri_push
-    xs 0xf95 (.push [0x03, 0x60] (by decide)) ri_push
+    xa 2
     xma 0xf96 (.reg .mstore) (ri_mstore_imgAtA (o := 0x360) rfl)
     obtain ⟨M1, img1, G1, hR1, hW1, hA1, hk1, h⟩ := xa_al_save1 hcode 16 0 [] _ _ _ rfl hR hW hA
       (by rw [show Nat.toB256 (0x140 + 32 * 0) = Bytes.toB256 [0x01, 0x40] by decide]
@@ -65,32 +62,19 @@ theorem xa_al_p3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
     have hW := hW1
     have hA := hA1
     clear hR1 hW1 hA1
-    xjd 0xfb9
-    xs 0xfbc (.push [0x03, 0x80] (by decide)) ri_push
-    xs 0xfbf (.push [0x03, 0x00] (by decide)) ri_push
-    xs 0xfc0 (.reg (.dup 0)) (ri_dup (by rfl))
+    xa 4
     xml 0xfc1 0x300 (g _ _ hm.o0 (by decide))
     xs 0xfc2 (.reg (.dup 2)) (ri_dup (by rfl))
     xma 0xfc3 (.reg .mstore) (ri_mstore_imgAtA (o := 0x380) rfl)
-    xs 0xfc4 (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0xfc6 (.push [0x20] (by decide)) ri_push
-    xs 0xfc7 (.reg .add) ri_add
+    xa 3
     xml 0xfc8 0x320 (g _ _ hm.o1 (by decide))
-    xs 0xfc9 (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0xfcb (.push [0x20] (by decide)) ri_push
-    xs 0xfcc (.reg .add) ri_add
+    xa 3
     xma 0xfcd (.reg .mstore) (ri_mstore_imgAtA (o := 0x3a0) rfl)
-    xs 0xfce (.reg (.dup 0)) (ri_dup (by rfl))
-    xs 0xfd0 (.push [0x40] (by decide)) ri_push
-    xs 0xfd1 (.reg .add) ri_add
+    xa 3
     xml 0xfd2 0x340 (g _ _ hm.o2 (by decide))
-    xs 0xfd3 (.reg (.dup 2)) (ri_dup (by rfl))
-    xs 0xfd5 (.push [0x40] (by decide)) ri_push
-    xs 0xfd6 (.reg .add) ri_add
+    xa 3
     xma 0xfd7 (.reg .mstore) (ri_mstore_imgAtA (o := 0x3c0) rfl)
-    xs 0xfd8 (.reg .pop) ri_pop
-    xs 0xfd9 (.reg .pop) ri_pop
-    xs 0xfdc (.push [0x01, 0xe0] (by decide)) ri_push
+    xa 3
     xml 0xfdd 0x1e0 (g _ _ hm.amp (by decide))
     xs 0xfe0 (.push [0x03, 0xe0] (by decide)) ri_push
     xma 0xfe1 (.reg .mstore) (ri_mstore_imgAtA (o := 0x3e0) rfl)
@@ -117,11 +101,9 @@ theorem xa_al_p3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
     have hW := hW2
     have hA := hA2
     clear hR2 hW2 hA2
-    xjd 0xffa
-    xs 0xffd (.push [0x04, 0x40] (by decide)) ri_push
+    xa 2
     xma 0xffe (.reg .mstore) (ri_mstore_imgAtA (o := 0x440) rfl)
-    xs 0x1001 (.push [0x03, 0x40] (by decide)) ri_push
-    xs 0x1004 (.push [0x03, 0x60] (by decide)) ri_push
+    xa 2
     xma 0x1005 (.reg .mstore) (ri_mstore_imgAtA (o := 0x360) rfl)
     replace h : XAt sevm post 0x1005 (St b (svWords (Bytes.writeAt img 0x360
       (Bytes.toB256 [0x01, 0x40]).toBytes) 0x140 (16 + 1) ++ []) _ _) L := h
@@ -134,8 +116,7 @@ theorem xa_al_p3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
     have hW := hW3
     have hA := hA3
     clear hR3 hW3 hA3
-    xjd 0x1029
-    xs 0x102c (.push [0x04, 0x40] (by decide)) ri_push
+    xa 2
     xml 0x102d 0x440 (hk3 _ _ ((WordAt.write_self _ _ _).write_other
       (by simp only [B256.length_toBytes]; omega)) (by omega) (by omega))
     xs 0x1030 (.push [0x02, 0xe0] (by decide)) ri_push

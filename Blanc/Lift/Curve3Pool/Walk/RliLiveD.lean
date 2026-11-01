@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Pool.Walk.RliLiveFront
 import Blanc.Lift.Curve3Pool.Callee.GetDMemGrow
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalancePush
+import Blanc.Lift.WalkKit
 
 /-!
 # `remove_liquidity_imbalance`, forward: `D0` and `new_balances`
@@ -96,32 +97,19 @@ theorem rx_rli_d0E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   clear hR hW hsz
   intro M1 img1 hMsv hR hW hsz hk1 hct1
   -- the arguments of `get_D_mem`
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rxm_mloadW (o := 0x280) (v := b0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ hb0 (.inl (by decide)))) (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x380) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0x380 0x380 32 = 0x3a0 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x2a0) (v := b1) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ hb1 (.inl (by decide)))) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreL (o := 0x3a0) (c := 6) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0x3a0 0x3a0 32 = 0x3c0 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x2c0) (v := b2) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ hb2 (.inl (by decide)))) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreL (o := 0x3c0) (c := 6) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x3c0 0x3c0 32 = 0x3e0 by decide] at hsz
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x220) (v := Aw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ hAw (.inl (by decide)))) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x3e0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0x3e0 0x3e0 32 = 0x400 by decide] at hsz
@@ -144,11 +132,9 @@ theorem rx_rli_d0E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   have hsz := hsz2
   clear hW2 hsz2
   -- `D0` parked, the restore counter
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreL (o := 0x440) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0x520 0x440 32 = 0x520 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreL (o := 0x360) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0x520 0x360 32 = 0x520 by decide] at hsz
   rw [rli_rs1_first]
   refine rx_rsFromM (fun o => Bytes.toB256 (img.sliceD o 32 0)) (C := 0x360) (sz := 0x520)
@@ -170,213 +156,93 @@ theorem rx_rli_d0E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   have hR := hR3; have hW := hW3; have hsz := hsz3
   clear hR3 hW3 hsz3
   -- `new_balances`
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mloadW (o := 0x440) (v := Nat.toB256 v) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hD3) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x340) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0x520 0x340 32 = 0x520 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 5 using hrs
   refine rxe_mstoreL (o := 0x460) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq8; intro M hMq8 hR hW hsz; rw [show memExtSize 0x520 0x460 32 = 0x520 by decide] at hsz
   xr (rx_add (by hrs) ·)
   -- tree t_325d_c548
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (by xbr) ·)
   -- tree t_3271_c548
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rxm_mloadW (o := 0x2e0) (v := b0) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH rc0) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (by xbr) ·)
   -- tree t_328a_c548
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 10 using hrs
   xr (rx_branch_succ (ex_geGuard hu0) ·)
   -- tree t_329c_c548
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_sub (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 9 using hrs
   refine rxe_mstoreL (o := 0x2e0) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq9; intro M hMq9 hR hW hsz; rw [show memExtSize 0x520 0x2e0 32 = 0x520 by decide] at hsz
   xr (rx_pop ·)
   -- tree t_32a7_c548
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 4 using hrs
   refine rxe_mstoreL (o := 0x460) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq10; intro M hMq10 hR hW hsz; rw [show memExtSize 0x520 0x460 32 = 0x520 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_eq rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branchTo_succ (by xbr) (g := t_325d_c561) rli_prog_561 ·)
   -- tree t_325d_c561
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (by xbr) ·)
   -- tree t_3271_c561
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rxm_mloadW (o := 0x300) (v := b1) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH rc1) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (by xbr) ·)
   -- tree t_328a_c561
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 10 using hrs
   xr (rx_branch_succ (ex_geGuard hu1) ·)
   -- tree t_329c_c561
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_sub (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 9 using hrs
   refine rxe_mstoreL (o := 0x300) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq11; intro M hMq11 hR hW hsz; rw [show memExtSize 0x520 0x300 32 = 0x520 by decide] at hsz
   xr (rx_pop ·)
   -- tree t_32a7_c561
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 4 using hrs
   refine rxe_mstoreL (o := 0x460) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq12; intro M hMq12 hR hW hsz; rw [show memExtSize 0x520 0x460 32 = 0x520 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_eq rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branchTo_succ (by xbr) (g := t_325d_c572) rli_prog_572 ·)
   -- tree t_325d_c572
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (by xbr) ·)
   -- tree t_3271_c572
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rxm_mloadW (o := 0x320) (v := b2) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH rc2) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (by xbr) ·)
   -- tree t_328a_c572
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 10 using hrs
   xr (rx_branch_succ (ex_geGuard hu2) ·)
   -- tree t_329c_c572
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_sub (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 9 using hrs
   refine rxe_mstoreL (o := 0x320) (c := 3) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq13; intro M hMq13 hR hW hsz; rw [show memExtSize 0x520 0x320 32 = 0x520 by decide] at hsz
   xr (rx_pop ·)
   -- tree t_32a7_c572
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 4 using hrs
   refine rxe_mstoreL (o := 0x460) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq14; intro M hMq14 hR hW hsz; rw [show memExtSize 0x520 0x460 32 = 0x520 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_eq rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_zero' (by xbr0) ·)
   -- tree t_32b7_c572
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   refine rxe_mstoreL (o := 0x4a0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq15; intro M hMq15 hR hW hsz; rw [show memExtSize 0x520 0x4a0 32 = 0x520 by decide] at hsz
   refine k M _ g1 hR hW hsz (by wauto) (by wauto) (by wauto) (by wauto) (by wauto) (by wauto)
     (by wauto) (by wauto) (by wauto) (by wauto) (by wauto) (by wauto) (by omega) (by omega)

@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.InitializeCore
 import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 import Blanc.Lift.InvWalkDispatch
+import Blanc.Lift.WalkKit
 
 /-! Actual initializer decoder, selector dispatch and pc-zero STOP endpoint. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -78,16 +79,12 @@ theorem initialize_decoder_exact {sevm : Sevm} {b : Devm} {M : Mem}
       (G + initializeStorageCharge sevm b + 151)) t_0434_c90
       (.halted (initializePublicPost sevm b [sel] M G)) := by
   unfold t_0434_c90
-  refine rx_dest ?_
-  refine rx_pop ?_
+  wrun! 2
   refine rx_push (w := ~~~ addressMask) ff20_eq (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_dup2 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_calldataload (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_dup2 (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 3
   refine rx_and (v := (initializeToken0 sevm).toB256)
     (addressSlotReadWord_eq_toAdr_toB256 _) (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_swap2 ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 2
   refine rx_add' (v := 36) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_calldataload (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_and (v := (initializeToken1 sevm).toB256)
@@ -158,15 +155,10 @@ theorem initialize_entry_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {sel
       (G + initializeStorageCharge sevm b + 191)) t_041e_c90
       (.halted (initializePublicPost sevm b [sel] M G)) := by
   unfold t_041e_c90
-  refine rx_dest ?_
-  refine rx_push (w := 0x0257) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 4) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 5
   refine rx_sub' (v := sevm.data.length.toB256 - 4) rfl
     (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_dup2 (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 2
   refine rx_lt (v := 0) (ltCheck_zero_of_le guard)
     (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; decide) ?_

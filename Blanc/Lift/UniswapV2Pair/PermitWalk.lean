@@ -3,6 +3,7 @@ import Blanc.Lift.StaticCallGuard
 import Blanc.Lift.InvWalkProvenance
 import Blanc.Lift.WordImage
 import Blanc.Lift.UniswapV2Pair.Execution
+import Blanc.Lift.WalkKit
 
 /-! The literal permit body before its recovery call: nonce postincrement, the
 EIP-712 struct and digest images, and the 128-byte recovery request. -/
@@ -166,37 +167,26 @@ theorem permitNonceLine_exact {fs : List SFunc} {sevm : Sevm} {b : Devm} {R : Li
   rw [show G + c3 + c2 + c1 + 111 = (G + c3 + c2 + 111) + c1 by omega]
   refine rx_sload_selC fork charge1 (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := ~~~ addressMask) ff20_eq (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 9) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_and (v := owner.toB256) (by rw [B256.and_comm, ← ff20_eq]; exact ff20_and_adr owner)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) (M' := M.write 0 owner.toB256.toBytes) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 4) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 4
   refine rx_mstore (c := 3) (M' := permitNonceMemory M owner) ?_ rfl ?_
   · rw [St.extCost_eq m0.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_keccak (v := permitNonceSlot owner) (c := 42) ?_ (permitNonceMemory_slot M owner)
     (m1.read_self (by decide)) (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq m1.size]; decide
   refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
   rw [show G + c3 + c2 + 18 = (G + c3 + 18) + c2 by omega]
   refine rx_sload_selC fork charge2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_add' (v := permitNonceRead sevm b owner + 1) rfl
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_swap3 ?_
+  wrun! 2
   exact rx_sstoreC fork charge3 sentry nonstatic body
 
 def permitStructLine : List Ninst := [
@@ -508,40 +498,32 @@ theorem permitStructLine_exact {fs : List SFunc} {sevm : Sevm} {b : Devm} {R : L
   refine rx_mload (i := 64) (v := 128) (c := 3) (by rw [St.extCost_eq mem.size]; decide)
     mem.word (mem.read_self (by decide)) (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := permitTypehash) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 1) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 6) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 160) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 12) (M' := A.write 160 permitTypehash.toBytes) (by rw [St.extCost_eq mem.size]; decide) rfl ?_
-  refine rx_dup (n := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 192) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap (n := 6) rfl ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_swap (n := 6) rfl ?_
   refine rx_mstore (c := 6) (M' := (A.write 160 permitTypehash.toBytes).write 192 owner.toB256.toBytes) (by rw [St.extCost_eq a1.size]; decide) rfl ?_
-  refine rx_swap (n := 5) rfl ?_
-  refine rx_dup (n := 13) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_and (v := spender.toB256) (by rw [and_mask_word, toAdr_toB256]) (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_push (w := 96) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 6) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 224) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_mstore (c := 6) (M' := ((A.write 160 permitTypehash.toBytes).write 192 owner.toB256.toBytes).write 224 spender.toB256.toBytes) (by rw [St.extCost_eq a2.size]; decide) rfl ?_
-  refine rx_push (w := 128) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 256) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_dup (n := 12) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 6) (M' := (((A.write 160 permitTypehash.toBytes).write 192 owner.toB256.toBytes).write 224 spender.toB256.toBytes).write 256 val.toBytes) (by rw [St.extCost_eq a3.size]; decide) rfl ?_
-  refine rx_push (w := 160) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 288) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 5) rfl ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_swap (n := 5) rfl ?_
   refine rx_mstore (c := 6) (M' := ((((A.write 160 permitTypehash.toBytes).write 192 owner.toB256.toBytes).write 224 spender.toB256.toBytes).write 256 val.toBytes).write 288 nonce.toBytes) (by rw [St.extCost_eq a4.size]; decide) rfl ?_
-  refine rx_push (w := 192) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 3
   refine rx_add' (v := 320) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_dup (n := 11) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 0) rfl ?_
@@ -549,16 +531,14 @@ theorem permitStructLine_exact {fs : List SFunc} {sevm : Sevm} {b : Devm} {R : L
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_mload (i := 64) (v := 128) (c := 3) (by rw [St.extCost_eq a6.size]; decide)
     a6.word (a6.read_self (by decide)) (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 6) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_sub' (v := 0) (B256.sub_self _) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_swap (n := 1) rfl ?_
   refine rx_add' (v := 192) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_mstore (c := 3) (M' := (permitStructFields A owner spender val nonce dl).write 128 (192 : B256).toBytes) (by rw [St.extCost_eq a6.size]; decide) rfl ?_
-  refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 352) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_dup (n := 2) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_mstore (c := 3) (M' := permitStructMemory A owner spender val nonce dl) (by rw [St.extCost_eq a7.size]; decide) rfl ?_
@@ -799,20 +779,16 @@ theorem permitDigestLine_exact {fs : List SFunc} {sevm : Sevm} {b : Devm} {Z : L
   rw [show memExtSize 480 352 32 = 480 from by decide] at a4
   dsimp only [permitDigestLine, List.foldr]
   refine rx_push (w := permitPrefixWord) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 256) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 6) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 384) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 9) (M' := B.write 384 permitPrefixWord.toBytes) (by rw [St.extCost_eq mem.size]; decide) rfl ?_
-  refine rx_push (w := 258) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 386) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap (n := 6) rfl ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_swap (n := 6) rfl ?_
   refine rx_mstore (c := 6) (M' := (B.write 384 permitPrefixWord.toBytes).write 386 dom.toBytes) (by rw [St.extCost_eq a1.size]; decide) rfl ?_
-  refine rx_push (w := 290) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 3
   refine rx_add' (v := 418) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 6) rfl ?_
   refine rx_swap (n := 0) rfl ?_
@@ -821,25 +797,21 @@ theorem permitDigestLine_exact {fs : List SFunc} {sevm : Sevm} {b : Devm} {Z : L
   refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_mload (i := 64) (v := 352) (c := 3) (by rw [St.extCost_eq a3.size]; decide)
     a3.word (a3.read_self (by decide)) (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_sub' (v := 128 - 352) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_swap (n := 6) rfl ?_
   refine rx_add' (v := 66) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_dup (n := 6) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_mstore (c := 3) (M' := (((B.write 384 permitPrefixWord.toBytes).write 386 dom.toBytes).write 418 inner.toBytes).write 352 (66 : B256).toBytes) (by rw [St.extCost_eq a3.size]; decide) rfl ?_
-  refine rx_push (w := 322) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 450) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 2) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) (M' := permitDigestMemory B dom inner) (by rw [St.extCost_eq a4.size]; decide) rfl ?_
   refine rx_dup (n := 6) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_mload (i := 352) (v := 66) (c := 3) (by rw [St.extCost_eq mC.size]; decide)
     readC sameC (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_swap (n := 6) rfl ?_
-  refine rx_dup (n := 3) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 384) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 6) rfl ?_
   refine rx_swap (n := 0) rfl ?_
@@ -1048,34 +1020,27 @@ theorem permitRequestLine_exact {fs : List SFunc} {sevm : Sevm} {b : Devm} {Z : 
   have b5 := b4.write 546 r (Or.inr (by decide))
   rw [show memExtSize 576 546 32 = 608 from by decide] at b5
   dsimp only [permitRequestLine, List.foldr]
-  refine rx_swap (n := 5) rfl ?_
-  refine rx_dup (n := 3) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 6) (M' := C.write 450 (0 : B256).toBytes) (by rw [St.extCost_eq mem.size]; decide) rfl ?_
-  refine rx_push (w := 354) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 482) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 2) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) (M' := (C.write 450 (0 : B256).toBytes).write 64 (482 : B256).toBytes) (by rw [St.extCost_eq b1.size]; decide) rfl ?_
   refine rx_dup (n := 6) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 6) (M' := ((C.write 450 (0 : B256).toBytes).write 64 (482 : B256).toBytes).write 482 digest.toBytes) (by rw [St.extCost_eq b2.size]; decide) rfl ?_
-  refine rx_push (w := 255) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_and (v := v.toB256) (UInt8.toB256_and_ff v) (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_push (w := 386) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 514) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_mstore (c := 6) (M' := (((C.write 450 (0 : B256).toBytes).write 64 (482 : B256).toBytes).write 482 digest.toBytes).write 514 v.toB256.toBytes) (by rw [St.extCost_eq b3.size]; decide) rfl ?_
-  refine rx_push (w := 418) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 546) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_dup (n := 8) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 0) rfl ?_
   refine rx_mstore (c := 6) (M' := ((((C.write 450 (0 : B256).toBytes).write 64 (482 : B256).toBytes).write 482 digest.toBytes).write 514 v.toB256.toBytes).write 546 r.toBytes) (by rw [St.extCost_eq b4.size]; decide) rfl ?_
-  refine rx_push (w := 450) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 578) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_dup (n := 7) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 0) rfl ?_
@@ -1085,13 +1050,10 @@ theorem permitRequestLine_exact {fs : List SFunc} {sevm : Sevm} {b : Devm} {Z : 
   refine rx_swap (n := 1) rfl ?_
   refine rx_swap (n := 3) rfl ?_
   refine rx_swap (n := 2) rfl ?_
-  refine rx_push (w := 482) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 0) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 2) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 3
   refine rx_add' (v := 610) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 3) rfl ?_
-  refine rx_push (w := 115792089237316195423570985008687907853269984665640564039457584007913129639904) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 450) (by decide) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_swap (n := 2) rfl ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_

@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.GetterStorageDispatch
 import Blanc.Lift.UniswapV2Pair.Layout
+import Blanc.Lift.WalkKit
 
 /-! Actual packed slot8 getter callee. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -15,26 +16,20 @@ theorem reserves_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
          reserve1Read (b.getStorVal sevm.currentTarget 8) ::
          reserve0Read (b.getStorVal sevm.currentTarget 8) :: R) M G)) := by
   unfold t_0d90_c56
-  refine rx_dest ?_
-  refine rx_push (w := 8) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   have gas : G + c + 66 = (G + 66) + c := by omega
   rw [gas]
   refine rx_sload_selC fork cost (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := reserveMask112) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_and (v := reserve0Read _) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_swap3 ?_
   refine rx_push (w := reserveDiv112) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
-  refine rx_div rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_swap2 ?_
+  wrun! 4
   refine rx_and (v := reserve1Read _) (B256.and_comm _ _) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap2 ?_
   refine rx_push (w := reserveDiv224) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_div rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_push (w := reserveMask32) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_and (v := reserveTimestampRead (b.getStorVal sevm.currentTarget 8)) ?_ (by simp only [List.length_cons]; omega) ?_
   · exact B256.and_comm _ _

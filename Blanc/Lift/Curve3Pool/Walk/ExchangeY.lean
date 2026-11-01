@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.ExchangeMid
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `exchange`, part 5: around the call of `get_y`
@@ -36,13 +37,9 @@ theorem xa_ex_args {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
       (∀ o v, WordAt img o v → o + 32 ≤ 0x800 ∨ 0x8c0 ≤ o → WordAt img' o v) ∧
       XAt sevm post 0x18a4 (St b (Nat.toB256 0x27cd :: exI sevm :: exJ sevm :: xw :: X0 :: X1 ::
         X2 :: S) M' G') L := by
-  xs 0x2779 (.push [0x04] (by decide)) ri_push
-  xs 0x277a (.reg .calldataload) ri_calldataload
-  xs 0x277d (.push [0x08, 0x00] (by decide)) ri_push
+  xa 3
   xmo 0x277e (.reg .mstore) (ri_mstore_imgAt (o := 0x800) rfl)
-  xs 0x2780 (.push [0x24] (by decide)) ri_push
-  xs 0x2781 (.reg .calldataload) ri_calldataload
-  xs 0x2784 (.push [0x08, 0x20] (by decide)) ri_push
+  xa 3
   xmo 0x2785 (.reg .mstore) (ri_mstore_imgAt (o := 0x820) rfl)
   xs 0x2788 (.push [0x07, 0xa0] (by decide)) ri_push
   xmo 0x2789 (.reg .mload) (ri_mload_imgAt (o := 0x7a0) rfl)
@@ -50,37 +47,25 @@ theorem xa_ex_args {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by decide), hx.read] at h
   xs 0x278c (.push [0x08, 0x40] (by decide)) ri_push
   xmo 0x278d (.reg .mstore) (ri_mstore_imgAt (o := 0x840) rfl)
-  xs 0x2790 (.push [0x08, 0x60] (by decide)) ri_push
-  xs 0x2793 (.push [0x02, 0x00] (by decide)) ri_push
-  xs 0x2794 (.reg (.dup 0)) (ri_dup (by rfl))
+  xa 3
   xmo 0x2795 (.reg .mload) (ri_mload_imgAt (o := 0x200) rfl)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint] at h
   rw [h0.read] at h
   xs 0x2796 (.reg (.dup 2)) (ri_dup (by rfl))
   xmo 0x2797 (.reg .mstore) (ri_mstore_imgAt (o := 0x860) rfl)
-  xs 0x2798 (.reg (.dup 0)) (ri_dup (by rfl))
-  xs 0x279a (.push [0x20] (by decide)) ri_push
-  xs 0x279b (.reg .add) ri_add
+  xa 3
   xmo 0x279c (.reg .mload) (ri_mload_imgAt (o := 0x220) (by decide))
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint] at h
   rw [h1.read] at h
-  xs 0x279d (.reg (.dup 2)) (ri_dup (by rfl))
-  xs 0x279f (.push [0x20] (by decide)) ri_push
-  xs 0x27a0 (.reg .add) ri_add
+  xa 3
   xmo 0x27a1 (.reg .mstore) (ri_mstore_imgAt (o := 0x880) (by decide))
-  xs 0x27a2 (.reg (.dup 0)) (ri_dup (by rfl))
-  xs 0x27a4 (.push [0x40] (by decide)) ri_push
-  xs 0x27a5 (.reg .add) ri_add
+  xa 3
   xmo 0x27a6 (.reg .mload) (ri_mload_imgAt (o := 0x240) (by decide))
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint] at h
   rw [h2.read] at h
-  xs 0x27a7 (.reg (.dup 2)) (ri_dup (by rfl))
-  xs 0x27a9 (.push [0x40] (by decide)) ri_push
-  xs 0x27aa (.reg .add) ri_add
+  xa 3
   xmo 0x27ab (.reg .mstore) (ri_mstore_imgAt (o := 0x8a0) (by decide))
-  xs 0x27ac (.reg .pop) ri_pop
-  xs 0x27ad (.reg .pop) ri_pop
-  xs 0x27b0 (.push [0x08, 0xa0] (by decide)) ri_push
+  xa 3
   xmo 0x27b1 (.reg .mload) (ri_mload_imgAt (o := 0x8a0) rfl)
   xs 0x27b4 (.push [0x08, 0x80] (by decide)) ri_push
   xmo 0x27b5 (.reg .mload) (ri_mload_imgAt (o := 0x880) rfl)
@@ -94,8 +79,7 @@ theorem xa_ex_args {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xmA 0x27c5 (.reg .mload) (ri_mload_imgAl (o := 0x800) rfl)
   xs 0x27c7 (.push [0x06] (by decide)) ri_push
   xpc 0x27c8
-  xs 0x27c9 (.reg .add) ri_add
-  xs 0x27cc (.push [0x18, 0xa4] (by decide)) ri_push
+  xa 2
   xjmp 0x18a4
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self]
     at h
@@ -113,11 +97,9 @@ theorem xa_ex_afterY {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
     ∃ M' G', Mem.Reads M' (Bytes.writeAt (Bytes.writeAt img 0x900 y.toBytes) 0x7e0
         (Nat.toB256 (0x140 + 32 * 52)).toBytes) ∧ Mem.Wf M' ∧
       XAt sevm post 0x27d9 (St b S M' G') L := by
-  xjd 0x27ce
-  xs 0x27d1 (.push [0x09, 0x00] (by decide)) ri_push
+  xa 2
   xmo 0x27d2 (.reg .mstore) (ri_mstore_imgAt (o := 0x900) rfl)
-  xs 0x27d5 (.push [0x07, 0xc0] (by decide)) ri_push
-  xs 0x27d8 (.push [0x07, 0xe0] (by decide)) ri_push
+  xa 2
   xmo 0x27d9 (.reg .mstore) (ri_mstore_imgAt (o := 0x7e0) rfl)
   exact ⟨_, _, hR, hW, h⟩
 
