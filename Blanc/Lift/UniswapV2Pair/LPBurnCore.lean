@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.LPMintCore
 import Blanc.Lift.UniswapV2Pair.WriterArithmetic
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! Literal LP burn 63: balance debit precedes total-supply debit. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -101,11 +102,9 @@ theorem lpBurn_supply_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   have nonstatic := ri_sstore_nonstaticH stateGas hd
   obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
@@ -113,22 +112,17 @@ theorem lpBurn_supply_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show (64 : B256).toNat = 64 from rfl, mem.read_self (by decide : 64 + 32 ≤ 192), ptr0] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (128 : B256).toNat = 128 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
@@ -138,28 +132,21 @@ theorem lpBurn_supply_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = (~~~ addressMask : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := fromWord.toAdr.toB256)
     (by rw [B256.and_comm]; exact ff20_and_word fromWord) (ri_and hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xdd, 0xf2, 0x52, 0xad, 0x1b, 0xe2, 0xc8, 0x9b, 0x69, 0xc2, 0xb0, 0x68, 0xfc, 0x37, 0x8d, 0xaa, 0x95, 0x2b, 0xa7, 0xf1, 0x63, 0xc4, 0xa1, 0x16, 0x28, 0xf5, 0x5a, 0x4d, 0xf5, 0x23, 0xb3, 0xef] = (transferTopic : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   simp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_sub hd)
@@ -169,18 +156,14 @@ theorem lpBurn_supply_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
   subst d
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 32) (by decide) (ri_add hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_log3 hd
   simp only [show (128 : B256).toNat = 128 from rfl, show (32 : B256).toNat = 32 from rfl,
     m1.read_self (by decide : 128 + 32 ≤ 192), Mem.read_write_word_of_wf mem.wf 128 value] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_pop hd
+  winv 2
   obtain ⟨residual, eq⟩ := ric_ret h
   exact ⟨nonstatic, residual, Seg.done.inj eq⟩
 
@@ -302,8 +285,7 @@ theorem lpBurn_balance_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = (~~~ addressMask : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := fromWord.toAdr.toB256)
     (by rw [B256.and_comm]; exact ff20_and_word fromWord) (ri_and hd)
@@ -311,11 +293,9 @@ theorem lpBurn_balance_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (0 : B256).toNat = 0 from rfl] at hd
@@ -336,21 +316,17 @@ theorem lpBurn_balance_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
   simp only [show (0 : B256).toNat = 0 from rfl, show (64 : B256).toNat = 64 from rfl,
     m1.read_self (by decide : 0 + 64 ≤ 192), hash] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   have nonstatic := ri_sstore_nonstaticH stateGas hd
@@ -361,11 +337,9 @@ theorem lpBurn_balance_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x2a, 0x02] = (0x2a02 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff] = (0xffffffff : B256) from by decide] at hd
@@ -498,8 +472,7 @@ theorem lpBurn63_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = (~~~ addressMask : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := fromWord.toAdr.toB256)
     (by rw [B256.and_comm]; exact ff20_and_word fromWord) (ri_and hd)
@@ -507,11 +480,9 @@ theorem lpBurn63_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (0 : B256).toNat = 0 from rfl] at hd
@@ -532,8 +503,7 @@ theorem lpBurn63_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_keccak hd
@@ -546,11 +516,9 @@ theorem lpBurn63_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0x29, 0xc8] = (0x29c8 : B256) from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   simp only [List.set] at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_push hd
   simp only [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff] = (0xffffffff : B256) from by decide] at hd

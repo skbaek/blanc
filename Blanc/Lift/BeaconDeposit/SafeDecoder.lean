@@ -2,6 +2,7 @@ import Blanc.Lift.BeaconDeposit.BodySpec
 import Blanc.Lift.BeaconDeposit.DepositDecode
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.Quiet
+import Blanc.Lift.WalkInvKit
 
 namespace Blanc.Lift.BeaconDeposit
 
@@ -58,20 +59,15 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
 
   -- Tree 1: t_00a4_c32 (head guard: CDS - 4 ≥ 0x80)
   unfold t_00a4_c32 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
+  winv 2
   rw [hret_tag] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
   rw [h4b] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_dup (w := (4 : B256)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_calldatasize s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_sub s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G8, rfl⟩ := ri_dup (w := sevm.data.length.toB256 - 4) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G12, run⟩ | ⟨hw_head, G12, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_head := eq_zero_of_iszero_ne_zero hw_head
@@ -95,9 +91,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   rw [hoff0] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_dup (w := argOff sevm 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G27, run⟩ | ⟨hw_off0_1, G27, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_off0_1 := eq_zero_of_iszero_ne_zero hw_off0_1
@@ -115,10 +109,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   rw [h20b] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G33, rfl⟩ := ri_dup (w := (4 : B256) + argOff sevm 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G36, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G37, rfl⟩ := ri_push s1
+  winv 4
   rcases ric_branch run with ⟨-, G38, run⟩ | ⟨hw_off0_2, G38, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_off0_2 := eq_zero_of_iszero_ne_zero hw_off0_2
@@ -171,14 +162,9 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G49, rfl⟩ := ri_mul s1
   rw [mul_one_b256] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G50, rfl⟩ := ri_dup (w := argPtr sevm 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G51, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G52, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G53, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G54, rfl⟩ := ri_dup (w := argLen sevm 0) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G55, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G56, rfl⟩ := ri_or s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G57, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G58, rfl⟩ := ri_push s1
+  winv 4
   rcases ric_branch run with ⟨-, G59, run⟩ | ⟨hw_len0, G59, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_len0 := eq_zero_of_iszero_ne_zero hw_len0
@@ -212,9 +198,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   rw [hoff1] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G72, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G73, rfl⟩ := ri_dup (w := argOff sevm 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G74, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G75, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G76, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G77, run⟩ | ⟨hw_off1_1, G77, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_off1_1 := eq_zero_of_iszero_ne_zero hw_off1_1
@@ -232,10 +216,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   rw [h20b] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G83, rfl⟩ := ri_dup (w := (4 : B256) + argOff sevm 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G84, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G85, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G86, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G87, rfl⟩ := ri_push s1
+  winv 4
   rcases ric_branch run with ⟨-, G88, run⟩ | ⟨hw_off1_2, G88, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_off1_2 := eq_zero_of_iszero_ne_zero hw_off1_2
@@ -265,14 +246,9 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G99, rfl⟩ := ri_mul s1
   rw [mul_one_b256] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G100, rfl⟩ := ri_dup (w := argPtr sevm 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G101, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G102, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G103, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G104, rfl⟩ := ri_dup (w := argLen sevm 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G105, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G106, rfl⟩ := ri_or s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G107, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G108, rfl⟩ := ri_push s1
+  winv 4
   rcases ric_branch run with ⟨-, G109, run⟩ | ⟨hw_len1, G109, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_len1 := eq_zero_of_iszero_ne_zero hw_len1
@@ -306,9 +282,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   rw [hoff2] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G122, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G123, rfl⟩ := ri_dup (w := argOff sevm 2) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G124, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G125, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G126, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G127, run⟩ | ⟨hw_off2_1, G127, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_off2_1 := eq_zero_of_iszero_ne_zero hw_off2_1
@@ -326,10 +300,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   rw [h20b] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G133, rfl⟩ := ri_dup (w := (4 : B256) + argOff sevm 2) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G134, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G135, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G136, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G137, rfl⟩ := ri_push s1
+  winv 4
   rcases ric_branch run with ⟨-, G138, run⟩ | ⟨hw_off2_2, G138, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_off2_2 := eq_zero_of_iszero_ne_zero hw_off2_2
@@ -359,14 +330,9 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G149, rfl⟩ := ri_mul s1
   rw [mul_one_b256] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G150, rfl⟩ := ri_dup (w := argPtr sevm 2) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G151, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G152, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G153, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G154, rfl⟩ := ri_dup (w := argLen sevm 2) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G155, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G156, rfl⟩ := ri_or s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G157, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G158, rfl⟩ := ri_push s1
+  winv 4
   rcases ric_branch run with ⟨-, G159, run⟩ | ⟨hw_len2, G159, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   have hguard_len2 := eq_zero_of_iszero_ne_zero hw_len2
@@ -388,8 +354,7 @@ theorem safe_decoder {sevm : Sevm} {b post : Devm} {sel : B256} {G : Nat}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G162, rfl⟩ := ri_swap (n := 3) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G163, rfl⟩ := ri_pop s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G164, rfl⟩ := ri_swap (n := 1) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G165, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G166, rfl⟩ := ri_calldataload s1
+  winv 2
   have hroot : Sevm.dataWord sevm 100 = argRoot sevm := rfl
   rw [hroot] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G167, rfl⟩ := ri_push s1

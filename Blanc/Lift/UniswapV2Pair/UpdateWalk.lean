@@ -6,6 +6,7 @@ import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.InvWalkOps
+import Blanc.Lift.WalkInvKit
 
 /-! One certified shared `_update` walk, retaining actual current metadata and
 caller-cached reserves separately. -/
@@ -79,24 +80,13 @@ theorem update_guards_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
         t_2377_c19 o := by
   have h := run.cut
   unfold t_22e0_c60 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_gt hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 8
   rcases ric_branchTo (g := t_230c_c19) (by decide) rfl h with
       ⟨gt0, _, h⟩ | ⟨gtNonzero, _, h⟩
   · have bound0 := toNat_le_of_gtCheck_eq_zero gt0
     change b0.toNat ≤ 2 ^ 112 - 1 at bound0
     unfold t_22f9_c60 at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_gt hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+    winv 5
     obtain ⟨guard, g, h⟩ := update_guard19_inv h
     have bound1 := toNat_le_of_gtCheck_eq_zero (eq_zero_of_iszero_ne_zero guard)
     change b1.toNat ≤ 2 ^ 112 - 1 at bound1
@@ -223,19 +213,9 @@ theorem update_header_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       t_23c7_c20 o := by
   have h := run.cut
   unfold t_2377_c19 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_timestamp hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_div hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  winv 10
   have lastWord : reserveMask32 &&& (b.getStorVal sevm.currentTarget 8 / reserveDiv224) =
       reserveTimestampRead (b.getStorVal sevm.currentTarget 8) := B256.and_comm _ _
   change SFunc.RunCut cert.prog sevm []
@@ -244,16 +224,7 @@ theorem update_header_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
        updateTimestampWord sevm.benvStat.time :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
   rw [lastWord] at h
   clear * - h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sub hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 10
   clear * - h
   rcases ric_branchTo (g := t_23c7_c20) (by decide) rfl h with
       ⟨guard, _, h⟩ | ⟨guard, g, h⟩
@@ -267,12 +238,7 @@ theorem update_header_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
       exact (by decide : (1 : B256) ≠ 0) guard
     simp only [updateOraclePrefixWord, elapsedNotZero, ite_false]
     unfold t_23b3_c19 at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+    winv 6
     exact ⟨_, h.uncut⟩
   · have elapsedZero := eq_zero_of_iszero_ne_zero guard
     change updateElapsedWord (b.getStorVal sevm.currentTarget 8) sevm.benvStat.time &&& reserveMask32 = 0
@@ -340,10 +306,7 @@ theorem update_oracle_reserve_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : 
       t_23e2_c21 o := by
   have h := run.cut
   unfold t_23c7_c20 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 4
   clear * - h
   rcases ric_branchTo (g := t_23e2_c21) (by decide) rfl h with
       ⟨guard, _, h⟩ | ⟨guard, g, h⟩
@@ -353,12 +316,7 @@ theorem update_oracle_reserve_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : 
       exact (by decide : B256.eqCheck (0 : B256) 0 ≠ 0) guard
     simp only [updateOracleReserveFlagWord, prefixNonzero, ite_false]
     unfold t_23ce_c20 at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
+    winv 6
     exact ⟨_, h.uncut⟩
   · have prefixZero := eq_zero_of_iszero_ne_zero guard
     simp only [updateOracleReserveFlagWord, prefixZero, ite_true]
@@ -401,9 +359,7 @@ theorem update_oracle_route_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
       (if flag = 0 then t_2492_c22 else t_23e8_c21) o := by
   have h := run.cut
   unfold t_23e2_c21 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   clear * - h
   rcases ric_branchTo (g := t_2492_c22) (by decide) rfl h with
       ⟨guard, g, h⟩ | ⟨guard, g, h⟩
@@ -495,34 +451,23 @@ theorem update_price0_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
         r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2425_c21 o := by
   have h := run.cut
   unfold t_23e8_c21 at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  winv 3
   change SFunc.RunCut cert.prog sevm []
     (St b ((reserveMask32 &&& dt) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
   rw [B256.and_comm reserveMask32 dt] at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 5
   clear * - h
   obtain ⟨_, h⟩ := ric_call (g := t_2a57_c65) rfl h
   rcases h with ⟨D, callee, h⟩ | ⟨D, callee, _⟩
   · obtain ⟨_, eq⟩ := uq_encode_inv callee
     cases eq
     unfold t_23fb_c21 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    winv 3
     change SFunc.RunCut cert.prog sevm []
       (St b ((uqMask224 &&& uqEncodeWord r1) :: r0 :: 0x2425 :: (dt &&& reserveMask32) ::
         dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
     rw [B256.and_comm uqMask224 (uqEncodeWord r1)] at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    winv 4
     clear * - h
     obtain ⟨_, h⟩ := ric_call (g := t_2a7b_c66) rfl h
     rcases h with ⟨D, callee, h⟩ | ⟨D, callee, _⟩
@@ -632,27 +577,16 @@ theorem update_accumulator0_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : M
           r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2465_c21 o := by
   have h := run.cut
   unfold t_2425_c21 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  winv 5
   change SFunc.RunCut cert.prog sevm []
     (St (afterSloadH sevm b 9)
       ((uqMask224 &&& price) :: 9 :: b.getStorVal sevm.currentTarget 9 ::
         (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
   rw [B256.and_comm uqMask224 price] at h
   clear * - h stateGas bal
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mul hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 6
   obtain ⟨d, hd, h⟩ := ric_next h
   have nonstatic := ri_sstore_nonstaticH stateGas hd
   obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hd
@@ -660,32 +594,20 @@ theorem update_accumulator0_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : M
     (St (updateAccumulatorPostH sevm b 9 price dt)
       (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
   clear * - h nonstatic
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 8
   clear * - h nonstatic
   obtain ⟨_, h⟩ := ric_call (g := t_2a57_c65) rfl h
   rcases h with ⟨D, callee, h⟩ | ⟨D, callee, _⟩
   · obtain ⟨_, eq⟩ := uq_encode_inv callee
     cases eq
     unfold t_23fb_c21_1 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    winv 3
     change SFunc.RunCut cert.prog sevm []
       (St (updateAccumulatorPostH sevm b 9 price dt)
         ((uqMask224 &&& uqEncodeWord r0) :: r1 :: 0x2465 :: (dt &&& reserveMask32) ::
           dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
     rw [B256.and_comm uqMask224 (uqEncodeWord r0)] at h
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+    winv 4
     clear * - h nonstatic
     obtain ⟨_, h⟩ := ric_call (g := t_2a7b_c66) rfl h
     rcases h with ⟨D, callee, h⟩ | ⟨D, callee, _⟩
@@ -748,27 +670,16 @@ theorem update_accumulator1_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : M
         (dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M G') t_2492_c22 o := by
   have h := run.cut
   unfold t_2465_c21 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_sloadH bal hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
+  winv 5
   change SFunc.RunCut cert.prog sevm []
     (St (afterSloadH sevm b 10)
       ((uqMask224 &&& price) :: 10 :: b.getStorVal sevm.currentTarget 10 ::
         (dt &&& reserveMask32) :: dt :: ts :: r1 :: r0 :: b1 :: b0 :: tag :: R) M _) _ (.done o) at h
   rw [B256.and_comm uqMask224 price] at h
   clear * - h stateGas bal
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mul hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 6
   obtain ⟨d, hd, h⟩ := ric_next h
   have nonstatic := ri_sstore_nonstaticH stateGas hd
   obtain ⟨g, rfl⟩ := ri_sstoreH stateGas bal hd

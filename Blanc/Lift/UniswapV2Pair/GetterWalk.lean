@@ -7,6 +7,7 @@ import Blanc.CommonCore
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! Exact execution of the deployed Pair's getter paths. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -35,9 +36,7 @@ theorem totalSupply_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (b.getStorVal sevm.currentTarget 0 :: ρ :: R) M G') := by
   have h := run.cut
   unfold t_0e18_c53 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_sloadH bal hd
   obtain ⟨d, hd, h⟩ := ric_next h
@@ -103,21 +102,14 @@ theorem getterWord_tail_ptr_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   have outmem := mem.write 128 v (Or.inr (by decide : 96 ≤ 128))
   have h := run.cut
   unfold t_039b_c98 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from rfl,
     show (64 : B256).toNat = 64 from rfl,
     mem.read_self (i := 64) (sz := 32) mem.ge, show Bytes.toB256 (M.read 64 32).1 = (128 : B256) from mem.word] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (128 : B256).toNat = 128 from rfl] at hd
@@ -127,25 +119,18 @@ theorem getterWord_tail_ptr_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   simp only [show (64 : B256).toNat = 64 from rfl,
     outmem.read_self (i := 64) (sz := 32) outmem.ge, show Bytes.toB256 ((M.write 128 v.toBytes).read 64 32).1 = (128 : B256) from outmem.word] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_sub hd
   simp only [show (128 : B256) - 128 = 0 from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_add hd
   simp only [show Bytes.toB256 [0x20] = (32 : B256) from rfl,
     show (32 : B256) + 0 = 32 from by decide] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   cases h with
   | last hr =>
     obtain ⟨hout, hstor, hlogs⟩ := ri_return hr
@@ -184,11 +169,7 @@ theorem totalSupply_entry_invH {sevm : Sevm} {b : Devm}
       (∀ a, Devm.getStor d a = Devm.getStor b a) ∧ d.logs = b.logs := by
   have h := run.cut
   unfold t_0393_c98 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   obtain ⟨_, h⟩ := ric_call (g := t_0e18_c53) (by rfl) h
   rcases h with ⟨d, hc, h⟩ | ⟨d, hc, _⟩
   · obtain ⟨_, eq⟩ := totalSupply_callee_invH bal hc
@@ -248,24 +229,14 @@ theorem getter_guards_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
       ∃ G', SFunc.Run fs sevm (St b [] getterInitMemory G') t_001a_c0 o := by
   have h := run.cut
   unfold t_0000_c0 at h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from rfl,
     show (64 : B256).toNat = 64 from rfl,
     show Bytes.toB256 [0x80] = (128 : B256) from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_callvalue hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_iszero hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 4
   rcases ric_branch h with ⟨_, _, bad⟩ | ⟨nonzero, _, h⟩
   · exact (getter_zeroRevert_impossible bad).elim
   · have value : sevm.value = 0 := by
@@ -275,19 +246,12 @@ theorem getter_guards_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
       exact nonzero zero
     rw [value] at h
     unfold t_0010_c0 at h
-    obtain ⟨_, h⟩ := ric_dest h
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_pop hd
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_push hd
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_calldatasize hd
+    winv 4
     obtain ⟨d, hd, h⟩ := ric_next h
     obtain ⟨_, hd⟩ := ri_lt hd
     simp only [show Bytes.toB256 [0x04] = (4 : B256) from rfl] at hd
     subst d
-    obtain ⟨d, hd, h⟩ := ric_next h
-    obtain ⟨_, rfl⟩ := ri_push hd
+    winv 1
     rcases ric_branch h with ⟨zero, g, h⟩ | ⟨_, _, bad⟩
     · have size : (4 : B256) ≤ sevm.data.length.toB256 := by
         by_contra ne

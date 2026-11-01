@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.GetterScalarWalk
 import Blanc.Lift.WalkKit
+import Blanc.Lift.WalkInvKit
 
 /-! Single-key storage getters use the compiler's exact scratch-write order. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -89,20 +90,15 @@ theorem singleMapping_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (s.memory M key) G') := by
   have h := run.cut
   rw [s.callee_shape] at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
   rw [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
   rw [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_keccak hd
   change d = St b (((s.memory M key).read 0 64).1.keccak :: ρ :: R)
     ((s.memory M key).read 0 64).2 _ at hd
@@ -202,23 +198,15 @@ theorem allowance_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (allowanceScratch2 M owner spender) G') := by
   have h := run.cut
   unfold t_1dd8_c30 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 5
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
   rw [show (Bytes.toB256 [0x20]).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
   rw [show (Bytes.toB256 [0]).toNat = 0 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_keccak hd
   change d = St b (((allowanceScratch1 M owner).read 0 64).1.keccak :: 64 :: 32 :: spender :: 0 :: ρ :: R)
     ((allowanceScratch1 M owner).read 0 64).2 _ at hd
@@ -226,13 +214,11 @@ theorem allowance_callee_invH {fs : List SFunc} {sevm : Sevm} {b : Devm}
     Mem.read_two_word_writes_at_raw_right_first M 0 owner 2
   rw [(allowanceScratch1_ptr mem owner).read_self (by decide), read1] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (32 : B256).toNat = 32 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (0 : B256).toNat = 0 from rfl] at hd
   subst d

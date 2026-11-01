@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.GetterMemory
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.MapSlot
 import Blanc.Lift.UniswapV2Pair.Cert
+import Blanc.Lift.WalkInvKit
 
 /-! Ordered scratch images and the actual common writer boolean return tail. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -86,11 +87,7 @@ theorem writerBool_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   rw [show memExtSize 160 128 32 = 160 from by decide] at outmem
   have h := run.cut
   unfold t_034e_c96 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show Bytes.toB256 [0x40] = (64 : B256) from rfl,
@@ -98,14 +95,12 @@ theorem writerBool_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     mem.read_self (by decide : 64 + 32 ≤ 160),
     show Bytes.toB256 (M.read 64 32).1 = (128 : B256) from mem.word] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_iszero hd)
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 1) (by decide) (ri_iszero hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (128 : B256).toNat = 128 from rfl] at hd
@@ -117,16 +112,10 @@ theorem writerBool_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
     show Bytes.toB256 ((M.write 128 (1 : B256).toBytes).read 64 32).1 = (128 : B256)
       from outmem.word] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_sub hd)
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_val (w := 32) (by decide) (ri_add hd)
   obtain ⟨d, hd, h⟩ := ric_next h

@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.SyncWalk
+import Blanc.Lift.WalkInvKit
 
 /-! The literal public swap entry: PC0 guards, the selector dispatch, and the ABI wrapper
 `t_01be..t_024c` decoding `swap(uint256,uint256,address,bytes)`. The dynamic `bytes data`
@@ -272,9 +273,7 @@ theorem swapPc0_inv {D : Exec.Deriv} {sevm : Sevm} {b : Devm} {G : Nat} {o : Out
   have run := SFunc.runP_iff_runCutP_nil.mp guarded
   refine ⟨value, size, ?_⟩
   unfold t_001a_c0 at run
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_calldataload (StepIn.toRun hs)
-  obtain ⟨_, hs, run⟩ := ric_nextP run; obtain ⟨_, rfl⟩ := ri_push (StepIn.toRun hs)
+  winv 3 using StepIn.toRun
   obtain ⟨d, hs, run⟩ := ric_nextP run
   obtain ⟨_, eq⟩ := ri_shr (StepIn.toRun hs)
   simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,

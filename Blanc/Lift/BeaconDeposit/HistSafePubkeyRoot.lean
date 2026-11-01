@@ -1,5 +1,6 @@
 import Blanc.Lift.BeaconDeposit.BodyShaKit
 import Blanc.Lift.BeaconDeposit.HistSafeWorld
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Safety segment B3 over a historical frame: the pubkey root, inverted
@@ -48,56 +49,32 @@ theorem safe_pubkeyRootH_of_rules {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : 
       false_and, List.not_mem_nil, or_false, or_true]); rwa [hlen] at this
   have run := run.cut
   unfold t_071c_c4 at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_swap rfl s1
+  winv 3
   iterate 14
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_mload s1
+  winv 2
   rw [h40, read_word hr 64 hfp, read_covered hs (by norm_num only) (by norm_num only)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_sub s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_log1 s1
+  winv 5
   have e256 : (256 : B256).toNat = 256 := by decide
   have e576 : ((832 : B256) - 256).toNat = 576 := by decide
   have hfst : (M.read 256 576).1 = data := by rw [hr.read, hdata]
   have hsnd : (M.read 256 576).2 = M :=
     Mem.read_snd_eq_self (by rw [hs]; exact memExtSize_of_le (by norm_num only) (by norm_num only))
   rw [e256, e576, hfst, hsnd] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
+  winv 6
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_shl s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [h40, read_word hr 64 hfp, read_covered hs (by norm_num only) (by norm_num only)] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 288) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 6
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_calldatacopy s1
   rw [show (288 : B256).toNat = 288 by decide, show (48 : B256).toNat = 48 by decide] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_and s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 336) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 3
   rw [show (336 : B256).toNat = 336 by decide] at run
   set pk := sevm.data.sliceD pP.toNat 48 0 with hpk
   have hpkl : pk.length = 48 := List.length_sliceD _ _ _ _
@@ -112,26 +89,16 @@ theorem safe_pubkeyRootH_of_rules {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : 
       (0x100 : B256).toBytes := by
     rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num only),
       Bytes.sliceD_writeAt_before _ _ _ _ _ (by norm_num only), hfp]
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 3
   rw [h40, read_word hr2 64 hfp2, read_covered hs2 (by norm_num only) (by norm_num only)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 80) (by decide) (ri_sub s1)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 64) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 2
   rw [e256] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
+  winv 3
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 352) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore s1
+  winv 4
   rw [h40] at run
   set X := Bytes.writeAt (Bytes.writeAt img 288 pk) 336 (0 : B256).toBytes with hX
   set img4 := Bytes.writeAt (Bytes.writeAt X 256 (64 : B256).toBytes) 64
@@ -150,25 +117,11 @@ theorem safe_pubkeyRootH_of_rules {sevm : Sevm} {b : Devm} {sel rt sP wP pP a : 
     rw [himg4, Bytes.sliceD_writeAt_after _ _ _ _ _ (by rw [B256.length_toBytes]; norm_num only)]
     have := Bytes.sliceD_writeAt X (64 : B256).toBytes 256
     rwa [B256.length_toBytes] at this
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mload s1
+  winv 2
   rw [e256, read_word hr4 256 h256_4, read_covered hs4 (by norm_num only) (by norm_num only)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 10
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_val (w := 288) (by decide) (ri_add s1)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s1
+  winv 5
   rw [show t_07bf_c4 = mcpyTree 0x07 0xfc 0x07 0xbf 12 t_07fc_c4 from rfl] at run
   have hlow4 : ∀ i l, 96 ≤ i → i + l ≤ 256 → img4.sliceD i l 0 = img.sliceD i l 0 := by
     intro i l h1 h2

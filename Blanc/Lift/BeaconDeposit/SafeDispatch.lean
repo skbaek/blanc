@@ -1,5 +1,6 @@
 import Blanc.Lift.BeaconDeposit.BodySpec
 import Blanc.Lift.InvWalkWorld
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Safety segment D: the dispatcher, inverted
@@ -51,28 +52,17 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   have run := run.cut
   -- t_0000_c0: the free pointer and the `CALLDATASIZE < 4` test
   unfold t_0000_c0 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_calldatasize s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 7
   rcases ric_branch run with ⟨-, G8, run⟩ | ⟨-, G8, run⟩
   swap; · exact (run.false_of_noOk (by decide)).elim
   rw [hm] at run
   -- t_000d_c0: the selector and the first comparison
   unfold t_000d_c0 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_shr s1
+  winv 4
   rw [hsel] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G13, rfl⟩ := ri_dup (w := Sevm.selector sevm) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨g31, hg31⟩ : ∃ g, prog[31]? = some g := ⟨_, rfl⟩
   rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg31 run with ⟨hw, G17, run⟩ | ⟨hw, G17, run⟩
   swap
@@ -85,9 +75,7 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   unfold t_001e_c0 at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G18, rfl⟩ := ri_dup (w := Sevm.selector sevm) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨g32, hg32⟩ : ∃ g, prog[32]? = some g := ⟨_, rfl⟩
   rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg32 run with ⟨hw, G22, run⟩ | ⟨hw, G22, run⟩
   swap
@@ -99,9 +87,7 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   unfold t_0029_c0 at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G23, rfl⟩ := ri_dup (w := Sevm.selector sevm) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨g33, hg33⟩ : ∃ g, prog[33]? = some g := ⟨_, rfl⟩
   rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg33 run with ⟨hw, G27, run⟩ | ⟨hw, G27, run⟩
   swap
@@ -113,9 +99,7 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   unfold t_0034_c0 at run
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G28, rfl⟩ := ri_dup (w := Sevm.selector sevm) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_push s1
+  winv 3
   obtain ⟨g34, hg34⟩ : ∃ g, prog[34]? = some g := ⟨_, rfl⟩
   rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg34 run with ⟨-, G32, run⟩ | ⟨hw, G32, run⟩
   · exact (run.false_of_noOk (by decide)).elim
