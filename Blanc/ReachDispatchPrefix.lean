@@ -248,7 +248,7 @@ private theorem reach_of_dispatch_build_logs :
           · exact (Line.of_inv Devm.output (by line_inv) h₁).trans
               (h_pop.output.trans (h_burn.output.trans h_output))
 
-/-- `reach_of_dispatch` with the dispatcher-entry log and output carried to
+/-- Inline-revert `dispatch` reachability with the dispatcher-entry log and output carried to
 the selected body, plus the loose gas-free walk prefix reaching the body's
 entry state.  The body may append logs or write output afterward; this
 theorem only states that inline-revert dispatch itself is log- and

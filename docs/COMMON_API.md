@@ -52,7 +52,10 @@ lines when next changed or relied on, not by a wholesale rewrite.
   [C6](#c6-i-need-to-link-an-auxiliary-call-table-by-name-instead-of-by-index),
   the last branch of that section rather than its head.
 - None matches: search public declarations in `Blanc/CommonCore.lean`,
-  `Blanc/CommonProofs.lean`, and the ladder (`Blanc/LadderBase.lean`,
+  the ten `Blanc/CommonProofs/*.lean` pieces (`Base`, `Frames`, `MemImage`,
+  `Messages`, `Walk`, `Hinv`, `DispatchReach`, `NoDel`, `Balance`,
+  `MemEffects`; `Blanc/CommonProofs.lean` only re-exports them, so import the
+  piece you use), and the ladder (`Blanc/LadderBase.lean`,
   `Blanc/LadderSem.lean`, and `Blanc/Ladder.lean`, which states
   `ContractSpec` over them); a helper found only in a
   contract module is a hoisting candidate, not a cross-contract import target.
@@ -272,11 +275,10 @@ lines when next changed or relied on, not by a wholesale rewrite.
 - The common `fsig +++ dispatch` entry preserves logs and output by
   `fsig_logs` and `fsig_output` in `Blanc/CommonProofs/DispatchReach.lean`.
 - Recover a known selected body from a sorted tree dispatcher with
-  `reach_of_dispatch` for the inline-revert form or `reach_of_dispatchWith`
-  for the indexed-fallback form in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean). Both consume the
-  exact selector/list membership and return the selected body with the
-  selector removed while preserving world state and memory; neither asserts
+  `reach_of_dispatchWith` for the indexed-fallback form in
+  [`Blanc/CommonProofs/DispatchReach.lean`](../Blanc/CommonProofs/DispatchReach.lean). It consumes the
+  exact selector/list membership and returns the selected body with the
+  selector removed while preserving world state and memory; it does not assert
   that an execution exists.  `reach_of_dispatchWith_logs` is the same
   factorization with the dispatcher's log and output silence carried to the
   selected body.  `reach_of_dispatch_logs` in
@@ -290,9 +292,8 @@ lines when next changed or relied on, not by a wholesale rewrite.
   entries".  It is the `Func.Run` counterpart of the compiled
   `DispatchTree.dispatchMiss_runCompiledTo_with_path`.
 - Peel the shared `nonpayable` entry wrapper on a source run with
-  `run_body_of_run_nonpayable_frame`, or with `run_body_of_run_nonpayable_logs`
-  when the endpoint's events or returndata must also be related to the public
-  frame's entry.  Both derive zero call value.
+  `run_body_of_run_nonpayable_frame` (in
+  [`Blanc/CommonProofs/Hinv.lean`](../Blanc/CommonProofs/Hinv.lean)); it derives zero call value.
 - Ordinary compiled success walk (`Func.RunCompiled`): `func_run` and the
   opcode constructors in [`Blanc/Forward.lean`](../Blanc/Forward.lean).
   `MSTORE` and `MSTORE8` each consume the next numeric memory-expansion hint;
@@ -3349,7 +3350,7 @@ branch supplies discovery rather than a single goal-head recipe.
   `afterSstore`). A dispatcher that reaches a non-gas-free entry needs a
   two-run walk to the selected entry first.
 
-`Linst.selfdestruct_preserves_getCode` and `Linst.selfdestruct_balance_effect`
+`Linst.selfdestruct_preserves_code_created` and `Linst.selfdestruct_balance_effect`
 cover the actual beneficiary credit and refund hooks across historical rules.
 The `Linst.selfdestruct_preserves_noDel`, `Linst.run_noDel` and
 `Linst.inv_noDel` helpers instead require
@@ -10942,7 +10943,13 @@ found it, not merely to add the contract.
 4. **Found nowhere: build it in the common library, then use it.** The
    generic shape that motivated the search is the placement decision — a new
    generic declaration is born in a shared module, not in the contract that
-   first needed it.
+   first needed it. Place it in the **narrowest shared owner**: the lowest
+   shared module below every consumer, or a new small module imported only by
+   its consumers. A hub — a module more than 500 production modules import,
+   such as `Blanc/CommonCore.lean`, a `Blanc/CommonProofs/*.lean` piece or the
+   ladder — is not a default destination: every line it gains is re-elaborated
+   by all of its dependents, and `scripts/check-proof-module-size.sh` blocks a
+   hub's growth past its ceiling. The same rule applies when hoisting (step 3).
 5. **Close with discoverability.** Every common-library addition or change —
    built, generalized, or hoisted — updates this registry in the same change:
    add the declaration to the narrowest branch above (or add a sub-branch),

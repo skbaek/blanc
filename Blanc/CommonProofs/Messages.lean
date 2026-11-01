@@ -40,10 +40,6 @@ lemma executeCode.handleError_code_created (exn : Execution) (a : Adr) :
     rcases p with ⟨err, evm⟩
     cases err <;> exact ⟨rfl, rfl⟩
 
-lemma executeCode.handleError_getCode (exn : Execution) (a : Adr) :
-    MsgResult.getCode (executeCode.handleError exn) a = Execution.getCode exn a := by
-  exact (executeCode.handleError_code_created exn a).1
-
 lemma executeCode.handleErrorWith_code_created (sg : Option StateGasRules)
     (exn : Execution) (a : Adr) :
     MsgResult.getCode (executeCode.handleErrorWith sg exn) a =
@@ -405,7 +401,7 @@ lemma processCreateMessage.msg_benvStat (msg : Msg) :
 
 /-- Master: `executeCode` preserves the code of every nonempty-code address.
 The suspended child's oracle invariant (`inv`) supplies the interpreted-code
-case; `handleError_getCode` covers precompile and error selection. -/
+case; `handleError_code_created` covers precompile and error selection. -/
 lemma ExecuteCode.accountPreserve {track : Bool}
     {msg : Msg} {xl : Xlot} {exn : Except (EvmError × State × AdrSet × Tra) Devm}
     (inv : (Blanc.Xlot.InvAccountPreserve track xl))
@@ -681,16 +677,6 @@ lemma Resume.createAmsterdam_accountPreserve {track : Bool} {state : StateGasRul
       · rw [ite_eq_right hP]
         dsimp only [Execution.getCode]
         exact ⟨h, hca⟩
-
-lemma Resume.createAmsterdam_getCode {state : StateGasRules} {parent : Devm}
-    {newAddress a : Adr} {nac : Bool}
-    {r : Except (EvmError × State × AdrSet × Tra) Devm}
-    (h : MsgResult.getCode r a = parent.getCode a) :
-    Execution.getCode
-      ((Resume.createAmsterdam state parent newAddress nac).run r) a =
-      parent.getCode a := by
-  exact (Resume.createAmsterdam_accountPreserve (track := false) h
-    (by intro impossible; cases impossible)).1
 
 lemma GenericCreate.accountPreserve {track : Bool}
     {sevm : Sevm} {devm : Devm} {endowment : B256} {newAddress : Adr}
@@ -1127,18 +1113,6 @@ lemma Resume.callAmsterdam_accountPreserve {track : Bool} {state : StateGasRules
       · rw [ite_eq_right hP]
         dsimp only [Execution.getCode]
         exact ⟨h, hca⟩
-
-
-lemma Resume.callAmsterdam_getCode {state : StateGasRules} {parent : Devm}
-    {a : Adr} {outputIndex outputSize : Nat} {nac : Bool}
-    {r : Except (EvmError × State × AdrSet × Tra) Devm}
-    (h : MsgResult.getCode r a = parent.getCode a) :
-    Execution.getCode
-      ((Resume.callAmsterdam state parent outputIndex outputSize nac).run r) a =
-      parent.getCode a := by
-  exact (Resume.callAmsterdam_accountPreserve (track := false) h
-    (by intro impossible; cases impossible)).1
-
 
 
 /-- On the successful path the CREATE-family return installs the child's
@@ -2967,12 +2941,6 @@ lemma Linst.selfdestruct_preserves_code_created {sevm : Sevm} {devm : Devm} {exn
                   intro run; rw [← run]
                   exact ⟨h_emit.trans (h_add.trans (h_sub.trans ((chargeStateGas_getCode_eq hstg adr).trans ((chargeGas_getCode_eq hchg adr).trans (h_wb.trans (Devm.popToAdr_getCode_eq h1 adr)))))), h_emit_ca.trans ((Devm.subBal_createdAccounts_eq h4).trans ((chargeStateGas_createdAccounts_eq hstg).trans ((chargeGas_createdAccounts_eq hchg).trans (h_wb_ca.trans (Devm.popToAdr_createdAccounts_eq h1)))))⟩
 
-lemma Linst.selfdestruct_preserves_getCode {sevm : Sevm} {devm : Devm} {exn : Execution}
-    (run : Linst.Run sevm devm .selfdestruct exn) :
-    ∀ adr : Adr, Execution.getCode exn adr = devm.getCode adr := by
-  intro adr
-  exact (Linst.selfdestruct_preserves_code_created run adr).1
-
 /-- Pointwise equality of code maps: the frame every non-create step keeps. -/
 def Devm.CodeFrame (before after : Devm) : Prop :=
   ∀ a : Adr, after.getCode a = before.getCode a
@@ -3110,7 +3078,7 @@ theorem Exec.effect {R : Devm → Devm → Prop}
       (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
 
 /-- Fork-indexed nonterminal effect: `Ninst.EffectRec` with the covered-fork
-premise for the frame. Consumed by `Exec.effectFork`. -/
+premise for the frame. Consumed by `Exec.effectForkTerminal`. -/
 def Ninst.EffectRecFork (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
   ∀ {pc sevm pre xl out}, CoveredFork sevm.benvStat.fork → Xlot.Rel R xl →
     Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out
@@ -3201,37 +3169,6 @@ theorem Exec.effectForkTerminal {R : Devm → Devm → Prop}
       exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .some ⟨_, _⟩) (out := .ok _) (ihc hfork_c)
         (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
   exact aux run hfork
-
-lemma Evm.step_effectFork {R : Devm → Devm → Prop}
-    (hrefl : ReflexiveRel R)
-    (hn : ∀ n, Ninst.EffectRecFork R n)
-    (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ l, Linst.Effect R l)
-    {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hxl : Xlot.Rel R xl)
-    (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
-    Execution.Rel R devm out := by
-  apply Evm.step_effectForkTerminal hrefl hn hj ?_ hfork hxl hrun
-  intro l sevm pre out _ run
-  exact hl l run
-
-/-- The fork-indexed traversal: `Exec.effect` where the per-instruction
-`Ninst` effect may assume the frame's fork is covered. Child-frame coverage
-is transported across each spawn by `Evm.step_spawn_child_fork`; tails keep
-the same frame. -/
-theorem Exec.effectFork {R : Devm → Devm → Prop}
-    (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
-    (hn : ∀ n, Ninst.EffectRecFork R n)
-    (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ l, Linst.Effect R l)
-    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out)
-    (hfork : CoveredFork sevm.benvStat.fork) :
-    Execution.Rel R pre out := by
-  apply Exec.effectForkTerminal hrefl htrans hn hj ?_ run hfork
-  intro l sevm pre out _ run
-  exact hl l run
 
 lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
@@ -3343,18 +3280,6 @@ lemma Xlot.invGetCode_of_rel {xl : Xlot}
     | error e => exact (h a ha).symm
     | ok d => exact (h a ha).symm
 
-/-- Reverse bridge: the observation invariant `InvGetCode` implies the
-relational `Xlot.Rel Devm.CodePreserve`.  Together with
-`Xlot.invGetCode_of_rel` this makes the two forms interchangeable, so the
-legacy `Xinst.preserves_getCode_gen` can project through the relational master. -/
-lemma Xlot.rel_of_invGetCode {xl : Xlot}
-    (h : (Blanc.Xlot.InvGetCode xl)) : Xlot.Rel Devm.CodePreserve xl := by
-  rcases xl with _ | ⟨evm, exn⟩
-  · trivial
-  · cases exn with
-    | error e => exact fun a ha => (h a ha).symm
-    | ok d => exact fun a ha => (h a ha).symm
-
 lemma Rinst.accountPreserve_effect (track : Bool) (r : Rinst) :
     Rinst.Effect (Devm.AccountPreserve track) r := by
   intro pc sevm pre out run
@@ -3445,11 +3370,6 @@ lemma Ninst.push_effectRec_of_instructionFrame
     (Ninst.push_instructionFrame_effectRec (hxs := hxs) (xl := .none)
       trivial hRun)
 
-lemma Ninst.push_codePreserve_effectRec {xs : Bytes} {hxs : xs.length ≤ 32} :
-  Ninst.EffectRec Devm.CodePreserve (.push xs hxs) := by
-  exact Ninst.push_effectRec_of_instructionFrame (R := Devm.CodePreserve)
-    (fun _ _ hf a _ => (hf.getCode a).symm)
-
 lemma Devm.withStack_instructionFrame (d : Devm) (stack : List B256) :
     Devm.InstructionFrame d (d.withStack stack) := by
   unfold Devm.withStack
@@ -3538,21 +3458,6 @@ lemma Ninst.exchange_effectRec_of_instructionFrame
   subst h0
   exact Outcome.Rel.mono hIR
     (Ninst.exchange_instructionFrame_effectRec (xl := .none) trivial hRun)
-
-lemma Ninst.dupn_codePreserve_effectRec {imm : UInt8} :
-  Ninst.EffectRec Devm.CodePreserve (.dupn imm) := by
-  exact Ninst.dupn_effectRec_of_instructionFrame (R := Devm.CodePreserve)
-    (fun _ _ hf a _ => (hf.getCode a).symm)
-
-lemma Ninst.swapn_codePreserve_effectRec {imm : UInt8} :
-  Ninst.EffectRec Devm.CodePreserve (.swapn imm) := by
-  exact Ninst.swapn_effectRec_of_instructionFrame (R := Devm.CodePreserve)
-    (fun _ _ hf a _ => (hf.getCode a).symm)
-
-lemma Ninst.exchange_codePreserve_effectRec {imm : UInt8} :
-  Ninst.EffectRec Devm.CodePreserve (.exchange imm) := by
-  exact Ninst.exchange_effectRec_of_instructionFrame (R := Devm.CodePreserve)
-    (fun _ _ hf a _ => (hf.getCode a).symm)
 
 lemma Ninst.accountPreserve_effectRec (track : Bool) (n : Ninst) :
     Ninst.EffectRec (Devm.AccountPreserve track) n := by
