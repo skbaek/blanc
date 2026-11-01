@@ -8335,8 +8335,6 @@ contract-neutral.
   (the registered producer uses `Cert.rangeOk`, below).
   Its jump counterpart `Cert.jumpsOk_singleton` takes the sole `jumpsOkNode`
   result; hand-written single-entry `Jumps` modules call it directly.
-- Assemble a seven-entry jump certificate with `Cert.jumpsOk_seven` in the same module from the
-  seven per-entry `jumpsOkNode` results; hand-written `Jumps` modules call it directly.
 - Decide a certificate in ranges of entries rather than one theorem per entry: `Cert.rangeOk`
   (the node check and, with its `j` flag, the jump check of every entry of a tail, memory maps
   included; a non-memory certificate runs it with no maps and tracking off), its trie-reading copy
@@ -8346,21 +8344,22 @@ contract-neutral.
   `Cert.checkNodeM_of_rangeOk` for a consumer that names one entry, in
   [`Blanc/Lift/CheckRange.lean`](../Blanc/Lift/CheckRange.lean). The registered producer emits it
   with `check.ranges B` (one `decide +kernel` per range of at most `B` summed tree nodes; `check.entries`
-  re-exports named entries), replacing the per-entry theorems, their `cert[i]'(by decide +kernel)`
+  re-exports named entries; `check.fuse_jumps` runs the jump checks in the ranges for a
+  hand-written `Jumps` module, which then proves `jumps_ok` by `Cert.jumpsOk_of_rangeOk`), replacing the per-entry theorems, their `cert[i]'(by decide +kernel)`
   index proofs and the per-entry `rest_`/`jrest_` chain. Measured on WSL (2026-11-01): Curve3Pool's
   generated check modules went from about 2,100 s to about 575 s of elaboration and from 30.6k to
   5.9k lines at `B = 600` (largest part 5.0 GiB, the 4,041-node entry alone). Worked use:
   `Blanc/Lift/Curve3Pool/Check.lean`.
-- Assemble the free-pointer check of a long certificate from per-entry kernel decisions: `fpEntry`
-  (entry `k` under its annotation, `false` past either end), `fpFrom` over the tails
-  `(c.zip ann).drop k`, the step `fpFrom_step`, the end `fpFrom_of_le` and the assembly
+- Assemble the free-pointer check of a long certificate from range decisions: `fpRange`
+  (entries `k .. k + n - 1` under their annotations, one kernel decision), `fpFrom` over the tails
+  `(c.zip ann).drop k`, the link `fpFrom_range`, the end `fpFrom_of_le` and the assembly
   `fpCert_of_fpFrom` in [`Blanc/Lift/FreePtrChain.lean`](../Blanc/Lift/FreePtrChain.lean), emitted by
-  the registered `scripts/lift/fp_annot.py` (registry key `fp`). Worked use:
-  `Blanc/Lift/Usdc/ImplFp/Check.lean`, `Blanc/Lift/Usdc/ImplFp.lean`. For any other annotated
-  per-entry check, instantiate the generic kit there: `chainEntry`/`chainFrom` over a check
-  function, with `chainFrom_step` and `chainFrom_of_le`.
-- Assemble the write-site check of a long certificate the same way: `wsEntry`, `wsFrom`,
-  `wsFrom_step`, `wsFrom_of_le` and `wsCert_of_wsFrom` in
+  the registered `scripts/lift/fp_annot.py` (registry key `fp`; ranges of at most
+  `CHECK_RANGE_BUDGET` summed cost proxy). Worked use: `Blanc/Lift/Usdc/ImplFp/Check.lean`,
+  `Blanc/Lift/Usdc/ImplFp.lean`. For any other annotated check, instantiate the generic kit there:
+  `chainRange`/`chainFrom` over a check function, with `chainFrom_range` and `chainFrom_of_le`.
+- Assemble the write-site check of a long certificate the same way: `wsRange`, `wsFrom`,
+  `wsFrom_range`, `wsFrom_of_le` and `wsCert_of_wsFrom` in
   [`Blanc/Lift/WriteSiteChain.lean`](../Blanc/Lift/WriteSiteChain.lean), emitted by the registered
   `scripts/lift/ws_annot.py` (registry key `ws`). Worked use: `Blanc/Lift/Usdc/ImplWs/Check.lean`,
   `Blanc/Lift/Usdc/ImplWs.lean`.

@@ -1,8 +1,8 @@
 import Blanc.Lift.FreePtrChain
 import Blanc.Lift.WriteSite
 
-/-! Chain assembly of `wsCert` from per-entry decisions (contract-neutral): the write-site
-instance of the generic chain kit `chainEntry`/`chainFrom` (`Blanc/Lift/FreePtrChain.lean`). -/
+/-! Range assembly of `wsCert` from range decisions (contract-neutral): the write-site instance
+of the generic kit `chainRange`/`chainFrom` (`Blanc/Lift/FreePtrChain.lean`). -/
 
 namespace Blanc.Lift.WriteSite
 
@@ -12,16 +12,17 @@ open Jaune
 def wsChk (c : Cert) (ann : List WAnn) (p : Entry × SFunc) (A : WAnn) : Bool :=
   wsNode c.entries ann A.ret p.1.frame A.entry p.2
 
-/-- Entry `k` passes the write-site walk under its annotation (`false` past either end). -/
-def wsEntry (c : Cert) (ann : List WAnn) (k : Nat) : Bool := chainEntry (wsChk c ann) c ann k
-
 /-- Every entry from `k` on passes: the third conjunct of `wsCert c ann` at `k = 0`. -/
 def wsFrom (c : Cert) (ann : List WAnn) (k : Nat) : Bool := chainFrom (wsChk c ann) c ann k
 
-/-- One step of the chain. -/
-theorem wsFrom_step {c : Cert} {ann : List WAnn} (k : Nat) (h : wsEntry c ann k = true)
-    (hrest : wsFrom c ann (k + 1) = true) : wsFrom c ann k = true :=
-  chainFrom_step k h hrest
+/-- The entries `k .. k + n - 1` pass the write-site walk: one generated kernel decision. -/
+def wsRange (c : Cert) (ann : List WAnn) (k n : Nat) : Bool :=
+  chainRange (wsChk c ann) c ann k n
+
+/-- One link of the chain. -/
+theorem wsFrom_range {c : Cert} {ann : List WAnn} (k n : Nat) (h : wsRange c ann k n = true)
+    (hrest : wsFrom c ann (k + n) = true) : wsFrom c ann k = true :=
+  chainFrom_range k n h hrest
 
 /-- The chain's end: past the last entry nothing is left to check. -/
 theorem wsFrom_of_le {c : Cert} {ann : List WAnn} {k : Nat} (h : c.length ≤ k) :

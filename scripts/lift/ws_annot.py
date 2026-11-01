@@ -1612,6 +1612,12 @@ def lean_module(path: Path) -> str:
     return ".".join(Path(path).with_suffix("").parts)
 
 
+# Summed producer cost proxy per kernel decision of the generated Check<i> modules (one
+# `decide +kernel` per range, `Blanc/Lift/FreePtrChain.lean` `chainRange`); measured on WSL
+# (blanc-jaune-consolidation-v1, 2026-11-01).
+CHECK_RANGE_BUDGET = 4000
+
+
 def split_parts(costs: List[int], parts: int) -> List[Tuple[int, int]]:
     """Contiguous entry ranges [a, b) of roughly equal total cost."""
     n = len(costs)
@@ -1628,16 +1634,32 @@ def split_parts(costs: List[int], parts: int) -> List[Tuple[int, int]]:
     return bounds
 
 
+def range_groups(costs: List[int], a: int, b: int, budget: int) -> List[Tuple[int, int]]:
+    """Contiguous ranges [k, e) covering [a, b), each of at most `budget` summed cost proxy (an
+    entry above the budget alone)."""
+    groups, k = [], a
+    while k < b:
+        e, acc = k + 1, costs[k]
+        while e < b and acc + costs[e] <= budget:
+            acc += costs[e]
+            e += 1
+        groups.append((k, e))
+        k = e
+    return groups
+
+
 def emit_checks(checker: Checker, parts: int, namespace: str, cert_ref: str,
-                cert_module: str, ann_module: str) -> Dict[str, str]:
-    """Kernel-decide modules for `wsCert`: `Check<i>.lean` decides
-    `wsEntry cert implWsAnn k` for one contiguous entry range each;
-    `Check.lean` chains them (`WriteSiteChain.wsFrom_step`) into
+                cert_module: str, ann_module: str,
+                budget: int = CHECK_RANGE_BUDGET) -> Dict[str, str]:
+    """Kernel-decide modules for `wsCert`: `Check<i>.lean` decides, for one contiguous entry
+    range of the certificate each, `wsRange cert implWsAnn k n` for ranges of at most `budget`
+    summed cost proxy; `Check.lean` chains them (`WriteSiteChain.wsFrom_range`) into
     `ws_rest_0 : wsFrom cert implWsAnn 0 = true`."""
     n = len(checker.entries)
     costs = [checker.cost.get(k, 1) for k in range(n)]
     files: Dict[str, str] = {}
     ranges = split_parts(costs, parts)
+    groups: List[Tuple[int, int]] = []
     for i, (a, b) in enumerate(ranges):
         lines = [
             "import Blanc.Lift.WriteSiteChain",
@@ -1645,8 +1667,8 @@ def emit_checks(checker: Checker, parts: int, namespace: str, cert_ref: str,
             f"import {ann_module}",
             "",
             f"/-! {CHECK_HEADER}",
-            f"Entries {a}..{b - 1} of `wsCert {cert_ref} implWsAnn`, each decided by the",
-            "kernel (`WriteSiteChain.wsEntry`); `Check.lean` chains them.",
+            f"Entries {a}..{b - 1} of `wsCert {cert_ref} implWsAnn`, decided by the kernel in ranges",
+            "(`WriteSiteChain.wsRange`); `Check.lean` chains them.",
             f"Producer cost proxy for this part: {sum(costs[a:b])}. -/",
             "",
             f"namespace {namespace}",
@@ -1654,9 +1676,10 @@ def emit_checks(checker: Checker, parts: int, namespace: str, cert_ref: str,
             "open Blanc.Lift.WriteSite",
             "",
         ]
-        for k in range(a, b):
+        for k, e in range_groups(costs, a, b, budget):
+            groups.append((k, e))
             lines += [
-                f"theorem ws_entry_{k} : wsEntry {cert_ref} implWsAnn {k} = true := by",
+                f"theorem ws_range_{k} : wsRange {cert_ref} implWsAnn {k} {e - k} = true := by",
                 "  decide +kernel",
                 "",
             ]
@@ -1667,24 +1690,22 @@ def emit_checks(checker: Checker, parts: int, namespace: str, cert_ref: str,
     lines += [
         "",
         f"/-! {CHECK_HEADER}",
-        "Chains the per-entry decisions of the Check<i> modules over the tails",
-        f"of `{cert_ref}.zip implWsAnn`, from the end. -/",
+        "Chains the range decisions of the Check<i> modules over the tails",
+        f"of `{cert_ref}.zip implWsAnn`. -/",
         "",
         f"namespace {namespace}",
         "",
         "open Blanc.Lift.WriteSite",
         "",
-        f"theorem ws_rest_{n} : wsFrom {cert_ref} implWsAnn {n} = true :=",
+        f"theorem ws_rest_0 : wsFrom {cert_ref} implWsAnn 0 = true :=",
+    ]
+    lines += [f"  wsFrom_range {k} {e - k} ws_range_{k} <|" for k, e in groups]
+    lines += [
         "  wsFrom_of_le (by decide +kernel)",
         "",
+        f"end {namespace}",
+        "",
     ]
-    for k in range(n - 1, -1, -1):
-        lines += [
-            f"theorem ws_rest_{k} : wsFrom {cert_ref} implWsAnn {k} = true :=",
-            f"  wsFrom_step {k} ws_entry_{k} ws_rest_{k + 1}",
-            "",
-        ]
-    lines += [f"end {namespace}", ""]
     files["Check.lean"] = "\n".join(lines)
     return files
 

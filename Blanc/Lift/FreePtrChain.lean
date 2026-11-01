@@ -1,40 +1,33 @@
 import Blanc.Lift.FreePtr
 
-/-! Chain assembly of an annotated certificate check from per-entry decisions
+/-! Range assembly of an annotated certificate check from range decisions
 (contract-neutral).
 
-The free-pointer counterpart of `Blanc/Lift/CheckChain.lean`, generic over the per-entry check:
-a long certificate's annotated check (`fpCert`, and the write-site checker's `wsCert` in
-`Blanc/Lift/WriteSiteChain.lean`) is decided one entry at a time (`chainEntry`, one kernel
-`decide` each, generated in split modules), and the tails `(c.zip ann).drop k` are walked from
-the end, one step per entry, so no step sees more than one entry. -/
+The annotated counterpart of `Cert.rangeOk` (`Blanc/Lift/CheckRange.lean`), generic over the
+per-entry check: a long certificate's annotated check (`fpCert`, and the write-site checker's
+`wsCert` in `Blanc/Lift/WriteSiteChain.lean`) is decided one contiguous range of entries at a time
+(`chainRange`, one kernel `decide` each, generated in split modules), and `chainFrom_range` chains
+the ranges over the tails `(c.zip ann).drop k`. -/
 
 namespace Blanc.Lift
-
-/-- Entry `k` passes `chk` under its annotation (`false` past either end). -/
-def chainEntry {α β : Type} (chk : α → β → Bool) (c : List α) (ann : List β) (k : Nat) : Bool :=
-  match c[k]?, ann[k]? with
-  | some p, some A => chk p A
-  | _, _ => false
 
 /-- Every entry from `k` on passes `chk` under its annotation. -/
 def chainFrom {α β : Type} (chk : α → β → Bool) (c : List α) (ann : List β) (k : Nat) : Bool :=
   ((c.zip ann).drop k).all fun p => chk p.1 p.2
 
-/-- One step of the chain. -/
-theorem chainFrom_step {α β : Type} {chk : α → β → Bool} {c : List α} {ann : List β} (k : Nat)
-    (h : chainEntry chk c ann k = true) (hrest : chainFrom chk c ann (k + 1) = true) :
-    chainFrom chk c ann k = true := by
-  unfold chainEntry at h
-  split at h
-  · rename_i p A hp hA
-    have hz : (c.zip ann)[k]? = some (p, A) := List.getElem?_zip_eq_some.mpr ⟨hp, hA⟩
-    have hk : k < (c.zip ann).length := (List.getElem?_eq_some_iff.mp hz).1
-    have hget : (c.zip ann)[k] = (p, A) := (List.getElem?_eq_some_iff.mp hz).2
-    unfold chainFrom at hrest ⊢
-    rw [List.drop_eq_getElem_cons hk, hget, List.all_cons, h, hrest]
-    rfl
-  · exact absurd h Bool.false_ne_true
+/-- The entries `k .. k + n - 1` (those that exist) pass `chk` under their annotations. -/
+def chainRange {α β : Type} (chk : α → β → Bool) (c : List α) (ann : List β) (k n : Nat) :
+    Bool :=
+  (((c.zip ann).drop k).take n).all fun p => chk p.1 p.2
+
+/-- One link of the chain: a range and the tail after it give the tail from its start. -/
+theorem chainFrom_range {α β : Type} {chk : α → β → Bool} {c : List α} {ann : List β}
+    (k n : Nat) (h : chainRange chk c ann k n = true)
+    (hrest : chainFrom chk c ann (k + n) = true) : chainFrom chk c ann k = true := by
+  unfold chainRange at h
+  unfold chainFrom at hrest ⊢
+  rw [← List.take_append_drop n ((c.zip ann).drop k), List.all_append, h, List.drop_drop, hrest]
+  rfl
 
 /-- The chain's end: past the last entry nothing is left to check. -/
 theorem chainFrom_of_le {α β : Type} {chk : α → β → Bool} {c : List α} {ann : List β} {k : Nat}
@@ -54,16 +47,16 @@ open Jaune
 def fpChk (c : Cert) (ann : List Ann) (p : Entry × SFunc) (A : Ann) : Bool :=
   fpNode c.entries ann A.ret p.1.frame A.entry p.2
 
-/-- Entry `k` passes the free-pointer walk under its annotation (`false` past either end). -/
-def fpEntry (c : Cert) (ann : List Ann) (k : Nat) : Bool := chainEntry (fpChk c ann) c ann k
-
 /-- Every entry from `k` on passes: the third conjunct of `fpCert c ann` at `k = 0`. -/
 def fpFrom (c : Cert) (ann : List Ann) (k : Nat) : Bool := chainFrom (fpChk c ann) c ann k
 
-/-- One step of the chain. -/
-theorem fpFrom_step {c : Cert} {ann : List Ann} (k : Nat) (h : fpEntry c ann k = true)
-    (hrest : fpFrom c ann (k + 1) = true) : fpFrom c ann k = true :=
-  chainFrom_step k h hrest
+/-- The entries `k .. k + n - 1` pass the free-pointer walk: one generated kernel decision. -/
+def fpRange (c : Cert) (ann : List Ann) (k n : Nat) : Bool := chainRange (fpChk c ann) c ann k n
+
+/-- One link of the chain. -/
+theorem fpFrom_range {c : Cert} {ann : List Ann} (k n : Nat) (h : fpRange c ann k n = true)
+    (hrest : fpFrom c ann (k + n) = true) : fpFrom c ann k = true :=
+  chainFrom_range k n h hrest
 
 /-- The chain's end: past the last entry nothing is left to check. -/
 theorem fpFrom_of_le {c : Cert} {ann : List Ann} {k : Nat} (h : c.length ≤ k) :
