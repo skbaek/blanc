@@ -50,7 +50,7 @@ theorem proxy_halt_dispatch {sevm : Sevm} {S : List B256} {M : Mem} {G : Nat}
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, -⟩
     swap
-    · exact .inr (.inl (eqCheck_ne_zero h).symm)
+    · exact .inr (.inl (B256.eq_of_eqCheck_ne_zero h).symm)
     unfold t_0041_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s
@@ -58,7 +58,7 @@ theorem proxy_halt_dispatch {sevm : Sevm} {S : List B256} {M : Mem} {G : Nat}
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, -⟩
     swap
-    · exact .inr (.inr (.inl (eqCheck_ne_zero h).symm))
+    · exact .inr (.inr (.inl (B256.eq_of_eqCheck_ne_zero h).symm))
     unfold t_004c_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s
@@ -66,7 +66,7 @@ theorem proxy_halt_dispatch {sevm : Sevm} {S : List B256} {M : Mem} {G : Nat}
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, -⟩
     swap
-    · exact .inr (.inr (.inr (.inl (eqCheck_ne_zero h).symm)))
+    · exact .inr (.inr (.inr (.inl (B256.eq_of_eqCheck_ne_zero h).symm)))
     unfold t_0057_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s
@@ -74,7 +74,7 @@ theorem proxy_halt_dispatch {sevm : Sevm} {S : List B256} {M : Mem} {G : Nat}
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, -⟩
     swap
-    · exact .inr (.inr (.inr (.inr (.inl (eqCheck_ne_zero h).symm))))
+    · exact .inr (.inr (.inr (.inr (.inl (B256.eq_of_eqCheck_ne_zero h).symm))))
     unfold t_0062_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s
@@ -82,7 +82,7 @@ theorem proxy_halt_dispatch {sevm : Sevm} {S : List B256} {M : Mem} {G : Nat}
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, -⟩
     swap
-    · exact .inr (.inr (.inr (.inr (.inr (eqCheck_ne_zero h).symm))))
+    · exact .inr (.inr (.inr (.inr (.inr (B256.eq_of_eqCheck_ne_zero h).symm))))
     unfold t_006d_c0 at run
     obtain ⟨_, run⟩ := rpw_dest run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push s

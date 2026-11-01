@@ -24,7 +24,7 @@ theorem and_ff20_word (x : B256) : x &&& ff20 = x.toAdr.toB256 := by
   rw [B256.and_comm, ff20_and_word]
 
 theorem caller_of_eqCheck {a : Adr} {w : B256} (h : a.toB256 =? (ff20 &&& w) ≠ 0) : a = w.toAdr := by
-  have e := eq_of_eqCheck_ne_zero h
+  have e := B256.eq_of_eqCheck_ne_zero h
   rw [ff20_and_word] at e
   have := congrArg B256.toAdr e
   rwa [toAdr_toB256, toAdr_toB256] at this
@@ -325,9 +325,9 @@ theorem burn_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   obtain ⟨-, f1, f2, f3, f4, f5, f6, -, f8, -, rfl⟩ := h
   have hp := flag20_of_notPaused f1
   have hmin := boolBit_of_ne f2
-  have hfr := frozenBit_of_free (eq_of_eqCheck_ne_zero f3)
+  have hfr := frozenBit_of_free (B256.eq_of_eqCheck_ne_zero f3)
   have hv := toNat_lt_of_gtCheck_ne_zero f4
-  have hle := toNat_ge_of_ltCheck_eq_zero (eq_of_eqCheck_ne_zero f5)
+  have hle := toNat_ge_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero f5)
   have hsup := toNat_le_of_gtCheck_eq_zero f8
   clear f1 f2 f3 f4 f5 f8
   simp only [ff20_and_word, and_ff20_word, toAdr_toB256, b0, b1, b4, b9, b11, b12] at *
@@ -404,10 +404,10 @@ theorem mint_out {P : Adr} {U : Key → Prop} {s s' : Stor} {e : Sevm}
   obtain ⟨-, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, -, f12, rfl⟩ := h
   have hp := flag20_of_notPaused f1
   have hmin := boolBit_of_ne f2
-  have hfc := frozenBit_of_free (eq_of_eqCheck_ne_zero f3)
-  have hfd := frozenBit_of_free (eq_of_eqCheck_ne_zero f4)
+  have hfc := frozenBit_of_free (B256.eq_of_eqCheck_ne_zero f3)
+  have hfd := frozenBit_of_free (B256.eq_of_eqCheck_ne_zero f4)
   have hv := toNat_lt_of_gtCheck_ne_zero f6
-  have hal := toNat_le_of_gtCheck_eq_zero (eq_of_eqCheck_ne_zero f7)
+  have hal := toNat_le_of_gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero f7)
   have hsup := add_noWrap f8
   clear f1 f2 f3 f4 f6 f7 f8
   simp only [ff20_and_word, and_ff20_word, toAdr_toB256, b0, b1, b4, b9, b11, b12, b13, b36'] at *

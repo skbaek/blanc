@@ -141,7 +141,7 @@ theorem rx_ex_restFrom_core (w : Nat → B256) : ∀ (k : Nat) {n : Nat} {S : Li
     unfold exRestBr
     simp only [show n ≠ 52 by omega, ↓reduceIte]
     have hlt : B256.ltCheck (Nat.toB256 (0x140 + 32 * (k + 1) - 32)) (Bytes.toB256 [0x01, 0x40]) =
-        0 := ltCheck_eq_zero_of_le (by
+        0 := B256.ltCheck_eq_zero_of_toNat_le (by
       rw [B256.toNat_toB256_of_lt (by omega), show (Bytes.toB256 [0x01, 0x40]).toNat = 0x140 by
         decide]
       omega)

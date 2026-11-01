@@ -61,7 +61,7 @@ theorem ex_off {k bw : B256} {base : Nat} (hk : k.toNat < 3) (hb : bw.toNat = ba
 
 theorem ex_lt3 {k : B256} (h : B256.ltCheck k (Bytes.toB256 [0x03]) ≠ 0) : k.toNat < 3 := by
   by_contra hn
-  exact h (ltCheck_eq_zero_of_le (by
+  exact h (B256.ltCheck_eq_zero_of_toNat_le (by
     rw [show (Bytes.toB256 [0x03]).toNat = 3 by decide]; omega))
 
 /-- **After `_xp_mem`** (`0x2458` → the `i == 2` test). -/
@@ -268,7 +268,7 @@ theorem xa_ex_bal1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xji 0x2507 0x250b hw2
   · xdead
   have hlen : 32 ≤ out.length := by
-    have e := gtCheck_ne_zero hw2
+    have e := B256.lt_of_gtCheck_ne_zero hw2
     rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
     exact e
   clear hw2

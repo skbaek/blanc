@@ -214,7 +214,7 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   xji 0x3d8a 0x3d8e hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by
-    have e := gtCheck_ne_zero hw
+    have e := B256.lt_of_gtCheck_ne_zero hw
     rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
     exact e
   clear hw

@@ -75,21 +75,6 @@ theorem claimN_le_balance {o shares supply balance : Nat}
   simpa only [claimN] using
     payN_le_balance (balance := balance) ho hshares
 
-private theorem nat_div_le_nat_div_of_cross
-    {n₁ n₂ d₁ d₂ : Nat}
-    (hd₁ : d₁ ≠ 0) (hd₂ : d₂ ≠ 0)
-    (hcross : n₁ * d₂ ≤ n₂ * d₁) :
-    n₁ / d₁ ≤ n₂ / d₂ := by
-  apply (Nat.le_div_iff_mul_le (Nat.pos_of_ne_zero hd₂)).2
-  apply Nat.le_of_mul_le_mul_right (c := d₁) _ (Nat.pos_of_ne_zero hd₁)
-  calc
-    (n₁ / d₁ * d₂) * d₁ =
-        (n₁ / d₁ * d₁) * d₂ := by
-      ac_rfl
-    _ ≤ n₁ * d₂ :=
-      Nat.mul_le_mul_right d₂ (Nat.div_mul_le_self n₁ d₁)
-    _ ≤ n₂ * d₁ := hcross
-
 /-- A fixed share balance has a weakly larger floor-valued claim at a weakly
 larger share price. -/
 theorem payN_mono_price {o shares : Nat} (ho : o ≠ 0)
@@ -97,7 +82,7 @@ theorem payN_mono_price {o shares : Nat} (ho : o ≠ 0)
     payN o shares pre.supply pre.balance ≤
       payN o shares post.supply post.balance := by
   unfold payN
-  apply nat_div_le_nat_div_of_cross (by omega) (by omega)
+  apply Jaune.Nat.div_le_div_of_cross (by omega) (by omega)
   unfold PriceLe at hprice
   calc
     shares * (pre.balance + 1) * (post.supply + o) =

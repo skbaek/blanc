@@ -1,6 +1,7 @@
 import Blanc.FakeExponential
 import Blanc.WordFakeExponential
 import Blanc.WordArithmetic
+import Jaune.WordFacts
 
 /-!
 A sufficient, explicit no-wrap domain relating the accepted Nat exponential
@@ -30,12 +31,6 @@ inductive NoWrap {numerator denominator : Nat} :
       (safeNext : NoWrap next (sumPrefix + accumulator)) :
       NoWrap (FakeExponential.Run.step active next) sumPrefix
 
-private theorem toB256_mul (a b : Nat) :
-    a.toB256 * b.toB256 = (a * b).toB256 := by
-  apply B256.toNat_inj
-  simp only [B256.toNat_mul, B256.toNat_toB256, Nat.lo_eq]
-  exact (Nat.mul_mod a b (2 ^ 256)).symm
-
 private theorem nextAccumulator_cast (numerator denominator counter accumulator : Nat)
     (productBound : accumulator * numerator < 2 ^ 256)
     (divisorBound : denominator * counter < 2 ^ 256) :
@@ -43,7 +38,7 @@ private theorem nextAccumulator_cast (numerator denominator counter accumulator 
         counter.toB256 accumulator.toB256 =
       (accumulator * numerator / (denominator * counter)).toB256 := by
   unfold WordFakeExponential.nextAccumulator
-  rw [toB256_mul accumulator numerator, toB256_mul denominator counter,
+  rw [Nat.toB256_mul_toB256 accumulator numerator, Nat.toB256_mul_toB256 denominator counter,
     wordDiv_eq_toB256_div, B256.toNat_toB256_of_lt productBound,
     B256.toNat_toB256_of_lt divisorBound]
 
@@ -106,7 +101,7 @@ theorem NoWrap.fakeExp_eq {factor numerator denominator iterations output : Nat}
       (factor.toB256 * denominator.toB256) 0 wordIterations wordOutput) :
     wordIterations = iterations ∧
       (wordOutput / denominator.toB256).toNat = fakeExp factor numerator denominator := by
-  rw [toB256_mul] at wordRun
+  rw [Nat.toB256_mul_toB256] at wordRun
   obtain ⟨countEq, sumEq⟩ := safe.word_result wordRun
   refine ⟨countEq, ?_⟩
   rw [wordDiv_eq_toB256_div, B256.toNat_toB256_of_lt

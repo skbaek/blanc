@@ -8,6 +8,7 @@ import Blanc.Lift.IdentityCallGas
 import Blanc.Lift.ReturnDataBound
 import Blanc.Lift.InvWalkStep
 import Blanc.Lift.WalkCutKit
+import Jaune.WordFacts
 
 /-!
 # Walking an actual frame derivation over a memory image
@@ -24,8 +25,8 @@ Companions to `Blanc/Lift/FrameWalk.lean` (`XAt`) that no walk needs to restate:
   `write_self`/`write_other`, `Region.append`/`left`/`right`/`head`/`copy`/`slice`, the
   `Mem.Reads.forget` cut (forget an image's construction after drawing the facts a walk still
   needs) and the `wchain` tactic (peel disjoint writes off a `WordAt`/`Region` goal);
-* branch conditions (`eqCheck_ne_zero_eq`, `isNe_fall`, `gtCheck_ne_zero`, `ltCheck_eq_zero_not_lt`,
-  `or_ne_zero`, …), Vyper's checked product `mul_check_toNat`, and `ChildOf.congr_left`.
+* branch conditions (`isNe_fall`, `or_ne_zero`, …; the plain flag facts are Jaune's
+  `B256.eq_of_eqCheck_ne_zero`, `B256.lt_of_gtCheck_ne_zero`, `B256.not_lt_of_ltCheck_eq_zero`), Vyper's checked product `mul_check_toNat`, and `ChildOf.congr_left`.
 
 Nothing here mentions a contract.
 -/
@@ -380,30 +381,13 @@ theorem getStorVal_afterSstore_ne {sevm : Sevm} {b : Devm} {k v x : B256} (h : k
 
 /-! ## Branch conditions -/
 
-theorem eqCheck_ne_zero_eq {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
-  unfold B256.eqCheck at h
-  split_ifs at h with e
-  · exact e
-  · exact absurd rfl h
-
 /-- `ISZERO (EQ x y)` fell through: `x = y`. -/
 theorem isNe_fall {x y : B256} (h : B256.eqCheck (B256.eqCheck x y) 0 = 0) : x = y :=
-  eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero h)
+  B256.eq_of_eqCheck_ne_zero (ne_of_eqCheck_eq_zero h)
 
 /-- `ISZERO (EQ x y)` jumped: `x ≠ y`. -/
 theorem isNe_jump {x y : B256} (h : B256.eqCheck (B256.eqCheck x y) 0 ≠ 0) : x ≠ y :=
-  ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq h)
-
-theorem gtCheck_ne_zero {x y : B256} (h : B256.gtCheck x y ≠ 0) : y < x := by
-  unfold B256.gtCheck at h
-  split_ifs at h with e
-  · exact e
-  · exact absurd rfl h
-
-theorem ltCheck_eq_zero_of_le {x y : B256} (h : y.toNat ≤ x.toNat) : B256.ltCheck x y = 0 := by
-  unfold B256.ltCheck
-  have : ¬ x < y := by rw [B256.lt_iff_toNat_lt_toNat]; omega
-  simp only [this, ↓reduceIte]
+  ne_of_eqCheck_eq_zero (B256.eq_of_eqCheck_ne_zero h)
 
 
 /-! ## Byte-image helpers -/
@@ -465,12 +449,6 @@ theorem or_ne_zero {x y : B256} (h : (x ||| y) ≠ 0) : x ≠ 0 ∨ y ≠ 0 := b
   by_cases hx : x = 0
   · right; intro hy; apply h; rw [hx, hy]; decide
   · exact .inl hx
-
-theorem ltCheck_eq_zero_not_lt {x y : B256} (h : B256.ltCheck x y = 0) : ¬ x < y := by
-  intro e
-  unfold B256.ltCheck at h
-  simp only [e, ↓reduceIte] at h
-  exact absurd h (by decide)
 
 
 /-- A child's relation to its parent's state depends only on the state's code, storage, logs,

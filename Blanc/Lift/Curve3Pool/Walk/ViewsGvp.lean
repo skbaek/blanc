@@ -33,7 +33,7 @@ theorem xa_gvp_xp (hc : Cert.CheckedM code cert mems true)
   xs 0x921 (.push [0x09, 0x26] (by decide)) ri_push  -- 091e PUSH2 0x0926
   xji 0x922 0x926 hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x927  -- 0926 JUMPDEST
   xs 0x92a (.push [0x01, 0x40] (by decide)) ri_push  -- 0927 PUSH2 0x0140
@@ -267,7 +267,7 @@ theorem xa_gvp_d (hc : Cert.CheckedM code cert mems true)
   xji 0xaa1 0xaa5 hw
   · xdead
   have hlen : 32 ≤ out.length := by
-    have e := gtCheck_ne_zero hw
+    have e := B256.lt_of_gtCheck_ne_zero hw
     rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
     exact e
   clear hw
@@ -338,8 +338,8 @@ theorem xa_gvp_d (hc : Cert.CheckedM code cert mems true)
       Mem.read_write_word_inside hW0 1024 _ (by decide) (by decide)]
     decide
   · rcases hmul with h1 | h1
-    · exact .inl (eqCheck_ne_zero_eq h1)
-    · exact .inr (eqCheck_ne_zero_eq h1)
+    · exact .inl (B256.eq_of_eqCheck_ne_zero h1)
+    · exact .inr (B256.eq_of_eqCheck_ne_zero h1)
   · intro a
     rw [hstor', hstor, afterSload_getStor]
   · rw [hlogs', hlogs, afterSload_logs]

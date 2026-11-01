@@ -7,6 +7,7 @@ import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.CodeSizeWalk
 import Blanc.Lift.Vyper
 import Blanc.Lift.PtrWordMemory
+import Jaune.WordFacts
 
 /-!
 # The `SignatureChecker` library rejects a Pair signer (U7a, library side)
@@ -132,18 +133,6 @@ theorem eq_zero_of_iszero_ne {x : B256} (h : B256.eqCheck x 0 ≠ 0) : x = 0 := 
   split at h
   · assumption
   · exact absurd rfl h
-
-theorem lt_of_ltCheck_ne {x y : B256} (h : B256.ltCheck x y ≠ 0) : x < y := by
-  unfold B256.ltCheck at h
-  split at h
-  · assumption
-  · exact absurd rfl h
-
-theorem not_lt_of_ltCheck_eq {x y : B256} (h : B256.ltCheck x y = 0) : ¬ x < y := by
-  intro l
-  unfold B256.ltCheck at h
-  simp only [l, ↓reduceIte] at h
-  exact absurd h (by decide)
 
 /-- A read of at least a word is that word followed by the rest. -/
 theorem read_split (M : Mem) (i n : Nat) (h : 32 ≤ n) :
@@ -318,7 +307,7 @@ private theorem loop12_nonstorage {sevm : Sevm} {b : Devm} {src dst len F : B256
     iterate 11 lx h
     obtain ⟨_, e⟩ := ric_jumpCut List.mem_cons_self h
     subst e
-    have lt := B256.lt_iff_toNat_lt_toNat.mp (lt_of_ltCheck_ne (ne_zero_of_iszero_eq c))
+    have lt := B256.lt_iff_toNat_lt_toNat.mp (B256.lt_of_ltCheck_ne_zero (ne_zero_of_iszero_eq c))
     have hsrc : (i + dst).toNat = i.toNat + dst.toNat := add_toNat_small (by omega)
     simp only [Seg.LoopPost, ↓reduceIte]
     refine ⟨_, _, _, rfl, ((hp.extend _ _).write _ _ (by omega)), ?_⟩
@@ -644,7 +633,7 @@ private theorem loop7_actual {sevm : Sevm} {b : Devm} {sig dig signer ret F E L 
     obtain ⟨_, e⟩ := ric_jumpCut List.mem_cons_self h
     subst e
     have l32 : 32 ≤ len.toNat := by
-      have := not_lt_of_ltCheck_eq c
+      have := B256.not_lt_of_ltCheck_eq_zero c
       rw [B256.lt_iff_toNat_lt_toNat, lit32] at this
       omega
     simp only [Seg.LoopPost, ↓reduceIte]
@@ -709,7 +698,7 @@ private theorem copy_first_actual {sevm : Sevm} {b : Devm} {sig dig signer ret F
   iterate 4 lx h
   rcases ric_branch h with ⟨-, _, h⟩ | ⟨c, _, h⟩
   swap
-  · have := lt_of_ltCheck_ne c
+  · have := B256.lt_of_ltCheck_ne_zero c
     rw [B256.lt_iff_toNat_lt_toNat, lit32, hL] at this
     omega
   iterate 16 lx h

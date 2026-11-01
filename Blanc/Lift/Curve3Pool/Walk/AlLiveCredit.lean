@@ -64,7 +64,7 @@ theorem rx_al_creditE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : 
   xr (rx_lt rfl (by hrs) ·)
   xr (rx_iszero rfl (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
-  xr (rx_branch_succ (by rw [ltCheck_eq_zero_of_le (by rw [← B256.le_iff_toNat_le_toNat]; exact not_lt.mp hadd)]; decide) ·)
+  xr (rx_branch_succ (by rw [B256.ltCheck_eq_zero_of_toNat_le (by rw [← B256.le_iff_toNat_le_toNat]; exact not_lt.mp hadd)]; decide) ·)
   xr (rx_dest ·)
   xr (rx_dup rfl (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)

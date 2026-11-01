@@ -79,7 +79,7 @@ structure LoopInv (sevm : Sevm) (i : Nat) (b : Devm) (M : Mem) : Prop where
 
 theorem toB256_add_push {i c : Nat} {x : UInt8} (hx : Bytes.toB256 [x] = Nat.toB256 c)
     (h : i + c < 2 ^ 256) : Nat.toB256 i + Bytes.toB256 [x] = Nat.toB256 (c + i) := by
-  rw [hx, toB256_add_toB256 (by omega), Nat.add_comm]
+  rw [hx, Nat.toB256_add_toB256 _ _, Nat.add_comm]
 
 theorem ctorStor_get {i j : Nat} {s : Stor} (h : CtorStor i s) (hj : j ≤ i) (hi : i < 1000) :
     s.get (Nat.toB256 (33 + j)) = zeroHash Bytes.sha256 j := by

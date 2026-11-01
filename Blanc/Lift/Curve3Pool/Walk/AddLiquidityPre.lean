@@ -97,7 +97,7 @@ theorem xa_al_p1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xji 0xe5f 0xe63 hw
   · xdead
   have hlock : (b.getStor sevm.currentTarget).get lockSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [lockSlot_lit] at e
     exact e
   clear hw
@@ -110,7 +110,7 @@ theorem xa_al_p1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xs 0xe70 (.push [0x0e, 0x75] (by decide)) ri_push
   xji 0xe71 0xe75 hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0xe76
   xs 0xe78 (.push [0x0f] (by decide)) ri_push
@@ -120,7 +120,7 @@ theorem xa_al_p1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xji 0xe7e 0xe82 hw
   · xdead
   have hkill : (b.getStor sevm.currentTarget).get isKilledSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [getStorVal_afterSstore_ne (by decide), getStorVal_eq, afterSload_getStor,
       isKilledSlot_lit] at e
     exact e
@@ -316,7 +316,7 @@ theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xji 0xf36 0xf3a hw2
   · xdead
   have hlen : 32 ≤ out.length := by
-    have e := gtCheck_ne_zero hw2
+    have e := B256.lt_of_gtCheck_ne_zero hw2
     rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
     exact e
   clear hw2

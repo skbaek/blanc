@@ -59,7 +59,7 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
   xs 0xb0c (.push [0x0b, 0x11] (by decide)) ri_push  -- 0b09 PUSH2 0x0b11
   xji 0xb0d 0xb11 hw
   · xdead  -- 0b0c JUMPI
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0xb12  -- 0b11 JUMPDEST
   xs 0xb14 (.push [0x64] (by decide)) ri_push  -- 0b12 PUSH1 0x64

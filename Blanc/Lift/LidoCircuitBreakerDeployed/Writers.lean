@@ -2,6 +2,7 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.FrameMem
 import Blanc.Lift.LidoCircuitBreakerDeployed.L2
 import Blanc.Lift.LidoCircuitBreakerDeployed.SetPauserNonzero
 import Blanc.Lift.LidoCircuitBreakerDeployed.NoHalt
+import Jaune.WordFacts
 
 /-!
 # The deployed Lido `registerPauser` wrapper, walked
@@ -26,12 +27,6 @@ open Jaune
 open Blanc
 open Blanc.Lift
 open Blanc.LidoCircuitBreaker
-
-theorem eq_of_eqCheck_ne {a b : B256} (h : B256.eqCheck a b ≠ 0) : a = b := by
-  unfold B256.eqCheck at h
-  split_ifs at h with he
-  · exact he
-  · exact absurd rfl h
 
 theorem canonical_toAdr_toB256 (x : B256) : canonicalAddress x.toAdr.toB256 := by
   unfold canonicalAddress
@@ -78,7 +73,7 @@ theorem entry29_ret {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {off ra : B256}
   obtain ⟨G9, rfl⟩ := ri_push s1
   rcases ric_branch run with ⟨-, G10, run⟩ | ⟨hnz, G10, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run (by decide)).elim
-  · refine ⟨canonical_of_mask_eq (eq_of_eqCheck_ne hnz), ?_⟩
+  · refine ⟨canonical_of_mask_eq (B256.eq_of_eqCheck_ne_zero hnz), ?_⟩
     unfold t_0fb6_c29 at run
     obtain ⟨G11, run⟩ := ric_dest run
     obtain ⟨d1, s1, run⟩ := ric_next run
@@ -824,7 +819,7 @@ theorem entry21_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
     rw [afterSload_getStor]
     exact hinv2
   · -- no previous pauser: entry 2 skips its heartbeat
-    have hp00 : p0 = 0 := eq_of_eqCheck_ne hnz
+    have hp00 : p0 = 0 := B256.eq_of_eqCheck_ne_zero hnz
     refine t0409_preserves hΦ hfork hp0c hnp (fun h => absurd ?_ h) (hfanp ht0) hinv2 run
     rw [hp00]; decide
 

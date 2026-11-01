@@ -221,11 +221,11 @@ variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B25
 
 theorem toB256_add_0x20 {p : Nat} (hp : p + 32 < 2 ^ 256) :
     Nat.toB256 p + Bytes.toB256 [0x20] = Nat.toB256 (p + 32) := by
-  rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, toB256_add_toB256 hp]
+  rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, Nat.toB256_add_toB256 _ _]
 
 theorem toB256_sub_0x20 {p : Nat} (h32 : 32 ≤ p) (hp : p < 2 ^ 256) :
     Nat.toB256 p - Bytes.toB256 [0x20] = Nat.toB256 (p - 32) := by
-  rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, toB256_sub_toB256 h32 hp]
+  rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, Nat.toB256_sub_toB256 h32 hp]
 
 /-- **One save iteration, inverted**: the word at the counter's value `p` is pushed and the
 counter becomes `p + 32`; the run goes on in one of the `JUMPI` arms. -/

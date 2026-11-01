@@ -57,7 +57,7 @@ theorem rx_rli_toSupply {sevm : Sevm} {pre : Devm} {W : Devm → Prop} {G U : Na
     rw [vyImg_selector]; exact hsel
   have hlen4 : B256.eqCheck (B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [0x04]))
       0 ≠ 0 := by
-    rw [ltCheck_eq_zero_of_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide
+    rw [B256.ltCheck_eq_zero_of_toNat_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide
   xr (rx_push rfl (by hr) ·)
   xr (rx_calldatasize (by hr) ·)
   xr (rx_lt rfl (by hr) ·)

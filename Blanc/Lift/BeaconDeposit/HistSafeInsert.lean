@@ -145,7 +145,7 @@ theorem safe_insertDeadH_of_rules {sevm : Sevm} {b : Devm} {sz nd : B256} {R : L
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := Nat.toB256 (h + 1))
-    (by rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, toB256_add_toB256 (by omega),
+    (by rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, Nat.toB256_add_toB256 _ _,
       Nat.add_comm]) (ri_add s1)
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s1
   obtain ⟨Gf, hr⟩ := ric_jumpCut (by simp only [List.mem_cons, List.not_mem_nil, or_false]) run

@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.RefineTransferCallees
+import Jaune.WordFacts
 
 /-!
 # Certificate walks of the callees the signed family shares (U6e2)
@@ -81,18 +82,6 @@ theorem boolBit_false_of_check {w : B256}
 
 theorem lit16 : Bytes.toB256 [16] = 16 := by decide
 
-theorem lt_of_gtCheck_ne_zero {x y : B256} (h : B256.gtCheck x y ≠ 0) : y < x := by
-  unfold B256.gtCheck at h
-  split at h
-  · assumption
-  · exact absurd rfl h
-
-theorem lt_of_ltCheck_ne_zero {x y : B256} (h : B256.ltCheck x y ≠ 0) : x < y := by
-  unfold B256.ltCheck at h
-  split at h
-  · assumption
-  · exact absurd rfl h
-
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 
 /-- **Entry 110, `_requireUnusedAuthorization(a, n)`**: reads the authorization-state word of
@@ -142,7 +131,7 @@ theorem e112_inv {vb va n a ret : B256} {o : Outcome} (fork : CoveredFork sevm.b
   repeat istep h
   obtain ⟨_, e⟩ := ric_ret h
   cases e
-  exact ⟨lt_of_gtCheck_ne_zero c1, lt_of_ltCheck_ne_zero c2, c3, _, _, _, rfl, s1⟩
+  exact ⟨B256.lt_of_gtCheck_ne_zero c1, B256.lt_of_ltCheck_ne_zero c2, c3, _, _, _, rfl, s1⟩
 
 /-- **Entry 113, `_markAuthorizationAsUsed(a, n)`**: the authorization-state write at `0x5060`. -/
 theorem e113_inv {n a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)

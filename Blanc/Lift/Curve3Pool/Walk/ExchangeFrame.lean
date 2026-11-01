@@ -61,7 +61,7 @@ theorem ex_ltCheck {p q : Nat} (hp : p < 2 ^ 256) (hq : q < 2 ^ 256) :
       rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hp, B256.toNat_toB256_of_lt hq]
       exact hlt) h
   · intro h
-    exact ltCheck_eq_zero_of_le (by
+    exact B256.ltCheck_eq_zero_of_toNat_le (by
       rw [B256.toNat_toB256_of_lt hp, B256.toNat_toB256_of_lt hq]; omega)
 
 /-- **`PC` on the actual derivation** pushes the instruction's own pc (`xa_next` forgets it). -/
@@ -240,7 +240,7 @@ theorem xa_ex_saveStep {sevm : Sevm} {post : Devm} {L : List Exec.Frame} {b : De
     rw [if_neg (by omega)]
     exact ⟨_, _, hR, hW, h⟩
   · have hge : ¬ p + 32 < 0x7e0 := (ex_ltCheck (q := 0x7e0) (by omega) (by decide)).mp
-      (eqCheck_ne_zero_eq hw)
+      (B256.eq_of_eqCheck_ne_zero hw)
     xjd 0x2777
     rw [if_pos (by omega)]
     exact ⟨_, _, hR, hW, h⟩
@@ -315,13 +315,13 @@ theorem xa_ex_restoreStep {sevm : Sevm} {post : Devm} {L : List Exec.Frame} {b :
   xs 0x27f7 (.push [0x27, 0xfc] (by decide)) ri_push
   xji 0x27f8 0x27fc hw
   · have hge : ¬ q - 32 < 0x140 := (ex_ltCheck (q := 0x140) (by omega) (by decide)).mp
-      (eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw))
+      (B256.eq_of_eqCheck_ne_zero (ne_of_eqCheck_eq_zero hw))
     xs 0x27fb (.push [0x27, 0xd9] (by decide)) ri_push
     xjmp 0x27d9
     rw [if_neg (by omega)]
     exact ⟨_, _, hR, hW, h⟩
   · have hlt : q - 32 < 0x140 := by
-      have e := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have e := ne_of_eqCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       by_contra hn
       exact e ((ex_ltCheck (q := 0x140) (by omega) (by decide)).mpr hn)
     xjd 0x27fd

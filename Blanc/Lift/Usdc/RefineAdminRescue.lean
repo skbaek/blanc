@@ -42,7 +42,7 @@ theorem len_of_checks {n : Nat} (hl : Nat.toB256 n <? Bytes.toB256 [4] = 0)
   by_cases hn : n < 2 ^ 256
   · have e := B256.toNat_toB256_of_lt hn
     have a := toNat_ge_of_ltCheck_eq_zero hl
-    have c := toNat_ge_of_ltCheck_eq_zero (eq_of_eqCheck_ne_zero h1)
+    have c := toNat_ge_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero h1)
     rw [B256.toNat_sub_eq_of_le _ _ (B256.le_of_toNat_le_toNat a), e,
       show (Bytes.toB256 [4]).toNat = 4 from by decide, show (Bytes.toB256 [96]).toNat = 96 from by decide] at c
     omega
@@ -148,7 +148,7 @@ theorem rescue_facts (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_push s; clear s
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h2, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
-  exact ⟨eq_of_eqCheck_ne_zero hv, len_of_checks hl h1, Blanc.Lift.Usdc.caller_of_eqCheck h2⟩
+  exact ⟨B256.eq_of_eqCheck_ne_zero hv, len_of_checks hl h1, Blanc.Lift.Usdc.caller_of_eqCheck h2⟩
 
 theorem reach_rescue {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {T : Conf}

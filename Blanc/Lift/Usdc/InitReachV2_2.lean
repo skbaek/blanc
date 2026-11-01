@@ -233,7 +233,7 @@ theorem pass22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
   cases hg
   rw [show Bytes.toB256 [1] + i.toB256 = (i + 1).toB256 by
     rw [B256.add_comm]
-    exact toB256_add_toB256 (a := i) (b := 1) (by have := B256.toNat_lt aL; omega)] at run
+    exact Nat.toB256_add_toB256 i 1] at run
   exact .inr (.inl ⟨_, _, _, hlt, run⟩)
 
 theorem pass22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')

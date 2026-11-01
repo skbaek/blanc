@@ -270,12 +270,12 @@ theorem xa_ex_dy {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
     xrevert
   xjd 0x2970
   obtain ⟨img1, hR1, hI⟩ := Mem.Reads.forget hR
-  refine ⟨ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hy1),
-    ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hy2),
-    (or_ne_zero hm1).imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq,
-    ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hf1),
-    (or_ne_zero hm2).imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq,
-    ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hmin), _, img1, _, hR1, hW,
+  refine ⟨B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hy1),
+    B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hy2),
+    (or_ne_zero hm1).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero,
+    B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hf1),
+    (or_ne_zero hm2).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero,
+    B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hmin), _, img1, _, hR1, hW,
     hF.mono fun o v hv ho => by rw [hI]; wchain; exact hv, by rw [hI]; wchain,
     by rw [hI]; wchain, h⟩
 
@@ -547,11 +547,11 @@ theorem xa_ex_store {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   rw [keccak_one] at h
   xs 0x2ab3 (.reg .add) ri_add
   xw 0x2ab4 (.reg .sstore) ri_sstore
-  refine ⟨(or_ne_zero hm1).imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq,
-    (or_ne_zero hm2).imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq,
-    ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hadd),
-    ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hs1),
-    ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hs2), _, _, _, hR, hW, fun o v hv h1 h2 => ?_, h⟩
+  refine ⟨(or_ne_zero hm1).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero,
+    (or_ne_zero hm2).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero,
+    B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hadd),
+    B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hs1),
+    B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hs2), _, _, _, hR, hW, fun o v hv h1 h2 => ?_, h⟩
   refine WordAt.write_other (WordAt.write_other (WordAt.write_other (WordAt.write_other hv ?_) ?_)
     ?_) ?_ <;> simp only [B256.length_toBytes] <;> omega
 

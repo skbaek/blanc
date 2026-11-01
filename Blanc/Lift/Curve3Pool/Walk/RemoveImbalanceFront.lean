@@ -61,7 +61,7 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
   xji 0x3059 0x305d hw
   · xdead
   have hlock : (b.getStor sevm.currentTarget).get lockSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [lockSlot_lit] at e
     exact e
   clear hw
@@ -74,7 +74,7 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
   xs 0x306a (.push [0x30, 0x6f] (by decide)) ri_push  -- 3067 PUSH2 0x306f
   xji 0x306b 0x306f hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x3070  -- 306f JUMPDEST
   xs 0x3072 (.push [0x0f] (by decide)) ri_push  -- 3070 PUSH1 0x0f
@@ -84,7 +84,7 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
   xji 0x3078 0x307c hw
   · xdead
   have hkill : (b.getStor sevm.currentTarget).get isKilledSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [isKilledSlot_lit, getStorVal_afterSstore_ne (by decide), getStorVal_afterSload,
       getStorVal_eq] at e
     exact e
@@ -124,7 +124,7 @@ theorem xa_rli_front (hc : Cert.CheckedM code cert mems true)
   xji 0x30a6 0x30aa hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by
-    have e := gtCheck_ne_zero hw
+    have e := B256.lt_of_gtCheck_ne_zero hw
     rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
     exact e
   clear hw

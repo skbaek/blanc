@@ -122,7 +122,7 @@ theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
   xji 0xda0 0xda4 hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by
-    have e := gtCheck_ne_zero hw
+    have e := B256.lt_of_gtCheck_ne_zero hw
     rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
     exact e
   clear hw
@@ -145,7 +145,7 @@ theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
   xs 0xdbd (.push [0x0d, 0xe2] (by decide)) ri_push  -- dba PUSH2 0x0de2
   xji 0xdbe 0xde2 hw
   swap
-  · have hd0 := eqCheck_ne_zero_eq hw
+  · have hd0 := B256.eq_of_eqCheck_ne_zero hw
     clear hw
     xjd 0xde3  -- de2 JUMPDEST
     xs 0xde6 (.push [0x02, 0x00] (by decide)) ri_push  -- de3 PUSH2 0x0200

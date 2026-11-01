@@ -73,7 +73,7 @@ theorem xa_al_finish {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
   xs 0x185a (.push [0x18, 0x5f] (by decide)) ri_push
   xji 0x185b 0x185f hw
   · xdead
-  have hTa := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hTa := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x1860
   xs 0x1861 (.reg (.dup 0)) (ri_dup (by rfl))

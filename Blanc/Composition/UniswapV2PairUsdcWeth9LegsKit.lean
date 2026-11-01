@@ -4,7 +4,7 @@ import Blanc.Lift.ExactWalkOps
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.InvWalkStep
-import Blanc.B256CheckFacts
+import Jaune.WordFacts
 import Jaune.DevmProjections
 
 /-!

@@ -49,7 +49,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xji 0x2c72 0x2c76 hw
   · xdead
   have hlock : (b.getStor sevm.currentTarget).get lockSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [lockSlot_lit] at e
     exact e
   clear hw
@@ -62,7 +62,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xs 0x2c83 (.push [0x2c, 0x88] (by decide)) ri_push
   xji 0x2c84 0x2c88 hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   refine ⟨hlock, hval, ?_⟩
   xjd 0x2c89
@@ -108,7 +108,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xji 0x2cb2 0x2cb6 hw2
   · xdead
   have hlen : 32 ≤ out.length := by
-    have e := gtCheck_ne_zero hw2
+    have e := B256.lt_of_gtCheck_ne_zero hw2
     rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
     exact e
   clear hw2

@@ -31,7 +31,7 @@ theorem xa_al_feePre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
   xs 0x13fd (.push [0x16, 0xe3] (by decide)) ri_push
   xji 0x13fe 0x16e3 hw
   · have hn : T ≠ 0 := by
-      have hg := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+      have hg := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       intro e; subst e; exact absurd hg (by decide)
     xs 0x1401 (.push [0x0a, 0x40] (by decide)) ri_push
     xs 0x1403 (.push [0x00] (by decide)) ri_push
@@ -49,7 +49,7 @@ theorem xa_al_feePre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
     · wchain
     · rw [show Nat.toB256 0 = Bytes.toB256 [0] by decide]; wchain
   · have hz : T = 0 := by
-      have hn := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have hn := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       apply B256.toNat_inj T 0
       have he : (Bytes.toB256 [0]).toNat = 0 := by decide
       rw [B256.lt_iff_toNat_lt_toNat] at hn
@@ -111,7 +111,7 @@ theorem xa_al_feeDiff {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   xs 0x1435 (.push [0x14, 0x3a] (by decide)) ri_push
   xji 0x1436 0x143a hmul
   · xdead
-  have hmul' := (or_ne_zero hmul).imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq
+  have hmul' := (or_ne_zero hmul).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero
   clear hmul
   xjd 0x143b
   xs 0x143c (.reg (.dup 0)) (ri_dup (by rfl))
@@ -203,7 +203,7 @@ theorem xa_al_feeDiff {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
     xma 0x14b9 (.reg .mstore) (ri_mstore_imgAtA (o := 0xa80) rfl)
     xs 0x14bc (.push [0x14, 0xf3] (by decide)) ri_push
     xjmp 0x14f3
-    refine ⟨_, _, _, _, hmul', hd, .inl ⟨gtCheck_ne_zero (ne_of_eqCheck_eq_zero hdiff), rfl⟩,
+    refine ⟨_, _, _, _, hmul', hd, .inl ⟨B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hdiff), rfl⟩,
       hR, hW, hA, ?_, ?_, ?_, WordAt.write_self _ _ _, h⟩
     · intro o w hw ho
       exact ((hw.write_other (by simp only [B256.length_toBytes]; omega)).write_other
@@ -249,7 +249,7 @@ theorem xa_al_feeDiff {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
     xs 0x14ef (.reg .pop) ri_pop
     xs 0x14f2 (.push [0x0a, 0x80] (by decide)) ri_push
     xma 0x14f3 (.reg .mstore) (ri_mstore_imgAtA (o := 0xa80) rfl)
-    refine ⟨_, _, _, _, hmul', hd, .inr ⟨gtCheck_eq_zero (eqCheck_ne_zero_eq hdiff), rfl⟩,
+    refine ⟨_, _, _, _, hmul', hd, .inr ⟨gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hdiff), rfl⟩,
       hR, hW, hA, ?_, ?_, ?_, WordAt.write_self _ _ _, h⟩
     · intro o w hw ho
       exact ((hw.write_other (by simp only [B256.length_toBytes]; omega)).write_other
@@ -289,7 +289,7 @@ theorem xa_al_feeWord {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   xs 0x150a (.push [0x15, 0x0f] (by decide)) ri_push
   xji 0x150b 0x150f hmul
   · xdead
-  have hmul' := (or_ne_zero hmul).imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq
+  have hmul' := (or_ne_zero hmul).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero
   clear hmul
   xjd 0x1510
   xs 0x1511 (.reg (.dup 0)) (ri_dup (by rfl))
@@ -400,7 +400,7 @@ theorem xa_al_adminStore {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G 
   xs 0x158b (.push [0x15, 0x90] (by decide)) ri_push
   xji 0x158c 0x1590 hmul
   · xdead
-  have hmulAF := (or_ne_zero hmul).imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq
+  have hmulAF := (or_ne_zero hmul).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero
   clear hmul
   xjd 0x1591
   xs 0x1592 (.reg (.dup 0)) (ri_dup (by rfl))
@@ -432,7 +432,7 @@ theorem xa_al_adminStore {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G 
   rw [show Bytes.toB256 [0x02, 0x54, 0x0b, 0xe4, 0x00] = Nat.toB256 feeDen by decide] at h
   xji 0x15b7 0x15bb hsub
   · xdead
-  have hge := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hsub)
+  have hge := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hsub)
   xjd 0x15bc
   xs 0x15bd (.reg (.dup 0)) (ri_dup (by rfl))
   xs 0x15be (.reg (.dup 2)) (ri_dup (by rfl))
@@ -522,7 +522,7 @@ theorem xa_al_feeNext {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   xs 0x161a (.push [0x16, 0x1f] (by decide)) ri_push
   xji 0x161b 0x161f hsub
   · xdead
-  have hge := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hsub)
+  have hge := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hsub)
   refine ⟨hge, ?_⟩
   xjd 0x1620
   xs 0x1621 (.reg (.dup 0)) (ri_dup (by rfl))
@@ -563,7 +563,7 @@ theorem xa_al_feeNext {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
     (WordAt.write_self _ _ _).write_other (by simp only [B256.length_toBytes]; omega)
   xji 0x163a 0x1409 hw
   · have e : i + 1 = 3 := by
-      have he := eqCheck_ne_zero_eq (ne_of_eqCheck_eq_zero hw)
+      have he := B256.eq_of_eqCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       rcases three_cases hi with rfl | rfl | rfl
       · exact absurd he (by decide)
       · exact absurd he (by decide)
@@ -571,7 +571,7 @@ theorem xa_al_feeNext {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
     rw [ite_eq_left e]
     exact ⟨_, _, _, hR, hW, hA, P, WordAt.write_self _ _ _, hn, h⟩
   · have e : i + 1 ≠ 3 := by
-      have he := ne_of_eqCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have he := ne_of_eqCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       intro e
       rcases three_cases hi with rfl | rfl | rfl
       · omega

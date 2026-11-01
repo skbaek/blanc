@@ -235,13 +235,13 @@ theorem xa_restoreIter (hat : RestoreAt sevm.code H t) {p : Nat} {w : B256}
   ys hat.i15 ri_iszero
   ys hat.i16 ri_push
   rcases xa_jumpi_St hat.i17 h with ⟨hw0, _, h⟩ | ⟨hw0, _, h⟩
-  · have hlt := ltCheck_eq_zero (eqCheck_ne_zero (eqCheck_zero_eq_zero hw0))
+  · have hlt := ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero (eqCheck_zero_eq_zero hw0))
     rw [B256.toNat_toB256_of_lt (by omega)] at hlt
     ys hat.i18 ri_push
     obtain ⟨G', h⟩ := xa_jump_St hat.i19 h
     rw [hat.hh] at h
     exact ⟨G', .inl ⟨hlt, h⟩⟩
-  · have hlt := ltCheck_ne_zero (eqCheck_zero_eq_zero (eqCheck_ne_zero hw0))
+  · have hlt := ltCheck_ne_zero (eqCheck_zero_eq_zero (B256.eq_of_eqCheck_ne_zero hw0))
     rw [B256.toNat_toB256_of_lt (by omega)] at hlt
     obtain ⟨G', h⟩ := xa_jumpdest_St hat.ix h
     exact ⟨G', .inr ⟨hlt, h⟩⟩

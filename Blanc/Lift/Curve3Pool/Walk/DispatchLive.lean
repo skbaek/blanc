@@ -33,7 +33,7 @@ theorem rxe_dispatch {sevm : Sevm} {b : Devm} {G N : Nat} {σ : B256} {q : SFunc
     SFunc.RunEx cert.prog sevm (St b [] Mem.empty (G + N)) t_0000_c0 Q := by
   have hlen4 : B256.eqCheck (B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [0x04]))
       0 ≠ 0 := by
-    rw [ltCheck_eq_zero_of_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide
+    rw [B256.ltCheck_eq_zero_of_toNat_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide
   have k' := rxe_vyFwd (S := []) hsel (by decide) 64 poolHead (by rw [hq]; exact k)
   rw [hq] at k'
   rw [show G + N = G + (N - 100) + 75 + 1 + 10 + 3 + 3 + 3 + 2 + 3 by omega]

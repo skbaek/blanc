@@ -97,7 +97,7 @@ theorem xa_oc_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xji 0x45c5 0x45c9 hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by
-    have := gtCheck_ne_zero hw
+    have := B256.lt_of_gtCheck_ne_zero hw
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at this
     rw [hc'.output]; omega

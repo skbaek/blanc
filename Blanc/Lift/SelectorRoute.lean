@@ -1,5 +1,6 @@
 import Blanc.Lift.ReachDispatch
 import Blanc.Lift.InvWalkWorld
+import Jaune.WordFacts
 
 /-!
 # The route of a selector word through a solc binary-search dispatcher
@@ -117,12 +118,6 @@ theorem rr_cmp_eq_either (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
   · obtain ⟨_, word, eq⟩ := St.of_pop2 pop
     exact .inr ⟨word ▸ nonzero, g, _, entry, eq ▸ h⟩
 
-theorem eq_of_eqCheck_ne {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
-  unfold B256.eqCheck at h
-  split at h
-  · assumption
-  · exact absurd rfl h
-
 /-- A raw reach through the comparison walk retains its first non-comparison leaf. -/
 theorem Reach.selWalk_inr (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {σ : B256} {f t : SFunc} (hw : f.selWalk σ = .inr t) {b : Devm}
@@ -175,7 +170,7 @@ theorem Reach.selWalk_inl (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Sum.inl.inj hw)
       rcases rr_cmp_eq_either hP run hT with ⟨zero, -⟩ | ⟨ne, r⟩
       · exact absurd zero h
-      · exact ⟨(eq_of_eqCheck_ne ne).symm, r⟩
+      · exact ⟨(B256.eq_of_eqCheck_ne_zero ne).symm, r⟩
   | case6 => cases hw
 
 /-! ### Cut runs -/
@@ -254,7 +249,7 @@ theorem SFunc.RunCut.selWalk_inl {fs : List SFunc} {sevm : Sevm} {σ c : B256}
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Sum.inl.inj hw)
       rcases ric_cmp_eq_either run with ⟨zero, -⟩ | ⟨ne, r⟩
       · exact absurd zero h
-      · exact ⟨(eq_of_eqCheck_ne ne).symm, r⟩
+      · exact ⟨(B256.eq_of_eqCheck_ne_zero ne).symm, r⟩
   | case6 => cases hw
 
 end Walk
@@ -361,15 +356,9 @@ theorem SFunc.RunCut.headWord {fs : List SFunc} {sevm : Sevm} {C : List Nat} {t 
       rcases ric_branch h with ⟨-, _, h'⟩ | ⟨nz, -⟩
       · exact (h'.false_of_noOk cond.2).elim
       · rw [← cond.1]
-        exact eq_of_eqCheck_ne nz
+        exact B256.eq_of_eqCheck_ne_zero nz
     · cases hw
   · cases hw
-
-theorem not_lt_of_ltCheck_zero {x y : B256} (h : B256.ltCheck x y = 0) : ¬ x < y := by
-  unfold B256.ltCheck at h
-  split at h
-  · exact absurd h (by decide)
-  · assumption
 
 /-- **The head fits.**  Calldata of `L` bytes the machine reads as at least four bytes, and then
 as at least `32 h` bytes after the selector, has `4 + 32 h` bytes. -/
@@ -381,13 +370,13 @@ theorem calldata_head_fits {L h : Nat} (h0 : B256.ltCheck L.toB256 4 = 0)
   have hL : L.toB256.toNat = L := B256.toNat_toB256_of_lt (by omega)
   have four : (4 : B256).toNat = 4 := rfl
   have le4 : 4 ≤ L := by
-    have := not_lt_of_ltCheck_zero h0
+    have := B256.not_lt_of_ltCheck_eq_zero h0
     rw [B256.lt_iff_toNat_lt_toNat, hL, four] at this
     omega
   rcases hh with rfl | hh
   · omega
   have hle : (4 : B256) ≤ L.toB256 := B256.le_of_toNat_le_toNat (by rw [hL, four]; exact le4)
-  have := not_lt_of_ltCheck_zero hh
+  have := B256.not_lt_of_ltCheck_eq_zero hh
   rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_sub_eq_of_le _ _ hle, hL, four,
     B256.toNat_toB256_of_lt (by omega)] at this
   omega

@@ -1,7 +1,7 @@
 import Blanc.Lift.ExactWalkCut
 import Blanc.ForwardSha256
 import Blanc.ForwardStorageAccess
-import Jaune.MulDiv
+import Jaune.WordFacts
 
 /-!
 # More walk steps for exact runs and exact cut runs
@@ -29,21 +29,6 @@ open Jaune
 
 /-! ## Word arithmetic on small pointers -/
 
-theorem toB256_add_toB256 {a b : Nat} (h : a + b < 2 ^ 256) :
-    Nat.toB256 a + Nat.toB256 b = Nat.toB256 (a + b) := by
-  apply B256.toNat_inj
-  rw [B256.toNat_add, B256.toNat_toB256_of_lt (by omega), B256.toNat_toB256_of_lt (by omega),
-    B256.toNat_toB256_of_lt h, Nat.lo_eq_of_lt h]
-
-theorem toB256_sub_toB256 {a b : Nat} (hb : b ≤ a) (ha : a < 2 ^ 256) :
-    Nat.toB256 a - Nat.toB256 b = Nat.toB256 (a - b) := by
-  apply B256.toNat_inj
-  rw [B256.toNat_sub_eq_of_le _ _ (by
-      rw [B256.le_iff_toNat_le_toNat, B256.toNat_toB256_of_lt (by omega),
-        B256.toNat_toB256_of_lt ha]; exact hb),
-    B256.toNat_toB256_of_lt ha, B256.toNat_toB256_of_lt (show b < 2 ^ 256 by omega),
-    B256.toNat_toB256_of_lt (show a - b < 2 ^ 256 by omega)]
-
 theorem toB256_div_two {y : Nat} (hy : y < 2 ^ 256) : Nat.toB256 y / 2 = Nat.toB256 (y / 2) := by
   apply B256.toNat_inj
   rw [B256.toNat_div (by decide), B256.toNat_toB256_of_lt hy,
@@ -53,7 +38,7 @@ theorem toB256_div_two {y : Nat} (hy : y < 2 ^ 256) : Nat.toB256 y / 2 = Nat.toB
 /-- A counter's increment by the pushed one-byte immediate `0x01`. -/
 theorem one_add_toB256 {h : Nat} (hh : h + 1 < 2 ^ 256) :
     Bytes.toB256 [0x01] + Nat.toB256 h = Nat.toB256 (h + 1) := by
-  rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, toB256_add_toB256 (by omega),
+  rw [show Bytes.toB256 [0x01] = Nat.toB256 1 by decide, Nat.toB256_add_toB256 _ _,
     Nat.add_comm]
 
 /-! ## What the SHA-256 precompile call leaves -/

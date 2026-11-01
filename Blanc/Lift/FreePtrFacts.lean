@@ -660,7 +660,7 @@ theorem learn1_sound (hf : AllHold ν fs) {z nz : List Nat} (hz : ∀ s ∈ z, �
         intro hs
         rw [hs] at hfh
         simp only [B256.eqCheck, ↓reduceIte] at hfh
-        exact B256.one_ne_zero' (hfh.symm.trans h0)
+        exact B256.one_ne_zero (hfh.symm.trans h0)
       exact ⟨toNat_pos_of_ne hs, toNat_le_maxW _⟩
     · split at hg
       · rename_i _ hr
@@ -687,7 +687,7 @@ theorem learn1_sound (hf : AllHold ν fs) {z nz : List Nat} (hz : ∀ s ∈ z, �
         have hxy : ν x < ν y := B256.lt_iff_toNat_lt_toNat.mpr (by omega)
         rw [hfh] at h0
         simp only [B256.ltCheck, hxy, ↓reduceIte] at h0
-        exact B256.one_ne_zero' h0
+        exact B256.one_ne_zero h0
       have := le_hi hf x; have := lo_le hf y; have := toNat_le_maxW (ν x)
       simp only [List.mem_cons, List.not_mem_nil, or_false] at hg
       rcases hg with rfl | rfl | rfl

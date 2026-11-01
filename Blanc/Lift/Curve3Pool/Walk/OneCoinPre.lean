@@ -53,7 +53,7 @@ theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
   xji 0x4416 0x441a hw
   · xdead
   have hlock : (b.getStor sevm.currentTarget).get lockSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [lockSlot_lit] at e
     exact e
   clear hw
@@ -66,7 +66,7 @@ theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
   xs 0x4427 (.push [0x44, 0x2c] (by decide)) ri_push  -- 4424 PUSH2 0x442c
   xji 0x4428 0x442c hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x442d  -- 442c JUMPDEST
   xs 0x442f (.push [0x60] (by decide)) ri_push  -- 442d PUSH1 0x60
@@ -102,7 +102,7 @@ theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
   xji 0x445a 0x445e hw
   · xdead
   have hkill : (b.getStor sevm.currentTarget).get isKilledSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [isKilledSlot_lit, getStorVal_afterSstore_ne (by decide), getStorVal_afterSload,
       getStorVal_eq] at e
     exact e
@@ -250,7 +250,7 @@ theorem xa_oc_b (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fo
   · xs 0x4502 (.push [0x64] (by decide)) ri_push
     xs 0x4505 (.push [0x02, 0x7c] (by decide)) ri_push
     xrevert
-  have hmin := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hmin := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x4507  -- 4506 JUMPDEST
   xs 0x4509 (.push [0x24] (by decide)) ri_push  -- 4507 PUSH1 0x24
@@ -326,7 +326,7 @@ theorem xa_oc_b (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fo
   xs 0x456a (.push [0x45, 0x6f] (by decide)) ri_push  -- 4567 PUSH2 0x456f
   xji 0x456b 0x456f hw
   · xdead
-  have hadd := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hadd := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x4570  -- 456f JUMPDEST
   xs 0x4571 (.reg (.dup 0)) (ri_dup (by rfl))  -- 4570 DUP1
@@ -343,7 +343,7 @@ theorem xa_oc_b (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fo
   xs 0x457e (.push [0x45, 0x83] (by decide)) ri_push  -- 457b PUSH2 0x4583
   xji 0x457f 0x4583 hw
   · xdead
-  have hsub := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hsub := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x4584  -- 4583 JUMPDEST
   xs 0x4585 (.reg (.dup 0)) (ri_dup (by rfl))  -- 4584 DUP1

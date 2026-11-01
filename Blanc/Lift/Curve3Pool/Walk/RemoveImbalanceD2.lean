@@ -130,7 +130,7 @@ theorem xa_rli_d2 (hc : Cert.CheckedM code cert mems true)
   xs 0x3653 (.push [0x36, 0x58] (by decide)) ri_push  -- 3650 PUSH2 0x3658
   xji 0x3654 0x3658 hw
   · xdead
-  have hD02 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hD02 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x3659  -- 3658 JUMPDEST
   xs 0x365a (.reg (.dup 0)) (ri_dup (by rfl))  -- 3659 DUP1
@@ -207,7 +207,7 @@ theorem xa_rli_d2 (hc : Cert.CheckedM code cert mems true)
   xs 0x36b8 (.push [0x36, 0xbd] (by decide)) ri_push  -- 36b5 PUSH2 0x36bd
   xji 0x36b9 0x36bd hw
   · xdead
-  have hb1 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hb1 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x36be  -- 36bd JUMPDEST
   xs 0x36bf (.reg (.dup 0)) (ri_dup (by rfl))  -- 36be DUP1
@@ -245,7 +245,7 @@ theorem xa_rli_d2 (hc : Cert.CheckedM code cert mems true)
   · xs 0x3715 (.push [0x64] (by decide)) ri_push
     xs 0x3718 (.push [0x07, 0xbc] (by decide)) ri_push
     xrevert
-  have hslip := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+  have hslip := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   refine ⟨D2, _, _, hD2, hD02, hmT, hD0, hbn, hb1, hslip, h, hV.sub ?_⟩
   simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]

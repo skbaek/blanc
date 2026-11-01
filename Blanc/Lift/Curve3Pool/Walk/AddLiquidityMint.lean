@@ -54,7 +54,7 @@ theorem xa_al_mintAmount {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G 
     xs 0x173c (.push [0x17, 0x41] (by decide)) ri_push
     xji 0x173d 0x1741 hsub
     · xdead
-    have hge := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hsub)
+    have hge := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hsub)
     xjd 0x1742
     xs 0x1743 (.reg (.dup 0)) (ri_dup (by rfl))
     xs 0x1744 (.reg (.dup 2)) (ri_dup (by rfl))
@@ -77,7 +77,7 @@ theorem xa_al_mintAmount {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G 
     xs 0x1757 (.push [0x17, 0x5c] (by decide)) ri_push
     xji 0x1758 0x175c hmul
     · xdead
-    have hm := (or_ne_zero hmul).imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq
+    have hm := (or_ne_zero hmul).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero
     xjd 0x175d
     xs 0x175e (.reg (.dup 0)) (ri_dup (by rfl))
     xs 0x175f (.reg (.swap 0)) (ri_swap (by rfl))
@@ -143,7 +143,7 @@ theorem xa_al_slippage {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
   · xs 0x17cb (.push [0x64] (by decide)) ri_push
     xs 0x17ce (.push [0x0b, 0xdc] (by decide)) ri_push
     xrevert
-  · refine ⟨ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw), _, _, _, hR, hW, hA, ?_, h⟩
+  · refine ⟨B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw), _, _, _, hR, hW, hA, ?_, h⟩
     intro o w hw ho
     exact (((hw.write_other (by simp only [B256.length_toBytes]; omega)).write_other
       (by simp only [B256.length_toBytes]; omega)).write_other
@@ -236,7 +236,7 @@ theorem xa_al_mintCallC {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G :
   xji 0x1808 0x180c hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by
-    have hh := gtCheck_ne_zero hw
+    have hh := B256.lt_of_gtCheck_ne_zero hw
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at hh
     rw [hc'.output]; omega

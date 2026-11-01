@@ -95,29 +95,6 @@ def Exec.CoreEthSound (dp : DeployParams) (ca : Adr)
       (Execution.committedPost out hcommit).state
       (Exec.bodyEthActions dp ca run hcommit)
 
-/-- CREATE's nonce/access-list preparation leaves the world balance map
-unchanged. -/
-theorem genericCreate_prepared_bal
-    (sevm : Sevm) (pre : Devm) (newAddress : Adr) :
-    (addAccessedAddress
-      (((pre.withGasLeft
-          (pre.gasLeft - except64th pre.gasLeft)).withReturnData
-        []).incrNonce sevm.currentTarget) newAddress).state.bal =
-      pre.state.bal :=
-  _root_.Jaune.genericCreate_prepared_bal sevm pre newAddress
-
-/-- A zero-value message entry preserves the complete balance map, including
-the self-call case where caller and callee coincide. -/
-theorem Msg.benvAfterTransfer_bal_eq_of_value_eq_zero
-    {msg : Msg} {post : Benv}
-    (hzero : msg.value = 0)
-    (hrun : msg.benvAfterTransfer = .ok post) :
-    post.state.bal = msg.benv.state.bal := by
-  have hpost := benvAfterTransfer_eq_of_not_transfer
-    (by intro h; exact h.2 hzero) hrun
-  subst post
-  rfl
-
 /-- Message entry at value zero funds every possible root ordinary-mint
 label (whose ETH weight is necessarily zero) without requiring the external
 caller inequality used by transaction entry.  This is the internal callback
@@ -156,7 +133,7 @@ theorem Exec.entryEthBound_of_value_eq_zero
       flowActionsEthRedemption
           (Exec.entryEthActions dp ca run hcommit) = 0 :=
     flowActionsEthRedemption_entryEthActions_eq_zero _
-  have hbal := Msg.benvAfterTransfer_bal_eq_of_value_eq_zero
+  have hbal := benvAfterTransfer_bal_of_value_zero
     hzero htransfer
   unfold EthBound
   rw [hmintZero, hredeem]
@@ -176,7 +153,7 @@ theorem ProcessMessage.ethBound_of_none_value_eq_zero
       ⟨benv, htransfer, hpost⟩
   · rw [hrollback]
     exact EthBound.refl ca msg.benv.state
-  · have hbal := Msg.benvAfterTransfer_bal_eq_of_value_eq_zero
+  · have hbal := benvAfterTransfer_bal_of_value_zero
       hzero htransfer
     rw [hpost]
     unfold EthBound

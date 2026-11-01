@@ -219,7 +219,7 @@ theorem memExtSize_cost_le {n i s B : Nat} (h : i + s ≤ B) :
   · exact Nat.le_max_left _ _
   · rcases Nat.le_total (ceilDiv n 32) (ceilDiv (i + s) 32) with hle | hle
     · rw [Nat.max_eq_right hle, memCost_ceil32]
-      exact (Lift.calculateMemoryGasCost_mono h).trans (Nat.le_max_right _ _)
+      exact (Jaune.calculateMemoryGasCost_mono h).trans (Nat.le_max_right _ _)
     · rw [Nat.max_eq_left hle, memCost_ceil32]
       exact Nat.le_max_left _ _
 
