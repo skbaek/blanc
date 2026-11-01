@@ -1,5 +1,6 @@
 import Blanc.Lift.WithdrawalRequest.SystemBookkeepingState
 import Blanc.Lift.PackedSha
+import Blanc.Lift.WalkInvKit
 
 /-! Certified metadata bookkeeping and the actual RETURN. -/
 
@@ -17,39 +18,23 @@ private theorem pointer_inv {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Na
     sevm.isStatic = false ∧ ∃ gas', SFunc.Run prog sevm
       (St (systemPointerBase sevm base head tail count) [count] memory gas') t_01a0_c2 out := by
   obtain ⟨_, run⟩ := ric_dest run.cut
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := [head, count, count, tail]) rfl step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := systemAdvancedHead head count) rfl (ri_add step)
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_swap (S' := [tail, systemAdvancedHead head count, count,
     systemAdvancedHead head count]) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_eq step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 2
   by_cases drained : systemAdvancedHead head count = tail
   · simp only [B256.eqCheck, ite_eq_left drained.symm] at run
     rcases ric_branch run with ⟨flag, _, _⟩ | ⟨_, _, run⟩
     · exact False.elim ((by decide : (1 : B256) ≠ 0) flag)
-    obtain ⟨_, run⟩ := ric_dest run
-    obtain ⟨_, step, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_swap rfl step
-    obtain ⟨_, step, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_pop step
-    obtain ⟨_, step, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨_, step, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_push step
+    winv 5
     obtain ⟨_, step, run⟩ := ric_next run
     have dynamic := ri_sstore_nonstatic fork step
     obtain ⟨_, rfl⟩ := ri_sstore fork step
-    obtain ⟨_, step, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨_, step, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_push step
+    winv 2
     obtain ⟨_, step, run⟩ := ric_next run
     obtain ⟨_, rfl⟩ := ri_sstore fork step
     simp only [systemPointerBase, ite_eq_left drained]
@@ -59,13 +44,11 @@ private theorem pointer_inv {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Na
     rcases ric_branch run with ⟨_, _, run⟩ | ⟨flag, _, _⟩
     · obtain ⟨_, step, run⟩ := ric_next run
       obtain ⟨_, rfl⟩ := ri_swap rfl step
-      obtain ⟨_, step, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_push step
+      winv 1
       obtain ⟨_, step, run⟩ := ric_next run
       have dynamic := ri_sstore_nonstatic fork step
       obtain ⟨_, rfl⟩ := ri_sstore fork step
-      obtain ⟨_, step, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_push step
+      winv 1
       obtain ⟨_, run⟩ := ric_jump (by intro h; cases h) pointer_join run
       simp only [systemPointerBase, ite_eq_right drained]
       exact ⟨dynamic, _, run.uncut⟩
@@ -150,22 +133,15 @@ private theorem excess_inv {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Nat
       (St (systemExcessRead sevm base) [systemEffectiveExcess sevm base, count] memory gas')
       t_01cd_c3 out := by
   obtain ⟨_, run⟩ := ric_dest run.cut
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_sload fork step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup rfl step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := B256.max)
     (by simpa only [B256.add_zero, List.replicate_succ, List.replicate_zero] using ones_add_zero)
     (ri_push step)
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_eq step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 3
   change SFunc.RunCut prog sevm []
     (St (systemExcessRead sevm base)
       [461, B256.eqCheck (B256.eqCheck B256.max (systemOldExcess sevm base)) 0,
@@ -176,8 +152,7 @@ private theorem excess_inv {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Nat
     rcases ric_branchTo (by intro h; cases h) excess_join run with ⟨_, _, run⟩ | ⟨flag, _, _⟩
     · obtain ⟨_, step, run⟩ := ric_next run
       obtain ⟨_, rfl⟩ := ri_pop step
-      obtain ⟨_, step, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_push step
+      winv 1
       simp only [systemEffectiveExcess, ite_eq_left inhibited]
       exact ⟨_, run.uncut⟩
     · exact False.elim (flag rfl)
@@ -239,22 +214,13 @@ private theorem count_inv {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Nat}
     ∃ gas', SFunc.Run prog sevm
       (St (systemCountRead sevm base) [systemNewExcess sevm base, count] memory gas') t_01e8_c4 out := by
   obtain ⟨_, run⟩ := ric_dest run.cut
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_sload fork step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := systemEffectiveExcess sevm base) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := systemPendingCount sevm base) rfl step
+  winv 3
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := systemExcessSum sevm base) rfl (ri_add step)
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_gt step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 2
   change SFunc.RunCut prog sevm []
     (St (systemCountRead sevm base)
       [482, B256.gtCheck (systemExcessSum sevm base) 2, systemPendingCount sevm base,
@@ -268,24 +234,14 @@ private theorem count_inv {sevm : Sevm} {base : Devm} {memory : Mem} {gas : Nat}
     obtain ⟨_, run⟩ := ric_dest run
     obtain ⟨_, step, run⟩ := ric_next run
     obtain ⟨_, rfl⟩ := ri_val (w := systemExcessSum sevm base) rfl (ri_add step)
-    obtain ⟨_, step, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_push step
-    obtain ⟨_, step, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_swap rfl step
-    obtain ⟨_, step, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_sub step
+    winv 3
     simp only [systemNewExcess, ite_eq_left positive]
     exact ⟨_, run.uncut⟩
   · simp only [ite_eq_right positive] at run
     rcases ric_branch run with ⟨_, _, run⟩ | ⟨flag, _, _⟩
     · obtain ⟨_, step, run⟩ := ric_next run
       obtain ⟨_, rfl⟩ := ri_pop step
-      obtain ⟨_, step, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_pop step
-      obtain ⟨_, step, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_push step
-      obtain ⟨_, step, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_push step
+      winv 3
       obtain ⟨_, run⟩ := ric_jump (by intro h; cases h) stores_join run
       simp only [systemNewExcess, ite_eq_right positive]
       exact ⟨_, run.uncut⟩
@@ -353,22 +309,16 @@ private theorem final_inv {sevm : Sevm} {base post : Devm} {memory : Mem} {gas :
       t_01e8_c4 (.halted post)) :
     ∃ gas', post = systemBookkeepingPost sevm base memory count gas' := by
   obtain ⟨_, run⟩ := ric_dest run.cut
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_sstore fork step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_sstore fork step
+  winv 2
   obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  obtain ⟨_, rfl⟩ := ri_sstore fork step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := systemReturnSize count) rfl (ri_mul step)
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 1
   have actual := run.uncut
   clear run
   change SFunc.Run prog sevm

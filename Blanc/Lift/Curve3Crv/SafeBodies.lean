@@ -3,6 +3,7 @@ import Blanc.Lift.StaticCall
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.HistStaticCall
 import Blanc.Lift.HistAccessWalkFacts
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Safety: the writing bodies, inverted
@@ -75,15 +76,10 @@ theorem safe_setMinter (hsg : sevm.benvStat.rules.stateGas = none) :
     (by rw [hM]; omega) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_caller s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G8, run⟩ | ⟨hw, G8, run⟩
   · exact (run.false_of_noOk (by decide)).elim
-  obtain ⟨G9, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
+  winv 4
   obtain ⟨d1, s1, run⟩ := ric_next run
   refine ⟨ri_sstore_nonstaticH hsg s1, ?_⟩
   obtain ⟨G13, rfl⟩ := ri_sstoreH hsg (BenvStat.bal_none_of_stateGas_none hsg) s1
@@ -134,33 +130,15 @@ theorem safe_transfer (hsg : sevm.benvStat.rules.stateGas = none) :
   obtain ⟨hd, G2, run⟩ := ric_vyAddrArg (p := 0x04) (h := 0x02) (l := 0xe9) (fail := t_02e5_c0)
     (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
     (by rw [hM]; omega) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_caller s1
+  winv 2
   obtain ⟨G5, run⟩ := ric_vySlot run
   obtain ⟨hle, G6, run⟩ := ric_vySubStoreH (p := 0x24) (h := 0x03) (l := 0x0a) (fail := t_0306_c0)
     hsg (by decide) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_calldataload s1
+  winv 3
   obtain ⟨G10, run⟩ := ric_vySlot run
   obtain ⟨hnof, G11, run⟩ := ric_vyAddStoreH (p := 0x24) (h := 0x03) (l := 0x38)
     (fail := t_0334_c0) hsg (by decide) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_caller s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_log3 s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_push s1
+  winv 16
   cases run with
   | last hl =>
     obtain ⟨hout, hstor, hlogs⟩ := ri_return hl
@@ -279,32 +257,23 @@ theorem safe_transferFrom (hsg : sevm.benvStat.rules.stateGas = none) :
   obtain ⟨hd, G3, run⟩ := ric_vyAddrArg (p := 0x24) (h := 0x03) (l := 0xbd) (fail := t_03b9_c0)
     (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
     (by rw [hM]; omega) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_calldataload s1
+  winv 3
   obtain ⟨G7, run⟩ := ric_vySlot run
   obtain ⟨hle, G8, run⟩ := ric_vySubStoreH (p := 0x44) (h := 0x03) (l := 0xe0) (fail := t_03dc_c0)
     hsg (by decide) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_calldataload s1
+  winv 3
   obtain ⟨G12, run⟩ := ric_vySlot run
   obtain ⟨hnof, G13, run⟩ := ric_vyAddStoreH (p := 0x44) (h := 0x04) (l := 0x0e)
     (fail := t_040a_c0) hsg (by decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_caller s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_xor s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
+  winv 4
   have hwf1 : Mem.Wf (vySlotMem (vySlotMem (vyMem Mem.empty (Sevm.dataWord sevm 0))
       (Bytes.toB256 [0x03]) (Sevm.dataWord sevm (Bytes.toB256 [0x04]))) (Bytes.toB256 [0x03])
       (Sevm.dataWord sevm (Bytes.toB256 [0x24]))) := vySlotMem_wf (vySlotMem_wf hwf0 _ _) _ _
   rcases ric_branchTo (g := t_045b_c3) (by simp only [List.not_mem_nil, not_false_eq_true]) rfl run with ⟨hx, G20, run⟩ | ⟨hx, G20, run⟩
   · -- the caller is not the minter: the allowance is spent
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_calldataload s1
+    winv 3
     obtain ⟨G24, run⟩ := ric_vySlot run
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_caller s1
     obtain ⟨G26, run⟩ := ric_vySlot run
@@ -465,11 +434,7 @@ theorem safe_approve (hsg : sevm.benvStat.rules.stateGas = none) :
   obtain ⟨hp, G2, run⟩ := ric_vyAddrArg (p := 0x04) (h := 0x04) (l := 0xc6) (fail := t_04c2_c0)
     (by decide) (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyImg_clamps _ _) (by rw [hM])
     (by rw [hM]; omega) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 5
   have hp' : p.toNat < 2 ^ 160 := hp
   rcases ric_branch run with ⟨hz, G8, run⟩ | ⟨hnz, G8, run⟩
   · -- a zero value: straight to the join
@@ -479,19 +444,15 @@ theorem safe_approve (hsg : sevm.benvStat.rules.stateGas = none) :
       simp only [B256.eqCheck, hne, ↓reduceIte] at hz
       exact absurd hz (by decide)
     unfold t_04d1_c0 at run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨G11, run⟩ := ric_jump (g := t_04f6_c4) (by simp only [List.not_mem_nil,
       not_false_eq_true]) rfl run
     obtain ⟨-, hl⟩ := tail b _ _ _ hwf0 (fun _ => rfl) rfl run
     exact ⟨_, by simp only [rawApprove]; exact ite_eq_left ⟨hv, hp', .inl hv0⟩, hl⟩
   · -- a nonzero value: the current allowance is read and must be zero
-    obtain ⟨G9, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_caller s1
+    winv 3
     obtain ⟨G12, run⟩ := ric_vySlot run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_calldataload s1
+    winv 2
     obtain ⟨G15, run⟩ := ric_vySlot run
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_iszero s1
@@ -522,45 +483,20 @@ theorem safe_mint (hsg : sevm.benvStat.rules.stateGas = none) :
     (by rw [hM]; omega) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_caller s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G8, run⟩ | ⟨hmin, G8, run⟩
   · exact (run.false_of_noOk (by decide)).elim
-  obtain ⟨G9, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_xor s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+  winv 6
   rcases ric_branch run with ⟨-, G15, run⟩ | ⟨hnz, G15, run⟩
   · exact (run.false_of_noOk (by decide)).elim
-  obtain ⟨G16, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨hnof1, G18, run⟩ := ric_vyAddStoreH (p := 0x24) (h := 0x05) (l := 0xbd)
     (fail := t_05b9_c0) hsg (by decide) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_calldataload s1
+  winv 3
   obtain ⟨G22, run⟩ := ric_vySlot run
   obtain ⟨hnof2, G23, run⟩ := ric_vyAddStoreH (p := 0x24) (h := 0x05) (l := 0xeb)
     (fail := t_05e7_c0) hsg (by decide) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_log3 s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G36, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G37, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G39, rfl⟩ := ri_push s1
+  winv 16
   cases run with
   | last hl =>
     obtain ⟨hout, hstor, hlogs⟩ := ri_return hl
@@ -627,45 +563,20 @@ theorem safe_burnFrom (hsg : sevm.benvStat.rules.stateGas = none) :
     (by rw [hM]; omega) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_caller s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G8, run⟩ | ⟨hmin, G8, run⟩
   · exact (run.false_of_noOk (by decide)).elim
-  obtain ⟨G9, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_xor s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+  winv 6
   rcases ric_branch run with ⟨-, G15, run⟩ | ⟨hnz, G15, run⟩
   · exact (run.false_of_noOk (by decide)).elim
-  obtain ⟨G16, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨hnof1, G18, run⟩ := ric_vySubStoreH (p := 0x24) (h := 0x06) (l := 0x91)
     (fail := t_068d_c0) hsg (by decide) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_calldataload s1
+  winv 3
   obtain ⟨G22, run⟩ := ric_vySlot run
   obtain ⟨hnof2, G23, run⟩ := ric_vySubStoreH (p := 0x24) (h := 0x06) (l := 0xbd)
     (fail := t_06b9_c0) hsg (by decide) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_log3 s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G36, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G37, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G39, rfl⟩ := ri_push s1
+  winv 16
   cases run with
   | last hl =>
     obtain ⟨hout, hstor, hlogs⟩ := ri_return hl
@@ -872,55 +783,21 @@ theorem safe_setName (hsg : sevm.benvStat.rules.stateGas = none) {G : Nat} {post
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (h := 0x00) (l := 0xfb) (fail := t_00f7_c0)
     (by decide) run
   -- `name`'s bytes to `0x140`, its length guard
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 6
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_calldatacopy s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
+  winv 9
   rcases ric_branch run with ⟨-, G18, run⟩ | ⟨hg0, G18, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   obtain ⟨G19, run⟩ := ric_dest run
   -- `symbol`'s bytes to `0x1c0`, its length guard
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_push s1
+  winv 6
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_calldatacopy s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_calldataload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_push s1
+  winv 9
   rcases ric_branch run with ⟨-, G36, run⟩ | ⟨hg1, G36, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   obtain ⟨G37, run⟩ := ric_dest run
   -- the owner call
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_caller s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G39, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G40, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G41, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G42, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G43, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G44, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G45, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G46, rfl⟩ := ri_push s1
+  winv 9
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G47, rfl⟩ := ri_sloadH (BenvStat.bal_none_of_stateGas_none hsg) s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨gw, G48, rfl⟩ := ri_gas s1
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -975,11 +852,7 @@ theorem safe_setName (hsg : sevm.benvStat.rules.stateGas = none) {G : Nat} {post
     rcases hpost.flag with h | h
     · exact absurd h hfl
     · exact h
-  obtain ⟨G51, run⟩ := ric_dest run
-  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G52, rfl⟩ := ri_push s1
-  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G53, rfl⟩ := ri_returndatasize s1
-  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G54, rfl⟩ := ri_gt s1
-  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G55, rfl⟩ := ri_push s1
+  winv 5
   rcases ric_branch run with ⟨-, G56, run⟩ | ⟨hrds, G56, run⟩
   · exact (run.false_of_noOk (by decide)).elim
   rw [hpost.returnData] at hrds
@@ -992,11 +865,7 @@ theorem safe_setName (hsg : sevm.benvStat.rules.stateGas = none) {G : Nat} {post
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at h
     have := Nat.mod_le out.length (2 ^ 256)
     omega
-  obtain ⟨G57, run⟩ := ric_dest run
-  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G58, rfl⟩ := ri_push s1
-  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G59, rfl⟩ := ri_pop s1
-  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G60, rfl⟩ := ri_push s1
-  obtain ⟨d2, s1, run⟩ := ric_next run; obtain ⟨G61, rfl⟩ := ri_mload s1
+  winv 5
   rw [n640, read_covered hs4 (by decide) (by decide)] at run
   have hw640 : (M4.read 640 32).1 = out.take 32 := by
     rw [hr4.read]
@@ -1054,13 +923,7 @@ theorem safe_setName (hsg : sevm.benvStat.rules.stateGas = none) {G : Nat} {post
       (exitT := t_0229_c2) (src := src1) hsg rfl rfl (Or.inr ⟨rfl, rfl⟩) hs5 hwf5 n448
       (by decide) (by decide) hsrc1 (by rw [hL1w]; omega) run
   unfold t_0229_c2 at run
-  obtain ⟨G75, run⟩ := ric_dest run
-  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G76, rfl⟩ := ri_pop s1
-  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G77, rfl⟩ := ri_pop s1
-  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G78, rfl⟩ := ri_pop s1
-  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G79, rfl⟩ := ri_pop s1
-  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G80, rfl⟩ := ri_pop s1
-  obtain ⟨d4, s1, run⟩ := ric_next run; obtain ⟨G81, rfl⟩ := ri_pop s1
+  winv 7
   cases run with
   | last hl =>
     cases hl

@@ -16,12 +16,7 @@ theorem mintMinReturn_inv {sevm : Sevm} {b : Devm} {R : List B256}
       (St b (value :: 0 :: left :: right :: ρ :: R) M G) t_298b_c27 r) :
     ∃ gas, r = .done (.returned (St b (value :: R) M gas)) := by
   unfold t_298b_c27 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := ρ :: 0 :: left :: right :: value :: R) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := right :: 0 :: left :: ρ :: value :: R) rfl hs
-  winv 3
+  winv 6
   exact ric_ret run
 
 /-- The shared min70 cleanup costs21gas. -/
@@ -47,25 +42,18 @@ theorem mintMin70_inv {sevm : Sevm} {b : Devm} {R : List B256}
       (St b (left :: right :: ρ :: R) M G) t_297a_c70 r) :
     ∃ gas, r = .done (.returned (St b (mintMinWord left right :: R) M gas)) := by
   unfold t_297a_c70 at run
-  winv 2
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := left) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := right) rfl hs
-  winv 2
+  winv 6
   by_cases less : right < left
   · simp only [B256.ltCheck, ite_eq_left less] at run
     rcases ric_branch run with ⟨zero, _, _⟩ | ⟨_, _, run⟩
     · exact (by decide : (1 : B256) ≠ 0) zero |>.elim
     · unfold t_2989_c70 at run
-      obtain ⟨_, run⟩ := ric_dest run
-      obtain ⟨_, hs, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_dup (w := right) rfl hs
+      winv 2
       simpa only [mintMinWord, ite_eq_left less] using mintMinReturn_inv run
   · simp only [B256.ltCheck, ite_eq_right less] at run
     rcases ric_branch run with ⟨_, _, run⟩ | ⟨zero, _, _⟩
     · unfold t_2984_c70 at run
-      obtain ⟨_, hs, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_dup (w := left) rfl hs
-      obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+      winv 2
       obtain ⟨_, run⟩ := ric_jump (g := t_298b_c27) h27 rfl run
       simpa only [mintMinWord, ite_eq_right less] using mintMinReturn_inv run
     · exact (zero rfl).elim
@@ -171,15 +159,10 @@ theorem mintLaterProduct0_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
       (St b ((amount0 * supply) :: r0 :: 0x12ca :: supply :: f :: amount1 :: amount0 ::
         b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M gas) t_1294_c41 r := by
   unfold t_1270_c41 at run
-  winv 3
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 5
   rw [show r0 &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = r0 from feeReserveWord_eq bound0] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := amount0) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := supply) rfl hs
-  winv 3
+  winv 6
   obtain ⟨_, call⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases call with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨nowrap, _, eq⟩ := mul58_inv callee
@@ -199,15 +182,10 @@ theorem mintLaterProduct1_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List
       (St b ((amount1 * supply) :: r1 :: (product0 / r0) :: 0x12ca :: supply :: f :: amount1 :: amount0 ::
         b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M gas) t_12bd_c41 r := by
   unfold t_129b_c41 at run
-  winv 3
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := r1) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
+  winv 5
   rw [show r1 &&& Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = r1 from feeReserveWord_eq bound1] at run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := amount1) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := supply) rfl hs
-  winv 3
+  winv 6
   obtain ⟨_, call⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases call with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨nowrap, _, eq⟩ := mul58_inv callee
@@ -230,16 +208,12 @@ theorem mintLaterPrice_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : List Na
         t_12cd_c11 r := by
   obtain ⟨product0, _, run⟩ := mintLaterProduct0_inv bound0 run
   unfold t_1294_c41 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   rcases ric_branch run with ⟨_, _, bad⟩ | ⟨nonzero0, _, run⟩
   · exact (bad.false_of_noOk (by decide : t_129a_c41.noOk = true)).elim
   · obtain ⟨product1, _, run⟩ := mintLaterProduct1_inv bound1 run
     unfold t_12bd_c41 at run
-    obtain ⟨_, run⟩ := ric_dest run
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := r1) rfl hs
-    obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+    winv 3
     rcases ric_branch run with ⟨_, _, bad⟩ | ⟨nonzero1, _, run⟩
     · exact (bad.false_of_noOk (by decide : t_12c3_c41.noOk = true)).elim
     · obtain ⟨gas, run⟩ := mintLaterFinish_inv run
@@ -350,10 +324,7 @@ theorem mintInitialProduct_inv {sevm : Sevm} {b : Devm} {R : List B256} {C : Lis
       (St b ((amount0 * amount1) :: 0x0bfd :: 1000 :: 0x125c :: supply :: f :: amount1 :: amount0 ::
         b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) M gas) t_1257_c41 r := by
   unfold t_123f_c41 at run
-  winv 4
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := amount0) rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup (w := amount1) rfl hs
-  winv 3
+  winv 9
   obtain ⟨_, call⟩ := ric_call (g := t_21e8_c58) rfl run
   rcases call with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨nowrap, _, eq⟩ := mul58_inv callee
@@ -758,9 +729,7 @@ theorem mintAfterUpdate_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
         (liquidity :: R) (mintEventMemory M amount0 amount1) gas) := by
   have h := run.cut
   unfold t_133c_c11 at h
-  obtain ⟨_, h⟩ := ric_dest h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := f) rfl hs
-  winv 2
+  winv 4
   by_cases off : f = 0
   · simp only [B256.eqCheck, ite_eq_left off] at h
     rcases ric_branchTo (g := t_137e_c12) (by decide : 12 ∉ ([] : List Nat)) rfl h with
@@ -867,12 +836,7 @@ theorem mintUpdateCaller_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
         (liquidity :: R) (mintEventMemory (updateMemoryH sevm b M r0 r1 b0 b1) amount0 amount1) gas) := by
   have h := run.cut
   unfold t_1330_c11 at h
-  winv 2
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := b0) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := b1) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := r0) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := r1) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 7
   obtain ⟨_, call⟩ := ric_call (g := t_22e0_c60) rfl h
   rcases call with ⟨d, callee, tail⟩ | ⟨d, callee, _⟩
   · obtain ⟨bound0, bound1, mutable, _, eq⟩ := update_invH stateGas bal mem callee
@@ -1228,8 +1192,7 @@ theorem mintPriced_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   unfold t_12cd_c11 at h
   winv 2
   rw [show Bytes.toB256 [0x00] = (0 : B256) from by decide] at h
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := liquidity) rfl hs
-  winv 2
+  winv 3
   rcases ric_branch h with ⟨_, _, bad⟩ | ⟨positive, _, h⟩
   · exact (bad.false_of_noOk (by decide : t_12d6_c11.noOk = true)).elim
   · have gt : (0 : B256) < liquidity := by
@@ -1547,9 +1510,7 @@ theorem mintAfterFee_invH {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   obtain ⟨_, hs, h⟩ := ric_next h
   obtain ⟨_, rfl⟩ := ri_swap (S' := 0 :: lpMintSupplyWord sevm b :: f :: amount1 :: amount0 ::
     b1 :: b0 :: r1 :: r0 :: oldLiquidity :: toWord :: ρ :: R) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := lpMintSupplyWord sevm b) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 3
   rcases ric_branch h with ⟨zero, _, tail⟩ | ⟨nonzero, _, tail⟩
   · simpa only [MintAfterFeeResultH, ite_eq_left zero] using mintInitial_invH stateGas bal mem tail.uncut
   · simpa only [MintAfterFeeResultH, ite_eq_right nonzero] using mintLater_invH stateGas bal mem bound0 bound1 tail.uncut

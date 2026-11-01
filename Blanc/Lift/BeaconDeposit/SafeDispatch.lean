@@ -60,9 +60,7 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   unfold t_000d_c0 at run
   winv 4
   rw [hsel] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_dup (w := Sevm.selector sevm) rfl s1
-  winv 3
+  winv 4
   obtain ⟨g31, hg31⟩ : ∃ g, prog[31]? = some g := ⟨_, rfl⟩
   rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg31 run with ⟨hw, G17, run⟩ | ⟨hw, G17, run⟩
   swap
@@ -73,9 +71,7 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   have h31 := ne_of_eq hw
   -- t_001e_c0: `deposit`
   unfold t_001e_c0 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_dup (w := Sevm.selector sevm) rfl s1
-  winv 3
+  winv 4
   obtain ⟨g32, hg32⟩ : ∃ g, prog[32]? = some g := ⟨_, rfl⟩
   rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg32 run with ⟨hw, G22, run⟩ | ⟨hw, G22, run⟩
   swap
@@ -85,9 +81,7 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
   have h32 := ne_of_eq hw
   -- t_0029_c0: `get_deposit_count`
   unfold t_0029_c0 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G23, rfl⟩ := ri_dup (w := Sevm.selector sevm) rfl s1
-  winv 3
+  winv 4
   obtain ⟨g33, hg33⟩ : ∃ g, prog[33]? = some g := ⟨_, rfl⟩
   rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg33 run with ⟨hw, G27, run⟩ | ⟨hw, G27, run⟩
   swap
@@ -97,9 +91,7 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat}
     exact absurd h.symm h32
   -- t_0034_c0: `get_deposit_root`, and the miss
   unfold t_0034_c0 at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G28, rfl⟩ := ri_dup (w := Sevm.selector sevm) rfl s1
-  winv 3
+  winv 4
   obtain ⟨g34, hg34⟩ : ∃ g, prog[34]? = some g := ⟨_, rfl⟩
   rcases ric_branchTo (by simp only [List.not_mem_nil, not_false_eq_true]) hg34 run with ⟨-, G32, run⟩ | ⟨hw, G32, run⟩
   · exact (run.false_of_noOk (by decide)).elim

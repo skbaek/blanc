@@ -2,6 +2,7 @@ import Blanc.Lift.InvWalk
 import Blanc.Lift.ExactWalkOps
 import Blanc.Lift.CopyLoop
 import Blanc.Lift.Silent
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Inversion step lemmas for stack, environment and memory operations
@@ -400,27 +401,12 @@ theorem ric_copy_step {i src dst len : B256} (hlt : B256.ltCheck i len = 1)
           (Bytes.toB256 (M.read (i + src).toNat 32).1).toBytes) G')
       T r := by
   unfold copyLoopTree at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (w := len) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := i) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+  winv 6
   rw [hlt, show B256.eqCheck (1 : B256) 0 = 0 by decide] at run
   rcases ric_branch run with ⟨-, G7, run⟩ | ⟨hw, -⟩
   swap; · exact absurd hw (by decide)
   unfold copyBody at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_dup (w := src) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_dup (w := i) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_mload s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_dup (w := dst) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_dup (w := i) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_push s1
+  winv 11
   exact ric_jump hkC hk run
 
 /-- The exit of `copyLoopTree`, inverted (`i ≥ len`): control passes to `exit`. -/
@@ -432,12 +418,7 @@ theorem ric_copy_exit {i src dst len : B256} (hlt : B256.ltCheck i len = 0)
       (St b (i :: src :: dst :: len :: R) M G')
       exit r := by
   unfold copyLoopTree at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (w := len) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := i) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
+  winv 6
   rw [hlt, show B256.eqCheck (0 : B256) 0 = 1 by decide] at run
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G7, run⟩
   · exact absurd hw (by decide)

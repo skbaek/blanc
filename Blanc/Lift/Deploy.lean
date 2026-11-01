@@ -5,6 +5,7 @@ import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.WalkSteps
 import Blanc.DeploymentMessage
 import Blanc.DeploymentTouch
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Deploying lifted creation code
@@ -219,22 +220,19 @@ theorem solcRuntimeReturn_effects
   obtain ⟨_, equal⟩ := ri_push step
   rw [sizeWord] at equal
   subst equal
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, equal⟩ := ri_push step
   rw [offsetWord] at equal
   subst equal
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, equal⟩ := ri_codecopy step
   change _ = St b (size :: S)
     (M.write 0 (sevm.code.sliceD offset.toNat size.toNat (Linst.toUInt8 .stop))) _ at equal
   rw [copiedEq] at equal
   subst equal
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 1
   cases run with
   | last terminal =>
       have effect := ri_return terminal
@@ -268,18 +266,12 @@ theorem solcConstructorPrelude_effects
   let memory := M.write 64 (128 : B256).toBytes
   have run := run.cut
   unfold solcConstructorPrelude at run
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 2
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, eq⟩ := ri_mstore step
   change _ = St b S memory _ at eq
   subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
+  winv 2
   obtain ⟨loaded, load, run⟩ := ric_next run
   have storage : loaded.getStor = b.getStor := (Ninst.Hinv.inv (f := Devm.getStor) load).symm
   have loadMemory : loaded.memory = memory := SolcStorageReturn.sload_memory load
@@ -288,21 +280,13 @@ theorem solcConstructorPrelude_effects
     List.cons.injEq] at popped pushed
   obtain ⟨rfl, rfl⟩ := popped
   rw [St.self pushed loadMemory] at run
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_shl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_not step
+  winv 4
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, eq⟩ := ri_and step
   change _ = St loaded (solcConstructorFlagWord (b.getStorVal sevm.currentTarget 1) ::
     1 :: S) memory _ at eq
   subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl step
+  winv 1
   obtain ⟨cleared, clear, run⟩ := ric_next run
   have clearOwn := sstore_getStor_set (xs := []) clear (by exact ⟨_, rfl⟩)
   have clearForeign : ∀ a, a ≠ sevm.currentTarget → cleared.getStor a = b.getStor a := by
@@ -311,10 +295,7 @@ theorem solcConstructorPrelude_effects
     exact (sstore_preserves_getStor_ne regular different.symm).trans (congrFun storage a)
   obtain ⟨b1, G1, eq⟩ := SolcStorageReturn.ri_sstore_any clear
   rw [eq] at run clearOwn clearForeign
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 2
   obtain ⟨reset, resetStore, run⟩ := ric_next run
   have resetOwn := sstore_getStor_set (xs := []) resetStore (by exact ⟨_, rfl⟩)
   have resetForeign : ∀ a, a ≠ sevm.currentTarget → reset.getStor a = b.getStor a := by
@@ -323,14 +304,7 @@ theorem solcConstructorPrelude_effects
     exact (sstore_preserves_getStor_ne regular different.symm).trans (clearForeign a different)
   obtain ⟨b2, G2, eq⟩ := SolcStorageReturn.ri_sstore_any resetStore
   rw [eq] at run resetOwn resetForeign
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_callvalue step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 0) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 4
   rcases ric_branch run with ⟨_, _, failed⟩ | ⟨nonzero, G3, run⟩
   · exact (SFunc.RunCutP.false_of_noOk failed (by decide)).elim
   · have zero : sevm.value = 0 := by
@@ -368,30 +342,19 @@ theorem legacyConstructorPrelude_effects
   let memory := M.write 64 (128 : B256).toBytes
   have run := run.cut
   unfold legacyConstructorPrelude at run
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 2
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, eq⟩ := ri_mstore step
   change _ = St b S memory _ at eq
   subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 4
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, eq⟩ := ri_exp step
   change _ = St b ((256 : B256).bexp 20 :: 1 :: 0 :: S) memory _ at eq
   have power : (256 : B256).bexp 20 = (0x10000000000000000000000000000000000000000 : B256) := by decide +kernel
   rw [power] at eq
   subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 1) rfl step
+  winv 1
   obtain ⟨loaded, load, run⟩ := ric_next run
   have storage : loaded.getStor = b.getStor := (Ninst.Hinv.inv (f := Devm.getStor) load).symm
   have loadMemory : loaded.memory = memory := SolcStorageReturn.sload_memory load
@@ -400,30 +363,19 @@ theorem legacyConstructorPrelude_effects
     List.cons.injEq] at popped pushed
   obtain ⟨rfl, rfl⟩ := popped
   rw [St.self pushed loadMemory] at run
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 1) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 2
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, eq⟩ := ri_mul step
   change _ = St loaded (((255 : B256) <<< 160) :: b.getStorVal sevm.currentTarget 1 ::
     (0x10000000000000000000000000000000000000000 : B256) :: 1 :: 0 :: S) memory _ at eq
   subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_not step
+  winv 1
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, eq⟩ := ri_and step
   change _ = St loaded (solcConstructorFlagWord (b.getStorVal sevm.currentTarget 1) ::
     (0x10000000000000000000000000000000000000000 : B256) :: 1 :: 0 :: S) memory _ at eq
   subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (n := 3) rfl step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_iszero step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_iszero step
+  winv 4
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, eq⟩ := ri_mul step
   change _ = St loaded (0 :: solcConstructorFlagWord (b.getStorVal sevm.currentTarget 1) ::
@@ -433,8 +385,7 @@ theorem legacyConstructorPrelude_effects
   obtain ⟨_, eq⟩ := ri_or step
   rw [B256.or_comm, B256.or_zero] at eq
   subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl step
+  winv 1
   obtain ⟨cleared, clear, run⟩ := ric_next run
   have clearOwn := sstore_getStor_set (xs := []) clear (by exact ⟨_, rfl⟩)
   have clearForeign : ∀ a, a ≠ sevm.currentTarget → cleared.getStor a = b.getStor a := by
@@ -443,12 +394,7 @@ theorem legacyConstructorPrelude_effects
     exact (sstore_preserves_getStor_ne regular different.symm).trans (congrFun storage a)
   obtain ⟨b1, G1, eq⟩ := SolcStorageReturn.ri_sstore_any clear
   rw [eq] at run clearOwn clearForeign
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 3
   obtain ⟨reset, resetStore, run⟩ := ric_next run
   have resetOwn := sstore_getStor_set (xs := []) resetStore (by exact ⟨_, rfl⟩)
   have resetForeign : ∀ a, a ≠ sevm.currentTarget → reset.getStor a = b.getStor a := by
@@ -506,15 +452,7 @@ theorem solcOwnerConstructor_effects
   obtain ⟨zero, after, G1, own, foreign, run⟩ := solcConstructorPrelude_effects run
   have run := run.cut
   unfold solcConstructorOwnerCall at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_pop step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_caller step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 5
   obtain ⟨G2, called⟩ := ric_call ownerEntry run
   rcases called with ⟨D, callee, cont⟩ | ⟨D, callee, _⟩
   · have effects := SolcStorageReturn.ownerInit_effects callee
@@ -530,9 +468,7 @@ theorem solcOwnerConstructor_effects
       rfl
     rw [St.self effects.1 effects.2.1] at cont
     unfold solcConstructorExit at cont
-    obtain ⟨_, cont⟩ := ric_dest cont
-    obtain ⟨_, step, cont⟩ := ric_next cont
-    obtain ⟨_, rfl⟩ := ri_push step
+    winv 2
     obtain ⟨_, terminal⟩ := ric_jump (by intro h; cases h) returnEntry cont
     have final := solcRuntimeReturn_effects sizeWord offsetWord nonzero terminal.uncut
     refine ⟨zero, (congrFun final.1 sevm.currentTarget).trans ownerOwn, ?_, final.2⟩
@@ -568,23 +504,13 @@ theorem legacyOwnerConstructor_effects
   obtain ⟨after, G1, own, foreign, run⟩ := legacyConstructorPrelude_effects run
   have run := run.cut
   unfold legacyConstructorOwnerCall at run
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_caller step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
+  winv 4
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, eq⟩ := ri_mul step
   change _ = St after (0x4100000000 :: sevm.caller.toB256 :: 60 :: S)
     (M.write 64 (128 : B256).toBytes) _ at eq
   subst eq
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push step
-  obtain ⟨_, step, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl step
+  winv 2
   obtain ⟨_, step, run⟩ := ric_next run
   obtain ⟨_, eq⟩ := ri_div step
   change _ = St after (65 :: sevm.caller.toB256 :: 60 :: S)
@@ -605,9 +531,7 @@ theorem legacyOwnerConstructor_effects
       rfl
     rw [St.self effects.1 effects.2.1] at cont
     unfold legacyConstructorExit at cont
-    obtain ⟨_, cont⟩ := ric_dest cont
-    obtain ⟨_, step, cont⟩ := ric_next cont
-    obtain ⟨_, rfl⟩ := ri_push step
+    winv 2
     obtain ⟨_, terminal⟩ := ric_jump (by intro h; cases h) returnEntry cont
     have final := solcRuntimeReturn_effects sizeWord offsetWord nonzero terminal.uncut
     refine ⟨(congrFun final.1 sevm.currentTarget).trans ownerOwn, ?_, final.2⟩

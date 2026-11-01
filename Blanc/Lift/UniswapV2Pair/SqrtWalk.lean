@@ -315,12 +315,7 @@ theorem sqrt_return_of_run {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
     (run : SFunc.RunCut cert.prog sevm C (St b (Z :: Y :: R :: T) M G) t_28c5_c26 r) :
     ∃ G', r = .done (.returned (St b (Z :: T) M G')) := by
   unfold t_28c5_c26 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := R :: Y :: Z :: T) rfl hn
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := Y :: R :: Z :: T) rfl hn
-  winv 1
+  winv 4
   exact ric_ret run
 
 /-- Successful body inversion reaches the actual back-edge instruction, with proved words. -/
@@ -348,21 +343,9 @@ theorem sqrt_body_of_run {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
   have hnext : (bodySum Y.toNat x).toB256 / 2 = (next Y.toNat x).toB256 :=
     toB256_div_two hsum
   unfold t_2896_c74 t_28a4_c74 t_28ad_c74 at run
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := x.toB256) rfl hn
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := Z :: x.toB256 :: x.toB256 :: Y :: R :: T) rfl hn
-  winv 2
+  winv 4
   simp only [show Bytes.toB256 [0x02] = (2 : B256) from by decide] at run
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := x.toB256) rfl hn
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := x.toB256) rfl hn
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := Y) rfl hn
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := x.toB256) rfl hn
-  winv 1
+  winv 5
   rcases ric_branch run with ⟨hz, _, run⟩ | ⟨_, _, run⟩
   · exact (hxne hz).elim
   · obtain ⟨_, run⟩ := ric_dest run
@@ -370,17 +353,13 @@ theorem sqrt_body_of_run {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
     rw [hdiv] at run
     winv 1
     rw [hadd] at run
-    obtain ⟨d, hn, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_dup (w := 2) rfl hn
-    winv 1
+    winv 2
     rcases ric_branch run with ⟨hz, _, run⟩ | ⟨_, _, run⟩
     · exact (by decide : (2 : B256) ≠ 0) hz |>.elim
     · obtain ⟨_, run⟩ := ric_dest run
       winv 1
       rw [hnext] at run
-      obtain ⟨d, hn, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_swap (S' := x.toB256 :: (next Y.toNat x).toB256 :: x.toB256 :: Y :: R :: T) rfl hn
-      winv 2
+      winv 3
       exact ⟨_, run⟩
 
 /-- Invert the actual header into its body/back-edge or returned old candidate. -/
@@ -399,12 +378,7 @@ theorem sqrt_header_of_run {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
     simp only [B256.ltCheck, B256.lt_iff_toNat_lt_toNat,
       B256.toNat_toB256_of_lt hx, B256.toNat_toB256_of_lt hz]
   unfold t_288d_c74 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := z.toB256) rfl hn
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := x.toB256) rfl hn
-  winv 1
+  winv 4
   rw [hlt] at run
   by_cases hg : x < z
   · simp only [ite_eq_left hg] at run
@@ -471,8 +445,7 @@ theorem sqrt_entry_of_run {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
   obtain ⟨_, rfl⟩ := ri_val (w := 0) (by decide) (ri_push hn)
   obtain ⟨d, hn, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val (w := 3) (by decide) (ri_push hn)
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := Y) rfl hn
+  winv 1
   obtain ⟨d, hn, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_val hgt (ri_gt hn)
   by_cases hy : 3 < Y.toNat
@@ -490,15 +463,12 @@ theorem sqrt_entry_of_run {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
         change (Y.toNat / 2).toB256 + (1 : Nat).toB256 = _
         exact Nat.toB256_add_toB256 _ _
       unfold t_2884_c69 at run
-      winv 1
-      obtain ⟨d, hn, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_dup (w := Y) rfl hn
+      winv 2
       obtain ⟨d, hn, run⟩ := ric_next run
       obtain ⟨_, rfl⟩ := ri_val (w := 1) (by decide) (ri_push hn)
       obtain ⟨d, hn, run⟩ := ric_next run
       obtain ⟨_, rfl⟩ := ri_val (w := 2) (by decide) (ri_push hn)
-      obtain ⟨d, hn, run⟩ := ric_next run
-      obtain ⟨_, rfl⟩ := ri_dup (w := Y) rfl hn
+      winv 1
       obtain ⟨d, hn, run⟩ := ric_next run
       obtain ⟨_, rfl⟩ := ri_val hdiv (ri_div hn)
       obtain ⟨d, hn, run⟩ := ric_next run
@@ -519,10 +489,7 @@ theorem sqrt_small_of_run {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
     (run : SFunc.RunCut cert.prog sevm [] (St b (0 :: Y :: R :: T) M G) t_28bb_c69 r) :
     ∃ G', r = .done (.returned (St b ((if Y = 0 then 0 else 1) :: T) M G')) := by
   unfold t_28bb_c69 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨d, hn, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := Y) rfl hn
-  winv 1
+  winv 3
   by_cases hy : Y = 0
   · subst Y
     simp only [show B256.eqCheck 0 0 = (1 : B256) from by decide] at run

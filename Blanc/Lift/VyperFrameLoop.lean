@@ -2,6 +2,7 @@ import Blanc.Lift.InvWalkOps
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.MemMap
 import Jaune.MemoryAccounting
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Vyper 0.2.x frame save and restore loops, unrolled
@@ -245,27 +246,17 @@ theorem ric_frameSaveIter {c0 c1 e0 e1 x0 x1 : UInt8} {fall exit : SFunc} {p c :
   have hctr' : Bytes.toB256 (M.read (Bytes.toB256 [c0, c1]).toNat 32).1 = Nat.toB256 p := hctr
   have hM1 := Mem.size_write_word_of_add_le (v := Nat.toB256 (p + 32)) hcs
   unfold frameSaveIter at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_mload s1
+  winv 3
   rw [hR _ hcs, hctr'] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_mload s1
   rw [hpn, hR _ hps] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_mload s1
+  winv 3
   rw [hR _ hcs, hctr'] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_add s1
   rw [toB256_add_0x20 hp] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_mload s1
+  winv 5
   rw [read_covered rfl (by rw [hM1]; exact hsz) (by rw [hM1]; exact hcs)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G17, run⟩ | ⟨-, G17, run⟩
   · exact ⟨G17, .inl run⟩
   · exact ⟨G17, .inr run⟩
@@ -295,28 +286,17 @@ theorem ric_frameRestoreIter {c0 c1 l0 l1 x0 x1 : UInt8} {fall exit : SFunc} {p 
   have hM2 := Mem.size_write_word_of_add_le (M := M.write p w.toBytes) (v := Nat.toB256 (p - 32))
     (by rw [hM1]; exact hcs)
   unfold frameRestoreIter at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_mload s1
+  winv 3
   rw [hR _ hcs, hctr'] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_mstore s1
   rw [hpn] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_mload s1
+  winv 3
   rw [read_covered rfl (by rw [hM1]; exact hsz) (by rw [hM1]; exact hcs), hctr1] at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_sub s1
   rw [toB256_sub_0x20 h32 (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_mstore s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_mload s1
+  winv 5
   rw [read_covered rfl (by rw [hM2, hM1]; exact hsz) (by rw [hM2, hM1]; exact hcs)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
+  winv 4
   rcases ric_branch run with ⟨-, G18, run⟩ | ⟨-, G18, run⟩
   · exact ⟨G18, .inl run⟩
   · exact ⟨G18, .inr run⟩

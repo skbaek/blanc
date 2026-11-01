@@ -2,6 +2,7 @@ import Blanc.Lift.SelectorRoute
 import Blanc.Lift.ExactWalk
 import Blanc.Lift.ExactWalkOps
 import Blanc.Lift.InvWalkDispatch
+import Blanc.Lift.WalkInvKit
 
 /-!
 # The route of a selector word, forward and gas-exact
@@ -163,12 +164,7 @@ theorem ricP_cmp_eq_either (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n 
         ∃ g G', fs[j]? = some g ∧ SFunc.RunCutP P fs sevm [] (St b (σ :: S) M G') g r) := by
   obtain ⟨d, hd, h⟩ := ric_nextP run
   obtain ⟨_, rfl⟩ := ri_dup rfl (hP hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (hP hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_eq (hP hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (hP hd)
+  winv 3 using hP
   cases h with
   | toZero d0 h k =>
       obtain ⟨-, hw, e⟩ := St.of_pop2 h

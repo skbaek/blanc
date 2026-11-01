@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Pool.Callee.GetYDTrees
 import Blanc.Lift.FuelLoopWalk
 import Blanc.Lift.StableSwapNewton.Fuel
+import Blanc.Lift.WalkInvKit
 
 /-!
 # `get_y_D`'s Newton `y` loop, inverted
@@ -79,23 +80,18 @@ theorem ric_ydExit (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {yw ρ
     (run : SFunc.RunCut progYD sevm C (St b (ydStk S) M G) ydExit r) :
     ∃ M' G', r = .done (.returned (St b (yw :: S) M' G')) ∧ YDOut M0 M' yw := by
   unfold ydExit at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_pop s1
+  winv 3
   obtain ⟨G4, run⟩ := ric_pushMloadF hF 14 (by decide) hy run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_mstore s1
+  winv 2
   rw [show (Bytes.toB256 [0x00]).toNat = 0 by decide] at run
   obtain ⟨hout, hw⟩ := hF.scratch (by decide) yw
   rw [hlen] at hout
   have hsz : (M.write 0 yw.toBytes).size % 32 = 0 := by rw [hout.size]; exact hF.aligned
   have hcov : ∀ o, o + 32 ≤ 0x340 → ((M.write 0 yw.toBytes).read o 32).2 = M.write 0 yw.toBytes :=
     fun o ho => read_covered rfl hsz (by rw [hout.size]; have := hF.cover; rw [hlen] at this; omega)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_mload s1
+  winv 2
   rw [show (Bytes.toB256 [0x00]).toNat = 0 by decide, hcov 0 (by decide)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_mload s1
+  winv 2
   rw [show (Bytes.toB256 [0x02, 0x00]).toNat = 0x140 + 32 * 6 by decide,
     hcov _ (by decide)] at run
   have hρ' : Bytes.toB256 ((M.write 0 yw.toBytes).read (0x140 + 32 * 6) 32).1 = ρ := hw 6 ρ hρ
@@ -115,21 +111,13 @@ theorem ric_ydTail (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {n k :
       ((n + 1 ≠ 255 ∧ r = .at k (St b (ydStk S) M' G')) ∨
         (n + 1 = 255 ∧ SFunc.RunCut progYD sevm C (St b (ydStk S) M' G') fall r)) := by
   unfold ydTail at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨G2, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := Nat.toB256 0x320) rfl s1
+  winv 3
   obtain ⟨G4, run⟩ := ric_mloadF hF 15 (by decide) hn run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_add s1
+  winv 2
   rw [one_add_toB256 (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_dup (w := Nat.toB256 (n + 1)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_dup (w := Nat.toB256 0x320) rfl s1
+  winv 2
   obtain ⟨G9, M1, hF1, run⟩ := ric_mstoreF hF 15 (by decide) (by rw [hlen]; decide) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_dup (w := Nat.toB256 255) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_push s1
+  winv 4
   have hiff := toB256_eq_toB256_iff (a := 255) (c := n + 1) (by decide) (by omega)
   rcases ric_branchToCut hk run with ⟨hw, G14, run⟩ | ⟨hw, G14, hr⟩
   · refine ⟨G14, M1, hF1, .inr ⟨?_, run⟩⟩
@@ -180,9 +168,7 @@ theorem ydHead_step {D ρ c bw : B256} {e t k : Nat} {fall fall' : SFunc}
   obtain ⟨G17, M2, hF2, run⟩ := ric_pushMstoreF hF1 14 (by decide) (lt16 (by decide)) run
   obtain ⟨G18, run⟩ := ric_pushMloadF hF2 13 (by decide) rfl run
   obtain ⟨G19, run⟩ := ric_pushMloadF hF2 14 (by decide) rfl run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
+  winv 3
   have hqw : Nat.toB256 q.toNat = q := toB256_toNat q
   have hqlt : q.toNat < 2 ^ 256 := B256.toNat_lt q
   -- leaving through the exit `e`
@@ -265,15 +251,11 @@ theorem ydHead_step {D ρ c bw : B256} {e t k : Nat} {fall fall' : SFunc}
   · -- `y ≤ y_prev`
     have hngt := toNat_le_of_iszero_gt_ne_zero hw
     rw [hyN] at hngt
-    obtain ⟨G24, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨G26, run⟩ := ric_pushMloadF hF2 13 (by decide) rfl run
     obtain ⟨G27, run⟩ := ric_pushMloadF hF2 14 (by decide) rfl run
     obtain ⟨hle, G28, run⟩ := ric_vySubT vyRevertT_noOk run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_gt s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_iszero s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_iszero s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_push s1
+    winv 4
     have hsub : (Nat.toB256 y - q).toNat = y - q.toNat := by
       rw [B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.mpr hle), hyN]
     have hng : ¬ q.toNat > y := by omega

@@ -1,6 +1,7 @@
 import Blanc.Lift.WithdrawalRequest.UserSetup
 import Blanc.WordFakeExponential
 import Blanc.MachineDataFacts
+import Blanc.Lift.WalkInvKit
 
 /-!
 The certified unsigned-word fee loop. Its finite recurrence witness supplies
@@ -48,17 +49,9 @@ private theorem header_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       (St b [output, accumulator, counter, numerator, denominator] M G')
       (if accumulator = 0 then t_0068_c0 else t_0055_c0) o := by
   obtain ⟨_, run⟩ := ric_dest run.cut
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 1
   change SFunc.RunCut _ _ _ (St b [0, output, accumulator, counter, numerator, denominator] M _) _ _ at run
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := accumulator) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_gt h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_iszero h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 4
   rcases ric_branch run with ⟨flag, G', run⟩ | ⟨flag, G', run⟩
   · have active : accumulator ≠ 0 := by
       intro hz
@@ -110,30 +103,16 @@ private theorem body_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       (St b [output + accumulator, nextAccumulator numerator denominator counter accumulator,
         counter + 1, numerator, denominator] M G') t_004d_c0 o := by
   have run := run.cut
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := accumulator) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_add h
+  winv 2
   rw [show accumulator + output = output + accumulator from B256.add_comm] at run
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_swap (S' := [accumulator, output + accumulator, counter, numerator, denominator]) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := numerator) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_mul h
+  winv 3
   rw [Blanc.B256.mul_comm numerator accumulator] at run
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := denominator) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_dup (w := counter) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_mul h
+  winv 3
   rw [Blanc.B256.mul_comm counter denominator] at run
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_swap
     (S' := [accumulator * numerator, denominator * counter, output + accumulator, counter, numerator, denominator]) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_div h
+  winv 1
   change SFunc.RunCut _ _ _
     (St b [nextAccumulator numerator denominator counter accumulator, output + accumulator,
       counter, numerator, denominator] M _) _ _ at run
@@ -141,13 +120,11 @@ private theorem body_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   obtain ⟨_, rfl⟩ := ri_swap
     (S' := [counter, output + accumulator, nextAccumulator numerator denominator counter accumulator,
       numerator, denominator]) rfl h
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_push h
+  winv 1
   change SFunc.RunCut _ _ _ (St b
     [1, counter, output + accumulator, nextAccumulator numerator denominator counter accumulator,
       numerator, denominator] M _) _ _ at run
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_add h
+  winv 1
   rw [show (1 : B256) + counter = counter + 1 from B256.add_comm] at run
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_swap

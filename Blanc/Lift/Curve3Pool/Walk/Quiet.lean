@@ -5,6 +5,7 @@ import Blanc.Lift.WalkSteps
 import Blanc.Lift.Vyper
 import Blanc.Lift.MemGlue
 import Jaune.WordFacts
+import Blanc.Lift.WalkInvKit
 
 /-!
 # The walk contract of a body that makes no external call
@@ -115,8 +116,7 @@ theorem ric_ownerGuard (hfork : CoveredFork sevm.benvStat.fork) {h l : UInt8}
       ∃ G', SFunc.RunCut fs sevm C (St (afterSload sevm b ownerSlot) S M G') ok r := by
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sload hfork s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_caller s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_eq s1
+  winv 2
   obtain ⟨hw, G5, run⟩ := ric_assertJump hf run
   exact ⟨B256.eq_of_eqCheck_ne_zero hw, G5, run⟩
 

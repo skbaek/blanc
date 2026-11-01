@@ -1,6 +1,7 @@
 import Blanc.Lift.VyperArraySlot
 import Blanc.Lift.StaticCall
 import Blanc.Lift.StableSwapNewton.Defs
+import Blanc.Lift.WalkInvKit
 
 /-!
 # A balance difference across a call: two `balanceOf` replies and a checked subtraction
@@ -107,11 +108,7 @@ theorem ric_vyStaticReply {h1 l1 h2 l2 oh ol : UInt8} {fail1 fail2 : SFunc}
   rcases ric_branch run with ⟨-, G2, run⟩ | ⟨hflag, G2, run⟩
   · exact (run.false_of_noOk hf1).elim
   have h1 : flag = 1 := hpost.flag.resolve_left hflag
-  obtain ⟨G3, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_returndatasize s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 5
   rcases ric_branch run with ⟨-, G8, run⟩ | ⟨hgt, G8, run⟩
   · exact (run.false_of_noOk hf2).elim
   have hlen : 31 < out.length := by
@@ -150,13 +147,10 @@ theorem ric_vyChkSubMem {vh vl h l : UInt8} {fail : SFunc} {post : B256}
       (St b ((post - pre) :: S) (M.read (Bytes.toB256 [vh, vl]).toNat 32).2 G') f r := by
   intro pre
   unfold vyChkSubMem at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_mload s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (n := 0) (w := pre) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_dup (n := 2) (w := post) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G8, run⟩ | ⟨hw, G8, run⟩
   · exact (run.false_of_noOk hf).elim
   have hle : pre.toNat ≤ post.toNat := by

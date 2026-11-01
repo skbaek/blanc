@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.AdminBalances
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Safety: `donate_admin_fees()`, inverted
@@ -77,63 +78,22 @@ theorem ric_donateIter {C : List Nat} {r : Seg} {B : Devm} {S : List B256} {M : 
       SFunc.RunCut cert.prog sevm C (St (afterSstore sevm d1 (balancesBase + Nat.toB256 i)
         (Bytes.toB256 (out.take 32))) S M' G') tail r := by
   unfold donateIter at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_mstore s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_address s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_mstore s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_mload s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_lt s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s2
+  winv 17
   rcases ric_branch run with ⟨-, G18, run⟩ | ⟨-, G18, run⟩
   · exact (ric_undefined run).elim
-  obtain ⟨G19, run⟩ := ric_dest run
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_mstore s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_keccak s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_add s2
+  winv 8
   obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_sload hfork s2
   obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨gw, G28, rfl⟩ := ri_gas s2
   obtain ⟨d2, s2, run⟩ := ric_next run
   obtain ⟨flag, out, hpost, hlenb, hans⟩ := ri_staticcall_bounded hfork s2
   rw [hpost.eq_St] at run
   obtain ⟨hfl, G29, run⟩ := ric_assertJump hf1 run
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_push s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_returndatasize s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_gt s3
+  winv 3
   obtain ⟨hrds, G33, run⟩ := ric_assertJump hf2 run
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_push s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_pop s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G36, rfl⟩ := ri_push s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G37, rfl⟩ := ri_mload s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_push s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G39, rfl⟩ := ri_mload s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G40, rfl⟩ := ri_push s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G41, rfl⟩ := ri_dup rfl s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G42, rfl⟩ := ri_lt s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G43, rfl⟩ := ri_push s3
+  winv 10
   rcases ric_branch run with ⟨-, G44, run⟩ | ⟨-, G44, run⟩
   · exact (ric_undefined run).elim
-  obtain ⟨G45, run⟩ := ric_dest run
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G46, rfl⟩ := ri_push s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G47, rfl⟩ := ri_push s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G48, rfl⟩ := ri_mstore s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G49, rfl⟩ := ri_push s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G50, rfl⟩ := ri_push s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G51, rfl⟩ := ri_keccak s3
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G52, rfl⟩ := ri_add s3
+  winv 8
   obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G53, rfl⟩ := ri_sstore hfork s3
   clear s2 s3
   clear * - hctr hwf hi hpost hlenb hans hfl hrds run hfork
@@ -201,18 +161,7 @@ theorem ric_donateTail {C : List Nat} {r : Seg} {B : Devm} {M : Mem} {G i : Nat}
       SFunc.RunCut cert.prog sevm C
         (St B [dd, w, Bytes.toB256 [0x03], Bytes.toB256 [0x01, 0x40]] M' G') X r := by
   unfold donateTail at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_mload s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_add s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_mstore s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_dup rfl s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_eq s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_iszero s2
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s2
+  winv 12
   have h320 : (Bytes.toB256 [0x01, 0x40]).toNat = 320 := by decide
   rw [h320, hctr, B256.toB256_toBytes] at run
   clear * - run hwf
@@ -304,9 +253,7 @@ theorem safe_donateAdminFees (hfork : CoveredFork sevm.benvStat.fork)
   swap
   · exact (ric_undefined run).elim
   unfold t_5006_c63 at run
-  obtain ⟨G19, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_pop s1
+  winv 3
   cases run with
   | last hl =>
   cases hl

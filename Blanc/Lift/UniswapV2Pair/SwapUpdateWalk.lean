@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.SwapCheckWalk
 import Blanc.Lift.UniswapV2Pair.UpdateSource
 import Blanc.Lift.WordWindowMemory
+import Blanc.Lift.WalkInvKit
 
 /-! The shared `_update` routine called from swap, at a moved free pointer `p`.
 `update_inv` fixes the pointer at 128 (the mint/burn/sync callers); only its Sync
@@ -29,28 +30,13 @@ theorem swapSyncEvent_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     omega
   have h := run.cut
   unfold updateSyncTree at h
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mload hd
   rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl,
     mem.read_self (i := 64) (sz := 32) (by have := mem.ge; omega),
     (PtrWord.of_ptrMem mem).2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mstore hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_div hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_and hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_add hd
+  winv 15
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
   rw [p32] at hd
   subst d
@@ -60,16 +46,11 @@ theorem swapSyncEvent_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     m2.read_self (i := 64) (sz := 32) (by have := m2.ge; omega),
     (PtrWord.of_ptrMem m2).2] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 5
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_sub hd
   rw [B256.sub_self] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_add hd
   rw [show (Bytes.toB256 [0x40]) + 0 = 64 from by decide] at hd
   subst d
@@ -78,12 +59,7 @@ theorem swapSyncEvent_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
   rw [show (64 : B256).toNat = 64 from rfl, m2.read_self covered,
     Mem.read_two_word_writes_at_raw] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_pop hd
+  winv 6
   obtain ⟨g, hg⟩ := ric_ret h
   refine ⟨_, _, g, m2, ?_⟩
   rw [Seg.done.inj hg, B256.and_comm reserveMask112 packed,
@@ -166,15 +142,7 @@ theorem swapTail_invH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : 
     exact swapPtr_add (k := 64) (by omega)
   have p96 : (p + Bytes.toB256 [0x60]).toNat = p.toNat + 96 := swapPtr_add (k := 96) (by omega)
   unfold t_0cd6_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 9
   obtain ⟨_, ⟨D, callee, run⟩ | ⟨D, callee, _⟩⟩ := ric_call (g := t_22e0_c60) rfl run
   swap
   · obtain ⟨_, _, _, _, _, _, _, returned⟩ := swapUpdate_invH stateGas bal mem lower width callee
@@ -194,37 +162,20 @@ theorem swapTail_invH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : 
     rw [m4.size] at h
     omega
   unfold t_0ce4_c8 at run
-  obtain ⟨_, run⟩ := ric_dest run
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
+  winv 3
   obtain ⟨d, hs, run⟩ := ric_next run; obtain ⟨_, hd⟩ := ri_mload hs
   rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl,
     ptr.read_self (i := 64) (sz := 32) (by have := ptr.ge; omega), (PtrWord.of_ptrMem ptr).2] at hd
   subst d
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_mstore hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 8
   obtain ⟨d, hs, run⟩ := ric_next run; obtain ⟨_, hd⟩ := ri_mstore hs
   rw [p32] at hd
   subst d
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 5
   obtain ⟨d, hs, run⟩ := ric_next run; obtain ⟨_, hd⟩ := ri_mstore hs
   rw [p64] at hd
   subst d
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_add hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 5
   obtain ⟨d, hs, run⟩ := ric_next run; obtain ⟨_, hd⟩ := ri_mstore hs
   rw [p96] at hd
   subst d
@@ -233,16 +184,7 @@ theorem swapTail_invH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : 
   rw [show (Bytes.toB256 [0x40]).toNat = 64 from rfl,
     m4.read_self (i := 64) (sz := 32) (by have := m4.ge; omega), (PtrWord.of_ptrMem m4).2] at hd
   subst d
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_and hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_caller hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_swap rfl hs
+  winv 10
   obtain ⟨d, hs, run⟩ := ric_next run; obtain ⟨_, hd⟩ := ri_sub hs
   rw [B256.sub_self] at hd
   subst d
@@ -255,20 +197,9 @@ theorem swapTail_invH {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : 
   rw [show (128 : B256).toNat = 128 from rfl, m4.read_self covered,
     Mem.read_four_word_writes ptr.wf] at hd
   subst d
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 4
   obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_sstoreH stateGas bal hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
-  obtain ⟨_, hs, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_pop hs
+  winv 9
   obtain ⟨g', hg⟩ := ric_ret run
   exact ⟨_, g', Seg.done.inj hg⟩
 

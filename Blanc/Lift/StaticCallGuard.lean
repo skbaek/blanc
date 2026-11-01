@@ -3,6 +3,7 @@ import Blanc.Lift.InvWalkProvenance
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.ExactWalkMemory
 import Blanc.Lift.ExactWalkCutOps
+import Blanc.Lift.WalkInvKit
 /-! Literal STATICCALL success and ABI return-width guards with retained provenance. -/
 
 namespace Blanc.Lift
@@ -36,10 +37,7 @@ theorem staticCallGuard_invP {P : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨d, hcall, h⟩ := ric_nextP h
   obtain ⟨flag, out, post, bound, answered⟩ := ri_staticcall_bounded fork (project hcall)
   rw [post.eq_St] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hs)
+  winv 4 using project
   rcases ric_branchP h with ⟨_, _, failed⟩ | ⟨accepted, tailGas, h⟩
   · exact (failed.false_of_noOk noFail).elim
   · have zeroFlag : B256.eqCheck flag 0 = 0 := eq_zero_of_iszero_ne_zero accepted
@@ -139,10 +137,7 @@ theorem returnWidthGuard_invP {P : Sevm → Devm → Ninst → Devm → Prop}
         (St b (b.returnData.length.toB256 :: p :: R) M G') decodeTree seg := by
   rw [shape] at run
   obtain ⟨_, h⟩ := ric_destP run
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_pop (project hs)
+  winv 4 using project
   change SFunc.RunCutP P fs sevm C _
     (returnWidthCompareLine.foldr SFunc.next (.next (.push destination le)
       (.branch shortTree decodeTree))) seg at h

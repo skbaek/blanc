@@ -84,24 +84,16 @@ theorem reserves_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   rw [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
     0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = reserveMask112 from rfl] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap (S' := r0 :: 128 :: 64 :: ts :: r1 :: reserveMask112 :: R) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := reserveMask112) rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_and hd
   rw [clean0] at hd; subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (128 : B256).toNat = 128 from rfl] at hd; subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap (S' := r1 :: 64 :: ts :: 128 :: reserveMask112 :: R) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap (S' := 64 :: r1 :: ts :: 128 :: reserveMask112 :: R) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap (S' := reserveMask112 :: r1 :: ts :: 128 :: 64 :: R) rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_and hd
   rw [clean1] at hd; subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_add hd
   simp only [show (128 : B256) + Bytes.toB256 [0x20] = 160 from by decide] at hd; subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
@@ -110,22 +102,18 @@ theorem reserves_tail_inv {fs : List SFunc} {sevm : Sevm} {b : Devm}
   rw [show Bytes.toB256 [0xff, 0xff, 0xff, 0xff] = reserveMask32 from rfl] at hd; subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_and hd
   rw [cleant] at hd; subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 64) rfl hd
+  winv 2
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_add hd
   simp only [show (64 : B256) + 128 = 192 from by decide] at hd; subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd
   simp only [show (192 : B256).toNat = 192 from rfl] at hd; subst d
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_swap (S' := 64 :: 128 :: R) rfl hd
+  winv 1
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mload hd
   simp only [show (64 : B256).toNat = 64 from rfl,
     m3.read_self (by decide : 64 + 32 ≤ 224),
     show Bytes.toB256 ((((M.write 128 r0.toBytes).write 160 r1.toBytes).write 192 ts.toBytes).read 64 32).1 = (128 : B256) from m3.word] at hd
   subst d
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap (S' := 128 :: 128 :: R) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := 128) rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap (S' := 128 :: 128 :: 128 :: R) rfl hd
+  winv 3
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_sub hd
   simp only [show (128 : B256) - 128 = 0 from by decide] at hd; subst d
   obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hd

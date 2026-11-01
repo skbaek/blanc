@@ -1,5 +1,6 @@
 import Blanc.Lift.IdentityCall
 import Blanc.Lift.BalanceDiffCall
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Vyper 0.2.x `raw_call(…, max_outsize=32)` and its optional-return test
@@ -312,67 +313,35 @@ theorem ric_vyRawCallCheck {p : VyRawSite} {f3 f4 f5 K : SFunc} {len : B256} {rd
   have hB : Bw.toNat < 2 ^ 16 := toNat_push2_lt p.bh p.bl
   have h20 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
   unfold vyRawCallCheck at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (n := 0) (w := Bw) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_mload s1
+  winv 5
   have h32B : (Bytes.toB256 [0x20] + Bw).toNat = Bw.toNat + 32 := by
     rw [B256.toNat_add, h20, Nat.lo_eq_of_lt (by omega)]; omega
   rw [h32B] at run
   set w := Bytes.toB256 (M.read (Bw.toNat + 32) 32).1 with hw
   set M4 := (M.read (Bw.toNat + 32) 32).2 with hM4
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup (n := 2) (w := Bw) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_mload s1
+  winv 3
   have hv : Bytes.toB256 (M4.read Bw.toNat 32).1 = len := by
     have e : (M4.read Bw.toNat len.toBytes.length).1 = len.toBytes :=
       Mem.read_fst_of_getD M4 Bw.toNat (fun j hj => hlen j (by rw [B256.length_toBytes] at hj; exact hj))
     rw [B256.length_toBytes] at e
     rw [e, B256.toB256_toBytes]
   rw [hv] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_dup (n := 0) (w := len) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨d1, s1, run⟩ := ric_next run
   obtain ⟨G11, rfl⟩ := ri_swap (S' := len :: Bytes.toB256 [0x20] :: len :: Bytes.toB256 [0x00] ::
     w :: Bw :: S) rfl s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨z1, G12, rfl⟩ := ri_sgt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
+  winv 2
   rcases ric_branch run with ⟨-, G15, run⟩ | ⟨-, G15, run⟩
   · exact (run.false_of_noOk hf3).elim
-  obtain ⟨G16, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_dup (n := 0) (w := len) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G18, rfl⟩ := ri_swap (S' := Bytes.toB256 [0x00] :: len :: len :: w :: Bw :: S) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G19, rfl⟩ := ri_swap (S' := len :: Bytes.toB256 [0x00] :: len :: w :: Bw :: S) rfl s1
+  winv 4
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨z2, G20, rfl⟩ := ri_slt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G22, rfl⟩ := ri_push s1
+  winv 2
   rcases ric_branch run with ⟨-, G23, run⟩ | ⟨-, G23, run⟩
   · exact (run.false_of_noOk hf4).elim
-  obtain ⟨G24, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_dup (n := 0) (w := len) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_sub s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_exp s1
+  winv 6
   set e := B256.bexp (Bytes.toB256 [0x01, 0x00]) (Bytes.toB256 [0x20] - len) with he
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_dup (n := 2) (w := w) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_div s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G32, rfl⟩ := ri_swap (S' := len :: (w / e) :: w :: Bw :: S) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G34, rfl⟩ := ri_swap (S' := w :: (w / e) :: Bw :: S) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G36, rfl⟩ := ri_swap (S' := Bw :: (w / e) :: S) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G37, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G39, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G40, rfl⟩ := ri_push s1
+  winv 11
   rcases ric_branch run with ⟨-, G41, run⟩ | ⟨hq, G41, run⟩
   · exact (run.false_of_noOk hf5).elim
   obtain ⟨G42, run⟩ := ric_dest run
@@ -424,32 +393,16 @@ theorem ric_vyRawCallJoin {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {len rds c : B
   have hB : Bw.toNat < 2 ^ 16 := toNat_push2_lt p.bh p.bl
   have h20 : (Bytes.toB256 [0x20]).toNat = 32 := by decide
   unfold vyRawCallJoin at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G2, rfl⟩ := ri_swap (S' := rds :: len :: c :: S) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G4, rfl⟩ := ri_swap (S' := c :: len :: S) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_mstore s1
+  winv 7
   set M1 := M.write Lw.toNat len.toBytes with hM1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_dup (n := 0) (w := Lw) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_mload s1
+  winv 3
   rw [hM1, Mem.read_write_word_self, B256.toB256_toBytes, ← hM1] at run
   set M1' := (M1.read Lw.toNat 32).2 with hM1'
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_add s1
+  winv 2
   set nw := Bytes.toB256 [0x20] + len with hnw
   have hnw' : nw.toNat = n + 32 := by
     rw [hnw, B256.toNat_add, h20, Nat.lo_eq_of_lt (by omega)]; omega
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_dup (n := 0) (w := nw) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G14, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_dup (n := 2) (w := nw) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_dup (n := 4) (w := Lw) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_push s1
+  winv 6
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨gw, G19, rfl⟩ := ri_gas s1
   rw [show Bytes.toB256 [0x04] = 4 by decide, show Bytes.toB256 [0x00] = 0 by decide] at run
   obtain ⟨d1, s1, run⟩ := ric_next run
@@ -465,12 +418,7 @@ theorem ric_vyRawCallJoin {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {len rds c : B
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_push s1
   rcases ric_branch run with ⟨hw, -⟩ | ⟨-, G22, run⟩
   · exact absurd hw (by decide)
-  obtain ⟨G23, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G26, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G28, rfl⟩ := ri_mload s1
+  winv 6
   -- the copy, byte by byte
   have hinlen : input.length = n + 32 := by
     rw [hinput, ← hnw']
@@ -513,9 +461,7 @@ theorem ric_vyRawCallJoin {p : VyRawSite} {f2 f3 f4 f5 K : SFunc} {len rds c : B
   have hag3 : Mem.AgreeOutside M1 M3 Bw.toNat (Bw.toNat + 64) :=
     hag2.comp (Mem.agreeOutside_of_data (μ := M2) (μ' := M3) rfl
       (memExtSize_ge M2.size Bw.toNat 32) _ _)
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨hz, G32, run⟩ | ⟨hz, G32, run⟩
   · -- `len > 0`: the tested tail
     have hpos : 1 ≤ n := by
@@ -589,17 +535,9 @@ theorem ric_vyRawCallTail {p : VyRawSite} {k : Nat} {f1 f2 f3 f4 f5 K : SFunc} {
   rcases ric_branch run with ⟨hz, G2, run⟩ | ⟨hflag, G2, run⟩
   · exact (run.false_of_noOk hf1).elim
   obtain ⟨M0, hM0⟩ := hM hflag
-  obtain ⟨G3, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_returndatasize s1
+  winv 3
   rw [← hrd] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G6, rfl⟩ := ri_dup (n := 0) (w := Nat.toB256 rd.length) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G7, rfl⟩ := ri_dup (n := 2) (w := Bytes.toB256 [0x20]) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_gt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+  winv 5
   rcases ric_branch run with ⟨hz, G11, run⟩ | ⟨hz, G11, run⟩
   · -- short reply: `len = RETURNDATASIZE`, through the join entry
     have hlt : rd.length < 32 := by
@@ -625,9 +563,7 @@ theorem ric_vyRawCallTail {p : VyRawSite} {k : Nat} {f1 f2 f3 f4 f5 K : SFunc} {
         rw [GT.gt, B256.lt_iff_toNat_lt_toNat, hrds, h20]; omega
       simp only [B256.gtCheck, this, ↓reduceIte]
       decide
-    obtain ⟨G12, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G13, rfl⟩ := ri_dup (n := 1) (w := Bytes.toB256 [0x20]) rfl s1
+    winv 2
     have hn : (Bytes.toB256 [0x20]).toNat = min rd.length 32 := by rw [h20]; omega
     obtain ⟨hok, rest⟩ := ric_vyRawCallJoin hid hf2 hf3 hf4 hf5 (by omega) (by omega)
       (rawCall_window hM0 hn) run

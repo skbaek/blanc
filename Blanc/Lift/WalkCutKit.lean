@@ -8,6 +8,7 @@ import Blanc.AddressSlotProofs
 import Blanc.Lift.Deploy
 import Blanc.Lift.InvWalkStep
 import Jaune.WordFacts
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Cut-run walk kit for certificate-driven inversions
@@ -83,10 +84,7 @@ theorem ric_eq_miss {sel : B256} {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {j : Nat}
     ∃ G', SFunc.RunCut fs sevm [] (St b (sel :: S) M G') f r := by
   cases hj : fs[j]? with
   | none =>
-    obtain ⟨_, s, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_dup rfl s
-    obtain ⟨_, s, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s
-    obtain ⟨_, s, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_eq s
-    obtain ⟨_, s, run⟩ := ric_next run; obtain ⟨_, rfl⟩ := ri_push s
+    winv 4
     cases run with
     | toZero d0 hp k => exact ⟨_, (St.of_pop2 hp).2.2 ▸ k⟩
     | toSuccCut _ _ _ hk' _ => exact absurd hk' List.not_mem_nil

@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Callee.GetDLoop
 import Blanc.Lift.ReachWalk
+import Blanc.Lift.WalkInvKit
 
 /-!
 # `get_D` (entry 417, pc `0x4c9`): the callee contract
@@ -43,13 +44,9 @@ theorem ric_gdSPost {x0 x1 x2 amp ρ s xs sc w8 dp d ann n p xv ic : B256}
       (gdSPost (gdHead (.branchTo .undefined 459))) r) :
     calleeOut b S M0 (gdPostRes (gdX x0 x1 x2) amp.toNat s.toNat) r := by
   unfold gdSPost at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_pop s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_pop s1
+  winv 3
   obtain ⟨G4, run⟩ := ric_pushMloadF hF 5 (by decide) rfl run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨hw, G8, run⟩ | ⟨hw, G8, run⟩
   · -- `S == 0`: return `0`
     have hs0 : s = 0 := eq_zero_of_iszero2_eq_zero hw
@@ -86,8 +83,7 @@ theorem ric_gdSPost {x0 x1 x2 amp ρ s xs sc w8 dp d ann n p xv ic : B256}
     exact ⟨0, rfl, Nat.two_pow_pos 256, _, G16, hr, hout⟩
   · -- `S ≠ 0`
     have hs0 := ne_zero_of_iszero2_ne_zero hw
-    obtain ⟨G9, run⟩ := ric_dest run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
+    winv 2
     obtain ⟨G11, M1, hF1, run⟩ := ric_pushMstoreF hF 9 (by decide) (lt16 (by decide)) run
     obtain ⟨G12, run⟩ := ric_pushMloadF hF1 5 (by decide) rfl run
     obtain ⟨G13, M2, hF2, run⟩ := ric_pushMstoreF hF1 10 (by decide) (lt16 (by decide)) run
@@ -95,13 +91,7 @@ theorem ric_gdSPost {x0 x1 x2 amp ρ s xs sc w8 dp d ann n p xv ic : B256}
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_push s1
     obtain ⟨hm, G16, run⟩ := ric_vyMulT vyRevertT_noOk run
     obtain ⟨G17, M3, hF3, run⟩ := ric_pushMstoreF hF2 11 (by decide) (lt16 (by decide)) run
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G21, rfl⟩ := ri_dup (w := Bytes.toB256 [0x00]) rfl s1
-    obtain ⟨d1, s1, run⟩ := ric_next run
-    obtain ⟨G22, rfl⟩ := ri_dup (w := Bytes.toB256 [0x02, 0xc0]) rfl s1
+    winv 5
     obtain ⟨G23, M4, hF4, run⟩ := ric_mstoreF hF3 12 (by decide) (lt16 (by decide)) run
     obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G24, rfl⟩ := ri_add s1
     rw [show Bytes.toB256 [0xff] + Bytes.toB256 [0x00] = Nat.toB256 255 by decide,
@@ -131,38 +121,28 @@ theorem ric_gdSIter (hF : WordFrame M0 M 0x140 ws) (hlen : ws.length = 16) {j : 
         B256.eqCheck (B256.eqCheck (Nat.toB256 3) (Nat.toB256 (j + 1))) 0 :: gdSStk S) M' G')
         jmp r := by
   unfold gdSIter at run
-  obtain ⟨G1, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨G3, run⟩ := ric_pushMloadF hF 7 (by decide) hj run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_mul s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_add s1
+  winv 3
   obtain ⟨G7, run⟩ := ric_mloadF hF j (gdXpAddr hj3) hx run
   obtain ⟨G8, M1, hF1, run⟩ := ric_pushMstoreF hF 6 (by decide) (by rw [hlen]; decide) run
   have hs1 : (ws.set 6 x)[5]? = some s := by rw [List.getElem?_set_ne (by decide)]; exact hs
   have hx1 : (ws.set 6 x)[6]? = some x := by rw [List.getElem?_set_self (by rw [hlen]; decide)]
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G10, rfl⟩ := ri_dup (w := Bytes.toB256 [0x01, 0xe0]) rfl s1
+  winv 2
   obtain ⟨G11, run⟩ := ric_mloadF hF1 5 (by decide) hs1 run
   obtain ⟨G12, run⟩ := ric_pushMloadF hF1 6 (by decide) hx1 run
   obtain ⟨ha, G13, run⟩ := ric_vyAddT vyRevertT_noOk run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G14, rfl⟩ := ri_dup (w := Bytes.toB256 [0x01, 0xe0]) rfl s1
+  winv 1
   obtain ⟨G15, M2, hF2, run⟩ := ric_mstoreF hF1 5 (by decide)
     (by rw [List.length_set, hlen]; decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_pop s1
   have hj2 : ((ws.set 6 x).set 5 (s + x))[7]? = some (Nat.toB256 j) := by
     rw [List.getElem?_set_ne (by decide), List.getElem?_set_ne (by decide)]; exact hj
-  obtain ⟨G17, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_dup (w := Nat.toB256 0x220) rfl s1
+  winv 2
   obtain ⟨G19, run⟩ := ric_mloadF hF2 7 (by decide) hj2 run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G20, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G21, rfl⟩ := ri_add s1
+  winv 2
   rw [one_add_toB256 (by omega)] at run
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G22, rfl⟩ := ri_dup (w := Nat.toB256 (j + 1)) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_dup (w := Nat.toB256 0x220) rfl s1
+  winv 2
   obtain ⟨G24, M3, hF3, run⟩ := ric_mstoreF hF2 7 (by decide)
     (by rw [List.length_set, List.length_set, hlen]; decide) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_dup (w := Nat.toB256 3) rfl s1
@@ -191,13 +171,7 @@ theorem ric_gdPro {ρ x0 x1 x2 amp : B256} (hsz : M.size % 32 = 0) (hcov : 0x340
   obtain ⟨G6, M5, hF, run⟩ := ric_pushMstoreF hF 3 (by decide) (lt16 (by decide)) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
   obtain ⟨G8, M6, hF, run⟩ := ric_pushMstoreF hF 5 (by decide) (lt16 (by decide)) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G12, rfl⟩ := ri_dup (w := Bytes.toB256 [0x00]) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G13, rfl⟩ := ri_dup (w := Bytes.toB256 [0x02, 0x20]) rfl s1
+  winv 5
   obtain ⟨G14, M7, hF, run⟩ := ric_mstoreF hF 7 (by decide) (lt16 (by decide)) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_add s1
   rw [show Bytes.toB256 [0x03] + Bytes.toB256 [0x00] = Nat.toB256 3 by decide,

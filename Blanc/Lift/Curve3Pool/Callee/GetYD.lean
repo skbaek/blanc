@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Pool.Callee.GetYDCoins
 import Blanc.Lift.Curve3Pool.Model
 import Blanc.Lift.ReachWalk
+import Blanc.Lift.WalkInvKit
 
 /-!
 # `get_y_D` (entry 753, pc `0x3999`): the callee contract
@@ -214,12 +215,10 @@ theorem ric_ydEntry {ρ A i x0 x1 x2 D : B256} {M : Mem} {G : Nat} {r : Seg}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_push s1
   obtain ⟨G10, run⟩ := ric_pushMloadF hF 1 (by decide) rfl run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_sltV s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_push s1
+  winv 2
   rcases ric_branch run with ⟨-, G14, run⟩ | ⟨hw1, G14, run⟩
   · exact (run.false_of_noOk vyRevertT_noOk).elim
-  obtain ⟨G15, run⟩ := ric_dest run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G16, rfl⟩ := ri_push s1
+  winv 2
   obtain ⟨G17, run⟩ := ric_pushMloadF hF 1 (by decide) rfl run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_sltV s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_push s1
@@ -246,12 +245,7 @@ theorem ric_ydEntry {ρ A i x0 x1 x2 D : B256} {M : Mem} {G : Nat} {r : Seg}
   obtain ⟨G29, M10, hF, run⟩ := ric_pushMstoreF hF 9 (by decide) (lt16 (by decide)) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G30, rfl⟩ := ri_push s1
   obtain ⟨G31, M11, hF, run⟩ := ric_pushMstoreF hF 10 (by decide) (lt16 (by decide)) run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G32, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G34, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G35, rfl⟩ := ri_dup (w := Bytes.toB256 [0x00]) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨G36, rfl⟩ := ri_dup (w := Bytes.toB256 [0x02, 0xa0]) rfl s1
+  winv 5
   obtain ⟨G37, M12, hF, run⟩ := ric_mstoreF hF 11 (by decide) (lt16 (by decide)) run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G38, rfl⟩ := ri_add s1
   rw [toB256_three, toB256_0x2a0] at run

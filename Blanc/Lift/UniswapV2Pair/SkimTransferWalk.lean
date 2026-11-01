@@ -144,9 +144,7 @@ theorem skimCopyPass_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   have h := run
   unfold t_20a4_c57 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := len) rfl (project hd)
-  winv 2 using project
+  winv 4 using project
   simp only [show Bytes.toB256 [32] = (32 : B256) from rfl, B256.ltCheck,
     ite_eq_right enough] at h
   rcases ric_branchP h with ⟨_, _, body⟩ | ⟨nonzero, _, _⟩
@@ -203,9 +201,7 @@ theorem skimCopy68_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   have h := second
   unfold t_20a4_c57 at h
   obtain ⟨_, h⟩ := ric_destP h
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := (4 : B256)) rfl (project hd)
-  winv 2 using project
+  winv 4 using project
   rw [show B256.ltCheck (4 : B256) (Bytes.toB256 [32]) = 1 from by decide] at h
   rcases ric_branchP h with ⟨zero, _, _⟩ | ⟨_, _, body⟩
   · exact ((by decide : (1 : B256) ≠ 0) zero).elim
@@ -309,10 +305,7 @@ theorem skimTransferDecode_inv {P : Sevm → Devm → Ninst → Devm → Prop}
   have h := run
   unfold t_2148_c16 at h
   obtain ⟨_, h⟩ := ric_destP h
-  winv 5 using project
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := success) rfl (project hd)
-  obtain ⟨_, hd, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup (w := success) rfl (project hd)
-  winv 2 using project
+  winv 9 using project
   by_cases failed : success = 0
   · rw [failed, show B256.eqCheck 0 0 = (1 : B256) from by decide] at h
     cases h with
@@ -336,9 +329,7 @@ theorem skimTransferDecode_inv {P : Sevm → Devm → Ninst → Devm → Prop}
       obtain ⟨_, _, eq⟩ := St.of_pop2 pop
       rw [eq] at tail
       unfold t_2155_c16 at tail
-      obtain ⟨_, hd, tail⟩ := ric_nextP tail; obtain ⟨_, rfl⟩ := ri_pop (project hd)
-      obtain ⟨_, hd, tail⟩ := ric_nextP tail; obtain ⟨_, rfl⟩ := ri_dup (w := ptr) rfl (project hd)
-      winv 4 using project
+      winv 6 using project
       by_cases empty : Bytes.toB256 (M.read ptr.toNat 32).1 = 0
       · rw [empty, show B256.eqCheck 0 0 = (1 : B256) from by decide] at tail
         cases tail with
@@ -363,13 +354,7 @@ theorem skimTransferDecode_inv {P : Sevm → Devm → Ninst → Devm → Prop}
           obtain ⟨_, _, eq⟩ := St.of_pop2 pop
           rw [eq] at body
           unfold t_215e_c16 at body
-          obtain ⟨_, hd, body⟩ := ric_nextP body; obtain ⟨_, rfl⟩ := ri_pop (project hd)
-          obtain ⟨_, hd, body⟩ := ric_nextP body; obtain ⟨_, rfl⟩ := ri_dup (w := ptr) rfl (project hd)
-          obtain ⟨_, hd, body⟩ := ric_nextP body; obtain ⟨_, rfl⟩ := ri_dup (w := ptr) rfl (project hd)
-          winv 5 using project
-          obtain ⟨_, hd, body⟩ := ric_nextP body
-          obtain ⟨_, rfl⟩ := ri_dup (w := Bytes.toB256 (M.read ptr.toNat 32).1) rfl (project hd)
-          winv 3 using project
+          winv 12 using project
           rcases ric_branchP body with ⟨_, _, failed⟩ | ⟨positive, _, head⟩
           · exact (failed.false_of_noOk (by decide : t_216f_c16.noOk = true)).elim
           · have width := toNat_ge_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero positive)

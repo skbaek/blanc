@@ -5,6 +5,7 @@ import Blanc.Lift.InvWalkDispatch
 import Blanc.Lift.InvWalkOps
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.ByteWindowMemory
+import Blanc.Lift.WalkInvKit
 
 /-!
 # WETH9 output inversion: the dispatcher and the free-pointer memory
@@ -34,12 +35,7 @@ theorem link_cut (l : Link) {rest : SFunc} {b : Devm} {S : List B256} {M : Mem} 
     (.next (.reg .eq) (.next (.push l.dest l.hd) (.branchTo rest l.k))))) r at run
   obtain ⟨d, hd, h⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_eq hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   cases h with
   | toZero d0 hp k =>
     obtain ⟨-, hw, e⟩ := St.of_pop2 hp

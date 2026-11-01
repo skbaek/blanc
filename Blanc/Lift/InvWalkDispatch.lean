@@ -1,5 +1,6 @@
 import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.InvWalkProvenance
+import Blanc.Lift.WalkInvKit
 
 /-! Invert the actual PUSH4/PUSH2 comparison segments in a lifted dispatcher. -/
 namespace Blanc.Lift
@@ -16,12 +17,7 @@ theorem ric_cmp_gt {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (if B256.gtCheck (Bytes.toB256 [c0, c1, c2, c3]) sel = 0 then f else g) r := by
   obtain ⟨d, hd, h⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_gt hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   rcases ric_branch h with ⟨zero, G', h⟩ | ⟨nonzero, G', h⟩
   · rw [ite_eq_left zero]
     exact ⟨G', h⟩
@@ -40,12 +36,7 @@ theorem ric_cmp_eq {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (if B256.eqCheck (Bytes.toB256 [c0, c1, c2, c3]) sel = 0 then f else g) r := by
   obtain ⟨d, hd, h⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_dup rfl hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_eq hd
-  obtain ⟨d, hd, h⟩ := ric_next h
-  obtain ⟨_, rfl⟩ := ri_push hd
+  winv 3
   rcases ric_branchTo notCut lookup h with ⟨zero, G', h⟩ | ⟨nonzero, G', h⟩
   · rw [ite_eq_left zero]
     exact ⟨G', h⟩
@@ -66,12 +57,7 @@ theorem ric_cmp_gtP {P : Sevm → Devm → Ninst → Devm → Prop}
       (if B256.gtCheck (Bytes.toB256 [c0, c1, c2, c3]) sel = 0 then f else g) r := by
   obtain ⟨d, hd, h⟩ := ric_nextP run
   obtain ⟨_, rfl⟩ := ri_dup rfl (step_sound hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (step_sound hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_gt (step_sound hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (step_sound hd)
+  winv 3 using step_sound
   rcases ric_branchP h with ⟨zero, G', h⟩ | ⟨nonzero, G', h⟩
   · rw [ite_eq_left zero]
     exact ⟨G', h⟩
@@ -93,12 +79,7 @@ theorem ric_cmp_eqP {P : Sevm → Devm → Ninst → Devm → Prop}
       (if B256.eqCheck (Bytes.toB256 [c0, c1, c2, c3]) sel = 0 then f else g) r := by
   obtain ⟨d, hd, h⟩ := ric_nextP run
   obtain ⟨_, rfl⟩ := ri_dup rfl (step_sound hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (step_sound hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_eq (step_sound hd)
-  obtain ⟨d, hd, h⟩ := ric_nextP h
-  obtain ⟨_, rfl⟩ := ri_push (step_sound hd)
+  winv 3 using step_sound
   cases h with
   | toZero d0 h k =>
       obtain ⟨-, hw, e⟩ := St.of_pop2 h

@@ -103,15 +103,7 @@ theorem mul_body_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     y ≠ 0 ∧ B256.Nofm x y ∧ ∃ G', o = .returned (St b ((x * y) :: R) M G') := by
   have h := run.cut
   unfold t_21f2_c58 at h
-  winv 2
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_mul hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := x) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := x * y) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hs
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_push hs
+  winv 10
   rcases ric_branch h with ⟨_, _, failed⟩ | ⟨hy, _, body⟩
   · exact (failed.false_of_noOk (by decide : t_21ff_c58.noOk = true)).elim
   · unfold t_2200_c58 at body
@@ -130,9 +122,7 @@ theorem mul58_inv {sevm : Sevm} {b : Devm} {R : List B256} {M : Mem}
     B256.Nofm x y ∧ ∃ G', o = .returned (St b ((x * y) :: R) M G') := by
   have h := run.cut
   unfold t_21e8_c58 at h
-  winv 2
-  obtain ⟨_, hs, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (w := y) rfl hs
-  winv 3
+  winv 6
   rcases ric_branchTo (g := t_2203_c18) (by decide : 18 ∉ []) rfl h with
     ⟨_, _, body⟩ | ⟨accepted, _, body⟩
   · exact (mul_body_inv body.uncut).2

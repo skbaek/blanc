@@ -5,6 +5,7 @@ import Blanc.Lift.VyperFrameLoop
 import Blanc.Lift.MemGlue
 import Blanc.Lift.VyperCallee
 import Blanc.Lift.StableSwapNewton.Defs
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Vyper 0.2.x checked `uint256` arithmetic and word-slot frames
@@ -258,18 +259,7 @@ theorem ric_vyMulT {x y : B256} (hf : fail.noOk = true)
     (run : SFunc.RunCut fs sevm C (St b (y :: x :: S) M G) (vyMulT h l fail k) r) :
     B256.Nofm x y ∧ ∃ G', SFunc.RunCut fs sevm C (St b ((x * y) :: S) M G') k r := by
   unfold vyMulT at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := y) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_mul s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_dup (w := y) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G8, rfl⟩ := ri_dup (w := x * y) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G9, rfl⟩ := ri_div s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_eq s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G11, rfl⟩ := ri_or s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_push s1
+  winv 12
   rcases ric_branch run with ⟨-, G13, run⟩ | ⟨hw, G13, run⟩
   · exact (run.false_of_noOk hf).elim
   obtain ⟨G14, run⟩ := ric_dest run
@@ -290,13 +280,7 @@ theorem ric_vyAddT {x y : B256} (hf : fail.noOk = true)
     (run : SFunc.RunCut fs sevm C (St b (y :: x :: S) M G) (vyAddT h l fail k) r) :
     x.toNat + y.toNat < 2 ^ 256 ∧ ∃ G', SFunc.RunCut fs sevm C (St b ((x + y) :: S) M G') k r := by
   unfold vyAddT at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (w := y) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_add s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G7, rfl⟩ := ri_push s1
+  winv 7
   rcases ric_branch run with ⟨-, G8, run⟩ | ⟨hw, G8, run⟩
   · exact (run.false_of_noOk hf).elim
   obtain ⟨G9, run⟩ := ric_dest run
@@ -321,11 +305,7 @@ theorem ric_vySubT {x y : B256} (hf : fail.noOk = true)
     (run : SFunc.RunCut fs sevm C (St b (y :: x :: S) M G) (vySubT h l fail k) r) :
     y.toNat ≤ x.toNat ∧ ∃ G', SFunc.RunCut fs sevm C (St b ((x - y) :: S) M G') k r := by
   unfold vySubT at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := y) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (w := x) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_lt s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_iszero s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_push s1
+  winv 5
   rcases ric_branch run with ⟨-, G6, run⟩ | ⟨hw, G6, run⟩
   · exact (run.false_of_noOk hf).elim
   obtain ⟨G7, run⟩ := ric_dest run
@@ -345,9 +325,7 @@ theorem ric_vyDivT {x y : B256} (hf : fail.noOk = true)
     (run : SFunc.RunCut fs sevm C (St b (y :: x :: S) M G) (vyDivT h l fail k) r) :
     y ≠ 0 ∧ ∃ G', SFunc.RunCut fs sevm C (St b ((x / y) :: S) M G') k r := by
   unfold vyDivT at run
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_dup (w := y) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_dup (w := y) rfl s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_push s1
+  winv 3
   rcases ric_branch run with ⟨-, G4, run⟩ | ⟨hw, G4, run⟩
   · exact (run.false_of_noOk hf).elim
   obtain ⟨G5, run⟩ := ric_dest run

@@ -1,6 +1,7 @@
 import Blanc.Lift.StaticCallGuard
 import Blanc.Lift.HistStaticCall
 import Blanc.ExecutionEntryAccounting
+import Blanc.Lift.WalkInvKit
 
 /-!
 # Historical `STATICCALL` success guards
@@ -49,10 +50,7 @@ theorem staticCallGuard_invPH {P : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨d, hcall, h⟩ := ric_nextP h
   obtain ⟨flag, out, post, bound, answered⟩ := ri_staticcall_boundedH hsg (project hcall)
   rw [post.eq_St] at h
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_dup rfl (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_iszero (project hs)
-  obtain ⟨_, hs, h⟩ := ric_nextP h; obtain ⟨_, rfl⟩ := ri_push (project hs)
+  winv 4 using project
   rcases ric_branchP h with ⟨_, _, failed⟩ | ⟨accepted, tailGas, h⟩
   · exact (failed.false_of_noOk noFail).elim
   · have zeroFlag : B256.eqCheck flag 0 = 0 := eq_zero_of_iszero_ne_zero accepted
