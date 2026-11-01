@@ -1,4 +1,5 @@
 import Blanc.AbstractStackTransfer
+import Blanc.CodeTrie
 
 /-!
 Checked finite tables of whole-stack patterns for actual decoded execution.
@@ -10,6 +11,35 @@ every successor is checked separately, and tree search order is checked too.
 namespace Blanc.AbstractStackSafety
 
 open Jaune CompiledStackSafety
+
+/-- Everything the checker reads from code: its size, the decoded instruction at each
+position and the accepted jump destinations.  `CodeReader.ofCode` reads them from the bytes;
+the checker's Boolean functions are stated over a reader, so any reader equal to it decides
+the same Booleans. -/
+structure CodeReader where
+  size : Nat
+  inst : Nat → Option Inst
+  jump : Nat → Bool
+
+/-- The reader of the actual bytes: the public decoder and `jumpable`. -/
+def CodeReader.ofCode (code : ByteArray) : CodeReader :=
+  ⟨code.size, code.getInst, jumpable code⟩
+
+/-- The trie reader: instructions decoded from the 33-byte trie window and destinations
+checked on the tries, each lookup `O(log n)` kernel steps instead of `O(pc)`. -/
+def CodeReader.ofTries {code : ByteArray} {d : Nat} (T : Lift.CodeTries code d) (size : Nat) :
+    CodeReader :=
+  ⟨size, fun pc => (ByteArray.mk (Lift.windowT d T.bytes pc)).getInst 0, Lift.jumpdestOkT code d T⟩
+
+/-- The trie reader is the reader of the bytes. -/
+theorem CodeReader.ofTries_eq {code : ByteArray} {d : Nat} (T : Lift.CodeTries code d)
+    {size : Nat} (h : code.size = size) : CodeReader.ofTries T size = CodeReader.ofCode code := by
+  simp only [ofTries, ofCode, h, mk.injEq, true_and]
+  constructor
+  · funext pc
+    exact Lift.getInst_windowT T pc
+  · funext k
+    rw [Lift.jumpdestOkT_eq, jumpable_eq_jumpdestOk]
 
 /-- A post-pattern may forget a literal, but never an operand position. -/
 def covers : Pattern → Pattern → Bool
@@ -121,7 +151,7 @@ theorem checkSuccessor_safe {table : Table} {maximum pc : Nat}
 
 /-- Instruction-local validation uses the actual decoder's instruction and
 literal bytes. Unsupported instructions fail closed. -/
-def checkInstruction (code : ByteArray) (table : Table) (maximum pc : Nat)
+def checkInstruction (code : CodeReader) (table : Table) (maximum pc : Nat)
     (input : Pattern) : Inst → Bool
   | .next (.push bytes fits) =>
       checkSuccessor table maximum (pc + (Ninst.push bytes fits).size)
@@ -145,13 +175,13 @@ def checkInstruction (code : ByteArray) (table : Table) (maximum pc : Nat)
       match jumpTransfer input with
       | none => false
       | some (destination, output) =>
-          jumpable code destination.toNat &&
+          code.jump destination.toNat &&
             checkSuccessor table maximum destination.toNat output
   | .jump .jumpi =>
       match jumpiTransfer input with
       | none => false
       | some (destination, _, output) =>
-          jumpable code destination.toNat &&
+          code.jump destination.toNat &&
             checkSuccessor table maximum destination.toNat output &&
             checkSuccessor table maximum (pc + 1) output
   | .last instruction =>
@@ -167,7 +197,7 @@ def instructionStep (evm : Evm) : Inst → Step
 theorem checkInstruction_safe {evm : Evm} {table : Table} {maximum : Nat}
     {input : Pattern} {instruction : Inst}
     (matched : Matches input evm.dyna.stack) (bound : input.length ≤ 8)
-    (checked : checkInstruction evm.sta.code table maximum evm.pc input instruction = true) :
+    (checked : checkInstruction (.ofCode evm.sta.code) table maximum evm.pc input instruction = true) :
     StepSafe table.Invariant (instructionStep evm instruction) := by
   cases instruction with
   | next instruction =>
@@ -241,26 +271,36 @@ def instructionWidth : Inst → Nat
   | _ => 1
 
 /-- A row must be in actual code and must not rely on padded PUSH bytes. -/
-def checkRow (code : ByteArray) (table : Table) (maximum pc : Nat)
+def checkRowWith (code : CodeReader) (table : Table) (maximum pc : Nat)
     (input : Pattern) : Bool :=
   decide (input.length ≤ maximum) && decide (pc < code.size) &&
-    match code.getInst pc with
+    match code.inst pc with
     | none => false
     | some instruction =>
         decide (pc + instructionWidth instruction ≤ code.size) &&
           checkInstruction code table maximum pc input instruction
+
+/-- `checkRowWith` on the actual bytes. -/
+def checkRow (code : ByteArray) : Table → Nat → Nat → Pattern → Bool :=
+  checkRowWith (.ofCode code)
+
+/-- Decide rows on any reader equal to the bytes' reader. -/
+theorem checkRow_eq_reader {code : ByteArray} {reader : CodeReader}
+    (h : reader = .ofCode code) : checkRow code = checkRowWith reader := by
+  rw [h]; rfl
 
 theorem checkRow_safe {sevm : Sevm} {table : Table} {maximum pc : Nat}
     {input : Pattern} {pre : Devm}
     (limit : maximum ≤ 8) (matched : Matches input pre.stack)
     (checked : checkRow sevm.code table maximum pc input = true) :
     StepSafe table.Invariant (Evm.step ⟨pc, sevm, pre⟩) := by
-  simp only [checkRow, Bool.and_eq_true, decide_eq_true_eq] at checked
+  simp only [checkRow, checkRowWith, CodeReader.ofCode, Bool.and_eq_true,
+    decide_eq_true_eq] at checked
   have bound : input.length ≤ 8 := Nat.le_trans checked.1.1 limit
   cases decoded : sevm.code.getInst pc with
   | none => simp only [decoded, Bool.false_eq_true, and_false] at checked
   | some instruction =>
-      simp only [decoded, Bool.and_eq_true, decide_eq_true_eq] at checked
+      simp only [decoded, Bool.and_eq_true] at checked
       have safe := checkInstruction_safe (evm := ⟨pc, sevm, pre⟩)
         matched bound checked.2.2
       cases instruction <;>
@@ -364,26 +404,36 @@ def Table.Layout (code : ByteArray) (start : Nat) : Table → Nat → Prop
         pc + instructionWidth instruction ≤ stop ∧
         right.Layout code (pc + instructionWidth instruction) stop
 
-def Table.checkLayout (code : ByteArray) (start : Nat) : Table → Nat → Bool
+def Table.checkLayoutWith (code : CodeReader) (start : Nat) : Table → Nat → Bool
   | .empty, stop => decide (start = stop)
   | .node pc _ left right, stop =>
-      match code.getInst pc with
+      match code.inst pc with
       | none => false
       | some instruction =>
-          left.checkLayout code start pc &&
+          left.checkLayoutWith code start pc &&
           decide (pc + instructionWidth instruction ≤ stop) &&
-          right.checkLayout code (pc + instructionWidth instruction) stop
+          right.checkLayoutWith code (pc + instructionWidth instruction) stop
+
+/-- `checkLayoutWith` on the actual bytes. -/
+def Table.checkLayout (code : ByteArray) (start : Nat) (table : Table) (stop : Nat) : Bool :=
+  table.checkLayoutWith (.ofCode code) start stop
+
+/-- Decide a layout on any reader equal to the bytes' reader. -/
+theorem Table.checkLayout_eq_reader {code : ByteArray} {reader : CodeReader}
+    (h : reader = .ofCode code) (start : Nat) (table : Table) (stop : Nat) :
+    table.checkLayout code start stop = table.checkLayoutWith reader start stop := by
+  rw [h]; rfl
 
 theorem Table.checkLayout_sound {code : ByteArray} {start stop : Nat}
     {table : Table} (checked : table.checkLayout code start stop = true) :
     table.Layout code start stop := by
   induction table generalizing start stop with
-  | empty => simpa only [Table.checkLayout, Table.Layout, decide_eq_true_eq] using checked
+  | empty => simpa only [Table.checkLayout, Table.checkLayoutWith, CodeReader.ofCode, Table.Layout, decide_eq_true_eq] using checked
   | node pc input left right ihLeft ihRight =>
       cases decoded : code.getInst pc with
-      | none => simp only [checkLayout, decoded, Bool.false_eq_true] at checked
+      | none => simp only [checkLayout, checkLayoutWith, CodeReader.ofCode, decoded, Bool.false_eq_true] at checked
       | some instruction =>
-          simp only [Table.checkLayout, decoded, Bool.and_eq_true,
+          simp only [Table.checkLayout, Table.checkLayoutWith, CodeReader.ofCode, decoded, Bool.and_eq_true,
             decide_eq_true_eq] at checked
           exact ⟨instruction, decoded, ihLeft checked.1.1,
             checked.1.2, ihRight checked.2⟩
@@ -398,13 +448,50 @@ theorem Table.checkLayout_node {code : ByteArray} {start stop pc next : Nat}
     (bound : next ≤ stop) :
     (Table.node pc input left right).checkLayout code start stop = true := by
   cases decoded : code.getInst pc with
-  | none => simp only [checkLayout, decoded, Bool.false_eq_true] at single
+  | none =>
+    simp only [checkLayout, checkLayoutWith, CodeReader.ofCode, decoded, Bool.false_eq_true] at single
   | some instruction =>
-      simp only [Table.checkLayout, decoded, Bool.and_eq_true, decide_eq_true_eq] at single
+      simp only [Table.checkLayout, Table.checkLayoutWith, CodeReader.ofCode, decoded,
+        Bool.and_eq_true, decide_eq_true_eq] at single
       have width : pc + instructionWidth instruction = next := single.2
-      simp only [Table.checkLayout, decoded, width, leftChecked, rightChecked,
-        Bool.true_and, Bool.and_true, decide_eq_true_eq]
+      simp only [Table.checkLayout, CodeReader.ofCode] at leftChecked rightChecked
+      simp only [Table.checkLayout, Table.checkLayoutWith, CodeReader.ofCode, decoded, width,
+        leftChecked, rightChecked, Bool.true_and, Bool.and_true, decide_eq_true_eq]
       exact bound
+
+/-! ### Deciding on an equal reader
+
+Each kernel decision of a subtree's rows or layout runs on `reader` (for instance the trie
+reader `CodeReader.ofTries`), and its conclusion is stated over the actual bytes. -/
+
+theorem Table.all_checkRow_reader {code : ByteArray} {reader : CodeReader}
+    (h : reader = .ofCode code) {table part : Table} {maximum : Nat}
+    (checked : part.all (checkRowWith reader table maximum) = true) :
+    part.all (checkRow code table maximum) = true := by
+  rw [checkRow_eq_reader h]; exact checked
+
+theorem Table.all_node_reader {code : ByteArray} {reader : CodeReader}
+    (h : reader = .ofCode code) {table left right : Table} {maximum pc : Nat} {input : Pattern}
+    (row : checkRowWith reader table maximum pc input = true)
+    (leftChecked : left.all (checkRow code table maximum) = true)
+    (rightChecked : right.all (checkRow code table maximum) = true) :
+    (Table.node pc input left right).all (checkRow code table maximum) = true :=
+  Table.all_node (by rw [checkRow_eq_reader h]; exact row) leftChecked rightChecked
+
+theorem Table.checkLayout_reader {code : ByteArray} {reader : CodeReader}
+    (h : reader = .ofCode code) {part : Table} {start stop : Nat}
+    (checked : part.checkLayoutWith reader start stop = true) :
+    part.checkLayout code start stop = true := by
+  rw [Table.checkLayout_eq_reader h]; exact checked
+
+theorem Table.checkLayout_node_reader {code : ByteArray} {reader : CodeReader}
+    (h : reader = .ofCode code) {start stop pc next : Nat} {input : Pattern} {left right : Table}
+    (single : (Table.node pc input .empty .empty).checkLayoutWith reader pc next = true)
+    (leftChecked : left.checkLayout code start pc = true)
+    (rightChecked : right.checkLayout code next stop = true)
+    (bound : next ≤ stop) :
+    (Table.node pc input left right).checkLayout code start stop = true :=
+  Table.checkLayout_node (Table.checkLayout_reader h single) leftChecked rightChecked bound
 
 def Table.size : Table → Nat
   | .empty => 0
@@ -470,7 +557,8 @@ theorem checkTable_certificate {sevm : Sevm} {table : Table} {maximum : Nat}
   · intro pc pre valid
     obtain ⟨input, found, matched⟩ := valid
     have row := Table.lookup_all checked.2 found
-    simp only [checkRow, Bool.and_eq_true, decide_eq_true_eq] at row
+    simp only [checkRow, checkRowWith, CodeReader.ofCode, Bool.and_eq_true,
+      decide_eq_true_eq] at row
     exact matched.length ▸ row.1.1
   · intro pc pre valid
     obtain ⟨input, found, matched⟩ := valid

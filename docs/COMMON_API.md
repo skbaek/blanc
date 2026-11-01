@@ -2945,6 +2945,15 @@ The four layers, bottom-up:
   is the entry point. `Table` is a finite search tree of rows; `checkTable` runs
   the complete finite validation and `checkTable_certificate` turns a successful
   check into a `Certificate`.
+  The row and layout checks read code only through a `CodeReader` (size, decoded
+  instruction, accepted destination); `checkRow code` and `Table.checkLayout code`
+  are `checkRowWith`/`Table.checkLayoutWith` on `CodeReader.ofCode code`. For a
+  runtime of more than a few hundred bytes, decide each subtree on the trie reader
+  `CodeReader.ofTries` (tries from [`Blanc/CodeTrie.lean`](../Blanc/CodeTrie.lean),
+  equal to the bytes' reader by `CodeReader.ofTries_eq`) with
+  `rw [checkRow_eq_reader reader_eq]` / `rw [Table.checkLayout_eq_reader reader_eq]`
+  before `decide +kernel`: plain reads cost `O(pc)` kernel steps per byte.
+  `Blanc/DripStackSafety.lean` (`codeTries`, `reader`, `reader_eq`) is the template.
 
 The whole minimal use is four declarations, kept live at the end of the owner
 module as `exampleCode`, `exampleTable`, `exampleTable_checked` and
@@ -8346,8 +8355,10 @@ contract-neutral.
   template's `entry_jumps_k` does: both walks evaluate the same abstract stacks,
   so the jump check costs almost nothing beside the node check (beacon deposit:
   `Jumps` 49 s to 1.4 s, `Check` unchanged).
-  For an individual destination, `jumpdestOkT` and `jumpdestOkT_eq` in the
-  same module provide the trie-backed check and its equality to `jumpdestOk`.
+  `LTrie`, `CodeTries` (`CodeTries.ofCode`) and, for an individual destination,
+  `jumpdestOkT` with its equality `jumpdestOkT_eq` to `jumpdestOk`, live in the
+  Lift-free [`Blanc/CodeTrie.lean`](../Blanc/CodeTrie.lean), with `windowT` and
+  `getInst_windowT` (the instruction at a position, decoded from its 33-byte trie window).
 - Assemble a single-entry non-memory certificate with `Cert.check_singleton` in
   [`Blanc/Lift/CheckAssembly.lean`](../Blanc/Lift/CheckAssembly.lean). Supply the
   existing startup Boolean and sole `checkNode` result; the theorem preserves

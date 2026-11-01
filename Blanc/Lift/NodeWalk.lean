@@ -148,10 +148,6 @@ def instBytes : Inst → Bytes
   | .jump j => [j.toUInt8]
   | .last l => [l.toUInt8]
 
-/-- The 33 trie bytes from `pc` (zero past the trie). -/
-def windowT (d : Nat) (t : LTrie UInt8) (pc : Nat) : Array UInt8 :=
-  ((List.range 33).map fun i => (LTrie.get? d t (pc + i)).getD 0).toArray
-
 /-- The instruction at `pc`: decoded from the trie window by Jaune's decoder and checked
 against the trie bytes. -/
 def decodeT (d : Nat) (t : LTrie UInt8) (pc : Nat) : Option Inst :=

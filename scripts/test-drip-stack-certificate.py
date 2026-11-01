@@ -204,8 +204,9 @@ class StackCertificateTests(unittest.TestCase):
             text = self.proofs[path]
             legacy = GEN.render_proof_region(self.raw, self.states, spec)
             self.assertEqual(GEN.recover_legacy_proof_region(text, self.raw, self.states, spec), legacy)
-            fragments = GEN.forward_row_proof_fragments(self.states, spec)
-            self.assertEqual(len(fragments), len(GEN.region_parts(self.parts, spec.root)))
+            fragments = GEN.forward_row_proof_fragments(self.raw, self.states, spec)
+            # One row and one layout decision per named subtree.
+            self.assertEqual(len(fragments), 2 * len(GEN.region_parts(self.parts, spec.root)))
             for old, new in fragments:
                 self.assertEqual(text.count(new), 1)
                 self.assertEqual(legacy.count(old), 1)
@@ -213,13 +214,17 @@ class StackCertificateTests(unittest.TestCase):
     def test_forward_recovery_rejects_unregistered_proof_changes(self):
         spec = GEN.REGION576
         text = self.proofs[GEN.REGION576_OUTPUT]
-        old, new = GEN.forward_row_proof_fragments(self.states, spec)[0]
+        old, new = GEN.forward_row_proof_fragments(self.raw, self.states, spec)[0]
         corruptions = {
             "missing rewrite": text.replace(new, old, 1),
             "duplicate rewrite": text.replace(new, new + "\n" + new, 1),
-            "wrong rewrite": text.replace("jumpable_eq_jumpdestOk", "jumpable", 1),
+            "wrong rewrite": text.replace("Table.all_checkRow_reader reader_eq",
+                                          "Table.all_checkRow_reader reader", 1),
+            "wrong layout rewrite": text.replace("Table.checkLayout_reader reader_eq",
+                                                 "Table.checkLayout_reader reader", 1),
             "extra rewrite": text.replace(new, new + "\n  skip", 1),
-            "old body": text.replace("  · exact subtree379_rows_checked", "  · exact subtree411_rows_checked", 1),
+            "old body": text.replace("    subtree379_rows_checked subtree411_rows_checked",
+                                     "    subtree411_rows_checked subtree379_rows_checked", 1),
             "layout": text.replace("code.toByteArray 372 387", "code.toByteArray 372 388", 1),
             "public header": text.replace("theorem subtree379_rows_checked", "theorem changed_rows_checked", 1),
             "complete table": text.replace("checkRow code.toByteArray table 8", "checkRow code.toByteArray subtree576 8", 1),

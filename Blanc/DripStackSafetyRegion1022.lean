@@ -12,386 +12,280 @@ open Jaune AbstractStackSafety
 
 theorem region1022_subtree861_rows_checked :
     subtree861.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree861, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree861_layout_checked :
     subtree861.checkLayout code.toByteArray 840 868 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree888_rows_checked :
     subtree888.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree888, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree888_layout_checked :
     subtree888.checkLayout code.toByteArray 869 897 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree868_rows_checked :
     subtree868.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree861_rows_checked
-  · exact region1022_subtree888_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree861_rows_checked region1022_subtree888_rows_checked
 
 theorem region1022_subtree868_layout_checked :
     subtree868.checkLayout code.toByteArray 840 897 = true := by
-  apply Table.checkLayout_node (next := 869)
-  · decide +kernel
-  · exact region1022_subtree861_layout_checked
-  · exact region1022_subtree888_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 869) reader_eq (by decide +kernel)
+    region1022_subtree861_layout_checked region1022_subtree888_layout_checked (by decide)
 
 theorem region1022_subtree905_rows_checked :
     subtree905.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree905, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree905_layout_checked :
     subtree905.checkLayout code.toByteArray 898 927 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree937_rows_checked :
     subtree937.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree937, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree937_layout_checked :
     subtree937.checkLayout code.toByteArray 930 942 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree927_rows_checked :
     subtree927.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree905_rows_checked
-  · exact region1022_subtree937_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree905_rows_checked region1022_subtree937_rows_checked
 
 theorem region1022_subtree927_layout_checked :
     subtree927.checkLayout code.toByteArray 898 942 = true := by
-  apply Table.checkLayout_node (next := 930)
-  · decide +kernel
-  · exact region1022_subtree905_layout_checked
-  · exact region1022_subtree937_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 930) reader_eq (by decide +kernel)
+    region1022_subtree905_layout_checked region1022_subtree937_layout_checked (by decide)
 
 theorem region1022_subtree897_rows_checked :
     subtree897.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree868_rows_checked
-  · exact region1022_subtree927_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree868_rows_checked region1022_subtree927_rows_checked
 
 theorem region1022_subtree897_layout_checked :
     subtree897.checkLayout code.toByteArray 840 942 = true := by
-  apply Table.checkLayout_node (next := 898)
-  · decide +kernel
-  · exact region1022_subtree868_layout_checked
-  · exact region1022_subtree927_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 898) reader_eq (by decide +kernel)
+    region1022_subtree868_layout_checked region1022_subtree927_layout_checked (by decide)
 
 theorem region1022_subtree948_rows_checked :
     subtree948.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree948, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree948_layout_checked :
     subtree948.checkLayout code.toByteArray 943 954 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree963_rows_checked :
     subtree963.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree963, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree963_layout_checked :
     subtree963.checkLayout code.toByteArray 955 968 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree954_rows_checked :
     subtree954.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree948_rows_checked
-  · exact region1022_subtree963_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree948_rows_checked region1022_subtree963_rows_checked
 
 theorem region1022_subtree954_layout_checked :
     subtree954.checkLayout code.toByteArray 943 968 = true := by
-  apply Table.checkLayout_node (next := 955)
-  · decide +kernel
-  · exact region1022_subtree948_layout_checked
-  · exact region1022_subtree963_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 955) reader_eq (by decide +kernel)
+    region1022_subtree948_layout_checked region1022_subtree963_layout_checked (by decide)
 
 theorem region1022_subtree976_rows_checked :
     subtree976.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree976, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree976_layout_checked :
     subtree976.checkLayout code.toByteArray 969 994 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1014_rows_checked :
     subtree1014.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree1014, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1014_layout_checked :
     subtree1014.checkLayout code.toByteArray 995 1022 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree994_rows_checked :
     subtree994.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree976_rows_checked
-  · exact region1022_subtree1014_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree976_rows_checked region1022_subtree1014_rows_checked
 
 theorem region1022_subtree994_layout_checked :
     subtree994.checkLayout code.toByteArray 969 1022 = true := by
-  apply Table.checkLayout_node (next := 995)
-  · decide +kernel
-  · exact region1022_subtree976_layout_checked
-  · exact region1022_subtree1014_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 995) reader_eq (by decide +kernel)
+    region1022_subtree976_layout_checked region1022_subtree1014_layout_checked (by decide)
 
 theorem region1022_subtree968_rows_checked :
     subtree968.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree954_rows_checked
-  · exact region1022_subtree994_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree954_rows_checked region1022_subtree994_rows_checked
 
 theorem region1022_subtree968_layout_checked :
     subtree968.checkLayout code.toByteArray 943 1022 = true := by
-  apply Table.checkLayout_node (next := 969)
-  · decide +kernel
-  · exact region1022_subtree954_layout_checked
-  · exact region1022_subtree994_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 969) reader_eq (by decide +kernel)
+    region1022_subtree954_layout_checked region1022_subtree994_layout_checked (by decide)
 
 theorem region1022_subtree942_rows_checked :
     subtree942.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree897_rows_checked
-  · exact region1022_subtree968_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree897_rows_checked region1022_subtree968_rows_checked
 
 theorem region1022_subtree942_layout_checked :
     subtree942.checkLayout code.toByteArray 840 1022 = true := by
-  apply Table.checkLayout_node (next := 943)
-  · decide +kernel
-  · exact region1022_subtree897_layout_checked
-  · exact region1022_subtree968_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 943) reader_eq (by decide +kernel)
+    region1022_subtree897_layout_checked region1022_subtree968_layout_checked (by decide)
 
 theorem region1022_subtree1028_rows_checked :
     subtree1028.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree1028, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1028_layout_checked :
     subtree1028.checkLayout code.toByteArray 1023 1036 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1045_rows_checked :
     subtree1045.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree1045, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1045_layout_checked :
     subtree1045.checkLayout code.toByteArray 1037 1054 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1036_rows_checked :
     subtree1036.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree1028_rows_checked
-  · exact region1022_subtree1045_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree1028_rows_checked region1022_subtree1045_rows_checked
 
 theorem region1022_subtree1036_layout_checked :
     subtree1036.checkLayout code.toByteArray 1023 1054 = true := by
-  apply Table.checkLayout_node (next := 1037)
-  · decide +kernel
-  · exact region1022_subtree1028_layout_checked
-  · exact region1022_subtree1045_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 1037) reader_eq (by decide +kernel)
+    region1022_subtree1028_layout_checked region1022_subtree1045_layout_checked (by decide)
 
 theorem region1022_subtree1062_rows_checked :
     subtree1062.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree1062, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1062_layout_checked :
     subtree1062.checkLayout code.toByteArray 1056 1070 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1090_rows_checked :
     subtree1090.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree1090, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1090_layout_checked :
     subtree1090.checkLayout code.toByteArray 1073 1097 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1070_rows_checked :
     subtree1070.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree1062_rows_checked
-  · exact region1022_subtree1090_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree1062_rows_checked region1022_subtree1090_rows_checked
 
 theorem region1022_subtree1070_layout_checked :
     subtree1070.checkLayout code.toByteArray 1056 1097 = true := by
-  apply Table.checkLayout_node (next := 1073)
-  · decide +kernel
-  · exact region1022_subtree1062_layout_checked
-  · exact region1022_subtree1090_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 1073) reader_eq (by decide +kernel)
+    region1022_subtree1062_layout_checked region1022_subtree1090_layout_checked (by decide)
 
 theorem region1022_subtree1054_rows_checked :
     subtree1054.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree1036_rows_checked
-  · exact region1022_subtree1070_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree1036_rows_checked region1022_subtree1070_rows_checked
 
 theorem region1022_subtree1054_layout_checked :
     subtree1054.checkLayout code.toByteArray 1023 1097 = true := by
-  apply Table.checkLayout_node (next := 1056)
-  · decide +kernel
-  · exact region1022_subtree1036_layout_checked
-  · exact region1022_subtree1070_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 1056) reader_eq (by decide +kernel)
+    region1022_subtree1036_layout_checked region1022_subtree1070_layout_checked (by decide)
 
 theorem region1022_subtree1119_rows_checked :
     subtree1119.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree1119, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1119_layout_checked :
     subtree1119.checkLayout code.toByteArray 1110 1125 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1131_rows_checked :
     subtree1131.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree1131, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1131_layout_checked :
     subtree1131.checkLayout code.toByteArray 1126 1137 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1125_rows_checked :
     subtree1125.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree1119_rows_checked
-  · exact region1022_subtree1131_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree1119_rows_checked region1022_subtree1131_rows_checked
 
 theorem region1022_subtree1125_layout_checked :
     subtree1125.checkLayout code.toByteArray 1110 1137 = true := by
-  apply Table.checkLayout_node (next := 1126)
-  · decide +kernel
-  · exact region1022_subtree1119_layout_checked
-  · exact region1022_subtree1131_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 1126) reader_eq (by decide +kernel)
+    region1022_subtree1119_layout_checked region1022_subtree1131_layout_checked (by decide)
 
 theorem region1022_subtree1148_rows_checked :
     subtree1148.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree1148, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1148_layout_checked :
     subtree1148.checkLayout code.toByteArray 1140 1156 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1165_rows_checked :
     subtree1165.all (checkRow code.toByteArray table 8) = true := by
-  simp only [subtree1165, Table.all, checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-  decide +kernel
+  exact Table.all_checkRow_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1165_layout_checked :
     subtree1165.checkLayout code.toByteArray 1157 1182 = true := by
-  decide +kernel
+  exact Table.checkLayout_reader reader_eq (by decide +kernel)
 
 theorem region1022_subtree1156_rows_checked :
     subtree1156.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree1148_rows_checked
-  · exact region1022_subtree1165_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree1148_rows_checked region1022_subtree1165_rows_checked
 
 theorem region1022_subtree1156_layout_checked :
     subtree1156.checkLayout code.toByteArray 1140 1182 = true := by
-  apply Table.checkLayout_node (next := 1157)
-  · decide +kernel
-  · exact region1022_subtree1148_layout_checked
-  · exact region1022_subtree1165_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 1157) reader_eq (by decide +kernel)
+    region1022_subtree1148_layout_checked region1022_subtree1165_layout_checked (by decide)
 
 theorem region1022_subtree1137_rows_checked :
     subtree1137.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree1125_rows_checked
-  · exact region1022_subtree1156_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree1125_rows_checked region1022_subtree1156_rows_checked
 
 theorem region1022_subtree1137_layout_checked :
     subtree1137.checkLayout code.toByteArray 1110 1182 = true := by
-  apply Table.checkLayout_node (next := 1140)
-  · decide +kernel
-  · exact region1022_subtree1125_layout_checked
-  · exact region1022_subtree1156_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 1140) reader_eq (by decide +kernel)
+    region1022_subtree1125_layout_checked region1022_subtree1156_layout_checked (by decide)
 
 theorem region1022_subtree1097_rows_checked :
     subtree1097.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree1054_rows_checked
-  · exact region1022_subtree1137_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree1054_rows_checked region1022_subtree1137_rows_checked
 
 theorem region1022_subtree1097_layout_checked :
     subtree1097.checkLayout code.toByteArray 1023 1182 = true := by
-  apply Table.checkLayout_node (next := 1110)
-  · decide +kernel
-  · exact region1022_subtree1054_layout_checked
-  · exact region1022_subtree1137_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 1110) reader_eq (by decide +kernel)
+    region1022_subtree1054_layout_checked region1022_subtree1137_layout_checked (by decide)
 
 theorem subtree1022_rows_checked :
     subtree1022.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]
-    decide +kernel
-  · exact region1022_subtree942_rows_checked
-  · exact region1022_subtree1097_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    region1022_subtree942_rows_checked region1022_subtree1097_rows_checked
 
 theorem subtree1022_layout_checked :
     subtree1022.checkLayout code.toByteArray 840 1182 = true := by
-  apply Table.checkLayout_node (next := 1023)
-  · decide +kernel
-  · exact region1022_subtree942_layout_checked
-  · exact region1022_subtree1097_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 1023) reader_eq (by decide +kernel)
+    region1022_subtree942_layout_checked region1022_subtree1097_layout_checked (by decide)
 
 end Blanc.Drip.StackSafety
