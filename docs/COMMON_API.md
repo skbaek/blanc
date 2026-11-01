@@ -1745,8 +1745,8 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   secp256k1 recovery by `decide +kernel` (the kernel cannot unfold `BLT.toBytes`, so rewrite the encoding first).
 - Pre-EIP-155 legacy transactions (`.zero` type, `v = 27` or `v = 28`, no chain id) for any `Tx`:
   [`Blanc/Lift/LegacyRecover.lean`](../Blanc/Lift/LegacyRecover.lean). `signingHash_pre155` evaluates
-  `Tx.signingHash` to its six-field payload; `signingPayload_pre155` encodes that payload with a long
-  data field kept abstract (only the leading fields' joined bytes are supplied); `recoverSender_pre155`
+  `Tx.signingHash` to its six-field payload (encode it with `RlpConcrete.encode_list_at_last`, the
+  data field kept abstract); `recoverSender_pre155`
   gives `recoverSender cid tx = .ok a` at every `cid` from the signing hash, the `r`/`s` range facts
   and one `secp256k1.recover h (tx.v - 27).toBool r s = some a` fact, each a closed `decide +kernel`
   goal once the fields are substituted; `legacy_decode_pre155` runs the strict nine-field
@@ -5274,11 +5274,21 @@ decide +kernel` from `Jaune/RlpEval.lean` is shorter still (DRIP
 `decode_bytes_short`, `decode_bytes_long`, `decode_list_short`, and `decode_list_long`
 apply Jaune's actual parser equations while keeping payload bytes abstract.
 On the encoder side, [`Blanc/RlpListEncode.lean`](../Blanc/RlpListEncode.lean)
-provides `RlpConcrete.toBytesJoin_append` (the joint item encoding of a
-concatenated list) and `RlpConcrete.encode_list_long` (a list whose joint item
-encoding is a known body of at least 56 bytes gets the long-list header over
-that abstract body); a signed creation transaction's canonical re-encoding uses
-them without reducing its payload (3Crv `HistoricalTx.tx_encoded`).
+provides `RlpConcrete.encode_list_at` (and `encode_list_at_last`, core
+`encode_list_mid`): a list of closed items with one long abstract byte item
+`data` at index `i` encodes as `hdr ++ data ++ tl`, where the closed header and
+tail are `decide +kernel` side conditions over `longHeaderS` and Jaune's
+structural `BLTs.toBytesJoinS`; the abstract item is never reduced. State the
+expected bytes as `prefix ++ code.toList ++ suffix` and a creation envelope or
+signing payload is one term, e.g.
+`encode_list_at 5 rfl code_toList_length (by decide) (by decide +kernel) (by decide +kernel)`
+(USDC/WETH9 `SignedInput.canonical` and `signingEncoded`, `HistoricalTxRaw.tx_encoded`,
+DRIP `concreteCreateEnvelopeEncoded`). For several abstract items use
+`encode_bytes_long` / `encode_list_long` (long header over an abstract payload or
+a known joint body) with `toBytesJoin_append`, and close each closed
+`longHeaderS` by `decide +kernel` instead of a `norm_num` header computation.
+`encode_bytes_nil` and `toBytesPack_of_pos` (`Blanc/RlpBytesInjective.lean`) are
+the shared one-line encoder facts.
 `decode_byte` and `decode_empty_bytes` cover the one-byte headers; `parse_cons`
 composes the actual first-item and remaining-list equations.
 `decode_hash` proves the fixed-width header-word roundtrip, including leading
