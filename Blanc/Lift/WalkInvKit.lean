@@ -14,22 +14,27 @@ This kit reads it off the tree instead (the inverse twin of `Blanc/Lift/WalkKit.
 
 * `winv n` inverts exactly `n` straight-line nodes of the run, failing if fewer are; bare `winv`
   inverts up to the first node that is not straight-line (a branch, a jump, a storage or call
-  instruction, a leaf), which is left to the author. Each step runs the hand-written pair:
-  `obtain ⟨_, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := L hd` with `L` one of `ri_push`,
+  instruction, a leaf), which is left to the author. Each step runs the hand-written step
+  `replace h := ric_next h; obtain ⟨_, hd, h⟩ := h; obtain ⟨_, rfl⟩ := L hd; clear hd` with `L`
+  one of `ri_push`,
   `ri_dup rfl`, `ri_swap rfl`, `ri_pop`, `ri_<op>` for a register instruction whose inversion
   states the next `St` (`ri_add`, `ri_iszero`, `ri_calldataload`, `ri_mload`, `ri_mstore`, …),
-  `ri_keccak` and `ri_log1`–`ri_log4`; a `.dest` node runs `obtain ⟨_, h⟩ := ric_dest h`.
+  `ri_keccak` and `ri_log1`–`ri_log4`; a `.dest` node runs `replace h := ric_dest h;
+  obtain ⟨_, h⟩ := h`. The spent run and step are cleared (as the `replace … clear` spelling of a
+  hand walk does): a long walk otherwise carries two dead hypotheses per instruction, which made a
+  436-step Usdc walk elaborate 2.9x slower than its hand form; cleared, it is within noise.
 * On a `SFunc.RunCutP P …` run it uses `ric_nextP`/`ric_destP`; `using e` names the projection
   from `P` to `Ninst.Run` (`winv 7 using project`, `winv 3 using StepIn.toRun`), applied as
   `L (e hd)`.
 * `at h` names the run; without it the kit walks the most recent cut-run hypothesis. The run keeps
   its name, so the author's next line refers to it as before.
 * `wskip n [at h]` steps over `n` nodes of any instruction, forgetting the state
-  (`obtain ⟨_, _, h⟩ := ric_next h`), as walks do that only need to reach a later node.
+  (`replace h := ric_next h; obtain ⟨_, _, h⟩ := h`), as walks do that only need to reach a
+  later node.
 
 The lemma names are resolved at the call site, as the hand walk resolves them. No hypothesis of the
 caller is named by the kit's own syntax (the run's name is the caller's), so nothing here needs
-`hygiene false`, and the proof term is the hand walk's.
+`hygiene false`, and the proof term is the hand walk's (up to the `clear`s, which leave no term).
 -/
 
 namespace Blanc.Lift.WalkKit
@@ -99,11 +104,13 @@ def invStepTac (hyp : Option Ident) (via : Option Term) (skip : Bool) : TacticM 
   | (``Blanc.Lift.SFunc.dest, _) =>
     if skip then return false
     let ricDest := mkIdent (if rel then `ric_destP else `ric_dest)
-    evalTactic (← `(tactic| obtain ⟨_, $h:ident⟩ := $ricDest $h))
+    evalTactic (← `(tactic| (replace $h:ident := $ricDest $h
+                             obtain ⟨_, $h:ident⟩ := $h)))
     return true
   | (``Blanc.Lift.SFunc.next, #[n, _]) =>
     if skip then
-      evalTactic (← `(tactic| obtain ⟨_, _, $h:ident⟩ := $ricNext $h))
+      evalTactic (← `(tactic| (replace $h:ident := $ricNext $h
+                               obtain ⟨_, _, $h:ident⟩ := $h)))
       return true
     let some lem ← invStep n | return false
     let arg ← match via with
@@ -111,8 +118,10 @@ def invStepTac (hyp : Option Ident) (via : Option Term) (skip : Bool) : TacticM 
       | none => `(hd)
     -- `rfl` is rcases' substitution pattern only unhygienic (a scoped name binds a hypothesis).
     let rflPat := mkIdent `rfl
-    evalTactic (← `(tactic| (obtain ⟨_, hd, $h:ident⟩ := $ricNext $h
-                             obtain ⟨_, $rflPat:ident⟩ := $lem $arg)))
+    evalTactic (← `(tactic| (replace $h:ident := $ricNext $h
+                             obtain ⟨_, hd, $h:ident⟩ := $h
+                             obtain ⟨_, $rflPat:ident⟩ := $lem $arg
+                             clear hd)))
     return true
   | _ => return false
 

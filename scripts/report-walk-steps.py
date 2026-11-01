@@ -21,7 +21,8 @@ Two finding classes, both report-only:
   report counts how many of the run's lines a kit takes as they are: `Blanc/Lift/WalkKit.lean`'s
   `wrun` (the forward straight-line `xr` forms), Curve 3pool's backward `xa`
   (`Blanc/Lift/Curve3Pool/Walk/AutoStep.lean`), or `Blanc/Lift/WalkInvKit.lean`'s `winv`/`wskip`
-  (the `ric_next` + `ri_<op>` inversion pairs, one- or two-line, `ric_dest`, and forgetful
+  (the `ric_next` + `ri_<op>` inversion pairs, one- or two-line, their `replace … ; clear s`
+  spelling, `ri_dup`/`ri_swap` with spelled-out implicits, `ric_dest`, and forgetful
   `obtain ⟨_, _, h⟩ := ric_next h`); the rest want a step tactic of their own family.
 * **repeated-simp-list**: a `simp only [...]` lemma list of at least three entries that occurs at
   least `--min-repeat` (default 3) times in the scanned files: name it once (a macro or a
@@ -47,7 +48,7 @@ STEP_RE = re.compile(
     r"(?:xr|xrc|xs|xs2|xm|xmo|xw|xjd|xjmp|xl|xsw|istep|xstep|wstep)\b"
     r"|(?:refine|exact|apply) rxc?e?_\w+"
     r"|obtain .*:= (?:ric_next|ric_nextP|ric_dest|ric_destP|rpw_next|rr_next|ri_\w+)\b"
-    r"|(?:have|replace) \w+ := (?:ric_next|ric_nextP|xa_nextAt|xa_next)\b"
+    r"|(?:have|replace) \w+ := (?:ric_next|ric_nextP|ric_dest|ric_destP|xa_nextAt|xa_next)\b"
     r")")
 _R = r"\(by (?:hr|hrs|wroom)\)"
 _VAL = "mul|div|mod|lt|gt|slt|sgt|eq|iszero|and|or|xor|not|byte"
@@ -70,11 +71,19 @@ _IOPS = ("add|mul|sub|div|mod|exp|lt|gt|eq|iszero|and|or|xor|not|byte|shl|shr|ad
          "callvalue|calldataload|calldatasize|returndatasize|timestamp|pop|mload|mstore|mstore8|"
          "tload|keccak|log1|log2|log3|log4|push")
 _INEXT = rf"obtain ⟨{_ID}, {_ID}, {_ID}⟩ := ric_nextP? {_ID}"
-_ISEC = (rf"obtain ⟨{_ID}, rfl⟩ := (?:ri_(?:{_IOPS})|ri_(?:dup|swap) rfl) "
+# `ri_dup`/`ri_swap` may name their implicit shape (`(n := 0)`, `(w := x)`, `(S' := …)`): the
+# kit's `rfl` lets unification supply it, so a walk that only spelled it out is taken as well.
+_IARG = r"(?: \((?:n|w|S') := [^()]*(?:\([^()]*\)[^()]*)*\))*"
+_ISEC = (rf"obtain ⟨{_ID}, rfl⟩ := (?:ri_(?:{_IOPS})|ri_(?:dup|swap){_IARG} rfl) "
          rf"(?:{_ID}|\({_ID}(?:\.{_ID})* {_ID}\))")
+# The `replace` spelling of one step (Usdc's admin walks).
+_IREP = (rf"replace (?P<rh>{_ID}) := ric_next (?P=rh); obtain ⟨_, (?P<rs>{_ID}), (?P=rh)⟩ := (?P=rh); "
+         rf"obtain ⟨_, rfl⟩ := (?:ri_(?:{_IOPS})|ri_(?:dup|swap){_IARG} rfl) (?P=rs); clear (?P=rs)")
+_IREPD = rf"replace (?P<dh>{_ID}) := ric_dest (?P=dh); obtain ⟨_, (?P=dh)⟩ := (?P=dh)"
 # Inversion steps that `winv`/`wskip` (Blanc/Lift/WalkInvKit.lean) take as written.
 INV_RE = re.compile(r"^\s*(?:" + "|".join([
-    rf"{_INEXT}; {_ISEC}", _INEXT, _ISEC, rf"obtain ⟨{_ID}, {_ID}⟩ := ric_destP? {_ID}"])
+    rf"{_INEXT}; {_ISEC}", _INEXT, _ISEC, rf"obtain ⟨{_ID}, {_ID}⟩ := ric_destP? {_ID}", _IREP,
+    _IREPD])
     + r")\s*$")
 SIMP_RE = re.compile(r"simp only \[([^\]]*)\]")
 WORKTREE = None
@@ -215,6 +224,13 @@ def self_test() -> int:
             "  obtain ⟨_, h⟩ := ric_dest h", "  obtain ⟨_, _, h⟩ := ric_next h",
             "  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, hd⟩ := ri_mstore hd"])
     checks.append(("inversion", walk_runs(inv, 8) == [(1, 8, 8, 7)]))
+    rep = (["  replace r := ric_dest r; obtain ⟨_, r⟩ := r"] +
+           ["  replace r := ric_next r; obtain ⟨_, s, r⟩ := r; obtain ⟨_, rfl⟩ := ri_push s; clear s"] * 3 +
+           ["  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_dup (n := 1) (w := f (x)) rfl hd",
+            "  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_swap (n := 0) rfl hd",
+            "  replace r := ric_next r; obtain ⟨_, s, r⟩ := r; obtain ⟨_, rfl⟩ := ri_sload hf s; clear s",
+            "  obtain ⟨d, hd, h⟩ := ric_next h; obtain ⟨_, rfl⟩ := ri_val (w := 2) rfl hd"])
+    checks.append(("inversion-forms", walk_runs(rep, 8) == [(1, 8, 8, 6)]))
     for name, ok in checks:
         print(f"{'PASS' if ok else 'FAIL'} {name}")
     ok = all(c for _, c in checks)
