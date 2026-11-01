@@ -1254,7 +1254,6 @@ lemma redemptionCall_runCompiled {e : Sevm} {b : Devm}
           exact hsub
         · simpa only [toAdr_toB256] using hstate
 
-set_option maxRecDepth 610 in
 /-- The actual compiled `withdrawTo` body reaches a successful outcome for an
 admitted code-free recipient.  `ExecSat` keeps that outcome existential while
 the storage/log walk introduces its deterministic intermediate states. -/
@@ -1310,12 +1309,17 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ hnonce₂ _hacc₂ hlog₂ hout₂
       herr₂ hdelete₂ hrefund₂ hc₂ hG₂
     simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₂ hc₂
+    have hev : pushCost transferEvent.toBytes.sig = gVerylow :=
+      pushCost_of_ne_zero (by decide +kernel)
+    unfold emitTransfer transferFromLog
+    generalize hevq : transferEvent = ev at hev ⊢
     apply Func.execSat_segment
     · intro ex hex
       cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
         func_run (11) [gMemory] <;> first
         | exact hex
         | exact Devm.extCost_empty_word
+    subst hevq
     refine Func.execSat_log_step_with_nonce
       (topics := [transferEvent, e.caller.toB256, 0])
       (s := [Sevm.argWord e 1, e.caller.toB256]) rfl rfl h_static
@@ -1495,7 +1499,6 @@ theorem withdrawTo_execSat {fs : List Func} {e : Sevm} {pre : Devm}
         · rcases hs with ⟨debit, hsub, hcallState⟩
           exact ⟨debit, hsub, htailState.trans hcallState⟩
 
-set_option maxRecDepth 610 in
 /-- The direct-holder `withdraw` body, proved by walking that body itself.  Its
 recipient is the caller opcode rather than a calldata word, so this is not
 inferred from `withdrawTo`. -/
@@ -1550,12 +1553,17 @@ theorem withdraw_execSat {fs : List Func} {e : Sevm} {pre : Devm}
     intro b₂ c₂ G₂ hkey₂ hoth₂ hbal₂ hcode₂ hnonce₂ _hacc₂ hlog₂ hout₂
       herr₂ hdelete₂ hrefund₂ hc₂ hG₂
     simp only [Devm.gasLeft_setMach, gasStorageSet] at hG₂ hc₂
+    have hev : pushCost transferEvent.toBytes.sig = gVerylow :=
+      pushCost_of_ne_zero (by decide +kernel)
+    unfold emitTransfer transferFromLog
+    generalize hevq : transferEvent = ev at hev ⊢
     apply Func.execSat_segment
     · intro ex hex
       cases ex <;> simp only [Func.ExecWitness] at hex ⊢ <;>
         func_run (11) [gMemory] <;> first
         | exact hex
         | exact Devm.extCost_empty_word
+    subst hevq
     refine Func.execSat_log_step_with_nonce
       (topics := [transferEvent, e.caller.toB256, 0])
       (s := [Sevm.argWord e 0, e.caller.toB256]) rfl rfl h_static

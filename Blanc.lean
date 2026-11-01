@@ -261,6 +261,7 @@ import Blanc.ForwardStorageEffects
 import Blanc.TerminalStorage
 import Blanc.ForwardDispatchMiss
 import Blanc.ForwardLog
+import Blanc.ForwardBalanceOf
 import Blanc.CompiledStackSafety
 import Blanc.AbstractStackSafety
 import Blanc.AbstractStackTransfer

@@ -205,19 +205,15 @@ theorem weth_decimals_gas_of_runCompiled {sevm : Sevm} {pre post : Devm}
   subst h_eq
   omega
 
-set_option maxRecDepth 613 in
 /-- **`weth`'s `balanceOf(address)` call costs exactly `balanceOfGas`.**
 
 The exactness theorem at the `exec` altitude. `exec` is a *function*, so its
 post-state is unique; the proof re-derives `weth_balanceOf_runCompiled`'s
 witness rather than reusing that theorem's existential, because the existential
-does not expose which witness it constructed. The re-derivation calls
-`func_run` exactly once — the same walk, not a new one — and the extra conjunct
-falls out of a projection through the construction: `Func.runCompiled_return_word`
-ends in `(_.memRead i sz).2.withOutput out`, `Devm.memRead` is
-`⟨val, devm.withMemory mem⟩`, and neither `withMemory` nor `withOutput` touches
-the `mach.gasLeft` field they leave untouched, so the post-state's `gasLeft` is
-`pre.gasLeft - 2241` **by `rfl`**, without forcing the memory write to reduce.
+does not expose which witness it constructed. The re-derivation walks the same
+dispatcher to the body entry and takes the body from
+`Func.balanceOf_runCompiled_cold`, whose third conjunct is the body's exact
+charge; the dispatcher's 141 and the body's 2119 make `balanceOfGas`.
 
 Same four limits as `weth_balanceOf_succeeds`; see that theorem's docstring. -/
 theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
@@ -239,8 +235,10 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
   rw [balanceOfGas_eq] at h_gas
   set g := pre.gasLeft with hg
   have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  obtain ⟨post, h_body, h_post_gas, h_out⟩ :=
+    Func.balanceOf_runCompiled_cold (base := pre) (g := g - 141) hfork h_cold (by omega)
   refine
-    ⟨_,
+    ⟨post,
       Prog.exec_of_runCompiled
         (Prog.runCompiled_intro (G := g - 1)
           (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
@@ -251,16 +249,11 @@ theorem weth_balanceOf_gas_exact {sevm : Sevm} {pre : Devm}
               simp only [B256.eqCheck, h_value, ↓reduceIte]
             func_run (5) [Sevm.selector sevm]
             rw [h_sel']
-            func_run [0, 1, 1, 0, 1, 1, 3]
-            · exact Devm.extCost_empty_word
-            · exact Func.runCompiled_return_word (G := g - 2260) (e := 0) rfl
-                (Devm.extCost_word_word Mem.size_write_word)
-                (by simp only [Devm.gasLeft_setMach]; omega)
-                (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))))
+            func_run (21) [0, 1, 1, 0, 1, 1]
+            exact h_body _))
         h_code,
-      ?_, rfl⟩
-  simp only [Devm.withOutput_gasLeft, Devm.memRead_gasLeft, Devm.gasLeft_setMach,
-    balanceOfGas_eq]
+      ?_, h_out⟩
+  rw [h_post_gas, balanceOfGas_eq]
   omega
 
 /-! ## Dropping the coldness assumption
@@ -311,7 +304,6 @@ def balanceOfGasWarm : Nat :=
 `gasColdSload - gasWarmAccess` and nothing else. -/
 theorem balanceOfGasWarm_eq : balanceOfGasWarm = 260 := by decide
 
-set_option maxRecDepth 604 in
 /-- A `balanceOf(address)` call on `weth` whose key is **already warm** has a
 gas-exact run; it costs exactly `balanceOfGasWarm` and returns the slot.
 
@@ -337,8 +329,10 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
   rw [balanceOfGasWarm_eq] at h_gas
   set g := pre.gasLeft with hg
   have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  obtain ⟨post, h_body, h_post_gas, h_out⟩ :=
+    Func.balanceOf_runCompiled_warm (base := pre) (g := g - 141) hfork h_warm (by omega)
   refine
-    ⟨_,
+    ⟨post,
       Prog.runCompiled_intro (G := g - 1)
         (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
@@ -348,15 +342,10 @@ theorem weth_balanceOf_warm_runCompiled {sevm : Sevm} {pre : Devm}
             simp only [B256.eqCheck, h_value, ↓reduceIte]
           func_run (5) [Sevm.selector sevm]
           rw [h_sel']
-          func_run [0, 1, 1, 0, 1, 1, 3]
-          · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_return_word (G := g - 260) (e := 0) rfl
-              (Devm.extCost_word_word Mem.size_write_word)
-              (by simp only [Devm.gasLeft_setMach]; omega)
-              (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
-      ?_, rfl⟩
-  simp only [Devm.withOutput_gasLeft, Devm.memRead_gasLeft, Devm.gasLeft_setMach,
-    balanceOfGasWarm_eq]
+          func_run (21) [0, 1, 1, 0, 1, 1]
+          exact h_body _),
+      ?_, h_out⟩
+  rw [h_post_gas, balanceOfGasWarm_eq]
   omega
 
 /-- **`weth`'s `balanceOf(address)` call on a warm key costs exactly

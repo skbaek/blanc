@@ -1,4 +1,4 @@
-import Blanc.Forward
+import Blanc.ForwardBalanceOf
 import Blanc.Weth
 
 namespace Blanc
@@ -86,13 +86,13 @@ abbrev boSel : B256 := selector "balanceOf" [.address]
 * `1` — the `nonpayable` guard's fork.  `ISZERO` over `CALLVALUE` left
   `sevm.value =? 0` on the stack, which `h_value` makes `1`, so the body arm
   is taken and the guard's `Func.revert` arm is not;
-* `3` — `MSTORE`'s memory-expansion charge, one word into empty memory.
+* then `Func.balanceOf_runCompiled_cold` (`Blanc/ForwardBalanceOf.lean`) walks
+  the shared body, whose `MSTORE` charges one word into empty memory.
 
 Everything else is derived, including the `CALLDATALOAD` that reads the argument:
 its value is `Sevm.dataWord sevm 4` by definition rather than by computation, so
 it consumes no hint. -/
 
-set_option maxRecDepth 613 in
 /-- A `balanceOf(guy)` call on `weth` has a gas-exact run, and it returns
 `guy`'s balance slot.
 
@@ -118,8 +118,10 @@ theorem weth_balanceOf_runCompiled {sevm : Sevm} {pre : Devm}
   rw [balanceOfGas_eq] at h_gas
   set g := pre.gasLeft with hg
   have h_stateGas : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
+  obtain ⟨post, h_body, -, h_out⟩ :=
+    Func.balanceOf_runCompiled_cold (base := pre) (g := g - 141) hfork h_cold (by omega)
   exact
-    ⟨_,
+    ⟨post,
       Prog.runCompiled_intro (G := g - 1)
         (mid := pre.setMach ⟨[], Mem.empty, g - 1, pre.stateGas⟩)
         (by simp only [gJumpdest]; omega)
@@ -129,13 +131,9 @@ theorem weth_balanceOf_runCompiled {sevm : Sevm} {pre : Devm}
             simp only [B256.eqCheck, h_value, ↓reduceIte]
           func_run (5) [Sevm.selector sevm]
           rw [h_sel']
-          func_run [0, 1, 1, 0, 1, 1, 3]
-          · exact Devm.extCost_empty_word
-          · exact Func.runCompiled_return_word (G := g - 2260) (e := 0) rfl
-              (Devm.extCost_word_word Mem.size_write_word)
-              (by simp only [Devm.gasLeft_setMach]; omega)
-              (Devm.memRead_word_fst (by simp only [Devm.memory_setMach]; rfl))),
-      rfl⟩
+          func_run (21) [0, 1, 1, 0, 1, 1]
+          exact h_body _),
+      h_out⟩
 
 /-- **`weth`'s `balanceOf(address)` call succeeds.**
 
