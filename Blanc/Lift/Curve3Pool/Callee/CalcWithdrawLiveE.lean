@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawLiveLoop
+import Blanc.Lift.WalkKit
 
 /-!
 # `_calc_withdraw_one_coin`, forward: the second `get_y_D`, `dy`, the fee and the return
@@ -125,25 +126,14 @@ theorem rx_cw_eE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 4097 + costGetYD Aw.toNat iw.toNat r0.toNat r1.toNat r2.toNat
       D1.toNat + 19 + 162 + (67 * 49 + 56) + 67 :=
     ⟨G - costGetYD Aw.toNat iw.toNat r0.toNat r1.toNat r2.toNat D1.toNat - 7684, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hi) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (ex_lt3_ne hi3) ·)
   -- tree t_41f1_c79
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 4 using hrs
   xr (rxm_mloadW (v := pickWord3 iw.toNat r0 r1 r2) (o := 0x540 + 32 * iw.toNat) hR hsz (ex_off (bw := Bytes.toB256 [5, 0x40]) hi3 (by decide) (by decide)) ⟨by omega, by decide⟩ (by wautoH (wordAt_pick hi3 hr0 hr1 hr2)) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreW (o := 0x780) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x760 0x780 32 = 0x7a0 by decide] at hsz
   rw [cw_sv4_first]
   refine rx_svFromM (fun o => Bytes.toB256 (img.sliceD o 32 0)) (C := 0x780) (sz := 0x7a0)
@@ -151,8 +141,7 @@ theorem rx_cw_eE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
     (fun m _ _ => by wautoH (wordAt_self img _)) (by simp only [List.length_cons]; omega) ?_
   clear hR hW hsz
   intro M1 img1 hM1 hR hW hsz hk1 hc1
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mloadW (o := 0x1a0) (v := Aw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ (by wautoH hA) (.inl (by decide)))) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreW (o := 0x7a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7a0 0x7a0 32 = 0x7c0 by decide] at hsz
@@ -160,31 +149,19 @@ theorem rx_cw_eE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ (by wautoH hi) (.inl (by decide)))) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreW (o := 0x7c0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7c0 0x7c0 32 = 0x7e0 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x540) (v := r0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ (by wautoH hr0) (.inl (by decide)))) (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   refine rxe_mstoreW (o := 0x7e0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7e0 0x7e0 32 = 0x800 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x560) (v := r1) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ (by wautoH hr1) (.inl (by decide)))) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreW (o := 0x800) (c := 6) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x800 0x800 32 = 0x820 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x580) (v := r2) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ (by wautoH hr2) (.inl (by decide)))) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreW (o := 0x820) (c := 6) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x820 0x820 32 = 0x840 by decide] at hsz
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x520) (v := D1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH (hk1 _ _ (by wautoH hD1) (.inl (by decide)))) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreW (o := 0x840) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x840 0x840 32 = 0x860 by decide] at hsz
@@ -217,11 +194,9 @@ theorem rx_cw_eE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   have hW := hW2
   have hsz := hsz2
   clear hW2 hsz2
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreW (o := 0x8a0) (c := 13) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x860 0x8a0 32 = 0x8c0 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreW (o := 0x780) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8c0 0x780 32 = 0x8c0 by decide] at hsz
   rw [cw_rs4_first]
   refine rx_rsFromM (fun o => Bytes.toB256 (img.sliceD o 32 0)) (C := 0x780) (sz := 0x8c0)
@@ -239,193 +214,91 @@ theorem rx_cw_eE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem}
   clear hR hW hsz hk3
   have hR := hR3; have hW := hW3; have hsz := hsz3
   clear hR3 hW3 hsz3
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mloadW (o := 0x8a0) (v := y2) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hy3) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rx_branch_succ (ex_geGuard hs0) ·)
   -- tree t_42b9_c1147
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_sub (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 9 using hrs
   refine rxe_mstoreW (o := 0x760) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8c0 0x760 32 = 0x8c0 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mload (o := 0x760) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 6 using hrs
   xr (rx_branch_succ (ex_geGuard hs1) ·)
   -- tree t_42d7_c1147
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_sub (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 10 using hrs
   xr (rxm_mloadW (o := 0x160) (v := iw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH rhi) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (ex_lt3_ne hi3) ·)
   -- tree t_42f2_c1147
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 4 using hrs
   xr (rxm_mloadW (v := pickWord3 iw.toNat cwP1 cwPm cwPm) (o := 0x220 + 32 * iw.toNat) hR hsz (ex_off (bw := Bytes.toB256 [2, 0x20]) hi3 (by decide) (by decide)) ⟨by omega, by decide⟩ (by wautoH (wordAt_pick hi3 rhp0 rhp1 rhp2)) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rx_branch_succ (cw_pm_ne hi3) ·)
   -- tree t_4302_c1147
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_div rfl (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 8 using hrs
   refine rxe_mstoreW (o := 0x760) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8c0 0x760 32 = 0x8c0 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rxm_mload (o := 0x760) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   xr (rx_dup rfl (by hrs) ·)
   refine rxe_mstoreW (o := 0x8c0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8c0 0x8c0 32 = 0x8e0 by decide] at hsz
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 10 using hrs
   xr (rxm_mloadW (o := 0x700) (v := dy0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH rhd) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mload (o := 0x760) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rx_branch_succ (ex_geGuard hs2) ·)
   -- tree t_4337_c1147
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_sub (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 9 using hrs
   refine rxe_mstoreW (o := 0x8e0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x8e0 0x8e0 32 = 0x900 by decide] at hsz
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 8 using hrs
   refine rxe_mstoreW (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x900 0xc0 32 = 0x900 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mload (o := 0xc0) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreW (o := 0x900) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x900 0x900 32 = 0x920 by decide] at hsz
   -- tree t_4353_c1147
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x900) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_gt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (by decide) ·)
   -- tree t_4365_c1147
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x900) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_sub (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x8e0) hR hsz (cw_off (by decide) (by decide)) (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mload (o := 0x900) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_sub (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreW (o := 0x900) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x920 0x900 32 = 0x920 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_jump cw_prog_1154 ·)
   -- tree t_4353_c1154
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x900) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_gt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_succ (by decide) ·)
   -- tree t_4365_c1154
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x900) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_sub (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x8c0) hR hsz (cw_off (by decide) (by decide)) (by decide) (by hrs) ·); try wsimp
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mload (o := 0x900) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_sub (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreW (o := 0x900) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x920 0x900 32 = 0x920 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rx_jump cw_prog_1161 ·)
   -- tree t_4353_c1161
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mload (o := 0x900) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_gt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_branch_zero' (by decide) ·)
   -- tree t_4361_c1161
   xr (rx_push rfl (by hrs) ·)
   xr (rx_jump cw_prog_1168 ·)
   -- tree t_4381_c1168
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mloadW (o := 0x180) (v := ρ) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH rhrho) (by hrs) ·)
   -- ATOM .ret
   refine ⟨_, rx_ret, hQ _ g1 hW hsz (by omega) (by omega) (by omega)

@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.AlLiveD2
+import Blanc.Lift.WalkKit
 
 /-!
 # `add_liquidity`, forward: `D2`
@@ -104,11 +105,7 @@ theorem rx_al_d2E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
     · exact al_d2_c69
     · exact al_d2_c93
   rw [hXe]
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   refine rxe_mstoreL (o := 0xaa0) (c := 6) hR hW hsz rfl (by decide) ?_
   clear hR hW hsz; rename' M => Mq0; intro M hMq0 hR hW hsz; have hRq := hR
   rw [show memExtSize 0xaa0 0xaa0 32 = 0xac0 by decide] at hsz
@@ -126,32 +123,19 @@ theorem rx_al_d2E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
   have g2 := hk1 _ _ (hI _ _ (by decide) hx2) (.inl (by decide))
   have gA := hk1 _ _ (hI _ _ (by decide) hA) (.inl (by decide))
   -- the arguments of `get_D_mem`
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rxm_mloadW (o := 0x460) (v := x0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH g0) (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0xac0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0xac0 0xac0 32 = 0xae0 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x480) (v := x1) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH g1') (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreL (o := 0xae0) (c := 7) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0xae0 0xae0 32 = 0xb00 by decide] at hsz
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x4a0) (v := x2) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH g2) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreL (o := 0xb00) (c := 6) hR hW hsz (cw_off (by decide) (by decide)) (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0xb00 0xb00 32 = 0xb20 by decide] at hsz
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x1e0) (v := A) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH gA) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0xb20) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq4; intro M hMq4 hR hW hsz; rw [show memExtSize 0xb20 0xb20 32 = 0xb40 by decide] at hsz
@@ -176,11 +160,9 @@ theorem rx_al_d2E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
   have hs2x := hsz2
   clear hW2 hsz2
   -- `D2` parked, the restore counter
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreL (o := 0xb80) (c := 13) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq5; intro M hMq5 hR hW hsz; rw [show memExtSize 0xb40 0xb80 32 = 0xba0 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreL (o := 0xaa0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq6; intro M hMq6 hR hW hsz; rw [show memExtSize 0xba0 0xaa0 32 = 0xba0 by decide] at hsz
   rw [al_rs5_first]
   refine rx_rsFromLM (fun o => Bytes.toB256 ((Bytes.writeAt img 0xaa0
@@ -195,8 +177,7 @@ theorem rx_al_d2E {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : Byte
   have hR := hR3; have hW := hW3; have hsz := hsz3
   clear hR3 hW3 hsz3
   -- `D2` stored at `0xa20`
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mloadW (o := 0xb80) (v := Nat.toB256 v) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hD3) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0xa20) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq7; intro M hMq7 hR hW hsz; rw [show memExtSize 0xba0 0xa20 32 = 0xba0 by decide] at hsz

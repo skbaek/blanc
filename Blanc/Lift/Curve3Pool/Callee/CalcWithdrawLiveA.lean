@@ -3,6 +3,7 @@ import Blanc.Lift.Curve3Pool.Walk.LiveLoops
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveY
 import Blanc.Lift.Curve3Pool.LivePremises
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXSpec
+import Blanc.Lift.WalkKit
 
 /-!
 # `_calc_withdraw_one_coin`, forward: the prologue, `_A`, the fee and the supply
@@ -77,8 +78,7 @@ theorem rx_cw_a2E {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem}
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 43 + (3 + (calculateMemoryGasCost 0x200 -
       calculateMemoryGasCost n)) + 4 := ⟨G - 47 - (3 + (calculateMemoryGasCost 0x200 -
       calculateMemoryGasCost n)), by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x1e0) (c := 3 + (calculateMemoryGasCost 0x200 - calculateMemoryGasCost n)) hR hW hsz rfl ⟨by rw [hext]; rfl, hn⟩ ?_; clear hR hW hsz; rename' M => M1; intro M hM1 hR hW hsz; rw [hext] at hsz
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreL (o := 0x1a0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M2; intro M hM2 hR hW hsz; rw [show memExtSize 0x200 0x1a0 32 = 0x200 by decide] at hsz
@@ -96,67 +96,23 @@ theorem rx_cw_a2E {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem}
   refine rxe_sloadVX hfork (by hr) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
   rw [show Bytes.toB256 [2] = feeSlot by decide] at hv2; subst hv2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 205 := ⟨g2 - 205, by omega⟩
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_div rfl (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_or rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 13
   xr (rx_branch_succ (ex_mulGuard hmf) ·)
   -- tree t_3d24_c36
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 12
   xr (rx_branch_succ (by xbr) ·)
   -- tree t_3d38_c36
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_div rfl (by hr) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 8
   refine rxe_mstoreL (o := 0x200) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M7; intro M hM7 hR hW hsz; rw [show memExtSize 0x200 0x200 32 = 0x220 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0x220) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M8; intro M hM8 hR hW hsz; rw [show memExtSize 0x220 0x220 32 = 0x240 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 4
   refine rxe_mstoreL (o := 0x240) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M9; intro M hM9 hR hW hsz; rw [show memExtSize 0x240 0x240 32 = 0x260 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 4
   refine rxe_mstoreL (o := 0x260) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M10; intro M hM10 hR hW hsz; rw [show memExtSize 0x260 0x260 32 = 0x280 by decide] at hsz
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   refine rxe_mstoreL (o := 0x2a0) (c := 9) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M11; intro M hM11 hR hW hsz; rw [show memExtSize 0x280 0x2a0 32 = 0x2c0 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_sloadVX hfork (by hr) (by omega) ?_; intro g4 b4 v4 hb4 hv4 hg41 hg42 g4x; replace hv4 := hL.val hv4; replace hL := hL.sloadE hb4
   rw [show Bytes.toB256 [5] = tokenSlot by decide] at hv4; subst hv4
   obtain ⟨g5, rfl⟩ : ∃ g, g4 = g + 2 := ⟨g4 - 2, by omega⟩
@@ -177,24 +133,15 @@ theorem rx_cw_a2E {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem}
   xr (rx_push rfl (by hr) ·)
   xr (rx_branch_succ (by decide) ·)
   -- tree t_3d81_c36
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_returndatasize (by hr) ·)
-  xr (rx_gt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   xr (rx_branch_succ (by rw [hrd]; exact ex_rds_gt hlen hlt) ·)
   -- tree t_3d8e_c36
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x300) hR hsz rfl (by decide) (by hr) ·)
   rw [ex_ans_read _ _ _ hlen, hA']
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreL (o := 0x280) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M12; intro M hM12 hR hW hsz; rw [show memExtSize 0x320 0x280 32 = 0x320 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0x380) (c := 15) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M13; intro M hM13 hR hW hsz; rw [show memExtSize 0x320 0x380 32 = 0x3a0 by decide] at hsz
   have hMc : M12 = cwA2Mem M1 A x1 x2 x3 x4 σ := by
     rw [hM11, hM10, hM9, hM8, hM7, hM6, hM5, hM4, hM3, hM2, hM1]; rfl
@@ -269,8 +216,7 @@ theorem rx_cw_aE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {S : List B256
     SFunc.RunEx cert.prog sevm (St b (ρ :: a :: i :: S) M G) t_3cca_c36 Q := by
   have hR0 := hR
   obtain ⟨g0, rfl⟩ : ∃ g, G = g + 43 := ⟨G - 43, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x180) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Ma1; intro M hMa1 hR hW hsz; rw [show memExtSize 0x1e0 0x180 32 = 0x1e0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreL (o := 0x140) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Ma2; intro M hMa2 hR hW hsz; rw [show memExtSize 0x1e0 0x140 32 = 0x1e0 by decide] at hsz

@@ -1,6 +1,7 @@
 import Blanc.Lift.Curve3Pool.LivePremises
 import Blanc.Lift.Curve3Pool.Walk.DispatchLive
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquiditySafe
+import Blanc.Lift.WalkKit
 
 /-!
 # `remove_liquidity`, forward: an exact run from the frame's entry
@@ -191,26 +192,15 @@ theorem rx_rl_preE {sevm : Sevm} {b : Devm} {Gs : Nat} {Q : Outcome → Prop} {W
       3 + 1 + 10 + 3 + 3 + sloadCost sevm b (Bytes.toB256 [0xff, 0xff, 0xff]) + 3 by omega]
   xr (rx_push rfl (by hr) ·)
   xr (rx_sload_sel hfork (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rx_branch_succ hlk ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_sstore hfork (by have : gCallStipend = 2300 := rfl; omega) hstatic ·)
-  xr (rx_callvalue (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hval]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   refine rxe_mstoreL (o := 0x160) (c := 21) hR hW hsz rfl (by decide) ?_; intro M hM0x160 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rx_sload_sel hfork (by hr) ·)
   xr (rx_gas (by hr) ·)
   have htokv : (afterSstore sevm (afterSload sevm b (Bytes.toB256 [255, 255, 255]))
@@ -259,33 +249,18 @@ theorem rx_rl_preE {sevm : Sevm} {b : Devm} {Gs : Nat} {Q : Outcome → Prop} {W
     rw [h, hT]
   xr (rx_push rfl (by hr) ·)
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_returndatasize (by hr) ·)
-  xr (rx_gt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   xr (rx_branch_succ hrds ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x1c0) hR hsz rfl (by decide) (by hr) ·)
   rw [hT1]
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreL (o := 0x140) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM0x140 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldatasize (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_calldatacopyL (o := 0x1e0) (z := 0x60) (c := 21) hR hW hsz rfl rfl (by decide) ?_; intro M hM0x1e0 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldatasize (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_calldatacopyL (o := 0x240) (z := 0x60) (c := 21) hR hW hsz rfl rfl (by decide) ?_; intro M hM0x240 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_dup (n := 3) rfl (by hr) ·)
+  wrun 5
   refine rxe_mstoreL (o := 0x2a0) (c := 6) hR hW hsz rfl (by decide) ?_; intro M hM0x2a0 hR hW hsz
   xr (rx_add (by hr) ·)
   rw [show [Bytes.toB256 [3] + Bytes.toB256 [0], Bytes.toB256 [2, 160]] = ([3, 0x2a0] : List B256)
@@ -379,155 +354,75 @@ theorem rx_rl_s1AL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M
   rw [show Gc + rlS1CostA sevm b i B T = Gc + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) + 3 + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 6 + 3 + 3 + 7 + 3 + 2 + 3 + 2 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 2 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + sloadCost sevm b (balancesBase + Nat.toB256 i) + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 by unfold rlS1CostA; omega]
   have hctr := hL.ctr
   have hT := hL.supply
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x2a0) hR hsz rfl (by decide) (by hr) ·)
   rw [hctr.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM1 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz rfl rfl (by decide) (by hr) (by decide) ·)
   rw [keccak_one]
   xr (rx_add (by hr) ·)
   xr (rx_sload_sel hfork (by hr) ·)
   rw [getStorVal_eq, hB]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_dup (n := 4) rfl (by hr) ·)
-  xr (rx_dup (n := 3) rfl (by hr) ·)
-  xr (rx_div rfl (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_or rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 14
   xr (rx_branch_succ hmulw ·)
-  xr (rx_dest ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 9
   xr (rxm_mload (o := 0x140) hR hsz rfl (by decide) (by hr) ·)
   rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by decide), hT.read]
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ hT0 ·)
-  xr (rx_dest ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_div rfl (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 8
   refine rxe_mstoreL (o := 0x2c0) (c := 7) hR hW hsz rfl (by decide) ?_; intro M hM2 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x2e0) (c := 6) hR hW hsz rfl (by decide) ?_; intro M hM3 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x300) (c := 6) hR hW hsz rfl (by decide) ?_; intro M hM4 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x320) (c := 6) hR hW hsz rfl (by decide) ?_; intro M hM5 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x340) (c := 6) hR hW hsz rfl (by decide) ?_; intro M hM6 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x360) (c := 6) hR hW hsz rfl (by decide) ?_; intro M hM7 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x2a0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, hctr.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rxm_mload (o := 0x2c0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self]
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ hminw ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x2a0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, hctr.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM8 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz rfl rfl (by decide) (by hr) (by decide) ·)
   rw [keccak_one]
-  xr (rx_add (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
+  wrun 2
   xr (rx_sload_sel hfork (by hr) ·)
   rw [getStorVal_afterSload, getStorVal_eq, hB]
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x2c0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self]
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   xr (rx_branch_succ hlew ·)
-  xr (rx_dest ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_sub (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
+  wrun 9
   xr (rx_sstore hfork (by have : gCallStipend = 2300 := rfl; omega) hstatic ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x2c0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x2a0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, hctr.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
   refine k _ _ (by rw [hM8, hM7, hM6, hM5, hM4, hM3, hM2, hM1]; rfl) hR hW (by rw [hsz]; decide) ⟨?_, ?_, ?_⟩ ?_
   · wchainT; exact hctr
@@ -580,155 +475,75 @@ theorem rx_rl_s1BL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M
   rw [show Gc + rlS1CostB sevm b i B T = Gc + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) (B - B * rlAmt sevm / T) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm (afterSload sevm b (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i) + 3 + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 5 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 2 + 3 + 2 + 3 + 2 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 + sloadCost sevm b (balancesBase + Nat.toB256 i) + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 1 by unfold rlS1CostB; omega]
   have hctr := hL.ctr
   have hT := hL.supply
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x2a0) hR hsz rfl (by decide) (by hr) ·)
   rw [hctr.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM1 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz rfl rfl (by decide) (by hr) (by decide) ·)
   rw [keccak_one]
   xr (rx_add (by hr) ·)
   xr (rx_sload_sel hfork (by hr) ·)
   rw [getStorVal_eq, hB]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_dup (n := 4) rfl (by hr) ·)
-  xr (rx_dup (n := 3) rfl (by hr) ·)
-  xr (rx_div rfl (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_or rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 14
   xr (rx_branch_succ hmulw ·)
-  xr (rx_dest ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 9
   xr (rxm_mload (o := 0x140) hR hsz rfl (by decide) (by hr) ·)
   rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by decide), hT.read]
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ hT0 ·)
-  xr (rx_dest ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_div rfl (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 8
   refine rxe_mstoreL (o := 0x2c0) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM2 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x2e0) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM3 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x300) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM4 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x320) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM5 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x340) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM6 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x360) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM7 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x2a0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, hctr.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rxm_mload (o := 0x2c0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self]
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ hminw ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x2a0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, hctr.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM8 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz rfl rfl (by decide) (by hr) (by decide) ·)
   rw [keccak_one]
-  xr (rx_add (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
+  wrun 2
   xr (rx_sload_sel hfork (by hr) ·)
   rw [getStorVal_afterSload, getStorVal_eq, hB]
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x2c0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self]
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   xr (rx_branch_succ hlew ·)
-  xr (rx_dest ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_sub (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
+  wrun 9
   xr (rx_sstore hfork (by have : gCallStipend = 2300 := rfl; omega) hstatic ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x2c0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x2a0) hR hsz rfl (by decide) (by hr) ·)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, hctr.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
   refine k _ _ (by rw [hM8, hM7, hM6, hM5, hM4, hM3, hM2, hM1]; rfl) hR hW (by rw [hsz]; decide) ⟨?_, ?_, ?_⟩ ?_
   · wchainT; exact hctr
@@ -814,36 +629,16 @@ theorem rx_rl_s2AL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M
       ∀ x y, SFunc.RunEx cert.prog sevm (St b' (x :: y :: [3, 0x2a0]) M' Gc) t_2ea7_c0 Q) :
     SFunc.RunEx cert.prog sevm (St b [Nat.toB256 i, Bytes.toB256 [0x01, 0xe0], V, 3, 0x2a0] M
       (Gc + 532)) t_2e0c_c0 Q := by
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 4
   refine rxe_mstoreL (o := 0x1e0 + 32 * i) (c := 3) hR hW hsz (off_amt hi)
     ⟨by rw [memExtSize_of_le (by decide) (by omega), Nat.sub_self]; rfl, by decide⟩ ?_
   intro M hM0 hR hW hsz
   rw [memExtSize_of_le (by decide) (by omega)] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0x400) (c := 19) hR hW hsz rfl (by decide) ?_; intro M hM1 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x420) (c := 6) hR hW hsz rfl (by decide) ?_; intro M hM2 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 4) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 5) rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_gas (by hr) ·)
+  wrun 15
   have e1 := Mem.Reads.forget hR
   clear hR
   obtain ⟨img1, hR, hI⟩ := e1
@@ -872,61 +667,23 @@ theorem rx_rl_s2AL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M
   have hb12 : BaseRel b b2 := ⟨hsha.stor, hsha.code, hsha.addrs, hsha.logs, hsha.output, hsha.error⟩
   have hWb2 : W b2 := hWc.sha _ _ _ hsha hWb
   clear hsha hsel4
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0x400) hR hsz rfl (by decide) (by hr) ·)
   rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide), f_400.read]
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_swap (n := 1) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_caller (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 11
   refine rxe_mstoreL (o := 0x484) (c := 6) hR hW hsz (by decide) (by decide) ?_; intro M hM3 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rxm_mload (o := 0x2c0) hR hsz rfl (by decide) (by hr) ·)
   rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by decide),
     Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide), f_v.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 5
   refine rxe_mstoreL (o := 0x4a4) (c := 6) hR hW hsz (by decide) (by decide) ?_; intro M hM4 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 7
   refine rxe_mstoreL (o := 0x460) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM5 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hr) ·)
   rw [Bytes.readWord_writeAt_self]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_dup (n := 4) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_gas (by hr) ·)
+  wrun 9
   refine rxe_identityL (i := 0x460) (n := 0x64) (o := 0x500) (z := 0x64) (ext := 16) (X := 143)
     (hid.of_rel hb12) hdepth hR hW hsz (by decide) (by decide) (by decide) (by decide) (by decide) rfl
     (by rw [show idCost 0x64 = 27 by decide]; omega) (by omega) (by hr) ?_
@@ -987,36 +744,16 @@ theorem rx_rl_s2BL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M
       ∀ x y, SFunc.RunEx cert.prog sevm (St b' (x :: y :: [3, 0x2a0]) M' Gc) t_2ea7_c0 Q) :
     SFunc.RunEx cert.prog sevm (St b [Nat.toB256 i, Bytes.toB256 [0x01, 0xe0], V, 3, 0x2a0] M
       (Gc + 482)) t_2e0c_c0 Q := by
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 4
   refine rxe_mstoreL (o := 0x1e0 + 32 * i) (c := 3) hR hW hsz (off_amt hi)
     ⟨by rw [memExtSize_of_le (by decide) (by omega), Nat.sub_self]; rfl, by decide⟩ ?_
   intro M hM0 hR hW hsz
   rw [memExtSize_of_le (by decide) (by omega)] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0x400) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM1 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x420) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM2 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 4) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 5) rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_gas (by hr) ·)
+  wrun 15
   have e1 := Mem.Reads.forget hR
   clear hR
   obtain ⟨img1, hR, hI⟩ := e1
@@ -1045,61 +782,23 @@ theorem rx_rl_s2BL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M
   have hb12 : BaseRel b b2 := ⟨hsha.stor, hsha.code, hsha.addrs, hsha.logs, hsha.output, hsha.error⟩
   have hWb2 : W b2 := hWc.sha _ _ _ hsha hWb
   clear hsha hsel4
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0x400) hR hsz rfl (by decide) (by hr) ·)
   rw [Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide), f_400.read]
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_swap (n := 1) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_caller (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 11
   refine rxe_mstoreL (o := 0x484) (c := 3) hR hW hsz (by decide) (by decide) ?_; intro M hM3 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rxm_mload (o := 0x2c0) hR hsz rfl (by decide) (by hr) ·)
   rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by decide),
     Bytes.sliceD_writeAt_before _ _ _ _ _ (by decide), f_v.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 5
   refine rxe_mstoreL (o := 0x4a4) (c := 3) hR hW hsz (by decide) (by decide) ?_; intro M hM4 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 7
   refine rxe_mstoreL (o := 0x460) (c := 3) hR hW hsz rfl (by decide) ?_; intro M hM5 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x460) hR hsz rfl (by decide) (by hr) ·)
   rw [Bytes.readWord_writeAt_self]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_dup (n := 4) rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_gas (by hr) ·)
+  wrun 9
   refine rxe_identityL (i := 0x460) (n := 0x64) (o := 0x500) (z := 0x64) (ext := 0) (X := 127)
     (hid.of_rel hb12) hdepth hR hW hsz (by decide) (by decide) (by decide) (by decide) (by decide) rfl
     (by rw [show idCost 0x64 = 27 by decide]; omega) (by omega) (by hr) ?_
@@ -1200,33 +899,20 @@ theorem rx_rl_s3E {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M 
   rw [show Gx + (108 + sloadCost sevm b (coinsBase + Nat.toB256 i)) = Gx + 2 +
     sloadCost sevm b (coinsBase + Nat.toB256 i) + 3 + 36 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 +
     3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 2 + 2 + 1 by omega]
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rxm_mload (o := 0x500) hR hsz rfl ⟨by omega, hs32⟩ (by hr) ·)
   rw [(Region.word hdata.left).read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0x2a0) hR hsz rfl ⟨by omega, hs32⟩ (by hr) ·)
   rw [hL.ctr.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (ltCheck_ne_zero_of_lt (lt_three hi)) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl
     ⟨by rw [memExtSize_of_le hs32 (by omega), Nat.sub_self]; rfl, hs32⟩ ?_
   intro M hM1 hR hW hsz
   rw [memExtSize_of_le hs32 (by omega)] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz rfl rfl ⟨by omega, hs32⟩ (by hr) (by decide) ·)
   rw [keccak_zero]
   xr (rx_add (by hr) ·)
@@ -1309,17 +995,12 @@ theorem rx_rl_s3E {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M 
   xr (rx_dup (n := 1) rfl (by hr) ·)
   xr (rxm_mload (o := 0x2a0) hR6 hsz6 rfl ⟨by decide, by decide⟩ (by hr) ·)
   rw [hctr6.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 2
   rw [succ_lit hi]
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 3) rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x2a0) (c := 3) hR6 hW6 hsz6 rfl (by decide) ?_
   intro M7 hM7 hR7 hW7 hsz7
-  xr (rx_dup (n := 1) rfl (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   have hWb' : W' b' := hW'c.sha _ _ _ hsha hWd
   have hidb' : IdReady sevm b' := (hidd (hid.afterSload _)).of_rel
     ⟨hsha.stor, hsha.code, hsha.addrs, hsha.logs, hsha.output, hsha.error⟩
@@ -1408,25 +1089,13 @@ theorem rx_rl_postE {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
   unfold rlPostCost
   rw [show Gx + (67 + sloadCost sevm b tokenSlot) = Gx + 2 + sloadCost sevm b tokenSlot + 3 + 3 +
     3 + 7 + 3 + 3 + 3 + 6 + 3 + 2 + 9 + 3 + 3 + 3 + 3 + 3 + 2 + 2 + 1 by omega, ← tokenSlot_lit]
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 8
   refine rxe_mstoreL (o := 0x600) (c := 9) hR hW hsz rfl (by decide) ?_; intro M hM1 hR hW hsz
-  xr (rx_caller (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x620) (c := 6) hR hW hsz rfl (by decide) ?_; intro M hM2 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0x640) (c := 7) hR hW hsz rfl (by decide) ?_; intro M hM3 hR hW hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_sload_sel hfork (by hr) ·)
   rw [tokenSlot_lit, getStorVal_eq]
   xr (rx_gas (by hr) ·)
@@ -1473,18 +1142,9 @@ theorem rx_rl_postE {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
     rw [ltCheck_eq_zero_of_le hTa]; decide
   xr (rx_push rfl (by hr) ·)
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_returndatasize (by hr) ·)
-  xr (rx_gt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   xr (rx_branch_succ hgt ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rxm_mload (o := 0x1e0) hR hsz2 rfl (by decide) (by hr) ·)
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreL (o := 0x6c0) (c := 6) hR hW2 hsz2 rfl (by decide) ?_; intro M hM4 hR hW hsz
@@ -1514,32 +1174,14 @@ theorem rx_rl_postE {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
   clear hI
   xr (rxm_mload (o := 0x140) hR hsz rfl (by decide) (by hr) ·)
   rw [f_T4.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 7
   xr (rx_branch_succ hlt ·)
-  xr (rx_dest ·)
-  xr (rx_dup (n := 0) rfl (by hr) ·)
-  xr (rx_dup (n := 2) rfl (by hr) ·)
-  xr (rx_sub (by hr) ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_swap (n := 0) rfl ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 9
   refine rxe_mstoreL (o := 0x780) (c := 6) hR hW hsz rfl (by decide) ?_; intro M hM10 hR hW hsz
-  xr (rx_caller (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_log2 (c := 2917) hstatic (by rw [St.extCost_eq hsz]; decide) rfl
     (read_covered_len hsz (by decide) (by decide)) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_sstoreX hfork hstatic (by omega) ?_
   intro G' hG'
   refine ⟨_, .last rfl, hQ _ d (by rw [hM3, hM2, hM1] at hE; exact hE) (by
