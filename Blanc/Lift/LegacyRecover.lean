@@ -1,5 +1,4 @@
 import Blanc.RlpConcrete
-import Blanc.RlpListEncode
 
 /-!
 # Pre-EIP-155 legacy signing, recovery and strict decoding
@@ -10,7 +9,6 @@ identifier. Consumers supply their own concrete fields; nothing here names a
 transaction, a contract, or an observed mainnet value.
 
 * `signingHash_pre155` evaluates `Tx.signingHash` to its six-field payload.
-* `signingPayload_pre155` encodes that payload with the data field abstract.
 * `recoverSender_pre155` reduces `recoverSender` at every chain id to one
   secp256k1 recovery fact on the signing hash.
 * `legacy_decode_pre155` runs the strict nine-field legacy decoder from the
@@ -35,38 +33,6 @@ theorem signingHash_pre155 {tx : Tx} {p : Nat} {rcv : Option Adr}
   rw [htype]
   dsimp only
   simp only [hb, ↓reduceIte]
-
-/-- The pre-EIP-155 payload ends with the data field, so a long data field
-leaves the payload as a fixed header over the explicit leading fields, with
-the data bytes kept abstract. -/
-theorem signingPayload_pre155 {fields : List BLT} {head data : Bytes}
-    (hhead : BLTs.toBytesJoin fields = head) (hdata : 56 ≤ data.length) :
-    (BLT.list (fields ++ [.bytes data])).toBytes =
-      (0xF7 + (head.length + (1 + data.length.toBytesPack.length + data.length)
-        ).toBytesPack.length.toUInt8) ::
-        ((head.length + (1 + data.length.toBytesPack.length + data.length)).toBytesPack ++
-          (head ++ ((0xB7 + data.length.toBytesPack.length.toUInt8) ::
-            (data.length.toBytesPack ++ data)))) := by
-  have hjoin : ∀ xs : List BLT, BLTs.toBytesJoin (xs ++ [.bytes data]) =
-      BLTs.toBytesJoin xs ++ (BLT.bytes data).toBytes := by
-    intro xs
-    rw [RlpConcrete.toBytesJoin_append, BLTs.toBytesJoin, BLTs.toBytesJoin, List.append_nil]
-  have hdataEnc : (BLT.bytes data).toBytes =
-      (0xB7 + data.length.toBytesPack.length.toUInt8) ::
-        (data.length.toBytesPack ++ data) := by
-    rw [RlpConcrete.encode_bytes_many data (by omega)]
-    simp only [show ¬data.length < 56 by omega, ↓reduceIte]
-  have hlen : (BLTs.toBytesJoin (fields ++ [.bytes data])).length =
-      head.length + (1 + data.length.toBytesPack.length + data.length) := by
-    rw [hjoin, hhead, hdataEnc]
-    simp only [List.length_append, List.length_cons]
-    omega
-  rw [BLT.toBytes, BLTs.toBytes]
-  dsimp only
-  rw [hlen]
-  simp only [show ¬head.length + (1 + data.length.toBytesPack.length + data.length) < 56 by omega,
-    ↓reduceIte]
-  rw [hjoin, hhead, hdataEnc]
 
 /-- Pre-EIP-155 sender recovery is chain-id independent: with canonical `r`
 and low `s`, one secp256k1 recovery fact on the signing hash, at parity

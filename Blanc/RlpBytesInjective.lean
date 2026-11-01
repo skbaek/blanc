@@ -39,7 +39,8 @@ theorem nat_bytes_length_mono {m n : Nat} (le : m ≤ n) :
         simpa only [List.length_cons, List.length_nil, Nat.succ_eq_add_one,
           Nat.add_le_add_iff_right] using smaller
 
-private theorem natBytesPack_of_pos (n : Nat) (positive : 0 < n) :
+/-- A positive natural packs to its plain byte encoding. -/
+theorem toBytesPack_of_pos (n : Nat) (positive : 0 < n) :
     n.toBytesPack = n.toBytes := by
   cases n with
   | zero => omega
@@ -54,7 +55,7 @@ private theorem encode_bytes_many_length_strict {xs ys : Bytes}
   · simp only [List.length_cons, List.length_append]; omega
   · omega
   · have width := nat_bytes_length_mono (Nat.le_of_lt lt)
-    rw [natBytesPack_of_pos xs.length (by omega), natBytesPack_of_pos ys.length (by omega)]
+    rw [toBytesPack_of_pos xs.length (by omega), toBytesPack_of_pos ys.length (by omega)]
     simp only [List.length_cons, List.length_append]
     omega
 
@@ -77,7 +78,8 @@ private theorem encode_bytes_many_inj {xs ys : Bytes}
   · exact (List.cons.inj same).2
   · exact List.append_cancel_left (List.cons.inj same).2
 
-private theorem encode_bytes_nil : (BLT.bytes []).toBytes = [0x80] := by
+/-- The empty byte string encodes as `0x80`. -/
+theorem encode_bytes_nil : (BLT.bytes []).toBytes = [0x80] := by
   rw [BLT.toBytes] <;> simp only [reduceCtorEq, imp_self, implies_true]
   rfl
 

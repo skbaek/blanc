@@ -16,12 +16,6 @@ namespace Blanc.RlpConcrete
 
 open Jaune
 
-private theorem toBytesPack_of_pos (n : Nat) (positive : 0 < n) :
-    n.toBytesPack = n.toBytes := by
-  cases n with
-  | zero => omega
-  | succ => rfl
-
 /-- A positive natural below `2 ^ 64` has a one-to-eight-byte encoding. -/
 private theorem toBytes_width (n : Nat) (positive : 0 < n) (small : n < 2 ^ 64) :
     1 ≤ n.toBytes.length ∧ n.toBytes.length ≤ 8 := by
@@ -93,10 +87,6 @@ theorem decode_list_long (k : Nat) (lbs bs tail : Bytes) (children : List BLT)
   simp only [Nat.sub_add_cancel pos] at t0 t1 t2 t3 t4 hsize
   rw [Bytes.toBLTDiff?, toBools_split, t0, t1, t2, t3, t4]
   simp only [hsize, splitAt_append, Option.bind_some, hlen, hparse, bind, pure]
-
-private theorem encode_bytes_nil : (BLT.bytes []).toBytes = [0x80] := by
-  rw [BLT.toBytes] <;> simp only [reduceCtorEq, imp_self, implies_true]
-  rfl
 
 private theorem highBit_of_lt (b : UInt8) (small : b < 0x80) : b.highBit = false := by
   have bytes : ∀ i : Fin 128, (i.val.toUInt8).highBit = false := by decide +kernel
