@@ -47,7 +47,8 @@ lines when next changed or relied on, not by a wholesale rewrite.
   [C — compilation and deployment](#c--compilation-and-deployment).
 - Verify bytecode Blanc did not compile (a deployed contract's runtime
   bytes): go straight to
-  [C9](#c9-i-need-to-verify-deployed-bytecode-blanc-did-not-compile).
+  [C9](#c9-i-need-to-verify-deployed-bytecode-blanc-did-not-compile), whose
+  route map names its need-shaped sub-branches C9.1 onward.
 - Link an auxiliary call table by name instead of by index: go straight to
   [C6](#c6-i-need-to-link-an-auxiliary-call-table-by-name-instead-of-by-index),
   the last branch of that section rather than its head.
@@ -4083,6 +4084,11 @@ laws live in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean):
   the sums without a `Nodup` premise; `footprintSum_cons` peels one key.  A
   statement control uses the strict form to show one moved row breaks an
   equation with an unmoved supply.
+- The hashed slot term itself, `mapSlot key base` (solc's mapping slot; Vyper's
+  with the arguments swapped), is in
+  [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean); write locality at
+  one owner's rows of a lifted contract's two-level mapping is under
+  [C9.5](#c95-i-need-hashed-storage-slots-write-locality-or-demanded-zero-cells).
 
 ### S6. I need a basic EVM-word identity
 
@@ -5512,7 +5518,9 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   actual parent fork's `delegatedCodeAddress(code1) = none` readiness through
   both recovery specializations, `ownerV2_query_consumed_effective` and
   `permitV2_1_query_consumed_effective`, the shared old-owner backend and all
-  three retained endpoints (`pair_query_at`, `has_pair_query`, `not_pair`).
+  three retained endpoints (`retained_old_owner_pair_query_at_effective`,
+  `retained_old_owner_has_pair_query_effective`,
+  `retained_old_owner_not_pair_effective`).
   Original pure-nondelegation APIs project to that same implementation; the
   independent query carrier is unchanged. Domain capabilities, BAL absence
   and actual routing readiness remain explicit producer obligations. This
@@ -5847,6 +5855,12 @@ pre-LOG memory window.  `of_logWith_image` transports `Mem.Wf` and a
 proof-carrying `Mem.Reads` image across that same fixed fragment.
 `of_logWith201_val` remains the convenient specialized form for the common
 ERC-20 three-topic, one-word event.
+
+Four consecutive word stores read back as one 128-byte window (a four-word ABI
+event staged at the free pointer): `Mem.read_four_word_writes` in
+[`Blanc/Lift/WordWindowMemory.lean`](../Blanc/Lift/WordWindowMemory.lean),
+listed with the other free-pointer images under
+[C9.12](#c912-i-need-free-pointer-memory-images-or-solc-04-writer-walks).
 
 ### M3. The goal is carrying a known memory word across execution
 
@@ -8041,6 +8055,11 @@ current recipe matchers have no forward-transition shape to bind.
   already-proved settlement as one fold step. Message level only: no transaction admission.
   Worked uses: `vminus_attack` (`Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Reach/ViolFinal.lean`)
   and `vplus_exit` (`Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exit/Capstone.lean`).
+- For a `CREATE2` address from an init-code digest, admitted `CREATE2` spawns,
+  or an EIP-1167 clone of a lifted implementation, use
+  [`Blanc/Lift/Create2Deploy.lean`](../Blanc/Lift/Create2Deploy.lean) and
+  [`Blanc/Lift/Clone1167.lean`](../Blanc/Lift/Clone1167.lean), described under
+  [C9.11](#c911-i-need-deployment-create-create2-or-a-clone).
 
 ### C3. I need a parameter-neutral runtime or creation template
 
@@ -8331,6 +8350,13 @@ both budgets are per-declaration. The lemma changes no statement, emits no
 byte, and needs neither `native_decide` nor a `maxRecDepth`/`maxHeartbeats`
 raise.
 
+For a lifted certificate over deployed bytes, read the code through
+`code.data.toList` (`ByteArray.toList` is quadratic in the kernel) and decide a
+large entry on the trie-reading copies of
+[`Blanc/Lift/CheckFast.lean`](../Blanc/Lift/CheckFast.lean); the measured rule is
+in the certificate entry of
+[C9.1](#c91-i-need-the-lifted-language-and-a-checked-certificate).
+
 ### C9. I need to verify deployed bytecode Blanc did not compile
 
 The route is lift, then reason about the lifted program. A certificate is
@@ -8339,7 +8365,30 @@ execution into a run of the lifted program, and the contract's properties are
 proved over that run. The deployed WETH9 (`Blanc/Lift/Weth9/`) and the deployed
 beacon deposit contract (`Blanc/Lift/BeaconDeposit/`: loops, SHA-256 precompile calls,
 dynamic ABI decoding, events) are the worked examples; every module below is
-contract-neutral.
+contract-neutral except the contract-owned adapters of C9.14 and C9.15, which
+other proofs over the same deployed contract reuse.
+
+Route map. Find the need below; each module is cited in the sub-branch whose
+need it serves, and [`docs/MODULE_INVENTORY.md`](MODULE_INVENTORY.md) lists
+every shared module with its own summary and the branches that cite it.
+
+- [C9.1](#c91-i-need-the-lifted-language-and-a-checked-certificate): the lifted language and a checked certificate.
+- [C9.2](#c92-i-need-to-connect-a-real-execution-with-a-lifted-run): to connect a real execution with a lifted run.
+- [C9.3](#c93-i-need-the-free-pointer-or-write-site-checkers-soundness): the free-pointer or write-site checker's soundness.
+- [C9.4](#c94-i-need-what-one-lifted-step-does): what one lifted step does.
+- [C9.5](#c95-i-need-hashed-storage-slots-write-locality-or-demanded-zero-cells): hashed storage slots, write locality or demanded zero cells.
+- [C9.6](#c96-i-need-the-calls-child-frames-and-logs-of-a-lifted-frame): the calls, child frames and logs of a lifted frame.
+- [C9.7](#c97-i-need-every-execution-prefix-to-a-node-whatever-the-outcome): every execution prefix to a node, whatever the outcome.
+- [C9.8](#c98-i-need-facts-at-a-checked-cursor-of-an-actual-successful-execution): facts at a checked cursor of an actual successful execution.
+- [C9.9](#c99-i-need-to-walk-a-successful-lifted-run): to walk a successful lifted run.
+- [C9.10](#c910-i-need-a-vyper-02-runtimes-idioms): a Vyper 0.2 runtime's idioms.
+- [C9.11](#c911-i-need-deployment-create-create2-or-a-clone): deployment, CREATE, CREATE2 or a clone.
+- [C9.12](#c912-i-need-free-pointer-memory-images-or-solc-04-writer-walks): free-pointer memory images or solc-0.4 writer walks.
+- [C9.13](#c913-i-need-a-whole-contract-property-without-per-path-walks): a whole-contract property without per-path walks.
+- [C9.14](#c914-i-need-the-uniswap-v2-pairs-shared-adapters): the Uniswap V2 Pair's shared adapters.
+- [C9.15](#c915-i-need-the-usdc-proxy-history-adapters): the USDC proxy-history adapters.
+
+#### C9.1. I need the lifted language and a checked certificate
 
 - The lifted language: `SFunc` (a tree whose jumps are resolved to entry
   indices), `SFunc.Run`/`SProg.Run` and the derivation-carrying
@@ -8379,6 +8428,32 @@ contract-neutral.
   `jumpdestOkT` with its equality `jumpdestOkT_eq` to `jumpdestOk`, live in the
   Lift-free [`Blanc/CodeTrie.lean`](../Blanc/CodeTrie.lean), with `windowT` and
   `getInst_windowT` (the instruction at a position, decoded from its 33-byte trie window).
+- Bytecode whose control flow runs through `PC`, constant arithmetic, constant
+  `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
+  memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
+  constant arithmetic (including top-first `DIV`, with zero denominator),
+  comparison and bitwise `AND`/`OR` folds (`foldConst`) and
+  decided `JUMPI`s (`AVal.jumps?`) are part of `checkNode`; the memory-tracking
+  checker `checkNodeM`/`Cert.checkM` over declared
+  maps (`absMem`, `memTop`, `memCompat`; `checkNode_eq_checkNodeM` with tracking
+  off) in [`Blanc/Lift/CheckMem.lean`](../Blanc/Lift/CheckMem.lean); the invariant
+  `MemMatches`, the return address in frame or map (`RetIn`) and the
+  per-instruction facts `absMem_sound`, `memTop_sound`, `step_mem_sound` (covered
+  fork), `staticcall_run_memory` (a `STATICCALL` changes memory only inside its
+  output window), `Mem.write_agree` (needs no `Mem.Wf`), `Mem.extends_agree` and
+  `Mem.AgreeOutside.trans`/`.mono` in
+  [`Blanc/Lift/MemMap.lean`](../Blanc/Lift/MemMap.lean); `lift_soundM` in Sound,
+  `lift_exactM`/`Cert.jumpsOkM` in Exact, trie mirrors `checkNodeMT`/`jumpsOkNodeMT`
+  in CheckFast. Produce with `scripts/lift/lift.py --memret callnext --const-mem`
+  (`--frame-loops` for Vyper 0.2.x frame save/restore loops, `--mem-calls` to keep the
+  map across `GAS` and constant-window `STATICCALL`).
+  The state-gas-capability forms are `staticcall_run_memory_noStateGas`,
+  `absMem_sound_noStateGas` and `step_mem_sound_noStateGas`. They preserve
+  the same bounded output-window and memory-map invariants using actual
+  selected access/delegation rules. Existing covered theorem statements
+  forward to these cores. Select these routes from the actual instruction
+  and memory-map premises; a general equality or memory-preservation goal
+  alone does not distinguish them from writes, extension or pure steps.
 - Assemble a single-entry non-memory certificate with `Cert.check_singleton` in
   [`Blanc/Lift/CheckAssembly.lean`](../Blanc/Lift/CheckAssembly.lean). Supply the
   existing startup Boolean and sole `checkNode` result; the theorem preserves
@@ -8414,14 +8489,19 @@ contract-neutral.
   [`Blanc/Lift/WriteSiteChain.lean`](../Blanc/Lift/WriteSiteChain.lean), emitted by the registered
   `scripts/lift/ws_annot.py` (registry key `ws`). Worked use: `Blanc/Lift/Usdc/ImplWs/Check.lean`,
   `Blanc/Lift/Usdc/ImplWs.lean`.
-- To relate the unsigned ABI word-length guards to a natural calldata bound,
-  use `word_calldata_guards_iff` in
-  [`Blanc/Lift/CalldataGuards.lean`](../Blanc/Lift/CalldataGuards.lean).
-  With both the actual calldata length and argument-byte count below `2^256`,
-  the guards `4 ≤ length` and `n ≤ length - 4` on words are equivalent to
-  `n + 4 ≤ length` on naturals. The representability hypotheses are explicit;
-  a modular length alone does not establish the natural bound. This arithmetic
-  equivalence has no execution-relation trigger, so discovery stays here.
+- Sharpening a checked certificate's declared entry frames without re-deciding every entry:
+  [`Blanc/Lift/CertRefine.lean`](../Blanc/Lift/CertRefine.lean). `Cert.refine c k i v` replaces position `i` of entry `k`'s
+  frame and keeps every tree (`Cert.refine_prog`, `Cert.refine_getElem?_ne`);
+  `Cert.check_of_agree` reduces the refined certificate's `Cert.check` to the entries of a list `T`
+  (re-decided through `Cert.entryOk`, trie form `Cert.entryOkT` with `Cert.entryOkT_eq`) when every
+  other entry is unchanged and references no refined entry (`checkNode_congr`). Worked use:
+  `Blanc/Lift/Usdc/ImplFrames.lean`.
+- Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
+  replaces its exponential `jumpable` by the linear `jumpdestOk` scan, for every
+  byte string; Blanc keeps no copy.
+
+#### C9.2. I need to connect a real execution with a lifted run
+
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
@@ -8435,38 +8515,128 @@ contract-neutral.
   direct capability carriers; a general `SProg.Run` or `RunP` goal does not
   select this route from other constructive program proofs. These successful
   execution theorems assert neither opcode availability nor no-deletion.
-- For one lifted step's effect on memory, use
-  [`Blanc/Lift/StepMemory.lean`](../Blanc/Lift/StepMemory.lean): the stack-pop
-  forms `Devm.pop_cons`/`popToNat_cons`/`popToAdr_cons`, `genericCall_memory`,
-  `genericCreate_memory`, `resume_create_memory`, the `run_*_memory` lemmas for
-  `CALL`, `DELEGATECALL`, `STATICCALL`, `CREATE2`, `BALANCE`, `EXTCODESIZE`,
-  `EXTCODEHASH`, `EXP`, `MSTORE8`, `CODECOPY`, `RETURNDATACOPY` and `MLOAD`, and
-  `Mem.write_size_ge` (a write never shrinks memory). The
-  `run_call_memory_noStateGas`, `run_delegatecall_memory_noStateGas`,
-  `run_staticcall_memory_noStateGas` and `run_create2_memory_noStateGas`
-  variants consume the executing rules' `stateGas = none`; their covered-fork
-  counterparts are projections of the same proofs. `run_selfbalance_memory`
-  preserves memory from the actual successful instruction, without a fork premise.
-- For crossing solc's word-copy loop without knowing the copied bytes, use
-  [`Blanc/Lift/CopyLoopKeep.lean`](../Blanc/Lift/CopyLoopKeep.lean):
-  `copy_loop_keep` (under the memory potential the loop leaves every byte below
-  the destination alone and exits with `len ≤ i'`).
-  `copy_loop_keep_nonstorage` shares that proof without a fork premise; the
-  original interface remains a compatibility projection.
+- Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
+  `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
+  the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
+  over the gas-carrying state `St`, a frame's entry state as an `St` (`pre_eq_St`), the
+  `St` projections (`St.stack`, `St.memory`, `St.gasLeft`, `St.returnData`, `St_error`,
+  `St_state`, `St_getCode`, `St_getStor`: `St` replaces only the machine), the
+  word read-back facts `sliceD_word_same` and `read_covered`, and one solc dispatcher
+  comparison (`cmp_miss`, `cmp_hit`) are in
+  [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean). The fixed-cost
+  `rx_sload_cold` and `rx_sload_warm` constructors require both
+  `sevm.benvStat.rules.stateGas = none` and selected access pricing
+  `sevm.benvStat.rules.access = .eip2929`; flat historical schedules do not
+  have their exact 2100/100 charges. More steps
+  (`rx_shl`, `rx_xor`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) are in
+  [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean). `rx_shl`/`rx_shr`
+  require the selected `rules.op.shifts = true` capability. Beacon's `le_half1`,
+  `le_mid`, and `to_little_endian_64_run` in
+  [`LittleEndian.lean`](../Blanc/Lift/BeaconDeposit/LittleEndian.lean) carry that
+  condition through their forward walks; arbitrary continuation evidence does
+  not supply it. The generic success-inversion statements remain unchanged.
+  The cut-run `rxc_shl` requires the same capability. To obtain it from a fixed
+  run witness rather than a premise, use
+  [`Blanc/Lift/ExactMustRun.lean`](../Blanc/Lift/ExactMustRun.lean):
+  `SFunc.mustRun p K f` (a Boolean walk: every successful `SFunc.RunExact` from
+  `f` executes an instruction selected by `p`, with jump/call targets in the
+  entries `K`, checked by `SFunc.mustRunEntries p fs K`; `REVERT` leaves have no
+  successful run; loops are covered), `SFunc.RunExact.of_mustRun` for any fact a
+  selected step implies, and its shift instance `SFunc.RunExact.shifts_of_mustRun`
+  (`Ninst.isShift`, `Ninst.RunCompiled.shifts_of_isShift`); discharge both checks
+  with `decide +kernel` on the concrete tree. `CoveredFork.rules_shifts`
+  (`Blanc/Semantics.lean`) supplies the capability from fork coverage.
+  The cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
+  [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
+  [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean), which
+  also holds the pointer arithmetic the steps take as premises
+  (`toB256_div_two`, `one_add_toB256`; word addition and subtraction of naturals are Jaune's
+  `Nat.toB256_add_toB256` and `Nat.toB256_sub_toB256`), the
+  SHA-256 precompile step's premises and world facts (`ShaReady`, `ShaCallPost`,
+  `staticcall_sha_step`), and `BaseRel`, the world a step that writes no storage and emits
+  no log keeps.
+- Concrete runs checked by kernel evaluation of Jaune's own `Evm.step`:
+  `ConcreteRun.stepN` (at most `n` continuing steps), `stepN_add`, `stepN_sta`, and the
+  bridges into the canonical derivation `ConcreteRun.exec_of_stepN`,
+  `exec_of_stepN_halt` and `exec_of_stepN_spawn_runOk` (across one `.spawn`), in
+  [`Blanc/ConcreteRun.lean`](../Blanc/ConcreteRun.lean). Worked use:
+  `Blanc/Lift/VyperNonreentrantDeployed/Concrete/ProxyConcrete.lean`.
+- A concrete frame run over a lifted certificate, as a gas-exact `SProg.RunExact`
+  (an executable witness: liveness from one start state, by kernel evaluation): the
+  interpreter `Witness.wrun` over the certificate's decoded tree, its single step
+  `wstep`, the configuration `Cfg` with the accessed-set and storage/account shadows
+  (`StorShadow`, `AcctShadow`, `storOf`, `AcctAgree`), Jaune's `State.set`
+  directly (kernel-reducible at the pinned Jaune), the kernel-cheap memory write
+  `memWriteB` (with `mem_write_eq_B`), the `CALL`
+  preparation `callPrep`/`callPrep_spec`, and chunk composition `wrun_add`/`wrun_add_cont`
+  in [`Blanc/Lift/WitnessArms.lean`](../Blanc/Lift/WitnessArms.lean). Transfer
+  shadows use `storSetBal` and `storTransfer`: account deletion filters every
+  cell at that owner, debit precedes credit, and zero value leaves the shadows
+  unchanged. `lookupS_filter_owner`, `storSetBal_agree`, and
+  `benvAfterTransferS_stor` prove these exact storage projections;
+  `acctView_clearIfEmpty` preserves the account-view fields. The raw
+  `storOf_setBal` now returns a conditional zero for deletion, and
+  `benvAfterTransferB_stor` concludes agreement with the transferred shadow.
+  `frameEnterB_done_acc` preserves accessed sets; use the separate
+  `frameEnterB_done_ok_state` for a successful child's actual transfer world.
+  The soundness theorem `Witness.wrun_exact` (from `wrun_cont`/`wrun_done` over `RunK`/`Agree`), the
+  shadow seeds `stateFoldAcct`/`stateFoldStor`, and code children supplied as data
+  (`ChildOk`, `ChildAgree`, `callResume`) in
+  [`Blanc/Lift/Witness.lean`](../Blanc/Lift/Witness.lean). A code child discharged by its
+  own witness run: `childStart`/`childStart_agree`, `childRun`, `childOk_of_start`,
+  `childOk_of_childRun`, `frame_of_wrun`, `childAgree_of_halt`, and the DELEGATECALL
+  preparation `dcallPrep`/`dcallPrep_spec`, in
+  [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean). `frame_settle_ok` and
+  `frame_of_wrun` require the frame's selected `settle.touchedSweep = false` capability;
+  `childOk_of_start` and `childOk_of_childRun` derive it from their existing covered-fork
+  evidence. `Witness.wrun_exact` remains generic. Historical settlement still needs a
+  producer that retains `recordTouch` and the touched-account metadata. Child starts
+  (`childStart`, `NodeWalk.childCfg`, and explicit `frame_of_wrun` inputs) use
+  `storTransfer` alongside `acsTransfer`; reusing the pre-transfer storage
+  shadow requires a separate no-change proof. That proof is
+  `transferKeepsStor m acs` (decided by evaluation: no value moves, or both
+  endpoints have a nonzero shadow nonce) with `storTransfer_of_keeps`, and
+  `frameStart_agree_keep` is `frameStart_agree` with the parent's storage shadow
+  itself (`storSetBal_of_nonce`, `lookupA_acsSetBal_nonce` underneath);
+  `haltCreated` projects a run's halted created set for a kernel decision. A
+  settled child supplied as data is restored by `Devm.withCreatedAccounts_of_eq`
+  (`Blanc/CommonProofs/Base.lean`). The frame-level spawn
+  fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
+  `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
+  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); reading a run's final
+  shadow expressed as a prefix appended to a base shadow, without enumerating addresses or keys:
+  `lookupA_append_of_restate` (a prefix restating the start's views changes no account),
+  `lookupS_append_of_ne` (writes elsewhere leave an address's storage),
+  `lookupS_append_of_absent` (a start with nothing at the address leaves the prefix's values)
+  and `lookupS_eq_zero_of` (only zero entries at a key) in
+  [`Blanc/Lift/WitnessShadow.lean`](../Blanc/Lift/WitnessShadow.lean); the literal-free
+  scaffolding for deciding a long `wrun` as kernel chunks between literal boundaries
+  (`Boundary.Bnd`/`obsB`/`cfgOf`/`obsD`/`obsDOk`, their composition `obsD_chain`,
+  `obsD_chain3`, `obsB_of_obsD`, `run_of_obsB` (every boundary also records that the frame's
+  accounts to delete are still empty and that the transaction's created accounts are empty,
+  `AtdClean`: `SSTORE`'s original read consults the created set, so a chunk over free
+  bookkeeping is decided with it fixed; a settled child supplied as data must likewise carry
+  an empty created set, e.g. `childObs … (d.withCreatedAccounts .emptyWithCapacity)`);
+  `Bnd1`/`cfgOf1`/`obsD1`/
+  `obsDOk1` with the refund counter and the accounts to delete optional (the created set always
+  empty); and a two-code-child frame's staging `callPairFrom`/`callPairA`/`callPairB`/
+  `callPairFrom_stages`) in
+  [`Blanc/Lift/WitnessBoundary.lean`](../Blanc/Lift/WitnessBoundary.lean). Code tries given as
+  generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in
+  [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean); the data checked in one
+  linear pass that also yields the length bound (`LTrie.build`, `LTrie.build_eq`,
+  `LTrie.eq_ofList_of_build`, `LTrie.length_le_of_build`; producer option `check.trie_build`) in
+  [`Blanc/Lift/CodeTriesBuild.lean`](../Blanc/Lift/CodeTriesBuild.lean). Worked use:
+  `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean` (`vminus_witness`).
+
+#### C9.3. I need the free-pointer or write-site checker's soundness
+
 - For the free-pointer checker's memory effect, use
   [`Blanc/Lift/FreePtrMem.lean`](../Blanc/Lift/FreePtrMem.lean): `FpWord`
   (the pointer word's meaning), `memEff_fpWord`, `memEff_touched`,
   `memEff_obs` and `memEff_mload_top`. `memEff_fpWord_noStateGas` uses the
   executing rules' state-gas absence with the same checker and memory-effect
   proof; `memEff_fpWord` retains its original covered-fork interface.
-- For the static code an instruction reads, use
-  [`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean):
-  `Ninst.step_withCode` (only `CODESIZE`/`CODECOPY` read the static code),
-  `codeAt`/`codeAt_at`/`codeAt_size` (the code that decodes to one
-  instruction at `pc` and to the implicit `STOP` after it),
-  `getInst_of_size_le` (past the end of the code the decoder yields that
-  `STOP`), and `Evm.step_stop_of_size_le` (the implicit `STOP` halts with
-  the machine unchanged).
 - For the free-pointer checker's facts and their soundness, use
   [`Blanc/Lift/FreePtr.lean`](../Blanc/Lift/FreePtr.lean),
   [`Blanc/Lift/SymTransfer.lean`](../Blanc/Lift/SymTransfer.lean), and
@@ -8568,6 +8738,29 @@ contract-neutral.
   mapping producer and all-version raw allowance classifier use this shared
   extraction. These existential site results have no reliable registered
   goal-head trigger; use this branch rather than a broad `Exists` recipe.
+
+#### C9.4. I need what one lifted step does
+
+- For one lifted step's effect on memory, use
+  [`Blanc/Lift/StepMemory.lean`](../Blanc/Lift/StepMemory.lean): the stack-pop
+  forms `Devm.pop_cons`/`popToNat_cons`/`popToAdr_cons`, `genericCall_memory`,
+  `genericCreate_memory`, `resume_create_memory`, the `run_*_memory` lemmas for
+  `CALL`, `DELEGATECALL`, `STATICCALL`, `CREATE2`, `BALANCE`, `EXTCODESIZE`,
+  `EXTCODEHASH`, `EXP`, `MSTORE8`, `CODECOPY`, `RETURNDATACOPY` and `MLOAD`, and
+  `Mem.write_size_ge` (a write never shrinks memory). The
+  `run_call_memory_noStateGas`, `run_delegatecall_memory_noStateGas`,
+  `run_staticcall_memory_noStateGas` and `run_create2_memory_noStateGas`
+  variants consume the executing rules' `stateGas = none`; their covered-fork
+  counterparts are projections of the same proofs. `run_selfbalance_memory`
+  preserves memory from the actual successful instruction, without a fork premise.
+- For the static code an instruction reads, use
+  [`Blanc/Lift/MemPotential.lean`](../Blanc/Lift/MemPotential.lean):
+  `Ninst.step_withCode` (only `CODESIZE`/`CODECOPY` read the static code),
+  `codeAt`/`codeAt_at`/`codeAt_size` (the code that decodes to one
+  instruction at `pc` and to the implicit `STOP` after it),
+  `getInst_of_size_le` (past the end of the code the decoder yields that
+  `STOP`), and `Evm.step_stop_of_size_le` (the implicit `STOP` halts with
+  the machine unchanged).
 - For which bytes one lifted step wrote, use
   [`Blanc/Lift/MemWrites.lean`](../Blanc/Lift/MemWrites.lean): `Mem.WritesAt`/`AgreeBelow`
   (the capability forms `call_run_writesAt_noStateGas`,
@@ -8586,25 +8779,20 @@ contract-neutral.
 - For the return-data buffer across one lifted step, use
   [`Blanc/Lift/ReturnDataKeep.lean`](../Blanc/Lift/ReturnDataKeep.lean): `regular_returnData` and
   `Ninst.Run.reg_returnData` (every regular instruction keeps `returnData`).
-- For a `DELEGATECALL` whose child must be inspected, use
-  [`Blanc/Lift/DelegateCallChild.lean`](../Blanc/Lift/DelegateCallChild.lean): `ri_delegatecall_child`
-  (after a lifted `DELEGATECALL` step: the success flag, and when set a successful child `Exec 0` that runs
-  the target's code on the input window from an empty machine with the parent's code and `benvStat`, its
-  output written into the output window), `delegatecall_generic` and `Frame.ofCall_enter_not_done`.
-  `delegatecall_generic_noStateGas` and `ri_delegatecall_child_noStateGas`
-  use the executing access/delegation rules and state-gas absence, retaining
-  the same actual child, block statics, code and output-window witnesses.
-- For crossing a silent internal call under any step relation, use
-  [`Blanc/Lift/SilentCallP.lean`](../Blanc/Lift/SilentCallP.lean): `ricP_call_silent`, the `RunCutP P` form
-  of `ric_call_silent`, with a no-halt set so the callee must return.
-  `ricP_call_silent_noStateGas` consumes the executing rules' state-gas absence
-  and keeps the same state equality and returned stack.
-- For a callee that cannot return, use
-  [`Blanc/Lift/NodeRet.lean`](../Blanc/Lift/NodeRet.lean): `RetClosed` (a node
-  predicate with `checkNode`'s return discipline), `SFunc.RunP.ret_mem` (a
-  returning run starts from a frame holding `.ret`) and
-  `SFunc.RunP.not_returned_of_noRet` (a callee whose frame has no `.ret` never
-  returns), bytes-free and for any step relation.
+- To relate the unsigned ABI word-length guards to a natural calldata bound,
+  use `word_calldata_guards_iff` in
+  [`Blanc/Lift/CalldataGuards.lean`](../Blanc/Lift/CalldataGuards.lean).
+  With both the actual calldata length and argument-byte count below `2^256`,
+  the guards `4 ≤ length` and `n ≤ length - 4` on words are equivalent to
+  `n + 4 ≤ length` on naturals. The representability hypotheses are explicit;
+  a modular length alone does not establish the natural bound. This arithmetic
+  equivalence has no execution-relation trigger, so discovery stays here.
+
+#### C9.5. I need hashed storage slots, write locality or demanded zero cells
+
+- Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
+  slot and, with the arguments swapped (slot first), Vyper's, in
+  [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean).
 - For write-site provenance terms and the generic locality corollary, use
   [`Blanc/Lift/WriteSite.lean`](../Blanc/Lift/WriteSite.lean),
   [`Blanc/Lift/WriteSiteTerm.lean`](../Blanc/Lift/WriteSiteTerm.lean),
@@ -8808,57 +8996,174 @@ contract-neutral.
   entry from `rawFrame_entryFacts` and keep success, code and `RowSep` as frame
   facts; V2 and V2_1 add `rules.bal = none` on the history's forks and address
   1's code without a delegation designator.
-- Bytecode whose control flow runs through `PC`, constant arithmetic, constant
-  `JUMPI` conditions or memory (Vyper 0.2 internal calls keep the return tag in
-  memory): `SFunc.pcAt` (a `PC` carrying its own pc) in `Blanc/Lift/Basic.lean`;
-  constant arithmetic (including top-first `DIV`, with zero denominator),
-  comparison and bitwise `AND`/`OR` folds (`foldConst`) and
-  decided `JUMPI`s (`AVal.jumps?`) are part of `checkNode`; the memory-tracking
-  checker `checkNodeM`/`Cert.checkM` over declared
-  maps (`absMem`, `memTop`, `memCompat`; `checkNode_eq_checkNodeM` with tracking
-  off) in [`Blanc/Lift/CheckMem.lean`](../Blanc/Lift/CheckMem.lean); the invariant
-  `MemMatches`, the return address in frame or map (`RetIn`) and the
-  per-instruction facts `absMem_sound`, `memTop_sound`, `step_mem_sound` (covered
-  fork), `staticcall_run_memory` (a `STATICCALL` changes memory only inside its
-  output window), `Mem.write_agree` (needs no `Mem.Wf`), `Mem.extends_agree` and
-  `Mem.AgreeOutside.trans`/`.mono` in
-  [`Blanc/Lift/MemMap.lean`](../Blanc/Lift/MemMap.lean); `lift_soundM` in Sound,
-  `lift_exactM`/`Cert.jumpsOkM` in Exact, trie mirrors `checkNodeMT`/`jumpsOkNodeMT`
-  in CheckFast. Produce with `scripts/lift/lift.py --memret callnext --const-mem`
-  (`--frame-loops` for Vyper 0.2.x frame save/restore loops, `--mem-calls` to keep the
-  map across `GAS` and constant-window `STATICCALL`).
-  The state-gas-capability forms are `staticcall_run_memory_noStateGas`,
-  `absMem_sound_noStateGas` and `step_mem_sound_noStateGas`. They preserve
-  the same bounded output-window and memory-map invariants using actual
-  selected access/delegation rules. Existing covered theorem statements
-  forward to these cores. Select these routes from the actual instruction
-  and memory-map premises; a general equality or memory-preservation goal
-  alone does not distinguish them from writes, extension or pure steps.
-- Every execution prefix to a certificate node (all outcomes, no success
-  premise): the certificate cursor `Cursor`/`Cont`, its invariant `CursorOK`
-  (checked node, pc, stack segments matched per pending function), the
-  synthetic step `SStep`, `cursor_start`, `cursor_step` (one `ParentStep`,
-  including a `CALL` over a child of any outcome, is one `SStep`) and
-  `cursor_of_parentPrefix`, with `CursorOK.exec_spawn` (a reached node spawns
-  only by `CALL`, `STATICCALL`, `CREATE2` or `DELEGATECALL`) and, for a certificate with
-  `Cert.callOnly` (no `CREATE2` or `DELEGATECALL` node), `Cursor.callOnly_of_reach` and
-  `CursorOK.exec_call_or_staticcall` (only `CALL`/`STATICCALL`), in
-  [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
-  With only selected state-gas absence, use
-  `Cursor.absNinst_run_stack_noStateGas`, `cursor_stepS_noStateGas`,
-  `cursor_step_noStateGas`, `cursor_of_parentPrefix_noStateGas` and
-  `reach_of_parentPrefix_noStateGas` in the same module. They retain the
-  exact actual same-frame edge/prefix, cursor invariant and child provenance,
-  cover every frame outcome, and add no success premise. Original modern
-  statements forward to these cores; no cursor/checker carrier changed.
-  Their existential step/reach conclusions require the joint certificate and
-  actual-edge/prefix premises, so select the route here rather than matching
-  an arbitrary existential or reachability goal.
-  `CursorOK.tree_of_last` places an actual decoded terminal instruction
-  at the cursor's checked `.last` node. It uses only `CursorOK` and
-  `Linst.At`, with no fork or successful-outcome premise. This is terminal
-  decoding, not a claim that the certificate excludes `SELFDESTRUCT`;
-  `Cert.callOnly` continues to permit every terminal instruction.
+
+#### C9.6. I need the calls, child frames and logs of a lifted frame
+
+- For a `DELEGATECALL` whose child must be inspected, use
+  [`Blanc/Lift/DelegateCallChild.lean`](../Blanc/Lift/DelegateCallChild.lean): `ri_delegatecall_child`
+  (after a lifted `DELEGATECALL` step: the success flag, and when set a successful child `Exec 0` that runs
+  the target's code on the input window from an empty machine with the parent's code and `benvStat`, its
+  output written into the output window), `delegatecall_generic` and `Frame.ofCall_enter_not_done`.
+  `delegatecall_generic_noStateGas` and `ri_delegatecall_child_noStateGas`
+  use the executing access/delegation rules and state-gas absence, retaining
+  the same actual child, block statics, code and output-window witnesses.
+- For crossing a silent internal call under any step relation, use
+  [`Blanc/Lift/SilentCallP.lean`](../Blanc/Lift/SilentCallP.lean): `ricP_call_silent`, the `RunCutP P` form
+  of `ric_call_silent`, with a no-halt set so the callee must return.
+  `ricP_call_silent_noStateGas` consumes the executing rules' state-gas absence
+  and keeps the same state equality and returned stack.
+- For a callee that cannot return, use
+  [`Blanc/Lift/NodeRet.lean`](../Blanc/Lift/NodeRet.lean): `RetClosed` (a node
+  predicate with `checkNode`'s return discipline), `SFunc.RunP.ret_mem` (a
+  returning run starts from a frame holding `.ret`) and
+  `SFunc.RunP.not_returned_of_noRet` (a callee whose frame has no `.ret` never
+  returns), bytes-free and for any step relation.
+- An `EXTCODESIZE` step with the actual warm/cold account access is in
+  [`Blanc/Lift/CodeSizeWalk.lean`](../Blanc/Lift/CodeSizeWalk.lean).
+  `temporalAccountAccessBase` and `temporalAccountAccessCost` name the selected
+  successor world and charge; `temporal_extcodesize_runCompiled` supplies the
+  compiled step from the code-size word, stack-room and covered-fork facts.
+  `ri_extcodesize` inverts the actual instruction into that world, exact word,
+  unchanged memory and residual gas. `rx_extcodesize` consumes an exact
+  continuation at the selected warm/cold charge.
+  `temporalAccountAccessBase_state`, `temporalAccountAccessBase_output` and
+  `temporalAccountAccessBase_logs` project the unchanged state, output and logs
+  through account warming. `temporalAccountAccessBase_getStor` and
+  `temporalAccountAccessBase_getCode` in
+  [`Blanc/Lift/AccountAccessState.lean`](../Blanc/Lift/AccountAccessState.lean)
+  preserve storage and code at every address. Use these facts to compose an observed call without
+  unfolding the nested world update; the Pair mint prefix consumes all three.
+  The existing Lido temporal access names are compatibility declarations over
+  this common owner.
+  For the separate flat-pricing route, use
+  `Ninst.runCompiled_extcodesize_flat` in
+  [`Blanc/ForwardFlatAccess.lean`](../Blanc/ForwardFlatAccess.lean), with explicit
+  flat prices and disabled BAL recording. Its successor retains the original
+  base and actual code-size word; use `Ninst.exec_of_stepRun` for continuation.
+  Neither route proves nonzero code size, callee liveness or the concrete
+  constructor execution.
+- A callee that fails on every input: `revertingCode` (`PUSH0 PUSH0 REVERT`); every pc-zero
+  frame over it ends in an error (`revertingCode_exec_error`, via the generic non-spawning
+  step inversion `Exec.ofExecution_inv`); an ordinary non-precompile message over it never
+  settles cleanly (`processMessage_not_clean_of_reverting`); and no static child message to
+  an account holding it answers (`not_staticAnswered_of_reverting`), which refutes the
+  `StaticAnswered` witness a successful-flag `STATICCALL` inversion retains. Use it for
+  failing-callee (callee-premise) controls, in
+  [`Blanc/Lift/RevertingCallee.lean`](../Blanc/Lift/RevertingCallee.lean).
+- A callee silent on one selector, whatever its code: `NoStaticAnswer code sel` (no
+  static child message to a non-precompile account holding `code` answers calldata
+  with selector `sel`), which refutes the same `StaticAnswered` witness. The Pair
+  proves the `0x1626ba7e` instance in its own stratum; the USDC library side takes it
+  as a hypothesis. Use it for selector-silence (answered-call) refutations, in
+  [`Blanc/Lift/StaticSilent.lean`](../Blanc/Lift/StaticSilent.lean).
+  `NoStaticAnswerH` uses `NeutralFork` and the actual-rule `StaticAnsweredH`
+  witness; `NoStaticAnswerH.toCovered` recovers the original interface.
+  `UniswapV2Pair.not_staticAnswered_pairH` shares the same message-entry and
+  settlement proof, using `staticView_bytecode_invH` and canonical actual-flag
+  call-code resolution. The modern Pair theorem projects from it. This supplies
+  the historical silence boundary for contract-signature consumers; it does
+  not by itself migrate the USDC library or establish owner rejection.
+  The first library consumers in `Blanc/Lift/Usdc/LibReject.lean` are
+  `lib_run_cut_noStateGas` (the actual successful bytecode cut) and
+  `lib_e8_invH` (the `isContract` branch with the executing rules' account-access
+  successor). The shared nonstorage memory walks retain their modern interfaces;
+  the static-call tail uses actual `StaticAnsweredH` and silence restricted to
+  the same executing environment, preserving the old global silence interface.
+  `Usdc.lib_rejects_pairH` now supplies the complete raw historical rejection
+  under `NeutralFork` and historical Pair silence, sharing the original decoder
+  and selection proof. In `Blanc/Lift/Usdc/LibSeam.lean`, `LibRejectsH` and
+  `LibSeam.lib_rejects_pairH` expose its fresh-frame interface. `LibRejectsAt`
+  restricts rejection to actual children with the same `benvStat`;
+  `LibRejects.at_of_covered` and `LibRejectsH.at_of_neutral` supply it without
+  converting the old global capability into a stronger one.
+  In `Blanc/Lift/Usdc/SignedSites.lean`, `tail3_false_nonstorage`,
+  `tail2_false_noStateGas` and `tail1_falseH` reuse the original result-word,
+  delegate-child and account-access tails with that same-environment capability.
+  `sx_nonstorage` orchestrates canonical nonstorage inversions;
+  `usdcLib_not_precompile_any` proves the fixed library address exclusion for
+  each actual fork. The original covered interfaces remain projections.
+  Selected permit consumers `ric_seg_e8digest_noStateGas` in
+  `Blanc/Lift/Usdc/ShuffleSegments.lean` and `ric_seg_w149_noStateGas` in
+  `Blanc/Lift/Usdc/RefineSignedPermitFrames.lean` reuse the original shuffle
+  checks. `skipP_78_noStateGas` and `skipP_79_noStateGas` in
+  `Blanc/Lift/Usdc/SignedPathsKit.lean` preserve the exact silent-call frames,
+  returned stacks and world-state equalities. `preambleP_nonstorage` preserves
+  the actual entry-to-dispatcher run without a fork premise. The encoding chain
+  `tail0_falseH`, `enc_falseH` and `site9_falseH` in SignedSites uses actual
+  state-gas/BAL absence and the same local rejection capability; it preserves
+  the original memory bounds, free-pointer observations and copy-loop proof.
+  `walk8H`, `walk94H`, `path_permitVrsH` and `path_permitBytesH` in
+  `Blanc/Lift/Usdc/SignedPathsPermit.lean` use actual SLOAD/SSTORE inversions
+  at the certified instruction positions, with canonical historical code
+  preservation and unchanged owner-word cleanup. Their original covered
+  interfaces remain projections. `impl_permit_pair_not_okH` in
+  `Blanc/Lift/Usdc/SignedPaths.lean` excludes successful Pair-owned calls for
+  the canonical V2_2 permit selectors, preserving the actual execution and
+  entry-world library/Pair code premises. Its dispatcher adaptation is shared
+  with the original covered endpoint.
+  `Blanc/Composition/UniswapV2PairUsdcOwnersIn.lean` supplies
+  `mid_retained_owner_excluded_from_installations_of_mid_roots` for the same
+  actual retained V2_2 frame (see the owner-exclusion paragraph below). The
+  P1 instance consuming these producers is
+  `pairUsdcAllowQuiet_of_connected_original_receipts_of_retained_actualKeys_constructor_bootstrap`
+  in [`UniswapV2PairUsdcRetainedP1.lean`](../Blanc/Composition/UniswapV2PairUsdcRetainedP1.lean),
+  over the exact `PairTouchedSpenders` of the consumed post-checkpoint trace
+  ([`UniswapV2PairUsdcWeth9P1.lean`](../Blanc/Composition/UniswapV2PairUsdcWeth9P1.lean)).
+- A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
+  (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
+  map and the log list kept) and, for a set flag, the successful static child message
+  (`StaticAnswered`), inverted (`ri_staticcall`) and forward over a caller-supplied step
+  (`rx_staticcall`), in [`Blanc/Lift/StaticCall.lean`](../Blanc/Lift/StaticCall.lean).
+  `StaticCallPost.output` retains the parent's enclosing output when the flag
+  is set; child bytes populate memory and `returnData`. It reuses
+  `Resume.call_output` in `Blanc/LadderBase.lean`.
+  `ri_staticcall_bounded` additionally derives `out.length < 2^256` from the
+  actual static-call producer, for the same outcome and full return data. This
+  bound is independent of the caller's output window and needs no callee premise.
+- A mutable `CALL` to an arbitrary callee: `MutableCallPost` (flag on top of the
+  rest; for a set flag, the output window written with a prefix of the full
+  return data and the caller's own output kept) and its inverse `ri_call_post`, in
+  [`Blanc/Lift/MutableCallPost.lean`](../Blanc/Lift/MutableCallPost.lean). Callee
+  storage effects are deliberately unstated; consume them through a turn fold over
+  the child derivation. The Pair swap callback consumes it.
+  For literal call-success and return-width guards around that primitive, use
+  [`Blanc/Lift/StaticCallGuard.lean`](../Blanc/Lift/StaticCallGuard.lean):
+  `staticCallGuard_invP` keeps the original instruction predicate and witness,
+  full reply, bounded producer and original continuation; `returnWidthGuard_invP`
+  derives the ABI minimum width from the actual guard. Their `_exact` forms
+  consume the genuine compiled call, actual returned stack/gas and continuation.
+  Request/output windows and `PtrMem` are parameterized; replies need not have
+  exactly32 bytes, and the returned world is not replaced by its pre-call world.
+  For an actual `Line.Run` through the comparison, use
+  `returnWidthCompareLine_inv` with `returnWidthCompareLine` and `PtrMem`.
+  It retains the actual post-state and comparison stack, including the full
+  returndata length converted to a word. Combine the bounded producer result
+  with the actual taken branch to derive the minimum width; the line alone
+  does not establish it. `returnWidthGuard_invP` reuses this single inversion
+  while retaining the residual cut's original instruction predicate.
+  The required literal tree and failure facts are not selected reliably by a
+  general `RunCutP` or `RunExact` goal head, so these entries remain registry-only.
+  `CALLER` (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`), `LOG3`
+  (`rx_log3`, `ri_log3`), `SSTORE` forward at its selected cost (`rx_sstore`), `RETURN`
+  inverted (`ri_return`), the memory facts `Mem.reads_data`/`Mem.read_write_word_of_wf`, and
+  the world projections after a store, log or return (`getStor_afterStore`,
+  `getStor_afterStore_ne`, `getStorVal_afterStore`, `logs_afterStore`, `getStor_addLog`,
+  `logs_addLog`, `getAcct_addLog`, `output_addLog`, `getStor_St_return`,
+  `logs_St_return`, `output_St_return`) are in
+  [`Blanc/Lift/WalkSteps.lean`](../Blanc/Lift/WalkSteps.lean), which also holds
+  exact forward `TIMESTAMP` (`rx_timestamp`, actual block-header time and two gas),
+  `SLT`, `TIMESTAMP`, `LOG2`, `TLOAD` and `TSTORE` inverted (`ri_slt`, `ri_timestamp`,
+  `ri_log2`, `ri_tload`, `ri_tstore`; `getStor_setTransVal`, `getCode_setTransVal`) and
+  `StorStep sevm b b' s`, a chain of loads and stores that changed only the executing
+  contract's storage (to `s`) and no log, built with `StorStep.refl`/`.sload`/`.sstore`/
+  `.trans`/`.congr`/`.of_getStor` and read with `StorStep.getStorVal`
+  (`getStorVal_eq_getStor` unfolds a word read).
+  `ri_log2_post` retains the precise added log (current target, both topics,
+  actual read bytes) and the read-expanded memory, leaving only residual gas
+  existential. `ri_log2` is its compatibility projection. Prove memory fit
+  before simplifying that returned memory to the input memory. This inverse
+  needs an existing instruction run and does not manufacture gas affordability;
+  its existential endpoint alone is not a reliable recipe trigger.
 - To discharge `SpawnKinds ca sem` without a certificate cursor (a `Cert.checkM`
   certificate has none), decide `callKindsCheck code` for the runtime bytes and apply
   `spawnKinds_of_callKindsCheck` (needs only `sem.Run sevm pre post → sevm.code = code`):
@@ -8890,34 +9195,306 @@ contract-neutral.
   post log is an entry log or was emitted at the current target of one of the execution's raw
   frames), e.g. to show no log comes from the deposit contract when the raw frames' targets are
   known, in [`Blanc/Lift/LogAddresses.lean`](../Blanc/Lift/LogAddresses.lean).
-- A frame predicate at every reachable cursor node: [`Blanc/Lift/CursorFrames.lean`](../Blanc/Lift/CursorFrames.lean).
-  `SFunc.framesSat es P` walks a tree with the abstract frames the checker computes and checks
-  `P n a` at every straight-line node; `Cert.framesSat` over every entry gives
-  `Cursor.framesSat_of_reachable` (through `SStep.framesSat`), `CursorOK.framesSat_exec` applies `P`
-  to a cursor-placed node's actual instruction and abstract frame, and `CursorOK.stack_const` with
-  `FrameMatches.getElem?_const` reads a `.const` frame position as the actual stack word. Worked
-  uses: `Blanc/Lift/QuietDelegateSkip.lean`, `Blanc/Lift/Usdc/ImplFrames.lean`.
-- Sharpening a checked certificate's declared entry frames without re-deciding every entry:
-  [`Blanc/Lift/CertRefine.lean`](../Blanc/Lift/CertRefine.lean). `Cert.refine c k i v` replaces position `i` of entry `k`'s
-  frame and keeps every tree (`Cert.refine_prog`, `Cert.refine_getElem?_ne`);
-  `Cert.check_of_agree` reduces the refined certificate's `Cert.check` to the entries of a list `T`
-  (re-decided through `Cert.entryOk`, trie form `Cert.entryOkT` with `Cert.entryOkT_eq`) when every
-  other entry is unchanged and references no refined entry (`checkNode_congr`). Worked use:
-  `Blanc/Lift/Usdc/ImplFrames.lean`.
-- To carry an exact fact forward from one certificate node to a later one along a frame's chain
-  (for example, that a `CALL`'s target operand is the result of an earlier `CREATE2`), use a
-  *window* in [`Blanc/Lift/CursorWindow.lean`](../Blanc/Lift/CursorWindow.lean): a finite list of
-  trees, each with its one predecessor and an index (`WindowEntry`); `Cert.windowOk E sites` checks
-  over the whole certificate that a window tree occurs only as a child of its predecessor and that
-  every `CALL` node is one of `sites`; along a checked chain (`Cursor.Checked`, `.step`,
-  `.entrance`, `.callSite`) `window_track` carries a property `Track j` one window edge at a time,
-  with no backward walk. Decide `Cert.windowOk` in its own module. The exact stack words the window
-  edges carry come from [`Blanc/Lift/PrefixTransfer.lean`](../Blanc/Lift/PrefixTransfer.lean):
-  `prefixTransfer` runs `ninstTransfer` on a prefix pattern of the stack, keeping `PUSH` literals
-  and `AND`s of known words (`padPattern` extends a short prefix for `DUP`/`SWAP`), with
-  success-only soundness `prefixTransfer_run`; `create2_run_result` and `genericCreate_result` give
-  the word a successful `CREATE2` leaves (the new address or zero). Worked use:
-  `Blanc/Lift/UniswapV2Factory/Window.lean` and `CallShape.lean` (`factory_call_target`).
+- Restrict external instruction families along a checked certificate cursor:
+  [`Blanc/Lift/CallRestriction.lean`](../Blanc/Lift/CallRestriction.lean) defines
+  `SFunc.execsSatisfy` and `Cursor.ExecsSatisfy` (active function and pending
+  returns). `SStep.execsSatisfy` preserves the restriction;
+  `Cursor.execsSatisfy_of_reachable` starts it from the checked certificate;
+  `CursorOK.execsSatisfy` turns actual instruction decoding into `allowed x = true`.
+  This constrains same-frame instruction families, not child commitment or
+  effects, and requires the check on every certificate function.
+  `Xinst.notDelegatecall` with `CursorOK.exec_spawn_undelegated` is the restriction the
+  `OwnSpawns` producers use: a cursor whose `ExecsSatisfy Xinst.notDelegatecall` decodes only
+  `CALL`, `STATICCALL` or `CREATE2`.
+  The same owner separately defines `SFunc.lastsSatisfy` and
+  `Cursor.LastsSatisfy` for terminal families, with `SStep.lastsSatisfy` and
+  `Cursor.lastsSatisfy_of_reachable` propagating a certificate-wide check.
+  `SFunc.noSelfdestruct` / `Cert.noSelfdestruct` specialize this walk to
+  reject terminal `SELFDESTRUCT`; `Cursor.noSelfdestruct_of_reach` retains
+  that checked restriction at active and suspended trees. This terminal
+  check is separate from `Cert.callOnly`, which still permits every halt.
+  `CursorOK.lastsSatisfy` applies that restriction to actual `Linst.At`
+  decoding through the shared `CursorOK.tree_of_last` donor;
+  `CursorOK.not_selfdestruct` gives the terminal exclusion. For a whole
+  same-frame chain use `not_selfdestruct_of_parentPrefix_noStateGas` with
+  `Cert.check`, the actual certificate's `noSelfdestruct` check, pc-zero
+  entry, installed-code equality, selected state-gas absence and the actual
+  `ParentPrefix`. It covers every eventual frame outcome. This is local
+  decoded-terminal exclusion, not account-deletion or contract preservation;
+  child routing and inherited deletion safety require their own proofs.
+  `call_or_staticcall_of_parentPrefix_noStateGas` is the matching fork-free
+  spawn restriction: a same-frame prefix of a `Cert.callOnly` certificate
+  decodes only `CALL`/`STATICCALL`, every outcome.
+- For concrete WETH9 or Uniswap V2 Pair code that must exclude terminal
+  `SELFDESTRUCT`, use
+  [`Weth9/TerminalSafety.lean`](../Blanc/Lift/Weth9/TerminalSafety.lean) and
+  [`UniswapV2Pair/TerminalSafety.lean`](../Blanc/Lift/UniswapV2Pair/TerminalSafety.lean).
+  Each namespace supplies `cert_noSelfdestruct` for its actual checked runtime
+  certificate and `runtime_not_selfdestruct` for an actual same-frame prefix
+  from pc-zero entry of its installed code with selected state-gas absence.
+  The conclusion excludes decoded `Linst.At ... .selfdestruct` for every
+  eventual frame outcome. It does not assert deletion safety or a contract
+  invariant; child routing, admission and inherited deletions remain separate.
+  Each also supplies `cert_callOnly`, `code_not_delegation`,
+  `runtime_call_or_staticcall` (fork-free spawn restriction) and `exec_noDel`:
+  all-outcome `Execution.NoDel wa` for any execution under `stateGas = none`
+  where `wa` holds the checked runtime (via `Exec.inv_noDel_of_installedCert`).
+  `code_toList_ne_nil` and `transaction_noDel` (one selected transaction under
+  `stateGas = none` keeps `wa` undeleted and holding the runtime) follow,
+  with `installedCert` and `history_noDel` for a configured In-history.
+- A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
+  the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
+  producer annotations from `scripts/lift/lift.py --lock-spec`) in
+  [`Blanc/Lift/LockCheck.lean`](../Blanc/Lift/LockCheck.lean); the fact
+  semantics in [`Blanc/Lift/LockCheckSound.lean`](../Blanc/Lift/LockCheckSound.lean);
+  `LockCheck.dominance`, its strong form `LockCheck.dominance_strong` (only
+  release pcs write the slot after a mutating body start) and
+  `LockCheck.no_forbidden`, over the invariant `LockOK`/`LConts`,
+  `lock_step` and `lock_of_parentPrefix`, in
+  [`Blanc/Lift/LockCheckFlow.lean`](../Blanc/Lift/LockCheckFlow.lean), which
+  also holds the step facts `LockCheck.pp_back` (a node strictly before a
+  successor precedes the node), `LockCheck.lockAt_edge` (one cell across a
+  same-frame edge that spawns nothing and stores elsewhere) and
+  `LockCheck.cursor_sstore_node`. The continuing arm uses the generic
+  `Evm.step_cont_getStor_get` directly; no separate no-executable-opcode
+  storage bridge is needed. Worked use:
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`; the full
+  `lock_exclusion` instance (dominance, `ownerDiscipline_of_world` for a
+  forwarder owner, `NoDelegateFrom` from the cursor, release-pc activity) is
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean`; its transaction
+  and history forms (`vplus_excludes`, `TransactionTrace.vplus`,
+  `ConfiguredHistoryTrace.vplus`: the well-formed-root premise derived from the
+  prepared message, every raw root of a history covered) are
+  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean`.
+
+#### C9.7. I need every execution prefix to a node, whatever the outcome
+
+- Every execution prefix to a certificate node (all outcomes, no success
+  premise): the certificate cursor `Cursor`/`Cont`, its invariant `CursorOK`
+  (checked node, pc, stack segments matched per pending function), the
+  synthetic step `SStep`, `cursor_start`, `cursor_step` (one `ParentStep`,
+  including a `CALL` over a child of any outcome, is one `SStep`) and
+  `cursor_of_parentPrefix`, with `CursorOK.exec_spawn` (a reached node spawns
+  only by `CALL`, `STATICCALL`, `CREATE2` or `DELEGATECALL`) and, for a certificate with
+  `Cert.callOnly` (no `CREATE2` or `DELEGATECALL` node), `Cursor.callOnly_of_reach` and
+  `CursorOK.exec_call_or_staticcall` (only `CALL`/`STATICCALL`), in
+  [`Blanc/Lift/Cursor.lean`](../Blanc/Lift/Cursor.lean).
+  With only selected state-gas absence, use
+  `Cursor.absNinst_run_stack_noStateGas`, `cursor_stepS_noStateGas`,
+  `cursor_step_noStateGas`, `cursor_of_parentPrefix_noStateGas` and
+  `reach_of_parentPrefix_noStateGas` in the same module. They retain the
+  exact actual same-frame edge/prefix, cursor invariant and child provenance,
+  cover every frame outcome, and add no success premise. Original modern
+  statements forward to these cores; no cursor/checker carrier changed.
+  Their existential step/reach conclusions require the joint certificate and
+  actual-edge/prefix premises, so select the route here rather than matching
+  an arbitrary existential or reachability goal.
+  `CursorOK.tree_of_last` places an actual decoded terminal instruction
+  at the cursor's checked `.last` node. It uses only `CursorOK` and
+  `Linst.At`, with no fork or successful-outcome premise. This is terminal
+  decoding, not a claim that the certificate excludes `SELFDESTRUCT`;
+  `Cert.callOnly` continues to permit every terminal instruction.
+- Every same-frame node with its machine state (all outcomes): the stateful
+  prefix lift `reach_of_parentPrefix` (from `cursor_stepS`, which adds one
+  `ConfStep` to each `cursor_step`) places the node at a `Reach (StepIn R)` from
+  entry `0`, and `CursorOK.tree_of_exec` puts an external instruction at its
+  `next` node, in `Blanc/Lift/Cursor.lean`. The configurations, steps and walk
+  inversions (`Conf`, `ConfStep`, `Reach`, `AtExec`, `Reach.next`/`exec`/`dest`/
+  `branch`/`branchTo`/`jump`/`call`/`pcAt`, and `Reach.split`, which turns a
+  returning callee into an ordinary big-step `SFunc.RunP … (.returned d)` so the
+  big-step callee specs are reused) are in
+  [`Blanc/Lift/Reach.lean`](../Blanc/Lift/Reach.lean). Use them for a prefix
+  fact of a certified frame, e.g. a storage invariant at a spawning node.
+  The walk kit over the state `St b S M G` (`rr_next`, `rr_dest`, `rr_branch`,
+  `rr_callOver` for an exec-free callee crossed as a big-step run, `rr_callInto`
+  when the target lies inside the callee), the exec-free region refutation
+  `Reach.false_of_execFree` with its decidable `ExecFreeSet`/`SFunc.execFreeIn`,
+  the dispatcher lemma `Reach.gotoTree` and `Reach.lastExec` (register steps up
+  to the last external instruction, `regSilent`) are in
+  [`Blanc/Lift/ReachWalk.lean`](../Blanc/Lift/ReachWalk.lean); worked use: Lido
+  `lido_spawnEntry` in `Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean`. Use it for safety facts
+  about reverting or out-of-gas frames, which `lift_sound` cannot see.
+- The same walk to an `SSTORE` target (`AtSstore`): `Reach.nextS`/`destS`/`branchS`/
+  `branchToS`/`jumpS`/`callS`/`not_lastS`/`not_ret_nilS`, `Reach.sstoreS` (stop at the
+  `SSTORE` or step past it), the `SSTORE`-free refutation `Reach.false_of_sstoreFree`
+  with its decidable `SstoreFreeSet`/`SFunc.sstoreFreeIn`, and the state kit `rs_next`,
+  `rs_dest`, `rs_branch`, `rs_branchTo`, `rs_jump`, `rs_callOver`, `rs_callInto` in
+  [`Blanc/Lift/ReachWalkSstore.lean`](../Blanc/Lift/ReachWalkSstore.lean); with
+  `reach_of_parentPrefix_noStateGas` and `CursorOK.tree_of_sstore` it names the key and
+  value of every `SSTORE` a certified frame reaches, whatever its outcome. Worked use: USDC
+  `Proxy.proxy_sstoreNodeH` in `Blanc/Lift/Usdc/ProxySstoreH.lean`.
+  The shared `Proxy.proxy_sstoreCursorH` also retains the checked cursor and
+  continuation geometry. `Proxy.proxy_implSstore_emitsUpgraded` in
+  [`Blanc/Lift/Usdc/ProxyUpgradeLog.lean`](../Blanc/Lift/Usdc/ProxyUpgradeLog.lean)
+  follows that continuation to an actual retained `Upgraded` log for a committing
+  proxy frame (`stateGas = none`, `bal = none`). Its same-frame prefix identifies
+  an implementation-slot write; the result specifies address and topic with an
+  existential payload. It does not assert receipt correspondence or history-wide
+  implementation continuity. `ConfiguredHistoryTraceIn.implSlot_change_emitsUpgraded`
+  in [`Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean`](../Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean)
+  composes this with retained-write attribution and frame-log inclusion: a
+  committing raw frame changing the implementation slot yields that log at the
+  proxy address. Its premises include nonempty proxy code at the frame entry,
+  `ImplSlotApart`, and the history's body-stage capabilities and BAL restriction.
+  The same module's `retained_implSstore_emitsUpgraded_of_proxyCode` instead
+  takes the actual retained node's proxy-code identity directly and proves
+  the log occurs in the same committed root. It does not require global
+  implementation-slot separation; establishing the node's code remains the
+  caller's obligation.
+  [`Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean`](../Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean)'s
+  `ConfiguredHistoryTraceIn.retained_proxyV1_context` couples strict earlier
+  retained-write exclusion with current Proxy/V1 code classification in one
+  committing root. It derives the unchanged implementation word and excludes
+  each current write using the same root's absence of an Upgraded log. Its
+  explicit remaining inputs are installed Proxy/V1 code and implementation
+  address at that root, own-code at the actual input root, and local separation
+  for actual writes already known to run V1. It requires no global raw-write
+  apartness; supplying that local V1 separation and the actual root/receipt
+  facts remains a separate obligation.
+  For an actual `R ∈ history.settledRoots`, use
+  `ConfiguredHistoryTraceIn.settledRoot_retained_proxyV1_context`. It supplies
+  raw-frame membership, commitment and conditional own-code from that same
+  root. Installed Proxy/V1 code, the implementation word, the same-root
+  absence of Upgraded logs and local known-V1 write separation remain explicit.
+  For implementations created later in the same root, use
+  `UsdcDeployedEntry.RuntimeReady` and
+  `ConfiguredHistoryTraceIn.retained_proxyWorld_context_from_installations`.
+  The selected entry is ready initially; each actual retained proxy upgrade
+  supplies readiness at that write. The induction carries nonempty code with
+  `Exec.retainedNodes_getCode_of_ordered_noStateGas`, deriving both current
+  pointer readiness and execution-family classification. Conditional V2.2
+  library readiness follows the running implementation through nested calls,
+  even when the proxy pointer changes before that frame resumes.
+  `settledRoot_retained_proxyWorld_from_installations` obtains the original
+  F2prime target and nonempty-code guard before requesting runtime evidence;
+  `settledRoot_dynamic_implSlot_origin_code_of_f2prime` supplies the resulting
+  classifier to committed-endpoint provenance.
+  `settledRoot_dynamic_runtimeReady_of_f2prime` additionally proves the proxy
+  runtime and selected implementation/library readiness at that endpoint.
+  An unchanged pointer uses its initial installation; a changed pointer uses
+  the actual retained final writer. Temporary upgrades and restoration are
+  allowed. This endpoint precedes final transaction deletion and touched sweep;
+  constructor deletion safety must be established separately before carrying
+  an implementation first created in this transaction through those stages.
+  Future entries need not be
+  installed at root entry. The older installed-world API projects this same
+  induction with its exact original statement. Actual runtime identities and
+  historical correspondence remain producer obligations; retained governance
+  does not establish the raw upgrade check. These APIs require explicit root,
+  upgrade and installation witnesses; there is no reliable automatic goal-head
+  recipe for selecting them.
+- Storage loops and straight-line steps on such a reach, in
+  [`Blanc/Lift/ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean): the step
+  function `stepR`/`ri_stepR` with the tactics `rsx` (one straight-line step), `rsd`
+  (a `JUMPDEST`), `rsw` and `rsld` (over `run`, `hT`, `erase`); the loop principles
+  `reach_loop_measure` and `reach_loop_index`; `Reach.withPot` (the memory potential at
+  every step of a reach); `Reach.sstoreNode_pot` (a raw `SSTORE` node under a fresh certified
+  frame as the end of such a reach from the entry tree; worked use: USDC
+  `initFrame_sstore` in `Blanc/Lift/Usdc/InitRowsHistory.lean`); the solc storage-string copy loop over `MLOAD` or `CALLDATALOAD`
+  (`ReachPayload.bodyR`/`headB`/`headJ`, `payloadB_reach`/`payloadJ_reach`: a store of the
+  loop writes `base + j` for `j < count fin p`, with `mload_rdStep`/`mload_win` and
+  `cdload_rdStep`/`cdload_win` for its read), and both clearing layouts
+  (`ReachClear.clear_reach`, `legacyClear_reach`: a store of the loop writes zero).
+  `ReachClear.legacyClear_reach_range` additionally preserves the actual initial
+  key and end word: a reached zero-store key lies at or above the initial key
+  and strictly below the end, or the original pending continuation is reached.
+  `legacyClear_reach` projects this single traversal to its original interface;
+  no old-header shape or additional gas assumption is required.
+  `ReachPayload.payloadB_reach_exact` retains equality of the exit index to
+  `count fin p`; the original `payloadB_reach` projects the same traversal.
+  USDC's `InitReachV1.tail7_reach_range` and `helper46_reach_range` in
+  [`Blanc/Lift/Usdc/InitReachV1.lean`](../Blanc/Lift/Usdc/InitReachV1.lean)
+  carry the clearing interval through the old initializer helper, retaining
+  the old endpoint computed from its actual input storage word. Their original
+  interfaces remain projections. These range facts do not by themselves prove
+  that a clearing key differs from a control slot.
+  [`Blanc/Lift/Usdc/InitV1KeyBounds.lean`](../Blanc/Lift/Usdc/InitV1KeyBounds.lean)
+  bounds the decoded old length and clearing count for any stored header.
+  `helper46_reach_ne_implSlot` consumes the helper range with explicit numeric
+  hash-base bounds and the new-length cap.
+  [`Blanc/Lift/Usdc/InitV1ConcreteBounds.lean`](../Blanc/Lift/Usdc/InitV1ConcreteBounds.lean)
+  proves the exact Keccak values for initializer headers 4, 5 and 7 in the kernel.
+  Its `bounds` theorem supplies header separation, the hash-base margin and
+  the implementation-slot exclusion interval for those three headers.
+  `InitReachV1.callFrag_reach_range`, `callee_reach_range`, `wrapper_reach_range`
+  and `initV1_reach_range` propagate the actual clearing ranges through the
+  initializer; `BoundedRange` retains the three length caps derived from actual
+  staging. The original caller interfaces project that same traversal.
+  `InitV1KeyBounds.initV1_reach_ne_implSlot_concrete` combines these ranges and
+  checked hashes to exclude the implementation slot at every reached initializer
+  store, with no numerical-bound, length-cap or old-header-format premise.
+  Also there: `rs_callIn`/`rs_ret` (enter a callee with its continuation pending, return into
+  it), `rs_callOverAny` (an `SSTORE`-free callee from any machine), `rsk` (one step taken
+  without inverting it), `rsa` (`rsd`, `rsx` or `rsld`, for `repeat rsa`), `mapSlot_scratch`
+  (a mapping slot from solc's scratch words at any closed offsets) and `Reach.selWalk_inlS` (a
+  solc dispatcher's comparison walk). The
+  solc 0.6 `string storage = string calldata` helper and the `f(string calldata)` external
+  wrapper, as shapes over their jump tags (`StrStoreCd.helper`, `CdStrWrap.wrapper`), with
+  `StrStoreCd.reach` (a store writes the slot, zero, or `keccak(slot) + j` for
+  `j < (len + 31) / 32`) and `CdStrWrap.reach` (the reach lies in the body, entered with the
+  decoded length and data pointer, both below `2 ^ 32`), are in
+  [`Blanc/Lift/ReachSolcStringStore.lean`](../Blanc/Lift/ReachSolcStringStore.lean); worked use:
+  USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`. The same module
+  has the memory form (`StrStore.reach` over `MLOAD`, memory kept outside scratch), solc 0.6's
+  string allocation fragment (`alloc06Frag`, `alloc06Frag_reach` into `Alloc06`: header at the
+  old free pointer, free pointer advanced past the rounded payload, lower memory kept) and
+  `memWord_write_far` (a word read clear of a write); worked use: USDC
+  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`. The solc ABI string decoder
+  fragments of `Blanc/Lift/SolcAbiStringStaging.lean` on a reach (`ReachAbi.strFrag_reach`,
+  `rotFrag_reach`, `staticFrag_reach`; the allocation is `allocMem` by `strFrag_mem`, its size
+  bounded by the potential) are there too; worked use: USDC `InitReachV1.wrapper_reach` in
+  `Blanc/Lift/Usdc/InitReachV1.lean`.
+- Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
+  and the instruction inversions `ri_address`/`ri_dup_any` in
+  [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region
+  (`SFunc.preIn`, `PreSet`, `Reach.firstExec`: the reach keeps the world up to the instruction;
+  `CursorOK.state_post_of_silent`) in [`Blanc/Lift/ReachFirstExec.lean`](../Blanc/Lift/ReachFirstExec.lean), with its big-step
+  companion `SFunc.RunP.stor_of_preIn` (a protected account's storage across a whole run of the
+  region, to its halt or its return) in [`Blanc/Lift/RegionStor.lean`](../Blanc/Lift/RegionStor.lean); the world at the first
+  external instruction of a reach from a tree whose paths run silent code, silent closures and at
+  most one external instruction (`SFunc.preExec`, `PreExecSet`, `Reach.preExec_state`) in
+  [`Blanc/Lift/ReachPreExec.lean`](../Blanc/Lift/ReachPreExec.lean); a silent tail after an external instruction
+  (`silent_after_exec`: the frame's post state is the state right after the instruction and no
+  later node decodes another, from the decidable checks `ExecSilent`/`SFunc.nodesSatisfy` and
+  `SFunc.contsIn`; `Reach.conts_silent`) in [`Blanc/Lift/ReachSilentTail.lean`](../Blanc/Lift/ReachSilentTail.lean); the route
+  of a selector word through a solc binary-search dispatcher (`SFunc.selWalk σ f`, computed by the
+  kernel for a concrete selector; `Reach.selWalk_inl`/`_inr`, `SFunc.RunCut.selWalk_inl`/`_inr`,
+  `SFunc.selWalk_mem_pairs`/`_leaves`; `SFunc.toCall` with `SFunc.RunP.callee_of_toCall` for a
+  wrapper's ABI decoding before its body call) in [`Blanc/Lift/SelectorRoute.lean`](../Blanc/Lift/SelectorRoute.lean), with its
+  forward, gas-exact twin (`SFunc.selCost`, 22 gas per row and 1 per `JUMPDEST`;
+  `SFunc.RunExact.selWalk_inl`/`_inr`; `SFunc.selGoto` naming the entered tree once for both
+  directions, `SFunc.RunExact.selGoto`, `SFunc.selGoto_spec`) in
+  [`Blanc/Lift/SelectorRouteExact.lean`](../Blanc/Lift/SelectorRouteExact.lean) (worked use: the UniswapV2 pair's
+  `pair_dispatch_exact`/`pair_dispatch_inv`, `Blanc/Lift/UniswapV2Pair/PairDispatch.lean`); and the
+  reach forms of the two route-C skips below, `rr_shuffle` and `rr_call_silent`, in
+  [`Blanc/Lift/ReachSkip.lean`](../Blanc/Lift/ReachSkip.lean). Worked uses: USDC (`Blanc/Lift/Usdc/RefineSignedAuth.lean`,
+  `RefineSignedPermitNodes.lean`, `RefineAdminRescue.lean`, `HistoryFamilyProxy.lean`).
+- Preserve an actual external-instruction target while routing a literal
+  comparison dispatcher: [`Blanc/Lift/ReachDispatch.lean`](../Blanc/Lift/ReachDispatch.lean)
+  provides `rr_cmp_gt` and `rr_cmp_eq` for `DUP`/`PUSH4`/comparison/`PUSH2`
+  branches. They preserve arbitrary instruction relation `P`, its soundness
+  projection, the original `AtExec` target and continuation stack; the equality
+  variant consumes the actual function lookup; the proof recipe for
+  `Exec.NoRetainedWriteTo` registers them. They have no in-tree consumer
+  since the single-frame Uniswap V2 history walk was superseded. These
+  projections alone do not identify a retained occurrence or child outcome.
+- From a cursor-placed node to *later* nodes of the same frame:
+  [`Blanc/Lift/ReachChain.lean`](../Blanc/Lift/ReachChain.lean).
+  `reach_between` is `reach_of_parentPrefix` started at any cursor-placed node;
+  `noExec_after_of_cursor` says no later node decodes an external instruction
+  when the tree from the cursor on is exec-free; `getStor_post_of_silent` says the
+  frame's post storage at an observed owner is the node's storage when the
+  owner is `State.Protected` at that node and the remaining tree is state-silent
+  (`Reach.silentTo`, `SFunc.silentTree`). The accepted terminal tree includes
+  `SELFDESTRUCT`, so a certificate alone does not protect every world owner.
+  `Evm.step_halt_getStor_eq` likewise takes protection at the pre world.
+  `StepIn.exec_getStor_eq_of_noDescendants` preserves a protected observed
+  owner in a frame with no raw descendants (a child would be the frame itself,
+  yet strictly shallower). When the remaining source suffix is `SFunc.silent`
+  (which excludes `SELFDESTRUCT` terminals) no protection is needed: WETH9
+  `weth9_exec_node` takes the actual source run from the node's cursor
+  (`CursorOK.sourceRunReturn`) and concludes `post.state = N'.devm.state` by
+  `SFunc.RunP.state_of_silent`, for every owner.
 - To retain an observation of each full synthetic configuration edge, use
   [`Blanc/Lift/ObservedReach.lean`](../Blanc/Lift/ObservedReach.lean).
   `ObservedReach` pairs the existing `ConfStep` with a before/after `Conf`
@@ -8977,6 +9554,30 @@ contract-neutral.
   injectivity, final-frame success or numeric pc order is assumed.
   `KeccakPairBefore.forget` projects both individual earlier-occurrence witnesses.
   The `ordered-observed-keccak-pair` recipe matches the ordered package goal.
+
+#### C9.8. I need facts at a checked cursor of an actual successful execution
+
+- A frame predicate at every reachable cursor node: [`Blanc/Lift/CursorFrames.lean`](../Blanc/Lift/CursorFrames.lean).
+  `SFunc.framesSat es P` walks a tree with the abstract frames the checker computes and checks
+  `P n a` at every straight-line node; `Cert.framesSat` over every entry gives
+  `Cursor.framesSat_of_reachable` (through `SStep.framesSat`), `CursorOK.framesSat_exec` applies `P`
+  to a cursor-placed node's actual instruction and abstract frame, and `CursorOK.stack_const` with
+  `FrameMatches.getElem?_const` reads a `.const` frame position as the actual stack word. Worked
+  uses: `Blanc/Lift/QuietDelegateSkip.lean`, `Blanc/Lift/Usdc/ImplFrames.lean`.
+- To carry an exact fact forward from one certificate node to a later one along a frame's chain
+  (for example, that a `CALL`'s target operand is the result of an earlier `CREATE2`), use a
+  *window* in [`Blanc/Lift/CursorWindow.lean`](../Blanc/Lift/CursorWindow.lean): a finite list of
+  trees, each with its one predecessor and an index (`WindowEntry`); `Cert.windowOk E sites` checks
+  over the whole certificate that a window tree occurs only as a child of its predecessor and that
+  every `CALL` node is one of `sites`; along a checked chain (`Cursor.Checked`, `.step`,
+  `.entrance`, `.callSite`) `window_track` carries a property `Track j` one window edge at a time,
+  with no backward walk. Decide `Cert.windowOk` in its own module. The exact stack words the window
+  edges carry come from [`Blanc/Lift/PrefixTransfer.lean`](../Blanc/Lift/PrefixTransfer.lean):
+  `prefixTransfer` runs `ninstTransfer` on a prefix pattern of the stack, keeping `PUSH` literals
+  and `AND`s of known words (`padPattern` extends a short prefix for `DUP`/`SWAP`), with
+  success-only soundness `prefixTransfer_run`; `create2_run_result` and `genericCreate_result` give
+  the word a successful `CREATE2` leaves (the new address or zero). Worked use:
+  `Blanc/Lift/UniswapV2Factory/Window.lean` and `CallShape.lean` (`factory_call_target`).
 - To identify the pc of an already supplied checked cursor from a literal
   byte prefix, use [`Blanc/Lift/CursorCheckPrefix.lean`](../Blanc/Lift/CursorCheckPrefix.lean).
   `bytesAt_append` joins adjacent checked slices; `checkNode_bytesAt_prefix`
@@ -9186,318 +9787,9 @@ contract-neutral.
   No successful outcome, child context or settlement premise is needed.
   The existing forward-cut consumers can retain these operands at the same
   actual occurrence; the projection alone supplies no occurrence order.
-- Every same-frame node with its machine state (all outcomes): the stateful
-  prefix lift `reach_of_parentPrefix` (from `cursor_stepS`, which adds one
-  `ConfStep` to each `cursor_step`) places the node at a `Reach (StepIn R)` from
-  entry `0`, and `CursorOK.tree_of_exec` puts an external instruction at its
-  `next` node, in `Blanc/Lift/Cursor.lean`. The configurations, steps and walk
-  inversions (`Conf`, `ConfStep`, `Reach`, `AtExec`, `Reach.next`/`exec`/`dest`/
-  `branch`/`branchTo`/`jump`/`call`/`pcAt`, and `Reach.split`, which turns a
-  returning callee into an ordinary big-step `SFunc.RunP … (.returned d)` so the
-  big-step callee specs are reused) are in
-  [`Blanc/Lift/Reach.lean`](../Blanc/Lift/Reach.lean). Use them for a prefix
-  fact of a certified frame, e.g. a storage invariant at a spawning node.
-  The walk kit over the state `St b S M G` (`rr_next`, `rr_dest`, `rr_branch`,
-  `rr_callOver` for an exec-free callee crossed as a big-step run, `rr_callInto`
-  when the target lies inside the callee), the exec-free region refutation
-  `Reach.false_of_execFree` with its decidable `ExecFreeSet`/`SFunc.execFreeIn`,
-  the dispatcher lemma `Reach.gotoTree` and `Reach.lastExec` (register steps up
-  to the last external instruction, `regSilent`) are in
-  [`Blanc/Lift/ReachWalk.lean`](../Blanc/Lift/ReachWalk.lean); worked use: Lido
-  `lido_spawnEntry` in `Blanc/Lift/LidoCircuitBreakerDeployed/Reentry.lean`. Use it for safety facts
-  about reverting or out-of-gas frames, which `lift_sound` cannot see.
-- The same walk to an `SSTORE` target (`AtSstore`): `Reach.nextS`/`destS`/`branchS`/
-  `branchToS`/`jumpS`/`callS`/`not_lastS`/`not_ret_nilS`, `Reach.sstoreS` (stop at the
-  `SSTORE` or step past it), the `SSTORE`-free refutation `Reach.false_of_sstoreFree`
-  with its decidable `SstoreFreeSet`/`SFunc.sstoreFreeIn`, and the state kit `rs_next`,
-  `rs_dest`, `rs_branch`, `rs_branchTo`, `rs_jump`, `rs_callOver`, `rs_callInto` in
-  [`Blanc/Lift/ReachWalkSstore.lean`](../Blanc/Lift/ReachWalkSstore.lean); with
-  `reach_of_parentPrefix_noStateGas` and `CursorOK.tree_of_sstore` it names the key and
-  value of every `SSTORE` a certified frame reaches, whatever its outcome. Worked use: USDC
-  `Proxy.proxy_sstoreNodeH` in `Blanc/Lift/Usdc/ProxySstoreH.lean`.
-  The shared `Proxy.proxy_sstoreCursorH` also retains the checked cursor and
-  continuation geometry. `Proxy.proxy_implSstore_emitsUpgraded` in
-  [`Blanc/Lift/Usdc/ProxyUpgradeLog.lean`](../Blanc/Lift/Usdc/ProxyUpgradeLog.lean)
-  follows that continuation to an actual retained `Upgraded` log for a committing
-  proxy frame (`stateGas = none`, `bal = none`). Its same-frame prefix identifies
-  an implementation-slot write; the result specifies address and topic with an
-  existential payload. It does not assert receipt correspondence or history-wide
-  implementation continuity. `ConfiguredHistoryTraceIn.implSlot_change_emitsUpgraded`
-  in [`Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean`](../Blanc/Lift/Usdc/ProxyCommittedUpgradeLog.lean)
-  composes this with retained-write attribution and frame-log inclusion: a
-  committing raw frame changing the implementation slot yields that log at the
-  proxy address. Its premises include nonempty proxy code at the frame entry,
-  `ImplSlotApart`, and the history's body-stage capabilities and BAL restriction.
-  The same module's `retained_implSstore_emitsUpgraded_of_proxyCode` instead
-  takes the actual retained node's proxy-code identity directly and proves
-  the log occurs in the same committed root. It does not require global
-  implementation-slot separation; establishing the node's code remains the
-  caller's obligation.
-  [`Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean`](../Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean)'s
-  `ConfiguredHistoryTraceIn.retained_proxyV1_context` couples strict earlier
-  retained-write exclusion with current Proxy/V1 code classification in one
-  committing root. It derives the unchanged implementation word and excludes
-  each current write using the same root's absence of an Upgraded log. Its
-  explicit remaining inputs are installed Proxy/V1 code and implementation
-  address at that root, own-code at the actual input root, and local separation
-  for actual writes already known to run V1. It requires no global raw-write
-  apartness; supplying that local V1 separation and the actual root/receipt
-  facts remains a separate obligation.
-  For an actual `R ∈ history.settledRoots`, use
-  `ConfiguredHistoryTraceIn.settledRoot_retained_proxyV1_context`. It supplies
-  raw-frame membership, commitment and conditional own-code from that same
-  root. Installed Proxy/V1 code, the implementation word, the same-root
-  absence of Upgraded logs and local known-V1 write separation remain explicit.
-  For implementations created later in the same root, use
-  `UsdcDeployedEntry.RuntimeReady` and
-  `ConfiguredHistoryTraceIn.retained_proxyWorld_context_from_installations`.
-  The selected entry is ready initially; each actual retained proxy upgrade
-  supplies readiness at that write. The induction carries nonempty code with
-  `Exec.retainedNodes_getCode_of_ordered_noStateGas`, deriving both current
-  pointer readiness and execution-family classification. Conditional V2.2
-  library readiness follows the running implementation through nested calls,
-  even when the proxy pointer changes before that frame resumes.
-  `settledRoot_retained_proxyWorld_from_installations` obtains the original
-  F2prime target and nonempty-code guard before requesting runtime evidence;
-  `settledRoot_dynamic_implSlot_origin_code_of_f2prime` supplies the resulting
-  classifier to committed-endpoint provenance.
-  `settledRoot_dynamic_runtimeReady_of_f2prime` additionally proves the proxy
-  runtime and selected implementation/library readiness at that endpoint.
-  An unchanged pointer uses its initial installation; a changed pointer uses
-  the actual retained final writer. Temporary upgrades and restoration are
-  allowed. This endpoint precedes final transaction deletion and touched sweep;
-  constructor deletion safety must be established separately before carrying
-  an implementation first created in this transaction through those stages.
-  Future entries need not be
-  installed at root entry. The older installed-world API projects this same
-  induction with its exact original statement. Actual runtime identities and
-  historical correspondence remain producer obligations; retained governance
-  does not establish the raw upgrade check. These APIs require explicit root,
-  upgrade and installation witnesses; there is no reliable automatic goal-head
-  recipe for selecting them.
-- Storage loops and straight-line steps on such a reach, in
-  [`Blanc/Lift/ReachSstoreLoops.lean`](../Blanc/Lift/ReachSstoreLoops.lean): the step
-  function `stepR`/`ri_stepR` with the tactics `rsx` (one straight-line step), `rsd`
-  (a `JUMPDEST`), `rsw` and `rsld` (over `run`, `hT`, `erase`); the loop principles
-  `reach_loop_measure` and `reach_loop_index`; `Reach.withPot` (the memory potential at
-  every step of a reach); `Reach.sstoreNode_pot` (a raw `SSTORE` node under a fresh certified
-  frame as the end of such a reach from the entry tree; worked use: USDC
-  `initFrame_sstore` in `Blanc/Lift/Usdc/InitRowsHistory.lean`); the solc storage-string copy loop over `MLOAD` or `CALLDATALOAD`
-  (`ReachPayload.bodyR`/`headB`/`headJ`, `payloadB_reach`/`payloadJ_reach`: a store of the
-  loop writes `base + j` for `j < count fin p`, with `mload_rdStep`/`mload_win` and
-  `cdload_rdStep`/`cdload_win` for its read), and both clearing layouts
-  (`ReachClear.clear_reach`, `legacyClear_reach`: a store of the loop writes zero).
-  `ReachClear.legacyClear_reach_range` additionally preserves the actual initial
-  key and end word: a reached zero-store key lies at or above the initial key
-  and strictly below the end, or the original pending continuation is reached.
-  `legacyClear_reach` projects this single traversal to its original interface;
-  no old-header shape or additional gas assumption is required.
-  `ReachPayload.payloadB_reach_exact` retains equality of the exit index to
-  `count fin p`; the original `payloadB_reach` projects the same traversal.
-  USDC's `InitReachV1.tail7_reach_range` and `helper46_reach_range` in
-  [`Blanc/Lift/Usdc/InitReachV1.lean`](../Blanc/Lift/Usdc/InitReachV1.lean)
-  carry the clearing interval through the old initializer helper, retaining
-  the old endpoint computed from its actual input storage word. Their original
-  interfaces remain projections. These range facts do not by themselves prove
-  that a clearing key differs from a control slot.
-  [`Blanc/Lift/Usdc/InitV1KeyBounds.lean`](../Blanc/Lift/Usdc/InitV1KeyBounds.lean)
-  bounds the decoded old length and clearing count for any stored header.
-  `helper46_reach_ne_implSlot` consumes the helper range with explicit numeric
-  hash-base bounds and the new-length cap.
-  [`Blanc/Lift/Usdc/InitV1ConcreteBounds.lean`](../Blanc/Lift/Usdc/InitV1ConcreteBounds.lean)
-  proves the exact Keccak values for initializer headers 4, 5 and 7 in the kernel.
-  Its `bounds` theorem supplies header separation, the hash-base margin and
-  the implementation-slot exclusion interval for those three headers.
-  `InitReachV1.callFrag_reach_range`, `callee_reach_range`, `wrapper_reach_range`
-  and `initV1_reach_range` propagate the actual clearing ranges through the
-  initializer; `BoundedRange` retains the three length caps derived from actual
-  staging. The original caller interfaces project that same traversal.
-  `InitV1KeyBounds.initV1_reach_ne_implSlot_concrete` combines these ranges and
-  checked hashes to exclude the implementation slot at every reached initializer
-  store, with no numerical-bound, length-cap or old-header-format premise.
-  Also there: `rs_callIn`/`rs_ret` (enter a callee with its continuation pending, return into
-  it), `rs_callOverAny` (an `SSTORE`-free callee from any machine), `rsk` (one step taken
-  without inverting it), `rsa` (`rsd`, `rsx` or `rsld`, for `repeat rsa`), `mapSlot_scratch`
-  (a mapping slot from solc's scratch words at any closed offsets) and `Reach.selWalk_inlS` (a
-  solc dispatcher's comparison walk). The
-  solc 0.6 `string storage = string calldata` helper and the `f(string calldata)` external
-  wrapper, as shapes over their jump tags (`StrStoreCd.helper`, `CdStrWrap.wrapper`), with
-  `StrStoreCd.reach` (a store writes the slot, zero, or `keccak(slot) + j` for
-  `j < (len + 31) / 32`) and `CdStrWrap.reach` (the reach lies in the body, entered with the
-  decoded length and data pointer, both below `2 ^ 32`), are in
-  [`Blanc/Lift/ReachSolcStringStore.lean`](../Blanc/Lift/ReachSolcStringStore.lean); worked use:
-  USDC `InitReachV2.initV2_reach` in `Blanc/Lift/Usdc/InitReachV2.lean`. The same module
-  has the memory form (`StrStore.reach` over `MLOAD`, memory kept outside scratch), solc 0.6's
-  string allocation fragment (`alloc06Frag`, `alloc06Frag_reach` into `Alloc06`: header at the
-  old free pointer, free pointer advanced past the rounded payload, lower memory kept) and
-  `memWord_write_far` (a word read clear of a write); worked use: USDC
-  `Init06.wrap06_reach` in `Blanc/Lift/Usdc/InitReach06.lean`. The solc ABI string decoder
-  fragments of `Blanc/Lift/SolcAbiStringStaging.lean` on a reach (`ReachAbi.strFrag_reach`,
-  `rotFrag_reach`, `staticFrag_reach`; the allocation is `allocMem` by `strFrag_mem`, its size
-  bounded by the potential) are there too; worked use: USDC `InitReachV1.wrapper_reach` in
-  `Blanc/Lift/Usdc/InitReachV1.lean`.
-- Further prefix-reach facts for a certified frame: the goto inversions `rr_branchTo`/`rr_jump`
-  and the instruction inversions `ri_address`/`ri_dup_any` in
-  [`Blanc/Lift/RunPWalk.lean`](../Blanc/Lift/RunPWalk.lean); the first external instruction of a store-free region
-  (`SFunc.preIn`, `PreSet`, `Reach.firstExec`: the reach keeps the world up to the instruction;
-  `CursorOK.state_post_of_silent`) in [`Blanc/Lift/ReachFirstExec.lean`](../Blanc/Lift/ReachFirstExec.lean), with its big-step
-  companion `SFunc.RunP.stor_of_preIn` (a protected account's storage across a whole run of the
-  region, to its halt or its return) in [`Blanc/Lift/RegionStor.lean`](../Blanc/Lift/RegionStor.lean); the world at the first
-  external instruction of a reach from a tree whose paths run silent code, silent closures and at
-  most one external instruction (`SFunc.preExec`, `PreExecSet`, `Reach.preExec_state`) in
-  [`Blanc/Lift/ReachPreExec.lean`](../Blanc/Lift/ReachPreExec.lean); a silent tail after an external instruction
-  (`silent_after_exec`: the frame's post state is the state right after the instruction and no
-  later node decodes another, from the decidable checks `ExecSilent`/`SFunc.nodesSatisfy` and
-  `SFunc.contsIn`; `Reach.conts_silent`) in [`Blanc/Lift/ReachSilentTail.lean`](../Blanc/Lift/ReachSilentTail.lean); the route
-  of a selector word through a solc binary-search dispatcher (`SFunc.selWalk σ f`, computed by the
-  kernel for a concrete selector; `Reach.selWalk_inl`/`_inr`, `SFunc.RunCut.selWalk_inl`/`_inr`,
-  `SFunc.selWalk_mem_pairs`/`_leaves`; `SFunc.toCall` with `SFunc.RunP.callee_of_toCall` for a
-  wrapper's ABI decoding before its body call) in [`Blanc/Lift/SelectorRoute.lean`](../Blanc/Lift/SelectorRoute.lean), with its
-  forward, gas-exact twin (`SFunc.selCost`, 22 gas per row and 1 per `JUMPDEST`;
-  `SFunc.RunExact.selWalk_inl`/`_inr`; `SFunc.selGoto` naming the entered tree once for both
-  directions, `SFunc.RunExact.selGoto`, `SFunc.selGoto_spec`) in
-  [`Blanc/Lift/SelectorRouteExact.lean`](../Blanc/Lift/SelectorRouteExact.lean) (worked use: the UniswapV2 pair's
-  `pair_dispatch_exact`/`pair_dispatch_inv`, `Blanc/Lift/UniswapV2Pair/PairDispatch.lean`); and the
-  reach forms of the two route-C skips below, `rr_shuffle` and `rr_call_silent`, in
-  [`Blanc/Lift/ReachSkip.lean`](../Blanc/Lift/ReachSkip.lean). Worked uses: USDC (`Blanc/Lift/Usdc/RefineSignedAuth.lean`,
-  `RefineSignedPermitNodes.lean`, `RefineAdminRescue.lean`, `HistoryFamilyProxy.lean`).
-- Preserve an actual external-instruction target while routing a literal
-  comparison dispatcher: [`Blanc/Lift/ReachDispatch.lean`](../Blanc/Lift/ReachDispatch.lean)
-  provides `rr_cmp_gt` and `rr_cmp_eq` for `DUP`/`PUSH4`/comparison/`PUSH2`
-  branches. They preserve arbitrary instruction relation `P`, its soundness
-  projection, the original `AtExec` target and continuation stack; the equality
-  variant consumes the actual function lookup; the proof recipe for
-  `Exec.NoRetainedWriteTo` registers them. They have no in-tree consumer
-  since the single-frame Uniswap V2 history walk was superseded. These
-  projections alone do not identify a retained occurrence or child outcome.
-- From a cursor-placed node to *later* nodes of the same frame:
-  [`Blanc/Lift/ReachChain.lean`](../Blanc/Lift/ReachChain.lean).
-  `reach_between` is `reach_of_parentPrefix` started at any cursor-placed node;
-  `noExec_after_of_cursor` says no later node decodes an external instruction
-  when the tree from the cursor on is exec-free; `getStor_post_of_silent` says the
-  frame's post storage at an observed owner is the node's storage when the
-  owner is `State.Protected` at that node and the remaining tree is state-silent
-  (`Reach.silentTo`, `SFunc.silentTree`). The accepted terminal tree includes
-  `SELFDESTRUCT`, so a certificate alone does not protect every world owner.
-  `Evm.step_halt_getStor_eq` likewise takes protection at the pre world.
-  `StepIn.exec_getStor_eq_of_noDescendants` preserves a protected observed
-  owner in a frame with no raw descendants (a child would be the frame itself,
-  yet strictly shallower). When the remaining source suffix is `SFunc.silent`
-  (which excludes `SELFDESTRUCT` terminals) no protection is needed: WETH9
-  `weth9_exec_node` takes the actual source run from the node's cursor
-  (`CursorOK.sourceRunReturn`) and concludes `post.state = N'.devm.state` by
-  `SFunc.RunP.state_of_silent`, for every owner.
-- Restrict external instruction families along a checked certificate cursor:
-  [`Blanc/Lift/CallRestriction.lean`](../Blanc/Lift/CallRestriction.lean) defines
-  `SFunc.execsSatisfy` and `Cursor.ExecsSatisfy` (active function and pending
-  returns). `SStep.execsSatisfy` preserves the restriction;
-  `Cursor.execsSatisfy_of_reachable` starts it from the checked certificate;
-  `CursorOK.execsSatisfy` turns actual instruction decoding into `allowed x = true`.
-  This constrains same-frame instruction families, not child commitment or
-  effects, and requires the check on every certificate function.
-  `Xinst.notDelegatecall` with `CursorOK.exec_spawn_undelegated` is the restriction the
-  `OwnSpawns` producers use: a cursor whose `ExecsSatisfy Xinst.notDelegatecall` decodes only
-  `CALL`, `STATICCALL` or `CREATE2`.
-  The same owner separately defines `SFunc.lastsSatisfy` and
-  `Cursor.LastsSatisfy` for terminal families, with `SStep.lastsSatisfy` and
-  `Cursor.lastsSatisfy_of_reachable` propagating a certificate-wide check.
-  `SFunc.noSelfdestruct` / `Cert.noSelfdestruct` specialize this walk to
-  reject terminal `SELFDESTRUCT`; `Cursor.noSelfdestruct_of_reach` retains
-  that checked restriction at active and suspended trees. This terminal
-  check is separate from `Cert.callOnly`, which still permits every halt.
-  `CursorOK.lastsSatisfy` applies that restriction to actual `Linst.At`
-  decoding through the shared `CursorOK.tree_of_last` donor;
-  `CursorOK.not_selfdestruct` gives the terminal exclusion. For a whole
-  same-frame chain use `not_selfdestruct_of_parentPrefix_noStateGas` with
-  `Cert.check`, the actual certificate's `noSelfdestruct` check, pc-zero
-  entry, installed-code equality, selected state-gas absence and the actual
-  `ParentPrefix`. It covers every eventual frame outcome. This is local
-  decoded-terminal exclusion, not account-deletion or contract preservation;
-  child routing and inherited deletion safety require their own proofs.
-  `call_or_staticcall_of_parentPrefix_noStateGas` is the matching fork-free
-  spawn restriction: a same-frame prefix of a `Cert.callOnly` certificate
-  decodes only `CALL`/`STATICCALL`, every outcome.
-- For concrete WETH9 or Uniswap V2 Pair code that must exclude terminal
-  `SELFDESTRUCT`, use
-  [`Weth9/TerminalSafety.lean`](../Blanc/Lift/Weth9/TerminalSafety.lean) and
-  [`UniswapV2Pair/TerminalSafety.lean`](../Blanc/Lift/UniswapV2Pair/TerminalSafety.lean).
-  Each namespace supplies `cert_noSelfdestruct` for its actual checked runtime
-  certificate and `runtime_not_selfdestruct` for an actual same-frame prefix
-  from pc-zero entry of its installed code with selected state-gas absence.
-  The conclusion excludes decoded `Linst.At ... .selfdestruct` for every
-  eventual frame outcome. It does not assert deletion safety or a contract
-  invariant; child routing, admission and inherited deletions remain separate.
-  Each also supplies `cert_callOnly`, `code_not_delegation`,
-  `runtime_call_or_staticcall` (fork-free spawn restriction) and `exec_noDel`:
-  all-outcome `Execution.NoDel wa` for any execution under `stateGas = none`
-  where `wa` holds the checked runtime (via `Exec.inv_noDel_of_installedCert`).
-  `code_toList_ne_nil` and `transaction_noDel` (one selected transaction under
-  `stateGas = none` keeps `wa` undeleted and holding the runtime) follow,
-  with `installedCert` and `history_noDel` for a configured In-history.
-- A reentrancy lock's `LockSpec.Dominance` from a certificate (all outcomes):
-  the checker `LockCheck.Spec`/`LockCheck.lockCert` (one Boolean walk with
-  producer annotations from `scripts/lift/lift.py --lock-spec`) in
-  [`Blanc/Lift/LockCheck.lean`](../Blanc/Lift/LockCheck.lean); the fact
-  semantics in [`Blanc/Lift/LockCheckSound.lean`](../Blanc/Lift/LockCheckSound.lean);
-  `LockCheck.dominance`, its strong form `LockCheck.dominance_strong` (only
-  release pcs write the slot after a mutating body start) and
-  `LockCheck.no_forbidden`, over the invariant `LockOK`/`LConts`,
-  `lock_step` and `lock_of_parentPrefix`, in
-  [`Blanc/Lift/LockCheckFlow.lean`](../Blanc/Lift/LockCheckFlow.lean), which
-  also holds the step facts `LockCheck.pp_back` (a node strictly before a
-  successor precedes the node), `LockCheck.lockAt_edge` (one cell across a
-  same-frame edge that spawns nothing and stores elsewhere) and
-  `LockCheck.cursor_sstore_node`. The continuing arm uses the generic
-  `Evm.step_cont_getStor_get` directly; no separate no-executable-opcode
-  storage bridge is needed. Worked use:
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/LockDominance.lean`; the full
-  `lock_exclusion` instance (dominance, `ownerDiscipline_of_world` for a
-  forwarder owner, `NoDelegateFrom` from the cursor, release-pc activity) is
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/Exclusion.lean`; its transaction
-  and history forms (`vplus_excludes`, `TransactionTrace.vplus`,
-  `ConfiguredHistoryTrace.vplus`: the well-formed-root premise derived from the
-  prepared message, every raw root of a history covered) are
-  `Blanc/Lift/VyperNonreentrantDeployed/Fixed/ExclusionTrace.lean`.
-- Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
-  `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
-  the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
-  over the gas-carrying state `St`, a frame's entry state as an `St` (`pre_eq_St`), the
-  `St` projections (`St.stack`, `St.memory`, `St.gasLeft`, `St.returnData`, `St_error`,
-  `St_state`, `St_getCode`, `St_getStor`: `St` replaces only the machine), the
-  word read-back facts `sliceD_word_same` and `read_covered`, and one solc dispatcher
-  comparison (`cmp_miss`, `cmp_hit`) are in
-  [`Blanc/Lift/ExactWalk.lean`](../Blanc/Lift/ExactWalk.lean). The fixed-cost
-  `rx_sload_cold` and `rx_sload_warm` constructors require both
-  `sevm.benvStat.rules.stateGas = none` and selected access pricing
-  `sevm.benvStat.rules.access = .eip2929`; flat historical schedules do not
-  have their exact 2100/100 charges. More steps
-  (`rx_shl`, `rx_xor`, `rx_byte`, `rx_mstore8`, `rx_calldatacopy`, `rx_log1`, …) are in
-  [`Blanc/Lift/ExactWalkOps.lean`](../Blanc/Lift/ExactWalkOps.lean). `rx_shl`/`rx_shr`
-  require the selected `rules.op.shifts = true` capability. Beacon's `le_half1`,
-  `le_mid`, and `to_little_endian_64_run` in
-  [`LittleEndian.lean`](../Blanc/Lift/BeaconDeposit/LittleEndian.lean) carry that
-  condition through their forward walks; arbitrary continuation evidence does
-  not supply it. The generic success-inversion statements remain unchanged.
-  The cut-run `rxc_shl` requires the same capability. To obtain it from a fixed
-  run witness rather than a premise, use
-  [`Blanc/Lift/ExactMustRun.lean`](../Blanc/Lift/ExactMustRun.lean):
-  `SFunc.mustRun p K f` (a Boolean walk: every successful `SFunc.RunExact` from
-  `f` executes an instruction selected by `p`, with jump/call targets in the
-  entries `K`, checked by `SFunc.mustRunEntries p fs K`; `REVERT` leaves have no
-  successful run; loops are covered), `SFunc.RunExact.of_mustRun` for any fact a
-  selected step implies, and its shift instance `SFunc.RunExact.shifts_of_mustRun`
-  (`Ninst.isShift`, `Ninst.RunCompiled.shifts_of_isShift`); discharge both checks
-  with `decide +kernel` on the concrete tree. `CoveredFork.rules_shifts`
-  (`Blanc/Semantics.lean`) supplies the capability from fork coverage.
-  The cut-run forms (`rxc_*`, `SFunc.RunExact.toCut`) in
-  [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
-  [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean), which
-  also holds the pointer arithmetic the steps take as premises
-  (`toB256_div_two`, `one_add_toB256`; word addition and subtraction of naturals are Jaune's
-  `Nat.toB256_add_toB256` and `Nat.toB256_sub_toB256`), the
-  SHA-256 precompile step's premises and world facts (`ShaReady`, `ShaCallPost`,
-  `staticcall_sha_step`), and `BaseRel`, the world a step that writes no storage and emits
-  no log keeps.
+
+#### C9.9. I need to walk a successful lifted run
+
 - Successful lifted run to facts (safety, the inversion walk): per-node `ric_*`
   (control, over `SFunc.RunCut`; `SFunc.Run.cut`/`SFunc.RunCut.uncut` for uncut
   runs) and per-instruction `ri_*` (successor as an `St`, `ri_xor` among them; numeral-offset forms
@@ -9719,6 +10011,30 @@ contract-neutral.
   bases, and solc's reuse of the previous hash's key word (`keccak_scratch2`, from
   `Mem.read_after_right_write`). Worked uses: USDC (`Blanc/Lift/Usdc/RefineTransferCallees.lean`,
   `RefineAdminBits.lean`), the USDC leg of the Pair (`Blanc/Composition/UniswapV2PairUsdcWeth9LegsKit.lean`).
+- Straight-line inversion steps of a cut run without writing them out: `winv n` / `winv` read
+  the node off the tree of `h : SFunc.RunCut …` (or `SFunc.RunCutP P …` with `using project`) and
+  run the hand-written step `replace h := ric_next h; obtain ⟨_, hd, h⟩ := h;
+  obtain ⟨_, rfl⟩ := ri_<op> hd; clear hd` (`ri_push`, `ri_dup rfl`, `ri_swap rfl`, `ri_pop`,
+  `ri_add`, `ri_mload`, …; `ric_dest` for a `.dest`; a `ri_dup`/`ri_swap` implicit such as
+  `(w := x)` is spelled out only where a `set` abbreviation or rewritten shape needs it), stopping at a branch, jump, storage or call node; `at h` names the run (default: the
+  most recent cut run); `wskip n` steps over any `n` nodes forgetting the state
+  (`obtain ⟨_, _, h⟩ := ric_next h`), in [`Blanc/Lift/WalkInvKit.lean`](../Blanc/Lift/WalkInvKit.lean).
+- Straight-line forward steps without writing them out: `wstep` / `wrun n` / `wrun` read the
+  instruction off the goal's tree (`SFunc.RunExact` or `SFunc.RunEx`) and apply the hand-written
+  term (`rx_push rfl (by wroom)`, `rx_dup rfl …`, `rx_swap1`, `rx_pop`, `rx_dest`, `rx_<op> rfl …`),
+  stopping at a branch, jump, memory, storage or call instruction; `using tac` swaps the
+  stack-room tactic `wroom`; `wrun! n` states pushed words as numerals (`rx_push (w := 64) rfl …`)
+  and `SWAP2`–`SWAP4` by `rx_swap2`–`rx_swap4`, the convention of the Uniswap V2 pair's walks. One
+  line replaces a run of `xr (rx_… ·)` or `refine rx_… ?_` lines, in
+  [`Blanc/Lift/WalkKit.lean`](../Blanc/Lift/WalkKit.lean). The backward twin for a frame walk
+  `h : XAt …` reads the instruction off the code's byte trie (`xa n`, one family's macros, so it
+  lives with them: Curve 3pool's `Walk/AutoStep.lean`).
+- Forward runs to *some* outcome, for walks through a call answered only by an `∃ d` premise
+  (the outcome is learned midway, so it cannot be fixed up front): `SFunc.RunEx` /
+  `SFunc.RunExCut` (`∃ r, RunExact … r ∧ Q r`), the lift `SFunc.RunEx.of` with the tactics
+  `xr (rx_push rfl h ·)` / `xrc …` for any fixed-outcome step, `SFunc.runEx_iff_runExCut_nil`,
+  and the fresh-state twins `rxce_call_identity`, `rxce_vyRawCallJoin`, `rxce_vyRawCallTail` in
+  [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean).
 - Crossing code without walking it, the route-C skip theorems. A checked synthetic run never
   touches the stack below its frame, [`Blanc/Lift/FrameSkip.lean`](../Blanc/Lift/FrameSkip.lean): `FrameAt`,
   `SFunc.RunP.stack_below`, `SFunc.RunCutP.stack_below` (every stop satisfies `CutStop`),
@@ -9744,275 +10060,6 @@ contract-neutral.
   `QuietDelegateSet` closure whose every `DELEGATECALL` names one constant word (`QDKeep`), and
   `ric_call_quietDelegate`. Worked uses: USDC (`Blanc/Lift/Usdc/ShuffleSegments.lean`,
   `SignedSkip.lean`, `RefineSignedPermitNodes.lean`).
-- An `EXTCODESIZE` step with the actual warm/cold account access is in
-  [`Blanc/Lift/CodeSizeWalk.lean`](../Blanc/Lift/CodeSizeWalk.lean).
-  `temporalAccountAccessBase` and `temporalAccountAccessCost` name the selected
-  successor world and charge; `temporal_extcodesize_runCompiled` supplies the
-  compiled step from the code-size word, stack-room and covered-fork facts.
-  `ri_extcodesize` inverts the actual instruction into that world, exact word,
-  unchanged memory and residual gas. `rx_extcodesize` consumes an exact
-  continuation at the selected warm/cold charge.
-  `temporalAccountAccessBase_state`, `temporalAccountAccessBase_output` and
-  `temporalAccountAccessBase_logs` project the unchanged state, output and logs
-  through account warming. `temporalAccountAccessBase_getStor` and
-  `temporalAccountAccessBase_getCode` in
-  [`Blanc/Lift/AccountAccessState.lean`](../Blanc/Lift/AccountAccessState.lean)
-  preserve storage and code at every address. Use these facts to compose an observed call without
-  unfolding the nested world update; the Pair mint prefix consumes all three.
-  The existing Lido temporal access names are compatibility declarations over
-  this common owner.
-  For the separate flat-pricing route, use
-  `Ninst.runCompiled_extcodesize_flat` in
-  [`Blanc/ForwardFlatAccess.lean`](../Blanc/ForwardFlatAccess.lean), with explicit
-  flat prices and disabled BAL recording. Its successor retains the original
-  base and actual code-size word; use `Ninst.exec_of_stepRun` for continuation.
-  Neither route proves nonzero code size, callee liveness or the concrete
-  constructor execution.
-- A callee that fails on every input: `revertingCode` (`PUSH0 PUSH0 REVERT`); every pc-zero
-  frame over it ends in an error (`revertingCode_exec_error`, via the generic non-spawning
-  step inversion `Exec.ofExecution_inv`); an ordinary non-precompile message over it never
-  settles cleanly (`processMessage_not_clean_of_reverting`); and no static child message to
-  an account holding it answers (`not_staticAnswered_of_reverting`), which refutes the
-  `StaticAnswered` witness a successful-flag `STATICCALL` inversion retains. Use it for
-  failing-callee (callee-premise) controls, in
-  [`Blanc/Lift/RevertingCallee.lean`](../Blanc/Lift/RevertingCallee.lean).
-- A callee silent on one selector, whatever its code: `NoStaticAnswer code sel` (no
-  static child message to a non-precompile account holding `code` answers calldata
-  with selector `sel`), which refutes the same `StaticAnswered` witness. The Pair
-  proves the `0x1626ba7e` instance in its own stratum; the USDC library side takes it
-  as a hypothesis. Use it for selector-silence (answered-call) refutations, in
-  [`Blanc/Lift/StaticSilent.lean`](../Blanc/Lift/StaticSilent.lean).
-  `NoStaticAnswerH` uses `NeutralFork` and the actual-rule `StaticAnsweredH`
-  witness; `NoStaticAnswerH.toCovered` recovers the original interface.
-  `UniswapV2Pair.not_staticAnswered_pairH` shares the same message-entry and
-  settlement proof, using `staticView_bytecode_invH` and canonical actual-flag
-  call-code resolution. The modern Pair theorem projects from it. This supplies
-  the historical silence boundary for contract-signature consumers; it does
-  not by itself migrate the USDC library or establish owner rejection.
-  The first library consumers in `Blanc/Lift/Usdc/LibReject.lean` are
-  `lib_run_cut_noStateGas` (the actual successful bytecode cut) and
-  `lib_e8_invH` (the `isContract` branch with the executing rules' account-access
-  successor). The shared nonstorage memory walks retain their modern interfaces;
-  the static-call tail uses actual `StaticAnsweredH` and silence restricted to
-  the same executing environment, preserving the old global silence interface.
-  `Usdc.lib_rejects_pairH` now supplies the complete raw historical rejection
-  under `NeutralFork` and historical Pair silence, sharing the original decoder
-  and selection proof. In `Blanc/Lift/Usdc/LibSeam.lean`, `LibRejectsH` and
-  `LibSeam.lib_rejects_pairH` expose its fresh-frame interface. `LibRejectsAt`
-  restricts rejection to actual children with the same `benvStat`;
-  `LibRejects.at_of_covered` and `LibRejectsH.at_of_neutral` supply it without
-  converting the old global capability into a stronger one.
-  In `Blanc/Lift/Usdc/SignedSites.lean`, `tail3_false_nonstorage`,
-  `tail2_false_noStateGas` and `tail1_falseH` reuse the original result-word,
-  delegate-child and account-access tails with that same-environment capability.
-  `sx_nonstorage` orchestrates canonical nonstorage inversions;
-  `usdcLib_not_precompile_any` proves the fixed library address exclusion for
-  each actual fork. The original covered interfaces remain projections.
-  Selected permit consumers `ric_seg_e8digest_noStateGas` in
-  `Blanc/Lift/Usdc/ShuffleSegments.lean` and `ric_seg_w149_noStateGas` in
-  `Blanc/Lift/Usdc/RefineSignedPermitFrames.lean` reuse the original shuffle
-  checks. `skipP_78_noStateGas` and `skipP_79_noStateGas` in
-  `Blanc/Lift/Usdc/SignedPathsKit.lean` preserve the exact silent-call frames,
-  returned stacks and world-state equalities. `preambleP_nonstorage` preserves
-  the actual entry-to-dispatcher run without a fork premise. The encoding chain
-  `tail0_falseH`, `enc_falseH` and `site9_falseH` in SignedSites uses actual
-  state-gas/BAL absence and the same local rejection capability; it preserves
-  the original memory bounds, free-pointer observations and copy-loop proof.
-  `walk8H`, `walk94H`, `path_permitVrsH` and `path_permitBytesH` in
-  `Blanc/Lift/Usdc/SignedPathsPermit.lean` use actual SLOAD/SSTORE inversions
-  at the certified instruction positions, with canonical historical code
-  preservation and unchanged owner-word cleanup. Their original covered
-  interfaces remain projections. `impl_permit_pair_not_okH` in
-  `Blanc/Lift/Usdc/SignedPaths.lean` excludes successful Pair-owned calls for
-  the canonical V2_2 permit selectors, preserving the actual execution and
-  entry-world library/Pair code premises. Its dispatcher adaptation is shared
-  with the original covered endpoint.
-  `Blanc/Composition/UniswapV2PairUsdcOwnersIn.lean` supplies
-  `mid_retained_owner_excluded_from_installations_of_mid_roots` for the same
-  actual retained V2_2 frame (see the owner-exclusion paragraph below). The
-  P1 instance consuming these producers is
-  `pairUsdcAllowQuiet_of_connected_original_receipts_of_retained_actualKeys_constructor_bootstrap`
-  in [`UniswapV2PairUsdcRetainedP1.lean`](../Blanc/Composition/UniswapV2PairUsdcRetainedP1.lean),
-  over the exact `PairTouchedSpenders` of the consumed post-checkpoint trace
-  ([`UniswapV2PairUsdcWeth9P1.lean`](../Blanc/Composition/UniswapV2PairUsdcWeth9P1.lean)).
-- The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
-  `UniswapV2Pair.code`, emitted by the registered certificate generator from the
-  `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
-  Both contract strata name the same bytes through this module; `Check.cert_check`
-  checks them.
-- A `STATICCALL` to an arbitrary callee, whose code is unknown: its abstract outcome
-  (`StaticCallPost`: flag, returned bytes as output window and return data, every storage
-  map and the log list kept) and, for a set flag, the successful static child message
-  (`StaticAnswered`), inverted (`ri_staticcall`) and forward over a caller-supplied step
-  (`rx_staticcall`), in [`Blanc/Lift/StaticCall.lean`](../Blanc/Lift/StaticCall.lean).
-  `StaticCallPost.output` retains the parent's enclosing output when the flag
-  is set; child bytes populate memory and `returnData`. It reuses
-  `Resume.call_output` in `Blanc/LadderBase.lean`.
-  `ri_staticcall_bounded` additionally derives `out.length < 2^256` from the
-  actual static-call producer, for the same outcome and full return data. This
-  bound is independent of the caller's output window and needs no callee premise.
-- A mutable `CALL` to an arbitrary callee: `MutableCallPost` (flag on top of the
-  rest; for a set flag, the output window written with a prefix of the full
-  return data and the caller's own output kept) and its inverse `ri_call_post`, in
-  [`Blanc/Lift/MutableCallPost.lean`](../Blanc/Lift/MutableCallPost.lean). Callee
-  storage effects are deliberately unstated; consume them through a turn fold over
-  the child derivation. The Pair swap callback consumes it.
-  For literal call-success and return-width guards around that primitive, use
-  [`Blanc/Lift/StaticCallGuard.lean`](../Blanc/Lift/StaticCallGuard.lean):
-  `staticCallGuard_invP` keeps the original instruction predicate and witness,
-  full reply, bounded producer and original continuation; `returnWidthGuard_invP`
-  derives the ABI minimum width from the actual guard. Their `_exact` forms
-  consume the genuine compiled call, actual returned stack/gas and continuation.
-  Request/output windows and `PtrMem` are parameterized; replies need not have
-  exactly32 bytes, and the returned world is not replaced by its pre-call world.
-  For an actual `Line.Run` through the comparison, use
-  `returnWidthCompareLine_inv` with `returnWidthCompareLine` and `PtrMem`.
-  It retains the actual post-state and comparison stack, including the full
-  returndata length converted to a word. Combine the bounded producer result
-  with the actual taken branch to derive the minimum width; the line alone
-  does not establish it. `returnWidthGuard_invP` reuses this single inversion
-  while retaining the residual cut's original instruction predicate.
-  The required literal tree and failure facts are not selected reliably by a
-  general `RunCutP` or `RunExact` goal head, so these entries remain registry-only.
-  `CALLER` (`rx_caller`, `ri_caller`), `KECCAK256` inverted (`ri_keccak`), `LOG3`
-  (`rx_log3`, `ri_log3`), `SSTORE` forward at its selected cost (`rx_sstore`), `RETURN`
-  inverted (`ri_return`), the memory facts `Mem.reads_data`/`Mem.read_write_word_of_wf`, and
-  the world projections after a store, log or return (`getStor_afterStore`,
-  `getStor_afterStore_ne`, `getStorVal_afterStore`, `logs_afterStore`, `getStor_addLog`,
-  `logs_addLog`, `getAcct_addLog`, `output_addLog`, `getStor_St_return`,
-  `logs_St_return`, `output_St_return`) are in
-  [`Blanc/Lift/WalkSteps.lean`](../Blanc/Lift/WalkSteps.lean), which also holds
-  exact forward `TIMESTAMP` (`rx_timestamp`, actual block-header time and two gas),
-  `SLT`, `TIMESTAMP`, `LOG2`, `TLOAD` and `TSTORE` inverted (`ri_slt`, `ri_timestamp`,
-  `ri_log2`, `ri_tload`, `ri_tstore`; `getStor_setTransVal`, `getCode_setTransVal`) and
-  `StorStep sevm b b' s`, a chain of loads and stores that changed only the executing
-  contract's storage (to `s`) and no log, built with `StorStep.refl`/`.sload`/`.sstore`/
-  `.trans`/`.congr`/`.of_getStor` and read with `StorStep.getStorVal`
-  (`getStorVal_eq_getStor` unfolds a word read).
-  `ri_log2_post` retains the precise added log (current target, both topics,
-  actual read bytes) and the read-expanded memory, leaving only residual gas
-  existential. `ri_log2` is its compatibility projection. Prove memory fit
-  before simplifying that returned memory to the input memory. This inverse
-  needs an existing instruction run and does not manufacture gas affordability;
-  its existential endpoint alone is not a reliable recipe trigger.
-- Concrete runs checked by kernel evaluation of Jaune's own `Evm.step`:
-  `ConcreteRun.stepN` (at most `n` continuing steps), `stepN_add`, `stepN_sta`, and the
-  bridges into the canonical derivation `ConcreteRun.exec_of_stepN`,
-  `exec_of_stepN_halt` and `exec_of_stepN_spawn_runOk` (across one `.spawn`), in
-  [`Blanc/ConcreteRun.lean`](../Blanc/ConcreteRun.lean). Worked use:
-  `Blanc/Lift/VyperNonreentrantDeployed/Concrete/ProxyConcrete.lean`.
-- A concrete frame run over a lifted certificate, as a gas-exact `SProg.RunExact`
-  (an executable witness: liveness from one start state, by kernel evaluation): the
-  interpreter `Witness.wrun` over the certificate's decoded tree, its single step
-  `wstep`, the configuration `Cfg` with the accessed-set and storage/account shadows
-  (`StorShadow`, `AcctShadow`, `storOf`, `AcctAgree`), Jaune's `State.set`
-  directly (kernel-reducible at the pinned Jaune), the kernel-cheap memory write
-  `memWriteB` (with `mem_write_eq_B`), the `CALL`
-  preparation `callPrep`/`callPrep_spec`, and chunk composition `wrun_add`/`wrun_add_cont`
-  in [`Blanc/Lift/WitnessArms.lean`](../Blanc/Lift/WitnessArms.lean). Transfer
-  shadows use `storSetBal` and `storTransfer`: account deletion filters every
-  cell at that owner, debit precedes credit, and zero value leaves the shadows
-  unchanged. `lookupS_filter_owner`, `storSetBal_agree`, and
-  `benvAfterTransferS_stor` prove these exact storage projections;
-  `acctView_clearIfEmpty` preserves the account-view fields. The raw
-  `storOf_setBal` now returns a conditional zero for deletion, and
-  `benvAfterTransferB_stor` concludes agreement with the transferred shadow.
-  `frameEnterB_done_acc` preserves accessed sets; use the separate
-  `frameEnterB_done_ok_state` for a successful child's actual transfer world.
-  The soundness theorem `Witness.wrun_exact` (from `wrun_cont`/`wrun_done` over `RunK`/`Agree`), the
-  shadow seeds `stateFoldAcct`/`stateFoldStor`, and code children supplied as data
-  (`ChildOk`, `ChildAgree`, `callResume`) in
-  [`Blanc/Lift/Witness.lean`](../Blanc/Lift/Witness.lean). A code child discharged by its
-  own witness run: `childStart`/`childStart_agree`, `childRun`, `childOk_of_start`,
-  `childOk_of_childRun`, `frame_of_wrun`, `childAgree_of_halt`, and the DELEGATECALL
-  preparation `dcallPrep`/`dcallPrep_spec`, in
-  [`Blanc/Lift/WitnessChild.lean`](../Blanc/Lift/WitnessChild.lean). `frame_settle_ok` and
-  `frame_of_wrun` require the frame's selected `settle.touchedSweep = false` capability;
-  `childOk_of_start` and `childOk_of_childRun` derive it from their existing covered-fork
-  evidence. `Witness.wrun_exact` remains generic. Historical settlement still needs a
-  producer that retains `recordTouch` and the touched-account metadata. Child starts
-  (`childStart`, `NodeWalk.childCfg`, and explicit `frame_of_wrun` inputs) use
-  `storTransfer` alongside `acsTransfer`; reusing the pre-transfer storage
-  shadow requires a separate no-change proof. That proof is
-  `transferKeepsStor m acs` (decided by evaluation: no value moves, or both
-  endpoints have a nonzero shadow nonce) with `storTransfer_of_keeps`, and
-  `frameStart_agree_keep` is `frameStart_agree` with the parent's storage shadow
-  itself (`storSetBal_of_nonce`, `lookupA_acsSetBal_nonce` underneath);
-  `haltCreated` projects a run's halted created set for a kernel decision. A
-  settled child supplied as data is restored by `Devm.withCreatedAccounts_of_eq`
-  (`Blanc/CommonProofs/Base.lean`). The frame-level spawn
-  fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
-  `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
-  [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); reading a run's final
-  shadow expressed as a prefix appended to a base shadow, without enumerating addresses or keys:
-  `lookupA_append_of_restate` (a prefix restating the start's views changes no account),
-  `lookupS_append_of_ne` (writes elsewhere leave an address's storage),
-  `lookupS_append_of_absent` (a start with nothing at the address leaves the prefix's values)
-  and `lookupS_eq_zero_of` (only zero entries at a key) in
-  [`Blanc/Lift/WitnessShadow.lean`](../Blanc/Lift/WitnessShadow.lean); the literal-free
-  scaffolding for deciding a long `wrun` as kernel chunks between literal boundaries
-  (`Boundary.Bnd`/`obsB`/`cfgOf`/`obsD`/`obsDOk`, their composition `obsD_chain`,
-  `obsD_chain3`, `obsB_of_obsD`, `run_of_obsB` (every boundary also records that the frame's
-  accounts to delete are still empty and that the transaction's created accounts are empty,
-  `AtdClean`: `SSTORE`'s original read consults the created set, so a chunk over free
-  bookkeeping is decided with it fixed; a settled child supplied as data must likewise carry
-  an empty created set, e.g. `childObs … (d.withCreatedAccounts .emptyWithCapacity)`);
-  `Bnd1`/`cfgOf1`/`obsD1`/
-  `obsDOk1` with the refund counter and the accounts to delete optional (the created set always
-  empty); and a two-code-child frame's staging `callPairFrom`/`callPairA`/`callPairB`/
-  `callPairFrom_stages`) in
-  [`Blanc/Lift/WitnessBoundary.lean`](../Blanc/Lift/WitnessBoundary.lean). Code tries given as
-  generated literals (checked once by kernel `rfl`): `CodeTries.ofData` in
-  [`Blanc/Lift/CodeTriesData.lean`](../Blanc/Lift/CodeTriesData.lean); the data checked in one
-  linear pass that also yields the length bound (`LTrie.build`, `LTrie.build_eq`,
-  `LTrie.eq_ofList_of_build`, `LTrie.length_le_of_build`; producer option `check.trie_build`) in
-  [`Blanc/Lift/CodeTriesBuild.lean`](../Blanc/Lift/CodeTriesBuild.lean). Worked use:
-  `Blanc/Lift/VyperNonreentrantDeployed/Vulnerable/Top.lean` (`vminus_witness`).
-- Hashed storage slots: `mapSlot key base = keccak256(pad32 key ‖ pad32 base)`, solc's mapping
-  slot and, with the arguments swapped (slot first), Vyper's, in
-  [`Blanc/Lift/MapSlot.lean`](../Blanc/Lift/MapSlot.lean).
-- Vyper 0.2.x runtimes: the frame prologue (`vyPrologue`, `ric_vyPrologue`, `rx_vyPrologue`,
-  memory `vyMem`/`vyImg`), the clamp constants as an image invariant (`VyClamps`,
-  `vyImg_clamps`, `VyClamps.clamp`), the non-payable guard and address-argument clamp every body starts with
-  (`vyNonpayable`, `vyAddrArg`, their `rx_`/`ric_` forms), and the `HashMap` slot scratch window
-  (`vySlot_read`, `vySlot_keccak`) with its whole macro (`vySlot`, `ric_vySlot`, `rx_vySlot`),
-  the checked storage subtract/add macros (`vySubStore`, `vyAddStore`, their `rx_` and
-  `ric_…H` forms, `B256.nof_iff_not_add_lt`), the selector read (`vyImg_selector`), and word facts
-  (`B256.xor_zero`, `B256.xor_eq_zero_iff`, `B256.toAdr_toB256_of_lt`), the `String` copy
-  loops with the counter in memory at `0x120`: storage to memory (`vyLoadLoopTree`,
-  `rx_vyLoadStep`, `rx_vyLoadLast`, `rx_vyLoadExit`) and memory to storage (`vyStoreLoopTree`,
-  `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIterH`
-  (a storing pass also proves the frame non-static),
-  and the set-up `vyStoreHead` with `rx_`/`ric_vyStoreHead`), unrolled per pass since the cap
-  bounds the count, the load loop's pass inverted (`ric_vyLoadIterH`); the
-  four inversions are stated from the rule facts they read (they have no `CoveredFork` form), over the actual access schedule's
-  successors `afterSloadH`/`afterSstoreH` (`HistAccessWalk.lean`): `ric_vySubStoreH`,
-  `ric_vyAddStoreH`, `ric_vyStoreIterH` (`rules.stateGas = none`) and `ric_vyLoadIterH`
-  (`rules.bal = none`), and the forward passes, gas-exact over `sloadCostH`/`sstoreCostH`:
-  `rx_vySubStoreH`, `rx_vyAddStoreH`, `rx_vyLoadStepH`, `rx_vyLoadLastH`, `rx_vyStoreStepH`,
-  `rx_vyStoreLastH` (`rules.stateGas = none`), with the `CoveredFork` names (`rx_vySubStore`, `rx_vyAddStore`, ...) their corollaries;
-  a stored-`String` view's
-  body up to its load loop (`vyStrView`) with the join's `ceil32_eq` and the zero-fill read
-  `sliceD_data_end`, and `sstoreCost_le`, `Mem.read_write_disjoint`, `vy_mul32`, in
-  [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
-- Walk a Vyper 0.2 selector dispatcher on a frame's actual derivation (`XAt`) by evaluation,
-  never test by test: from a sound decoder of the code (`DecSound dec code`, e.g. a trie
-  `decodeT`), `vyChain dec n p` reads the chain of `PUSH4 c PUSH1 0 MLOAD EQ ISZERO PUSH2 t JUMPI`
-  tests and always-taken `PUSH1 0 ISZERO PUSH2 t JUMPI` skips; a contract states it once as a
-  literal list by `decide +kernel` (Curve 3pool: `poolLinks`/`pool_chain`); `xa_vyChain` takes a
-  frame with selector `σ` to `vyHit σ ls e` (the arm past the first equal test, kernel-computed
-  from the list) and `xa_vyChain_miss` takes a selector missing every test to the chain's end,
-  with the prologue's memory `vyMem Mem.empty w` kept (`ri_mload_vy0`, `vyMem_word0_selector`);
-  one test or skip alone is `xa_vyTest`/`xa_vyPass`; in
-  [`Blanc/Lift/VyperDispatchWalk.lean`](../Blanc/Lift/VyperDispatchWalk.lean). Worked use:
-  `Blanc/Lift/Curve3Pool/Walk/Dispatch.lean` (`xa_dispatch`, `xa_dispatch_miss`).
-- The same dispatcher forward and gas-exact over a lifted program's trees: `SFunc.vyFwd σ n t`
-  evaluates the chain of tests (28 gas), always-taken skips (19) and `JUMPDEST`s (1) from the tree
-  `t` for the selector `σ`, returning the arm reached and the gas spent; `rx_vyFwd`/`rxe_vyFwd`
-  turn a run of that arm (prologue memory `vyMem Mem.empty w`) into a run of `t` for that gas
-  more, the pair closed by `kernel_rfl` for a concrete program; in
-  [`Blanc/Lift/VyperDispatchExact.lean`](../Blanc/Lift/VyperDispatchExact.lean). Worked use:
-  `Blanc/Lift/Curve3Pool/Walk/DispatchLive.lean` (`rxe_dispatch`, one line per `rx_dispatch_*`).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
   `SFunc.RunCutP.loop` (invariant; `SFunc.RunP.loop`), which
@@ -10035,38 +10082,6 @@ contract-neutral.
   `PUSH1 6; PC; ADD; PUSH2 t; JUMP` as `pcCallTree p t0 t1 k f`, inverted by `ric_pcCall` (a
   callee run from return address `p + 6` and the continuation) and built by `rxc_pcCall`
   (cost 19); all in [`Blanc/Lift/InvWalkCallNext.lean`](../Blanc/Lift/InvWalkCallNext.lean).
-- Unrolled Vyper frame save/restore chains (a counter word walks a frame `[lo, lo + 32 n)`,
-  pushing or popping one word per copy): templates `frameSaveIter`/`frameRestoreIter`,
-  constants `FrameLoopTpl`, one-`rfl` chain facts `FrameSaveChain`/`FrameRestoreChain`;
-  safety `ric_frameSave_chain`/`ric_frameRestore_chain`, liveness
-  `rxc_frameSave_chain`/`rxc_frameRestore_chain` (cost `67 (n-1) + 56`, `70 (n-1) + 59`);
-  memory `saveMem`, `restoreMem` and `restoreMem_frameWords` (the restored frame reads as the
-  saved one), and the word-slot carrier `Words M L` (`Words.write`, `.agree`, `.read`) over
-  `memWord`/`Mem.AgreeOutside`; all in
-  [`Blanc/Lift/VyperFrameLoop.lean`](../Blanc/Lift/VyperFrameLoop.lean).
-- Vyper 0.2.x checked `uint256` arithmetic and word-slot frames: the idiom trees
-  `vyMulT`/`vyAddT`/`vySubT`/`vyDivT` (guard, `PUSH2 ok JUMPI` over `vyRevertT`, clean-up),
-  inverted by `ric_vyMulT`/`ric_vyAddT`/`ric_vySubT`/`ric_vyDivT` (the guard as a `Nat` fact:
-  `B256.Nofm`, no-wrap sum, no underflow, nonzero divisor) and built by
-  `rxc_vyMulT`/`rxc_vyAddT`/`rxc_vySubT`/`rxc_vyDivT` (69/51/45/38 gas); the bridges to the
-  checked naturals of `StableSwapNewton/Defs.lean` (`chkMul_toNat_of_nofm`, `chkAdd_toNat_of_lt`,
-  `chkSub_toNat_of_le`, `chkDiv_toNat_of_ne` and their inverses `chkMul_inv` … `chkDiv_inv`);
-  the frame carrier `WordFrame M0 M lo ws` (`ws` at `lo + 32 j`, `M0`'s size, agreement off the
-  window, `Mem.Wf` kept) with `ric_mloadF`/`ric_mstoreF` (and `PUSH2` forms) and their forward
-  `rxc_*F` (3/6 gas); `ScratchOut` for a callee's result in scratch word `0`
-  (`WordFrame.scratch`, `ScratchOut.keepsOff` to `Mem.KeepsOff`, `ScratchOut.words`); the
-  `int128` range check `B256.toNat_lt_three_of_slt` (`ri_sltV`); comparison flags
-  (`toNat_lt_of_iszero_gt_eq_zero`, `eq_zero_of_iszero2_eq_zero`, `gtCheck_toNat`,
-  `iszero_eq3_ne` / `iszero_eq3_eq` for a three-iteration word counter, …) and the
-  forward `JUMPI` into a goto entry `rxc_branchTo_zero`/`_cut`/`_taken`; the tracked-memory
-  frame kit over `MemTrack` (`MemTrack.saveMem'`/`MemTrack.restoreMem` across the frame
-  save/restore chains, `Words.restoreMem'`, `Words.of_frameSlots`, `Mem.KeepsOff.widen`,
-  `MemTrack.withWords`), the bridges `WordFrame.keepsOff`/`WordFrame.memTrack`/
-  `WordFrame.words1`, the untracked load `ric_mloadU` (`imloadU`), `isltV`, the forward
-  `rxc_slt`/`rxc_xor`, and `xname` (name the tracked memory of a forward walk); all in
-  [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
-  The fuel-loop kit's `RunExactCut_fuelLoop_peelAt` (one peeled pass at one counter, for a copy
-  whose last-pass fall-through is unreachable) is in `FuelLoopWalk.lean`.
 - Indexed loads from three consecutive carried words: `pickWord3` selects the word,
   `word3_indexAddr` converts `32 * i + base` to its natural offset under the explicit
   index/base bounds, and `ri_mloadWord3` inverts the actual `MLOAD` over `Words` plus
@@ -10112,6 +10127,114 @@ contract-neutral.
   read algebra `Mem.read_split`, `Mem.read_split64`, `Mem.read_two_word_writes_wf`,
   `Mem.read_write_word_disjoint`, `Mem.read_write_word_inside`, in
   [`Blanc/Lift/MemGlue.lean`](../Blanc/Lift/MemGlue.lean).
+- Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as
+  `getDMem_spec` need): `Mem.size_write_mod32`, `Mem.size_extends_mod32`, the image steps
+  `ri_mload_imgAtA`/`ri_mstore_imgAtA`/`ri_calldatacopy_imgAtA`/`ri_keccak_imgAtA` and the
+  spawning steps `xa_staticcall_imgA`/`xa_call_imgA`/`xa_identity_imgA` in
+  [`Blanc/Lift/FrameWalkAligned.lean`](../Blanc/Lift/FrameWalkAligned.lean).
+- For crossing solc's word-copy loop without knowing the copied bytes, use
+  [`Blanc/Lift/CopyLoopKeep.lean`](../Blanc/Lift/CopyLoopKeep.lean):
+  `copy_loop_keep` (under the memory potential the loop leaves every byte below
+  the destination alone and exits with `len ≤ i'`).
+  `copy_loop_keep_nonstorage` shares that proof without a fork premise; the
+  original interface remains a compatibility projection.
+- solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
+  [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
+  `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile
+  (`copy_sha_gen` over memory of any word-aligned size, with its result image
+  `shaImg`; its corollaries `copy_sha`, `packed_sha_pair`, and `pair_mem_sha` for a
+  pair whose second word is the previous digest at the free pointer) in
+  [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and the corollary
+  over memory that already covers the destination (`copy_sha_covered`) in
+  [`Blanc/Lift/PackedShaCovered.lean`](../Blanc/Lift/PackedShaCovered.lean).
+  The same site as solc emits it under its size-favouring constant optimiser
+  (creation code: `-32` as `PUSH1 0x1f NOT`, the all-ones mask as `PUSH1 0 NOT`;
+  `mcpyTreeN`, `mergeTreeN`, `copy_shaN_gen`, `copy_shaN`, `packed_sha_pairN`) in
+  [`Blanc/Lift/PackedShaSize.lean`](../Blanc/Lift/PackedShaSize.lean).
+- For the size-optimized two-word packed-SHA site under actual Muir Glacier rules,
+  [`Blanc/Lift/HistPackedShaSize.lean`](../Blanc/Lift/HistPackedShaSize.lean)
+  provides `staticcall_sha_stepMuir`, `copy_shaNMuir_gen`, `copy_shaNMuir`, and
+  `packed_sha_pairNMuir`. The exact call costs 784 gas, copy/merge/call costs
+  1207 plus expansion, and packing costs 1336 plus expansion. The hash stays
+  symbolic; these forward constructors require no successful-run premise.
+  No reliable single goal-head trigger distinguishes this rule-specific site.
+
+#### C9.10. I need a Vyper 0.2 runtime's idioms
+
+- Vyper 0.2.x runtimes: the frame prologue (`vyPrologue`, `ric_vyPrologue`, `rx_vyPrologue`,
+  memory `vyMem`/`vyImg`), the clamp constants as an image invariant (`VyClamps`,
+  `vyImg_clamps`, `VyClamps.clamp`), the non-payable guard and address-argument clamp every body starts with
+  (`vyNonpayable`, `vyAddrArg`, their `rx_`/`ric_` forms), and the `HashMap` slot scratch window
+  (`vySlot_read`, `vySlot_keccak`) with its whole macro (`vySlot`, `ric_vySlot`, `rx_vySlot`),
+  the checked storage subtract/add macros (`vySubStore`, `vyAddStore`, their `rx_` and
+  `ric_…H` forms, `B256.nof_iff_not_add_lt`), the selector read (`vyImg_selector`), and word facts
+  (`B256.xor_zero`, `B256.xor_eq_zero_iff`, `B256.toAdr_toB256_of_lt`), the `String` copy
+  loops with the counter in memory at `0x120`: storage to memory (`vyLoadLoopTree`,
+  `rx_vyLoadStep`, `rx_vyLoadLast`, `rx_vyLoadExit`) and memory to storage (`vyStoreLoopTree`,
+  `rx_vyStoreStep`, `rx_vyStoreLast`, `rx_vyStoreExit`, one pass inverted `ric_vyStoreIterH`
+  (a storing pass also proves the frame non-static),
+  and the set-up `vyStoreHead` with `rx_`/`ric_vyStoreHead`), unrolled per pass since the cap
+  bounds the count, the load loop's pass inverted (`ric_vyLoadIterH`); the
+  four inversions are stated from the rule facts they read (they have no `CoveredFork` form), over the actual access schedule's
+  successors `afterSloadH`/`afterSstoreH` (`HistAccessWalk.lean`): `ric_vySubStoreH`,
+  `ric_vyAddStoreH`, `ric_vyStoreIterH` (`rules.stateGas = none`) and `ric_vyLoadIterH`
+  (`rules.bal = none`), and the forward passes, gas-exact over `sloadCostH`/`sstoreCostH`:
+  `rx_vySubStoreH`, `rx_vyAddStoreH`, `rx_vyLoadStepH`, `rx_vyLoadLastH`, `rx_vyStoreStepH`,
+  `rx_vyStoreLastH` (`rules.stateGas = none`), with the `CoveredFork` names (`rx_vySubStore`, `rx_vyAddStore`, ...) their corollaries;
+  a stored-`String` view's
+  body up to its load loop (`vyStrView`) with the join's `ceil32_eq` and the zero-fill read
+  `sliceD_data_end`, and `sstoreCost_le`, `Mem.read_write_disjoint`, `vy_mul32`, in
+  [`Blanc/Lift/Vyper.lean`](../Blanc/Lift/Vyper.lean).
+- Walk a Vyper 0.2 selector dispatcher on a frame's actual derivation (`XAt`) by evaluation,
+  never test by test: from a sound decoder of the code (`DecSound dec code`, e.g. a trie
+  `decodeT`), `vyChain dec n p` reads the chain of `PUSH4 c PUSH1 0 MLOAD EQ ISZERO PUSH2 t JUMPI`
+  tests and always-taken `PUSH1 0 ISZERO PUSH2 t JUMPI` skips; a contract states it once as a
+  literal list by `decide +kernel` (Curve 3pool: `poolLinks`/`pool_chain`); `xa_vyChain` takes a
+  frame with selector `σ` to `vyHit σ ls e` (the arm past the first equal test, kernel-computed
+  from the list) and `xa_vyChain_miss` takes a selector missing every test to the chain's end,
+  with the prologue's memory `vyMem Mem.empty w` kept (`ri_mload_vy0`, `vyMem_word0_selector`);
+  one test or skip alone is `xa_vyTest`/`xa_vyPass`; in
+  [`Blanc/Lift/VyperDispatchWalk.lean`](../Blanc/Lift/VyperDispatchWalk.lean). Worked use:
+  `Blanc/Lift/Curve3Pool/Walk/Dispatch.lean` (`xa_dispatch`, `xa_dispatch_miss`).
+- The same dispatcher forward and gas-exact over a lifted program's trees: `SFunc.vyFwd σ n t`
+  evaluates the chain of tests (28 gas), always-taken skips (19) and `JUMPDEST`s (1) from the tree
+  `t` for the selector `σ`, returning the arm reached and the gas spent; `rx_vyFwd`/`rxe_vyFwd`
+  turn a run of that arm (prologue memory `vyMem Mem.empty w`) into a run of `t` for that gas
+  more, the pair closed by `kernel_rfl` for a concrete program; in
+  [`Blanc/Lift/VyperDispatchExact.lean`](../Blanc/Lift/VyperDispatchExact.lean). Worked use:
+  `Blanc/Lift/Curve3Pool/Walk/DispatchLive.lean` (`rxe_dispatch`, one line per `rx_dispatch_*`).
+- Unrolled Vyper frame save/restore chains (a counter word walks a frame `[lo, lo + 32 n)`,
+  pushing or popping one word per copy): templates `frameSaveIter`/`frameRestoreIter`,
+  constants `FrameLoopTpl`, one-`rfl` chain facts `FrameSaveChain`/`FrameRestoreChain`;
+  safety `ric_frameSave_chain`/`ric_frameRestore_chain`, liveness
+  `rxc_frameSave_chain`/`rxc_frameRestore_chain` (cost `67 (n-1) + 56`, `70 (n-1) + 59`);
+  memory `saveMem`, `restoreMem` and `restoreMem_frameWords` (the restored frame reads as the
+  saved one), and the word-slot carrier `Words M L` (`Words.write`, `.agree`, `.read`) over
+  `memWord`/`Mem.AgreeOutside`; all in
+  [`Blanc/Lift/VyperFrameLoop.lean`](../Blanc/Lift/VyperFrameLoop.lean).
+- Vyper 0.2.x checked `uint256` arithmetic and word-slot frames: the idiom trees
+  `vyMulT`/`vyAddT`/`vySubT`/`vyDivT` (guard, `PUSH2 ok JUMPI` over `vyRevertT`, clean-up),
+  inverted by `ric_vyMulT`/`ric_vyAddT`/`ric_vySubT`/`ric_vyDivT` (the guard as a `Nat` fact:
+  `B256.Nofm`, no-wrap sum, no underflow, nonzero divisor) and built by
+  `rxc_vyMulT`/`rxc_vyAddT`/`rxc_vySubT`/`rxc_vyDivT` (69/51/45/38 gas); the bridges to the
+  checked naturals of `StableSwapNewton/Defs.lean` (`chkMul_toNat_of_nofm`, `chkAdd_toNat_of_lt`,
+  `chkSub_toNat_of_le`, `chkDiv_toNat_of_ne` and their inverses `chkMul_inv` … `chkDiv_inv`);
+  the frame carrier `WordFrame M0 M lo ws` (`ws` at `lo + 32 j`, `M0`'s size, agreement off the
+  window, `Mem.Wf` kept) with `ric_mloadF`/`ric_mstoreF` (and `PUSH2` forms) and their forward
+  `rxc_*F` (3/6 gas); `ScratchOut` for a callee's result in scratch word `0`
+  (`WordFrame.scratch`, `ScratchOut.keepsOff` to `Mem.KeepsOff`, `ScratchOut.words`); the
+  `int128` range check `B256.toNat_lt_three_of_slt` (`ri_sltV`); comparison flags
+  (`toNat_lt_of_iszero_gt_eq_zero`, `eq_zero_of_iszero2_eq_zero`, `gtCheck_toNat`,
+  `iszero_eq3_ne` / `iszero_eq3_eq` for a three-iteration word counter, …) and the
+  forward `JUMPI` into a goto entry `rxc_branchTo_zero`/`_cut`/`_taken`; the tracked-memory
+  frame kit over `MemTrack` (`MemTrack.saveMem'`/`MemTrack.restoreMem` across the frame
+  save/restore chains, `Words.restoreMem'`, `Words.of_frameSlots`, `Mem.KeepsOff.widen`,
+  `MemTrack.withWords`), the bridges `WordFrame.keepsOff`/`WordFrame.memTrack`/
+  `WordFrame.words1`, the untracked load `ric_mloadU` (`imloadU`), `isltV`, the forward
+  `rxc_slt`/`rxc_xor`, and `xname` (name the tracked memory of a forward walk); all in
+  [`Blanc/Lift/VyperCheckedArith.lean`](../Blanc/Lift/VyperCheckedArith.lean).
+  The fuel-loop kit's `RunExactCut_fuelLoop_peelAt` (one peeled pass at one counter, for a copy
+  whose last-pass fall-through is unreachable) is in `FuelLoopWalk.lean`.
 - Vyper 0.2.x internal-callee walks (a callee's value contract without concrete memory
   terms, windows as `Mem.KeepsOff` of `Blanc/Lift/MemGlue.lean`): the tracked walk memory
   `MemTrack M₀ M W L` (kept off the windows `W`, carrying the words `L`, well formed) with the
@@ -10151,48 +10274,9 @@ contract-neutral.
   byte-number bridge `Bytes.toNat_toB256_of_length` / `B256.toNat_eq_toBytes` and the
   no-`Mem.Wf` byte readers `Mem.write_getD_inside`, `Mem.read_fst_of_getD`, in
   [`Blanc/Lift/VyperRawCall.lean`](../Blanc/Lift/VyperRawCall.lean).
-- Forward runs to *some* outcome, for walks through a call answered only by an `∃ d` premise
-  (the outcome is learned midway, so it cannot be fixed up front): `SFunc.RunEx` /
-  `SFunc.RunExCut` (`∃ r, RunExact … r ∧ Q r`), the lift `SFunc.RunEx.of` with the tactics
-  `xr (rx_push rfl h ·)` / `xrc …` for any fixed-outcome step, `SFunc.runEx_iff_runExCut_nil`,
-  and the fresh-state twins `rxce_call_identity`, `rxce_vyRawCallJoin`, `rxce_vyRawCallTail` in
-  [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean).
-- Straight-line forward steps without writing them out: `wstep` / `wrun n` / `wrun` read the
-  instruction off the goal's tree (`SFunc.RunExact` or `SFunc.RunEx`) and apply the hand-written
-  term (`rx_push rfl (by wroom)`, `rx_dup rfl …`, `rx_swap1`, `rx_pop`, `rx_dest`, `rx_<op> rfl …`),
-  stopping at a branch, jump, memory, storage or call instruction; `using tac` swaps the
-  stack-room tactic `wroom`; `wrun! n` states pushed words as numerals (`rx_push (w := 64) rfl …`)
-  and `SWAP2`–`SWAP4` by `rx_swap2`–`rx_swap4`, the convention of the Uniswap V2 pair's walks. One
-  line replaces a run of `xr (rx_… ·)` or `refine rx_… ?_` lines, in
-  [`Blanc/Lift/WalkKit.lean`](../Blanc/Lift/WalkKit.lean). The backward twin for a frame walk
-  `h : XAt …` reads the instruction off the code's byte trie (`xa n`, one family's macros, so it
-  lives with them: Curve 3pool's `Walk/AutoStep.lean`).
-- Straight-line inversion steps of a cut run without writing them out: `winv n` / `winv` read
-  the node off the tree of `h : SFunc.RunCut …` (or `SFunc.RunCutP P …` with `using project`) and
-  run the hand-written step `replace h := ric_next h; obtain ⟨_, hd, h⟩ := h;
-  obtain ⟨_, rfl⟩ := ri_<op> hd; clear hd` (`ri_push`, `ri_dup rfl`, `ri_swap rfl`, `ri_pop`,
-  `ri_add`, `ri_mload`, …; `ric_dest` for a `.dest`; a `ri_dup`/`ri_swap` implicit such as
-  `(w := x)` is spelled out only where a `set` abbreviation or rewritten shape needs it), stopping at a branch, jump, storage or call node; `at h` names the run (default: the
-  most recent cut run); `wskip n` steps over any `n` nodes forgetting the state
-  (`obtain ⟨_, _, h⟩ := ric_next h`), in [`Blanc/Lift/WalkInvKit.lean`](../Blanc/Lift/WalkInvKit.lean).
-- Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as
-  `getDMem_spec` need): `Mem.size_write_mod32`, `Mem.size_extends_mod32`, the image steps
-  `ri_mload_imgAtA`/`ri_mstore_imgAtA`/`ri_calldatacopy_imgAtA`/`ri_keccak_imgAtA` and the
-  spawning steps `xa_staticcall_imgA`/`xa_call_imgA`/`xa_identity_imgA` in
-  [`Blanc/Lift/FrameWalkAligned.lean`](../Blanc/Lift/FrameWalkAligned.lean).
-- solc idioms, gas-exact: the word-copy loop (`copy_loop`) in
-  [`Blanc/Lift/CopyLoop.lean`](../Blanc/Lift/CopyLoop.lean); the
-  `sha256(abi.encodePacked(a, b))` site through the SHA-256 precompile
-  (`copy_sha_gen` over memory of any word-aligned size, with its result image
-  `shaImg`; its corollaries `copy_sha`, `packed_sha_pair`, and `pair_mem_sha` for a
-  pair whose second word is the previous digest at the free pointer) in
-  [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and the corollary
-  over memory that already covers the destination (`copy_sha_covered`) in
-  [`Blanc/Lift/PackedShaCovered.lean`](../Blanc/Lift/PackedShaCovered.lean).
-  The same site as solc emits it under its size-favouring constant optimiser
-  (creation code: `-32` as `PUSH1 0x1f NOT`, the all-ones mask as `PUSH1 0 NOT`;
-  `mcpyTreeN`, `mergeTreeN`, `copy_shaN_gen`, `copy_shaN`, `packed_sha_pairN`) in
-  [`Blanc/Lift/PackedShaSize.lean`](../Blanc/Lift/PackedShaSize.lean).
+
+#### C9.11. I need deployment, CREATE, CREATE2 or a clone
+
 - Deploying lifted creation code: a gas-exact run of a checked creation certificate's
   constructor from the creation frame's start state settles through Jaune's
   `processCreateMessage`, installing the constructor's output and exposing the
@@ -10444,15 +10528,6 @@ contract-neutral.
   and `liftCreate_okH` lift a checked exact constructor run from `stateGas = none`,
   retaining the historical target touch. Code admissibility, deposit gas, size,
   value transfer and the run remain explicit obligations.
-
-  For the size-optimized two-word packed-SHA site under actual Muir Glacier rules,
-  [`Blanc/Lift/HistPackedShaSize.lean`](../Blanc/Lift/HistPackedShaSize.lean)
-  provides `staticcall_sha_stepMuir`, `copy_shaNMuir_gen`, `copy_shaNMuir`, and
-  `packed_sha_pairNMuir`. The exact call costs 784 gas, copy/merge/call costs
-  1207 plus expansion, and packing costs 1336 plus expansion. The hash stays
-  symbolic; these forward constructors require no successful-run premise.
-  No reliable single goal-head trigger distinguishes this rule-specific site.
-
 - To retain constructor metadata through symbolic historical walks, use
   [`Blanc/Lift/CreateSettlementMeta.lean`](../Blanc/Lift/CreateSettlementMeta.lean).
   `CreateRunMeta` records a zero refund, empty logs, the inherited deletion set and
@@ -10465,7 +10540,6 @@ contract-neutral.
   `shaResume_accountsToDelete`, `recordTouch_accountsToDelete` and
   `afterSstoreH_accountsToDelete` are symbolic projections, and `St_meta` projects
   metadata before any concrete memory image is substituted.
-
 - The settled world of a zero-value CREATE as a closed term of its input world (so a later
   message that takes it as `origState` can evaluate it): the entry world `entryState` and
   `entry_state` (target storage cleared and nonce incremented; zero-value entry
@@ -10509,6 +10583,9 @@ contract-neutral.
   Neither interface requires initial Pair-storage emptiness or a reverse
   factory-slot value. Original receipt/body authentication and later trace-local
   hash freshness remain separate requirements.
+
+#### C9.12. I need free-pointer memory images or solc-0.4 writer walks
+
 - Free-pointer memory with a pointer independent of allocation: `PtrMem p n M`
   in [`Blanc/Lift/ExactWalkMemory.lean`](../Blanc/Lift/ExactWalkMemory.lean)
   combines aligned size, `Mem.Wf` and the existing `MemMatches` word at offset64.
@@ -10559,9 +10636,9 @@ contract-neutral.
   unprotected account can lose storage under a nonzero transfer.
   Worked use: the deployed WETH9's writers,
   `Blanc/Lift/Weth9/LiveApprove.lean` … `LiveHistory.lean`.
-- Jump destinations: Jaune's own `jumpable_eq_jumpdestOk` (`Jaune/Machine.lean`)
-  replaces its exponential `jumpable` by the linear `jumpdestOk` scan, for every
-  byte string; Blanc keeps no copy.
+
+#### C9.13. I need a whole-contract property without per-path walks
+
 - Properties of the lifted program without per-path walks: a state-silent
   entry set (`SilentSet`, `SFunc.Run.state_of_silent`) in
   [`Blanc/Lift/Silent.lean`](../Blanc/Lift/Silent.lean), its balance analogue
@@ -10610,6 +10687,14 @@ contract-neutral.
 There is no recipe: the entry points are whole-contract theorems, not goal
 shapes a trigger could match.
 
+#### C9.14. I need the Uniswap V2 Pair's shared adapters
+
+- The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
+  `UniswapV2Pair.code`, emitted by the registered certificate generator from the
+  `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
+  Both contract strata name the same bytes through this module; `Check.cert_check`
+  checks them.
+
 The Pair cursor, source-call and positional statements named below are the
 historical `H` forms, which take `rules.stateGas = none` (and `rules.bal = none`
 where it appears) as premises instead of `CoveredFork`. The `CoveredFork` forms
@@ -10624,13 +10709,12 @@ world rather than selecting a call through a source run. The reusable fee
 request/reply carrier in
 [`PairFeeObservation.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeObservation.lean)
 keeps the original-root occurrence, raw slot, complete physical reply and decoded
-word. Its `returnCursor`, `returnState`, `returnCutData` and `returnCutExact` in
+word. Its `returnCursor`, `returnState` and `returnCutData` in
 [`PairFeeReturn.lean`](../Blanc/Lift/UniswapV2Pair/PairFeeReturn.lean)
 transport that same reply through the actual internal return with arbitrary
-caller and outer continuations; `returnCutExact` retains `cut.node = N` for
-consumers which sample storage from the returned world. `returnCutData` also
-retains the fee guards and full physical `feeBranchPost` at that exact node;
-`returnCutExact` and `returnCut` project the same witness. The ordinary guarded
+caller and outer continuations; `returnCutData` retains `cut.node = N` for
+consumers which sample storage from the returned world, together with the fee
+guards and full physical `feeBranchPost` at that exact node. The ordinary guarded
 static-call adapter `static_source_call_atH`
 in [`StaticSourceCall.lean`](../Blanc/Lift/UniswapV2Pair/StaticSourceCall.lean)
 binds the supplied occurrence to the request, reply and original per-spawn
@@ -10980,67 +11064,6 @@ request and code guard to the supplied model frame and full path queue.
 Burn and Mint supply their own finite factory-word and frame bindings;
 the adapter preserves the observation's actual call and paths.
 
-## Common-library-first workflow
-
-A needed definition, lemma, tactic, or instance has a **generic shape** when
-its statement nowhere mentions the contract immediately being worked on — when
-that contract's own names could be abstracted away without changing what it
-says. Every generic-shaped need triggers this workflow. It is the standing
-default for all Blanc work, not per-goal advice, and it exists because the
-point of each new contract is to leave the common library stronger than it
-found it, not merely to add the contract.
-
-1. **Search before writing.** Follow the branches above, run
-   `lean_local_search`, and run `blanc_suggest` at the goal. A `blanc_suggest`
-   no-match is not evidence that no shared declaration exists; the registry
-   branches and declaration search are the authority on existence.
-2. **Found in a shared module: use it.** When a close variant exists but is
-   too narrow, generalize the shared declaration in place, provided every
-   existing proof still elaborates — verify with the build and the repository
-   gates. A generalization that would force consumer rewrites is a design
-   change to surface, not a silent rewrite.
-3. **Found only in another contract's module: hoist it first, then use it.**
-   Move it to a shared module below every consumer, rename away any
-   contract-claiming name (the `wbsum` → `balSum` example in `README.md`,
-   *Module hierarchy: contracts are siblings*), remove the contract-local
-   copy, and use it through the shared owner. Never import a sibling contract
-   to reach it; `scripts/check-layering.sh` fails that import in either
-   direction.
-4. **Found nowhere: build it in the common library, then use it.** The
-   generic shape that motivated the search is the placement decision — a new
-   generic declaration is born in a shared module, not in the contract that
-   first needed it. Place it in the **narrowest shared owner**: the lowest
-   shared module below every consumer, or a new small module imported only by
-   its consumers. A hub — a module more than 500 production modules import,
-   such as `Blanc/CommonCore.lean`, a `Blanc/CommonProofs/*.lean` piece or the
-   ladder — is not a default destination: every line it gains is re-elaborated
-   by all of its dependents, and `scripts/check-proof-module-size.sh` blocks a
-   hub's growth past its ceiling. The same rule applies when hoisting (step 3).
-5. **Close with discoverability.** Every common-library addition or change —
-   built, generalized, or hoisted — updates this registry in the same change:
-   add the declaration to the narrowest branch above (or add a sub-branch),
-   and when a reliable goal shape exists, register a goal-sensitive recipe in
-   `scripts/proof-recipes.toml` and regenerate the surfaces
-   (`python3 scripts/generate-proof-recipes.py --write`). Verify with
-   `scripts/check-proof-recipes.sh --base main`. Discoverability closure is
-   part of the change that touched the library, not a follow-up task.
-
-Do not add a contract module as a registry destination: that is evidence the
-declaration has not yet reached its common owner.
-
-The workflow is enforced as well as documented, and this section is the map
-of that machinery: [`scripts/check-layering.sh`](../scripts/check-layering.sh)
-owns placement (no cross-contract import, no shared module importing a
-contract); [`scripts/check-proof-recipes.sh`](../scripts/check-proof-recipes.sh)
-keeps the recipe registry and its generated surfaces synchronized, and reports
-byte-identical declaration copies and unregistered local selector tables among
-changed declarations; and
-[`scripts/check-proof-duplication.sh`](../scripts/check-proof-duplication.sh)
-holds the shrink-only textual-duplication baseline. A red row from any of them
-usually means a step above was skipped. Bytecode-segment sharing between call
-sites is a separate, opt-in mechanism with its own guide outside this
-repository; nothing in this workflow requires it.
-
 `writerRep_absorb` in
 [`PairWriterAbsorb.lean`](../Blanc/Lift/UniswapV2Pair/PairWriterAbsorb.lean)
 extends a represented finite footprint inside the same separated universe to
@@ -11054,13 +11077,15 @@ shared `burnOwnedRaw` image and `burn_pending_logs_preserves`, which transports
 the existing locked-child pending log image into the Burn/Sync image without
 changing foreign logs. The original Burn source donor imports the same proofs.
 
-### Swap original source prefix and admitted transfers
+##### Swap original source prefix and admitted transfers
 
 [`SwapPositionalSourcePrefix.lean`](../Blanc/Lift/UniswapV2Pair/SwapPositionalSourcePrefix.lean)
 derives the initial source guards, cached words and starting segment from the
 original successful execution. `swap_source_transfersH` composes both optional
 transfers from that same physical chain and the same admitted queue witnesses;
 only executed calls advance the source index.
+
+#### C9.15. I need the USDC proxy-history adapters
 
 For the exact value of an actual retained USDC proxy implementation write, use
 `ConfiguredHistoryTraceIn.retained_implSstore_emitsUpgraded_data_of_proxyCode`
@@ -11225,3 +11250,63 @@ fields retain their complete raw-key, initializer, native-query and R4 populatio
 no final origin, readiness or zero field is supplied.
 The observation correspondence and source-registration decisions remain open.
 
+## Common-library-first workflow
+
+A needed definition, lemma, tactic, or instance has a **generic shape** when
+its statement nowhere mentions the contract immediately being worked on — when
+that contract's own names could be abstracted away without changing what it
+says. Every generic-shaped need triggers this workflow. It is the standing
+default for all Blanc work, not per-goal advice, and it exists because the
+point of each new contract is to leave the common library stronger than it
+found it, not merely to add the contract.
+
+1. **Search before writing.** Follow the branches above, run
+   `lean_local_search`, and run `blanc_suggest` at the goal. A `blanc_suggest`
+   no-match is not evidence that no shared declaration exists; the registry
+   branches and declaration search are the authority on existence.
+2. **Found in a shared module: use it.** When a close variant exists but is
+   too narrow, generalize the shared declaration in place, provided every
+   existing proof still elaborates — verify with the build and the repository
+   gates. A generalization that would force consumer rewrites is a design
+   change to surface, not a silent rewrite.
+3. **Found only in another contract's module: hoist it first, then use it.**
+   Move it to a shared module below every consumer, rename away any
+   contract-claiming name (the `wbsum` → `balSum` example in `README.md`,
+   *Module hierarchy: contracts are siblings*), remove the contract-local
+   copy, and use it through the shared owner. Never import a sibling contract
+   to reach it; `scripts/check-layering.sh` fails that import in either
+   direction.
+4. **Found nowhere: build it in the common library, then use it.** The
+   generic shape that motivated the search is the placement decision — a new
+   generic declaration is born in a shared module, not in the contract that
+   first needed it. Place it in the **narrowest shared owner**: the lowest
+   shared module below every consumer, or a new small module imported only by
+   its consumers. A hub — a module more than 500 production modules import,
+   such as `Blanc/CommonCore.lean`, a `Blanc/CommonProofs/*.lean` piece or the
+   ladder — is not a default destination: every line it gains is re-elaborated
+   by all of its dependents, and `scripts/check-proof-module-size.sh` blocks a
+   hub's growth past its ceiling. The same rule applies when hoisting (step 3).
+5. **Close with discoverability.** Every common-library addition or change —
+   built, generalized, or hoisted — updates this registry in the same change:
+   add the declaration to the narrowest branch above (or add a sub-branch),
+   and when a reliable goal shape exists, register a goal-sensitive recipe in
+   `scripts/proof-recipes.toml` and regenerate the surfaces
+   (`python3 scripts/generate-proof-recipes.py --write`). Verify with
+   `scripts/check-proof-recipes.sh --base main`. Discoverability closure is
+   part of the change that touched the library, not a follow-up task.
+
+Do not add a contract module as a registry destination: that is evidence the
+declaration has not yet reached its common owner.
+
+The workflow is enforced as well as documented, and this section is the map
+of that machinery: [`scripts/check-layering.sh`](../scripts/check-layering.sh)
+owns placement (no cross-contract import, no shared module importing a
+contract); [`scripts/check-proof-recipes.sh`](../scripts/check-proof-recipes.sh)
+keeps the recipe registry and its generated surfaces synchronized, and reports
+byte-identical declaration copies and unregistered local selector tables among
+changed declarations; and
+[`scripts/check-proof-duplication.sh`](../scripts/check-proof-duplication.sh)
+holds the shrink-only textual-duplication baseline. A red row from any of them
+usually means a step above was skipped. Bytecode-segment sharing between call
+sites is a separate, opt-in mechanism with its own guide outside this
+repository; nothing in this workflow requires it.

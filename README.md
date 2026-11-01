@@ -478,8 +478,13 @@ This repo contains the following files:
   ingress, one shared fresh-index machine, a checked Maker-shaped `rpow`, and a
   checks-effects-interactions exit.
 - [`Blanc/Lift/`](Blanc/Lift/): kernel-checked lifts of bytecode already on
-  mainnet — WETH9, the Beacon deposit contract, Curve's 3Crv token, Lido's
-  CircuitBreaker and the fixed and vulnerable Vyper pool pair.
+  mainnet — among them WETH9, the Beacon deposit contract, Curve's 3Crv token
+  and 3pool, Lido's CircuitBreaker, USDC's proxy and implementations, the
+  Uniswap V2 Pair and Factory, the EIP-4788, EIP-2935, EIP-7002 and EIP-7251
+  system contracts, and the fixed and vulnerable Vyper pool pair, plus token
+  and attacker fixtures. The certificate registry
+  [`scripts/lift/certificates.json`](scripts/lift/certificates.json) is the
+  authoritative list of lifted inputs.
   [`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md)
   maps each claim to its theorem, premises and non-claims, and states the
   deployment caveats.
