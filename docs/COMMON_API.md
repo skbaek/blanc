@@ -250,7 +250,7 @@ lines when next changed or relied on, not by a wholesale rewrite.
   there is no recipe.
 - For a successful source branch whose selected arm calls a known
   nonreturning auxiliary, use `of_run_branch_call_of_not_run` in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).  Its shared
+  [`Blanc/CommonProofs/Balance.lean`](../Blanc/CommonProofs/Balance.lean).  Its shared
   specializations `of_run_branch_call_revert`,
   `of_run_branch_call_revertWith`, and
   `of_run_branch_call_revertReturnData` cover the standard empty,
@@ -270,7 +270,7 @@ lines when next changed or relied on, not by a wholesale rewrite.
   cover flat and warm/cold access without a fork or BAL restriction.
   Their stack-equality conclusions have no reliable dedicated recipe trigger.
 - The common `fsig +++ dispatch` entry preserves logs and output by
-  `fsig_logs` and `fsig_output` in `Blanc/CommonProofs.lean`.
+  `fsig_logs` and `fsig_output` in `Blanc/CommonProofs/DispatchReach.lean`.
 - Recover a known selected body from a sorted tree dispatcher with
   `reach_of_dispatch` for the inline-revert form or `reach_of_dispatchWith`
   for the indexed-fallback form in
@@ -284,7 +284,7 @@ lines when next changed or relied on, not by a wholesale rewrite.
   inline-revert form with log/output silence plus the loose gas-free walk
   prefix reaching the selected body's entry state.
 - Rule a selector *out* at source level with `not_run_dispatch_of_miss` in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean): a selector with no
+  [`Blanc/CommonProofs/DispatchReach.lean`](../Blanc/CommonProofs/DispatchReach.lean): a selector with no
   leaf in the tree has no successful inline-revert dispatcher run at all, so a
   contract's selector census becomes "every successful call is one of these
   entries".  It is the `Func.Run` counterpart of the compiled
@@ -330,7 +330,7 @@ lines when next changed or relied on, not by a wholesale rewrite.
   or `setStorVal`, not these whole carrier equalities; discovery stays here
   instead of broadening that trigger or unfolding a concrete state tower. The lower
   one-write primitive is `setStorVal_getStor_ne` in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean).
+  [`Blanc/CommonProofs/Base.lean`](../Blanc/CommonProofs/Base.lean).
 - For exact ordered SLOAD accounting, `SloadSchedule` retains the incoming
   state and key at each read. `sloadScheduleCost_eq` separates the warm base
   cost from the cold surcharge, and `sloadColdCount_le` /
@@ -778,7 +778,7 @@ spawn/resume equations at the consumer:
 
 For the entered child's code and code address at the `Xinst`-step level — from a
 spawn equation without operand knowledge — use the spawn-source family in
-[`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
+[`Blanc/CommonProofs/Messages.lean`](../Blanc/CommonProofs/Messages.lean):
 
 - `Xinst.step_spawn_source`: the trichotomy over any
   `Xinst.step sevm devm x = .spawn f rsm` — empty target code, same target as
@@ -3129,7 +3129,7 @@ branch supplies discovery rather than a single goal-head recipe.
 ### I1. One instruction/line/function preserves an observation
 
 - Coarse outcome-aware instruction frames in
-  [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
+  [`Blanc/CommonProofs/Frames.lean`](../Blanc/CommonProofs/Frames.lean):
   `processCreateMessage.chargeCodeGas_instructionFrame` covers code-deposit
   charging on both outcomes, including optional EF rejection and state-gas
   charges. `ForkRules.accessDelegation_instructionFrame` covers the activated
@@ -3182,12 +3182,14 @@ branch supplies discovery rather than a single goal-head recipe.
   retains its modern statement. These stack observations have no reliable
   registered single goal-head trigger.
 - `Ninst.Inv`, `Rinst.Inv`, and `Line.Inv`: use `line_inv` plus the registered
-  `Ninst.Hinv` / `Rinst.Hinv` instances in `Blanc/Tactics.lean`.
+  `Ninst.Hinv` / `Rinst.Hinv` instances in `Blanc/Tactics.lean` and
+  [`Blanc/CommonProofs/Hinv.lean`](../Blanc/CommonProofs/Hinv.lean).
 - `Func.Inv`: use `func_inv`; it intentionally refuses arbitrary `Func.call`.
 - For direct stack-prefix transport through shared line instructions, use the
-  `prefix_of_*` family in [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean),
+  `prefix_of_*` family in [`Blanc/CommonProofs/Walk.lean`](../Blanc/CommonProofs/Walk.lean),
   including `prefix_of_mul`, `prefix_of_div`, `prefix_of_timestamp`,
-  `prefix_of_xor`, and `prefix_of_argCheckNonAddress`. These declarations are
+  `prefix_of_xor`, and `prefix_of_argCheckNonAddress` (in
+  [`Blanc/CommonProofs/Balance.lean`](../Blanc/CommonProofs/Balance.lean)). These declarations are
   also registered with the
   `stack-prefix-transport` recipe.
   - `Devm.state` is preserved by `mstore`, `mload`, `swap`, and the register
@@ -3357,7 +3359,7 @@ assert a historical-uniform NoDel invariant.
 
 For a weaker actual step condition,
 `Linst.selfdestruct_preserves_noDel_of_onlyCreated_or_foreign` in
-`Blanc/CommonProofs.lean` accepts the modern creation restriction **or**
+`Blanc/CommonProofs/NoDel.lean` accepts the modern creation restriction **or**
 `sevm.currentTarget ≠ wa`. SELFDESTRUCT schedules its executing storage target,
 not its beneficiary. `Linst.run_noDel_of_safe` handles an actual terminal run
 when that target is foreign or the decoded terminal is not SELFDESTRUCT.
@@ -3381,7 +3383,7 @@ needs the terminal and complete-settlement argument. Use the named theorem;
 a bare set-membership goal does not identify this execution-specific route.
 
 - `Linst.EffectFork`, `Evm.step_effectForkTerminal` and
-  `Exec.effectForkTerminal` in `Blanc/CommonProofs.lean` let terminal as well
+  `Exec.effectForkTerminal` in `Blanc/CommonProofs/Messages.lean` let terminal as well
   as nonterminal effects use the frame's `CoveredFork` premise. Child
   coverage follows the actual spawn; the existing unrestricted terminal
   traversal APIs remain available. `Linst.noDelCode_effectFork` and
@@ -3885,7 +3887,7 @@ equality of the whole machine or world. Import that primitive owner directly.
 For the entire storage map at one address, the corresponding adapter is
 `getStor_eq_of_state_eq` in `Blanc/LadderBase.lean`.
 
-Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
+Use [`Blanc/CommonProofs/Base.lean`](../Blanc/CommonProofs/Base.lean):
 
 - `Stor.get_set_ite` exposes a single storage-map update as the equality
   branch at an arbitrary observed key.
@@ -3964,7 +3966,7 @@ Use [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean):
 ### S3. I need state-relation or write-frame composition
 
 Use `Devm.StateWriteFrame` and its reflexive/transitive/composition lemmas in
-`Blanc/CommonProofs.lean`, then inspect higher-level relation combinators in
+`Blanc/CommonProofs/Frames.lean`, then inspect higher-level relation combinators in
 [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean).
 
 If the fact is about which holder's balance moved rather than how states
@@ -5283,7 +5285,7 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   ABI's left-aligned four significant bytes before an integer comparison;
   use ordinary `arg` for integer/address head words.
 - Full source from offset zero: `Bytes.sliceD_zero_length` in
-  `Blanc/CommonProofs.lean`.
+  `Blanc/CommonProofs/MemImage.lean`.
 - Recover a selector from calldata described as
   `abiSelectorBytes selected ++ tail` with
   `selector_eq_of_data_eq_abiSelectorBytes_append`; discharge its explicit
@@ -5705,7 +5707,8 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   next numeric hint. `Func.runCompiledTo_mstore_step` covers word stores that
   need an exhibited outcome-general continuation.
 - For scratch decoders that carry a proof image, use
-  `of_run_mstoreAt_image` and `of_run_loadWordAt_image` to advance the stack,
+  `of_run_mstoreAt_image` and `of_run_loadWordAt_image` (in
+  [`Blanc/CommonProofs/MemEffects.lean`](../Blanc/CommonProofs/MemEffects.lean)) to advance the stack,
   `Mem.Wf`, `Mem.Reads`, and the state equation together.  When the proof also
   carries event chronology, `of_run_loadWordAt_logs` supplies the exact
   successful two-instruction log-silence fact; `MLOAD` deliberately has no
@@ -5946,7 +5949,7 @@ Use Jaune's `Jaune/MessageExecution.lean`, imported by
 - `Msg.initDevm_*` and `Msg.initSevm_*` (Jaune's
   `Jaune/MessageExecution.lean`) expose canonical message-entry fields.
 
-`Msg.NoDel.initDevm` in `Blanc/CommonProofs.lean` requires the exact additional
+`Msg.NoDel.initDevm` in `Blanc/CommonProofs/NoDel.lean` requires the exact additional
 fact `wa ∉ msg.inheritedDeletions`; message NoDel alone constrains code and the
 created-account set, not the inherited deletion snapshot. Derive this fact
 from the actual message producer. It is not a default-empty assumption.
@@ -5983,7 +5986,7 @@ Use Jaune's `Jaune/ExecSettlement.lean` and `Jaune/ExecChronology.lean`
 and [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean)) and
 Blanc's [`Blanc/ExecutionOccurrence.lean`](../Blanc/ExecutionOccurrence.lean):
 
-- `processMessage.settle_ok_cases` in `Blanc/CommonProofs.lean` retains the
+- `processMessage.settle_ok_cases` in `Blanc/CommonProofs/Balance.lean` retains the
   actual `Devm.recordTouch` wrapper on both clean and rolled-back machines.
   Use its exact machine equations, then project unchanged observations.
   Rollback restores entry state, transient storage and storage-write
@@ -7471,7 +7474,7 @@ also works for any actual message whose authorization list is known empty;
 its direct exclusion goal has no registered reliable recipe trigger.
 
 For a whole-state balance preorder under `stateGas = none`,
-`processMessageCall.call_balance_noninc` in `Blanc/CommonProofs.lean` follows
+`processMessageCall.call_balance_noninc` in `Blanc/CommonProofs/Balance.lean` follows
 `legacyAuthorization` and `Msg.resolveCodeDelegation`, preserving the actual
 activation facade and the authorization prefix's balance sum.
 `ForkRules.accessDelegation_of_not_delegation` and
@@ -8105,7 +8108,7 @@ not introduce another compiler-equation matcher or traverse a closed program.
 
 ### C5. I need to preserve a compile-shape equality under a known prefix
 
-Import [`Blanc/CommonProofs.lean`](../Blanc/CommonProofs.lean) and apply
+Import [`Blanc/CommonProofs/Base.lean`](../Blanc/CommonProofs/Base.lean) and apply
 `Func.compileShape_prepend_congr l` to an existing equality
 `p.compileShape = q.compileShape`. It returns
 `(l +++ p).compileShape = (l +++ q).compileShape` without re-proving the
@@ -9888,7 +9891,7 @@ contract-neutral.
   itself (`storSetBal_of_nonce`, `lookupA_acsSetBal_nonce` underneath);
   `haltCreated` projects a run's halted created set for a kernel decision. A
   settled child supplied as data is restored by `Devm.withCreatedAccounts_of_eq`
-  (`Blanc/CommonProofs.lean`). The frame-level spawn
+  (`Blanc/CommonProofs/Base.lean`). The frame-level spawn
   fact `SpawnedBy sevm devm x child` (`Xinst.step` spawns a frame entering as `child`) and
   `spawnedBy_of_callPrep`, `spawnedBy_of_childStart`, `spawnedBy_of_dcallPrep` in
   [`Blanc/Lift/WitnessSpawn.lean`](../Blanc/Lift/WitnessSpawn.lean); reading a run's final

@@ -124,7 +124,7 @@ import tomllib
 # ---------------------------------------------------------------------------
 
 SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "SelectorWords", "MachineDataFacts", "CreationArtifact", "RlpConcrete", "RlpListEncode", "RlpBytesInjective",
-          "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "Ladder", "Upgrade",
+          "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "CommonProofs.Base", "CommonProofs.Frames", "CommonProofs.MemImage", "CommonProofs.Messages", "CommonProofs.Walk", "CommonProofs.Hinv", "CommonProofs.DispatchReach", "CommonProofs.NoDel", "CommonProofs.Balance", "CommonProofs.MemEffects", "Ladder", "Upgrade",
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "SlotFootprintSubset", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentCompiled", "DeploymentOccurrence", "DeploymentMessage", "DeploymentTouch", "Forward", "ForwardFlatAccess",

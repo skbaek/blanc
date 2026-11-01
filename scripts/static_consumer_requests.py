@@ -425,7 +425,7 @@ def _collect(sources):
     path='scripts/execution-occurrence-lift-manifest.json';d,jo=json_document(sources,path);p='scripts/check-execution-occurrence.py';ch=operation(p,'main')
     for item_index,item in enumerate(d['mappings']):add('Blanc.'+item['declaration'] if not item['declaration'].startswith('Blanc.') else item['declaration'],item['commonModule'],jo(('mappings',item_index)),ch,'manifest-owner-kind-existence','mappings',item['kind'])
     for field in ('signaturePins','controlSignaturePins'):
-        for item_index,item in enumerate(d[field]):add(item['declaration'],'scripts/ExecutionOccurrenceControls.lean' if field.startswith('control') else 'Blanc/CommonProofs.lean',jo((field,item_index)),operation(p,'check_direct_code_fixture') if field.startswith('control') else ch,'exact-header-source-pin',field,item['header'])
+        for item_index,item in enumerate(d[field]):add(item['declaration'],'scripts/ExecutionOccurrenceControls.lean' if field.startswith('control') else 'Blanc/CommonProofs/Messages.lean',jo((field,item_index)),operation(p,'check_direct_code_fixture') if field.startswith('control') else ch,'exact-header-source-pin',field,item['header'])
 
     p='scripts/check-extraction-ownership.py';ch=register_family(p,'audit','manifest-common-owner-kind','Mapped common declarations must exist with kind; old donor/alias names are forbidden.')
     path='scripts/execution-settlement-lift-manifest.json';d,jo=json_document(sources,path)

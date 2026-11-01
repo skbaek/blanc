@@ -9,43 +9,43 @@
       "declaration": "ProcessMessage.ok_state_eq_committedPost",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowEth.lean",
-      "commonModule": "Blanc/CommonProofs.lean"
+      "commonModule": "Blanc/CommonProofs/Messages.lean"
     },
     {
       "declaration": "ProcessMessage.ok_state_eq_of_not_commits",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowEth.lean",
-      "commonModule": "Blanc/CommonProofs.lean"
+      "commonModule": "Blanc/CommonProofs/Messages.lean"
     },
     {
       "declaration": "executeCode.handle_precompile_ok_state",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowEth.lean",
-      "commonModule": "Blanc/CommonProofs.lean"
+      "commonModule": "Blanc/CommonProofs/Messages.lean"
     },
     {
       "declaration": "processCreateMessage.chargeCodeGas_error_eq",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowEth.lean",
-      "commonModule": "Blanc/CommonProofs.lean"
+      "commonModule": "Blanc/CommonProofs/Messages.lean"
     },
     {
       "declaration": "ProcessCreateMessage.rollback_of_error",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowEth.lean",
-      "commonModule": "Blanc/CommonProofs.lean"
+      "commonModule": "Blanc/CommonProofs/Messages.lean"
     },
     {
       "declaration": "processMessage_settle_ok_state_cases",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowEth.lean",
-      "commonModule": "Blanc/CommonProofs.lean"
+      "commonModule": "Blanc/CommonProofs/Balance.lean"
     },
     {
       "declaration": "ProcessMessage.none_ok_state_cases",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowEth.lean",
-      "commonModule": "Blanc/CommonProofs.lean"
+      "commonModule": "Blanc/CommonProofs/Balance.lean"
     },
     {
       "declaration": "genericCall_step_spawn_exact",
@@ -63,7 +63,7 @@
       "declaration": "Xinst.step_spawn_codeAddress_eq_currentTarget",
       "kind": "theorem",
       "donorModule": "Blanc/Weth10HolderFlowEthExec.lean",
-      "commonModule": "Blanc/CommonProofs.lean"
+      "commonModule": "Blanc/CommonProofs/Messages.lean"
     }
   ],
   "retiredDeclarations": [

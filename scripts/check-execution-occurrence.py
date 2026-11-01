@@ -799,7 +799,7 @@ def main(argv: list[str]) -> int:
         "declaration": CANONICAL_DIRECT_CODE_LOCAL,
         "kind": "theorem",
         "donorModule": "Blanc/Weth10HolderFlowEthExec.lean",
-        "commonModule": "Blanc/CommonProofs.lean",
+        "commonModule": "Blanc/CommonProofs/Messages.lean",
     }
     if mappings.count(canonical_mapping) != 1:
         return fail("canonical direct-code move row is absent or drifted")
@@ -872,7 +872,7 @@ def main(argv: list[str]) -> int:
     canonical_locations = owner_locations(
         ownership, first_party_lean_paths(), CANONICAL_DIRECT_CODE
     )
-    canonical_owner = ROOT / "Blanc/CommonProofs.lean"
+    canonical_owner = ROOT / "Blanc/CommonProofs/Messages.lean"
     if (len(canonical_locations) != 1 or
             canonical_locations[0][0] != canonical_owner or
             canonical_locations[0][1] != "theorem"):

@@ -1426,7 +1426,7 @@
      "Blanc/LidoCircuitBreakerHistoryChain.lean",
      "Blanc/LidoCircuitBreaker.lean",
      "Blanc/LidoCircuitBreakerRegistryModel.lean",
-     "Blanc/CommonProofs.lean",
+     "Blanc/CommonProofs/Base.lean",
      "Blanc/Ladder.lean",
      "Blanc/LadderBase.lean",
      "scripts/gate_semaphore.py"
@@ -4266,7 +4266,7 @@
       "reason": "committed Lean subject of the owner audit, manifest pin or deletion control; the static prerequisite verifies it"
      },
      {
-      "path": "Blanc/CommonProofs.lean",
+      "path": "Blanc/CommonProofs/Walk.lean",
       "reason": "committed Lean subject of the owner audit, manifest pin or deletion control; the static prerequisite verifies it"
      },
      {
