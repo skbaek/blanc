@@ -17,11 +17,6 @@ open Jaune
 
 /-! ## Code -/
 
-/-- `St` preserves every account's code: it only replaces the machine. -/
-theorem St_getCode (b : Devm) (S : List B256) (M : Mem) (G : Nat) (address : Adr) :
-    (Blanc.Lift.St b S M G).getCode address = b.getCode address := by
-  simp only [Blanc.Lift.St, Devm.getCode_state, Devm.setMach_state]
-
 /-- `returnPost` preserves every account's code: it only replaces machine,
 memory window and output. -/
 theorem returnPost_getCode (d : Devm) (i sz : B256) (S : List B256) (address : Adr) :
@@ -66,7 +61,7 @@ code. -/
 theorem systemFramePost_getCode (sevm : Sevm) (base : Devm) (memory : Mem)
     (gas : Nat) (address : Adr) :
     (systemFramePost sevm base memory gas).getCode address = base.getCode address := by
-  rw [systemFramePost, systemBookkeepingPost, returnPost_getCode, St_getCode]
+  rw [systemFramePost, systemBookkeepingPost, returnPost_getCode, Blanc.Lift.St_getCode]
   simp only [systemBookkeepingBase, systemExcessStore, systemCountRead, systemExcessRead,
     Blanc.afterSstore_getCode, Blanc.afterSload_getCode]
   unfold systemFramePointers systemPointerBase

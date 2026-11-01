@@ -118,7 +118,7 @@ theorem proxy_spawn_exists {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pr
   have hcode : (St b' (g :: I.toB256 :: 0 :: sevm.data.length.toB256 :: 0 :: 0 :: S)
       (M.write 0 (sevm.data.sliceD 0 sevm.data.length.toB256.toNat 0)) G).getCode I =
       pre.state.getCode I := by
-    rw [getCode_St, getCode_of_state hb']; rfl
+    rw [St_getCode, getCode_of_state hb']; rfl
   unfold Xinst.Run at xrun
   cases hs : Xinst.step sevm (St b' (g :: I.toB256 :: 0 :: sevm.data.length.toB256 :: 0 :: 0 :: S)
       (M.write 0 (sevm.data.sliceD 0 sevm.data.length.toB256.toNat 0)) G) .delegatecall with
@@ -190,7 +190,7 @@ theorem proxy_forwards_ok {sevm : Sevm} {pre : Devm} {out : Execution} (run : Ex
   have hstackN : N.devm.stack = w0 :: I.toB256 :: (0 :: sevm.data.length.toB256 :: 0 :: 0 :: S0) := by
     rw [hdev]; rfl
   have hcodeN : N.devm.getCode I = pre.state.getCode I := by
-    rw [hdev, getCode_St, getCode_of_state hstate0]; rfl
+    rw [hdev, St_getCode, getCode_of_state hstate0]; rfl
   have henterN := dc_enter_run nodeFork hx hstackN (by rw [hcodeN]; exact undelegated)
     (by rw [sevmEq]; exact notPrecompile)
   obtain ⟨-, -, hcreate, -, hstat, parent, oi, os, hrsm⟩ :=

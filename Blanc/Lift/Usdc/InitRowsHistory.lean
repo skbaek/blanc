@@ -286,7 +286,6 @@ theorem ConfiguredHistoryTraceIn.initializer_write_ne_implSlot_or_migration
   rw [same]
   exact initFrame_sstore_ne_implSlot_or_migration pc hsg fresh gas rootInit chain found
 
-
 /-- Every actual initializer write is numerically off the implementation slot or
 has an original successful migration mapping hash before that same write. -/
 theorem ConfiguredHistoryTraceIn.initializer_write_ne_implSlot_or_hash
@@ -398,7 +397,6 @@ theorem v22MigrationHashKey?_complete {P : Adr} {root : Exec.Deriv}
     decoded, executed, read]
   exact recognized
 
-
 theorem v22MigrationHashKey?_sound {P : Adr} {node : Exec.Deriv}
     {key : HistoricalMappingKey} (recognized : v22MigrationHashKey? P node = some key) :
     node.sevm.currentTarget = P ∧ node.sevm.code = Impl.code ∧
@@ -502,7 +500,6 @@ theorem ConfiguredHistoryTraceIn.initializer_write_ne_implSlot
   · rw [slot]
     exact HistoricalMappingKey.slot_ne_implSlot initialApart fresh collected
 
-
 /-- **`InitRowWritesNonInc` from the frame-local key separation.** -/
 theorem ConfiguredHistoryTraceIn.initRowWritesNonInc
     (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
@@ -516,27 +513,6 @@ theorem ConfiguredHistoryTraceIn.initRowWritesNonInc
     exact (apart G hG target init g hg (hk ▸ keys)).elim
   · rw [zero]
     exact Nat.zero_le _
-
-/-- **P1 with the initializers' writes discharged.** `usdc_pairAllowance_noIncrease_deployed`
-with `InitRowsApart` (frame-local key separation of the initializer frames) in place of
-`InitRowWritesNonInc`; every other premise is the same. -/
-theorem ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease_deployed_apart
-    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
-    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
-    (admin : AdminUpgradesWithinFrom P W history.rawFrames history.rawNodes)
-    (apartSlot : ImplSlotApart P history.rawNodes)
-    (slotsApart : ProxySlotsApart pair Tr)
-    (rowSep : UsdcRowSep P pair Tr history.rawFrames)
-    (noPairException : NoPairExceptionWrites P pair Tr history.rawFrames history.rawNodes)
-    (initApart : InitRowsApart P pair Tr history.rawFrames)
-    {k : B256} (tracked : ∃ g, Tr g ∧ allowSlot pair g = k) :
-    (∀ n ∈ history.rawNodes,
-        ((n.devm.getStor P).get k).toNat ≤ ((checkpoint.state.getStor P).get k).toNat) ∧
-      ((future.state.getStor P).get k).toNat ≤ ((checkpoint.state.getStor P).get k).toNat :=
-  ConfiguredHistoryTraceIn.usdc_pairAllowance_noIncrease_deployed history capabilities bal world
-    admin apartSlot slotsApart rowSep noPairException
-    (ConfiguredHistoryTraceIn.initRowWritesNonInc history capabilities initApart) tracked
 
 end History
 

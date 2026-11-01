@@ -75,18 +75,6 @@ abbrev CoinPullExactAt (sevm : Sevm) (W W' : Devm → Prop) (t amt : B256) (U : 
   MutCallExactAt sevm W W' t (transferFromSel ++ sevm.caller.toB256.toBytes ++
     sevm.currentTarget.toB256.toBytes ++ amt.toBytes) RawCallOk U ii 0x64 oi
 
-/-- The exact profile of `token.burnFrom(msg.sender, amt)` at one window. -/
-abbrev BurnExactAt (sevm : Sevm) (W W' : Devm → Prop) (t amt : B256) (U : Nat) (ii oi : B256) :
-    Prop :=
-  MutCallExactAt sevm W W' t (burnFromSel ++ sevm.caller.toB256.toBytes ++ amt.toBytes)
-    (fun r => 32 ≤ r.length) U ii 0x44 oi
-
-/-- The exact profile of `token.mint(msg.sender, amt)` at one window. -/
-abbrev MintExactAt (sevm : Sevm) (W W' : Devm → Prop) (t amt : B256) (U : Nat) (ii oi : B256) :
-    Prop :=
-  MutCallExactAt sevm W W' t (mintSel ++ sevm.caller.toB256.toBytes ++ amt.toBytes)
-    (fun r => 32 ≤ r.length) U ii 0x44 oi
-
 /-- `remove_liquidity`'s exact supply window. -/
 abbrev SupplyExact (sevm : Sevm) (W : Devm → Prop) (t T : B256) (U : Nat) : Prop :=
   SupplyExactAt sevm W W t T U 0x17c 0x1c0

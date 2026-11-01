@@ -82,18 +82,6 @@ theorem observedC_missing :
   rw [address_digest] at first
   exact observedC_missing_index first
 
-/-- Conditional application to the same original configured block execution.
-The observed-to-original header identity is an explicit consumer obligation. -/
-theorem address_ne_of_observedCBloom
-    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
-    (trace : ConfiguredBlockTraceIn F cfg pre post)
-    (header : trace.block.header.bloom = observedCBloom)
-    {log : Log} (member : log ∈ trace.blockOutput.blockLogs) :
-    log.address ≠ usdcProxy := by
-  apply trace.address_ne_of_bloom_missing (address := usdcProxy) _ member
-  rw [header]
-  exact observedC_missing
-
 /-- The first required address bit is absent from the observed D literal. -/
 theorem observedD_missing_index :
     ¬ LogBloom.HasIndex observedDBloom addressDigest.toBytes 0 := by

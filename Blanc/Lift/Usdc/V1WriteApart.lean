@@ -99,7 +99,6 @@ theorem ConfiguredHistoryTraceIn.v1_write_ne_implSlot_or_transferFrom
     · exact .inl (transferApart .caller atSite selected)
     · exact .inl (transferApart .recipient atSite selected)
 
-
 /-- Freshness over the seven exact V1 mapping-key collectors of this history.
 This bundles finite key obligations; it does not assume write separation. -/
 structure V1MappingFreshKeys {F : Fork → Prop} {cfg : ChainConfig}
@@ -337,7 +336,6 @@ theorem ConfiguredHistoryTraceIn.v1_allowance_write_source
     rw [← equal] at recognized
     exact .inr recognized.allowance_source
 
-
 /-- The actual V1 allowance write law from finite observed-key separation. The
 transferFrom case uses its own current-cell subtraction bound, without descriptor RowSep. -/
 theorem ConfiguredHistoryTraceIn.v1_allowance_write_class
@@ -371,7 +369,6 @@ theorem ConfiguredHistoryTraceIn.v1_allowance_write_class
       rootSelector found atSite
     rw [rootTarget] at bound
     exact .inr bound
-
 
 /-- Finite actual-key separation supplies the internal V1 frame classifier over
 the same full raw history and any tracked subset of the observed spender list. -/
@@ -407,26 +404,6 @@ theorem ConfiguredHistoryTraceIn.v1RawWriteClass_of_actualKeys
     rw [selV1T_root, toAdr_toB256, ← same]
     exact ⟨List.mem_singleton.mpr approve.1, approve.2⟩
   · exact .inr nonInc
-
-/-- Actual V1 key separation and unchanged modern descriptor separation classify
-all raw tracked-row writes, retaining their original parent-frame attribution. -/
-theorem ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualV1Keys
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain} {P pair : Adr}
-    {Tr : Adr → Prop} (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (codes : UsdcNodeCodes P history.rawNodes)
-    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
-    (modernSep : UsdcModernRowSep P pair Tr history.rawFrames)
-    (spenders : List Adr) (observed : ∀ g, Tr g → g ∈ spenders)
-    (faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) (actualV1MappingKeys P history) = true)
-    (fixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true) :
-    UsdcRawRowWriteClass P pair Tr history.rawFrames history.rawNodes := by
-  intro m member w found owner tracked
-  exact ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_v1Class history capabilities codes
-    proxyApart modernSep
-    (ConfiguredHistoryTraceIn.v1RawWriteClass_of_actualKeys history capabilities spenders
-      observed faithful fixedApart) member found owner tracked
 
 /-- Classify one actual successful store whose runtime is known, using the
 original full-history key populations. Runtime coverage is required only for
@@ -499,68 +476,6 @@ theorem ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_actualKeys_of_nodeCode
   · have rootCode : root.sevm.code = Lib.code := by rw [← same]; exact library
     exact (lib_no_sstore_node pc stateGas chain rootCode found).elim
 
-/-- Restrict the classified history while retaining the original full-history
-finite key populations. Raw-frame inclusion supplies original node membership;
-no filtered replacement key list or additional code coverage before the scope is assumed. -/
-theorem ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualKeys_on
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain} {P pair : Adr}
-    {Tr : Adr → Prop} (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    {scopeCfg : ChainConfig} {scopeStart scopeEnd : BlockChain}
-    (scope : ConfiguredHistoryTraceIn F scopeCfg scopeStart scopeEnd)
-    (framesIn : scope.rawFrames ⊆ history.rawFrames)
-    (capabilities : BodyStageCapabilities F) (neutral : ∀ fork, F fork → NeutralFork fork)
-    (codes : UsdcNodeCodes P scope.rawNodes)
-    (proxyApart : ProxyRowsApart P pair Tr scope.rawNodes)
-    (spenders : List Adr) (observed : ∀ g, Tr g → g ∈ spenders)
-    (v1Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) (actualV1MappingKeys P history) = true)
-    (v2Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) (actualV2CoveredKeys P history) = true)
-    (v21Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) (actualV2_1CoveredKeys P history) = true)
-    (v22Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) (actualV22CoveredKeys P history) = true)
-    (v1FixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true)
-    (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) modernFixedWriteSlots = true) :
-    UsdcRawRowWriteClass P pair Tr scope.rawFrames scope.rawNodes := by
-  intro node scopeMember write found owner tracked
-  have target : node.sevm.currentTarget = P :=
-    (successfulSstore?_node_owner found).2.symm.trans owner
-  exact ConfiguredHistoryTraceIn.usdc_rawRowWrite_of_actualKeys_of_nodeCode
-    history scope framesIn capabilities neutral proxyApart spenders observed
-    v1Faithful v2Faithful v21Faithful v22Faithful v1FixedApart modernFixedApart
-    scopeMember (codes node scopeMember target) found owner tracked
-
-/-- All four implementation families use their original finite successful-store
-populations. No descriptor-wide modern separation or assumed raw classifier remains.
-The exact finite checks, proxy separation and selected code population stay explicit. -/
-theorem ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualKeys
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain} {P pair : Adr}
-    {Tr : Adr → Prop} (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (neutral : ∀ fork, F fork → NeutralFork fork)
-    (codes : UsdcNodeCodes P history.rawNodes)
-    (proxyApart : ProxyRowsApart P pair Tr history.rawNodes)
-    (spenders : List Adr) (observed : ∀ g, Tr g → g ∈ spenders)
-    (v1Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) (actualV1MappingKeys P history) = true)
-    (v2Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) (actualV2CoveredKeys P history) = true)
-    (v21Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) (actualV2_1CoveredKeys P history) = true)
-    (v22Faithful : SlotFootprint.checkFaithfulOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) (actualV22CoveredKeys P history) = true)
-    (v1FixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) v1FixedWriteSlots = true)
-    (modernFixedApart : SlotFootprint.checkApartOn HistoricalMappingKey.slot
-      (spenders.map (fun g => .modern (.allow pair g))) modernFixedWriteSlots = true) :
-    UsdcRawRowWriteClass P pair Tr history.rawFrames history.rawNodes := by
-  exact ConfiguredHistoryTraceIn.usdcRawRowWriteClass_of_actualKeys_on history history
-    (fun _ member => member) capabilities neutral codes proxyApart spenders observed
-    v1Faithful v2Faithful v21Faithful v22Faithful v1FixedApart modernFixedApart
-
-
 /-- All five certified implementation/library runtimes avoid the proxy's
 implementation slot on the original raw history. The finite key premises are
 the existing V1 and modern populations; no code coverage or upgrade ordering
@@ -590,7 +505,6 @@ theorem ConfiguredHistoryTraceIn.knownImplSlotApart_of_actualKeys
     have same := Exec.Deriv.ParentPrefix.sevm_eq chain
     have rootCode : root.sevm.code = Lib.code := by rw [← same]; exact library
     exact (lib_no_sstore_node pc stateGas chain rootCode found).elim
-
 
 /-- The positional code induction now obtains its slot-separation premise
 from actual finite keys rather than assuming it for unknown delegated code. -/

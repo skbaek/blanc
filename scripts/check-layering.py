@@ -446,7 +446,6 @@ SHARED += [
 # In-histories (beacon-deposit-historical-reach-v1): contract-neutral.
 SHARED += [
     "ExecutionHistoryInForkFacts",
-    "ExecutionHistoryInNoDel",
     "ExecutionHistoryInSystemCodeKeep",
     "ExecutionHistoryInWarmth",
     "ExecutionHistoryInCodeAt",

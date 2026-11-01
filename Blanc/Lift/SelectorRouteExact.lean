@@ -203,7 +203,7 @@ theorem SFunc.RunCutP.selWalk_inl (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Sum.inl.inj hw)
       rcases ricP_cmp_eq_either hP run with ⟨zero, -⟩ | ⟨ne, r⟩
       · exact absurd zero h
-      · exact ⟨(eq_of_eqCheck_ne ne).symm, r⟩
+      · exact ⟨(B256.eq_of_eqCheck_ne_zero ne).symm, r⟩
   | case6 => cases hw
 
 /-- **Into the goto's entry, inverted, for a `P`-run.** -/

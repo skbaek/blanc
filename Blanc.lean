@@ -56,7 +56,6 @@ import Blanc.ExecutionHistoryInCodeAt
 import Blanc.ExecutionHistoryInCallerExclusion
 import Blanc.ExecutionSenderQueryCuts
 import Blanc.ExecutionHistoryInForkFacts
-import Blanc.ExecutionHistoryInNoDel
 import Blanc.ExecutionHistoryStateTrace
 import Blanc.ExecutionHistoryInStateTrace
 import Blanc.ExecutionHistoryInSystemCodeKeep
