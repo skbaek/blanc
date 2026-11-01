@@ -3,6 +3,7 @@ import Blanc.Lift.UniswapV2Pair.WriterArithmetic
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.HistAccessWalk
 import Blanc.Lift.ExactWalkSolc
+import Blanc.Lift.WalkKit
 
 /-! The literal repeated factory initializer and its two packed address writes. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -84,9 +85,7 @@ theorem initializeWrites_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (G + load0 + store0 + load1 + store1 + 78)) t_0fb2_c45
       (.returned (St (initializeWritesBase sevm b token0 token1) R M G)) := by
   unfold t_0fb2_c45
-  refine rx_dest ?_
-  refine rx_push (w := 6) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   rw [show G + load0 + store0 + load1 + store1 + 71 =
       (G + store0 + load1 + store1 + 71) + load0 from by omega]
   refine rx_sload_selC fork cost0 (by simp only [List.length_cons]; omega) ?_
@@ -97,21 +96,16 @@ theorem initializeWrites_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_and (v := token0.toB256) (addressSlotReadWord_toB256 token0)
     (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := addressMask) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap2 ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
-  refine rx_and rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_or (v := initializeWord0 sevm b token0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_swap2 ?_
+  wrun! 2
   rw [show G + store0 + load1 + store1 + 38 =
       (G + load1 + store1 + 38) + store0 from by omega]
   refine rx_sstoreC fork costS0 (by omega) nonstatic ?_
-  refine rx_push (w := 7) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   rw [show G + load1 + store1 + 32 = (G + store1 + 32) + load1 from by omega]
   refine rx_sload_selC fork cost1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap3 ?_
-  refine rx_swap1 ?_
+  wrun! 2
   refine rx_swap (n := 3) rfl ?_
   dsimp only [List.set]
   refine rx_and (v := token1.toB256) (addressSlotReadWord_toB256 token1)
@@ -257,8 +251,7 @@ theorem initialize45_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (G + factoryLoad + load0 + store0 + load1 + store1 + 106)) t_0f2c_c45
       (.returned (St (initializeCoreBase sevm b token0 token1) R M G)) := by
   unfold t_0f2c_c45
-  refine rx_dest ?_
-  refine rx_push (w := 5) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   rw [show G + factoryLoad + load0 + store0 + load1 + store1 + 102 =
     (G + load0 + store0 + load1 + store1 + 102) + factoryLoad from by omega]
   refine rx_sload_selC fork factoryCost (by simp only [List.length_cons]; omega) ?_

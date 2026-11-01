@@ -1,5 +1,6 @@
 import Blanc.Lift.UniswapV2Pair.GetterStorageReservesCore
 import Blanc.Lift.UniswapV2Pair.GetterStorageReservesMemory
+import Blanc.Lift.WalkKit
 
 /-! Actual packed-reserve return wrapper and its internal call. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -17,9 +18,7 @@ theorem reserves_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   have m3 := getterReservesMemory_ptr mem r0 r1 ts
   simp only [getterReservesMemory, getterReservesMemory2, getterReservesMemory1] at m1 m2 m3
   unfold t_02de_c101
-  refine rx_dest ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mload (c := 3) ?_ mem.word (mem.read_self (by decide))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq mem.size]; decide
@@ -30,20 +29,16 @@ theorem reserves_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 9) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_swap3 ?_
-  refine rx_swap1 ?_
-  refine rx_swap4 ?_
+  wrun! 3
   refine rx_and clean1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 160) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 6) ?_ rfl ?_
   · simp only [show (128 : B256).toNat = 128 from rfl]
     rw [St.extCost_eq m1.size]; decide
   refine rx_push (w := reserveMask32) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_and cleant (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 192) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 6) ?_ rfl ?_
   · simp only [show (128 : B256).toNat = 128 from rfl,
@@ -56,9 +51,7 @@ theorem reserves_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
       show (160 : B256).toNat = 160 from rfl,
       show (128 : B256).toNat = 128 from rfl]
     rw [St.extCost_eq m3.size]; decide
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 3
   refine rx_sub' (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := 96) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_add' (v := 96) (by decide) (by simp only [List.length_cons]; omega) ?_
@@ -173,9 +166,7 @@ theorem reserves_entry_exact {sevm : Sevm} {b : Devm} {M : Mem} {G c : Nat} {sel
   have gas : G + c + 194 = (((G + 109) + c + 70) + 8) + 3 + 3 + 1 := by omega
   rw [gas]
   unfold t_02d6_c101
-  refine rx_dest ?_
-  refine rx_push (w := 0x02de) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
-  refine rx_push (w := 0x0d90) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 3
   refine rx_callRet (show cert.prog[56]? = some t_0d90_c56 from rfl)
     (reserves_callee_exact fork cost (by simp only [List.length_cons, List.length_nil]; decide)) ?_
   exact reserves_tail_exact clean0 clean1 cleant mem (by simp only [List.length_cons, List.length_nil]; decide)

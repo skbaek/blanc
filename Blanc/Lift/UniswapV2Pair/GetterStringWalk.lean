@@ -2,6 +2,7 @@ import Blanc.Lift.UniswapV2Pair.GetterStringMemory
 import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.GetterWalk
 import Blanc.Lift.CopyLoop
+import Blanc.Lift.WalkKit
 
 /-! Actual constant-string callees and shared ABI wrapper walks. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -54,13 +55,11 @@ theorem getterString_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   rw [show memExtSize 96 128 32 = 160 from by decide] at len
   rw [s.callee_tree]
   unfold getterStringCalleeTree
-  refine rx_dest ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mload (c := 3) ?_ mem.word (mem.read_self (by decide))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 192) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) ?_ rfl ?_
@@ -81,8 +80,7 @@ theorem getterString_callee_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
       show (128 : B256).toNat = 128 from rfl,
       show (160 : B256).toNat = 160 from rfl]
     rw [St.extCost_eq len.size]; decide
-  refine rx_pop ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   simp only [show (64 : B256).toNat = 64 from rfl,
     show (128 : B256).toNat = 128 from rfl, show (160 : B256).toNat = 160 from rfl]
   exact rx_ret
@@ -138,18 +136,11 @@ theorem getterString_return_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
     SFunc.RunExact fs sevm (St b (L :: 288 :: 192 :: 192 :: 128 :: R) M (G + 30))
       t_02c8_c1 (.halted (getterStringReturn b R M G)) := by
   unfold t_02c8_c1
-  refine rx_dest ?_
-  refine rx_pop ?_
-  refine rx_swap3 ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 7
   refine rx_mload (c := 3) ?_ mem.word (mem.read_self (by decide))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap2 ?_
+  wrun! 2
   refine rx_sub' (v := 96) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap1 ?_
   exact rx_return_any rfl (by rw [St.extCost_eq mem.size]; decide)
@@ -163,29 +154,24 @@ theorem getterString_padding_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   have padded := mem.write 256 s.word (Or.inr (by decide))
   rw [show memExtSize 288 256 32 = 288 from by decide] at padded
   unfold t_02af_c39
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_sub' (v := 256) (by cases s <;> decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
   refine rx_mload (c := 3) ?_ word (mem.read_self (by decide))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_sub' (v := 32 - s.length) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := 256) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_exp' (c := 60) (by cases s <;> decide) (by simp only [List.length_cons]; omega) ?_
-  refine rx_sub (by simp only [List.length_cons]; omega) ?_
-  refine rx_not rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_and s.masked (by simp only [List.length_cons]; omega) ?_
   refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
   refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_add' (v := 288) (by decide) (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap2 ?_
-  refine rx_pop ?_
+  wrun! 2
   simp only [show (256 : B256).toNat = 256 from rfl]
   exact getterString_return_exact padded (by omega)
 
@@ -269,19 +255,10 @@ theorem getterString_exit_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (St b (32 :: 160 :: 256 :: s.length :: s.length :: 160 :: 256 :: 192 :: 192 :: 128 :: R) M (G + 197))
       t_029b_c39 (.halted (getterStringReturn b R (M.write 256 s.word.toBytes) G)) := by
   unfold t_029b_c39
-  refine rx_dest ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_swap1 ?_
-  refine rx_pop ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 9
   refine rx_add' (v := 256 + s.length) (by cases s <;> decide)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_push (w := 31) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_and (v := s.length) (by cases s <;> decide)
     (by simp only [List.length_cons]; omega) ?_
   refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
@@ -452,15 +429,11 @@ theorem getterString_wrapper_exact {sevm : Sevm} {b : Devm} {R : List B256} {M :
   have len2 := (getterStringHeads_words mem s.length s.word).1
   refine ⟨post, ?_, out, stor, logs, gas⟩
   unfold t_0261_c100
-  refine rx_dest ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mload (c := 3) ?_ initial.word (initial.read_self (by decide))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq initial.size]; decide
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 6) ?_ rfl ?_
   · rw [St.extCost_eq initial.size]; decide
   refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
@@ -469,8 +442,7 @@ theorem getterString_wrapper_exact {sevm : Sevm} {b : Devm} {R : List B256} {M :
   · simp only [show (192 : B256).toNat = 192 from rfl,
       show (128 : B256).toNat = 128 from rfl]
     rw [St.extCost_eq size1]; decide
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 224) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 6) ?_ rfl ?_
   · simp only [show (192 : B256).toNat = 192 from rfl,
@@ -482,21 +454,11 @@ theorem getterString_wrapper_exact {sevm : Sevm} {b : Devm} {R : List B256} {M :
   · simp only [show (192 : B256).toNat = 192 from rfl,
       show (128 : B256).toNat = 128 from rfl, show (224 : B256).toNat = 224 from rfl]
     rw [St.extCost_eq size2]; decide
-  refine rx_swap2 ?_
-  refine rx_swap3 ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap3 ?_
-  refine rx_swap1 ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 6
   refine rx_add' (v := 256) (by decide) (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap2 ?_
-  refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_add' (v := 160) (by decide) (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 5
   simp only [show (192 : B256).toNat = 192 from rfl,
     show (224 : B256).toNat = 224 from rfl]
   exact copy
@@ -621,8 +583,7 @@ theorem getterString_entry_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {s
   refine ⟨post, ?_, out, stor, logs, gas⟩
   rw [s.entry_shape]
   unfold getterStringEntryTree
-  refine rx_dest ?_
-  refine rx_push (w := 0x0261) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 2
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_callRet s.callee_lookup
     (getterString_callee_exact (G := G + 390) (R := [sel]) s mem
