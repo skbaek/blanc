@@ -73,11 +73,35 @@ theorem Ninst.none_getStor_eq_of_ne_sstore
       exact ((Ninst.exchange_instructionFrame_effectRec
         (xl := .none) trivial run).getStor owner).symm
 
-/-- A continuing driver step preserves one persistent cell unless it is an
-`SSTORE`, executed by that cell's owner, whose key operand is that cell's key. -/
-theorem Evm.step_cont_getStor_get
-    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+/-- The executable-instruction arm under state-gas absence: the instruction
+runs the actual completed execution without state gas, so the post storage
+is the executed storage.  Takes the `Ninst.step` equation (as in the
+original's `nstep`) rather than a run proof. -/
+private theorem Ninst.exec_getStor_get_noStateGas {pc pc' : Nat} {sevm : Sevm}
+    {pre post : Devm} {executable : Xinst}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (nstep : Ninst.step ⟨pc, sevm, pre⟩ (.exec executable) = .cont pc' post)
+    {owner : Adr} {key : B256} :
+    (Devm.getStor post owner).get key = (Devm.getStor pre owner).get key := by
+  simp only [Ninst.step_exec, XStep.toStep] at nstep
+  cases actual : Xinst.step sevm pre executable with
+  | spawn frame resume => rw [actual] at nstep; cases nstep
+  | done out =>
+      rw [actual] at nstep
+      cases out with
+      | error error => cases nstep
+      | ok actualPost =>
+          cases nstep
+          exact congrArg (fun storage => storage.get key)
+            (Xinst.step_done_getStor_noStateGas hsg actual owner)
+
+/-- State-gas-absence twin of `Evm.step_cont_getStor_get`: a successful
+non-matching driver step preserves the observed cell.  The executable arm
+is factored through the helper above, which runs the `Xinst.step_done`
+analysis under `Xinst.step_done_getStor_noStateGas` instead of coverage. -/
+theorem Evm.step_cont_getStor_get_noStateGas {pc pc' : Nat} {sevm : Sevm}
+    {pre post : Devm}
+    (hsg : sevm.benvStat.rules.stateGas = none)
     (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
     {owner : Adr} {key : B256}
     (notStore : sevm.currentTarget = owner →
@@ -117,17 +141,7 @@ theorem Evm.step_cont_getStor_get
             exact ⟨rfl, rfl⟩
           cases instruction with
           | exec executable =>
-              simp only [Ninst.step_exec, XStep.toStep] at nstep
-              cases actual : Xinst.step sevm pre executable with
-              | spawn frame resume => rw [actual] at nstep; cases nstep
-              | done out =>
-                  rw [actual] at nstep
-                  cases out with
-                  | error error => cases nstep
-                  | ok actualPost =>
-                      cases nstep
-                      exact congrArg (fun storage => storage.get key)
-                        (Xinst.step_done_getStor hfork actual owner)
+              exact Ninst.exec_getStor_get_noStateGas hsg nstep
           | reg regular =>
               have run : Rinst.run ⟨pc, sevm, pre⟩ regular = .ok post :=
                 ((Step.run_ofExecution (xl := (.none : Xlot))).mp nrun).2.symm
@@ -161,6 +175,18 @@ theorem Evm.step_cont_getStor_get
               exact congrArg (fun storage => storage.get key) ((Ninst.exchange_instructionFrame_effectRec
                 (xl := .none) trivial nrun).getStor owner).symm
 
+/-- A continuing driver step preserves one persistent cell unless it is an
+`SSTORE`, executed by that cell's owner, whose key operand is that cell's key. -/
+theorem Evm.step_cont_getStor_get
+    {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
+    {owner : Adr} {key : B256}
+    (notStore : sevm.currentTarget = owner →
+      Ninst.At sevm.code pc (.reg .sstore) → pre.stack.head? ≠ some key) :
+    (Devm.getStor post owner).get key = (Devm.getStor pre owner).get key :=
+  Evm.step_cont_getStor_get_noStateGas hfork.rules_stateGas_none step notStore
+
 /-- An immediately completed spawn (precompile, failed entry) preserves
 persistent storage at each structurally protected owner. -/
 theorem Evm.step_doneOk_getStor_eq
@@ -178,11 +204,12 @@ theorem Evm.step_doneOk_getStor_eq
   rw [spawn]
   exact ⟨settled, RunFrame.of_done enter, resumeRun.symm⟩
 
-/-- An entered child preserves the storage of each structurally protected owner. -/
-theorem Evm.step_spawn_enter_getStor
+/-- An entered child preserves the storage of each structurally protected owner, under
+`rules.stateGas = none` (every historical fork). -/
+theorem Evm.step_spawn_enter_getStor_protected_noStateGas
     {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
     {frame : Jaune.Frame} {resume : Resume} {child : Evm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hsg : sevm.benvStat.rules.stateGas = none)
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
     (enter : frame.enter = .run child)
     (owner : Adr) (protection : State.Protected pre.state owner) :
@@ -190,7 +217,7 @@ theorem Evm.step_spawn_enter_getStor
   rcases Evm.step_spawn_inv step with ⟨x, _, spawn, _⟩
   have messageFacts : frame.inner.benv.state.getStor owner = pre.getStor owner ∧
       State.Protected frame.inner.benv.state owner := by
-    rcases Xinst.step_shapeCovered sevm pre x hfork with
+    rcases Xinst.step_shapeNoStateGas sevm pre x hsg with
       ⟨execution, shape, -⟩ |
       ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
       ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -248,6 +275,17 @@ theorem Evm.step_spawn_enter_getStor
   rcases Frame.enter_run_inv enter with ⟨benv, transfer, rfl⟩
   exact (benvAfterTransfer_ok_getStor transfer owner (Or.inr messageFacts.2)).trans
     messageFacts.1
+
+/-- An entered child preserves the storage of each structurally protected owner. -/
+theorem Evm.step_spawn_enter_getStor
+    {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
+    {frame : Jaune.Frame} {resume : Resume} {child : Evm}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (enter : frame.enter = .run child)
+    (owner : Adr) (protection : State.Protected pre.state owner) :
+    Devm.getStor child.dyna owner = Devm.getStor pre owner :=
+  Evm.step_spawn_enter_getStor_protected_noStateGas hfork.rules_stateGas_none step enter owner protection
 
 /-- A child discarded by complete settlement preserves the parent code and storage
 maps, including empty-code addresses and raw cells at unprotected owners.
