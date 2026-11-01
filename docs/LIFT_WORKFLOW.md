@@ -92,7 +92,8 @@ All are off by default, so every row that omits them regenerates byte-identicall
   `Cert.rangeOk` decision per range with the node and jump checks fused, chained by `Cert.rangeOk_drop_take` into
   `cert_rangeOk` (`Blanc/Lift/CheckRange.lean`); there are no per-entry theorems. It refuses an entry above
   `split_nodes` and is required in memory mode and for a generated `jumps` module. `entries: [i, ...]` (memory mode)
-  re-exports `entry_i` for a consumer that names one entry. Measured budgets: 600 (Curve3Pool, USDC), 200 (USDC upgraders), 1000 (0x6326).
+  re-exports `entry_i` for a consumer that names one entry; `fuse_jumps: true` runs the jump checks in the ranges
+  for a hand-written `Jumps` module (`jumps_ok := Cert.jumpsOk_of_rangeOk cert_rangeOk`). Measured budgets: 600 (Curve3Pool, USDC), 200 (USDC upgraders), 1000 (0x6326).
 - `literal_tries: true`: emit the code tries as data checked once against `LTrie.ofList`; `trie_build: true` (needs
   `literal_tries`): check each by one linear `LTrie.build` pass (`Blanc/Lift/CodeTriesBuild.lean`).
 - Without `ranges` (only a certificate with an entry above `split_nodes`, 0x847e) the per-entry decisions combine into

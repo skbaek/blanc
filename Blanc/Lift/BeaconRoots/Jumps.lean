@@ -1,16 +1,13 @@
-import Blanc.Lift.Exact
 import Blanc.Lift.BeaconRoots.Check
-import Blanc.Lift.CheckAssembly
+
+/-! Valid jump destinations: the jump checks run inside the Check module's range decisions
+(`cert_rangeOk`, registry `check.fuse_jumps`), so `jumps_ok` is one projection. -/
 
 namespace Blanc.Lift.BeaconRoots
 
 open Jaune
 
-theorem jumps_0 :
-    jumpsOkNode code (Cert.entries cert) t_0000_c0 [] = true := by
-  decide +kernel
-
 theorem jumps_ok : Cert.jumpsOk code cert = true :=
-  Cert.jumpsOk_singleton jumps_0
+  Cert.jumpsOk_of_rangeOk cert_rangeOk
 
 end Blanc.Lift.BeaconRoots

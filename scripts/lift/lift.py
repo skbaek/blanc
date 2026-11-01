@@ -437,6 +437,8 @@ def run_registry(args: argparse.Namespace) -> int:
                     argv += ["--check-ranges", str(check["ranges"])]
                 if "entries" in check:
                     argv += ["--check-entries", ",".join(str(i) for i in check["entries"])]
+                if check.get("fuse_jumps") is True:
+                    argv.append("--check-fuse-jumps")
             tries = row.get("tries")
             if tries:
                 if check and check.get("parts", 0) >= 2:
@@ -586,6 +588,8 @@ parser.add_argument("--check-ranges", type=int, default=0,
                     help="decide the entries in contiguous ranges of at most this many summed tree nodes (an entry above it alone), one Cert.rangeOk kernel decision per range with the node and jump checks fused, assembled by one Cert.rangeOk_drop_take chain (Blanc.Lift.CheckRange) instead of per-entry theorems and a per-entry chain (registry check.ranges; 0: off); opt-in per certificate so other certificates regenerate byte-identically")
 parser.add_argument("--check-entries", type=str, default="",
                     help="with --check-ranges and --memret: also export entry_i (the per-entry checkNodeM fact, from its range by Cert.checkNodeM_of_rangeOk) for these comma-separated entries, for consumers that name one entry (registry check.entries)")
+parser.add_argument("--check-fuse-jumps", action="store_true",
+                    help="with --check-ranges and no generated Jumps module: run the jump checks inside the range decisions anyway, so a hand-written Jumps module derives jumps_ok from cert_rangeOk (Cert.jumpsOk_of_rangeOk) (registry check.fuse_jumps)")
 parser.add_argument("--check-literal-tries", action="store_true",
                     help="emit the code tries as data checked once against LTrie.ofList (registry check.literal_tries)")
 parser.add_argument("--check-trie-build", action="store_true",
@@ -677,6 +681,8 @@ if args.tries_out is not None and args.check_parts >= 2:
     parser.error("standalone tries and split Check both own CheckTries.lean")
 if args.check_ranges and args.check_out is None:
     parser.error("--check-ranges needs --check-out")
+if args.check_fuse_jumps and not args.check_ranges:
+    parser.error("--check-fuse-jumps needs --check-ranges")
 if args.check_entries and not (args.check_ranges and MEMRET):
     parser.error("--check-entries needs --check-ranges and --memret")
 if args.check_trie_build and not args.check_literal_tries:
@@ -2886,7 +2892,7 @@ def check_source_ranges(head: List[str]) -> Any:
                           "The generic equalities rewrite each result to Cert.checkM / Cert.jumpsOkM.")
                 for l in head]
     ms, b = ("mems", "true") if MEMRET else ("[]", "false")
-    j = "true" if MEMRET or args.jumps_out is not None else "false"
+    j = "true" if MEMRET or args.jumps_out is not None or args.check_fuse_jumps else "false"
     exports = sorted({int(x) for x in args.check_entries.split(",") if x.strip()})
     if any(i >= n for i in exports):
         raise RuntimeError(f"--check-entries names an entry past the certificate's {n} entries")

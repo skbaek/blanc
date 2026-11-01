@@ -26,22 +26,4 @@ theorem Cert.jumpsOk_singleton {code : ByteArray} {entry : Entry} {node : SFunc}
   rw [hnode]
   rfl
 
-/-- Assemble a seven-entry jump certificate from its seven node checks, the
-`jumpsOk` counterpart of `check_seven` for hand-written `Jumps` modules. -/
-theorem Cert.jumpsOk_seven {code : ByteArray}
-    {e0 e1 e2 e3 e4 e5 e6 : Entry} {f0 f1 f2 f3 f4 f5 f6 : SFunc}
-    (h0 : jumpsOkNode code [e0, e1, e2, e3, e4, e5, e6] f0 e0.frame = true)
-    (h1 : jumpsOkNode code [e0, e1, e2, e3, e4, e5, e6] f1 e1.frame = true)
-    (h2 : jumpsOkNode code [e0, e1, e2, e3, e4, e5, e6] f2 e2.frame = true)
-    (h3 : jumpsOkNode code [e0, e1, e2, e3, e4, e5, e6] f3 e3.frame = true)
-    (h4 : jumpsOkNode code [e0, e1, e2, e3, e4, e5, e6] f4 e4.frame = true)
-    (h5 : jumpsOkNode code [e0, e1, e2, e3, e4, e5, e6] f5 e5.frame = true)
-    (h6 : jumpsOkNode code [e0, e1, e2, e3, e4, e5, e6] f6 e6.frame = true) :
-    Cert.jumpsOk code
-      [(e0, f0), (e1, f1), (e2, f2), (e3, f3), (e4, f4), (e5, f5), (e6, f6)] = true := by
-  unfold Cert.jumpsOk
-  simp only [Cert.entries, List.map_cons, List.map_nil, List.all_cons, List.all_nil]
-  rw [h0, h1, h2, h3, h4, h5, h6]
-  rfl
-
 end Blanc.Lift

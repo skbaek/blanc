@@ -1,22 +1,13 @@
-import Blanc.Lift.Exact
 import Blanc.Lift.SystemDrainer.Check
-import Blanc.Lift.CheckAssembly
 
-/-!
-# System-drainer valid jump destinations
-
-The drainer has one straight-line entry; its jumpability is one kernel decision.
--/
+/-! Valid jump destinations: the jump checks run inside the Check module's range decisions
+(`cert_rangeOk`, registry `check.fuse_jumps`), so `jumps_ok` is one projection. -/
 
 namespace Blanc.Lift.SystemDrainer
 
 open Jaune
 
-theorem jumps_0 :
-    jumpsOkNode code (Cert.entries cert) t_0000_c0 [] = true := by
-  decide +kernel
-
 theorem jumps_ok : Cert.jumpsOk code cert = true :=
-  Cert.jumpsOk_singleton jumps_0
+  Cert.jumpsOk_of_rangeOk cert_rangeOk
 
 end Blanc.Lift.SystemDrainer
