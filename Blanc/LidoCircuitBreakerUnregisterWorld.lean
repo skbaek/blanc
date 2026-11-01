@@ -108,7 +108,7 @@ slot and the array's last entry slot.
 
 The configured-interval slot is deliberately absent, and stays cold: this
 chronology never touches it.  Because every *read* key is warm, each
-`temporalSloadBase` layer of the chronology's post-state tower is the identity,
+`afterSload` layer of the chronology's post-state tower is the identity,
 so both staged loads are charged `gasWarmAccess` and no `Std.HashSet` is ever
 decided. -/
 def unregWorldKeys : Std.HashSet (Adr × B256) :=
@@ -726,7 +726,7 @@ storage only at the assignment slot. -/
 theorem unregWorld_assignmentBase :
     assignmentBase unregWorldSevm unregWorldPre unregWorldTarget =
       unregWorldPre := by
-  rw [assignmentBase, temporalSloadBase]
+  rw [assignmentBase, afterSload]
   split
   · rfl
   · rename_i hcold
@@ -812,8 +812,8 @@ theorem unregWorld_entryExpiry :
 private theorem unregWorld_warmCost {base : Devm} {key : B256}
     (h : base.accessedStorageKeys = unregWorldKeys)
     (hk : (unregWorldOwner, key) ∈ unregWorldKeys) :
-    temporalSloadCost unregWorldSevm base key = gasWarmAccess := by
-  rw [temporalSloadCost]
+    sloadCost unregWorldSevm base key = gasWarmAccess := by
+  rw [sloadCost]
   split
   · rfl
   · rename_i hno
@@ -835,8 +835,8 @@ theorem unregWorld_bodyGasEq :
       foundZeroOldLastRegisterBodyGas sevm base target oldPauser
         c₁ c₂ c₃ c₄ c₅ c₆ c₇ c₈ =
       221 + (4131 +
-        temporalSloadCost sevm base (assignmentSlot target) + c₁ +
-        temporalSloadCost sevm (assignmentPost sevm base target 0)
+        sloadCost sevm base (assignmentSlot target) + c₁ +
+        sloadCost sevm (assignmentPost sevm base target 0)
           (countSlot oldPauser) + c₂ + c₃ + c₄ + c₅ + c₆ + c₇ + c₈) :=
     fun _ _ _ _ _ _ _ _ _ _ _ _ => rfl
   rw [hunfold,unregWorld_warmCost unregWorld_accessed unregWorld_warmAssignment,

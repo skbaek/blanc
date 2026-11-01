@@ -27,7 +27,7 @@ enter them at exactly the exported state.
 
 Costs follow the register-side conventions: fixed charges are exact numerals,
 warmth-dependent charges are hypothesis-supplied numerals
-(`temporalSloadCost`/`temporalAccountAccessCost` equations), and `SSTORE`
+(`sloadCost`/`temporalAccountAccessCost` equations), and `SSTORE`
 charges are hypothesis-supplied `sstoreValueCost` numerals in the style of
 `afterOldPauser_finishSetPauser_runCompiled`.
 -/
@@ -56,7 +56,7 @@ private lemma ltCheck_checkedSum_eq_zero {time interval : B256}
 /-! ## Temporal account access
 
 `EXTCODESIZE`'s charge is warmth-dependent, and warmth is a fact about the
-frame.  Mirror the `temporalSloadBase`/`temporalSloadCost` convention: the
+frame.  Mirror the `afterSload`/`sloadCost` convention: the
 caller supplies the charge as an equation about the entry world, and the walk
 threads the possibly-warmed successor world. -/
 
@@ -380,6 +380,18 @@ private lemma responder_staticcall_crossing
     · intro hx
       exact Std.HashSet.mem_insert.mpr (Or.inr hx)
 
+/-- Push charges of the keccak-defined words these walks push, kernel-checked
+once so no walk evaluates the hash (see `heartbeatUpdatedEvent_pushCost`). -/
+private theorem pauseTriggeredEvent_pushCost :
+    pushCost pauseTriggeredEvent.toBytes.sig = 3 :=
+  pushCost_of_ne_zero (by decide +kernel)
+
+private theorem isPausedSelector_pushCost : pushCost isPausedSelector.toBytes.sig = 3 :=
+  pushCost_of_ne_zero (by decide +kernel)
+
+private theorem pauseForSelector_pushCost : pushCost pauseForSelector.toBytes.sig = 3 :=
+  pushCost_of_ne_zero (by decide +kernel)
+
 /-! ## The shared expiry-write finish
 
 Both `pauseSuccess` arms end in `pauseExpiryFinish` and differ only in the
@@ -515,18 +527,18 @@ both exercised by the two witness worlds: row 19 retires the pauser (count
 zero, stored expiry zero) and row 18 retains it (count nonzero, stored expiry
 the checked `interval + timestamp`). -/
 
-private theorem temporalSloadCost_congr
+private theorem sloadCost_congr
     (sevm : Sevm) (base base' : Devm) (k : B256)
     (h : base.accessedStorageKeys = base'.accessedStorageKeys) :
-    temporalSloadCost sevm base k = temporalSloadCost sevm base' k := by
-  unfold temporalSloadCost
+    sloadCost sevm base k = sloadCost sevm base' k := by
+  unfold sloadCost
   rw [h]
 
-private theorem temporalSloadBase_accessedStorageKeys_addLog
+private theorem afterSload_accessedStorageKeys_addLog
     (sevm : Sevm) (base : Devm) (l : Log) (k : B256) :
-    (temporalSloadBase sevm (base.addLog l) k).accessedStorageKeys =
-      (temporalSloadBase sevm base k).accessedStorageKeys := by
-  unfold temporalSloadBase
+    (afterSload sevm (base.addLog l) k).accessedStorageKeys =
+      (afterSload sevm base k).accessedStorageKeys := by
+  unfold afterSload
   by_cases h : (sevm.currentTarget, k) ∈ base.accessedStorageKeys
   · rw [ite_eq_left (show (sevm.currentTarget, k) ∈
       (base.addLog l).accessedStorageKeys from h), ite_eq_left h]
@@ -555,7 +567,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     (hsize : 768 ≤ M.size) (halign : M.size % 32 = 0)
     (hcaller : sevm.caller.toB256 = pauser)
     (hcount : base.getStorVal sevm.currentTarget (countSlot pauser) = 0)
-    (hcountCost : temporalSloadCost sevm base (countSlot pauser) = countCost)
+    (hcountCost : sloadCost sevm base (countSlot pauser) = countCost)
     (hexpiry : base.getStorVal sevm.currentTarget (expirySlot pauser) =
       expiryCurrent)
     (hexpiryOrig : base.getOrigStorVal sevm sevm.currentTarget
@@ -568,7 +580,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     Func.RunCompiled fs sevm
       (base.setMach ⟨[], M, G + 3322 + countCost + storeCost, base.stateGas⟩) pauseSuccess
       ((((temporalSstorePost sevm
-            (temporalSloadBase sevm
+            (afterSload sevm
               (base.addLog ⟨sevm.currentTarget,
                 [pauseTriggeredEvent, target, pauser], duration.toBytes⟩)
               (countSlot pauser))
@@ -576,16 +588,15 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
           ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser],
             (0 : B256).toBytes⟩).setMach
         ⟨[], (M.write 0 duration.toBytes).write 0 (0 : B256).toBytes,
-          G, ((temporalSstorePost sevm (temporalSloadBase sevm (base.addLog ⟨sevm.currentTarget, [pauseTriggeredEvent, target, pauser], duration.toBytes⟩) (countSlot pauser)) (expirySlot pauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (0 : B256).toBytes⟩).stateGas⟩).setTransVal
+          G, ((temporalSstorePost sevm (afterSload sevm (base.addLog ⟨sevm.currentTarget, [pauseTriggeredEvent, target, pauser], duration.toBytes⟩) (countSlot pauser)) (expirySlot pauser) 0).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (0 : B256).toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
-  have hevent : pushCost pauseTriggeredEvent.toBytes.sig = 3 :=
-    pushCost_of_ne_zero (by decide +kernel)
+  have hevent := pauseTriggeredEvent_pushCost
   unfold pauseSuccess
   generalize pauseTriggeredEvent = event at hevent ⊢
   let eventLog : Log := ⟨sevm.currentTarget,
     [event, target, pauser], duration.toBytes⟩
   let eventBase := base.addLog eventLog
-  let countBase := temporalSloadBase sevm eventBase (countSlot pauser)
+  let countBase := afterSload sevm eventBase (countSlot pauser)
   have hdurationCovered : (durationWord * 32).toNat + 32 ≤ M.size := by
     have hoff : (durationWord * 32).toNat + 32 ≤ 768 := by decide
     omega
@@ -648,13 +659,13 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
     refine pauseExpiryFinish_ok_runCompiled (hfork := hfork) fs sevm countBase
       (M.write 0 duration.toBytes) pauser 0
       expiryCurrent expiryOriginal storeCost G (by omega) halign' hcaller
-      ?_ ((temporalSloadBase_getOrigStorVal sevm eventBase _ _ _).trans hexpiryOrig)
+      ?_ ((afterSload_getOrigStorVal sevm eventBase _ _ _).trans hexpiryOrig)
       ?_ hstoreCost hstipend hstatic
     · rw [show countBase.getStorVal sevm.currentTarget (expirySlot pauser) =
         eventBase.getStorVal sevm.currentTarget (expirySlot pauser) from
-          temporalSloadBase_getStorVal sevm eventBase (countSlot pauser) _ _]
+          afterSload_getStorVal sevm eventBase (countSlot pauser) _ _]
       exact hexpiry
-    · exact temporalSloadBase_preserves_warm sevm eventBase (countSlot pauser)
+    · exact afterSload_preserves_warm sevm eventBase (countSlot pauser)
         (expirySlot pauser) hwarmExpiry
   -- the count test, the taken branch, and the zero push
   have harm : Func.RunCompiled fs sevm
@@ -685,7 +696,7 @@ theorem pauseSuccess_zeroCount_ok_runCompiled
       (key := countSlot pauser) (value := 0) (stack := [])
       (M := M.write 0 duration.toBytes)
       (G := G + 1531 + storeCost) hcount (by simp only [List.length_nil, Nat.ofNat_pos])
-    rw [show temporalSloadCost sevm eventBase (countSlot pauser) =
+    rw [show sloadCost sevm eventBase (countSlot pauser) =
       countCost from hcountCost] at h
     exact h
   -- the event prefix
@@ -740,11 +751,11 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     (hcaller : sevm.caller.toB256 = pauser)
     (hcount : base.getStorVal sevm.currentTarget (countSlot pauser) = count)
     (hcountNz : count ≠ 0)
-    (hcountCost : temporalSloadCost sevm base (countSlot pauser) = countCost)
+    (hcountCost : sloadCost sevm base (countSlot pauser) = countCost)
     (hinterval : base.getStorVal sevm.currentTarget heartbeatIntervalSlot =
       interval)
-    (hintervalCost : temporalSloadCost sevm
-      (temporalSloadBase sevm base (countSlot pauser))
+    (hintervalCost : sloadCost sevm
+      (afterSload sevm base (countSlot pauser))
       heartbeatIntervalSlot = intervalCost)
     (hnof : B256.Nof sevm.benvStat.time interval)
     (hexpiry : base.getStorVal sevm.currentTarget (expirySlot pauser) =
@@ -761,8 +772,8 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
       (base.setMach ⟨[], M,
         G + 3351 + countCost + intervalCost + storeCost, base.stateGas⟩) pauseSuccess
       ((((temporalSstorePost sevm
-            (temporalSloadBase sevm
-              (temporalSloadBase sevm
+            (afterSload sevm
+              (afterSload sevm
                 (base.addLog ⟨sevm.currentTarget,
                   [pauseTriggeredEvent, target, pauser], duration.toBytes⟩)
                 (countSlot pauser))
@@ -771,17 +782,16 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
           ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser],
             (interval + sevm.benvStat.time).toBytes⟩).setMach
         ⟨[], (M.write 0 duration.toBytes).write 0
-          (interval + sevm.benvStat.time).toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm (temporalSloadBase sevm (base.addLog ⟨sevm.currentTarget, [pauseTriggeredEvent, target, pauser], duration.toBytes⟩) (countSlot pauser)) heartbeatIntervalSlot) (expirySlot pauser) (interval + sevm.benvStat.time)).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (interval + sevm.benvStat.time).toBytes⟩).stateGas⟩).setTransVal
+          (interval + sevm.benvStat.time).toBytes, G, ((temporalSstorePost sevm (afterSload sevm (afterSload sevm (base.addLog ⟨sevm.currentTarget, [pauseTriggeredEvent, target, pauser], duration.toBytes⟩) (countSlot pauser)) heartbeatIntervalSlot) (expirySlot pauser) (interval + sevm.benvStat.time)).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, pauser], (interval + sevm.benvStat.time).toBytes⟩).stateGas⟩).setTransVal
         sevm.currentTarget lockKey 0) := by
-  have hevent : pushCost pauseTriggeredEvent.toBytes.sig = 3 :=
-    pushCost_of_ne_zero (by decide +kernel)
+  have hevent := pauseTriggeredEvent_pushCost
   unfold pauseSuccess
   generalize pauseTriggeredEvent = event at hevent ⊢
   let eventLog : Log := ⟨sevm.currentTarget,
     [event, target, pauser], duration.toBytes⟩
   let eventBase := base.addLog eventLog
-  let countBase := temporalSloadBase sevm eventBase (countSlot pauser)
-  let intervalBase := temporalSloadBase sevm countBase heartbeatIntervalSlot
+  let countBase := afterSload sevm eventBase (countSlot pauser)
+  let intervalBase := afterSload sevm countBase heartbeatIntervalSlot
   have hdurationCovered : (durationWord * 32).toNat + 32 ≤ M.size := by
     have hoff : (durationWord * 32).toNat + 32 ≤ 768 := by decide
     omega
@@ -845,22 +855,22 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
     refine pauseExpiryFinish_ok_runCompiled (hfork := hfork) fs sevm intervalBase
       (M.write 0 duration.toBytes) pauser (interval + sevm.benvStat.time)
       expiryCurrent expiryOriginal storeCost G (by omega) halign' hcaller
-      ?_ ((temporalSloadBase_getOrigStorVal sevm countBase _ _ _).trans
-        ((temporalSloadBase_getOrigStorVal sevm eventBase _ _ _).trans hexpiryOrig))
+      ?_ ((afterSload_getOrigStorVal sevm countBase _ _ _).trans
+        ((afterSload_getOrigStorVal sevm eventBase _ _ _).trans hexpiryOrig))
       ?_ hstoreCost hstipend hstatic
     · rw [show intervalBase.getStorVal sevm.currentTarget
           (expirySlot pauser) =
         countBase.getStorVal sevm.currentTarget (expirySlot pauser) from
-          temporalSloadBase_getStorVal sevm countBase heartbeatIntervalSlot
+          afterSload_getStorVal sevm countBase heartbeatIntervalSlot
             _ _,
         show countBase.getStorVal sevm.currentTarget (expirySlot pauser) =
           eventBase.getStorVal sevm.currentTarget (expirySlot pauser) from
-            temporalSloadBase_getStorVal sevm eventBase (countSlot pauser)
+            afterSload_getStorVal sevm eventBase (countSlot pauser)
               _ _]
       exact hexpiry
-    · exact temporalSloadBase_preserves_warm sevm countBase
+    · exact afterSload_preserves_warm sevm countBase
         heartbeatIntervalSlot (expirySlot pauser)
-        (temporalSloadBase_preserves_warm sevm eventBase (countSlot pauser)
+        (afterSload_preserves_warm sevm eventBase (countSlot pauser)
           (expirySlot pauser) hwarmExpiry)
   -- the checked addition and its overflow probe
   have hsum : Func.RunCompiled fs sevm
@@ -895,14 +905,14 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
       rw [show countBase.getStorVal sevm.currentTarget
           heartbeatIntervalSlot =
         eventBase.getStorVal sevm.currentTarget heartbeatIntervalSlot from
-          temporalSloadBase_getStorVal sevm eventBase (countSlot pauser) _ _]
+          afterSload_getStorVal sevm eventBase (countSlot pauser) _ _]
       exact hinterval
-    have hcost : temporalSloadCost sevm countBase heartbeatIntervalSlot =
+    have hcost : sloadCost sevm countBase heartbeatIntervalSlot =
         intervalCost :=
-      (temporalSloadCost_congr sevm countBase
-        (temporalSloadBase sevm base (countSlot pauser))
+      (sloadCost_congr sevm countBase
+        (afterSload sevm base (countSlot pauser))
         heartbeatIntervalSlot
-        (temporalSloadBase_accessedStorageKeys_addLog sevm base eventLog
+        (afterSload_accessedStorageKeys_addLog sevm base eventLog
           (countSlot pauser))).trans hintervalCost
     have h := temporal_sload_runCompiled (hfork := hfork) (sevm := sevm) (base := countBase)
       (key := heartbeatIntervalSlot) (value := interval)
@@ -944,7 +954,7 @@ theorem pauseSuccess_checkedCount_ok_runCompiled
       (M := M.write 0 duration.toBytes)
       (G := G + 1560 + intervalCost + storeCost) hcount (by simp only [List.length_nil,
         Nat.ofNat_pos])
-    rw [show temporalSloadCost sevm eventBase (countSlot pauser) =
+    rw [show sloadCost sevm eventBase (countSlot pauser) =
       countCost from hcountCost] at h
     exact h
   -- the event prefix
@@ -1355,8 +1365,7 @@ theorem pauseAfterSet_toSuccess_runCompiled
             pushList [32, 0, 4, 0x11c] +++ loadWord targetWord +++
             Ninst.gas ::: Ninst.staticcall ::: Ninst.iszero :::
             ((Func.call bubbleRevertSlot) <?> decodePausedResult)))) post := by
-    have hc1 : pushCost isPausedSelector.toBytes.sig = 3 :=
-      pushCost_of_ne_zero (by decide +kernel)
+    have hc1 := isPausedSelector_pushCost
     generalize isPausedSelector = sel at *
     func_run (12) [0, 0, 3]
     repeat (case h_legacy => exact hfork.rules_stateGas_none)
@@ -1393,10 +1402,8 @@ theorem pauseAfterSet_toSuccess_runCompiled
                 Ninst.gas ::: Ninst.staticcall ::: Ninst.iszero :::
                 ((Func.call bubbleRevertSlot) <?> decodePausedResult))))))
       post := by
-    have hc1 : pushCost isPausedSelector.toBytes.sig = 3 :=
-      pushCost_of_ne_zero (by decide +kernel)
-    have hc2 : pushCost pauseForSelector.toBytes.sig = 3 :=
-      pushCost_of_ne_zero (by decide +kernel)
+    have hc1 := isPausedSelector_pushCost
+    have hc2 := pauseForSelector_pushCost
     generalize isPausedSelector = sel at *
     generalize pauseForSelector = sel2 at *
     func_run (18) [0, 0, 3, 0, 3]

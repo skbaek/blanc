@@ -21,7 +21,7 @@ pauser's heartbeat expiry is cleared first.
 
 Every storage key either world reads or writes is warm at message entry except
 the configured-interval slot, which both chronologies charge cold.  That is not
-cosmetic: it makes every `temporalSloadBase` layer of the four-, six- and
+cosmetic: it makes every `afterSload` layer of the four-, six- and
 seven-layer post-state towers the identity, so the towers' accessed-key sets
 and storage values are settled by `temporalSstorePost_other` and
 `temporalSstorePost_self` alone and no `Std.HashSet` is ever decided.
@@ -466,7 +466,7 @@ theorem replWorld_coldInterval :
 
 /-! ## The post-state towers
 
-Every read key is warm at entry, so each `temporalSloadBase` layer of the
+Every read key is warm at entry, so each `afterSload` layer of the
 chronology's four-, six- and seven-layer towers is the identity.  That is what
 lets `temporalSstorePost_other` and `temporalSstorePost_self` settle every
 storage value and every warmth question below without a `Std.HashSet` ever
@@ -479,7 +479,7 @@ variable (oldCount : B256) (gas : Nat)
 theorem replWorld_assignmentBase :
     assignmentBase (replWorldSevm oldCount gas) (replWorldPre oldCount gas)
       replWorldTarget = replWorldPre oldCount gas := by
-  rw [assignmentBase, temporalSloadBase]
+  rw [assignmentBase, afterSload]
   split
   · rfl
   · rename_i hcold
@@ -509,13 +509,13 @@ theorem replWorld_assignmentPost_getStorVal {oldCount gas} {key : B256}
     replWorld_assignmentBase, replWorld_getStorVal]
 
 private theorem replWorld_oldCountLoadBase :
-    temporalSloadBase (replWorldSevm oldCount gas)
+    afterSload (replWorldSevm oldCount gas)
         (assignmentPost (replWorldSevm oldCount gas)
           (replWorldPre oldCount gas) replWorldTarget replWorldNewPauser)
         (countSlot replWorldOldPauser) =
       assignmentPost (replWorldSevm oldCount gas) (replWorldPre oldCount gas)
         replWorldTarget replWorldNewPauser := by
-  rw [temporalSloadBase]
+  rw [afterSload]
   split
   · rfl
   · rename_i hcold
@@ -542,7 +542,7 @@ theorem replWorld_foundKernelPost_getStorVal {oldCount gas} {key : B256}
       (replWorldStor oldCount).get key := by
   rw [foundKernelPost,
     temporalSstorePost_other (replWorldSevm oldCount gas)
-      (temporalSloadBase (replWorldSevm oldCount gas)
+      (afterSload (replWorldSevm oldCount gas)
         (assignmentPost (replWorldSevm oldCount gas)
           (replWorldPre oldCount gas) replWorldTarget replWorldNewPauser)
         (countSlot replWorldOldPauser))
@@ -561,14 +561,14 @@ theorem replWorld_foundKernelPost_oldCount :
   temporalSstorePost_self _ _ _ _
 
 private theorem replWorld_newCountLoadBase :
-    temporalSloadBase (replWorldSevm oldCount gas)
+    afterSload (replWorldSevm oldCount gas)
         (foundKernelPost (replWorldSevm oldCount gas)
           (replWorldPre oldCount gas) replWorldTarget replWorldNewPauser
           replWorldOldPauser oldCount)
         (countSlot replWorldNewPauser) =
       foundKernelPost (replWorldSevm oldCount gas) (replWorldPre oldCount gas)
         replWorldTarget replWorldNewPauser replWorldOldPauser oldCount := by
-  rw [temporalSloadBase]
+  rw [afterSload]
   split
   · rfl
   · rename_i hcold
@@ -599,7 +599,7 @@ theorem replWorld_foundNonzeroKernelPost_getStorVal {oldCount gas}
       (replWorldStor oldCount).get key := by
   rw [foundNonzeroKernelPost,
     temporalSstorePost_other (replWorldSevm oldCount gas)
-      (temporalSloadBase (replWorldSevm oldCount gas)
+      (afterSload (replWorldSevm oldCount gas)
         (foundKernelPost (replWorldSevm oldCount gas)
           (replWorldPre oldCount gas) replWorldTarget replWorldNewPauser
           replWorldOldPauser oldCount)
@@ -618,7 +618,7 @@ theorem replWorld_foundNonzeroKernelPost_oldCount (nextCount : B256) :
         (countSlot replWorldOldPauser) = oldCount - 1 := by
   rw [foundNonzeroKernelPost,
     temporalSstorePost_other (replWorldSevm oldCount gas)
-      (temporalSloadBase (replWorldSevm oldCount gas)
+      (afterSload (replWorldSevm oldCount gas)
         (foundKernelPost (replWorldSevm oldCount gas)
           (replWorldPre oldCount gas) replWorldTarget replWorldNewPauser
           replWorldOldPauser oldCount)
@@ -658,9 +658,9 @@ private theorem replWorld_setCost {new : B256} (h : new ≠ 0) :
 private theorem replWorld_warmCost {oldCount : B256} {gas : Nat} {base : Devm}
     {key : B256} (h : base.accessedStorageKeys = replWorldKeys)
     (hk : (replWorldOwner, key) ∈ replWorldKeys) :
-    temporalSloadCost (replWorldSevm oldCount gas) base key =
+    sloadCost (replWorldSevm oldCount gas) base key =
       gasWarmAccess := by
-  rw [temporalSloadCost]
+  rw [sloadCost]
   split
   · rfl
   · rename_i hno

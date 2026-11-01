@@ -91,20 +91,15 @@ theorem refundCounter_setMach
     {base : Devm} {mach : Mach} :
     (base.setMach mach).refundCounter = base.refundCounter := rfl
 
-def temporalSloadBase (sevm : Sevm) (base : Devm)
-    (key : B256) : Devm :=
-  if (sevm.currentTarget, key) ∈ base.accessedStorageKeys then base
-  else addAccessedStorageKey base sevm.currentTarget key
+/-- Former local names of `afterSload` and `sloadCost`, kept only because the
+byte-pinned S5 access header of `setPauserKernel_foundNonzero_finishSetPauser_runCompiled`
+still spells them; every proof uses the shared names. -/
+abbrev temporalSloadBase (sevm : Sevm) (base : Devm) (key : B256) : Devm :=
+  afterSload sevm base key
 
-theorem temporalSloadBase_stateGas {sevm : Sevm} {base : Devm} {key : B256} :
-    (temporalSloadBase sevm base key).stateGas = base.stateGas := by
-  unfold temporalSloadBase
-  split <;> rfl
-
-def temporalSloadCost (sevm : Sevm) (base : Devm)
-    (key : B256) : Nat :=
-  if (sevm.currentTarget, key) ∈ base.accessedStorageKeys then gasWarmAccess
-  else gasColdSload
+/-- See `temporalSloadBase`. -/
+abbrev temporalSloadCost (sevm : Sevm) (base : Devm) (key : B256) : Nat :=
+  sloadCost sevm base key
 
 def temporalSstorePost (sevm : Sevm) (base : Devm)
     (key value : B256) : Devm :=
@@ -126,15 +121,15 @@ theorem temporal_sload_runCompiled
     (hroom : stack.length < 1024) :
     Ninst.RunCompiled sevm
       (base.setMach ⟨key :: stack, M,
-        G + temporalSloadCost sevm base key, base.stateGas⟩) Ninst.sload
-      ((temporalSloadBase sevm base key).setMach
-        ⟨value :: stack, M, G, (temporalSloadBase sevm base key).stateGas⟩) := by
+        G + sloadCost sevm base key, base.stateGas⟩) Ninst.sload
+      ((afterSload sevm base key).setMach
+        ⟨value :: stack, M, G, (afterSload sevm base key).stateGas⟩) := by
   by_cases hwarm : (sevm.currentTarget, key) ∈ base.accessedStorageKeys
-  · simp only [temporalSloadBase, temporalSloadCost, ite_eq_left hwarm]
+  · simp only [afterSload, sloadCost, ite_eq_left hwarm]
     exact Ninst.runCompiled_sload_warm hfork.rules_stateGas_none hfork.rules_access rfl hwarm
       (by simpa only [Devm.getStorVal_setMach] using hvalue)
       (by simp only [Devm.gasLeft_setMach]) hroom
-  · simp only [temporalSloadBase, temporalSloadCost, ite_eq_right hwarm]
+  · simp only [afterSload, sloadCost, ite_eq_right hwarm]
     have hsg : (addAccessedStorageKey base sevm.currentTarget key).stateGas =
         base.stateGas := rfl
     rw [hsg]
@@ -174,45 +169,15 @@ theorem temporal_sstore_runCompiled
       temporalSstore_getOrigStorVal_setMach]
   · simp only [Devm.gasLeft_setMach]
 
-theorem temporalSloadBase_warm
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (sevm.currentTarget, key) ∈
-      (temporalSloadBase sevm base key).accessedStorageKeys := by
-  unfold temporalSloadBase
-  split <;> rename_i h
-  · exact h
-  · exact Std.HashSet.mem_insert_self
-
-theorem temporalSloadBase_getStorVal
-    (sevm : Sevm) (base : Devm) (readKey : B256)
-    (a : Adr) (key : B256) :
-    (temporalSloadBase sevm base readKey).getStorVal a key =
-      base.getStorVal a key := by
-  unfold temporalSloadBase
-  split <;> rfl
-
-theorem temporalSloadBase_preserves_warm
+theorem afterSload_preserves_warm
     (sevm : Sevm) (base : Devm) (readKey key : B256)
     (h : (sevm.currentTarget, key) ∈ base.accessedStorageKeys) :
     (sevm.currentTarget, key) ∈
-      (temporalSloadBase sevm base readKey).accessedStorageKeys := by
-  unfold temporalSloadBase
+      (afterSload sevm base readKey).accessedStorageKeys := by
+  unfold afterSload
   split
   · exact h
   · exact Std.HashSet.mem_insert.mpr (Or.inr h)
-
-theorem temporalSloadBase_logs
-    (sevm : Sevm) (base : Devm) (key : B256) :
-    (temporalSloadBase sevm base key).logs = base.logs := by
-  unfold temporalSloadBase
-  split <;> rfl
-
-theorem temporalSloadBase_getOrigStorVal
-    (sevm : Sevm) (base : Devm) (readKey : B256) (a : Adr) (key : B256) :
-    (temporalSloadBase sevm base readKey).getOrigStorVal sevm a key =
-      base.getOrigStorVal sevm a key := by
-  unfold temporalSloadBase
-  split <;> rfl
 
 theorem temporalSstorePost_getOrigStorVal
     (sevm : Sevm) (base : Devm) (writeKey value : B256) (a : Adr) (key : B256) :
@@ -549,23 +514,23 @@ theorem afterOldPauser_finishSetPauser_runCompiled
     (hstatic : sevm.isStatic = false)
     (hfinish : Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       ((temporalSstorePost sevm
-          (temporalSloadBase sevm base (countSlot newPauser))
-          (countSlot newPauser) nextCount).setMach ⟨stack, M, G, (temporalSstorePost sevm (temporalSloadBase sevm base (countSlot newPauser)) (countSlot newPauser) nextCount).stateGas⟩)
+          (afterSload sevm base (countSlot newPauser))
+          (countSlot newPauser) nextCount).setMach ⟨stack, M, G, (temporalSstorePost sevm (afterSload sevm base (countSlot newPauser)) (countSlot newPauser) nextCount).stateGas⟩)
         finishSetPauser post) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨stack, M,
-        G + 64 + temporalSloadCost sevm base (countSlot newPauser) +
+        G + 64 + sloadCost sevm base (countSlot newPauser) +
           countCost, base.stateGas⟩) afterOldPauser post := by
   let countKey := countSlot newPauser
-  let countBase := temporalSloadBase sevm base countKey
+  let countBase := afterSload sevm base countKey
   let countPost := temporalSstorePost sevm countBase countKey nextCount
   have hcountBase : countBase.getStorVal sevm.currentTarget countKey =
       count := by
-    simpa only [countBase, countKey, temporalSloadBase_getStorVal] using
+    simpa only [countBase, countKey, afterSload_getStorVal] using
       hcount
   have hwarmCount : (sevm.currentTarget, countKey) ∈
       countBase.accessedStorageKeys :=
-    temporalSloadBase_warm sevm base countKey
+    afterSload_warm sevm base countKey
   let fs := (runtime dp).main :: (runtime dp).aux
   have hfinishLookup : fs[finishSetPauserSlot]? = some finishSetPauser := by
     simp only [fs, runtime, aux, finishSetPauserSlot, symbolicLinkCert_resolved, legacyRuntime_main, legacyRuntime_aux, slotOf, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd, Nat.reduceLT, getElem?_pos, List.getElem_cons_succ, List.getElem_cons_zero]
@@ -588,7 +553,7 @@ theorem afterOldPauser_finishSetPauser_runCompiled
       (Ninst.sstore ::: .call finishSetPauserSlot) post := by
     apply Func.RunCompiled.next
     · exact temporal_sstore_runCompiled (hfork := hfork) hcountBase
-        (by simpa only [countBase, temporalSloadBase_getOrigStorVal] using hcountOrig)
+        (by simpa only [countBase, afterSload_getOrigStorVal] using hcountOrig)
         hcountCost hwarmCount hgasStipend hstatic
     · exact hfinishCall
   have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
@@ -636,14 +601,14 @@ theorem afterOldPauser_finishSetPauser_runCompiled
       exact hcountKeyTail
   have hcountLoad : Func.RunCompiled fs sevm
       (base.setMach ⟨countKey :: stack, M,
-        G + 30 + countCost + temporalSloadCost sevm base countKey, base.stateGas⟩)
+        G + 30 + countCost + sloadCost sevm base countKey, base.stateGas⟩)
       (Ninst.sload ::: pushB256 1 ::: add ::: newCountKey +++
         Ninst.sstore ::: .call finishSetPauserSlot) post := by
     exact Func.RunCompiled.next (temporal_sload_runCompiled (hfork := hfork) hcount (by omega))
       hcountTail
   have hcountBody : Func.RunCompiled fs sevm
       (base.setMach ⟨stack, M,
-        G + 42 + temporalSloadCost sevm base countKey + countCost, base.stateGas⟩)
+        G + 42 + sloadCost sevm base countKey + countCost, base.stateGas⟩)
       (newCountKey +++ Ninst.sload ::: pushB256 1 ::: add :::
         newCountKey +++ Ninst.sstore ::: .call finishSetPauserSlot) post := by
     func_run (4) [3, countKey]
@@ -656,20 +621,20 @@ theorem afterOldPauser_finishSetPauser_runCompiled
       norm_num only [gVerylow]
     case a =>
       rw [hnewMemory]
-      have hg : G + 42 + temporalSloadCost sevm base countKey +
+      have hg : G + 42 + sloadCost sevm base countKey +
           countCost - 12 =
-          G + 30 + countCost + temporalSloadCost sevm base countKey := by
+          G + 30 + countCost + sloadCost sevm base countKey := by
         omega
       rw [hg]
       change Func.RunCompiled fs sevm
         (base.setMach ⟨countKey :: stack, M,
-          G + 30 + countCost + temporalSloadCost sevm base countKey, base.stateGas⟩)
+          G + 30 + countCost + sloadCost sevm base countKey, base.stateGas⟩)
         (Ninst.sload ::: pushB256 1 ::: add ::: newCountKey +++
           Ninst.sstore ::: .call finishSetPauserSlot) post
       exact hcountLoad
   have hbranch : Func.RunCompiled fs sevm
       (base.setMach ⟨0 :: stack, M,
-        G + 55 + temporalSloadCost sevm base countKey + countCost, base.stateGas⟩)
+        G + 55 + sloadCost sevm base countKey + countCost, base.stateGas⟩)
       ((.call removeTargetSlot) <?>
         (newCountKey +++ Ninst.sload ::: pushB256 1 ::: add :::
           newCountKey +++ Ninst.sstore ::: .call finishSetPauserSlot))
@@ -680,10 +645,10 @@ theorem afterOldPauser_finishSetPauser_runCompiled
         Devm.memory_setMach] using
         (Devm.popBurnBy_setMach
           (devm := base.setMach ⟨0 :: stack, M,
-            G + 55 + temporalSloadCost sevm base countKey + countCost, base.stateGas⟩)
+            G + 55 + sloadCost sevm base countKey + countCost, base.stateGas⟩)
           (x := (0 : B256)) (s := stack)
           (cost := gVerylow + gHigh)
-          (G := G + 42 + temporalSloadCost sevm base countKey + countCost)
+          (G := G + 42 + sloadCost sevm base countKey + countCost)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
             norm_num only [gVerylow, gHigh]
@@ -698,9 +663,9 @@ theorem afterOldPauser_finishSetPauser_runCompiled
   case a =>
     rw [Mem.Reads.read hreads, hnew, hnewMemory]
     simp only [B256.eqCheck, ite_eq_right hnewNonzero]
-    have hg : G + 64 + temporalSloadCost sevm base countKey +
+    have hg : G + 64 + sloadCost sevm base countKey +
         countCost - 9 =
-        G + 55 + temporalSloadCost sevm base countKey + countCost := by
+        G + 55 + sloadCost sevm base countKey + countCost := by
       omega
     rw [hg]
     exact hbranch
@@ -712,7 +677,7 @@ def arrayLengthMemoryCost (M : Mem) : Nat :=
 
 /-- State after the fresh path has read and replaced the target assignment. -/
 def assignmentBase (sevm : Sevm) (base : Devm) (target : B256) : Devm :=
-  temporalSloadBase sevm base (assignmentSlot target)
+  afterSload sevm base (assignmentSlot target)
 
 def assignmentPost (sevm : Sevm) (base : Devm)
     (target newPauser : B256) : Devm :=
@@ -723,7 +688,7 @@ theorem assignmentBase_getOrigStorVal
     (sevm : Sevm) (base : Devm) (target : B256) (a : Adr) (key : B256) :
     (assignmentBase sevm base target).getOrigStorVal sevm a key =
       base.getOrigStorVal sevm a key :=
-  temporalSloadBase_getOrigStorVal sevm base _ a key
+  afterSload_getOrigStorVal sevm base _ a key
 
 theorem assignmentPost_getOrigStorVal
     (sevm : Sevm) (base : Devm) (target newPauser : B256) (a : Adr) (key : B256) :
@@ -1271,11 +1236,11 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
             loadWord newPauserWord +++ pushB256 heartbeatUpdatedEvent :::
             logWith 1 0 1 +++ Func.stop)))
       (((temporalSstorePost sevm
-          (temporalSloadBase sevm base heartbeatIntervalSlot)
+          (afterSload sevm base heartbeatIntervalSlot)
           (expirySlot newPauser) expiry).addLog
         ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser],
           expiry.toBytes⟩).setMach
-        ⟨stack, M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (temporalSloadBase sevm base heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
+        ⟨stack, M.write 0 expiry.toBytes, G, ((temporalSstorePost sevm (afterSload sevm base heartbeatIntervalSlot) (expirySlot newPauser) expiry).addLog ⟨sevm.currentTarget, [heartbeatUpdatedEvent, newPauser], expiry.toBytes⟩).stateGas⟩) := by
   have hnewCovered : (newPauserWord * 32).toNat + 32 ≤ M.size := by
     have hoff : (newPauserWord * 32).toNat + 32 ≤ 640 := by decide
     omega
@@ -1307,16 +1272,16 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
         (newPauserWord * 32).toNat 32).2 = M.write 0 expiry.toBytes := by
     rw [Mem.read_snd_eq_self (memExtSize_of_le halignM' hnewCoveredM')]
   have hafterIntervalEq :
-      temporalSloadBase sevm base heartbeatIntervalSlot =
+      afterSload sevm base heartbeatIntervalSlot =
         addAccessedStorageKey base sevm.currentTarget
           heartbeatIntervalSlot := by
-    simp only [temporalSloadBase, ite_eq_right hintervalCold]
+    simp only [afterSload, ite_eq_right hintervalCold]
   have htag := registerAfterSet_tagExpiryStoreLogTail_runCompiled (hfork := hfork) fs sevm
-    (temporalSloadBase sevm base heartbeatIntervalSlot) M img _ newPauser expiry
+    (afterSload sevm base heartbeatIntervalSlot) M img _ newPauser expiry
     currentExpiry expiryOriginal stack storeCost G hnewValueM' hstack hwf hreads hnew hsize
-    halign (by rw [temporalSloadBase_getStorVal]; exact hexpiry)
-    ((temporalSloadBase_getOrigStorVal sevm base _ _ _).trans hexpiryOrig)
-    (temporalSloadBase_preserves_warm sevm base heartbeatIntervalSlot
+    halign (by rw [afterSload_getStorVal]; exact hexpiry)
+    ((afterSload_getOrigStorVal sevm base _ _ _).trans hexpiryOrig)
+    (afterSload_preserves_warm sevm base heartbeatIntervalSlot
       (expirySlot newPauser) hwarmExpiry)
     hstoreCost hgasStipend hstatic
   -- Walk to the new-pauser MLOAD; the tag and store/log tail is a separate lemma.
@@ -1350,7 +1315,7 @@ theorem registerAfterSet_nonzeroNewPauserTail_runCompiled
     rw [hnewMemoryM', ← hafterIntervalEq]
     have hg : G + 3569 + storeCost - 2168 = G + 1401 + storeCost := by omega
     rw [hg]
-    rw [temporalSloadBase_stateGas] at htag
+    rw [afterSload_stateGas] at htag
     exact htag
 
 /-- Exact kernel prefix reserve for the append arm: the outer nonzero guard
@@ -1358,7 +1323,7 @@ and the assignment replacement for a target whose recorded pauser is zero,
 measured above whatever the `appendTarget` continuation itself consumes. -/
 def appendSetPauserKernelPrefixGas (sevm : Sevm) (base : Devm)
     (target : B256) (assignmentCost : Nat) : Nat :=
-  90 + temporalSloadCost sevm base (assignmentSlot target) + assignmentCost
+  90 + sloadCost sevm base (assignmentSlot target) + assignmentCost
 
 /-- Generated-kernel walk for a target whose recorded pauser is zero: the
 outer nonzero guard passes, the zero previous pauser is saved to memory, the
@@ -1409,10 +1374,10 @@ theorem setPauserKernel_append_runCompiled
   have hassignmentBase : assignBase.getStorVal sevm.currentTarget
       assignmentKey = 0 := by
     simpa only [assignBase, assignmentBase,
-      temporalSloadBase_getStorVal] using hassignment
+      afterSload_getStorVal] using hassignment
   have hwarmAssignment : (sevm.currentTarget, assignmentKey) ∈
       assignBase.accessedStorageKeys :=
-    temporalSloadBase_warm sevm base assignmentKey
+    afterSload_warm sevm base assignmentKey
   have hwf' : Mem.Wf M' := hwf.write _ _
   have hreads' : Mem.Reads M' img' := Mem.Reads.write hwf hreads _ _
   have hsizeM' : M'.size = M.size := by
@@ -1582,7 +1547,7 @@ theorem setPauserKernel_append_runCompiled
   have hsload : Func.RunCompiled fs sevm
       (base.setMach ⟨[assignmentKey], M,
         Ga + 56 + assignmentCost +
-          temporalSloadCost sevm base assignmentKey, base.stateGas⟩)
+          sloadCost sevm base assignmentKey, base.stateGas⟩)
       (Ninst.sload ::: dup 0 ::: mstoreAt previousPauserWord +++
         loadWord newPauserWord +++ targetKey +++ Ninst.sstore :::
         Ninst.iszero ::: ((.call appendTargetSlot) <?>
@@ -1594,7 +1559,7 @@ theorem setPauserKernel_append_runCompiled
   have htargetKeyFirst : Func.RunCompiled fs sevm
       (base.setMach ⟨[], M,
         Ga + 68 + assignmentCost +
-          temporalSloadCost sevm base assignmentKey, base.stateGas⟩)
+          sloadCost sevm base assignmentKey, base.stateGas⟩)
       (targetKey +++ Ninst.sload ::: dup 0 :::
         mstoreAt previousPauserWord +++ loadWord newPauserWord +++
         targetKey +++ Ninst.sstore ::: Ninst.iszero :::
@@ -1606,15 +1571,15 @@ theorem setPauserKernel_append_runCompiled
     have hrun := targetKey_prepend_runCompiled htargetValue htargetMemory
       halign htargetCovered (by simp only [List.length_nil, Nat.ofNat_pos]) hsload
     have hg : Ga + 56 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target) + 12 =
+          sloadCost sevm base (assignmentSlot target) + 12 =
         Ga + 68 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target) := by omega
+          sloadCost sevm base (assignmentSlot target) := by omega
     rw [hg] at hrun
     exact hrun
   have hguardBranch : Func.RunCompiled fs sevm
       (base.setMach ⟨[0], M,
         Ga + 81 + assignmentCost +
-          temporalSloadCost sevm base assignmentKey, base.stateGas⟩)
+          sloadCost sevm base assignmentKey, base.stateGas⟩)
       ((.call pausableZeroErrorSlot) <?>
         (targetKey +++ Ninst.sload ::: dup 0 :::
           mstoreAt previousPauserWord +++ loadWord newPauserWord +++
@@ -1628,18 +1593,18 @@ theorem setPauserKernel_append_runCompiled
       simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
       omega)
     · have hg : Ga + 81 + assignmentCost +
-          temporalSloadCost sevm base assignmentKey =
+          sloadCost sevm base assignmentKey =
           Ga + 68 + assignmentCost +
-            temporalSloadCost sevm base assignmentKey + 13 := by omega
+            sloadCost sevm base assignmentKey + 13 := by omega
       rw [hg]
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using (Devm.popBurnBy_setMach
           (devm := base.setMach ⟨[0], M,
             Ga + 68 + assignmentCost +
-              temporalSloadCost sevm base assignmentKey + 13, base.stateGas⟩)
+              sloadCost sevm base assignmentKey + 13, base.stateGas⟩)
           (x := (0 : B256)) (s := []) (cost := gVerylow + gHigh)
           (G := Ga + 68 + assignmentCost +
-            temporalSloadCost sevm base assignmentKey)
+            sloadCost sevm base assignmentKey)
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
             norm_num only [gVerylow, gHigh]))
@@ -1647,7 +1612,7 @@ theorem setPauserKernel_append_runCompiled
   have hguard : Func.RunCompiled fs sevm
       (base.setMach ⟨[target], M,
         Ga + 84 + assignmentCost +
-          temporalSloadCost sevm base assignmentKey, base.stateGas⟩)
+          sloadCost sevm base assignmentKey, base.stateGas⟩)
       (Ninst.iszero ::: ((.call pausableZeroErrorSlot) <?>
         (targetKey +++ Ninst.sload ::: dup 0 :::
           mstoreAt previousPauserWord +++ loadWord newPauserWord +++
@@ -1663,28 +1628,28 @@ theorem setPauserKernel_append_runCompiled
       rw [ite_eq_right htargetValid.1]
     case a =>
       have hg : Ga + 84 + assignmentCost +
-            temporalSloadCost sevm base assignmentKey - 3 =
+            sloadCost sevm base assignmentKey - 3 =
           Ga + 81 + assignmentCost +
-            temporalSloadCost sevm base assignmentKey := by omega
+            sloadCost sevm base assignmentKey := by omega
       rw [hg]
       exact hguardBranch
   have hkernel : Func.RunCompiled fs sevm
       (base.setMach ⟨[], M,
         Ga + 90 + assignmentCost +
-          temporalSloadCost sevm base assignmentKey, base.stateGas⟩)
+          sloadCost sevm base assignmentKey, base.stateGas⟩)
       setPauserKernel out := by
     have hrun := targetWord_prepend_runCompiled htargetValue htargetMemory
       halign htargetCovered (by simp only [List.length_nil, Nat.ofNat_pos]) hguard
     have hg : Ga + 84 + assignmentCost +
-          temporalSloadCost sevm base assignmentKey + 6 =
+          sloadCost sevm base assignmentKey + 6 =
         Ga + 90 + assignmentCost +
-          temporalSloadCost sevm base assignmentKey := by omega
+          sloadCost sevm base assignmentKey := by omega
     rw [hg] at hrun
     simpa only [setPauserKernel] using hrun
   have hg : Ga + appendSetPauserKernelPrefixGas sevm base target
         assignmentCost =
       Ga + 90 + assignmentCost +
-        temporalSloadCost sevm base assignmentKey := by
+        sloadCost sevm base assignmentKey := by
     dsimp only [appendSetPauserKernelPrefixGas, assignmentKey]
     omega
   rw [hg]
@@ -1696,8 +1661,8 @@ whatever the `afterOldPauser` continuation itself consumes. -/
 def foundSetPauserKernelPrefixGas (sevm : Sevm) (base : Devm)
     (target newPauser oldPauser : B256)
     (assignmentCost countCost : Nat) : Nat :=
-  122 + temporalSloadCost sevm base (assignmentSlot target) + assignmentCost +
-    temporalSloadCost sevm (assignmentPost sevm base target newPauser)
+  122 + sloadCost sevm base (assignmentSlot target) + assignmentCost +
+    sloadCost sevm (assignmentPost sevm base target newPauser)
       (countSlot oldPauser) + countCost
 
 /-- Generated-kernel walk for a target whose recorded pauser is nonzero: the
@@ -1739,7 +1704,7 @@ theorem setPauserKernel_found_runCompiled
     (hstatic : sevm.isStatic = false)
     (hafter :
       let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
-      let countBase := temporalSloadBase sevm
+      let countBase := afterSload sevm
         (assignmentPost sevm base target newPauser)
         (countSlot oldPauser)
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
@@ -1755,14 +1720,14 @@ theorem setPauserKernel_found_runCompiled
   let fs := (runtime dp).main :: (runtime dp).aux
   let assignBase := assignmentBase sevm base target
   let assignPost := assignmentPost sevm base target newPauser
-  let countBase := temporalSloadBase sevm assignPost (countSlot oldPauser)
+  let countBase := afterSload sevm assignPost (countSlot oldPauser)
   let countPost := temporalSstorePost sevm countBase (countSlot oldPauser)
     (oldCount - 1)
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
   let elseGas := G + afterGas + 45 + countCost +
-    temporalSloadCost sevm assignPost (countSlot oldPauser)
+    sloadCost sevm assignPost (countSlot oldPauser)
   have hwf' : Mem.Wf M' := hwf.write _ _
   have hreads' : Mem.Reads M' img' := Mem.Reads.write hwf hreads _ _
   have hpreviousCovered : (previousPauserWord * 32).toNat + 32 ≤ M.size :=
@@ -1837,17 +1802,17 @@ theorem setPauserKernel_found_runCompiled
     · exact hafter
   have hcountBase : countBase.getStorVal sevm.currentTarget
       (countSlot oldPauser) = oldCount := by
-    simpa only [countBase, temporalSloadBase_getStorVal] using hcount
+    simpa only [countBase, afterSload_getStorVal] using hcount
   have hwarmCount : (sevm.currentTarget, countSlot oldPauser) ∈
       countBase.accessedStorageKeys :=
-    temporalSloadBase_warm sevm assignPost (countSlot oldPauser)
+    afterSload_warm sevm assignPost (countSlot oldPauser)
   have hstoreCount : Func.RunCompiled fs sevm
       (countBase.setMach ⟨[countSlot oldPauser, oldCount - 1], M',
         G + afterGas + 12 + countCost, countBase.stateGas⟩)
       (Ninst.sstore ::: .call afterOldPauserSlot) out :=
     Func.RunCompiled.next
       (temporal_sstore_runCompiled (hfork := hfork) hcountBase
-        ((temporalSloadBase_getOrigStorVal sevm assignPost _ _ _).trans
+        ((afterSload_getOrigStorVal sevm assignPost _ _ _).trans
           ((assignmentPost_getOrigStorVal sevm base target newPauser _ _).trans hcountOrig))
         hcountCost hwarmCount
         hgasFinal hstatic) hafterCall
@@ -1876,7 +1841,7 @@ theorem setPauserKernel_found_runCompiled
   have hcountSload : Func.RunCompiled fs sevm
       (assignPost.setMach ⟨[countSlot oldPauser], M',
         G + afterGas + 33 + countCost +
-          temporalSloadCost sevm assignPost (countSlot oldPauser), assignPost.stateGas⟩)
+          sloadCost sevm assignPost (countSlot oldPauser), assignPost.stateGas⟩)
       (Ninst.sload ::: pushB256 1 ::: swap 0 ::: sub :::
         previousCountKey +++ Ninst.sstore ::: .call afterOldPauserSlot)
       out :=
@@ -1890,7 +1855,7 @@ theorem setPauserKernel_found_runCompiled
     have hrun := previousCountKey_prepend_runCompiled hpreviousValue'
       hpreviousMemory' halign' hpreviousCovered' (by simp only [List.length_nil, Nat.ofNat_pos]) hcountSload
     have hg : G + afterGas + 33 + countCost +
-          temporalSloadCost sevm assignPost (countSlot oldPauser) + 12 =
+          sloadCost sevm assignPost (countSlot oldPauser) + 12 =
         elseGas := by
       dsimp only [elseGas]
       omega
@@ -1932,10 +1897,10 @@ theorem setPauserKernel_found_runCompiled
   have hassignmentBase : assignBase.getStorVal sevm.currentTarget
       (assignmentSlot target) = oldPauser := by
     simpa only [assignBase, assignmentBase,
-      temporalSloadBase_getStorVal] using hassignment
+      afterSload_getStorVal] using hassignment
   have hwarmAssignment : (sevm.currentTarget, assignmentSlot target) ∈
       assignBase.accessedStorageKeys :=
-    temporalSloadBase_warm sevm base (assignmentSlot target)
+    afterSload_warm sevm base (assignmentSlot target)
   have hstore : Func.RunCompiled fs sevm
       (assignBase.setMach
         ⟨[assignmentSlot target, newPauser, oldPauser], M',
@@ -2025,7 +1990,7 @@ theorem setPauserKernel_found_runCompiled
   have hsload : Func.RunCompiled fs sevm
       (base.setMach ⟨[assignmentSlot target], M,
         elseGas + 43 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target), base.stateGas⟩)
+          sloadCost sevm base (assignmentSlot target), base.stateGas⟩)
       (Ninst.sload ::: dup 0 ::: mstoreAt previousPauserWord +++
         loadWord newPauserWord +++ targetKey +++ Ninst.sstore :::
         Ninst.iszero ::: ((.call appendTargetSlot) <?>
@@ -2038,7 +2003,7 @@ theorem setPauserKernel_found_runCompiled
   have htargetKeyFirst : Func.RunCompiled fs sevm
       (base.setMach ⟨[], M,
         elseGas + 55 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target), base.stateGas⟩)
+          sloadCost sevm base (assignmentSlot target), base.stateGas⟩)
       (targetKey +++ Ninst.sload ::: dup 0 :::
         mstoreAt previousPauserWord +++ loadWord newPauserWord +++
         targetKey +++ Ninst.sstore ::: Ninst.iszero :::
@@ -2050,15 +2015,15 @@ theorem setPauserKernel_found_runCompiled
     have hrun := targetKey_prepend_runCompiled htargetValue htargetMemory
       halign htargetCovered (by simp only [List.length_nil, Nat.ofNat_pos]) hsload
     have hg : elseGas + 43 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target) + 12 =
+          sloadCost sevm base (assignmentSlot target) + 12 =
         elseGas + 55 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target) := by omega
+          sloadCost sevm base (assignmentSlot target) := by omega
     rw [hg] at hrun
     exact hrun
   have hguardBranch : Func.RunCompiled fs sevm
       (base.setMach ⟨[0], M,
         elseGas + 68 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target), base.stateGas⟩)
+          sloadCost sevm base (assignmentSlot target), base.stateGas⟩)
       ((.call pausableZeroErrorSlot) <?>
         (targetKey +++ Ninst.sload ::: dup 0 :::
           mstoreAt previousPauserWord +++ loadWord newPauserWord +++
@@ -2072,19 +2037,19 @@ theorem setPauserKernel_found_runCompiled
       simp only [Devm.stack_setMach, List.length_cons, List.length_nil]
       omega)
     · have hg : elseGas + 68 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target) =
+          sloadCost sevm base (assignmentSlot target) =
           elseGas + 55 + assignmentCost +
-            temporalSloadCost sevm base (assignmentSlot target) + 13 := by
+            sloadCost sevm base (assignmentSlot target) + 13 := by
         omega
       rw [hg]
       simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
           Devm.memory_setMach] using (Devm.popBurnBy_setMach
           (devm := base.setMach ⟨[0], M,
             elseGas + 55 + assignmentCost +
-              temporalSloadCost sevm base (assignmentSlot target) + 13, base.stateGas⟩)
+              sloadCost sevm base (assignmentSlot target) + 13, base.stateGas⟩)
           (x := (0 : B256)) (s := []) (cost := gVerylow + gHigh)
           (G := elseGas + 55 + assignmentCost +
-            temporalSloadCost sevm base (assignmentSlot target))
+            sloadCost sevm base (assignmentSlot target))
           (h_stk := rfl) (h := by
             simp only [Devm.gasLeft_setMach]
             norm_num only [gVerylow, gHigh]))
@@ -2092,7 +2057,7 @@ theorem setPauserKernel_found_runCompiled
   have hguard : Func.RunCompiled fs sevm
       (base.setMach ⟨[target], M,
         elseGas + 71 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target), base.stateGas⟩)
+          sloadCost sevm base (assignmentSlot target), base.stateGas⟩)
       (Ninst.iszero ::: ((.call pausableZeroErrorSlot) <?>
         (targetKey +++ Ninst.sload ::: dup 0 :::
           mstoreAt previousPauserWord +++ loadWord newPauserWord +++
@@ -2108,28 +2073,28 @@ theorem setPauserKernel_found_runCompiled
       rw [ite_eq_right htargetValid.1]
     case a =>
       have hg : elseGas + 71 + assignmentCost +
-            temporalSloadCost sevm base (assignmentSlot target) - 3 =
+            sloadCost sevm base (assignmentSlot target) - 3 =
           elseGas + 68 + assignmentCost +
-            temporalSloadCost sevm base (assignmentSlot target) := by omega
+            sloadCost sevm base (assignmentSlot target) := by omega
       rw [hg]
       exact hguardBranch
   have hkernel : Func.RunCompiled fs sevm
       (base.setMach ⟨[], M,
         elseGas + 77 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target), base.stateGas⟩)
+          sloadCost sevm base (assignmentSlot target), base.stateGas⟩)
       setPauserKernel out := by
     have hrun := targetWord_prepend_runCompiled htargetValue htargetMemory
       halign htargetCovered (by simp only [List.length_nil, Nat.ofNat_pos]) hguard
     have hg : elseGas + 71 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target) + 6 =
+          sloadCost sevm base (assignmentSlot target) + 6 =
         elseGas + 77 + assignmentCost +
-          temporalSloadCost sevm base (assignmentSlot target) := by omega
+          sloadCost sevm base (assignmentSlot target) := by omega
     rw [hg] at hrun
     simpa only [setPauserKernel] using hrun
   have hg : G + afterGas + foundSetPauserKernelPrefixGas sevm base target
         newPauser oldPauser assignmentCost countCost =
       elseGas + 77 + assignmentCost +
-        temporalSloadCost sevm base (assignmentSlot target) := by
+        sloadCost sevm base (assignmentSlot target) := by
     dsimp only [foundSetPauserKernelPrefixGas, elseGas, assignPost]
     omega
   rw [hg]
@@ -2137,13 +2102,13 @@ theorem setPauserKernel_found_runCompiled
 
 /-- State reached by the found-target kernel prefix: the target's assignment has
 been replaced by `newPauser` and the old pauser's count has been decremented.
-This is a four-layer `temporalSstorePost`/`temporalSloadBase` tower; keep it
+This is a four-layer `temporalSstorePost`/`afterSload` tower; keep it
 folded under this name and never cross it by `exact`, `change` or `rfl`.  See
 README.md, *Proof-performance conventions*. -/
 def foundKernelPost (sevm : Sevm) (base : Devm)
     (target newPauser oldPauser oldCount : B256) : Devm :=
   temporalSstorePost sevm
-    (temporalSloadBase sevm (assignmentPost sevm base target newPauser)
+    (afterSload sevm (assignmentPost sevm base target newPauser)
       (countSlot oldPauser))
     (countSlot oldPauser) (oldCount - 1)
 
@@ -2153,7 +2118,7 @@ theorem foundKernelPost_getOrigStorVal
     (foundKernelPost sevm base target newPauser oldPauser oldCount).getOrigStorVal
       sevm a key = base.getOrigStorVal sevm a key := by
   unfold foundKernelPost
-  rw [temporalSstorePost_getOrigStorVal, temporalSloadBase_getOrigStorVal,
+  rw [temporalSstorePost_getOrigStorVal, afterSload_getOrigStorVal,
     assignmentPost_getOrigStorVal]
 
 /-- Complete Registry walk for the found-target arm with a **nonzero** new
@@ -2223,7 +2188,7 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
           foundSetPauserKernelPrefixGas sevm base target newPauser oldPauser
             assignmentCost countCost, base.stateGas⟩)
       setPauserKernel out := by
-  dsimp only at hfinish
+  simp only [temporalSloadBase, temporalSloadCost] at *
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
@@ -2247,17 +2212,17 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
     newPauser newCount nextCount newCountOriginal [] newCountCost G out
     (by simp only [List.length_nil, zero_le]) hreads' hnew' hnewNonzero (by omega) halign' hnewCount
     ((foundKernelPost_getOrigStorVal sevm base _ _ _ _ _ _).trans hnewCountOrig) hnewCountNext hnewCountCost hgasStipend hstatic hfinish
-  have hg : G + 64 + temporalSloadCost sevm
+  have hg : G + 64 + sloadCost sevm
         (foundKernelPost sevm base target newPauser oldPauser oldCount)
         (countSlot newPauser) + newCountCost =
-      G + (64 + temporalSloadCost sevm
+      G + (64 + sloadCost sevm
         (foundKernelPost sevm base target newPauser oldPauser oldCount)
         (countSlot newPauser) + newCountCost) := by omega
   rw [hg] at hafter
   exact setPauserKernel_found_runCompiled (hfork := hfork) dp sevm base M img out target
     newPauser oldPauser oldCount assignmentOriginal countOriginal
     assignmentCost countCost
-    (64 + temporalSloadCost sevm
+    (64 + sloadCost sevm
       (foundKernelPost sevm base target newPauser oldPauser oldCount)
       (countSlot newPauser) + newCountCost) G
     hwf hreads htarget hnew htargetValid holdValid hsize.symm.le halign
