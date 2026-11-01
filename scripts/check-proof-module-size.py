@@ -5,7 +5,10 @@ A module whose reverse import closure (the production modules that import it,
 directly or transitively) exceeds ``HUB_REVERSE_CLOSURE`` is a *hub*: every
 line it gains is re-elaborated by that many dependents' rebuilds.  Growth of a
 hub past its grandfathered ceiling is BLOCKING (register S7, after the
-CommonProofs split); every other finding stays report-only.
+CommonProofs split) once ``HUB_BLOCKING`` is set; every other finding stays
+report-only.  ``HUB_BLOCKING`` is off until the three hubs that were already
+past their ceilings before S7 (CommonCore, Forward, ForwardCall) are split:
+user decision 2026-11-02, never raise a ceiling to make them fit.
 
 README.md:417-425 records the evidence behind both constants: a 1,244-line
 model answered in about 21 seconds, while an 8,000-line derivation did not
@@ -40,6 +43,9 @@ NEW_MODULE_HARD_CAP = 8000
 # Register S7: size policy keyed to rebuild cost.  A hub is a module more
 # than this many production modules import (directly or transitively).
 HUB_REVERSE_CLOSURE = 500
+# Hub growth blocks only when this is set (see the module docstring).  Until
+# then it is printed as HUB-GROWTH and the verdict stays report-only.
+HUB_BLOCKING = False
 IMPORT_RE = re.compile(r"^import\s+(Blanc(?:\.[A-Za-z0-9_']+)*)\s*$", re.M)
 THRESHOLD_SOURCE = "README.md:417-425"
 SCHEMA_VERSION = 1
@@ -460,11 +466,12 @@ def ordinary(root: Path) -> int:
         )
     for finding in blocking:
         print(
-            f"MODULE-SIZE — BLOCKING hub-growth: {finding.module}: {finding.lines} lines, "
+            f"MODULE-SIZE — {'BLOCKING' if HUB_BLOCKING else 'HUB-GROWTH (report-only)'} "
+            f"hub-growth: {finding.module}: {finding.lines} lines, "
             f"ceiling {finding.ceiling}, reverse closure {closures[finding.module]} "
             f"> {HUB_REVERSE_CLOSURE}"
         )
-    if blocking:
+    if blocking and HUB_BLOCKING:
         print(
             f"REGRESSION — proof module size: {len(blocking)} hub module(s) "
             f"(reverse closure > {HUB_REVERSE_CLOSURE}) grew past their ceiling; "
@@ -477,7 +484,9 @@ def ordinary(root: Path) -> int:
         f"{growth} growth finding(s), {hard} new-module hard-cap breach(es), "
         f"{len(improvements)} improvement(s); {len(applied)} exception(s) applied; "
         f"{sum(1 for count in closures.values() if count > HUB_REVERSE_CLOSURE)} hub module(s) "
-        f"(reverse closure > {HUB_REVERSE_CLOSURE}) held blocking"
+        f"(reverse closure > {HUB_REVERSE_CLOSURE}); "
+        + ("hub growth blocking" if HUB_BLOCKING else
+           f"{len(blocking)} hub growth finding(s) reported, hub blocking off until the S7 hub split")
     )
     return 0
 
