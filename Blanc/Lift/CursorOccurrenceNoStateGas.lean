@@ -5,10 +5,8 @@ import Blanc.Lift.CursorTreeNinst
 /-!
 # Checked cursors at actual occurrences without a covered fork
 
-`cursor_next_forward_noStateGas` and
-`cursor_next_call_occurrence_forward_noStateGas` are the forms of
-`cursor_next_forward` and `cursor_next_call_occurrence_forward` whose premise
-is `stateGas = none` in place of `CoveredFork`.
+The cursor cuts themselves take `stateGas = none` (`cursor_next_forwardH` in
+`CursorCuts`, `cursor_next_call_occurrence_forwardH` in `CursorOccurrence`).
 
 At a raw frame of a `ConfiguredHistoryTraceIn` the entry facts of the lift
 (pc zero, `stateGas = none`) come from `rawFrame_entryFacts`:
@@ -27,65 +25,6 @@ key and value on top of the node's stack.
 namespace Blanc.Lift
 
 open Jaune
-
-/-- `cursor_next_forward` with `stateGas = none` in place of `CoveredFork`. -/
-theorem cursor_next_forward_noStateGas {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (ok : CursorOK code c F κ) {n : Ninst} {f : SFunc}
-    (tree : κ.f = .next n f) {post : Devm} (success : F.exn = .ok post)
-    (hsg : F.sevm.benvStat.rules.stateGas = none) :
-    ∃ (N : Exec.Deriv) (κ' : Cursor),
-      Exec.Deriv.ParentStep N F ∧
-      N.pc = F.pc + n.size ∧
-      Ninst.RunWith (Cursor.DescOf F) F.sevm F.devm n N.devm ∧
-      SStep c κ κ' ∧
-      ConfStep (Ninst.RunWith (Cursor.DescOf F)) c.prog F.sevm
-        (κ.conf F.devm) (κ'.conf N.devm) ∧
-      CursorOK code c N κ' := by
-  have atInst := ok.ninstAt_of_next tree
-  obtain ⟨N, edge⟩ := Blanc.Exec.Deriv.ParentStep.exists_of_ninstAt_ok success atInst
-  obtain ⟨pc, primitive⟩ := Cursor.parentStep_ninstIn edge atInst
-  obtain ⟨κ', synthetic, stateful, placed⟩ := cursor_stepS_noStateGas checked ok edge hsg
-  exact ⟨N, κ', edge, pc, primitive, synthetic, stateful, placed⟩
-
-/-- `cursor_next_call_occurrence_forward` with `stateGas = none` in place of
-`CoveredFork`: a checked external next node is crossed at its actual
-same-frame occurrence. -/
-theorem cursor_next_call_occurrence_forward_noStateGas {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {root F : Exec.Deriv} {κ : Cursor}
-    (reached : Exec.Deriv.ParentPrefix root F) (ok : CursorOK code c F κ)
-    {x : Xinst} {f : SFunc} (tree : κ.f = .next (.exec x) f)
-    {post : Devm} (success : F.exn = .ok post)
-    (hsg : F.sevm.benvStat.rules.stateGas = none) :
-    ∃ (step : CallOccurrenceStep root x) (κ' : Cursor),
-      step.occurrence.node = F ∧
-      step.returned.pc = F.pc + (.exec x : Ninst).size ∧
-      Ninst.RunWith (Cursor.DescOf F) F.sevm F.devm (.exec x) step.returned.devm ∧
-      SStep c κ κ' ∧
-      ConfStep (Ninst.RunWith (Cursor.DescOf F)) c.prog F.sevm
-        (κ.conf F.devm) (κ'.conf step.returned.devm) ∧
-      CursorOK code c step.returned κ' := by
-  obtain ⟨before, decomposition⟩ :=
-    Exec.Deriv.ParentPrefix.rawNodes_decomposition reached
-  have member : F ∈ Exec.rawNodes root.exc := by
-    rw [decomposition]
-    exact List.mem_append_right before (Exec.mem_rawNodes_self F.exc)
-  obtain ⟨occurrence, sameNode, instruction⟩ :=
-    Exec.exists_ninstOccurrence_of_mem_rawNodes member (ok.ninstAt_of_next tree)
-  obtain ⟨returned, κ', edge, pc, primitive, synthetic, stateful, placed⟩ :=
-    cursor_next_forward_noStateGas checked ok tree success hsg
-  obtain ⟨slot, filled, stepPc, stepRun⟩ := primitive.toRun
-  have actual : Ninst.StepRun occurrence.node.pc occurrence.node.sevm
-      occurrence.node.devm occurrence.instruction slot (.ok returned.devm) := by
-    rw [sameNode, instruction]
-    exact Ninst.stepRun_pc_irrel rfl stepRun
-  have sameFrame : Exec.Deriv.ParentPrefix root occurrence.node := by
-    rw [sameNode]; exact reached
-  have crossed : Exec.Deriv.ParentStep returned occurrence.node := by
-    rw [sameNode]; exact edge
-  exact ⟨⟨occurrence, returned, instruction, sameFrame, crossed,
-      (occurrence_stepRun_unique occurrence filled actual).2⟩,
-    κ', sameNode, pc, primitive, synthetic, stateful, placed⟩
 
 end Blanc.Lift
 

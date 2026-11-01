@@ -35,6 +35,19 @@ theorem St.getStorVal {b : Devm} {S : List B256} {M : Mem} {G : Nat} {a : Adr}
     {k : B256} : (St b S M G).getStorVal a k = b.getStorVal a k := rfl
 theorem St.accessedStorageKeys {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
     (St b S M G).accessedStorageKeys = b.accessedStorageKeys := rfl
+theorem St.returnData {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
+    (St b S M G).returnData = b.returnData := rfl
+
+/-! `St` replaces only the machine: the world's error, state, code and storage are the base's. -/
+
+theorem St_error (b : Devm) (S : List B256) (M : Mem) (G : Nat) : (St b S M G).error = b.error :=
+  rfl
+theorem St_state (b : Devm) (S : List B256) (M : Mem) (G : Nat) :
+    (St b S M G).state = b.state := rfl
+theorem St_getCode (b : Devm) (S : List B256) (M : Mem) (G : Nat) (a : Adr) :
+    (St b S M G).getCode a = b.getCode a := rfl
+theorem St_getStor (b : Devm) (S : List B256) (M : Mem) (G : Nat) (a : Adr) :
+    Devm.getStor (St b S M G) a = Devm.getStor b a := rfl
 
 /-- The expansion charge of a window over an image of known size. -/
 theorem St.extCost_eq {b : Devm} {S : List B256} {M : Mem} {G n : Nat} (hn : M.size = n)

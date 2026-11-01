@@ -455,9 +455,6 @@ theorem setPauser_step {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {np t : B256
 
 /-! ## The heartbeat tail (entry 2) -/
 
-theorem getStor_St (b : Devm) (S : List B256) (M : Mem) (G : Nat) (a : Adr) :
-    Devm.getStor (St b S M G) a = Devm.getStor b a := rfl
-
 theorem St_pref (b : Devm) (S : List B256) (M : Mem) (G : Nat) : S <<+ (St b S M G).stack := by
   simpa only [List.append_nil, St.stack] using pref_append S []
 
@@ -509,7 +506,7 @@ theorem call22_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
   refine ⟨b', M', G', ?_, run⟩
   rw [show Devm.getStor b' sevm.currentTarget =
     Devm.getStor (Outcome.devm (.returned (St b' xs M' G'))) sevm.currentTarget from rfl, hs,
-    getStor_St, B256.toAdr_toB256_of_lt hp]
+    St_getStor, B256.toAdr_toB256_of_lt hp]
   exact hΦ hfa hinv
 
 /- The universal-registry interface remains a corollary. -/
@@ -583,7 +580,7 @@ theorem t0418_preserves {Apart : B256 → Prop} {Φ : Stor → Prop}
     obtain ⟨tl, hw⟩ := stack_of_pref hw
     have hst : D23.state = _ := silent_entry_state (k := 23) (by decide) rfl r23
     have hinv23 : Φ (Devm.getStor D23 sevm.currentTarget) := by
-      rw [getStor_eq_of_state_eq hst, getStor_St, afterSload_getStor]
+      rw [getStor_eq_of_state_eq hst, St_getStor, afterSload_getStor]
       exact hinv
     rw [St.self (d := D23) hw rfl] at run
     unfold t_0446_c2 at run

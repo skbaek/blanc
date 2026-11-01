@@ -29,13 +29,12 @@ theorem CursorStateAt.memory_eq {code : ByteArray} {c : Cert} {start : Exec.Deri
   obtain ⟨G, state⟩ := cut.state
   rw [state, St.memory]
 
-/-- A checked jump cut applies a local source-state inverse to the actual
-`ConfStep`. Both the successor tree and machine state are derived from it. -/
-theorem CursorStateAt.jump {code : ByteArray} {c : Cert} {start : Exec.Deriv}
+/-- `CursorStateAt.jump` from `rules.stateGas = none` alone. -/
+theorem CursorStateAt.jumpH {code : ByteArray} {c : Cert} {start : Exec.Deriv}
     {f tail : SFunc} {b b' : Devm} {S S' : List B256} {M M' : Mem} {K nextK : List SFunc}
     (cut : CursorStateAt code c start f b S M K)
     (checked : Cert.check code c = true) {post : Devm}
-    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
+    (success : start.exn = .ok post) (hsg : start.sevm.benvStat.rules.stateGas = none)
     {j : Jinst} (decoded : Jinst.At cut.node.sevm.code cut.node.pc j)
     (inverse : ∀ {G d f' K'},
       ConfStep (Ninst.RunWith (Cursor.DescOf cut.node)) c.prog start.sevm
@@ -43,8 +42,8 @@ theorem CursorStateAt.jump {code : ByteArray} {c : Cert} {start : Exec.Deriv}
       f' = tail ∧ K' = nextK ∧ ∃ G', d = St b' S' M' G') :
     Nonempty (CursorStateAt code c start tail b' S' M' nextK) := by
   obtain ⟨N, κ', edge, _, _, stateful, ok⟩ :=
-    cursor_jinst_forward checked cut.placed decoded
-      (cut.exn_eq.trans success) (cut.sevm_eq ▸ fork)
+    cursor_jinst_forwardH checked cut.placed decoded
+      (cut.exn_eq.trans success) (cut.sevm_eq ▸ hsg)
   obtain ⟨G, state⟩ := cut.state
   have step : ConfStep (Ninst.RunWith (Cursor.DescOf cut.node)) c.prog start.sevm
       ⟨St b S M G, f, K⟩
@@ -59,22 +58,45 @@ theorem CursorStateAt.jump {code : ByteArray} {c : Cert} {start : Exec.Deriv}
     sameExn.trans cut.exn_eq,
     ok, tree, state, conts⟩⟩
 
+/-- A checked jump cut applies a local source-state inverse to the actual
+`ConfStep`. Both the successor tree and machine state are derived from it. -/
+theorem CursorStateAt.jump {code : ByteArray} {c : Cert} {start : Exec.Deriv}
+    {f tail : SFunc} {b b' : Devm} {S S' : List B256} {M M' : Mem} {K nextK : List SFunc}
+    (cut : CursorStateAt code c start f b S M K)
+    (checked : Cert.check code c = true) {post : Devm}
+    (success : start.exn = .ok post) (fork : CoveredFork start.sevm.benvStat.fork)
+    {j : Jinst} (decoded : Jinst.At cut.node.sevm.code cut.node.pc j)
+    (inverse : ∀ {G d f' K'},
+      ConfStep (Ninst.RunWith (Cursor.DescOf cut.node)) c.prog start.sevm
+        ⟨St b S M G, f, K⟩ ⟨d, f', K'⟩ →
+      f' = tail ∧ K' = nextK ∧ ∃ G', d = St b' S' M' G') :
+    Nonempty (CursorStateAt code c start tail b' S' M' nextK) :=
+  cut.jumpH checked success fork.rules_stateGas_none decoded inverse
+
 section ControlCuts
 
 variable {code : ByteArray} {c : Cert} {start : Exec.Deriv} {b : Devm}
   {S : List B256} {M : Mem} {K : List SFunc} {post : Devm}
+
+/-- `CursorStateAt.call` from `rules.stateGas = none` alone. -/
+theorem CursorStateAt.callH {f g : SFunc} {k : Nat} {target : B256}
+    (cut : CursorStateAt code c start (.callNext k f) b (target :: S) M K)
+    (checked : Cert.check code c = true) (success : start.exn = .ok post)
+    (hsg : start.sevm.benvStat.rules.stateGas = none) (lookup : c.prog[k]? = some g) :
+    Nonempty (CursorStateAt code c start g b S M (f :: K)) := by
+  apply cut.jumpH checked success hsg (cut.placed.jumpAt_of_callNext cut.tree)
+  intro G d f' K' step
+  cases step with
+  | call _ entry pop =>
+      exact ⟨Option.some.inj (entry.symm.trans lookup), rfl, _, (St.of_pop1 pop).2⟩
 
 /-- An internal call retains its actual suspended continuation tree. -/
 theorem CursorStateAt.call {f g : SFunc} {k : Nat} {target : B256}
     (cut : CursorStateAt code c start (.callNext k f) b (target :: S) M K)
     (checked : Cert.check code c = true) (success : start.exn = .ok post)
     (fork : CoveredFork start.sevm.benvStat.fork) (lookup : c.prog[k]? = some g) :
-    Nonempty (CursorStateAt code c start g b S M (f :: K)) := by
-  apply cut.jump checked success fork (cut.placed.jumpAt_of_callNext cut.tree)
-  intro G d f' K' step
-  cases step with
-  | call _ entry pop =>
-      exact ⟨Option.some.inj (entry.symm.trans lookup), rfl, _, (St.of_pop1 pop).2⟩
+    Nonempty (CursorStateAt code c start g b S M (f :: K)) :=
+  cut.callH checked success fork.rules_stateGas_none lookup
 
 end ControlCuts
 

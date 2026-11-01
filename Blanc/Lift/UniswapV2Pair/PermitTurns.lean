@@ -70,12 +70,6 @@ theorem PermitRecoveryAuthH.toCovered {D : Exec.Deriv} {out : Bytes} {entered : 
   obtain ⟨b, G, actual, settled, pc, devm, outEq, enteredEq, mapped⟩ := auth
   exact ⟨b, G, actual.toCovered fork, settled.toCovered fork, pc, devm, outEq, enteredEq, mapped⟩
 
-private theorem permit_St_getCode (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
-    (St x S M g).getCode a = x.getCode a := rfl
-
-private theorem permit_St_getStor (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
-    Devm.getStor (St x S M g) a = Devm.getStor x a := rfl
-
 theorem permitNonceWorld_getCodeH (sevm : Sevm) (b : Devm) (owner : Adr) (a : Adr) :
     (permitNonceWorldH sevm b owner).getCode a = b.getCode a := by
   unfold permitNonceWorldH
@@ -135,8 +129,8 @@ theorem PermitCallOccurrenceH.recovery_turns {U K : WriterKey → Prop}
     (K := WriterExtend K (permitTouched (permitOwner root.sevm) (permitSpender root.sevm)))
     (frame := permitPublicSuspended current invocation root.sevm)
     (request := permitPublicRequest current root.sevm) 0 sem image
-    (by rw [actual.beforeState, permit_St_getCode, permitNonceWorld_getCodeH]; exact installed)
-    (by rw [actual.beforeState, permit_St_getStor]; exact permit_suspended_repH rep fresh)
+    (by rw [actual.beforeState, St_getCode, permitNonceWorld_getCodeH]; exact installed)
+    (by rw [actual.beforeState, St_getStor]; exact permit_suspended_repH rep fresh)
     (by rw [actual.beforeSevm]; rfl) (actual.beforeSevm ▸ stateGas) (actual.beforeSevm ▸ bal)
     (by
       intro F member target

@@ -283,8 +283,6 @@ lemma B256.le_add_right {xs ys : B256} (h : B256.Nof xs ys) : xs ≤ xs + ys := 
 
 -- helper lemmas for reasoning about the balance transfer performed by `call`
 
-
-
 lemma of_state_transfer_fields {st st' : Jaune.State} {ct callee : Adr} {wad : B256}
     (h_sub : st.subBal ct wad = some st') :
     (∀ a, State.Protected st a → ((st'.addBal callee wad).get a).stor = (st.get a).stor) ∧
@@ -658,7 +656,6 @@ lemma sstore_preserves_getStor_ne {pc : Nat} {sevm : Sevm} {s s' : Devm} {a : Ad
     injection h9 with eq
     rw [← eq, setStorVal_getStor_ne h_ne]
     exact (congr_fun E' a).symm
-
 
 lemma of_executeCode_noneCode {msg : Msg} {xl : Xlot}
     {ex : Except (EvmError × Jaune.State × AdrSet × Tra) Devm}
@@ -2753,7 +2750,6 @@ def Exec.InvDepth (k : Nat) (ca : Adr) (p : Prog)
   ForallDeeperAt k ca p (λ _ sevm pre exn _ =>
     CoveredFork sevm.benvStat.fork → σ sevm pre → ifOk (ρ sevm) exn)
 
-
 /-! ## The contract-generic ladder -/
 
 /-- A successful synchronous generic call cannot change persistent storage.
@@ -4289,8 +4285,6 @@ lemma Xinst.some_child_wf {sevm : Sevm} {devm : Devm} {x : Xinst}
   rw [Frame.enter_run_memory henter]
   exact Mem.wf_empty
 
-
-
 /-! ## The quantified open-contract layer
 
 From the conservation arc's Step 6.  Two results sit here, both additive.
@@ -4432,8 +4426,6 @@ theorem Func.Core.of_callFree {fs fs' : List Func} {Q : Stor → Prop}
     {f : Func} (h_cf : Func.callFree f = true) (h : Func.Core fs Q f) :
     Func.Core fs' Q f :=
   fun {_ _ _} h_run hq => h (Func.Run.of_callFree h_cf h_run) hq
-
-
 
 /-! ## Generic message-, transaction- and block-level plumbing
 
@@ -4708,17 +4700,6 @@ lemma Xinst.inv_noDel_noStateGas {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
   · exact GenericCreate.inv_noDel inv h (Devm.NoDel.of_instructionFrame hf hnd)
   · exact GenericCall.inv_noDel inv h (Devm.NoDel.of_instructionFrame hf hnd)
 
-
-/-- Modern compatibility specialization of the capability-level Xinst step. -/
-lemma Xinst.inv_noDel_gen {wa : Adr} {sevm : Sevm} {s : Devm} {x : Xinst}
-    {xl : Xlot} {exn : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (inv : Xlot.InvNoDel wa xl)
-    (h : Xinst.Run sevm s x xl exn)
-    (hnd : Devm.NoDel wa s) : Execution.NoDel wa exn :=
-  Xinst.inv_noDel_noStateGas hfork.rules_stateGas_none inv h hnd
-
-
 /-- A decoded ordinary-lane instruction preserves NoDel with its actual
 recursive child-slot obligation explicit, including error outcomes. -/
 lemma Ninst.inv_noDel_noStateGas {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
@@ -4772,15 +4753,6 @@ lemma Ninst.inv_noDel_noStateGas {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Dev
         (xl := .none) trivial run
       exact Execution.NoDel.of_instructionFrame frame h
 
-/-- Modern compatibility specialization of the capability-level Ninst step. -/
-lemma Ninst.inv_noDel_gen {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {n : Ninst} {xl : Xlot} {exn : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (inv : Xlot.InvNoDel wa xl)
-    (run : Ninst.StepRun pc sevm devm n xl exn)
-    (h : Devm.NoDel wa devm) : Execution.NoDel wa exn :=
-  Ninst.inv_noDel_noStateGas hfork.rules_stateGas_none inv run h
-
 -- The composite relation carried through `Exec.effect` for the NoDel invariant.
 def Devm.NoDelCode (wa : Adr) (pre post : Devm) : Prop :=
   Devm.NoDel wa pre → Devm.NoDel wa post
@@ -4801,15 +4773,6 @@ lemma Xlot.invNoDel_of_rel {wa : Adr} {xl : Xlot}
     | error e => exact h hnd
     | ok d => exact h hnd
 
-lemma Ninst.noDelCode_effectRec (wa : Adr) (n : Ninst) :
-    Ninst.EffectRecFork (Devm.NoDelCode wa) n := by
-  intro pc sevm pre xl out hfork hxl hrun
-  have hnd := fun h =>
-    Ninst.inv_noDel_gen hfork (Xlot.invNoDel_of_rel hxl) hrun h
-  cases out with
-  | error e => exact hnd
-  | ok d => exact hnd
-
 lemma Jinst.noDelCode_effect (wa : Adr) (j : Jinst) :
     Jinst.Effect (Devm.NoDelCode wa) j := by
   intro evm out hrun
@@ -4825,32 +4788,163 @@ lemma Jinst.noDelCode_effect (wa : Adr) (j : Jinst) :
     refine fun h => ?_
     exact Devm.NoDel.of_eqs (Jinst.inv_delSets hrun).symm (hcode wa).symm h
 
-lemma Linst.noDelCode_effectFork (wa : Adr) (l : Linst) :
-    Linst.EffectFork (Devm.NoDelCode wa) l := by
-  intro sevm pre out hfork hrun
-  have h_onlyCreated : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true := by
-    exact hfork.cases
-      (motive := fun f => f.ruleSet.settle.selfdestructOnlyCreated = true)
-      rfl rfl rfl rfl
-  have hnd := fun h => Linst.inv_noDel (wa := wa) hrun h h_onlyCreated
+/-- A nonterminal instruction preserves `NoDelCode`, under `stateGas = none`. -/
+lemma Ninst.noDelCode_effectRec_noStateGas (wa : Adr) (n : Ninst) :
+    ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {xl : Xlot} {out : Execution},
+    sevm.benvStat.rules.stateGas = none → Xlot.Rel (Devm.NoDelCode wa) xl →
+    Ninst.StepRun pc sevm pre n xl out →
+    Execution.Rel (Devm.NoDelCode wa) pre out := by
+  intro pc sevm pre xl out hsg hxl hrun
+  have hnd := fun h =>
+    Ninst.inv_noDel_noStateGas hsg (Xlot.invNoDel_of_rel hxl) hrun h
   cases out with
   | error e => exact hnd
   | ok d => exact hnd
 
-lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
-    {exn : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
+/-- A terminal instruction preserves `NoDelCode`, under the EIP-6780 flag. -/
+lemma Linst.noDelCode_effect_of_onlyCreated (wa : Adr) (l : Linst) :
+    ∀ {sevm : Sevm} {pre : Devm} {out : Execution},
+    sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
+    Linst.Run sevm pre l out → Execution.Rel (Devm.NoDelCode wa) pre out := by
+  intro sevm pre out hflag hrun
+  have hnd := fun h => Linst.inv_noDel (wa := wa) hrun h hflag
+  cases out with
+  | error e => exact hnd
+  | ok d => exact hnd
+
+/-- One interpreter step preserves any reflexive relation with neutral
+per-instruction effects under `stateGas = none` and the EIP-6780 flag. -/
+lemma Evm.step_effect_noStateGas {R : Devm → Devm → Prop}
+    (hrefl : ReflexiveRel R)
+    (hn : ∀ (n : Ninst) {pc : Nat} {sevm : Sevm} {pre : Devm} {xl : Xlot}
+      {out : Execution},
+      sevm.benvStat.rules.stateGas = none → Xlot.Rel R xl →
+      Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ (l : Linst) {sevm : Sevm} {pre : Devm} {out : Execution},
+      sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
+      Linst.Run sevm pre l out → Execution.Rel R pre out)
+    {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hflag : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true)
+    (hxl : Xlot.Rel R xl)
+    (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
+    Execution.Rel R devm out := by
+  rcases hgi : (Evm.getInst ⟨pc, sevm, devm⟩) with _ | i
+  · rw [Evm.step_invOp hgi] at hrun
+    obtain ⟨-, rfl⟩ := hrun
+    exact hrefl _
+  · cases i with
+    | next n =>
+      rw [Evm.step_next (n := n) hgi] at hrun
+      exact hn n hsg hxl hrun
+    | jump j =>
+      rw [Evm.step_jump (j := j) hgi] at hrun
+      obtain ⟨-, hcase⟩ := Step.run_ofJump hrun
+      have hjr := hj j (evm := ⟨pc, sevm, devm⟩) (out := j.run ⟨pc, sevm, devm⟩) rfl
+      rcases hcase with ⟨e, hje, rfl⟩ | ⟨pc', d, hje, rfl⟩ <;> rw [hje] at hjr <;>
+        exact hjr
+    | last l =>
+      rw [Evm.step_last (l := l) hgi] at hrun
+      obtain ⟨-, rfl⟩ := hrun
+      exact hl l hflag rfl
+
+/-- Per-instruction neutral effects compose into `Execution.Rel` for a
+complete `Exec` derivation: tails keep the same frame, children transport
+the schedule by the exact spawn environment equality. -/
+theorem Exec.effect_neutralSchedule {R : Devm → Devm → Prop}
+    (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
+    (hn : ∀ (n : Ninst) {pc : Nat} {sevm : Sevm} {pre : Devm} {xl : Xlot}
+      {out : Execution},
+      sevm.benvStat.rules.stateGas = none → Xlot.Rel R xl →
+      Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out)
+    (hj : ∀ j, Jinst.Effect R j)
+    (hl : ∀ (l : Linst) {sevm : Sevm} {pre : Devm} {out : Execution},
+      sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
+      Linst.Run sevm pre l out → Execution.Rel R pre out)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hflag : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true) :
+    Execution.Rel R pre out := by
+  have hcomp : ∀ {a b : Devm} {o : Execution},
+      R a b → Execution.Rel R b o → Execution.Rel R a o := by
+    intro a b o hab hbo
+    cases o <;> exact htrans hab hbo
+  have aux : ∀ {pc sevm pre out}, Exec pc sevm pre out →
+      sevm.benvStat.rules.stateGas = none →
+      sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
+      Execution.Rel R pre out := by
+    intro pc sevm pre out run hsg hflag
+    revert hsg hflag
+    induction run with
+    | halt hstep =>
+      intro hsg hflag
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
+        trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
+    | cont hstep _ ih =>
+      intro hsg hflag
+      refine hcomp (?_ : R _ _) (ih hsg hflag)
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
+        (out := .ok _) trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
+    | doneErr hstep henter hr =>
+      intro hsg hflag
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
+        trivial (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
+    | doneOk hstep henter hr _ ih =>
+      intro hsg hflag
+      refine hcomp (?_ : R _ _) (ih hsg hflag)
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
+        (out := .ok _) trivial
+        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
+    | runErr hstep henter _ hr ihc =>
+      intro hsg hflag
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag
+        (xl := .some ⟨_, _⟩)
+        (ihc (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hsg)
+          (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hflag))
+        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
+    | runOk hstep henter _ hr _ ihc ih =>
+      intro hsg hflag
+      refine hcomp (?_ : R _ _) (ih hsg hflag)
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag
+        (xl := .some ⟨_, _⟩) (out := .ok _)
+        (ihc (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hsg)
+          (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hflag))
+        (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
+  exact aux run hsg hflag
+
+/-- A complete execution preserves `NoDel` under `stateGas = none` and the
+EIP-6780 flag. -/
+lemma Exec.inv_noDel_noStateGas {wa : Adr} {pc : Nat} {sevm : Sevm}
+    {devm : Devm} {exn : Execution}
     (run : Exec pc sevm devm exn)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hflag : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true)
     (h : Devm.NoDel wa devm) : Execution.NoDel wa exn := by
-  have heff := Exec.effectForkTerminal (noDelCode_refl_trans wa).1 (noDelCode_refl_trans wa).2
-    (Ninst.noDelCode_effectRec wa) (Jinst.noDelCode_effect wa)
-    (Linst.noDelCode_effectFork wa) run hfork
+  have heff := Exec.effect_neutralSchedule (noDelCode_refl_trans wa).1
+    (noDelCode_refl_trans wa).2 (Ninst.noDelCode_effectRec_noStateGas wa)
+    (Jinst.noDelCode_effect wa) (Linst.noDelCode_effect_of_onlyCreated wa)
+    run hsg hflag
   cases exn with
   | error e => exact heff h
   | ok d => exact heff h
 
-theorem processMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
-    (hfork : CoveredFork msg.benv.stat.fork)
+/-- A complete execution on a covered fork preserves `NoDel`. -/
+lemma Exec.inv_noDel {wa : Adr} {pc : Nat} {sevm : Sevm} {devm : Devm}
+    {exn : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (run : Exec pc sevm devm exn)
+    (h : Devm.NoDel wa devm) : Execution.NoDel wa exn :=
+  Exec.inv_noDel_noStateGas run hfork.rules_stateGas_none
+    hfork.rules_selfdestructOnlyCreated h
+
+/-- A settled message preserves `NoDel` under `stateGas = none` and the
+EIP-6780 flag. -/
+theorem processMessage_preserves_noDel_noStateGas {wa : Adr} {msg : Msg}
+    {evm : Devm}
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (hflag : msg.benv.stat.rules.settle.selfdestructOnlyCreated = true)
     (h_run : processMessage msg = .ok evm)
     (h : Msg.NoDel wa msg)
     (h_inherited : wa ∉ msg.inheritedDeletions) : Devm.NoDel wa evm := by
@@ -4861,13 +4955,20 @@ theorem processMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     · intro hnd
       obtain ⟨exc⟩ := hfill
       have hbenv : cevm.sta.benvStat = msg.benv.stat := RunFrame.benvStat_eq hrel
-      have hfork_c : CoveredFork cevm.sta.benvStat.fork := by
-        rw [hbenv]; exact hfork
-      exact Exec.inv_noDel hfork_c exc hnd
+      have hsg_c : cevm.sta.benvStat.rules.stateGas = none := by
+        rw [hbenv]; exact hsg
+      have hflag_c :
+          cevm.sta.benvStat.rules.settle.selfdestructOnlyCreated = true := by
+        rw [hbenv]; exact hflag
+      exact Exec.inv_noDel_noStateGas exc hsg_c hflag_c hnd
   exact ProcessMessage.inv_noDel hinv hrel h h_inherited
 
-theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
-    (hfork : CoveredFork msg.benv.stat.fork)
+/-- A settled create message preserves `NoDel` under `stateGas = none` and
+the EIP-6780 flag. -/
+theorem processCreateMessage_preserves_noDel_noStateGas {wa : Adr} {msg : Msg}
+    {evm : Devm}
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (hflag : msg.benv.stat.rules.settle.selfdestructOnlyCreated = true)
     (h_run : processCreateMessage msg = .ok evm)
     (h_ct : msg.currentTarget ≠ wa)
     (h : Msg.NoDel wa msg)
@@ -4880,9 +4981,15 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
     cases h_run
   rw [hpm0] at h_run
   have h_rest := h_run
-  have hfork' : CoveredFork (processCreateMessage.msg msg).benv.stat.fork := by
-    rw [processCreateMessage.msg_benvStat]; exact hfork
-  have h_pm : Devm.NoDel wa evm2 := processMessage_preserves_noDel hfork' hpm0 h_inv_cm h_inherited
+  have hsg' : (processCreateMessage.msg msg).benv.stat.rules.stateGas = none := by
+    rw [processCreateMessage.msg_benvStat]; exact hsg
+  have hflag' :
+      (processCreateMessage.msg msg).benv.stat.rules.settle.selfdestructOnlyCreated
+        = true := by
+    rw [processCreateMessage.msg_benvStat]; exact hflag
+  have h_pm : Devm.NoDel wa evm2 :=
+    processMessage_preserves_noDel_noStateGas hsg' hflag' hpm0 h_inv_cm
+      h_inherited
   unfold processCreateMessage.settle at h_rest
   dsimp only [bind, Except.bind] at h_rest
   · by_cases herr : evm2.error.isNone = true
@@ -4893,33 +5000,47 @@ theorem processCreateMessage_preserves_noDel {wa : Adr} {msg : Msg} {evm : Devm}
         cases err
         case halt reason =>
           rw [← Except.ok.inj h_rest]
-          have h_ds : Devm.delSets evm3 = Devm.delSets evm2 := chargeCodeGas_delSets_err hcg
-          have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
-          have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
-          have h_atd : wa ∉ evm3.accountsToDelete := by rw [h_atd_eq]; exact h_pm.atd
-          have h_ca : wa ∉ evm3.createdAccounts := by rw [h_ca_eq]; exact h_pm.ca
+          have h_ds : Devm.delSets evm3 = Devm.delSets evm2 :=
+            chargeCodeGas_delSets_err hcg
+          have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete :=
+            congrArg Prod.fst h_ds
+          have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts :=
+            congrArg Prod.snd h_ds
+          have h_atd : wa ∉ evm3.accountsToDelete := by
+            rw [h_atd_eq]; exact h_pm.atd
+          have h_ca : wa ∉ evm3.createdAccounts := by
+            rw [h_ca_eq]; exact h_pm.ca
           unfold processCreateMessage.exceptionalHalt
-          cases hsg : msg.benv.stat.rules.stateGas <;>
-            exact Devm.NoDel.of_eqs (d := evm3.rollback msg.benv.state msg.tenv.transientStorage) rfl rfl
+          cases hsg_eq : msg.benv.stat.rules.stateGas <;>
+            exact Devm.NoDel.of_eqs (d := evm3.rollback msg.benv.state
+              msg.tenv.transientStorage) rfl rfl
               (Devm.NoDel.rollback h_atd h_ca h.code)
         all_goals cases h_rest
       · rw [hcg] at h_rest; dsimp only at h_rest
         rw [← Except.ok.inj h_rest]
-        have h_ds : Devm.delSets evm3 = Devm.delSets evm2 := chargeCodeGas_delSets_ok hcg
-        have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete := congrArg Prod.fst h_ds
-        have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts := congrArg Prod.snd h_ds
-        have h_atd : wa ∉ evm3.accountsToDelete := by rw [h_atd_eq]; exact h_pm.atd
-        have h_ca : wa ∉ evm3.createdAccounts := by rw [h_ca_eq]; exact h_pm.ca
+        have h_ds : Devm.delSets evm3 = Devm.delSets evm2 :=
+          chargeCodeGas_delSets_ok hcg
+        have h_atd_eq : evm3.accountsToDelete = evm2.accountsToDelete :=
+          congrArg Prod.fst h_ds
+        have h_ca_eq : evm3.createdAccounts = evm2.createdAccounts :=
+          congrArg Prod.snd h_ds
+        have h_atd : wa ∉ evm3.accountsToDelete := by
+          rw [h_atd_eq]; exact h_pm.atd
+        have h_ca : wa ∉ evm3.createdAccounts := by
+          rw [h_ca_eq]; exact h_pm.ca
         have h_gc : evm3.getCode wa = evm2.getCode wa := by
           have hh := processCreateMessage.chargeCodeGas_getCode_gen hcg wa
           simpa only [Execution.getCode] using hh
         refine ⟨h_atd, h_ca, ?_⟩
-        show ((evm3.setCode msg.currentTarget ⟨⟨evm3.output⟩⟩).getCode wa).toList ≠ []
+        show ((evm3.setCode msg.currentTarget ⟨⟨evm3.output⟩⟩).getCode wa).toList
+          ≠ []
         rw [setCode_getCode h_ct, h_gc]
         exact h_pm.code
     · rw [ite_eq_right herr] at h_rest
       rw [← Except.ok.inj h_rest]
-      exact (⟨h_pm.atd, h_pm.ca, h.code⟩ : Devm.NoDel wa ((evm2.rollback msg.benv.state msg.tenv.transientStorage).withStorageWrites msg.benv.storageWrites))
+      exact (⟨h_pm.atd, h_pm.ca, h.code⟩ : Devm.NoDel wa ((evm2.rollback
+        msg.benv.state msg.tenv.transientStorage).withStorageWrites
+        msg.benv.storageWrites))
 
 lemma setDelegationStep_benv_equiv {auth : Auth} {msg msg' : Msg} {refund refund' : B256}
     (h : setDelegationStep auth msg refund = .ok (msg', refund')) :
@@ -5145,15 +5266,17 @@ lemma setDelegation_inheritedDeletions {msg msg' : Msg} {v : B256}
       msg'.inheritedDeletions = msg_mid.inheritedDeletions := hh.symm
       _ = msg.inheritedDeletions := setDelegationLoop_inheritedDeletions h_loop
 
-theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.State}
-    {out : MsgCallOutput}
-    (hfork : CoveredFork msg.benv.stat.fork)
+/-- A settled message call keeps `wa` out of the deletion set under
+`stateGas = none` and the EIP-6780 flag. -/
+theorem processMessageCall_preserves_noDel_noStateGas {wa : Adr} {msg : Msg}
+    {st' : Jaune.State} {out : MsgCallOutput}
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (hflag : msg.benv.stat.rules.settle.selfdestructOnlyCreated = true)
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h : Msg.NoDel wa msg)
     (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa))
     (h_inherited : wa ∉ msg.inheritedDeletions) :
     wa ∉ out.accountsToDelete := by
-  have hsg : msg.benv.stat.rules.stateGas = none := hfork.rules_stateGas_none
   unfold processMessageCall at h_run
   split at h_run
   · unfold processMessageCall.create at h_run
@@ -5175,7 +5298,8 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
         injection h_run
       · simp only [Except.bimap, bind, Except.bind]
         intro h_run
-        have h_nodel := processCreateMessage_preserves_noDel hfork h_evm h_ct h h_inherited
+        have h_nodel := processCreateMessage_preserves_noDel_noStateGas hsg
+          hflag h_evm h_ct h h_inherited
         change (if evm.error.isNone = true then _ else _) = _ at h_run
         split at h_run
         · split at h_run
@@ -5191,15 +5315,14 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
   · unfold processMessageCall.call at h_run
     simp only [hsg] at h_run
     rcases Except.bind_eq_ok h_run with ⟨⟨delegated, refund⟩, hauth, h_run⟩
-    have hd : Msg.NoDel wa delegated ∧ CoveredFork delegated.benv.stat.fork ∧
+    have hd : Msg.NoDel wa delegated ∧ delegated.benv.stat = msg.benv.stat ∧
         wa ∉ delegated.inheritedDeletions := by
       unfold processMessageCall.legacyAuthorization at hauth
       split at hauth
-      · cases hauth; exact ⟨h, hfork, h_inherited⟩
+      · cases hauth; exact ⟨h, rfl, h_inherited⟩
       · rcases Except.bind_eq_ok hauth with ⟨⟨msg', v⟩, hdel, hauth⟩
         cases hauth
-        exact ⟨setDelegation_msg_noDel hdel h h_not_del,
-          (setDelegation_benvStat hdel) ▸ hfork,
+        exact ⟨setDelegation_msg_noDel hdel h h_not_del, setDelegation_benvStat hdel,
           (setDelegation_inheritedDeletions hdel) ▸ h_inherited⟩
     rcases Except.bind_eq_ok h_run with ⟨evm, hpm, h_run⟩
     have hpm' : processMessage delegated.resolveCodeDelegation = .ok evm := by
@@ -5210,13 +5333,14 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
     have hpc : Msg.NoDel wa delegated.resolveCodeDelegation := by
       unfold Msg.resolveCodeDelegation
       split <;> exact ⟨hd.1.ca, hd.1.code⟩
-    have hfpc : CoveredFork delegated.resolveCodeDelegation.benv.stat.fork := by
+    have hstat : delegated.resolveCodeDelegation.benv.stat = msg.benv.stat := by
       unfold Msg.resolveCodeDelegation
       split <;> exact hd.2.1
     have hipc : wa ∉ delegated.resolveCodeDelegation.inheritedDeletions := by
       unfold Msg.resolveCodeDelegation
       split <;> exact hd.2.2
-    have hn := processMessage_preserves_noDel hfpc hpm' hpc hipc
+    have hn := processMessage_preserves_noDel_noStateGas (by rw [hstat]; exact hsg)
+      (by rw [hstat]; exact hflag) hpm' hpc hipc
     split at h_run
     · rename_i herr
       rcases Except.bind_eq_ok h_run with ⟨r, hr, h_run⟩
@@ -5229,9 +5353,11 @@ theorem processMessageCall_preserves_noDel {wa : Adr} {msg : Msg} {st' : Jaune.S
       simp only [herr, ↓reduceIte]
       exact AdrSet.not_mem_empty
 
-theorem processMessageCall_accountsToDelete_ne {wa : Adr} {msg : Msg}
-    {st' : Jaune.State} {out : MsgCallOutput}
-    (hfork : CoveredFork msg.benv.stat.fork)
+/-- Every deleted account of a settled message call differs from `wa`. -/
+theorem processMessageCall_accountsToDelete_ne_noStateGas {wa : Adr}
+    {msg : Msg} {st' : Jaune.State} {out : MsgCallOutput}
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (hflag : msg.benv.stat.rules.settle.selfdestructOnlyCreated = true)
     (h_run : processMessageCall msg = .ok ⟨st', out⟩)
     (h : Msg.NoDel wa msg)
     (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa))
@@ -5239,8 +5365,19 @@ theorem processMessageCall_accountsToDelete_ne {wa : Adr} {msg : Msg}
     ∀ a ∈ out.accountsToDelete.toList, a ≠ wa := by
   intro a ha heq
   subst heq
-  exact processMessageCall_preserves_noDel hfork h_run h h_not_del h_inherited
-    (Std.HashSet.mem_toList.mp ha)
+  exact processMessageCall_preserves_noDel_noStateGas hsg hflag h_run h
+    h_not_del h_inherited (Std.HashSet.mem_toList.mp ha)
+
+theorem processMessageCall_accountsToDelete_ne {wa : Adr} {msg : Msg}
+    {st' : Jaune.State} {out : MsgCallOutput}
+    (hfork : CoveredFork msg.benv.stat.fork)
+    (h_run : processMessageCall msg = .ok ⟨st', out⟩)
+    (h : Msg.NoDel wa msg)
+    (h_not_del : ¬ isValidDelegation (msg.benv.state.getCode wa))
+    (h_inherited : wa ∉ msg.inheritedDeletions) :
+    ∀ a ∈ out.accountsToDelete.toList, a ≠ wa :=
+  processMessageCall_accountsToDelete_ne_noStateGas hfork.rules_stateGas_none
+    hfork.rules_selfdestructOnlyCreated h_run h h_not_del h_inherited
 
 lemma prepareMessage_benv {benv : Benv} {tenv : Tenv} {tx : Tx} {msg : Msg}
     (h_prep : prepareMessage benv tenv tx = .ok msg) :
@@ -5481,7 +5618,6 @@ lemma validateTransaction_calldataFloorGasCost_le_gas {rules : ForkRules} {tx : 
                 simp only [Prod.mk.injEq] at h_result
                 obtain ⟨rfl, rfl⟩ := h_result
                 omega
-
 
 -- Total wei credited by a list of withdrawals, computed in ℕ. Withdrawals
 -- mint ether with wrapping addition (`State.addBal`), so the block-level
@@ -5748,24 +5884,6 @@ lemma BlockChain.Reach.chainId_eq {ch ch' : BlockChain}
   | step h_reach' h_bound h_st ih =>
       rw [stateTransitionAt_preserves_chainId h_st, ih]
 
--- A Prague-only schedule is the Prague chain: every `Reach` step is a
--- `ReachUsing (ChainConfig.pragueOnly ch.chainId)` step, because
--- `stateTransitionUsing` on that schedule reduces to `stateTransition`.
--- The corrected `ReachUsing.refl` demands real evidence, so the conversion
--- carries it rather than being true because the identity was ignored: the
--- Prague-only schedule is valid for every identity
--- (`ChainConfig.pragueOnly_valid`), it names the base snapshot's own chain ID
--- by construction, and the base snapshot's context validity is the one fact
--- plain `Reach` never established, so it enters as a hypothesis.
-theorem ChainConfig.pragueOnly_forkAt (chainId : UInt64) (number timestamp : Nat) :
-    (ChainConfig.pragueOnly chainId).forkAt number timestamp = .ok .prague := by
-  exact ChainConfig.single_forkAt chainId .prague number timestamp
-
-/-- A fork a configured lookup selects is one the schedule activates. -/
-theorem ChainConfig.forkAt_mem {cfg : ChainConfig} {number timestamp : Nat} {f : Fork}
-    (h : cfg.forkAt number timestamp = .ok f) : f ∈ cfg.activations.map (·.fork) := by
-  exact Jaune.ChainConfig.forkAt_mem h
-
 /-- At or after Prague's timestamp, a successful mainnet selection is covered.
 Both schedule coordinates are real inputs; no block-number floor is assumed. -/
 theorem mainnetChainConfig_covered (number timestamp : Nat) (f : Fork)
@@ -5781,6 +5899,15 @@ theorem mainnetChainConfig_covered (number timestamp : Nat) (f : Fork)
     simp_all only [Fork.index, CoveredFork, coveredForks, List.mem_cons,
       List.not_mem_nil, reduceCtorEq, false_or, true_or, or_true, or_false] <;> omega
 
+-- A Prague-only schedule is the Prague chain: every `Reach` step is a
+-- `ReachUsing (ChainConfig.pragueOnly ch.chainId)` step, because
+-- `stateTransitionUsing` on that schedule reduces to `stateTransition`.
+-- The corrected `ReachUsing.refl` demands real evidence, so the conversion
+-- carries it rather than being true because the identity was ignored: the
+-- Prague-only schedule is valid for every identity
+-- (`ChainConfig.pragueOnly_valid`), it names the base snapshot's own chain ID
+-- by construction, and the base snapshot's context validity is the one fact
+-- plain `Reach` never established, so it enters as a hypothesis.
 theorem BlockChain.Reach.toReachUsing {ch ch' : BlockChain}
     (h_ctx : ch.ValidContext)
     (h_reach : BlockChain.Reach ch ch') :
@@ -5793,6 +5920,5 @@ theorem BlockChain.Reach.toReachUsing {ch ch' : BlockChain}
       rw [stateTransitionUsing_single
         (show ch.chainId = _ from (Reach.chainId_eq h_reach').symm)]
       exact h_st
-
 
 end Blanc
