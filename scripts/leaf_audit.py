@@ -88,6 +88,9 @@ NEUTRAL_ATTRIBUTES = frozenset({
     "irreducible", "reducible", "semireducible", "inline", "noinline", "macro_inline",
     "always_inline", "specialize", "nospecialize", "deprecated", "pp_nodot", "match_pattern",
     "nolint", "unbox",
+    # `tactic NAME` registers a `def` as the elaborator of the syntax kind NAME (the walk kits'
+    # `@[tactic wrunStx] def evalWrun`). It attaches only to a definition and names no theorem.
+    "tactic",
 })
 
 # Tactics whose bracketed argument is a list of lemmas that are rewritten with or simplified by.
@@ -1350,6 +1353,17 @@ def attribute_controls() -> List[Tuple[Optional[str], str]]:
     results.append((None if ok_used else f"grind use: expected G.g1 G.g2 G.g3, got {sorted(used)}",
                     "OK — grind use: names of an `attribute [local grind ..]` command are used; "
                     "membership alone (`@[grind]` g0) is not"))
+    tactic_text = ("namespace T\n"
+                   "theorem t0 : True := trivial\n"
+                   "@[tactic t0Stx] def evalT0 : Nat := 0\n"
+                   "end T\n")
+    tactic_problems = scan_attributes_text("T", tactic_text)
+    tactic_used = scan_uses({"T": tactic_text}, {"T.t0", "T.evalT0"})
+    ok_tactic = not tactic_problems and not tactic_used
+    results.append((None if ok_tactic else
+                    f"tactic attribute guard: {tactic_problems} used={sorted(tactic_used)}",
+                    "OK — tactic attribute guard: `@[tactic NAME] def` is classified neutral and "
+                    "credits no use"))
     return results
 
 
