@@ -2736,6 +2736,46 @@ def declarations_map(source: str) -> dict:
             for declaration in declarations(source)}
 
 
+def vocabulary_falsifier_targets(root: Path) -> list:
+    """(label, problem) pairs for vocabulary falsifiers that point astray.
+
+    A vocabulary falsifier names the file it mutates.  When a pinned
+    vocabulary declaration moves between files (as `BlockChain.ReachUsing`
+    did from `Blanc/Ladder.lean` to `Blanc/LadderBase.lean`, e92b0b5e), the
+    pin tables move with it but the falsifier's file field does not, and the
+    falsifier is stranded.  So every vocabulary falsifier must target a key
+    of `VOCABULARY_NAMES`, and its mutation anchor must lie inside one of the
+    declarations that key pins -- not merely somewhere in the file.  When the
+    anchor now lies in another vocabulary file's pinned declaration, the
+    message names that file.
+    """
+    problems = []
+    pinned_text = {}
+    for relative, names in VOCABULARY_NAMES.items():
+        found = vocabulary_map(read_source(root, relative))
+        pinned_text[relative] = {name: found[name]["text"]
+                                 for name in names if name in found}
+    for label, kind, key, old, _new, _expected in SELF_TESTS:
+        if kind not in ("vocabulary", "vocabulary-channels"):
+            continue
+        if key not in VOCABULARY_NAMES:
+            problems.append((label,
+                f"{label}: targets {key}, which is not a VOCABULARY_NAMES file "
+                f"({', '.join(sorted(VOCABULARY_NAMES))})"))
+            continue
+        if any(old in text for text in pinned_text[key].values()):
+            continue
+        elsewhere = sorted(f"{name} in {relative}"
+                           for relative, texts in pinned_text.items()
+                           for name, text in texts.items() if old in text)
+        where = (f"; it now lies in {', '.join(elsewhere)} -- point the "
+                 "falsifier there" if elsewhere else "")
+        problems.append((label,
+            f"{label}: its mutation anchor lies in no declaration "
+            f"VOCABULARY_NAMES pins for {key}{where}"))
+    return problems
+
+
 def self_test(root: Path) -> int:
     sources = load_owners(root)
     program = read_source(root, PROGRAM_SOURCE)
@@ -2796,8 +2836,12 @@ def self_test(root: Path) -> int:
         else:
             fail(f"unknown self-test kind {kind}")
 
-    problems = []
+    misdirected = vocabulary_falsifier_targets(root)
+    stranded = {label for label, _ in misdirected}
+    problems = [problem for _, problem in misdirected]
     for label, kind, key, old, new, expected in SELF_TESTS:
+        if label in stranded:
+            continue
         if kind in ("vocabulary", "vocabulary-channels"):
             base = read_source(root, key)
         elif key == "program":
