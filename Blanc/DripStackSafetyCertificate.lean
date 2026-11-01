@@ -15,48 +15,33 @@ open Jaune AbstractStackSafety CompiledStackSafety
 
 theorem subtree371_rows_checked :
     subtree371.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · decide +kernel
-  · exact subtree214_rows_checked
-  · exact subtree576_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    subtree214_rows_checked subtree576_rows_checked
 
 theorem subtree371_layout_checked :
     subtree371.checkLayout code.toByteArray 0 839 = true := by
-  apply Table.checkLayout_node (next := 372)
-  · decide +kernel
-  · exact subtree214_layout_checked
-  · exact subtree576_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 372) reader_eq (by decide +kernel)
+    subtree214_layout_checked subtree576_layout_checked (by decide)
 
 theorem subtree1182_rows_checked :
     subtree1182.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · decide +kernel
-  · exact subtree1022_rows_checked
-  · exact subtree1459_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    subtree1022_rows_checked subtree1459_rows_checked
 
 theorem subtree1182_layout_checked :
     subtree1182.checkLayout code.toByteArray 840 1762 = true := by
-  apply Table.checkLayout_node (next := 1199)
-  · decide +kernel
-  · exact subtree1022_layout_checked
-  · exact subtree1459_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 1199) reader_eq (by decide +kernel)
+    subtree1022_layout_checked subtree1459_layout_checked (by decide)
 
 theorem subtree839_rows_checked :
     subtree839.all (checkRow code.toByteArray table 8) = true := by
-  apply Table.all_node
-  · decide +kernel
-  · exact subtree371_rows_checked
-  · exact subtree1182_rows_checked
+  exact Table.all_node_reader reader_eq (by decide +kernel)
+    subtree371_rows_checked subtree1182_rows_checked
 
 theorem subtree839_layout_checked :
     subtree839.checkLayout code.toByteArray 0 1762 = true := by
-  apply Table.checkLayout_node (next := 840)
-  · decide +kernel
-  · exact subtree371_layout_checked
-  · exact subtree1182_layout_checked
-  · decide +kernel
+  exact Table.checkLayout_node_reader (next := 840) reader_eq (by decide +kernel)
+    subtree371_layout_checked subtree1182_layout_checked (by decide)
 
 theorem table_rows_checked :
     table.all (checkRow code.toByteArray table 8) = true := by

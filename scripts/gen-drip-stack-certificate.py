@@ -28,6 +28,21 @@ CERTIFICATE_OUTPUT = ROOT / "Blanc/DripStackSafetyCertificate.lean"
 MAXIMUM = 8
 # A representation boundary, not a bound on program/table size or proof resources.
 SUBTREE_ROWS = 15
+# Kernel decisions read the runtime through the trie reader (Blanc/DripStackSafety.lean).
+LEAF_ROWS = "  exact Table.all_checkRow_reader reader_eq (by decide +kernel)"
+LEAF_LAYOUT = "  exact Table.checkLayout_reader reader_eq (by decide +kernel)"
+
+
+def join_rows(left: str, right: str) -> str:
+    return (f"  exact Table.all_node_reader reader_eq (by decide +kernel)\n"
+            f"    {left}_rows_checked {right}_rows_checked")
+
+
+def join_layout(next_pc: int, left: str, right: str) -> str:
+    return (f"  exact Table.checkLayout_node_reader (next := {next_pc}) reader_eq (by decide +kernel)\n"
+            f"    {left}_layout_checked {right}_layout_checked (by decide)")
+
+
 Pattern = producer.Pattern
 Instruction = producer.Instruction
 Rejected = producer.Rejected
@@ -246,31 +261,49 @@ def render_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec
     return "\n".join(output)
 
 
-def forward_row_proof_fragments(states: dict[int, Pattern], spec: RegionSpec) -> list[tuple[str, str]]:
-    """Exact reversible proof-only replacements; every public header stays fixed."""
+def forward_row_proof_fragments(raw: bytes, states: dict[int, Pattern],
+                                spec: RegionSpec) -> list[tuple[str, str]]:
+    """Exact reversible proof-only replacements; every public header stays fixed.
+
+    Each kernel row or layout decision runs on the trie reader `reader` of
+    Blanc/DripStackSafety.lean (`reader_eq`); the statement is unchanged."""
+    decoded = decode(raw)
     parts = region_parts(subtrees(states), spec.root)
     root = parts[-1]
+
+    def stem(part: Subtree) -> str:
+        return part.name if part is root else f"{spec.internal_theorem_prefix}{part.name}"
+
     fragments = []
     for part in parts:
-        stem = part.name if part is root else f"{spec.internal_theorem_prefix}{part.name}"
-        header = (f"theorem {stem}_rows_checked :\n"
-                  f"    {part.name}.all (checkRow code.toByteArray table {MAXIMUM}) = true := by\n")
+        start = part.rows[0][0]
+        final_pc = part.rows[-1][0]
+        stop = final_pc + decoded[final_pc].width
+        rows = (f"theorem {stem(part)}_rows_checked :\n"
+                f"    {part.name}.all (checkRow code.toByteArray table {MAXIMUM}) = true := by\n")
+        layout = (f"theorem {stem(part)}_layout_checked :\n"
+                  f"    {part.name}.checkLayout code.toByteArray {start} {stop} = true := by\n")
         if part.left is None:
-            old = header + "  decide +kernel"
-            new = (header + f"  simp only [{part.name}, Table.all, checkRow, checkInstruction, "
-                   "jumpable_eq_jumpdestOk]\n  decide +kernel")
+            fragments.append((rows + "  decide +kernel", rows + LEAF_ROWS))
+            fragments.append((layout + "  decide +kernel", layout + LEAF_LAYOUT))
         else:
-            old = header + "  apply Table.all_node\n  · decide +kernel"
-            new = (header + "  apply Table.all_node\n"
-                   "  · simp only [checkRow, checkInstruction, jumpable_eq_jumpdestOk]\n"
-                   "    decide +kernel")
-        fragments.append((old, new))
+            left, right = stem(part.left), stem(part.right)
+            next_pc = part.right.rows[0][0]
+            fragments.append((
+                rows + "  apply Table.all_node\n  · decide +kernel\n"
+                f"  · exact {left}_rows_checked\n  · exact {right}_rows_checked",
+                rows + join_rows(left, right)))
+            fragments.append((
+                layout + f"  apply Table.checkLayout_node (next := {next_pc})\n  · decide +kernel\n"
+                f"  · exact {left}_layout_checked\n  · exact {right}_layout_checked\n"
+                "  · decide +kernel",
+                layout + join_layout(next_pc, left, right)))
     return fragments
 
 
 def recover_legacy_proof_region(text: str, raw: bytes, states: dict[int, Pattern], spec: RegionSpec) -> str:
     """Remove only the complete prescribed rewrites, then require every old byte."""
-    for old, new in forward_row_proof_fragments(states, spec):
+    for old, new in forward_row_proof_fragments(raw, states, spec):
         require(text.count(new) == 1, f"missing/duplicate forward row proof in {spec.root}")
         text = text.replace(new, old, 1)
     # This equality protects the entire old body, topology, layout and headers.
@@ -282,12 +315,17 @@ def recover_legacy_proof_region(text: str, raw: bytes, states: dict[int, Pattern
 def render_forward_proof_region(raw: bytes, states: dict[int, Pattern], spec: RegionSpec) -> str:
     legacy = render_proof_region(raw, states, spec)
     text = legacy
-    for old, new in forward_row_proof_fragments(states, spec):
+    for old, new in forward_row_proof_fragments(raw, states, spec):
         require(text.count(old) == 1, f"missing/duplicate legacy row proof in {spec.root}")
         text = text.replace(old, new, 1)
     require(recover_legacy_proof_region(text, raw, states, spec) == legacy,
             f"forward proof does not preserve legacy {spec.root}")
     return text
+
+
+def theorem_headers(text: str) -> list[str]:
+    """Every public statement of a proof module, in order; proofs are free to change."""
+    return re.findall(r"^theorem [^\n]*\n(?:    [^\n]*\n)*?[^\n]*:= by$", text, re.M)
 
 
 def render_certificate_facade(raw: bytes, states: dict[int, Pattern]) -> str:
@@ -330,48 +368,33 @@ def render_certificate_facade(raw: bytes, states: dict[int, Pattern]) -> str:
         "",
         "theorem subtree371_rows_checked :",
         "    subtree371.all (checkRow code.toByteArray table 8) = true := by",
-        "  apply Table.all_node",
-        "  · decide +kernel",
-        "  · exact subtree214_rows_checked",
-        "  · exact subtree576_rows_checked",
+        "  exact Table.all_node_reader reader_eq (by decide +kernel)",
+        "    subtree214_rows_checked subtree576_rows_checked",
         "",
         "theorem subtree371_layout_checked :",
         "    subtree371.checkLayout code.toByteArray 0 839 = true := by",
-        "  apply Table.checkLayout_node (next := 372)",
-        "  · decide +kernel",
-        "  · exact subtree214_layout_checked",
-        "  · exact subtree576_layout_checked",
-        "  · decide +kernel",
+        "  exact Table.checkLayout_node_reader (next := 372) reader_eq (by decide +kernel)",
+        "    subtree214_layout_checked subtree576_layout_checked (by decide)",
         "",
         "theorem subtree1182_rows_checked :",
         "    subtree1182.all (checkRow code.toByteArray table 8) = true := by",
-        "  apply Table.all_node",
-        "  · decide +kernel",
-        "  · exact subtree1022_rows_checked",
-        "  · exact subtree1459_rows_checked",
+        "  exact Table.all_node_reader reader_eq (by decide +kernel)",
+        "    subtree1022_rows_checked subtree1459_rows_checked",
         "",
         "theorem subtree1182_layout_checked :",
         "    subtree1182.checkLayout code.toByteArray 840 1762 = true := by",
-        "  apply Table.checkLayout_node (next := 1199)",
-        "  · decide +kernel",
-        "  · exact subtree1022_layout_checked",
-        "  · exact subtree1459_layout_checked",
-        "  · decide +kernel",
+        "  exact Table.checkLayout_node_reader (next := 1199) reader_eq (by decide +kernel)",
+        "    subtree1022_layout_checked subtree1459_layout_checked (by decide)",
         "",
         "theorem subtree839_rows_checked :",
         "    subtree839.all (checkRow code.toByteArray table 8) = true := by",
-        "  apply Table.all_node",
-        "  · decide +kernel",
-        "  · exact subtree371_rows_checked",
-        "  · exact subtree1182_rows_checked",
+        "  exact Table.all_node_reader reader_eq (by decide +kernel)",
+        "    subtree371_rows_checked subtree1182_rows_checked",
         "",
         "theorem subtree839_layout_checked :",
         "    subtree839.checkLayout code.toByteArray 0 1762 = true := by",
-        "  apply Table.checkLayout_node (next := 840)",
-        "  · decide +kernel",
-        "  · exact subtree371_layout_checked",
-        "  · exact subtree1182_layout_checked",
-        "  · decide +kernel",
+        "  exact Table.checkLayout_node_reader (next := 840) reader_eq (by decide +kernel)",
+        "    subtree371_layout_checked subtree1182_layout_checked (by decide)",
         "",
         "theorem table_rows_checked :",
         "    table.all (checkRow code.toByteArray table 8) = true := by",
@@ -493,8 +516,8 @@ def main() -> int:
             require(recover_legacy_proof_region(forward576, raw, states, REGION576) == legacy576,
                     "renderer does not preserve exact legacy Region576 proof")
             require(REGION576_OUTPUT.is_file() and
-                    REGION576_OUTPUT.read_text() in (legacy576, forward576),
-                    "renderer does not reproduce accepted Blanc/DripStackSafetyRegion576.lean")
+                    theorem_headers(REGION576_OUTPUT.read_text()) == theorem_headers(legacy576),
+                    "renderer does not keep the accepted Blanc/DripStackSafetyRegion576.lean statements")
             for path, proof in proofs.items():
                 path.write_text(proof)
             print("OK — wrote fixed DRIP stack proof modules: Region576, Region1022, Region1459 and Certificate")

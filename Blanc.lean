@@ -269,6 +269,7 @@ import Blanc.ReachDispatchPrefix
 import Blanc.FuncMainPrefix
 import Blanc.PrefixTransport
 import Blanc.AbstractStackCertificate
+import Blanc.CodeTrie
 import Blanc.Weth10Redeemable
 import Blanc.Weth10HolderFlowResult
 import Blanc.Weth10HolderFlowWriteCompleteness
