@@ -264,7 +264,7 @@ SHARED += ["Lift.ReturnDataBound", "Lift.PrecompileOutputBound"]
 SHARED += ["Lift.CommittedLogs", "Lift.CommittedFrameLogs", "Lift.SegmentedReplay", "Lift.SegmentedHistory"]
 # Walk steps for arbitrary static calls, CALLER/KECCAK256/LOG3/SSTORE, hashed slots and the
 # Vyper 0.2.x front end (vyper-3crv-bytecode-v1): contract-neutral.
-SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.VyperDispatchWalk", "Lift.PackedWord"]
+SHARED += ["Lift.CalldataGuards", "Lift.StaticCall", "Lift.StaticCallGuard", "Lift.WalkSteps", "Lift.MapSlot", "Lift.Vyper", "Lift.VyperDispatchWalk", "Lift.VyperDispatchExact", "Lift.PackedWord"]
 # Spawn kinds from code bytes (curve-3pool-stableswap-v1): contract-neutral.
 SHARED += ["Lift.SpawnKindsM"]
 SHARED += ["Lift.GuardedCalls"]
@@ -1009,7 +1009,7 @@ CONTRACTS = {
                     "Lift.Curve3Pool.Creation.Input",
                     "Lift.Curve3Pool.Creation.Window",
                     "Lift.Curve3Pool.Walk.Kit",
-                    "Lift.Curve3Pool.Walk.Dispatch",
+                    "Lift.Curve3Pool.Walk.Dispatch", "Lift.Curve3Pool.Walk.DispatchLive",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityPre",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityLoop",
                     "Lift.Curve3Pool.Walk.RemoveLiquidityPost",

@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Crv.Spec
 import Blanc.Lift.InvWalkWorld
+import Blanc.Lift.VyperDispatchExact
 
 /-!
 # The dispatcher (entry 0 up to the thirteen bodies)
@@ -46,44 +47,6 @@ def selTest (c0 c1 c2 c3 h l : UInt8) (f nxt : SFunc) : SFunc :=
       (.next (.push [h, l] (by simp only [List.length_cons, List.length_nil, zero_add,
         Nat.reduceAdd, Nat.reduceLeDiff])) (.branch f nxt))))))
 
-theorem mload_selector :
-    Bytes.toB256 ((Mv).read (Bytes.toB256 [0x00]).toNat 32).1 = Sevm.selector sevm ∧
-      ((Mv).read (Bytes.toB256 [0x00]).toNat 32).2 = Mv := by
-  have h0 : (Bytes.toB256 [0x00]).toNat = 0 := by decide
-  rw [h0, (vyMem_reads Mem.wf_empty Mem.reads_empty _).read, vyImg_selector]
-  exact ⟨rfl, read_covered (vyMem_empty_size _) (by decide) (by decide)⟩
-
-private theorem test_rx {v : B256} (hv : B256.eqCheck (B256.eqCheck (Sevm.selector sevm)
-      (Bytes.toB256 [c0, c1, c2, c3])) 0 = v) {G : Nat}
-    (k : SFunc.RunExact prog sevm (St b [Bytes.toB256 [h, l], v] Mv G) (.branch f nxt) o) :
-    SFunc.RunExact prog sevm (St b [] Mv (G + 18)) (selTest c0 c1 c2 c3 h l f nxt) o := by
-  obtain ⟨hs, hM⟩ := mload_selector (sevm := sevm)
-  unfold selTest
-  rw [show G + 18 = G + 3 + 3 + 3 + 3 + 3 + 3 by omega]
-  refine rx_push rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
-  refine rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) ?_
-  refine rx_mload (c := 3) ?_ hs hM (by simp only [List.length_cons, List.length_nil, zero_add,
-    Nat.one_lt_ofNat]) ?_
-  · rw [St, Devm.extCost_zero_of_le (by rw [vyMem_empty_size]) (by
-      rw [vyMem_empty_size]; decide)]; rfl
-  refine rx_eq rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
-  refine rx_iszero hv (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
-  exact rx_push rfl (by simp only [List.length_cons, List.length_nil, zero_add, Nat.one_lt_ofNat]) k
-
-/-- A missed test: control passes to the next test. -/
-theorem test_miss (hne : Sevm.selector sevm ≠ Bytes.toB256 [c0, c1, c2, c3]) {G : Nat}
-    (k : SFunc.RunExact prog sevm (St b [] Mv G) nxt o) :
-    SFunc.RunExact prog sevm (St b [] Mv (G + 28)) (selTest c0 c1 c2 c3 h l f nxt) o := by
-  rw [show G + 28 = G + 10 + 18 by omega]
-  exact test_rx (v := 1) (by simp only [B256.eqCheck, hne, ↓reduceIte]) (rx_branch_succ (by decide) k)
-
-/-- A hit: control falls into the body. -/
-theorem test_hit (heq : Sevm.selector sevm = Bytes.toB256 [c0, c1, c2, c3]) {G : Nat}
-    (k : SFunc.RunExact prog sevm (St b [] Mv G) f o) :
-    SFunc.RunExact prog sevm (St b [] Mv (G + 28)) (selTest c0 c1 c2 c3 h l f nxt) o := by
-  rw [show G + 28 = G + 10 + 18 by omega]
-  exact test_rx (v := 0) (by simp only [B256.eqCheck, heq, ↓reduceIte, ite_eq_right_iff, imp_self]) (rx_branch_zero k)
-
 /-- The size test and the prologue, forward (100 gas). -/
 theorem disp_prefix (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256) {G : Nat}
     (k : SFunc.RunExact prog sevm (St b [] Mv G) test0 o) :
@@ -111,7 +74,7 @@ theorem test_inv {C : List Nat} {r : Seg} {G : Nat}
       ∃ G', SFunc.RunCut prog sevm C (St b [] Mv G') f r) ∨
     (Sevm.selector sevm ≠ Bytes.toB256 [c0, c1, c2, c3] ∧
       ∃ G', SFunc.RunCut prog sevm C (St b [] Mv G') nxt r) := by
-  obtain ⟨hs, hM⟩ := mload_selector (sevm := sevm)
+  obtain ⟨hs, hM⟩ := vyMem_mload_selector (sevm := sevm)
   unfold selTest at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
@@ -227,231 +190,24 @@ theorem safe_dispatch {sevm : Sevm} {b post : Devm} {G : Nat} (hcd : sevm.data.l
 the prologue 75, and per test 28 (`PUSH4` 3, `PUSH1` 3, `MLOAD` 3, `EQ` 3, `ISZERO` 3, `PUSH2` 3,
 `JUMPI` 10) plus 1 for each missed test's `JUMPDEST`.
 
-Proof sketch.  `rx_push`, `rx_calldatasize`, `rx_lt (v := 0)` (`4 ≤ size`), `rx_iszero (v := 1)`,
-`rx_push`, `rx_branch_succ`, `rx_dest`, `rx_vyPrologue`; then induction-free: a `match` on `k`
-(13 cases), each `k` misses `k` tests (`rx_mload` of the selector as in `safeDispatch`, `rx_eq
-(v := 0)` from the selectors' distinctness, `decide`; `rx_iszero (v := 1)`, `rx_branch_succ`,
-`rx_dest`) and hits the `k`-th (`rx_eq (v := 1)`, `rx_iszero (v := 0)`, `rx_branch_zero`).
-A helper for one missed test and one for the hit, over `vyMem Mem.empty w`, keeps each case to a
-few lines. -/
+The chain after the prologue is evaluated by `SFunc.vyFwd` (`Blanc/Lift/VyperDispatchExact.lean`):
+for each of the thirteen bodies the kernel checks that it reaches body `k` for `28 + 29 k` gas. -/
 theorem live_dispatch {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcome} {k : Nat} {f : SFunc}
     {sel : B256} (hk : bodies[k]? = some f) (hs : sels[k]? = some sel)
     (hsel : Sevm.selector sevm = sel) (hlen : 4 ≤ sevm.data.length)
     (hcd : sevm.data.length < 2 ^ 256)
     (hrun : SFunc.RunExact prog sevm (entrySt sevm b G) f o) :
     SFunc.RunExact prog sevm (St b [] Mem.empty (G + dispatchGas k)) t_0000_c0 o := by
-  rcases k with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | k
-  all_goals simp only [bodies, sels, List.getElem?_cons_zero, List.getElem?_cons_succ,
-    Option.some.injEq, List.getElem?_nil, reduceCtorEq] at hk hs
-  all_goals try (subst hk; subst hs)
-  · rw [show G + dispatchGas 0 = G + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 1 = G + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 2 = G + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 3 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 4 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 5 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 6 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 7 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 8 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 9 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 10 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 11 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
-  · rw [show G + dispatchGas 12 = G + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 1 + 28 + 75 + 1 + 24 by unfold dispatchGas; omega]
-    refine disp_prefix hlen hcd ?_
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_miss ?_ (rx_dest ?_)
-    · rw [hsel]; decide
-    refine test_hit ?_ hrun
-    rw [hsel]; decide
+  have hfwd : SFunc.vyFwd sel 32 test0 = (f, dispatchGas k - 100) := by
+    rcases k with _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | _ | k
+    all_goals simp only [bodies, sels, List.getElem?_cons_zero, List.getElem?_cons_succ,
+      Option.some.injEq, List.getElem?_nil, reduceCtorEq] at hk hs
+    all_goals try (subst hk; subst hs)
+    all_goals kernel_rfl
+  rw [show G + dispatchGas k = G + (dispatchGas k - 100) + 75 + 1 + 24 by unfold dispatchGas; omega]
+  refine disp_prefix hlen hcd ?_
+  have h := rx_vyFwd (S := []) hsel (by decide) 32 test0 (G := G) (by rw [hfwd]; exact hrun)
+  rwa [hfwd] at h
 
 /-- The call the model receives in the frame of body `k`. -/
 def callAt (sevm : Sevm) : Nat → Call

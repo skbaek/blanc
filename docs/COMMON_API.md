@@ -9980,6 +9980,13 @@ contract-neutral.
   one test or skip alone is `xa_vyTest`/`xa_vyPass`; in
   [`Blanc/Lift/VyperDispatchWalk.lean`](../Blanc/Lift/VyperDispatchWalk.lean). Worked use:
   `Blanc/Lift/Curve3Pool/Walk/Dispatch.lean` (`xa_dispatch`, `xa_dispatch_miss`).
+- The same dispatcher forward and gas-exact over a lifted program's trees: `SFunc.vyFwd σ n t`
+  evaluates the chain of tests (28 gas), always-taken skips (19) and `JUMPDEST`s (1) from the tree
+  `t` for the selector `σ`, returning the arm reached and the gas spent; `rx_vyFwd`/`rxe_vyFwd`
+  turn a run of that arm (prologue memory `vyMem Mem.empty w`) into a run of `t` for that gas
+  more, the pair closed by `kernel_rfl` for a concrete program; in
+  [`Blanc/Lift/VyperDispatchExact.lean`](../Blanc/Lift/VyperDispatchExact.lean). Worked use:
+  `Blanc/Lift/Curve3Pool/Walk/DispatchLive.lean` (`rxe_dispatch`, one line per `rx_dispatch_*`).
 - Loops: a back-edge to entry `k` is reasoned about one iteration at a time on
   runs cut at `k` (`SFunc.RunCutP`, `SFunc.RunExactCut`). Safety:
   `SFunc.RunCutP.loop` (invariant; `SFunc.RunP.loop`), which
