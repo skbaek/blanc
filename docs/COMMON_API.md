@@ -3389,13 +3389,11 @@ This does not exclude scheduling deletion: retained deletion safety still
 needs the terminal and complete-settlement argument. Use the named theorem;
 a bare set-membership goal does not identify this execution-specific route.
 
-- `Linst.EffectFork`, `Evm.step_effectForkTerminal` and
-  `Exec.effectForkTerminal` in `Blanc/CommonProofs/Messages.lean` let terminal as well
-  as nonterminal effects use the frame's `CoveredFork` premise. Child
-  coverage follows the actual spawn; the existing unrestricted terminal
-  traversal APIs remain available. `Linst.noDelCode_effectFork` and
-  `Exec.inv_noDel` in `Blanc/LadderBase.lean` consume this interface without
-  assuming historical-uniform no-deletion behavior.
+- `Evm.step_effect_noStateGas` and `Exec.effect_neutralSchedule` in
+  `Blanc/CommonProofs/Messages.lean` compose neutral per-instruction effects
+  under `stateGas = none` and the EIP-6780 flag, transporting the schedule to
+  children by the exact spawn environment; `Exec.inv_noDel_noStateGas` in
+  `Blanc/LadderBase.lean` consumes them.
 - `Xinst.inv_noDel_noStateGas` and `Ninst.inv_noDel_noStateGas` in
   `Blanc/LadderBase.lean` preserve NoDel through actual instruction steps under
   `sevm.benvStat.rules.stateGas = none`. Their explicit `Xlot.InvNoDel` premise

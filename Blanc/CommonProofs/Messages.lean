@@ -3077,24 +3077,21 @@ theorem Exec.effect {R : Devm → Devm → Prop}
     exact Evm.step_effect hrefl hn hj hl (xl := .some ⟨_, _⟩) (out := .ok _) ihc
       (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
 
-/-- Fork-indexed nonterminal effect: `Ninst.EffectRec` with the covered-fork
-premise for the frame. Consumed by `Exec.effectForkTerminal`. -/
-def Ninst.EffectRecFork (R : Devm → Devm → Prop) (n : Ninst) : Prop :=
-  ∀ {pc sevm pre xl out}, CoveredFork sevm.benvStat.fork → Xlot.Rel R xl →
-    Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out
-
-/-- Terminal effect restricted to a frame whose fork is covered. -/
-def Linst.EffectFork (R : Devm → Devm → Prop) (l : Linst) : Prop :=
-  ∀ {sevm pre out}, CoveredFork sevm.benvStat.fork →
-    Linst.Run sevm pre l out → Execution.Rel R pre out
-
-lemma Evm.step_effectForkTerminal {R : Devm → Devm → Prop}
+/-- One interpreter step preserves any reflexive relation with neutral
+per-instruction effects under `stateGas = none` and the EIP-6780 flag. -/
+lemma Evm.step_effect_noStateGas {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R)
-    (hn : ∀ n, Ninst.EffectRecFork R n)
+    (hn : ∀ (n : Ninst) {pc : Nat} {sevm : Sevm} {pre : Devm} {xl : Xlot}
+      {out : Execution},
+      sevm.benvStat.rules.stateGas = none → Xlot.Rel R xl →
+      Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out)
     (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ l, Linst.EffectFork R l)
+    (hl : ∀ (l : Linst) {sevm : Sevm} {pre : Devm} {out : Execution},
+      sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
+      Linst.Run sevm pre l out → Execution.Rel R pre out)
     {pc : Nat} {sevm : Sevm} {devm : Devm} {xl : Xlot} {out : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hflag : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true)
     (hxl : Xlot.Rel R xl)
     (hrun : Step.Run (Evm.step ⟨pc, sevm, devm⟩) xl out) :
     Execution.Rel R devm out := by
@@ -3105,7 +3102,7 @@ lemma Evm.step_effectForkTerminal {R : Devm → Devm → Prop}
   · cases i with
     | next n =>
       rw [Evm.step_next (n := n) hgi] at hrun
-      exact hn n hfork hxl hrun
+      exact hn n hsg hxl hrun
     | jump j =>
       rw [Evm.step_jump (j := j) hgi] at hrun
       obtain ⟨-, hcase⟩ := Step.run_ofJump hrun
@@ -3115,60 +3112,72 @@ lemma Evm.step_effectForkTerminal {R : Devm → Devm → Prop}
     | last l =>
       rw [Evm.step_last (l := l) hgi] at hrun
       obtain ⟨-, rfl⟩ := hrun
-      exact hl l hfork rfl
+      exact hl l hflag rfl
 
-/-- The fork-indexed traversal: `Exec.effect` where the per-instruction
-`Ninst` effect may assume the frame's fork is covered. Child-frame coverage
-is transported across each spawn by `Evm.step_spawn_child_fork`; tails keep
-the same frame. -/
-theorem Exec.effectForkTerminal {R : Devm → Devm → Prop}
+/-- Per-instruction neutral effects compose into `Execution.Rel` for a
+complete `Exec` derivation: tails keep the same frame, children transport
+the schedule by the exact spawn environment equality. -/
+theorem Exec.effect_neutralSchedule {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
-    (hn : ∀ n, Ninst.EffectRecFork R n)
+    (hn : ∀ (n : Ninst) {pc : Nat} {sevm : Sevm} {pre : Devm} {xl : Xlot}
+      {out : Execution},
+      sevm.benvStat.rules.stateGas = none → Xlot.Rel R xl →
+      Ninst.StepRun pc sevm pre n xl out → Execution.Rel R pre out)
     (hj : ∀ j, Jinst.Effect R j)
-    (hl : ∀ l, Linst.EffectFork R l)
+    (hl : ∀ (l : Linst) {sevm : Sevm} {pre : Devm} {out : Execution},
+      sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
+      Linst.Run sevm pre l out → Execution.Rel R pre out)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (hflag : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true) :
     Execution.Rel R pre out := by
   have hcomp : ∀ {a b : Devm} {o : Execution},
       R a b → Execution.Rel R b o → Execution.Rel R a o := by
     intro a b o hab hbo
     cases o <;> exact htrans hab hbo
   have aux : ∀ {pc sevm pre out}, Exec pc sevm pre out →
-      CoveredFork sevm.benvStat.fork → Execution.Rel R pre out := by
-    intro pc sevm pre out run hfork
-    revert hfork
+      sevm.benvStat.rules.stateGas = none →
+      sevm.benvStat.rules.settle.selfdestructOnlyCreated = true →
+      Execution.Rel R pre out := by
+    intro pc sevm pre out run hsg hflag
+    revert hsg hflag
     induction run with
     | halt hstep =>
-      intro hfork
-      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .none) trivial
-        (by rw [hstep]; exact ⟨rfl, rfl⟩)
+      intro hsg hflag
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
+        trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
     | cont hstep _ ih =>
-      intro hfork
-      refine hcomp (?_ : R _ _) (ih hfork)
-      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .none) (out := .ok _) trivial
-        (by rw [hstep]; exact ⟨rfl, rfl⟩)
+      intro hsg hflag
+      refine hcomp (?_ : R _ _) (ih hsg hflag)
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
+        (out := .ok _) trivial (by rw [hstep]; exact ⟨rfl, rfl⟩)
     | doneErr hstep henter hr =>
-      intro hfork
-      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .none) trivial
-        (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
+      intro hsg hflag
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
+        trivial (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
     | doneOk hstep henter hr _ ih =>
-      intro hfork
-      refine hcomp (?_ : R _ _) (ih hfork)
-      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .none) (out := .ok _) trivial
+      intro hsg hflag
+      refine hcomp (?_ : R _ _) (ih hsg hflag)
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag (xl := .none)
+        (out := .ok _) trivial
         (by rw [hstep]; exact ⟨_, RunFrame.of_done henter, hr.symm⟩)
     | runErr hstep henter _ hr ihc =>
-      intro hfork
-      have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
-      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .some ⟨_, _⟩) (ihc hfork_c)
+      intro hsg hflag
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag
+        (xl := .some ⟨_, _⟩)
+        (ihc (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hsg)
+          (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hflag))
         (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
     | runOk hstep henter _ hr _ ihc ih =>
-      intro hfork
-      have hfork_c := Evm.step_spawn_child_fork hstep henter hfork
-      refine hcomp (?_ : R _ _) (ih hfork)
-      exact Evm.step_effectForkTerminal hrefl hn hj hl hfork (xl := .some ⟨_, _⟩) (out := .ok _) (ihc hfork_c)
+      intro hsg hflag
+      refine hcomp (?_ : R _ _) (ih hsg hflag)
+      exact Evm.step_effect_noStateGas hrefl hn hj hl hsg hflag
+        (xl := .some ⟨_, _⟩) (out := .ok _)
+        (ihc (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hsg)
+          (by rw [Evm.step_spawn_child_benvStat hstep henter]; exact hflag))
         (by rw [hstep]; exact ⟨_, RunFrame.of_run henter, hr.symm⟩)
-  exact aux run hfork
+  exact aux run hsg hflag
 
 lemma Xlot.rel_of_filled {R : Devm → Devm → Prop}
     (hrefl : ReflexiveRel R) (htrans : TransitiveRel R)
