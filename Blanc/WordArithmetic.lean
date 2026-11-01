@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Hinv
 import Jaune.MulDiv
 import Mathlib.Data.Int.ModEq
 import Mathlib.Data.Nat.Bitwise

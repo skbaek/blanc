@@ -1,5 +1,5 @@
 import Blanc.RunPrefix
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Hinv
 
 /-!
 Contract-neutral sorted-tree dispatcher reachability with the loose walk

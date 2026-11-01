@@ -1,6 +1,7 @@
 -- Exact state, event, and return observations for WETH10's ordinary mutators.
 
 import Blanc.Weth10Functional
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

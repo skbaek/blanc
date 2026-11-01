@@ -3,6 +3,7 @@
 import Blanc.ProrataWethVaultArithmeticExec
 import Blanc.ProrataWethVaultViews
 import Blanc.CompiledFixedInvariance
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

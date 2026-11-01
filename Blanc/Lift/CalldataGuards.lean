@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Base
 
 /-! Unsigned word-length ABI guards under actual calldata representability. -/
 namespace Blanc.Lift

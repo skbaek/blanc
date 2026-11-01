@@ -1,5 +1,5 @@
 import Blanc.BeaconDepositAbi
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Balance
 
 /-!
 # Source-level Beacon deposit ABI inversion

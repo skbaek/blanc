@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.MemImage
 
 /-! Bounded-width masks on EVM words. -/
 namespace Blanc.Lift.PackedWord

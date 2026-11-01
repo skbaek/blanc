@@ -16,6 +16,7 @@ import Blanc.ReachDispatchPrefix
 import Blanc.Ladder
 import Blanc.MessageExecution
 import Blanc.FuncMainPrefix
+import Blanc.CommonProofs.DispatchReach
 
 namespace Blanc
 

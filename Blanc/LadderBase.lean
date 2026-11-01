@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Balance
 import Blanc.MachineDataFacts
 
 namespace Blanc

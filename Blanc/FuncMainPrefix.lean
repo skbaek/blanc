@@ -1,4 +1,5 @@
 import Blanc.ReachDispatchPrefix
+import Blanc.CommonProofs.DispatchReach
 
 namespace Blanc
 

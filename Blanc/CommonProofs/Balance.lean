@@ -1932,10 +1932,6 @@ theorem Devm.addAccessedStorageKey_setMach_setMach
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
       (addAccessedStorageKey base target key).setMach mach' := rfl
 
-lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
-    Devm.getStor (devm.setStorVal adr key val) adr = (Devm.getStor devm adr).set key val := by
-  exact congrArg Acct.stor (State.setStorVal_get_self devm.state adr key val)
-
 /-- Persistent storage read-after-write at the same address and key. -/
 theorem Devm.getStorVal_setStorVal_self
     (devm : Devm) (adr : Adr) (key val : B256) :

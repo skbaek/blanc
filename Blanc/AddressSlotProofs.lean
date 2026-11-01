@@ -1,5 +1,5 @@
 import Blanc.AddressSlot
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Balance
 
 /-!
 # Functional facts for Solidity address slots

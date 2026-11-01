@@ -4,6 +4,7 @@
 import Blanc.Composition.ProrataWethVaultRevertSteps
 import Blanc.Composition.ProrataWethVaultPair
 import Blanc.ProrataWethVaultMaxArithmetic
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc.Composition.ProrataWethVault
 

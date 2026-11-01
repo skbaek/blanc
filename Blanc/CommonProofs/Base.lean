@@ -685,6 +685,10 @@ lemma addAccessedStorageKey_getStor {devm : Devm} {adr : Adr} {key : B256} :
   funext a
   exact Devm.WorldEq.getStor (addAccessedStorageKey_worldEq devm adr key) a |>.symm
 
+lemma setStorVal_getStor_self {devm : Devm} {adr : Adr} {key val : B256} :
+    Devm.getStor (devm.setStorVal adr key val) adr = (Devm.getStor devm adr).set key val := by
+  exact congrArg Acct.stor (State.setStorVal_get_self devm.state adr key val)
+
 lemma setStorVal_getStor_ne {devm : Devm} {adr a : Adr}
     {key val : B256} (h : adr ≠ a) :
     Devm.getStor (devm.setStorVal adr key val) a = Devm.getStor devm a := by
