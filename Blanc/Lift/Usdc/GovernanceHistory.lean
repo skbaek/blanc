@@ -248,7 +248,6 @@ theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_co
     (ConfiguredHistoryTraceIn.governance_on_settledRoot history governance member)
     retained target code address found key
 
-
 /-- Target-only compatibility projection of the retained upgrade theorem.
 The stronger result also retains the target code observed at the write. -/
 theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime
@@ -264,55 +263,6 @@ theorem ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime
     (key : write.key = implSlot) : write.value.toAdr ∈ upgradeTargets := by
   exact (ConfiguredHistoryTraceIn.retained_proxyUpgrade_target_of_f2prime_with_code
     history capabilities bal governance member retained target code address found key).1
-
-/-- Conditional raw upgrade classification from the explicit raw governance
-obligation and deployment-before-upgrade ordering. The theorem name is kept
-for compatibility; approved retained-frame F2′ alone does not supply its
-`governance` argument. -/
-theorem ConfiguredHistoryTraceIn.adminUpgradesWithinFrom_of_f2prime
-    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
-    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
-    (governance : UsdcGovernanceF2primeAtImplWrites P history.rawFrames history.rawNodes)
-    (deployedFirst : UpgradeTargetsDeployedFirst P W) :
-    AdminUpgradesWithinFrom P W history.rawFrames history.rawNodes := by
-  intro b₁ m b₂ split w found owner key G hG chain target code sel caller
-  have hsevm := Exec.Deriv.ParentPrefix.sevm_eq chain
-  have hm : m ∈ history.rawNodes := by
-    rw [split]; exact List.mem_append_right _ List.mem_cons_self
-  have selMem : Blanc.Sevm.selector G.sevm ∈ [0x3659cfe6, 0x4f1ef286] := by
-    rcases sel with h | h
-    · rw [dispatchWord_eq_selector] at h
-      rw [h]
-      decide
-    · rw [dispatchWord_eq_selector] at h
-      rw [h]
-      decide
-  have allowed := governance m hm w found owner key G hG chain target code caller selMem
-  obtain ⟨impl, implMem, hImpl⟩ := AllowedAdminAsk.upgradeArg allowed sel
-  -- The written value is `G`'s upgrade argument.
-  have mTarget : m.sevm.currentTarget = P := by rw [hsevm]; exact target
-  have mCode : m.sevm.code = Proxy.code := by rw [hsevm]; exact code
-  obtain ⟨G', -, chain', -, -, cls⟩ :=
-    ConfiguredHistoryTraceIn.proxy_rawWrite history capabilities bal hm mTarget mCode found
-  have value : w.value.toAdr = impl := by
-    rcases cls with adminKey | ⟨-, hv, -, -⟩
-    · exact absurd (adminKey.symm.trans key) (by decide)
-    · rw [hv, ← Exec.Deriv.ParentPrefix.sevm_eq chain', hsevm]
-      exact hImpl
-  obtain ⟨e, he, adr, noWrite⟩ := deployedFirst impl implMem
-  refine ⟨e, he, ?_, by rw [hImpl, adr]⟩
-  obtain ⟨rest, hnodes⟩ := ConfiguredHistoryTraceIn.BoundaryAt.prefix (world.boundary e he)
-  rw [split] at hnodes
-  rcases List.append_eq_append_iff.mp hnodes.symm with ⟨a', hb, -⟩ | ⟨c', hpre, hd⟩
-  · exact ⟨a', hb⟩
-  · cases c' with
-    | nil => exact ⟨[], by rw [hpre, List.append_nil, List.append_nil]⟩
-    | cons x c'' =>
-        have hx : m = x := (List.cons.inj hd).1
-        have mPre : m ∈ e.pre := by
-          rw [hpre, hx]; exact List.mem_append_right _ List.mem_cons_self
-        exact absurd value (noWrite m mPre w found owner key)
 
 end History
 

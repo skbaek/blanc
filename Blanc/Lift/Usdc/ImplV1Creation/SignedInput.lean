@@ -1,3 +1,4 @@
+import Blanc.RlpRoundTrip
 import Blanc.Lift.Usdc.ImplV1Creation.SigningHash
 
 /-! Strict decoding of the unadopted V1 signed creation envelope. -/
@@ -33,52 +34,6 @@ def envelope : TxEnvelope := TxEnvelope.ofLegacyDecode strict_legacy_decode
 theorem payload_length : payload.length = 12352 := by
   simp only [payload, List.length_append, List.length_cons, List.length_nil,
     code_toList_length, rBytes, sBytes, B256.length_toBytes, Nat.reduceAdd]
-
-theorem payload_parse (k : Nat) :
-    Bytes.toBLTs? (k + 9) payload = some fields := by
-  have hlen : Bytes.toNat [0x2f, 0xee] = code.toList.length := by
-    rw [code_toList_length]
-    decide +kernel
-  have hr : rBytes.length = 32 := by decide +kernel
-  have hs : sBytes.length = 32 := by decide +kernel
-  unfold payload fields
-  simp only [List.append_assoc, List.cons_append, List.nil_append]
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_short _ 4 [0xee, 0x6b, 0x28, 0x00] _ (by decide) rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_three _ [0x66, 0x91, 0xb7] _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_empty_bytes _ _
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_long_two _ _ _ _ _ hlen
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_byte _ _ _ rfl
-  apply RlpConcrete.parse_cons
-  · exact RlpConcrete.decode_bytes_32 _ _ _ hr
-  apply RlpConcrete.parse_cons
-  · simpa only [List.append_nil] using RlpConcrete.decode_bytes_32 k sBytes [] hs
-  rw [Bytes.toBLTs?]
-
-theorem envelope_parse : signedBytes.toBLT? = some (.list fields) := by
-  have hlen : Bytes.toNat [0x30, 0x40] = payload.length := by
-    rw [payload_length]
-    decide +kernel
-  have parsed := RlpConcrete.decode_list_long_two 12354 0x30 0x40
-    payload [] fields hlen (payload_parse 12345)
-  simp only [List.append_nil] at parsed
-  unfold signedBytes Bytes.toBLT?
-  simp only [List.cons_append, List.nil_append, List.length_cons, payload_length]
-  rw [parsed]
-
-/-- Full signed bytes pass the actual strict legacy decoder. -/
-theorem signed_decode :
-    signedBytes.toBLT?.bind (fun blt => blt.toExTx.toOption) = some tx := by
-  rw [envelope_parse]
-  rfl
 
 theorem tx_blt : tx.toBLT = .list fields := by
   have hr : trimZero rBytes = rBytes := by decide +kernel
@@ -116,6 +71,16 @@ theorem canonical : tx.toBLT.toBytes = signedBytes := by
       Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq,
       UInt8.reduceOfNat, UInt8.reduceAdd, ↓reduceIte, List.length_cons, List.length_nil,
       List.cons_append, List.nil_append]
+
+theorem envelope_parse : signedBytes.toBLT? = some (.list fields) :=
+  RlpConcrete.toBLT?_of_encoded (tx_blt ▸ canonical)
+    (by unfold signedBytes; rw [List.length_append, payload_length]; decide)
+
+/-- Full signed bytes pass the actual strict legacy decoder. -/
+theorem signed_decode :
+    signedBytes.toBLT?.bind (fun blt => blt.toExTx.toOption) = some tx := by
+  rw [envelope_parse]
+  rfl
 
 theorem transaction_hash_bytes : getTxHash tx = signedBytes.keccak := by
   unfold getTxHash

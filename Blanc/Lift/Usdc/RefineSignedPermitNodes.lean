@@ -80,9 +80,6 @@ macro "rinto " h:ident t:ident : tactic => `(tactic|
    subst eT
    replace $t:ident := AtExec.below.mp $t))
 
-theorem st_state' (b : Devm) (S : List B256) (M : Mem) (G : Nat) : (St b S M G).state = b.state :=
-  rfl
-
 theorem rr_branchTo {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm}
     {b : Devm} {S : List B256} {M : Mem} {G : Nat} {f g : SFunc} {k : Nat} {K : List SFunc}
     {T : Conf} {dd w : B256} (hk : fs[k]? = some g)
@@ -134,7 +131,7 @@ theorem e8_reach {R : Exec.Deriv} {sevm : Sevm} {b : Devm} {S : List B256} {M : 
     obtain ⟨hs, x', f', hf, hx'⟩ := Reach.preExec_state StepIn.toRun permit_execFree permit_silent
       permit_preExec h hT (.inl ⟨permit_after_store, fun _ h => absurd h List.not_mem_nil⟩)
     obtain rfl : x' = .delegatecall := by simpa only [beq_iff_eq] using hx'
-    simp only [st_state'] at hs
+    simp only [St_state] at hs
     refine ⟨⟨(Devm.getStor b sevm.currentTarget).get (nonceSlot x4.toAdr) + 1, ?_⟩, f', hf⟩
     rw [getStor_of_state hs, afterSstore_getStor_self, afterSload_getStor, getStor_of_state hs1,
       keccak_scratch, word_ff20, gsv, getStor_of_state hs1]

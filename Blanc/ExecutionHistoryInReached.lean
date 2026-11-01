@@ -32,59 +32,6 @@ def ConfiguredHistoryTraceIn.coveredOfReached
         forkIn := stateTransitionUsing_covered_of_reached floor coverage
           (prior.toReachUsing.tip_floor start) block.transition block.forkAt }
 
-/-- The original raw forest is unchanged, including failed executions. -/
-theorem ConfiguredHistoryTraceIn.coveredOfReached_rawFrames
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future) (floor : Nat)
-    (coverage : ∀ number timestamp fork, floor ≤ timestamp →
-      cfg.forkAt number timestamp = .ok fork → CoveredFork fork)
-    (start : ∃ tip, checkpoint.blocks.getLast? = some tip ∧ floor ≤ tip.header.timestamp) :
-    (trace.coveredOfReached floor coverage start).rawFrames = trace.rawFrames := by
-  induction trace with
-  | refl => rfl
-  | step prior block ih =>
-    simp only [ConfiguredHistoryTraceIn.coveredOfReached, ConfiguredHistoryTraceIn.rawFrames,
-      ConfiguredBlockTraceIn.rawFrames, ih]
-
-/-- Complete settlement keeps exactly the original retained forest. -/
-theorem ConfiguredHistoryTraceIn.coveredOfReached_settledFrames
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future) (floor : Nat)
-    (coverage : ∀ number timestamp fork, floor ≤ timestamp →
-      cfg.forkAt number timestamp = .ok fork → CoveredFork fork)
-    (start : ∃ tip, checkpoint.blocks.getLast? = some tip ∧ floor ≤ tip.header.timestamp) :
-    (trace.coveredOfReached floor coverage start).settledFrames = trace.settledFrames := by
-  induction trace with
-  | refl => rfl
-  | step prior block ih =>
-    simp only [ConfiguredHistoryTraceIn.coveredOfReached, ConfiguredHistoryTraceIn.settledFrames,
-      ConfiguredBlockTraceIn.settledFrames, ih]
-
-/-- Checked transactions retain their original admission evidence and order. -/
-theorem ConfiguredHistoryTraceIn.coveredOfReached_senderOccurrences
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future) (floor : Nat)
-    (coverage : ∀ number timestamp fork, floor ≤ timestamp →
-      cfg.forkAt number timestamp = .ok fork → CoveredFork fork)
-    (start : ∃ tip, checkpoint.blocks.getLast? = some tip ∧ floor ≤ tip.header.timestamp) :
-    (trace.coveredOfReached floor coverage start).senderOccurrences = trace.senderOccurrences := by
-  induction trace with
-  | refl => rfl
-  | step prior block ih =>
-    simp only [ConfiguredHistoryTraceIn.coveredOfReached,
-      ConfiguredHistoryTraceIn.senderOccurrences, ih]
-
-/-- Re-predication does not filter failed transactions or duplicate queries. -/
-theorem ConfiguredHistoryTraceIn.coveredOfReached_senderQueries
-    {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTraceIn F cfg checkpoint future) (floor : Nat)
-    (coverage : ∀ number timestamp fork, floor ≤ timestamp →
-      cfg.forkAt number timestamp = .ok fork → CoveredFork fork)
-    (start : ∃ tip, checkpoint.blocks.getLast? = some tip ∧ floor ≤ tip.header.timestamp) :
-    (trace.coveredOfReached floor coverage start).senderQueries = trace.senderQueries := by
-  rw [ConfiguredHistoryTraceIn.senderQueries, trace.coveredOfReached_senderOccurrences]
-  rfl
-
 /-- Align actual stage endpoints before comparing the original transaction
 occurrences. The rest of the body carrier need not be identified. -/
 private theorem StagedBodyTrace.senderOccurrences_eq_of_components
@@ -130,14 +77,5 @@ theorem ConfiguredHistoryTraceIn.toModern_senderOccurrences
     rw [ih]
     exact congrArg (fun entries => prior.senderOccurrences ++ entries)
       (block.bodyTrace.toModern_senderOccurrences block.forkIn)
-
-/-- Modern recovery keeps the original complete sender-query population. -/
-theorem ConfiguredHistoryTraceIn.toModern_senderQueries
-    {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTraceIn CoveredFork cfg checkpoint future) :
-    trace.toModern.senderQueries = trace.senderQueries := by
-  change trace.toModern.senderOccurrences.map SenderOccurrence.query =
-    trace.senderOccurrences.map SenderOccurrence.query
-  rw [trace.toModern_senderOccurrences]
 
 end Blanc.ExecutionTrace

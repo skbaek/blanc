@@ -1,4 +1,5 @@
 import Jaune.Machine
+import Jaune.WordFacts
 
 /-!
 # Primitive machine-data facts
@@ -11,8 +12,6 @@ directly; it is deliberately not reexported by CommonProofs or Ladder.
 namespace Blanc
 
 open Jaune
-
-local infix:70 " <? " => B256.ltCheck
 
 /-- Multiplication on EVM words is commutative, including wrapping products. -/
 theorem B256.mul_comm (x y : B256) : x * y = y * x := by
@@ -30,13 +29,6 @@ theorem B256.mul_one (x : B256) : x * (1 : B256) = x := by
 theorem B256.eq_zero_of_toNat {x : B256} (h : x.toNat = 0) : x = 0 :=
   B256.toNat_inj _ _ (by rw [h, B256.toNat_zero])
 
-
-/-- A zero unsigned comparison flag rules out the corresponding strict order. -/
-theorem B256.not_lt_of_ltCheck_eq_zero {x y : B256} (h : (x <? y) = 0) :
-    ¬ x < y := by
-  intro hlt
-  rw [B256.ltCheck, ite_eq_left hlt] at h
-  exact absurd h (by decide +kernel)
 
 /-- Equality of account states preserves a persistent-storage word at any key. -/
 theorem Devm.getStorVal_of_state {s t : Devm} (h : s.state = t.state)

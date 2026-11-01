@@ -24,9 +24,6 @@ namespace Blanc.Lift
 
 open Jaune
 
-theorem St.returnData {b : Devm} {S : List B256} {M : Mem} {G : Nat} :
-    (St b S M G).returnData = b.returnData := rfl
-
 theorem St.memRead_fst {b : Devm} {S : List B256} {M : Mem} {G i sz : Nat} :
     ((St b S M G).memRead i sz).1 = (M.read i sz).1 := rfl
 

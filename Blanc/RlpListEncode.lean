@@ -3,7 +3,8 @@ import Blanc.RlpConcrete
 /-!
 # Concrete RLP list encoding with abstract payloads
 
-Encoder-side companions of `RlpConcrete.decode_list_long_two`:
+Encoder-side companions of the parser round trip `RlpConcrete.toBLT?_toBytes`
+(`Blanc/RlpRoundTrip.lean`):
 
 * `toBytesJoin_append`: the joint encoding of a concatenated item list is the concatenation of
   the joint encodings.

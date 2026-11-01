@@ -172,9 +172,7 @@ private theorem registerAfterSet_freshNonzero_runCompiled
     rw [Devm.getStorVal_setMach, getStorVal_addLog, temporalSstorePost_self]
   · have logs_setMach (d : Devm) (mach : Mach) :
         (d.setMach mach).logs = d.logs := rfl
-    have logs_addLog (d : Devm) (l : Log) :
-        (d.addLog l).logs = d.logs ++ [l] := rfl
-    rw [logs_setMach, logs_addLog, temporalSstorePost_logs,
+    rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs,
       temporalSloadBase_logs]
 
 private theorem finishSetPauser_freshNonzero_runCompiled

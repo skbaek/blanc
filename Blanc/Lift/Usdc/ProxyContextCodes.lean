@@ -410,17 +410,6 @@ theorem world_at_of_knownApart (history : ConfiguredHistoryTraceIn F cfg checkpo
       have family := (ok b₁ m b₂ hb P (.inl rfl) target).context world
       exact absurd key (apartSlot m (sub m hm) target (family.resolve_left hcode) w found)
 
-/-- Compatibility form with the original all-nonproxy slot-separation premise. -/
-theorem world_at (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F)
-    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
-    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes)
-    {b post : List Exec.Deriv} {x : Exec.Deriv} (split : history.rawNodes = b ++ x :: post)
-    (ok : ∀ b₁ m b₂, b = b₁ ++ m :: b₂ → CtxAt P W b₁ m) :
-    x.devm.getCode P = Proxy.code ∧ (∀ e ∈ W, e.Active b → x.devm.getCode e.adr = e.code) ∧
-      ∃ e ∈ W, e.Active b ∧ ((x.devm.getStor P).get implSlot).toAdr = e.adr := by
-  exact world_at_of_knownApart history capabilities world upgrades apartSlot.known split ok
-
 /-- The active library of a running V2_2 implementation holds its actual installed code. -/
 theorem UsdcDeployedWorld.active_library_code
     {Bd : State → List Exec.Deriv → Prop} {P a : Adr} {W : List UsdcDeployedEntry}
@@ -624,26 +613,6 @@ theorem ConfiguredHistoryTraceIn.usdc_contextCodes
     ∀ G ∈ history.rawFrames, G.sevm.currentTarget = P → UsdcContextCode G.sevm.code :=
   (ConfiguredHistoryTraceIn.usdc_nodeCodes history capabilities bal world upgrades
     apartSlot).frames history
-
-/-- **Raw safety at the proxy** from the deployed world and the two implementation-slot
-premises. -/
-theorem usdc_safeRawFrames_of_world (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
-    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
-    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes) :
-    SafeRawFrames P history.rawFrames :=
-  usdc_safeRawFrames history capabilities
-    (ConfiguredHistoryTraceIn.usdc_contextCodes history capabilities bal world upgrades apartSlot)
-
-/-- **The proxy runtime at every raw frame** from the deployed world and the two
-implementation-slot premises. -/
-theorem rawFrame_proxyCode_of_world (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    (capabilities : BodyStageCapabilities F) (bal : ∀ {fork}, F fork → fork.ruleSet.bal = none)
-    (world : UsdcDeployedWorld history.BoundaryAt P W checkpoint.state)
-    (upgrades : UpgradesWithinFrom P W history.rawNodes) (apartSlot : ImplSlotApart P history.rawNodes) :
-    ∀ R ∈ history.rawFrames, R.devm.getCode P = Proxy.code :=
-  rawFrame_proxyCode history capabilities world.proxy
-    (ConfiguredHistoryTraceIn.usdc_contextCodes history capabilities bal world upgrades apartSlot)
 
 end History
 

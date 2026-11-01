@@ -408,10 +408,6 @@ private theorem temporalSstorePost_accessedAddresses (sevm : Sevm)
     (temporalSstorePost sevm base key value).accessedAddresses =
       base.accessedAddresses := rfl
 
-private theorem setMach_getStorVal (devm : Devm) (m : Mach) (a : Adr)
-    (key : B256) : (devm.setMach m).getStorVal a key = devm.getStorVal a key :=
-  rfl
-
 /-! ## The cold and warm charges, resolved at the row-19 world -/
 
 private theorem lastCost_assignment :
@@ -2348,45 +2344,45 @@ private theorem pauseLastWorld_master :
   · -- the reentrancy lock is clear
     exact getTransVal_setTransVal_self _ _ _
   · -- the retired pauser's expiry cell
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal]
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal]
     exact temporalSstorePost_self _ _ _ _
   · -- assignment cleared
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_assignCallee_ne_expiry.symm),
       temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
       seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_assign
   · -- count cleared
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_count_ne_expiry.symm),
       temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
       seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_count
   · -- array popped
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_length_ne_expiry.symm),
       temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
       seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_length
   · -- array slot cleared
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_entryOne_ne_expiry.symm),
       temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
       seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_entry
   · -- index cleared
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_indexCallee_ne_expiry.symm),
       temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
       seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact lastStor_B6_index
   · -- the configured interval is untouched
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_interval_ne_expiry.symm),
       temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
@@ -2396,7 +2392,7 @@ private theorem pauseLastWorld_master :
       pauseWorld_interval_ne_indexCallee.symm
       pauseWorld_interval_ne_length.symm).trans pauseLastStor_interval
   · -- the configured duration is untouched
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_duration_ne_expiry.symm),
       temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
@@ -2407,7 +2403,7 @@ private theorem pauseLastWorld_master :
       pauseWorld_duration_ne_length.symm).trans pauseLastStor_duration
   · -- no other canonical pauser's expiry moves
     intro pauser hcanon hne
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe (lastExpiry_ne_of_ne hcanon hne)),
       temporalSloadBase_getStorVal, Devm.addLog_getStorVal,
@@ -4436,64 +4432,64 @@ private theorem pauseRetainedWorld_master :
       temporalSloadBase_output, Devm.addLog_output, houtF, Devm.addLog_output,
       returnRB6_output]
   · exact getTransVal_setTransVal_self _ _ _
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal]
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal]
     exact temporalSstorePost_self _ _ _ _
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_assignCallee_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_assign
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_count_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_count
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_length_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_length
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_entryOne_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_hole
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_entryTwo_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_tail
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_indexCallee_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_index
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_indexT2_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_moved
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_interval_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_interval
-  · rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+  · rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe pauseWorld_duration_ne_expiry.symm),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,
       Devm.addLog_getStorVal, seam_getStorVal hchain, Devm.addLog_getStorVal]
     exact returnStor_RB6_duration
   · intro pauser hcanon hne
-    rw [Devm.setTransVal_getStorVal, setMach_getStorVal, Devm.addLog_getStorVal,
+    rw [Devm.setTransVal_getStorVal, Devm.getStorVal_setMach, Devm.addLog_getStorVal,
       temporalSstorePost_other _ _ _ _ _ _
         (keyPairNe (returnExpiry_ne_of_ne hcanon hne)),
       temporalSloadBase_getStorVal, temporalSloadBase_getStorVal,

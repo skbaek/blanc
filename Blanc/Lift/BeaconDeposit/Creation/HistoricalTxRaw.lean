@@ -1,4 +1,4 @@
-import Blanc.RlpConcrete
+import Blanc.RlpRoundTrip
 import Blanc.Lift.BeaconDeposit.Creation.Deploy
 
 /-!
@@ -95,47 +95,6 @@ theorem body_length : rawBody.length = 6716 := by
   simp only [rawBody, List.length_append, data_length]
   decide +kernel
 
-/-- Each field parser retains the remaining payload without reducing its data. -/
-theorem body_parse (k : Nat) : Bytes.toBLTs? (k + 9) rawBody = some fields := by
-  have hs := decode_bytes_32 k sBytes [] (by decide +kernel)
-  have ps := parse_cons k 0xa0 (sBytes ++ []) [] (.bytes sBytes) [] hs (by rw [Bytes.toBLTs?])
-  have hr := decode_bytes_32 (k + 1) rBytes (0xa0 :: (sBytes ++ [])) (by decide +kernel)
-  have pr := parse_cons (k + 1) 0xa0 (rBytes ++ (0xa0 :: (sBytes ++ [])))
-    (0xa0 :: (sBytes ++ [])) (.bytes rBytes) [.bytes sBytes] hr ps
-  have hv := decode_byte (k + 2) 0x26
-    (0xa0 :: (rBytes ++ (0xa0 :: (sBytes ++ [])))) (by rfl)
-  have pv := parse_cons (k + 2) 0x26 _ _ (.bytes [0x26]) _ hv pr
-  have hd := decode_bytes_long_two (k + 3) 0x19 0xe9 code.toList
-    (0x26 :: (0xa0 :: (rBytes ++ (0xa0 :: (sBytes ++ [])))))
-    (by rw [data_length]; rfl)
-  have pd := parse_cons (k + 3) 0xb9 _ _ (.bytes code.toList) _ hd pv
-  have he0 := decode_empty_bytes (k + 4)
-    (0xb9 :: 0x19 :: 0xe9 :: (code.toList ++
-      (0x26 :: 0xa0 :: (rBytes ++ (0xa0 :: (sBytes ++ []))))))
-  have pe0 := parse_cons (k + 4) 0x80 _ _ (.bytes []) _ he0 pd
-  have he1 := decode_empty_bytes (k + 5)
-    (0x80 :: 0xb9 :: 0x19 :: 0xe9 :: (code.toList ++
-      (0x26 :: 0xa0 :: (rBytes ++ (0xa0 :: (sBytes ++ []))))))
-  have pe1 := parse_cons (k + 5) 0x80 _ _ (.bytes []) _ he1 pe0
-  have pg := parse_cons (k + 6) 0x83 _ _ (.bytes [0x2f, 0xef, 0xd8]) _
-    (decode_bytes_three (k + 6) [0x2f, 0xef, 0xd8] _ rfl) pe1
-  have pp := parse_cons (k + 7) 0x85 _ _ (.bytes [0x22, 0x39, 0xe1, 0xfe, 0x00]) _
-    (decode_bytes_short (k + 7) 5 [0x22, 0x39, 0xe1, 0xfe, 0x00] _ (by decide) rfl) pg
-  have pn := parse_cons (k + 8) 0x80 _ _ (.bytes []) _
-    (decode_empty_bytes (k + 8) _) pp
-  simpa only [rawBody, rawSuffix, fields, List.cons_append, List.nil_append,
-    List.append_nil, List.append_assoc] using pn
-
-/-- The exact raw candidate passes Jaune's full-consumption RLP parser. -/
-theorem raw_decode : Bytes.toBLT? raw = some (.list fields) := by
-  have hp := decode_list_long_two 6718 0x1a 0x3c rawBody [] fields
-    (by rw [body_length]; rfl) (body_parse 6709)
-  have he : raw = 0xf9 :: 0x1a :: 0x3c :: (rawBody ++ []) := by
-    simp only [raw, rawPrefix, rawBody, List.cons_append, List.nil_append,
-      List.append_nil]
-  unfold Bytes.toBLT?
-  rw [raw_length, he, hp]
-
 theorem fields_encoded_body : BLTs.toBytesJoin fields = rawBody := by
   have hr : (BLT.bytes rBytes).toBytes = 0xa0 :: rBytes := by
     rw [encode_bytes_many _ (by decide +kernel)]
@@ -159,6 +118,10 @@ theorem tx_encoded : tx.toBLT.toBytes = raw := by
     Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv, List.length_cons,
     List.length_nil, UInt8.reduceAdd, raw, rawPrefix, rawBody,
     List.cons_append, List.nil_append]
+
+/-- The exact raw candidate passes Jaune's full-consumption RLP parser. -/
+theorem raw_decode : Bytes.toBLT? raw = some (.list fields) :=
+  toBLT?_of_encoded (tx_toBLT ▸ tx_encoded) (by rw [raw_length]; decide)
 
 /-- Fixed EIP-155 payload, again retaining the existing creation-code owner. -/
 def signingPayload : Bytes :=

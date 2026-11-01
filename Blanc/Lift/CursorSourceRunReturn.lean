@@ -16,20 +16,19 @@ def CursorSourceReturn (code : ByteArray) (c : Cert)
       ⟨continuation.f, continuation.tag.toNat,
         List.replicate continuation.rets .unk ++ continuation.a, continuation.m, tail⟩
 
-/-- A checked actual successful cursor either halts with its own result, or
-returns through its actual checked continuation. -/
-theorem CursorOK.sourceRunReturn {code : ByteArray} {c : Cert}
+/-- `CursorOK.sourceRunReturn` from `rules.stateGas = none` alone. -/
+theorem CursorOK.sourceRunReturnH {code : ByteArray} {c : Cert}
     {F : Exec.Deriv} {κ : Cursor} (checked : Cert.check code c = true)
     (placed : CursorOK code c F κ) {post : Devm} (success : F.exn = .ok post)
-    (fork : CoveredFork F.sevm.benvStat.fork) :
+    (hsg : F.sevm.benvStat.rules.stateGas = none) :
     SFunc.RunP (StepIn F) c.prog F.sevm F.devm κ.f (.halted post) ∨
       CursorSourceReturn code c F κ post := by
   obtain ⟨S, base, stack, frame, continuations⟩ := placed.stack
   have check : checkNodeM code c.entries [] false κ.m F.pc κ.a [] κ.f = true := by
     rw [placed.pc_eq, ← checkNode_eq_checkNodeM]
     exact placed.check
-  have source := node_soundM (Cert.checkedM_of_check checked) F F
-    (fun r member => List.mem_cons_of_mem _ member) post success placed.code_eq fork
+  have source := node_soundM_noStateGas (Cert.checkedM_of_check checked) F F
+    (fun r member => List.mem_cons_of_mem _ member) post success placed.code_eq hsg
     κ.m κ.a κ.f (Cont.tagOf κ.K) S base [] check stack frame (memMatches_nil _ _)
   rcases source with halted | ⟨ret, state, returned, actual, smaller, run, stateStack, arity⟩
   · exact Or.inl halted
@@ -55,5 +54,15 @@ theorem CursorOK.sourceRunReturn {code : ByteArray} {c : Cert}
         · have unknown := frameMatches_unk_length (ρ := Cont.tagOf K) returned
           rw [arity, ← count] at unknown
           exact List.rel_append unknown callerFrame
+
+/-- A checked actual successful cursor either halts with its own result, or
+returns through its actual checked continuation. -/
+theorem CursorOK.sourceRunReturn {code : ByteArray} {c : Cert}
+    {F : Exec.Deriv} {κ : Cursor} (checked : Cert.check code c = true)
+    (placed : CursorOK code c F κ) {post : Devm} (success : F.exn = .ok post)
+    (fork : CoveredFork F.sevm.benvStat.fork) :
+    SFunc.RunP (StepIn F) c.prog F.sevm F.devm κ.f (.halted post) ∨
+      CursorSourceReturn code c F κ post :=
+  CursorOK.sourceRunReturnH checked placed success fork.rules_stateGas_none
 
 end Blanc.Lift
