@@ -58,9 +58,6 @@ theorem proxy_node {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 se
       exact hf'.1
     exact .inr ⟨hx, hs, hw⟩
 
-theorem getCode_St (b : Devm) (S : List B256) (M : Mem) (G : Nat) (a : Adr) :
-    (St b S M G).getCode a = b.getCode a := rfl
-
 theorem getCode_of_state {b b' : Devm} (h : b'.state = b.state) (a : Adr) :
     b'.getCode a = b.getCode a := by
   simp only [Devm.getCode, Devm.getAcct, h]
@@ -93,7 +90,7 @@ theorem proxy_child {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 s
   have hstack : N.devm.stack = w :: I.toB256 :: (0 :: sevm.data.length.toB256 :: 0 :: 0 :: S) := by
     rw [hdev]; rfl
   have nodeCode : N.devm.getCode I = pre.state.getCode I := by
-    rw [hdev, getCode_St, getCode_of_state hstate]; rfl
+    rw [hdev, St_getCode, getCode_of_state hstate]; rfl
   obtain ⟨hT, hA, hC, hV, hS, hK, ii, is, oi, os, s', hrest, hD⟩ :=
     Xinst.step_delegatecall_spawn_exact nodeFork hx hstack
       (by rw [toAdr_toB256, nodeCode]; exact undelegated)

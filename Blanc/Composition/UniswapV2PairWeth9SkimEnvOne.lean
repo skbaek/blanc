@@ -251,9 +251,6 @@ end W1
 
 /-! ## X's transfer keeps reserve1 -/
 
-private theorem St_getCode_eq' (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
-    (St x S M g).getCode a = x.getCode a := rfl
-
 /-- X's query leaves the cached world's Pair storage: the lock word written, nothing else. -/
 theorem skimQuery_world {sevm : Sevm} {b qd0 : Devm} {S : List B256} {M : Mem} {G : Nat}
     {g t ii is oi os : B256} (fork : CoveredFork sevm.benvStat.fork)
@@ -310,7 +307,7 @@ theorem skimFirstCall_reserve1 {K U : WriterKey → Prop} {current : Checkpoint}
         cases raw <;> exact Exec.preserves_getCode childRun
     have preserve := Ninst.codePreserve_effectRec (.exec .staticcall) slot (steps 0)
     have nonempty := fun h => preserve pair h
-    rw [St_getCode_eq'] at nonempty
+    rw [St_getCode] at nonempty
     have nonempty' : ((temporalAccountAccessBase (skimCachedWorld sevm b)
         (skimToken0 sevm b).toAdr).getCode pair).toList ≠ [] := by
       rw [cachedCode]

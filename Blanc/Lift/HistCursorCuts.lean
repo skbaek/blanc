@@ -7,9 +7,11 @@ import Blanc.Lift.CursorJump
 
 The forward cursor cuts of `CursorCuts`, `CursorOccurrence`, `CursorStateCuts` and `CursorJump`
 read their `CoveredFork` premise only through `cursor_stepS`, that is only through
-`rules.stateGas = none`. The `…H` forms here take that fact alone, through
+`rules.stateGas = none`. The `…H` forms take that fact alone, through
 `cursor_stepS_noStateGas`, so they hold on every historical fork (`HistFork.stateGas_none`).
-A modern statement is the `…H` form at `CoveredFork.rules_stateGas_none`.
+Where a modern statement exists, its `…H` form sits beside it (`CursorCuts`, `CursorStateCuts`,
+`CursorOccurrence`) and the modern one is that form at `CoveredFork.rules_stateGas_none`; the
+`…H` cuts here have no modern twin.
 
 Nothing here mentions a contract.
 -/
@@ -17,109 +19,6 @@ Nothing here mentions a contract.
 namespace Blanc.Lift
 
 open Jaune
-
-/-- `cursor_next_forward` from `rules.stateGas = none` alone. -/
-theorem cursor_next_forwardH {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (ok : CursorOK code c F κ) {n : Ninst} {f : SFunc}
-    (tree : κ.f = .next n f) {post : Devm} (success : F.exn = .ok post)
-    (hsg : F.sevm.benvStat.rules.stateGas = none) :
-    ∃ (N : Exec.Deriv) (κ' : Cursor),
-      Exec.Deriv.ParentStep N F ∧
-      N.pc = F.pc + n.size ∧
-      Ninst.RunWith (Cursor.DescOf F) F.sevm F.devm n N.devm ∧
-      SStep c κ κ' ∧
-      ConfStep (Ninst.RunWith (Cursor.DescOf F)) c.prog F.sevm
-        (κ.conf F.devm) (κ'.conf N.devm) ∧
-      CursorOK code c N κ' := by
-  have atInst := ok.ninstAt_of_next tree
-  have crossed : ∃ N : Exec.Deriv, Exec.Deriv.ParentStep N F := by
-    rcases F with ⟨pc, sevm, pre, out, run⟩
-    dsimp only at success
-    subst out
-    cases run with
-    | halt step =>
-      exact (Ninst.step_ne_halt_ok ((Evm.step_next atInst).symm.trans step)).elim
-    | cont step next => exact ⟨_, .cont step next⟩
-    | doneOk step entered resumed next => exact ⟨_, .doneOk step entered resumed next⟩
-    | runOk step entered child resumed next =>
-      exact ⟨_, .runOk step entered child resumed next⟩
-  obtain ⟨N, edge⟩ := crossed
-  obtain ⟨pc, primitive⟩ := Cursor.parentStep_ninstIn edge atInst
-  obtain ⟨κ', synthetic, stateful, placed⟩ := cursor_stepS_noStateGas checked ok edge hsg
-  exact ⟨N, κ', edge, pc, primitive, synthetic, stateful, placed⟩
-
-/-- `cursor_jinst_forward` from `rules.stateGas = none` alone. -/
-theorem cursor_jinst_forwardH {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (ok : CursorOK code c F κ) {j : Jinst}
-    (instruction : Jinst.At F.sevm.code F.pc j)
-    {post : Devm} (success : F.exn = .ok post)
-    (hsg : F.sevm.benvStat.rules.stateGas = none) :
-    ∃ (N : Exec.Deriv) (κ' : Cursor),
-      Exec.Deriv.ParentStep N F ∧
-      Jinst.Run ⟨F.pc, F.sevm, F.devm⟩ j (.ok ⟨N.pc, N.devm⟩) ∧
-      SStep c κ κ' ∧
-      ConfStep (Ninst.RunWith (Cursor.DescOf F)) c.prog F.sevm
-        (κ.conf F.devm) (κ'.conf N.devm) ∧
-      CursorOK code c N κ' := by
-  obtain ⟨nextPc, inter, next, edge, jumped⟩ :=
-    Blanc.Exec.Deriv.ParentStep.exists_of_jinstAt_ok success instruction
-  obtain ⟨κ', synthetic, stateful, placed⟩ := cursor_stepS_noStateGas checked ok edge hsg
-  exact ⟨⟨nextPc, F.sevm, inter, F.exn, next⟩, κ', edge, jumped,
-    synthetic, stateful, placed⟩
-
-/-- `cursor_nexts_line_cont_free_forward` from `rules.stateGas = none` alone. -/
-theorem cursor_nexts_line_cont_free_forwardH {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {F : Exec.Deriv} {κ : Cursor}
-    (ok : CursorOK code c F κ) (ns : List Ninst) (tail : SFunc)
-    (tree : κ.f = ns.foldr SFunc.next tail)
-    {post : Devm} (success : F.exn = .ok post)
-    (hsg : F.sevm.benvStat.rules.stateGas = none) :
-    ∃ (N : Exec.Deriv) (κ' : Cursor),
-      Exec.Deriv.ParentPrefix F N ∧
-      N.pc = F.pc + (ns.map Ninst.size).sum ∧
-      N.sevm = F.sevm ∧ N.exn = F.exn ∧
-      CursorOK code c N κ' ∧ κ'.f = tail ∧
-      Line.Run F.sevm F.devm ns N.devm ∧ κ'.K = κ.K ∧
-      ((∀ n ∈ ns, ∀ x : Xinst, n ≠ .exec x) →
-        Exec.Deriv.ExecFreeUntil F N) := by
-  induction ns generalizing F κ with
-  | nil =>
-    exact ⟨F, κ, .refl F,
-      (by simp only [List.map_nil, List.sum_nil, Nat.add_zero]), rfl, rfl, ok, tree, .nil, rfl,
-      fun _ => .refl F⟩
-  | cons n ns ih =>
-    change κ.f = .next n (ns.foldr SFunc.next tail) at tree
-    obtain ⟨next, cursor, edge, stepPc, primitive, synthetic, stateful, placed⟩ :=
-      cursor_next_forwardH checked ok tree success hsg
-    have nextSevm : next.sevm = F.sevm := Cursor.parentStep_sevm edge
-    have nextOutcome : next.exn = F.exn := by cases edge <;> rfl
-    have nextShape : cursor.f = ns.foldr SFunc.next tail ∧ cursor.K = κ.K := by
-      rcases κ with ⟨f, pc, a, m, K⟩
-      dsimp only at tree
-      subst f
-      cases synthetic
-      exact ⟨rfl, rfl⟩
-    obtain ⟨N, κ', path, pc, sameSevm, sameOutcome, finalOk, finalTree, line, finalK, finalFree⟩ :=
-      ih placed nextShape.1 (nextOutcome.trans success) (nextSevm ▸ hsg)
-    refine ⟨N, κ', .step edge path, ?_, sameSevm.trans nextSevm,
-      sameOutcome.trans nextOutcome, finalOk, finalTree, ?_, finalK.trans nextShape.2, ?_⟩
-    · rw [stepPc] at pc
-      simpa only [List.map_cons, List.sum_cons, Nat.add_assoc] using pc
-    · rw [nextSevm] at line
-      exact .cons primitive.toRun line
-    · intro free
-      have decoded := ok.ninstAt_of_next tree
-      have headFree : ∀ x : Xinst, ¬ Ninst.At F.sevm.code F.pc (.exec x) := by
-        intro x atExec
-        have equal : n = .exec x :=
-          Inst.next.inj (Option.some.inj (decoded.symm.trans atExec))
-        exact free n (List.mem_cons_self) x equal
-      have tailFree : ∀ n ∈ ns, ∀ x : Xinst, n ≠ .exec x :=
-        fun n member x => free n (List.mem_cons_of_mem _ member) x
-      exact (Blanc.Exec.Deriv.ExecFreeUntil.ofStep edge headFree).trans
-        (finalFree tailFree)
 
 /-- A cursor-only literal-prefix cut from `rules.stateGas = none` alone. -/
 theorem cursor_nexts_forwardH {code : ByteArray} {c : Cert}
@@ -169,41 +68,6 @@ theorem cursor_branch_forwardH {code : ByteArray} {c : Cert}
     exact actualPc
   · exact Or.inr ⟨rfl, actualPc⟩
 
-/-- An actual external-call occurrence cut from `rules.stateGas = none` alone. -/
-theorem cursor_next_call_occurrence_forwardH {code : ByteArray} {c : Cert}
-    (checked : Cert.check code c = true) {root F : Exec.Deriv} {κ : Cursor}
-    (reached : Exec.Deriv.ParentPrefix root F) (ok : CursorOK code c F κ)
-    {x : Xinst} {f : SFunc} (tree : κ.f = .next (.exec x) f)
-    {post : Devm} (success : F.exn = .ok post)
-    (hsg : F.sevm.benvStat.rules.stateGas = none) :
-    ∃ (step : CallOccurrenceStep root x) (κ' : Cursor),
-      step.occurrence.node = F ∧
-      step.returned.pc = F.pc + (.exec x : Ninst).size ∧
-      Ninst.RunWith (Cursor.DescOf F) F.sevm F.devm (.exec x) step.returned.devm ∧
-      SStep c κ κ' ∧
-      ConfStep (Ninst.RunWith (Cursor.DescOf F)) c.prog F.sevm
-        (κ.conf F.devm) (κ'.conf step.returned.devm) ∧
-      CursorOK code c step.returned κ' := by
-  have decoded := ok.ninstAt_of_next tree
-  obtain ⟨before, decomposition⟩ :=
-    Exec.Deriv.ParentPrefix.rawNodes_decomposition reached
-  have member : F ∈ Exec.rawNodes root.exc := by
-    rw [decomposition]
-    exact List.mem_append_right before (Exec.mem_rawNodes_self F.exc)
-  obtain ⟨occurrence, sameNode, instruction⟩ :=
-    Exec.exists_ninstOccurrence_of_mem_rawNodes member decoded
-  obtain ⟨returned, κ', edge, pc, primitive, synthetic, stateful, placed⟩ :=
-    cursor_next_forwardH checked ok tree success hsg
-  have result : occurrence.stepResult = .ok returned.devm := by
-    obtain ⟨slot, filled, stepPc, step⟩ := primitive.toRun
-    have actual : Ninst.StepRun occurrence.node.pc occurrence.node.sevm
-        occurrence.node.devm occurrence.instruction slot (.ok returned.devm) := by
-      rw [sameNode, instruction]
-      exact Ninst.stepRun_pc_irrel rfl step
-    exact (occurrence_stepRun_unique occurrence filled actual).2
-  exact ⟨⟨occurrence, returned, instruction, sameNode ▸ reached, sameNode ▸ edge, result⟩,
-    κ', sameNode, pc, primitive, synthetic, stateful, placed⟩
-
 /-! ## State cuts -/
 
 /-- `CursorStateAt.line` from `rules.stateGas = none` alone. -/
@@ -227,35 +91,6 @@ theorem CursorStateAt.lineH {code : ByteArray} {c : Cert} {start : Exec.Deriv}
   exact ⟨⟨N, κ', cut.free.trans (free nonexec), sameSevm.trans cut.sevm_eq,
     sameExn.trans cut.exn_eq, ok, tree, inverse line,
     by rw [sameK]; exact cut.continuations⟩⟩
-
-/-- `CursorStateAt.jump` from `rules.stateGas = none` alone. -/
-theorem CursorStateAt.jumpH {code : ByteArray} {c : Cert} {start : Exec.Deriv}
-    {f tail : SFunc} {b b' : Devm} {S S' : List B256} {M M' : Mem} {K nextK : List SFunc}
-    (cut : CursorStateAt code c start f b S M K)
-    (checked : Cert.check code c = true) {post : Devm}
-    (success : start.exn = .ok post) (hsg : start.sevm.benvStat.rules.stateGas = none)
-    {j : Jinst} (decoded : Jinst.At cut.node.sevm.code cut.node.pc j)
-    (inverse : ∀ {G d f' K'},
-      ConfStep (Ninst.RunWith (Cursor.DescOf cut.node)) c.prog start.sevm
-        ⟨St b S M G, f, K⟩ ⟨d, f', K'⟩ →
-      f' = tail ∧ K' = nextK ∧ ∃ G', d = St b' S' M' G') :
-    Nonempty (CursorStateAt code c start tail b' S' M' nextK) := by
-  obtain ⟨N, κ', edge, _, _, stateful, ok⟩ :=
-    cursor_jinst_forwardH checked cut.placed decoded
-      (cut.exn_eq.trans success) (cut.sevm_eq ▸ hsg)
-  obtain ⟨G, state⟩ := cut.state
-  have step : ConfStep (Ninst.RunWith (Cursor.DescOf cut.node)) c.prog start.sevm
-      ⟨St b S M G, f, K⟩
-      ⟨N.devm, κ'.f, κ'.K.map Cont.f⟩ := by
-    simpa only [Cursor.conf, cut.sevm_eq, state, cut.tree, cut.continuations] using stateful
-  obtain ⟨tree, conts, state⟩ := inverse step
-  have sameExn : N.exn = cut.node.exn := by
-    generalize origin : cut.node = F at edge ⊢
-    cases edge <;> rfl
-  exact ⟨⟨N, κ', cut.free.trans (Exec.Deriv.ExecFreeUntil.ofStep edge
-    (Blanc.Jinst.At.not_exec decoded)), (Cursor.parentStep_sevm edge).trans cut.sevm_eq,
-    sameExn.trans cut.exn_eq,
-    ok, tree, state, conts⟩⟩
 
 section ControlCutsH
 
@@ -322,18 +157,6 @@ theorem CursorStateAt.toSuccH {f g : SFunc} {k : Nat} {target flag : B256}
   | toZero _ pop => exact (nonzero (St.of_pop2 pop).2.1).elim
   | toSucc _ _ _ entry pop =>
       exact ⟨Option.some.inj (entry.symm.trans lookup), rfl, _, (St.of_pop2 pop).2.2⟩
-
-/-- `CursorStateAt.call` from `rules.stateGas = none` alone. -/
-theorem CursorStateAt.callH {f g : SFunc} {k : Nat} {target : B256}
-    (cut : CursorStateAt code c start (.callNext k f) b (target :: S) M K)
-    (checked : Cert.check code c = true) (success : start.exn = .ok post)
-    (hsg : start.sevm.benvStat.rules.stateGas = none) (lookup : c.prog[k]? = some g) :
-    Nonempty (CursorStateAt code c start g b S M (f :: K)) := by
-  apply cut.jumpH checked success hsg (cut.placed.jumpAt_of_callNext cut.tree)
-  intro G d f' K' step
-  cases step with
-  | call _ entry pop =>
-      exact ⟨Option.some.inj (entry.symm.trans lookup), rfl, _, (St.of_pop1 pop).2⟩
 
 /-- The return state cut from `rules.stateGas = none` alone; -/
 theorem CursorStateAt.retH {f : SFunc} {target : B256}

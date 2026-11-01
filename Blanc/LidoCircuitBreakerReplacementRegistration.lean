@@ -1200,8 +1200,6 @@ theorem registerPauser_body_retainedNonzero_runCompiled
     rw [getStorVal_setMach, getStorVal_addLog, temporalSstorePost_self]
   · have logs_setMach (d : Devm) (mach : Mach) :
         (d.setMach mach).logs = d.logs := rfl
-    have logs_addLog (d : Devm) (l : Log) :
-        (d.addLog l).logs = d.logs ++ [l] := rfl
     have hkernelLogs : (foundNonzeroKernelPost sevm base target newPauser
         oldPauser oldCount nextCount).logs = base.logs := by
       simp only [foundNonzeroKernelPost]
@@ -1212,8 +1210,8 @@ theorem registerPauser_body_retainedNonzero_runCompiled
       rw [temporalSstorePost_logs]
       simp only [assignmentBase]
       rw [temporalSloadBase_logs]
-    rw [logs_setMach, logs_addLog, temporalSstorePost_logs,
-      temporalSloadBase_logs, logs_addLog, hkernelLogs, List.append_assoc]
+    rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs,
+      temporalSloadBase_logs, Devm.addLog_logs, hkernelLogs, List.append_assoc]
     rfl
   · intro pauser hpauser hne
     have getStorVal_setMach (d : Devm) (mach : Mach) (a : Adr) (k : B256) :
@@ -1942,8 +1940,6 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
     rw [getStorVal_setMach, getStorVal_addLog, temporalSstorePost_self]
   · have logs_setMach (d : Devm) (mach : Mach) :
         (d.setMach mach).logs = d.logs := rfl
-    have logs_addLog (d : Devm) (l : Log) :
-        (d.addLog l).logs = d.logs ++ [l] := rfl
     have hkernelLogs : (foundNonzeroKernelPost sevm base target newPauser
         oldPauser oldCount nextCount).logs = base.logs := by
       simp only [foundNonzeroKernelPost]
@@ -1954,9 +1950,9 @@ theorem registerPauser_body_oldLastNonzero_runCompiled
       rw [temporalSstorePost_logs]
       simp only [assignmentBase]
       rw [temporalSloadBase_logs]
-    rw [logs_setMach, logs_addLog, temporalSstorePost_logs,
-      temporalSloadBase_logs, logs_addLog, temporalSstorePost_logs,
-      logs_addLog, hkernelLogs]
+    rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs,
+      temporalSloadBase_logs, Devm.addLog_logs, temporalSstorePost_logs,
+      Devm.addLog_logs, hkernelLogs]
     simp only [List.append_assoc]
     rfl
   · have getStorVal_setMach (d : Devm) (mach : Mach) (a : Adr) (k : B256) :

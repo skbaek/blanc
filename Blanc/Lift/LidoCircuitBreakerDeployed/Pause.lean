@@ -41,9 +41,6 @@ theorem ric_forget {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S 
     ∃ b' M', Devm.getStor b' = Devm.getStor b ∧ SFunc.RunCut fs sevm C (St b' S M' G) f r :=
   ⟨b, M, rfl, run⟩
 
-theorem getStor_St_code (b : Devm) (S : List B256) (M : Mem) (G : Nat) (a : Adr) :
-    (St b S M G).getCode a = b.getCode a := rfl
-
 theorem canonicalAddress_adr (a : Adr) : canonicalAddress a.toB256 := by
   rw [← toAdr_toB256 a]
   exact canonical_toAdr_toB256 _
@@ -219,7 +216,7 @@ theorem t07ec_regInv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {t dur t2 ra :
     obtain ⟨tl, hw⟩ := stack_of_pref hw
     have hst : D23.state = _ := silent_entry_state (k := 23) (by decide) rfl r23
     have hinv23 : RegInv (Devm.getStor D23 sevm.currentTarget) := by
-      rw [getStor_eq_of_state_eq hst, getStor_St, afterSload_getStor, afterSload_getStor]
+      rw [getStor_eq_of_state_eq hst, St_getStor, afterSload_getStor, afterSload_getStor]
       exact hinvb1
     rw [St.self (d := D23) hw rfl] at run
     unfold t_0446_c13 at run
@@ -671,8 +668,8 @@ theorem entry13_regInv {A : List Entry → Sevm → Prop}
         ih pc' sevm' pre' post' child hd hat hf (hadm.mono hq) hpw)
       (St_pref _ _ _ _) ?_ trivial (zero_le_B256 _) ?_
     · have hc := congrFun hcode2 sevm.currentTarget
-      rw [getStor_St_code] at hc
-      rw [getStor_St_code, getCode_eq_of_state_eq hst, hc]
+      rw [St_getCode] at hc
+      rw [St_getCode, getCode_eq_of_state_eq hst, hc]
       simpa only [afterSload_getCode, getCode_setTransVal] using hcode
     · show RegInv (Devm.getStor d1 sevm.currentTarget)
       rw [getStor_eq_of_state_eq hst]

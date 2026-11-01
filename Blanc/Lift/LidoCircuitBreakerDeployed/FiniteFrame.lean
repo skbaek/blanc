@@ -133,7 +133,7 @@ theorem registerPauser_nonzero_finite {sevm : Sevm} {pre post : Devm}
       (Mem.empty.write 64 (128 : B256).toBytes) G) (o := .halted post)
   · intro _ _ G' D rbody
     apply registerPauser_body_finite hfork (memOK_empty.write_word 64 128)
-      (by simpa only [getStor_St] using hw) ht ho hn hnew hfind hfaithful hapart
+      (by simpa only [St_getStor] using hw) ht ho hn hnew hfind hfaithful hapart
     exact rbody
   · exact run
 

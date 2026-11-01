@@ -272,9 +272,9 @@ theorem l2_registerPauser_zero_witness {sevm : Sevm} {pre post : Devm}
   apply l2_registerPauser_zero_wrapper hfork (by rfl) (d := St pre
     [selector "registerPauser" [.address, .address]]
     (Mem.empty.write 64 (128 : B256).toBytes) G) (o := .halted post)
-  · simpa only [EntryAt, getStor_St] using hA
+  · simpa only [EntryAt, St_getStor] using hA
   · exact memOK_empty.write_word 64 128
-  · simpa only [getStor_St] using hwit
+  · simpa only [St_getStor] using hwit
   · exact hnp0
   · exact run
 

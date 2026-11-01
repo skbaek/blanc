@@ -33,15 +33,6 @@ open Jaune
 
 namespace ExecutionTrace
 
-/-- A same-frame-or-descendant node of a derivation is one of its raw nodes.
-Inline of the one-line `Exec.mem_rawNodes_of_parentPrefix_root` glue
-(`Blanc/SourceAttainment.lean`): the root is its own raw frame root. -/
-private theorem mem_rawNodes_of_parentPrefix_deriv {R node : Exec.Deriv}
-    (h : Exec.Deriv.ParentPrefix R node) : node ∈ Exec.rawNodes R.exc := by
-  obtain ⟨pc, sevm, pre, out, run⟩ := R
-  exact (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix run node).mpr
-    ⟨_, List.mem_cons_self, h⟩
-
 def RetainedXlot.rawNodes {slot : Xlot} : RetainedXlot slot → List Exec.Deriv
   | .none => []
   | .some run => Exec.rawNodes run
@@ -696,19 +687,6 @@ theorem ConfiguredHistoryTraceIn.safeRawFrames_of_rawNodes {wa : Adr}
     SafeRawFrames wa history.rawFrames := by
   intro R hR node hn ht
   exact h node (history.rawNodes_of_mem_rawFrames R hR node hn) ht
-
-/-- Every raw frame root is a raw node: `ParentPrefix.refl` through the
-bridge, positionally. Values can repeat, so the split is positional. -/
-theorem ConfiguredHistoryTraceIn.exists_rawNodes_split_of_mem_rawFrames
-    {F : Fork → Prop} {cfg : ChainConfig}
-    {checkpoint future : BlockChain}
-    (history : ConfiguredHistoryTraceIn F cfg checkpoint future)
-    {R : Exec.Deriv} (member : R ∈ history.rawFrames) :
-    ∃ before after, history.rawNodes = before ++ R :: after := by
-  have hR : R ∈ history.rawNodes :=
-    history.rawNodes_of_mem_rawFrames R member R
-      (mem_rawNodes_of_parentPrefix_deriv (.refl R))
-  exact List.append_of_mem hR
 
 end ExecutionTrace
 

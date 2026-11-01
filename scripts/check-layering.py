@@ -123,7 +123,7 @@ import tomllib
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "SelectorWords", "MachineDataFacts", "CreationArtifact", "RlpConcrete", "RlpListEncode", "RlpBytesInjective",
+SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "SelectorWords", "MachineDataFacts", "CreationArtifact", "RlpConcrete", "RlpListEncode", "RlpBytesInjective", "RlpRoundTrip",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs", "CommonProofs.Base", "CommonProofs.Frames", "CommonProofs.MemImage", "CommonProofs.Messages", "CommonProofs.Walk", "CommonProofs.Hinv", "CommonProofs.DispatchReach", "CommonProofs.NoDel", "CommonProofs.Balance", "CommonProofs.MemEffects", "Ladder", "Upgrade",
           "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "SlotFootprintRestrict", "SlotFootprintSubset", "OffsetPricing", "ProrataAccounting",
           "ProrataAttackModel", "ProrataAttackPath", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
@@ -446,7 +446,6 @@ SHARED += [
 # In-histories (beacon-deposit-historical-reach-v1): contract-neutral.
 SHARED += [
     "ExecutionHistoryInForkFacts",
-    "ExecutionHistoryInNoDel",
     "ExecutionHistoryInSystemCodeKeep",
     "ExecutionHistoryInWarmth",
     "ExecutionHistoryInCodeAt",

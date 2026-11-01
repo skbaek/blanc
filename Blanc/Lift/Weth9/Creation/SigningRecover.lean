@@ -42,17 +42,4 @@ theorem recoveredSender_of_fields {tx : Tx}
   apply recoveredSender_of_signingHash htype hv hr hs
   exact (signingEncoded htype hnonce hgas hvalue hdata hv).trans (congrArg some hashed)
 
-/-- The explicit creation fields recover the deployer using the proved payload
-hash. Original transaction correspondence remains explicit at the consumer. -/
-theorem recoveredSender_of_creation_fields {tx : Tx}
-    (htype : tx.type = .zero 21000000000 none)
-    (hnonce : tx.nonce = 446) (hgas : tx.gas = 1500000)
-    (hvalue : tx.value = 0) (hdata : tx.data = code.toList) (hv : tx.v = 37)
-    (hr : tx.r.toB256 =
-      0x7ce08af79f7a6c1b8b336f50890a80602c4dcd1e3cc5ca131373f0e8ff15e278)
-    (hs : tx.s.toB256 =
-      0x45e183d91f1e8f31e32d333cf6090990c9bf7d35dd00472cfd2d3a63ca8b1a5)
-    : recoverSender 1 tx = .ok deployer := by
-  exact recoveredSender_of_fields htype hnonce hgas hvalue hdata hv hr hs signingPayload_hash
-
 end Blanc.Lift.Weth9.Creation

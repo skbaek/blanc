@@ -221,6 +221,13 @@ theorem CoveredFork.rules_touchedSweep {s : BenvStat} (h : CoveredFork s.fork) :
     s.rules.settle.touchedSweep = false :=
   h.cases (motive := fun f => (Fork.ruleSet f).settle.touchedSweep = false) rfl rfl rfl rfl
 
+/-- Every covered fork restricts SELFDESTRUCT deletion to accounts created in the same
+transaction (EIP-6780). -/
+theorem CoveredFork.rules_selfdestructOnlyCreated {s : BenvStat} (h : CoveredFork s.fork) :
+    s.rules.settle.selfdestructOnlyCreated = true :=
+  h.cases (motive := fun f => (Fork.ruleSet f).settle.selfdestructOnlyCreated = true)
+    rfl rfl rfl rfl
+
 /-- Every covered fork caps the gas refund at a fifth of the gas used (EIP-3529). -/
 theorem CoveredFork.rules_refundQuotient {s : BenvStat} (h : CoveredFork s.fork) :
     s.rules.settle.refundQuotient = 5 :=

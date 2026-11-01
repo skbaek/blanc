@@ -1032,8 +1032,7 @@ lemma Linst.inv_postcond {wa : Adr} {sevm : Sevm} {pre post : Devm} {l : Linst}
       hfork.cases (motive := fun f => f.ruleSet.settle.eraseEmptyOnModify = true)
         rfl rfl rfl rfl
     have honly : sevm.benvStat.rules.settle.selfdestructOnlyCreated = true :=
-      hfork.cases (motive := fun f => f.ruleSet.settle.selfdestructOnlyCreated = true)
-        rfl rfl rfl rfl
+      hfork.rules_selfdestructOnlyCreated
     dsimp only [Linst.Run, Linst.run, ne_eq, Except.bind_ok, ite_not, Lean.Elab.WF.paramLet,
       Devm.balReadAccount_accessedAddresses, Devm.balReadAccount_getAcct] at h_run
     rw [hsg] at h_run

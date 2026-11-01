@@ -107,32 +107,29 @@ theorem rawFrameDescendants_sub_of_prefix {A F : Exec.Deriv}
   | refl => exact fun r hr => hr
   | step head rest ih => exact fun r hr => desc_sub_of_prec head.prec r (ih r hr)
 
-/-- **The reach between two chain nodes.**  `reach_of_parentPrefix` from any cursor-placed node `F` of a
-frame `R`: a later node `N` of the same frame is reached from `F`'s stateful image, through steps whose
-children lie among `R`'s raw frame roots. -/
-theorem reach_between {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+/-- `reach_between` from `rules.stateGas = none` alone. -/
+theorem reach_betweenH {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {R F N : Exec.Deriv} (hF : Exec.Deriv.ParentPrefix R F) (hp : Exec.Deriv.ParentPrefix F N)
-    (hfork : CoveredFork R.sevm.benvStat.fork) {κ₀ : Cursor} (ok : CursorOK code c F κ₀) :
+    (hsg : R.sevm.benvStat.rules.stateGas = none) {κ₀ : Cursor} (ok : CursorOK code c F κ₀) :
     ∃ κ, Reach (StepIn R) c.prog R.sevm (κ₀.conf F.devm) (κ.conf N.devm) ∧
       CursorOK code c N κ := by
   have hsevm : F.sevm = R.sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq hF
   have hdesc : ∀ r ∈ Exec.rawFrameDescendants F.exc, r ∈ Exec.rawFrameRoots R.exc :=
     fun r hr => List.mem_cons_of_mem _ (rawFrameDescendants_sub_of_prefix hF r hr)
   suffices h : ∀ {F n : Exec.Deriv}, Exec.Deriv.ParentPrefix F n →
-      ∀ κ₀, CursorOK code c F κ₀ → CoveredFork F.sevm.benvStat.fork → F.sevm = R.sevm →
+      ∀ κ₀, CursorOK code c F κ₀ → F.sevm = R.sevm →
       (∀ r ∈ Exec.rawFrameDescendants F.exc, r ∈ Exec.rawFrameRoots R.exc) →
       ∃ κ, Reach (StepIn R) c.prog R.sevm (κ₀.conf F.devm) (κ.conf n.devm) ∧
         CursorOK code c n κ from
-    h hp κ₀ ok (hsevm ▸ hfork) hsevm hdesc
+    h hp κ₀ ok hsevm hdesc
   intro F n hp
   induction hp with
-  | refl root => exact fun κ₀ ok _ _ _ => ⟨κ₀, .refl, ok⟩
+  | refl root => exact fun κ₀ ok _ _ => ⟨κ₀, .refl, ok⟩
   | step head _ ih =>
-    intro κ₀ ok hfork hsevm hdesc
-    obtain ⟨κ₁, -, hstep, ok₁⟩ := cursor_stepS hc ok head hfork
+    intro κ₀ ok hsevm hdesc
+    obtain ⟨κ₁, -, hstep, ok₁⟩ := cursor_stepS_noStateGas hc ok head (hsevm ▸ hsg)
     have hsevm₁ := Cursor.parentStep_sevm head
-    obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁ (by rw [hsevm₁]; exact hfork)
-      (hsevm₁.trans hsevm)
+    obtain ⟨κ, hreach, ok'⟩ := ih κ₁ ok₁ (hsevm₁.trans hsevm)
       (fun r hr => hdesc r (by
         cases head with
         | cont => simpa only [Exec.rawFrameDescendants] using hr
@@ -144,6 +141,28 @@ theorem reach_between {code : ByteArray} {c : Cert} (hc : Cert.check code c = tr
     rw [← hsevm]
     exact hstep.mono fun h => h.mono fun _ _ _ _ _ he r hr => hdesc r (he r hr)
 
+/-- **The reach between two chain nodes.**  `reach_of_parentPrefix` from any cursor-placed node `F` of a
+frame `R`: a later node `N` of the same frame is reached from `F`'s stateful image, through steps whose
+children lie among `R`'s raw frame roots. -/
+theorem reach_between {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    {R F N : Exec.Deriv} (hF : Exec.Deriv.ParentPrefix R F) (hp : Exec.Deriv.ParentPrefix F N)
+    (hfork : CoveredFork R.sevm.benvStat.fork) {κ₀ : Cursor} (ok : CursorOK code c F κ₀) :
+    ∃ κ, Reach (StepIn R) c.prog R.sevm (κ₀.conf F.devm) (κ.conf N.devm) ∧
+      CursorOK code c N κ :=
+  reach_betweenH hc hF hp hfork.rules_stateGas_none ok
+
+/-- `noExec_after_of_cursor` from `rules.stateGas = none` alone. -/
+theorem noExec_after_of_cursorH {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
+    {R F N : Exec.Deriv} (hF : Exec.Deriv.ParentPrefix R F) (hp : Exec.Deriv.ParentPrefix F N)
+    (hsg : R.sevm.benvStat.rules.stateGas = none) {κ : Cursor} (ok : CursorOK code c F κ)
+    {E : List Nat} (hE : ExecFreeSet c.prog E = true) (hf : κ.f.execFreeIn E = true)
+    (hK : ∀ s ∈ κ.K.map Cont.f, s.execFreeIn E = true) :
+    ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) := by
+  intro x hat
+  obtain ⟨κ', reach, okN⟩ := reach_betweenH hc hF hp hsg ok
+  obtain ⟨g, hg, -⟩ := okN.tree_of_exec hat
+  exact Reach.false_of_execFree hE reach ⟨x, g, hg⟩ hf hK
+
 /-- **No later external instruction.**  From a cursor-placed node of a certified frame whose remaining
 tree, and the trees pending below it, make no external call within a closed exec-free set, no later
 node of the frame decodes an external instruction. -/
@@ -152,11 +171,8 @@ theorem noExec_after_of_cursor {code : ByteArray} {c : Cert} (hc : Cert.check co
     (hfork : CoveredFork R.sevm.benvStat.fork) {κ : Cursor} (ok : CursorOK code c F κ)
     {E : List Nat} (hE : ExecFreeSet c.prog E = true) (hf : κ.f.execFreeIn E = true)
     (hK : ∀ s ∈ κ.K.map Cont.f, s.execFreeIn E = true) :
-    ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) := by
-  intro x hat
-  obtain ⟨κ', reach, okN⟩ := reach_between hc hF hp hfork ok
-  obtain ⟨g, hg, -⟩ := okN.tree_of_exec hat
-  exact Reach.false_of_execFree hE reach ⟨x, g, hg⟩ hf hK
+    ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x) :=
+  noExec_after_of_cursorH hc hF hp hfork.rules_stateGas_none ok hE hf hK
 
 /-! ## The halt of a frame -/
 

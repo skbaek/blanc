@@ -1013,11 +1013,9 @@ theorem setPauserKernel_foundZeroRetainedLast_runCompiled
     exact hkernel
   · have logs_setMach (d : Devm) (mach : Mach) :
         (d.setMach mach).logs = d.logs := rfl
-    have logs_addLog (d : Devm) (log : Log) :
-        (d.addLog log).logs = d.logs ++ [log] := rfl
     dsimp only [post, countPost, countBase, assignPost,
       assignmentPost, assignmentBase, eventLog]
-    rw [logs_setMach, logs_addLog]
+    rw [logs_setMach, Devm.addLog_logs]
     simp only [indexClearPost, lengthWritePost,
       entryClearPost, indexWritePost, entryWritePost,
       temporalSstorePost_logs, temporalSloadBase_logs]
@@ -2430,11 +2428,9 @@ theorem setPauserKernel_foundZeroRetainedSwapPop_runCompiled
     exact hkernel
   · have logs_setMach (d : Devm) (mach : Mach) :
         (d.setMach mach).logs = d.logs := rfl
-    have logs_addLog (d : Devm) (log : Log) :
-        (d.addLog log).logs = d.logs ++ [log] := rfl
     dsimp only [post, countPost, countBase, assignPost,
       assignmentPost, assignmentBase, eventLog]
-    rw [logs_setMach, logs_addLog]
+    rw [logs_setMach, Devm.addLog_logs]
     simp only [indexClearPost, lengthWritePost,
       swapPopClearPost, indexWritePost, entryWritePost,
       temporalSstorePost_logs, temporalSloadBase_logs]
@@ -3700,11 +3696,9 @@ theorem setPauserKernel_foundZeroOldLast_runCompiled
     exact hkernel
   · have logs_setMach (d : Devm) (mach : Mach) :
         (d.setMach mach).logs = d.logs := rfl
-    have logs_addLog (d : Devm) (log : Log) :
-        (d.addLog log).logs = d.logs ++ [log] := rfl
     dsimp only [post, removePost, countPost, countBase, assignPost,
       assignmentPost, assignmentBase, eventLog, heartbeatLog]
-    rw [logs_setMach, logs_addLog, temporalSstorePost_logs, logs_addLog]
+    rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs, Devm.addLog_logs]
     simp only [indexClearPost, lengthWritePost,
       entryClearPost, indexWritePost, entryWritePost,
       temporalSstorePost_logs, temporalSloadBase_logs, List.append_assoc,
@@ -5044,11 +5038,9 @@ theorem setPauserKernel_foundZeroOldLastSwapPop_runCompiled
     exact hkernel
   · have logs_setMach (d : Devm) (mach : Mach) :
         (d.setMach mach).logs = d.logs := rfl
-    have logs_addLog (d : Devm) (log : Log) :
-        (d.addLog log).logs = d.logs ++ [log] := rfl
     dsimp only [post, removePost, countPost, countBase, assignPost,
       assignmentPost, assignmentBase, eventLog, heartbeatLog]
-    rw [logs_setMach, logs_addLog, temporalSstorePost_logs, logs_addLog]
+    rw [logs_setMach, Devm.addLog_logs, temporalSstorePost_logs, Devm.addLog_logs]
     simp only [indexClearPost, lengthWritePost,
       swapPopClearPost, indexWritePost, entryWritePost,
       temporalSstorePost_logs, temporalSloadBase_logs, List.append_assoc,
