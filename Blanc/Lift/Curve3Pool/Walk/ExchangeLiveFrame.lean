@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLivePush
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLiveBal
+import Blanc.Lift.WalkKit
 
 /-!
 # `exchange`, forward: the whole frame
@@ -160,13 +161,7 @@ theorem rx_ex_test2_ne {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {Q : Outcome
     (h : exI sevm ≠ 2)
     (k : SFunc.RunEx cert.prog sevm (St b [] M G) t_26c9_c13 Q) :
     SFunc.RunEx cert.prog sevm (St b [] M (G + 29)) t_2666_c12 Q := by
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 7
   xr (rx_branchTo_succ (exFeeTest_ne h) (g := t_26c9_c13) rfl ·)
   exact k
 
@@ -175,13 +170,7 @@ theorem rx_ex_test2_eq {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {Q : Outcome
     (h : exI sevm = 2)
     (k : SFunc.RunEx cert.prog sevm (St b [] M G) t_2672_c12 Q) :
     SFunc.RunEx cert.prog sevm (St b [] M (G + 29)) t_2666_c12 Q := by
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 7
   xr (rx_branchTo_zero' (exFeeTest_eq h) ·)
   exact k
 

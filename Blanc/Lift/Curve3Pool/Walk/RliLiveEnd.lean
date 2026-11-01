@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.RliLivePush
+import Blanc.Lift.WalkKit
 
 /-!
 # `remove_liquidity_imbalance`, forward: the event and `STOP`
@@ -31,20 +32,11 @@ theorem rx_rli_end920E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) rliEnd Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 3432 := ⟨G - 3432, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 6 using hrs
   refine rxe_mstore (o := 0xb80) (c := 69) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0x920 0xb80 32 = 0xba0 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstore (o := 0xba0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xba0 0xba0 32 = 0xbc0 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstore (o := 0xbc0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xbc0 0xbc0 32 = 0xbe0 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x5a0) (v := f0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hf0) (by hrs) ·)
@@ -66,29 +58,13 @@ theorem rx_rli_end920E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
   xr (rxm_mloadW (o := 0x140) (v := T) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hT) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x780) (v := Bw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hBw) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rx_branch_succ (ex_geGuard hTX) ·)
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_sub (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 9 using hrs
   refine rxe_mstore (o := 0xc60) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xc60 0xc60 32 = 0xc80 by decide] at hsz
-  xr (rx_caller (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_log2 (c := 3173) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
   have hL2 := (hL.addLogE _).sstoreE hb2
   refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩
@@ -123,20 +99,11 @@ theorem rx_rli_endB60E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) rliEnd Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 3372 := ⟨G - 3372, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 6 using hrs
   refine rxe_mstore (o := 0xb80) (c := 9) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xb60 0xb80 32 = 0xba0 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstore (o := 0xba0) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xba0 0xba0 32 = 0xbc0 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_calldataload (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstore (o := 0xbc0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xbc0 0xbc0 32 = 0xbe0 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x5a0) (v := f0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hf0) (by hrs) ·)
@@ -158,29 +125,13 @@ theorem rx_rli_endB60E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
   xr (rxm_mloadW (o := 0x140) (v := T) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hT) (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x780) (v := Bw) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hBw) (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_lt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rx_branch_succ (ex_geGuard hTX) ·)
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_sub (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 9 using hrs
   refine rxe_mstore (o := 0xc60) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz M; intro M hR hW hsz; rw [show memExtSize 0xc60 0xc60 32 = 0xc80 by decide] at hsz
-  xr (rx_caller (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rx_log2 (c := 3173) hstatic (by rw [St.extCost_eq hsz]; decide) rfl (read_covered_len hsz (by decide) (by decide)) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
   have hL2 := (hL.addLogE _).sstoreE hb2
   refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩

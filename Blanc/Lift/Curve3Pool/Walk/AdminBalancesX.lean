@@ -2,6 +2,7 @@ import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Curve3Pool.Walk.AdminBalances
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLoop
 import Blanc.Lift.Curve3Pool.Spec
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `admin_balances`, on the actual derivation
@@ -96,30 +97,16 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
       (vyImg [] (Sevm.dataWord sevm 0)) :=
     vyMem_reads Mem.wf_empty Mem.reads_empty _
   have hW : Mem.Wf (vyMem Mem.empty (Sevm.dataWord sevm 0)) := vyMem_wf Mem.wf_empty _
-  xs 0x4c94 (.reg .callvalue) ri_callvalue
-  xs 0x4c95 (.reg .iszero) ri_iszero
-  xs 0x4c98 (.push [0x4c, 0x9d] (by decide)) ri_push
+  xa 3
   xji 0x4c99 0x4c9d hw
   · xdead
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
-  xjd 0x4c9e
-  xs 0x4ca0 (.push [0x20] (by decide)) ri_push
-  xs 0x4ca3 (.push [0x01, 0xc0] (by decide)) ri_push
-  xs 0x4ca5 (.push [0x24] (by decide)) ri_push
-  xs 0x4caa (.push [0x70, 0xa0, 0x82, 0x31] (by decide)) ri_push
-  xs 0x4cad (.push [0x01, 0x40] (by decide)) ri_push
+  xa 6
   xmo 0x4cae (.reg .mstore) (ri_mstore_imgAt (o := 0x140) rfl)
-  xs 0x4caf (.reg .address) ri_address
-  xs 0x4cb2 (.push [0x01, 0x60] (by decide)) ri_push
+  xa 2
   xmo 0x4cb3 (.reg .mstore) (ri_mstore_imgAt (o := 0x160) rfl)
-  xs 0x4cb6 (.push [0x01, 0x5c] (by decide)) ri_push
-  xs 0x4cb8 (.push [0x04] (by decide)) ri_push
-  xs 0x4cb9 (.reg .calldataload) ri_calldataload
-  xs 0x4cbb (.push [0x03] (by decide)) ri_push
-  xs 0x4cbc (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x4cbd (.reg .lt) ri_lt
-  xs 0x4cc0 (.push [0x4c, 0xc5] (by decide)) ri_push
+  xa 7
   xji 0x4cc1 0x4cc5 hw
   · xdead
   have hlt : Sevm.dataWord sevm (Bytes.toB256 [4]) < Bytes.toB256 [3] := by
@@ -136,12 +123,9 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
     rw [hk_def, B256.toNat_toB256_of_lt (by omega)]
   have hslot : coinsBase + Sevm.dataWord sevm (Bytes.toB256 [4]) = coinSlot k := by
     rw [hargv]; rfl
-  xjd 0x4cc6
-  xs 0x4cc8 (.push [0x00] (by decide)) ri_push
-  xs 0x4cca (.push [0xc0] (by decide)) ri_push
+  xa 3
   xmo 0x4ccb (.reg .mstore) (ri_mstore_imgAt (o := 0xc0) rfl)
-  xs 0x4ccd (.push [0x20] (by decide)) ri_push
-  xs 0x4ccf (.push [0xc0] (by decide)) ri_push
+  xa 2
   xmo 0x4cd0 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_zero] at h
   xs 0x4cd1 (.reg .add) ri_add
@@ -160,11 +144,7 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   · exact absurd hpre (hcoin k.val k.isLt)
   clear hk hw
   rw [adminBal_input] at hdata
-  xjd 0x4cdd
-  xs 0x4cdf (.push [0x1f] (by decide)) ri_push
-  xs 0x4ce0 (.reg .returndatasize) ri_returndatasize
-  xs 0x4ce1 (.reg .gt) ri_gt
-  xs 0x4ce4 (.push [0x4c, 0xe9] (by decide)) ri_push
+  xa 5
   xji 0x4ce5 0x4ce9 hw
   · xdead
   have hlen32 : 32 ≤ out.length := by
@@ -173,29 +153,18 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at hgt
     omega
   clear hw
-  xjd 0x4cea
-  xs 0x4cec (.push [0x00] (by decide)) ri_push
-  xs 0x4ced (.reg .pop) ri_pop
-  xs 0x4cf0 (.push [0x01, 0xc0] (by decide)) ri_push
+  xa 4
   xmo 0x4cf1 (.reg .mload) (ri_mload_imgAt (o := 0x1c0) rfl)
   have hlen : (out.take 32).length = 32 := by rw [List.length_take]; omega
   rw [adminBal_read_ans _ _ hlen] at h
   clear hlen
-  xs 0x4cf3 (.push [0x04] (by decide)) ri_push
-  xs 0x4cf4 (.reg .calldataload) ri_calldataload
-  xs 0x4cf6 (.push [0x03] (by decide)) ri_push
-  xs 0x4cf7 (.reg (.dup 1)) (ri_dup (by rfl))
-  xs 0x4cf8 (.reg .lt) ri_lt
-  xs 0x4cfb (.push [0x4d, 0x00] (by decide)) ri_push
+  xa 6
   xji 0x4cfc 0x4d00 hw
   · exact absurd hw (ltCheck_ne_zero_of_lt hlt)
   clear hw
-  xjd 0x4d01
-  xs 0x4d03 (.push [0x01] (by decide)) ri_push
-  xs 0x4d05 (.push [0xc0] (by decide)) ri_push
+  xa 3
   xmo 0x4d06 (.reg .mstore) (ri_mstore_imgAt (o := 0xc0) rfl)
-  xs 0x4d08 (.push [0x20] (by decide)) ri_push
-  xs 0x4d0a (.push [0xc0] (by decide)) ri_push
+  xa 2
   xmo 0x4d0b (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one] at h
   xs 0x4d0c (.reg .add) ri_add
@@ -204,11 +173,7 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   rw [hslot2] at h
   xw 0x4d0d (.reg .sload) ri_sload
   rw [getStorVal_eq, hstor1, afterSload_getStor] at h
-  xs 0x4d0e (.reg (.dup 0)) (ri_dup (by rfl))
-  xs 0x4d0f (.reg (.dup 2)) (ri_dup (by rfl))
-  xs 0x4d10 (.reg .lt) ri_lt
-  xs 0x4d11 (.reg .iszero) ri_iszero
-  xs 0x4d14 (.push [0x4d, 0x19] (by decide)) ri_push
+  xa 5
   xji 0x4d15 0x4d19 hw
   · xdead
   have hle : ((b.getStor sevm.currentTarget).get (balanceSlot k)).toNat ≤
@@ -216,18 +181,9 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
     have hne := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     exact B256.le_iff_toNat_le_toNat.mp (not_lt.mp hne)
   clear hw
-  xjd 0x4d1a
-  xs 0x4d1b (.reg (.dup 0)) (ri_dup (by rfl))
-  xs 0x4d1c (.reg (.dup 2)) (ri_dup (by rfl))
-  xs 0x4d1d (.reg .sub) ri_sub
-  xs 0x4d1e (.reg (.swap 0)) (ri_swap (by rfl))
-  xs 0x4d1f (.reg .pop) ri_pop
-  xs 0x4d20 (.reg (.swap 0)) (ri_swap (by rfl))
-  xs 0x4d21 (.reg .pop) ri_pop
-  xs 0x4d23 (.push [0x00] (by decide)) ri_push
+  xa 9
   xmo 0x4d24 (.reg .mstore) (ri_mstore_imgAt (o := 0) rfl)
-  xs 0x4d26 (.push [0x20] (by decide)) ri_push
-  xs 0x4d28 (.push [0x00] (by decide)) ri_push
+  xa 2
   obtain ⟨hrun, hL1⟩ := xa_halt (l := .return_) (atL hcode (by kernel_rfl)) h
   simp only [Linst.Run, Linst.run] at hrun
   rw [Devm.popToNat_eq_ok (devm := _) rfl] at hrun

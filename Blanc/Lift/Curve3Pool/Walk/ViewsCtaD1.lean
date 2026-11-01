@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.ViewsCtaLoop
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-! # `calc_token_amount`: `D1 = get_D_mem(new_balances, amp)` inside the frame save -/
 
@@ -31,31 +32,19 @@ theorem xa_cta_d1 (hc : Cert.CheckedM code cert mems true)
   have hV := hV1
   clear hV1
   vnorm
-  xs 0xd02 (.push [0x03, 0x80] (by decide)) ri_push  -- cff PUSH2 0x0380
-  xs 0xd05 (.push [0x01, 0x40] (by decide)) ri_push  -- d02 PUSH2 0x0140
-  xs 0xd06 (.reg (.dup 0)) (ri_dup (by rfl))  -- d05 DUP1
+  xa 3
   xl 0xd07 0x140  -- d06 MLOAD
   xs 0xd08 (.reg (.dup 2)) (ri_dup (by rfl))  -- d07 DUP3
   xsw 0xd09 0x380  -- d08 MSTORE
-  xs 0xd0a (.reg (.dup 0)) (ri_dup (by rfl))  -- d09 DUP1
-  xs 0xd0c (.push [0x20] (by decide)) ri_push  -- d0a PUSH1 0x20
-  xs 0xd0d (.reg .add) ri_add  -- d0c ADD
+  xa 3
   xl 0xd0e 0x160  -- d0d MLOAD
-  xs 0xd0f (.reg (.dup 2)) (ri_dup (by rfl))  -- d0e DUP3
-  xs 0xd11 (.push [0x20] (by decide)) ri_push  -- d0f PUSH1 0x20
-  xs 0xd12 (.reg .add) ri_add  -- d11 ADD
+  xa 3
   xsw 0xd13 0x3a0  -- d12 MSTORE
-  xs 0xd14 (.reg (.dup 0)) (ri_dup (by rfl))  -- d13 DUP1
-  xs 0xd16 (.push [0x40] (by decide)) ri_push  -- d14 PUSH1 0x40
-  xs 0xd17 (.reg .add) ri_add  -- d16 ADD
+  xa 3
   xl 0xd18 0x180  -- d17 MLOAD
-  xs 0xd19 (.reg (.dup 2)) (ri_dup (by rfl))  -- d18 DUP3
-  xs 0xd1b (.push [0x40] (by decide)) ri_push  -- d19 PUSH1 0x40
-  xs 0xd1c (.reg .add) ri_add  -- d1b ADD
+  xa 3
   xsw 0xd1d 0x3c0  -- d1c MSTORE
-  xs 0xd1e (.reg .pop) ri_pop  -- d1d POP
-  xs 0xd1f (.reg .pop) ri_pop  -- d1e POP
-  xs 0xd22 (.push [0x01, 0xa0] (by decide)) ri_push  -- d1f PUSH2 0x01a0
+  xa 3
   xl 0xd23 0x1a0  -- d22 MLOAD
   xs 0xd26 (.push [0x03, 0xe0] (by decide)) ri_push  -- d23 PUSH2 0x03e0
   xsw 0xd27 0x3e0  -- d26 MSTORE
@@ -69,19 +58,16 @@ theorem xa_cta_d1 (hc : Cert.CheckedM code cert mems true)
   xl 0xd37 0x380  -- d36 MLOAD
   xs 0xd39 (.push [0x06] (by decide)) ri_push  -- d37 PUSH1 0x06
   cvpc 0xd3a  -- d39 PC
-  xs 0xd3b (.reg .add) ri_add  -- d3a ADD
-  xs 0xd3e (.push [0x07, 0xb7] (by decide)) ri_push  -- d3b PUSH2 0x07b7
+  xa 2
   xjmp 0x7b7  -- d3e JUMP
   obtain ⟨D1, M3, _, h, hD1, hV1⟩ := xa_vGetDMem hc hcode hfork hV h
   clear hV
   have hV := hV1
   clear hV1
   vnorm
-  xjd 0xd40  -- d3f JUMPDEST
-  xs 0xd43 (.push [0x04, 0x40] (by decide)) ri_push  -- d40 PUSH2 0x0440
+  xa 2
   xsw 0xd44 0x440  -- d43 MSTORE
-  xs 0xd47 (.push [0x03, 0x40] (by decide)) ri_push  -- d44 PUSH2 0x0340
-  xs 0xd4a (.push [0x03, 0x60] (by decide)) ri_push  -- d47 PUSH2 0x0360
+  xa 2
   xsw 0xd4b 0x360  -- d4a MSTORE
   -- the restore loop over [0x140, 0x360)
   rw [← List.append_nil (frameWords _ _ _).reverse] at h

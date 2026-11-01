@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLivePre
+import Blanc.Lift.WalkKit
 
 /-!
 # `exchange`, forward: `_xp_mem`, the frame restore, `dx`, `input_coin`, up to the fee test
@@ -87,8 +88,7 @@ theorem rx_ex_mid_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {g R : Nat} {Q : 
   have hsz := hsz'
   clear hW' hsz'
   obtain ⟨h1, rfl⟩ : ∃ g, g1 = g + 253 := ⟨g1 - 253, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreW (o := 0x320) (c := 12) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x2e0 0x320 32 = 0x340 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreW (o := 0x340) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x340 0x340 32 = 0x360 by decide] at hsz
@@ -112,47 +112,26 @@ theorem rx_ex_mid_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {g R : Nat} {Q : 
   refine rxe_mstoreW (o := 0x160) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x380 0x160 32 = 0x380 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreW (o := 0x140) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x380 0x140 32 = 0x380 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x320) hR hsz rfl (by decide) (by hr) ·); try wsimp
   xr (rx_dup rfl (by hr) ·)
   refine rxe_mstoreW (o := 0x200) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x380 0x200 32 = 0x380 by decide] at hsz
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0x340) hR hsz rfl (by decide) (by hr) ·); try wsimp
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 3
   refine rxe_mstoreW (o := 0x220) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x380 0x220 32 = 0x380 by decide] at hsz
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 3
   xr (rxm_mload (o := 0x360) hR hsz rfl (by decide) (by hr) ·); try wsimp
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 3
   refine rxe_mstoreW (o := 0x240) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x380 0x240 32 = 0x380 by decide] at hsz
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 5
   refine rxe_mstoreW (o := 0x380) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x380 0x380 32 = 0x3a0 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   xr (rx_branch_succ (ex_lt3_ne hi) ·)
   -- tree t_24bc_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreW (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x3a0 0xc0 32 = 0x3a0 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hr) (by decide) ·)
   rw [keccak_zero]
   xr (rx_add (by hr) ·)
@@ -160,12 +139,7 @@ theorem rx_ex_mid_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {g R : Nat} {Q : 
   obtain ⟨h3, rfl⟩ : ∃ g, h2 = g + 27 := ⟨h2 - 27, by omega⟩
   xr (rx_push rfl (by hr) ·)
   refine rxe_mstoreW (o := 0x3a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x3a0 0x3a0 32 = 0x3c0 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 6
   have hF : ExFrame (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
       (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
       (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt

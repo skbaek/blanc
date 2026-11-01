@@ -4,6 +4,7 @@ import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.SelectorRouteExact
 import Blanc.Lift.InvWalkDispatch
 import Blanc.ConcreteRun
+import Blanc.Lift.WalkKit
 
 /-!
 # The pair's dispatcher, both ways
@@ -30,8 +31,7 @@ theorem getterString_guards_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcom
     (body : SFunc.RunExact cert.prog sevm (St b [] getterInitMemory G) t_001a_c0 o) :
     SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + 63)) t_0000_c0 o := by
   unfold t_0000_c0
-  refine rx_push (w := 128) rfl (by decide) ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 2
   refine rx_mstore (c := 12) ?_ rfl ?_
   · rw [St.extCost_eq (n := 0) rfl]; decide
   refine rx_callvalue (by decide) ?_
@@ -41,10 +41,7 @@ theorem getterString_guards_exact {sevm : Sevm} {b : Devm} {G : Nat} {o : Outcom
   refine rx_push (w := 16) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_0010_c0
-  refine rx_dest ?_
-  refine rx_pop ?_
-  refine rx_push (w := 4) rfl (by decide) ?_
-  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 4
   refine rx_lt (v := 0) (ltCheck_zero_of_le size) (by decide) ?_
   refine rx_push (w := 0x01b9) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
   exact rx_branch_zero body
@@ -68,9 +65,7 @@ theorem pair_selector_exact {sevm : Sevm} {b : Devm} {M : Mem} {G N : Nat} {o : 
   subst hN
   rw [show G + (12 + pairRows.selCost σ) = G + pairRows.selCost σ + 3 + 3 + 3 + 3 by omega,
     t_001a_eq]
-  refine rx_push (w := 0) rfl (by decide) ?_
-  refine rx_calldataload (by decide) ?_
-  refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; decide) ?_
+  wrun! 3
   refine rx_shr (h_shifts := h_shifts) (v := σ) selector (by decide) ?_
   exact SFunc.RunExact.selGoto (S := []) ht (by decide) body
 

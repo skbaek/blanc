@@ -10127,6 +10127,16 @@ contract-neutral.
   `xr (rx_push rfl h ·)` / `xrc …` for any fixed-outcome step, `SFunc.runEx_iff_runExCut_nil`,
   and the fresh-state twins `rxce_call_identity`, `rxce_vyRawCallJoin`, `rxce_vyRawCallTail` in
   [`Blanc/Lift/RunEx.lean`](../Blanc/Lift/RunEx.lean).
+- Straight-line forward steps without writing them out: `wstep` / `wrun n` / `wrun` read the
+  instruction off the goal's tree (`SFunc.RunExact` or `SFunc.RunEx`) and apply the hand-written
+  term (`rx_push rfl (by wroom)`, `rx_dup rfl …`, `rx_swap1`, `rx_pop`, `rx_dest`, `rx_<op> rfl …`),
+  stopping at a branch, jump, memory, storage or call instruction; `using tac` swaps the
+  stack-room tactic `wroom`; `wrun! n` states pushed words as numerals (`rx_push (w := 64) rfl …`)
+  and `SWAP2`–`SWAP4` by `rx_swap2`–`rx_swap4`, the convention of the Uniswap V2 pair's walks. One
+  line replaces a run of `xr (rx_… ·)` or `refine rx_… ?_` lines, in
+  [`Blanc/Lift/WalkKit.lean`](../Blanc/Lift/WalkKit.lean). The backward twin for a frame walk
+  `h : XAt …` reads the instruction off the code's byte trie (`xa n`, one family's macros, so it
+  lives with them: Curve 3pool's `Walk/AutoStep.lean`).
 - Frame walks keeping memory word-aligned (`M.size % 32 = 0`, which callee contracts such as
   `getDMem_spec` need): `Mem.size_write_mod32`, `Mem.size_extends_mod32`, the image steps
   `ri_mload_imgAtA`/`ri_mstore_imgAtA`/`ri_calldatacopy_imgAtA`/`ri_keccak_imgAtA` and the

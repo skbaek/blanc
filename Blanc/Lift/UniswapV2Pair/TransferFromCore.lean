@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.TransferCore
+import Blanc.Lift.WalkKit
 
 /-! Literal transferFrom allowance branches and their shared transfer continuation. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -44,12 +45,7 @@ theorem transferFrom_join_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
         M (G + sourceCost + debitCost + loadCost + creditCost + 2382)) t_0ee8_c10
       (.returned (transferFromJoinPost sevm b R M owner recipient amount G)) := by
   unfold t_0ee8_c10
-  refine rx_dest ?_
-  refine rx_push (w := 0x0ef3) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x260b) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 6
   have gas : G + sourceCost + debitCost + loadCost + creditCost + 2366 =
     ((G + 26) + sourceCost + debitCost + loadCost + creditCost + 2332) + 8 := by omega
   rw [gas]
@@ -57,14 +53,10 @@ theorem transferFrom_join_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : Me
     (transfer61_exact fork mem sourceEq debitEq loadEq creditEq (by omega) (by omega)
       nonstatic cover nowrap (by simp only [List.length_cons]; omega)) ?_
   unfold t_0ef3_c10
-  refine rx_dest ?_
-  refine rx_pop ?_
-  refine rx_push (w := 1) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_swap (S' := ρ :: amount :: recipient.toB256 :: owner.toB256 :: 1 :: R) rfl ?_
   refine rx_swap (S' := owner.toB256 :: amount :: recipient.toB256 :: ρ :: 1 :: R) rfl ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
+  wrun! 3
   exact rx_ret
 
 
@@ -188,21 +180,14 @@ theorem transferFrom_store_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : M
   refine rx_dup (n := 5) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_and (v := owner.toB256) (by rw [B256.and_comm]; exact ff20_and_adr owner)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 2) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 4
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq m0.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   simp only [show (32 : B256).toNat = 32 from rfl, show (0 : B256).toNat = 0 from rfl]
   have gasHash1 : G + allowanceCost + sourceCost + debitCost + loadCost + creditCost + 2486 =
     (G + allowanceCost + sourceCost + debitCost + loadCost + creditCost + 2444) + 42 := by omega
@@ -211,12 +196,10 @@ theorem transferFrom_store_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : M
     (m1.read_self (by decide)) (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq s1]; decide
   · exact congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 owner.toB256 2)
-  refine rx_caller (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq s1]; decide
-  refine rx_swap1 ?_
-  refine rx_swap2 ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq s2]; decide
@@ -410,21 +393,14 @@ theorem transferFrom_finite_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : 
   refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_and (v := owner.toB256) (by rw [B256.and_comm]; exact ff20_and_adr owner)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 2) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 4
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq m0.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   simp only [show (32 : B256).toNat = 32 from rfl, show (0 : B256).toNat = 0 from rfl]
   have gasHash1 : G + secondCost + allowanceCost + sourceCost + debitCost + loadCost + creditCost + 2716 =
     (G + secondCost + allowanceCost + sourceCost + debitCost + loadCost + creditCost + 2674) + 42 := by omega
@@ -433,12 +409,10 @@ theorem transferFrom_finite_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : 
     (m1.read_self (by decide)) (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq s1]; decide
   · exact congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 owner.toB256 2)
-  refine rx_caller (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq s1]; decide
-  refine rx_swap1 ?_
-  refine rx_swap2 ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq s2]; decide
@@ -457,11 +431,7 @@ theorem transferFrom_finite_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : 
     (G + allowanceCost + sourceCost + debitCost + loadCost + creditCost + 2612) + secondCost := by omega
   rw [gasLoad]
   refine rx_sload_selC fork secondEq (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x0eb6) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0xffffffff) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0x226e) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 5
   refine rx_and (v := 0x226e) (by decide) (by simp only [List.length_cons]; omega) ?_
   have gasCall : G + allowanceCost + sourceCost + debitCost + loadCost + creditCost + 2594 =
     ((G + allowanceCost + sourceCost + debitCost + loadCost + creditCost + 2532) + 54) + 8 := by omega
@@ -634,21 +604,14 @@ theorem transferFrom_prefix_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : 
   refine rx_dup (n := 3) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_and (v := owner.toB256) (by rw [B256.and_comm]; exact ff20_and_adr owner)
     (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 0) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq mem.size]; decide
-  refine rx_push (w := 2) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
+  wrun! 4
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq m0.size]; decide
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup4 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   simp only [show (32 : B256).toNat = 32 from rfl, show (0 : B256).toNat = 0 from rfl]
   have gasHash1 : G + firstCost + 123 =
     (G + firstCost + 81) + 42 := by omega
@@ -657,12 +620,10 @@ theorem transferFrom_prefix_exact {sevm : Sevm} {b : Devm} {R : List B256} {M : 
     (m1.read_self (by decide)) (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq s1]; decide
   · exact congrArg Bytes.keccak (Mem.read_two_word_writes_at_raw M 0 owner.toB256 2)
-  refine rx_caller (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · rw [St.extCost_eq s1]; decide
-  refine rx_swap1 ?_
-  refine rx_swap2 ?_
+  wrun! 2
   refine rx_mstore (c := 3) ?_ rfl ?_
   · simp only [show (0 : B256).toNat = 0 from rfl]
     rw [St.extCost_eq s2]; decide

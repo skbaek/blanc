@@ -2,6 +2,7 @@ import Blanc.Lift.Curve3Pool.Walk.RliLiveFront
 import Blanc.Lift.Curve3Pool.Walk.DispatchLive
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPre
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityExactKit
+import Blanc.Lift.WalkKit
 
 /-!
 # `add_liquidity`, forward: the dispatcher, the guards, `_A`, the supply and the balances
@@ -210,29 +211,19 @@ theorem rx_al_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp :
   xr (rx_push rfl (by hrs) ·)
   refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 23 := ⟨g2 - 23, by omega⟩
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rx_branch_succ (by rw [hv2, lockSlot_lit, hlock]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42 g4x; replace hL := hL.sstoreE hb4
   obtain ⟨g5, rfl⟩ : ∃ g, g4 = g + 22 := ⟨g4 - 22, by omega⟩
-  xr (rx_callvalue (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   xr (rx_branch_succ (by rw [hval]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g6 b6 v6 hb6 hv6 hg61 hg62 g6x; replace hv6 := hL.val hv6; replace hL := hL.sloadE hb6
   obtain ⟨g7, rfl⟩ : ∃ g, g6 = g + 61 := ⟨g6 - 61, by omega⟩
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rx_branch_succ (by rw [hv6, isKilledSlot_lit, Stor.get_set_ne _ (by decide) _, hkill]; decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_calldatasize (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   refine rxe_calldatacopyL (o := 0x140) (z := 0x60) (c := 33) hR hW hsz (by decide) (by decide) (by decide) ?_; clear hR hW hsz; rename' M => M20; intro M hM20 hR hW hsz; rw [show memExtSize 0xc0 0x140 0x60 = 0x1a0 by decide] at hsz
   rw [B256.toNat_toB256_of_lt hcd, sliceD_data_end] at hR hM20
   have z0 : WordAt (Bytes.writeAt img 0x140 (List.replicate 0x60 0)) 0x140 0 := al_zeroWord img (j := 0) (by omega)
@@ -242,41 +233,11 @@ theorem rx_al_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp :
   refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g8 b8 v8 hb8 hv8 hg81 hg82 g8x; replace hv8 := hL.val hv8; replace hL := hL.sloadE hb8
   rw [show Bytes.toB256 [2] = feeSlot by decide, Stor.get_set_ne _ (by decide) _] at hv8; subst hv8
   obtain ⟨g9, rfl⟩ : ∃ g, g8 = g + 125 := ⟨g8 - 125, by omega⟩
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_mul rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_div rfl (by hrs) ·)
-  xr (rx_eq rfl (by hrs) ·)
-  xr (rx_or rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 13 using hrs
   xr (rx_branch_succ (ex_mulGuard hmf) ·)
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 12 using hrs
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_div rfl (by hrs) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 8 using hrs
   refine rxe_mstoreL (o := 0x1a0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M1; intro M hM1 hR hW hsz; rw [show memExtSize 0x1a0 0x1a0 32 = 0x1c0 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro g10 b10 v10 hb10 hv10 hg101 hg102 g10x; replace hv10 := hL.val hv10; replace hL := hL.sloadE hb10
@@ -314,8 +275,7 @@ theorem rx_al_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp :
   have hsz := hsz'
   clear hW' hsz'
   obtain ⟨p1, rfl⟩ : ∃ g, g12 = g + 91 := ⟨g12 - 91, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreL (o := 0x220) (c := 9) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M3; intro M hM3 hR hW hsz; rw [show memExtSize 0x200 0x220 32 = 0x240 by decide] at hsz
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x1e0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M4; intro M hM4 hR hW hsz; rw [show memExtSize 0x240 0x1e0 32 = 0x240 by decide] at hsz
@@ -333,14 +293,9 @@ theorem rx_al_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp :
   xr (rxm_mload (o := 0x220) hR hsz rfl (by decide) (by hrs) ·); try wsimp
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x1e0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M10; intro M hM10 hR hW hsz; rw [show memExtSize 0x240 0x1e0 32 = 0x240 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   refine rxe_mstoreL (o := 0x260) (c := 9) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M11; intro M hM11 hR hW hsz; rw [show memExtSize 0x240 0x260 32 = 0x280 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro p2 c2 u2 hc2 hu2 hp21 hp22 p2x; replace hu2 := hL.val hu2; replace hL := hL.sloadE hc2
   obtain ⟨p3, rfl⟩ : ∃ g, p2 = g + 2 := ⟨p2 - 2, by omega⟩
   xr (rx_gas (by hrs) ·)
@@ -361,74 +316,47 @@ theorem rx_al_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp :
   rw [hp4]
   xr (rx_push rfl (by hrs) ·)
   xr (rx_branch_succ (by decide) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_returndatasize (by hrs) ·)
-  xr (rx_gt rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 5 using hrs
   xr (rx_branch_succ (by rw [hrd]; exact ex_rds_gt hlen hlt) ·)
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rxm_mload (o := 0x2c0) hR hsz rfl (by decide) (by hrs) ·)
   rw [ex_ans_read _ _ _ hlen, hA']
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x240) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M12; intro M hM12 hR hW hsz; rw [show memExtSize 0x2e0 0x240 32 = 0x2e0 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   refine rxe_mstoreL (o := 0x2e0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M13; intro M hM13 hR hW hsz; rw [show memExtSize 0x2e0 0x2e0 32 = 0x300 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M14; intro M hM14 hR hW hsz; rw [show memExtSize 0x300 0xc0 32 = 0x300 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_one]
   refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro p5 c5 u5 hc5 hu5 hp51 hp52 p5x; replace hu5 := hL.val hu5; replace hL := hL.sloadE hc5
   obtain ⟨p6, rfl⟩ : ∃ g, p5 = g + 66 := ⟨p5 - 66, by omega⟩
   xr (rx_dup rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0x300) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M15; intro M hM15 hR hW hsz; rw [show memExtSize 0x300 0x300 32 = 0x320 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M16; intro M hM16 hR hW hsz; rw [show memExtSize 0x320 0xc0 32 = 0x320 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_one]
   xr (rx_add (by hrs) ·)
   refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro p7 c7 u7 hc7 hu7 hp71 hp72 p7x; replace hu7 := hL.val hu7; replace hL := hL.sloadE hc7
   obtain ⟨p8, rfl⟩ : ∃ g, p7 = g + 72 := ⟨p7 - 72, by omega⟩
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreL (o := 0x320) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M17; intro M hM17 hR hW hsz; rw [show memExtSize 0x320 0x320 32 = 0x340 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M18; intro M hM18 hR hW hsz; rw [show memExtSize 0x340 0xc0 32 = 0x340 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_one]
   xr (rx_add (by hrs) ·)
   refine rxe_sloadVX hfork (by hrs) (by omega) ?_; intro p9 c9 u9 hc9 hu9 hp91 hp92 p9x; replace hu9 := hL.val hu9; replace hL := hL.sloadE hc9
   obtain ⟨p10, rfl⟩ : ∃ g, p9 = g + 47 := ⟨p9 - 47, by omega⟩
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreL (o := 0x340) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => M19; intro M hM19 hR hW hsz; rw [show memExtSize 0x340 0x340 32 = 0x360 by decide] at hsz
-  xr (rx_pop ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 4 using hrs
   xr (rxm_mload (o := 0x240) hR hsz rfl (by decide) (by hrs) ·); try wsimp
-  xr (rx_gt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   have e5 : u5 = balAt σ 0 := by
     rw [hu5, Stor.get_set_ne _ (by decide) _]; exact congrArg σ.get (by decide)
   have e7 : u7 = balAt σ 1 := by

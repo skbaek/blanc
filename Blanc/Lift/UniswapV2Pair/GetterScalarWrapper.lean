@@ -1,4 +1,5 @@
 import Blanc.Lift.UniswapV2Pair.GetterScalarCore
+import Blanc.Lift.WalkKit
 
 /-! The actual uint8 and address masks in the Pair's scalar return wrappers. -/
 namespace Blanc.Lift.UniswapV2Pair
@@ -29,16 +30,13 @@ theorem getterMasked_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
       (.halted (getterWordPost b R M v G)) := by
   have outmem := getterWordMemory_ptr mem v
   rw [s.tail_shape]
-  refine rx_dest ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_mload (c := 3) ?_ mem.word (mem.read_self (by decide))
     (by simp only [List.length_cons]; omega) ?_
   · rw [St.extCost_eq mem.size]
     decide
   refine rx_push (w := Bytes.toB256 s.bytes) rfl (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
-  refine rx_swap3 ?_
+  wrun! 2
   refine rx_and clean (by simp only [List.length_cons]; omega) ?_
   refine rx_dup3 (by simp only [List.length_cons]; omega) ?_
   refine rx_mstore (c := 9) ?_ rfl ?_
@@ -49,9 +47,7 @@ theorem getterMasked_tail_exact {fs : List SFunc} {sevm : Sevm} {b : Devm}
   · simp only [show (128 : B256).toNat = 128 from rfl]
     rw [St.extCost_eq outmem.size]
     decide
-  refine rx_swap1 ?_
-  refine rx_dup2 (by simp only [List.length_cons]; omega) ?_
-  refine rx_swap1 ?_
+  wrun! 3
   refine rx_sub' (v := 0) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := 32) rfl (by simp only [List.length_cons]; omega) ?_
   refine rx_add' (v := 32) (by decide) (by simp only [List.length_cons]; omega) ?_

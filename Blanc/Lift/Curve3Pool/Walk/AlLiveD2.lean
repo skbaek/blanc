@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.AlLiveFee
+import Blanc.Lift.WalkKit
 
 /-!
 # `add_liquidity`, forward: after `D1` — the supply test, the fee loop, `D2`, the first deposit
@@ -46,28 +47,20 @@ theorem rx_al_feePreE (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa
       SFunc.RunEx cert.prog sevm (St b (3 :: 0xa40 :: S) M' g) t_1409_c1273 Q) :
     SFunc.RunEx cert.prog sevm (St b S M G) t_13e9_c1273 Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 100 + 45 := ⟨G - 145, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mloadW (o := 0x900) (v := D1) hR hsz rfl ⟨by decide, by decide⟩ hD1 (by hrs) ·)
   xr (rx_push rfl (by hrs) ·)
   refine rxe_mstoreL (o := 0xa20) (c := 7) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0xa20 0xa20 32 = 0xa40 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mloadW (o := 0x240) (v := T) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hm.m0.supply) (by hrs) ·)
-  xr (rx_gt rfl (by hrs) ·)
-  xr (rx_iszero rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   by_cases hT : T = 0
   · subst hT
     xr (rx_branch_succ (by decide) ·)
     exact k0 rfl M _ _ hR hW hsz (fun o w hw ho => by wauto) (by wauto) (by omega) (by omega)
       (by omega) hMq1
   · xr (rx_branch_zero' (al_supply_test hT) ·)
-    xr (rx_push rfl (by hrs) ·)
-    xr (rx_push rfl (by hrs) ·)
-    xr (rx_push rfl (by hrs) ·)
-    xr (rx_dup rfl (by hrs) ·)
-    xr (rx_dup rfl (by hrs) ·)
+    wrun 5 using hrs
     refine rxe_mstoreL (o := 0xa40) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq2; intro M hMq2 hR hW hsz; rw [show memExtSize 0xa40 0xa40 32 = 0xa60 by decide] at hsz
     xr (rx_add (by hrs) ·)
     rw [show Bytes.toB256 [3] + Bytes.toB256 [0] = (3 : B256) by decide,
@@ -110,40 +103,27 @@ theorem rx_al_store0E {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.
       SFunc.RunEx cert.prog sevm (St b' S M' g) t_170b_c1273 Q) :
     SFunc.RunEx cert.prog sevm (St b S M G) t_16e3_c1273 Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 64 := ⟨G - 64, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_mstoreL (o := 0xc0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq1; intro M hMq1 hR hW hsz; rw [show memExtSize 0xa40 0xc0 32 = 0xa40 by decide] at hsz
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_keccak (o := 0xc0) (z := 0x20) (c := 36) hR hsz (by decide) (by decide) ⟨by decide, by decide⟩ (by hrs) (by decide) ·)
   rw [keccak_one]
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
+  wrun 2 using hrs
   xr (rxm_mloadW (o := 0x460) (v := nv 0) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hm.n0) (by hrs) ·)
   xr (rx_dup rfl (by hrs) ·)
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x; replace hL := hL.sstoreE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 21 := ⟨g2 - 21, by omega⟩
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x480) (v := nv 1) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH hm.n1) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42 g4x; replace hL := hL.sstoreE hb4
   obtain ⟨g5, rfl⟩ : ∃ g, g4 = g + 21 := ⟨g4 - 21, by omega⟩
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   xr (rxm_mloadW (o := 0x4a0) (v := nv 2) hR hsz (cw_off (by decide) (by decide)) ⟨by decide, by decide⟩ (by wautoH hm.n2) (by hrs) ·)
-  xr (rx_push rfl (by hrs) ·)
-  xr (rx_dup rfl (by hrs) ·)
-  xr (rx_add (by hrs) ·)
+  wrun 3 using hrs
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g6 b6 hb6 hg61 hg62 g6x; replace hL := hL.sstoreE hb6
   obtain ⟨g7, rfl⟩ : ∃ g, g6 = g + 4 := ⟨g6 - 4, by omega⟩
-  xr (rx_pop ·)
-  xr (rx_pop ·)
+  wrun 2
   have e : alStor3 σ (nv 0) (nv 1) (nv 2) = ((σ.set balancesBase (nv 0)).set
       (balancesBase + Bytes.toB256 [1]) (nv 1)).set (balancesBase + Bytes.toB256 [2]) (nv 2) := by
     unfold alStor3

@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.OneCoinLiveP2
 import Blanc.Lift.Curve3Pool.Walk.DispatchLive
+import Blanc.Lift.WalkKit
 
 /-!
 # `remove_liquidity_one_coin`, forward: the dispatcher and the guards
@@ -65,70 +66,44 @@ theorem rx_oc_preE {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outcome
   xr (rx_push rfl (by hr) ·)
   refine rxe_sloadVX hfork (by hr) (by omega) ?_; intro g2 b2 v2 hb2 hv2 hg21 hg22 g2x; replace hv2 := hL.val hv2; replace hL := hL.sloadE hb2
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 23 := ⟨g2 - 23, by omega⟩
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rx_branch_succ (by rw [hv2, lockSlot_lit, hlock]; decide) ·)
   -- tree t_441a_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g4 b4 hb4 hg41 hg42 g4x; replace hL := hL.sstoreE hb4
   obtain ⟨g5, rfl⟩ : ∃ g, g4 = g + 97 := ⟨g4 - 97, by omega⟩
-  xr (rx_callvalue (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   xr (rx_branch_succ (by rw [hval]; decide) ·)
   -- tree t_442c_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rxm_mload (o := 0x60) hR hsz rfl (by decide) (by hr) ·); try wsimp
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x40) hR hsz rfl (by decide) (by hr) ·); try wsimp
-  xr (rx_swap1 ·)
-  xr (rx_sgt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (by rw [e40]; exact ex_clamp_hi hi3) ·)
   -- tree t_4442_c0
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hr) ·)
+  wrun 2
   xr (rx_swap2 ·)
-  xr (rx_swap1 ·)
-  xr (rx_slt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 4
   xr (rx_branch_succ (by rw [e60]; exact ex_clamp_lo hi3) ·)
   -- tree t_4450_c0
-  xr (rx_dest ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_sloadVX hfork (by hr) (by omega) ?_; intro g6 b6 v6 hb6 hv6 hg61 hg62 g6x; replace hv6 := hL.val hv6; replace hL := hL.sloadE hb6
   obtain ⟨g7, rfl⟩ : ∃ g, g6 = g + 110 := ⟨g6 - 110, by omega⟩
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   xr (rx_branch_succ (by rw [hv6, isKilledSlot_lit, Stor.get_set_ne _ (by decide) _, hkill]; decide) ·)
   -- tree t_445e_c0
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0x140) (c := 18) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mf1; intro M hMf1 hR hW hsz; rw [show memExtSize 0xc0 0x140 32 = 0x160 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreL (o := 0x160) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mf2; intro M hMf2 hR hW hsz; rw [show memExtSize 0x160 0x160 32 = 0x180 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x140) hR hsz rfl (by decide) (by hr) ·); try wsimp
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x160) hR hsz rfl (by decide) (by hr) ·); try wsimp
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0x1a0) (c := 9) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mf3; intro M hMf3 hR hW hsz; rw [show memExtSize 0x180 0x1a0 32 = 0x1c0 by decide] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 3
   refine rxe_mstoreL (o := 0x1c0) (c := 6) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mf4; intro M hMf4 hR hW hsz; rw [show memExtSize 0x1c0 0x1c0 32 = 0x1e0 by decide] at hsz
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x1c0) hR hsz rfl (by decide) (by hr) ·); try wsimp

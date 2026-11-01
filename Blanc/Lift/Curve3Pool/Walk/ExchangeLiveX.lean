@@ -1,4 +1,5 @@
 import Blanc.Lift.Curve3Pool.Walk.ExchangeLivePull
+import Blanc.Lift.WalkKit
 
 /-!
 # `exchange`, forward: `x`
@@ -33,98 +34,35 @@ theorem rx_ex_x_core {sevm : Sevm} {b : Devm} {G R : Nat} {Q : Outcome → Prop}
   have hs0 : 0x6e0 ≤ s := by rcases hs with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
   have hc0 : c0 ≤ 26 := by omega
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 16 + c0 + 263 := ⟨G - 279 - c0, by omega⟩
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 8
   xr (rx_branch_succ (ex_lt3_ne hi) ·)
   -- tree t_26dc_c13
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x200 + 32 * (exI sevm).toNat) hR hsz (ex_off (bw := Bytes.toB256 [2, 0]) hi (by decide) (by decide)) ⟨by omega, hs32⟩ (by hr) ·)
   rw [(hF.xp _ hi).read]
   xr (rx_push rfl (by hr) ·)
   xr (rxm_mload (o := 0x380) hR hsz rfl ⟨by omega, hs32⟩ (by hr) ·)
   rw [hF.dx.read]
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_calldataload (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 7
   xr (rx_branch_succ (ex_lt3_ne hi) ·)
   -- tree t_26f8_c13
-  xr (rx_dest ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
+  wrun 4
   xr (rxm_mload (o := 0x140 + 32 * (exI sevm).toNat) hR hsz (ex_off (bw := Bytes.toB256 [1, 0x40]) hi (by decide) (by decide)) ⟨by omega, hs32⟩ (by hr) ·)
   rw [(hF.rate _ hi).read]
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_mul rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_div rfl (by hr) ·)
-  xr (rx_eq rfl (by hr) ·)
-  xr (rx_or rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 12
   xr (rx_branch_succ (ex_mulGuard hmx) ·)
   -- tree t_2711_c13
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 12
   xr (rx_branch_succ (by decide) ·)
   -- tree t_272c_c13
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_div rfl (by hr) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_lt rfl (by hr) ·)
-  xr (rx_iszero rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 14
   xr (rx_branch_succ (ex_geGuard hax) ·)
   -- tree t_2741_c13
-  xr (rx_dest ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_dup rfl (by hr) ·)
-  xr (rx_add (by hr) ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_swap1 ·)
-  xr (rx_pop ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 9
   refine rxe_mstoreW (o := 0x7a0) (c := c0) hR hW hsz rfl (by rcases hs with ⟨rfl, rfl⟩ | ⟨rfl, rfl⟩ <;> decide) ?_
   have hs' : memExtSize s 0x7a0 32 = 0x7c0 := by rcases hs with ⟨rfl, -⟩ | ⟨rfl, -⟩ <;> decide
   clear hR hW hsz; intro hR hW hsz; rw [hs'] at hsz
-  xr (rx_push rfl (by hr) ·)
-  xr (rx_push rfl (by hr) ·)
+  wrun 2
   refine rxe_mstoreW (o := 0x7e0) (c := 10) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; intro hR hW hsz; rw [show memExtSize 0x7c0 0x7e0 32 = 0x800 by decide] at hsz
   -- STOP at t_2754_c13
   refine k _ _ g1 hR hW (by rw [hsz]) (hF.mono fun o v hv ho => by wauto) (by wauto) (by wauto)

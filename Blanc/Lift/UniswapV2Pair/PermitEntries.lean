@@ -3,6 +3,7 @@ import Blanc.Lift.UniswapV2Pair.PairDispatch
 import Blanc.Lift.UniswapV2Pair.PermitWalk
 import Blanc.Lift.ByteWindowMemory
 import Blanc.Lift.UniswapV2Pair.WriterEntries
+import Blanc.Lift.WalkKit
 
 /-! The permit recovery call, the signer guard, the approval core at the moved
 free pointer, and the whole internal permit body. -/
@@ -602,10 +603,7 @@ theorem permitSigner_exact {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G
     rw [signer]
     simp only [B256.eqCheck, ite_true]
   unfold t_1cdc_c29
-  refine rx_dest ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_push (w := 64) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 4
   refine rx_mload (i := 64) (v := 482) (c := 3) (by rw [St.extCost_eq mem.size]; decide)
     mem.word (mem.read_self (by decide)) (by simp only [List.length_cons]; omega) ?_
   refine rx_push rfl (by simp only [List.length_cons]; omega) ?_
@@ -613,8 +611,7 @@ theorem permitSigner_exact {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G
   refine rx_mload (i := 450) (v := Bytes.toB256 (F.read 450 32).1) (c := 3)
     (by rw [St.extCost_eq mem.size]; decide) rfl (mem.read_self (by decide)) (by simp only [List.length_cons]; omega) ?_
   refine rx_swap (n := 1) rfl ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
+  wrun! 2
   refine rx_push rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_and (v := (Bytes.toB256 (F.read 450 32).1).toAdr.toB256)
@@ -626,8 +623,7 @@ theorem permitSigner_exact {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G
   refine rx_push (w := 0x1d57) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_branchTo_zero ?_
   unfold t_1d27_c29
-  refine rx_pop ?_
-  refine rx_dup (n := 8) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_push rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_and (v := owner.toB256) (ff20_and_adr owner) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
@@ -635,32 +631,17 @@ theorem permitSigner_exact {sevm : Sevm} {d : Devm} {R : List B256} {F : Mem} {G
   refine rx_and (v := (Bytes.toB256 (F.read 450 32).1).toAdr.toB256) (ff20_and_word _) (by simp only [List.length_cons, List.length_set]; omega) ?_
   refine rx_eq equal (by simp only [List.length_cons, List.length_set]; omega) ?_
   unfold t_1d57_c15
-  refine rx_dest ?_
-  refine rx_push (w := 0x1dc2) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 2
   refine rx_branch_succ (by decide) ?_
   unfold t_1dc2_c15
-  refine rx_dest ?_
-  refine rx_push (w := 0x1dcd) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_dup (n := 9) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
-  refine rx_push (w := 0x259c) rfl (by simp only [List.length_cons, List.length_set]; omega) ?_
+  wrun! 6
   have gas : G + c + 2028 = ((G + 27) + 0 + c + 1993) + 8 := by omega
   rw [gas]
   refine rx_callRet (g := t_259c_c64) (by rfl)
     (approve64_exact_at fork mem (by decide) (by decide) cost (by omega) nonstatic
       (by simp only [List.length_cons, List.length_set]; omega)) ?_
   unfold t_1dcd_c15
-  refine rx_dest ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
+  wrun! 10
   exact rx_ret
 
 /-- Forward internal permit from the supplied compiled recovery call at its derived
@@ -704,9 +685,7 @@ theorem permitBody_exact {sevm : Sevm} {b d : Devm} {R : List B256} {M : Mem} {i
   have mC := permitDigestMemory_ptr mB (b.getStorVal sevm.currentTarget 3)
     (permitInner owner spender value (permitNonceRead sevm b owner) deadline)
   unfold t_1b0c_c29
-  refine rx_dest ?_
-  refine rx_timestamp (by simp only [List.length_cons]; omega) ?_
-  refine rx_dup (n := 4) rfl (by simp only [List.length_cons]; omega) ?_
+  wrun! 3
   refine rx_lt (v := 0) (ltCheck_zero_of_le timely) (by simp only [List.length_cons]; omega) ?_
   refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons]; omega) ?_
   refine rx_push (w := 0x1b7b) rfl (by simp only [List.length_cons]; omega) ?_
@@ -769,25 +748,17 @@ theorem permitEntry_exact {sevm : Sevm} {b d : Devm} {G callGas : Nat} {sel : B2
       (callGas + permitNonceStoreCharge sevm b + permitNonceCharge sevm b + 952)) t_05e2_c76
       (.halted (permitPublicPost sevm b d d.returnData sel G)) := by
   unfold t_05e2_c76
-  refine rx_dest ?_
-  refine rx_push (w := 0x0257) rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rx_push (w := 4) rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rx_dup1 (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rx_calldatasize (by simp only [List.length_cons, List.length_nil]; omega) ?_
+  wrun! 5
   refine rx_sub' (v := sevm.data.length.toB256 - 4) rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rx_push (w := 224) rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rx_dup2 (by simp only [List.length_cons, List.length_nil]; omega) ?_
+  wrun! 2
   refine rx_lt (v := 0) (ltCheck_zero_of_le guard) (by simp only [List.length_cons, List.length_nil]; omega) ?_
   refine rx_iszero (v := 1) (by decide) (by simp only [List.length_cons, List.length_nil]; omega) ?_
   refine rx_push (w := 0x05f8) rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
   refine rx_branch_succ (by decide) ?_
   unfold t_05f8_c76
-  refine rx_dest ?_
-  refine rx_pop ?_
+  wrun! 2
   refine rx_push rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rx_calldataload (by simp only [List.length_cons, List.length_nil]; omega) ?_
-  refine rx_dup (n := 1) rfl (by simp only [List.length_cons, List.length_nil]; omega) ?_
+  wrun! 3
   refine rx_and (v := (permitOwner sevm).toB256) (ff20_and_word _) (by simp only [List.length_cons, List.length_nil]; omega) ?_
   refine rx_swap (n := 1) rfl ?_
   refine rx_push (w := 32) rfl (by simp only [List.length_set, List.length_cons, List.length_nil]; omega) ?_

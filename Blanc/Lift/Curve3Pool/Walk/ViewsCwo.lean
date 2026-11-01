@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXFirst
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvpRaw
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `calc_withdraw_one_coin(_token_amount, i)`: the frame and its raw effect
@@ -37,47 +38,26 @@ theorem xa_cwo2 (hc : Cert.CheckedM code cert mems true)
         ⟨(Sevm.dataWord sevm (Bytes.toB256 [0x24])).toNat, hi⟩ (vSupply c).toNat := by
   have hV : VW (vdMem sevm) [] := ⟨Words.nil _, vyMem_wf Mem.wf_empty _,
     by rw [vyMem_empty_size]⟩
-  xs 0x4399 (.reg .callvalue) ri_callvalue  -- 4398 CALLVALUE
-  xs 0x439a (.reg .iszero) ri_iszero  -- 4399 ISZERO
-  xs 0x439d (.push [0x43, 0xa2] (by decide)) ri_push  -- 439a PUSH2 0x43a2
+  xa 3
   xji 0x439e 0x43a2 hw
   · xdead
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
-  xjd 0x43a3  -- 43a2 JUMPDEST
-  xs 0x43a5 (.push [0x60] (by decide)) ri_push  -- 43a3 PUSH1 0x60
+  xa 2
   xlu 0x43a6  -- 43a5 MLOAD
-  xs 0x43a8 (.push [0x24] (by decide)) ri_push  -- 43a6 PUSH1 0x24
-  xs 0x43a9 (.reg .calldataload) ri_calldataload  -- 43a8 CALLDATALOAD
-  xs 0x43aa (.reg (.dup 0)) (ri_dup (by rfl))  -- 43a9 DUP1
-  xs 0x43ac (.push [0x40] (by decide)) ri_push  -- 43aa PUSH1 0x40
+  xa 4
   xlu 0x43ad  -- 43ac MLOAD
-  xs 0x43ae (.reg (.swap 0)) (ri_swap (by rfl))  -- 43ad SWAP1
-  xs2 0x43af (.reg .sgt) ri_sgt  -- 43ae SGT
-  xs 0x43b0 (.reg .iszero) ri_iszero  -- 43af ISZERO
-  xs 0x43b3 (.push [0x43, 0xb8] (by decide)) ri_push  -- 43b0 PUSH2 0x43b8
+  xa 4
   xji 0x43b4 0x43b8 hw
   · xdead
   clear hw
-  xjd 0x43b9  -- 43b8 JUMPDEST
-  xs 0x43ba (.reg (.dup 0)) (ri_dup (by rfl))  -- 43b9 DUP1
-  xs 0x43bb (.reg (.swap 1)) (ri_swap (by rfl))  -- 43ba SWAP2
-  xs 0x43bc (.reg (.swap 0)) (ri_swap (by rfl))  -- 43bb SWAP1
-  xs2 0x43bd (.reg .slt) ri_slt  -- 43bc SLT
-  xs 0x43be (.reg .iszero) ri_iszero  -- 43bd ISZERO
-  xs 0x43c1 (.push [0x43, 0xc6] (by decide)) ri_push  -- 43be PUSH2 0x43c6
+  xa 7
   xji 0x43c2 0x43c6 hw
   · xdead
   clear hw
-  xjd 0x43c7  -- 43c6 JUMPDEST
-  xs 0x43c8 (.reg .pop) ri_pop  -- 43c7 POP
-  xs 0x43ca (.push [0x04] (by decide)) ri_push  -- 43c8 PUSH1 0x04
-  xs 0x43cb (.reg .calldataload) ri_calldataload  -- 43ca CALLDATALOAD
-  xs 0x43ce (.push [0x01, 0x40] (by decide)) ri_push  -- 43cb PUSH2 0x0140
+  xa 5
   xsw 0x43cf 0x140  -- 43ce MSTORE
-  xs 0x43d1 (.push [0x24] (by decide)) ri_push  -- 43cf PUSH1 0x24
-  xs 0x43d2 (.reg .calldataload) ri_calldataload  -- 43d1 CALLDATALOAD
-  xs 0x43d5 (.push [0x01, 0x60] (by decide)) ri_push  -- 43d2 PUSH2 0x0160
+  xa 3
   xsw 0x43d6 0x160  -- 43d5 MSTORE
   xs 0x43d9 (.push [0x01, 0x60] (by decide)) ri_push  -- 43d6 PUSH2 0x0160
   xl 0x43da 0x160  -- 43d9 MLOAD
@@ -85,8 +65,7 @@ theorem xa_cwo2 (hc : Cert.CheckedM code cert mems true)
   xl 0x43de 0x140  -- 43dd MLOAD
   xs 0x43e0 (.push [0x06] (by decide)) ri_push  -- 43de PUSH1 0x06
   cvpc 0x43e1  -- 43e0 PC
-  xs 0x43e2 (.reg .add) ri_add  -- 43e1 ADD
-  xs 0x43e5 (.push [0x3c, 0xca] (by decide)) ri_push  -- 43e2 PUSH2 0x3cca
+  xa 2
   xjmp 0x3cca  -- 43e5 JUMP
   obtain ⟨c, L', hi, dy, fee, b', M1, G1, hL, hsw, hmod, hfirst, hsec, hst, hlg, h, hV1, -⟩ :=
     xa_cw2 hc hcode hfork ha (hV.sub (List.nil_subset _)) htok h
@@ -94,8 +73,7 @@ theorem xa_cwo2 (hc : Cert.CheckedM code cert mems true)
   clear hV
   have hV := hV1
   clear hV1
-  xjd 0x43e7  -- 43e6 JUMPDEST
-  xs 0x43ea (.push [0x01, 0xc0] (by decide)) ri_push  -- 43e7 PUSH2 0x01c0
+  xa 2
   xsw 0x43eb 0x1c0  -- 43ea MSTORE
   xs 0x43ee (.push [0x01, 0xe0] (by decide)) ri_push  -- 43eb PUSH2 0x01e0
   xsw 0x43ef 0x1e0  -- 43ee MSTORE
@@ -104,8 +82,7 @@ theorem xa_cwo2 (hc : Cert.CheckedM code cert mems true)
   xs 0x43f5 (.push [0x00] (by decide)) ri_push  -- 43f3 PUSH1 0x00
   have hfinalwf := hV.wf
   xsw 0x43f6 0x0  -- 43f5 MSTORE
-  xs 0x43f8 (.push [0x20] (by decide)) ri_push  -- 43f6 PUSH1 0x20
-  xs 0x43fa (.push [0x00] (by decide)) ri_push  -- 43f8 PUSH1 0x00
+  xa 2
   obtain ⟨hrun, rfl⟩ := xa_halt (l := .return_) (atL hcode (by kernel_rfl)) h
   obtain ⟨hout, hstor, hlogs⟩ := ri_return hrun
   refine ⟨hval, c, hi, dy, fee, by rw [hL], hsw, hmod, fun a => by rw [hstor, hst],

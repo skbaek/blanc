@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceD0
 import Blanc.Lift.FrameWalkAligned
+import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
 # `remove_liquidity_imbalance` on the word carrier, part 3: `D1`
@@ -64,8 +65,7 @@ theorem xa_rli_d1 (hc : Cert.CheckedM code cert mems true)
       VW M' [(0x600, Bytes.toB256 [0]), (0x480, D1), (0x340, D0), (0x140, T), (0x1e0, F),
         (0x200, AF), (0x220, A), (0x280, o0), (0x2a0, o1), (0x2c0, o2), (0x2e0, n0), (0x300, n1),
         (0x320, n2)] := by
-  xs 0x32bd (.push [0x01, 0x40] (by decide)) ri_push  -- 32ba PUSH2 0x0140
-  xs 0x32c0 (.push [0x04, 0xa0] (by decide)) ri_push  -- 32bd PUSH2 0x04a0
+  xa 2
   xsw 0x32c1 0x4a0  -- 32c0 MSTORE
   have hF : Words _ [(0x340, D0), (0x140, T), (0x1e0, F), (0x200, AF), (0x220, A), (0x280, o0), (0x2a0, o1),
       (0x2c0, o2), (0x2e0, n0), (0x300, n1), (0x320, n2)] := hV.words.sub (by
@@ -78,31 +78,19 @@ theorem xa_rli_d1 (hc : Cert.CheckedM code cert mems true)
   have hV := hV1
   clear hV1
   vnorm
-  xs 0x32e7 (.push [0x04, 0xc0] (by decide)) ri_push  -- 32e4 PUSH2 0x04c0
-  xs 0x32ea (.push [0x02, 0xe0] (by decide)) ri_push  -- 32e7 PUSH2 0x02e0
-  xs 0x32eb (.reg (.dup 0)) (ri_dup (by rfl))  -- 32ea DUP1
+  xa 3
   xl 0x32ec 0x2e0  -- 32eb MLOAD
   xs 0x32ed (.reg (.dup 2)) (ri_dup (by rfl))  -- 32ec DUP3
   xsw 0x32ee 0x4c0  -- 32ed MSTORE
-  xs 0x32ef (.reg (.dup 0)) (ri_dup (by rfl))  -- 32ee DUP1
-  xs 0x32f1 (.push [0x20] (by decide)) ri_push  -- 32ef PUSH1 0x20
-  xs 0x32f2 (.reg .add) ri_add  -- 32f1 ADD
+  xa 3
   xl 0x32f3 0x300  -- 32f2 MLOAD
-  xs 0x32f4 (.reg (.dup 2)) (ri_dup (by rfl))  -- 32f3 DUP3
-  xs 0x32f6 (.push [0x20] (by decide)) ri_push  -- 32f4 PUSH1 0x20
-  xs 0x32f7 (.reg .add) ri_add  -- 32f6 ADD
+  xa 3
   xsw 0x32f8 0x4e0  -- 32f7 MSTORE
-  xs 0x32f9 (.reg (.dup 0)) (ri_dup (by rfl))  -- 32f8 DUP1
-  xs 0x32fb (.push [0x40] (by decide)) ri_push  -- 32f9 PUSH1 0x40
-  xs 0x32fc (.reg .add) ri_add  -- 32fb ADD
+  xa 3
   xl 0x32fd 0x320  -- 32fc MLOAD
-  xs 0x32fe (.reg (.dup 2)) (ri_dup (by rfl))  -- 32fd DUP3
-  xs 0x3300 (.push [0x40] (by decide)) ri_push  -- 32fe PUSH1 0x40
-  xs 0x3301 (.reg .add) ri_add  -- 3300 ADD
+  xa 3
   xsw 0x3302 0x500  -- 3301 MSTORE
-  xs 0x3303 (.reg .pop) ri_pop  -- 3302 POP
-  xs 0x3304 (.reg .pop) ri_pop  -- 3303 POP
-  xs 0x3307 (.push [0x02, 0x20] (by decide)) ri_push  -- 3304 PUSH2 0x0220
+  xa 3
   xl 0x3308 0x220  -- 3307 MLOAD
   xs 0x330b (.push [0x05, 0x20] (by decide)) ri_push  -- 3308 PUSH2 0x0520
   xsw 0x330c 0x520  -- 330b MSTORE
@@ -116,19 +104,16 @@ theorem xa_rli_d1 (hc : Cert.CheckedM code cert mems true)
   xl 0x331c 0x4c0  -- 331b MLOAD
   xs 0x331e (.push [0x06] (by decide)) ri_push  -- 331c PUSH1 0x06
   cvpc 0x331f  -- 331e PC
-  xs 0x3320 (.reg .add) ri_add  -- 331f ADD
-  xs 0x3323 (.push [0x07, 0xb7] (by decide)) ri_push  -- 3320 PUSH2 0x07b7
+  xa 2
   xjmp 0x7b7  -- 3323 JUMP
   obtain ⟨D1, M3, _, h, hD1, hV1⟩ := xa_vGetDMem hc hcode hfork hV h
   clear hV
   have hV := hV1
   clear hV1
   vnorm
-  xjd 0x3325  -- 3324 JUMPDEST
-  xs 0x3328 (.push [0x05, 0x80] (by decide)) ri_push  -- 3325 PUSH2 0x0580
+  xa 2
   xsw 0x3329 0x580  -- 3328 MSTORE
-  xs 0x332c (.push [0x04, 0x80] (by decide)) ri_push  -- 3329 PUSH2 0x0480
-  xs 0x332f (.push [0x04, 0xa0] (by decide)) ri_push  -- 332c PUSH2 0x04a0
+  xa 2
   xsw 0x3330 0x4a0  -- 332f MSTORE
   -- the restore loop over [0x140, 0x4a0)
   rw [← List.append_nil (frameWords _ _ _).reverse] at h
@@ -148,15 +133,9 @@ theorem xa_rli_d1 (hc : Cert.CheckedM code cert mems true)
   xl 0x3358 0x580  -- 3357 MLOAD
   xs 0x335b (.push [0x04, 0x80] (by decide)) ri_push  -- 3358 PUSH2 0x0480
   xsw 0x335c 0x480  -- 335b MSTORE
-  xs 0x335e (.push [0x60] (by decide)) ri_push  -- 335c PUSH1 0x60
-  xs 0x335f (.reg .calldatasize) ri_calldatasize  -- 335e CALLDATASIZE
-  xs 0x3362 (.push [0x05, 0xa0] (by decide)) ri_push  -- 335f PUSH2 0x05a0
+  xa 3
   xcdc 0x3363 0x5a0 0x60  -- 3362 CALLDATACOPY
-  xs 0x3366 (.push [0x06, 0x00] (by decide)) ri_push  -- 3363 PUSH2 0x0600
-  xs 0x3368 (.push [0x00] (by decide)) ri_push  -- 3366 PUSH1 0x00
-  xs 0x336a (.push [0x03] (by decide)) ri_push  -- 3368 PUSH1 0x03
-  xs 0x336b (.reg (.dup 1)) (ri_dup (by rfl))  -- 336a DUP2
-  xs 0x336c (.reg (.dup 3)) (ri_dup (by rfl))  -- 336b DUP4
+  xa 5
   xsw 0x336d 0x600  -- 336c MSTORE
   xs 0x336e (.reg .add) ri_add  -- 336d ADD
   rw [show Bytes.toB256 [3] + Bytes.toB256 [0] = Bytes.toB256 [3] from by decide] at h
