@@ -277,7 +277,6 @@ theorem getCode_of_state {a b : Devm} (h : a.state = b.state) :
     Devm.getCode a = Devm.getCode b := by
   funext x; simp only [Devm.getCode, Devm.getAcct]; rw [h]
 
-set_option maxRecDepth 604 in
 /-- The three selector crossings of `hybridDispatchWith` on a walk whose
 calldata selects `pause`: the outer pivot taken *fall-through* (the selector
 equals the pivot, so `gt` yields zero), the third/fourth pivot taken jumped,
@@ -318,7 +317,7 @@ theorem dispatch_routeTo_pause (dp : DeployParams)
   have m1 := (Line.of_inv Devm.memory (by line_inv) run1).symm.trans m0
   have d1 := (Line.of_inv Devm.getCode (by line_inv) run1).symm.trans d0
   refine routeTo_branchLeft_frame tail1
-    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; selector_words_decide)
     (fun _s2 hpop2 tail2 => ?_)
   have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
   have g2 := (getStor_of_state hpop2.state).symm.trans g1
@@ -331,7 +330,7 @@ theorem dispatch_routeTo_pause (dp : DeployParams)
   have m3 := (Line.of_inv Devm.memory (by line_inv) run3).symm.trans m2
   have d3 := (Line.of_inv Devm.getCode (by line_inv) run3).symm.trans d2
   refine routeTo_branchRight_frame tail3
-    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; selector_words_decide)
     (fun _s4 _w4 hpop4 tail4 => ?_)
   have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
   have g4 := (getStor_of_state hpop4.state).symm.trans g3
@@ -344,7 +343,7 @@ theorem dispatch_routeTo_pause (dp : DeployParams)
   have m5 := (Line.of_inv Devm.memory (by line_inv) run5).symm.trans m4
   have d5 := (Line.of_inv Devm.getCode (by line_inv) run5).symm.trans d4
   refine routeTo_branchRight_frame tail5
-    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; selector_words_decide)
     (fun _s6 _w6 hpop6 tail6 => ?_)
   have g6 := (getStor_of_state hpop6.state).symm.trans g5
   have m6 := hpop6.memory.symm.trans m5

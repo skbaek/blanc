@@ -410,7 +410,6 @@ theorem prefix_of_lastLinearTest {sevm : Sevm} {s s' : Devm} {sel word : B256}
   cases r2
   exact prefix_of_eq hop (prefix_of_push (of_run_pushB256 hpush) hp)
 
-set_option maxRecDepth 609 in
 /-- The six selector crossings of `hybridDispatchWith`, on a walk whose
 calldata selects `registerPauser`: two `splitDispatch` pivots taken jumped,
 then three `linearDispatchWith` misses and the match.
@@ -451,7 +450,7 @@ theorem dispatch_routeTo_registerPauser (dp : DeployParams)
   have g1 := (Line.of_inv Devm.getStor (by line_inv) run1).symm.trans g0
   have m1 := (Line.of_inv Devm.memory (by line_inv) run1).symm.trans m0
   refine routeTo_branchRight_frame tail1
-    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; selector_words_decide)
     (fun _s2 _w2 hpop2 tail2 => ?_)
   have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
   have g2 := (getStor_of_state hpop2.state).symm.trans g1
@@ -462,7 +461,7 @@ theorem dispatch_routeTo_registerPauser (dp : DeployParams)
   have g3 := (Line.of_inv Devm.getStor (by line_inv) run3).symm.trans g2
   have m3 := (Line.of_inv Devm.memory (by line_inv) run3).symm.trans m2
   refine routeTo_branchRight_frame tail3
-    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; selector_words_decide)
     (fun _s4 _w4 hpop4 tail4 => ?_)
   have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
   have g4 := (getStor_of_state hpop4.state).symm.trans g3
@@ -473,7 +472,7 @@ theorem dispatch_routeTo_registerPauser (dp : DeployParams)
   have g5 := (Line.of_inv Devm.getStor (by line_inv) run5).symm.trans g4
   have m5 := (Line.of_inv Devm.memory (by line_inv) run5).symm.trans m4
   refine routeTo_branchLeft_frame tail5
-    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; selector_words_decide)
     (fun _s6 hpop6 tail6 => ?_)
   have p6 := tail_of_stack_prefix p5 ⟨_, hpop6.stack⟩
   have g6 := (getStor_of_state hpop6.state).symm.trans g5
@@ -484,7 +483,7 @@ theorem dispatch_routeTo_registerPauser (dp : DeployParams)
   have g7 := (Line.of_inv Devm.getStor (by line_inv) run7).symm.trans g6
   have m7 := (Line.of_inv Devm.memory (by line_inv) run7).symm.trans m6
   refine routeTo_branchLeft_frame tail7
-    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; selector_words_decide)
     (fun _s8 hpop8 tail8 => ?_)
   have p8 := tail_of_stack_prefix p7 ⟨_, hpop8.stack⟩
   have g8 := (getStor_of_state hpop8.state).symm.trans g7
@@ -495,7 +494,7 @@ theorem dispatch_routeTo_registerPauser (dp : DeployParams)
   have g9 := (Line.of_inv Devm.getStor (by line_inv) run9).symm.trans g8
   have m9 := (Line.of_inv Devm.memory (by line_inv) run9).symm.trans m8
   refine routeTo_branchLeft_frame tail9
-    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; selector_words_decide)
     (fun _s10 hpop10 tail10 => ?_)
   have p10 := tail_of_stack_prefix p9 ⟨_, hpop10.stack⟩
   have g10 := (getStor_of_state hpop10.state).symm.trans g9
@@ -507,7 +506,7 @@ theorem dispatch_routeTo_registerPauser (dp : DeployParams)
   have g11 := (Line.of_inv Devm.getStor (by line_inv) run11).symm.trans g10
   have m11 := (Line.of_inv Devm.memory (by line_inv) run11).symm.trans m10
   refine routeTo_branchRight_frame tail11
-    (fun _w _rest hs => by rw [head_of_stack_prefix p11 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p11 hs]; selector_words_decide)
     (fun _s12 _w12 hpop12 tail12 => ?_)
   have g12 := (getStor_of_state hpop12.state).symm.trans g11
   have m12 := hpop12.memory.symm.trans m11
@@ -2316,7 +2315,6 @@ theorem setPauseDuration_body_runCompiledTo
 subtree, two selector misses, the match, and the chain's `POP`. -/
 def setPauseDurationDispatchGas : Nat := 151
 
-set_option maxRecDepth 659 in
 /-- Exact dispatcher bridge for any terminal outcome of the selected
 pause-duration setter body. -/
 theorem setPauseDuration_dispatch_runCompiledTo
@@ -2337,35 +2335,11 @@ theorem setPauseDuration_dispatch_runCompiledTo
       (runtime dp) out ∧
       some sevm.code.toList = Prog.compile (runtime dp) := by
   refine ⟨?_, ?_⟩
-  · refine Prog.runCompiledTo_intro
-      (mid := base.setMach ⟨[], Mem.empty, G + 150 + bodyGas, base.stateGas⟩)
-      (G := G + 150 + bodyGas) ?_ ?_ ?_
-    · simp only [Devm.gasLeft_setMach, setPauseDurationDispatchGas, gJumpdest]
-      omega
-    · rfl
-    · have hlt : sevm.data.length.toB256 <? 4 = 0 := by
-        rw [hdata]
-        decide
-      have hor : B256.or 0 sevm.value = 0 := by
-        rw [hvalue]
-        decide
-      have hselector' :
-          Sevm.dataWord sevm 0 >>> B256.toNat 224 =
-            selector "setPauseDuration" [.uint256] := hselector
-      unfold runtime symbolicLinkCert legacyRuntime runtimeMain hybridDispatchWith splitDispatch
-        linearDispatchWith firstSelector funcs
-      simp only [List.take, List.drop, List.head?, Option.map, Option.getD]
-      func_run (31) [0, 0,
-        selector "setPauseDuration" [.uint256],
-        0, 0, 0, 0, 1]
-      all_goals try exact fun _ => h_push0
-      have hboundary : G + 150 + bodyGas - 150 = G + bodyGas := by
-        omega
-      simpa only [Devm.setMach_setMach, Devm.stateGas_setMach, Devm.stack_setMach,
-        Devm.memory_setMach, Devm.gasLeft_setMach, hboundary,
-        runtimeMain, hybridDispatchWith, splitDispatch, firstSelector, funcs,
-        List.take, List.drop, List.head?, Option.map, Option.getD,
-        linearDispatchWith] using hbody
+  · exact runtime_dispatch_runCompiledTo dp 15
+      h_push0 h_shifts hvalue (by rw [hdata]; decide) hselector
+      (by simp only [setPauseDurationDispatchGas, gJumpdest,
+        show runtimeDispatchCost 15 = 150 from rfl]; omega)
+      hbody
   · rw [hcode, lidoCircuitBreakerCode_compile]
 
 /-- The concrete configuration call runs, gas-exactly, on the production
@@ -2441,7 +2415,6 @@ def setPauseDurationConfigPath : Prog.SourcePath :=
       sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
       sourceRests 15⟩
 
-set_option maxRecDepth 602 in
 /-- The complete route from program entry to the `setPauseDuration.config`
 `SSTORE`, across all ten branches.  Only the calldata selector is an execution
 premise: five crossings are decided on it and the other five have
@@ -2470,35 +2443,35 @@ theorem runtimeMain_routeTo_setPauseDurationConfig (dp : DeployParams)
     (fun _s1 run1 tail1 => ?_)
   have p1 := prefix_of_splitTest p0 run1
   refine routeTo_branchLeft_frame tail1
-    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; selector_words_decide)
     (fun _s2 hpop2 tail2 => ?_)
   have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
   refine routeTo_line (splitTest (selector "MIN_HEARTBEAT_INTERVAL" [])) tail2
     (fun _s3 run3 tail3 => ?_)
   have p3 := prefix_of_splitTest p2 run3
   refine routeTo_branchLeft_frame tail3
-    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; selector_words_decide)
     (fun _s4 hpop4 tail4 => ?_)
   have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
   refine routeTo_line (linearTest (selector "MIN_HEARTBEAT_INTERVAL" [])) tail4
     (fun _s5 run5 tail5 => ?_)
   have p5 := prefix_of_linearTest p4 run5
   refine routeTo_branchLeft_frame tail5
-    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; selector_words_decide)
     (fun _s6 hpop6 tail6 => ?_)
   have p6 := tail_of_stack_prefix p5 ⟨_, hpop6.stack⟩
   refine routeTo_line (linearTest (selector "heartbeatExpiry" [.address]))
     tail6 (fun _s7 run7 tail7 => ?_)
   have p7 := prefix_of_linearTest p6 run7
   refine routeTo_branchLeft_frame tail7
-    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; selector_words_decide)
     (fun _s8 hpop8 tail8 => ?_)
   have p8 := tail_of_stack_prefix p7 ⟨_, hpop8.stack⟩
   refine routeTo_line (linearTest (selector "setPauseDuration" [.uint256]))
     tail8 (fun _s9 run9 tail9 => ?_)
   have p9 := prefix_of_linearTest p8 run9
   refine routeTo_branchRight_frame tail9
-    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; selector_words_decide)
     (fun _s10 _w10 _hpop10 tail10 => ?_)
   refine routeTo_line setPauseDurationEntryTest tail10
     (fun _s11 _run11 tail11 => ?_)
@@ -2752,7 +2725,6 @@ def setHeartbeatIntervalConfigPath : Prog.SourcePath :=
       sourceRests 4 ++ [Prog.SourceStep.branchLeft] ++
       sourceRests 15⟩
 
-set_option maxRecDepth 606 in
 /-- The complete route from program entry to the `setHeartbeatInterval.config`
 `SSTORE`, across all eleven branches.  Only the calldata selector is an
 execution premise, exactly as on the pause-duration route.
@@ -2779,35 +2751,35 @@ theorem runtimeMain_routeTo_setHeartbeatIntervalConfig (dp : DeployParams)
     (fun _s1 run1 tail1 => ?_)
   have p1 := prefix_of_splitTest p0 run1
   refine routeTo_branchRight_frame tail1
-    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; selector_words_decide)
     (fun _s2 _w2 hpop2 tail2 => ?_)
   have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
   refine routeTo_line (splitTest (selector "getPauser" [.address])) tail2
     (fun _s3 run3 tail3 => ?_)
   have p3 := prefix_of_splitTest p2 run3
   refine routeTo_branchLeft_frame tail3
-    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; selector_words_decide)
     (fun _s4 hpop4 tail4 => ?_)
   have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
   refine routeTo_line (linearTest (selector "getPauser" [.address])) tail4
     (fun _s5 run5 tail5 => ?_)
   have p5 := prefix_of_linearTest p4 run5
   refine routeTo_branchLeft_frame tail5
-    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; selector_words_decide)
     (fun _s6 hpop6 tail6 => ?_)
   have p6 := tail_of_stack_prefix p5 ⟨_, hpop6.stack⟩
   refine routeTo_line (linearTest (selector "getPausables" [])) tail6
     (fun _s7 run7 tail7 => ?_)
   have p7 := prefix_of_linearTest p6 run7
   refine routeTo_branchLeft_frame tail7
-    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; selector_words_decide)
     (fun _s8 hpop8 tail8 => ?_)
   have p8 := tail_of_stack_prefix p7 ⟨_, hpop8.stack⟩
   refine routeTo_line (linearTest (selector "heartbeatInterval" [])) tail8
     (fun _s9 run9 tail9 => ?_)
   have p9 := prefix_of_linearTest p8 run9
   refine routeTo_branchLeft_frame tail9
-    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; selector_words_decide)
     (fun _s10 hpop10 tail10 => ?_)
   have p10 := tail_of_stack_prefix p9 ⟨_, hpop10.stack⟩
   refine routeTo_line
@@ -2815,7 +2787,7 @@ theorem runtimeMain_routeTo_setHeartbeatIntervalConfig (dp : DeployParams)
     (fun _s11 run11 tail11 => ?_)
   have p11 := prefix_of_lastLinearTest p10 run11
   refine routeTo_branchRight tail11
-    (fun _w _rest hs => by rw [head_of_stack_prefix p11 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p11 hs]; selector_words_decide)
     (fun _s12 arm12 => ?_)
   refine routeTo_line setHeartbeatIntervalEntryTest arm12
     (fun _s13 _run13 tail13 => ?_)
@@ -3189,7 +3161,6 @@ def heartbeatExpiryPath : Prog.SourcePath :=
       sourceRests 8 ++ [Prog.SourceStep.branchLeft] ++
       sourceRests 6⟩
 
-set_option maxRecDepth 609 in
 /-- The complete route from program entry to the `heartbeat.expiry` `SSTORE`,
 across all eleven branches.  Only the calldata selector is an execution
 premise: the registered-caller and strict-liveness facts this row's authority
@@ -3225,35 +3196,35 @@ theorem runtimeMain_routeTo_heartbeatExpiry
     (fun _s1 run1 tail1 => ?_)
   have p1 := prefix_of_splitTest p0 run1
   refine routeTo_branchRight_frame tail1
-    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p1 hs]; selector_words_decide)
     (fun _s2 _w2 hpop2 tail2 => ?_)
   have p2 := tail_of_stack_prefix p1 ⟨_, hpop2.stack⟩
   refine routeTo_line (splitTest (selector "getPauser" [.address])) tail2
     (fun _s3 run3 tail3 => ?_)
   have p3 := prefix_of_splitTest p2 run3
   refine routeTo_branchRight_frame tail3
-    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p3 hs]; selector_words_decide)
     (fun _s4 _w4 hpop4 tail4 => ?_)
   have p4 := tail_of_stack_prefix p3 ⟨_, hpop4.stack⟩
   refine routeTo_line (linearTest (selector "pauseDuration" [])) tail4
     (fun _s5 run5 tail5 => ?_)
   have p5 := prefix_of_linearTest p4 run5
   refine routeTo_branchLeft_frame tail5
-    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p5 hs]; selector_words_decide)
     (fun _s6 hpop6 tail6 => ?_)
   have p6 := tail_of_stack_prefix p5 ⟨_, hpop6.stack⟩
   refine routeTo_line (linearTest (selector "MAX_PAUSE_DURATION" [])) tail6
     (fun _s7 run7 tail7 => ?_)
   have p7 := prefix_of_linearTest p6 run7
   refine routeTo_branchLeft_frame tail7
-    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p7 hs]; selector_words_decide)
     (fun _s8 hpop8 tail8 => ?_)
   have p8 := tail_of_stack_prefix p7 ⟨_, hpop8.stack⟩
   refine routeTo_line (linearTest (selector "ADMIN" [])) tail8
     (fun _s9 run9 tail9 => ?_)
   have p9 := prefix_of_linearTest p8 run9
   refine routeTo_branchLeft_frame tail9
-    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p9 hs]; selector_words_decide)
     (fun _s10 hpop10 tail10 => ?_)
   have p10 := tail_of_stack_prefix p9 ⟨_, hpop10.stack⟩
   refine routeTo_line
@@ -3261,14 +3232,14 @@ theorem runtimeMain_routeTo_heartbeatExpiry
     (fun _s11 run11 tail11 => ?_)
   have p11 := prefix_of_linearTest p10 run11
   refine routeTo_branchLeft_frame tail11
-    (fun _w _rest hs => by rw [head_of_stack_prefix p11 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p11 hs]; selector_words_decide)
     (fun _s12 hpop12 tail12 => ?_)
   have p12 := tail_of_stack_prefix p11 ⟨_, hpop12.stack⟩
   refine routeTo_line (lastLinearTest (selector "heartbeat" [])) tail12
     (fun _s13 run13 tail13 => ?_)
   have p13 := prefix_of_lastLinearTest p12 run13
   refine routeTo_branchRight tail13
-    (fun _w _rest hs => by rw [head_of_stack_prefix p13 hs]; decide)
+    (fun _w _rest hs => by rw [head_of_stack_prefix p13 hs]; selector_words_decide)
     (fun _s14 arm14 => ?_)
   refine routeTo_line heartbeatCountTest arm14 (fun _s15 _run15 tail15 => ?_)
   refine routeTo_branchLeft_of_rightRevertsOk tail15 (fuel := 8) (by rfl)
