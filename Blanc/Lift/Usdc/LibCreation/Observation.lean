@@ -11,7 +11,7 @@ open Jaune ExecutionTrace
 
 /-- The observed signed wire is exactly the decoder-certified proof input. -/
 theorem observed_signed_bytes : SignedInput.signedBytes = ObservationData.signedBytes := by
-  unfold SignedInput.signedBytes SignedInput.payload
+  unfold SignedInput.signedBytes
   rw [ByteArray.toList_eq_toList_data]
   apply eq_of_beq
   decide +kernel

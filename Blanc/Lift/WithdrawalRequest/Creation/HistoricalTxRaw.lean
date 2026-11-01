@@ -1,3 +1,4 @@
+import Blanc.RlpListEncode
 import Blanc.RlpRoundTrip
 import Blanc.Lift.LegacyRecover
 import Blanc.Lift.WithdrawalRequest.Creation.Deploy
@@ -11,7 +12,7 @@ no receiver, zero value, the 549-byte creation input `creationCode` as data, and
 pre-EIP-155 signature `v = 27`, `r = 0x0539`. The strict decoder's result comes from the shared
 `LegacyRecover.legacy_decode_pre155`; `raw = rawPrefix ++ creationCode.toList ++ rawSuffix`
 (592 bytes) parses with full consumption and is the canonical re-encoding; the six-field
-pre-EIP-155 signing payload is factored by `LegacyRecover.signingPayload_pre155`. The creation
+pre-EIP-155 signing payload is encoded by `RlpConcrete.encode_list_at_last`. The creation
 input stays owned by `Creation.creationCode`; no byte of it is copied here. The values are
 unadopted candidate observations.
 -/
@@ -75,60 +76,14 @@ theorem raw_length : raw.length = 592 := by
   simp only [raw, List.length_append, data_length]
   decide +kernel
 
-/-- The creation data uses its exact two-byte long-string header. -/
-theorem data_encoded :
-    (BLT.bytes creationCode.toList).toBytes = [0xb9, 0x02, 0x25] ++ creationCode.toList := by
-  rw [encode_bytes_many _ (by rw [data_length]; decide)]
-  simp only [data_length, Nat.reduceLT, ↓reduceIte, Nat.toBytesPack,
-    Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd,
-    Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv,
-    List.length_cons, List.length_nil, UInt8.reduceAdd, List.cons_append,
-    List.nil_append]
-
-/-- The list body, retaining the shared data payload. -/
-def rawBody : Bytes :=
-  [0x80, 0x85, 0xe8, 0xd4, 0xa5, 0x10, 0x00, 0x83, 0x03, 0xd0, 0x90,
-   0x80, 0x80, 0xb9, 0x02, 0x25] ++ creationCode.toList ++ rawSuffix
-
-theorem body_length : rawBody.length = 589 := by
-  simp only [rawBody, List.length_append, data_length]
-  decide +kernel
-
-theorem fields_encoded_body : BLTs.toBytesJoin fields = rawBody := by
-  have hr : (BLT.bytes rBytes).toBytes = 0x82 :: rBytes := by
-    rw [encode_bytes_many _ (by decide)]
-    decide +kernel
-  have hs : (BLT.bytes sBytes).toBytes = 0x93 :: sBytes := by
-    rw [encode_bytes_many _ (by decide)]
-    decide +kernel
-  simp only [fields, BLTs.toBytesJoin, data_encoded, hr, hs]
-  simp only [BLT.toBytes, UInt8.reduceLT, ↓reduceIte, List.length_cons,
-    List.length_nil, Nat.reduceAdd, Nat.reduceLT, Nat.toUInt8_eq,
-    UInt8.reduceOfNat, UInt8.reduceAdd, rawBody, rawSuffix,
-    List.cons_append, List.nil_append, List.append_nil, List.append_assoc]
-
 /-- Canonical signed re-encoding returns precisely the candidate bytes. -/
 theorem tx_encoded : tx.toBLT.toBytes = raw := by
-  have header : (589 : Nat).toBytesPack = [0x02, 0x4d] := by decide +kernel
-  rw [tx_toBLT, BLT.toBytes, BLTs.toBytes, fields_encoded_body, body_length,
-    ite_eq_right (by decide), header]
-  rfl
+  rw [tx_toBLT]
+  exact encode_list_at 5 rfl data_length (by decide) (by decide +kernel) (by decide +kernel)
 
 /-- The signed bytes pass Jaune's full-consumption RLP parser. -/
 theorem raw_decode : Bytes.toBLT? raw = some (.list fields) :=
   toBLT?_of_encoded (tx_toBLT ▸ tx_encoded) (by rw [raw_length]; decide)
-
-/-- The five leading scalar fields, shared by the signed list and the signing payload. -/
-def headFields : List BLT :=
-  [.bytes [], .bytes [0xe8, 0xd4, 0xa5, 0x10, 0x00], .bytes [0x03, 0xd0, 0x90],
-   .bytes [], .bytes []]
-
-theorem headFields_encoded :
-    BLTs.toBytesJoin headFields =
-      [0x80, 0x85, 0xe8, 0xd4, 0xa5, 0x10, 0x00, 0x83, 0x03, 0xd0, 0x90, 0x80, 0x80] := by
-  simp only [headFields, BLTs.toBytesJoin, BLT.toBytes, ↓reduceIte,
-    List.length_cons, List.length_nil, Nat.reduceAdd, Nat.reduceLT, Nat.toUInt8_eq,
-    UInt8.reduceOfNat, UInt8.reduceAdd, List.cons_append, List.nil_append, List.append_nil]
 
 /-- The six-field pre-EIP-155 signing payload (no chain-id trailer), retaining the creation
 input. -/
@@ -137,27 +92,10 @@ def signingPayload : Bytes :=
    0x83, 0x03, 0xd0, 0x90, 0x80, 0x80, 0xb9, 0x02, 0x25] ++ creationCode.toList
 
 /-- Pre-EIP-155 encoding, factored from the cryptographic reduction (shared
-`signingHash_pre155` and `signingPayload_pre155`). -/
+`signingHash_pre155` and `RlpConcrete.encode_list_at_last`). -/
 theorem signingEncoded : tx.signingHash = some signingPayload.keccak := by
   rw [LegacyRecover.signingHash_pre155 (p := 1000000000000) (rcv := none) rfl (Or.inl rfl)]
-  have hn : (UInt64.toBytes 0).sig = [] := by decide +kernel
-  have hp : Nat.toBytes 1000000000000 = [0xe8, 0xd4, 0xa5, 0x10, 0x00] := by decide +kernel
-  have hg : Nat.toBytes 250000 = [0x03, 0xd0, 0x90] := by decide +kernel
-  have h0 : Nat.toBytes 0 = [] := by decide +kernel
-  have hfields : [BLT.bytes tx.nonce.toBytes.sig, .bytes (1000000000000 : Nat).toBytes,
-      .bytes tx.gas.toBytes, .bytes (((none : Option Adr) <&> Adr.toBytes).getD []),
-      .bytes tx.value.toBytes, .bytes tx.data] =
-      headFields ++ [.bytes creationCode.toList] := by
-    change [BLT.bytes (UInt64.toBytes 0).sig, .bytes (1000000000000 : Nat).toBytes,
-      .bytes (250000 : Nat).toBytes, .bytes [], .bytes (0 : Nat).toBytes,
-      .bytes creationCode.toList] = _
-    rw [hn, hp, hg, h0]
-    rfl
-  rw [hfields, LegacyRecover.signingPayload_pre155 headFields_encoded
-    (by rw [data_length]; decide)]
-  simp only [data_length, List.length_cons, List.length_nil, Nat.reduceAdd, Nat.toBytesPack,
-    Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceMod, Nat.toUInt8_eq,
-    UInt8.reduceOfNat, Nat.reduceDiv, UInt8.reduceAdd, signingPayload, List.cons_append,
-    List.nil_append]
+  exact congrArg (fun b => some (Bytes.keccak b))
+    (encode_list_at_last 5 rfl rfl data_length (by decide) (by decide +kernel))
 
 end Blanc.Lift.WithdrawalRequest.Creation.HistoricalTx

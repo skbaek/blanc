@@ -1,3 +1,4 @@
+import Blanc.RlpListEncode
 import Blanc.RlpRoundTrip
 import Blanc.Lift.BeaconDeposit.Creation.Deploy
 
@@ -76,48 +77,10 @@ theorem raw_length : raw.length = 6719 := by
   simp only [raw, List.length_append, data_length]
   decide +kernel
 
-/-- The creation data uses its exact two-byte long-string header. -/
-theorem data_encoded :
-    (BLT.bytes code.toList).toBytes = [0xb9, 0x19, 0xe9] ++ code.toList := by
-  rw [encode_bytes_many _ (by rw [data_length]; decide)]
-  simp only [data_length, Nat.reduceLT, ↓reduceIte, Nat.toBytesPack,
-    Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd,
-    Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv,
-    List.length_cons, List.length_nil, UInt8.reduceAdd, List.cons_append,
-    List.nil_append]
-
-/-- The list body retains the shared data payload. -/
-def rawBody : Bytes :=
-  [0x80, 0x85, 0x22, 0x39, 0xe1, 0xfe, 0x00, 0x83, 0x2f, 0xef, 0xd8,
-   0x80, 0x80, 0xb9, 0x19, 0xe9] ++ code.toList ++ rawSuffix
-
-theorem body_length : rawBody.length = 6716 := by
-  simp only [rawBody, List.length_append, data_length]
-  decide +kernel
-
-theorem fields_encoded_body : BLTs.toBytesJoin fields = rawBody := by
-  have hr : (BLT.bytes rBytes).toBytes = 0xa0 :: rBytes := by
-    rw [encode_bytes_many _ (by decide +kernel)]
-    decide +kernel
-  have hs : (BLT.bytes sBytes).toBytes = 0xa0 :: sBytes := by
-    rw [encode_bytes_many _ (by decide +kernel)]
-    decide +kernel
-  simp only [fields, BLTs.toBytesJoin, data_encoded, hr, hs]
-  simp only [BLT.toBytes, UInt8.reduceLT, ↓reduceIte, List.length_cons,
-    List.length_nil, Nat.reduceAdd, Nat.reduceLT, Nat.toUInt8_eq,
-    UInt8.reduceOfNat, UInt8.reduceAdd, rawBody, rawSuffix,
-    List.cons_append, List.nil_append, List.append_nil, List.append_assoc]
-
 /-- Canonical signed re-encoding returns precisely the raw candidate. -/
 theorem tx_encoded : tx.toBLT.toBytes = raw := by
   rw [tx_toBLT]
-  rw [BLT.toBytes, BLTs.toBytes]
-  rw [fields_encoded_body, body_length]
-  simp only [Nat.reduceLT, ↓reduceIte, Nat.toBytesPack, Nat.toBytes,
-    Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod,
-    Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv, List.length_cons,
-    List.length_nil, UInt8.reduceAdd, raw, rawPrefix, rawBody,
-    List.cons_append, List.nil_append]
+  exact encode_list_at 5 rfl data_length (by decide) (by decide +kernel) (by decide +kernel)
 
 /-- The exact raw candidate passes Jaune's full-consumption RLP parser. -/
 theorem raw_decode : Bytes.toBLT? raw = some (.list fields) :=
@@ -131,36 +94,8 @@ def signingPayload : Bytes :=
 
 /-- EIP-155 encoding is factored from the subsequent cryptographic reduction. -/
 theorem signingEncoded : tx.signingHash = some signingPayload.keccak := by
-  have hn : (UInt64.toBytes 0).sig = [] := by decide +kernel
-  have hp : Nat.toBytes 147000000000 = [0x22, 0x39, 0xe1, 0xfe, 0x00] := by decide +kernel
-  have hg : Nat.toBytes 3141592 = [0x2f, 0xef, 0xd8] := by decide +kernel
-  have h0 : Nat.toBytes 0 = [] := by decide +kernel
-  have h1 : Nat.toBytes 1 = [1] := by decide +kernel
-  simp only [Tx.signingHash, tx,
-    Nat.reduceSub, Nat.reduceDiv, hn, hp, hg, h0, h1]
-  change some ((BLT.list
-    [.bytes [], .bytes [0x22, 0x39, 0xe1, 0xfe, 0x00],
-     .bytes [0x2f, 0xef, 0xd8], .bytes [], .bytes [], .bytes code.toList,
-     .bytes [1], .bytes [], .bytes []]).toBytes.keccak) = _
-  apply congrArg some
-  apply congrArg Bytes.keccak
-  rw [BLT.toBytes, BLTs.toBytes]
-  have hj : BLTs.toBytesJoin
-      [.bytes [], .bytes [0x22, 0x39, 0xe1, 0xfe, 0x00],
-       .bytes [0x2f, 0xef, 0xd8], .bytes [], .bytes [], .bytes code.toList,
-       .bytes [1], .bytes [], .bytes []] =
-      [0x80, 0x85, 0x22, 0x39, 0xe1, 0xfe, 0x00, 0x83, 0x2f, 0xef, 0xd8,
-       0x80, 0x80, 0xb9, 0x19, 0xe9] ++ code.toList ++ [1, 0x80, 0x80] := by
-    simp only [BLTs.toBytesJoin, data_encoded]
-    simp only [BLT.toBytes, UInt8.reduceLT, ↓reduceIte, List.length_cons,
-      List.length_nil, Nat.reduceAdd, Nat.reduceLT, Nat.toUInt8_eq,
-      UInt8.reduceOfNat, UInt8.reduceAdd, List.cons_append,
-      List.nil_append, List.append_nil]
-  rw [hj]
-  simp only [List.length_append, List.length_cons, List.length_nil,
-    data_length, Nat.reduceAdd, Nat.reduceLT, ↓reduceIte, Nat.toBytesPack,
-    Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, Nat.reduceMod,
-    Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv, UInt8.reduceAdd,
-    signingPayload, List.cons_append, List.nil_append]
+  simp only [Tx.signingHash, tx, Nat.reduceSub, Nat.reduceDiv]
+  exact congrArg (fun b => some (Bytes.keccak b))
+    (encode_list_at 5 rfl data_length (by decide) (by decide +kernel) (by decide +kernel))
 
 end Blanc.Lift.BeaconDeposit.Creation.HistoricalTx

@@ -5,6 +5,7 @@
 -- proved by Lean; no fixture result is a theorem premise.
 
 import Blanc.DripDeploy
+import Blanc.RlpListEncode
 import Blanc.RlpRoundTrip
 import Jaune.RlpEval
 import Blanc.DripRpow
@@ -48,18 +49,6 @@ theorem concreteCreateAddress : computeContractAddress concreteCreateSender 0 = 
   simp only [computeContractAddress, hs, hz, BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin]
   decide +kernel
 
-private theorem concreteCreationEncoded :
-    (BLT.bytes creationCode).toBytes = [0xb9, 0x07, 0xd1] ++ creationCode := by
-  have hlen : creationCode.length = 2001 := creationCodeSize_exact
-  rw [RlpConcrete.encode_bytes_many creationCode (by omega), hlen]
-  simp only [Nat.reduceLT, ↓reduceIte, Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one,
-    Nat.reduceAdd, Nat.toBytes.aux, Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv,
-    List.length_cons, List.length_nil, zero_add, UInt8.reduceAdd, List.cons_append, List.nil_append]
-
-def concreteCreatePayload : Bytes :=
-  [0x01, 0x80, 0x01, 0x08, 0x83, 0x07, 0xa1, 0x20, 0x80, 0x80, 0xb9, 0x07, 0xd1] ++
-  creationCode ++ [0xc0, 0x80, 0xa0] ++ concreteCreateTx.r ++ [0xa0] ++ concreteCreateTx.s
-
 def concreteCreateFields : List BLT :=
   [.bytes [1], .bytes [], .bytes [1], .bytes [8], .bytes [7, 0xa1, 0x20],
    .bytes [], .bytes [], .bytes creationCode, .list [], .bytes [],
@@ -74,80 +63,46 @@ theorem concreteCreateBLT : concreteCreateTx.toBLT = .list concreteCreateFields 
     Nat.reduceAdd, Nat.reduceMod, UInt8.reduceOfNat, AccessList.toBLT, List.map_nil, hr, hs,
     concreteCreateFields]
 
-theorem concreteCreateEncoded :
-    concreteCreateTxRlp = [0x02, 0xf9, 0x08, 0x22] ++ concreteCreatePayload := by
-  have hrlen : concreteCreateR.length = 32 := by decide +kernel
-  have hslen : concreteCreateS.length = 32 := by decide +kernel
-  have hr : (BLT.bytes concreteCreateR).toBytes = 0xa0 :: concreteCreateR := by
-    rw [RlpConcrete.encode_bytes_many _ (by omega), hrlen]
-    rfl
-  have hs : (BLT.bytes concreteCreateS).toBytes = 0xa0 :: concreteCreateS := by
-    rw [RlpConcrete.encode_bytes_many _ (by omega), hslen]
-    rfl
-  have hlen : creationCode.length = 2001 := creationCodeSize_exact
-  rw [concreteCreateTxRlp, concreteCreateBLT]
-  simp only [concreteCreateFields, BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, UInt8.reduceLT,
-    ↓reduceIte, List.length_nil, Nat.ofNat_pos, Nat.toUInt8_eq, UInt8.reduceOfNat, add_zero,
-    List.length_cons, zero_add, Nat.reduceAdd, Nat.reduceLT, UInt8.reduceAdd,
-    concreteCreationEncoded, List.cons_append, List.nil_append, hr, hs, List.append_nil,
-    List.length_append, hlen, hrlen, hslen, Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one,
-    Nat.toBytes.aux, Nat.reduceMod, Nat.reduceDiv, concreteCreatePayload, concreteCreateTx,
-    List.append_assoc]
+/-- The list encoding of the creation transaction: a closed header, the creation code, and
+the closed signature tail. -/
+def concreteCreateEnvelope : Bytes :=
+  [0xf9, 0x08, 0x22, 0x01, 0x80, 0x01, 0x08, 0x83, 0x07, 0xa1, 0x20, 0x80, 0x80, 0xb9, 0x07,
+    0xd1] ++ creationCode ++ ([0xc0, 0x80, 0xa0] ++ concreteCreateR ++ [0xa0] ++ concreteCreateS)
 
-theorem concreteCreatePayload_length : concreteCreatePayload.length = 2082 := by
-  have hlen : creationCode.length = 2001 := creationCodeSize_exact
-  simp only [concreteCreatePayload, List.cons_append, List.nil_append, concreteCreateTx,
-    concreteCreateR, concreteCreateS, List.append_assoc, List.length_cons, List.length_append, hlen,
-    B256.length_toBytes, Nat.reduceAdd]
+theorem concreteCreateEnvelopeEncoded :
+    (BLT.list concreteCreateFields).toBytes = concreteCreateEnvelope :=
+  RlpConcrete.encode_list_at 7 rfl creationCodeSize_exact
+    (by decide) (by decide +kernel) (by decide +kernel)
+
+theorem concreteCreateEncoded : concreteCreateTxRlp = 0x02 :: concreteCreateEnvelope := by
+  rw [concreteCreateTxRlp, concreteCreateBLT, concreteCreateEnvelopeEncoded]
+
+theorem concreteCreateEnvelope_length : concreteCreateEnvelope.length = 2085 := by
+  rw [concreteCreateEnvelope, List.length_append, List.length_append,
+    show creationCode.length = 2001 from creationCodeSize_exact]
+  decide +kernel
 
 theorem concreteCreateEnvelopeParse :
-    Bytes.toBLT? (0xf9 :: 0x08 :: 0x22 :: concreteCreatePayload) =
-      some (.list concreteCreateFields) := by
-  have encoded : (BLT.list concreteCreateFields).toBytes =
-      0xf9 :: 0x08 :: 0x22 :: concreteCreatePayload := by
-    have h := concreteCreateEncoded
-    rw [concreteCreateTxRlp, concreteCreateBLT] at h
-    simpa only [List.cons_append, List.nil_append, List.cons.injEq, true_and] using h
-  exact RlpConcrete.toBLT?_of_encoded encoded
-    (by rw [List.length_cons, List.length_cons, List.length_cons,
-      concreteCreatePayload_length]; decide)
+    Bytes.toBLT? concreteCreateEnvelope = some (.list concreteCreateFields) :=
+  RlpConcrete.toBLT?_of_encoded concreteCreateEnvelopeEncoded
+    (by rw [concreteCreateEnvelope_length]; decide)
 
 theorem concreteCreateDecode :
     decodeTx pragueRules (.inl concreteCreateTxRlp) = .ok concreteCreateTx := by
-  simp only [decodeTx, concreteCreateEncoded, List.cons_append, List.nil_append,
-    Bytes.toExTx, concreteCreateEnvelopeParse, concreteCreateFields]
+  simp only [decodeTx, concreteCreateEncoded, Bytes.toExTx, concreteCreateEnvelopeParse,
+    concreteCreateFields]
   rfl
 
 def concreteCreateSigningPayload : Bytes :=
-  [0x02, 0xf9, 0x07, 0xdf, 0x01, 0x80, 0x01, 0x08, 0x83, 0x07, 0xa1,
-    0x20, 0x80, 0x80, 0xb9, 0x07, 0xd1] ++ creationCode ++ [0xc0]
+  0x02 :: ([0xf9, 0x07, 0xdf, 0x01, 0x80, 0x01, 0x08, 0x83, 0x07, 0xa1,
+    0x20, 0x80, 0x80, 0xb9, 0x07, 0xd1] ++ creationCode ++ [0xc0])
 
 theorem concreteCreateSigningEncoded :
     concreteCreateTx.signingHash = some concreteCreateSigningPayload.keccak := by
-  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
-  have hn : (UInt64.toBytes 0).sig = [] := by decide +kernel
-  have h0 : Nat.toBytes 0 = [] := by simp only [Nat.toBytes, Nat.toBytes.aux]
-  have h1 : Nat.toBytes 1 = [1] := by simp only [Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one,
-    zero_add, Nat.one_mod, Nat.toUInt8_eq, UInt8.ofNat_one, Nat.reduceDiv]
-  have h8 : Nat.toBytes 8 = [8] := by simp only [Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one,
-    Nat.reduceAdd, Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv]
-  have hg : Nat.toBytes 500000 = [7, 0xa1, 0x20] := by simp only [Nat.toBytes, Nat.toBytes.aux,
-    Nat.succ_eq_add_one, Nat.reduceAdd, Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat,
-    Nat.reduceDiv]
-  have hlen : creationCode.length = 2001 := creationCodeSize_exact
-  simp only [Tx.signingHash, concreteCreateTx, hc, hn, h0, h1, h8, hg,
-    AccessList.toBLT, List.map_nil]
-  apply congrArg some
-  apply congrArg Bytes.keccak
-  change 2 :: (BLT.list
-    [.bytes [1], .bytes [], .bytes [1], .bytes [8], .bytes [7, 0xa1, 0x20],
-     .bytes [], .bytes [], .bytes creationCode, .list []]).toBytes = _
-  simp only [BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, UInt8.reduceLT, ↓reduceIte,
-    List.length_nil, Nat.ofNat_pos, Nat.toUInt8_eq, UInt8.reduceOfNat, add_zero, List.length_cons,
-    zero_add, Nat.reduceAdd, Nat.reduceLT, UInt8.reduceAdd, concreteCreationEncoded,
-    List.cons_append, List.nil_append, List.append_nil, List.length_append, hlen, Nat.toBytesPack,
-    Nat.toBytes, Nat.succ_eq_add_one, Nat.toBytes.aux, Nat.reduceMod, Nat.reduceDiv,
-    concreteCreateSigningPayload]
+  simp only [Tx.signingHash, concreteCreateTx, AccessList.toBLT, List.map_nil]
+  exact congrArg (fun b => some (Bytes.keccak (2 :: b)))
+    (RlpConcrete.encode_list_at 7 rfl creationCodeSize_exact
+      (by decide) (by decide +kernel) (by decide +kernel))
 
 theorem concreteCreateSigningHash :
     concreteCreateTx.signingHash =
@@ -429,12 +384,8 @@ theorem concreteHeaderPayloadEncoded (sr tr rr wr rh : B256) :
     rfl
   have hb : (BLT.bytes (List.replicate 256 0)).toBytes =
       [0xb9, 1, 0] ++ List.replicate 256 0 := by
-    rw [RlpConcrete.encode_bytes_many _ (by simp only [List.length_replicate]; decide)]
-    simp only [List.length_replicate, Nat.reduceLT, ↓reduceIte, Nat.toBytesPack, Nat.toBytes,
-      Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toBytes.aux, Nat.mod_self, Nat.toUInt8_eq,
-      UInt8.reduceOfNat, Nat.ofNat_pos, Nat.div_self, zero_add, Nat.one_mod, UInt8.ofNat_one,
-      Nat.reduceDiv, List.length_cons, List.length_nil, UInt8.reduceAdd, List.cons_append,
-      List.nil_append]
+    rw [RlpConcrete.encode_bytes_long (List.length_replicate ..) (by decide),
+      show RlpConcrete.longHeaderS 0xB7 256 = [0xb9, 1, 0] by decide +kernel]
   unfold concreteHeaderFields concreteHeaderPayload
   generalize concreteGenesisHeader.hash = parentHash
   simp only [BLTs.toBytesJoin, hw, ha, hn, hb]
@@ -446,40 +397,17 @@ theorem concreteHeaderPayloadEncoded (sr tr rr wr rh : B256) :
 theorem concreteHeaderEncoded (sr tr rr wr rh : B256) :
     (concreteDeploymentHeader sr tr rr wr rh).toBLT.toBytes =
       [0xf9, 2, 0x59] ++ concreteHeaderPayload sr tr rr wr rh := by
-  rw [concreteHeaderBLT, BLT.toBytes, BLTs.toBytes, concreteHeaderPayloadEncoded,
-    concreteHeaderPayload_length]
-  simp only [show ¬ (601 < 56) from by decide, ite_false]
-  have hpack : Nat.toBytesPack 601 = [2, 0x59] := by
-    simp only [Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toBytes.aux,
-      Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv]
-  rw [hpack]
-  rfl
+  rw [concreteHeaderBLT, RlpConcrete.encode_list_long (concreteHeaderPayloadEncoded sr tr rr wr rh)
+    (concreteHeaderPayload_length sr tr rr wr rh) (by decide),
+    show RlpConcrete.longHeaderS 0xF7 601 = [0xf9, 2, 0x59] by decide +kernel]
 
 theorem concreteCreateTxRlp_length : concreteCreateTxRlp.length = 2086 := by
-  rw [concreteCreateEncoded]
-  simp only [List.length_append, List.length_cons, List.length_nil,
-    concreteCreatePayload_length]
-
-theorem concreteTxStringEncoded : (BLT.bytes concreteCreateTxRlp).toBytes =
-    [0xb9, 8, 0x26] ++ concreteCreateTxRlp := by
-  rw [RlpConcrete.encode_bytes_many _ (by rw [concreteCreateTxRlp_length]; decide),
-    concreteCreateTxRlp_length]
-  have hp : Nat.toBytesPack 2086 = [8, 0x26] := by
-    simp only [Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toBytes.aux,
-      Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv]
-  simp only [show ¬ (2086 < 56) from by decide, ite_false, hp]
-  rfl
+  rw [concreteCreateEncoded, List.length_cons, concreteCreateEnvelope_length]
 
 theorem concreteTxListEncoded : (BLT.list [.bytes concreteCreateTxRlp]).toBytes =
-    [0xf9, 8, 0x29, 0xb9, 8, 0x26] ++ concreteCreateTxRlp := by
-  rw [BLT.toBytes, BLTs.toBytes]
-  simp only [BLTs.toBytesJoin, concreteTxStringEncoded, List.append_nil,
-    List.length_append, List.length_cons, List.length_nil, concreteCreateTxRlp_length]
-  have hp : Nat.toBytesPack 2089 = [8, 0x29] := by
-    simp only [Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toBytes.aux,
-      Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv]
-  simp only [show ¬ (3 + 2086 < 56) from by decide, ite_false, hp]
-  rfl
+    [0xf9, 8, 0x29, 0xb9, 8, 0x26] ++ concreteCreateTxRlp :=
+  RlpConcrete.encode_list_at_last 0 rfl rfl concreteCreateTxRlp_length (by decide)
+    (by decide +kernel)
 
 def concreteDeploymentBlock (sr tr rr wr rh : B256) : Block :=
   { header := concreteDeploymentHeader sr tr rr wr rh,
@@ -506,12 +434,8 @@ theorem concreteBlockEncoded (sr tr rr wr rh : B256) :
     rw [he]
     simp only [concreteBlockPayload, List.append_assoc, List.cons_append, List.nil_append]
   simp only [concreteDeploymentBlock, Block.toBLT, List.map_cons, List.map_nil, B8LOrTxToBLT]
-  rw [BLT.toBytes, BLTs.toBytes, hpayload, concreteBlockPayload_length]
-  have hp : Nat.toBytesPack 2698 = [0x0a, 0x8a] := by
-    simp only [Nat.toBytesPack, Nat.toBytes, Nat.succ_eq_add_one, Nat.reduceAdd, Nat.toBytes.aux,
-      Nat.reduceMod, Nat.toUInt8_eq, UInt8.reduceOfNat, Nat.reduceDiv]
-  simp only [show ¬ (2698 < 56) from by decide, ite_false, hp]
-  rfl
+  rw [RlpConcrete.encode_list_long hpayload (concreteBlockPayload_length sr tr rr wr rh)
+    (by decide), show RlpConcrete.longHeaderS 0xF7 2698 = [0xf9, 0x0a, 0x8a] by decide +kernel]
 
 theorem concreteBlockParse (sr tr rr wr rh : B256) :
     Bytes.toBLT? ([0xf9, 0x0a, 0x8a] ++ concreteBlockPayload sr tr rr wr rh) =
@@ -916,23 +840,10 @@ def concreteJoinSigningPayload : Bytes :=
 
 theorem concreteJoinSigningEncoded :
     concreteJoinTx.signingHash = some concreteJoinSigningPayload.keccak := by
-  have hc : (UInt64.toBytes 1).sig = [1] := by decide +kernel
-  have ht : (BLT.bytes concreteCreateTarget.toBytes).toBytes =
-      0x94 :: concreteCreateTarget.toBytes := by
-    rw [RlpConcrete.encode_bytes_many _ (by decide +kernel)]
-    rfl
-  have hlen : concreteCreateTarget.toBytes.length = 20 := rfl
-  simp only [Tx.signingHash, concreteJoinTx, hc, AccessList.toBLT, List.map_nil]
-  apply congrArg some
-  apply congrArg Bytes.keccak
-  change 2 :: (BLT.list [.bytes [1], .bytes [1], .bytes (Nat.toBytes 1),
-    .bytes (Nat.toBytes 8), .bytes (Nat.toBytes 500000), .bytes concreteCreateTarget.toBytes,
-    .bytes (Nat.toBytes 100), .bytes [0xb6, 0x88, 0xa3, 0x63], .list []]).toBytes = _
-  simp only [Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one, zero_add, Nat.one_mod,
-    Nat.toUInt8_eq, UInt8.ofNat_one, Nat.reduceDiv, Nat.reduceAdd, Nat.reduceMod, UInt8.reduceOfNat,
-    BLT.toBytes, BLTs.toBytes, BLTs.toBytesJoin, UInt8.reduceLT, ↓reduceIte, List.length_cons,
-    List.length_nil, Nat.reduceLT, UInt8.reduceAdd, ht, Nat.ofNat_pos, add_zero, List.append_nil,
-    List.cons_append, List.nil_append, List.length_append, hlen, concreteJoinSigningPayload]
+  simp only [Tx.signingHash, concreteJoinTx, AccessList.toBLT, List.map_nil]
+  apply congrArg (fun b => some (Bytes.keccak b))
+  rw [BLT.toBytes_eq_toBytesS]
+  decide +kernel
 
 theorem concreteJoinSigningHash :
     concreteJoinTx.signingHash =

@@ -1,5 +1,5 @@
 import Blanc.Lift.Usdc.ImplV2Creation.Bindings
-import Blanc.RlpConcrete
+import Blanc.RlpListEncode
 
 /-! Signing envelope of the unadopted V2 creation preview, conditional on explicit fields. -/
 namespace Blanc.Lift.Usdc.ImplV2Creation
@@ -30,30 +30,8 @@ theorem signingEncoded {tx : Tx}
       Bool.or_self, ↓reduceIte]
     rfl
   rw [fields]
-  apply congrArg some
-  apply congrArg Bytes.keccak
-  have inputEncoded : (BLT.bytes code.toList).toBytes =
-      [0xb9, 0x5a, 0xd0] ++ code.toList := by
-    rw [RlpConcrete.encode_bytes_many _ (by rw [code_toList_length]; omega),
-      code_toList_length]
-    norm_num only [Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one,
-      Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq,
-      UInt8.reduceOfNat, UInt8.reduceAdd, ↓reduceIte, List.length_cons, List.length_nil,
-      List.cons_append, List.nil_append]
-  have joined : BLTs.toBytesJoin
-      [.bytes [0x1f], .bytes [0x22, 0xec, 0xb2, 0x5c, 0x00],
-        .bytes [0x4f, 0x58, 0x80], .bytes [], .bytes [], .bytes code.toList] =
-      [0x1f, 0x85, 0x22, 0xec, 0xb2, 0x5c, 0x00,
-        0x83, 0x4f, 0x58, 0x80, 0x80, 0x80, 0xb9, 0x5a, 0xd0] ++ code.toList := by
-    simp only [BLTs.toBytesJoin, inputEncoded, BLT.toBytes,
-      List.length_cons, List.length_nil, Nat.reduceLT, UInt8.reduceLT, ↓reduceIte,
-      List.cons_append, List.nil_append, List.append_nil]
-    rfl
-  rw [BLT.toBytes, BLTs.toBytes, joined]
-  norm_num only [List.length_append, List.length_cons, List.length_nil, code_toList_length,
-    Nat.toBytesPack, Nat.toBytes, Nat.toBytes.aux, Nat.succ_eq_add_one,
-    Nat.reduceAdd, Nat.reduceMod, Nat.reduceDiv, Nat.reduceLT, Nat.toUInt8_eq,
-    UInt8.reduceOfNat, UInt8.reduceAdd, ↓reduceIte, List.cons_append,
-    List.nil_append, signingPayload]
+  exact congrArg (fun b => some (Bytes.keccak b))
+    (RlpConcrete.encode_list_at_last 5 rfl rfl code_toList_length (by decide)
+      (by decide +kernel))
 
 end Blanc.Lift.Usdc.ImplV2Creation
