@@ -63,8 +63,6 @@ theorem concreteCreateBLT : concreteCreateTx.toBLT = .list concreteCreateFields 
     Nat.reduceAdd, Nat.reduceMod, UInt8.reduceOfNat, AccessList.toBLT, List.map_nil, hr, hs,
     concreteCreateFields]
 
-theorem creationCode_length : creationCode.length = 2001 := creationCodeSize_exact
-
 /-- The list encoding of the creation transaction: a closed header, the creation code, and
 the closed signature tail. -/
 def concreteCreateEnvelope : Bytes :=
@@ -73,7 +71,7 @@ def concreteCreateEnvelope : Bytes :=
 
 theorem concreteCreateEnvelopeEncoded :
     (BLT.list concreteCreateFields).toBytes = concreteCreateEnvelope :=
-  RlpConcrete.encode_list_at 7 rfl creationCode_length
+  RlpConcrete.encode_list_at 7 rfl creationCodeSize_exact
     (by decide) (by decide +kernel) (by decide +kernel)
 
 theorem concreteCreateEncoded : concreteCreateTxRlp = 0x02 :: concreteCreateEnvelope := by
@@ -81,7 +79,7 @@ theorem concreteCreateEncoded : concreteCreateTxRlp = 0x02 :: concreteCreateEnve
 
 theorem concreteCreateEnvelope_length : concreteCreateEnvelope.length = 2085 := by
   rw [concreteCreateEnvelope, List.length_append, List.length_append,
-    creationCode_length]
+    show creationCode.length = 2001 from creationCodeSize_exact]
   decide +kernel
 
 theorem concreteCreateEnvelopeParse :
@@ -103,7 +101,7 @@ theorem concreteCreateSigningEncoded :
     concreteCreateTx.signingHash = some concreteCreateSigningPayload.keccak := by
   simp only [Tx.signingHash, concreteCreateTx, AccessList.toBLT, List.map_nil]
   exact congrArg (fun b => some (Bytes.keccak (2 :: b)))
-    (RlpConcrete.encode_list_at 7 rfl creationCode_length
+    (RlpConcrete.encode_list_at 7 rfl creationCodeSize_exact
       (by decide) (by decide +kernel) (by decide +kernel))
 
 theorem concreteCreateSigningHash :
