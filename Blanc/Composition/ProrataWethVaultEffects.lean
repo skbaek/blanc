@@ -7,6 +7,8 @@ import Blanc.Ladder
 import Blanc.NonpayableInversion
 import Blanc.Solvent
 import Blanc.WethLive
+import Blanc.CommonProofs.DispatchReach
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # Exact effects of the PRORATA vault's WETH children

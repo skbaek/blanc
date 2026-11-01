@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.MemImage
 
 /-! # Contract-neutral byte-image write laws -/
 

@@ -26,7 +26,7 @@
 -- `maxBalance + 1 = 2^126` wei; from an arbitrary admissible state the exact
 -- threshold is `maxBalance + 1 - B`.
 
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Base
 
 namespace Blanc
 

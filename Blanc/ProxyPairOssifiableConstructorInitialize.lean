@@ -1,5 +1,6 @@
 import Blanc.ProxyPairOssifiableConstructorDecode
 import Blanc.ProxyPairOssifiableControlEffects
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # OssifiableProxy constructor implementation check

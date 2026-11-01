@@ -8,6 +8,7 @@
 import Blanc.Weth10Functional
 import Blanc.Ladder
 import Blanc.Weth10Errors
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

@@ -1,7 +1,7 @@
 import Blanc.ExecutionHistory
 import Blanc.ExecutionTraceWarmth
 import Blanc.ExecutionTraceAdmission
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Balance
 import Blanc.LadderBase
 
 /-!

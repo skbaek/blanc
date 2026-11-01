@@ -3,6 +3,7 @@
 import Blanc.Weth10StateFunctional
 import Blanc.Weth10StateSound
 import Blanc.Weth10Errors
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

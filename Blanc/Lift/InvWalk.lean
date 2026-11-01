@@ -1,5 +1,5 @@
 import Blanc.Lift.ExactWalk
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Walk
 import Blanc.Lift.Loop
 import Blanc.CompiledWalkInversion
 

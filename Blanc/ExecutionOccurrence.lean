@@ -1,7 +1,7 @@
 import Blanc.ExecutionSettlement
 import Blanc.ExecutionFrames
 import Blanc.Compiled
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Balance
 import Blanc.ExecDeterminism
 import Blanc.Ladder
 import Jaune.ExecChronology

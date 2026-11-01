@@ -52,7 +52,7 @@ channels, its allowlist and its trust scan are all live.
 A fourth net was added once the family was complete.  `VOCABULARY_PINS` pins
 the declarations this family is WRITTEN IN but does not own -- `RegistryWitness`
 and the `ContractSpec` premise vocabulary in `Blanc/Ladder.lean`, plus the
-shared storage-silence fixed point in `Blanc/CommonProofs.lean`.  Without it a
+shared storage-silence fixed point in `Blanc/CommonProofs/Base.lean`.  Without it a
 pinned statement can keep its digest while the words it is made of change
 meaning underneath it, which is not hypothetical: threading `Mem.Wf` through
 the ladder moved `DispatchInv` and three Chain statements from `Pre` to `PreWf`
@@ -697,9 +697,10 @@ SEMANTIC_CHANNELS = {
 #     `RegistryWitness.*` theorems, not the structure.
 #
 #   * `ContractSpec` and its fields (`Pre`, `PreWf`, `Post`, `Sound`,
-#     `FuncSound`, `Preserves`, `StateInv`, `MsgInv`), `Exec.InvDepth`, and
-#     `BlockChain.Reach`/`ReachUsing` (`Blanc/Ladder.lean`) are named by pinned
-#     S7 statements and pinned by nothing.  The worked exploit: add
+#     `FuncSound`, `Preserves`, `StateInv`, `MsgInv`; `Blanc/Ladder.lean`),
+#     `Exec.InvDepth`, and `BlockChain.Reach`/`ReachUsing`
+#     (`Blanc/LadderBase.lean`) are named by pinned S7 statements and pinned
+#     by nothing.  The worked exploit: add
 #     `block.txs = []` to `BlockChain.ReachUsing.step` and
 #     `chain_preserves_registryStable` still READS "every state reachable by
 #     the configured valid-chain relation", with an unchanged digest, while
@@ -720,7 +721,7 @@ SEMANTIC_CHANNELS = {
 # missing pin, and so that the digest emitter cannot bootstrap itself from an
 # empty table.
 VOCABULARY_NAMES = {
-    "Blanc/CommonProofs.lean": (
+    "Blanc/CommonProofs/Base.lean": (
         "Blanc.Func.StorSilentIn",
         "Blanc.Func.getStor_eq_of_run_storSilentIn",
     ),
@@ -752,7 +753,7 @@ VOCABULARY_SOURCES = tuple(VOCABULARY_NAMES)
 
 # >>> VOCABULARY PINS >>>
 VOCABULARY_PINS = {
-    "Blanc/CommonProofs.lean": {
+    "Blanc/CommonProofs/Base.lean": {
         "Blanc.Func.StorSilentIn": "8dab02e4b783fd0bb8af9bf8c4d175aa1ee8e037b8cf72ef04aceddd71d5e887",
         "Blanc.Func.getStor_eq_of_run_storSilentIn": "15e4b349ffc9ce4a35e8e6b0573213efe975a1a991db75705b73c8b3065ea159"
     },
@@ -2682,22 +2683,24 @@ SELF_TESTS = (
      "  targetsValid : ∀ entry ∈ entries, True",
      "no longer mentions"),
     ("vocabulary: shared storage-silence definition gutted",
-     "vocabulary", "Blanc/CommonProofs.lean",
+     "vocabulary", "Blanc/CommonProofs/Base.lean",
      "  | .last l => Linst.Inv Devm.getStor Devm.getStor l",
      "  | .last _ => True",
      "changed in"),
     ("vocabulary: shared storage-silence definition gutted, digest re-taken",
-     "vocabulary-channels", "Blanc/CommonProofs.lean",
+     "vocabulary-channels", "Blanc/CommonProofs/Base.lean",
      "  | .last l => Linst.Inv Devm.getStor Devm.getStor l",
      "  | .last _ => True",
      "no longer mentions"),
     ("vocabulary: shared storage-silence theorem weakened, digest re-taken",
-     "vocabulary-channels", "Blanc/CommonProofs.lean",
+     "vocabulary-channels", "Blanc/CommonProofs/Base.lean",
      "    Devm.getStor r = Devm.getStor s := by",
      "    True := by",
      "no longer mentions"),
+    # `BlockChain.ReachUsing` moved verbatim from `Blanc/Ladder.lean` to
+    # `Blanc/LadderBase.lean` (e92b0b5e); the mutation follows it there.
     ("vocabulary: valid-chain reachability restricted to empty blocks",
-     "vocabulary", "Blanc/Ladder.lean",
+     "vocabulary", "Blanc/LadderBase.lean",
      "      ReachUsing cfg ch ch' →\n"
      "      sum ch'.state.bal + wdsum block.wds < 2 ^ 256 →",
      "      ReachUsing cfg ch ch' →\n"

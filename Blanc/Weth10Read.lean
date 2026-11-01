@@ -1,6 +1,7 @@
 -- Exact functional observations for WETH10's read-only public surface boundary.
 
 import Blanc.Weth10Permit
+import Blanc.CommonProofs.MemEffects
 
 namespace Blanc
 

@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.NoDel
 
 /-!
 # Storage at successful terminal steps

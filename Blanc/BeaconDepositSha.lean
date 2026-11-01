@@ -1,6 +1,7 @@
 import Blanc.BeaconDeposit
 import Blanc.ForwardSha256
 import Blanc.StaticPrecompileMessage
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # Beacon deposit SHA-256 wrapper carrier

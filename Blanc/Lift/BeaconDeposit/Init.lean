@@ -1,5 +1,5 @@
 import Blanc.Lift.BeaconDeposit.Layout
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Base
 
 /-!
 # Satisfiability of the Beacon deposit checkpoint premise

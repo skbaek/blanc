@@ -1,4 +1,4 @@
-import Blanc.CommonProofs
+import Blanc.CommonProofs.Messages
 import Blanc.ExecutionFrames
 import Blanc.ExecutionAdmissionSem
 

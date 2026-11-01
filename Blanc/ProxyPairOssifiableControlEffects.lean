@@ -1,5 +1,6 @@
 import Blanc.ProxyPairOssifiableControl
 import Blanc.AddressSlotProofs
+import Blanc.CommonProofs.MemEffects
 
 /-!
 # Exact effects of the OssifiableProxy control plane
