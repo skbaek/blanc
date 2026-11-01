@@ -380,28 +380,9 @@ theorem constructorReturnImage_read :
 
 /-! ## Balance threading
 
-`getBal` preservation through the walk's transitions, the two `B256`
-zero-lemmas, the value-zero entry-transfer balance-map equality, and the
-`addBal`-at-another-address projection for final settlement. All eight are
-generic-shaped (S9 hoist candidates); they live here only because the packet
-owns no shared path. -/
-
-private theorem getBal_setMach_eq {d : Devm} {m : Mach} {a : Adr} :
-    (d.setMach m).getBal a = d.getBal a := rfl
-
-private theorem getBal_addAccessed_eq {d : Devm} {a : Adr} {k : B256} {b : Adr} :
-    (addAccessedStorageKey d a k).getBal b = d.getBal b := rfl
-
-private theorem getBal_withRefundCounter_eq {d : Devm} {n : Int} {b : Adr} :
-    (d.withRefundCounter n).getBal b = d.getBal b := rfl
-
-private theorem getBal_setStorVal_eq {d : Devm} {a : Adr} {k v : B256} {b : Adr} :
-    (d.setStorVal a k v).getBal b = d.getBal b := by
-  show ((d.state.setStorVal a k v).get b).bal = (d.state.get b).bal
-  by_cases h : a = b
-  · subst h
-    rw [State.setStorVal_get_self]
-  · rw [State.setStorVal_get_ne _ h]
+`getBal` preservation through the walk's transitions uses Jaune's
+`DevmProjections` laws. The `addBal`-at-another-address projection for final
+settlement is generic-shaped (hoist debt) and has no Jaune twin at the pin. -/
 
 private theorem addBal_bal_ne {st : State} {a b : Adr} {v : B256} (h : a ≠ b) :
     (st.addBal a v).bal b = st.bal b := by
@@ -688,8 +669,8 @@ theorem constructorProgram_runCompiled {sevm : Sevm} {pre : Devm} {G : Nat}
     show dRet.getBal sevm.currentTarget = pre.getBal sevm.currentTarget
     simp only [dRet, s19, s18, s17, s16, s15, s14, s13, s12, s11, s10,
       s9, s8, s7, s6, s5, s4, s3, s2, s1, mid,
-      getBal_setMach_eq, getBal_setStorVal_eq, getBal_withRefundCounter_eq,
-      getBal_addAccessed_eq]
+      Devm.setMach_getBal, Devm.setStorVal_getBal, Devm.withRefundCounter_getBal,
+      addAccessedStorageKey_getBal]
   have hstateW : postW.state =
       (pre.state.setStorVal sevm.currentTarget chiSlot scale).setStorVal
         sevm.currentTarget rhoSlot sevm.benvStat.time := by rfl

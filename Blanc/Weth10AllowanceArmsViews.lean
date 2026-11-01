@@ -137,10 +137,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_name
         nonpayable name := rfl
     rw [hshape]
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or]
-  have hchildless : ∀ n ∈ nameLine, NinstIsChildless n := by
-    simp only [nameLine, pushB256, pushList, List.map_cons, List.map_nil, List.cons_append,
-      List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ nameLine, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -194,10 +192,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_symbol
     rw [hshape]
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
       or_true]
-  have hchildless : ∀ n ∈ symbolLine, NinstIsChildless n := by
-    simp only [symbolLine, pushB256, pushList, List.map_cons, List.map_nil, List.cons_append,
-      List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ symbolLine, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -252,10 +248,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_decimals
     rw [hshape]
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
       or_true]
-  have hchildless : ∀ n ∈ returnWordLine 0x12, NinstIsChildless n := by
-    simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
-      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ returnWordLine 0x12, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -314,10 +308,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_permitTypehash
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
       or_true]
   have hchildless : ∀ n ∈ returnWordLine PERMIT_TYPEHASH,
-      NinstIsChildless n := by
-    simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
-      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self]
+      NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -378,10 +370,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_callbackSuccess
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
       or_true]
   have hchildless : ∀ n ∈ returnWordLine CALLBACK_SUCCESS,
-      NinstIsChildless n := by
-    simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
-      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self]
+      NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -438,10 +428,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_totalSupply
     rw [hshape]
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
       or_true]
-  have hchildless : ∀ n ∈ totalSupplyLine, NinstIsChildless n := by
-    simp only [totalSupplyLine, pushFlashMintedSlot, pushB256, List.cons_append, List.nil_append,
-      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ totalSupplyLine, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -498,10 +486,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_balanceOf
     rw [hshape]
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
       or_true]
-  have hchildless : ∀ n ∈ balanceOfLine, NinstIsChildless n := by
-    simp only [balanceOfLine, arg, cdl, pushB256, List.cons_append, List.nil_append, mstoreAt,
-      pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ balanceOfLine, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -558,10 +544,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_nonces
     rw [hshape]
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
       or_true]
-  have hchildless : ∀ n ∈ noncesLine, NinstIsChildless n := by
-    simp only [noncesLine, arg, cdl, pushB256, tagNonceKey, List.cons_append, List.nil_append,
-      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ noncesLine, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -615,10 +599,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_flashMinted
     rw [hshape]
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
       or_true]
-  have hchildless : ∀ n ∈ flashMintedLine, NinstIsChildless n := by
-    simp only [flashMintedLine, pushFlashMintedSlot, pushB256, List.cons_append, List.nil_append,
-      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ flashMintedLine, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -677,10 +659,8 @@ theorem Exec.Frame.attributionInner_eq_nil_of_deploymentChainId
     rw [hshape]
     simp only [weth10Funcs, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, true_or,
       or_true]
-  have hchildless : ∀ n ∈ deploymentChainIdLine dp, NinstIsChildless n := by
-    simp only [deploymentChainIdLine, pushDeployWord, mstoreAt, pushB256, List.cons_append,
-      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
-      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ deploymentChainIdLine dp, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.attributionInner_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -747,21 +727,16 @@ theorem Exec.Frame.attributionInner_eq_nil_of_domainSeparator
     ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨bodyCursor⟩
   rcases bodyCursor.peelChildlessLine
-      (by simp only [domainSelectLine, Fin.isValue, pushDeployWord, List.mem_cons, List.not_mem_nil,
-        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, -⟩
   rcases branchCursor.selectBranchSplit with
     ⟨⟨freshCursor⟩⟩ | ⟨⟨cachedCursor⟩⟩
   · rcases freshCursor.peelChildlessLine
-        (by simp only [domainFreshLine, calculateDomainSeparator, mstoreAt, pushB256,
-          List.cons_append, List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons,
-          List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
   · rcases cachedCursor.peelChildlessLine
-        (by simp only [domainCachedLine, pushDeployWord, mstoreAt, pushB256, List.cons_append,
-          List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
-          or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
 
@@ -829,22 +804,16 @@ theorem Exec.Frame.attributionInner_eq_nil_of_maxFlashLoan
     ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨bodyCursor⟩
   rcases bodyCursor.peelChildlessLine
-      (by simp only [maxFlashLoanSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, -⟩
   rcases branchCursor.selectBranchSplit with
     ⟨⟨zeroCursor⟩⟩ | ⟨⟨availCursor⟩⟩
   · rcases zeroCursor.peelChildlessLine
-        (by simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
-          pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
   · rcases availCursor.peelChildlessLine
-        (by simp only [maxFlashLoanAvailableLine, pushFlashMintedSlot, pushB256, List.cons_append,
-          List.nil_append, mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons,
-          List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
 
@@ -911,16 +880,12 @@ theorem Exec.Frame.attributionInner_eq_nil_of_flashFee
     ⟨wrapperCursor⟩
   rcases wrapperCursor.enterNonpayable with ⟨bodyCursor⟩
   rcases bodyCursor.peelChildlessLine
-      (by simp only [flashFeeSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, -⟩
   rcases branchCursor.selectBranchSplit with
     ⟨⟨successCursor⟩⟩ | ⟨⟨errorCursor⟩⟩
   · rcases successCursor.peelChildlessLine
-        (by simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
-          pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
   · exfalso

@@ -2115,7 +2115,7 @@ private theorem Exec.Frame.CompiledCursor.peelChildlessLine_of_sourceShape
     {body : Func} {line : Line} {tail : Func} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final)
     (shape : body = line +++ tail)
-    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    (hchildless : ∀ n ∈ line, NonExecInstruction n) :
     ∃ tailCursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table tail final,
       Line.Run frame.sevm cursor.pre line tailCursor.pre ∧
       tailCursor.actions = cursor.actions := by
@@ -2132,7 +2132,7 @@ theorem Exec.Frame.CompiledCursor.finishChildlessLine
     {line : Line} {i : Linst} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table
       (line +++ Func.last i) final)
-    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    (hchildless : ∀ n ∈ line, NonExecInstruction n) :
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions :=
   cursor.finishTerminalChildlessLine hchildless
 
@@ -2144,7 +2144,7 @@ private theorem Exec.Frame.CompiledCursor.finishChildlessLine_of_sourceShape
     {body : Func} {line : Line} {i : Linst} {final : Devm}
     (cursor : Blanc.Weth10.Exec.Frame.CompiledCursor dp ca frame fs table body final)
     (shape : body = line +++ Func.last i)
-    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    (hchildless : ∀ n ∈ line, NonExecInstruction n) :
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   subst body
   exact cursor.finishChildlessLine hchildless
@@ -2161,9 +2161,9 @@ theorem Exec.Frame.CompiledCursor.finishChildlessBranch
       (linePrefix +++
         ((left +++ Func.last leftLast) <?>
           (right +++ Func.last rightLast))) final)
-    (hprefix : ∀ n ∈ linePrefix, NinstIsChildless n)
-    (hleft : ∀ n ∈ left, NinstIsChildless n)
-    (hright : ∀ n ∈ right, NinstIsChildless n) :
+    (hprefix : ∀ n ∈ linePrefix, NonExecInstruction n)
+    (hleft : ∀ n ∈ left, NonExecInstruction n)
+    (hright : ∀ n ∈ right, NonExecInstruction n) :
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   rcases cursor.peelChildlessLine hprefix with
     ⟨branchCursor, _hline, hbranchActions⟩
@@ -2187,9 +2187,9 @@ private theorem Exec.Frame.CompiledCursor.finishChildlessBranch_of_sourceShape
       linePrefix +++
         ((left +++ Func.last leftLast) <?>
           (right +++ Func.last rightLast)))
-    (hprefix : ∀ n ∈ linePrefix, NinstIsChildless n)
-    (hleft : ∀ n ∈ left, NinstIsChildless n)
-    (hright : ∀ n ∈ right, NinstIsChildless n) :
+    (hprefix : ∀ n ∈ linePrefix, NonExecInstruction n)
+    (hleft : ∀ n ∈ left, NonExecInstruction n)
+    (hright : ∀ n ∈ right, NonExecInstruction n) :
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = cursor.actions := by
   subst body
   exact cursor.finishChildlessBranch hprefix hleft hright
@@ -2205,8 +2205,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_receive
     ⟨mainCursor, hmainActions⟩
   rcases mainCursor.peelChildlessLine_of_sourceShape
       (weth10Main_entry_sourceShape dp)
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨entryBranchCursor, hentryLine, hentryActions⟩
   have hflagPrefix :
       [frame.sevm.data.length.toB256 =? 0] <<+
@@ -2228,9 +2227,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_receive
     ⟨receiveCursor, _hstack, hreceiveActions⟩
   have hdesc := receiveCursor.finishChildlessLine_of_sourceShape
     receiveEther_sourceShape
-    (by simp only [mintCallerLine, mstoreAt, pushB256, List.cons_append, List.nil_append, logWith,
-      Fin.isValue, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
   exact hdesc.trans (hreceiveActions.trans
     (hentryActions.trans hmainActions))
 
@@ -2250,9 +2247,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_deposit
     ⟨bodyCursor, _hstack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessLine_of_sourceShape
     deposit_sourceShape
-    (by simp only [mintCallerLine, mstoreAt, pushB256, List.cons_append, List.nil_append, logWith,
-      Fin.isValue, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
   exact hdesc.trans hbodyActions
 
 /-- The payable `depositTo` dispatch body is childless through its terminal
@@ -2271,10 +2266,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_depositTo
     ⟨bodyCursor, _hstack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessLine_of_sourceShape
     depositTo_sourceShape
-    (by simp only [mintToPrefix, addressArg, arg, cdl, pushB256, normalizeAddress, pushAddressMask,
-      List.cons_append, List.nil_append, mstoreAt, logWith, Fin.isValue, Fin.reduceSucc,
-      List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-      and_self])
+    (NonExecInstruction.forall_of_all rfl)
   exact hdesc.trans hbodyActions
 
 /-- Any listed nonpayable selector whose guarded body is a childless line
@@ -2286,7 +2278,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_nonpayableChildless
     (hnonempty : frame.sevm.data.length.toB256 ≠ 0)
     (hmem : (Sevm.selector frame.sevm,
       nonpayable (line +++ Func.last i)) ∈ weth10Funcs dp)
-    (hchildless : ∀ n ∈ line, NinstIsChildless n) :
+    (hchildless : ∀ n ∈ line, NonExecInstruction n) :
     Blanc.Weth10.Exec.Frame.descendantFlowActions dp ca frame = [] := by
   rcases Blanc.Weth10.Exec.Frame.compiledSelectorBodyCursor (frame := frame) context hnonempty hmem with
     ⟨wrapperCursor, _hstack, hwrapperActions⟩
@@ -2343,9 +2335,7 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero
     ⟨transferCursor, _htransferStack, htransferActions⟩
   rcases transferCursor.peelChildlessLine_of_sourceShape
       transfer_sourceShape
-      (by simp only [transferSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine, htargetActions⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+
@@ -2364,20 +2354,13 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_transferNonzero
     ⟨nonzeroCursor, _hnonzeroStack, hnonzeroActions⟩
   rcases nonzeroCursor.peelChildlessLine_of_sourceShape
       transferNonzeroThen_returnTrue_sourceShape
-      (by simp only [transferBalanceCheckLine, loadCallerBalanceAmount, Fin.isValue, arg, cdl,
-        pushB256, List.cons_append, List.nil_append, balanceTooSmall, List.mem_cons,
-        List.not_mem_nil, or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨balanceBranchCursor, _hbalanceLine, hbalanceActions⟩
   rcases balanceBranchCursor.selectBranchWithActions with
       hsuccess | herror
   · rcases hsuccess with ⟨successCursor, hsuccessActions⟩
     have hdesc := successCursor.finishChildlessLine
-      (by simp only [transferNonzeroSuccessLine, debitLoadedBalance, Fin.isValue, addressArg, arg,
-        cdl, pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append,
-        emitTransfer, transferFromLog, mstoreAt, logWith, Fin.reduceSucc, pushList, List.map_cons,
-        List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
     exact hdesc.trans (hsuccessActions.trans
       (hbalanceActions.trans (hnonzeroActions.trans
         (htargetActions.trans
@@ -2463,11 +2446,8 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_approve
     rw [hselector]
     simp only [weth10Funcs, List.mem_cons]
     exact Or.inr (Or.inl (by rfl))
-  have hchildless : ∀ n ∈ approveLine, NinstIsChildless n := by
-    simp only [approveLine, approvePrefix, mstoreAt, pushB256, List.cons_append, List.nil_append,
-      argCopy, cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl,
-      Fin.isValue, logApprove, logWith, Fin.reduceSucc, returnTrueLine, List.mem_cons,
-      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]
+  have hchildless : ∀ n ∈ approveLine, NonExecInstruction n :=
+    NonExecInstruction.forall_of_all rfl
   exact Blanc.Weth10.Exec.Frame.descendantFlowActions_eq_nil_of_nonpayableChildless (frame := frame)
     context hnonempty hmem hchildless
 
@@ -2621,7 +2601,7 @@ no recursive instruction followed by one terminal instruction. -/
 def ChildlessTerminal (body : Func) : Prop :=
   ∃ (line : Line) (terminal : Linst),
     body = line +++ Func.last terminal ∧
-    ∀ n ∈ line, NinstIsChildless n
+    ∀ n ∈ line, NonExecInstruction n
 
 /-- Concrete executable certificate for a childless, non-flow WETH selector.
 It carries only selector/body membership and instruction shape; storage
@@ -2857,16 +2837,11 @@ def nameLine : Line :=
 
 private theorem name_childlessTerminal : ChildlessTerminal name := by
   exact ⟨nameLine, .return_, rfl, by
-    simp only [nameLine, pushB256, pushList, List.map_cons, List.map_nil, List.cons_append,
-      List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 private theorem approve_childlessTerminal : ChildlessTerminal approve := by
   exact ⟨approveLine, .return_, rfl, by
-    simp only [approveLine, approvePrefix, mstoreAt, pushB256, List.cons_append, List.nil_append,
-      argCopy, cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl,
-      Fin.isValue, logApprove, logWith, Fin.reduceSucc, returnTrueLine, List.mem_cons,
-      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 /-- Exact proof-indexed accounting for the childless `name` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_name
@@ -2892,9 +2867,7 @@ private def returnWordLine (w : B256) : Line :=
 private theorem returnWord_childlessTerminal (w : B256) :
     ChildlessTerminal (returnWord w) :=
   ⟨returnWordLine w, .return_, rfl, by
-    simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
-      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 /-- Exact proof-indexed accounting for the childless `PERMIT_TYPEHASH` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_permitTypehash
@@ -2929,9 +2902,7 @@ theorem Exec.Frame.hasProofIndexedStorageAccounting_of_decimals
   · rw [hselector]
     simp only [weth10Funcs, List.mem_cons, List.not_mem_nil, or_false, true_or, or_true]
   · exact ⟨returnWordLine 0x12, .return_, rfl, by
-      simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
-        List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]⟩
+      exact NonExecInstruction.forall_of_all rfl⟩
   · exact decimalsSelector_noPrimaryFlow.selectsNoPrimaryFlow
       (hselector.trans decimalsSelector_word_eq_local)
   · rw [hselector, decimalsSelector_word_eq_local]
@@ -2967,9 +2938,7 @@ private def totalSupplyLine : Line :=
 private theorem totalSupply_childlessTerminal :
     ChildlessTerminal totalSupply :=
   ⟨totalSupplyLine, .return_, rfl, by
-    simp only [totalSupplyLine, pushFlashMintedSlot, pushB256, List.cons_append, List.nil_append,
-      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 private def balanceOfLine : Line :=
   arg 0 ++ [sload] ++ mstoreAt 0 ++ pushList [32, 0]
@@ -2977,18 +2946,14 @@ private def balanceOfLine : Line :=
 private theorem balanceOf_childlessTerminal :
     ChildlessTerminal balanceOfEndpoint :=
   ⟨balanceOfLine, .return_, rfl, by
-    simp only [balanceOfLine, arg, cdl, pushB256, List.cons_append, List.nil_append, mstoreAt,
-      pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 private def noncesLine : Line :=
   arg 0 ++ tagNonceKey ++ [sload] ++ mstoreAt 0 ++ pushList [32, 0]
 
 private theorem nonces_childlessTerminal : ChildlessTerminal nonces :=
   ⟨noncesLine, .return_, rfl, by
-    simp only [noncesLine, arg, cdl, pushB256, tagNonceKey, List.cons_append, List.nil_append,
-      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 private def flashMintedLine : Line :=
   pushFlashMintedSlot ++ [sload] ++ mstoreAt 0 ++ pushList [32, 0]
@@ -2996,9 +2961,7 @@ private def flashMintedLine : Line :=
 private theorem flashMinted_childlessTerminal :
     ChildlessTerminal flashMinted :=
   ⟨flashMintedLine, .return_, rfl, by
-    simp only [flashMintedLine, pushFlashMintedSlot, pushB256, List.cons_append, List.nil_append,
-      mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-      NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 def symbolLine : Line :=
   [pushB256 (Blanc.String.toBytes "WETH10").toB256,
@@ -3008,9 +2971,7 @@ def symbolLine : Line :=
 
 private theorem symbol_childlessTerminal : ChildlessTerminal symbol :=
   ⟨symbolLine, .return_, rfl, by
-    simp only [symbolLine, pushB256, pushList, List.map_cons, List.map_nil, List.cons_append,
-      List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 private def deploymentChainIdLine (dp : DeployParams) : Line :=
   [pushDeployWord dp.deploymentChainId] ++
@@ -3019,9 +2980,7 @@ private def deploymentChainIdLine (dp : DeployParams) : Line :=
 private theorem deploymentChainId_childlessTerminal (dp : DeployParams) :
     ChildlessTerminal (deploymentChainId dp) :=
   ⟨deploymentChainIdLine dp, .return_, rfl, by
-    simp only [deploymentChainIdLine, pushDeployWord, mstoreAt, pushB256, List.cons_append,
-      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
-      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 private def allowanceLine : Line :=
   argCopy 0 0 2 ++ allowanceKeyFromMemory ++ [sload] ++
@@ -3029,9 +2988,7 @@ private def allowanceLine : Line :=
 
 private theorem allowance_childlessTerminal : ChildlessTerminal allowance :=
   ⟨allowanceLine, .return_, rfl, by
-    simp only [allowanceLine, argCopy, cdc, pushB256, allowanceKeyFromMemory, pushList,
-      List.map_cons, List.map_nil, List.cons_append, List.nil_append, mstoreAt, List.mem_cons,
-      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]⟩
+    exact NonExecInstruction.forall_of_all rfl⟩
 
 /-- Exact proof-indexed accounting for the childless `totalSupply` view. -/
 theorem Exec.Frame.hasProofIndexedStorageAccounting_of_totalSupply
@@ -3203,14 +3160,9 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_domainSeparator
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessBranch_of_sourceShape
     (domainSeparator_sourceShape dp)
-    (by simp only [domainSelectLine, Fin.isValue, pushDeployWord, List.mem_cons, List.not_mem_nil,
-      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
-    (by simp only [domainCachedLine, pushDeployWord, mstoreAt, pushB256, List.cons_append,
-      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
-      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
-    (by simp only [domainFreshLine, calculateDomainSeparator, mstoreAt, pushB256, List.cons_append,
-      List.nil_append, pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil,
-      or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
+    (NonExecInstruction.forall_of_all rfl)
+    (NonExecInstruction.forall_of_all rfl)
   exact hdesc.trans (hbodyActions.trans hwrapperActions)
 
 /-- Exact proof-indexed accounting for both childless domain-separator arms. -/
@@ -3268,15 +3220,9 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_maxFlashLoan
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
   have hdesc := bodyCursor.finishChildlessBranch_of_sourceShape
     maxFlashLoan_sourceShape
-    (by simp only [maxFlashLoanSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
-      List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-      and_self])
-    (by simp only [maxFlashLoanAvailableLine, pushFlashMintedSlot, pushB256, List.cons_append,
-      List.nil_append, mstoreAt, pushList, List.map_cons, List.map_nil, List.mem_cons,
-      List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
-    (by simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append, pushList,
-      List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-      forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
+    (NonExecInstruction.forall_of_all rfl)
+    (NonExecInstruction.forall_of_all rfl)
   exact hdesc.trans (hbodyActions.trans hwrapperActions)
 
 /-- Exact proof-indexed accounting for both `maxFlashLoan` result arms. -/
@@ -3332,16 +3278,12 @@ theorem Exec.Frame.descendantFlowActions_eq_nil_of_flashFee
     ⟨bodyCursor, _hbodyStack, hbodyActions⟩
   rcases bodyCursor.peelChildlessLine_of_sourceShape
       flashFee_sourceShape
-      (by simp only [flashFeeSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, _hline, hbranchActions⟩
   rcases branchCursor.selectBranchWithActions with hsuccess | herror
   · rcases hsuccess with ⟨successCursor, hsuccessActions⟩
     have hdesc := successCursor.finishChildlessLine
-      (by simp only [returnWordLine, pushB256, mstoreAt, List.cons_append, List.nil_append,
-        pushList, List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
     exact hdesc.trans (hsuccessActions.trans
       (hbranchActions.trans (hbodyActions.trans hwrapperActions)))
   · rcases herror with ⟨errorCursor, _herrorActions⟩

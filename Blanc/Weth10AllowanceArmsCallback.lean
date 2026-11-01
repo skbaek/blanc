@@ -176,7 +176,7 @@ private theorem Exec.Frame.CountedCursor.reachCallBoolCallbackCounted
     {final : Devm} {img : Bytes}
     (cursor : Blanc.Weth10.Exec.Frame.CountedCursor (frame := frame) dp ca (f₀ :: aux) table
       (callBoolCallback sel targetArg dataArg value) final)
-    (hvalueChildless : ∀ n ∈ value, NinstIsChildless n)
+    (hvalueChildless : ∀ n ∈ value, NonExecInstruction n)
     (h_value_stack : ∀ {a b : Devm} {xs : Stack},
       xs <<+ a.stack → Line.Run frame.sevm a value b →
         valueWord :: xs <<+ b.stack)
@@ -196,49 +196,39 @@ private theorem Exec.Frame.CountedCursor.reachCallBoolCallbackCounted
   rcases cursor.peelChildlessLine
       (line := arg targetArg ++
         [Ninst.dup 0, Ninst.extcodesize, Ninst.iszero])
-      (by simp only [arg, cdl, pushB256, Fin.isValue, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨branchCursor, hcheck⟩
   rcases branchCursor.selectBranchLeftWithBurn (fun _ => not_run_revert) with
     ⟨successCursor, hpopCheck⟩
-  rcases successCursor.selectNextChildless (by simp only [NinstIsChildless]) with
+  rcases successCursor.selectNextChildless (NonExecInstruction.of_isNonExec rfl) with
     ⟨valueCursor, hpop⟩
   rcases valueCursor.peelChildlessLine hvalueChildless with
     ⟨headCursor, hvalueRun⟩
   rcases headCursor.peelChildlessLine
       (line := storeTokenCallbackHead sel)
-      (by simp only [storeTokenCallbackHead, pushB256, mstoreAt, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨zerosCursor, hhead⟩
   rcases zerosCursor.peelChildlessLine
       (line := pushList [0, 0])
-      (by simp only [pushList, List.map_cons, pushB256, List.map_nil, List.mem_cons,
-        List.not_mem_nil, or_false, or_self, NinstIsChildless, forall_eq]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨tailCursor, hzeros⟩
   rcases tailCursor.peelChildlessLine
       (line := forwardArgTail dataArg 4)
-      (by simp only [forwardArgTail, arg, cdl, pushB256, Fin.isValue, mstoreAt, List.cons_append,
-        List.nil_append, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨sizeCursor, htailRun⟩
   rcases sizeCursor.peelChildlessLine
       (line := tokenCallbackArgsSize)
-      (by simp only [tokenCallbackArgsSize, pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨offsetCursor, hsize⟩
   rcases offsetCursor.peelChildlessLine
       (line := [Ninst.pushB256 callbackArgsOffset, Ninst.pushB256 0])
-      (by simp only [pushB256, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetCursor, hoffsets⟩
   rcases targetCursor.peelChildlessLine
       (line := arg targetArg)
-      (by simp only [arg, cdl, pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨gasCursor, htargetRun⟩
-  rcases gasCursor.selectNextChildless (by simp only [NinstIsChildless]) with
+  rcases gasCursor.selectNextChildless (NonExecInstruction.of_isNonExec rfl) with
     ⟨callCursor, hgas⟩
   exact ⟨callCursor, rawTokenCallbackCallPrefix_of_runs
     sel targetArg dataArg valueWord value h_value_stack h_value_stor
@@ -281,14 +271,13 @@ private theorem Exec.attributionInner_eq_nil_of_boolReturnTail
       Option.some.injEq] using hget.symm
   subst body
   unfold boolReturn at bodyCursor
-  rcases bodyCursor.selectNextChildless (by simp only [NinstIsChildless]) with
+  rcases bodyCursor.selectNextChildless (NonExecInstruction.of_isNonExec rfl) with
     ⟨firstBranchCursor, -⟩
   rcases firstBranchCursor.selectBranchSplit with hdecode | hbubble
   · rcases hdecode with ⟨decodePrefixCursor⟩
     rcases decodePrefixCursor.peelChildlessLine
         (line := returnDataShorterThan 32)
-        (by simp only [returnDataShorterThan, pushB256, List.mem_cons, List.not_mem_nil, or_false,
-          NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨secondBranchCursor, -⟩
     rcases secondBranchCursor.selectBranchSplit with hreturn | hrev
     · rcases hreturn with ⟨returnCursor⟩
@@ -302,9 +291,7 @@ private theorem Exec.attributionInner_eq_nil_of_boolReturnTail
           mstoreAt 0 ++ pushList [32, 0]) +++ Func.return_) final
         at returnCursor
       rcases returnCursor.peelChildlessLine
-          (by simp only [pushList, List.map_cons, pushB256, List.map_nil, List.cons_append,
-            List.nil_append, mstoreAt, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-            NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+          (NonExecInstruction.forall_of_all rfl) with
         ⟨lastCursor, -⟩
       exact lastCursor.finishAttributionInner
     · rcases hrev with ⟨revertCursor⟩
@@ -333,7 +320,7 @@ private theorem Exec.Frame.CountedCursor.countedTokenCallbackChronology
       ((weth10 dp).main :: weth10Aux)
       (table 0 ((weth10 dp).main :: weth10Aux))
       (callBoolCallback sel targetArg dataArg value) frame.post)
-    (hvalueChildless : ∀ n ∈ value, NinstIsChildless n)
+    (hvalueChildless : ∀ n ∈ value, NonExecInstruction n)
     (h_value_stack : ∀ {a b : Devm} {xs : Stack},
       xs <<+ a.stack → Line.Run frame.sevm a value b →
         valueWord :: xs <<+ b.stack)
@@ -500,10 +487,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
   unfold depositToAndCall at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := mintToPrefix)
-      (by simp only [mintToPrefix, addressArg, arg, cdl, pushB256, normalizeAddress,
-        pushAddressMask, List.cons_append, List.nil_append, mstoreAt, logWith, Fin.isValue,
-        Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callbackCursor, hmint⟩
   have hwfBody : Mem.Wf bodyCursor.pre.memory := by
     rw [← hentrySilent.memory]
@@ -519,7 +503,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_depositToAndCall
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 1)
       (valueWord := frame.sevm.value) (value := [Ninst.callvalue])
       (img := frame.sevm.value.toBytes)
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
@@ -772,8 +756,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
   unfold transferAndCall transferThen at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := arg 0 ++ [Ninst.iszero])
-      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+ targetBranchCursor.pre.stack := by
@@ -789,9 +772,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
     ⟨nonzeroCursor, _hnonzeroStack, hselectSilent⟩
   rcases nonzeroCursor.peelChildlessLine
       (line := loadCallerBalanceAmount 1 ++ balanceTooSmall)
-      (by simp only [loadCallerBalanceAmount, Fin.isValue, arg, cdl, pushB256, List.cons_append,
-        List.nil_append, balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨guardBranchCursor, hguardLine⟩
   rcases guardBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (transferBalanceError_lookup dp)) with
@@ -805,27 +786,20 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
     (Devm.PopBurn.of_popBurnBy hsuccessPop) hpFlag
   rcases successCursor.peelChildlessLine
       (line := debitLoadedBalance)
-      (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨creditCursor, hdebit⟩
   rcases creditCursor.peelChildlessLine
       (line := addressArg 0 ++ [Ninst.dup 0, Ninst.sload] ++ arg 1 ++
         [Ninst.add, Ninst.swap 0, Ninst.sstore])
-      (by simp only [addressArg, arg, cdl, pushB256, normalizeAddress, pushAddressMask,
-        List.cons_append, List.nil_append, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨eventCursor, hcredit⟩
   rcases eventCursor.peelChildlessLine
       (line := [Ninst.caller] ++ arg 1 ++ addressArg 0)
-      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, addressArg,
-        normalizeAddress, pushAddressMask, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨emitCursor, hevent⟩
   rcases emitCursor.peelChildlessLine
       (line := emitTransfer)
-      (by simp only [emitTransfer, transferFromLog, Fin.isValue, pushB256, mstoreAt, logWith,
-        Fin.reduceSucc, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil,
-        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callbackCursor, hemit⟩
   have hmemSuccess : frame.pre.memory = successCursor.pre.memory := by
     calc
@@ -849,8 +823,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCall
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 2)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := (Sevm.argWord frame.sevm 1).toBytes)
-      (by simp only [arg, cdl, pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)
@@ -993,8 +966,7 @@ private theorem Exec.Frame.tokenCallbackSuccessAllowanceCloser
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := dataArg)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := (Sevm.argWord frame.sevm 1).toBytes)
-      (by simp only [arg, cdl, pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)
@@ -1044,8 +1016,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
   unfold transferAndCall transferThen at transferCursor
   rcases transferCursor.peelChildlessLine
       (line := arg 0 ++ [Ninst.iszero])
-      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+ targetBranchCursor.pre.stack := by
@@ -1094,9 +1065,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_transferAndCallZero
     (by
       rw [← hbodyCode]
       exact context.installed.1)
-    (by simp only [redeemSendToCallerPrefix, pushList, List.map_cons, pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToCallerPrefix_effect hp hrun)
@@ -1168,10 +1137,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
   unfold approveAndCall at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := approvePrefix)
-      (by simp only [approvePrefix, mstoreAt, pushB256, List.cons_append, List.nil_append, argCopy,
-        cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl, Fin.isValue,
-        logApprove, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callbackCursor, hprefix⟩
   have hwfBody : Mem.Wf bodyCursor.pre.memory := by
     rw [← hbodySilent.memory]
@@ -1187,8 +1153,7 @@ theorem Exec.Frame.allowanceRegionEffect_of_approveAndCall
       (sel := onTokenApprovalSelector) (targetArg := 0) (dataArg := 2)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := callbackImg)
-      (by simp only [arg, cdl, pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)
@@ -1376,10 +1341,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_depositToAndCall
   unfold depositToAndCall at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := mintToPrefix)
-      (by simp only [mintToPrefix, addressArg, arg, cdl, pushB256, normalizeAddress,
-        pushAddressMask, List.cons_append, List.nil_append, mstoreAt, logWith, Fin.isValue,
-        Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callbackCursor, hmint⟩
   have hwfBody : Mem.Wf bodyCursor.pre.memory := by
     rw [← hentrySilent.memory]
@@ -1395,7 +1357,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_depositToAndCall
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 1)
       (valueWord := frame.sevm.value) (value := [Ninst.callvalue])
       (img := frame.sevm.value.toBytes)
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         rcases Line.of_run_cons hline with ⟨c, hcv, hnil⟩
@@ -1503,8 +1465,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
   unfold transferAndCall transferThen at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := arg 0 ++ [Ninst.iszero])
-      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+ targetBranchCursor.pre.stack := by
@@ -1520,9 +1481,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
     ⟨nonzeroCursor, _hnonzeroStack, hselectSilent⟩
   rcases nonzeroCursor.peelChildlessLine
       (line := loadCallerBalanceAmount 1 ++ balanceTooSmall)
-      (by simp only [loadCallerBalanceAmount, Fin.isValue, arg, cdl, pushB256, List.cons_append,
-        List.nil_append, balanceTooSmall, List.mem_cons, List.not_mem_nil, or_false, or_self_left,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨guardBranchCursor, hguardLine⟩
   rcases guardBranchCursor.selectBranchLeftWithBurn
       (not_run_call_revertWith (transferBalanceError_lookup dp)) with
@@ -1536,27 +1495,20 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
     (Devm.PopBurn.of_popBurnBy hsuccessPop) hpFlag
   rcases successCursor.peelChildlessLine
       (line := debitLoadedBalance)
-      (by simp only [debitLoadedBalance, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨creditCursor, hdebit⟩
   rcases creditCursor.peelChildlessLine
       (line := addressArg 0 ++ [Ninst.dup 0, Ninst.sload] ++ arg 1 ++
         [Ninst.add, Ninst.swap 0, Ninst.sstore])
-      (by simp only [addressArg, arg, cdl, pushB256, normalizeAddress, pushAddressMask,
-        List.cons_append, List.nil_append, Fin.isValue, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨eventCursor, hcredit⟩
   rcases eventCursor.peelChildlessLine
       (line := [Ninst.caller] ++ arg 1 ++ addressArg 0)
-      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, addressArg,
-        normalizeAddress, pushAddressMask, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨emitCursor, hevent⟩
   rcases emitCursor.peelChildlessLine
       (line := emitTransfer)
-      (by simp only [emitTransfer, transferFromLog, Fin.isValue, pushB256, mstoreAt, logWith,
-        Fin.reduceSucc, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil,
-        or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callbackCursor, hemit⟩
   have hmemSuccess : frame.pre.memory = successCursor.pre.memory := by
     calc
@@ -1580,8 +1532,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCall
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := 2)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := (Sevm.argWord frame.sevm 1).toBytes)
-      (by simp only [arg, cdl, pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)
@@ -1700,10 +1651,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_approveAndCall
   unfold approveAndCall at bodyCursor
   rcases bodyCursor.peelChildlessLine
       (line := approvePrefix)
-      (by simp only [approvePrefix, mstoreAt, pushB256, List.cons_append, List.nil_append, argCopy,
-        cdc, allowanceKeyFromMemory, pushList, List.map_cons, List.map_nil, arg, cdl, Fin.isValue,
-        logApprove, logWith, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨callbackCursor, hprefix⟩
   have hwfBody : Mem.Wf bodyCursor.pre.memory := by
     rw [← hbodySilent.memory]
@@ -1719,8 +1667,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_approveAndCall
       (sel := onTokenApprovalSelector) (targetArg := 0) (dataArg := 2)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := callbackImg)
-      (by simp only [arg, cdl, pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)
@@ -1837,8 +1784,7 @@ private theorem Exec.Frame.tokenCallbackSuccessAllowanceCloserSound
       (sel := onTokenTransferSelector) (targetArg := 0) (dataArg := dataArg)
       (valueWord := Sevm.argWord frame.sevm 1) (value := arg 1)
       (img := (Sevm.argWord frame.sevm 1).toBytes)
-      (by simp only [arg, cdl, pushB256, List.mem_cons, List.not_mem_nil, or_false,
-        NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+      (NonExecInstruction.forall_of_all rfl)
       (by
         intro a b xs hp hline
         exact prefix_of_arg hp hline)
@@ -1888,8 +1834,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCallZero
   unfold transferAndCall transferThen at transferCursor
   rcases transferCursor.peelChildlessLine
       (line := arg 0 ++ [Ninst.iszero])
-      (by simp only [arg, cdl, pushB256, List.cons_append, List.nil_append, List.mem_cons,
-        List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+ targetBranchCursor.pre.stack := by
@@ -1938,9 +1883,7 @@ theorem Exec.Frame.allowanceRegionEffectSound_of_transferAndCallZero
     (by
       rw [← hbodyCode]
       exact context.installed.1)
-    (by simp only [redeemSendToCallerPrefix, pushList, List.map_cons, pushB256, List.map_nil,
-      Fin.isValue, List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false,
-      or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq, and_self])
+    (NonExecInstruction.forall_of_all rfl)
     (by
       intro sendPre callPre value tail hp hrun
       exact redeemSendToCallerPrefix_effect hp hrun)

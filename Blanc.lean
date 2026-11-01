@@ -141,6 +141,7 @@ import Blanc.ExecutionTraceEntry
 import Blanc.ExecutionAccountingObserved
 import Blanc.DeploymentOccurrence
 import Blanc.RootedExecution
+import Blanc.NonExecLine
 import Blanc.ExecutionTerminal
 import Blanc.ExecutionNoninterference
 import Blanc.CycleWriteFree

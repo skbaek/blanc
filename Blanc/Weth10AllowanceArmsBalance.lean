@@ -100,8 +100,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_receive
         (fsig +++ dispatchWith fallbackSlot (weth10Tree dp))))
     frame.post at mainCursor
   rcases mainCursor.peelChildlessLine
-      (by simp only [List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp,
-        forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨entryBranchCursor, hentryLine⟩
   have hflagPrefix :
       [frame.sevm.data.length.toB256 =? 0] <<+
@@ -124,9 +123,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_receive
     (table 0 ((weth10 dp).main :: weth10Aux))
     (mintCallerLine +++ Func.last .stop) frame.post at receiveCursor
   rcases receiveCursor.peelChildlessLine
-      (by simp only [mintCallerLine, mstoreAt, pushB256, List.cons_append, List.nil_append, logWith,
-        Fin.isValue, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨lastCursor, -⟩
   exact lastCursor.finishAttributionInner
 
@@ -211,9 +208,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_deposit
     (table 0 ((weth10 dp).main :: weth10Aux))
     (mintCallerLine +++ Func.last .stop) frame.post at bodyCursor
   rcases bodyCursor.peelChildlessLine
-      (by simp only [mintCallerLine, mstoreAt, pushB256, List.cons_append, List.nil_append, logWith,
-        Fin.isValue, Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨lastCursor, -⟩
   exact lastCursor.finishAttributionInner
 
@@ -309,10 +304,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_depositTo
     (table 0 ((weth10 dp).main :: weth10Aux))
     (mintToPrefix +++ Func.last .stop) frame.post at bodyCursor
   rcases bodyCursor.peelChildlessLine
-      (by simp only [mintToPrefix, addressArg, arg, cdl, pushB256, normalizeAddress,
-        pushAddressMask, List.cons_append, List.nil_append, mstoreAt, logWith, Fin.isValue,
-        Fin.reduceSucc, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-        forall_eq_or_imp, forall_eq, and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨lastCursor, -⟩
   exact lastCursor.finishAttributionInner
 
@@ -535,9 +527,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferNonzero
       (transferZeroThen returnTrue <?> transferNonzeroThen returnTrue))
     frame.post at transferCursor
   rcases transferCursor.peelChildlessLine
-      (by simp only [transferSelectLine, arg, cdl, pushB256, List.cons_append, List.nil_append,
-        List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨targetBranchCursor, htargetLine⟩
   have htargetPrefix :
       [Sevm.argWord frame.sevm 0 =? 0] <<+
@@ -562,10 +552,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferNonzero
         (transferNonzeroSuccessLine +++ Func.last .return_)))
     frame.post at nonzeroCursor
   rcases nonzeroCursor.peelChildlessLine
-      (by simp only [transferBalanceCheckLine, loadCallerBalanceAmount, Fin.isValue, arg, cdl,
-        pushB256, List.cons_append, List.nil_append, balanceTooSmall, List.mem_cons,
-        List.not_mem_nil, or_false, or_self_left, NinstIsChildless, forall_eq_or_imp, forall_eq,
-        and_self]) with
+      (NonExecInstruction.forall_of_all rfl) with
     ⟨balanceBranchCursor, hbalanceLine⟩
   rcases of_run_append (loadCallerBalanceAmount 1) hbalanceLine with
     ⟨midState, hload, hguardRun⟩
@@ -577,11 +564,7 @@ theorem Exec.Frame.attributionInner_eq_nil_of_transferNonzero
     rcases balanceBranchCursor.selectBranchZero hpFlag with
       ⟨successCursor, _hsuccessStack⟩
     rcases successCursor.peelChildlessLine
-        (by simp only [transferNonzeroSuccessLine, debitLoadedBalance, Fin.isValue, addressArg, arg,
-          cdl, pushB256, normalizeAddress, pushAddressMask, List.cons_append, List.nil_append,
-          emitTransfer, transferFromLog, mstoreAt, logWith, Fin.reduceSucc, pushList, List.map_cons,
-          List.map_nil, List.mem_cons, List.not_mem_nil, or_false, NinstIsChildless,
-          forall_eq_or_imp, forall_eq, and_self]) with
+        (NonExecInstruction.forall_of_all rfl) with
       ⟨lastCursor, -⟩
     exact lastCursor.finishAttributionInner
   · exfalso
