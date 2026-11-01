@@ -71,7 +71,7 @@ theorem xa_ex_bal2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xji 0x26a1 0x26a5 hw2
   · xdead
   have hlen : 32 ≤ out.length := by
-    have e := gtCheck_ne_zero hw2
+    have e := B256.lt_of_gtCheck_ne_zero hw2
     rw [hrd, B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hob] at e
     exact e
   clear hw2
@@ -96,7 +96,7 @@ theorem xa_ex_bal2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xs 0x26b8 (.push [0x26, 0xbd] (by decide)) ri_push
   xji 0x26b9 0x26bd hw
   · xdead
-  have hle := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hle := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x26be
   xs 0x26bf (.reg (.dup 0)) (ri_dup (by rfl))
@@ -234,8 +234,8 @@ theorem xa_ex_x {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M
   xs 0x2753 (.push [0x07, 0xe0] (by decide)) ri_push
   xmo 0x2754 (.reg .mstore) (ri_mstore_imgAt (o := 0x7e0) rfl)
   have hmul' := or_ne_zero hmul
-  refine ⟨hmul'.imp eqCheck_ne_zero_eq eqCheck_ne_zero_eq,
-    ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hadd), _, _, _, hR, hW, hF.mono fun o v hv ho =>
+  refine ⟨hmul'.imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero,
+    B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hadd), _, _, _, hR, hW, hF.mono fun o v hv ho =>
       (hv.write_other (by simp only [B256.length_toBytes]; omega)).write_other
         (by simp only [B256.length_toBytes]; omega),
     (WordAt.write_self _ _ _).write_other (by simp only [B256.length_toBytes]; omega),

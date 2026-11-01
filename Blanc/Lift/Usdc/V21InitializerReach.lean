@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.OldTransferFromCallee
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.V2_1TransferReach
 import Blanc.Lift.FrameSkip
 
@@ -101,10 +102,7 @@ theorem body_source {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact .inr (after_source erase later hT cont)
 
 /-- Exact selector routing through the inherited initializer wrapper. -/
-theorem route_initializer : SFunc.selWalk 0x2fc81e09
-    (.next (.reg (.dup 0)) (.next (.push [0x7f, 0x2e, 0xec, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xb2] (by decide))
-        (.branch ImplV2_1.t_002b_c0 ImplV2_1.t_01b2_c0))))) =
+theorem route_initializer : ImplV2_1.selTree.selWalk 0x2fc81e09 =
     .inl (Bytes.toB256 [0x2f, 0xc8, 0x1e, 0x09], 138) := by
   decide +kernel
 

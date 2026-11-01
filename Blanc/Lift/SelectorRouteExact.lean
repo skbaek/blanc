@@ -1,6 +1,7 @@
 import Blanc.Lift.SelectorRoute
 import Blanc.Lift.ExactWalk
 import Blanc.Lift.ExactWalkOps
+import Blanc.Lift.InvWalkDispatch
 
 /-!
 # The route of a selector word, forward and gas-exact
@@ -12,6 +13,8 @@ PUSH2 d JUMPI` row, 1 per `JUMPDEST`), computed by the kernel for a concrete sel
 * `SFunc.RunExact.selWalk_inl`: where the walk ends at the goto `(c, j)`, a run of entry `j`
   (with the selector word still on top) is a run of the tree, for `selCost` more gas;
 * `SFunc.RunExact.selWalk_inr`: the same at a leaf the walk ends at (the fallback);
+* `SFunc.RunCutP.selWalk_inl`: the inverse at the goto for a run over any instruction relation
+  `P` that implies `Ninst.Run` (the `RunCut` form is `SFunc.RunCut.selWalk_inl`);
 * `SFunc.selGoto fs σ f`: the entry tree the walk enters, so a contract's forward and inverse
   dispatch facts take one kernel-checked hypothesis (`SFunc.RunExact.selGoto`, `SFunc.selGoto_spec`).
 
@@ -142,5 +145,78 @@ theorem SFunc.RunExact.selGoto {σ : B256} {f g : SFunc} (h : f.selGoto fs σ = 
   exact SFunc.RunExact.selWalk_inl hw hj hS k
 
 end Fwd
+
+section InvP
+
+variable {P : Sevm → Devm → Ninst → Devm → Prop} {fs : List SFunc} {sevm : Sevm} {b : Devm}
+  {S : List B256} {M : Mem} {r : Seg}
+
+/-- One equality comparison of a `P`-run with nothing cut, either way. -/
+theorem ricP_cmp_eq_either (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {G : Nat}
+    {σ : B256} {c0 c1 c2 c3 d0 d1 : UInt8} {l1 l2} {f : SFunc} {j : Nat}
+    (run : SFunc.RunCutP P fs sevm [] (St b (σ :: S) M G)
+      (.next (.reg (.dup 0)) (.next (.push [c0, c1, c2, c3] l1)
+      (.next (.reg .eq) (.next (.push [d0, d1] l2) (.branchTo f j))))) r) :
+    (B256.eqCheck (Bytes.toB256 [c0, c1, c2, c3]) σ = 0 ∧
+        ∃ G', SFunc.RunCutP P fs sevm [] (St b (σ :: S) M G') f r) ∨
+      (B256.eqCheck (Bytes.toB256 [c0, c1, c2, c3]) σ ≠ 0 ∧
+        ∃ g G', fs[j]? = some g ∧ SFunc.RunCutP P fs sevm [] (St b (σ :: S) M G') g r) := by
+  obtain ⟨d, hd, h⟩ := ric_nextP run
+  obtain ⟨_, rfl⟩ := ri_dup rfl (hP hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_push (hP hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_eq (hP hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_push (hP hd)
+  cases h with
+  | toZero d0 h k =>
+      obtain ⟨-, hw, e⟩ := St.of_pop2 h
+      exact .inl ⟨hw, _, e ▸ k⟩
+  | toSuccCut _ _ _ hk' _ => exact absurd hk' List.not_mem_nil
+  | toSucc d0 w0 hw _ hk' h k =>
+      obtain ⟨-, hw', e⟩ := St.of_pop2 h
+      exact .inr ⟨hw' ▸ hw, _, _, hk', e ▸ k⟩
+
+/-- **The goto of the walk, for a `P`-run.** -/
+theorem SFunc.RunCutP.selWalk_inl (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {σ c : B256} {f : SFunc} {j : Nat} (hw : f.selWalk σ = .inl (c, j)) {G : Nat}
+    (run : SFunc.RunCutP P fs sevm [] (St b (σ :: S) M G) f r) :
+    σ = c ∧ ∃ g G', fs[j]? = some g ∧ SFunc.RunCutP P fs sevm [] (St b (σ :: S) M G') g r := by
+  fun_induction SFunc.selWalk σ f generalizing G with
+  | case1 f ih =>
+      obtain ⟨G', r⟩ := ric_destP run
+      exact ih hw r
+  | case2 c0 c1 c2 c3 _ _ _ _ f g h ih =>
+      obtain ⟨G', r⟩ := ric_cmp_gtP hP run
+      rw [ite_eq_left h] at r
+      exact ih hw r
+  | case3 c0 c1 c2 c3 _ _ _ _ f g h ih =>
+      obtain ⟨G', r⟩ := ric_cmp_gtP hP run
+      rw [ite_eq_right h] at r
+      exact ih hw r
+  | case4 c0 c1 c2 c3 _ _ _ _ f j h ih =>
+      rcases ricP_cmp_eq_either hP run with ⟨-, G', r⟩ | ⟨ne, -⟩
+      · exact ih hw r
+      · exact absurd h ne
+  | case5 c0 c1 c2 c3 _ _ _ _ f j h =>
+      obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Sum.inl.inj hw)
+      rcases ricP_cmp_eq_either hP run with ⟨zero, -⟩ | ⟨ne, r⟩
+      · exact absurd zero h
+      · exact ⟨(eq_of_eqCheck_ne ne).symm, r⟩
+  | case6 => cases hw
+
+/-- **Into the goto's entry, inverted, for a `P`-run.** -/
+theorem SFunc.RunCutP.selGoto (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {σ : B256} {f g : SFunc} (h : f.selGoto fs σ = some g) {G : Nat}
+    (run : SFunc.RunCutP P fs sevm [] (St b (σ :: S) M G) f r) :
+    ∃ G', SFunc.RunCutP P fs sevm [] (St b (σ :: S) M G') g r := by
+  obtain ⟨_, _, hw, hj⟩ := SFunc.selGoto_spec h
+  obtain ⟨-, g', G', hg, run⟩ := SFunc.RunCutP.selWalk_inl hP hw run
+  rw [hj] at hg
+  cases hg
+  exact ⟨G', run⟩
+
+end InvP
 
 end Blanc.Lift

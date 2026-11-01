@@ -114,7 +114,7 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xji 0x2fb5 0x2fb9 hw
   · xdead
   have hlen : 32 ≤ c.post.output.length := by
-    have := gtCheck_ne_zero hw
+    have := B256.lt_of_gtCheck_ne_zero hw
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hrd,
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at this
     rw [hc'.output]; omega
@@ -178,7 +178,7 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xs 0x2fff (.push [0x30, 0x04] (by decide)) ri_push
   xji 0x3000 0x3004 hw
   · xdead
-  have hTa := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hTa := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x3005
   xs 0x3006 (.reg (.dup 0)) (ri_dup (by rfl))

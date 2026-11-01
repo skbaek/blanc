@@ -419,12 +419,6 @@ SHARED += [
     "SlotFootprintWord",
 ]
 
-# Comparison flags from arithmetic facts (usdc-weth9-pair-composition-v1 fold of a BeaconDeposit/USDC
-# duplicate): contract-neutral.
-SHARED += [
-    "B256CheckFacts",
-]
-
 # Concatenation of selected-domain In-histories with the modern-to-historical
 # bridge (beacon-deposit-historical-reach-v1): contract-neutral.
 SHARED += [
@@ -1665,7 +1659,7 @@ CONTRACTS = {
         "Lift.Usdc.InitReach",
         "Lift.Usdc.InitReachV2",
         "Lift.Usdc.InitReachV2_1",
-        "Lift.Usdc.InitReachV2_2",
+        "Lift.Usdc.InitReachV2_2", "Lift.Usdc.SelTrees",
         "Lift.Usdc.InitReach06",
         "Lift.Usdc.InitReachV1",
         "Lift.Usdc.InitV1KeyBounds",

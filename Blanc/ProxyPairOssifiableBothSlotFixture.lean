@@ -161,10 +161,10 @@ theorem setupMain_runCompiledTo
     simp only [Devm.getStorVal_setMach,
       getStorVal_sstoreBase_ne _ _ _ _ _ _
         (show adminSlotLit ≠ implementationSlotLit by decide),
-      Devm.getStorVal_setStorVal_self]
+      Devm.setStorVal_getStorVal_self]
   · rw [Devm.getStorVal_of_state (Devm.withOutput_state _ _)]
     simp only [Devm.getStorVal_setMach,
-      Devm.getStorVal_setStorVal_self]
+      Devm.setStorVal_getStorVal_self]
   · simp only [Devm.withOutput_logs,
       Devm.setMach_logs, Devm.sstoreBase_logs]
     rfl

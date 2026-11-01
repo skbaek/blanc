@@ -52,7 +52,7 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xji 0x2323 0x2327 hw
   · xdead
   have hlock : (b.getStor sevm.currentTarget).get lockSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [lockSlot_lit] at e
     exact e
   clear hw
@@ -65,7 +65,7 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xs 0x2334 (.push [0x23, 0x39] (by decide)) ri_push
   xji 0x2335 0x2339 hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   refine ⟨hlock, hval, ?_⟩
   -- the clamps of `i` and `j`
@@ -130,7 +130,7 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xji 0x238c 0x2390 hw
   · xdead
   have hkill : (b.getStor sevm.currentTarget).get isKilledSlot = 0 := by
-    have e := eqCheck_ne_zero_eq hw
+    have e := B256.eq_of_eqCheck_ne_zero hw
     rw [isKilledSlot_lit, getStorVal_afterSstore_ne (by decide), getStorVal_afterSload,
       getStorVal_eq] at e
     exact e

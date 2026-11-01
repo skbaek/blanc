@@ -69,7 +69,7 @@ theorem rx_al_toSupply {sevm : Sevm} {pre : Devm} {s : State} {W : Devm → Prop
     rw [vyImg_selector]; exact hsel
   have hlen4 : B256.eqCheck (B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [0x04]))
       0 ≠ 0 := by
-    rw [ltCheck_eq_zero_of_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide
+    rw [B256.ltCheck_eq_zero_of_toNat_le (by rw [B256.toNat_toB256_of_lt hcd]; exact hlen)]; decide
   wrun 5
   xr (rx_branch_succ hlen4 ·)
   xr (rx_dest ·)

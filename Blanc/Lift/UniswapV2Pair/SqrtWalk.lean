@@ -52,7 +52,7 @@ theorem sqrt_body_exact {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
     rw [B256.toNat_div hxne, hxnat,
       B256.toNat_toB256_of_lt (lt_of_le_of_lt (Nat.div_le_self _ _) (B256.toNat_lt Y))]
   have hadd : (Y.toNat / x).toB256 + x.toB256 = (bodySum Y.toNat x).toB256 :=
-    toB256_add_toB256 hsum
+    Nat.toB256_add_toB256 _ _
   have hnext : (bodySum Y.toNat x).toB256 / 2 = (next Y.toNat x).toB256 :=
     toB256_div_two hsum
   unfold t_2896_c74 t_28a4_c74 t_28ad_c74
@@ -145,7 +145,7 @@ theorem sqrt_setup_large_exact {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem
       _ = (Y.toNat / 2).toB256 := toB256_div_two (B256.toNat_lt Y)
   have hadd : (Y.toNat / 2).toB256 + 1 = (initialGuess Y.toNat).toB256 := by
     change (Y.toNat / 2).toB256 + (1 : Nat).toB256 = _
-    exact toB256_add_toB256 (lt_trans hi (B256.toNat_lt Y))
+    exact Nat.toB256_add_toB256 _ _
   unfold t_2878_c69 t_2884_c69
   apply rxc_dest
   apply rxc_push (w := 0) (by decide) (by simp only [List.length_cons]; omega)
@@ -344,7 +344,7 @@ theorem sqrt_body_of_run {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
     rw [B256.toNat_div hxne, hxnat,
       B256.toNat_toB256_of_lt (lt_of_le_of_lt (Nat.div_le_self _ _) (B256.toNat_lt Y))]
   have hadd : (Y.toNat / x).toB256 + x.toB256 = (bodySum Y.toNat x).toB256 :=
-    toB256_add_toB256 hsum
+    Nat.toB256_add_toB256 _ _
   have hnext : (bodySum Y.toNat x).toB256 / 2 = (next Y.toNat x).toB256 :=
     toB256_div_two hsum
   unfold t_2896_c74 t_28a4_c74 t_28ad_c74 at run
@@ -509,7 +509,7 @@ theorem sqrt_entry_of_run {sevm : Sevm} {b : Devm} {T : List B256} {M : Mem}
           _ = (Y.toNat / 2).toB256 := toB256_div_two (B256.toNat_lt Y)
       have hadd : (Y.toNat / 2).toB256 + 1 = (initialGuess Y.toNat).toB256 := by
         change (Y.toNat / 2).toB256 + (1 : Nat).toB256 = _
-        exact toB256_add_toB256 (lt_trans hi (B256.toNat_lt Y))
+        exact Nat.toB256_add_toB256 _ _
       unfold t_2884_c69 at run
       obtain ⟨d, hn, run⟩ := ric_next run
       obtain ⟨_, rfl⟩ := ri_pop hn

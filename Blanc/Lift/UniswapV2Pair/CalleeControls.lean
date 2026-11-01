@@ -2,6 +2,7 @@ import Blanc.Lift.RevertingCallee
 import Blanc.Lift.UniswapV2Pair.SyncWalk
 import Blanc.Lift.UniswapV2Pair.SkimSecondWalk
 import Blanc.Lift.UniswapV2Pair.MintPrefixWalk
+import Blanc.Lift.AccountAccessState
 
 /-!
 # U6 callee-premise controls: a failing token defeats liveness
@@ -40,12 +41,6 @@ private theorem lockedToken0 {sevm : Sevm} {b : Devm} {tok : Adr}
     afterSload_getStor]
   exact token0
 
-/-- Account warming keeps every installed code. -/
-theorem warm_getCode (base : Devm) (a t : Adr) :
-    (temporalAccountAccessBase base a).getCode t = base.getCode t := by
-  unfold Devm.getCode Devm.getAcct
-  rw [temporalAccountAccessBase_state]
-
 /-- **U6 control (sync).** With a reverting, non-precompile `token0`, no raw pc-zero `sync`
 run succeeds. -/
 theorem sync_no_success_of_reverting_token0 {sevm : Sevm} {b post : Devm} {G : Nat} {tok : Adr}
@@ -62,7 +57,7 @@ theorem sync_no_success_of_reverting_token0 {sevm : Sevm} {b post : Devm} {G : N
   rw [lockedToken0 token0] at answered
   refine not_staticAnswered_of_reverting ?_ notPrecompile answered
   unfold syncFirstWorld syncLockedWorld
-  rw [warm_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
+  rw [temporalAccountAccessBase_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
   exact tokenCode
 
 /-- **U6 control (sync, token1).** With a reverting, non-precompile `token1`, no raw pc-zero
@@ -91,11 +86,11 @@ theorem sync_no_success_of_reverting_token1 {sevm : Sevm} {b post : Devm} {G : N
   have before : (temporalAccountAccessBase (syncFirstWorld sevm b)
       (syncFirstToken sevm b).toAdr).getCode tok = revertingCode := by
     unfold syncFirstWorld syncLockedWorld
-    rw [warm_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
+    rw [temporalAccountAccessBase_getCode, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
     exact tokenCode
   have after : d0.getCode tok = revertingCode := revertingCode_kept (StepIn.toRun call0)
     (by unfold St; rw [Devm.getCode_setMach]; exact before)
-  rw [warm_getCode, afterSload_getCode]
+  rw [temporalAccountAccessBase_getCode, afterSload_getCode]
   exact after
 
 /-- **U6 control (skim).** With a reverting, non-precompile `token0`, no raw pc-zero `skim`
@@ -114,7 +109,7 @@ theorem skim_no_success_of_reverting_token0 {sevm : Sevm} {b post : Devm} {G : N
   rw [lockedToken0 token0] at answered
   refine not_staticAnswered_of_reverting ?_ notPrecompile answered
   unfold skimCachedWorld syncLockedWorld
-  rw [warm_getCode, afterSload_getCode, afterSload_getCode, afterSload_getCode,
+  rw [temporalAccountAccessBase_getCode, afterSload_getCode, afterSload_getCode, afterSload_getCode,
     afterSstore_getCode, afterSload_getCode]
   exact tokenCode
 
@@ -146,7 +141,7 @@ theorem mint_no_success_of_reverting_token0 {sevm : Sevm} {b post : Devm} {G : N
   rw [slot] at answered
   refine not_staticAnswered_of_reverting ?_ notPrecompile answered
   unfold mintLockedWorld
-  rw [warm_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
+  rw [temporalAccountAccessBase_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
     afterSload_getCode]
   exact tokenCode
 
@@ -184,12 +179,12 @@ theorem mint_no_success_of_reverting_token1 {sevm : Sevm} {b post : Devm} {G : N
       ((afterSload sevm (mintLockedWorld sevm b) 8).getStorVal sevm.currentTarget
         6).toAdr.toB256.toAdr).getCode tok = revertingCode := by
     unfold mintLockedWorld
-    rw [warm_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
+    rw [temporalAccountAccessBase_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
       afterSload_getCode]
     exact tokenCode
   have after : d0.getCode tok = revertingCode := revertingCode_kept (StepIn.toRun call0)
     (by unfold St; rw [Devm.getCode_setMach]; exact before)
-  rw [warm_getCode, afterSload_getCode]
+  rw [temporalAccountAccessBase_getCode, afterSload_getCode]
   exact after
 
 end Blanc.Lift.UniswapV2Pair

@@ -4,6 +4,7 @@ import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.Vyper
 import Blanc.Lift.MemGlue
+import Jaune.WordFacts
 
 /-!
 # The walk contract of a body that makes no external call
@@ -92,11 +93,6 @@ section Guards
 variable {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {S : List B256} {M : Mem}
   {G : Nat} {r : Seg} {fail ok : SFunc}
 
-theorem eq_of_eqCheck_ne_zero' {a c : B256} (h : B256.eqCheck a c ≠ 0) : a = c := by
-  unfold B256.eqCheck at h; split at h
-  · assumption
-  · exact absurd rfl h
-
 /-- `PUSH2 ok JUMPI` over a reverting fall-through, inverted: the tested word is nonzero. -/
 theorem ric_assertJump {h l : UInt8} {w : B256} {le : [h, l].length ≤ 32}
     (hf : fail.noOk = true)
@@ -122,7 +118,7 @@ theorem ric_ownerGuard (hfork : CoveredFork sevm.benvStat.fork) {h l : UInt8}
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_caller s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_eq s1
   obtain ⟨hw, G5, run⟩ := ric_assertJump hf run
-  exact ⟨eq_of_eqCheck_ne_zero' hw, G5, run⟩
+  exact ⟨B256.eq_of_eqCheck_ne_zero hw, G5, run⟩
 
 /-- The world part of a quiet body's straight-line run: the base `B` reached from the entry
 base `b` by selected loads and stores keeps every other account, the logs and the output, and

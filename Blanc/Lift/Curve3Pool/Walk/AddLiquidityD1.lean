@@ -146,6 +146,6 @@ theorem xa_al_d1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   · xs 0x13e7 (.push [0x00] (by decide)) ri_push
     xs 0x13e8 (.reg (.dup 0)) (ri_dup (by rfl))
     xrevert
-  · exact ⟨v, _, _, _, hv, gtCheck_ne_zero hw, hR, hW, hA, hm', hd1, h⟩
+  · exact ⟨v, _, _, _, hv, B256.lt_of_gtCheck_ne_zero hw, hR, hW, hA, hm', hd1, h⟩
 
 end Blanc.Lift.Curve3Pool

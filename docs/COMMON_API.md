@@ -4139,10 +4139,12 @@ wrapping products, and `B256.not_lt_of_ltCheck_eq_zero` turns a zero unsigned
 comparison flag into the negated strict comparison. The latter does not
 assert that arithmetic producing either operand was overflow-free. Import
 this owner directly; CommonProofs and Ladder do not reexport it.
-For the converse direction, a comparison flag discharged from values,
-[`Blanc/B256CheckFacts.lean`](../Blanc/B256CheckFacts.lean) has
-`B256.gtCheck_eq_zero_of_toNat_le` (`GT` is `0` when the left operand's
-value is at most the right's), the step a walk needs at a solc range check.
+For every other comparison flag (`eqCheck`, `ltCheck`, `gtCheck`, in either
+direction, including flags discharged from `toNat` bounds at a solc range
+check), import Jaune's `Jaune.WordFacts` and use its `B256.eq_of_eqCheck_ne_zero`,
+`B256.lt_of_ltCheck_ne_zero`, `B256.lt_of_gtCheck_ne_zero`,
+`B256.ltCheck_eq_zero_of_toNat_le`, `B256.gtCheck_eq_zero_of_toNat_le` and the
+`B256.{eq,lt,gt}Check_{ne,eq}_zero_iff` family; do not restate them.
 For a logical shift right that never grows its shifted operand, use
 `B256.shr_toNat_le` in
 [`Blanc/Lift/FreePtrFacts.lean`](../Blanc/Lift/FreePtrFacts.lean).
@@ -9442,7 +9444,8 @@ contract-neutral.
   [`Blanc/Lift/ExactWalkCut.lean`](../Blanc/Lift/ExactWalkCut.lean) and
   [`Blanc/Lift/ExactWalkCutOps.lean`](../Blanc/Lift/ExactWalkCutOps.lean), which
   also holds the pointer arithmetic the steps take as premises
-  (`toB256_add_toB256`, `toB256_sub_toB256`, `toB256_div_two`, `one_add_toB256`), the
+  (`toB256_div_two`, `one_add_toB256`; word addition and subtraction of naturals are Jaune's
+  `Nat.toB256_add_toB256` and `Nat.toB256_sub_toB256`), the
   SHA-256 precompile step's premises and world facts (`ShaReady`, `ShaCallPost`,
   `staticcall_sha_step`), and `BaseRel`, the world a step that writes no storage and emits
   no log keeps.

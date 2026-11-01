@@ -227,7 +227,7 @@ theorem rx_al_joinFeeE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x4e0) (v := B1) hR hsz rfl ⟨by decide, by decide⟩ (by wautoH hb1) (by hrs) ·)
   wrun 5 using hrs
-  xr (rx_branch_succ (by rw [ltCheck_eq_zero_of_le (by rw [← B256.le_iff_toNat_le_toNat]; exact not_lt.mp hsub)]; decide) ·)
+  xr (rx_branch_succ (by rw [B256.ltCheck_eq_zero_of_toNat_le (by rw [← B256.le_iff_toNat_le_toNat]; exact not_lt.mp hsub)]; decide) ·)
   wrun 9 using hrs
   refine rxe_mstoreL (o := 0x4e0) (c := 3) hR hW hsz rfl (by decide) ?_; clear hR hW hsz; rename' M => Mq3; intro M hMq3 hR hW hsz; rw [show memExtSize 0x900 0x4e0 32 = 0x900 by decide] at hsz
   xr (rx_dest ·)

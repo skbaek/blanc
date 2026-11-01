@@ -49,7 +49,7 @@ theorem xa_al_p3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xs 0xf8e (.push [0x10, 0x31] (by decide)) ri_push
   xji 0xf8f 0x1031 hw
   · have hT : T ≠ 0 := by
-      have e := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+      have e := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
       intro hT0; rw [hT0] at e; exact absurd e (by decide)
     clear hw
     xs 0xf92 (.push [0x01, 0x40] (by decide)) ri_push
@@ -160,7 +160,7 @@ theorem xa_al_p3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
     · exact wo _ _ (r 15 _ _ (by decide) (by decide) hm.o1) (by decide)
     · exact wo _ _ (r 16 _ _ (by decide) (by decide) hm.o2) (by decide)
   · have hT : T = 0 := by
-      have e := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+      have e := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
       rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0]).toNat = 0 by decide] at e
       exact B256.toNat_inj _ _ (by rw [show (0 : B256).toNat = 0 from rfl]; omega)
     exact ⟨0, M, img, _, hR, hW, hA, hm, fun _ => rfl, fun e => absurd hT e, h⟩

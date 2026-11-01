@@ -155,7 +155,7 @@ theorem add_minus32 {l : Nat} (h1 : 32 ≤ l) (h2 : l < 2 ^ 256) :
 
 theorem push20_add {a : Nat} (h : a + 32 < 2 ^ 256) :
     Bytes.toB256 [0x20] + Nat.toB256 a = Nat.toB256 (a + 32) := by
-  rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, toB256_add_toB256 (by omega),
+  rw [show Bytes.toB256 [0x20] = Nat.toB256 32 by decide, Nat.toB256_add_toB256 _ _,
     Nat.add_comm]
 
 theorem lt_toB256 {a b : Nat} (ha : a < 2 ^ 256) (hb : b < 2 ^ 256) :
@@ -371,11 +371,11 @@ theorem push20_add' {a c : Nat} (h : a + 32 = c) (hc : c < 2 ^ 256) :
 
 theorem add_toB256' {a b c : Nat} (h : a + b = c) (hc : c < 2 ^ 256) :
     Nat.toB256 a + Nat.toB256 b = Nat.toB256 c := by
-  subst h; exact toB256_add_toB256 hc
+  subst h; exact Nat.toB256_add_toB256 _ _
 
 theorem sub_toB256' {a b c : Nat} (hb : b ≤ a) (h : a - b = c) (ha : a < 2 ^ 256) :
     Nat.toB256 a - Nat.toB256 b = Nat.toB256 c := by
-  subst h; exact toB256_sub_toB256 hb ha
+  subst h; exact Nat.toB256_sub_toB256 hb ha
 
 theorem memExtsSize_two_covered {n i j : Nat} (hn : n % 32 = 0) (hi : i + 64 ≤ n)
     (hj : j + 32 ≤ n) : memExtsSize n [⟨i, 64⟩, ⟨j, 32⟩] = n := by

@@ -41,7 +41,7 @@ theorem fb_short {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   · xs 0xc (.push [0x52, 0xc9] (by decide)) ri_push
     xjmp 0x52c9
     exact fb_revert hcode h
-  · apply ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  · apply B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hcd,
       show (Bytes.toB256 [4]).toNat = 4 by decide]
     exact hlen

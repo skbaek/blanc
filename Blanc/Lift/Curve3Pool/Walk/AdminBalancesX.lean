@@ -101,7 +101,7 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   xs 0x4c98 (.push [0x4c, 0x9d] (by decide)) ri_push
   xji 0x4c99 0x4c9d hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x4c9e
   xs 0x4ca0 (.push [0x20] (by decide)) ri_push
@@ -168,7 +168,7 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   xji 0x4ce5 0x4ce9 hw
   · xdead
   have hlen32 : 32 ≤ out.length := by
-    have hgt := gtCheck_ne_zero hw
+    have hgt := B256.lt_of_gtCheck_ne_zero hw
     rw [B256.lt_iff_toNat_lt_toNat, hrd, B256.toNat_toB256_of_lt hob,
       show (Bytes.toB256 [0x1f]).toNat = 31 by decide] at hgt
     omega
@@ -213,7 +213,7 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   · xdead
   have hle : ((b.getStor sevm.currentTarget).get (balanceSlot k)).toNat ≤
       (Bytes.toB256 (out.take 32)).toNat := by
-    have hne := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+    have hne := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     exact B256.le_iff_toNat_le_toNat.mp (not_lt.mp hne)
   clear hw
   xjd 0x4d1a

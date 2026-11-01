@@ -1,4 +1,5 @@
 import Blanc.Lift.ExactWalkCut
+import Jaune.MemoryAccounting
 
 /-!
 # The solc word-copy loop
@@ -36,13 +37,6 @@ open Jaune
 
 theorem ceilDiv32_mono {a b : Nat} (h : a ≤ b) : ceilDiv a 32 ≤ ceilDiv b 32 := by
   unfold ceilDiv; split_ifs <;> omega
-
-theorem calculateMemoryGasCost_mono {a b : Nat} (h : a ≤ b) :
-    calculateMemoryGasCost a ≤ calculateMemoryGasCost b := by
-  unfold calculateMemoryGasCost
-  have h1 := ceilDiv32_mono h
-  have h2 : ceilDiv a 32 ^ 2 ≤ ceilDiv b 32 ^ 2 := Nat.pow_le_pow_left h1 2
-  exact Nat.add_le_add (Nat.mul_le_mul_left _ h1) (Nat.div_le_div_right h2)
 
 theorem ceil32_of_mod {x : Nat} (h : x % 32 = 0) : ceil32 x = x := by
   unfold ceil32; rw [h]

@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V1MintReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.CursorKeccakOrder
 
 /-! Actual V1 transferFrom stores and their earlier mapping hashes. -/
@@ -211,9 +212,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact owner_reach_observed erase run hT cont
 
 /-- V1's checked dispatcher selects the transferFrom wrapper. -/
-theorem route_transferFrom : SFunc.selWalk 0x23b872dd
-    (.next (.reg (.dup 0)) (.next (.push [0x06, 0xfd, 0xde, 0x03] (by decide)) (.next (.reg .eq)
-      (.next (.push [0x01, 0x90] (by decide)) (.branchTo ImplV1.t_0041_c0 53))))) =
+theorem route_transferFrom : ImplV1.selTree.selWalk 0x23b872dd =
     .inl (Bytes.toB256 [0x23, 0xb8, 0x72, 0xdd], 57) := by
   decide +kernel
 

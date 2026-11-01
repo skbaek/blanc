@@ -127,7 +127,7 @@ theorem helperH {sevm : Sevm} (fr : CtorFrameH sevm) {b : Devm} {M : Mem} {n ℓ
   refine rx_and hmask (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_dup (n := 3) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_dup (n := 0) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
-  refine rx_add' (toB256_add_toB256 (by omega)) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
+  refine rx_add' (Nat.toB256_add_toB256 _ _) (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_or rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_dup (n := 5) rfl (by simp only [Fin.isValue, Fin.coe_ofNat_eq_mod, Nat.zero_mod, List.set_cons_zero, Nat.reduceMod, List.set_cons_succ, List.length_cons]; omega) ?_
   refine rx_sstoreH fr.stateGas (fun _ => by omega) fr.static ?_

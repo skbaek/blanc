@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V22ConfigureMinterReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.CursorReturnToward
 
 /-! Original V2.2 transfer stores, distinguished by their retained setter return tags. -/
@@ -259,10 +260,7 @@ theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact debit_reach_observed erase run hT cont
 
 /-- The checked dispatcher routes transfer through its original ABI wrapper. -/
-theorem route_transfer : SFunc.selWalk 0xa9059cbb
-    (.next (.reg (.dup 0)) (.next (.push [0x84, 0x56, 0xcb, 0x59] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xd3] (by decide))
-        (.branch Impl.t_002b_c0 Impl.t_01d3_c0))))) =
+theorem route_transfer : Impl.selTree.selWalk 0xa9059cbb =
     .inl (Bytes.toB256 [0xa9, 0x05, 0x9c, 0xbb], 145) := by
   decide +kernel
 

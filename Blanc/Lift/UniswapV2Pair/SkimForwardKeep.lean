@@ -1,6 +1,7 @@
 import Blanc.Lift.UniswapV2Pair.SkimForwardAccept
 import Blanc.Lift.UniswapV2Pair.LockedSupply
 import Blanc.Lift.UniswapV2Pair.SkimSource
+import Blanc.Lift.AccountAccessState
 
 /-!
 # Skim liveness: the first transfer keeps the lock-guarded Pair fields (derived)
@@ -70,16 +71,6 @@ def SkimForwardEnv.FirstCallFresh {sevm : Sevm} {b : Devm} {g : Nat}
 private theorem St_getCode_eq (x : Devm) (S : List B256) (M : Mem) (g : Nat) (a : Adr) :
     (St x S M g).getCode a = x.getCode a := rfl
 
-private theorem tAAB_getStor (base : Devm) (a x : Adr) :
-    Devm.getStor (temporalAccountAccessBase base a) x = Devm.getStor base x := by
-  unfold temporalAccountAccessBase
-  split <;> rfl
-
-private theorem tAAB_getCode (base : Devm) (a x : Adr) :
-    (temporalAccountAccessBase base a).getCode x = base.getCode x := by
-  unfold temporalAccountAccessBase
-  split <;> rfl
-
 /-- **The first skim transfer keeps the Pair's lock-guarded fields** (derived, not assumed).  At a
 non-static skim frame whose storage represents `current.state` and whose account holds the Pair
 code, the first transfer `CALL` leaves `totalSupply` (slot 0), the three packed reserve fields
@@ -119,13 +110,13 @@ theorem SkimForwardEnv.firstCall_keeps {K U : WriterKey → Prop} {current : Che
   -- the staged world: the query left the cached world's storage and code
   have queried := compiled_staticcall_stor fork env.qenv0.call
   have world : Devm.getStor env.qd0 pair = (Devm.getStor b pair).set 12 0 := by
-    rw [queried, tAAB_getStor]
+    rw [queried, temporalAccountAccessBase_getStor]
     unfold skimCachedWorld syncLockedWorld
     rw [afterSload_getStor, afterSload_getStor, afterSload_getStor, afterSstore_getStor_self,
       afterSload_getStor]
   have cachedCode : (temporalAccountAccessBase (skimCachedWorld sevm b)
       (skimToken0 sevm b).toAdr).getCode pair = b.getCode pair := by
-    rw [tAAB_getCode]
+    rw [temporalAccountAccessBase_getCode]
     unfold skimCachedWorld syncLockedWorld
     rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, afterSstore_getCode,
       afterSload_getCode]
@@ -228,7 +219,7 @@ theorem SkimForwardEnv.run_of_model {K U : WriterKey → Prop} {current : Checkp
       calc env.qd0.getStorVal sevm.currentTarget 8
           = (Devm.getStor env.qd0 sevm.currentTarget).get 8 := rfl
         _ = (Devm.getStor (skimCachedWorld sevm b) sevm.currentTarget).get 8 := by
-          rw [queried, tAAB_getStor]
+          rw [queried, temporalAccountAccessBase_getStor]
         _ = b.getStorVal sevm.currentTarget 8 := by
           unfold skimCachedWorld syncLockedWorld
           rw [afterSload_getStor, afterSload_getStor, afterSload_getStor, afterSstore_getStor_self,

@@ -51,7 +51,7 @@ theorem rx_al_creditE {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {img : 
   xr (rx_push rfl (by hrs) ·)
   xr (rxm_mloadW (o := 0x4e0) (v := v) hR hsz rfl ⟨by omega, hs32⟩ (by wautoH hv) (by hrs) ·)
   wrun 7 using hrs
-  xr (rx_branch_succ (by rw [ltCheck_eq_zero_of_le (by rw [← B256.le_iff_toNat_le_toNat]; exact not_lt.mp hadd)]; decide) ·)
+  xr (rx_branch_succ (by rw [B256.ltCheck_eq_zero_of_toNat_le (by rw [← B256.le_iff_toNat_le_toNat]; exact not_lt.mp hadd)]; decide) ·)
   wrun 10 using hrs
   xr (rxm_mloadW (o := 0x4c0) (v := Nat.toB256 i) hR hsz rfl ⟨by omega, hs32⟩ (by wautoH hm.ctr) (by hrs) ·)
   wrun 4 using hrs

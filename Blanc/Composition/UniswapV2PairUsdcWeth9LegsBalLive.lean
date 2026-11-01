@@ -32,7 +32,7 @@ theorem args32_of_len {n : Nat} (h : 36 ≤ n) (hn : n < 2 ^ 256) :
     apply B256.not_lt.mp
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hn, h4]
     omega
-  apply ltCheck_zero_of_le
+  apply B256.ltCheck_eq_zero_of_toNat_le
   rw [B256.toNat_sub_eq_of_le _ _ le, B256.toNat_toB256_of_lt hn, h4]
   have h32 : (Bytes.toB256 [32]).toNat = 32 := by decide
   rw [h32]

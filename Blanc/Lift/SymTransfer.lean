@@ -1,4 +1,5 @@
 import Blanc.Lift.Sound
+import Jaune.WordFacts
 
 /-!
 # Symbols through a stack transfer (shared by the symbolic checkers)
@@ -245,9 +246,6 @@ theorem run_iszero_top (run : Ninst.Run sevm d (.reg .iszero) d') (hs : d.stack 
   rcases of_run_reg run with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore] at run
   exact unary_top run hs
-
-theorem B256.one_ne_zero' : (1 : B256) ≠ 0 := by
-  decide
 
 theorem toNat_add_of_le {x y : B256} {a b : Nat} (hx : x.toNat ≤ a) (hy : y.toNat ≤ b)
     (hab : a + b ≤ 2 ^ 256 - 1) : (x + y).toNat = x.toNat + y.toNat := by

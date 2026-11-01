@@ -1,4 +1,5 @@
 import Blanc.Lift.CursorKeccakOrder
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.ImplV2.Check
 import Blanc.Lift.CursorOccurrenceNoStateGas
 import Blanc.Lift.WalkCutKit
@@ -59,10 +60,7 @@ theorem body_reach_ordered {Q : Sevm → Devm → Ninst → Devm → Prop}
 
 
 /-- The checked dispatcher routes approve through its original ABI wrapper. -/
-theorem route_approve : SFunc.selWalk 0x095ea7b3
-    (.next (.reg (.dup 0)) (.next (.push [0x8a, 0x6d, 0xb9, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xbd] (by decide))
-        (.branch ImplV2.t_002b_c0 ImplV2.t_01bd_c0))))) =
+theorem route_approve : ImplV2.selTree.selWalk 0x095ea7b3 =
     .inl (Bytes.toB256 [0x09, 0x5e, 0xa7, 0xb3], 149) := by
   decide +kernel
 

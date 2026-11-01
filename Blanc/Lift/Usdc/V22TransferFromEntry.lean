@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V22TransferFromCallee
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.OldTransferFromEntry
 
 /-! Original V2.2 transferFrom dispatch, ABI decoding, and public guards. -/
@@ -78,10 +79,7 @@ theorem public_to_body {Q : Sevm → Devm → Ninst → Devm → Prop}
   exact ⟨_, _, _, run⟩
 
 /-- The checked dispatcher selects the exact transferFrom ABI wrapper. -/
-theorem route_transferFrom : SFunc.selWalk 0x23b872dd
-    (.next (.reg (.dup 0)) (.next (.push [0x84, 0x56, 0xcb, 0x59] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xd3] (by decide))
-        (.branch Impl.t_002b_c0 Impl.t_01d3_c0))))) =
+theorem route_transferFrom : Impl.selTree.selWalk 0x23b872dd =
     .inl (Bytes.toB256 [0x23, 0xb8, 0x72, 0xdd], 175) := by
   decide +kernel
 

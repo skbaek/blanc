@@ -6,6 +6,7 @@ import Blanc.Lift.WalkSteps
 import Blanc.Lift.ExactLeaf
 import Blanc.Lift.RunPWalk
 import Blanc.AddressSlotProofs
+import Jaune.WordFacts
 
 /-!
 # Walking the proxy certificate (C2b)
@@ -57,12 +58,6 @@ theorem ne_of_eqCheck_eq_zero {x y : B256} (h : B256.eqCheck x y = 0) : x ≠ y 
   split at h
   · exact absurd h (by decide)
   · contradiction
-
-theorem eqCheck_ne_zero {x y : B256} (h : B256.eqCheck x y ≠ 0) : x = y := by
-  unfold B256.eqCheck at h
-  split at h
-  · assumption
-  · exact (h rfl).elim
 
 theorem iszero_eq_zero {x : B256} (h : B256.eqCheck x 0 = 0) : x ≠ 0 := ne_of_eqCheck_eq_zero h
 

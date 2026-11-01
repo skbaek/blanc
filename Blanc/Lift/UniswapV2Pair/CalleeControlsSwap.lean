@@ -230,7 +230,7 @@ theorem swap_no_success_of_reverting_callback {sevm : Sevm} {b post : Devm} {G :
   have target : ((0xffffffffffffffffffffffffffffffffffffffff : B256) &&&
       swapRecipientWord sevm).toAdr = swapRecipient sevm := by
     rw [swapRecipientWord_eq, maskWord, toAdr_toB256, toAdr_toB256]
-  exact nonzero (call_flag_zero_of_reverting (by rw [warm_getCode, target]; exact code2)
+  exact nonzero (call_flag_zero_of_reverting (by rw [temporalAccountAccessBase_getCode, target]; exact code2)
     (by rw [target]; exact notPrecompile) fork (StepIn.toRun step) settled.stack)
 
 end Blanc.Lift.UniswapV2Pair

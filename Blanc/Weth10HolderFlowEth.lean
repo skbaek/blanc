@@ -1094,11 +1094,6 @@ theorem ProcessMessageTrace.ethBound_of_committedExecSound
       exact ProcessMessage.ethBound_of_committedExecSound
         run hprocess hsound runReady hfork
 
-theorem processCreateMessage_msg_bal_eq (msg : Msg) :
-    (processCreateMessage.msg msg).benv.state.bal =
-      msg.benv.state.bal :=
-  Jaune.processCreateMessage_msg_bal_eq msg
-
 theorem MessageReady.processCreateMessage_msg
     {dp : DeployParams} {ca : Adr} {msg : Msg}
     (ready : MessageReady dp ca msg)
@@ -1138,16 +1133,6 @@ theorem ne_ca_of_messageCreateCollision_false
     msg.currentTarget ≠ ca :=
   ContractSpec.StateInv.ne_of_messageCreateCollision_false
     ready.backed.state hcollision
-
-theorem ProcessCreateMessage.ok_state_eq_inner_of_no_error
-    {msg : Msg} {slot : Xlot} {post : Devm}
-    (hprocess : ProcessCreateMessage msg slot (.ok post))
-    (herror : post.error.isSome = false) :
-    ∃ inner : Devm,
-      ProcessMessage (processCreateMessage.msg msg) slot (.ok inner) ∧
-      post.state.bal = inner.state.bal :=
-  _root_.Jaune.ProcessCreateMessage.ok_state_eq_inner_of_no_error
-    hprocess herror
 
 /-- Create settlement contributes retained raw actions only when code-deposit
 settlement also commits.  The error arm proves the outer rollback exactly. -/

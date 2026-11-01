@@ -129,7 +129,7 @@ theorem rx_svFromLM (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8
     unfold lpBr
     simp only [↓reduceIte]
     have hge : B256.ltCheck (Nat.toB256 (0x140 + 32 * N + 32)) (Bytes.toB256 [l1, l2]) = 0 :=
-      ltCheck_eq_zero_of_le (by rw [hL, B256.toNat_toB256_of_lt (by omega)]; omega)
+      B256.ltCheck_eq_zero_of_toNat_le (by rw [hL, B256.toNat_toB256_of_lt (by omega)]; omega)
     xr (rx_branch_succ (by rw [hge]; decide) ·)
     refine kk M' _ (by rw [hM']; rfl) hR' hW' hsz' (fun o v h ho => h.write_other (by
       simp only [B256.length_toBytes]; omega)) ?_
@@ -310,7 +310,7 @@ theorem rx_rsFromLM (w : Nat → B256) {N : Nat} {idx : List Nat} {h1 h2 : UInt8
     unfold lpBr
     simp only [show n ≠ N by omega, ↓reduceIte]
     have hlt : B256.ltCheck (Nat.toB256 (0x140 + 32 * (k + 1) - 32)) (Bytes.toB256 [0x01, 0x40]) =
-        0 := ltCheck_eq_zero_of_le (by
+        0 := B256.ltCheck_eq_zero_of_toNat_le (by
       rw [B256.toNat_toB256_of_lt (by omega), show (Bytes.toB256 [0x01, 0x40]).toNat = 0x140 by
         decide]
       omega)

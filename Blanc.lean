@@ -1915,7 +1915,6 @@ import Blanc.Lift.WalkCutKit
 import Blanc.OwnerClosure
 import Blanc.OwnerClosureControl
 import Blanc.SlotFootprintWord
-import Blanc.B256CheckFacts
 import Blanc.Composition.UniswapV2PairUsdcWeth9BurnEnv
 import Blanc.Composition.UniswapV2PairUsdcWeth9BurnLive
 import Blanc.Composition.UniswapV2PairUsdcWeth9BurnLiveF

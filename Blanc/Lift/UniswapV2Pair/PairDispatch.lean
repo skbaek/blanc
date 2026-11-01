@@ -114,4 +114,27 @@ theorem pair_dispatch_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outc
   cases hg
   exact ⟨_, h.uncut⟩
 
+/-- **The dispatcher, inverted, for a `P`-run** cut nowhere. -/
+theorem pair_dispatch_invP {P : Sevm → Devm → Ninst → Devm → Prop}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {sevm : Sevm} {b : Devm} {M : Mem}
+    {G : Nat} {r : Seg} {σ : B256} {tgt : SFunc}
+    (selector : Blanc.Sevm.selector sevm = σ) (ht : pairRows.selGoto cert.prog σ = some tgt)
+    (run : SFunc.RunCutP P cert.prog sevm [] (St b [] M G) t_001a_c0 r) :
+    ∃ G', SFunc.RunCutP P cert.prog sevm [] (St b [σ] M G') tgt r := by
+  rw [t_001a_eq] at run
+  obtain ⟨d, hd, h⟩ := ric_nextP run
+  obtain ⟨_, rfl⟩ := ri_push (hP hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_calldataload (hP hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, rfl⟩ := ri_push (hP hd)
+  obtain ⟨d, hd, h⟩ := ric_nextP h
+  obtain ⟨_, hd⟩ := ri_shr (hP hd)
+  simp only [show Bytes.toB256 [0] = (0 : B256) from rfl,
+    show Bytes.toB256 [0xe0] = (224 : B256) from rfl,
+    show (224 : B256).toNat = 224 from rfl,
+    show Sevm.dataWord sevm 0 >>> 224 = σ from selector] at hd
+  subst d
+  exact SFunc.RunCutP.selGoto (S := []) hP ht h
+
 end Blanc.Lift.UniswapV2Pair

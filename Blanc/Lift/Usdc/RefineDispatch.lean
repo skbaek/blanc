@@ -49,7 +49,7 @@ theorem impl_preamble_cut {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G 
   obtain ⟨_, rfl⟩ := ri_push hd
   rcases ric_branch h with ⟨-, _, h⟩ | ⟨nz, _, h⟩
   · exact (h.false_of_noOk (by decide)).elim
-  have value : sevm.value = 0 := eq_of_eqCheck_ne nz
+  have value : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero nz
   unfold Impl.t_0010_c0 at h
   obtain ⟨_, h⟩ := ric_dest h
   obtain ⟨d, hd, h⟩ := ric_next h
@@ -323,7 +323,7 @@ theorem version_body_false {fs : List SFunc} {sevm : Sevm} {d : Devm} {o : Outco
   obtain ⟨_, rfl⟩ := ri_push hd
   rcases ric_branch h with ⟨-, _, h⟩ | ⟨nz, -⟩
   · exact h.false_of_noOk hf
-  · exact version_read v hn (eq_of_eqCheck_ne nz)
+  · exact version_read v hn (B256.eq_of_eqCheck_ne_zero nz)
 
 /-- `initialize`'s `require(!initialized)` has no run once the contract is initialized. -/
 theorem initialize_body_false {sevm : Sevm} {d : Devm} {o : Outcome}
@@ -354,7 +354,7 @@ theorem initialize_body_false {sevm : Sevm} {d : Devm} {o : Outcome}
   obtain ⟨_, rfl⟩ := ri_push hd
   rcases ric_branch h with ⟨-, _, h⟩ | ⟨nz, -⟩
   · exact h.false_of_noOk (by decide)
-  · exact flag20_read flag (eq_of_eqCheck_ne nz)
+  · exact flag20_read flag (B256.eq_of_eqCheck_ne_zero nz)
 
 /-- `initializeV2`'s `require(initialized && _initializedVersion == 0)` has no run at version `3`
 of an initialized contract. -/
@@ -407,10 +407,10 @@ theorem initializeV2_body_false {sevm : Sevm} {d : Devm} {o : Outcome}
     obtain ⟨_, rfl⟩ := ri_push hd
     rcases ric_branch h with ⟨-, _, h⟩ | ⟨nz, -⟩
     · exact h.false_of_noOk (by decide)
-    · have e := (eq_of_eqCheck_ne nz).symm
+    · have e := (B256.eq_of_eqCheck_ne_zero nz).symm
       simp only [Devm.getStorVal, Devm.getAcct, NodeWalk.afterSload_state] at e
       exact version_read v (n := 0) (by decide) e
-  · exact flag20_read flag (eq_of_eqCheck_ne nz)
+  · exact flag20_read flag (B256.eq_of_eqCheck_ne_zero nz)
 
 /-- **`initialize` and `initializeV2_2` revert at a good ledger** (U6g; the model reverts them,
 decision usdc-u5a-initialize-revert). -/

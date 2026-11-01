@@ -4,6 +4,7 @@ import Blanc.Lift.UniswapV2Pair.GetterStringWalk
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.UniswapV2Pair.SwapForwardFront
 import Blanc.Lift.UniswapV2Pair.SwapForwardBack
+import Jaune.WordFacts
 
 /-! Forward (gas-exact) schedule of the swap entry: the PC0 guards, the selector dispatch to
 `t_01be_c99`, the ABI wrapper up to the body's internal call and the wrapper's `STOP`, around
@@ -56,17 +57,9 @@ theorem swap_iszero_lt {x y : B256} (h : y.toNat ≤ x.toNat) :
   rw [zero]
   decide
 
-theorem swap_gt_zero {x y : B256} (h : x.toNat ≤ y.toNat) : B256.gtCheck x y = 0 := by
-  have notGt : ¬ x > y := by
-    change ¬ y < x
-    rw [B256.lt_iff_toNat_lt_toNat]
-    omega
-  unfold B256.gtCheck
-  simp only [notGt, ite_false]
-
 theorem swap_iszero_gt {x y : B256} (h : x.toNat ≤ y.toNat) :
     B256.eqCheck (B256.gtCheck x y) 0 ≠ 0 := by
-  rw [swap_gt_zero h]
+  rw [B256.gtCheck_eq_zero_of_toNat_le h]
   decide
 
 /-- The ABI wrapper `t_01be..t_024c`: under the four literal guards it decodes the entry and
@@ -101,11 +94,11 @@ theorem swapAbi_exact {sevm : Sevm} {b post : Devm} {G : Nat} {o : Outcome}
     rw [show Bytes.toB256 [4] + Bytes.toB256 [96] = (100 : B256) from by decide,
       show Bytes.toB256 [1] = (1 : B256) from rfl, mulOne,
       show B256.gtCheck (Sevm.dataWord sevm (Bytes.toB256 [4] + Sevm.dataWord sevm 100))
-        (Bytes.toB256 [1, 0, 0, 0, 0]) = 0 from swap_gt_zero guards.length,
+        (Bytes.toB256 [1, 0, 0, 0, 0]) = 0 from B256.gtCheck_eq_zero_of_toNat_le guards.length,
       show B256.gtCheck (Bytes.toB256 [32] + (Bytes.toB256 [4] + Sevm.dataWord sevm 100) +
         Sevm.dataWord sevm (Bytes.toB256 [4] + Sevm.dataWord sevm 100))
         (Bytes.toB256 [4] + (Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4])) = 0
-        from swap_gt_zero guards.tail]
+        from B256.gtCheck_eq_zero_of_toNat_le guards.tail]
     decide
   unfold t_024c_c99
   repeat swap_rx

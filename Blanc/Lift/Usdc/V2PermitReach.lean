@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.V2TransferWithAuthorizationReach
+import Blanc.Lift.Usdc.SelTrees
 import Blanc.Lift.Usdc.ModernCallerHashBodies
 import Blanc.Lift.Usdc.V2_1PermitReach
 
@@ -11,10 +12,7 @@ open V2_1PermitReach (NonceSource nonceLine)
 variable {observe : Conf → Conf → Prop}
 
 /-- The checked dispatcher routes permit through its original ABI wrapper. -/
-theorem route_permit : SFunc.selWalk 0xd505accf
-    (.next (.reg (.dup 0)) (.next (.push [0x8a, 0x6d, 0xb9, 0xc3] (by decide))
-      (.next (.reg .gt) (.next (.push [0x01, 0xbd] (by decide))
-        (.branch ImplV2.t_002b_c0 ImplV2.t_01bd_c0))))) =
+theorem route_permit : ImplV2.selTree.selWalk 0xd505accf =
     .inl (Bytes.toB256 [0xd5, 0x05, 0xac, 0xcf], 111) := by
   decide +kernel
 

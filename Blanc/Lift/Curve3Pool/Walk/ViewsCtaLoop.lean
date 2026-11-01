@@ -42,7 +42,7 @@ theorem xa_cta_it0 {M : Mem} {D0 amp B0 B1 B2 ck : B256}
   xs 0xc27 (.push [0x0c, 0x77] (by decide)) ri_push  -- c24 PUSH2 0x0c77
   xji 0xc28 0xc77 hw
   swap
-  · have hd0 := eqCheck_ne_zero_eq hw
+  · have hd0 := B256.eq_of_eqCheck_ne_zero hw
     clear hw
     xjd 0xc78  -- c77 JUMPDEST
     xs 0xc7b (.push [0x01, 0x40] (by decide)) ri_push  -- c78 PUSH2 0x0140
@@ -156,7 +156,7 @@ theorem xa_cta_it0 {M : Mem} {D0 amp B0 B1 B2 ck : B256}
   xji 0xc64 0xc68 hw
   · xdead
   have hadd := (B256.nof_iff_not_add_lt _ _).mpr
-    (ltCheck_eq_zero_not_lt (eq_zero_of_iszero_ne_zero hw))
+    (B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hw))
   clear hw
   xjd 0xc69  -- c68 JUMPDEST
   xs 0xc6a (.reg (.dup 0)) (ri_dup (by rfl))  -- c69 DUP1
@@ -207,7 +207,7 @@ theorem xa_cta_it1 {M : Mem} {D0 amp B0 B1 B2 ck : B256}
   xs 0xc27 (.push [0x0c, 0x77] (by decide)) ri_push  -- c24 PUSH2 0x0c77
   xji 0xc28 0xc77 hw
   swap
-  · have hd0 := eqCheck_ne_zero_eq hw
+  · have hd0 := B256.eq_of_eqCheck_ne_zero hw
     clear hw
     xjd 0xc78  -- c77 JUMPDEST
     xs 0xc7b (.push [0x01, 0x40] (by decide)) ri_push  -- c78 PUSH2 0x0140
@@ -321,7 +321,7 @@ theorem xa_cta_it1 {M : Mem} {D0 amp B0 B1 B2 ck : B256}
   xji 0xc64 0xc68 hw
   · xdead
   have hadd := (B256.nof_iff_not_add_lt _ _).mpr
-    (ltCheck_eq_zero_not_lt (eq_zero_of_iszero_ne_zero hw))
+    (B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hw))
   clear hw
   xjd 0xc69  -- c68 JUMPDEST
   xs 0xc6a (.reg (.dup 0)) (ri_dup (by rfl))  -- c69 DUP1
@@ -372,7 +372,7 @@ theorem xa_cta_it2 {M : Mem} {D0 amp B0 B1 B2 ck : B256}
   xs 0xc27 (.push [0x0c, 0x77] (by decide)) ri_push  -- c24 PUSH2 0x0c77
   xji 0xc28 0xc77 hw
   swap
-  · have hd0 := eqCheck_ne_zero_eq hw
+  · have hd0 := B256.eq_of_eqCheck_ne_zero hw
     clear hw
     xjd 0xc78  -- c77 JUMPDEST
     xs 0xc7b (.push [0x01, 0x40] (by decide)) ri_push  -- c78 PUSH2 0x0140
@@ -487,7 +487,7 @@ theorem xa_cta_it2 {M : Mem} {D0 amp B0 B1 B2 ck : B256}
   xji 0xc64 0xc68 hw
   · xdead
   have hadd := (B256.nof_iff_not_add_lt _ _).mpr
-    (ltCheck_eq_zero_not_lt (eq_zero_of_iszero_ne_zero hw))
+    (B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hw))
   clear hw
   xjd 0xc69  -- c68 JUMPDEST
   xs 0xc6a (.reg (.dup 0)) (ri_dup (by rfl))  -- c69 DUP1

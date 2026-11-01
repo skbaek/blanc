@@ -1,5 +1,6 @@
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsFrame
 import Blanc.Lift.Usdc.HistorySlotsCore
+import Jaune.WordFacts
 
 /-!
 # The branch facts of the USDC `transfer` frame from ledger conditions (U9a)
@@ -34,13 +35,9 @@ theorem usdcOp_transfer_words {e : Sevm} {dst : Adr} {v : Nat} (op : usdcOp e = 
       rw [ite_eq_right bal, ite_eq_right xfer] at op
       split at op <;> cases op
 
-theorem ltCheck_zero_of_le {x y : B256} (h : y.toNat ≤ x.toNat) : B256.ltCheck x y = 0 := by
-  have : ¬ x < y := by rw [B256.lt_iff_toNat_lt_toNat]; omega
-  simp only [B256.ltCheck, this, ↓reduceIte]
-
 theorem short_of_len {n : Nat} (h4 : 4 ≤ n) (hn : n < 2 ^ 256) :
     B256.ltCheck (Nat.toB256 n) (Bytes.toB256 [4]) = 0 :=
-  ltCheck_zero_of_le (by rw [B256.toNat_toB256_of_lt hn]; exact h4)
+  B256.ltCheck_eq_zero_of_toNat_le (by rw [B256.toNat_toB256_of_lt hn]; exact h4)
 
 theorem args_of_len {n : Nat} (h : 68 ≤ n) (hn : n < 2 ^ 256) :
     B256.ltCheck (Nat.toB256 n - Bytes.toB256 [4]) (Bytes.toB256 [64]) = 0 := by
@@ -49,7 +46,7 @@ theorem args_of_len {n : Nat} (h : 68 ≤ n) (hn : n < 2 ^ 256) :
     apply B256.not_lt.mp
     rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hn, h4]
     omega
-  apply ltCheck_zero_of_le
+  apply B256.ltCheck_eq_zero_of_toNat_le
   rw [B256.toNat_sub_eq_of_le _ _ le, B256.toNat_toB256_of_lt hn, h4]
   have h64 : (Bytes.toB256 [64]).toNat = 64 := by decide
   rw [h64]

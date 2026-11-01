@@ -47,7 +47,7 @@ theorem xa_dyu_x (hc : Cert.CheckedM code cert mems true)
   xs 0x2059 (.push [0x20, 0x5e] (by decide)) ri_push  -- 2056 PUSH2 0x205e
   xji 0x205a 0x205e hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x205f  -- 205e JUMPDEST
   xs 0x2061 (.push [0x60] (by decide)) ri_push  -- 205f PUSH1 0x60
@@ -250,7 +250,7 @@ theorem xa_dyu_x (hc : Cert.CheckedM code cert mems true)
   xji 0x216c 0x2170 hw
   · xdead
   have hax := (B256.nof_iff_not_add_lt _ _).mpr
-    (ltCheck_eq_zero_not_lt (eq_zero_of_iszero_ne_zero hw))
+    (B256.not_lt_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hw))
   clear hw
   xjd 0x2171  -- 2170 JUMPDEST
   xs 0x2172 (.reg (.dup 0)) (ri_dup (by rfl))  -- 2171 DUP1

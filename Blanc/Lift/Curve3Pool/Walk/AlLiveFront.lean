@@ -38,7 +38,7 @@ theorem al_supply_test {T : B256} (hT : T ≠ 0) :
     rw [B256.lt_iff_toNat_lt_toNat, show (Bytes.toB256 [0]).toNat = 0 by decide]
     exact Nat.pos_of_ne_zero fun h => hT (B256.toNat_inj _ _ (by rw [h]; rfl))
   by_contra h
-  exact hgt (eqCheck_ne_zero_eq h)
+  exact hgt (B256.eq_of_eqCheck_ne_zero h)
 
 /-! ## `add_liquidity`'s prologue, exact
 

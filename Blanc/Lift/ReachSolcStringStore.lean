@@ -1,5 +1,6 @@
 import Blanc.Lift.ReachSstoreLoops
 import Blanc.Lift.SolcAbiStringStaging
+import Jaune.WordFacts
 
 /-!
 # solc 0.6 `string storage = string calldata` on a prefix reach
@@ -202,11 +203,6 @@ theorem exit_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {
   · exact .inl ⟨key, rest, stack⟩
   · exact .inr returned
 
-theorem toB256_add (a b : Nat) : a.toB256 + b.toB256 = (a + b).toB256 := by
-  apply B256.toNat_inj
-  rw [B256.toNat_add, B256.toNat_toB256, B256.toNat_toB256, B256.toNat_toB256]
-  exact (Nat.add_mod _ _ _).symm
-
 /-- What a short arm owes: on the arm's entry stack, it stores at the slot (its fifth word) and
 leaves for the shared exit with the same stack under kept memory. -/
 def ShortOK (P : Sevm → Devm → Ninst → Devm → Prop) (fs : List SFunc) (sevm : Sevm)
@@ -301,7 +297,7 @@ theorem reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') 
     iterate 3 rsx
     rcases rs_branchTo run hT with ⟨hz, _, run⟩ | ⟨_, g, _, hg, run⟩
     · iterate 3 rsx
-      rw [toB256_add] at run
+      rw [Nat.toB256_add_toB256] at run
       rcases ReachPayload.payloadJ_reach_exact erase hrd rdStep win E.loop (i := 0)
           (fin := (p + len).toB256) (base0 := slot.toBytes.keccak) (p := p)
           (by

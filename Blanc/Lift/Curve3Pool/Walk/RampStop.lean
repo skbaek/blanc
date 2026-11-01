@@ -46,7 +46,7 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
   xs 0x491f (.push [0x49, 0x24] (by decide)) ri_push  -- 491c PUSH2 0x4924
   xji 0x4920 0x4924 hw
   · xdead
-  have hval : sevm.value = 0 := eqCheck_ne_zero_eq hw
+  have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x4925  -- 4924 JUMPDEST
   xs 0x4927 (.push [0x04] (by decide)) ri_push  -- 4925 PUSH1 0x04
@@ -56,7 +56,7 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
   xs 0x492d (.push [0x49, 0x32] (by decide)) ri_push  -- 492a PUSH2 0x4932
   xji 0x492e 0x4932 hw
   · xdead
-  have hown := eqCheck_ne_zero_eq hw
+  have hown := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xjd 0x4933  -- 4932 JUMPDEST
   xs 0x4936 (.push [0x01, 0x40] (by decide)) ri_push  -- 4933 PUSH2 0x0140

@@ -95,7 +95,7 @@ theorem mulCheck_ne_zero {x y : B256} (h : x.toNat * y.toNat < 2 ^ 256) :
 /-- An `ISZERO (LT x y)` guard passes when `y ≤ x`. -/
 theorem geCheck_ne_zero {x y : B256} (h : y.toNat ≤ x.toNat) :
     B256.eqCheck (B256.ltCheck x y) 0 ≠ 0 := by
-  rw [ltCheck_eq_zero_of_le h]; decide
+  rw [B256.ltCheck_eq_zero_of_toNat_le h]; decide
 
 /-- `T - A` as a number, when `A ≤ T`. -/
 theorem sub_word {T A : B256} (h : A.toNat ≤ T.toNat) : T - A = Nat.toB256 (T.toNat - A.toNat) := by

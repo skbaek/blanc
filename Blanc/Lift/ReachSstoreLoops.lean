@@ -367,7 +367,7 @@ theorem ObservedReach.selWalk_inlS (erase : ∀ {s d n d'}, P s d n d' → Ninst
       obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Sum.inl.inj hw)
       rcases ObservedReach.rs_cmp_eq_either erase run hT with ⟨zero, -⟩ | ⟨ne, r⟩
       · exact absurd zero h
-      · exact ⟨(eq_of_eqCheck_ne ne).symm, r⟩
+      · exact ⟨(B256.eq_of_eqCheck_ne_zero ne).symm, r⟩
   | case6 => cases hw
 
 theorem Reach.selWalk_inlS (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {c : B256}

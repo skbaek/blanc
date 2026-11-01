@@ -383,16 +383,6 @@ private theorem Xinst.step_staticcall_done_state
       _ = d11.state := (Devm.push_of_push hpush).state
   · cases hdone
 
-private theorem Msg.benvAfterTransfer_bal_eq_zero_permit
-    {msg : Msg} {post : Benv}
-    (hzero : msg.value = 0)
-    (hrun : msg.benvAfterTransfer = .ok post) :
-    post.state.bal = msg.benv.state.bal := by
-  have hpost := benvAfterTransfer_eq_of_not_transfer
-    (by intro h; exact h.2 hzero) hrun
-  subst post
-  rfl
-
 private theorem Msg.benvAfterTransfer_stor_code_permit
     {msg : Msg} {post : Benv}
     (hzero : msg.value = 0)
@@ -426,7 +416,7 @@ private theorem PermitOwnObservations.of_staticcall_none
       _ = childPost.state := hrollback.symm
       _ = callPost.state := hpost.symm
   · have hbal :=
-      Msg.benvAfterTransfer_bal_eq_zero_permit hzero htransfer
+      benvAfterTransfer_bal_of_value_zero hzero htransfer
     have hfields := Msg.benvAfterTransfer_stor_code_permit hzero htransfer
     refine ⟨Stor.Weth10Silent.of_eq ?_, ?_, ?_⟩
     · change callPre.state.getStor sevm.currentTarget =

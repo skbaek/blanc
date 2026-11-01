@@ -361,7 +361,7 @@ theorem sel34_reachH (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256
   obtain ⟨_, s, run⟩ := rr_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
   rcases rr_branch run hT with ⟨hz, _, run⟩ | ⟨-, _, run⟩
   · have hadm : sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr :=
-      (masked_eq_iff _ _).mp (eqCheck_ne_zero (iszero_eq_zero hz))
+      (masked_eq_iff _ _).mp (B256.eq_of_eqCheck_ne_zero (iszero_eq_zero hz))
     right
     unfold t_02a4_c2 at run
     obtain ⟨_, s, run⟩ := rr_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -640,7 +640,7 @@ theorem proxy_reachH (bal : sevm.benvStat.rules.bal = none) {b : Devm}
     rcases rr_branchTo run hT with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_00ba_c34 := Option.some.inj (hg.symm.trans rfl)
-      exact (sel34_reachH hP bal run hT).imp id fun hc => ⟨hc, (eqCheck_ne_zero h).symm⟩
+      exact (sel34_reachH hP bal run hT).imp id fun hc => ⟨hc, (B256.eq_of_eqCheck_ne_zero h).symm⟩
     unfold t_004c_c0 at run
     obtain ⟨_, s, run⟩ := rr_next run hT; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rr_next run hT; obtain ⟨_, rfl⟩ := ri_push (hP s)

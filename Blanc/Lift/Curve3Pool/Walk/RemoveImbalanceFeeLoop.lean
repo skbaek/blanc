@@ -130,7 +130,7 @@ theorem xa_rli_feeA0 (hcode : sevm.code = code)
   refine ⟨hm1, hD0, ?_⟩
   xji 0x33e9 0x3422 hw
   · -- ideal > new
-    have hgt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+    have hgt := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
     clear hw
     xs 0x33ec (.push [0x06, 0x20] (by decide)) ri_push  -- 33e9 PUSH2 0x0620
     xl 0x33ed 0x620  -- 33ec MLOAD
@@ -156,7 +156,7 @@ theorem xa_rli_feeA0 (hcode : sevm.code = code)
     xs 0x340d (.push [0x34, 0x12] (by decide)) ri_push  -- 340a PUSH2 0x3412
     xji 0x340e 0x3412 hw
     · xdead
-    have hsub := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+    have hsub := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     clear hw
     xjd 0x3413  -- 3412 JUMPDEST
     xs 0x3414 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3413 DUP1
@@ -173,7 +173,7 @@ theorem xa_rli_feeA0 (hcode : sevm.code = code)
     exact ⟨_, _, _, .inl ⟨hgt, rfl⟩, h, hV.sub (by
       simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])⟩
   · -- ideal ≤ new
-    have hgt := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+    have hgt := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     clear hw
     xjd 0x3423  -- 3422 JUMPDEST
     xs 0x3426 (.push [0x02, 0xe0] (by decide)) ri_push  -- 3423 PUSH2 0x02e0
@@ -200,7 +200,7 @@ theorem xa_rli_feeA0 (hcode : sevm.code = code)
     xs 0x3447 (.push [0x34, 0x4c] (by decide)) ri_push  -- 3444 PUSH2 0x344c
     xji 0x3448 0x344c hw
     · xdead
-    have hsub := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+    have hsub := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     clear hw
     xjd 0x344d  -- 344c JUMPDEST
     xs 0x344e (.reg (.dup 0)) (ri_dup (by rfl))  -- 344d DUP1
@@ -367,7 +367,7 @@ theorem xa_rli_feeB0 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   xs 0x351b (.push [0x35, 0x20] (by decide)) ri_push  -- 3518 PUSH2 0x3520
   xji 0x351c 0x3520 hw
   · xdead
-  have hs3 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hs3 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x3521  -- 3520 JUMPDEST
   xs 0x3522 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3521 DUP1
@@ -433,7 +433,7 @@ theorem xa_rli_feeB0 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   xs 0x357f (.push [0x35, 0x84] (by decide)) ri_push  -- 357c PUSH2 0x3584
   xji 0x3580 0x3584 hw
   · xdead
-  have hs4 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hs4 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x3585  -- 3584 JUMPDEST
   xs 0x3586 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3585 DUP1
@@ -570,7 +570,7 @@ theorem xa_rli_feeA1 (hcode : sevm.code = code)
   refine ⟨hm1, hD0, ?_⟩
   xji 0x33e9 0x3422 hw
   · -- ideal > new
-    have hgt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+    have hgt := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
     clear hw
     xs 0x33ec (.push [0x06, 0x20] (by decide)) ri_push  -- 33e9 PUSH2 0x0620
     xl 0x33ed 0x620  -- 33ec MLOAD
@@ -596,7 +596,7 @@ theorem xa_rli_feeA1 (hcode : sevm.code = code)
     xs 0x340d (.push [0x34, 0x12] (by decide)) ri_push  -- 340a PUSH2 0x3412
     xji 0x340e 0x3412 hw
     · xdead
-    have hsub := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+    have hsub := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     clear hw
     xjd 0x3413  -- 3412 JUMPDEST
     xs 0x3414 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3413 DUP1
@@ -613,7 +613,7 @@ theorem xa_rli_feeA1 (hcode : sevm.code = code)
     exact ⟨_, _, _, .inl ⟨hgt, rfl⟩, h, hV.sub (by
       simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])⟩
   · -- ideal ≤ new
-    have hgt := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+    have hgt := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     clear hw
     xjd 0x3423  -- 3422 JUMPDEST
     xs 0x3426 (.push [0x02, 0xe0] (by decide)) ri_push  -- 3423 PUSH2 0x02e0
@@ -640,7 +640,7 @@ theorem xa_rli_feeA1 (hcode : sevm.code = code)
     xs 0x3447 (.push [0x34, 0x4c] (by decide)) ri_push  -- 3444 PUSH2 0x344c
     xji 0x3448 0x344c hw
     · xdead
-    have hsub := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+    have hsub := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     clear hw
     xjd 0x344d  -- 344c JUMPDEST
     xs 0x344e (.reg (.dup 0)) (ri_dup (by rfl))  -- 344d DUP1
@@ -807,7 +807,7 @@ theorem xa_rli_feeB1 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   xs 0x351b (.push [0x35, 0x20] (by decide)) ri_push  -- 3518 PUSH2 0x3520
   xji 0x351c 0x3520 hw
   · xdead
-  have hs3 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hs3 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x3521  -- 3520 JUMPDEST
   xs 0x3522 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3521 DUP1
@@ -873,7 +873,7 @@ theorem xa_rli_feeB1 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   xs 0x357f (.push [0x35, 0x84] (by decide)) ri_push  -- 357c PUSH2 0x3584
   xji 0x3580 0x3584 hw
   · xdead
-  have hs4 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hs4 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x3585  -- 3584 JUMPDEST
   xs 0x3586 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3585 DUP1
@@ -1010,7 +1010,7 @@ theorem xa_rli_feeA2 (hcode : sevm.code = code)
   refine ⟨hm1, hD0, ?_⟩
   xji 0x33e9 0x3422 hw
   · -- ideal > new
-    have hgt := gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
+    have hgt := B256.lt_of_gtCheck_ne_zero (ne_of_eqCheck_eq_zero hw)
     clear hw
     xs 0x33ec (.push [0x06, 0x20] (by decide)) ri_push  -- 33e9 PUSH2 0x0620
     xl 0x33ed 0x620  -- 33ec MLOAD
@@ -1036,7 +1036,7 @@ theorem xa_rli_feeA2 (hcode : sevm.code = code)
     xs 0x340d (.push [0x34, 0x12] (by decide)) ri_push  -- 340a PUSH2 0x3412
     xji 0x340e 0x3412 hw
     · xdead
-    have hsub := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+    have hsub := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     clear hw
     xjd 0x3413  -- 3412 JUMPDEST
     xs 0x3414 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3413 DUP1
@@ -1053,7 +1053,7 @@ theorem xa_rli_feeA2 (hcode : sevm.code = code)
     exact ⟨_, _, _, .inl ⟨hgt, rfl⟩, h, hV.sub (by
       simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])⟩
   · -- ideal ≤ new
-    have hgt := gtCheck_eq_zero (eqCheck_ne_zero_eq hw)
+    have hgt := gtCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     clear hw
     xjd 0x3423  -- 3422 JUMPDEST
     xs 0x3426 (.push [0x02, 0xe0] (by decide)) ri_push  -- 3423 PUSH2 0x02e0
@@ -1080,7 +1080,7 @@ theorem xa_rli_feeA2 (hcode : sevm.code = code)
     xs 0x3447 (.push [0x34, 0x4c] (by decide)) ri_push  -- 3444 PUSH2 0x344c
     xji 0x3448 0x344c hw
     · xdead
-    have hsub := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+    have hsub := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
     clear hw
     xjd 0x344d  -- 344c JUMPDEST
     xs 0x344e (.reg (.dup 0)) (ri_dup (by rfl))  -- 344d DUP1
@@ -1247,7 +1247,7 @@ theorem xa_rli_feeB2 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   xs 0x351b (.push [0x35, 0x20] (by decide)) ri_push  -- 3518 PUSH2 0x3520
   xji 0x351c 0x3520 hw
   · xdead
-  have hs3 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hs3 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x3521  -- 3520 JUMPDEST
   xs 0x3522 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3521 DUP1
@@ -1313,7 +1313,7 @@ theorem xa_rli_feeB2 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   xs 0x357f (.push [0x35, 0x84] (by decide)) ri_push  -- 357c PUSH2 0x3584
   xji 0x3580 0x3584 hw
   · xdead
-  have hs4 := ltCheck_eq_zero_not_lt (eqCheck_ne_zero_eq hw)
+  have hs4 := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xjd 0x3585  -- 3584 JUMPDEST
   xs 0x3586 (.reg (.dup 0)) (ri_dup (by rfl))  -- 3585 DUP1

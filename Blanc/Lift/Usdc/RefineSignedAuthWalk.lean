@@ -128,7 +128,7 @@ theorem e95_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
     rfl
   rw [hb4] at c3 c4 c5 c6 s5
   refine ⟨?_, B, MB, GB, eo, t1, t2, a0, c1, c2, c3, c4, c5, c6, by rw [congrFun sB, s5]⟩
-  have e := congrArg B256.toAdr (eq_of_eqCheck_ne c0)
+  have e := congrArg B256.toAdr (B256.eq_of_eqCheck_ne_zero c0)
   rwa [word_ff20, toAdr_toB256, toAdr_toB256] at e
 
 /-- **Entry 87, `transferWithAuthorization(from, to, value, validAfter, validBefore, nonce, v, r,
