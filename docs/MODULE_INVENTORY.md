@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-615 shared modules, 588 with a module summary.
+616 shared modules, 589 with a module summary.
 
 ## `Blanc/`
 
@@ -234,6 +234,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ExecutionTransactionPrefix.lean`](../Blanc/ExecutionTransactionPrefix.lean) | Exact cuts of the existing retained transaction trace. | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
 | [`ExecutionTransactionPrefixAdmission.lean`](../Blanc/ExecutionTransactionPrefixAdmission.lean) | Admission transport to an arbitrary transaction cut after both real opening system calls. | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
 | [`ExecutionTransactionStateTrace.lean`](../Blanc/ExecutionTransactionStateTrace.lean) | Contract-neutral state chronology for a successful Jaune transaction. | [E8](COMMON_API.md#e8-i-need-an-exact-ordered-replay-of-world-state-changes), [T3](COMMON_API.md#t3-the-wrapper-is-a-transaction-and-the-fact-is-about-an-installed-contract) |
+| [`ExecutionTrieBinding.lean`](../Blanc/ExecutionTrieBinding.lean) | Trie-map binding for configured blocks: the nibble-keyed maps Jaune's transaction and receipt roots hash, their lookups, the block output's transaction map as the decoded body, and the encoding injectivity that turns a recorded map entry into an exact body slot or receipt. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`ExecutionWarmth.lean`](../Blanc/ExecutionWarmth.lean) | **Accessed-address growth along a frame.** The EIP-2929 accessed-address set of a frame only grows while the frame runs: every instruction either leaves it alone or inserts into it, a successful child is united into it, and a failed child is dropped without touching the set the … | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
 | [`ExecutionWholeFrameAccounting.lean`](../Blanc/ExecutionWholeFrameAccounting.lean) | **A target handler for contracts whose frame theorem covers its whole subtree.** `Blanc/ExecutionModelAccounting.lean` replays a successful non-static target frame as its own steps followed by the steps of the children it settles (`SpawnReplay`): the frame's own carrier effect … | [T2c](COMMON_API.md#t2c-i-need-that-ledger-replay-on-every-wrapper-up-to-a-whole-configured-history) |
 | [`ExecutionWholeFrameAccountingIn.lean`](../Blanc/ExecutionWholeFrameAccountingIn.lean) | **Whole-frame accounting over a selected fork domain.** The modern whole-frame handler (`Blanc/ExecutionWholeFrameAccounting.lean`) carries `CoveredFork` through the spawn-child transport, the static case and the frame obligation. | [T2c](COMMON_API.md#t2c-i-need-that-ledger-replay-on-every-wrapper-up-to-a-whole-configured-history) |
