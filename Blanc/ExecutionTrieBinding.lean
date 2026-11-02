@@ -329,14 +329,16 @@ theorem list_toBytes_head (rs : List BLT) (small : (BLT.list rs).toBytes.length 
     simp only [UInt8.toNat_add, Nat.toUInt8_eq, UInt8.toNat_ofNat', UInt8.reduceToNat]
     omega
 
-theorem trimZero_of_canonicalScalar {n : Nat} {xs : Bytes} (h : Bytes.CanonicalScalar n xs) :
-    trimZero xs = xs := by
-  have head := (Bytes.canonicalScalar_iff.mp h).2
-  cases xs with
+/-- Leading zero bytes do not change a big-endian word: `Tx.toBLT`'s trimming
+of signature scalars preserves the value `recoverSender` reads. -/
+theorem toB256_trimZero (xs : Bytes) : Bytes.toB256 (trimZero xs) = xs.toB256 := by
+  induction xs with
   | nil => rfl
-  | cons x xs =>
-    have hx : x ≠ 0 := fun same => head (by rw [same]; rfl)
-    simp only [trimZero, List.dropWhile_cons, hx, decide_false, Bool.false_eq_true, ↓reduceIte]
+  | cons x xs ih =>
+    by_cases hx : x = 0
+    · subst hx
+      rw [Bytes.toB256_zero_cons, ← ih]; rfl
+    · simp only [trimZero, List.dropWhile_cons, hx, decide_false, Bool.false_eq_true, ↓reduceIte]
 
 private theorem receiver_bytes_injective {a b : Option Adr}
     (h : @Option.rec Adr (fun _ => Bytes) [] Adr.toBytes a =
@@ -355,26 +357,27 @@ private theorem receiver_bytes_injective {a b : Option Adr}
       cases this
     | some b => exact congrArg some (adr_toBytes_injective h)
 
-/-- Two wire-canonical legacy transactions with the same RLP item are equal.
-Canonical signature scalars are needed: `Tx.toBLT` trims leading zero bytes. -/
-theorem legacy_tx_eq_of_toBLT_eq {tx tx' : Tx} {gasPrice gasPrice' : Nat}
+/-- Two legacy transactions with the same RLP item agree on every field it
+encodes; the signature scalars agree up to leading zero bytes (`Tx.toBLT`
+trims them), hence as words (`toB256_trimZero`). -/
+theorem legacy_fields_of_toBLT_eq {tx tx' : Tx} {gasPrice gasPrice' : Nat}
     {receiver receiver' : Option Adr}
     (type : tx.type = .zero gasPrice receiver) (type' : tx'.type = .zero gasPrice' receiver')
-    (canonical : Bytes.CanonicalScalar 32 tx.r ∧ Bytes.CanonicalScalar 32 tx.s)
-    (canonical' : Bytes.CanonicalScalar 32 tx'.r ∧ Bytes.CanonicalScalar 32 tx'.s)
-    (same : tx.toBLT = tx'.toBLT) : tx = tx' := by
+    (same : tx.toBLT = tx'.toBLT) :
+    tx.nonce = tx'.nonce ∧ gasPrice = gasPrice' ∧ tx.gas = tx'.gas ∧ receiver = receiver' ∧
+      tx.value = tx'.value ∧ tx.data = tx'.data ∧ tx.v = tx'.v ∧
+      tx.r.toB256 = tx'.r.toB256 ∧ tx.s.toB256 = tx'.s.toB256 := by
   obtain ⟨nonce, gas, value, data, v, r, s, ty⟩ := tx
   obtain ⟨nonce', gas', value', data', v', r', s', ty'⟩ := tx'
-  dsimp only at type type' canonical canonical'
+  dsimp only at type type' ⊢
   subst type type'
-  simp only [Tx.toBLT, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, and_true,
-    trimZero_of_canonicalScalar canonical.1, trimZero_of_canonicalScalar canonical.2,
-    trimZero_of_canonicalScalar canonical'.1, trimZero_of_canonicalScalar canonical'.2] at same
+  simp only [Tx.toBLT, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, and_true] at same
   obtain ⟨hnonce, hprice, hgas, hreceiver, hvalue, hdata, hv, hr, hs⟩ := same
-  have hnonce := UInt64.toNat_inj.mp (nat_toBytes_injective hnonce)
-  rw [hnonce, nat_toBytes_injective hprice, nat_toBytes_injective hgas,
-    receiver_bytes_injective hreceiver, nat_toBytes_injective hvalue, hdata,
-    nat_toBytes_injective hv, hr, hs]
+  refine ⟨UInt64.toNat_inj.mp (nat_toBytes_injective hnonce), nat_toBytes_injective hprice,
+    nat_toBytes_injective hgas, receiver_bytes_injective hreceiver, nat_toBytes_injective hvalue,
+    hdata, nat_toBytes_injective hv, ?_, ?_⟩
+  · rw [← toB256_trimZero r, hr, toB256_trimZero]
+  · rw [← toB256_trimZero s, hs, toB256_trimZero]
 
 /-- A legacy transaction's trie value is its bare RLP encoding. -/
 theorem txTrieValue_of_legacy {tx : Tx} {gasPrice : Nat} {receiver : Option Adr}
@@ -522,7 +525,8 @@ theorem exists_receipt_of_mem_receiptsEntries {bout : BlockOutput} {k e : Bytes}
 /-- If the block's transaction entry list holds, at index `i`'s nibble key, a
 legacy transaction's trie value, body slot `i` is an already-decoded legacy
 transaction with that transaction's RLP item. Signature-scalar bytes are fixed
-only up to leading zeros; see `slot_of_transactionsEntries`. -/
+only up to leading zeros, which the fields `recoverSender` and intrinsic gas
+read do not see (`legacy_fields_of_toBLT_eq`). -/
 theorem ConfiguredBlockTraceIn.legacy_slot_of_transactionsEntries
     {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
     (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat} {tx₀ : Tx}
@@ -548,26 +552,6 @@ theorem ConfiguredBlockTraceIn.legacy_slot_of_transactionsEntries
   | inr tx' =>
     cases decoded
     exact atSlot
-
-/-- With wire-canonical body slots (as `BLT.toExBlock` produces) and a
-wire-canonical legacy `tx₀`, an entry of the block's transaction entry list
-identifies body slot `i` exactly. -/
-theorem ConfiguredBlockTraceIn.slot_of_transactionsEntries
-    {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat} {tx₀ : Tx}
-    {gasPrice₀ : Nat} {receiver₀ : Option Adr} (type₀ : tx₀.type = .zero gasPrice₀ receiver₀)
-    (canonical₀ : Bytes.CanonicalScalar 32 tx₀.r ∧ Bytes.CanonicalScalar 32 tx₀.s)
-    (small : (txTrieValue tx₀).length < 2 ^ 64)
-    (entry : ((BLT.toBytes (.bytes i.toBytes)).toNibbles, txTrieValue tx₀) ∈
-      transactionsEntries block.blockOutput)
-    (wire : ∀ slot ∈ block.block.txs, TxEntry.WireWellFormed slot) :
-    block.block.txs[i]? = some (.inr tx₀) := by
-  obtain ⟨tx, _, _, atSlot, type, blt⟩ :=
-    block.legacy_slot_of_transactionsEntries type₀ small entry
-  have wired := (wire _ (List.mem_of_getElem? atSlot)).1
-  rw [legacy_tx_eq_of_toBLT_eq type type₀ ⟨wired.2.2.2.1, wired.2.2.2.2.1⟩ canonical₀ blt]
-    at atSlot
-  exact atSlot
 
 /-- If the block's receipt entry list holds, at key `k`'s nibbles, the trie
 value of `r`, the block output's receipt at `k` is exactly `r`. -/

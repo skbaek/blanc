@@ -2017,6 +2017,7 @@ import Blanc.Composition.LiveUsdcWeth9B26213219Joint
 import Blanc.Composition.LiveUsdcWeth9B26213219Headlines
 import Blanc.Composition.LiveUsdcWeth9B26213219WethExit
 import Blanc.Composition.LiveUsdcWeth9B26213219WethObserved
+import Blanc.Composition.LiveUsdcWeth9B26213219WethAnchor
 import Blanc.Composition.LiveUsdcWeth9B26213219Liquidity
 import Blanc.Composition.LiveUsdcWeth9B26213219CallShare
 import Blanc.Composition.LiveUsdcWeth9B26213219Swap

@@ -2266,6 +2266,7 @@ COMPOSITION = [
     "Composition.LiveUsdcWeth9B26213219Headlines",
     "Composition.LiveUsdcWeth9B26213219WethExit",
     "Composition.LiveUsdcWeth9B26213219WethObserved",
+    "Composition.LiveUsdcWeth9B26213219WethAnchor",
     "Composition.LiveUsdcWeth9B26213219Liquidity",
     "Composition.LiveUsdcWeth9B26213219Mint",
     "Composition.LiveUsdcWeth9B26213219ObservedHistory",

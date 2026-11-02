@@ -10,10 +10,10 @@ import Blanc.Lift.Weth9.Creation.ObservationData
 Hand-written consumers of the generated `Block/*` modules. A trace header `h` with
 `h.hash = blockHash₀`, Keccak-separated from the recorded header at their encodings, has the
 recorded encoding (`header_eq_of_separated`) and hence its number, timestamp and both roots. The
-generated tries' slot-85 entries are the WETH9 creation's signed bytes (`SignedInput.signedBytes`)
+generated entry lists' slot-85 entries are the WETH9 creation's signed bytes (`SignedInput.signedBytes`)
 and the encoding of the successful receipt `ObservationData.receipt`, in the value form Jaune's
-`getTransactionsRoot`/`getReceiptRoot` write. Linking the trace's own trie entries to these is the
-trace-side step (not here).
+`getTransactionsRoot`/`getReceiptRoot` write. Linking the trace's own entry lists to these is the
+anchor's step (`WethHashAnchor`), not here.
 -/
 
 namespace Blanc.Lift.Weth9.Creation.Block
@@ -67,18 +67,19 @@ theorem t085_eq : t085 = SignedInput.signedBytes := by
   apply eq_of_beq
   decide +kernel
 
-/-- **Transaction slot 85.** The certified transaction trie holds the WETH9 creation's signed
+/-- **Transaction slot 85.** The recorded transaction entry list holds the WETH9 creation's signed
 envelope at key 85, which is `SignedInput.tx`'s canonical encoding (`SignedInput.canonical`), the
 legacy value `getTransactionsRoot` writes. -/
-theorem txNTB₀_creation : txNTB₀[creationKey.toNibbles]? = some SignedInput.signedBytes := by
+theorem txEntries₀_creation : (creationKey.toNibbles, SignedInput.signedBytes) ∈ txEntries₀ := by
   rw [← t085_eq, creationKey, BLT.toBytes_eq_toBytesS, Nat.toBytes_eq_toBytesS]
   decide +kernel
 
-/-- **Receipt slot 85.** The certified receipt trie holds, at key 85, the value `getReceiptRoot`
-writes for `ObservationData.receipt`: a successful legacy receipt. -/
-theorem receiptNTB₀_creation :
-    receiptNTB₀[creationKey.toNibbles]? =
-      some (ObservationData.receipt.1.val.toBytes ++ ObservationData.receipt.2.toBLT.toBytes) := by
+/-- **Receipt slot 85.** The recorded receipt entry list holds, at key 85, the value
+`getReceiptRoot` writes for `ObservationData.receipt`: a successful legacy receipt. -/
+theorem receiptEntries₀_creation :
+    (creationKey.toNibbles,
+      ObservationData.receipt.1.val.toBytes ++ ObservationData.receipt.2.toBLT.toBytes) ∈
+      receiptEntries₀ := by
   simp only [creationKey, BLT.toBytes_eq_toBytesS, Nat.toBytes_eq_toBytesS]
   decide +kernel
 

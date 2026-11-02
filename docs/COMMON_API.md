@@ -2039,12 +2039,13 @@ and `exists_receipt_of_mem_receiptsEntries` read an entry back at its byte key.
 transaction map at encoded index `i` with the `i`-th decoded body transaction
 (`exists_slot_of_transactionsTrie` for the body slot).
 `ConfiguredBlockTraceIn.legacy_slot_of_transactionsEntries` derives from a legacy
-entry an already-decoded legacy slot with the same RLP item;
-`slot_of_transactionsEntries` gives the exact slot when body slots are
-wire-canonical (`Tx.toBLT` trims signature scalars, so a non-canonical `r`/`s`
-is otherwise indistinguishable). `ConfiguredBlockTraceIn.receipt_of_receiptsEntries`
+entry an already-decoded legacy slot with the same RLP item. That item fixes
+the signature scalars only up to leading zero bytes (`Tx.toBLT` trims them), which
+no consumer needs: `legacy_fields_of_toBLT_eq` gives every encoded field and the
+scalars as words (`toB256_trimZero`), which is all `recoverSender` and intrinsic
+gas read, so no wire-canonicity premise is required. `ConfiguredBlockTraceIn.receipt_of_receiptsEntries`
 gives the exact typed receipt. Encoding facts: `blt_toBytes_injective` (below
-`2 ^ 64` bytes), `list_toBytes_head`, `legacy_tx_eq_of_toBLT_eq`,
+`2 ^ 64` bytes), `list_toBytes_head`,
 `receipt_toBLT_injective`, `receiptTrieValue_injective`, `txTrieValue_eq_legacy`,
 `txTrieValue_of_legacy`, `Bytes.toExTx_not_legacy`, `adr_toBytes_injective`,
 `toNibbles_injective`. No Merkle–Patricia injectivity of `trie` is proved; the
