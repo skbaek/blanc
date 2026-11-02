@@ -18,11 +18,8 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
 theorem WethDeploymentTo.initial_foot {checkpoint : BlockChain}
     (d : WethDeploymentTo checkpoint) :
     Weth9.FootInv d.keys (d.cut.afterBenv.state.getStor weth)
-      (d.cut.afterBenv.state.bal weth) := by
-  have created := Weth9.weth9_history_committed_from_creation_block d.block d.number d.time
-    d.cut d.txType d.data d.value d.nonce d.sender d.funds d.gas d.gasBound d.empty
-  rw [weth_creation_address]
-  exact (created.2.2.1 _).extend d.fresh
+      (d.cut.afterBenv.state.bal weth) :=
+  (d.created.2.2.1 _).extend d.fresh
 
 /-- The same universe is admitted at every original raw WETH entry. -/
 theorem WethDeploymentTo.entry_keys {checkpoint : BlockChain}
@@ -84,13 +81,9 @@ theorem DeploymentHistoryLink.before_pair_replay {checkpoint : BlockChain}
         (Weth9.ledger wd.keys (pd.cut.benv.state.getStor weth)) := by
   have foot := wd.initial_foot
   let L := Weth9.weth9AccountingLadderIn HistFork HistFork.stateGas_none weth foot.inj
-  have created := Weth9.weth9_history_committed_from_creation_block wd.block wd.number wd.time
-    wd.cut wd.txType wd.data wd.value wd.nonce wd.sender wd.funds wd.gas wd.gasBound wd.empty
-  have start : (Weth9.footSpec wd.keys).StateInv weth wd.cut.afterBenv.state := by
-    apply Weth9.footSpec_stateInv_iff.mpr
-    refine ⟨?_, created.2.2.2.1, foot.support, foot.backed⟩
-    rw [weth_creation_address]
-    exact congrArg some created.1
+  have start : (Weth9.footSpec wd.keys).StateInv weth wd.cut.afterBenv.state :=
+    Weth9.footSpec_stateInv_iff.mpr ⟨congrArg some wd.created.1, wd.created.2.2.2.1,
+      foot.support, foot.backed⟩
   have admitted : link.earlierTrace.FrameAdmitted weth (Weth9.footEntry wd.keys) :=
     (link.earlierTrace.frameAdmitted_iff_rawFrames weth _).2
       (fun _ member target => wd.entry_keys (link.raw_parts.1 member) target)
@@ -143,16 +136,33 @@ theorem DeploymentHistoryLink.before_pair_replay {checkpoint : BlockChain}
   rw [beforePairFrames, List.flatMap_append]
   exact Weth9.LedgerReplay.append earlyReplay prefixReplay
 
+/-- The earlier WETH deployment and intervening actual history supply the
+installed runtime at the entry to createPair; no extra checkpoint is assumed. -/
+theorem DeploymentHistoryLink.weth_code_before_pair {checkpoint : BlockChain}
+    {wd : WethDeploymentTo checkpoint} {pd : PairDeploymentTo checkpoint}
+    (link : DeploymentHistoryLink wd pd) :
+    some (pd.cut.benv.state.getCode weth).toList = Weth9.weth9Sem.image :=
+  link.before_pair_replay.1.state.code
+
+/-- The genuine creation cut preserves all WETH storage, with installation
+derived from the original linked deployment histories. -/
+theorem DeploymentHistoryLink.creation_preserves_weth {checkpoint : BlockChain}
+    {wd : WethDeploymentTo checkpoint} {pd : PairDeploymentTo checkpoint}
+    (link : DeploymentHistoryLink wd pd) :
+    pd.cut.afterBenv.state.getStor weth = pd.cut.benv.state.getStor weth := by
+  apply (pd.creation_preserves_weth ?_).2
+  have code := link.weth_code_before_pair
+  intro empty
+  rw [empty] at code
+  exact Weth9.weth9Sem.ne_nil rfl (Option.some.inj code.symm)
+
 /-- The constructor's zero allowance ledger remains zero when extended by
 the original history's fresh tracked keys. -/
 theorem WethDeploymentTo.initial_allow_zero {checkpoint : BlockChain}
     (d : WethDeploymentTo checkpoint) :
     ∀ g, (Weth9.ledger d.keys (d.cut.afterBenv.state.getStor weth)).allow pair g = 0 := by
-  have created := Weth9.weth9_history_committed_from_creation_block d.block d.number d.time
-    d.cut d.txType d.data d.value d.nonce d.sender d.funds d.gas d.gasBound d.empty
-  have same := Weth9.ledger_extend (created.2.2.1 0) d.fresh
+  have same := Weth9.ledger_extend (d.created.2.2.1 0) d.fresh
   intro g
-  rw [weth_creation_address]
   change (Weth9.ledger (Weth9.Key.extend (fun _ => False) _) _).allow pair g = 0
   exact (congrArg (fun l : Weth9.Ledger => l.allow pair g) same).trans
     (by

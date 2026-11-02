@@ -17,11 +17,8 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 
 /-- The actual creation history leaves WETH9's runtime installed at the checkpoint. -/
 theorem WethDeploymentTo.installed {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
-    some (checkpoint.state.getCode weth).toList = Weth9.weth9Sem.image := by
-  have created := Weth9.weth9_history_committed_from_creation_block d.block d.number d.time
-    d.cut d.txType d.data d.value d.nonce d.sender d.funds d.gas d.gasBound d.empty
-  rw [weth_creation_address]
-  exact (created.2.2.2.2 d.history d.fresh).1
+    some (checkpoint.state.getCode weth).toList = Weth9.weth9Sem.image :=
+  d.created.2.2.2.2.1
 
 /-- **WETH9 exit after its actual deployment.** At any block reached by a configured history
 (`trace`) from the deployment record's checkpoint, whose touched keys are fresh against the

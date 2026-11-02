@@ -8,10 +8,11 @@ The two deployment records must describe the same retained history. The link
 below provides the intervening configured blocks and identifies the original
 WETH history with their concatenation. Post-deployment caller provenance then
 uses the already proved Pair child selectors. Separately, exact factory
-execution proves that createPair preserves all WETH storage, with WETH's
-installation derived from its earlier deployment. The older frame-based
-prefix theorem remains available. `LiveUsdcWeth9B26213219AllowanceReplay`
-composes storage preservation with replay on both sides of the creation cut.
+execution proves that createPair preserves all WETH storage when WETH's runtime
+is installed at its entry. The older frame-based prefix theorem remains
+available. `LiveUsdcWeth9B26213219AllowanceReplay` derives that installation
+from its replay of the history before createPair and composes storage
+preservation with replay on both sides of the creation cut.
 -/
 
 namespace Blanc.Composition.LiveUsdcWeth9B26213219
@@ -52,69 +53,6 @@ structure DeploymentHistoryLink {checkpoint : BlockChain}
     (wd : WethDeploymentTo checkpoint) (pd : PairDeploymentTo checkpoint) where
   between : ConfiguredHistoryTraceIn HistFork mainnetChainConfig wd.completed pd.pre
   history : wd.history = (between.step pd.block).append pd.history
-
-/-- The earlier WETH deployment and intervening actual history supply the
-installed runtime at the entry to createPair; no extra checkpoint is assumed. -/
-theorem DeploymentHistoryLink.weth_code_before_pair {checkpoint : BlockChain}
-    {wd : WethDeploymentTo checkpoint} {pd : PairDeploymentTo checkpoint}
-    (link : DeploymentHistoryLink wd pd) :
-    some (pd.cut.benv.state.getCode weth).toList = Weth9.weth9Sem.image := by
-  let spec := ContractSpecSem.ofStorageOnly Weth9.weth9Sem (fun _ => True)
-  have preserves : spec.PreservesAdmittedIn HistFork weth (fun _ _ => True) :=
-    fun _ _ _ _ _ _ _ _ _ => ⟨trivial, trivial⟩
-  have created := Weth9.weth9_history_committed_from_creation_block wd.block wd.number wd.time
-    wd.cut wd.txType wd.data wd.value wd.nonce wd.sender wd.funds wd.gas wd.gasBound wd.empty
-  have start : spec.StateInv weth wd.cut.afterBenv.state := by
-    refine ⟨?_, trivial, trivial⟩
-    rw [weth_creation_address]
-    exact congrArg some created.1
-  let earlier := (MidHistoryTraceIn.tail wd.block wd.cut).append link.between
-  have preInv : spec.StateInv weth pd.pre.state := earlier.stateInv_admitted_semIn
-    preserves BodyStageCapabilities.historical
-    ((earlier.frameAdmitted_iff_rawFrames weth _).2 fun _ _ _ => trivial)
-    (earlier.rewardCreditsFunded BodyStageCapabilities.historical)
-    start Weth9.installedCert rfl
-  have fork : pd.block.fork = .muirGlacier := by
-    have selected := pd.block.forkAt
-    rw [pd.number, pd.time] at selected
-    exact Except.ok.inj (selected.symm.trans UniswapV2Pair.pair_deployment_fork)
-  have rules : (initBenv pd.block.fork pd.pre pd.block.block.header).stat.rules =
-      Fork.ruleSet .muirGlacier := by
-    change pd.block.fork.ruleSet = _
-    rw [fork]
-  have beacon := pd.block.bodyTrace.beacon.disabled_endpoints (by rw [rules]; rfl)
-  have history := pd.block.bodyTrace.history.disabled_endpoints (by rw [rules]; rfl)
-  have stateEq : pd.block.bodyTrace.historyState = pd.pre.state := history.1.trans beacon.1
-  have beforeInv : spec.BenvInv weth
-      (((initBenv pd.block.fork pd.pre pd.block.block.header).withState
-        pd.block.bodyTrace.beaconState).withState pd.block.bodyTrace.historyState) := by
-    refine ⟨?_, AdrSet.not_mem_empty⟩
-    change spec.StateInv weth pd.block.bodyTrace.historyState
-    rw [stateEq]
-    exact preInv
-  have bound : sum pd.block.bodyTrace.historyState.bal < 2 ^ 256 := by
-    rw [stateEq]
-    have total := pd.block.withdrawalsBound
-    change sum pd.pre.state.bal + wdsum pd.block.block.wds < 2 ^ 256 at total
-    omega
-  have finalInv := pd.cut.before.benvInv_admitted_semIn preserves pd.block.forkIn
-    (by change (initBenv pd.block.fork pd.pre pd.block.block.header).stat.rules.stateGas = none
-        rw [rules]; rfl)
-    ((pd.cut.before.frameAdmitted_iff_rawFrames weth _).2 fun _ _ _ => trivial)
-    bound beforeInv Weth9.installedCert rfl
-  exact finalInv.state.code
-
-/-- The genuine creation cut preserves all WETH storage, with installation
-derived from the original linked deployment histories. -/
-theorem DeploymentHistoryLink.creation_preserves_weth {checkpoint : BlockChain}
-    {wd : WethDeploymentTo checkpoint} {pd : PairDeploymentTo checkpoint}
-    (link : DeploymentHistoryLink wd pd) :
-    pd.cut.afterBenv.state.getStor weth = pd.cut.benv.state.getStor weth := by
-  apply (pd.creation_preserves_weth ?_).2
-  have code := link.weth_code_before_pair
-  intro empty
-  rw [empty] at code
-  exact Weth9.weth9Sem.ne_nil rfl (Option.some.inj code.symm)
 
 /-- Original retained frames through and including the genuine createPair transaction.
 The post-createPair transaction suffix belongs to the later Pair trace instead. -/

@@ -42,10 +42,6 @@ structure CtorFrameH (sevm : Sevm) : Prop where
 
 /-! ## The string-storing helper (entry 2) -/
 
-/-- The helper's exact cost from the world `b`, storing `v` at slot `p`. -/
-def helperCost (sevm : Sevm) (b : Devm) (p v : B256) : Nat :=
-  115 + sstoreCost sevm (afterSload sevm b p) p v + 172 + sloadCost sevm b p + 7
-
 /-- The helperH's exact cost from the world `b`, storing `v` at slot `p`. -/
 def helperCostH (sevm : Sevm) (b : Devm) (p v : B256) : Nat :=
   115 + sstoreCostH sevm (afterSloadH sevm b p) p v + 172 + sloadCostH sevm b p + 7
@@ -249,19 +245,6 @@ def copyCost : Nat :=
 
 theorem copyCost_eq : copyCost = 588 := by decide
 
-/-- The worlds of the main walk: after the name, after the symbol, after reading decimals. -/
-def wName (sevm : Sevm) (b : Devm) : Devm :=
-  afterSstore sevm (afterSload sevm b 0) 0 nameSlotWord
-def wSymbol (sevm : Sevm) (b : Devm) : Devm :=
-  afterSstore sevm (afterSload sevm (wName sevm b) 1) 1 symbolSlotWord
-def wDecimals (sevm : Sevm) (b : Devm) : Devm := afterSload sevm (wSymbol sevm b) 2
-
-/-- The constructor's exact cost from the world `b`. -/
-def ctorCost (sevm : Sevm) (b : Devm) : Nat :=
-  48 + copyCost + sstoreCost sevm (wDecimals sevm b) 2 18 + 40 +
-    sloadCost sevm (wSymbol sevm b) 2 + 28 + helperCost sevm (wName sevm b) 1 symbolSlotWord +
-    109 + helperCost sevm b 0 nameSlotWord + 124
-
 /-- The worlds of the main walk under the frame's actual storage schedule: after the name, after the symbol, after reading decimals. -/
 def wNameH (sevm : Sevm) (b : Devm) : Devm :=
   afterSstoreH sevm (afterSloadH sevm b 0) 0 nameSlotWord
@@ -274,21 +257,6 @@ def ctorCostH (sevm : Sevm) (b : Devm) : Nat :=
   48 + copyCost + sstoreCostH sevm (wDecimalsH sevm b) 2 18 + 40 +
     sloadCostH sevm (wSymbolH sevm b) 2 + 28 + helperCostH sevm (wNameH sevm b) 1 symbolSlotWord +
     109 + helperCostH sevm b 0 nameSlotWord + 124
-
-theorem ctorCost_le (sevm : Sevm) (b : Devm) : ctorCost sevm b ≤ 80000 := by
-  have hl : ∀ (b : Devm) (k : B256), sloadCost sevm b k ≤ 2100 := by
-    intro b k; unfold sloadCost; split <;> decide
-  have hs : ∀ (b : Devm) (k v : B256), sstoreCost sevm b k v ≤ 22100 := by
-    intro b k v; unfold sstoreCost sstoreValueCost; split_ifs <;> decide
-  unfold ctorCost helperCost
-  have := hl b 0
-  have := hl (wName sevm b) 1
-  have := hl (wSymbol sevm b) 2
-  have := hs (afterSload sevm b 0) 0 nameSlotWord
-  have := hs (afterSload sevm (wName sevm b) 1) 1 symbolSlotWord
-  have := hs (wDecimals sevm b) 2 18
-  rw [copyCost_eq]
-  omega
 
 /-- Under a flat `SLOAD` price of at most 2100, the constructor costs at most 80,000 gas under the
 frame's actual storage schedule. -/

@@ -193,31 +193,46 @@ def WethDeploymentTo.keys {checkpoint : BlockChain} (d : WethDeploymentTo checkp
 theorem weth_creation_address : weth = Weth9.Creation.weth9Address := by decide +kernel
 theorem pair_creation_address : pair = UniswapV2Pair.Creation.pairAddress := by decide +kernel
 
-/-- Backing and the world-sum bound are conclusions of the actual creation history. -/
-theorem WethDeploymentTo.foot {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
-    SumNof checkpoint.state.bal ∧
-    Weth9.FootInv d.keys (checkpoint.state.getStor weth) (checkpoint.state.bal weth) := by
+/-- **The record's deployment, at `weth`.** `Weth9.weth9_history_committed_from_creation_block`
+applied once to the record's fields: right after the creation transaction WETH holds its runtime
+and the constructor's storage, with the empty footprint and `SumNof`; at the checkpoint the runtime
+is still installed, `SumNof` holds, the footprint holds over the record's keys, and the footprint
+ledger is the model run of the committed writer invocations. -/
+theorem WethDeploymentTo.created {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
+    (d.cut.afterBenv.state.getCode weth).toList = Weth9.code.toList ∧
+      d.cut.afterBenv.state.getStor weth = Weth9.Creation.deployedStor ∧
+      (∀ b : B256, Weth9.FootInv (fun _ => False) (d.cut.afterBenv.state.getStor weth) b) ∧
+      SumNof d.cut.afterBenv.state.bal ∧
+      some (checkpoint.state.getCode weth).toList = Weth9.weth9Sem.image ∧
+      SumNof checkpoint.state.bal ∧
+      Weth9.FootInv d.keys (checkpoint.state.getStor weth) (checkpoint.state.bal weth) ∧
+      (Weth9.ledger (fun _ => False) Weth9.Creation.deployedStor).run
+          (Weth9.replayCalls (Weth9.midCommittedInvocationsIn Weth9.Creation.weth9Address d.trace)) =
+        some (Weth9.ledger d.keys (checkpoint.state.getStor weth)) := by
   have created := Weth9.weth9_history_committed_from_creation_block d.block d.number d.time
     d.cut d.txType d.data d.value d.nonce d.sender d.funds d.gas d.gasBound d.empty
   have finished := created.2.2.2.2 d.history d.fresh
   rw [weth_creation_address]
-  exact ⟨finished.2.1, finished.2.2.1⟩
+  exact ⟨created.1, created.2.1, created.2.2.1, created.2.2.2.1, finished.1, finished.2.1,
+    finished.2.2.1, finished.2.2.2.1⟩
+
+/-- Backing and the world-sum bound are conclusions of the actual creation history. -/
+theorem WethDeploymentTo.foot {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
+    SumNof checkpoint.state.bal ∧
+    Weth9.FootInv d.keys (checkpoint.state.getStor weth) (checkpoint.state.bal weth) :=
+  ⟨d.created.2.2.2.2.2.1, d.created.2.2.2.2.2.2.1⟩
 
 /-- The model replay is retained for the remaining allowance provenance proof. -/
 theorem WethDeploymentTo.replay {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
     (Weth9.ledger (fun _ => False) Weth9.Creation.deployedStor).run
       (Weth9.replayCalls (Weth9.midCommittedInvocationsIn Weth9.Creation.weth9Address d.trace)) =
-    some (Weth9.ledger d.keys (checkpoint.state.getStor weth)) := by
-  have created := Weth9.weth9_history_committed_from_creation_block d.block d.number d.time
-    d.cut d.txType d.data d.value d.nonce d.sender d.funds d.gas d.gasBound d.empty
-  rw [weth_creation_address]
-  exact (created.2.2.2.2 d.history d.fresh).2.2.2.1
+    some (Weth9.ledger d.keys (checkpoint.state.getStor weth)) :=
+  d.created.2.2.2.2.2.2.2
 
 /-- Every retained frame sees WETH's installed runtime; frames at WETH execute it. -/
 theorem WethDeploymentTo.ownCode {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
     ∀ G ∈ d.trace.settledFrames, OwnCodeAtIn HistFork weth Weth9.code G := by
-  have created := Weth9.weth9_history_committed_from_creation_block d.block d.number d.time
-    d.cut d.txType d.data d.value d.nonce d.sender d.funds d.gas d.gasBound d.empty
+  have code := d.created.1
   have spawns : OwnSpawnsIn Weth9.Creation.weth9Address Weth9.code := by
     intro R N x pc code _ ordinary chain hat
     obtain ⟨_, reach, ok⟩ := cursor_of_parentPrefix_noStateGas Weth9.cert_check
@@ -226,10 +241,10 @@ theorem WethDeploymentTo.ownCode {checkpoint : BlockChain} (d : WethDeploymentTo
       with call | staticcall
     · exact Or.inl call
     · exact Or.inr (Or.inl staticcall)
-  rw [weth_creation_address]
+  rw [weth_creation_address] at code ⊢
   exact MidHistoryTraceIn.settled_ownCode_of_imageIn Weth9.weth9Sem
     Weth9.Creation.weth9Address d.trace BodyStageCapabilities.historical
-    (congrArg some created.1) Weth9.installedCert rfl
+    (congrArg some code) Weth9.installedCert rfl
     (Weth9.weth9Sem.ne_nil rfl) (Weth9.weth9Sem.not_delegation rfl) spawns
 
 /-- WETH's actual retained children receive WETH as caller, even on the old forks. -/

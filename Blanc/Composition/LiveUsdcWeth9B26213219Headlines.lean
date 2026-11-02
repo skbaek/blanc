@@ -38,11 +38,8 @@ def WethDeployed (w : Jaune.State) : Prop :=
 retained block 4719568, installs WETH9's runtime at `weth` and leaves exactly the constructor's
 storage. -/
 theorem weth9_deployment {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
-    WethDeployed d.cut.afterBenv.state := by
-  have created := Weth9.weth9_history_committed_from_creation_block d.block d.number d.time
-    d.cut d.txType d.data d.value d.nonce d.sender d.funds d.gas d.gasBound d.empty
-  rw [WethDeployed, weth_creation_address]
-  exact ⟨created.1, created.2.1⟩
+    WethDeployed d.cut.afterBenv.state :=
+  ⟨d.created.1, d.created.2.1⟩
 
 /-- **WETH9 backing.**  At any block after WETH9's deployment, the stored balance words of every
 holder the history from the creation transaction touched sum to at most WETH9's ether. -/
