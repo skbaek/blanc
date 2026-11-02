@@ -104,6 +104,8 @@ jobs:
         run: scripts/check-lido-ossifiable-proxy-performance.sh
       - name: Lido OssifiableProxy generated artifacts (offline)
         run: scripts/check-lido-ossifiable-proxy-artifacts.sh
+      - name: WETH9 creation block generated modules (offline)
+        run: python3 -B scripts/weth9-creation-block-generate.py --check
       # The Lido dispatcher and both differential matrices remain mandatory
       # local candidate gates. The narrowly provisioned EELS checkout below is
       # owned by the deployment-root singleton replay only.

@@ -4465,6 +4465,41 @@
      "^OK \u2014 DRIP self-test: "
     ]
    }
+  },
+  {
+   "command": [
+    "python3",
+    "-B",
+    "scripts/weth9-creation-block-generate.py",
+    "--check"
+   ],
+   "id": "weth9-creation-block-generated",
+   "inputs": {
+    "files": [
+     "scripts/weth9-creation-block-generate.py",
+     "scripts/weth9-creation-block-4719568.json",
+     "scripts/keccak.py",
+     "Blanc/Lift/Weth9/Creation/ObservationData.lean"
+    ],
+    "populations": [
+     {
+      "pattern": "*.lean",
+      "root": "Blanc/Lift/Weth9/Creation/Block"
+     }
+    ],
+    "tools": [
+     "python3"
+    ]
+   },
+   "kind": "cacheable",
+   "note": "Regenerates the ten generated block-4,719,568 modules (header literal, transaction and receipt entry lists, node-hash certificates, roots) from the committed reduced capture, whose SHA-256 the script pins, and byte-compares them; an extra or missing generated module in the directory is refused, and the hand-written Binding.lean is exempt. Lean-free. What it does not own: whether the capture is mainnet's block (the kernel checks the header against the block hash and the roots against the header), or the reduction from the frozen capture in the goal store.",
+   "order": 88,
+   "verdict": {
+    "expect_exit": 0,
+    "summary_patterns": [
+     "^WETH9_CREATION_BLOCK BYTE_IDENTICAL 10 modules; "
+    ]
+   }
   }
  ],
  "schema": 1

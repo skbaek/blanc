@@ -998,6 +998,15 @@
     "drip-evidence"
    ],
    "historical_catches": []
+  },
+  {
+   "id": "weth9-creation-block-generated",
+   "work": [
+    "static-corpus"
+   ],
+   "resource_class": "light",
+   "prerequisites": [],
+   "historical_catches": []
   }
  ]
 }
