@@ -1,39 +1,20 @@
 import Blanc.Composition.LiveUsdcWeth9B26213219WethExit
 import Blanc.Composition.LiveUsdcWeth9B26213219Headlines
 import Blanc.Composition.LiveUsdcWeth9B26213219WethObservation
-import Blanc.Lift.Weth9.Creation.SigningHash
 
 /-!
 # WETH9's headlines from its observed creation block
 
-`WethObservedHistory` is the WETH-only part of `ObservedDeploymentHistory`: the observed original
-creation block (`WethOriginalObservation`: block 4719568, slot 85, signed transaction, receipt), the
-configured `HistFork` history after it, and HASH-T over the keys that history touches. The
-deployment record is derived, with the kernel-checked signing hash, and the exit, backing and net
-flow are stated from it.
+`WethObservedHistory` (`…WethObservation`) is the observed original creation block
+(`WethOriginalObservation`: block number and timestamp, the signed transaction at slot 85, the
+receipt at key 85), the configured `HistFork` history after it, and HASH-T over the keys that
+history touches; `ObservedDeploymentHistory.toWeth` produces it from the live-pair interface. The
+exit, backing and net flow are stated from it.
 -/
 
 namespace Blanc.Composition.LiveUsdcWeth9B26213219
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
-
-/-- The observed original WETH9 creation block joined to a configured history ending at
-`checkpoint`, with trace-local freshness of the keys that history touches. No installed code,
-`SumNof`, footprint, funding, collision or signing-hash premise is an input. -/
-structure WethObservedHistory (checkpoint : BlockChain) where
-  pre : BlockChain
-  completed : BlockChain
-  block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed
-  observed : WethOriginalObservation block
-  history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint
-  fresh : Weth9.KeysFresh (fun _ => False)
-    (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
-      ((MidHistoryTraceIn.tail block observed.cut).append history))
-
-/-- The deployment record, from the observation and the checked signing hash. -/
-noncomputable def WethObservedHistory.deployment {checkpoint : BlockChain}
-    (h : WethObservedHistory checkpoint) : WethDeploymentTo checkpoint :=
-  h.observed.deployment Weth9.Creation.signingPayload_hash h.history h.fresh
 
 /-- **WETH9 backing from the observed creation block.** -/
 theorem weth9_backed_observed {checkpoint : BlockChain} (h : WethObservedHistory checkpoint) :

@@ -1,7 +1,6 @@
 import Blanc.Composition.LiveUsdcWeth9B26213219WethObservation
 import Blanc.Composition.LiveUsdcWeth9B26213219PairObservation
 import Blanc.Composition.LiveUsdcWeth9B26213219Anchor
-import Blanc.Lift.Weth9.Creation.SigningHash
 
 /-! A single original history supplies both deployment inputs and the live
 checkpoint. The deployment records and their consistency link are derived.
@@ -14,8 +13,8 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift
   Blanc.Composition.LiveUsdcWeth9FactoryAnchor
 
 /-- Original observed deployment blocks joined by actual configured histories.
-No final footprint, Pair representation, deployment record or link is an input.
-The finite signing hash has a proved default; it is not a required caller input. -/
+No final footprint, Pair representation, deployment record or link is an input;
+the finite signing hash is the kernel-checked theorem, not a field. -/
 structure ObservedDeploymentHistory (checkpoint : BlockChain) where
   wethPre : BlockChain
   wethPost : BlockChain
@@ -29,11 +28,6 @@ structure ObservedDeploymentHistory (checkpoint : BlockChain) where
   factory : OriginalDParent pairBlock parent
   between : ConfiguredHistoryTraceIn HistFork mainnetChainConfig wethPost pairPre
   later : ConfiguredHistoryTraceIn HistFork mainnetChainConfig pairPost checkpoint
-  /-- Compatibility field: existing explicit callers remain valid; new callers
-  use the checked default. The deployment producer uses the theorem directly. -/
-  wethSigningHash : Weth9.Creation.signingPayload.keccak =
-    0x1e62afdbf54076edd8083f93eab1bf693f2a5a3675886b669d13d9b3e6221235 :=
-      Weth9.Creation.signingPayload_hash
   wethFresh : Weth9.KeysFresh (fun _ => False)
     (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
       ((MidHistoryTraceIn.tail wethBlock wethObserved.cut).append
@@ -42,11 +36,17 @@ structure ObservedDeploymentHistory (checkpoint : BlockChain) where
     (UniswapV2Pair.pairMidTouchedKeysIn UniswapV2Pair.Creation.pairAddress
       ((MidHistoryTraceIn.tail pairBlock pairObserved.pairCut).append later))
 
-/-- WETH's continuation contains the original Pair block and its continuation. -/
+/-- The WETH-only observed history: WETH's continuation contains the original
+Pair block and its continuation. -/
+def ObservedDeploymentHistory.toWeth {checkpoint : BlockChain}
+    (h : ObservedDeploymentHistory checkpoint) : WethObservedHistory checkpoint :=
+  ⟨h.wethPre, h.wethPost, h.wethBlock, h.wethObserved,
+    (h.between.step h.pairBlock).append h.later, h.wethFresh⟩
+
+/-- WETH's deployment input, from its observed history. -/
 noncomputable def ObservedDeploymentHistory.wethDeployment {checkpoint : BlockChain}
     (h : ObservedDeploymentHistory checkpoint) : WethDeploymentTo checkpoint :=
-  h.wethObserved.deployment Weth9.Creation.signingPayload_hash
-    ((h.between.step h.pairBlock).append h.later) h.wethFresh
+  h.toWeth.deployment
 
 /-- The same Pair block and continuation produce its deployment input. -/
 noncomputable def ObservedDeploymentHistory.pairDeployment {checkpoint : BlockChain}
