@@ -3,8 +3,9 @@ import Blanc.ExecutionHistoryReceiptCensus
 
 /-! Correspondence for the completed inclusive WETH Approval census.
 The observation concerns original receipts in blocks 4719568 through 10008355.
-Provider completeness and binding to this original history remain explicit and
-unadopted. Accepted chronology and interval inclusion derive the strict receipt
+What is observed is a provider's Approval-log census; its completeness and its
+binding to this original history are not authenticated against any block hash and
+remain explicit premises. Accepted chronology and interval inclusion derive the strict receipt
 absence needed by the checkpoint; no further collection is required. -/
 namespace Blanc.Composition.LiveUsdcWeth9B26213219
 

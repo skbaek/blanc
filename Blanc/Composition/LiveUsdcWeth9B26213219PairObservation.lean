@@ -4,7 +4,8 @@ import Blanc.Composition.LiveUsdcWeth9FactoryAnchor
 /-! The original Pair deployment from its observed block and parent state.
 The original body constructs the transaction cut; the parent observation and
 checked factory preservation supply code at that cut. Original correspondence,
-the continuation and HASH-T remain explicit. No observation is adopted. -/
+the continuation and HASH-T remain explicit. The Pair block's observation is
+fetched data, not authenticated against its block hash. -/
 namespace Blanc.Composition.LiveUsdcWeth9B26213219.CDObservation
 
 open Jaune Blanc.ExecutionTrace Blanc.Lift

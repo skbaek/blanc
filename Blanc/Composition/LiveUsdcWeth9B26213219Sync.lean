@@ -8,7 +8,8 @@ Finite observations and the original linked histories produce the checkpoint.
 The future trace retains the established governance, freshness and call/gas
 conditions. The Pair's proxy-admin exclusion follows from the finite admin read.
 No final checkpoint or USDC quiet-allowance premise is supplied. Historical
-receipt absence and finite observations remain explicit, unadopted inputs.
+receipt absence (a provider's log census) and the finite reads remain explicit
+premises, not authenticated against a block hash.
 -/
 
 namespace Blanc.Composition.LiveUsdcWeth9B26213219

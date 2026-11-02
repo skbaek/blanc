@@ -4,10 +4,11 @@ import Blanc.Lift.Weth9.Creation.ObservationData
 import Blanc.Lift.Weth9.Creation.SigningHash
 import Blanc.ExecutionTrieBinding
 
-/-! Original WETH deployment observations. The supplied block's number and
-timestamp, the signed transaction at its slot 85 and the receipt at key 85 are
-the observed correspondence consumed here. No consensus inclusion, trie
-authentication or new history assumption is adopted. -/
+/-! Original WETH deployment observations. The block's number and timestamp,
+the legacy transaction at its slot 85 (the signed creation transaction's RLP
+item) and the receipt at key 85 are the correspondence consumed here. Stated
+alone it is fetched data; `WethHashAnchor.observation` derives it from the block
+hash under HASH-B. No consensus inclusion or new history assumption is adopted. -/
 namespace Blanc.Composition.LiveUsdcWeth9B26213219
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Weth9.Creation

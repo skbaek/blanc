@@ -3,7 +3,8 @@ import Blanc.Composition.UniswapV2PairUsdcOriginSeed
 import Blanc.Lift.Usdc.HistoryAnchorObservationData
 
 /-! Concrete C/D receipts at the original transaction cuts.
-Header/body/receipt correspondence is explicit and unadopted. The observations
+What is observed is the blocks' header fields, body slots and receipts as fetched;
+they are not authenticated against a block hash and remain explicit premises. They
 do not supply factory code, intervening history, HASH-T or a final invariant. -/
 namespace Blanc.Composition.LiveUsdcWeth9B26213219
 

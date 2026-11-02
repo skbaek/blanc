@@ -31,6 +31,18 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 from keccak import keccak256  # noqa: E402
 
 INPUT_SHA256 = '9aa608d3c0d80c088c2c7d3682f2cc26023165c5fbc136ad42cf74fa89a12b26'
+# The reduced canonical capture committed beside this script: exactly the fields
+# `load` and the rebuilders read, written by `--reduce` from the frozen capture.
+REDUCED = ROOT / 'scripts' / 'weth9-creation-block-4719568.json'
+REDUCED_SHA256 = '6f4adb269b13b4c7ee21d1dfeaeb29e3906626f96e0f0c39867e911ebf57c775'
+BLOCK_KEYS = ['difficulty', 'extraData', 'gasLimit', 'gasUsed', 'hash', 'logsBloom', 'miner',
+              'mixHash', 'nonce', 'number', 'parentHash', 'receiptsRoot', 'sha3Uncles',
+              'stateRoot', 'timestamp', 'transactions', 'transactionsRoot', 'uncles']
+TX_KEYS = ['gas', 'gasPrice', 'hash', 'input', 'nonce', 'r', 's', 'to', 'transactionIndex',
+           'type', 'v', 'value']
+RECEIPT_KEYS = ['cumulativeGasUsed', 'logs', 'logsBloom', 'status', 'transactionHash',
+                'transactionIndex', 'type']
+LOG_KEYS = ['address', 'data', 'topics']
 NUMBER = 4719568
 BLOCK_HASH = 'd6e5f60d6b2367e74cd2aa520dbeb104826c3932eb482cc16e7f7ef5f8f74799'
 TX_COUNT = 137
@@ -160,8 +172,8 @@ class Trie:
 def load(path):
     raw = Path(path).read_bytes()
     got = hashlib.sha256(raw).hexdigest()
-    if got != INPUT_SHA256:
-        raise ValueError(f'frozen capture sha256 mismatch: {got}')
+    if got not in (INPUT_SHA256, REDUCED_SHA256):
+        raise ValueError(f'capture sha256 matches neither the frozen nor the reduced capture: {got}')
     d = json.loads(raw)
     b, rs = d['block'], d['receipts']
     if qty(b['number']) != NUMBER or b['hash'] != '0x' + BLOCK_HASH:
@@ -225,6 +237,21 @@ def entries(values):
 
 def rlp_key_bytes(ns):
     return bytes((ns[i] << 4) | ns[i + 1] for i in range(0, len(ns), 2))
+
+
+def reduced(path):
+    """The reduced canonical capture: the frozen capture's read fields, canonical JSON."""
+    b, rs = load(path)
+    keep = lambda d, ks: {k: d[k] for k in ks}
+    block = keep(b, BLOCK_KEYS)
+    block['transactions'] = [keep(t, TX_KEYS) for t in b['transactions']]
+    receipts = []
+    for r in rs:
+        r = keep(r, RECEIPT_KEYS)
+        r['logs'] = [keep(lg, LOG_KEYS) for lg in r['logs']]
+        receipts.append(r)
+    return (json.dumps({'block': block, 'receipts': receipts}, sort_keys=True,
+                       separators=(',', ':')) + '\n').encode()
 
 
 # --- Lean rendering ------------------------------------------------------------
@@ -401,13 +428,25 @@ def generate(path):
 
 def main():
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument('input', type=Path, help='frozen block-4719568-drpc.json capture')
+    p.add_argument('input', type=Path, nargs='?', default=REDUCED,
+                   help='frozen block-4719568-drpc.json capture, or the reduced canonical capture '
+                        '(the default, scripts/weth9-creation-block-4719568.json)')
+    p.add_argument('--reduce', type=Path, metavar='OUT',
+                   help='write the reduced canonical capture of INPUT to OUT and exit')
     p.add_argument('--write', action='store_true')
     p.add_argument('--check', action='store_true', help='byte-compare (the default)')
     p.add_argument('--output-dir', type=Path, default=ROOT / OUT)
     args = p.parse_args()
     if args.write and args.check:
         p.error('--write and --check are mutually exclusive')
+    if args.reduce:
+        try:
+            data = reduced(args.input)
+        except (ValueError, KeyError, OSError) as e:
+            raise SystemExit(f'WETH9_CREATION_BLOCK REFUSED {e}')
+        args.reduce.write_bytes(data)
+        print(f'WETH9_CREATION_BLOCK REDUCED {len(data)} bytes sha256 {hashlib.sha256(data).hexdigest()}')
+        return
     try:
         out, stats = generate(args.input)
     except (ValueError, KeyError, OSError) as e:

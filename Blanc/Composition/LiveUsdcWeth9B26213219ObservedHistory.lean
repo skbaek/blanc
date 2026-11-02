@@ -5,7 +5,9 @@ import Blanc.Composition.LiveUsdcWeth9B26213219Anchor
 /-! A single original history supplies both deployment inputs and the live
 checkpoint. The deployment records and their consistency link are derived.
 Fetched correspondence, receipt absence and cryptographic conditions remain
-explicit; this interface does not adopt observations or establish USDC P1. -/
+explicit premises; none is authenticated against a block hash here (the WETH
+observation alone can be derived from its block hash, `WethHashAnchor.observation`).
+This interface does not establish USDC P1. -/
 namespace Blanc.Composition.LiveUsdcWeth9B26213219
 
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift

@@ -5,7 +5,8 @@ import Blanc.Lift.UniswapV2Pair.Creation.Facts
 import Blanc.Lift.Usdc.HistoryAnchorObservationData
 
 /-! Factory identity at the original Pair-creation transaction from a finite
-observation at its parent block. Correspondence remains explicit and unadopted.
+observation at its parent block (fetched account reads), not authenticated against
+a block or state-root hash; the correspondence remains an explicit premise.
 The original trace's prefix supplies preservation; no final-code read is used. -/
 namespace Blanc.Composition.LiveUsdcWeth9FactoryAnchor
 

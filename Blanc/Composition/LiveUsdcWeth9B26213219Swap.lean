@@ -8,7 +8,8 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9SwapLiveF
 The same-B checkpoint and touched-row P1 are derived from original history
 inputs. The source swap theorem's complete callback, gas, acceptance, context,
 model and outcome conditions remain. Proxy-admin exclusion follows from the
-finite read and future governance. Historical evidence remains unadopted.
+finite read and future governance. The historical evidence (log census, finite
+reads) remains an explicit premise, not authenticated against a block hash.
 -/
 
 namespace Blanc.Composition.LiveUsdcWeth9B26213219
@@ -110,7 +111,7 @@ theorem swap_from_original_history
 
 /-- Receipt-premise variant: the same conclusion and remaining hypotheses,
 using absence of Pair-owned WETH approvals in the original pre-deployment receipts.
-The receipt premise is explicit and no external observation is adopted. -/
+The receipt premise is explicit; no fetched data are authenticated here. -/
 theorem swap_from_original_receipts
     {checkpoint future : BlockChain}
     (anchor : ObservedCheckpoint checkpoint)

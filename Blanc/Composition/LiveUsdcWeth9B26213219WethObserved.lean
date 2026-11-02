@@ -6,8 +6,9 @@ import Blanc.Composition.LiveUsdcWeth9B26213219WethObservation
 # WETH9's headlines from its observed creation block
 
 `WethObservedHistory` (`…WethObservation`) is the observed original creation block
-(`WethOriginalObservation`: block number and timestamp, the signed transaction at slot 85, the
-receipt at key 85), the configured `HistFork` history after it, and HASH-T over the keys that
+(`WethOriginalObservation`: block number and timestamp, the creation transaction's RLP item at
+slot 85, the receipt at key 85; derived from the block hash by `WethHashAnchor.observation`),
+the configured `HistFork` history after it, and HASH-T over the keys that
 history touches; `ObservedDeploymentHistory.toWeth` produces it from the live-pair interface. The
 exit, backing and net flow are stated from it.
 -/
