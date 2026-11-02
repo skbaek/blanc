@@ -2022,6 +2022,31 @@ checked output. They do not authenticate separately fetched receipts or prove
 trie injectivity. The projected equality goals have no carrier-specific head,
 so discovery stays in this branch rather than in a proof recipe.
 
+To turn a block's transaction or receipt trie entries into body and receipt
+facts, use [`Blanc/ExecutionTrieBinding.lean`](../Blanc/ExecutionTrieBinding.lean).
+`transactionsEntries` and `receiptsEntries` are the entry lists that
+`getTransactionsRoot` and `getReceiptRoot` build their trie maps from
+(`transactionsNTB`, `receiptsNTB`; `getTransactionsRoot_eq_trie`,
+`getReceiptRoot_eq_trie` by `rfl`; `ConfiguredBlockTraceIn.txsRoot_eq_trie` and
+`.receiptRoot_eq_trie` at the header), with values `txTrieValue` and
+`receiptTrieValue`. State a binding over these lists, not over the `NTB` tree
+(structural tree equality includes shape). `exists_transaction_of_mem_transactionsEntries`
+and `exists_receipt_of_mem_receiptsEntries` read an entry back at its byte key.
+`ConfiguredBlockTraceIn.transactionsTrie_getElem?` identifies the output's
+transaction map at encoded index `i` with the `i`-th decoded body transaction
+(`exists_slot_of_transactionsTrie` for the body slot).
+`ConfiguredBlockTraceIn.legacy_slot_of_transactionsEntries` derives from a legacy
+entry an already-decoded legacy slot with the same RLP item;
+`slot_of_transactionsEntries` gives the exact slot when body slots are
+wire-canonical (`Tx.toBLT` trims signature scalars, so a non-canonical `r`/`s`
+is otherwise indistinguishable). `ConfiguredBlockTraceIn.receipt_of_receiptsEntries`
+gives the exact typed receipt. Encoding facts: `blt_toBytes_injective` (below
+`2 ^ 64` bytes), `list_toBytes_head`, `legacy_tx_eq_of_toBLT_eq`,
+`receipt_toBLT_injective`, `receiptTrieValue_injective`, `txTrieValue_eq_legacy`,
+`txTrieValue_of_legacy`, `Bytes.toExTx_not_legacy`, `adr_toBytes_injective`,
+`toNibbles_injective`. No Merkle–Patricia injectivity of `trie` is proved; the
+entry equality is the caller's obligation.
+
 To exclude an address using a missing log-bloom bit, use
 [`Blanc/LogBloom.lean`](../Blanc/LogBloom.lean).
 `LogBloom.ContainsAddress` requires all three address bits from Jaune's actual

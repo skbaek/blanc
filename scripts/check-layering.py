@@ -379,6 +379,7 @@ SHARED += [
     "ExecutionHistoryInEraBounds",
     "ExecutionHistoryCommittedCuts",
     "ExecutionIndexedReceipts",
+    "ExecutionTrieBinding",
     "ExecutionReceiptRanges",
     "ExecutionHistoryReceiptLogs",
     "ExecutionBlockLogs",

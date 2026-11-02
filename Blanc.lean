@@ -1696,6 +1696,7 @@ import Blanc.ExecutionHistoryCommittedCell
 import Blanc.ExecutionHistoryInEraBounds
 import Blanc.ExecutionHistoryCommittedCuts
 import Blanc.ExecutionIndexedReceipts
+import Blanc.ExecutionTrieBinding
 import Blanc.ExecutionReceiptRanges
 import Blanc.ExecutionHistoryReceiptLogs
 import Blanc.ExecutionBlockLogs
