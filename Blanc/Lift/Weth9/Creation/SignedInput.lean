@@ -2,7 +2,9 @@ import Blanc.RlpListEncode
 import Blanc.RlpRoundTrip
 import Blanc.Lift.Weth9.Creation.SigningRecover
 
-/-! Strict decoding of the unadopted WETH signed creation envelope. -/
+/-! The WETH9 signed creation transaction (block 4,719,568, slot 85): its fields, its exact signed
+bytes and their canonical re-encoding and strict decode. The slot binding against the block hash
+is `WethHashAnchor.observation`. -/
 namespace Blanc.Lift.Weth9.Creation.SignedInput
 open Jaune
 
@@ -25,12 +27,6 @@ def signedBytes : Bytes :=
   [0xf9, 0x0e, 0x05, 0x82, 0x01, 0xbe, 0x85, 0x04, 0xe3, 0xb2, 0x92, 0x00,
     0x83, 0x16, 0xe3, 0x60, 0x80, 0x80, 0xb9, 0x0d, 0xb0] ++
     code.toList ++ ([0x25, 0xa0] ++ rBytes ++ [0xa0] ++ sBytes)
-
-theorem strict_legacy_decode : BLT.toExLegacyTx fields = .ok tx := by
-  rfl
-
-/-- The slot is certified by the strict legacy decoder, not a typed-slot bypass. -/
-def envelope : TxEnvelope := TxEnvelope.ofLegacyDecode strict_legacy_decode
 
 theorem tx_blt : tx.toBLT = .list fields := by
   dsimp only [tx, fields, Tx.toBLT]
@@ -56,13 +52,5 @@ theorem signed_decode :
 theorem transaction_hash_bytes : getTxHash tx = signedBytes.keccak := by
   unfold getTxHash
   rw [canonical]
-
-/-- Recovery reuses the WSL-owned exact payload-hash obligation. -/
-theorem recovered
-    (hashed : signingPayload.keccak =
-      0x1e62afdbf54076edd8083f93eab1bf693f2a5a3675886b669d13d9b3e6221235) :
-    recoverSender 1 tx = .ok deployer := by
-  exact recoveredSender_of_fields rfl rfl rfl rfl rfl rfl
-    (by decide +kernel) (by decide +kernel) hashed
 
 end Blanc.Lift.Weth9.Creation.SignedInput
