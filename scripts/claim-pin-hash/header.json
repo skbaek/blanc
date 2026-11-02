@@ -4,19 +4,19 @@
  "verdict": "roots.tsv only; constants.tsv, boundary.tsv and these counts are diagnostic",
  "pin_key": "label (thm:/iff:/eq:/stmt:/uses:/anon); a repeated label gets #<statement digest prefix>",
  "pins": 1183,
- "entries": 21887,
+ "entries": 21883,
  "kinds": {
   "block": 704,
   "boundary": 693,
   "ctor": 1063,
-  "def": 15780,
+  "def": 15776,
   "inductive": 707,
   "pin": 1183,
   "rec": 199,
   "theorem": 2741
  },
  "hashed_constants": {
-  "blanc": 17236,
+  "blanc": 17232,
   "jaune": 3224,
   "local": 30
  },
