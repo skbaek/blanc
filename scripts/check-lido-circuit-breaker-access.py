@@ -505,7 +505,7 @@ ROLES = {
         "registerPauser_stageArgs_runCompiled":
             "a3586e76455a1b2ddcd4ca7c0093c5dbb794e9a46a64bdf50b9e619cd20659c7",
         "setPauserKernel_foundNonzero_finishSetPauser_runCompiled":
-            "9ed9b31928b3cd610b7f49bca7a15006307f45ac1c0cfbc2563ddde213ea560d",
+            "2f933e845b662fdaf4cef96f196a6864982e53a82d5d80fd4e3b57a44d65656d",
         "removeTarget_toFinish_runCompiled":
             "90fc7fa5734a6b4c01b032534f49bd7461e86407cc91f48596ad807c5386f2fd",
         "removeTarget_runCompiled":

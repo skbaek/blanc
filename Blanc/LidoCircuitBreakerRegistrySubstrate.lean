@@ -91,16 +91,6 @@ theorem refundCounter_setMach
     {base : Devm} {mach : Mach} :
     (base.setMach mach).refundCounter = base.refundCounter := rfl
 
-/-- Former local names of `afterSload` and `sloadCost`, kept only because the
-byte-pinned S5 access header of `setPauserKernel_foundNonzero_finishSetPauser_runCompiled`
-still spells them; every proof uses the shared names. -/
-abbrev temporalSloadBase (sevm : Sevm) (base : Devm) (key : B256) : Devm :=
-  afterSload sevm base key
-
-/-- See `temporalSloadBase`. -/
-abbrev temporalSloadCost (sevm : Sevm) (base : Devm) (key : B256) : Nat :=
-  sloadCost sevm base key
-
 def temporalSstorePost (sevm : Sevm) (base : Devm)
     (key value : B256) : Devm :=
   (base.withRefundCounter (sstoreNewRefundCounter sevm.benvStat.rules.gas value
@@ -2166,18 +2156,17 @@ theorem setPauserKernel_foundNonzero_finishSetPauser_runCompiled
         oldCount
       Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
         ((temporalSstorePost sevm
-          (temporalSloadBase sevm countPost (countSlot newPauser))
-          (countSlot newPauser) nextCount).setMach ⟨[], M', G, (temporalSstorePost sevm (temporalSloadBase sevm countPost (countSlot newPauser)) (countSlot newPauser) nextCount).stateGas⟩)
+          (afterSload sevm countPost (countSlot newPauser))
+          (countSlot newPauser) nextCount).setMach ⟨[], M', G, (temporalSstorePost sevm (afterSload sevm countPost (countSlot newPauser)) (countSlot newPauser) nextCount).stateGas⟩)
         finishSetPauser out) :
     Func.RunCompiled ((runtime dp).main :: (runtime dp).aux) sevm
       (base.setMach ⟨[], M,
-        G + (64 + temporalSloadCost sevm
+        G + (64 + sloadCost sevm
             (foundKernelPost sevm base target newPauser oldPauser oldCount)
             (countSlot newPauser) + newCountCost) +
           foundSetPauserKernelPrefixGas sevm base target newPauser oldPauser
             assignmentCost countCost, base.stateGas⟩)
       setPauserKernel out := by
-  simp only [temporalSloadBase, temporalSloadCost] at *
   let M' := M.write (previousPauserWord * 32).toNat oldPauser.toBytes
   let img' := Bytes.writeAt img (previousPauserWord * 32).toNat
     oldPauser.toBytes
