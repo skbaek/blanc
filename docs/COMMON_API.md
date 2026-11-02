@@ -39,6 +39,9 @@ lines when next changed or relied on, not by a wholesale rewrite.
   [S — state and machine updates](#s--state-and-machine-updates).
 - Reason about bytes or EVM memory: go to
   [M — bytes and memory](#m--bytes-and-memory).
+- Bind a block to its hash, check a trie root in the kernel, or state a hash
+  premise: go to
+  [M4](#m4-i-need-a-blocks-trie-root-its-header-hash-or-a-finite-hash-separation-premise).
 - Reason about the integer exponential loop and its iteration count: go to
   [S9](#s9-i-need-the-integer-exponential-recurrence-or-a-finite-loop-witness).
 - Relate raw execution to message/frame settlement: go to
@@ -5960,6 +5963,37 @@ prefix, `nil_pref` included, passes through — and the exact appended
 `transferLogEntry` naming the caller, ABI word zero and ABI word one.  WETH10's
 `of_run_argCopy011` covers the calldata-copy step alone and is likewise a
 candidate for folding into this walk, again as WETH10 family work.
+
+### M4. I need a block's trie root, its header hash, or a finite hash-separation premise
+
+- A hash or trie premise: state it with `Blanc.Separated f xs` from
+  [`Blanc/Separated.lean`](../Blanc/Separated.lean) over the finitely many values the trace computes
+  (typically `[traceValue, recordedValue]`), never as universal injectivity (false by pigeonhole,
+  so vacuous). `Separated.pair_eq` is the binding step, `Separated.pair_self` shows it satisfiable,
+  `Separated.pair_iff` shows that in context it is exactly the equation it delivers (the gain is
+  epistemic: it fails only under a collision). HASH-T's footprint premise is an instance:
+  `SlotFootprint.FreshKeys.separated`, `SlotFootprint.freshKeys_iff`.
+- A header bound to a recorded block hash:
+  [`Blanc/HeaderBinding.lean`](../Blanc/HeaderBinding.lean) `HeaderBinding.toBLT_eq_of_hash_eq`
+  (equal hashes plus Keccak separation of the two encodings give equal `Header.toBLT`, via
+  `RlpConcrete.toBLT?_toBytes`) and `fields_of_toBLT_eq` (the 13 always-written fields other than
+  coinbase and nonce). The recorded header's own hash is `rw [Header.hash, BLT.toBytes_eq_toBytesS];
+  decide +kernel` (about 1 s for 531 bytes); WETH9's instance is
+  `Lift/Weth9/Creation/Block/Binding.lean`.
+- A concrete Merkle–Patricia root (`trie j = r` over many entries):
+  [`Blanc/TrieKernel.lean`](../Blanc/TrieKernel.lean). Jaune's `trie` does not reduce in the
+  kernel (`BLT.toBytes` is well-founded); `trie_eq_trieS` is the structural twin and
+  `trie_eq_cached cert hc` the hash-parametric twin at a node-hash certificate. Generate one
+  `decide +kernel` Keccak lemma per hashed node into modules of at most about 24 KB of preimages,
+  then close with `rw [trie_eq_cached cert hc]; decide +kernel`. Precedent generator:
+  `scripts/weth9-creation-block-generate.py` (block 4,719,568's transaction and receipt tries).
+  - Probe: `Blanc/Probe/N100K*.lean` in the disposable `weth9-binding-probe` worktree (100 × 1024 B
+    entries, 107 nodes, 5 chunks); production: `Blanc/Lift/Weth9/Creation/Block/*Cert*.lean`.
+  - Measured cost: kernel Keccak about 1.7–2.0 s and 0.33–0.4 GB RSS per KB of preimage within one
+    declaration, released per declaration; 24 KB chunks about 41 s; N100K 231 s wall, 6.5 GB peak (WSL).
+  - Simplest alternative tried: `rw [trie_eq_trieS]; decide +kernel` without a certificate passes at
+    16 × 40 B (5 s) but 100 × 300 B was retracted at 15.7 GB.
+  - Date: 2026-11-02
 
 ## T — settlement
 

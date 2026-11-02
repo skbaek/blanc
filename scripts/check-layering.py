@@ -1868,6 +1868,24 @@ CONTRACTS["usdc"].extend([
     "Lift.Usdc.HistoryAnchorBodyInput",
 ])
 
+# Finite hash separation, the kernel trie-root twin with its node-hash certificate, and header
+# binding (weth9-observation-binding-v1): contract-neutral.
+SHARED += ["Separated", "TrieKernel", "HeaderBinding"]
+# WETH9's creation block 4,719,568: generated header/trie data and certificates, and the binding.
+CONTRACTS["weth9"].extend([
+    "Lift.Weth9.Creation.Block.Header",
+    "Lift.Weth9.Creation.Block.TxData",
+    "Lift.Weth9.Creation.Block.TxCert0",
+    "Lift.Weth9.Creation.Block.TxCert1",
+    "Lift.Weth9.Creation.Block.TxRoot",
+    "Lift.Weth9.Creation.Block.ReceiptData",
+    "Lift.Weth9.Creation.Block.ReceiptCert0",
+    "Lift.Weth9.Creation.Block.ReceiptCert1",
+    "Lift.Weth9.Creation.Block.ReceiptCert2",
+    "Lift.Weth9.Creation.Block.ReceiptRoot",
+    "Lift.Weth9.Creation.Block.Binding",
+])
+
 # The closed WETH9 applicability witness stays within its contract family.
 CONTRACTS["weth9"].extend([
     "Lift.Weth9.ClosedSigningData",

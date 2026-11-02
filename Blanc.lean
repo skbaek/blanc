@@ -546,6 +546,7 @@ import Blanc.Lift.Weth9.PrefixTx
 import Blanc.Lift.Weth9.ClosedExit
 import Blanc.Lift.Weth9.Init
 import Blanc.Lift.Weth9.Creation.Deploy
+import Blanc.Lift.Weth9.Creation.Block.Binding
 
 -- The deployed beacon deposit contract, lifted from its runtime bytes
 -- (beacon-deposit-bytecode-v1); these two tops reach the whole lift kit.
