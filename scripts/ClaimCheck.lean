@@ -222,6 +222,7 @@ import Blanc.Lift.UniswapV2Pair.HeadlineOracle
 import Blanc.Lift.UniswapV2Pair.HeadlineShare
 import Blanc.Composition.PairTwoTokenCallShare
 import Blanc.Composition.LiveUsdcWeth9B26213219Headlines
+import Blanc.Composition.LiveUsdcWeth9B26213219WethObserved
 import Blanc.Composition.LiveUsdcWeth9B26213219CallShare
 -- `open private` below; no longer reached transitively under mathlib 4.35.
 import Batteries.Tactic.OpenPrivate
@@ -19634,6 +19635,191 @@ example {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
       (Weth9.replayCalls (Weth9.midCommittedInvocationsIn weth d.trace))
       (checkpoint.state.getStor weth) :=
   weth9_net_flow d
+
+-- Live WETH9: WethDeploymentTo.installed
+example {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint) :
+    some (checkpoint.state.getCode weth).toList = Weth9.weth9Sem.image :=
+  d.installed
+
+-- Live WETH9: weth9_exit_from_deployment
+example : ∀ {checkpoint : BlockChain} (d : WethDeploymentTo checkpoint)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E : Adr} {wad : B256}
+    {chainId : UInt64} {maxPriorityFee maxFee : Nat}
+    (hstate : benv.state = checkpoint.state)
+    (hfork : CoveredFork benv.stat.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some weth) [])
+    (hvalue : tx.value = 0) (hdata : tx.data = Weth9.withdrawCalldata wad)
+    (hchain : chainId = benv.stat.chainId)
+    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
+    (hgas : Weth9.withdrawIntrinsicGas wad + Weth9.withdrawFrameGas wad + 811 ≤ tx.gas)
+    (hcap : tx.gas ≤ 16777216)
+    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
+    (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
+    (hnocode : (benv.state.getCode E).size = 0)
+    (hfunds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat)
+    (hprecE : benv.stat.rules.isPrecomp E = false)
+    (hprecCa : benv.stat.rules.isPrecomp weth = false)
+    (hholder : d.keys (.bal E))
+    (hbal : wad ≤ (checkpoint.state.getStor weth).get (Weth9.balSlot E))
+    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ weth)
+    (hfresh : weth ∉ benv.createdAccounts)
+    (hcbSafe : State.Protected benv.state benv.stat.coinbase ∨
+      benv.state.getStor benv.stat.coinbase = .empty),
+    ∃ (st : Jaune.State) (bout' : BlockOutput),
+      processTransaction benv bout tx index = .ok (st, bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        Weth9.withdrawGasUsed ((checkpoint.state.getStor weth).get (Weth9.balSlot E)) wad ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        Weth9.withdrawGasUsed ((checkpoint.state.getStor weth).get (Weth9.balSlot E)) wad ∧
+      st.getStor weth = (checkpoint.state.getStor weth).set (Weth9.balSlot E)
+        ((checkpoint.state.getStor weth).get (Weth9.balSlot E) - wad) ∧
+      (∀ a, a ≠ weth → st.getStor a = checkpoint.state.getStor a) ∧
+      (st.get E).nonce = tx.nonce + 1 ∧
+      (st.get E).bal = checkpoint.state.bal E -
+          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 + wad +
+        ((tx.gas -
+            Weth9.withdrawGasUsed ((checkpoint.state.getStor weth).get (Weth9.balSlot E)) wad) *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 ∧
+      (st.get weth).bal = checkpoint.state.bal weth - wad ∧
+      ((checkpoint.state.bal E).toNat + wad.toNat < 2 ^ 256 →
+        (st.get E).bal.toNat +
+            Weth9.withdrawGasUsed ((checkpoint.state.getStor weth).get (Weth9.balSlot E)) wad *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
+          (checkpoint.state.bal E).toNat + wad.toNat) :=
+  @weth9_exit_from_deployment
+
+-- Live WETH9: weth9_exit_from_deployment_after
+example : ∀ {cfg : ChainConfig} {checkpoint future : BlockChain} (d : WethDeploymentTo checkpoint)
+    (trace : ConfiguredHistoryTrace cfg checkpoint future)
+    (fresh : Weth9.KeysFresh d.keys (Weth9.historyTouchedKeys weth trace))
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E : Adr} {wad : B256}
+    {chainId : UInt64} {maxPriorityFee maxFee : Nat}
+    (hstate : benv.state = future.state)
+    (hfork : CoveredFork benv.stat.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some weth) [])
+    (hvalue : tx.value = 0) (hdata : tx.data = Weth9.withdrawCalldata wad)
+    (hchain : chainId = benv.stat.chainId)
+    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
+    (hgas : Weth9.withdrawIntrinsicGas wad + Weth9.withdrawFrameGas wad + 811 ≤ tx.gas)
+    (hcap : tx.gas ≤ 16777216)
+    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
+    (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
+    (hnocode : (benv.state.getCode E).size = 0)
+    (hfunds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat)
+    (hprecE : benv.stat.rules.isPrecomp E = false)
+    (hprecCa : benv.stat.rules.isPrecomp weth = false)
+    (hholder : Weth9.historyKeyUniverse weth trace d.keys (.bal E))
+    (hbal : wad ≤ (future.state.getStor weth).get (Weth9.balSlot E))
+    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ weth)
+    (hfresh : weth ∉ benv.createdAccounts)
+    (hcbSafe : State.Protected benv.state benv.stat.coinbase ∨
+      benv.state.getStor benv.stat.coinbase = .empty),
+    ∃ (st : Jaune.State) (bout' : BlockOutput),
+      processTransaction benv bout tx index = .ok (st, bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        Weth9.withdrawGasUsed ((future.state.getStor weth).get (Weth9.balSlot E)) wad ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        Weth9.withdrawGasUsed ((future.state.getStor weth).get (Weth9.balSlot E)) wad ∧
+      st.getStor weth = (future.state.getStor weth).set (Weth9.balSlot E)
+        ((future.state.getStor weth).get (Weth9.balSlot E) - wad) ∧
+      (∀ a, a ≠ weth → st.getStor a = future.state.getStor a) ∧
+      (st.get E).nonce = tx.nonce + 1 ∧
+      (st.get E).bal = future.state.bal E -
+          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 + wad +
+        ((tx.gas - Weth9.withdrawGasUsed ((future.state.getStor weth).get (Weth9.balSlot E)) wad) *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 ∧
+      (st.get weth).bal = future.state.bal weth - wad ∧
+      ((future.state.bal E).toNat + wad.toNat < 2 ^ 256 →
+        (st.get E).bal.toNat +
+            Weth9.withdrawGasUsed ((future.state.getStor weth).get (Weth9.balSlot E)) wad *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
+          (future.state.bal E).toNat + wad.toNat) :=
+  @weth9_exit_from_deployment_after
+
+-- Live WETH9 constructor: WethObservedHistory.mk
+example {checkpoint : BlockChain} (pre completed : BlockChain)
+    (block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre completed)
+    (observed : WethOriginalObservation block)
+    (history : ConfiguredHistoryTraceIn HistFork mainnetChainConfig completed checkpoint)
+    (fresh : Weth9.KeysFresh (fun _ => False)
+      (Weth9.midTouchedKeysIn Weth9.Creation.weth9Address
+        ((MidHistoryTraceIn.tail block observed.cut).append history))) :
+    WethObservedHistory checkpoint :=
+  ⟨pre, completed, block, observed, history, fresh⟩
+
+-- Live WETH9 definition: WethObservedHistory.deployment
+example {checkpoint : BlockChain} (h : WethObservedHistory checkpoint) :
+    h.deployment = h.observed.deployment Weth9.Creation.signingPayload_hash h.history h.fresh :=
+  rfl
+
+-- Live WETH9: weth9_backed_observed
+example {checkpoint : BlockChain} (h : WethObservedHistory checkpoint) :
+    Weth9.EtherBacked (Weth9.midTouchedKeysIn weth h.deployment.trace)
+      (checkpoint.state.getStor weth) (checkpoint.state.bal weth) :=
+  weth9_backed_observed h
+
+-- Live WETH9: weth9_net_flow_observed
+example {checkpoint : BlockChain} (h : WethObservedHistory checkpoint) :
+    Weth9.NetFlow (Weth9.midTouchedKeysIn weth h.deployment.trace)
+      (Weth9.replayCalls (Weth9.midCommittedInvocationsIn weth h.deployment.trace))
+      (checkpoint.state.getStor weth) :=
+  weth9_net_flow_observed h
+
+-- Live WETH9: weth9_exit_observed
+example : ∀ {checkpoint : BlockChain} (h : WethObservedHistory checkpoint)
+    {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E : Adr} {wad : B256}
+    {chainId : UInt64} {maxPriorityFee maxFee : Nat}
+    (hstate : benv.state = checkpoint.state)
+    (hfork : CoveredFork benv.stat.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some weth) [])
+    (hvalue : tx.value = 0) (hdata : tx.data = Weth9.withdrawCalldata wad)
+    (hchain : chainId = benv.stat.chainId)
+    (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
+    (hgas : Weth9.withdrawIntrinsicGas wad + Weth9.withdrawFrameGas wad + 811 ≤ tx.gas)
+    (hcap : tx.gas ≤ 16777216)
+    (hroom : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed)
+    (hrecover : recoverSender benv.stat.chainId tx = .ok E)
+    (hnonce : (benv.state.get E).nonce = tx.nonce) (hnonceMax : tx.nonce ≠ UInt64.max)
+    (hnocode : (benv.state.getCode E).size = 0)
+    (hfunds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat)
+    (hprecE : benv.stat.rules.isPrecomp E = false)
+    (hprecCa : benv.stat.rules.isPrecomp weth = false)
+    (hholder : h.deployment.keys (.bal E))
+    (hbal : wad ≤ (checkpoint.state.getStor weth).get (Weth9.balSlot E))
+    (hcbE : benv.stat.coinbase ≠ E) (hcbCa : benv.stat.coinbase ≠ weth)
+    (hfresh : weth ∉ benv.createdAccounts)
+    (hcbSafe : State.Protected benv.state benv.stat.coinbase ∨
+      benv.state.getStor benv.stat.coinbase = .empty),
+    ∃ (st : Jaune.State) (bout' : BlockOutput),
+      processTransaction benv bout tx index = .ok (st, bout') ∧
+      bout'.cumulativeGasUsed = bout.cumulativeGasUsed +
+        Weth9.withdrawGasUsed ((checkpoint.state.getStor weth).get (Weth9.balSlot E)) wad ∧
+      bout'.blockGasUsed = bout.blockGasUsed +
+        Weth9.withdrawGasUsed ((checkpoint.state.getStor weth).get (Weth9.balSlot E)) wad ∧
+      st.getStor weth = (checkpoint.state.getStor weth).set (Weth9.balSlot E)
+        ((checkpoint.state.getStor weth).get (Weth9.balSlot E) - wad) ∧
+      (∀ a, a ≠ weth → st.getStor a = checkpoint.state.getStor a) ∧
+      (st.get E).nonce = tx.nonce + 1 ∧
+      (st.get E).bal = checkpoint.state.bal E -
+          (tx.gas * (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 + wad +
+        ((tx.gas -
+            Weth9.withdrawGasUsed ((checkpoint.state.getStor weth).get (Weth9.balSlot E)) wad) *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) +
+            benv.stat.baseFeePerGas)).toB256 ∧
+      (st.get weth).bal = checkpoint.state.bal weth - wad ∧
+      ((checkpoint.state.bal E).toNat + wad.toNat < 2 ^ 256 →
+        (st.get E).bal.toNat +
+            Weth9.withdrawGasUsed ((checkpoint.state.getStor weth).get (Weth9.balSlot E)) wad *
+          (min maxPriorityFee (maxFee - benv.stat.baseFeePerGas) + benv.stat.baseFeePerGas) =
+          (checkpoint.state.bal E).toNat + wad.toNat) :=
+  @weth9_exit_observed
 
 -- Live Uniswap V2 Pair: pair_ledger
 example {checkpoint : BlockChain} (d : PairDeploymentTo checkpoint) :
