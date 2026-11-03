@@ -642,7 +642,6 @@ import Blanc.Lift.LidoCircuitBreakerDeployed.RegistryObservers
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteRegistry
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteUpdate
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteInit
-import Blanc.Lift.LidoCircuitBreakerDeployed.SlotsApart
 import Blanc.Lift.LidoCircuitBreakerDeployed.Creation.Transaction
 import Blanc.Lift.LidoCircuitBreakerDeployed.DeploymentHistory
 import Blanc.Lift.LidoCircuitBreakerDeployed.LiveObservation

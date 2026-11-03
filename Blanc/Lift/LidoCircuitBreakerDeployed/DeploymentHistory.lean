@@ -1,6 +1,5 @@
 import Blanc.Lift.LidoCircuitBreakerDeployed.History
 import Blanc.Lift.LidoCircuitBreakerDeployed.FiniteInit
-import Blanc.Lift.LidoCircuitBreakerDeployed.SlotsApart
 import Blanc.Lift.LidoCircuitBreakerDeployed.Creation.Transaction
 import Blanc.Lift.LidoCircuitBreakerDeployed.L2History
 import Blanc.ExecutionEntryAccountingMidHistory
@@ -19,11 +18,13 @@ blocks.
 The headlines `lido_registry_consistent` and `lido_remove_repairs` state the named Props
 `ConsistentRegistry` and `RemovalRepaired` over the storage observers of
 `RegistryObservers.lean`. Their premises are the retained history (the configured
-history premise) and the one universal non-collision hypothesis `LidoSlotsApart`; the installed
-code, the empty Registry after the constructor, every frame entry condition (`lidoEntry lidoA`)
-and the checkpoint `ForeignApart` premises are derived. `lido_deployment_finite_init` states the
-finite empty-registry observation right after the actual creation transaction, with no hash
-premise (only the decidable finite apart checker over the chosen probes).
+history premise) and the per-frame hash premise `LidoDeploymentTo.HashApart` over that
+history: at every raw CircuitBreaker frame of the remainder, the frame entry condition
+`lidoEntry lidoA`, and at the checkpoint `ForeignApart 0 0` and `ForeignApart 0 1`. The
+installed code, the empty Registry after the constructor and fresh entry at every frame are
+derived. `lido_deployment_finite_init` states the finite empty-registry observation right after
+the actual creation transaction, with no hash premise (only the decidable finite apart checker
+over the chosen probes).
 -/
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
@@ -72,61 +73,81 @@ def remainder (history : LidoDeploymentTo cfg future) :
     MidHistoryTraceIn CoveredFork cfg history.deployment.cut.afterBenv future :=
   (MidHistoryTraceIn.tail history.block history.deployment.cut).append history.following
 
-/-- Under the non-collision hypothesis, the CircuitBreaker satisfies the Lido state invariant
-right after its actual creation transaction. -/
-theorem stateInv_deployed (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart) :
+/-- **The per-frame hash premise of the history headlines** (class HASH-U in the claim map).
+It is a conjunction of per-slot facts, each fixing one raw slot that the history itself selects
+and requiring it to miss the slot of every observable Registry key:
+
+* `checkpoint`: the constructor's two written slots `0` and `1` miss every observable key's
+  slot (`ForeignApart 0`: the mapping slots of every address, and the array length slot);
+* `frames`: at every raw frame at the CircuitBreaker along the remainder, `lidoEntry lidoA`:
+  the frame's caller `heartbeatExpiry` slot and the constant slots `0`, `1` miss every
+  observable key's slot (`LocalApart`), and, for every witness of the frame-entry storage, the
+  Registry keys the selected `setPauser` branch writes are faithful and the old and new
+  pausers' `heartbeatExpiry` slots miss every observable key's slot (`EntryAt lidoA`).
+
+Which slots are checked is set by the trace (its frames, their callers and calldata, and the
+entry storage); what each is checked against ranges over all `2 ^ 160` addresses. Nothing
+discharges it; that it holds is a heuristic Keccak assumption, not a proved fact. -/
+structure HashApart (history : LidoDeploymentTo cfg future) : Prop where
+  checkpoint : ForeignApart 0 0 ∧ ForeignApart 0 1
+  frames : ∀ root ∈ history.remainder.rawFrames,
+    root.sevm.currentTarget = Creation.breakerAddress → lidoEntry lidoA root.sevm root.devm
+
+/-- Under the checkpoint half of the hash premise, the CircuitBreaker satisfies the Lido state
+invariant right after its actual creation transaction. -/
+theorem stateInv_deployed (history : LidoDeploymentTo cfg future) (apart : history.HashApart) :
     lidoSpec.StateInv Creation.breakerAddress history.deployment.cut.afterBenv.state := by
   obtain ⟨hcode, hstor⟩ := history.deployment.initial
   refine stateInv_of_registryZeroRaw (by rw [hcode]; rfl) ?_
   rw [hstor]
-  exact Creation.registryZeroRaw_deployedStor
-    (H.foreignApart_fixed (Or.inl rfl) (Nat.zero_le _))
-    (H.foreignApart_fixed (Or.inr rfl) (Nat.zero_le _))
+  exact Creation.registryZeroRaw_deployedStor apart.checkpoint.1 apart.checkpoint.2
 
 /-- Every raw frame at the CircuitBreaker along the remainder is admitted: fresh entry is
-derived from the retained executions, and the per-frame hash entry from the hypothesis. -/
-theorem admitted (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart) :
+derived from the retained executions, and the per-frame hash entry is the premise's
+`frames`. -/
+theorem admitted (history : LidoDeploymentTo cfg future) (apart : history.HashApart) :
     history.remainder.FrameAdmitted Creation.breakerAddress (lidoFrameEntry lidoA) :=
-  (history.remainder.frameAdmitted_iff_rawFrames _ _).2 fun root member _ =>
+  (history.remainder.frameAdmitted_iff_rawFrames _ _).2 fun root member target =>
     ⟨history.remainder.rawFrames_entered enteredCondition_fresh root member,
-      H.lidoEntry root.sevm root.devm⟩
+      apart.frames root member target⟩
 
 /-- The Lido state invariant at `future`. -/
-theorem stateInv_future (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart) :
+theorem stateInv_future (history : LidoDeploymentTo cfg future) (apart : history.HashApart) :
     lidoSpec.StateInv Creation.breakerAddress future.state :=
   history.remainder.stateInv_admitted_semIn
     (ContractSpecSem.PreservesAdmitted.toIn
       (lidoSpec_preservesAdmitted_mem lidoWriterSpecsM Creation.breakerAddress))
-    BodyStageCapabilities.covered (history.admitted H)
+    BodyStageCapabilities.covered (history.admitted apart)
     (history.remainder.rewardCreditsFunded BodyStageCapabilities.covered)
-    (history.stateInv_deployed H) installedCert rfl
+    (history.stateInv_deployed apart) installedCert rfl
 
 end LidoDeploymentTo
 
 /-- **The CircuitBreaker Registry is consistent after any history from its actual deployment.**
 For the CircuitBreaker's actual creation transaction and any configured covered-fork history
-after it up to `future`, under the one non-collision hypothesis `LidoSlotsApart`, the Registry
-read from the CircuitBreaker's storage at `future` is consistent: the stored targets are
-distinct, a target has a nonzero pauser and index exactly when it is stored, each stored
-target's index is its position plus one, each pauser's guard count is the number of stored
-targets it guards, and the zero address guards nothing. -/
+after it up to `future`, under the per-frame hash premise `LidoDeploymentTo.HashApart` of that
+history, the Registry read from the CircuitBreaker's storage at `future` is consistent: the
+stored targets are distinct, a target has a nonzero pauser and index exactly when it is stored,
+each stored target's index is its position plus one, each pauser's guard count is the number of
+stored targets it guards, and the zero address guards nothing. -/
 theorem lido_registry_consistent {cfg : ChainConfig} {future : BlockChain}
-    (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart) :
+    (history : LidoDeploymentTo cfg future) (apart : history.HashApart) :
     ConsistentRegistry (future.state.getStor Creation.breakerAddress) := by
-  have h := (history.stateInv_future H).inv
+  have h := (history.stateInv_future apart).inv
   rw [lidoSpec_inv] at h
   obtain ⟨entries, hw⟩ := h
   exact consistentRegistry_of_witness hw
 
 /-- **Removal repairs the CircuitBreaker Registry.** For the CircuitBreaker's actual creation
-transaction and any configured covered-fork history after it up to `future`, under the one
-non-collision hypothesis `LidoSlotsApart`, every settlement-committed non-static frame at the
-CircuitBreaker whose calldata is `registerPauser(t, 0)` (including one re-entered from inside
-`pause`'s `CALL`) clears `t`'s pauser and index, and leaves the stored target array equal to the
-one at the frame's entry with `t` swap-and-popped out (unchanged when `t` was not stored).
+transaction and any configured covered-fork history after it up to `future`, under the per-frame
+hash premise `LidoDeploymentTo.HashApart` of that history, every settlement-committed non-static
+frame at the CircuitBreaker whose calldata is `registerPauser(t, 0)` (including one re-entered
+from inside `pause`'s `CALL`) clears `t`'s pauser and index, and leaves the stored target array
+equal to the one at the frame's entry with `t` swap-and-popped out (unchanged when `t` was not
+stored).
 Frames rolled back by an ancestor are not claimed; static frames are not observed. -/
 theorem lido_remove_repairs {cfg : ChainConfig} {future : BlockChain}
-    (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart)
+    (history : LidoDeploymentTo cfg future) (apart : history.HashApart)
     (frame : Exec.Frame) (member : frame ∈ history.remainder.settledFrames)
     (target : frame.sevm.currentTarget = Creation.breakerAddress)
     (nonstatic : frame.sevm.isStatic = false)
@@ -134,9 +155,9 @@ theorem lido_remove_repairs {cfg : ChainConfig} {future : BlockChain}
     (hnp0 : Sevm.dataWord frame.sevm 36 = 0) :
     RemovalRepaired (Devm.getStor frame.pre Creation.breakerAddress)
       (Devm.getStor frame.post Creation.breakerAddress) (Sevm.dataWord frame.sevm 4) := by
-  have inv := history.stateInv_deployed H
+  have inv := history.stateInv_deployed apart
   obtain ⟨-, good⟩ := history.remainder.entryGood_settled (c := lidoSpec)
-    (I := fun s => RegInv s) (history.admitted H) inv inv.inv
+    (I := fun s => RegInv s) (history.admitted apart) inv inv.inv
     (lidoSpec_preservesAdmitted_mem lidoWriterSpecsM Creation.breakerAddress)
     (lido_framePreserves Creation.breakerAddress) (lido_spawnKinds Creation.breakerAddress)
     (lido_spawnEntry Creation.breakerAddress) installedCert rfl

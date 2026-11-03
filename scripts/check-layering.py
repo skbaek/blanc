@@ -1408,7 +1408,6 @@ CONTRACTS = {
                              "Lift.LidoCircuitBreakerDeployed.DeploymentHistory",
                              "Lift.LidoCircuitBreakerDeployed.LiveObservation",
                              "Lift.LidoCircuitBreakerDeployed.LiveRegistry",
-                             "Lift.LidoCircuitBreakerDeployed.SlotsApart",
                              "Lift.LidoCircuitBreakerDeployed.Creation.Walk",
                              "Lift.LidoCircuitBreakerDeployed.Corollaries",
                              "Lift.LidoCircuitBreakerDeployed.Foreign",
