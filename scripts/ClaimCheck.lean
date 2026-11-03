@@ -19153,36 +19153,30 @@ example (pre post : Stor) (t : B256) :
         else registeredTargets pre) :=
   Iff.rfl
 
--- Lido CircuitBreaker definition: mappingBases
-example : mappingBases = [2, 3, 4, 6] :=
-  rfl
-
--- Lido CircuitBreaker definition: LidoSlotsApart
-example :
-    LidoSlotsApart ↔
-      ((∀ {p q s s' : B256}, canonicalAddress p → canonicalAddress q →
-        s ∈ mappingBases → s' ∈ mappingBases → mapSlot p s = mapSlot q s' → p = q ∧ s = s') ∧
-      (∀ {p s : B256} {i : Nat}, canonicalAddress p → s ∈ mappingBases →
-        i < 2 ^ 160 → mapSlot p s ≠ registryArraySlot i) ∧
-      (∀ {p s : B256}, canonicalAddress p → s ∈ mappingBases →
-        mapSlot p s ≠ 0 ∧ mapSlot p s ≠ 1 ∧ mapSlot p s ≠ 5)) :=
-  ⟨fun h => ⟨h.injective, h.offArray, h.offFixed⟩, fun ⟨h0, h1, h2⟩ => ⟨h0, h1, h2⟩⟩
-
 end Blanc.Lift.LidoCircuitBreakerDeployed
 
 namespace Blanc.Lift.LidoCircuitBreakerDeployed
 open Jaune Blanc Blanc.Lift Blanc.LidoCircuitBreaker Blanc.ExecutionTrace
 open scoped BigOperators
 
+-- Lido CircuitBreaker definition: LidoDeploymentTo.HashApart
+example {cfg : ChainConfig} {future : BlockChain} (history : LidoDeploymentTo cfg future) :
+    history.HashApart ↔
+      ((ForeignApart 0 0 ∧ ForeignApart 0 1) ∧
+      (∀ root ∈ history.remainder.rawFrames,
+        root.sevm.currentTarget = Creation.breakerAddress →
+          lidoEntry lidoA root.sevm root.devm)) :=
+  ⟨fun h => ⟨h.checkpoint, h.frames⟩, fun ⟨h0, h1⟩ => ⟨h0, h1⟩⟩
+
 -- Lido CircuitBreaker: lido_registry_consistent
 example {cfg : ChainConfig} {future : BlockChain}
-    (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart) :
+    (history : LidoDeploymentTo cfg future) (apart : history.HashApart) :
     ConsistentRegistry (future.state.getStor Creation.breakerAddress) :=
-  lido_registry_consistent history H
+  lido_registry_consistent history apart
 
 -- Lido CircuitBreaker: lido_remove_repairs
 example {cfg : ChainConfig} {future : BlockChain}
-    (history : LidoDeploymentTo cfg future) (H : LidoSlotsApart)
+    (history : LidoDeploymentTo cfg future) (apart : history.HashApart)
     (frame : Exec.Frame) (member : frame ∈ history.remainder.settledFrames)
     (target : frame.sevm.currentTarget = Creation.breakerAddress)
     (nonstatic : frame.sevm.isStatic = false)
@@ -19190,7 +19184,7 @@ example {cfg : ChainConfig} {future : BlockChain}
     (hnp0 : Sevm.dataWord frame.sevm 36 = 0) :
     RemovalRepaired (Devm.getStor frame.pre Creation.breakerAddress)
       (Devm.getStor frame.post Creation.breakerAddress) (Sevm.dataWord frame.sevm 4) :=
-  lido_remove_repairs history H frame member target nonstatic hsig hnp0
+  lido_remove_repairs history apart frame member target nonstatic hsig hnp0
 
 -- Lido CircuitBreaker constructor: LidoDeploymentTo.mk
 example {cfg : ChainConfig} {future : BlockChain} (before after : BlockChain)
