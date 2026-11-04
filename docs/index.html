@@ -44,7 +44,7 @@
       <p class="eyebrow">EVM bytecode, verified in Lean 4</p>
       <h1>Nothing but<br>the bytes.</h1>
       <p class="lede">Blanc proves theorems about Ethereum contracts as they are deployed: the exact bytes at mainnet addresses — compiled by solc and Vyper between 2017 and 2026, or written by hand in assembly — read without trusting the tools that produced them.</p>
-      <p class="lede">Every theorem is stated against <a href="https://skbaek.github.io/jaune/">Jaune</a>, an executable semantics of the EVM and of block processing that passes all 34,205 blockchain-test cases of Ethereum’s <code>tests@v20.0.2</code> fixtures for the forks in force since May 2025. Lean’s kernel checks every proof, and none uses an axiom beyond Lean’s three standard ones. Gas is exact, so a theorem can say not only that a contract keeps its books, but that a transaction sent to it is admitted, and exactly what it costs.</p>
+      <p class="lede">Every theorem is stated against <a href="https://skbaek.github.io/jaune/">Jaune</a>, an executable semantics of the EVM and of block processing that passes all 73,345 blockchain-test cases of Ethereum’s <code>tests@v21.0.1</code> fixtures for the forks from Byzantium through BPO2. Lean’s kernel checks every proof, and none uses an axiom beyond Lean’s three standard ones. Gas is exact, so a theorem can say not only that a contract keeps its books, but that a transaction sent to it is admitted, and exactly what it costs.</p>
       <div class="cta">
         <a class="btn solid big" href="#corpus">The eleven artifacts</a>
         <a class="btn big" href="method.html">How it works</a>
@@ -157,7 +157,7 @@
       <div class="q"><h3>Was the code written for the verifier?</h3>
         <p>No. Nine compiler versions and an assembler, from unoptimized solc 0.4.19 output of 2017 to 504 bytes of hand-written assembly the protocol runs. None of it was shaped for Blanc’s tools.</p></div>
       <div class="q"><h3>Is the machine the real machine?</h3>
-        <p>Jaune defines the machine, every transaction type, block validation, system calls, withdrawals and requests, every precompile from <code>ecrecover</code> to BLS12-381, and fork selection by schedule — and it runs: 34,205 of 34,205 blockchain-test cases pass, run through the core of the block transition the theorems quantify over. Its gas schedule meets the chain too: in a 30,000-block window, every WETH9 <code>withdraw</code> of the proved shape whose starting balance the logs determine — 3,748 of 3,780 — used exactly the gas Blanc proves, and so did all 542 Uniswap-pair <code>approve</code> calls compared, counting the standard intrinsic charge on top of the proved frame cost.</p></div>
+        <p>Jaune defines the machine, every transaction type, block validation, system calls, withdrawals and requests, every precompile from <code>ecrecover</code> to BLS12-381, and fork selection by schedule — and it runs: 73,345 of 73,345 blockchain-test cases pass, Byzantium through BPO2, run through the core of the block transition the theorems quantify over. Its gas schedule meets the chain too: in a 30,000-block window, every WETH9 <code>withdraw</code> of the proved shape whose starting balance the logs determine — 3,748 of 3,780 — used exactly the gas Blanc proves, and so did all 542 Uniswap-pair <code>approve</code> calls compared, counting the standard intrinsic charge on top of the proved frame cost.</p></div>
       <div class="q"><h3>Does the theorem matter?</h3>
         <p>The properties are the ones people rely on: balances that stay backed, deposits accumulated exactly, withdrawal requests delivered first in, first out, a lock that actually excludes, a ledger that balances.</p></div>
       <div class="q"><h3>Does it say the contract works?</h3>
@@ -272,7 +272,7 @@
     <div class="stats" style="margin-bottom:40px">
       <div class="stat"><span class="n num">2,170</span><span class="l">leaf results — theorems nothing else builds on — all covered by one axiom walk</span></div>
       <div class="stat"><span class="n num">1188</span><span class="l">statements pinned exactly, so a weakened claim fails like a broken proof</span></div>
-      <div class="stat"><span class="n num">34,205</span><span class="l">conformance cases Jaune passes, of 34,205 selected, at the revision Blanc pins</span></div>
+      <div class="stat"><span class="n num">73,345</span><span class="l">conformance cases Jaune passes, of 73,345 selected, at the revision Blanc pins</span></div>
       <div class="stat"><span class="n num">86</span><span class="l">gates in the catalogue, all executed afresh and passing at commit <code>5048a51f</code></span></div>
     </div>
     <div class="ledger">

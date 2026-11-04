@@ -716,8 +716,9 @@ PATH_REFERENCES = [
 
 UNCHECKED_PUBLISHED_NUMBERS = [
     {
-        "number": "5,006/5,006 supported fixture files and 34,205/34,205 cases of "
-        "tests@v20.0.2, as the pinned Jaune revision reports them",
+        "number": "4,968/4,968 current-mainnet fixture files and 34,449/34,449 cases of "
+        "tests@v21.0.1, plus the historical lane's 3,692 files and 38,896 cases "
+        "(73,345 in all), as the pinned Jaune revision reports them",
         "surfaces": "docs/index.html, docs/method.html",
         "producer": "none in this tree",
         "blocker": "Jaune's number, produced by a gate in that repository over a "
