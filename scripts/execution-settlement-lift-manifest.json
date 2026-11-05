@@ -1,12 +1,8 @@
 {
-  "schema": 3,
+  "schema": 4,
   "commonModule": ".lake/packages/jaune/Jaune/ExecSettlement.lean",
-  "contractModuleGlobs": [
-    "Blanc/Weth10*.lean",
-    "Blanc/Lido*.lean"
-  ],
   "requiredDirectImport": {
-    "module": "Blanc/Weth10HolderFlow.lean",
+    "module": "Blanc/ExecutionSettlement.lean",
     "import": "Jaune.ExecSettlement"
   },
   "mappings": [
