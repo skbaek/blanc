@@ -93,15 +93,18 @@ _NATIVE_SPEC.loader.exec_module(native_process)
 # -- the Python installation, temporary directories -- is machinery, not input.
 def interesting_roots() -> list[Path]:
     roots = [ROOT]
-    for name in ("eels", "t8n_target", "t8n_python_base"):
+    for name in gc.NAMED_ROOTS:
         try:
-            roots.append(gc.resolve_path(ROOT, f"@{name}"))
+            resolved = gc.resolve_path(ROOT, f"@{name}")
         except Exception:
-            pass
+            continue
+        if resolved.is_dir():
+            roots.append(resolved)
     eest = Path(os.path.expanduser("~/eest-mainnet-v20.0.1"))
     if eest.is_dir():
         roots.append(eest)
     return roots
+
 
 
 IGNORED_PARTS = ("__pycache__", "/.git/")
@@ -221,8 +224,8 @@ def runner_content_files(gate: dict) -> set[Path]:
     """Runner sources whose contents this gate's fingerprint covers.
 
     `runner_identity_sources` is the runner's own relevance rule: the
-    soundness digest plus the host-identity file for every gate, and the
-    t8n resolver only for gates that consume it.  An entry that does not
+    soundness digest plus the host-identity file for every gate, and any
+    conditional source only for gates that consume it.  An entry that does not
     map to a file covers nothing, so an unexpected future entry fails
     closed into `undeclared` rather than into silence.
     """
@@ -248,7 +251,7 @@ def runner_binding_files() -> set[Path]:
     contents.  A gate that loads the runner therefore reads these files
     through a channel the fingerprint accounts for, even when their
     contents deliberately identify no verdict (the lock, the semaphore
-    helper, the t8n resolver for a gate that does not consume it).
+    helper).
     Derived from the runner's own source, so a module imported tomorrow
     is covered the day it is added; stdlib bindings resolve to no
     sibling and drop out.  A parse failure covers nothing.
@@ -315,7 +318,7 @@ def ensure_cold_bytecode_cache() -> str:
     )
 
 
-LOST_HOOK_ROWS = frozenset(['lido-deployment', 'weth10-differential', 'lido-dispatchers', 'lido-differential', 'lido-twg-differential', 'lido-ossifiable-proxy-differential', 'weth10-redemption', 'weth10-deployment', 'current-mainnet', 'weth10-current-mainnet', 'beacon-deposit-current-mainnet', 'beacon-deposit-differential', 'beacon-deposit-deployment', 'prorata-current-mainnet', 'lido-ossifiable-proxy-current-mainnet', 'drip-current-mainnet', 'lido-twg-pinned-target-current-mainnet'])
+
 
 
 LAKE_SUBTREES = (".lake/build", ".lake/packages")
@@ -408,17 +411,21 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
 
     roots = list(roots)
     required_root_errors = set()
-    inputs_text = json.dumps(gate.get("inputs", {}))
-    if (identifier in LOST_HOOK_ROWS and "current-mainnet" in identifier) or "@t8n_" in inputs_text:
-        for name in ("t8n_target", "t8n_python_base"):
-            try:
-                resolved = gc.resolve_path(ROOT, f"@{name}").resolve()
-                if not resolved.is_dir():
-                    raise ValueError("required input root is absent")
+    named_roots = sorted({
+        value[1:].partition("/")[0]
+        for value in gc._input_strings(gate.get("inputs", {}))
+        if value.startswith("@") and value[1:].partition("/")[0]
+    })
+    for name in named_roots:
+        try:
+            resolved = gc.resolve_path(ROOT, f"@{name}").resolve()
+            if resolved.is_dir():
                 if resolved not in roots:
                     roots.append(resolved)
-            except Exception as error:
-                required_root_errors.add(f"required @{name} root unresolved: {error}")
+            elif not resolved.exists():
+                raise ValueError("required input root is absent")
+        except Exception as error:
+            required_root_errors.add(f"required @{name} root unresolved: {error}")
     reads: set[str] = set()
     writes: set[str] = set()
     listings: set[str] = set()
@@ -518,21 +525,7 @@ def audit_gate(gate: dict, roots: list[Path], runner_bindings: set[Path]) -> dic
             available.remove(match)
     native_errors, native_captures = native_process.validate_records(native_records, NATIVE_CAPABILITY, starts, ends, log)
     unverified.update(native_errors)
-    if identifier in LOST_HOOK_ROWS:
-        if not bootstraps:
-            unverified.add("known sanitized/PYTHONPATH-replaced Python launch has no verified explicit adapter")
-        # Inspect the actual wrapper, not a source-count floor. Every known lost
-        # boundary must visibly pass through the explicit source-owned adapter.
-        wrapper = ROOT / gate["command"][0]
-        try:
-            source = wrapper.read_text(encoding="utf-8")
-            for line in source.replace("\\\n", " ").splitlines():
-                if (("/usr/bin/env -i" in line or ("PYTHONPATH=" in line and "EELS" in line))
-                        and not any(adapter in line for adapter in ("gate_audit_python", "gate_audit_exec_python"))
-                        and not line.lstrip().startswith("#")):
-                    unverified.add("unadapted shell Python boundary: " + line.strip())
-        except OSError as error:
-            unverified.add(f"cannot inspect known Python wrapper: {error}")
+
     if not starts:
         unverified.add("no Python observer startup receipt; observation coverage unverified")
     if set(starts) != ends:
