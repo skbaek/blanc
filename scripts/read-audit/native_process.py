@@ -287,31 +287,7 @@ def boundary_expected(capability, boundary):
     root = Path(boundary['root']).resolve()
     expected = {}
     producers = {}
-    if spec.get('kind') == 'drip-routing-v1':
-        producer = Path(spec['producer'])
-        if digest(producer) != spec['producer_sha256']:
-            raise Unknown('DRIP fixture producer identity drift')
-        producers[str(producer)] = identity(producer)
-        tree = ast.parse(producer.read_text())
-        cls = next(node for node in tree.body if isinstance(node, ast.ClassDef) and node.name == 'DripGateCoordination')
-        setup = next(node for node in cls.body if isinstance(node, ast.FunctionDef) and node.name == 'setUp')
-        calls = [node for node in ast.walk(setup) if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and isinstance(node.func.value, ast.Name) and node.func.value.id == 'self' and node.func.attr == 'command']
-        if len(calls) != 2:
-            raise Unknown('unsupported DRIP command generator shape')
-        bodies = [ast.literal_eval(node.args[1]) for node in calls]
-        if not all(isinstance(body, str) for body in bodies):
-            raise Unknown('nonliteral DRIP stub body')
-        # Generator code identity is pinned above. Derive actual bodies from
-        # that source rather than accepting fixture-provided role assertions.
-        for rel, body in zip(('bin/python3', 'creme/.semaphore/semaphore'), bodies):
-            expected[str(root / rel)] = hashlib.sha256(('#!/usr/bin/env bash\nset -eu\n' + body).encode()).hexdigest()
-        for name, item in spec['copied'].items():
-            origin = Path(item['source'])
-            if digest(origin) != item['sha256']:
-                raise Unknown('copied fixture source drift: ' + name)
-            producers[str(origin)] = identity(origin)
-            expected[str(root / 'scripts' / name)] = item['sha256']
-    elif spec.get('kind') == 'static-synthetic-v1':
+    if spec.get('kind') == 'static-synthetic-v1':
         # Used only by the explicitly pinned disposable control capability.
         # No static-synthetic boundary is proposed in the adoption packet.
         if str(root) != spec['root']:
