@@ -1,6 +1,6 @@
 import Blanc.Lift.Usdc.ProxyContextCodes
 import Blanc.Lift.Usdc.ProxyRetainedContextCodes
-import Blanc.Lift.Usdc.SignedPaths
+import Blanc.Composition.UsdcPair.SignedPaths
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.StaticSilent
 import Blanc.ExecutionMidHistoryInForest

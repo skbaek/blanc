@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.SignedPathsKit
+import Blanc.Composition.UsdcPair.SignedPathsKit
 
 /-!
 # F7b: the four authorization paths reach `_requireValidSignature`

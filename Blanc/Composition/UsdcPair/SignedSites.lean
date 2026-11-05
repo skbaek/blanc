@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.LibSeam
+import Blanc.Composition.UsdcPair.LibSeam
 import Blanc.Lift.Usdc.SignedSkip
 import Blanc.Lift.DelegateCallChild
 import Blanc.Lift.CopyLoopKeep

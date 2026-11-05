@@ -112,7 +112,7 @@ Where each tactic is defined, what goal it expects, and when to use it. "Goal" i
 Other families are local to a kit (each is a separate vocabulary for the same idea: walk one lifted instruction and
 name the new state): `wsimp`/`wauto` (`Blanc/Lift/Curve3Pool/Walk/ExchangeLiveKit.lean`), `xppush`/`xpmempush`
 (`Blanc/Lift/Curve3Pool/Callee/Xp.lean`), `rstep`/`rdisp` (`Blanc/Lift/Usdc/RefineTransferNodes.lean`), `icallA`
-(`Blanc/Lift/Usdc/RefineSignedAuthChecks.lean`), `sx`/`sxx` (`Blanc/Lift/Usdc/SignedSites.lean`, `SignedPathsKit.lean`).
+(`Blanc/Lift/Usdc/RefineSignedAuthChecks.lean`), `sx`/`sxx` (`Blanc/Composition/UsdcPair/SignedSites.lean`, `SignedPathsKit.lean`).
 Files with the most tactic declarations: `ExactWalkSolc` 23, `VyperCallee` 21, `CommonProofs` 16, `ReachSstoreLoops` 12,
 `Usdc/LibReject` 11, `Curve3Pool/Walk/Kit` 11. Search `macro "` and `elab "` before adding a new step tactic.
 

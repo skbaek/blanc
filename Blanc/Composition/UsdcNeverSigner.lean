@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.NeverSigner
+import Blanc.Composition.UsdcPair.NeverSigner
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.StaticSilent
 

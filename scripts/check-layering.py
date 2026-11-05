@@ -323,7 +323,7 @@ SHARED += ["Lift.GasErasureRun", "Lift.InvWalkBranchToP", "Lift.LedgerFootprintO
 # certificate generator, amendment A11) and the contract-neutral one-selector
 # silence predicate (amendment A11): both strata name the same bytes and the
 # same predicate, and no contract module imports another contract's.
-SHARED += ["Lift.PairCode", "Lift.StaticSilent"]
+SHARED += ["Lift.StaticSilent"]
 
 SHARED += ["Lift.CallChildren", "Lift.CallSite", "Lift.CallSiteChildren", "Lift.CallerProvenance"]
 # Outermost settled frames at an address (committed-replay histories): contract-neutral.
@@ -1462,14 +1462,6 @@ CONTRACTS = {
         "Lift.Usdc.ImplFp.Check1",
         "Lift.Usdc.ImplFp.Check2",
         "Lift.Usdc.ImplFp.Check3",
-        "Lift.Usdc.LibReject",
-        "Lift.Usdc.LibSeam",
-        "Lift.Usdc.SignedSites",
-        "Lift.Usdc.SignedPaths",
-        "Lift.Usdc.SignedPathsAuth",
-        "Lift.Usdc.SignedPathsKit",
-        "Lift.Usdc.SignedPathsPermit",
-        "Lift.Usdc.NeverSigner",
         "Lift.Usdc.CodeImage",
         "Lift.Usdc.Constants",
         "Lift.Usdc.Decode",
@@ -2001,6 +1993,8 @@ CONTRACTS["weth9"].extend([
 CONTRACTS["usdc"].extend(['Lift.Usdc.TransferLiveImpl', 'Lift.Usdc.TransferLiveProxy', 'Lift.Usdc.TransferLiveFrame', 'Lift.Usdc.TransferLiveFacts'])
 SHARED += ["Lift.AccumulatedWalk", "Lift.GasField"]
 
+CONTRACTS["uniswap-v2-pair"].append("Lift.PairCode")
+
 # Fixed synthetic 299-byte token fixture, shared without V± instance worlds.
 SHARED += ['Lift.Token20.Cert', 'Lift.Token20.Check', 'Lift.Token20.Creation.Cert', 'Lift.Token20.Creation.Check', 'Lift.Token20.Creation.Deploy', 'Lift.Token20.Creation.Input', 'Lift.Token20.Frame', 'Lift.Token20.Run', 'Lift.Token20.RunBalance', 'Lift.Token20.RunTransfer', 'Lift.Token20.RunTransferFrom']
 
@@ -2288,6 +2282,14 @@ COMPOSITION = {
     "Composition.LiveUsdcWeth9FactoryAnchorData": ('uniswap-v2-pair', 'usdc', 'weth9'),
     "Composition.UniswapV2PairUsdcRetainedP1": ('uniswap-v2-pair', 'usdc'),
     "Composition.UniswapV2PairUsdcWeth9HybridCheckpoint": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UsdcPair.LibReject": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UsdcPair.LibSeam": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UsdcPair.SignedSites": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UsdcPair.SignedPathsKit": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UsdcPair.SignedPathsAuth": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UsdcPair.SignedPathsPermit": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UsdcPair.SignedPaths": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UsdcPair.NeverSigner": ('uniswap-v2-pair', 'usdc'),
     # Every joint owner is explicit; no family or shared module may import back.
 }
 

@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.LibReject
+import Blanc.Composition.UsdcPair.LibReject
 
 /-!
 # F6: the library seam (`LibRejects`, `lib_rejects_pair`)
@@ -9,7 +9,7 @@ word, the first of which is zero (`false`).
 
 `LibRejects` is `Blanc.Lift.Usdc.LibRejects`, as frozen.  The frozen theorem name
 `lib_rejects_pair` is already taken in `Blanc.Lift.Usdc` by U7a's library lemma
-(`Blanc/Lift/Usdc/LibReject.lean`, a different signature that this module does not change), so the
+(`Blanc/Composition/UsdcPair/LibReject.lean`, a different signature that this module does not change), so the
 seam theorem lives one namespace down, as `Blanc.Lift.Usdc.LibSeam.lib_rejects_pair`; its
 statement is the frozen one.  It is an adapter: the fresh machine is the walk state
 `St pre [] Mem.empty pre.gasLeft`, the calldata word is `Sevm.dataWord sevm 4`, and a 32-byte

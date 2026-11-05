@@ -1,5 +1,5 @@
-import Blanc.Lift.Usdc.SignedPaths
-import Blanc.Lift.Usdc.LibSeam
+import Blanc.Composition.UsdcPair.SignedPaths
+import Blanc.Composition.UsdcPair.LibSeam
 import Blanc.Lift.Usdc.HistoryReplay
 import Blanc.Lift.Usdc.HistFFacts
 import Blanc.Lift.HistoryGas

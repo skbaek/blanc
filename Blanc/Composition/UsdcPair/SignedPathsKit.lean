@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.SignedSites
+import Blanc.Composition.UsdcPair.SignedSites
 import Blanc.Lift.Usdc.RefineSignedPermit
 import Blanc.Lift.Usdc.RefineSignedAuth
 import Blanc.Lift.InvWalkDispatch

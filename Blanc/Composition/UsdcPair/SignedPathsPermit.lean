@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.SignedPathsKit
+import Blanc.Composition.UsdcPair.SignedPathsKit
 import Blanc.Lift.HistAccessWalkFacts
 
 /-!

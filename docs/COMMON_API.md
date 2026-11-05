@@ -9162,7 +9162,7 @@ every shared module with its own summary and the branches that cite it.
   call-code resolution. The modern Pair theorem projects from it. This supplies
   the historical silence boundary for contract-signature consumers; it does
   not by itself migrate the USDC library or establish owner rejection.
-  The first library consumers in `Blanc/Lift/Usdc/LibReject.lean` are
+  The first library consumers in `Blanc/Composition/UsdcPair/LibReject.lean` are
   `lib_run_cut_noStateGas` (the actual successful bytecode cut) and
   `lib_e8_invH` (the `isContract` branch with the executing rules' account-access
   successor). The shared nonstorage memory walks retain their modern interfaces;
@@ -9170,12 +9170,12 @@ every shared module with its own summary and the branches that cite it.
   the same executing environment, preserving the old global silence interface.
   `Usdc.lib_rejects_pairH` now supplies the complete raw historical rejection
   under `NeutralFork` and historical Pair silence, sharing the original decoder
-  and selection proof. In `Blanc/Lift/Usdc/LibSeam.lean`, `LibRejectsH` and
+  and selection proof. In `Blanc/Composition/UsdcPair/LibSeam.lean`, `LibRejectsH` and
   `LibSeam.lib_rejects_pairH` expose its fresh-frame interface. `LibRejectsAt`
   restricts rejection to actual children with the same `benvStat`;
   `LibRejects.at_of_covered` and `LibRejectsH.at_of_neutral` supply it without
   converting the old global capability into a stronger one.
-  In `Blanc/Lift/Usdc/SignedSites.lean`, `tail3_false_nonstorage`,
+  In `Blanc/Composition/UsdcPair/SignedSites.lean`, `tail3_false_nonstorage`,
   `tail2_false_noStateGas` and `tail1_falseH` reuse the original result-word,
   delegate-child and account-access tails with that same-environment capability.
   `sx_nonstorage` orchestrates canonical nonstorage inversions;
@@ -9185,18 +9185,18 @@ every shared module with its own summary and the branches that cite it.
   `Blanc/Lift/Usdc/ShuffleSegments.lean` and `ric_seg_w149_noStateGas` in
   `Blanc/Lift/Usdc/RefineSignedPermitFrames.lean` reuse the original shuffle
   checks. `skipP_78_noStateGas` and `skipP_79_noStateGas` in
-  `Blanc/Lift/Usdc/SignedPathsKit.lean` preserve the exact silent-call frames,
+  `Blanc/Composition/UsdcPair/SignedPathsKit.lean` preserve the exact silent-call frames,
   returned stacks and world-state equalities. `preambleP_nonstorage` preserves
   the actual entry-to-dispatcher run without a fork premise. The encoding chain
   `tail0_falseH`, `enc_falseH` and `site9_falseH` in SignedSites uses actual
   state-gas/BAL absence and the same local rejection capability; it preserves
   the original memory bounds, free-pointer observations and copy-loop proof.
   `walk8H`, `walk94H`, `path_permitVrsH` and `path_permitBytesH` in
-  `Blanc/Lift/Usdc/SignedPathsPermit.lean` use actual SLOAD/SSTORE inversions
+  `Blanc/Composition/UsdcPair/SignedPathsPermit.lean` use actual SLOAD/SSTORE inversions
   at the certified instruction positions, with canonical historical code
   preservation and unchanged owner-word cleanup. Their original covered
   interfaces remain projections. `impl_permit_pair_not_okH` in
-  `Blanc/Lift/Usdc/SignedPaths.lean` excludes successful Pair-owned calls for
+  `Blanc/Composition/UsdcPair/SignedPaths.lean` excludes successful Pair-owned calls for
   the canonical V2_2 permit selectors, preserving the actual execution and
   entry-world library/Pair code premises. Its dispatcher adaptation is shared
   with the original covered endpoint.
@@ -10807,11 +10807,13 @@ shapes a trigger could match.
 
 #### C9.14. I need the Uniswap V2 Pair's shared adapters
 
-- The Pair's deployed runtime bytes as shared data: `UniswapV2Pair.codeChunk0-2` and
+- The Pair's deployed runtime bytes (owned by the Pair family): `UniswapV2Pair.codeChunk0-2` and
   `UniswapV2Pair.code`, emitted by the registered certificate generator from the
   `uniswap-v2-pair` row, in [`Blanc/Lift/PairCode.lean`](../Blanc/Lift/PairCode.lean).
-  Both contract strata name the same bytes through this module; `Check.cert_check`
-  checks them.
+  The Pair and Pair/USDC compositions name the same bytes through this module;
+  `Check.cert_check` checks them. The eight Pair-specific signature-library and
+  signed-path modules live under `Blanc/Composition/UsdcPair/`, downstream of
+  the generic USDC modules; their existing declaration namespaces stay stable.
 
 The Pair cursor, source-call and positional statements named below are the
 historical `H` forms, which take `rules.stateGas = none` (and `rules.bal = none`

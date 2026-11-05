@@ -1,6 +1,6 @@
 import Blanc.Lift.Usdc.ImplFp
-import Blanc.Lift.Usdc.SignedPathsAuth
-import Blanc.Lift.Usdc.SignedPathsPermit
+import Blanc.Composition.UsdcPair.SignedPathsAuth
+import Blanc.Composition.UsdcPair.SignedPathsPermit
 import Blanc.Lift.Usdc.AllowLocalityV2_2
 
 /-!
