@@ -43,27 +43,6 @@ def proofRecipeContainsName (needle : Lean.Name) : Lean.Expr → Bool
         proofRecipeContainsName needle body
   | .mdata _ expr | .proj _ _ expr => proofRecipeContainsName needle expr
 
-def proofRecipeIsBoundedCreationWordEncoder : Lean.Expr → Bool
-  | .mdata _ target => proofRecipeIsBoundedCreationWordEncoder target
-  | .app (.app (.app (.app (.const name _) _) _) instruction) _ =>
-      name == `Blanc.Ninst.RunCompiled &&
-        proofRecipeHeadName? instruction ==
-          some `Blanc.CreationArtifact.pushB256AsPush2OrPush32
-  | _ => false
-
-def proofRecipeExprHasFVarOrMVar : Lean.Expr → Bool
-  | .fvar _ | .mvar _ => true
-  | .bvar _ | .sort _ | .const _ _ | .lit _ => false
-  | .app fn arg =>
-      proofRecipeExprHasFVarOrMVar fn || proofRecipeExprHasFVarOrMVar arg
-  | .lam _ type body _ | .forallE _ type body _ =>
-      proofRecipeExprHasFVarOrMVar type || proofRecipeExprHasFVarOrMVar body
-  | .letE _ type value body _ =>
-      proofRecipeExprHasFVarOrMVar type ||
-        proofRecipeExprHasFVarOrMVar value ||
-        proofRecipeExprHasFVarOrMVar body
-  | .mdata _ expr | .proj _ _ expr => proofRecipeExprHasFVarOrMVar expr
-
 def proofRecipeIsDevmWithUpdaterName : Lean.Name → Bool
   | .str pre suffix =>
       pre == `Jaune.Devm && suffix.startsWith "with"
@@ -127,36 +106,6 @@ def proofRecipeIsDevmProjectionBridge (target : Lean.Expr) : Bool :=
       | none => false
   | none => false
 
-def proofRecipeContainsClosedCompileShapeByteSize : Lean.Expr → Bool
-  | .bvar _ | .fvar _ | .mvar _ | .sort _ | .const _ _ | .lit _ => false
-  | .app fn arg =>
-      match fn, arg with
-      | .const byteSizeName _, .app (.const compileShapeName _) func =>
-          if byteSizeName == `Blanc.Func.CompileShape.byteSize &&
-              compileShapeName == `Blanc.Func.compileShape then
-            !proofRecipeExprHasFVarOrMVar func
-          else
-            proofRecipeContainsClosedCompileShapeByteSize fn ||
-              proofRecipeContainsClosedCompileShapeByteSize arg
-      | _, _ =>
-          proofRecipeContainsClosedCompileShapeByteSize fn ||
-            proofRecipeContainsClosedCompileShapeByteSize arg
-  | .lam _ type body _ | .forallE _ type body _ =>
-      proofRecipeContainsClosedCompileShapeByteSize type ||
-        proofRecipeContainsClosedCompileShapeByteSize body
-  | .letE _ type value body _ =>
-      proofRecipeContainsClosedCompileShapeByteSize type ||
-        proofRecipeContainsClosedCompileShapeByteSize value ||
-        proofRecipeContainsClosedCompileShapeByteSize body
-  | .mdata _ expr | .proj _ _ expr =>
-      proofRecipeContainsClosedCompileShapeByteSize expr
-
-def proofRecipeIsByteSizeComposition (target : Lean.Expr) : Bool :=
-  let head := proofRecipeHeadName? target
-  (head == some `Eq || head == some `Ne ||
-    head == some `LE.le || head == some `LT.lt) &&
-    proofRecipeContainsClosedCompileShapeByteSize target
-
 def proofRecipeCompileShapePrepend? : Lean.Expr →
     Option (Lean.Expr × Lean.Expr)
   | .mdata _ expression => proofRecipeCompileShapePrepend? expression
@@ -182,54 +131,6 @@ def proofRecipeIsCompileShapePrependCongruence : Lean.Expr → Bool
         false
   | _ => false
 
-def proofRecipeIsDirectByteNavigationFunc (function : Lean.Expr) : Bool :=
-  let head := proofRecipeHeadName? function
-  head == some `Blanc.Func.next ||
-    head == some `Blanc.Func.branch ||
-    head == some `Blanc.CompiledShape.dispatchNode
-
-def proofRecipeShapeIsByteNavigation : Lean.Expr → Bool
-  | .mdata _ shape => proofRecipeShapeIsByteNavigation shape
-  | shape =>
-  let head := proofRecipeHeadName? shape
-      if head == some `Blanc.Func.CompileShape.next ||
-          head == some `Blanc.Func.CompileShape.branch then
-        true
-      else
-        match shape with
-        | .app (.const name _) function =>
-            name == `Blanc.Func.compileShape &&
-              proofRecipeIsDirectByteNavigationFunc function
-        | _ => false
-
-def proofRecipeContainsByteNavigation : Nat → Lean.Expr → Bool
-  | 0, _ => false
-  | fuel + 1, expression@(.app fn arg) =>
-      match expression with
-      | .app (.app (.app (.app (.app (.app (.const name _) _) _) shape) _) _) _ =>
-          if name == `Blanc.Func.byteAtByShape then
-            proofRecipeShapeIsByteNavigation shape
-          else
-            proofRecipeContainsByteNavigation fuel fn ||
-              proofRecipeContainsByteNavigation fuel arg
-      | _ => proofRecipeContainsByteNavigation fuel fn ||
-          proofRecipeContainsByteNavigation fuel arg
-  | fuel + 1, .lam _ type body _ =>
-      proofRecipeContainsByteNavigation fuel type ||
-        proofRecipeContainsByteNavigation fuel body
-  | fuel + 1, .forallE _ type body _ =>
-      proofRecipeContainsByteNavigation fuel type ||
-        proofRecipeContainsByteNavigation fuel body
-  | fuel + 1, .letE _ type value body _ =>
-      proofRecipeContainsByteNavigation fuel type ||
-        proofRecipeContainsByteNavigation fuel value ||
-        proofRecipeContainsByteNavigation fuel body
-  | fuel + 1, .mdata _ expression =>
-      proofRecipeContainsByteNavigation fuel expression
-  | fuel + 1, .proj _ _ expression =>
-      proofRecipeContainsByteNavigation fuel expression
-  | _, _ => false
-
 def proofRecipeHasPremiseHead (needle : Lean.Name) : Lean.Expr → Bool
   | .forallE _ domain body _ =>
       proofRecipeHeadName? domain == some needle ||
@@ -247,39 +148,6 @@ def proofRecipeLocalTypeCount (needle : Lean.Name) : TacticM Nat := do
       if proofRecipeHeadName? type == some needle then
         count := count + 1
   return count
-
-def proofRecipeBVarOccurrenceCount (needle : Nat) : Lean.Expr → Nat
-  | .bvar index => if index == needle then 1 else 0
-  | .app fn arg =>
-      proofRecipeBVarOccurrenceCount needle fn +
-        proofRecipeBVarOccurrenceCount needle arg
-  | .lam _ type body _ | .forallE _ type body _ =>
-      proofRecipeBVarOccurrenceCount needle type +
-        proofRecipeBVarOccurrenceCount (needle + 1) body
-  | .letE _ type value body _ =>
-      proofRecipeBVarOccurrenceCount needle type +
-        proofRecipeBVarOccurrenceCount needle value +
-        proofRecipeBVarOccurrenceCount (needle + 1) body
-  | .mdata _ expr | .proj _ _ expr =>
-      proofRecipeBVarOccurrenceCount needle expr
-  | _ => 0
-
-def proofRecipeHasRepeatedClosedLetSubject : Lean.Expr → Bool
-  | .app fn arg =>
-      proofRecipeHasRepeatedClosedLetSubject fn ||
-        proofRecipeHasRepeatedClosedLetSubject arg
-  | .lam _ type body _ | .forallE _ type body _ =>
-      proofRecipeHasRepeatedClosedLetSubject type ||
-        proofRecipeHasRepeatedClosedLetSubject body
-  | .letE _ type value body _ =>
-      (!proofRecipeExprHasFVarOrMVar value &&
-          proofRecipeBVarOccurrenceCount 0 body > 1) ||
-        proofRecipeHasRepeatedClosedLetSubject type ||
-        proofRecipeHasRepeatedClosedLetSubject value ||
-        proofRecipeHasRepeatedClosedLetSubject body
-  | .mdata _ expr | .proj _ _ expr =>
-      proofRecipeHasRepeatedClosedLetSubject expr
-  | _ => false
 
 def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM Bool := do
   let head := proofRecipeHeadName? target
@@ -308,43 +176,15 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.Line.Run target
   | "context-shape:intermediate-devm" =>
       return (← proofRecipeLocalTypeCount `Jaune.Devm) > 2
-  | "goal-shape:devm-update-projection" =>
-      return proofRecipeIsDevmProjectionBridge target
   | "goal-shape:successor-projection" =>
       return head == some `Eq &&
         proofRecipeContainsName `Jaune.Devm.setMach target &&
         !proofRecipeIsDevmProjectionBridge target
-  | "goal-shape:compileshape-bytesize" =>
-      return proofRecipeIsByteSizeComposition target
-  | "goal-shape:compiled-shape-byte-navigation" =>
-      return proofRecipeContainsByteNavigation 8 target
   | "goal-shape:compile-shape-prepend-congruence" =>
       return proofRecipeIsCompileShapePrependCongruence target
-  | "goal-shape:bounded-creation-word-encoder" =>
-      return proofRecipeIsBoundedCreationWordEncoder target
-  | "goal-shape:tagged-storage-region-separation" =>
-      return proofRecipeContainsName `Blanc.TaggedStorage.encode target
-  | "goal-shape:selector-separation" =>
-      return proofRecipeContainsName `Blanc.selector target
-  | "goal-shape:linear-dispatch-selection" =>
-      return proofRecipeContainsName `Blanc.linearDispatchWith target
-  | "goal-head:LinkCertificate" => return head == some `Blanc.LinkCertificate
-  | "goal-shape:symbolic-label-linking" =>
-      return proofRecipeContainsName `Blanc.resolve target ||
-        proofRecipeContainsName `Blanc.checkLink target ||
-        proofRecipeContainsName `Blanc.SymbolicProg.findLabel? target ||
-        proofRecipeContainsName `Blanc.SymbolicProg.validateDefinitions target ||
-        proofRecipeContainsName `Blanc.SymbolicProg.callsOk target ||
-        proofRecipeContainsName `Blanc.SymbolicProg.erase target ||
-        proofRecipeContainsName `Blanc.SymbolicFunc.erase target
   | "goal-shape:fixed-byte-offset" =>
       return head == some `Blanc.Mem.Wf || head == some `Blanc.Mem.Reads ||
         proofRecipeContainsName `Blanc.Bytes.writeAt target
-  | "goal-shape:frame-root-carrying" =>
-      return proofRecipeContainsName `Blanc.rootedRunCompiledTo target ||
-        proofRecipeContainsName `Blanc.ninstAllChildRoots target ||
-        proofRecipeContainsName `Blanc.Exec.rawFrameRoots target ||
-        proofRecipeContainsName `Blanc.Exec.rawFrameDescendants target
   | "goal-head:ContractSpec.PreservesAdmitted" =>
       return head == some `Blanc.ContractSpec.PreservesAdmitted
   | "goal-shape:trace-local-frame-admission" =>
@@ -385,19 +225,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
           `Blanc.ExecutionTrace.ConfiguredBlockTraceIn.FrameAdmitted target ||
         proofRecipeContainsName
           `Blanc.ExecutionTrace.ConfiguredHistoryTraceIn.FrameAdmitted target
-  | "goal-shape:raw-sstore-free-compiled-path" =>
-      return proofRecipeContainsName
-          `Blanc.Func.RunCompiledTo.NoRawSstorePath target ||
-        proofRecipeContainsName `Blanc.Exec.NoRawSstore target ||
-        proofRecipeContainsName `Blanc.Ninst.ChildlessRunCompiled target
   | "goal-shape:retained-write-noninterference" =>
       return head == some `Blanc.Exec.NoRetainedWriteTo
-  | "goal-shape:exact-retained-storage-effects" =>
-      return proofRecipeContainsName
-          `Blanc.Exec.retainedStorageEffectTriples target ||
-        proofRecipeContainsName
-          `Blanc.Func.RunCompiledTo.StorageEffectPath target ||
-        proofRecipeContainsName `Blanc.Func.StorageEffectRun target
   | "goal-shape:retained-wrapper-trace" =>
       return proofRecipeContainsName `Blanc.ExecutionTrace.RetainedXlot target ||
         proofRecipeContainsName `Blanc.ExecutionTrace.ProcessMessageTrace target ||
@@ -418,12 +247,6 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.ExecutionTrace.ConfiguredHistoryTraceIn target
   | "goal-head:StateReplay" => return head == some `Blanc.StateReplay
   | "goal-head:ReturnsWord" => return head == some `Blanc.ReturnsWord
-  | "goal-head:MigrationSound" => return head == some `Blanc.MigrationSound
-  | "goal-head:BehavioralRefinement" =>
-      return head == some `Blanc.BehavioralRefinement
-  | "goal-shape:accepted-bool-word" =>
-      return head == some `Iff &&
-        proofRecipeContainsName `Blanc.AcceptedBoolWord target
   | "goal-shape:message-execution-settlement" =>
       return proofRecipeContainsName `Jaune.processMessage target &&
         (proofRecipeContainsName `Jaune.exec target ||
@@ -432,10 +255,6 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
       return proofRecipeContainsName `Jaune.Devm.memWrite target ||
         proofRecipeContainsName `Jaune.addAccessedStorageKey target ||
         proofRecipeContainsName `Jaune.Devm.setStorVal target
-  | "goal-shape:terminal-return-revert" =>
-      return head == some `Blanc.Func.RunCompiledTo &&
-        (proofRecipeContainsName `Jaune.Linst.return_ target ||
-          proofRecipeContainsName `Jaune.Linst.revert target)
   | "goal-shape:constant-error-guard" =>
       return head == some `Blanc.Func.RunCompiledTo &&
         proofRecipeContainsName `Blanc.Func.branch target &&
@@ -443,20 +262,8 @@ def proofRecipeTriggerMatches (target : Lean.Expr) (trigger : String) : TacticM 
         proofRecipeContainsName `Blanc.errorData target
   | "goal-shape:full-length-slice" =>
       return proofRecipeContainsName `Jaune.List.sliceD target
-  | "goal-shape:runcompiled-family-compression" =>
-      return head == some `Blanc.Func.RunCompiled ||
-        head == some `Blanc.Func.RunCompiledTo
-  | "goal-shape:shared-subject-kernel-decision" =>
-      return proofRecipeHasRepeatedClosedLetSubject target
   | "goal-head:CompiledStackSafety.StepSafe" =>
       return head == some `Blanc.CompiledStackSafety.StepSafe
-  | "goal-head:CompiledStackSafety.Certificate" =>
-      return head == some `Blanc.CompiledStackSafety.Certificate
-  | "goal-shape:operand-stack-fault-free" =>
-      return proofRecipeContainsName `Jaune.ExceptionalHalt.stackUnderflow target ||
-        proofRecipeContainsName `Jaune.ExceptionalHalt.stackOverflow target ||
-        proofRecipeContainsName `Blanc.CompiledStackSafety.StackFault target ||
-        proofRecipeContainsName `Blanc.CompiledStackSafety.NoStackFault target
   | _ => return false
 
 def String.toSyntax (s : String) : Lean.Syntax :=
