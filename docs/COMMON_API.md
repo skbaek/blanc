@@ -572,6 +572,18 @@ lines when next changed or relied on, not by a wholesale rewrite.
 
 ### E2. The walk crosses a child frame
 
+- Value-call initialization and memory projections, plus the zero-value child
+  message identity: `Blanc/Lift/CallMessageFacts.lean` owns the `vcsm_*`
+  projections, `mem_read_fst`, `callSpawnParent_memory_data`,
+  `addAccessedAddress_setMach_memory` and `callChildMsg_zero` in `Blanc.Lift`.
+- Selector-plus-two-word calldata: `Blanc/Lift/CalldataWords.lean` owns
+  `Blanc.Lift.dataWord_twoWords`, using the existing shared selector-length
+  lemma rather than a contract-local duplicate.
+- A known clean static child: `Blanc/Lift/ExactWalkStaticCallChild.lean` owns
+  `Blanc.Lift.Ninst.runCompiled_staticcall_child`, preserving all original
+  fork/delegation/access/gas/depth/non-precompile/stack-room/child premises.
+  Concrete Pair/WETH transfer and balance skeletons stay in their compositions.
+
 Use [`Blanc/ForwardCall.lean`](../Blanc/ForwardCall.lean):
 
 - `Func.ExecWitness` / `Prog.ExecWitness` package raw call outcomes.

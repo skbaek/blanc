@@ -1,8 +1,9 @@
+import Blanc.Lift.CallMessageFacts
+import Blanc.Lift.CalldataWords
 import Blanc.Composition.Curve3Pool3CrvCoinCalls
 import Blanc.Composition.Curve3PoolCalleeLive
 import Blanc.Lift.Token20.RunBalance
 import Blanc.Lift.Curve3Pool.CalldataWords
-import Blanc.Composition.UniswapV2PairWeth9SwapLegsCall
 import Blanc.StorageAccessGas
 import Blanc.CodeDelegation
 import Blanc.StorageRefundPotential
@@ -33,7 +34,7 @@ its code (`lift_exact`), so the coins' replies are their code's, not premises.
 namespace Blanc.Composition.Curve3Pool3CrvInstance
 
 open Jaune Blanc Blanc.Lift Blanc.Composition.Curve3Pool3CrvJoint
-open Blanc.Composition.UniswapV2PairWeth9Joint (vcsm_benvStat vcsm_caller vcsm_currentTarget
+open Blanc.Lift (vcsm_benvStat vcsm_caller vcsm_currentTarget
   vcsm_value vcsm_isStatic vcsm_code vcsm_state vcsm_gasLeft vcsm_stack vcsm_memory vcsm_error
   mem_read_fst callSpawnParent_memory_data addAccessedAddress_setMach_memory)
 
@@ -563,7 +564,7 @@ theorem push_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
     rfl
   have hsel : Sevm.selector (initSevm msg) = 0xa9059cbb :=
     selector_eq_of_data_eq_abiSelectorBytes_append (by decide) (by rw [hd, List.append_assoc])
-  obtain ⟨w4, w36, -⟩ := UniswapV2PairWeth9Joint.dataWord_twoWords hd
+  obtain ⟨w4, w36, -⟩ := Blanc.Lift.dataWord_twoWords hd
   have hto : trTo (initSevm msg) = dst := by unfold trTo; rw [w4, toAdr_toB256]
   have hval : trVal (initSevm msg) = v := w36
   have hfromBal : mvFrom (initSevm msg) (initDevm msg) (initSevm msg).caller =

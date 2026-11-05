@@ -1,3 +1,5 @@
+import Blanc.Lift.CallMessageFacts
+import Blanc.Lift.CalldataWords
 import Blanc.Composition.UniswapV2PairWeth9SwapLegsRun
 import Blanc.Lift.GasField
 import Blanc.Lift.ExactWalkCallChild
@@ -192,32 +194,6 @@ theorem wethTransferCallAt_eq (g k f r : Nat) :
 
 end Transfer3
 
-section Calldata
-
-theorem abiSelectorBytes_length (sel : B256) : (abiSelectorBytes sel).length = 4 := by
-  simp only [abiSelectorBytes, List.length_drop, B256.length_toBytes]
-
-/-- A two-word call's argument words. -/
-theorem dataWord_twoWords {e : Sevm} {sel w a : B256}
-    (h : e.data = abiSelectorBytes sel ++ w.toBytes ++ a.toBytes) :
-    Sevm.dataWord e 4 = w ∧ Sevm.dataWord e 36 = a ∧ e.data.length = 68 := by
-  have l4 := abiSelectorBytes_length sel
-  refine ⟨?_, ?_, ?_⟩
-  · unfold Sevm.dataWord
-    rw [h, show (4 : B256).toNat = 4 from rfl, List.sliceD, List.append_assoc,
-      List.drop_append_of_le_length (by omega), List.drop_of_length_le (by omega), List.nil_append,
-      List.takeD_eq_take 0 (by simp only [List.length_append, B256.length_toBytes]; omega),
-      List.take_left' (B256.length_toBytes w), B256.toB256_toBytes]
-  · unfold Sevm.dataWord
-    rw [h, show (36 : B256).toNat = 36 from rfl, List.sliceD,
-      List.drop_append_of_le_length (by simp only [List.length_append, B256.length_toBytes]; omega),
-      List.drop_of_length_le (by simp only [List.length_append, B256.length_toBytes]; omega),
-      List.nil_append, List.takeD_eq_take 0 (by simp only [B256.length_toBytes]; omega),
-      List.take_of_length_le (by simp only [B256.length_toBytes]; omega), B256.toB256_toBytes]
-  · rw [h]
-    simp only [List.length_append, B256.length_toBytes, l4]
-
-end Calldata
 
 section CallHelpers
 
@@ -243,28 +219,8 @@ section Msg
 variable (sevm : Sevm) (P : Devm) (f : Nat) (v : B256) (c d : Adr) (ii is : Nat) (code : ByteArray)
   (dp : Bool)
 
-theorem vcsm_benvStat : (initSevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).benvStat =
-    sevm.benvStat := rfl
-theorem vcsm_caller : (initSevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).caller =
-    sevm.currentTarget := rfl
-theorem vcsm_currentTarget :
-    (initSevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).currentTarget = c := rfl
-theorem vcsm_value : (initSevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).value = v := rfl
-theorem vcsm_isStatic : (initSevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).isStatic =
-    (false || sevm.isStatic) := rfl
-theorem vcsm_code : (initSevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).code = code := rfl
 theorem vcsm_data : (initSevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).data =
     (valueCallSpawnMsg sevm P f v c d ii is code dp).data := rfl
-theorem vcsm_state : (initDevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).state = P.state :=
-  rfl
-theorem vcsm_gasLeft : (initDevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).gasLeft = f :=
-  rfl
-theorem vcsm_stack : (initDevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).stack = [] := rfl
-theorem vcsm_memory : (initDevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).memory =
-    Mem.empty := rfl
-theorem vcsm_error : (initDevm (valueCallSpawnMsg sevm P f v c d ii is code dp)).error = none :=
-  rfl
-
 end Msg
 
 theorem callSpawnParent_state (d : Devm) (c ii is oi os : Nat) :
@@ -303,20 +259,6 @@ theorem xfer_accessDelegation (cg : Nat)
   rw [addAccessedAddress_setMach_state]
   dsimp only
   rw [hcode, Weth9.getDelegatedCodeAddress_code]
-
-theorem callSpawnParent_memory_data (d : Devm) (c ii is oi os : Nat) :
-    (callSpawnParent d c ii is oi os).memory.data = d.memory.data := rfl
-
-theorem callChildMsg_zero (sevm : Sevm) (P : Devm) (f : Nat) (callee dadr : Adr) (ii is : Nat)
-    (code : ByteArray) (dp : Bool) (stmid : Jaune.State) :
-    callChildMsg sevm P f 0 callee dadr ii is code dp stmid =
-      valueCallSpawnMsg sevm P f 0 callee dadr ii is code dp := by
-  simp only [callChildMsg, ite_true]
-
-theorem addAccessedAddress_setMach_memory (W : Devm) (m : Mach) (a : Adr) :
-    (addAccessedAddress (W.setMach m) a).memory = m.memory := rfl
-
-theorem mem_read_fst (μ : Mem) (i n : Nat) : (μ.read i n).1 = μ.data.sliceD i n 0 := rfl
 
 /-- The child message's calldata: `transfer(to, amount)` read out of the staged window. -/
 theorem xferMsg_data (g k f : Nat) (wf : Mem.Wf M) (lower : 128 ≤ p.toNat)

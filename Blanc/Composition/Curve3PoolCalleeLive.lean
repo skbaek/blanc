@@ -1,8 +1,10 @@
+import Blanc.Lift.CallMessageFacts
+import Blanc.Lift.CalldataWords
+import Blanc.Lift.ExactWalkStaticCallChild
 import Blanc.Lift.Curve3Pool.LivePremises
 import Blanc.Lift.Curve3Crv.CostBounds
 import Blanc.Lift.Curve3Crv.Check
 import Blanc.Composition.Curve3CrvPositional
-import Blanc.Composition.UniswapV2PairWeth9SwapLegsRead
 import Blanc.Lift.StaticOnlyRoots
 import Blanc.ExecutionErrorKeep
 import Blanc.CodeDelegation
@@ -44,7 +46,7 @@ with `c3crv_cert_staticOnly`).
 namespace Blanc.Composition.Curve3PoolCalleeLive
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool
-open Blanc.Composition.UniswapV2PairWeth9Joint (Ninst.runCompiled_staticcall_child)
+open Blanc.Lift (Ninst.runCompiled_staticcall_child)
 
 /-! ## The call site: popped, warmed, charged -/
 
@@ -138,7 +140,7 @@ theorem call0_cross {cpost : Devm} (hfork : CoveredFork sevm.benvStat.fork)
       unfold State.subBal
       simp only [show ¬ (warmed b S M G t).state.bal sevm.currentTarget < 0 from
         B256.not_lt.mpr (B256.zero_le _), ↓reduceIte])
-    (by rw [UniswapV2PairWeth9Joint.callChildMsg_zero]; exact hexec) herr
+    (by rw [Blanc.Lift.callChildMsg_zero]; exact hexec) herr
 
 /-- **A `STATICCALL` whose child halts cleanly** resumes in `callChildPost` at the site's
 parent. -/
@@ -359,7 +361,7 @@ theorem adr_toB256_lt (a : Adr) : a.toB256.toNat < 2 ^ 160 := by
 theorem argWords {e : Sevm} {sel d v : B256}
     (h : e.data = abiSelectorBytes sel ++ d.toBytes ++ v.toBytes) :
     Sevm.argWord e 0 = d ∧ Sevm.argWord e 1 = v ∧ e.data.length = 68 := by
-  obtain ⟨h4, h36, hl⟩ := UniswapV2PairWeth9Joint.dataWord_twoWords h
+  obtain ⟨h4, h36, hl⟩ := Blanc.Lift.dataWord_twoWords h
   refine ⟨?_, ?_, hl⟩
   · show Sevm.dataWord e (32 * 0 + 4) = d
     rw [show (32 * 0 + 4 : B256) = 4 by decide]

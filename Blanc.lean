@@ -2035,3 +2035,6 @@ import Blanc.Lift.Usdc.V2_1TransferFromCreditHashes
 import Blanc.ExecutionTraceMessageRoots
 import Blanc.ExecutionAcceptedPayoutTrace
 import Blanc.Lift.Usdc.AllowanceQuiet
+import Blanc.Lift.CallMessageFacts
+import Blanc.Lift.CalldataWords
+import Blanc.Lift.ExactWalkStaticCallChild

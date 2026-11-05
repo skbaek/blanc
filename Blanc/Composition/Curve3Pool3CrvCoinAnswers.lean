@@ -1,9 +1,10 @@
+import Blanc.Lift.CallMessageFacts
 import Blanc.Composition.Curve3Pool3CrvCoinExact
 
 namespace Blanc.Composition.Curve3Pool3CrvInstance
 
 open Jaune Blanc Blanc.Lift Blanc.Composition.Curve3Pool3CrvJoint
-open Blanc.Composition.UniswapV2PairWeth9Joint (vcsm_benvStat vcsm_caller vcsm_currentTarget
+open Blanc.Lift (vcsm_benvStat vcsm_caller vcsm_currentTarget
   vcsm_value vcsm_isStatic vcsm_code vcsm_state vcsm_gasLeft vcsm_stack vcsm_memory vcsm_error
   mem_read_fst callSpawnParent_memory_data addAccessedAddress_setMach_memory)
 

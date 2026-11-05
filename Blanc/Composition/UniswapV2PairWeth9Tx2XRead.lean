@@ -1,3 +1,4 @@
+import Blanc.Lift.ExactWalkStaticCallChild
 import Blanc.Composition.UniswapV2PairWeth9SwapLegs
 import Blanc.Composition.UniswapV2PairWeth9Tx1
 import Blanc.Lift.Token20.RunBalance

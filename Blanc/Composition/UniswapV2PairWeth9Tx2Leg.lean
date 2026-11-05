@@ -1,3 +1,5 @@
+import Blanc.Lift.CallMessageFacts
+import Blanc.Lift.CalldataWords
 import Blanc.Composition.UniswapV2PairWeth9Tx2View
 
 /-!
