@@ -62,24 +62,8 @@ import keccak_rate_boundary_vectors as vectors  # noqa: E402
 
 CANONICAL_IMPLEMENTATION = "keccak.py"
 
-# Consumer representations are not additional implementations. Keep their
-# higher-level semantic checks separate while sharing the hash primitive.
-BARE_HEX_ADAPTERS = (
-    ("gen-beacon-deposit-vectors.py", "keccak256"),
-    ("lido_circuit_breaker_reference_schema.py", "keccak256"),
-    ("lido_twg_reference_schema.py", "keccak256"),
-    ("lido_ossifiable_proxy_reference_schema.py", "keccak256"),
-    ("lido_ossifiable_proxy_performance_schema.py", "keccak256"),
-    ("weth10_reference_schema.py", "keccak256"),
-    ("weth10-reference.py", "keccak256"),
-)
-BYTE_ADAPTERS = (
-    ("gen-beacon-deposit-vectors.py", "keccak256_bytes"),
-    ("gen-beacon-deposit-current-mainnet.py", "keccak256"),
-    ("lido_circuit_breaker_reference_schema.py", "keccak_bytes"),
-    ("lido_twg_reference_schema.py", "keccak_bytes"),
-)
-
+# Retired product aliases are not live assurance surfaces. Pin each canonical
+# representation directly and retain the paper's USDC consumer below.
 HISTORICAL_DEFECT_LENGTHS = vectors.DEFECT_LENGTHS
 
 # --- what a sponge is -------------------------------------------------------
@@ -627,7 +611,7 @@ def self_test() -> List[str]:
 
 
 def adapter_failures() -> List[str]:
-    """Hold the canonical API and every migrated consumer representation."""
+    """Hold the canonical representations and the retained USDC consumer."""
 
     failures: List[str] = []
 
@@ -636,7 +620,6 @@ def adapter_failures() -> List[str]:
             failures.append(f"adapter: {message}")
 
     helper = load("keccak.py")
-    census = load("check-lido-twg-census.py")
     message = vectors.message(135)
     expected_hex = vectors.VECTORS[135]
     original = bytes(message)
@@ -646,6 +629,9 @@ def adapter_failures() -> List[str]:
             "keccak256 must return exactly 32 bytes")
     require(raw.hex() == expected_hex, "canonical bytes digest disagrees")
     require(message == original, "canonical helper mutated its input")
+    bare = helper.keccak256_bare_hex(message)
+    require(isinstance(bare, str) and bare == expected_hex,
+            "keccak256_bare_hex must return bare lowercase hex")
     prefixed = helper.keccak256_hex(message)
     require(isinstance(prefixed, str) and prefixed == "0x" + expected_hex,
             "keccak256_hex must return lowercase 0x-prefixed hex")
@@ -658,21 +644,11 @@ def adapter_failures() -> List[str]:
     else:
         require(False, "canonical selector accepted a signature with spaces")
 
-    for filename, attribute in BARE_HEX_ADAPTERS:
-        value = getattr(load(filename), attribute)(message)
-        require(isinstance(value, str) and value == expected_hex,
-                f"{filename}.{attribute} must return bare lowercase hex")
-    for filename, attribute in BYTE_ADAPTERS:
-        value = getattr(load(filename), attribute)(message)
-        require(isinstance(value, bytes) and value == bytes.fromhex(expected_hex),
-                f"{filename}.{attribute} must return exactly 32 digest bytes")
-    require(census.selector("Error(string)") == "0x08c379a0",
-            "TWG selector adapter must return 0x-prefixed text")
-    require(
-        census.digest("Transfer(address,address,uint256)")
-        == "0x" + vectors.SELECTORS[b"Transfer(address,address,uint256)"],
-        "TWG digest adapter must return 0x-prefixed 32-byte hex",
-    )
+    description = load("usdc-history-reference.py").describe(message)
+    require(description.get("bytes") == len(message),
+            "USDC history describe must preserve byte length")
+    require(description.get("keccak256") == "0x" + expected_hex,
+            "USDC history describe must return lowercase 0x-prefixed digest")
     return failures
 
 
@@ -698,9 +674,9 @@ def main() -> int:
     print(f"OK keccak rate-boundary control: 1 canonical sponge"
           f" x {len(vectors.VECTORS)} lengths + {len(vectors.SELECTORS)}"
           f" selectors = {total} comparisons against {vectors.ORACLE}"
-          f" @ {vectors.ORACLE_PIN}; {len(BARE_HEX_ADAPTERS)} bare-hex and"
-          f" {len(BYTE_ADAPTERS)} byte aliases plus TWG text adapters retain return"
-          f" shapes; structural sponge scan reconciled and shown to catch 2"
+          f" @ {vectors.ORACLE_PIN}; canonical bytes/bare-hex/prefixed-hex/selector"
+          f" shapes and retained USDC history consumer checked; structural sponge"
+          f" scan reconciled and shown to catch 2"
           f" planted implementations; historical padding mutant fails only"
           f" at {HISTORICAL_DEFECT_LENGTHS}")
     return 0
