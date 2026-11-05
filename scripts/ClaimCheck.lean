@@ -8656,7 +8656,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace)) :
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -8681,7 +8681,7 @@ example {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeys pair trace)) :
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes (initializedState factory domain token0 token1) steps finish ∧
@@ -9289,9 +9289,9 @@ environment is built from) are not unfolded here. -/
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
 
--- Uniswap V2 Pair definition: pairFrameObs
+-- Uniswap V2 Pair definition: Blanc.Exec.Frame.obsAt
 example (pair : Adr) (frame : Exec.Frame)  :
-    pairFrameObs pair frame =
+    Blanc.Exec.Frame.obsAt pair frame =
       (if frame.sevm.currentTarget = pair ∧ frame.sevm.isStatic = false then [frame] else []) :=
   rfl
 
@@ -9300,10 +9300,10 @@ end Blanc.Lift.UniswapV2Pair
 namespace Blanc.Lift.UniswapV2Pair
 open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
 
--- Uniswap V2 Pair definition: pairSubtreeFrames
+-- Uniswap V2 Pair definition: Blanc.Exec.Frame.subtreeAt
 example (pair : Adr) (f : Exec.Frame)  :
-    pairSubtreeFrames pair f =
-      ((Exec.committedFrames f.run).flatMap (pairFrameObs pair)) :=
+    Blanc.Exec.Frame.subtreeAt pair f =
+      ((Exec.committedFrames f.run).flatMap (Blanc.Exec.Frame.obsAt pair)) :=
   rfl
 
 end Blanc.Lift.UniswapV2Pair
@@ -9327,7 +9327,7 @@ open Jaune Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
 example {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
     (trace : ConfiguredHistoryTrace cfg checkpoint future)  :
     committedPairFrames pair trace =
-      (trace.settledFrames.flatMap (pairFrameObs pair)) :=
+      (trace.settledFrames.flatMap (Blanc.Exec.Frame.obsAt pair)) :=
   rfl
 
 end Blanc.Lift.UniswapV2Pair
@@ -10245,7 +10245,7 @@ example (Consumes : Exec.Deriv → SegmentResult → Transcript → RunResult �
     (finish : State) (K' : WriterKey → Prop) :
     PairHistoryReplayedWith Consumes Auth pair trace K₀ st₀ finish K' ↔
       (∃ steps : List PairStep,
-    steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+    steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
     (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
     PairObservedReplayWith Consumes st₀ steps finish ∧
     runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
@@ -10277,7 +10277,7 @@ example {cfg : ChainConfig} {checkpoint future : BlockChain} (pair : Adr)
     (finish : State) (K' : WriterKey → Prop)  :
     PairHistoryReplayed pair trace K₀ st₀ finish K' ↔
       (∃ steps : List PairStep,
-    steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+    steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
     (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
     PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
     runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
@@ -13627,7 +13627,7 @@ example {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
             ¬ node.sevm.benvStat.rules.isPrecomp T)
     (start : JointAt C trace pair side st₀ checkpoint.state) :
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop) (steps : List PairStep),
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
       runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
@@ -13661,7 +13661,7 @@ example {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
             ¬ node.sevm.benvStat.rules.isPrecomp T)
     (start : JointAt C trace pair side st₀ checkpoint.state) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -13694,7 +13694,7 @@ example {pair T : Adr} {B : Book} (C : Core T B) (laws : BookLaws B)
             ¬ node.sevm.benvStat.rules.isPrecomp T)
     (start : JointAt C trace pair side st₀ checkpoint.state) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -14590,7 +14590,7 @@ example {pair weth : Adr} (side : TokenSide)
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -14615,7 +14615,7 @@ example {pair weth : Adr} (side : TokenSide)
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -14651,7 +14651,7 @@ example (st : Jaune.State) :
             ((swapWorld st).getStor UniswapV2PairWeth9Instance.weth).get (Weth9.balSlot trader) = 996 ∧
             ((swapWorld st).getStor UniswapV2PairWeth9Instance.weth).get (Weth9.balSlot pair) = 999004 ∧
             reserve0Read (((swapWorld st).getStor pair).get 8) =
-              ((swapWorld st).getStor tokenX).get (VyperNonreentrantDeployed.Token20.balSlot pair) ∧
+              ((swapWorld st).getStor tokenX).get (Blanc.Lift.Token20.balSlot pair) ∧
             reserve1Read (((swapWorld st).getStor pair).get 8) =
               ((swapWorld st).getStor UniswapV2PairWeth9Instance.weth).get (Weth9.balSlot pair) ∧
             reserve0Read (((swapWorld st).getStor pair).get 8) = 1001000 ∧
@@ -14671,7 +14671,7 @@ example (st : Jaune.State) :
                 ∀ g, Weth9.historyKeyUniverse UniswapV2PairWeth9Instance.weth trace (FiniteCheckpoint.rowKeys w0WethRows)
                     (.allow pair g) → ((swapWorld st).getStor UniswapV2PairWeth9Instance.weth).get (Weth9.allowSlot pair g) = 0) ∧
             ∃ steps : List PairStep,
-              steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+              steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
               (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
               ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
                 PairObservedReplayWith PairAdmittedConsumes w0PairState steps finish ∧
@@ -14780,7 +14780,7 @@ example {pair usdc weth : Adr}
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -14806,7 +14806,7 @@ example {pair usdc weth : Adr}
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -15278,7 +15278,7 @@ example {pair usdc weth : Adr}
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -15305,7 +15305,7 @@ example {pair usdc weth : Adr}
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -16238,7 +16238,7 @@ namespace Blanc.Composition.Curve3Pool3CrvInstance
 open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool
 open Blanc.Composition.Curve3PoolCalleeLive
 open Blanc.Composition.Curve3Pool3CrvHeadlines (C3At c3At_burn c3At_mint precomp_false)
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot balanceOfGas balanceOfPost boHolder balanceOf_runExact cert_check cert_jumpsOk)
+open Blanc.Lift.Token20 (balSlot allowSlot balanceOfGas balanceOfPost boHolder balanceOf_runExact cert_check cert_jumpsOk)
 
 example : ∀ {sevm : Sevm} {pre : Devm} {T : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcoins : T20Coins sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256
       (rlAmt sevm)) (hfits : ∀ k : Fin 3, T20MoveFits (pre.getStor (coinOf sevm pre k)) sevm.currentTarget
@@ -16268,12 +16268,12 @@ example : ∀ {sevm : Sevm} {pre : Devm} {T m : B256} (hfork : CoveredFork sevm.
         CoinBalOkAt sevm (alWorld sevm pre m 2) (alWorld sevm pre m 2)
           ((pre.getStor sevm.currentTarget).get (coinSlot 2))
           ((pre.getStor (coinOf sevm pre 2)).get
-            (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget)) 80000 0x53c 0x5a0 ∧
+            (Blanc.Lift.Token20.balSlot sevm.currentTarget)) 80000 0x53c 0x5a0 ∧
         CoinPullOkAt sevm (alWorld sevm pre m 2) (alWorld sevm pre m 3)
           ((pre.getStor sevm.currentTarget).get (coinSlot 2)) (alAmt sevm 2) 80000 0x760 0x820 ∧
         CoinBalOkAt sevm (alWorld sevm pre m 3) (alWorld sevm pre m 3)
           ((pre.getStor sevm.currentTarget).get (coinSlot 2))
-          ((alFeeStor sevm pre).get (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+          ((alFeeStor sevm pre).get (Blanc.Lift.Token20.balSlot sevm.currentTarget))
           80000 0x87c 0x8e0) ∧
       MintOkAt sevm (alWorld sevm pre m 3) (alWorld sevm pre m 4)
         ((pre.getStor sevm.currentTarget).get tokenSlot) m 80000 0xc7c 0xd00 :=
@@ -16294,7 +16294,7 @@ example : ∀ {sevm : Sevm} {pre : Devm} {T m : B256} (hfork : CoveredFork sevm.
         rliWorld sevm pre m (k + 2) b) :=
   @Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_premises_satisfiable
 
-example : ∀ {sevm : Sevm} {pre : Devm} {T v : B256} {i : Fin 3} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcode : pre.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code) (hprec : ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre i)) (hpool : coinOf sevm pre i ≠ sevm.currentTarget) (htok : coinOf sevm pre i ≠ tokOf sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256
+example : ∀ {sevm : Sevm} {pre : Devm} {T v : B256} {i : Fin 3} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hcode : pre.getCode (coinOf sevm pre i) = Blanc.Lift.Token20.code) (hprec : ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre i)) (hpool : coinOf sevm pre i ≠ sevm.currentTarget) (htok : coinOf sevm pre i ≠ tokOf sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256
       (ocAmt sevm)) (hfits : T20MoveFits (pre.getStor (coinOf sevm pre i)) sevm.currentTarget sevm.caller v),
     WClosed sevm (ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i) ∧
       WClosed sevm (ocWorld sevm pre (burnStor (Devm.getStor pre (tokOf sevm pre))
@@ -16425,10 +16425,10 @@ end Blanc.Composition.Curve3Pool3CrvInstance
 
 namespace Blanc.Composition.Curve3Pool3CrvInstance
 open Jaune Blanc Blanc.Lift Blanc.Composition.Curve3Pool3CrvJoint
-open Blanc.Composition.UniswapV2PairWeth9Joint (vcsm_benvStat vcsm_caller vcsm_currentTarget vcsm_value vcsm_isStatic vcsm_code vcsm_state vcsm_gasLeft vcsm_stack vcsm_memory vcsm_error mem_read_fst callSpawnParent_memory_data addAccessedAddress_setMach_memory)
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot)
+open Blanc.Lift (vcsm_benvStat vcsm_caller vcsm_currentTarget vcsm_value vcsm_isStatic vcsm_code vcsm_state vcsm_gasLeft vcsm_stack vcsm_memory vcsm_error mem_read_fst callSpawnParent_memory_data addAccessedAddress_setMach_memory)
+open Blanc.Lift.Token20 (balSlot allowSlot)
 
-example : ∀ {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {c : Adr} {U : Nat} {ii oi : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget) (hU : 80000 ≤ U) (hii : ii.toNat + 0x64 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104) (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+example : ∀ {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {c : Adr} {U : Nat} {ii oi : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget) (hU : 80000 ≤ U) (hii : ii.toNat + 0x64 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104) (hW : ∀ b, W b → b.getCode c = Blanc.Lift.Token20.code ∧
       T20PullFits (b.getStor c) sevm.caller sevm.currentTarget sevm.currentTarget amt) (hW' : ∀ b d, W b → CoinLeaves c (t20Move (t20Allow (b.getStor c) sevm.caller
         sevm.currentTarget amt) sevm.caller sevm.currentTarget amt)
       ((getOrigAcct sevm c).stor = b.getStor c ∧ c ∉ b.createdAccounts ∧
@@ -16438,7 +16438,7 @@ example : ∀ {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {c : Adr} {U :
     Curve3Pool.CoinPullOkAt sevm W W' t amt U ii oi :=
   @Blanc.Composition.Curve3Pool3CrvInstance.token20_coinPullOkAt
 
-example : ∀ {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {c : Adr} {U : Nat} {ii oi : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget) (hU : 80000 ≤ U) (hii : ii.toNat + 0x44 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104) (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+example : ∀ {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {c : Adr} {U : Nat} {ii oi : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget) (hU : 80000 ≤ U) (hii : ii.toNat + 0x44 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104) (hW : ∀ b, W b → b.getCode c = Blanc.Lift.Token20.code ∧
       T20MoveFits (b.getStor c) sevm.currentTarget sevm.caller amt) (hW' : ∀ b d, W b → CoinLeaves c (t20Move (b.getStor c) sevm.currentTarget sevm.caller amt)
       ((getOrigAcct sevm c).stor = b.getStor c ∧ c ∉ b.createdAccounts ∧
         balSlot sevm.currentTarget ≠ balSlot sevm.caller) b d → W' d),
@@ -17909,8 +17909,8 @@ example : ∀ {sevm : Sevm} {pre : Devm} {T m : B256} (hfork : CoveredFork sevm.
         alWorld sevm pre m (k + 1) b) ∧
       ∃ P : ALExactCalls, ALExactPremises sevm (pre.getStor sevm.currentTarget) T
         ((pre.getStor (coinOf sevm pre 2)).get
-          (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
-        ((alFeeStor sevm pre).get (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+          (Blanc.Lift.Token20.balSlot sevm.currentTarget))
+        ((alFeeStor sevm pre).get (Blanc.Lift.Token20.balSlot sevm.currentTarget))
         m (alWorld sevm pre m) 80000 P :=
   @Blanc.Composition.Curve3Pool3CrvInstance.addLiquidity_exactPremises_satisfiable
 
@@ -17922,7 +17922,7 @@ example : ∀ {sevm : Sevm} {pre : Devm} {T m : B256} (hfork : CoveredFork sevm.
         (rliWorld sevm pre m) 80000 P :=
   @Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_exactPremises_satisfiable
 
-example : ∀ {sevm : Sevm} {pre : Devm} {T v : B256} {i : Fin 3} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hi : i.val = (ocI sevm).toNat) (hcode : pre.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code) (hprec : ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre i)) (hpool : coinOf sevm pre i ≠ sevm.currentTarget) (htok : coinOf sevm pre i ≠ tokOf sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256 (ocAmt sevm)) (hfits : T20MoveFits (pre.getStor (coinOf sevm pre i)) sevm.currentTarget sevm.caller v),
+example : ∀ {sevm : Sevm} {pre : Devm} {T v : B256} {i : Fin 3} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hi : i.val = (ocI sevm).toNat) (hcode : pre.getCode (coinOf sevm pre i) = Blanc.Lift.Token20.code) (hprec : ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre i)) (hpool : coinOf sevm pre i ≠ sevm.currentTarget) (htok : coinOf sevm pre i ≠ tokOf sevm pre) (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256 (ocAmt sevm)) (hfits : T20MoveFits (pre.getStor (coinOf sevm pre i)) sevm.currentTarget sevm.caller v),
         WClosed sevm (ocWorld sevm pre (Devm.getStor pre (tokOf sevm pre)) i) ∧
       WClosed sevm (ocWorld sevm pre (burnStor (Devm.getStor pre (tokOf sevm pre))
         sevm.caller.toB256 (ocAmt sevm)) i) ∧
@@ -17941,12 +17941,12 @@ example : ∀ {sevm : Sevm} {pre : Devm} {i j : Fin 3} {v : B256} (hfork : Cover
           StaticWordCallProfile sevm (exWorld0 sevm pre i j) (exWorld0 sevm pre i j)
             ((pre.getStor sevm.currentTarget).get (coinSlot i)) (balanceOfData sevm.currentTarget)
             ((pre.getStor (coinOf sevm pre i)).get
-              (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+              (Blanc.Lift.Token20.balSlot sevm.currentTarget))
             80000 0x3dc 0x24 0x440 P.balD1 P.balN1 ∧
           StaticWordCallProfile sevm (exWorld1 sevm pre i j) (exWorld1 sevm pre i j)
             ((pre.getStor sevm.currentTarget).get (coinSlot i)) (balanceOfData sevm.currentTarget)
             ((exPulledStor sevm pre i).get
-              (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+              (Blanc.Lift.Token20.balSlot sevm.currentTarget))
             80000 0x71c 0x24 0x780 P.balD2 P.balN2) ∧
         MutableCallProfile sevm (exWorld0 sevm pre i j) (exWorld1 sevm pre i j)
           ((pre.getStor sevm.currentTarget).get (coinSlot i))
@@ -18218,7 +18218,7 @@ example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChai
     ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 (initDevm msg) ∧
       ∀ {o : Out} {i : Fin 3} (_hi : i.val = (ocI (initSevm msg)).toNat),
         (initDevm msg).getCode (coinOf (initSevm msg) (initDevm msg) i) =
-          VyperNonreentrantDeployed.Token20.code →
+          Blanc.Lift.Token20.code →
         coinOf (initSevm msg) (initDevm msg) i ≠ msg.currentTarget →
         coinOf (initSevm msg) (initDevm msg) i ≠ c3 →
         T20MoveFits ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) i))
@@ -18454,7 +18454,7 @@ example : ∀ {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChai
     (hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256 (ocAmt sevm)),
     ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
       ∀ {o : Out} {i : Fin 3} (_hi : i.val = (ocI sevm).toNat),
-        pre.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code →
+        pre.getCode (coinOf sevm pre i) = Blanc.Lift.Token20.code →
         coinOf sevm pre i ≠ sevm.currentTarget → coinOf sevm pre i ≠ c3 →
         T20MoveFits (pre.getStor (coinOf sevm pre i)) sevm.currentTarget sevm.caller
           (Nat.toB256 (ocPushAmt o)) →
