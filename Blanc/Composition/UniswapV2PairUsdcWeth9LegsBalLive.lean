@@ -10,6 +10,8 @@ at the gas-exact charge `proxyBalCost` and returns the queried account's balance
 
 namespace Blanc.Composition.UsdcLive
 
+open Blanc.Lift.AccumulatedWalk
+
 open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Blanc.Composition.UsdcToken
 
 local notation "m20" => Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]

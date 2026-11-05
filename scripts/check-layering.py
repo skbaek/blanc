@@ -200,7 +200,7 @@ SHARED += ["ExecutionTerminal", "MessageExecution", "MessageExecutionInversion",
            "ExecutionAccountingLadder", "CallSpawnExact", "StaticcallObservation", "StaticcallOperands", "StaticCallStorage",
            "ChargeGas", "CallOutOfGas", "SourceSiteCount", "CompiledShape",
            "SymbolicProgram",
-           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionStagedFrameEnv", "ExecutionStagedRootFacts", "ExecutionStagedSstoreAttribution", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionExistingAccount", "ExecutionDeletionSafety", "ExecutionRetainedDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelSafeHistory", "ExecutionRetainedNoDelTransaction", "ExecutionRetainedNoDelHistory", "ExecutionTraceDeterminism", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
+           "ExecutionTraceFrames", "ExecutionTraceAdmission", "ExecutionTraceSettledFrames", "ExecutionTraceSettledOrigin", "ExecutionTraceSettledFresh", "ExecutionStagedFrames", "ExecutionStagedAdmission", "ExecutionStagedFrameEnv", "ExecutionStagedRootFacts", "ExecutionStagedSstoreAttribution", "ExecutionTraceRootFrame", "ExecutionRequestSegments", "ExecutionTraceEntry", "ExecutionExistingAccount", "ExecutionDeletionSafety", "ExecutionRetainedDeletionSafety", "ExecutionNoDelProducer", "ExecutionNoDelSafeHistory", "ExecutionRetainedNoDelTransaction", "ExecutionRetainedNoDelHistory", "ExecutionTraceDeterminism", "ExecutionNoDelTransaction", "ExecutionNoDelHistory", "ExecutionHistoricalAdmission", "ExecutionHistoricalLadder",
            "ExecutionAccountingObserved", "ExecutionAccountingAdmission", "ExecutionAccountingCore", "ExecutionEntryAccounting", "ExecutionEntryAccountingMidHistory", "ExecutionModelAccounting", "ExecutionModelAccountingIn", "ExecutionWholeFrameAccounting", "ExecutionDirectCode", "FuncMainPrefix", "ExecutionAccountingStepsIn", "ExecutionAccountingCoreIn", "ExecutionAccountingAdmissionIn", "ExecutionAccountingHistoryIn", "ExecutionWholeFrameAccountingIn",
            "ChunkedDecide"]
 # The ladder over arbitrary code images and the generic bytecode lift
@@ -2003,6 +2003,9 @@ CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Token20.RunTransferFrom",
 ])
 
+CONTRACTS["usdc"].extend(['Lift.Usdc.TransferLiveImpl', 'Lift.Usdc.TransferLiveProxy', 'Lift.Usdc.TransferLiveFrame', 'Lift.Usdc.TransferLiveFacts'])
+SHARED += ["Lift.AccumulatedWalk", "Lift.GasField"]
+
 # Explicit semantic ownership, not the union of existing imports. Abstract token
 # interfaces do not add WETH9/USDC to PairToken/PairTwoToken; concrete instances
 # do. Single-family token adapters and Curve replay adapters stay narrow. The
@@ -2219,11 +2222,6 @@ COMPOSITION = {
     "Composition.UniswapV2PairUsdcWeth9LegsBalFrame": ('uniswap-v2-pair', 'usdc', 'weth9'),
     "Composition.UniswapV2PairUsdcWeth9LegsBalLive": ('uniswap-v2-pair', 'usdc', 'weth9'),
     "Composition.UniswapV2PairUsdcWeth9LegsCall": ('uniswap-v2-pair', 'usdc', 'weth9'),
-    "Composition.UniswapV2PairUsdcWeth9LegsFacts": ('uniswap-v2-pair', 'usdc', 'weth9'),
-    "Composition.UniswapV2PairUsdcWeth9LegsFrame": ('uniswap-v2-pair', 'usdc', 'weth9'),
-    "Composition.UniswapV2PairUsdcWeth9LegsImpl": ('uniswap-v2-pair', 'usdc', 'weth9'),
-    "Composition.UniswapV2PairUsdcWeth9LegsKit": ('uniswap-v2-pair', 'usdc', 'weth9'),
-    "Composition.UniswapV2PairUsdcWeth9LegsProxy": ('uniswap-v2-pair', 'usdc', 'weth9'),
     "Composition.UniswapV2PairUsdcWeth9LegsRead": ('uniswap-v2-pair', 'usdc', 'weth9'),
     "Composition.UniswapV2PairUsdcWeth9LegsSwap0": ('uniswap-v2-pair', 'usdc', 'weth9'),
     "Composition.UniswapV2PairUsdcWeth9LegsXfer": ('uniswap-v2-pair', 'usdc', 'weth9'),

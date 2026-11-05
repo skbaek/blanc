@@ -1,4 +1,5 @@
 import Blanc.Composition.UniswapV2PairWeth9SwapLegsRun
+import Blanc.Lift.GasField
 import Blanc.Lift.ExactWalkCallChild
 import Blanc.Lift.Weth9.LiveTx
 import Blanc.Lift.UniswapV2Pair.SwapForwardFront
@@ -16,7 +17,7 @@ gas).  `wethTransferCall … cg` is that result, built exactly as the zero-value
 
 namespace Blanc.Composition.UniswapV2PairWeth9Joint
 
-open Jaune Blanc Blanc.Lift Blanc.Lift.UniswapV2Pair
+open Jaune Blanc Blanc.Lift Blanc.Lift.UniswapV2Pair Blanc.Lift.GasField
 
 section Transfer
 
@@ -108,17 +109,13 @@ section GasField
 
 variable (s : Sevm) (f : Nat)
 
-theorem sloadCost_gasField (b : Devm) (k : B256) :
-    sloadCost { s with gas := f } b k = sloadCost s b k := rfl
 
-theorem sstoreCost_gasField (b : Devm) (k v : B256) :
-    sstoreCost { s with gas := f } b k v = sstoreCost s b k v := rfl
 
-theorem afterSload_gasField (b : Devm) (k : B256) :
-    afterSload { s with gas := f } b k = afterSload s b k := rfl
 
-theorem afterSstore_gasField (b : Devm) (k v : B256) :
-    afterSstore { s with gas := f } b k v = afterSstore s b k v := rfl
+
+
+
+
 
 theorem transferGas_gasField (pre : Devm) :
     Weth9.transferGas { s with gas := f } pre = Weth9.transferGas s pre := by
@@ -127,8 +124,7 @@ theorem transferGas_gasField (pre : Devm) :
     afterSload_gasField, afterSstore_gasField]
   rfl
 
-theorem dataWord_gasField (i : B256) : Sevm.dataWord { s with gas := f } i = Sevm.dataWord s i :=
-  rfl
+
 
 theorem selector_gasField : Sevm.selector { s with gas := f } = Sevm.selector s := rfl
 
@@ -157,9 +153,7 @@ theorem weth9TransferPost_gasLeft' (s : Sevm) (d : Devm) (r r' : Nat) :
     weth9TransferPost s d r = (weth9TransferPost s d r').withGasLeft r :=
   transferWrapperPost_gasLeft _ _ _ r r'
 
-theorem callChildPost_withGasLeft (P c : Devm) (a b oi os : Nat) :
-    callChildPost (P.withGasLeft a) (c.withGasLeft b) oi os =
-      (callChildPost P c oi os).withGasLeft (a + b) := rfl
+
 
 theorem addAccessedAddress_setMach_gas (W : Devm) (S : List B256) (M : Mem) (g g' : Nat)
     (sg : StateGasMeter) (a : Adr) :
@@ -276,14 +270,11 @@ end Msg
 theorem callSpawnParent_state (d : Devm) (c ii is oi os : Nat) :
     (callSpawnParent d c ii is oi os).state = d.state := rfl
 
-theorem callSpawnParent_gasLeft (d : Devm) (c ii is oi os : Nat) :
-    (callSpawnParent d c ii is oi os).gasLeft = d.gasLeft - c := rfl
 
-theorem callSpawnParent_stack (d : Devm) (c ii is oi os : Nat) :
-    (callSpawnParent d c ii is oi os).stack = d.stack := rfl
 
-theorem callChildPost_returnData (P c : Devm) (oi os : Nat) :
-    (callChildPost P c oi os).returnData = c.output := rfl
+
+
+
 
 end CallHelpers
 

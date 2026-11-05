@@ -5142,7 +5142,10 @@ segment `Core.segment`; [`Blanc/Lift/Token/Along.lean`](../Blanc/Lift/Token/Alon
 `Core.good_along` (every ledger met along a settled prefix is good) and
 `Core.run_holder_segment`. Further facets are separate structures in their own files:
 `Erc20Abi` ([`Blanc/Lift/Token/Abi.lean`](../Blanc/Lift/Token/Abi.lean)) and `SelfCaller`
-([`Blanc/Lift/Token/SelfCaller.lean`](../Blanc/Lift/Token/SelfCaller.lean)). Worked instance:
+([`Blanc/Lift/Token/SelfCaller.lean`](../Blanc/Lift/Token/SelfCaller.lean)).
+The ABI owner also provides `Blanc.Lift.Token.true_word_accepted`: the canonical
+word `1` is an accepted nonzero ERC-20 reply, independently of any token instance.
+Worked instance:
 WETH9 (`Blanc/Composition/Weth9TokenCore.lean`, `weth9Core`).
 For a token with a privileged minter, the minter/supply facet `SupplyFacet B`
 ([`Blanc/Lift/Token/Supply.lean`](../Blanc/Lift/Token/Supply.lean)) reads a book's supply and minter
@@ -6330,6 +6333,11 @@ consumer needs canonical interpreter ingress as one conjunct:
   trace-level caller-exclusion theorem.
   `SystemMessageTrace.mem_rawFrames_of_mem_settledFrames` supplies the same
   membership transport for a protocol system invocation.
+  For configured histories, [`Blanc/ExecutionTraceSettledFresh.lean`](../Blanc/ExecutionTraceSettledFresh.lean)
+  supplies `ConfiguredHistoryTrace.mem_rawFrames_of_mem_settledFrames` and
+  `ConfiguredHistoryTrace.settledFrames_fresh`. The latter gives empty entry
+  stack and memory for every settlement-retained frame; its block step reuses
+  `ConfiguredBlockTrace.mem_rawFrames_of_settled` in the existing shared timing owner.
 - To place the entered top-level root frame of a committed message or call transaction among settled frames, import [`Blanc/ExecutionTraceRootFrame.lean`](../Blanc/ExecutionTraceRootFrame.lean).
   `Exec.Frame.exists_ok` extracts the successful raw outcome already guaranteed
   by a retained frame's commitment; its qualified name is preserved after
@@ -10101,7 +10109,7 @@ every shared module with its own summary and the branches that cite it.
   `ric_eq_miss`/`ric_eq_hit` and the `rr_*` reach forms), the storage projections of the walk
   bases, and solc's reuse of the previous hash's key word (`keccak_scratch2`, from
   `Mem.read_after_right_write`). Worked uses: USDC (`Blanc/Lift/Usdc/RefineTransferCallees.lean`,
-  `RefineAdminBits.lean`), the USDC leg of the Pair (`Blanc/Composition/UniswapV2PairUsdcWeth9LegsKit.lean`).
+  `RefineAdminBits.lean`), the USDC leg of the Pair (`Blanc/Lift/AccumulatedWalk.lean`).
 - Straight-line inversion steps of a cut run without writing them out: `winv n` / `winv` read
   the node off the tree of `h : SFunc.RunCut …` (or `SFunc.RunCutP P …` with `using project`) and
   run the hand-written step `replace h := ric_next h; obtain ⟨_, hd, h⟩ := h;
@@ -10676,6 +10684,25 @@ every shared module with its own summary and the branches that cite it.
   hash freshness remain separate requirements.
 
 #### C9.12. I need free-pointer memory images or solc-0.4 writer walks
+
+- Accumulated-cost exact walks and a Reads-based fixed-size free-pointer image:
+  [`Blanc/Lift/AccumulatedWalk.lean`](../Blanc/Lift/AccumulatedWalk.lean)
+  owns `Blanc.Lift.AccumulatedWalk.FpM`, its image operations, `rk`/`rk0`,
+  internal-call adapters and the `xrun`/`xcallM` step tactics. The pointer is
+  arbitrary; the carrier retains its existing Reads witness and fixed-size
+  write interface, rather than changing to the separate extending `PtrMem` shape.
+  Its word/length guards include `short_of_len`, `args_of_len`, `eqCheck_ne`
+  and `adr_toB256_ne_zero`. Actual implementation/proxy walks remain USDC instances.
+- Initial frame-gas field independence:
+  [`Blanc/Lift/GasField.lean`](../Blanc/Lift/GasField.lean) gives
+  `sloadCost_gasField`, `sstoreCost_gasField`, `afterSload_gasField`,
+  `afterSstore_gasField` and `dataWord_gasField` in `Blanc.Lift.GasField`.
+  `Blanc.Lift.callChildPost_returnData` and `Blanc.Lift.callChildPost_withGasLeft` are owned beside the generic child-post
+  definition in [`Blanc/Lift/ExactWalkCallChild.lean`](../Blanc/Lift/ExactWalkCallChild.lean);
+  parent gas and stack projections reuse the existing `Blanc.callSpawnParent_gasLeft`
+  and `Blanc.callSpawnParent_stack` in the shared forward-call owner.
+  These are identities of generic frame operations, not cost or behavior
+  assumptions about a token.
 
 - Free-pointer memory with a pointer independent of allocation: `PtrMem p n M`
   in [`Blanc/Lift/ExactWalkMemory.lean`](../Blanc/Lift/ExactWalkMemory.lean)

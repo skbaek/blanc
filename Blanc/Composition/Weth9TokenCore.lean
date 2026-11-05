@@ -1,10 +1,10 @@
 import Blanc.Composition.Weth9TokenFrames
 import Blanc.Composition.Weth9TokenOutputsTransfer
 import Blanc.ExecutionAccountingPositionalHistory
-import Blanc.ExecutionTraceEntered
-import Blanc.ExecutionTraceSettledOrigin
+import Blanc.ExecutionTraceSettledFresh
 import Blanc.Lift.CallChildren
 import Blanc.Lift.Token.SelfCaller
+import Blanc.Lift.Token.Abi
 
 /-!
 # WETH9 is an instance of the token core
@@ -26,54 +26,7 @@ its tracked balance rows.
 `CALL`/`STATICCALL`, both of which hand the current target to the child as caller.
 -/
 
-namespace Blanc.ExecutionTrace
 
-open Jaune Blanc
-
-variable {cfg : ChainConfig}
-
-/-- A settled block frame's root derivation is a raw frame of the block. -/
-theorem ConfiguredBlockTrace.mem_rawFrames_of_mem_settledFrames {pre post : BlockChain}
-    (trace : ConfiguredBlockTrace cfg pre post) (frame : Exec.Frame)
-    (member : frame ∈ trace.settledFrames) :
-    (Blanc.Exec.Frame.rootDeriv (frame := frame)) ∈ trace.rawFrames := by
-  simp only [ConfiguredBlockTrace.settledFrames, AppliedBodyTrace.settledFrames,
-    RequestsTrace.settledFrames, List.mem_append] at member
-  simp only [ConfiguredBlockTrace.rawFrames, AppliedBodyTrace.rawFrames, RequestsTrace.rawFrames,
-    List.mem_append]
-  rcases member with ((beacon | history) | transactions) | (withdrawal | consolidation)
-  · exact Or.inl (Or.inl (Or.inl (trace.bodyTrace.beacon.mem_rawFrames_of_mem_settledFrames _ beacon)))
-  · exact Or.inl (Or.inl (Or.inr
-      (trace.bodyTrace.history.mem_rawFrames_of_mem_settledFrames _ history)))
-  · exact Or.inl (Or.inr
-      (trace.bodyTrace.transactions.mem_rawFrames_of_mem_settledFrames _ transactions))
-  · exact Or.inr (Or.inl
-      (trace.bodyTrace.requests.withdrawal.mem_rawFrames_of_mem_settledFrames _ withdrawal))
-  · exact Or.inr (Or.inr
-      (trace.bodyTrace.requests.consolidation.mem_rawFrames_of_mem_settledFrames _ consolidation))
-
-/-- A settled history frame's root derivation is a raw frame of the history. -/
-theorem ConfiguredHistoryTrace.mem_rawFrames_of_mem_settledFrames {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) (frame : Exec.Frame)
-    (member : frame ∈ trace.settledFrames) :
-    (Blanc.Exec.Frame.rootDeriv (frame := frame)) ∈ trace.rawFrames := by
-  induction trace with
-  | refl => simp only [ConfiguredHistoryTrace.settledFrames, List.not_mem_nil] at member
-  | step prior block ih =>
-      simp only [ConfiguredHistoryTrace.settledFrames, List.mem_append] at member
-      simp only [ConfiguredHistoryTrace.rawFrames, List.mem_append]
-      rcases member with member | member
-      · exact Or.inl (ih member)
-      · exact Or.inr (block.mem_rawFrames_of_mem_settledFrames frame member)
-
-/-- **Every settled frame of a configured history is entered fresh** (empty stack and memory). -/
-theorem ConfiguredHistoryTrace.settledFrames_fresh {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) :
-    ∀ f ∈ trace.settledFrames, Exec.FreshEntry f.sevm f.pre :=
-  fun f member => trace.rawFrames_entered enteredCondition_fresh _
-    (trace.mem_rawFrames_of_mem_settledFrames f member)
-
-end Blanc.ExecutionTrace
 
 namespace Blanc.Composition.Weth9Token
 
@@ -212,14 +165,6 @@ theorem weth9_history_balanceAnswer {ca : Adr} {K₀ : Key → Prop} {cfg : Chai
       rw [toB256_toNat, tracked_self row]
       rfl
 
-/-- WETH9's `true` answer is an accepted ERC-20 boolean. -/
-theorem true_word_accepted :
-    (Nat.toB256 1).toBytes = [] ∨ (32 ≤ (Nat.toB256 1).toBytes.length ∧
-      Bytes.toB256 ((Nat.toB256 1).toBytes.sliceD 0 32 0) ≠ 0) := by
-  refine Or.inr ⟨by rw [B256.length_toBytes], ?_⟩
-  rw [Bytes.sliceD_zero_length (B256.length_toBytes _), B256.toB256_toBytes]
-  decide
-
 /-- **`transferAnswer`**: a settled `transfer` entry frame answers `true`. -/
 theorem weth9_history_transferAnswer {ca : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
     {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
@@ -241,7 +186,7 @@ theorem weth9_history_transferAnswer {ca : Adr} {K₀ : Key → Prop} {cfg : Cha
       change post.output = [] ∨ (32 ≤ post.output.length ∧
         Bytes.toB256 (post.output.sliceD 0 32 0) ≠ 0)
       rw [weth9Op_transfer_output hcode fork hop run]
-      exact true_word_accepted
+      exact Blanc.Lift.Token.true_word_accepted
 
 /-! ## The instance -/
 

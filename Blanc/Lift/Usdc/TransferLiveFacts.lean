@@ -1,4 +1,4 @@
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsFrame
+import Blanc.Lift.Usdc.TransferLiveFrame
 import Blanc.Lift.Usdc.HistorySlotsCore
 import Jaune.WordFacts
 
@@ -12,6 +12,8 @@ the destination's balance stays below `2 ^ 255`.
 -/
 
 namespace Blanc.Composition.UsdcLive
+
+open Blanc.Lift.AccumulatedWalk
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Blanc.Lift.Token Blanc.SlotFootprint
 
@@ -35,22 +37,9 @@ theorem usdcOp_transfer_words {e : Sevm} {dst : Adr} {v : Nat} (op : usdcOp e = 
       rw [ite_eq_right bal, ite_eq_right xfer] at op
       split at op <;> cases op
 
-theorem short_of_len {n : Nat} (h4 : 4 ≤ n) (hn : n < 2 ^ 256) :
-    B256.ltCheck (Nat.toB256 n) (Bytes.toB256 [4]) = 0 :=
-  B256.ltCheck_eq_zero_of_toNat_le (by rw [B256.toNat_toB256_of_lt hn]; exact h4)
 
-theorem args_of_len {n : Nat} (h : 68 ≤ n) (hn : n < 2 ^ 256) :
-    B256.ltCheck (Nat.toB256 n - Bytes.toB256 [4]) (Bytes.toB256 [64]) = 0 := by
-  have h4 : (Bytes.toB256 [4]).toNat = 4 := by decide
-  have le : Bytes.toB256 [4] ≤ Nat.toB256 n := by
-    apply B256.not_lt.mp
-    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hn, h4]
-    omega
-  apply B256.ltCheck_eq_zero_of_toNat_le
-  rw [B256.toNat_sub_eq_of_le _ _ le, B256.toNat_toB256_of_lt hn, h4]
-  have h64 : (Bytes.toB256 [64]).toNat = 64 := by decide
-  rw [h64]
-  omega
+
+
 
 /-- `whenNotPaused`'s word from an unpaused flag. -/
 theorem paused_word {w : B256} (h : flag20 w = false) :
@@ -109,11 +98,9 @@ theorem xVal_eq (sevm : Sevm) : xVal sevm = Sevm.dataWord sevm 36 := by
 local notation "m20" => Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
 local notation "l255" => Bytes.toB256 [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
 
-theorem eqCheck_ne {x y : B256} (h : x ≠ y) : B256.eqCheck x y = 0 := by
-  simp only [B256.eqCheck, h, ↓reduceIte]
 
-theorem adr_toB256_ne_zero {a : Adr} (h : a ≠ 0) : a.toB256 ≠ 0 := fun e =>
-  h (Adr.toB256_inj (e.trans (by decide)))
+
+
 
 /-- **The proxy's branch facts** for a `transfer` call by a caller other than the admin word. -/
 theorem proxyFacts_of {sevm : Sevm} {pre : Devm} (len : 4 ≤ sevm.data.length)

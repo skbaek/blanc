@@ -1,7 +1,7 @@
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsKit
+import Blanc.Lift.AccumulatedWalk
 import Blanc.Lift.Usdc.ProxyOk
 import Blanc.Lift.Usdc.Impl.Contract
-import Blanc.Composition.UniswapV2PairWeth9SwapLegsCall
+import Blanc.Lift.GasField
 
 /-!
 # The USDC proxy frame, forward (U9a)
@@ -13,6 +13,8 @@ frame up to `_delegate`'s `DELEGATECALL`.
 -/
 
 namespace Blanc.Composition.UsdcLive
+
+open Blanc.Lift.AccumulatedWalk
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Proxy
 
@@ -175,7 +177,7 @@ theorem dlg_step {sevm : Sevm} {b cpost : Devm} {Y : Nat} (hfork : CoveredFork s
     rw [if_neg (by omega)]
     simp only [Nat.min_eq_right hle, ↓reduceIte, Nat.add_zero]
     rfl
-  refine Ninst.runCompiled_delegatecall_child (d1 := dWarm sevm b Y) hfork rfl ?_ ?_ rfl hsplit
+  refine Blanc.Lift.AccumulatedWalk.Ninst.runCompiled_delegatecall_child (d1 := dWarm sevm b Y) hfork rfl ?_ ?_ rfl hsplit
     ?_ hdepth hprec (by simp only [List.length_cons, List.length_nil]; omega) hexec herr
   · rfl
   · have hu : getDelegatedCodeAddress ((addAccessedAddress ((dSt sevm b Y).setMach

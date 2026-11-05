@@ -1,10 +1,12 @@
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsImpl
+import Blanc.Lift.Usdc.TransferLiveImpl
 
 /-!
 # The USDC implementation's `balanceOf` frame, forward (U9a)
 -/
 
 namespace Blanc.Composition.UsdcLive
+
+open Blanc.Lift.AccumulatedWalk
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Impl
 
@@ -77,6 +79,6 @@ theorem e46W_gas (s : Sevm) (b : Devm) (a ret : B256) (S : List B256) (M : Mem) 
 theorem implBalW_gas (s : Sevm) (b : Devm) (f : Nat) :
     (implBalW { s with gas := f } b).1 = (implBalW s b).1 := by
   unfold implBalW
-  simp only [e46W_gas, UniswapV2PairWeth9Joint.dataWord_gasField]
+  simp only [e46W_gas, Blanc.Lift.GasField.dataWord_gasField]
 
 end Blanc.Composition.UsdcLive

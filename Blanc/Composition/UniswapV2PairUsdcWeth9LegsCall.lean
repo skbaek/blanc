@@ -55,8 +55,8 @@ theorem withOutput_withGasLeft (d : Devm) (o : Bytes) (g : Nat) :
 theorem implXferPost_gasField (s : Sevm) (b : Devm) (f G : Nat) :
     implXferPost { s with gas := f } b G = implXferPost s b G := by
   simp only [implXferPost, e93Post, e93Debited, e37Pre, implXferMem, e93Mem, xTo, xVal,
-    UniswapV2PairWeth9Joint.afterSload_gasField, UniswapV2PairWeth9Joint.afterSstore_gasField,
-    UniswapV2PairWeth9Joint.dataWord_gasField]
+    Blanc.Lift.GasField.afterSload_gasField, Blanc.Lift.GasField.afterSstore_gasField,
+    Blanc.Lift.GasField.dataWord_gasField]
 
 theorem implXferPost_reframe (s : Sevm) (b : Devm) (G : Nat) :
     implXferPost s b G = (implXferPost s b 0).withGasLeft G := by
@@ -86,8 +86,8 @@ theorem proxyXferPost_reframe (s : Sevm) (pre : Devm) (X : Nat) :
   rw [dMsg_sevm s pre (frameY s pre X), dMsg_sevm s pre (frameY s pre 0), implXferPost_gasField,
     implXferPost_gasField, implXferPost_reframe _ _ (dFwd s pre (frameY s pre X) - _),
     implXferPost_reframe _ _ (dFwd s pre (frameY s pre 0) - _), dParent_reframe s pre (frameY s pre X),
-    dParent_reframe s pre (frameY s pre 0), UniswapV2PairWeth9Joint.callChildPost_withGasLeft,
-    UniswapV2PairWeth9Joint.callChildPost_withGasLeft, St_withGasLeft, St_withGasLeft,
+    dParent_reframe s pre (frameY s pre 0), Blanc.Lift.callChildPost_withGasLeft,
+    Blanc.Lift.callChildPost_withGasLeft, St_withGasLeft, St_withGasLeft,
     St.memRead_snd, St.memRead_snd, St_reframe _ _ _ X, withOutput_withGasLeft]
   simp only [implXferPost_gasField]
   rfl

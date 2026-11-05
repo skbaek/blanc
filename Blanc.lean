@@ -1661,11 +1661,11 @@ import Blanc.Composition.UniswapV2PairUsdcWeth9LegsBal
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsBalFrame
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsBalLive
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsCall
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsFacts
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsFrame
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsImpl
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsKit
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsProxy
+import Blanc.Lift.Usdc.TransferLiveFacts
+import Blanc.Lift.Usdc.TransferLiveFrame
+import Blanc.Lift.Usdc.TransferLiveImpl
+import Blanc.Lift.AccumulatedWalk
+import Blanc.Lift.Usdc.TransferLiveProxy
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsRead
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsSwap0
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsXfer

@@ -98,8 +98,8 @@ theorem proxy_bal_run {sevm : Sevm} {pre : Devm} {X : Nat} (fork : CoveredFork s
 
 theorem implBalPost_gasField (s : Sevm) (b : Devm) (f G : Nat) :
     implBalPost { s with gas := f } b G = implBalPost s b G := by
-  simp only [implBalPost, implBalMem, bWord, bKey, bTo, UniswapV2PairWeth9Joint.afterSload_gasField,
-    UniswapV2PairWeth9Joint.dataWord_gasField]
+  simp only [implBalPost, implBalMem, bWord, bKey, bTo, Blanc.Lift.GasField.afterSload_gasField,
+    Blanc.Lift.GasField.dataWord_gasField]
 
 theorem implBalPost_reframe (s : Sevm) (b : Devm) (G : Nat) :
     implBalPost s b G = (implBalPost s b 0).withGasLeft G := by
@@ -133,8 +133,8 @@ theorem proxyBalPost_reframe (s : Sevm) (pre : Devm) (X : Nat) :
   rw [dMsg_sevm s pre (balY s pre X), dMsg_sevm s pre (balY s pre 0), implBalPost_gasField,
     implBalPost_gasField, implBalPost_reframe _ _ (dFwd s pre (balY s pre X) - _),
     implBalPost_reframe _ _ (dFwd s pre (balY s pre 0) - _), dParent_reframe s pre (balY s pre X),
-    dParent_reframe s pre (balY s pre 0), UniswapV2PairWeth9Joint.callChildPost_withGasLeft,
-    UniswapV2PairWeth9Joint.callChildPost_withGasLeft, St_withGasLeft, St_withGasLeft,
+    dParent_reframe s pre (balY s pre 0), Blanc.Lift.callChildPost_withGasLeft,
+    Blanc.Lift.callChildPost_withGasLeft, St_withGasLeft, St_withGasLeft,
     St.memRead_snd, St.memRead_snd, St_reframe _ _ _ X, withOutput_withGasLeft]
   simp only [implBalPost_gasField]
   rfl

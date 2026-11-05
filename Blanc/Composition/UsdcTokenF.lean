@@ -1,3 +1,5 @@
+import Blanc.ExecutionTraceSettledFresh
+import Blanc.Lift.Token.Abi
 import Blanc.Composition.UsdcToken
 import Blanc.Lift.Usdc.HistFCore
 import Blanc.Lift.Usdc.HistFSlots
@@ -219,7 +221,7 @@ theorem usdc_transferAnswerF {P : Adr} {K₀ : Key → Prop} {cfg : ChainConfig}
   intro sevm pre post run _ fork ccode stackNil memEmpty sel'
   change post.output = [] ∨ (32 ≤ post.output.length ∧ Bytes.toB256 (post.output.sliceD 0 32 0) ≠ 0)
   rw [impl_transfer_output run ccode fork stackNil memEmpty sel']
-  exact Weth9Token.true_word_accepted
+  exact Blanc.Lift.Token.true_word_accepted
 
 /-! ## The instance -/
 

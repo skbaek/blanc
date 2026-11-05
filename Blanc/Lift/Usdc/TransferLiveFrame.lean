@@ -1,5 +1,5 @@
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsImpl
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsProxy
+import Blanc.Lift.Usdc.TransferLiveImpl
+import Blanc.Lift.Usdc.TransferLiveProxy
 import Blanc.Lift.Usdc.Impl.Jumps
 import Blanc.Lift.Usdc.Proxy.Jumps
 import Blanc.Lift.Usdc.Proxy.Check
@@ -227,15 +227,15 @@ theorem proxy_frame_run {sevm : Sevm} {pre C : Devm} {X cc : Nat} {s w : B256}
     simp only [dFwd, except64th]; omega
   have hgas' : (callChildPost (dParent sevm pre Y) C
       (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat).gasLeft = X + tailW sevm pre w := by
-    rw [hgas, UniswapV2PairWeth9Joint.callSpawnParent_gasLeft, hgasC]
+    rw [hgas, Blanc.callSpawnParent_gasLeft, hgasC]
     show Y - _ + _ = _
     omega
   have hD := St.self hstk hmem
-  rw [hgas', UniswapV2PairWeth9Joint.callSpawnParent_stack] at hD
+  rw [hgas', Blanc.callSpawnParent_stack] at hD
   have tail := (dTailW sevm (callChildPost (dParent sevm pre Y) C
       (Bytes.toB256 [0]).toNat (Bytes.toB256 [0]).toNat) (pRest sevm pre)
       (dParent sevm pre Y).memory w).2
-    (by rw [UniswapV2PairWeth9Joint.callChildPost_returnData, hout])
+    (by rw [Blanc.Lift.callChildPost_returnData, hout])
     (dParent_size sevm pre _).1 (dParent_size sevm pre _).2
     (by simp only [pRest, List.length_cons, List.length_nil]; omega) X
   rw [dTailW_base sevm _ (dParent sevm pre 0)] at tail

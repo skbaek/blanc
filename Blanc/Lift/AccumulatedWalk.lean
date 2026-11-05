@@ -8,24 +8,14 @@ import Jaune.WordFacts
 import Jaune.DevmProjections
 
 /-!
-# A cost-accumulating forward walk kit (U9a)
+# Accumulated-cost lifted walks
 
-The gas-exact walk kit of `Blanc/Lift/ExactWalk.lean` states each step backwards with a numeral
-charge, so a walk's total charge must be written out beforehand.  The USDC runs (a proxy frame
-forwarding to a 23 KB implementation) are too long for that.  Here the charge is left to
-unification: a walk proves `SFunc.RunExact … (St b S M (G + c)) …` with `c` a metavariable, and
-every step (`rk`) splits it as `k + c'`, the step's own charge `k` first.  The finished walk has
-assigned `c`; stating the walk as a subtype `{c // …}` makes that charge a definition (its value is
-the walk's assignment, so it reduces by `rfl`).
-
-Also here: `FpM`, the solc free-pointer memory invariant with any pointer value (`FpMem` is its
-`0x60` instance), and its forward steps for the solc 0.6 layout (pointer `0x80`, result word at
-`0x80`).
-
-Nothing here mentions a contract (hoist candidates for `Blanc/Lift/`).
+Forward exact walks infer each step's cost while carrying a Reads-based
+free-pointer image with an arbitrary pointer value. Internal-call adapters,
+word guards and step tactics remain independent of any deployed contract.
 -/
 
-namespace Blanc.Composition.UsdcLive
+namespace Blanc.Lift.AccumulatedWalk
 
 open Jaune Blanc Blanc.Lift
 
@@ -419,18 +409,18 @@ elab "xrun" : tactic => do
     if !ok then break
     i := i + 1
 
-end Blanc.Composition.UsdcLive
+end Blanc.Lift.AccumulatedWalk
 
-namespace Blanc.Composition.UsdcLive
+namespace Blanc.Lift.AccumulatedWalk
 
 /-- `x.toNat ≤ y.toNat` from a hypothesis `gtCheck x y = 0` (after normalizing reads). -/
 macro "xle" : tactic => `(tactic| (try xnorm) <;> first
   | with_reducible assumption
   | exact Blanc.Lift.toNat_le_of_gtCheck_eq_zero (by with_reducible assumption))
 
-end Blanc.Composition.UsdcLive
+end Blanc.Lift.AccumulatedWalk
 
-namespace Blanc.Composition.UsdcLive
+namespace Blanc.Lift.AccumulatedWalk
 
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- The callee walk `w sevm b e₁ … e_k S M` instantiated at the goal's state (base `b`, the `k`
@@ -474,9 +464,9 @@ elab "xcallMT " w:ident k:num " [" as:term:max* "] " hs:(ppSpace colGt term:max)
   t ← `(($t).2 $hs*)
   evalTactic (← `(tactic| (refine' rx_callKT (hj := by rfl) (hc := $t) ?_ ?_; rotate_left)))
 
-end Blanc.Composition.UsdcLive
+end Blanc.Lift.AccumulatedWalk
 
-namespace Blanc.Composition.UsdcLive
+namespace Blanc.Lift.AccumulatedWalk
 
 open Jaune Blanc Blanc.Lift
 
@@ -539,4 +529,33 @@ lemma Ninst.runCompiled_delegatecall_child {sevm : Sevm} {devm : Devm}
   exact Ninst.runCompiled_delegatecall hfork h_stk h_ext h_del h_acc h_split h_gas h_depth
     henter hres
 
-end Blanc.Composition.UsdcLive
+end Blanc.Lift.AccumulatedWalk
+
+namespace Blanc.Lift.AccumulatedWalk
+
+open Jaune Blanc Blanc.Lift
+
+theorem short_of_len {n : Nat} (h4 : 4 ≤ n) (hn : n < 2 ^ 256) :
+    B256.ltCheck (Nat.toB256 n) (Bytes.toB256 [4]) = 0 :=
+  B256.ltCheck_eq_zero_of_toNat_le (by rw [B256.toNat_toB256_of_lt hn]; exact h4)
+
+theorem args_of_len {n : Nat} (h : 68 ≤ n) (hn : n < 2 ^ 256) :
+    B256.ltCheck (Nat.toB256 n - Bytes.toB256 [4]) (Bytes.toB256 [64]) = 0 := by
+  have h4 : (Bytes.toB256 [4]).toNat = 4 := by decide
+  have le : Bytes.toB256 [4] ≤ Nat.toB256 n := by
+    apply B256.not_lt.mp
+    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hn, h4]
+    omega
+  apply B256.ltCheck_eq_zero_of_toNat_le
+  rw [B256.toNat_sub_eq_of_le _ _ le, B256.toNat_toB256_of_lt hn, h4]
+  have h64 : (Bytes.toB256 [64]).toNat = 64 := by decide
+  rw [h64]
+  omega
+
+theorem eqCheck_ne {x y : B256} (h : x ≠ y) : B256.eqCheck x y = 0 := by
+  simp only [B256.eqCheck, h, ↓reduceIte]
+
+theorem adr_toB256_ne_zero {a : Adr} (h : a ≠ 0) : a.toB256 ≠ 0 := fun e =>
+  h (Adr.toB256_inj (e.trans (by decide)))
+
+end Blanc.Lift.AccumulatedWalk

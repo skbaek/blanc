@@ -1,4 +1,4 @@
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsFacts
+import Blanc.Lift.Usdc.TransferLiveFacts
 import Blanc.Lift.Token.TransferLiveBudget
 
 /-!

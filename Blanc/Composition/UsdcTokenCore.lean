@@ -1,5 +1,5 @@
 import Blanc.Lift.Usdc.RefineTransferDispatch
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsKit
+import Blanc.Lift.AccumulatedWalk
 
 /-!
 # The USDC implementation's `balanceOf` and `transfer` answers (U7b)
@@ -19,7 +19,9 @@ frames' return tail answers the word it stores (`tail_output`):
 
 namespace Blanc.Composition.UsdcToken
 
-open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Blanc.Composition.UsdcLive Impl
+open Blanc.Lift.AccumulatedWalk
+
+open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Impl
 
 local notation "fp80" => Bytes.toB256 [0x80]
 

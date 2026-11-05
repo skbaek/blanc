@@ -1,8 +1,10 @@
-import Blanc.Composition.UniswapV2PairUsdcWeth9LegsKit
+import Blanc.Lift.AccumulatedWalk
 import Blanc.Lift.Usdc.RefineTransfer
-import Blanc.Composition.UniswapV2PairWeth9SwapLegsCall
+import Blanc.Lift.GasField
 
 namespace Blanc.Composition.UsdcLive
+
+open Blanc.Lift.AccumulatedWalk
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Impl
 
@@ -301,17 +303,17 @@ theorem e99W_gas (s : Sevm) (b : Devm) (x y ret : B256) (S : List B256) (M : Mem
 theorem e93W_gas (s : Sevm) (b : Devm) (x y z ret : B256) (S : List B256) (M : Mem) (f : Nat) :
     (e93W { s with gas := f } b x y z ret S M).1 = (e93W s b x y z ret S M).1 := by
   unfold e93W
-  simp only [e96W_gas, e100W_gas, e99W_gas, e98W_gas, UniswapV2PairWeth9Joint.sloadCost_gasField, UniswapV2PairWeth9Joint.sstoreCost_gasField, UniswapV2PairWeth9Joint.afterSload_gasField, UniswapV2PairWeth9Joint.afterSstore_gasField, UniswapV2PairWeth9Joint.dataWord_gasField]
+  simp only [e96W_gas, e100W_gas, e99W_gas, e98W_gas, Blanc.Lift.GasField.sloadCost_gasField, Blanc.Lift.GasField.sstoreCost_gasField, Blanc.Lift.GasField.afterSload_gasField, Blanc.Lift.GasField.afterSstore_gasField, Blanc.Lift.GasField.dataWord_gasField]
 
 theorem e37W_gas (s : Sevm) (b : Devm) (x y ret : B256) (S : List B256) (M : Mem) (f : Nat) :
     (e37W { s with gas := f } b x y ret S M).1 = (e37W s b x y ret S M).1 := by
   unfold e37W
-  simp only [e83W_gas, e93W_gas, UniswapV2PairWeth9Joint.sloadCost_gasField, UniswapV2PairWeth9Joint.sstoreCost_gasField, UniswapV2PairWeth9Joint.afterSload_gasField, UniswapV2PairWeth9Joint.afterSstore_gasField, UniswapV2PairWeth9Joint.dataWord_gasField]
+  simp only [e83W_gas, e93W_gas, Blanc.Lift.GasField.sloadCost_gasField, Blanc.Lift.GasField.sstoreCost_gasField, Blanc.Lift.GasField.afterSload_gasField, Blanc.Lift.GasField.afterSstore_gasField, Blanc.Lift.GasField.dataWord_gasField]
 
 /-- The implementation `transfer` charge does not read the message's gas field. -/
 theorem implXferW_gas (s : Sevm) (b : Devm) (f : Nat) :
     (implXferW { s with gas := f } b).1 = (implXferW s b).1 := by
   unfold implXferW
-  simp only [e37W_gas, UniswapV2PairWeth9Joint.sloadCost_gasField, UniswapV2PairWeth9Joint.sstoreCost_gasField, UniswapV2PairWeth9Joint.afterSload_gasField, UniswapV2PairWeth9Joint.afterSstore_gasField, UniswapV2PairWeth9Joint.dataWord_gasField]
+  simp only [e37W_gas, Blanc.Lift.GasField.sloadCost_gasField, Blanc.Lift.GasField.sstoreCost_gasField, Blanc.Lift.GasField.afterSload_gasField, Blanc.Lift.GasField.afterSstore_gasField, Blanc.Lift.GasField.dataWord_gasField]
 
 end Blanc.Composition.UsdcLive

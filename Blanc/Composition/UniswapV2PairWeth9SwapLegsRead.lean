@@ -13,6 +13,8 @@ the world, and `wethBalanceCall … cg` is the result at call gas `cg`, built as
 
 namespace Blanc.Composition.UniswapV2PairWeth9Joint
 
+open Blanc.Lift.GasField
+
 open Jaune Blanc Blanc.Lift Blanc.Lift.UniswapV2Pair
 
 /-! ## The static crossing with a known child -/

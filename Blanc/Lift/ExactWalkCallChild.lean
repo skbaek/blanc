@@ -54,6 +54,13 @@ def callChildPost (p cpost : Devm) (oi os : Nat) : Devm :=
       (incorporateChildOnSuccess p cpost cpost.output).stateGas⟩).memWrite oi
     (cpost.output.take os)
 
+theorem callChildPost_returnData (P c : Devm) (oi os : Nat) :
+    (callChildPost P c oi os).returnData = c.output := rfl
+
+theorem callChildPost_withGasLeft (P c : Devm) (a b oi os : Nat) :
+    callChildPost (P.withGasLeft a) (c.withGasLeft b) oi os =
+      (callChildPost P c oi os).withGasLeft (a + b) := rfl
+
 /-- An affordable nonzero-value `CALL` to a non-precompile callee whose entered
 child halts cleanly resumes in `callChildPost`.  The child's derivation is the
 premise `h_exec`, stated at exactly the message the parent builds. -/
