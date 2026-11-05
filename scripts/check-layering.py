@@ -2009,6 +2009,8 @@ CONTRACTS["vyper-nonreentrant-deployed"].extend([
 # Pair/USDC provenance bridges genuinely compose those two families; their
 # current imports must not widen them to the WETH9 exhibit. Named exhibit kits
 # retain their exhibit ownership until moved to a neutral shared owner.
+# Withdrawal witnesses execute concrete beacon/history/consolidation system
+# transactions; those are genuine composed protocols, not generic scaffolding.
 # Each entry is a nonempty tuple of distinct CONTRACTS keys. Adding a composition
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
@@ -2020,10 +2022,10 @@ COMPOSITION = {
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControl": ('lido-circuit-breaker', 'lido-twg'),
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun": ('lido-circuit-breaker', 'lido-twg'),
     "Composition.ProrataWethVaultBoundary": ('prorata-weth-vault', 'weth'),
-    "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),
-    "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request',),
-    "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request',),
-    "Composition.WithdrawalRequestDrainControl": ('withdrawal-request',),
+    "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request', 'beacon-roots', 'history-storage'),
+    "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request', 'beacon-roots', 'history-storage', 'consolidation-request'),
+    "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request', 'beacon-roots', 'history-storage', 'consolidation-request'),
+    "Composition.WithdrawalRequestDrainControl": ('withdrawal-request', 'beacon-roots', 'history-storage', 'consolidation-request'),
     "Composition.ProrataWethVaultEffects": ('prorata-weth-vault', 'weth'),
     "Composition.ProrataWethVaultStaging": ('prorata-weth-vault', 'weth'),
     "Composition.ProrataWethVaultViews": ('prorata-weth-vault', 'weth'),
