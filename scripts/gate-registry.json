@@ -4477,6 +4477,7 @@
    "inputs": {
     "files": [
      "scripts/weth9-creation-block-generate.py",
+     "scripts/legacy_block_producer.py",
      "scripts/weth9-creation-block-4719568.json",
      "scripts/keccak.py",
      "Blanc/Lift/Weth9/Creation/ObservationData.lean"
