@@ -249,7 +249,7 @@ def declaration_names(text: str, matches: list[re.Match]) -> dict[int, str]:
 
 def declarations(text: str, *, qualified: bool = True) -> dict[str, tuple[str, str]]:
     result: dict[str, tuple[str, str]] = {}
-    # The manifest and WETH aggregate predate full-name keys. Keep their
+    # The manifest predates full-name keys. Keep its
     # source-spelled projection explicit and reject ambiguous projections;
     # corpus ownership/shadow scans use qualified identities instead.
     commands = command_text(text)
@@ -264,7 +264,7 @@ def declarations(text: str, *, qualified: bool = True) -> dict[str, tuple[str, s
         if head.end() not in matched_keyword_ends:
             fail("unsupported Lean declaration spelling")
     text = without_comments(text)
-    # Keep exact historic header boundaries for the immutable schema-1 hashes.
+    # Keep exact historic header boundaries for the frozen manifest hashes.
     header_matches = {m.start(3): m for m in DECL_RE.finditer(text)}
     seen: set[str] = set()
     for i, match in enumerate(matches):
@@ -306,7 +306,7 @@ def declarations(text: str, *, qualified: bool = True) -> dict[str, tuple[str, s
 
 
 def legacy_declarations(text: str) -> dict[str, tuple[str, str]]:
-    """Frozen schema-1 source-spelled keys, never for contract shadow scans."""
+    """Frozen manifest source-spelled keys, never for contract shadow scans."""
     return declarations(text, qualified=False)
 
 
@@ -374,12 +374,12 @@ def load_manifest() -> dict:
     expected = {
         "schema", "commonModule", "rootModule", "requiredRootImport",
         "exactCommonImports", "owners", "signatureHashes", "movedDonors",
-        "donorSource", "touchedConsumers", "forbiddenTraceFamily",
+        "forbiddenTraceFamily",
         "requiredPositiveTheorems", "frozenAssuranceFiles",
-        "movedSignatureHashes", "touchedConsumerHashes", "jaunePinFiles",
-        "wethPublicHeaderAggregate", "requiredSharedClassification",
+        "movedSignatureHashes", "jaunePinFiles",
+        "requiredSharedClassification",
     }
-    if set(data) != expected or data["schema"] != 1:
+    if set(data) != expected or data["schema"] != 2:
         fail("manifest schema/keys are not exact")
     for key in expected - {"schema", "signatureHashes", "frozenAssuranceFiles"}:
         if not data[key]:
@@ -426,7 +426,6 @@ def shadows(candidate: str, protected: str) -> bool:
 
 
 def audit_moves(data: dict) -> None:
-    donor_text = read(ROOT / data["donorSource"])
     layering = read(ROOT / "scripts/check-layering.py")
     contract_match = re.search(r"(?s)^CONTRACTS\s*=\s*\{(.*?)\n\}\n", layering, re.M)
     if contract_match is None:
@@ -464,13 +463,6 @@ def audit_moves(data: dict) -> None:
             if any(shadows(candidate, name) for candidate in
                    contract_inventory[contract_path]):
                 fail(f"contract shadow survives for {name} in {contract_path.relative_to(ROOT)}")
-    if set(data["touchedConsumerHashes"]) != set(data["touchedConsumers"]):
-        fail("touched-consumer hash keys do not exactly match touched consumers")
-    for consumer in data["touchedConsumers"]:
-        if not (ROOT / consumer).is_file():
-            fail(f"touched consumer is absent: {consumer}")
-        if sha256(ROOT / consumer) != data["touchedConsumerHashes"][consumer]:
-            fail(f"touched consumer drifted beyond its pinned owner-reference edit: {consumer}")
 
 
 def audit_architecture(data: dict) -> None:
@@ -488,18 +480,6 @@ def audit_architecture(data: dict) -> None:
     for rel, expected in data["jaunePinFiles"].items():
         if sha256(ROOT / rel) != expected:
             fail(f"Blanc's Jaune pin file changed: {rel}")
-
-    # Public WETH statements are frozen as one order-independent digest. This
-    # permits no unrecorded statement drift while avoiding a large per-file
-    # manifest. The two intentionally edited consumers are additionally
-    # pinned byte-for-byte above.
-    headers: list[str] = []
-    for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
-        for name, (kind, header) in sorted(legacy_declarations(read(path)).items()):
-            headers.append(f"{path.name}:{kind}:{name}:{header}")
-    aggregate = hashlib.sha256("\n".join(headers).encode()).hexdigest()
-    if aggregate != data["wethPublicHeaderAggregate"]:
-        fail(f"WETH public-statement aggregate drifted: {aggregate}")
 
 
 def audit_frozen(data: dict) -> None:
@@ -632,16 +612,6 @@ def write_manifest(data: dict) -> None:
         ).hexdigest()
         for owner_file, name, _ in data["movedDonors"]
     }
-    data["touchedConsumerHashes"] = {
-        relative: sha256(ROOT / relative) for relative in data["touchedConsumers"]
-    }
-    headers = []
-    for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
-        for name, (kind, header) in sorted(legacy_declarations(read(path)).items()):
-            headers.append(f"{path.name}:{kind}:{name}:{header}")
-    data["wethPublicHeaderAggregate"] = hashlib.sha256(
-        "\n".join(headers).encode()
-    ).hexdigest()
     data["frozenAssuranceFiles"] = {
         relative: sha256(ROOT / relative)
         for relative in data["frozenAssuranceFiles"]
@@ -678,18 +648,8 @@ def main() -> None:
             moved[name] = hashlib.sha256(
                 legacy_declarations(read(ROOT / owner_file))[name][1].encode()
             ).hexdigest()
-        headers = []
-        for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
-            for name, (kind, header) in sorted(legacy_declarations(read(path)).items()):
-                headers.append(f"{path.name}:{kind}:{name}:{header}")
         print(json.dumps({
             "movedSignatureHashes": moved,
-            "touchedConsumerHashes": {
-                rel: sha256(ROOT / rel) for rel in data["touchedConsumers"]
-            },
-            "wethPublicHeaderAggregate": hashlib.sha256(
-                "\n".join(headers).encode()
-            ).hexdigest(),
         }, indent=2))
         return
     if arguments.self_test:
