@@ -1,7 +1,7 @@
 import Blanc.Composition.Curve3Pool3CrvCapstoneFrame
 import Blanc.Composition.Curve3Pool3CrvSigningRecover
 import Blanc.TransactionForward
-import Blanc.Composition.UniswapV2PairWeth9CapstoneRaw
+import Blanc.ExecutionTraceMessageRoots
 import Blanc.ExecutionTraceRootFrame
 import Blanc.ExecutionTraceCodeKeep
 import Blanc.Lift.LogAddresses
@@ -177,7 +177,7 @@ theorem ex_trace_raw {state : Jaune.State} {bout' : BlockOutput}
         · exact (congrArg getDelegatedCodeAddress frame.code).trans getDelegatedCodeAddress_pool)
   subst msgEq
   obtain ⟨raw, run, frames⟩ :=
-    UniswapV2PairWeth9Capstone.messageCallTrace_rawFrames_run trace.message target auths nodeleg
+    Blanc.messageCallTrace_rawFrames_run trace.message target auths nodeleg
       enter
   obtain ⟨post', exc, -⟩ := ex_frame_live frame
   have h1 := (exec_iff_exec_eq _ _ _ raw).mp ⟨run⟩

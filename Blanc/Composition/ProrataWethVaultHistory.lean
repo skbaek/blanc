@@ -2,7 +2,9 @@
 
 import Blanc.Composition.ProrataWethVaultEnvironment
 import Blanc.Composition.ProrataWethVaultAccounting
-import Blanc.ProrataRealizedAccounting
+import Blanc.ExecutionAcceptedPayoutTrace
+import Blanc.ProrataAccounting
+import Blanc.ExecutionAccountingReplay
 import Blanc.Composition.ProrataWethVaultRely
 import Blanc.Composition.ProrataWethVaultLedgerVisits
 import Blanc.Composition.ProrataWethVaultTerminals
@@ -355,7 +357,7 @@ structure WethWithdrawSplit (sevm : Sevm) (pre post : Devm) where
   callPre : Devm
   callPost : Devm
   /-- The accepted value-bearing `CALL` to the caller, paying exactly `wad`. -/
-  payout : Blanc.Prorata.AcceptedPayoutTrace sevm (Sevm.argWord sevm 0) callPre callPost
+  payout : Blanc.AcceptedPayoutTrace sevm (Sevm.argWord sevm 0) callPre callPost
   /-- Before the `CALL`, WETH's storage moved in the caller's own row only. -/
   written : Devm.getStor callPre sevm.currentTarget =
     (Devm.getStor pre sevm.currentTarget).set sevm.caller.toB256
@@ -534,7 +536,7 @@ theorem WethWithdrawSplit.ofCallFacts_pinned {sevm : Sevm} {pre post : Devm}
       · exact entryState
       · rfl
       · rfl
-  let payout : Blanc.Prorata.AcceptedPayoutTrace sevm wad callPre callPost :=
+  let payout : Blanc.AcceptedPayoutTrace sevm wad callPre callPost :=
     { childMsg := childMsg
       entry := entry
       child := child

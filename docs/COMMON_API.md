@@ -1802,6 +1802,16 @@ to E9.
 
 ### E6. I need the exact successful wrapper trace, not only its final result
 
+- Actual non-creation message-call raw roots:
+  `Blanc.messageCallTrace_rawFrames_run` in
+  `Blanc/ExecutionTraceMessageRoots.lean` retains the no-authorization,
+  no-delegation and actual entered-frame premises. Both the Pair and Curve
+  signed-transaction witnesses use this same proof.
+- An accepted value-payout child with its transfer entry and retained trace:
+  `Blanc.AcceptedPayoutTrace` in `Blanc/ExecutionAcceptedPayoutTrace.lean`
+  keeps every message/state/clean-child/target-distinction/depth field; both
+  PRORATA realized accounting and the WETH-vault replay consume it.
+
 Use [`Blanc/ExecutionTrace.lean`](../Blanc/ExecutionTrace.lean). Its carrier
 and constructor families cover every modelled wrapper layer:
 

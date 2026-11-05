@@ -1,3 +1,4 @@
+import Blanc.Lift.Usdc.AllowanceQuiet
 import Blanc.Composition.UniswapV2PairUsdcWeth9Checkpoint
 import Blanc.Composition.UsdcTokenF
 import Blanc.Lift.UniswapV2Pair.StaticSilent
@@ -21,12 +22,6 @@ namespace Blanc.Composition.UniswapV2PairUsdcWeth9
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.UniswapV2Pair
   Blanc.Composition.PairTokenJoint Blanc.Composition.UniswapV2PairWeth9Joint
   Blanc.Composition.UsdcToken
-
-/-- **The Pair's touched USDC allowance rows read zero at the checkpoint.** -/
-def PairUsdcAllowQuiet (pair usdc : Adr) {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) : Prop :=
-  ∀ g, (.allow pair g) ∈ Usdc.historyTouchedKeys usdc trace →
-    (checkpoint.state.getStor usdc).get (Usdc.allowSlot pair g) = 0
 
 /-- **The support-free two-token joint checkpoint**: `JointCheckpoint2` with the
 support-free footprint at `token0`. -/

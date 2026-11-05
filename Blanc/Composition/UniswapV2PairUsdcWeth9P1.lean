@@ -1,12 +1,11 @@
 import Blanc.Composition.UniswapV2PairUsdcOriginSeed
-import Blanc.Composition.UniswapV2PairUsdcWeth9CheckpointF
 import Blanc.Lift.Usdc.InitRowsHistory
 import Blanc.Lift.Usdc.GovernanceHistory
 
 /-!
 # The Pair's touched USDC allowance spenders
 
-`PairUsdcAllowQuiet pair usdc trace` (`UniswapV2PairUsdcWeth9CheckpointF.lean`) is L1's
+`PairUsdcAllowQuiet pair usdc trace` (`Lift/Usdc/AllowanceQuiet.lean`) is L1's
 consumed premise P1: every allowance row of the Pair that the post-B trace touches reads
 zero at B. This module names the finite spender population that premise ranges over
 (`PairTouchedSpenders`, `pairTouchedSpenders`, `mem_pairTouchedSpenders`) and its historical

@@ -2032,3 +2032,6 @@ import Blanc.Lift.Usdc.V2ApproveMappingTouches
 import Blanc.Lift.Usdc.V2BlacklistReach
 import Blanc.Lift.Usdc.V2TransferFromCreditHashes
 import Blanc.Lift.Usdc.V2_1TransferFromCreditHashes
+import Blanc.ExecutionTraceMessageRoots
+import Blanc.ExecutionAcceptedPayoutTrace
+import Blanc.Lift.Usdc.AllowanceQuiet

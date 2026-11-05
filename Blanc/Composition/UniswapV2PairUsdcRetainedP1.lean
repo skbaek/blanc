@@ -1,3 +1,4 @@
+import Blanc.Lift.Usdc.AllowanceQuiet
 import Blanc.Composition.UniswapV2PairUsdcWeth9P1
 import Blanc.Composition.UniswapV2PairUsdcCallersIn
 
