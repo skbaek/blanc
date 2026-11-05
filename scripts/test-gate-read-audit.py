@@ -511,7 +511,7 @@ def descendant_observation_controls() -> None:
 
 def legacy_descendant_controls() -> None:
     with tempfile.TemporaryDirectory(prefix='gate-read-legacy-') as directory:
-        import ast, contextlib, hashlib, importlib.util, io, json, os, shlex, subprocess, sys
+        import contextlib, hashlib, importlib.util, io, json, os, shlex, subprocess, sys
         from pathlib import Path
         SOURCE = Path(__file__).resolve().parents[1]
         WORK = Path(directory)
@@ -531,7 +531,14 @@ def legacy_descendant_controls() -> None:
             spec.loader.exec_module(m)
             return m
         PROBE = 'import json,os,sys\nfrom pathlib import Path\nprobe={"environment":dict(os.environ),"path":sys.path,"argv":sys.argv,"orig_argv":sys.orig_argv,"executable":sys.executable,"prefix":sys.prefix,"base_prefix":sys.base_prefix,"flags":repr(sys.flags),"file":globals().get("__file__"),"package":globals().get("__package__"),"spec":({k:getattr(__spec__,k) for k in ["name","origin","parent","has_location","cached"]} if globals().get("__spec__") is not None else None),"loader":repr(type(globals().get("__loader__"))),"dont_write_bytecode":sys.dont_write_bytecode}\nassert Path(os.environ["HOLE"]).read_text()=="undeclared payload\\n"\n'
-        PARENT = 'import ast,importlib.util,json,os,sys,subprocess\nfrom pathlib import Path\nfrom typing import Mapping\nsource=Path(os.environ["SOURCE"])\nPath(os.environ["DECLARED"]).read_text()\nspec=importlib.util.spec_from_file_location("prague_actual", source/"scripts/prague_fixture.py")\np=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)\npost,result,body=p.run_t8n({}, {}, [], eels_root=Path(os.environ["EELS_ROOT"]))\nassert (post,result,body)==({}, {}, [])\ns=source.joinpath("scripts/gen-lido-twg-differential.py").read_text()\ntree=ast.parse(s)\nnode=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=="compatibility_contract")\ntemplates=next(n for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=="PLACEHOLDER_TEMPLATE_DIGESTS" for t in n.targets))\nPLACEHOLDER_TEMPLATE_DIGESTS=ast.literal_eval(templates.value)\nCOMPATIBILITY_TOOL=Path(os.environ["SCHEMA_TOOL"])\nREPO=Path(os.environ["SYNTHETIC_ROOT"])\ndef expect(condition,message):\n    assert condition,message\nexec(compile(ast.Module(body=[node],type_ignores=[]),str(source/"scripts/gen-lido-twg-differential.py"),"exec"))\ntry:\n    contract=compatibility_contract()\n    assert contract=={"templates":PLACEHOLDER_TEMPLATE_DIGESTS}\n    print("legacy descendant success")\nexcept subprocess.CalledProcessError as e:\n    print(json.dumps({"type":type(e).__name__,"returncode":e.returncode,"cmd":e.cmd,"output":e.output.hex(),"stderr":e.stderr}))\n    raise SystemExit(23)\n'
+        # Test-owned callback/check_output contract: retained helpers wrap errors or
+        # use a different output API. Product register/template-fill semantics are
+        # deliberately absent; the real shared run_t8n descendant remains above it.
+        templates = {"schema": "synthetic-template-v1"}
+        SCHEMA_FIXTURE = 'def schema_contract():\n    command = [sys.executable, str(SCHEMA_TOOL), "schema"]\n    run = getattr(sys, "_blanc_gate_read_audit_run", None)\n    if run is None:\n        raw = subprocess.check_output(command, cwd=REPO)\n    else:\n        raw = run(command, cwd=REPO, stdout=subprocess.PIPE, check=True).stdout\n    value = json.loads(raw)\n    assert set(value) == {"documentFill"}\n    contract = value["documentFill"]\n    assert contract["templates"] == SCHEMA_TEMPLATES\n    return contract\n'
+        PARENT = ('import importlib.util,json,os,sys,subprocess\nfrom pathlib import Path\nsource=Path(os.environ["SOURCE"])\nPath(os.environ["DECLARED"]).read_text()\nspec=importlib.util.spec_from_file_location("prague_actual", source/"scripts/prague_fixture.py")\np=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)\npost,result,body=p.run_t8n({}, {}, [], eels_root=Path(os.environ["EELS_ROOT"]))\nassert (post,result,body)==({}, {}, [])\nSCHEMA_TOOL=Path(os.environ["SCHEMA_TOOL"])\nREPO=Path(os.environ["SYNTHETIC_ROOT"])\n'
+                  + "SCHEMA_TEMPLATES=" + repr(templates) + "\n"
+                  + SCHEMA_FIXTURE + 'try:\n    contract=schema_contract()\n    assert contract=={"templates":SCHEMA_TEMPLATES}\n    print("legacy descendant success")\nexcept subprocess.CalledProcessError as e:\n    print(json.dumps({"type":type(e).__name__,"returncode":e.returncode,"cmd":e.cmd,"output":e.output.hex(),"stderr":e.stderr}))\n    raise SystemExit(23)\n')
 
         def setup(name, failure=False):
             root = WORK / name
@@ -544,9 +551,6 @@ def legacy_descendant_controls() -> None:
             write(root / 'declared.txt', 'declared parent input\n')
             write(root / 'undeclared.txt', 'undeclared payload\n')
             write(package / '__main__.py', PROBE + 'Path(os.environ["T8N_PROBE"]).write_text(json.dumps(probe,sort_keys=True))\na=sys.argv[1:];out=Path(a[a.index("--output.basedir")+1])\nfor n,v in [("out-alloc.json",{}),("out-result.json",{}),("out-body.txt",[])]:\n    (out/n).write_text(json.dumps(v))\n')
-            tree = ast.parse((SOURCE / 'scripts/gen-lido-twg-differential.py').read_text())
-            n = next((n for n in tree.body if isinstance(n, ast.Assign) and any((isinstance(t, ast.Name) and t.id == 'PLACEHOLDER_TEMPLATE_DIGESTS' for t in n.targets))))
-            templates = ast.literal_eval(n.value)
             schema = write(root / 'schema.py', PROBE + 'Path(os.environ["SCHEMA_PROBE"]).write_text(json.dumps(probe,sort_keys=True))\n' + ('print("failure stdout");print("failure stderr",file=sys.stderr);raise SystemExit(7)\n' if failure else 'print(' + repr(json.dumps({'documentFill': {'templates': templates}})) + ')\n'))
             parent = write(root / 'parent.py', PARENT)
             wrapper = write(root / 'wrapper.sh', '#!/usr/bin/env bash\nset -eu\nSCRIPT_DIR=' + shlex.quote(str(SOURCE / 'scripts')) + '\n. "$SCRIPT_DIR/read-audit/launch.sh"\nPYTHONPATH="$EELS_ROOT/src" gate_audit_python ' + shlex.quote(PYTHON) + ' ' + shlex.quote(str(parent)) + '\n')
@@ -629,7 +633,7 @@ def legacy_descendant_controls() -> None:
             root, parent, wrapper, env = setup('legacy-check-output-timeout')
             child = Path(env['SCHEMA_TOOL'])
             child.write_text(PROBE + 'import time\nprint("timeout stdout",flush=True)\nprint("timeout stderr",file=sys.stderr,flush=True)\ntime.sleep(3)\n')
-            source = PARENT.replace('try:\n    contract=compatibility_contract()', 'original_run=subprocess.run\ncallback=getattr(sys,"_blanc_gate_read_audit_run",None)\nif callback is None:\n    def limited_run(*args,**kwargs):\n        kwargs["timeout"]=0.4\n        return original_run(*args,**kwargs)\n    subprocess.run=limited_run\nelse:\n    def limited_callback(*args,**kwargs):\n        kwargs["timeout"]=0.4\n        return callback(*args,**kwargs)\n    sys._blanc_gate_read_audit_run=limited_callback\ntry:\n    contract=compatibility_contract()')
+            source = PARENT.replace('try:\n    contract=schema_contract()', 'original_run=subprocess.run\ncallback=getattr(sys,"_blanc_gate_read_audit_run",None)\nif callback is None:\n    def limited_run(*args,**kwargs):\n        kwargs["timeout"]=0.4\n        return original_run(*args,**kwargs)\n    subprocess.run=limited_run\nelse:\n    def limited_callback(*args,**kwargs):\n        kwargs["timeout"]=0.4\n        return callback(*args,**kwargs)\n    sys._blanc_gate_read_audit_run=limited_callback\ntry:\n    contract=schema_contract()')
             source = source.replace('except subprocess.CalledProcessError as e:', 'except subprocess.TimeoutExpired as e:').replace('"returncode":e.returncode', '"timeout":e.timeout')
             parent.write_text(source)
             log = root / 'timeout.log'
@@ -926,19 +930,46 @@ def current_wrapper_source_controls() -> None:
     for name in wrappers:
         result = subprocess.run(["bash", "-n", str(source / name)], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
-    for name in ("check-beacon-deposit-current-mainnet.sh", "check-lido-twg-pinned-target-current-mainnet.sh"):
-        text = (source / name).read_text()
-        branch = text[text.index('if [[ "${1:-}" == "--static-self-check" ]]'):]
-        branch = branch[:branch.index("\nfi") + 3]
-        # Run the actual early-return branch with a synthetic Python launcher;
-        # any fallthrough is a failure, and original child status is preserved.
+    # Exercise the retained wrapper's actual preflight and immediately following
+    # early return. The syntax inventory above still describes the live corpus;
+    # pending product retirement must update that list explicitly, not skip files.
+    import hashlib
+    name = "check-weth10-current-mainnet.sh"
+    wrapper = source / name
+    text = wrapper.read_text()
+    start = text.index("gate_audit_python /usr/bin/env -i ")
+    stop = text.index('if [ "$STATIC_SELF_CHECK" -eq 1 ]; then', start)
+    branch = text[start:text.index("\nfi", stop) + 3]
+
+    def verify_static_return(candidate):
         for child_exit in (0, 19):
-            control = ('set -euo pipefail\nSCRIPT_DIR=/unused\nWRAPPER_ARGS=()\nSTATIC_ENV=()\n'
+            control = ('set -euo pipefail\nSCRIPT_DIR=/unused\nTARGET_PYTHON=/unused/python\n'
+                       'CHILD_ENV=("SYNTHETIC=1")\nHISTORICAL_BOUNDARY=synthetic\nEVIDENCE_BOUNDARY_FALSIFIERS=4\n'
+                       'STATIC_SELF_CHECK=1\n'
                        'gate_audit_python() { return ' + str(child_exit) + '; }\n'
                        'gate_audit_exec_python() { return ' + str(child_exit) + '; }\n'
-                       + branch + '\nexit 77\n')
+                       + candidate + '\nexit 77\n')
             result = subprocess.run(["bash", "-c", control, "static-branch", "--static-self-check"], capture_output=True, text=True)
             assert result.returncode == child_exit, (name, child_exit, result.returncode, result.stderr)
+
+    verify_static_return(branch)
+    green = branch
+    green_sha = hashlib.sha256(green.encode()).hexdigest()
+    assert branch.count("  exit 0\n") == 1
+    try:
+        # Keep the if body syntactically valid while removing only its exit effect.
+        branch = branch.replace("  exit 0\n", "  :\n", 1)
+        try:
+            verify_static_return(branch)
+        except AssertionError as error:
+            assert error.args == ((name, 0, 77, ""),), error
+            print("CONTROL retained WETH10 exit-effect disabled bites at fallthrough sentinel 77")
+        else:
+            raise AssertionError("removing the static return escaped the fallthrough control")
+    finally:
+        branch = green
+    assert hashlib.sha256(branch.encode()).hexdigest() == green_sha and wrapper.read_text() == text
+    print("CONTROL static-return source restored SHA256 " + green_sha + "; no identical restored rerun")
     with tempfile.TemporaryDirectory(prefix="gate-read-ordinary-") as directory:
         root = Path(directory)
         script = root / "ordinary.py"
