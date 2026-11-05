@@ -1,7 +1,7 @@
 import Blanc.Composition.ProrataWethVaultBacking
 import Blanc.ExecutionStateTrace
 import Blanc.ProrataAttackModel
-import Blanc.ProrataAttackTrace
+import Blanc.OffsetPriceBacking
 
 /-!
 # Exact four-quote accounting for the WETH vault
@@ -2324,7 +2324,7 @@ theorem supply_le_offset_mul_balance {vault : Adr} (path : FourQuotePath vault)
     (hzero : path.snapshotAt 0 = ⟨0, 0⟩) (i : Nat) :
     (path.snapshotAt i).supply ≤ Blanc.ProrataWethVault.offsetN *
       (path.snapshotAt i).balance := by
-  apply Blanc.Prorata.backed_of_priceLe_genesis
+  apply Blanc.OffsetPriceBacking.backed_of_priceLe_genesis
   rw [← hzero]
   exact path.priceLe_snapshotAt i
 

@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-616 shared modules, 589 with a module summary.
+617 shared modules, 590 with a module summary.
 
 ## `Blanc/`
 
@@ -280,6 +280,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`MessageResult.lean`](../Blanc/MessageResult.lean) | **Contract-neutral settled message observations.** This module names only result-level facts. | [T2](COMMON_API.md#t2-i-need-to-know-which-child-effects-survive-settlement) |
 | [`NonExecLine.lean`](../Blanc/NonExecLine.lean) | Line-level discharge of `NonExecInstruction`: a structural Boolean test that reduces on each instruction constructor even under symbolic operands (`pushB256 w`), so `∀ n ∈ line, NonExecInstruction n` for a concrete line is `NonExecInstruction.forall_of_all rfl` rather than a … | [E3](COMMON_API.md#e3-i-must-carry-a-predicate-over-all-entered-child-roots) |
 | [`NonpayableInversion.lean`](../Blanc/NonpayableInversion.lean) | **Nonpayable wrapper inversion.** `run_body_of_run_nonpayable_frame` carries state and memory across Blanc's shared `nonpayable` wrapper. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term) |
+| [`OffsetPriceBacking.lean`](../Blanc/OffsetPriceBacking.lean) | **Genesis price backing.** A virtual-offset price bounded below by its genesis price gives the exact supply-to-balance backing bound. | [S8](COMMON_API.md#s8-i-need-nat-level-prorata-pricing-accounting-effects-or-coalition-attack-bounds) |
 | [`OffsetPricing.lean`](../Blanc/OffsetPricing.lean) | **Virtual-offset share pricing.** A vault that issues shares against a held asset prices them with a *virtual offset*: `o` phantom shares and one phantom asset unit, so that the first deposit cannot be front-run into a division by zero and a donation cannot move the price … | [S8](COMMON_API.md#s8-i-need-nat-level-prorata-pricing-accounting-effects-or-coalition-attack-bounds) |
 | [`OwnerClosure.lean`](../Blanc/OwnerClosure.lean) | **Storage-owner discipline for a code family closed under delegation.** `Exec.ownerCode_of_world` (`Blanc/OwnerDiscipline.lean`) covers one level of delegation: an EIP-1167 forwarder in front of a code that delegates nowhere. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`OwnerClosureControl.lean`](../Blanc/OwnerClosureControl.lean) | **Owner closure is not vacuous: a two-code family.** A toy instance of `Exec.ownerCode_of_closed`: the family `{toyForwarder, toyLeaf}`, where `toyForwarder` is the EIP-1167 forwarder `DELEGATECALL`ing the fixed address `toyImpl` and `toyLeaf` is the one-byte `STOP`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |

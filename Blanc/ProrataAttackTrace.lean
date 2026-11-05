@@ -1,5 +1,6 @@
 -- ProrataAttackTrace.lean : the SF-frozen P4 attack trace and its headlines.
 
+import Blanc.OffsetPriceBacking
 import Blanc.ProrataAttackPath
 import Blanc.ProrataAccountingHistory
 
@@ -19,24 +20,6 @@ carries an arithmetic premise. -/
 theorem offset_ne_zero : offset.toNat ≠ 0 := by rw [offset_toNat]; omega
 
 theorem two_le_offset : 2 ≤ offset.toNat := by rw [offset_toNat]; omega
-
-/-- The genesis price anchor is exactly the backing bound.  `PriceLe o ⟨0,0⟩ s`
-says the share price at `s` has not fallen below its genesis value `1/o`, and
-that is the same statement as `supply ≤ o · balance` — the invariant's third
-conjunct, available at every boundary of a genesis-rooted replay rather than
-only at a settled world state. -/
-theorem backed_of_priceLe_genesis {o : Nat} {s : AccountingSnapshot}
-    (h : PriceLe o ⟨0, 0⟩ s) : s.supply ≤ o * s.balance := by
-  have h1 : 1 * (s.supply + o) ≤ (s.balance + 1) * (0 + o) := h
-  rw [Nat.one_mul, Nat.zero_add, Nat.add_mul, Nat.one_mul,
-    Nat.mul_comm s.balance o] at h1
-  omega
-
-theorem AttackAttribution.coalitionAmount_zero (a : AttackAttribution) :
-    a.coalitionAmount 0 = 0 := by cases a <;> rfl
-
-theorem AttackAttribution.outsideAmount_zero (a : AttackAttribution) :
-    a.outsideAmount 0 = 0 := by cases a <;> rfl
 
 /-! ## Price monotonicity along a realized replay -/
 
@@ -465,7 +448,7 @@ private theorem attackStep_of_realized
             state.accounting.supply state.accounting.balance := by rw [hacc]; exact hquote
         have hbacked : state.accounting.supply ≤
             offset.toNat * state.accounting.balance := by
-          rw [hacc]; exact backed_of_priceLe_genesis hprice
+          rw [hacc]; exact Blanc.OffsetPriceBacking.backed_of_priceLe_genesis hprice
         refine ⟨_, _, ProrataAttackEffect.victimDeposit state amount minted
           hphase hminted hbacked, ?_, ?_, ?_, ?_, ?_, ?_⟩
         · simp only [hacc, hpost]

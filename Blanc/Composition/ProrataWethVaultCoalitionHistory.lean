@@ -1,5 +1,6 @@
 -- ProrataWethVaultCoalitionHistory.lean : the realized coalition overlay (vault U9).
 
+import Blanc.OffsetPriceBacking
 import Blanc.Composition.ProrataWethVaultAccountingHistory
 import Blanc.Composition.ProrataWethVaultCoalition
 
@@ -785,7 +786,7 @@ private theorem pairAttackStep_of_record {vault victim : Adr}
     let deposit : Blanc.Prorata.VictimDeposit offsetN :=
       { pre := state.accounting, amount := amount, minted := minted
         minted_eq := by rw [hacc]; exact hexact rfl
-        backed := Blanc.Prorata.backed_of_priceLe_genesis hprice }
+        backed := Blanc.OffsetPriceBacking.backed_of_priceLe_genesis hprice }
     refine ⟨_, _, PairAttackEffect.victimDeposit state deposit hphase rfl,
       ?_, ?_, hopen, ?_, ?_, ?_, ?_, ?_⟩
     · simp only [PairAttackState.victimDeposited, Blanc.Prorata.VictimDeposit.post, deposit, hacc, hpost]

@@ -1,6 +1,7 @@
 -- ProrataWethVaultPairHistory.lean : the pair's realized history carrier (R10), its rooted allowance
 -- ledger, and the backing corollary limited exactly by D9.
 
+import Blanc.OffsetPriceBacking
 import Blanc.Composition.ProrataWethVaultPairLadder
 
 /-!
@@ -578,7 +579,7 @@ theorem backing {steps : List (PairStepRecord vault)} {future : BlockChain}
   have price := realizes.toReplay.priceLe (realizes.debitAmount_eq_zero collision)
   rw [PairBoundary.snapshot_ofState, PairBoundary.snapshot_ofState,
     root.genesisSnapshot] at price
-  exact Blanc.Prorata.backed_of_priceLe_genesis price
+  exact Blanc.OffsetPriceBacking.backed_of_priceLe_genesis price
 -- A:2329–2337 (`FourQuotePath.supply_le_offset_mul_balance`) over the replay.
 
 end PairTraceRealizes
@@ -632,7 +633,7 @@ theorem pair_reachable_backed_or_debit {cfg : ChainConfig} {deployed future : Bl
   · rw [PairBoundary.snapshot_ofState, PairBoundary.snapshot_ofState,
       root.genesisSnapshot] at price
     exact .inl ⟨(realizes.worldInv hcov).conserved, realizes.capped,
-      Blanc.Prorata.backed_of_priceLe_genesis price⟩
+      Blanc.OffsetPriceBacking.backed_of_priceLe_genesis price⟩
   · exact .inr debit
 
 /-- **The final backing corollary** (goal G6 last clause; SF §7 last bullet), limited exactly by D9. -/

@@ -26,6 +26,12 @@ def outsideAmount (attribution : AttackAttribution) (amount : Nat) : Nat :=
 
 end AttackAttribution
 
+theorem AttackAttribution.coalitionAmount_zero (a : AttackAttribution) :
+    a.coalitionAmount 0 = 0 := by cases a <;> rfl
+
+theorem AttackAttribution.outsideAmount_zero (a : AttackAttribution) :
+    a.outsideAmount 0 = 0 := by cases a <;> rfl
+
 /-- The unique victim deposit, retaining its pre-credit snapshot and the P2
 backing fact needed only by the later full-exit bridge. -/
 structure VictimDeposit (o : Nat) where

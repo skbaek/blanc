@@ -5212,6 +5212,15 @@ it, `claimN` values a share balance with `claimN_le_balance`,
 `payN_mono_price`, and the per-move bounds `claimN_externalCredit_le`,
 `claimN_deposit_le`, and `claimN_withdraw_le`, closing in
 `victim_loss_le_ceil`/`victim_loss_le_div_add_one`.
+For a genesis-anchored comparison,
+[`Blanc/OffsetPriceBacking.lean`](../Blanc/OffsetPriceBacking.lean) owns
+`Blanc.OffsetPriceBacking.backed_of_priceLe_genesis`: `PriceLe o ⟨0, 0⟩ s`
+implies `s.supply ≤ o * s.balance`, for any offset and snapshot. Both the
+realized accounting trace and the WETH-backed vault use this neutral owner.
+The name-preserving `AttackAttribution.coalitionAmount_zero` and
+`AttackAttribution.outsideAmount_zero` facts live beside their generic
+attribution functions in the shared attack-path owner below, rather than
+inside the concrete trace.
 [`Blanc/ProrataAttackPath.lean`](../Blanc/ProrataAttackPath.lean) runs the
 whole attack: `ProrataAttackState.Invariant` conjoins `SharesPartition`,
 `FlowExact`, `ClaimBound`, and `VictimConsistent`, `genesis_invariant` seeds
