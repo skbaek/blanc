@@ -3,21 +3,23 @@
 
 Two ownership maps are audited.
 
-The lift manifest, execution-settlement-lift-manifest.json, records the 14
-settlement declarations first lifted out of WETH10.  Their common owner is now
-Jaune's `Jaune/ExecSettlement.lean` in the pinned Jaune package (Blanc adopted
-Jaune's canonical execution layer).  It checks
-that every listed declaration is genuinely declared by the common module, that
-no listed donor declaration or common-owner basename shadow survives in the
-historical WETH10 donor family or the Lido family, that neither family contains
-an alias/export command, and that Weth10HolderFlow imports the
-common module directly.  The 21 exact compatibility abbreviations approved
-when the retained trace carrier moved are required; any drift or added
-alias/export still fails.  A contract module may consume a common declaration
-but must never re-provide one, so no export is approved: each consumer imports
-and opens `Blanc.ExecutionTrace` directly.  It deliberately does not try to
-recognize propositionally equivalent declarations under unrelated names; that
-remains an independent review obligation.
+The lift manifest (schema 4), execution-settlement-lift-manifest.json, records
+the 14 settlement declarations first lifted out of WETH10.  Their common owner
+is Jaune's `Jaune/ExecSettlement.lean` in the pinned Jaune package (Blanc
+adopted Jaune's canonical execution layer).  It checks that every listed
+declaration is genuinely declared by the common module with its manifest kind,
+that no exact historical donor declaration survives anywhere in the nonempty
+all-Blanc corpus (`Blanc/**/*.lean` and `Blanc.lean`, read with the existing
+`tolerant_declarations` parser; DONOR-SURVIVOR), and that the retained shared
+consumer `Blanc/ExecutionSettlement.lean` directly imports
+`Jaune.ExecSettlement`.  A declaration scan does not prove absence of every
+alias/export-created name, and it does not recognize propositionally
+equivalent declarations under unrelated names; those remain independent
+review obligations under the broad parser's existing limitations.  The
+product-specific WETH10/Lido donor populations, common-owner basename-shadow
+and any-alias/export bans in those files, and the 21 WETH retained-trace
+compatibility abbreviations are retired with their product surfaces and are
+not audited here.
 
 The relocation manifest, jaune-exec-relocation-manifest.json, lists every
 handwritten declaration of the canonical execution layer (`Exec`, its
@@ -30,22 +32,22 @@ RELOCATED-REDEFINED, a destination that no longer declares it as
 RELOCATED-MISSING.
 
 ``--negative-controls`` (the wrapper's ``--self-test``; evidence economy rule
-3, so it runs when the harness changes, not on every Lean edit) runs twelve
-controls: the historical donor alias, an
-unexpected donor export, a Lido common-owner basename shadow, a Lido alias, a
-missing common declaration, a missing direct import, and distinct trailing-`?`
-declaration parsing, plus removal of the WETH flow compatibility block and
-right-hand-side drift in the attribution compatibility block, and three
-relocation controls: a leftover `Blanc.Exec` copy, a disconnected
-`Jaune.*`-named copy declared from Blanc, and a relocated declaration missing
-from its Jaune module.  Each must fail
-with its own diagnostic tag, so a green control run proves the relevant
-channel is live.
+3, so it runs when the harness changes, not on every Lean edit) runs eight
+controls: seven mutations in a disposable fixture tree seeded from a clean
+audit (a test-owned exact historical-donor declaration, a missing common
+declaration, a common-kind mismatch, a missing direct import in the retained
+shared consumer, a leftover `Blanc.Exec` copy, a disconnected `Jaune.*`-named
+copy declared from Blanc, and a relocated declaration missing from its Jaune
+module) plus distinct trailing-`?` declaration parsing.  Each mutation must
+fail with its own diagnostic tag; afterwards the exact seed bytes are restored
+(new files removed) and byte identity with the seed is asserted, without a
+redundant restored audit.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import shutil
@@ -75,56 +77,6 @@ DECL_RE = re.compile(
 IMPORT_RE = re.compile(rf"^\s*import\s+({IDENT})(?:\s|$)")
 ALIAS_COMMAND_RE = re.compile(r"\balias\b")
 EXPORT_COMMAND_RE = re.compile(r"\bexport\b")
-APPROVED_TRACE_COMPAT_ABBREVS = {
-    "Blanc/Weth10HolderFlow.lean": """abbrev Blanc.ExecutionTrace.RetainedXlot.flowActions :=
-  Blanc.Weth10.RetainedXlot.flowActions
-abbrev Blanc.ExecutionTrace.RetainedXlot.flowObservations :=
-  Blanc.Weth10.RetainedXlot.flowObservations
-abbrev Blanc.ExecutionTrace.MessageCallTrace.flowActions :=
-  Blanc.Weth10.MessageCallTrace.flowActions
-abbrev Blanc.ExecutionTrace.MessageCallTrace.flowObservations :=
-  Blanc.Weth10.MessageCallTrace.flowObservations
-abbrev Blanc.ExecutionTrace.TransactionTrace.flowActions :=
-  Blanc.Weth10.TransactionTrace.flowActions
-abbrev Blanc.ExecutionTrace.TransactionTrace.flowObservations :=
-  Blanc.Weth10.TransactionTrace.flowObservations
-abbrev Blanc.ExecutionTrace.ApplyTransactionsTrace.flowActions :=
-  Blanc.Weth10.ApplyTransactionsTrace.flowActions
-abbrev Blanc.ExecutionTrace.ApplyTransactionsTrace.flowObservations :=
-  Blanc.Weth10.ApplyTransactionsTrace.flowObservations
-abbrev Blanc.ExecutionTrace.SystemMessageTrace.flowActions :=
-  Blanc.Weth10.SystemMessageTrace.flowActions
-abbrev Blanc.ExecutionTrace.SystemMessageTrace.flowObservations :=
-  Blanc.Weth10.SystemMessageTrace.flowObservations
-abbrev Blanc.ExecutionTrace.RequestsTrace.flowActions :=
-  Blanc.Weth10.RequestsTrace.flowActions
-abbrev Blanc.ExecutionTrace.RequestsTrace.flowObservations :=
-  Blanc.Weth10.RequestsTrace.flowObservations
-abbrev Blanc.ExecutionTrace.AppliedBodyTrace.flowActions :=
-  Blanc.Weth10.AppliedBodyTrace.flowActions
-abbrev Blanc.ExecutionTrace.AppliedBodyTrace.flowObservations :=
-  Blanc.Weth10.AppliedBodyTrace.flowObservations""",
-    "Blanc/Weth10Attribution.lean": """abbrev Blanc.ExecutionTrace.RetainedXlot.attributionStream :=
-  Blanc.Weth10.RetainedXlot.attributionStream
-abbrev Blanc.ExecutionTrace.MessageCallTrace.attributionStream :=
-  Blanc.Weth10.MessageCallTrace.attributionStream
-abbrev Blanc.ExecutionTrace.TransactionTrace.attributionStream :=
-  Blanc.Weth10.TransactionTrace.attributionStream
-abbrev Blanc.ExecutionTrace.ApplyTransactionsTrace.attributionStream :=
-  Blanc.Weth10.ApplyTransactionsTrace.attributionStream
-abbrev Blanc.ExecutionTrace.SystemMessageTrace.attributionStream :=
-  Blanc.Weth10.SystemMessageTrace.attributionStream
-abbrev Blanc.ExecutionTrace.RequestsTrace.attributionStream :=
-  Blanc.Weth10.RequestsTrace.attributionStream
-abbrev Blanc.ExecutionTrace.AppliedBodyTrace.attributionStream :=
-  Blanc.Weth10.AppliedBodyTrace.attributionStream""",
-}
-APPROVED_TRACE_COMPAT_DECLS = {
-    (path, line.split()[1])
-    for path, block in APPROVED_TRACE_COMPAT_ABBREVS.items()
-    for line in block.splitlines()
-    if line.startswith("abbrev ")
-}
 
 
 @dataclass(frozen=True)
@@ -137,7 +89,6 @@ class Mapping:
 @dataclass(frozen=True)
 class Config:
     common_module: str
-    contract_globs: tuple[str, ...]
     direct_module: str
     direct_import: str
     mappings: tuple[Mapping, ...]
@@ -294,15 +245,11 @@ def read_config(root: Path) -> Config:
     except json.JSONDecodeError as exc:
         raise ValueError(f"malformed manifest {MANIFEST}: {exc.msg}") from exc
     if not isinstance(value, dict) or set(value) != {
-        "schema", "commonModule", "contractModuleGlobs", "requiredDirectImport", "mappings"
+        "schema", "commonModule", "requiredDirectImport", "mappings"
     }:
-        raise ValueError("manifest must contain exactly schema/commonModule/contractModuleGlobs/requiredDirectImport/mappings")
-    if value["schema"] != 3 or not isinstance(value["commonModule"], str) or not value["commonModule"]:
+        raise ValueError("manifest must contain exactly schema/commonModule/requiredDirectImport/mappings")
+    if value["schema"] != 4 or not isinstance(value["commonModule"], str) or not value["commonModule"]:
         raise ValueError("manifest has unsupported schema or invalid module paths")
-    contract_globs = value["contractModuleGlobs"]
-    if (not isinstance(contract_globs, list) or
-            contract_globs != ["Blanc/Weth10*.lean", "Blanc/Lido*.lean"]):
-        raise ValueError("manifest must pin the WETH10 and Lido contract module globs")
     direct = value["requiredDirectImport"]
     if not isinstance(direct, dict) or set(direct) != {"module", "import"} or not all(isinstance(direct[k], str) and direct[k] for k in direct):
         raise ValueError("manifest requiredDirectImport must contain exactly nonempty module/import")
@@ -321,7 +268,7 @@ def read_config(root: Path) -> Config:
         mappings.append(Mapping(donor, common, kind))
     if len({row.donor for row in mappings}) != len(mappings) or len({row.common for row in mappings}) != len(mappings):
         raise ValueError("manifest mappings must have unique donor and common names")
-    return Config(value["commonModule"], tuple(contract_globs), direct["module"], direct["import"], tuple(mappings))
+    return Config(value["commonModule"], direct["module"], direct["import"], tuple(mappings))
 
 
 RELOCATION_DECL_RE = re.compile(
@@ -453,48 +400,17 @@ def audit(root: Path) -> list[str]:
                 errors.append(f"COMMON-MISSING — {row.common} is not declared in {config.common_module}")
             elif got[0] != row.kind:
                 errors.append(f"COMMON-KIND-MISMATCH — {row.common} is {got[0]}, manifest requires {row.kind}")
-        donor_files: list[Path] = []
-        for pattern in config.contract_globs:
-            matches = sorted(root.glob(pattern))
-            if not matches:
-                errors.append(
-                    f"SETUP — extraction ownership: no contract modules match {pattern}"
-                )
-            donor_files.extend(matches)
-        donor_files = sorted(set(donor_files))
         donors = {row.donor for row in config.mappings}
-        common_basenames = {row.common.rsplit(".", 1)[-1] for row in config.mappings}
-        seen_trace_compat: set[tuple[str, str]] = set()
-        for path in donor_files:
+        blanc_files = sorted((root / "Blanc").rglob("*.lean"))
+        if (root / "Blanc.lean").is_file():
+            blanc_files.append(root / "Blanc.lean")
+        if not blanc_files:
+            errors.append("SETUP — extraction ownership: no Blanc modules to audit for donor survivors")
+        for path in blanc_files:
             rel = path.relative_to(root).as_posix()
-            for name, (kind, line) in declarations(path).items():
-                if name.startswith("Blanc.ExecutionTrace."):
-                    compat = (rel, name)
-                    seen_trace_compat.add(compat)
-                    if compat not in APPROVED_TRACE_COMPAT_DECLS or kind != "abbrev":
-                        errors.append(
-                            f"TRACE-COMPAT-ABBREV — {rel}:{line}: "
-                            f"unapproved {kind} {name}"
-                        )
-                elif name in donors:
+            for name, kind, line in tolerant_declarations(path):
+                if name in donors:
                     errors.append(f"DONOR-SURVIVOR — {rel}:{line}: {kind} {name}")
-                elif name.rsplit(".", 1)[-1] in common_basenames:
-                    errors.append(f"CONTRACT-SHADOW — {rel}:{line}: {kind} {name}")
-            for name, line, form in donor_aliases_or_exports(path, donors):
-                tag = "CONTRACT-ALIAS" if rel.startswith("Blanc/Lido") else "DONOR-SURVIVOR"
-                errors.append(f"{tag} — {rel}:{line}: {form} {name}")
-        for rel, block in APPROVED_TRACE_COMPAT_ABBREVS.items():
-            path = root / rel
-            source = path.read_text(encoding="utf-8") if path.is_file() else ""
-            if source.count(block) != 1:
-                errors.append(
-                    f"TRACE-COMPAT-ABBREV — {rel} must contain its exact "
-                    "approved Blanc.ExecutionTrace compatibility block"
-                )
-        for rel, name in sorted(APPROVED_TRACE_COMPAT_DECLS - seen_trace_compat):
-            errors.append(
-                f"TRACE-COMPAT-ABBREV — {rel}: missing approved abbrev {name}"
-            )
         direct_path = root / config.direct_module
         if not direct_path.is_file():
             errors.append(f"DIRECT-IMPORT-MISSING — required consumer module missing: {config.direct_module}")
@@ -506,47 +422,18 @@ def audit(root: Path) -> list[str]:
         return [f"SETUP — extraction ownership: {exc}"]
 
 
-def mutate_donor_alias(root: Path) -> None:
-    path = root / "Blanc/Weth10HolderFlow.lean"
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(
-            "\nnamespace Blanc.Weth10.Execution\n"
-            "alias commits := Jaune.Execution.commits\n"
-            "end Blanc.Weth10.Execution\n"
-        )
-
-
-def mutate_donor_export(root: Path) -> None:
-    path = root / "Blanc/Weth10HolderFlow.lean"
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write("\nexport Jaune.Execution (commits)\n")
-
-
-def mutate_trace_compat_flow_missing(root: Path) -> None:
-    rel = "Blanc/Weth10HolderFlow.lean"
-    path = root / rel
-    block = APPROVED_TRACE_COMPAT_ABBREVS[rel]
-    text = path.read_text(encoding="utf-8")
-    if text.count(block) != 1:
-        raise ValueError("negative control could not uniquely find flow compatibility block")
-    path.write_text(text.replace(block, "-- removed flow compatibility block", 1), encoding="utf-8")
-
-
-def mutate_trace_compat_attribution_drift(root: Path) -> None:
-    rel = "Blanc/Weth10Attribution.lean"
-    path = root / rel
-    block = APPROVED_TRACE_COMPAT_ABBREVS[rel]
-    text = path.read_text(encoding="utf-8")
-    if text.count(block) != 1:
-        raise ValueError(
-            "negative control could not uniquely find attribution compatibility block"
-        )
-    drifted = block.replace(
-        "Blanc.Weth10.RetainedXlot.attributionStream",
-        "Blanc.Weth10.MessageCallTrace.attributionStream",
-        1,
+def mutate_historical_donor_survivor(root: Path) -> None:
+    # Test-owned fixture file: an exact historical donor declaration in the
+    # all-Blanc corpus, removed again by the restore step (new-file absence).
+    path = root / "Blanc/ExtractionOwnershipControl.lean"
+    if path.exists():
+        raise ValueError("negative control fixture path already exists")
+    path.write_text(
+        "namespace Blanc.Weth10.Execution\n"
+        "def commits : Prop := True\n"
+        "end Blanc.Weth10.Execution\n",
+        encoding="utf-8",
     )
-    path.write_text(text.replace(block, drifted, 1), encoding="utf-8")
 
 
 COMMON_MODULE = ".lake/packages/jaune/Jaune/ExecSettlement.lean"
@@ -561,24 +448,13 @@ def mutate_common_missing(root: Path) -> None:
     path.write_text(text.replace(old, "def executionSettlementControlMissing", 1), encoding="utf-8")
 
 
-def mutate_lido_shadow(root: Path) -> None:
-    path = root / "Blanc/LidoCircuitBreakerCore.lean"
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(
-            "\nnamespace Blanc.LidoCircuitBreaker.Exec\n"
-            "def committedFrames := Jaune.Exec.committedFrames\n"
-            "end Blanc.LidoCircuitBreaker.Exec\n"
-        )
-
-
-def mutate_lido_alias(root: Path) -> None:
-    path = root / "Blanc/LidoCircuitBreakerCore.lean"
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(
-            "\nnamespace Blanc.LidoCircuitBreaker\n"
-            "alias lidoSettlementLegacy := Jaune.Execution.commits\n"
-            "end Blanc.LidoCircuitBreaker\n"
-        )
+def mutate_common_kind_mismatch(root: Path) -> None:
+    path = root / COMMON_MODULE
+    text = path.read_text(encoding="utf-8")
+    old = "def Execution.commits"
+    if text.count(old) != 1:
+        raise ValueError(f"negative control could not uniquely find {old}")
+    path.write_text(text.replace(old, "theorem Execution.commits", 1), encoding="utf-8")
 
 
 def mutate_relocated_leftover(root: Path) -> None:
@@ -614,7 +490,7 @@ def mutate_relocated_missing(root: Path) -> None:
 
 
 def mutate_direct_import_missing(root: Path) -> None:
-    path = root / "Blanc/Weth10HolderFlow.lean"
+    path = root / "Blanc/ExecutionSettlement.lean"
     text = path.read_text(encoding="utf-8")
     old = "import Jaune.ExecSettlement"
     if text.count(old) != 1:
@@ -623,16 +499,12 @@ def mutate_direct_import_missing(root: Path) -> None:
 
 
 def negative_controls(root: Path) -> list[str]:
+    # Exactly eight controls: these seven mutations plus the trailing-`?`
+    # parser probe below.  The common-kind tag is COMMON-KIND-MISMATCH.
     controls = [
-        ("donor-alias", "DONOR-SURVIVOR", mutate_donor_alias),
-        ("donor-export", "DONOR-SURVIVOR", mutate_donor_export),
-        ("trace-flow-compat-missing", "TRACE-COMPAT-ABBREV",
-         mutate_trace_compat_flow_missing),
-        ("trace-attribution-compat-drift", "TRACE-COMPAT-ABBREV",
-         mutate_trace_compat_attribution_drift),
-        ("lido-shadow", "CONTRACT-SHADOW", mutate_lido_shadow),
-        ("lido-alias", "CONTRACT-ALIAS", mutate_lido_alias),
+        ("historical-donor-survivor", "DONOR-SURVIVOR", mutate_historical_donor_survivor),
         ("common-missing", "COMMON-MISSING", mutate_common_missing),
+        ("common-kind-mismatch", "COMMON-KIND-MISMATCH", mutate_common_kind_mismatch),
         ("direct-import-missing", "DIRECT-IMPORT-MISSING", mutate_direct_import_missing),
         ("relocated-leftover", "RELOCATED-REDEFINED", mutate_relocated_leftover),
         ("relocated-disconnected", "RELOCATED-REDEFINED", mutate_relocated_disconnected),
@@ -682,18 +554,43 @@ def negative_controls(root: Path) -> list[str]:
         )
         if audit(copied):
             failures.append("CONTROL-SETUP — the seed copy does not audit clean")
+
+        def snapshot(tree: Path) -> dict[str, str]:
+            return {
+                path.relative_to(tree).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in sorted(tree.rglob("*"))
+                if path.is_file()
+            }
+
+        seed_snapshot = snapshot(copied)
+        case = Path(temp) / "case"
+        shutil.copytree(copied, case)
+
+        def restore_seed_bytes() -> None:
+            # Restore exact seed bytes and new-file absence; identity is
+            # asserted by the caller without a redundant restored audit.
+            for path in sorted(case.rglob("*")):
+                if path.is_file() and path.relative_to(case).as_posix() not in seed_snapshot:
+                    path.unlink()
+            for rel, digest in seed_snapshot.items():
+                target = case / rel
+                if not target.is_file() or hashlib.sha256(target.read_bytes()).hexdigest() != digest:
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(copied / rel, target)
+
         for name, expected, mutate in controls:
-            case = Path(temp) / name
-            shutil.copytree(copied, case)
             try:
                 mutate(case)
             except (OSError, ValueError) as exc:
                 failures.append(f"CONTROL-SETUP — {name}: {exc}")
-                continue
-            output = audit(case)
-            if not any(line.startswith(expected) for line in output):
-                rendered = "; ".join(output) if output else "passed unexpectedly"
-                failures.append(f"CONTROL-FAILED — {name}: expected {expected}, got {rendered}")
+            else:
+                output = audit(case)
+                if not any(line.startswith(expected) for line in output):
+                    rendered = "; ".join(output) if output else "passed unexpectedly"
+                    failures.append(f"CONTROL-FAILED — {name}: expected {expected}, got {rendered}")
+            restore_seed_bytes()
+            if snapshot(case) != seed_snapshot:
+                failures.append(f"CONTROL-FAILED — {name}: restored tree is not byte-identical to the seed")
     return failures
 
 
@@ -716,9 +613,9 @@ def main() -> int:
                 print(control)
             print(f"REGRESSION — extraction ownership: {len(controls)} negative control(s) failed")
             return 1
-        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present; 197/197 relocated declarations owned by Jaune only; 12/12 negative controls live")
+        print("OK — extraction ownership: 14/14 common declarations present with manifest kinds; no exact historical donor declaration in the all-Blanc corpus (alias/export-created names not audited); Blanc/ExecutionSettlement.lean directly imports Jaune.ExecSettlement; 197/197 relocated declarations owned by Jaune only; 8/8 negative controls live")
     else:
-        print("OK — extraction ownership: 14/14 common declarations present; WETH10/Lido settlement shadows and aliases/exports absent; 21 approved trace compatibility abbreviations exact; direct import present; 197/197 relocated declarations owned by Jaune only")
+        print("OK — extraction ownership: 14/14 common declarations present with manifest kinds; no exact historical donor declaration in the all-Blanc corpus (alias/export-created names not audited); Blanc/ExecutionSettlement.lean directly imports Jaune.ExecSettlement; 197/197 relocated declarations owned by Jaune only")
     return 0
 
 
