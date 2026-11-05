@@ -1130,7 +1130,7 @@ def control_malformed_untracked_reads_are_refused() -> None:
         ("code under scripts (.lean)", {"files": ["a"],
                                        "untracked_reads": [{"path": "scripts/Check.lean", "reason": "r"}]}),
         ("code under a named scripts root", {"files": ["a"],
-                                             "untracked_reads": [{"path": "@eels/scripts/x.py", "reason": "r"}]}),
+                                             "untracked_reads": [{"path": "@controlref/scripts/x.py", "reason": "r"}]}),
         ("script glob", {"files": ["a"],
                          "untracked_reads": [{"root": "scripts", "pattern": "*.py", "reason": "r"}]}),
         ("glob without reason", {"files": ["a"],
@@ -1434,10 +1434,10 @@ def control_module_scope_import_bindings_are_runner_authority() -> None:
     The digest matches top-level nodes by name and an `import` statement has
     none, so every module-scope binding used to sit outside it.  Two of them
     were caught by moving those imports into hashed function bodies, which left
-    the class open: `from gate_cache_t8n_root import T8N_TARGET_ROOT` supplies
-    `NAMED_ROOTS` and `resolve_path`, so rebinding that one line moved the
-    fingerprinted input root from the pinned checkout to an arbitrary path
-    while the runner identity stayed byte-identical.
+    the class open: every sibling binding supplies a name the authorities
+    resolve at call time, so rebinding one such line could substitute the
+    imported implementation a verdict-affecting authority calls while the
+    runner identity stayed byte-identical.
 
     This control enumerates the bindings out of the runner's own source rather
     than from a list, so a sibling module added tomorrow is covered the day it
@@ -1457,7 +1457,7 @@ def control_module_scope_import_bindings_are_runner_authority() -> None:
     } | {
         alias.name for node in nodes if isinstance(node, ast.Import) for alias in node.names
     }
-    for sibling in ("gate_cache_lock", "gate_cache_t8n_root", "gate_semaphore"):
+    for sibling in ("gate_cache_lock", "gate_semaphore"):
         require(sibling in bound_sources,
                 f"{sibling} is no longer a module-scope import of the runner")
 
@@ -1513,7 +1513,7 @@ def control_authority_digest_hashes_bindings_not_imported_sources() -> None:
     source = path.read_text(encoding="utf-8")
     siblings = (
         "gate_cache_lock.py", "gate_semaphore.py",
-        "gate_cache_t8n_root.py", "gate_cache_host_identity.py",
+        "gate_cache_host_identity.py",
     )
     digests: list[str] = []
     with tempfile.TemporaryDirectory(prefix="gate-import-contents-") as temp:
@@ -1718,40 +1718,6 @@ def control_scheduling_metadata_is_not_substantive_verdict_identity() -> None:
         require(after == before,
                 "order and CI placement must not retroactively change a substantive verdict")
 
-
-def control_t8n_resolver_invalidates_only_its_consumers() -> None:
-    ordinary = simple_gate(
-        "ordinary",
-        ["scripts/ordinary.sh"],
-        {"files": ["scripts/x.txt"]},
-        "^OK — ordinary: ",
-    )
-    current = simple_gate(
-        "current",
-        ["scripts/current.sh"],
-        {"files": ["@t8n_python_base/bin/python3.11"]},
-        "^OK — current: ",
-    )
-    before_ordinary, _ = gc.runner_identity(ordinary)
-    before_current, _ = gc.runner_identity(current)
-    original = gc.file_digest
-
-    def changed_t8n_only(path: Path) -> str:
-        if path.name == gc.RUNNER_T8N_SOURCE:
-            return "f" * 64
-        return original(path)
-
-    with patched(gc, "file_digest", changed_t8n_only):
-        after_ordinary, _ = gc.runner_identity(ordinary)
-        after_current, _ = gc.runner_identity(current)
-    require(
-        after_ordinary == before_ordinary,
-        "a t8n resolver change must preserve unrelated gate fingerprints",
-    )
-    require(
-        after_current != before_current,
-        "a t8n resolver change must invalidate current-mainnet consumers",
-    )
 
 
 def control_unparsable_import_cannot_hide_a_dependency() -> None:
@@ -2173,78 +2139,26 @@ def control_external_checkout_identity() -> None:
         require(s.disposition("g") == "fresh", "an absent checkout must force execution")
 
 
-def control_oracle_lanes_are_disjoint_and_exact() -> None:
-    """The historical Prague and current-mainnet roots cannot be cross-wired."""
+def control_unknown_named_root_refuses() -> None:
+    """No production alias is retained for tests; installed roots resolve."""
 
-    with scratch() as s:
-        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
-
-        def gate(inputs: dict[str, Any]) -> dict[str, Any]:
-            return simple_gate("g", ["scripts/g.sh"], inputs, "^OK — g.sh: ")
-
-        legacy_external = {
-            "id": "eels",
-            "path": "~/execution-specs",
-            "path_env": "EELS_ROOT",
-            "pin": gc.LEGACY_EELS_PIN,
-        }
-        current_external = {
-            "id": "t8n_target",
-            "path": "~/execution-specs-t8n-amsterdam",
-            "path_env": "JAUNE_T8N_TARGET",
-            "pin": gc.CURRENT_T8N_PIN,
-        }
-        shared_files = [
-            "scripts/current-mainnet-target.json",
-            "scripts/current-mainnet-runtime-lock.json",
-            "scripts/current_mainnet.py",
-        ]
-        for path in shared_files:
-            s.write(path, "fixture\n")
-
-        valid_legacy = {
-            "env": ["EELS_ROOT", "HOME"],
-            "external": [legacy_external],
-            "files": ["@eels/venv/bin/python"],
-        }
-        s.registry([gate(valid_legacy)])
-        s.load()
-
-        valid_current = {
-            "env": ["JAUNE_T8N_TARGET", "HOME"],
-            "external": [current_external],
-            "files": shared_files + ["@t8n_target/.venv/bin/python"],
-        }
-        s.registry([gate(valid_current)])
-        s.load()
-
-        mutants = []
-        changed = copy.deepcopy(valid_legacy)
-        changed["external"] = [current_external]
-        mutants.append(("legacy repointed", changed))
-        changed = copy.deepcopy(valid_current)
-        changed["external"][0]["pin"] = gc.LEGACY_EELS_PIN
-        mutants.append(("pins swapped", changed))
-        changed = copy.deepcopy(valid_current)
-        changed["env"].append("EELS_ROOT")
-        mutants.append(("shared environment", changed))
-        changed = copy.deepcopy(valid_current)
-        changed["external"][0]["pin"] = gc.CURRENT_T8N_PIN[:1]
-        mutants.append(("short pin", changed))
-        changed = copy.deepcopy(valid_current)
-        changed["files"].remove("scripts/current_mainnet.py")
-        mutants.append(("helper omitted", changed))
-        changed = copy.deepcopy(valid_current)
-        changed["files"].remove("scripts/current-mainnet-runtime-lock.json")
-        mutants.append(("runtime lock omitted", changed))
-
-        for label, inputs in mutants:
-            s.registry([gate(inputs)])
-            try:
-                s.load()
-            except gc.GateCacheError:
-                continue
-            raise ControlFailure(f"{label} oracle-lane mutant was accepted")
+    require(not gc.NAMED_ROOTS,
+            "a production named-root alias was retained; install a test-owned "
+            "mapping in the control that needs one instead")
+    with scratch() as s, scratch() as elsewhere:
+        try:
+            gc.resolve_path(s.root, "@unknown_root/venv/bin/python")
+        except gc.GateCacheError:
+            pass
+        else:
+            raise ControlFailure("an unknown named root resolved instead of refusing")
+        installed = {"controlref": ("GATE_CONTROL_REFERENCE_DIR", str(elsewhere.root))}
+        with patched(gc, "NAMED_ROOTS", installed):
+            require(gc.resolve_path(s.root, "@controlref/venv/bin/python")
+                    == elsewhere.root / "venv/bin/python",
+                    "an installed test-owned named root must resolve generically")
+        require(not gc.NAMED_ROOTS,
+                "the test-owned named-root mapping was not restored")
 
 
 def control_symlink_file_target_invalidates() -> None:
@@ -2267,233 +2181,6 @@ def control_symlink_file_target_invalidates() -> None:
             "retargeting a file symlink must invalidate even with equal target bytes",
         )
 
-
-def control_current_mainnet_python_base_is_native() -> None:
-    """The CPython root follows the venv selector instead of one OS literal."""
-
-    # Every native consumer must own the optional archive through exact files.
-    registry = json.loads(gc.registry_path(Path(gc.__file__).resolve().parent.parent)
-                          .read_text(encoding="utf-8"))
-    native = [row for row in registry["gates"] if gc.gate_uses_t8n_resolver(row)]
-    require(bool(native), "native ZIP registration control needs a nonempty consumer population")
-    for row in native:
-        require(row["inputs"].get("files", []).count(
-                    "@t8n_python_base/lib/python311.zip") == 1,
-                f"{row['id']}: optional native ZIP input missing or repeated")
-
-    with scratch() as s:
-        target = s.root / "target"
-        selector = target / ".venv/bin/python"
-        selector.parent.mkdir(parents=True)
-        bases = [s.root / "uv/a", s.root / "uv/b"]
-        for base in bases:
-            executable = base / "bin/python3.11"
-            executable.parent.mkdir(parents=True)
-            executable.write_text("same runtime\n", encoding="utf-8")
-            (base / "lib/python3.11").mkdir(parents=True)
-        selector.symlink_to(bases[0] / "bin/python3.11")
-        old = os.environ.get("JAUNE_T8N_TARGET")
-        os.environ["JAUNE_T8N_TARGET"] = str(target)
-        try:
-            resolved = gc.resolve_path(s.root, "@t8n_python_base/lib/python3.11")
-            require(
-                resolved == (bases[0] / "lib/python3.11").resolve(strict=True),
-                "derived CPython root did not follow the first native selector",
-            )
-            selector.unlink()
-            selector.symlink_to(bases[1] / "bin/python3.11")
-            resolved = gc.resolve_path(s.root, "@t8n_python_base/lib/python3.11")
-            require(
-                resolved == (bases[1] / "lib/python3.11").resolve(strict=True),
-                "derived CPython root did not follow a retargeted native selector",
-            )
-            # The optional archive is beside, not inside, the stdlib tree.
-            # Exercise the production file/fingerprint path; never execute the
-            # fake interpreter or infer existence from attempted enumeration.
-            archive = resolved.parent / "python311.zip"
-            archive_key = "@t8n_python_base/lib/python311.zip"
-            payload = b"synthetic archive bytes\n"
-
-            def archive_identity():
-                gc.forget_digests()
-                return gc.component_files(s.root, [archive_key])
-
-            def archive_refuses(label: str) -> None:
-                try:
-                    archive_identity()
-                except gc.Unresolvable:
-                    return
-                raise ControlFailure(f"native ZIP {label} must refuse identity")
-
-            absent, detail = archive_identity()
-            require(detail[archive_key] == "<absent>",
-                    "only an absent ZIP leaf may retain the optional absence marker")
-            archive.write_bytes(payload)
-            regular, detail = archive_identity()
-            require(detail[archive_key] == gc.sha256_bytes(payload) and regular != absent,
-                    "ZIP appearance must bind the existing regular-file SHA256 shape")
-            archive.write_bytes(payload + b"changed\n")
-            require(archive_identity()[0] != regular,
-                    "one ZIP content change must invalidate its file identity")
-            archive.unlink()
-            require(archive_identity()[0] == absent,
-                    "ZIP removal must recover the absent-path identity")
-
-            archive.mkdir()
-            archive_refuses("plain directory")
-            (archive / "module.py").write_text("value = 1\n", encoding="utf-8")
-            archive_refuses("nonempty directory")
-            (archive / "module.py").unlink()
-            archive.rmdir()
-
-            first = s.write("archives/first.zip", payload.decode())
-            second = s.write("archives/second.zip", payload.decode())
-            archive.symlink_to(first)
-            linked = archive_identity()[0]
-            require(linked != regular,
-                    "a ZIP file symlink must retain selector identity as well as bytes")
-            archive.unlink()
-            archive.symlink_to(second)
-            require(archive_identity()[0] != linked,
-                    "ZIP retargeting must invalidate even with identical target bytes")
-            linked = archive_identity()[0]
-            second.write_bytes(payload + b"target change\n")
-            require(archive_identity()[0] != linked,
-                    "a ZIP symlink target's byte change must invalidate")
-            archive.unlink()
-            relative = os.path.relpath(first, archive.parent)
-            archive.symlink_to(relative)
-            relative_identity = archive_identity()[0]
-            archive.unlink()
-            archive.symlink_to(first)
-            require(archive_identity()[0] != relative_identity,
-                    "relative and absolute ZIP link selectors remain distinct")
-            archive.unlink()
-            archive.symlink_to(bases[1] / "lib/python3.11", target_is_directory=True)
-            archive_refuses("directory symlink")
-            archive.unlink()
-            archive.symlink_to(s.root / "missing-archive.zip")
-            archive_refuses("dangling symlink")
-            archive.unlink()
-            archive.symlink_to(archive.name)
-            archive_refuses("self-loop symlink")
-            archive.unlink()
-            other_link = archive.with_name("other.zip")
-            archive.symlink_to(other_link.name)
-            other_link.symlink_to(archive.name)
-            archive_refuses("two-link cycle")
-            archive.unlink()
-            other_link.unlink()
-
-            library = archive.parent
-            saved_library = bases[1] / "saved-library"
-            library.rename(saved_library)
-            try:
-                archive_refuses("missing library parent")
-                library.write_text("not a directory\n", encoding="utf-8")
-                archive_refuses("file ancestor")
-                library.unlink()
-                library.symlink_to("missing-library", target_is_directory=True)
-                archive_refuses("dangling library ancestor")
-                library.unlink()
-                library.symlink_to(library.name, target_is_directory=True)
-                archive_refuses("looping library ancestor")
-            finally:
-                if library.is_symlink() or library.exists():
-                    library.unlink()
-                saved_library.rename(library)
-
-            # Inject otherwise privilege-dependent inspection failures only on
-            # this synthetic path. This is error handling, not OS access proof.
-            original_lstat = Path.lstat
-            def unreadable_leaf(path, *args, **kwargs):
-                if path == archive:
-                    raise PermissionError("synthetic ZIP inspection denied")
-                return original_lstat(path, *args, **kwargs)
-            with patched(Path, "lstat", unreadable_leaf):
-                archive_refuses("uninspectable leaf")
-            original_resolve = Path.resolve
-            def unreadable_parent(path, *args, **kwargs):
-                if path == library:
-                    raise PermissionError("synthetic ZIP parent inspection denied")
-                return original_resolve(path, *args, **kwargs)
-            with patched(Path, "resolve", unreadable_parent):
-                archive_refuses("uninspectable parent")
-            archive.write_bytes(payload)
-            original_read = Path.read_bytes
-            def unreadable_contents(path, *args, **kwargs):
-                if path == archive:
-                    raise PermissionError("synthetic ZIP read denied")
-                return original_read(path, *args, **kwargs)
-            with patched(Path, "read_bytes", unreadable_contents):
-                archive_refuses("unreadable regular file")
-            archive.unlink()
-
-            require(hasattr(os, "mkfifo"), "native ZIP controls require supported POSIX FIFO metadata")
-            os.mkfifo(archive)
-            archive_refuses("FIFO")
-            archive.unlink()
-            fifo = s.root / "archive-fifo"
-            os.mkfifo(fifo)
-            archive.symlink_to(fifo)
-            archive_refuses("FIFO symlink")
-            archive.unlink()
-            fifo.unlink()
-
-            gate = simple_gate("zip", ["synthetic-never-executed"],
-                               {"files": [archive_key]}, "^OK — zip: ")
-            def fingerprint(selected):
-                gc.forget_digests()
-                return gc.fingerprint(s.root, selected)[0]
-            def require_transition(selected):
-                before = fingerprint(selected)
-                archive.write_bytes(payload)
-                try:
-                    after = fingerprint(selected)
-                finally:
-                    archive.unlink()
-                require(after != before,
-                        "ZIP entry must invalidate an absent-to-file transition")
-            require_transition(gate)
-            without_entry = copy.deepcopy(gate)
-            without_entry["inputs"]["files"] = []
-            try:
-                require_transition(without_entry)
-            except ControlFailure as error:
-                require(str(error) == "ZIP entry must invalidate an absent-to-file transition",
-                        f"sole ZIP entry loss must bite at transition identity: {error}")
-            else:
-                raise ControlFailure("sole ZIP entry loss escaped its transition control")
-            require(gate["inputs"]["files"] == [archive_key],
-                    "sole-entry counterfactual must not mutate the green declaration")
-
-            archive.write_bytes(payload)
-            fingerprint(gate)
-            archive.unlink()
-            archive.mkdir()
-            try:
-                try:
-                    fingerprint(gate)
-                except gc.Unresolvable:
-                    pass
-                else:
-                    raise ControlFailure("post-change ZIP directory fingerprint was accepted")
-            finally:
-                archive.rmdir()
-
-            selector.unlink()
-            selector.write_text("not a selector\n", encoding="utf-8")
-            try:
-                gc.resolve_path(s.root, "@t8n_python_base/lib/python3.11")
-            except gc.Unresolvable:
-                pass
-            else:
-                raise ControlFailure("a non-symlink CPython selector was accepted")
-        finally:
-            if old is None:
-                os.environ.pop("JAUNE_T8N_TARGET", None)
-            else:
-                os.environ["JAUNE_T8N_TARGET"] = old
 
 
 def control_symlink_directory_selector_invalidates() -> None:
@@ -4642,32 +4329,31 @@ def control_audit_resolves_present_named_root_inputs() -> None:
         (external.root / "venv/bin/python").write_text("#!/bin/sh\n", encoding="utf-8")
         external.git_init()
         pin = external.git("rev-parse", "HEAD")
-        expected_pin = gc.LEGACY_EELS_PIN
-        gc.LEGACY_EELS_PIN = pin
-        try:
-            with environment({"EELS_ROOT": str(external.root)}):
-                command = ["scripts/check-a.sh"]
-                for declared in ("@eels/.venv/bin/python", "@eels/venv/bin/python"):
-                    gate = audit_gate("a", command, 1)
-                    gate["inputs"] = {
-                        "external": [{
-                            "id": "eels",
-                            "path": "~/execution-specs",
-                            "path_env": "EELS_ROOT",
-                            "pin": pin,
-                        }],
-                        "env": ["EELS_ROOT"],
-                        "files": [declared],
-                    }
-                    code = audit_scratch(s, command, [gate], [])
-                    if declared.startswith("@eels/.venv/"):
-                        require(code != 0, "a missing named-root file must fail audit")
-                        require("scripts/check-a.sh" in s.output and declared in s.output,
-                                f"audit did not name the row and path:\n{s.output}")
-                    else:
-                        require(code == 0, f"a resolvable named-root file must pass audit:\n{s.output}")
-        finally:
-            gc.LEGACY_EELS_PIN = expected_pin
+        installed = {"controlref": ("GATE_CONTROL_REFERENCE_DIR", "unused-reference")}
+        with patched(gc, "NAMED_ROOTS", installed), environment({"GATE_CONTROL_REFERENCE_DIR": str(external.root)}):
+            command = ["scripts/check-a.sh"]
+            for declared in ("@controlref/.venv/bin/python", "@controlref/venv/bin/python"):
+                gate = audit_gate("a", command, 1)
+                gate["inputs"] = {
+                    "external": [{
+                        "id": "controlref",
+                        "path": "~/unused-control-reference",
+                        "path_env": "GATE_CONTROL_REFERENCE_DIR",
+                        "pin": pin,
+                    }],
+                    "env": ["GATE_CONTROL_REFERENCE_DIR"],
+                    "files": [declared],
+                }
+                code = audit_scratch(s, command, [gate], [])
+                if declared.startswith("@controlref/.venv/"):
+                    require(code != 0, "a missing named-root file must fail audit")
+                    require("scripts/check-a.sh" in s.output and declared in s.output,
+                            f"audit did not name the row and path:\n{s.output}")
+                else:
+                    require(code == 0, f"a resolvable named-root file must pass audit:\n{s.output}")
+        require(not gc.NAMED_ROOTS,
+                "the test-owned named-root mapping was not restored")
+
 
 
 # --- controls: findings from adversarial review ------------------------------
@@ -6108,7 +5794,6 @@ CONTROLS = (
     control_build_certificate_report_sanitizes_its_host_field,
     control_soundness_edit_invalidates_every_cacheable_row,
     control_scheduling_metadata_is_not_substantive_verdict_identity,
-    control_t8n_resolver_invalidates_only_its_consumers,
     control_lean_module_dep_hash_invalidates,
     control_missing_trace_forces_execution,
     control_malformed_trace_forces_execution,
@@ -6120,9 +5805,8 @@ CONTROLS = (
     control_git_ref_movement_invalidates,
     control_unresolvable_ref_forces_execution,
     control_external_checkout_identity,
-    control_oracle_lanes_are_disjoint_and_exact,
+    control_unknown_named_root_refuses,
     control_symlink_file_target_invalidates,
-    control_current_mainnet_python_base_is_native,
     control_symlink_directory_selector_invalidates,
     control_environment_variable_invalidates,
     control_expiry_clock_moves_only_at_semantic_transition,
