@@ -19,7 +19,7 @@ def O6 : State := origOf stor5
 
 /-- The kernel's root frame of message 7. -/
 def fA : Frame :=
-  Frame.ofCall (kCall world6 O6 tokenAddr Blanc.Lift.VyperNonreentrantDeployed.Token20.code
+  Frame.ofCall (kCall world6 O6 tokenAddr Blanc.Lift.Token20.code
     approveCall 100000 0)
 
 def eA : Evm := runOr (frameEnterS fA acs6)
@@ -28,7 +28,7 @@ def cA1 : PCfg := cfgOr cA (pwalkH (.avoid 0) tokenTries eA.sta okAny 46 cA)
 def dA : Devm := haltOf (pwalkH (.avoid 0) tokenTries eA.sta okAny 1 cA1)
 
 /-- `allowance[creator][P]`'s slot. -/
-abbrev allowCP : B256 := Blanc.Lift.VyperNonreentrantDeployed.Token20.allowSlot creator proxyAddr
+abbrev allowCP : B256 := Blanc.Lift.Token20.allowSlot creator proxyAddr
 
 /-- The storage after message 7: the allowance, then `stor5`. -/
 def stor7 : StorShadow := ((tokenAddr, allowCP), 1000) :: stor5
@@ -36,7 +36,7 @@ def stor7 : StorShadow := ((tokenAddr, allowCP), 1000) :: stor5
 theorem approveFacts :
     frameEnterS fA acs6 = .run eA ∧
     (eA.pc, eA.sta.code, eA.sta.benvStat.fork, eA.sta.benvStat.excessBlobGas) =
-      (0, Blanc.Lift.VyperNonreentrantDeployed.Token20.code, .prague, 0) ∧
+      (0, Blanc.Lift.Token20.code, .prague, 0) ∧
     pwalkH (.avoid 0) tokenTries eA.sta okAny 46 cA = .cont cA1 ∧
     pwalkH (.avoid 0) tokenTries eA.sta okAny 1 cA1 = .halt (.ok dA) ∧
     dA.error = none ∧ dA.gasLeft = 77697 ∧ dA.refundCounter = 0 ∧

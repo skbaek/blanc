@@ -28,7 +28,7 @@ theorem frameBalD {g : Fork} (hg : CoveredFork g) (hs : ReOK world7 eBal.sta)
   intro t ht
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, hst, w1, w2, -⟩ := addFacts
   have hcode : ((eBal.sta.withFork g).withOrig world7).code =
-      Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
+      Blanc.Lift.Token20.code :=
     (Sevm.withOrig_code _ _).trans
       ((Sevm.withFork_code _ _).trans (Prod.mk.inj (Prod.mk.inj hst).2).2)
   have w1' := (walk_re hs hg (.avoid 0) tokenTries okAny 29 cBal0).trans w1
@@ -47,7 +47,7 @@ theorem frameTfD {g : Fork} (hg : CoveredFork g) (hs : ReOK world7 eTf.sta)
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, hst, w1,
     w2, -⟩ := addFacts
   have hcode : ((eTf.sta.withFork g).withOrig world7).code =
-      Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
+      Blanc.Lift.Token20.code :=
     (Sevm.withOrig_code _ _).trans
       ((Sevm.withFork_code _ _).trans (Prod.mk.inj (Prod.mk.inj (Prod.mk.inj hst).2).2).1)
   have w1' := (walk_re hs hg (.avoid 0) tokenTries okAny 85 cTf0).trans w1

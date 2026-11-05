@@ -2,7 +2,7 @@ import Blanc.Lift.CallProfileTransport
 import Blanc.Composition.Curve3Pool3CrvWorld
 import Blanc.Lift.Curve3Pool.LivePremises
 import Blanc.Lift.MutableCallPost
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.RunTransferFrom
+import Blanc.Lift.Token20.RunTransferFrom
 
 /-!
 # Compatibility names for the pool's all-gas coin call sites

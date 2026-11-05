@@ -44,7 +44,7 @@ private theorem create_fixtures_from (W4 : State) (fork : Fork) (hfork : Covered
     (hW : WorldIs W4 acs0 storOracle) :
     let W5 := ((CreateEntry.entryState W4 creator tokenAddr).setStorVal tokenAddr
       creator.toB256 1000000).setCode tokenAddr
-        Blanc.Lift.VyperNonreentrantDeployed.Token20.code
+        Blanc.Lift.Token20.code
     let W6 := (CreateEntry.entryState W5 creator receiverAddr).setCode receiverAddr
       Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.code
     ∃ postT postR : Devm,
@@ -58,20 +58,20 @@ private theorem create_fixtures_from (W4 : State) (fork : Fork) (hfork : Covered
   obtain ⟨hRP, hRI, hRC, hRT⟩ := receiverAddr_ne
   -- the token creation
   obtain ⟨postT, hT, hTe, hTg, hTtok, hTrest, hTstate⟩ :=
-    Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.create_token (tokenCreateMsg fork W4)
+    Blanc.Lift.Token20.Creation.create_token (tokenCreateMsg fork W4)
       hfork rfl rfl rfl rfl rfl (by show (82000 : Nat) ≤ 200000; decide)
   have hv4 : acctView (W4.get tokenAddr) = Acct.nil := (hW.1 tokenAddr).trans rfl
-  have hmint : Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.mintSstoreGas
+  have hmint : Blanc.Lift.Token20.Creation.mintSstoreGas
       (tokenCreateMsg fork W4) = 22100 := by
     have h2 : (tokenCreateMsg fork W4).currentTarget = tokenAddr := rfl
     have h3 : (tokenCreateMsg fork W4).caller = creator := rfl
     have h4 : (tokenCreateMsg fork W4).accessedStorageKeys = .emptyWithCapacity := rfl
-    unfold Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.mintSstoreGas
+    unfold Blanc.Lift.Token20.Creation.mintSstoreGas
     rw [h2, h3, h4, ite_eq_right Std.HashSet.not_mem_emptyWithCapacity]
     rfl
   have hw5 : postT.state = W5 := hTstate
   have hTacct : postT.state.get tokenAddr =
-      Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.tokenAcct W4 tokenAddr creator :=
+      Blanc.Lift.Token20.Creation.tokenAcct W4 tokenAddr creator :=
     hTtok
   -- the receiver creation
   obtain ⟨postR, hR, hRe, hRg, hRacc, hRrest, hRstate⟩ :=
@@ -93,11 +93,11 @@ private theorem create_fixtures_from (W4 : State) (fork : Fork) (hfork : Covered
           simp only [stor5, lookupS, true_and, hk, ↓reduceIte]
           exact (lookupS_storOracle_ne hTP hTI k).symm)
       (fun a k ha => by simp only [stor5, lookupS, Ne.symm ha, false_and, ↓reduceIte])
-    have hview : acctView (Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.tokenAcct W4
+    have hview : acctView (Blanc.Lift.Token20.Creation.tokenAcct W4
         tokenAddr creator) = tokenAccount := by
       have hn : (W4.get tokenAddr).nonce = 0 := congrArg Acct.nonce hv4
       have hb : (W4.get tokenAddr).bal = 0 := congrArg Acct.bal hv4
-      simp only [Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.tokenAcct, acctView, hn, hb,
+      simp only [Blanc.Lift.Token20.Creation.tokenAcct, acctView, hn, hb,
         tokenAccount]
       rfl
     rw [hview] at h

@@ -1,6 +1,6 @@
 import Blanc.Composition.Curve3Pool3CrvCoinAnswers
 import Blanc.Composition.Curve3Pool3CrvHeadlines
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.RunBalance
+import Blanc.Lift.Token20.RunBalance
 
 /-!
 # The liveness premises are satisfiable by `Token20` coins and the deployed 3Crv
@@ -34,7 +34,7 @@ namespace Blanc.Composition.Curve3Pool3CrvInstance
 open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool
 open Blanc.Composition.Curve3PoolCalleeLive
 open Blanc.Composition.Curve3Pool3CrvHeadlines (C3At c3At_burn c3At_mint precomp_false)
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot balanceOfGas balanceOfPost boHolder
+open Blanc.Lift.Token20 (balSlot allowSlot balanceOfGas balanceOfPost boHolder
   balanceOf_runExact cert_check cert_jumpsOk)
 
 /-! ## `balanceOf(self)` from `Token20`'s code -/
@@ -48,7 +48,7 @@ window inside `[0, 4096)`): wherever the coin holds `Token20` and the pool's bal
 theorem token20_coinBalOkAt (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)
-    (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+    (hW : ∀ b, W b → b.getCode c = Blanc.Lift.Token20.code ∧
       (b.getStor c).get (balSlot sevm.currentTarget) = B)
     (hW' : ∀ b d, W b → (∀ a, Devm.getStor d a = Devm.getStor b a) →
       (∀ a, d.getCode a = b.getCode a) → W' d) :
@@ -72,7 +72,7 @@ abbrev tokOf : Adr := ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr
 /-- **The frame's coins as `Token20` coins**: `Token20`'s code at the entry, no precompile,
 neither the pool nor its token, pairwise distinct. -/
 structure T20Coins : Prop where
-  code : ∀ k : Fin 3, pre.getCode (coinOf sevm pre k) = VyperNonreentrantDeployed.Token20.code
+  code : ∀ k : Fin 3, pre.getCode (coinOf sevm pre k) = Blanc.Lift.Token20.code
   prec : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre k)
   pool : ∀ k : Fin 3, coinOf sevm pre k ≠ sevm.currentTarget
   tok : ∀ k : Fin 3, coinOf sevm pre k ≠ tokOf sevm pre
@@ -88,7 +88,7 @@ structure C3Entry (T : B256) : Prop where
 
 /-- **Coin `k` as at the frame's entry**: `Token20`'s code and its entry ledger. -/
 def CoinPinned (k : Fin 3) (b : Devm) : Prop :=
-  b.getCode (coinOf sevm pre k) = VyperNonreentrantDeployed.Token20.code ∧
+  b.getCode (coinOf sevm pre k) = Blanc.Lift.Token20.code ∧
     b.getStor (coinOf sevm pre k) = pre.getStor (coinOf sevm pre k)
 
 end Entry
@@ -188,7 +188,7 @@ def alWorld (m : B256) (k : Nat) (b : Devm) : Prop :=
     sevm.caller.toB256 m else Devm.getStor pre (tokOf sevm pre)) b ∧
     (∀ j : Fin 3, k ≤ j.val → CoinPinned sevm pre j b) ∧
     (k = 3 → alAmt sevm 2 ≠ 0 →
-      b.getCode (coinOf sevm pre 2) = VyperNonreentrantDeployed.Token20.code ∧
+      b.getCode (coinOf sevm pre 2) = Blanc.Lift.Token20.code ∧
         b.getStor (coinOf sevm pre 2) = alFeeStor sevm pre)
 
 end AddLiquidity
@@ -216,12 +216,12 @@ theorem addLiquidity_premises_satisfiable {sevm : Sevm} {pre : Devm} {T m : B256
         CoinBalOkAt sevm (alWorld sevm pre m 2) (alWorld sevm pre m 2)
           ((pre.getStor sevm.currentTarget).get (coinSlot 2))
           ((pre.getStor (coinOf sevm pre 2)).get
-            (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget)) 80000 0x53c 0x5a0 ∧
+            (Blanc.Lift.Token20.balSlot sevm.currentTarget)) 80000 0x53c 0x5a0 ∧
         CoinPullOkAt sevm (alWorld sevm pre m 2) (alWorld sevm pre m 3)
           ((pre.getStor sevm.currentTarget).get (coinSlot 2)) (alAmt sevm 2) 80000 0x760 0x820 ∧
         CoinBalOkAt sevm (alWorld sevm pre m 3) (alWorld sevm pre m 3)
           ((pre.getStor sevm.currentTarget).get (coinSlot 2))
-          ((alFeeStor sevm pre).get (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+          ((alFeeStor sevm pre).get (Blanc.Lift.Token20.balSlot sevm.currentTarget))
           80000 0x87c 0x8e0) ∧
       MintOkAt sevm (alWorld sevm pre m 3) (alWorld sevm pre m 4)
         ((pre.getStor sevm.currentTarget).get tokenSlot) m 80000 0xc7c 0xd00 := by
@@ -373,7 +373,7 @@ satisfy every callee premise at `U = 80000`, starting from the frame's entry. -/
 theorem removeLiquidityOneCoin_premises_satisfiable {sevm : Sevm} {pre : Devm} {T v : B256}
     {i : Fin 3} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T)
-    (hcode : pre.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code)
+    (hcode : pre.getCode (coinOf sevm pre i) = Blanc.Lift.Token20.code)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre i))
     (hpool : coinOf sevm pre i ≠ sevm.currentTarget) (htok : coinOf sevm pre i ≠ tokOf sevm pre)
     (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256

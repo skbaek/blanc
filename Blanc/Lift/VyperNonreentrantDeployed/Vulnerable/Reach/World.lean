@@ -1,7 +1,7 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.World
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Creation.Input
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Clone.Input
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Input
+import Blanc.Lift.Token20.Creation.Input
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Input
 
 /-! # The disclosed V− reachable-setup world and its root messages
@@ -96,7 +96,7 @@ def cloneCreateMsg (fork : Fork) (W : State) : Msg :=
 constructor mints `balanceOf[creator] := 10^6`. -/
 def tokenCreateMsg (fork : Fork) (W : State) : Msg :=
   createMsg fork W tokenAddr
-    Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.creationCode 200000
+    Blanc.Lift.Token20.Creation.creationCode 200000
 
 /-- Message 5: the **synthetic** reachable-attacker creation input, at `attackerAddr`,
 200,000 gas. -/

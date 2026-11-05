@@ -1,4 +1,4 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.RunTransfer
+import Blanc.Lift.Token20.RunTransfer
 
 /-!
 # The synthetic token `T`: the gas-exact run of `transferFrom(from, to, v)`
@@ -11,7 +11,7 @@ unless `v ≤ allowance`, write it less `v`), the balance move of `RunTransfer.l
 its warm/cold and EIP-2200 parts kept as `sloadCost`/`sstoreCost`.
 -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Token20
+namespace Blanc.Lift.Token20
 
 open Jaune Blanc.Lift
 
@@ -156,4 +156,4 @@ theorem transferFrom_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     exact ok_scratch (by simp only [List.length_cons, List.length_nil]; omega)
   rwa [pre_eq_St hstack hmem hg] at hrun
 
-end Blanc.Lift.VyperNonreentrantDeployed.Token20
+end Blanc.Lift.Token20

@@ -2,7 +2,7 @@ import Blanc.Composition.Curve3Pool3CrvCheckpoint
 import Blanc.Lift.Curve3Pool.Ladder
 import Blanc.Lift.Curve3Crv.Ladder
 import Blanc.Lift.Weth9.ClosedWorld
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
+import Blanc.Lift.Token20.Check
 import Blanc.LadderBase
 
 /-!
@@ -10,7 +10,7 @@ import Blanc.LadderBase
 
 `P0` is U9(a)'s synthetic world (`Curve3Pool3CrvJoint.world`: the pool's and 3Crv's storage at the
 joint checkpoint) with the code installed: the certified 3pool runtime at `poolAddr`, the certified
-3Crv runtime at `c3crvAddr`, the synthetic token `Token20` (`VyperNonreentrantDeployed.Token20`) at
+3Crv runtime at `c3crvAddr`, the synthetic token `Token20` (`Blanc.Lift.Token20`) at
 the three coins standing in for DAI, USDC and USDT, the STOP fixture at the four system addresses
 (`Weth9.ClosedInstance.systemWorld`), and the funded code-free trader (the published secp256k1 test
 key `1`'s address) that signs the exchange.
@@ -42,17 +42,17 @@ def traderEther : B256 := 10000000
 /-- Coin 0's ledger: the trader's and the pool's balances and the trader's allowance to the
 pool. -/
 def coin0Stor : Stor := Stor.ofList
-  [(VyperNonreentrantDeployed.Token20.balSlot trader, 1000),
-    (VyperNonreentrantDeployed.Token20.balSlot poolAddr, 1000),
-    (VyperNonreentrantDeployed.Token20.allowSlot trader poolAddr, Nat.toB256 exchangeDx)]
+  [(Blanc.Lift.Token20.balSlot trader, 1000),
+    (Blanc.Lift.Token20.balSlot poolAddr, 1000),
+    (Blanc.Lift.Token20.allowSlot trader poolAddr, Nat.toB256 exchangeDx)]
 
 /-- Coin 1's ledger: the pool's balance. -/
 def coin1Stor : Stor := Stor.ofList
-  [(VyperNonreentrantDeployed.Token20.balSlot poolAddr, 2000)]
+  [(Blanc.Lift.Token20.balSlot poolAddr, 2000)]
 
 /-- Coin 2's ledger: the pool's balance. -/
 def coin2Stor : Stor := Stor.ofList
-  [(VyperNonreentrantDeployed.Token20.balSlot poolAddr, 3000)]
+  [(Blanc.Lift.Token20.balSlot poolAddr, 3000)]
 
 /-- The pool's account: the certified runtime over U9(a)'s storage. -/
 def poolAcct : Acct := { nonce := 1, bal := 0, stor := poolStor, code := Curve3Pool.code }
@@ -62,7 +62,7 @@ def c3crvAcct : Acct := { nonce := 1, bal := 0, stor := c3Stor, code := Curve3Cr
 
 /-- A coin's account: the synthetic token's runtime over its ledger. -/
 def coinAcct (σ : Stor) : Acct :=
-  { nonce := 1, bal := 0, stor := σ, code := VyperNonreentrantDeployed.Token20.code }
+  { nonce := 1, bal := 0, stor := σ, code := Blanc.Lift.Token20.code }
 
 /-- The trader's account: code-free, nonce `0`, funded. -/
 def traderAcct : Acct := { Acct.nil with bal := traderEther }

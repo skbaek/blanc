@@ -1,4 +1,4 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Cert
+import Blanc.Lift.Token20.Creation.Cert
 import Blanc.Lift.CheckFast
 import Blanc.Lift.CheckRange
 
@@ -6,7 +6,7 @@ import Blanc.Lift.CheckRange
 The node checks are decided in ranges against trie-backed reads of the exact runtime.
 Cert.rangeOkT_eq rewrites each range decision to Cert.rangeOk (Blanc/Lift/CheckRange.lean). -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation
+namespace Blanc.Lift.Token20.Creation
 
 open Jaune
 
@@ -25,4 +25,4 @@ theorem cert_rangeOk : Cert.rangeOk code (Cert.entries cert) [] false false 0 (c
 theorem cert_check : Cert.check code cert = true :=
   Cert.check_of_rangeOk (by decide +kernel) cert_rangeOk
 
-end Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation
+end Blanc.Lift.Token20.Creation

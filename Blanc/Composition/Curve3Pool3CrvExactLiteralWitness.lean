@@ -61,7 +61,7 @@ pull (`k = 3`, nonzero amount), the fee coin's ledger as the pull leaves it. -/
 def alCoins (k : Nat) (b : Devm) : Prop :=
   coinsFrom sevm pre k b ∧
     (k = 3 → alAmt sevm 2 ≠ 0 →
-      b.getCode (coinOf sevm pre 2) = VyperNonreentrantDeployed.Token20.code ∧
+      b.getCode (coinOf sevm pre 2) = Blanc.Lift.Token20.code ∧
         b.getStor (coinOf sevm pre 2) = alFeeStor sevm pre)
 
 /-- **`remove_liquidity_one_coin`'s coin chain**: coin `i` as at the entry, then anything. -/
@@ -305,7 +305,7 @@ theorem addLiquidity_exact_literal_witness {msg : Msg} {o : Out} {pool c3 : Adr}
         (alCoins (initSevm msg) (initDevm msg) 2))
       (((initDevm msg).getStor msg.currentTarget).get (coinSlot 2))
       (((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) 2)).get
-        (VyperNonreentrantDeployed.Token20.balSlot msg.currentTarget)) 80000 0x53c 0x5a0 :=
+        (Blanc.Lift.Token20.balSlot msg.currentTarget)) 80000 0x53c 0x5a0 :=
     token20_coinBalExactAt hfork hdepth (hcoins.prec 2) rfl (by decide) (by decide) (by decide)
       (fun b hb => ⟨(hb.2.1 2 (le_refl _)).1, by rw [(hb.2.1 2 (le_refl _)).2]; rfl⟩)
       (fun b d hb hs hc => alCoins_keep hb hs hc)
@@ -321,7 +321,7 @@ theorem addLiquidity_exact_literal_witness {msg : Msg} {o : Out} {pool c3 : Adr}
         (((initDevm msg).getStor msg.currentTarget).get (coinSlot 2))
         (balanceOfData msg.currentTarget)
         ((alFeeStor (initSevm msg) (initDevm msg)).get
-          (VyperNonreentrantDeployed.Token20.balSlot msg.currentTarget))
+          (Blanc.Lift.Token20.balSlot msg.currentTarget))
         80000 0x87c 0x24 0x8e0 d n := by
     by_cases ha : alAmt (initSevm msg) 2 = 0
     · exact ⟨fun _ _ _ => 0, fun b _ _ => b, fun h => absurd ha h⟩
@@ -329,7 +329,7 @@ theorem addLiquidity_exact_literal_witness {msg : Msg} {o : Out} {pool c3 : Adr}
           (Devm.getStor (initDevm msg) (tokOf (initSevm msg) (initDevm msg)))
           (alCoins (initSevm msg) (initDevm msg) 3)) (ii := 0x87c) (oi := 0x8e0)
         (B := (alFeeStor (initSevm msg) (initDevm msg)).get
-          (VyperNonreentrantDeployed.Token20.balSlot msg.currentTarget)) (U := 80000)
+          (Blanc.Lift.Token20.balSlot msg.currentTarget)) (U := 80000)
         hfork hdepth (hcoins.prec 2) rfl (by decide) (by decide) (by decide)
         (fun b hb => ⟨(hb.2.2 rfl ha).1, by rw [(hb.2.2 rfl ha).2]; rfl⟩)
         (fun b d hb hs hc => alCoins_keep hb hs hc)
@@ -446,7 +446,7 @@ theorem removeLiquidityOneCoin_exact_literal_witness {msg : Msg} {o : Out} {i : 
     (hcoin : ∀ k : Fin 3, ¬ (initSevm msg).benvStat.rules.isPrecomp
       (coinOf (initSevm msg) (initDevm msg) k))
     (hcode : (initDevm msg).getCode (coinOf (initSevm msg) (initDevm msg) i) =
-      VyperNonreentrantDeployed.Token20.code)
+      Blanc.Lift.Token20.code)
     (hpool : coinOf (initSevm msg) (initDevm msg) i ≠ msg.currentTarget)
     (htc : coinOf (initSevm msg) (initDevm msg) i ≠ c3)
     (hburn : BurnFits (Devm.getStor (initDevm msg) c3) pool msg.caller.toB256
@@ -577,7 +577,7 @@ theorem addLiquidity_entry_literal_witness {o : Out}
       MutCallExactAt.bounded
         (alCoins_pullExact (k := 2) hfork hstatic hdepth hcoins (hcoins.tok 2) (hfits 2 ha)),
       StaticWordExactAt.bounded (token20_coinBalExactAt (U := 80000)
-        (B := (alFeeStor sevm pre).get (VyperNonreentrantDeployed.Token20.balSlot
+        (B := (alFeeStor sevm pre).get (Blanc.Lift.Token20.balSlot
           sevm.currentTarget)) hfork hdepth (hcoins.prec 2) rfl (by decide) (by decide) (by decide)
         (fun b hb => ⟨(hb.2.2 rfl ha).1, by rw [(hb.2.2 rfl ha).2]⟩)
         (fun b d hb hs hc => alCoins_keep hb hs hc))⟩⟩
@@ -626,7 +626,7 @@ theorem removeLiquidityOneCoin_entry_literal_witness {o : Out} {i : Fin 3}
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre k))
-    (hcode : pre.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code)
+    (hcode : pre.getCode (coinOf sevm pre i) = Blanc.Lift.Token20.code)
     (hpool : coinOf sevm pre i ≠ sevm.currentTarget) (htc : coinOf sevm pre i ≠ c3)
     (hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256 (ocAmt sevm))
     (hfits : T20MoveFits (pre.getStor (coinOf sevm pre i)) sevm.currentTarget sevm.caller

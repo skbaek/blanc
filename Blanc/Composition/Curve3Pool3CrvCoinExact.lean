@@ -4,19 +4,19 @@ import Blanc.Lift.Curve3Pool.ExactLivePremises
 namespace Blanc.Composition.Curve3Pool3CrvInstance
 
 open Jaune Blanc Blanc.Lift
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot)
+open Blanc.Lift.Token20 (balSlot allowSlot)
 
 /-- The push's charge, chosen from a normalized input before caller gas is supplied. -/
 def token20PushDebit (sevm : Sevm) (t ii oi : B256) (b : Devm) (S : List B256) (M : Mem) : Nat :=
   ccAcc (b.withGasLeft 0) S M 0 t + ccExt (b.withGasLeft 0) S M 0 ii 0x44 oi +
-    VyperNonreentrantDeployed.Token20.transferGas
+    Blanc.Lift.Token20.transferGas
       (initSevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi))
       (initDevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi))
 
 /-- The full push successor at normalized input and final residual gas. -/
 def token20PushNext (sevm : Sevm) (t ii oi : B256) (b : Devm) (S : List B256) (M : Mem) : Devm :=
   ccPost (b.withGasLeft 0) S M 0 t ii 0x44 oi
-    (VyperNonreentrantDeployed.Token20.transferPost
+    (Blanc.Lift.Token20.transferPost
       (initSevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi))
       (initDevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi)) 0)
 
@@ -27,7 +27,7 @@ theorem token20_coinPushExactAt (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget)
     (hU : 80000 ≤ U) (hii : ii.toNat + 0x44 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104)
-    (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+    (hW : ∀ b, W b → b.getCode c = Blanc.Lift.Token20.code ∧
       T20MoveFits (b.getStor c) sevm.currentTarget sevm.caller amt)
     (hW' : ∀ b d, W b → CoinLeaves c (t20Move (b.getStor c) sevm.currentTarget sevm.caller amt)
       ((getOrigAcct sevm c).stor = b.getStor c ∧ c ∉ b.createdAccounts ∧
@@ -47,7 +47,7 @@ theorem token20_coinPushExactAt (hfork : CoveredFork sevm.benvStat.fork)
     have hfwd := ccFwd_ge (t := t) (by omega) hext
     obtain ⟨cpost, used, hcost, hchildpost, hexec, herr, hout, hgas, hused,
         hcode, hstor, hs, hcr, hrf⟩ := push_child_exact hfork hstatic ht hc hin hfits hfwd
-    have hnCost : used = VyperNonreentrantDeployed.Token20.transferGas
+    have hnCost : used = Blanc.Lift.Token20.transferGas
         (initSevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi))
         (initDevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi)) := by
       rw [hcost]
@@ -74,7 +74,7 @@ theorem token20_coinPushExactAt (hfork : CoveredFork sevm.benvStat.fork)
       apply Devm.EqModGas.of_normalized_eq
       rfl
     have hcp : Devm.EqModGas cpost
-        (VyperNonreentrantDeployed.Token20.transferPost
+        (Blanc.Lift.Token20.transferPost
           (initSevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi))
           (initDevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi)) 0) := by
       rw [hchildpost]
@@ -105,14 +105,14 @@ theorem token20_coinPushExactAt (hfork : CoveredFork sevm.benvStat.fork)
 /-- The pull's charge, chosen from a normalized input before caller gas is supplied. -/
 def token20PullDebit (sevm : Sevm) (t ii oi : B256) (b : Devm) (S : List B256) (M : Mem) : Nat :=
   ccAcc (b.withGasLeft 0) S M 0 t + ccExt (b.withGasLeft 0) S M 0 ii 0x64 oi +
-    VyperNonreentrantDeployed.Token20.transferFromGas
+    Blanc.Lift.Token20.transferFromGas
       (initSevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi))
       (initDevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi))
 
 /-- The full pull successor at normalized input and final residual gas. -/
 def token20PullNext (sevm : Sevm) (t ii oi : B256) (b : Devm) (S : List B256) (M : Mem) : Devm :=
   ccPost (b.withGasLeft 0) S M 0 t ii 0x64 oi
-    (VyperNonreentrantDeployed.Token20.transferFromPost
+    (Blanc.Lift.Token20.transferFromPost
       (initSevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi))
       (initDevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi)) 0)
 
@@ -121,7 +121,7 @@ theorem token20_coinPullExactAt (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget)
     (hU : 80000 ≤ U) (hii : ii.toNat + 0x64 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104)
-    (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+    (hW : ∀ b, W b → b.getCode c = Blanc.Lift.Token20.code ∧
       T20PullFits (b.getStor c) sevm.caller sevm.currentTarget sevm.currentTarget amt)
     (hW' : ∀ b d, W b → CoinLeaves c (t20Move (t20Allow (b.getStor c) sevm.caller
         sevm.currentTarget amt) sevm.caller sevm.currentTarget amt)
@@ -144,7 +144,7 @@ theorem token20_coinPullExactAt (hfork : CoveredFork sevm.benvStat.fork)
     have hfwd := ccFwd_ge (t := t) (by omega) hext
     obtain ⟨cpost, used, hcost, hchildpost, hexec, herr, hout, hgas, hused,
         hcode, hstor, hs, hcr, hrf⟩ := pull_child_exact hfork hstatic ht hc hin hfits hfwd
-    have hnCost : used = VyperNonreentrantDeployed.Token20.transferFromGas
+    have hnCost : used = Blanc.Lift.Token20.transferFromGas
         (initSevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi))
         (initDevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi)) := by
       rw [hcost]
@@ -171,7 +171,7 @@ theorem token20_coinPullExactAt (hfork : CoveredFork sevm.benvStat.fork)
       apply Devm.EqModGas.of_normalized_eq
       rfl
     have hcp : Devm.EqModGas cpost
-        (VyperNonreentrantDeployed.Token20.transferFromPost
+        (Blanc.Lift.Token20.transferFromPost
           (initSevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi))
           (initDevm (ccMsg sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi)) 0) := by
       rw [hchildpost]
@@ -201,7 +201,7 @@ theorem token20_coinPullExactAt (hfork : CoveredFork sevm.benvStat.fork)
 
 section Balance
 
-open Curve3PoolCalleeLive VyperNonreentrantDeployed.Token20
+open Curve3PoolCalleeLive Blanc.Lift.Token20
 
 /-- Exact balance-call charge from the normalized input, chosen before caller gas. -/
 def token20BalanceDebit (sevm : Sevm) (t ii oi : B256) (b : Devm) (S : List B256) (M : Mem) : Nat :=
@@ -221,7 +221,7 @@ variable {B : B256}
 theorem token20_coinBalExactAt (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)
-    (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+    (hW : ∀ b, W b → b.getCode c = Blanc.Lift.Token20.code ∧
       (b.getStor c).get (balSlot sevm.currentTarget) = B)
     (hW' : ∀ b d, W b → (∀ a, Devm.getStor d a = Devm.getStor b a) →
       (∀ a, d.getCode a = b.getCode a) → W' d) :

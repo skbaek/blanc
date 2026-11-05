@@ -1,6 +1,6 @@
 import Blanc.Composition.Curve3Pool3CrvCoinCalls
 import Blanc.Composition.Curve3PoolCalleeLive
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.RunBalance
+import Blanc.Lift.Token20.RunBalance
 import Blanc.Lift.Curve3Pool.CalldataWords
 import Blanc.Composition.UniswapV2PairWeth9SwapLegsCall
 import Blanc.StorageAccessGas
@@ -185,10 +185,10 @@ theorem cc_answer_true {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : N
 
 /-- What a returning tail keeps of its base. -/
 theorem retPost_facts (b : Devm) (S : List B256) (M : Mem) (G : Nat) (w : B256) :
-    (VyperNonreentrantDeployed.Token20.retPost b S M G w).error = b.error ∧
-      (VyperNonreentrantDeployed.Token20.retPost b S M G w).output = w.toBytes ∧
-      (VyperNonreentrantDeployed.Token20.retPost b S M G w).gasLeft = G ∧
-      (VyperNonreentrantDeployed.Token20.retPost b S M G w).state = b.state :=
+    (Blanc.Lift.Token20.retPost b S M G w).error = b.error ∧
+      (Blanc.Lift.Token20.retPost b S M G w).output = w.toBytes ∧
+      (Blanc.Lift.Token20.retPost b S M G w).gasLeft = G ∧
+      (Blanc.Lift.Token20.retPost b S M G w).state = b.state :=
   ⟨rfl, rfl, rfl, rfl⟩
 
 /-- A first `SSTORE` to a slot of an account not created in the transaction, whose current value is
@@ -204,8 +204,8 @@ theorem sstore_first_ge {s : Sevm} {d : Devm} {k v : B256} {σ : Stor}
     rw [hor, hcur])
 
 theorem retPost_refund_created (b : Devm) (S : List B256) (M : Mem) (G : Nat) (w : B256) :
-    (VyperNonreentrantDeployed.Token20.retPost b S M G w).refundCounter = b.refundCounter ∧
-      (VyperNonreentrantDeployed.Token20.retPost b S M G w).createdAccounts = b.createdAccounts :=
+    (Blanc.Lift.Token20.retPost b S M G w).refundCounter = b.refundCounter ∧
+      (Blanc.Lift.Token20.retPost b S M G w).createdAccounts = b.createdAccounts :=
   ⟨rfl, rfl⟩
 
 /-! ## `Token20`'s ledger after the pool's calls -/
@@ -221,24 +221,24 @@ theorem getCode_of_state {d c : Devm} (h : d.state = c.state) (a : Adr) :
   rw [h]
 
 
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot) in
+open Blanc.Lift.Token20 (balSlot allowSlot) in
 /-- The ledger `transfer`'s move of `v` from `src` to `dst` leaves (its two writes). -/
 def t20Move (σ : Stor) (src dst : Adr) (v : B256) : Stor :=
   (σ.set (balSlot src) (σ.get (balSlot src) - v)).set (balSlot dst)
     (v + (σ.set (balSlot src) (σ.get (balSlot src) - v)).get (balSlot dst))
 
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot) in
+open Blanc.Lift.Token20 (balSlot allowSlot) in
 /-- **The move fits**: `src`'s balance covers `v`, and `dst`'s credit does not wrap. -/
 def T20MoveFits (σ : Stor) (src dst : Adr) (v : B256) : Prop :=
   v ≤ σ.get (balSlot src) ∧
     v ≤ v + (σ.set (balSlot src) (σ.get (balSlot src) - v)).get (balSlot dst)
 
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot) in
+open Blanc.Lift.Token20 (balSlot allowSlot) in
 /-- The ledger after `transferFrom`'s allowance debit (`src`'s allowance to `sp`). -/
 def t20Allow (σ : Stor) (src sp : Adr) (v : B256) : Stor :=
   σ.set (allowSlot src sp) (σ.get (allowSlot src sp) - v)
 
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot) in
+open Blanc.Lift.Token20 (balSlot allowSlot) in
 /-- **`transferFrom(src, dst, v)` by `sp` fits**: the allowance covers `v`, then the move fits on
 the debited ledger. -/
 def T20PullFits (σ : Stor) (src sp dst : Adr) (v : B256) : Prop :=
@@ -253,7 +253,7 @@ theorem balanceOfSel_abi : Curve3Pool.balanceOfSel = abiSelectorBytes 0x70a08231
 
 section Pull
 
-open VyperNonreentrantDeployed.Token20 (tfFrom tfTo tfVal tfAllow tf1 tf2 mvFrom mvTo mv1 mv2 mv3 mv4
+open Blanc.Lift.Token20 (tfFrom tfTo tfVal tfAllow tf1 tf2 mvFrom mvTo mv1 mv2 mv3 mv4
   mvCost transferFromGas transferFromBase transferFromPost transferFrom_runExact cert_check
   cert_jumpsOk balSlot allowSlot)
 
@@ -275,7 +275,7 @@ storage (as `t20Move (t20Allow …)`), creating nothing; its refund counter is n
 coin is untouched in the transaction and the three slots it writes are distinct. -/
 theorem pull_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     {c src : Adr} {v : B256} (ht : t.toAdr = c)
-    (hcode : b.state.getCode c = VyperNonreentrantDeployed.Token20.code)
+    (hcode : b.state.getCode c = Blanc.Lift.Token20.code)
     (hdata : (M.read ii.toNat (0x64 : B256).toNat).1 = Curve3Pool.transferFromSel ++
       src.toB256.toBytes ++ sevm.currentTarget.toB256.toBytes ++ v.toBytes)
     (hfits : T20PullFits (b.getStor c) src sevm.currentTarget sevm.currentTarget v)
@@ -296,7 +296,7 @@ theorem pull_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
         allowSlot src sevm.currentTarget ≠ balSlot sevm.currentTarget →
         balSlot src ≠ balSlot sevm.currentTarget → 0 ≤ cpost.refundCounter) := by
   generalize hmsg : ccMsg sevm b S M G t ii 0x64 oi = msg
-  have hcC : (initSevm msg).code = VyperNonreentrantDeployed.Token20.code := by
+  have hcC : (initSevm msg).code = Blanc.Lift.Token20.code := by
     rw [← hmsg, ← hcode, ← ht]; rfl
   have hfC : CoveredFork (initSevm msg).benvStat.fork := by rw [← hmsg]; exact hfork
   have hsC : (initSevm msg).isStatic = false := by
@@ -416,7 +416,7 @@ theorem pull_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
   obtain ⟨pr, pc⟩ := retPost_refund_created (transferFromBase (initSevm msg) (initDevm msg))
     [tfVal (initSevm msg), (tfTo (initSevm msg)).toB256, (tfFrom (initSevm msg)).toB256,
       Sevm.selector (initSevm msg)]
-    (VyperNonreentrantDeployed.Token20.okMem (VyperNonreentrantDeployed.Token20.scratch
+    (Blanc.Lift.Token20.okMem (Blanc.Lift.Token20.scratch
       (tfFrom (initSevm msg)).toB256 (initSevm msg).caller.toB256))
     (ccFwd b S M G t ii 0x64 oi - transferFromGas (initSevm msg) (initDevm msg)) 1
   refine ⟨transferFromPost (initSevm msg) (initDevm msg)
@@ -446,7 +446,7 @@ theorem pull_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
     rfl
   · rw [getStor_of_state ps]
     exact hs4
-  · change (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).createdAccounts = _
+  · change (Blanc.Lift.Token20.retPost _ _ _ _ _).createdAccounts = _
     rw [pc]
     unfold transferFromBase mv4
     rw [c6, ← hmsg]
@@ -488,7 +488,7 @@ theorem pull_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
       (b := mv2 (initSevm msg) (tf2 (initSevm msg) (initDevm msg)) (tfFrom (initSevm msg))
         (tfVal (initSevm msg)))
       (key := balSlot (tfTo (initSevm msg)))
-    change 0 ≤ (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).refundCounter
+    change 0 ≤ (Blanc.Lift.Token20.retPost _ _ _ _ _).refundCounter
     rw [pr]
     calc (0 : Int) = (tf1 (initSevm msg) (initDevm msg)).refundCounter := r1.symm
       _ ≤ (tf2 (initSevm msg) (initDevm msg)).refundCounter := r2
@@ -506,7 +506,7 @@ end Pull
 
 section Push
 
-open VyperNonreentrantDeployed.Token20 (trTo trVal mvFrom mvTo mv1 mv2 mv3 mv4 mvCost transferGas
+open Blanc.Lift.Token20 (trTo trVal mvFrom mvTo mv1 mv2 mv3 mv4 mvCost transferGas
   transferBase transferPost transfer_runExact cert_check cert_jumpsOk balSlot)
 
 /-- What `transfer`'s halting machine keeps of its base. -/
@@ -527,7 +527,7 @@ storage (as `t20Move`), creating nothing; its refund counter is nonnegative when
 untouched in the transaction and the two balance slots differ. -/
 theorem push_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     {c dst : Adr} {v : B256} (ht : t.toAdr = c)
-    (hcode : b.state.getCode c = VyperNonreentrantDeployed.Token20.code)
+    (hcode : b.state.getCode c = Blanc.Lift.Token20.code)
     (hdata : (M.read ii.toNat (0x44 : B256).toNat).1 =
       Curve3Pool.transferSel ++ dst.toB256.toBytes ++ v.toBytes)
     (hfits : T20MoveFits (b.getStor c) sevm.currentTarget dst v)
@@ -545,7 +545,7 @@ theorem push_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
       ((getOrigAcct sevm c).stor = b.getStor c → c ∉ b.createdAccounts →
         balSlot sevm.currentTarget ≠ balSlot dst → 0 ≤ cpost.refundCounter) := by
   generalize hmsg : ccMsg sevm b S M G t ii 0x44 oi = msg
-  have hcC : (initSevm msg).code = VyperNonreentrantDeployed.Token20.code := by
+  have hcC : (initSevm msg).code = Blanc.Lift.Token20.code := by
     rw [← hmsg, ← hcode, ← ht]; rfl
   have hfC : CoveredFork (initSevm msg).benvStat.fork := by rw [← hmsg]; exact hfork
   have hsC : (initSevm msg).isStatic = false := by
@@ -631,7 +631,7 @@ theorem push_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
   obtain ⟨pr, pc⟩ := retPost_refund_created (transferBase (initSevm msg) (initDevm msg))
     [trVal (initSevm msg), (trTo (initSevm msg)).toB256, (initSevm msg).caller.toB256,
       Sevm.selector (initSevm msg)]
-    (VyperNonreentrantDeployed.Token20.okMem Mem.empty)
+    (Blanc.Lift.Token20.okMem Mem.empty)
     (ccFwd b S M G t ii 0x44 oi - transferGas (initSevm msg) (initDevm msg)) 1
   refine ⟨transferPost (initSevm msg) (initDevm msg)
       (ccFwd b S M G t ii 0x44 oi - transferGas (initSevm msg) (initDevm msg)),
@@ -658,7 +658,7 @@ theorem push_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
     rfl
   · rw [getStor_of_state ps]
     exact hs4
-  · change (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).createdAccounts = _
+  · change (Blanc.Lift.Token20.retPost _ _ _ _ _).createdAccounts = _
     rw [pc]
     unfold transferBase mv4
     rw [c4, ← hmsg]
@@ -688,7 +688,7 @@ theorem push_child_exact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
     have r3 := afterSload_refundCounter (sevm := initSevm msg)
       (b := mv2 (initSevm msg) (initDevm msg) (initSevm msg).caller (trVal (initSevm msg)))
       (key := balSlot (trTo (initSevm msg)))
-    change 0 ≤ (VyperNonreentrantDeployed.Token20.retPost _ _ _ _ _).refundCounter
+    change 0 ≤ (Blanc.Lift.Token20.retPost _ _ _ _ _).refundCounter
     rw [pr]
     calc (0 : Int) = (mv1 (initSevm msg) (initDevm msg) (initSevm msg).caller).refundCounter :=
           r1.symm
@@ -719,7 +719,7 @@ structure CoinLeaves (c : Adr) (σ' : Stor) (R : Prop) (b d : Devm) : Prop where
   refund : R → b.refundCounter ≤ d.refundCounter
 
 theorem token20_undelegated :
-    getDelegatedCodeAddress VyperNonreentrantDeployed.Token20.code = none :=
+    getDelegatedCodeAddress Blanc.Lift.Token20.code = none :=
   getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel)
 
 /-- A non-precompile, as the crossing states it. -/
@@ -744,12 +744,12 @@ theorem ccPost_created (b : Devm) (S : List B256) (M : Mem) (G : Nat) (t ii is o
 
 section TransferProfileTransport
 
-open VyperNonreentrantDeployed.Token20
+open Blanc.Lift.Token20
 
 /-- Token20 transfer pricing ignores both initial-gas fields. -/
 theorem t20_transferGas_reframe (s : Sevm) (p : Devm) (F : Nat) :
-    VyperNonreentrantDeployed.Token20.transferGas {s with gas := F} (p.withGasLeft F) =
-      VyperNonreentrantDeployed.Token20.transferGas s p := by
+    Blanc.Lift.Token20.transferGas {s with gas := F} (p.withGasLeft F) =
+      Blanc.Lift.Token20.transferGas s p := by
   change transferGas s (p.withGasLeft F) = transferGas s p
   simp only [transferGas, mvCost, mv3, mv2, mv1, mvFrom, mvTo, Devm.withGasLeft,
     afterSload_setMach, afterSstore_setMach, Devm.getStorVal_setMach, sstoreCost_setMach,
@@ -758,8 +758,8 @@ theorem t20_transferGas_reframe (s : Sevm) (p : Devm) (F : Nat) :
 
 /-- Token20's explicit transfer post keeps every column when initial gas is reframed. -/
 theorem t20_transferPost_reframe (s : Sevm) (p : Devm) (F R : Nat) :
-    VyperNonreentrantDeployed.Token20.transferPost {s with gas := F} (p.withGasLeft F) R =
-      VyperNonreentrantDeployed.Token20.transferPost s p R := by
+    Blanc.Lift.Token20.transferPost {s with gas := F} (p.withGasLeft F) R =
+      Blanc.Lift.Token20.transferPost s p R := by
   change transferPost s (p.withGasLeft F) R = transferPost s p R
   simp only [transferPost, transferBase, mv4, mv3, mv2, mv1, mvFrom, mvTo,
     Devm.withGasLeft, afterSload_setMach, afterSstore_setMach, Devm.getStorVal_setMach,
@@ -769,8 +769,8 @@ theorem t20_transferPost_reframe (s : Sevm) (p : Devm) (F R : Nat) :
 
 /-- The final residual affects no other column of the explicit transfer post. -/
 theorem t20_transferPost_residual (s : Sevm) (p : Devm) (R : Nat) :
-    Devm.EqModGas (VyperNonreentrantDeployed.Token20.transferPost s p R)
-      (VyperNonreentrantDeployed.Token20.transferPost s p 0) := by
+    Devm.EqModGas (Blanc.Lift.Token20.transferPost s p R)
+      (Blanc.Lift.Token20.transferPost s p 0) := by
   apply Devm.EqModGas.of_normalized_eq
   rfl
 
@@ -778,12 +778,12 @@ end TransferProfileTransport
 
 section TransferFromProfileTransport
 
-open VyperNonreentrantDeployed.Token20
+open Blanc.Lift.Token20
 
 /-- Token20 transferFrom pricing ignores both initial-gas fields. -/
 theorem t20_transferFromGas_reframe (s : Sevm) (p : Devm) (F : Nat) :
-    VyperNonreentrantDeployed.Token20.transferFromGas {s with gas := F} (p.withGasLeft F) =
-      VyperNonreentrantDeployed.Token20.transferFromGas s p := by
+    Blanc.Lift.Token20.transferFromGas {s with gas := F} (p.withGasLeft F) =
+      Blanc.Lift.Token20.transferFromGas s p := by
   have htf : ∀ q, tf2 {s with gas := F} q = tf2 s q := by
     intro q
     rfl
@@ -798,8 +798,8 @@ theorem t20_transferFromGas_reframe (s : Sevm) (p : Devm) (F : Nat) :
 
 /-- Token20's explicit transferFrom post keeps every column when initial gas is reframed. -/
 theorem t20_transferFromPost_reframe (s : Sevm) (p : Devm) (F R : Nat) :
-    VyperNonreentrantDeployed.Token20.transferFromPost {s with gas := F} (p.withGasLeft F) R =
-      VyperNonreentrantDeployed.Token20.transferFromPost s p R := by
+    Blanc.Lift.Token20.transferFromPost {s with gas := F} (p.withGasLeft F) R =
+      Blanc.Lift.Token20.transferFromPost s p R := by
   have htf : ∀ q, tf2 {s with gas := F} q = tf2 s q := by
     intro q
     rfl
@@ -816,8 +816,8 @@ theorem t20_transferFromPost_reframe (s : Sevm) (p : Devm) (F R : Nat) :
 
 /-- The final residual affects no other column of the explicit transferFrom post. -/
 theorem t20_transferFromPost_residual (s : Sevm) (p : Devm) (R : Nat) :
-    Devm.EqModGas (VyperNonreentrantDeployed.Token20.transferFromPost s p R)
-      (VyperNonreentrantDeployed.Token20.transferFromPost s p 0) := by
+    Devm.EqModGas (Blanc.Lift.Token20.transferFromPost s p R)
+      (Blanc.Lift.Token20.transferFromPost s p 0) := by
   apply Devm.EqModGas.of_normalized_eq
   rfl
 
@@ -825,7 +825,7 @@ end TransferFromProfileTransport
 
 section BalanceProfileTransport
 
-open Curve3PoolCalleeLive Curve3Pool VyperNonreentrantDeployed.Token20
+open Curve3PoolCalleeLive Curve3Pool Blanc.Lift.Token20
 
 /-- Token20 balance pricing ignores initial execution gas. -/
 theorem t20_balanceGas_reframe (s : Sevm) (p : Devm) (F : Nat) :
@@ -851,7 +851,7 @@ variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 
 /-- The existing Token20 static balance execution, retaining exact cost and post. -/
 theorem balance_child_exact (hfork : CoveredFork sevm.benvStat.fork) (ht : t.toAdr = c)
-    (hc : b.getCode c = VyperNonreentrantDeployed.Token20.code)
+    (hc : b.getCode c = Blanc.Lift.Token20.code)
     (hin : (M.read ii.toNat (0x24 : B256).toNat).1 = Curve3Pool.balanceOfData sevm.currentTarget)
     (hB : (b.getStor c).get (balSlot sevm.currentTarget) = B)
     (hfwd : 65000 ≤ fwd b S M G t ii 0x24 oi 0x20) :
@@ -866,7 +866,7 @@ theorem balance_child_exact (hfork : CoveredFork sevm.benvStat.fork) (ht : t.toA
       cpost.error = none ∧ cpost.gasLeft = fwd b S M G t ii 0x24 oi 0x20 - used ∧
       used ≤ 2206 ∧ cpost.output = B.toBytes ∧ cpost.state = b.state := by
   have hcC : (initSevm (staticMsg sevm b S M G t ii 0x24 oi 0x20)).code =
-      VyperNonreentrantDeployed.Token20.code := by
+      Blanc.Lift.Token20.code := by
     rw [staticMsg_code, ht]; exact hc
   have hfC : CoveredFork (initSevm (staticMsg sevm b S M G t ii 0x24 oi 0x20)).benvStat.fork := by
     rw [staticMsg_benvStat]; exact hfork

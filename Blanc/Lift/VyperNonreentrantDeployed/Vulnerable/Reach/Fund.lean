@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Init
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Deploy
+import Blanc.Lift.Token20.Creation.Deploy
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Creation.Deploy
 
 /-! # V− setup, messages 4–5: executed creation of the token and the attacker

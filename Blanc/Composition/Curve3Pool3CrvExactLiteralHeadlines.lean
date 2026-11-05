@@ -361,7 +361,7 @@ theorem pool_3crv_removeLiquidityOneCoin_live_exact_literal
     ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 (initDevm msg) ∧
       ∀ {o : Out} {i : Fin 3} (_hi : i.val = (ocI (initSevm msg)).toNat),
         (initDevm msg).getCode (coinOf (initSevm msg) (initDevm msg) i) =
-          VyperNonreentrantDeployed.Token20.code →
+          Blanc.Lift.Token20.code →
         coinOf (initSevm msg) (initDevm msg) i ≠ msg.currentTarget →
         coinOf (initSevm msg) (initDevm msg) i ≠ c3 →
         T20MoveFits ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) i))
@@ -665,7 +665,7 @@ theorem pool_3crv_removeLiquidityOneCoin_live_entry_literal
     (hburn : BurnFits (Devm.getStor pre c3) pool sevm.caller.toB256 (ocAmt sevm)) :
     ∃ s, PoolHistoryAt trace pool ps₀ s ∧ C3Ready pool c3 pre ∧
       ∀ {o : Out} {i : Fin 3} (_hi : i.val = (ocI sevm).toNat),
-        pre.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code →
+        pre.getCode (coinOf sevm pre i) = Blanc.Lift.Token20.code →
         coinOf sevm pre i ≠ sevm.currentTarget → coinOf sevm pre i ≠ c3 →
         T20MoveFits (pre.getStor (coinOf sevm pre i)) sevm.currentTarget sevm.caller
           (Nat.toB256 (ocPushAmt o)) →

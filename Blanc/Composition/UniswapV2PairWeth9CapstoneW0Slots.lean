@@ -14,11 +14,11 @@ namespace Blanc.Composition.UniswapV2PairWeth9Instance
 open Jaune Blanc Blanc.Lift
 
 theorem w0TokenStor_trader :
-    w0TokenStor.get (VyperNonreentrantDeployed.Token20.balSlot trader) = 100000 := by
+    w0TokenStor.get (Blanc.Lift.Token20.balSlot trader) = 100000 := by
   decide +kernel
 
 theorem w0TokenStor_pair :
-    w0TokenStor.get (VyperNonreentrantDeployed.Token20.balSlot pair) = 1000000 := by
+    w0TokenStor.get (Blanc.Lift.Token20.balSlot pair) = 1000000 := by
   decide +kernel
 
 theorem w0WethStor_pair : w0WethStor.get (Weth9.balSlot pair) = 1000000 := by

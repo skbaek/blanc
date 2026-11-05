@@ -21,7 +21,7 @@ price 2 (priority fee 1 over base fee 1): the trader pays 63514 wei, the coinbas
 namespace Blanc.Composition.UniswapV2PairWeth9Instance
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
-open Blanc.Lift.VyperNonreentrantDeployed.Token20 (balSlot code)
+open Blanc.Lift.Token20 (balSlot code)
 
 /-- **What `tx1` needs of the block environment**: admission facts and `X`'s touched slots. -/
 structure Tx1Context (benv : Benv) (xT xP : B256) : Prop where

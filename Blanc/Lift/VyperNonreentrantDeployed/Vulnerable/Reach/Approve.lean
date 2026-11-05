@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.AddSetup
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Frame
+import Blanc.Lift.Token20.Frame
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Init.Proxy
 import Blanc.Lift.KernelBatchForall
 

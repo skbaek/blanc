@@ -76,8 +76,8 @@ def w0WethStor : Stor := Stor.ofList [(balSlot pair, 1000000)]
 
 /-- Token20's storage at `X`: the trader's and the Pair's balances. -/
 def w0TokenStor : Stor := Stor.ofList
-  [(VyperNonreentrantDeployed.Token20.balSlot trader, 100000),
-    (VyperNonreentrantDeployed.Token20.balSlot pair, 1000000)]
+  [(Blanc.Lift.Token20.balSlot trader, 100000),
+    (Blanc.Lift.Token20.balSlot pair, 1000000)]
 
 /-- **The synthetic world `W0`.** -/
 def W0 : Jaune.State :=
@@ -85,7 +85,7 @@ def W0 : Jaune.State :=
       { nonce := 1, bal := 0, stor := w0PairStor, code := UniswapV2Pair.code }).insert weth
       { nonce := 1, bal := 1000000, stor := w0WethStor, code := Weth9.code }).insert tokenX
       { nonce := 1, bal := 0, stor := w0TokenStor,
-        code := VyperNonreentrantDeployed.Token20.code }).insert factory
+        code := Blanc.Lift.Token20.code }).insert factory
       { nonce := 2, bal := 0, stor := .empty, code := UniswapV2Factory.factoryCode }).insert trader
       { Acct.nil with bal := 10000000 })
 

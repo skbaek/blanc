@@ -1,4 +1,4 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Run
+import Blanc.Lift.Token20.Run
 
 /-!
 # The synthetic token `T`: the gas-exact run of `transfer(to, v)`
@@ -12,7 +12,7 @@ post state is an explicit term over the entry machine (`afterSload`/`afterSstore
 exact, its warm/cold and EIP-2200 parts kept as `sloadCost`/`sstoreCost`.
 -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Token20
+namespace Blanc.Lift.Token20
 
 open Jaune Blanc.Lift
 
@@ -201,4 +201,4 @@ theorem transfer_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
     exact ok_empty (by simp only [List.length_cons, List.length_nil]; omega)
   rwa [pre_eq_St hstack hmem hg] at hrun
 
-end Blanc.Lift.VyperNonreentrantDeployed.Token20
+end Blanc.Lift.Token20

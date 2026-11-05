@@ -1,6 +1,6 @@
 import Blanc.Composition.UniswapV2PairWeth9SwapLegs
 import Blanc.Composition.UniswapV2PairWeth9Tx1
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.RunBalance
+import Blanc.Lift.Token20.RunBalance
 
 /-!
 # The swap's post-callback `X.balanceOf(pair)` STATICCALL, as a function of the call gas
@@ -17,7 +17,7 @@ query.
 namespace Blanc.Composition.UniswapV2PairWeth9Instance
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.UniswapV2Pair Blanc.Composition.UniswapV2PairWeth9Joint
-open Blanc.Lift.VyperNonreentrantDeployed.Token20 (balanceOfGas balanceOfPost balanceOf_runExact
+open Blanc.Lift.Token20 (balanceOfGas balanceOfPost balanceOf_runExact
   boHolder retPost)
 
 section Balance
@@ -55,7 +55,7 @@ section Spec
 variable {sevm : Sevm} {B : Devm} {S : List B256} {M : Mem} {p t : B256}
 
 theorem xbal_accessDelegation (cg : Nat)
-    (hcode : B.state.getCode (balTok t) = VyperNonreentrantDeployed.Token20.code) :
+    (hcode : B.state.getCode (balTok t) = Blanc.Lift.Token20.code) :
     accessDelegation (addAccessedAddress (balPopped sevm B S M p t cg) (balTok t)) (balTok t) =
       ⟨false, balTok t, B.state.getCode (balTok t), 0, balWarm sevm B S M p t cg⟩ := by
   unfold accessDelegation balWarm balPopped
@@ -69,7 +69,7 @@ for the view after the 63/64 rule: the STATICCALL resumes with the success flag,
 word as the reply, and `cg` less the access charge, the expansion and Token20's charge. -/
 theorem xBalanceCall_spec {cg : Nat}
     (hfork : CoveredFork sevm.benvStat.fork)
-    (hcode : B.state.getCode (balTok t) = VyperNonreentrantDeployed.Token20.code)
+    (hcode : B.state.getCode (balTok t) = Blanc.Lift.Token20.code)
     (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp (balTok t) = false)
     (hroom : S.length < 1018) (wf : Mem.Wf M) (width : p.toNat + 260 < 2 ^ 256)
@@ -81,7 +81,7 @@ theorem xBalanceCall_spec {cg : Nat}
       (xBalanceCall sevm B S M p t cg).stack = 1 :: balRest S p t ∧
       (xBalanceCall sevm B S M p t cg).returnData =
         (B.getStorVal (balTok t)
-          (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget)).toBytes ∧
+          (Blanc.Lift.Token20.balSlot sevm.currentTarget)).toBytes ∧
       (xBalanceCall sevm B S M p t cg).gasLeft =
         cg - (balAcc B t + balExt sevm B S M p t + xBalUsed sevm B S M p t) := by
   generalize hext : balExt sevm B S M p t = ext at hcharge hfwd ⊢
@@ -114,7 +114,7 @@ theorem xBalanceCall_spec {cg : Nat}
       change fwd = fwd - used + used
       omega)
   have hexec := (exec_iff_exec_eq 0 _ _ _).mp (lift_exact
-    VyperNonreentrantDeployed.Token20.cert_check VyperNonreentrantDeployed.Token20.cert_jumpsOk
+    Blanc.Lift.Token20.cert_check Blanc.Lift.Token20.cert_jumpsOk
     (sevm := initSevm (balMsg sevm B S M p t cg (fwd + acc + ext) fwd)) hcode hfork hrun)
   have hcross := Ninst.runCompiled_staticcall_child
     (devm := balCallState sevm B S M p t cg) (gw := cg.toB256) (tw := swapTokenWord t)
@@ -167,7 +167,7 @@ theorem xBalanceCall_spec {cg : Nat}
     rw [boHolder, hw4, toAdr_toB256]
     unfold Devm.getStorVal Devm.getAcct
     change (((balParent sevm B S M p t cg (fwd + acc + ext)).state.get (balTok t)).stor.get
-      (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget)).toBytes = _
+      (Blanc.Lift.Token20.balSlot sevm.currentTarget)).toBytes = _
     unfold balParent balWarm balPopped
     rw [callSpawnParent_state, addAccessedAddress_setMach_state, Lift.temporalAccountAccessBase_state]
   · rw [callChildPost_gasLeft, callSpawnParent_gasLeft]

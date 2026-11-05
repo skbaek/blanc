@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.Reach.Init
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Deploy
+import Blanc.Lift.Token20.Creation.Deploy
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Creation.Deploy
 import Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.Check
 import Blanc.Lift.NodeWalkOrig
@@ -44,7 +44,7 @@ def receiverAddr : Adr := 0x6666666666666666666666666666666666666666
 
 /-- **Message 5**: the synthetic token creation input at `tokenAddr`, 200,000 gas. -/
 def tokenCreateMsg (fork : Fork) (W : State) : Msg :=
-  createMsg fork W tokenAddr Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.creationCode
+  createMsg fork W tokenAddr Blanc.Lift.Token20.Creation.creationCode
     200000
 
 /-- **Message 6**: the synthetic receiver creation input at `receiverAddr`, 100,000 gas. -/
@@ -55,7 +55,7 @@ def receiverCreateMsg (fork : Fork) (W : State) : Msg :=
 /-- The token creation's settled world, as the operations Jaune applies. -/
 def world5 : State :=
   ((CreateEntry.entryState world4 creator tokenAddr).setStorVal tokenAddr creator.toB256
-    1000000).setCode tokenAddr Blanc.Lift.VyperNonreentrantDeployed.Token20.code
+    1000000).setCode tokenAddr Blanc.Lift.Token20.code
 
 /-- The receiver creation's settled world, as the operations Jaune applies. -/
 def world6 : State :=
@@ -99,7 +99,7 @@ def removeCall : Bytes :=
 
 /-- **Message 7**: `T.approve(P, 1000)`, 100,000 gas. -/
 def approveMsg (fork : Fork) (W : State) : Msg :=
-  rootCall fork W tokenAddr Blanc.Lift.VyperNonreentrantDeployed.Token20.code approveCall 100000 0
+  rootCall fork W tokenAddr Blanc.Lift.Token20.code approveCall 100000 0
 
 /-- **Message 8**: `P.add_liquidity([1000, 1000], 0)` with 1000 wei, 1,000,000 gas. -/
 def addMsg (fork : Fork) (W : State) : Msg :=
@@ -113,7 +113,7 @@ def removeMsg (fork : Fork) (W : State) : Msg :=
 
 /-- The token's account once created (nonce 1, no balance, the registered runtime). -/
 def tokenAccount : Acct :=
-  { Acct.nil with nonce := 1, code := Blanc.Lift.VyperNonreentrantDeployed.Token20.code }
+  { Acct.nil with nonce := 1, code := Blanc.Lift.Token20.code }
 
 /-- The receiver's account once created. -/
 def receiverAccount : Acct :=
@@ -128,8 +128,8 @@ def acs6 : AcctShadow := acctShadowOf accts6
 def stor5 : StorShadow := ((tokenAddr, creator.toB256), 1000000) :: storOracle
 
 /-- The token's tries (depth 9 covers its 299 bytes). -/
-def tokenTries : CodeTries Blanc.Lift.VyperNonreentrantDeployed.Token20.code 9 :=
-  CodeTries.ofCode Blanc.Lift.VyperNonreentrantDeployed.Token20.code 9 (by decide +kernel)
+def tokenTries : CodeTries Blanc.Lift.Token20.code 9 :=
+  CodeTries.ofCode Blanc.Lift.Token20.code 9 (by decide +kernel)
     (by decide +kernel)
 
 /-- The receiver's tries. -/

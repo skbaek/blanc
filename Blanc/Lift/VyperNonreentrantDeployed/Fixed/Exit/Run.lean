@@ -184,7 +184,7 @@ theorem exitFacts :
     cpBal.f.inner.codeAddress = some tokenAddr ∧
     frameEnterS cpBal.f cB2.acs = .run eBal ∧
     (eBal.pc, eBal.sta.currentTarget, eBal.sta.code) =
-      (0, tokenAddr, Blanc.Lift.VyperNonreentrantDeployed.Token20.code) ∧
+      (0, tokenAddr, Blanc.Lift.Token20.code) ∧
     pwalkH (.avoid 0) tokenTries eBal.sta okAny 29 cBal0 = .cont cBal1 ∧
     pwalkH (.avoid 0) tokenTries eBal.sta okAny 1 cBal1 = .halt (.ok dBal) ∧
     dBal.error = none ∧
@@ -243,7 +243,7 @@ theorem exitFacts :
     cpXf.f.inner.codeAddress = some tokenAddr ∧
     frameEnterS cpXf.f cB6.acs = .run eXf ∧
     (eXf.pc, eXf.sta.currentTarget, eXf.sta.code, eXf.sta.value.toNat) =
-      (0, tokenAddr, Blanc.Lift.VyperNonreentrantDeployed.Token20.code, 0) ∧
+      (0, tokenAddr, Blanc.Lift.Token20.code, 0) ∧
     pwalkH (.avoid 0) tokenTries eXf.sta okAny 53 cXf0 = .cont cXf1 ∧
     pwalkH (.avoid 0) tokenTries eXf.sta okAny 1 cXf1 = .halt (.ok dXf) ∧
     dXf.error = none ∧

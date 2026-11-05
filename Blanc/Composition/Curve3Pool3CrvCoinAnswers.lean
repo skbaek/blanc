@@ -9,7 +9,7 @@ open Blanc.Composition.UniswapV2PairWeth9Joint (vcsm_benvStat vcsm_caller vcsm_c
 
 section Premises
 
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot)
+open Blanc.Lift.Token20 (balSlot allowSlot)
 
 variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {c : Adr} {U : Nat} {ii oi : B256}
 
@@ -20,7 +20,7 @@ theorem token20_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget)
     (hU : 80000 ≤ U) (hii : ii.toNat + 0x64 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104)
-    (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+    (hW : ∀ b, W b → b.getCode c = Blanc.Lift.Token20.code ∧
       T20PullFits (b.getStor c) sevm.caller sevm.currentTarget sevm.currentTarget amt)
     (hW' : ∀ b d, W b → CoinLeaves c (t20Move (t20Allow (b.getStor c) sevm.caller
         sevm.currentTarget amt) sevm.caller sevm.currentTarget amt)
@@ -38,7 +38,7 @@ theorem token20_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp c) (ht : t.toAdr = c) (hne : c ≠ sevm.currentTarget)
     (hU : 80000 ≤ U) (hii : ii.toNat + 0x44 ≤ 3104) (hoi : oi.toNat + 32 ≤ 3104)
-    (hW : ∀ b, W b → b.getCode c = VyperNonreentrantDeployed.Token20.code ∧
+    (hW : ∀ b, W b → b.getCode c = Blanc.Lift.Token20.code ∧
       T20MoveFits (b.getStor c) sevm.currentTarget sevm.caller amt)
     (hW' : ∀ b d, W b → CoinLeaves c (t20Move (b.getStor c) sevm.currentTarget sevm.caller amt)
       ((getOrigAcct sevm c).stor = b.getStor c ∧ c ∉ b.createdAccounts ∧
@@ -71,13 +71,13 @@ def WCore (sevm : Sevm) (b : Devm) : Prop :=
 
 /-- The world before the pull. -/
 def WPull (sevm : Sevm) (b : Devm) : Prop :=
-  b.getCode coin0Addr = VyperNonreentrantDeployed.Token20.code ∧
-    b.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code ∧
+  b.getCode coin0Addr = Blanc.Lift.Token20.code ∧
+    b.getCode coin1Addr = Blanc.Lift.Token20.code ∧
     b.getStor coin0Addr = coin0Stor ∧ b.getStor coin1Addr = coin1Stor ∧ WCore sevm b
 
 /-- The world after the pull. -/
 def WPush (sevm : Sevm) (b : Devm) : Prop :=
-  b.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code ∧ b.getStor coin1Addr = coin1Stor ∧
+  b.getCode coin1Addr = Blanc.Lift.Token20.code ∧ b.getStor coin1Addr = coin1Stor ∧
     WCore sevm b
 
 /-- A clean coin child keeps the core when its refund condition holds: it writes only its coin's

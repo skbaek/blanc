@@ -62,13 +62,13 @@ theorem al_costW :
 
 /-- The fee coin's pre-pull balance at the entry is `3000`. -/
 theorem al_B1W : ((wPre alDataW).getStor (coinOf (cSevm alDataW) (wPre alDataW) 2)).get
-    (VyperNonreentrantDeployed.Token20.balSlot (cSevm alDataW).currentTarget) =
+    (Blanc.Lift.Token20.balSlot (cSevm alDataW).currentTarget) =
       (3000 : B256) := by
   decide +kernel
 
 /-- The fee coin's post-pull balance at the entry is `3300`. -/
 theorem al_B2W : ((alFeeStor (cSevm alDataW) (wPre alDataW)).get
-    (VyperNonreentrantDeployed.Token20.balSlot (cSevm alDataW).currentTarget)) =
+    (Blanc.Lift.Token20.balSlot (cSevm alDataW).currentTarget)) =
       (3300 : B256) := by
   decide +kernel
 

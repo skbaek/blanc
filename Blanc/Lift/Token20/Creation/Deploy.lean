@@ -1,5 +1,5 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation.Check
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
+import Blanc.Lift.Token20.Creation.Check
+import Blanc.Lift.Token20.Check
 import Blanc.Lift.Deploy
 import Blanc.Lift.Vyper
 import Blanc.Lift.WalkSteps
@@ -16,12 +16,12 @@ returns the registered 299-byte `Token20` runtime, which is installed at the tar
 that one storage entry. No other account changes. The settled world is also an explicit term of
 the input world (`CreateEntry.entryState`). Message execution only: no historical inclusion. -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation
+namespace Blanc.Lift.Token20.Creation
 
 open Jaune Blanc.Lift
 
 /-- The registered runtime's bytes. -/
-abbrev runtime : List UInt8 := Blanc.Lift.VyperNonreentrantDeployed.Token20.code.data.toList
+abbrev runtime : List UInt8 := Blanc.Lift.Token20.code.data.toList
 
 theorem runtime_length : runtime.length = 299 := by decide +kernel
 
@@ -148,24 +148,24 @@ def tokenAcct (W : State) (T creator : Adr) : Acct where
   nonce := (W.get T).nonce + 1
   bal := (W.get T).bal
   stor := Stor.empty.set creator.toB256 1000000
-  code := Blanc.Lift.VyperNonreentrantDeployed.Token20.code
+  code := Blanc.Lift.Token20.code
 
 /-- The installed runtime is nonempty (its size is the constructor-output length). -/
 theorem installed_code_size_ne_zero :
-    Blanc.Lift.VyperNonreentrantDeployed.Token20.code.size ≠ 0 := by
-  have h : Blanc.Lift.VyperNonreentrantDeployed.Token20.code.size = runtime.length := rfl
+    Blanc.Lift.Token20.code.size ≠ 0 := by
+  have h : Blanc.Lift.Token20.code.size = runtime.length := rfl
   rw [h, runtime_length]
   decide
 
 /-- An account carrying the installed runtime is never empty. -/
 theorem installed_not_empty {ac : Acct}
-    (hcode : ac.code = Blanc.Lift.VyperNonreentrantDeployed.Token20.code) :
+    (hcode : ac.code = Blanc.Lift.Token20.code) :
     ¬ ac.Empty := by
   intro h
   exact installed_code_size_ne_zero (hcode ▸ h.1)
 
 theorem runtime_code :
-    (⟨⟨runtime⟩⟩ : ByteArray) = Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
+    (⟨⟨runtime⟩⟩ : ByteArray) = Blanc.Lift.Token20.code :=
   (fun (c : ByteArray) => show (⟨⟨c.data.toList⟩⟩ : ByteArray) = c by cases c; rfl) _
 
 theorem runtime_deposit : runtime.length * gasCodeDeposit = 59800 := by
@@ -183,7 +183,7 @@ theorem create_token (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
       (∀ a, a ≠ msg.currentTarget → post.state.get a = msg.benv.state.get a) ∧
       post.state = ((CreateEntry.entryState msg.benv.state msg.caller msg.currentTarget).setStorVal
         msg.currentTarget msg.caller.toB256 1000000).setCode msg.currentTarget
-          Blanc.Lift.VyperNonreentrantDeployed.Token20.code := by
+          Blanc.Lift.Token20.code := by
   obtain ⟨benv, htransfer⟩ :=
     benvAfterTransfer_exists_zero (msg := processCreateMessage.msg msg) hvalue
   let sevm := initSevm (createSeed msg benv)
@@ -276,4 +276,4 @@ theorem create_token (msg : Msg) (hfork : CoveredFork msg.benv.stat.fork)
   · rw [CreateEntry.liftCreatePost_state, hraw, facts.1, runtime_code,
       CreateEntry.entry_state hvalue hstv htransfer]
 
-end Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation
+end Blanc.Lift.Token20.Creation

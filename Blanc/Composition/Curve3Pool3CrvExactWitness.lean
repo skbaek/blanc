@@ -97,8 +97,8 @@ theorem addLiquidity_exactPremises_satisfiable {sevm : Sevm} {pre : Devm} {T m :
         alWorld sevm pre m (k + 1) b) ∧
       ∃ P : ALExactCalls, ALExactPremises sevm (pre.getStor sevm.currentTarget) T
         ((pre.getStor (coinOf sevm pre 2)).get
-          (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
-        ((alFeeStor sevm pre).get (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+          (Blanc.Lift.Token20.balSlot sevm.currentTarget))
+        ((alFeeStor sevm pre).get (Blanc.Lift.Token20.balSlot sevm.currentTarget))
         m (alWorld sevm pre m) 80000 P := by
   obtain ⟨hcl, h0, -, -, hskip, -, -⟩ := addLiquidity_premises_satisfiable hfork hstatic hdepth
     hc3 hcoins hmint hfits
@@ -145,7 +145,7 @@ theorem addLiquidity_exactPremises_satisfiable {sevm : Sevm} {pre : Devm} {T m :
   have hbalB : CoinBalExactAt sevm (alWorld sevm pre m 2) (alWorld sevm pre m 2)
       ((pre.getStor sevm.currentTarget).get (coinSlot 2))
       ((pre.getStor (coinOf sevm pre 2)).get
-        (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget)) 80000 0x53c 0x5a0 :=
+        (Blanc.Lift.Token20.balSlot sevm.currentTarget)) 80000 0x53c 0x5a0 :=
     token20_coinBalExactAt hfork hdepth (hcoins.prec 2) rfl (by decide) (by decide) (by decide)
       (fun b hb => ⟨(hb.2.1 2 (le_refl _)).1, by rw [(hb.2.1 2 (le_refl _)).2]⟩)
       (fun b d hb hs hc => keep 2 b d hb hs hc)
@@ -153,7 +153,7 @@ theorem addLiquidity_exactPremises_satisfiable {sevm : Sevm} {pre : Devm} {T m :
   -- the balance after the pull is read only when the fee coin's amount is nonzero
   have hbalA : alAmt sevm 2 ≠ 0 → CoinBalExactAt sevm (alWorld sevm pre m 3)
       (alWorld sevm pre m 3) ((pre.getStor sevm.currentTarget).get (coinSlot 2))
-      ((alFeeStor sevm pre).get (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+      ((alFeeStor sevm pre).get (Blanc.Lift.Token20.balSlot sevm.currentTarget))
       80000 0x87c 0x8e0 := fun ha =>
     token20_coinBalExactAt hfork hdepth (hcoins.prec 2) rfl (by decide) (by decide) (by decide)
       (fun b hb => ⟨(hb.2.2 rfl ha).1, by rw [(hb.2.2 rfl ha).2]⟩)
@@ -181,7 +181,7 @@ theorem addLiquidity_exactPremises_satisfiable {sevm : Sevm} {pre : Devm} {T m :
       alAmt sevm 2 ≠ 0 →
       StaticWordCallProfile sevm (alWorld sevm pre m 3) (alWorld sevm pre m 3)
         ((pre.getStor sevm.currentTarget).get (coinSlot 2)) (balanceOfData sevm.currentTarget)
-        ((alFeeStor sevm pre).get (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+        ((alFeeStor sevm pre).get (Blanc.Lift.Token20.balSlot sevm.currentTarget))
         80000 0x87c 0x24 0x8e0 d n := by
     by_cases ha : alAmt sevm 2 = 0
     · exact ⟨fun _ _ _ => 0, fun b _ _ => b, fun h => absurd ha h⟩
@@ -294,7 +294,7 @@ theorem removeLiquidityImbalance_exactPremises_satisfiable {sevm : Sevm} {pre : 
 theorem removeLiquidityOneCoin_exactPremises_satisfiable {sevm : Sevm} {pre : Devm} {T v : B256}
     {i : Fin 3} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hc3 : C3Entry sevm pre T) (hi : i.val = (ocI sevm).toNat)
-    (hcode : pre.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code)
+    (hcode : pre.getCode (coinOf sevm pre i) = Blanc.Lift.Token20.code)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp (coinOf sevm pre i))
     (hpool : coinOf sevm pre i ≠ sevm.currentTarget) (htok : coinOf sevm pre i ≠ tokOf sevm pre)
     (hburn : BurnFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256
@@ -349,7 +349,7 @@ def exWorld0 (i j : Fin 3) (b : Devm) : Prop :=
 /-- `exchange`'s world between the pull and the push: coin `i` as its pull leaves it, coin `j` as
 at the entry. -/
 def exWorld1 (i j : Fin 3) (b : Devm) : Prop :=
-  (b.getCode (coinOf sevm pre i) = VyperNonreentrantDeployed.Token20.code ∧
+  (b.getCode (coinOf sevm pre i) = Blanc.Lift.Token20.code ∧
     b.getStor (coinOf sevm pre i) = exPulledStor sevm pre i) ∧ CoinPinned sevm pre j b
 
 end Exchange
@@ -371,12 +371,12 @@ theorem exchange_exactPremises_satisfiable {sevm : Sevm} {pre : Devm} {i j : Fin
           StaticWordCallProfile sevm (exWorld0 sevm pre i j) (exWorld0 sevm pre i j)
             ((pre.getStor sevm.currentTarget).get (coinSlot i)) (balanceOfData sevm.currentTarget)
             ((pre.getStor (coinOf sevm pre i)).get
-              (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+              (Blanc.Lift.Token20.balSlot sevm.currentTarget))
             80000 0x3dc 0x24 0x440 P.balD1 P.balN1 ∧
           StaticWordCallProfile sevm (exWorld1 sevm pre i j) (exWorld1 sevm pre i j)
             ((pre.getStor sevm.currentTarget).get (coinSlot i)) (balanceOfData sevm.currentTarget)
             ((exPulledStor sevm pre i).get
-              (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget))
+              (Blanc.Lift.Token20.balSlot sevm.currentTarget))
             80000 0x71c 0x24 0x780 P.balD2 P.balN2) ∧
         MutableCallProfile sevm (exWorld0 sevm pre i j) (exWorld1 sevm pre i j)
           ((pre.getStor sevm.currentTarget).get (coinSlot i))
@@ -396,13 +396,13 @@ theorem exchange_exactPremises_satisfiable {sevm : Sevm} {pre : Devm} {i j : Fin
   obtain ⟨dB1, nB1, pB1⟩ : CoinBalExactAt sevm (exWorld0 sevm pre i j) (exWorld0 sevm pre i j)
       ((pre.getStor sevm.currentTarget).get (coinSlot i))
       ((pre.getStor (coinOf sevm pre i)).get
-        (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget)) 80000 0x3dc 0x440 :=
+        (Blanc.Lift.Token20.balSlot sevm.currentTarget)) 80000 0x3dc 0x440 :=
     token20_coinBalExactAt hfork hdepth (hcoins.prec i) rfl (by decide) (by decide) (by decide)
       (fun b hb => ⟨hb.1.1, by rw [hb.1.2]⟩) keep0
   obtain ⟨dB2, nB2, pB2⟩ : CoinBalExactAt sevm (exWorld1 sevm pre i j) (exWorld1 sevm pre i j)
       ((pre.getStor sevm.currentTarget).get (coinSlot i))
       ((exPulledStor sevm pre i).get
-        (VyperNonreentrantDeployed.Token20.balSlot sevm.currentTarget)) 80000 0x71c 0x780 :=
+        (Blanc.Lift.Token20.balSlot sevm.currentTarget)) 80000 0x71c 0x780 :=
     token20_coinBalExactAt hfork hdepth (hcoins.prec i) rfl (by decide) (by decide) (by decide)
       (fun b hb => ⟨hb.1.1, by rw [hb.1.2]⟩) keep1
   obtain ⟨dL, nL, pL⟩ : CoinPullExactAt sevm (exWorld0 sevm pre i j) (exWorld1 sevm pre i j)

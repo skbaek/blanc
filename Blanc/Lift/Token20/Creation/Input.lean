@@ -1,4 +1,4 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Cert
+import Blanc.Lift.Token20.Cert
 
 /-! **Synthetic** creation input of the shared token fixture `T` (`Token20`).
 
@@ -14,7 +14,7 @@ Not a mainnet artifact. The registry entry `vyper-token20-creation`
 (`scripts/lift/certificates.json`) pins the 315 bytes; its generated certificate checks this
 definition. -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation
+namespace Blanc.Lift.Token20.Creation
 
 /-- The constructor: mint `10^6` to the caller, then copy out the runtime. -/
 def ctorPrefix : List UInt8 :=
@@ -22,6 +22,6 @@ def ctorPrefix : List UInt8 :=
 
 /-- The synthetic token creation input. -/
 def creationCode : ByteArray :=
-  ⟨(ctorPrefix ++ Blanc.Lift.VyperNonreentrantDeployed.Token20.code.data.toList).toArray⟩
+  ⟨(ctorPrefix ++ Blanc.Lift.Token20.code.data.toList).toArray⟩
 
-end Blanc.Lift.VyperNonreentrantDeployed.Token20.Creation
+end Blanc.Lift.Token20.Creation

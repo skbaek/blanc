@@ -56,7 +56,7 @@ def ClosedSwapOutcome (st : Jaune.State) : Prop :=
         ((swapWorld st).getStor weth).get (Weth9.balSlot pair) = 999004 ∧
       -- the reserves are the new balances
         reserve0Read (((swapWorld st).getStor pair).get 8) =
-          ((swapWorld st).getStor tokenX).get (VyperNonreentrantDeployed.Token20.balSlot pair) ∧
+          ((swapWorld st).getStor tokenX).get (Blanc.Lift.Token20.balSlot pair) ∧
         reserve1Read (((swapWorld st).getStor pair).get 8) =
           ((swapWorld st).getStor weth).get (Weth9.balSlot pair) ∧
         reserve0Read (((swapWorld st).getStor pair).get 8) = 1001000 ∧
@@ -156,7 +156,7 @@ theorem uniswap_weth9_closed_agreeing {st : Jaune.State} (canonical : st.Canonic
     rw [balances.2, stWeth, w0WethStor_pair]; decide
   obtain ⟨res0, res1, -, -⟩ := tx2_settled_reserves (tx1World st)
   have xAfter : ((swapWorld st).getStor tokenX).get
-      (VyperNonreentrantDeployed.Token20.balSlot pair) = 1001000 := by
+      (Blanc.Lift.Token20.balSlot pair) = 1001000 := by
     change ((swapWorld st).get tokenX).stor.get _ = _
     rw [tx2_settled_get_other _ (by decide +kernel) (by decide +kernel) (by decide +kernel)
       (by decide +kernel)]

@@ -1615,7 +1615,7 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
   `sstoreCostS` takes the actual `Devm` after `Sevm`; it and `afterSstoreS` retain
   the machine's created-account-aware original storage read. A transaction
   snapshot alone does not determine that value. Worked example: the synthetic token's `approve_child` in
-  `Blanc/Lift/VyperNonreentrantDeployed/Token20/Frame.lean`.
+  `Blanc/Lift/Token20/Frame.lean`.
 - To state a closed walk witness under every covered fork rather than the one its machine
   fixes, transport its kernel facts with
   [`Blanc/Lift/NodeWalkFork.lean`](../Blanc/Lift/NodeWalkFork.lean): `pwalk_withFork`
@@ -11367,6 +11367,29 @@ creation chronology, and applies the retained actual-key endpoint in
 fields retain their complete raw-key, initializer, native-query and R4 populations;
 no final origin, readiness or zero field is supplied.
 The observation correspondence and source-registration decisions remain open.
+
+#### C9.16. I need a fixed synthetic token for a concrete witness
+
+- Fixed synthetic coin fixture: the hand-assembled **299-byte Token20** is
+  shared support for concrete witnesses, not a mainnet token or an arbitrary
+  ERC-20 implementation. Its historical inputs and registry IDs remain fixed.
+  Success runs are proved; documented rejection behavior of the bytes is not
+  upgraded into a universal proved property. Balances use address-word slots;
+  transferFrom always decrements allowance, including self-spends.
+  `Blanc/Lift/Token20/Cert.lean` supplies the runtime literal/certificate.
+  `Blanc/Lift/Token20/Check.lean` supplies the runtime kernel acceptance and layout.
+  `Blanc/Lift/Token20/Creation/Cert.lean` supplies the creation lift certificate.
+  `Blanc/Lift/Token20/Creation/Check.lean` supplies the creation kernel acceptance.
+  `Blanc/Lift/Token20/Creation/Deploy.lean` supplies the constructor/CREATE exact execution.
+  `Blanc/Lift/Token20/Creation/Input.lean` supplies the 315-byte constructor/runtime input.
+  `Blanc/Lift/Token20/Frame.lean` supplies the approve child/shadow interface.
+  `Blanc/Lift/Token20/Run.lean` supplies the scratch/approve exact-run helpers.
+  `Blanc/Lift/Token20/RunBalance.lean` supplies the balanceOf success run.
+  `Blanc/Lift/Token20/RunTransfer.lean` supplies the transfer success run.
+  `Blanc/Lift/Token20/RunTransferFrom.lean` supplies the transferFrom success run.
+  The 16-byte constructor mints 10^6 to its creator and installs exactly the
+  fixture runtime. Creation.Deploy proves message execution, not historical
+  deployment inclusion. Instance worlds and concrete V± histories stay local.
 
 ## Common-library-first workflow
 

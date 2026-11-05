@@ -29,7 +29,7 @@ is `initSevm`/`initDevm` of the message `cMsg`; only its calldata varies per ent
 section Concrete
 
 open Blanc.Composition.Curve3Pool3CrvJoint
-open VyperNonreentrantDeployed.Token20 (balSlot allowSlot)
+open Blanc.Lift.Token20 (balSlot allowSlot)
 
 /-- 3Crv's storage with the trader holding `600` LP tokens (the holder's row is unchanged). -/
 def cC3Stor : Stor := c3Stor.set (mapSlot 3 trader.toB256) 600
@@ -100,13 +100,13 @@ theorem cState_get_coin2 : cState.get coin2Addr = coinAcct (cCoinStor coin2Stor)
   unfold cState
   rw [State.get_set_self]
 
-theorem cState_code_coin0 : cState.getCode coin0Addr = VyperNonreentrantDeployed.Token20.code :=
+theorem cState_code_coin0 : cState.getCode coin0Addr = Blanc.Lift.Token20.code :=
   congrArg Acct.code cState_get_coin0
 
-theorem cState_code_coin1 : cState.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code :=
+theorem cState_code_coin1 : cState.getCode coin1Addr = Blanc.Lift.Token20.code :=
   congrArg Acct.code cState_get_coin1
 
-theorem cState_code_coin2 : cState.getCode coin2Addr = VyperNonreentrantDeployed.Token20.code :=
+theorem cState_code_coin2 : cState.getCode coin2Addr = Blanc.Lift.Token20.code :=
   congrArg Acct.code cState_get_coin2
 
 /-- The three coins' addresses. -/
@@ -115,7 +115,7 @@ def coinAdr : Fin 3 → Adr
   | 1 => coin1Addr
   | 2 => coin2Addr
 
-theorem cState_code_coin (k : Fin 3) : cState.getCode (coinAdr k) = VyperNonreentrantDeployed.Token20.code := by
+theorem cState_code_coin (k : Fin 3) : cState.getCode (coinAdr k) = Blanc.Lift.Token20.code := by
   fin_cases k
   · exact cState_code_coin0
   · exact cState_code_coin1

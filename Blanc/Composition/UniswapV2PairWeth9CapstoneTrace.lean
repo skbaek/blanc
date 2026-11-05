@@ -81,7 +81,7 @@ theorem tx1_trace_raw {benv : Benv} {xT xP : B256} (ctx : Tx1Context benv xT xP)
   let R : Jaune.State → Msg → Benv → Devm → Prop := fun _ msg after _ =>
     (Frame.ofCall msg).enter = .run (initEvm (msg.withBenv after)) ∧
     msg.target.isNone = false ∧ msg.tenv.stat.auths.isEmpty = true ∧
-    msg.code = VyperNonreentrantDeployed.Token20.code ∧ msg.currentTarget = tokenX
+    msg.code = Blanc.Lift.Token20.code ∧ msg.currentTarget = tokenX
   obtain ⟨debit, msg, after, post, msgEq, ⟨enter, target, auths, code, current⟩, -⟩ :=
     trace.root_frame_of_call_value_with_message (R := R) (E := trader) (t := tokenX)
       (chainId := 1) (maxPriorityFee := 1) (maxFee := 8) (intrinsicGas := 21584)
@@ -107,7 +107,7 @@ theorem tx1_trace_raw {benv : Benv} {xT xP : B256} (ctx : Tx1Context benv xT xP)
         intro debit msg after hdebit hprepare hentry
         obtain ⟨post, execution, error, refund, -, -, -, -⟩ :=
           tx1_prepared_success ctx 1 tx1SigR tx1SigS debit msg after hdebit hprepare hentry
-        have debitCode : debit.getCode tokenX = VyperNonreentrantDeployed.Token20.code := by
+        have debitCode : debit.getCode tokenX = Blanc.Lift.Token20.code := by
           obtain ⟨_, equation⟩ := State.of_subBal hdebit
           rw [equation, State.setBal_getCode]
           exact State.incrNonce_get_code.trans ctx.code

@@ -1,4 +1,4 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
+import Blanc.Lift.Token20.Check
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.ExactLeaf
@@ -20,7 +20,7 @@ selected `SLOAD`/`SSTORE` bases (`afterSload`, `afterSstore`, `Blanc/ForwardCall
 The `SSTORE` sentry is discharged from `gCallStipend < G`, `G` the gas left at the end.
 -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Token20
+namespace Blanc.Lift.Token20
 
 open Jaune Blanc.Lift
 
@@ -215,4 +215,4 @@ theorem approve_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
 
 /-! ## `balanceOf(a)` -/
 
-end Blanc.Lift.VyperNonreentrantDeployed.Token20
+end Blanc.Lift.Token20

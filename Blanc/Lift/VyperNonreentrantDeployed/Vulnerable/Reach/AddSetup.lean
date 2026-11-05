@@ -1,5 +1,5 @@
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.InitRun
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
+import Blanc.Lift.Token20.Check
 import Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.AttackerR.Check
 import Blanc.Lift.NodeWalkOrig
 

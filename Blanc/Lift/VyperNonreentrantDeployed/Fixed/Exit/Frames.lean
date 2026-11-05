@@ -147,7 +147,7 @@ theorem frameBal {fk : Fork} (hg : CoveredFork fk) (hs : ReOK world8 eBal.sta)
       ChildAgree dBal cBal1.keys cBal1.adrs cBal1.stor cBal1.acs := by
   intro t ht
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, eBalF, wBal1, wBal2, -⟩ := exitFacts
-  have hcode : (reS eBal.sta fk).code = Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
+  have hcode : (reS eBal.sta fk).code = Blanc.Lift.Token20.code :=
     (Sevm.withOrig_code _ _).trans ((Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj eBalF).2).2))
   have w1 := (walk_re hs hg (.avoid 0) tokenTries okAny 29 cBal0).trans wBal1
   have w2 := (walk_re hs hg (.avoid 0) tokenTries okAny 1 cBal1).trans wBal2
@@ -163,7 +163,7 @@ theorem frameXf {fk : Fork} (hg : CoveredFork fk) (hs : ReOK world8 eXf.sta)
       ChildAgree dXf cXf1.keys cXf1.adrs cXf1.stor cXf1.acs := by
   intro t ht
   obtain ⟨-, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, eXfF, wXf1, wXf2, -⟩ := exitFacts
-  have hcode : (reS eXf.sta fk).code = Blanc.Lift.VyperNonreentrantDeployed.Token20.code :=
+  have hcode : (reS eXf.sta fk).code = Blanc.Lift.Token20.code :=
     (Sevm.withOrig_code _ _).trans ((Sevm.withFork_code _ _).trans ((Prod.mk.inj (Prod.mk.inj (Prod.mk.inj eXfF).2).2).1))
   have w1 := (walk_re hs hg (.avoid 0) tokenTries okAny 53 cXf0).trans wXf1
   have w2 := (walk_re hs hg (.avoid 0) tokenTries okAny 1 cXf1).trans wXf2

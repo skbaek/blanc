@@ -1,4 +1,4 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Run
+import Blanc.Lift.Token20.Run
 import Blanc.Lift.ExactLeaf
 
 /-!
@@ -22,7 +22,7 @@ is one of `PUSH*`, `DUP*`, `SWAP*`, `POP`, `CALLDATALOAD`, `SHR`, `EQ`, `LT`, `G
 all fork-neutral, and the theorems hold for every `CoveredFork` directly.
 -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Token20
+namespace Blanc.Lift.Token20
 
 open Jaune Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk
 
@@ -81,4 +81,4 @@ theorem approve_child {sevm : Sevm} {c : PCfg} {G : Nat} (hcode : sevm.code = co
 
 /-! ## `balanceOf` -/
 
-end Blanc.Lift.VyperNonreentrantDeployed.Token20
+end Blanc.Lift.Token20

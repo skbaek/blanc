@@ -61,7 +61,7 @@ theorem checkpoint_facts {W : State} (h : Checkpoint W) :
     (∀ a, a ≠ proxyAddr → a ≠ implAddr → a ≠ tokenAddr → ∀ k, storOf W a k = 0) ∧
     -- the codes
     (W.get proxyAddr).code = fwd ∧ (W.get implAddr).code = code ∧
-    (W.get tokenAddr).code = Blanc.Lift.VyperNonreentrantDeployed.Token20.code ∧
+    (W.get tokenAddr).code = Blanc.Lift.Token20.code ∧
     (W.get receiverAddr).code = Blanc.Lift.VyperNonreentrantDeployed.Fixed.ReceiverR.code := by
   have hs := h.2
   have hsup : storOf W proxyAddr 0x16 = 2000 := by rw [hs]; decide +kernel

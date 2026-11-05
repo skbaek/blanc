@@ -40,10 +40,10 @@ theorem exRoot_callKinds (hcode : sevm.code = Curve3Pool.code)
   rw [hNs, hcode] at hb hx
   exact callKinds_of_check code_callKinds hb hx
 
-theorem token20_code_ne : (VyperNonreentrantDeployed.Token20.code).toList ≠ [] := by
+theorem token20_code_ne : (Blanc.Lift.Token20.code).toList ≠ [] := by
   decide +kernel
 
-theorem token20_not_delegation : ¬ isValidDelegation VyperNonreentrantDeployed.Token20.code := by
+theorem token20_not_delegation : ¬ isValidDelegation Blanc.Lift.Token20.code := by
   intro h
   have h1 := h.1
   revert h1
@@ -59,18 +59,18 @@ theorem pool_code_ne : (Curve3Pool.code).toList ≠ [] := by
 the code of every other address.** -/
 theorem exRoot_coinChild_keepsAt (hcode : sevm.code = Curve3Pool.code)
     (hfork : CoveredFork sevm.benvStat.fork) (exc : Exec 0 sevm b (.ok post)) {t a : Adr}
-    (htc : b.getCode t = VyperNonreentrantDeployed.Token20.code) (hta : t ≠ a) :
+    (htc : b.getCode t = Blanc.Lift.Token20.code) (hta : t ≠ a) :
     ∀ c ∈ Exec.childFrames exc, c.sevm.currentTarget = t →
       ((b.getCode a).toList ≠ [] →
         ∀ x, (c.post.getStor a).get x = (c.pre.getStor a).get x) ∧
         c.post.getCode a = c.pre.getCode a := by
   intro c hc ht
   obtain ⟨cfork, cpre, ccode⟩ := Exec.childFrames_code exc hfork (exRoot_callKinds hcode exc) c hc
-  have hcc : c.sevm.code = VyperNonreentrantDeployed.Token20.code := by
+  have hcc : c.sevm.code = Blanc.Lift.Token20.code := by
     rw [ccode t (by rw [htc]; exact token20_code_ne) (by rw [htc]; exact token20_not_delegation)
       ht, htc]
   have hsf : SpawnFreeReach c.sevm.code := by
-    rw [hcc]; exact VyperNonreentrantDeployed.Token20.spawnFreeReach
+    rw [hcc]; exact Blanc.Lift.Token20.spawnFreeReach
   obtain ⟨hst, hcd⟩ := Exec.Frame.keeps_of_spawnFree c (Exec.childFrames_pc exc c hc) cfork hsf
     (a := a) (by rw [ht]; exact hta.symm)
   exact ⟨fun hne => hst (by rw [cpre a hne]; exact hne), hcd⟩
@@ -79,7 +79,7 @@ theorem exRoot_coinChild_keepsAt (hcode : sevm.code = Curve3Pool.code)
 theorem exRoot_coinChild_keeps (hcode : sevm.code = Curve3Pool.code)
     (hfork : CoveredFork sevm.benvStat.fork) (hpool : b.getCode sevm.currentTarget = Curve3Pool.code)
     (exc : Exec 0 sevm b (.ok post)) {t : Adr}
-    (htc : b.getCode t = VyperNonreentrantDeployed.Token20.code) (htp : t ≠ sevm.currentTarget)
+    (htc : b.getCode t = Blanc.Lift.Token20.code) (htp : t ≠ sevm.currentTarget)
     (ht4 : t ≠ 4) :
     ∀ c ∈ Exec.childFrames exc, c.sevm.currentTarget = t →
       (∀ x, (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x) ∧
@@ -102,7 +102,7 @@ theorem exRoot_children {s : Curve3Pool.State} (exc : Exec 0 sevm b (.ok post))
     (hcoinPre : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp (exCoin sevm b k))
     (hpool : b.getCode sevm.currentTarget = Curve3Pool.code) (hid : IdReady sevm b)
     (hstack : b.stack = []) (hmem : b.memory = Mem.empty) (hgas : b.gasMeasure < 2 ^ 256)
-    (hcoins : ∀ k : Fin 3, b.getCode (exCoin sevm b k) = VyperNonreentrantDeployed.Token20.code ∧
+    (hcoins : ∀ k : Fin 3, b.getCode (exCoin sevm b k) = Blanc.Lift.Token20.code ∧
       exCoin sevm b k ≠ sevm.currentTarget ∧ exCoin sevm b k ≠ 4) :
     (∀ c ∈ Exec.childFrames exc, ExCoinChild sevm b c) ∧
       PoolCallsKeep ⟨0, sevm, b, .ok post, exc⟩ ∧
@@ -158,10 +158,10 @@ theorem exRoot_raw {s : Curve3Pool.State} (exc : Exec 0 sevm b (.ok post))
     (hcoinPre : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp (exCoin sevm b k))
     (hpool : b.getCode sevm.currentTarget = Curve3Pool.code) (hid : IdReady sevm b)
     (hstack : b.stack = []) (hmem : b.memory = Mem.empty) (hgas : b.gasMeasure < 2 ^ 256)
-    (hcoins : ∀ k : Fin 3, b.getCode (exCoin sevm b k) = VyperNonreentrantDeployed.Token20.code ∧
+    (hcoins : ∀ k : Fin 3, b.getCode (exCoin sevm b k) = Blanc.Lift.Token20.code ∧
       exCoin sevm b k ≠ sevm.currentTarget ∧ exCoin sevm b k ≠ 4) :
     ∀ r ∈ Exec.rawFrameDescendants exc, ∃ c ∈ Exec.childFrames exc, ExCoinChild sevm b c ∧
-      r.sevm = c.sevm ∧ c.sevm.code = VyperNonreentrantDeployed.Token20.code ∧
+      r.sevm = c.sevm ∧ c.sevm.code = Blanc.Lift.Token20.code ∧
       Exec.rawFrameDescendants r.exc = [] := by
   obtain ⟨coin, -, h4⟩ := exRoot_children exc hcode hfork hlen hcd hsel ha hcoinPre hpool hid
     hstack hmem hgas hcoins
@@ -172,7 +172,7 @@ theorem exRoot_raw {s : Curve3Pool.State} (exc : Exec 0 sevm b (.ok post))
   obtain ⟨htc, -, -⟩ := hcoins k
   have htc' := htc
   obtain ⟨cfork, -, ccode⟩ := Exec.childFrames_code exc hfork (exRoot_callKinds hcode exc) c hc
-  have hcc : c.sevm.code = VyperNonreentrantDeployed.Token20.code := by
+  have hcc : c.sevm.code = Blanc.Lift.Token20.code := by
     rw [ccode _ (by rw [htc']; exact token20_code_ne) (by rw [htc']; exact token20_not_delegation)
       hk, htc']
   have hnil : Exec.rawFrameDescendants c.run = [] := by
@@ -181,7 +181,7 @@ theorem exRoot_raw {s : Curve3Pool.State} (exc : Exec 0 sevm b (.ok post))
     dsimp only at hpc hcc ⊢
     subst hpc
     exact Exec.rawFrameDescendants_eq_nil_of_reach crun (noPushBefore_zero _ _)
-      (by rw [hcc]; exact VyperNonreentrantDeployed.Token20.spawnFreeReach)
+      (by rw [hcc]; exact Blanc.Lift.Token20.spawnFreeReach)
   simp only [Exec.rawFrameRoots, hnil, List.mem_singleton] at hrc
   subst hrc
   exact ⟨c, hc, ⟨k, hk⟩, rfl, hcc, hnil⟩

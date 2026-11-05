@@ -1,4 +1,4 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.RunTransfer
+import Blanc.Lift.Token20.RunTransfer
 import Blanc.ForwardStorageAccess
 
 /-!
@@ -16,7 +16,7 @@ exactly 10173 gas.
 namespace Blanc.Composition.UniswapV2PairWeth9Instance
 
 open Jaune Blanc Blanc.Lift
-open Blanc.Lift.VyperNonreentrantDeployed.Token20 (trTo trVal transferGas transferPost
+open Blanc.Lift.Token20 (trTo trVal transferGas transferPost
   transfer_runExact mvFrom mvTo mv1 mv2 mv3 mv4 mvCost transferBase retPost okMem balSlot code
   cert_check cert_jumpsOk)
 

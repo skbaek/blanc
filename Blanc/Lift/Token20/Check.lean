@@ -1,4 +1,4 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Cert
+import Blanc.Lift.Token20.Cert
 import Blanc.Lift.Exact
 import Blanc.Lift.MapSlot
 import Blanc.ExecutionReachable
@@ -27,7 +27,7 @@ This module holds the kernel acceptance of the certificate (`cert_check`, `cert_
 storage layout, and the fact that no reachable instruction can spawn a frame (`spawnFreeReach`).
 -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Token20
+namespace Blanc.Lift.Token20
 
 open Jaune Blanc.Lift
 
@@ -47,4 +47,4 @@ def allowSlot (owner spender : Adr) : B256 := mapSlot owner.toB256 spender.toB25
 /-- No `CALL`- or `CREATE`-family instruction starts at a position an execution reaches. -/
 theorem spawnFreeReach : SpawnFreeReach code := spawnFreeReach_of_check (by decide +kernel)
 
-end Blanc.Lift.VyperNonreentrantDeployed.Token20
+end Blanc.Lift.Token20

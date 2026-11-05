@@ -43,9 +43,9 @@ structure ExTxContext (benv : Benv) : Prop where
   noCode : (benv.state.getCode trader).size = 0
   poolCode : benv.state.getCode poolAddr = Curve3Pool.code
   poolStor : benv.state.getStor poolAddr = poolStor
-  coin0Code : benv.state.getCode coin0Addr = VyperNonreentrantDeployed.Token20.code
-  coin1Code : benv.state.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code
-  coin2Code : benv.state.getCode coin2Addr = VyperNonreentrantDeployed.Token20.code
+  coin0Code : benv.state.getCode coin0Addr = Blanc.Lift.Token20.code
+  coin1Code : benv.state.getCode coin1Addr = Blanc.Lift.Token20.code
+  coin2Code : benv.state.getCode coin2Addr = Blanc.Lift.Token20.code
   c3crvCode : benv.state.getCode c3crvAddr = Curve3Crv.code
   coin0Stor : benv.state.getStor coin0Addr = coin0Stor
   coin1Stor : benv.state.getStor coin1Addr = coin1Stor
@@ -70,9 +70,9 @@ structure ExFrame (sevm : Sevm) (b : Devm) : Prop where
   gas : b.gasLeft = 878400
   poolStor : b.state.getStor poolAddr = poolStor
   poolCode : b.state.getCode poolAddr = Curve3Pool.code
-  coin0Code : b.state.getCode coin0Addr = VyperNonreentrantDeployed.Token20.code
-  coin1Code : b.state.getCode coin1Addr = VyperNonreentrantDeployed.Token20.code
-  coin2Code : b.state.getCode coin2Addr = VyperNonreentrantDeployed.Token20.code
+  coin0Code : b.state.getCode coin0Addr = Blanc.Lift.Token20.code
+  coin1Code : b.state.getCode coin1Addr = Blanc.Lift.Token20.code
+  coin2Code : b.state.getCode coin2Addr = Blanc.Lift.Token20.code
   c3crvCode : b.state.getCode c3crvAddr = Curve3Crv.code
   coin0Stor : b.state.getStor coin0Addr = coin0Stor
   coin1Stor : b.state.getStor coin1Addr = coin1Stor
@@ -277,7 +277,7 @@ theorem exFrame_gas : b.gasMeasure < 2 ^ 256 := by
   decide
 
 theorem exFrame_coins (k : Fin 3) :
-    b.getCode (exCoin sevm b k) = VyperNonreentrantDeployed.Token20.code ∧
+    b.getCode (exCoin sevm b k) = Blanc.Lift.Token20.code ∧
       exCoin sevm b k ≠ sevm.currentTarget ∧ exCoin sevm b k ≠ 4 := by
   rw [exFrame_coin h, h.target]
   refine ⟨?_, (exCoinAdr_ne k).1, (exCoinAdr_ne k).2⟩
@@ -310,7 +310,7 @@ theorem exFrame_children {post : Devm} (exc : Exec 0 sevm b (.ok post)) :
 /-- **The raw frames the exchange frame enters** (`exRoot_raw` at an `ExFrame` entry). -/
 theorem exFrame_raw {post : Devm} (exc : Exec 0 sevm b (.ok post)) :
     ∀ r ∈ Exec.rawFrameDescendants exc, ∃ c ∈ Exec.childFrames exc, ExCoinChild sevm b c ∧
-      r.sevm = c.sevm ∧ c.sevm.code = VyperNonreentrantDeployed.Token20.code ∧
+      r.sevm = c.sevm ∧ c.sevm.code = Blanc.Lift.Token20.code ∧
       Exec.rawFrameDescendants r.exc = [] :=
   exRoot_raw exc h.code (exFrame_fork h) (exFrame_len h).1 (exFrame_len h).2 (exFrame_sel h)
     (exFrame_abs h) (exFrame_coinPre h) (exFrame_poolCode h) (exFrame_id h) h.stack h.memory (exFrame_gas h) (exFrame_coins h)

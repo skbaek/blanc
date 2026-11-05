@@ -12,7 +12,7 @@ nonce is bumped and its ether is `10^7 − 63514`.
 namespace Blanc.Composition.UniswapV2PairWeth9Instance
 
 open Jaune Blanc Blanc.Lift
-open Blanc.Lift.VyperNonreentrantDeployed.Token20 (balSlot)
+open Blanc.Lift.Token20 (balSlot)
 
 theorem trader_ne_zero : trader ≠ 0 := by decide +kernel
 theorem tokenX_ne_zero : tokenX ≠ 0 := by decide +kernel

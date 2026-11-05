@@ -1,7 +1,7 @@
 import Blanc.Lift.RetainedTargetCompleteness
 import Blanc.Lift.ReachChain
 import Blanc.Lift.Weth9.CommittedSpawn
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Check
+import Blanc.Lift.Token20.Check
 import Blanc.ExecutionReachable
 import Blanc.ExecutionTraceFrames
 
@@ -68,10 +68,10 @@ theorem weth9_rawFrameDescendants_nil {sevm : Sevm} {pre : Devm} {out : Executio
 /-- **A Token20 frame enters no child.** -/
 theorem token20_rawFrameDescendants_nil {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec 0 sevm pre out)
-    (hcode : sevm.code = VyperNonreentrantDeployed.Token20.code) :
+    (hcode : sevm.code = Blanc.Lift.Token20.code) :
     Exec.rawFrameDescendants run = [] :=
   Exec.rawFrameDescendants_eq_nil_of_reach run (noPushBefore_zero _ _)
-    (hcode ▸ VyperNonreentrantDeployed.Token20.spawnFreeReach)
+    (hcode ▸ Blanc.Lift.Token20.spawnFreeReach)
 
 /-- A message whose code carries no delegation designator resolves to itself. -/
 private theorem resolveCodeDelegation_of_none {msg : Msg}

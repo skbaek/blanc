@@ -95,7 +95,7 @@ theorem CallChild.root {node : Exec.Deriv} {target : Adr} {data rd : Bytes} {d :
     eq_root_of_rawFrameDescendants_nil child (quiet m cd hcode hdata stat child) mem
   exact ⟨m, cd, child, dpc, dsevm, dexn, tgt, caller, hdata, hcode, stat, out⟩
 
-theorem token20_code_ne_nil : VyperNonreentrantDeployed.Token20.code.toList ≠ [] := by
+theorem token20_code_ne_nil : Blanc.Lift.Token20.code.toList ≠ [] := by
   rw [ByteArray.toList_eq_toList_data]
   exact List.cons_ne_nil _ _
 
@@ -225,7 +225,7 @@ theorem tx2_swap_raw {out : Execution} (run : Exec 0 sevm (St b [] Mem.empty G) 
     have tok : (swapTokenWord (swapInitialToken0 sevm b)).toAdr = tokenX := by
       rw [tx2_token0 h]; decide +kernel
     have codeNode : r.balances.first.step.occurrence.node.devm.getCode tokenX =
-        VyperNonreentrantDeployed.Token20.code :=
+        Blanc.Lift.Token20.code :=
       rootCode r.balances.first.step.sameFrame h.xCode token20_code_ne_nil
     have hdata : (r.balances.first.step.occurrence.node.devm.memory.read
         r.balances.optional.transfers.second.ptr.toNat (B256.toNat 36)).1 = tx2BalanceData := by

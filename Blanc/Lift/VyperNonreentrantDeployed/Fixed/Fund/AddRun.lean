@@ -132,7 +132,7 @@ theorem addFacts :
     cpBal.f.inner.codeAddress = some tokenAddr ∧
     frameEnterS cpBal.f cDB1.acs = .run eBal ∧
     (eBal.pc, eBal.sta.currentTarget, eBal.sta.code) =
-      (0, tokenAddr, Blanc.Lift.VyperNonreentrantDeployed.Token20.code) ∧
+      (0, tokenAddr, Blanc.Lift.Token20.code) ∧
     pwalkH (.avoid 0) tokenTries eBal.sta okAny 29 cBal0 = .cont cBal1 ∧
     pwalkH (.avoid 0) tokenTries eBal.sta okAny 1 cBal1 = .halt (.ok dBal) ∧
     dBal.error = none ∧
@@ -145,7 +145,7 @@ theorem addFacts :
     cpTf.f.inner.codeAddress = some tokenAddr ∧
     frameEnterS cpTf.f cDB3.acs = .run eTf ∧
     (eTf.pc, eTf.sta.currentTarget, eTf.sta.code, eTf.sta.value.toNat) =
-      (0, tokenAddr, Blanc.Lift.VyperNonreentrantDeployed.Token20.code, 0) ∧
+      (0, tokenAddr, Blanc.Lift.Token20.code, 0) ∧
     pwalkH (.avoid 0) tokenTries eTf.sta okAny 85 cTf0 = .cont cTf1 ∧
     pwalkH (.avoid 0) tokenTries eTf.sta okAny 1 cTf1 = .halt (.ok dTf) ∧
     dTf.error = none ∧

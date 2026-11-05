@@ -97,10 +97,10 @@ structure Tx2Frame (sevm : Sevm) (b : Devm) : Prop where
   pairStor : b.state.getStor pair = w0PairStor
   pairCode : b.state.getCode pair = UniswapV2Pair.code
   wethCode : b.state.getCode weth = Weth9.code
-  xCode : b.state.getCode tokenX = VyperNonreentrantDeployed.Token20.code
+  xCode : b.state.getCode tokenX = Blanc.Lift.Token20.code
   wethPair : (b.state.getStor weth).get (Weth9.balSlot pair) = 1000000
   wethTrader : (b.state.getStor weth).get (Weth9.balSlot trader) = 0
-  xPair : (b.state.getStor tokenX).get (VyperNonreentrantDeployed.Token20.balSlot pair) = 1001000
+  xPair : (b.state.getStor tokenX).get (Blanc.Lift.Token20.balSlot pair) = 1001000
 
 theorem w0PairStor_12 : w0PairStor.get 12 = 1 := by decide +kernel
 theorem w0PairStor_8 : w0PairStor.get 8 = Nat.toB256 (1000000 + 1000000 * 2 ^ 112) := by

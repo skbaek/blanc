@@ -12,7 +12,7 @@ After WETH9's `transfer`, the Pair queries `X.balanceOf(pair)` (Token20, cold) a
 namespace Blanc.Composition.UniswapV2PairWeth9Instance
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.UniswapV2Pair Blanc.Composition.UniswapV2PairWeth9Joint
-open Blanc.Lift.VyperNonreentrantDeployed.Token20 (balanceOfGas balanceOfPost boHolder retPost)
+open Blanc.Lift.Token20 (balanceOfGas balanceOfPost boHolder retPost)
 
 /-! ## Generic balance-query views -/
 
@@ -45,7 +45,7 @@ theorem balanceOfPost_view {b d : Devm} {K : List (Adr × B256)} {A : List Adr} 
     {rc : Int} {Lg : List Log} {s : Sevm} {a x : Adr} (ht : s.currentTarget = a)
     (hx : (Sevm.dataWord s 4).toAdr = x) (h : DView b d K A S rc Lg) (G : Nat) :
     DView b (balanceOfPost s d G)
-      ((a, VyperNonreentrantDeployed.Token20.balSlot x) :: K) A S rc Lg := by
+      ((a, Blanc.Lift.Token20.balSlot x) :: K) A S rc Lg := by
   unfold balanceOfPost retPost
   rw [boHolder, hx]
   exact (((h.afterSload ht _).St _ _ _).memRead _ _).withOutput _
@@ -164,7 +164,7 @@ theorem tx2_xUsed : xBalUsed sevm D tx2S0 tx2M tx2P tx2W.token0 = 2206 := by
 
 /-- The first query's warm keys. -/
 abbrev tx2K0 : List (Adr × B256) :=
-  tx2KD ++ ((tokenX, VyperNonreentrantDeployed.Token20.balSlot pair) :: tx2KD)
+  tx2KD ++ ((tokenX, Blanc.Lift.Token20.balSlot pair) :: tx2KD)
 
 /-- The first query's warm addresses. -/
 abbrev tx2A0 : List Adr := [tokenX, tokenX, weth, weth] ++ [tokenX, tokenX, weth, weth]

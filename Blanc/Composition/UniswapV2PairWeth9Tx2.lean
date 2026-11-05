@@ -40,8 +40,8 @@ structure Tx2Context (benv : Benv) : Prop where
   wethCode : benv.state.getCode weth = Weth9.code
   wethPair : (benv.state.getStor weth).get (Weth9.balSlot pair) = 1000000
   wethTrader : (benv.state.getStor weth).get (Weth9.balSlot trader) = 0
-  xCode : benv.state.getCode tokenX = VyperNonreentrantDeployed.Token20.code
-  xPair : (benv.state.getStor tokenX).get (VyperNonreentrantDeployed.Token20.balSlot pair) = 1001000
+  xCode : benv.state.getCode tokenX = Blanc.Lift.Token20.code
+  xPair : (benv.state.getStor tokenX).get (Blanc.Lift.Token20.balSlot pair) = 1001000
   createdPair : pair ∉ benv.createdAccounts
   createdWeth : weth ∉ benv.createdAccounts
   createdX : tokenX ∉ benv.createdAccounts

@@ -1,4 +1,4 @@
-import Blanc.Lift.VyperNonreentrantDeployed.Token20.Run
+import Blanc.Lift.Token20.Run
 
 /-!
 # The synthetic token `T`: the gas-exact run of `balanceOf(a)`
@@ -9,7 +9,7 @@ entry (empty stack and memory), static or not, under any covered fork: the dispa
 `balanceOf[a]` and the return of that word.  No storage write.
 -/
 
-namespace Blanc.Lift.VyperNonreentrantDeployed.Token20
+namespace Blanc.Lift.Token20
 
 open Jaune Blanc.Lift
 
@@ -66,4 +66,4 @@ theorem balanceOf_runExact {sevm : Sevm} {pre : Devm} {G : Nat}
         (pre.getStorVal sevm.currentTarget (balSlot (boHolder sevm))))
   rwa [pre_eq_St hstack hmem hg] at hrun
 
-end Blanc.Lift.VyperNonreentrantDeployed.Token20
+end Blanc.Lift.Token20
