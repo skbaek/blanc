@@ -2,24 +2,6 @@ schema_version = 1
 generated_notice = "Generated from scripts/proof-recipes.toml; do not edit by hand."
 
 [[recipe]]
-id = "tagged-storage-region-separation"
-status = "active"
-triggers = ["goal-shape:tagged-storage-region-separation"]
-preferred_path = "For two `TaggedStorage.encode` keys with regions below 16, payloads below `2^252`, and unequal regions, apply `TaggedStorage.encode_ne_of_region_ne`. For a fixed region, use `TaggedStorage.encode_injective_of_payload_lt`; use `TaggedStorage.encode_eq_of_payload_lt` to bridge an existing unmasked `OR` encoder only after proving its payload bound."
-boundary = "The encoder masks payload bits at and above bit 252, so unbounded payload injectivity is false; natural regions also wrap modulo the 256-bit word width, so unbounded region separation is false. This is logical key construction, not Solidity address-slot read or assignment semantics, and it proves no family hash/payload injectivity."
-owner_module = "Blanc/TaggedStorage.lean"
-canonical_example = "Blanc/TaggedStorage.lean:encode_ne_of_region_ne"
-symbols = [
-  "module:Blanc/TaggedStorage.lean",
-  "declaration:Blanc.TaggedStorage.encode",
-  "declaration:Blanc.TaggedStorage.encode_eq_of_payload_lt",
-  "declaration:Blanc.TaggedStorage.encode_injective_of_payload_lt",
-  "declaration:Blanc.TaggedStorage.encode_ne_of_region_ne",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-09-09"
-
-[[recipe]]
 id = "same-frame-stack-certificate"
 status = "active"
 triggers = ["goal-head:CompiledStackSafety.StepSafe", "goal-head:CompiledStackSafety.ResumeSafe"]
@@ -47,10 +29,10 @@ triggers = [
   "goal-head:Func.ExecTo",
   "goal-head:Func.ExecWitness",
 ]
-preferred_path = "Use `func_run` and its registered opcode arms. For `MSTORE` and `MSTORE8`, pass the dynamic memory-expansion charge as the next numeric hint; the `MSTORE8` arm preserves the exact singleton low-byte write and leaves `devm.extCost [⟨i.toNat, 1⟩] = e` as an explicit obligation. Before walking a large concrete body, apply the term-size breaker: the pathological case is a walk whose intermediate term carries the whole concrete remaining program, memory or value, and its signature is a `maxRecDepth`/`maxHeartbeats` ceiling over a multi-`MSTORE` staging run. Factor such a walk into named sub-components, abstract each over the memory or value it threads — a carrier structure over a variable, as `ConstructorPatchInvariant` does in `Blanc/LidoCircuitBreakerDeploymentTrace.lean` — and instantiate the concrete facts through named top-level lemmas, so one layer over a variable stays small instead of composing multiplicatively. Build each certificate separately and abstract only those that cross the breaker; the abstraction is not free and a short bounded walk does not need it. For residual-cost attribution, opt in with the default-off `Blanc.Forward.discharge` trace and aggregate it with `scripts/read-discharge-trace.py` before changing a fallback."
-boundary = "This constructs a compiled walk; numeric memory hints are checked against the semantic `extCost` premise, so dynamic expansion remains explicit. It does not invert an existing run, replace a completed continuation with a summary, synthesize a parallel path certificate, or optimize route data before proof construction. Expensive source and value classes are heterogeneous, so there is no shared discharge fold. Consider local sub-component or carrier abstraction only for oversized concrete intermediates, and judge the owning closure rather than an isolated target. In the tested `runcompiled-construction` contexts, the `UnregisterRegistration` body-from-kernel summary required a new recursion ceiling and was reverted, while cross-module placement in `RegistrySubstrate` made the gate red. Those results close those attempts in those contexts, not the local sub-component route above or the distinct successful private summaries documented by `runcompiled-family-compression`. Reuse a cold-entry helper only when the same accumulated prefix recurs in a measured owner. Current local examples: `ConstructorPatchInvariant` in `Blanc/LidoCircuitBreakerDeploymentTrace.lean`; `PauseStageMemory` and its pause-walk route in `Blanc/LidoCircuitBreakerPauseWalk.lean`; replacement guard-prefix certificates leading to `replacementRegisterPauserBody_fromStage_runCompiled` in `Blanc/LidoCircuitBreakerReplacementRegistration.lean`; `freshRegisterPauserBody_fromStage_runCompiled`; and `absentZeroRegisterPauserBody_fromStage_runCompiled`. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `runcompiled-construction`."
+preferred_path = "Use `func_run` and its registered opcode arms. For `MSTORE` and `MSTORE8`, pass the dynamic memory-expansion charge as the next numeric hint; the exact `extCost` equation remains a checked obligation. `Forward.relSpecs` selects the existing `Func.RunCompiled`, `RunCompiledTo`, `ExecTo` or `ExecWitness` rules from the goal head. For an oversized concrete intermediate, factor the walk into named sub-components over the memory or value it threads before instantiating concrete facts. A short bounded walk needs no extra abstraction. The default-off `Blanc.Forward.discharge` trace and `scripts/read-discharge-trace.py` expose residual attribution before a fallback is changed."
+boundary = "This constructs a compiled walk; it does not invert an existing run or synthesize an actual continuation from a summary. Dynamic memory expansion, exact terminal behavior and arbitrary child behavior remain explicit. No retained library proof consumer of `func_run` was found in the paper scope; the canonical anchor is its existing implementation registry, so this is generic authoring guidance rather than a measured paper-consumer claim. Probe: Blanc/Forward.lean:Forward.relSpecs. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/Forward.lean"
-canonical_example = "Blanc/Weth10Redeemable.lean:withdrawTo_progExecSat"
+canonical_example = "Blanc/Forward.lean:Forward.relSpecs"
 symbols = [
   "tactic:func_run",
   "declaration:Func.RunCompiled",
@@ -60,44 +42,16 @@ symbols = [
   "declaration:Ninst.runCompiled_mstore8_of",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-09-09"
-
-[[recipe]]
-id = "linear-dispatch-selection"
-status = "active"
-triggers = ["goal-shape:linear-dispatch-selection"]
-preferred_path = "For an existing `Func.RunCompiledTo` walk rooted at `Blanc.linearDispatchWith`, use `dispatchBodyWitness_of_runCompiledTo` for a selector hit or `dispatchFallbackWitness_of_runCompiledTo` for a miss. A hit supplies selector uniqueness and selected-entry membership; a miss supplies a nonempty entry list and exclusion from every entry. Both start from `selector :: tail`, remove the selector, recover the exact body or fallback call, and preserve the dispatch frame outside stack and gas. To construct an arbitrary-outcome all-miss route forward from a fallback-body witness, use `Func.execWitness_linearDispatchWith_fallback` with the exact `linearDispatchFallbackCost` budget and selected `rules.op.push0 = true` for every entry whose emitted `toBytes.sig` is empty. Nonempty immediates need no PUSH0 capability. Compose frame facts with `Devm.DispatchFramePreserved.trans` and the push/pop/diff-burn adapters."
-boundary = "The neutral theorems discharge only dispatcher opcode inversions or constructive all-miss opcode execution. They do not know a contract's selector census, calldata ABI, role storage, auxiliary rebasing, or selected-body/fallback semantics."
-owner_module = "Blanc/LinearDispatchCorrectness.lean"
-canonical_example = "Blanc/LinearDispatchCorrectness.lean:dispatchBodyWitness_of_runCompiledTo"
-symbols = [
-  "module:Blanc/LinearDispatch.lean",
-  "module:Blanc/LinearDispatchCorrectness.lean",
-  "declaration:Blanc.linearDispatchWith",
-  "declaration:Blanc.selectorUnique",
-  "declaration:Blanc.Devm.DispatchFramePreserved",
-  "declaration:Blanc.Devm.DispatchFramePreserved.trans",
-  "declaration:Blanc.dispatchFrame_of_pushBurn",
-  "declaration:Blanc.dispatchFrame_of_popBurnBy",
-  "declaration:Blanc.dispatchFrame_of_diffBurn",
-  "declaration:Blanc.DispatchBodyWitness",
-  "declaration:Blanc.dispatchBodyWitness_of_runCompiledTo",
-  "declaration:Blanc.DispatchFallbackWitness",
-  "declaration:Blanc.dispatchFallbackWitness_of_runCompiledTo",
-  "declaration:Blanc.linearDispatchFallbackCost",
-  "declaration:Blanc.Func.execWitness_linearDispatchWith_fallback",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-29"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "line-run-split"
 status = "active"
 triggers = ["implication-premise:Line.Run"]
 preferred_path = "Use `line_execute` or `line_execute_with`; revert a named run premise first when needed. For an exact Solidity signed-query opcode list, use the matching `SolcSignedQuery` line inverse with its actual PUSH bytes and stack suffix, then compose the checked source cursor in the consumer. The authorization decoder covers nine calldata words; mapped_byte_read_line takes the original stack-index equality for its actual address, so the same inverse serves DUP7 and DUP9. Selector and wrapper inverses retain the actual instruction/guard values rather than assume a selected endpoint. The seven_word_head/body/tail_line inverses share the authorization builder; the struct_hash_line_at and typed_words/length/hash_line_at inverses retain actual buffer lengths, pointers and read bounds. The masked_owner_line inverse derives the canonical address-mask equality flag; the actual successful branch remains a consumer obligation."
-boundary = "The tactic performs one split and does not automatically transport an arbitrary set of observations. Signed-query inverses require their exact opcode list and original run; they do not prove dispatch, source reachability, signature validity or an endpoint. The six- and seven-word struct facts and shared typed_memory_facts_at cover the supported layouts 128 to 352 to 450/480 and 128 to 384 to 482/512. These are buffer consequences under their explicit local premises; the consumer still derives those premises and the actual whole query route."
+boundary = "The tactic performs one split and does not automatically transport an arbitrary set of observations. Signed-query inverses require their exact opcode list and original run; they do not prove dispatch, source reachability, signature validity or an endpoint. The six- and seven-word struct facts and shared typed_memory_facts_at cover the supported layouts 128 to 352 to 450/480 and 128 to 384 to 482/512. These are buffer consequences under their explicit local premises; the consumer still derives those premises and the actual whole query route. Probe: Blanc/CommonProofs/Balance.lean:of_transferTestLt. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/CommonProofs/Balance.lean"
-canonical_example = "Blanc/Conserved.lean:Fmint.of_prepApprove"
+canonical_example = "Blanc/CommonProofs/Balance.lean:of_transferTestLt"
 symbols = [
   "tactic:line_execute",
   "tactic:line_execute_with",
@@ -128,16 +82,16 @@ symbols = [
   "declaration:Blanc.Lift.SolcSignedQuery.recovery_epilogue",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-20"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "func-run-prefix-split"
 status = "active"
 triggers = ["implication-premise:Func.Run"]
 preferred_path = "Use `func_execute n` or `func_execute_with line` to expose a known prefix. For a successful conditional whose selected arm calls a known nonreturning auxiliary, use `of_run_branch_call_of_not_run`; the `revert`, `revertWith`, and `revertReturnData` specializations discharge the standard reverter bodies."
-boundary = "This targets the older implication-shaped `Func.Run`; it is not `RunCompiled` construction and does not invert an arbitrary named derivation without first reverting it. The nonreturning-call inversion proves only that the successful walk selected the zero/fall-through arm; transport any stack or state observation separately from its returned `Devm.PopBurn`."
+boundary = "This targets the older implication-shaped `Func.Run`; it is not `RunCompiled` construction and does not invert an arbitrary named derivation without first reverting it. The nonreturning-call inversion proves only that the successful walk selected the zero/fall-through arm; transport any stack or state observation separately from its returned `Devm.PopBurn`. Probe: Blanc/CommonProofs/Base.lean:dispatchWith_inv. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/Tactics.lean"
-canonical_example = "Blanc/Solvent.lean:withdraw_preserves_solvent"
+canonical_example = "Blanc/CommonProofs/Base.lean:dispatchWith_inv"
 symbols = [
   "tactic:func_execute",
   "tactic:func_execute_with",
@@ -149,35 +103,16 @@ symbols = [
   "declaration:Blanc.Func.not_run_revertReturnData",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-20"
-
-[[recipe]]
-id = "static-store-exclusion"
-status = "active"
-triggers = ["implication-premise:Func.Run"]
-preferred_path = "Prove `StoresOrHalts fs f`, then apply `StoresOrHalts.isStatic_eq_false` to the exact successful source run `Func.Run fs e s f r` to derive `e.isStatic = false`. Use `stores_structure` for instruction and branch structure. Before a long staging line, use `stores_line line` with the exact `Line` prefix supplied explicitly; the driver does not search for an arbitrary split. Handle contract-specific calls explicitly with `StoresOrHalts.call` or the `with` arm."
-boundary = "Every successful path must reach `SSTORE` or be impossible under the universal non-run premise of `StoresOrHalts.never`; a body with an executable `Func.stop` arm is outside the relation. The theorem does not construct a run, identify the written key or value, or prove a storage effect."
-owner_module = "Blanc/StaticStores.lean"
-canonical_example = "Blanc/LidoTriggerableWithdrawalsGatewayStaticStores.lean:setLimitWrite_storesOrHalts"
-symbols = [
-  "module:Blanc/StaticStores.lean",
-  "declaration:Blanc.StoresOrHalts",
-  "declaration:Blanc.StoresOrHalts.prepend",
-  "declaration:Blanc.StoresOrHalts.isStatic_eq_false",
-  "tactic:stores_structure",
-  "tactic:stores_line",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-09-08"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "stack-prefix-transport"
 status = "active"
 triggers = ["goal-shape:stack-prefix-line-run"]
 preferred_path = "Use `line_prefix` or `generalize_line_prefix`, with `show_pref` for concrete prefix goals. For a known MUL, DIV, ADDMOD, MULMOD, TIMESTAMP, XOR, or non-address argument-check step, use the corresponding `prefix_of_*` declaration directly when the tactic has no registered arm."
-boundary = "`line_prefix` supports a finite instruction set and refuses instructions without a registered case. The direct `prefix_of_*` lemmas transport only the named stack prefix; combine them with a separate observation invariant when more state must be carried."
+boundary = "`line_prefix` supports a finite instruction set and refuses instructions without a registered case. The direct `prefix_of_*` lemmas transport only the named stack prefix; combine them with a separate observation invariant when more state must be carried. Probe: Blanc/CommonProofs/Balance.lean:of_push_addressMask. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/Tactics.lean"
-canonical_example = "Blanc/Weth10HolderFlowCompiled.lean:recognized_of_run_dispatchWith"
+canonical_example = "Blanc/CommonProofs/Balance.lean:of_push_addressMask"
 symbols = [
   "tactic:line_prefix",
   "tactic:generalize_line_prefix",
@@ -191,28 +126,28 @@ symbols = [
   "declaration:prefix_of_argCheckNonAddress",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-20"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "state-context-cleanup"
 status = "active"
 triggers = ["context-shape:intermediate-devm"]
 preferred_path = "Use `clear_state hState` after transporting every fact that must survive."
-boundary = "This destructive cleanup removes the state and every local fact that depends on it. Check whether a usable completed continuation summary already discharges the goal, and transport every fact that must survive. The context-count heuristic is only a prompt, never an automatic cleanup command; it cannot determine whether such a summary exists. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `state-context-cleanup`."
+boundary = "This destructive cleanup removes the state and every local fact that depends on it. Transport every fact that must survive first. The context-count heuristic only prompts a review and cannot establish that a completed continuation summary exists. No retained library proof consumer of `clear_state` was found in the paper scope; the canonical anchor is its existing `clearIfOcc` implementation, not a claimed proof consumer. Probe: Blanc/Tactics.lean:clearIfOcc. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/Tactics.lean"
-canonical_example = "Blanc/Conserved.lean:Fmint.of_prepApprove"
+canonical_example = "Blanc/Tactics.lean:clearIfOcc"
 symbols = ["tactic:clear_state"]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-21"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "line-observation-invariance"
 status = "active"
 triggers = ["goal-head:Line.Inv", "goal-head:Ninst.Inv", "goal-head:Rinst.Inv"]
 preferred_path = "Use `line_inv` through the registered `Ninst.Hinv` and `Rinst.Hinv` instances."
-boundary = "A missing contract-neutral instance belongs in the lowest common upstream layer; contract-specific semantic facts do not."
+boundary = "A missing contract-neutral instance belongs in the lowest common upstream layer; contract-specific semantic facts do not. Probe: Blanc/AddressSlotProofs.lean:of_loadAddressWordAt_val. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/Tactics.lean"
-canonical_example = "Blanc/Weth10HolderFlowCompiled.lean:Devm.DispatchSilent.of_pushEq"
+canonical_example = "Blanc/AddressSlotProofs.lean:of_loadAddressWordAt_val"
 symbols = [
   "tactic:line_inv",
   "declaration:Line.Inv",
@@ -222,16 +157,16 @@ symbols = [
   "declaration:Rinst.Hinv",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-20"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "function-observation-invariance"
 status = "active"
 triggers = ["goal-head:Func.Inv", "goal-head:Linst.Inv"]
 preferred_path = "For `Func.Inv`, use `func_inv` to assemble the function invariant from registered line and terminal invariants. For a terminal `Linst.Inv`, use the registered instance directly with `exact Linst.Hinv.inv`."
-boundary = "`func_inv` deliberately refuses `Func.call`, whose callee is arbitrary under `Func.Inv`; fix the context or factor through the entry. A missing terminal instance belongs in the lowest common shared module, not in a contract consumer."
+boundary = "`func_inv` deliberately refuses `Func.call`, whose callee is arbitrary under `Func.Inv`; fix the context or factor through the entry. A missing terminal instance belongs in the lowest common shared module, not in a contract consumer. Probe: Blanc/LadderBase.lean:transfer_preserves_bal. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/Tactics.lean"
-canonical_example = "Blanc/Solvent.lean:approve_preserves_bal"
+canonical_example = "Blanc/LadderBase.lean:transfer_preserves_bal"
 symbols = [
   "tactic:func_inv",
   "declaration:Func.Inv",
@@ -239,25 +174,25 @@ symbols = [
   "declaration:Linst.Hinv",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-20"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "call-boundary-outcomes"
 status = "active"
-triggers = ["goal-head:Func.ExecSat", "goal-head:Prog.ExecSat", "goal-head:Func.ExecWitness", "goal-head:StaticcallObservation", "goal-head:StaticcallRouting", "goal-head:StaticcallSpawnOperands"]
-preferred_path = "For original operands and payload on an actual STATICCALL spawn, import Blanc.StaticcallOperands and use Xinst.step_staticcall_spawn_operands or Ninst.step_staticcall_spawn_operands. StaticcallSpawnOperands derives all six raw words, exact remaining stack, original-memory input, masked target, rules-gated delegation and the exact legacy or Amsterdam resume with its actual state-gas grant. Ninst.staticcall_observation_with_operands and Exec.NinstOccurrence.staticcall_observation_with_operands enrich the same all-outcome message/slot/result. For an actual STATICCALL on any outcome, import Blanc.StaticcallObservation. Use Ninst.staticcall_observation with the original filled slot and arbitrary-result StepRun, or Exec.NinstOccurrence.staticcall_observation on the full actual occurrence. The result preserves the exact spawn/message/resume and classifies native versus VM entry without a flag or output filter. For an already supplied zero-value ProcessMessage, use staticcall_routing_of_process to recover the exact enabled native executePrecomp route or the original VM child and raw/settled relation. Use the `ForwardCall` module and the live `ExecSat`/`ExecWitness` layer to cross calls or package multiple outcomes. At a proof-carrying `DELEGATECALL` boundary, use `DelegatecallSpawnDescriptor.step` for the exact spawn and `.crossing` for the entered child's successful continuation instead of reconstructing the descriptor fields at the consumer. To construct the compiled call from a retained child and exact resume equation, use `DelegatecallSpawnDescriptor.runCompiled_of_certificate`. When an existing compiled call step has already resumed, use `DelegatecallSpawnDescriptor.settled_of_runCompiled` to obtain a `DelegatecallSettledBoundary` with the exact retained child and parent observations. Use `DelegatecallSettledBoundary.memory_image_of_outputSize_zero` to carry a proof-carrying memory image across a zero-output child resume. To invert an existing source `Ninst.Run` over a direct call with known operands, use the `Blanc/LadderBase.lean` inversion pair: `of_run_call_val_with_depth_frame` for the 7-operand CALL prefix (failed arm: flag `0` + `Devm.WorldEq`; entered arm: `Ninst.StepRun`, depth, exact parent/message/resume equations; compat projections `of_run_call_val_with_depth`, `of_run_call_val`) and `of_run_staticcall_val_with_depth_cause` for the 6-operand STATICCALL prefix (failed arm carries `StatcallFailureCause`; compat projection `of_run_staticcall_val_with_depth`). For an actual empty recursive slot and a nonzero success flag, `Xinst.call_none_precompile` (seven operands) and `Xinst.staticcall_none_precompile` (six operands) in `Lift.TargetLogEvents` identify an enabled precompile at the original target; an empty retained queue alone cannot distinguish a precompile from interpreted code with no retained views. When the actual pc, recursive slot, `Xlot.Filled` and `Ninst.StepRun` are already available, use `of_step_call_val_with_depth_frame` for CALL or `of_step_staticcall_val_with_depth_frame_cause` for STATICCALL to retain that same slot and exact spawn; it does not establish child order or root commitment. Dismiss the failed arm with the trailing `iszero`+guard, align the entered step with `Ninst.StepRun.unique_exec_of_filled`, and take `RawCommits` from `ProcessMessage.settlementCommits_of_some_ok_clean`. For child code/address from a spawn equation without operand knowledge, use the `Blanc/CommonProofs/Messages.lean` spawn-source family: the `Xinst.step_spawn_source` trichotomy (whose same-target disjunct is explicitly open), `Xinst.step_spawn_codeAddress_eq_currentTarget`, and `Evm.step_spawn_child` for the away-from-parent cases. For same-target STATICCALL use `Xinst.step_staticcall_sameTarget_code` with nondelegation evidence. To restrict which Xinst family a checked certificate cursor reaches, use `Cursor.execsSatisfy_of_reachable` and `CursorOK.execsSatisfy` from `Lift.CallRestriction`."
-boundary = "Do not duplicate the settlement/determinism tail, and do not infer deadness from qualified-name grep alone. CALL (7 operands, value, stipend) and STATICCALL (6 operands, forced static) have separate inversion statements: select by operand count, never by analogy. The inversion pair inverts an existing run and never manufactures liveness from a prefix; the spawn-source trichotomy's same-target disjunct is open for arbitrary instructions; the dedicated STATICCALL theorem requires nondelegation. Cursor family restrictions do not assert child commitment or effects. The three STATICCALL triggers match only their exact raw Blanc heads, without unfolding aliases or nested goals. Native slot.none is an entered invocation; flag0 or empty bytes do not prove absence. The operand extension supplies original-memory payload equality only from an actual spawn; it preserves native OOG, delegation and arbitrary outcomes without assuming affordability. No selector enumeration, R3 relevance, cryptographic exclusion, historical lift or root commitment follows."
+triggers = [
+  "goal-head:Func.ExecSat",
+  "goal-head:Prog.ExecSat",
+  "goal-head:Func.ExecWitness",
+  "goal-head:StaticcallObservation",
+  "goal-head:StaticcallRouting",
+]
+preferred_path = "For an actual STATICCALL on any outcome, import Blanc.StaticcallObservation. Use Ninst.staticcall_observation with the original filled slot and arbitrary-result StepRun, or Exec.NinstOccurrence.staticcall_observation on the full actual occurrence. The result preserves the exact spawn/message/resume and classifies native versus VM entry without a flag or output filter. For an already supplied zero-value ProcessMessage, use staticcall_routing_of_process to recover the exact enabled native executePrecomp route or the original VM child and raw/settled relation. Use the `ForwardCall` module and the live `ExecSat`/`ExecWitness` layer to cross calls or package multiple outcomes. At a proof-carrying `DELEGATECALL` boundary, use `DelegatecallSpawnDescriptor.step` for the exact spawn and `.crossing` for the entered child's successful continuation instead of reconstructing the descriptor fields at the consumer. To construct the compiled call from a retained child and exact resume equation, use `DelegatecallSpawnDescriptor.runCompiled_of_certificate`. When an existing compiled call step has already resumed, use `DelegatecallSpawnDescriptor.settled_of_runCompiled` to obtain a `DelegatecallSettledBoundary` with the exact retained child and parent observations. Use `DelegatecallSettledBoundary.memory_image_of_outputSize_zero` to carry a proof-carrying memory image across a zero-output child resume. To invert an existing source `Ninst.Run` over a direct call with known operands, use the `Blanc/LadderBase.lean` inversion pair: `of_run_call_val_with_depth_frame` for the 7-operand CALL prefix (failed arm: flag `0` + `Devm.WorldEq`; entered arm: `Ninst.StepRun`, depth, exact parent/message/resume equations; compat projections `of_run_call_val_with_depth`, `of_run_call_val`) and `of_run_staticcall_val_with_depth_cause` for the 6-operand STATICCALL prefix (failed arm carries `StatcallFailureCause`; compat projection `of_run_staticcall_val_with_depth`). For an actual empty recursive slot and a nonzero success flag, `Xinst.call_none_precompile` (seven operands) and `Xinst.staticcall_none_precompile` (six operands) in `Lift.TargetLogEvents` identify an enabled precompile at the original target; an empty retained queue alone cannot distinguish a precompile from interpreted code with no retained views. When the actual pc, recursive slot, `Xlot.Filled` and `Ninst.StepRun` are already available, use `of_step_call_val_with_depth_frame` for CALL or `of_step_staticcall_val_with_depth_frame_cause` for STATICCALL to retain that same slot and exact spawn; it does not establish child order or root commitment. Dismiss the failed arm with the trailing `iszero`+guard, align the entered step with `Ninst.StepRun.unique_exec_of_filled`, and take `RawCommits` from `ProcessMessage.settlementCommits_of_some_ok_clean`. For child code/address from a spawn equation without operand knowledge, use the `Blanc/CommonProofs/Messages.lean` spawn-source family: the `Xinst.step_spawn_source` trichotomy (whose same-target disjunct is explicitly open), `Xinst.step_spawn_codeAddress_eq_currentTarget`, and `Evm.step_spawn_child` for the away-from-parent cases. For same-target STATICCALL use `Xinst.step_staticcall_sameTarget_code` with nondelegation evidence. To restrict which Xinst family a checked certificate cursor reaches, use `Cursor.execsSatisfy_of_reachable` and `CursorOK.execsSatisfy` from `Lift.CallRestriction`."
+boundary = "Do not duplicate the settlement/determinism tail, and do not infer deadness from qualified-name grep alone. CALL (7 operands, value, stipend) and STATICCALL (6 operands, forced static) have separate inversion statements: select by operand count, never by analogy. The inversion pair inverts an existing run and never manufactures liveness from a prefix; the spawn-source trichotomy's same-target disjunct is open for arbitrary instructions; the dedicated STATICCALL theorem requires nondelegation. Cursor family restrictions do not assert child commitment or effects. The three STATICCALL triggers match only their exact raw Blanc heads, without unfolding aliases or nested goals. Native slot.none is an entered invocation; flag0 or empty bytes do not prove absence. No selector enumeration, R3 relevance, cryptographic exclusion, historical lift or root commitment follows. Probe: Blanc/Lift/Usdc/RetainedOldRecovery.lean:RetainedOldOwnerNativeQuery.observation. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/ForwardCall.lean"
-canonical_example = "Blanc/Weth10Redeemable.lean:withdrawTo_progExecSat"
+canonical_example = "Blanc/Lift/Usdc/RetainedOldRecovery.lean:RetainedOldOwnerNativeQuery.observation"
 symbols = [
   "module:Blanc/ForwardCall.lean",
   "module:Blanc/StaticcallObservation.lean",
-  "module:Blanc/StaticcallOperands.lean",
-  "declaration:Blanc.StaticcallSpawnOperands",
-  "declaration:Blanc.Xinst.step_staticcall_spawn_operands",
-  "declaration:Blanc.Ninst.step_staticcall_spawn_operands",
-  "declaration:Blanc.Ninst.staticcall_observation_with_operands",
-  "declaration:Blanc.Exec.NinstOccurrence.staticcall_observation_with_operands",
   "declaration:Blanc.StaticcallObservation",
   "declaration:Blanc.StaticcallRouting",
   "declaration:Blanc.Ninst.staticcall_observation",
@@ -301,7 +236,7 @@ symbols = [
   "declaration:Blanc.Lift.CursorOK.execsSatisfy",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-30"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "changed-frame-projection"
@@ -322,67 +257,6 @@ review_owner = "proof-infrastructure"
 review_date = "2026-10-15"
 
 [[recipe]]
-id = "devm-projection-bridge"
-status = "active"
-triggers = ["goal-shape:devm-update-projection"]
-preferred_path = "Rewrite with the matching Jaune update-first projection lemma, named `Devm.<update>_<projection>`, for the column in the goal. Never bridge a concrete effect tower or compiled artifact through `withOutput`, `setMach`, `setMeta`, `setWorld`, or another `with*` update using bare `change`, `show`, `rfl`, or `exact`."
-boundary = "A succeeding concrete `getStor` walk can expose this projection mechanism after the effect tower is built. Reuse the shared `Devm.withRefundCounter_getStor` and `Devm.addLog_getStor` cuts with a private cold-store boundary; do not reorder `Meta` fields. This does not reopen `successor-projection-normalization`, and resource ceilings neither detect nor bound this kernel-side cost. The target must expose an explicit `Devm` update head; if a local definition hides it, unfold only that binding and run `blanc_suggest` again. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `devm-projection-bridge`."
-owner_module = "Blanc/LidoCircuitBreakerDeploymentMessage.lean"
-canonical_example = "Blanc/LidoCircuitBreakerDeploymentMessage.lean:officialConstructorPost_refundCounter"
-symbols = ["declaration:LidoCircuitBreaker.officialConstructorPost_refundCounter"]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-25"
-
-[[recipe]]
-id = "bytesize-composition"
-status = "active"
-triggers = ["goal-shape:compileshape-bytesize"]
-preferred_path = "Prove one small `decide +kernel` fact per leaf, then derive internal `compileShape.byteSize` facts arithmetically through `dispatchNode_size`-style composition. `dispatchCae9_size` is the canonical example: with its children available, its composition closes in 0.004 s."
-boundary = "The measured law is about 2.6 ms per compiled byte of the addressed object; byte-range width predicts nothing because `byteAtByShape` is lazy. Hoist named size facts only for repeated consumers of the same object. Do not generalize the narrower domain-slices route; reopen it only with a broader child-fact or representation change that improves the owning row. Keep `weth10MainEmit_drop_3950` unchanged. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `bytesize-composition`."
-owner_module = "Blanc/Weth10Deploy.lean"
-canonical_example = "Blanc/Weth10DeployUpperSlices.lean:dispatchCae9_size"
-symbols = ["declaration:Weth10.dispatchCae9_size"]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-25"
-
-[[recipe]]
-id = "compiled-shape-byte-navigation"
-status = "active"
-triggers = ["goal-shape:compiled-shape-byte-navigation"]
-preferred_path = "Import `Blanc.CompiledShape` and open `CompiledShape` inside `namespace Blanc`. Use `byteAt_next_to_tail` once the index is beyond a reference instruction, even when the executed instruction and tail differ; use `byteAt_prepend_*` for fixed instruction prefixes, `byteAt_branch_*` for branch header/left/jumpdest/right regions, `dispatchNodeByteAt_*` for the common selector-dispatch shape, and `pushFullWord_*` for a fixed 32-byte `Ninst.push`. Supply the existing compile-shape, size, and index-bound facts so the proof traverses only the addressed subtree."
-boundary = "These lemmas navigate `Func.byteAtByShape` from an already supplied compile shape. They do not prove a shape is correct, compile a function, or replace contract-specific selector, route, or closed-size facts. `byteAt_next_to_tail` uses the reference instruction's size for the supplied lower bound and offset; it does not assert that the reference and executed instructions have equal bytes or widths. `pushFullWord_*` applies only to a fixed 32-byte `Ninst.push w.toBytes`; it is not `Ninst.pushB256`, whose immediate width is value-dependent. To avoid recursively normalizing a large closed function, the matcher performs bounded structural inspection: explicit `.next`/`.branch`, direct `Func.next`/`Func.branch` under `compileShape`, and the registered `CompiledShape.dispatchNode` wrapper. Other reducible wrappers should be exposed by the author only as far as the relevant constructor before invoking `blanc_suggest` again."
-owner_module = "Blanc/CompiledShape.lean"
-canonical_example = "Blanc/CompiledShape.lean:byteAt_branch_to_right"
-symbols = [
-  "module:Blanc/CompiledShape.lean",
-  "declaration:Blanc.CompiledShape.byteAt_next_to_tail",
-  "declaration:Blanc.CompiledShape.byteAt_prepend_to_tail",
-  "declaration:Blanc.CompiledShape.byteAt_branch_to_right",
-  "declaration:Blanc.CompiledShape.dispatchNodeByteAt_to_onPath",
-  "declaration:Blanc.CompiledShape.pushFullWord_opcode_eq",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-09-09"
-
-[[recipe]]
-id = "compiler-structural-composition"
-status = "active"
-triggers = ["goal-shape:compile-prepend", "goal-shape:compile-branch"]
-preferred_path = "Import `Blanc.CompiledShape`. Use `CompiledShape.compile_prepend` or `compile_prepend_of` to retain an opaque continuation, and `compile_branch` to assemble already checked child compilations and a bounded jump target. Use `dispatchLeaf_size` and `prefixByteSize_fsig` for the corresponding shared size facts."
-boundary = "Matches only a direct compiler equality with an explicit `prepend` or `Func.branch` function argument. It does not unfold wrappers, traverse a closed function, search hypotheses, prove child compilations, establish table entries, or discharge jump bounds. Expose one source constructor and supply its checked children and coordinates."
-owner_module = "Blanc/CompiledShape.lean"
-canonical_example = "Blanc/CompiledShape.lean:compile_prepend_of"
-symbols = [
-  "declaration:Blanc.CompiledShape.compile_prepend",
-  "declaration:Blanc.CompiledShape.compile_prepend_of",
-  "declaration:Blanc.CompiledShape.compile_branch",
-  "declaration:Blanc.CompiledShape.dispatchLeaf_size",
-  "declaration:Blanc.CompiledShape.prefixByteSize_fsig",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-09-20"
-
-[[recipe]]
 id = "compile-shape-prepend-congruence"
 status = "active"
 triggers = ["goal-shape:compile-shape-prepend-congruence"]
@@ -398,22 +272,6 @@ review_owner = "proof-infrastructure"
 review_date = "2026-09-09"
 
 [[recipe]]
-id = "bounded-creation-word-encoder"
-status = "active"
-triggers = ["goal-shape:bounded-creation-word-encoder"]
-preferred_path = "For an exact `Ninst.RunCompiled` goal over `CreationArtifact.pushB256AsPush2OrPush32 word`, apply `Ninst.runCompiled_pushB256AsPush2OrPush32`. Supply `devm.gasLeft = G + gVerylow` and `devm.stack.length < 1024`; the result pushes the same word, preserves memory, and leaves gas `G`."
-boundary = "The encoder's input and operational conclusion are exact `B256` values. A `Nat` consumer must separately prove its value is below `2^256` before conversion. This theorem establishes one instruction's execution; it proves no provisional/final prefix fixed point, constructor execution, or message execution. The matcher inspects only the four-argument `Ninst.RunCompiled` spine and requires the instruction argument itself to have the exact encoder head; it does not traverse the pre-state, result, or closed word, and performs no reduction or normalization."
-owner_module = "Blanc/CreationArtifact.lean"
-canonical_example = "Blanc/CreationArtifact.lean:Ninst.runCompiled_pushB256AsPush2OrPush32"
-symbols = [
-  "module:Blanc/CreationArtifact.lean",
-  "declaration:Blanc.CreationArtifact.pushB256AsPush2OrPush32",
-  "declaration:Blanc.Ninst.runCompiled_pushB256AsPush2OrPush32",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-09-08"
-
-[[recipe]]
 id = "successor-projection-normalization"
 status = "partial"
 triggers = ["goal-shape:successor-projection"]
@@ -426,56 +284,16 @@ review_owner = "proof-infrastructure"
 review_date = "2026-08-21"
 
 [[recipe]]
-id = "runcompiled-family-compression"
-status = "partial"
-triggers = ["goal-shape:runcompiled-family-compression"]
-preferred_path = "When expensive bodies repeat the same post-kernel walk, freeze a committed-row decision rule, factor the body-from-kernel boundary, and preserve the old statements as instantiations. If a one-shot `func_run` needs a local resource ceiling, promote its exact tactic-produced residual states to named theorem boundaries, reducing the chunks as far as needed; compare against the original declarations' limits before rejecting the factorization. Profile the generic, chunks, and instances, run the bare elaboration gate, withhold the generic in an isolated falsifier, and reject any split that materially regresses its owner row or adds a proof-resource ceiling."
-boundary = "Exact proof-copy deletion alone does not predict owner timing. A private body-from-kernel summary is a candidate only when measurements show the owning closure improves and the route removes real repeated work. Cross-module reuse lacks ancestor headroom in the tested family, and the Registry tail is kernel/definitional-equality owned rather than a compression opportunity. Source symmetry alone does not license a timing retrofit. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `runcompiled-family-compression`."
-owner_module = "Blanc/LidoCircuitBreakerUnregisterRegistration.lean"
-canonical_example = "Blanc/LidoCircuitBreakerUnregisterRegistration.lean:registerPauser_body_foundZeroOldLast_runCompiled"
-symbols = [
-  "declaration:Blanc.LidoCircuitBreaker.registerPauser_stageArgs_runCompiled",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-21"
-
-[[recipe]]
-id = "shared-subject-kernel-decision"
-status = "active"
-triggers = ["goal-shape:shared-subject-kernel-decision"]
-preferred_path = "When several kernel-decidable facts inspect the same expensive closed subject, bind that subject once, decide the facts as one tuple or conjunction, and project the results; alternatively prove one normalized equality and derive the views with `congrArg`."
-boundary = "Apply only when normalization of one identical closed subject dominates every fact. Do not bundle facts about different subjects or use this as a term-size or definitional-equality cure. Attainment bundling is a known losing shape when aliases and conjunction elaboration outweigh the reuse; reopen it only with a shared closed-subject representation that avoids those costs. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `shared-subject-kernel-decision`."
-owner_module = "Blanc/LidoCircuitBreakerSites.lean"
-canonical_example = "Blanc/LidoCircuitBreakerSites.lean:runtimeSourceEffectPcs_official"
-symbols = ["declaration:Blanc.LidoCircuitBreaker.runtimeSourceEffectPcs_official"]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-25"
-
-[[recipe]]
-id = "selector-separation"
-status = "active"
-triggers = ["goal-shape:selector-separation"]
-preferred_path = "Hoist a reviewed literal separation table ahead of repeated consumers and transport its facts directly."
-boundary = "This route is module-local. It does not establish a cross-domain canonical selector list, `Nodup` theorem, extractor, named simp set, or cross-module placement; no blocking rule may require those designs. `blanc_suggest` misses the literal `SelectorWordNoPrimaryFlow` certificate goal, so consult this recipe manually for that shape. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `selector-separation`."
-owner_module = "Blanc/Weth10SelectorFacts.lean"
-canonical_example = "Blanc/Weth10SelectorFacts.lean:Weth10.selector_name_ne_approveSelector"
-symbols = ["declaration:Weth10.selector_name_ne_approveSelector"]
-anti_patterns = ["local-selector-table"]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-21"
-
-[[recipe]]
 id = "fixed-byte-offsets"
 status = "active"
 triggers = ["goal-shape:fixed-byte-offset"]
-preferred_path = "Use `Bytes.sliceD_writeAt` for the whole written window, `Bytes.sliceD_writeAt_inside` for a contained subwindow, and `Bytes.sliceD_writeAt_before` or `Bytes.sliceD_writeAt_after` for disjoint neighboring windows. For a padded slice, use `Bytes.getD_sliceD_of_lt` for an in-range byte or `Bytes.sliceD_sliceD_of_le` for a contained subwindow. Use `Bytes.readWord_writeAt_self` or `Bytes.readWord_writeAt_of_disjoint` for word reads. For adjacent event words use `Bytes.read_two_word_writes_at` or `Mem.read_two_word_writes_at`. For padded or abstract memory, start from `Mem.Wf` and `Mem.Reads`; in scratch decoders, `of_run_mstoreAt_image` and `of_run_loadWordAt_image` advance the stack, image, well-formedness, and state equation together, while `of_run_loadWordAt_logs` preserves event chronology. For exact primitive byte-store inversion use `of_run_mstore8_val` or its known-prefix wrapper `prefix_of_mstore8_val`, and use `of_run_mstore8_state` for the persistent-state equation. For calldata copies with known operands use `prefix_of_calldatacopy_val`. For creation copies use `of_run_codecopy_image`; its lower-level components are `prefix_of_codecopy_val` plus `of_run_codecopy_logs`. For fixed logs use `of_logWith_image`. Keep compiled-emitter `List.drop` equalities local unless a profile proves that a structural helper moves their kernel cost."
-boundary = "These laws cover byte-array writes and fixed-width word reads; they do not make arbitrary compiled-emitter `List.drop` identities a shared API. Reopen the separate emitter-helper route only when the serialized owning-module median improves by the licensed win rule. Experimental history: Blanc commit 0eee78d571e673f37543e4d306608af445065017, `scripts/proof-recipes.toml`, recipe `fixed-byte-offsets`."
+preferred_path = "Use `Bytes.sliceD_writeAt` for the whole written window, `Bytes.sliceD_writeAt_inside` for a contained subwindow, and `Bytes.sliceD_writeAt_before` or `Bytes.sliceD_writeAt_after` for disjoint neighboring windows. For a padded slice, use `Bytes.getD_sliceD_of_lt` or `Bytes.sliceD_sliceD_of_le` under their explicit bounds. Use `Bytes.readWord_writeAt_self` or `Bytes.readWord_writeAt_of_disjoint` for word reads. For adjacent words use `Bytes.read_two_word_writes_at` or `Mem.read_two_word_writes_at`; for padded or abstract memory retain `Mem.Wf` and `Mem.Reads`. The actual Curve `xa_al_feeDiff` walk consumes the disjoint-word law. `of_run_mstore8_val` remains the shared exact primitive byte-store inverse."
+boundary = "These laws cover byte-array writes and fixed-width word reads with their exact bounds and padding. They do not infer arbitrary execution effects or source-program memory summaries. Keep compiled-emitter `List.drop` equalities local unless an owning-module profile justifies a shared helper. Probe: Blanc/Lift/Curve3Pool/Walk/AddLiquidityFee.lean:xa_al_feeDiff. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/CommonProofs/MemImage.lean"
-canonical_example = "Blanc/CommonProofs/MemImage.lean:Bytes.readWord_writeAt_of_disjoint"
+canonical_example = "Blanc/Lift/Curve3Pool/Walk/AddLiquidityFee.lean:xa_al_feeDiff"
 symbols = [
   "module:Blanc/CommonProofs/MemImage.lean",
   "module:Blanc/CommonProofs/Walk.lean",
-  "module:Blanc/CommonProofs/MemEffects.lean",
   "declaration:Bytes.getD_sliceD_of_lt",
   "declaration:Bytes.sliceD_sliceD_of_le",
   "declaration:Bytes.sliceD_writeAt",
@@ -488,42 +306,10 @@ symbols = [
   "declaration:Mem.Wf",
   "declaration:Mem.Reads",
   "declaration:Mem.read_two_word_writes_at",
-  "declaration:of_run_mstoreAt_image",
   "declaration:of_run_mstore8_val",
-  "declaration:prefix_of_mstore8_val",
-  "declaration:of_run_mstore8_state",
-  "declaration:of_run_loadWordAt_image",
-  "declaration:of_run_loadWordAt_logs",
-  "declaration:prefix_of_calldatacopy_val",
-  "declaration:of_run_codecopy_image",
-  "declaration:prefix_of_codecopy_val",
-  "declaration:of_run_codecopy_logs",
-  "declaration:of_logWith_image",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-30"
-
-[[recipe]]
-id = "frame-root-carrying-execution"
-status = "active"
-triggers = ["goal-shape:frame-root-carrying"]
-preferred_path = "Use `rootedRunCompiledTo` to carry a predicate through a compiled walk, discharge childless instructions with `ninstAllChildRoots_of_not_exec` or `NonExecInstruction`, establish spawning children with `ninstAllChildRoots_of_exec_spawn`, and finish a whole program with `Prog.exec_of_rootedRunCompiledTo`."
-boundary = "This API preserves predicates over raw entered-frame roots. It does not apply settlement/commit filtering; use `ExecutionSettlement` and `ExecutionOccurrence` for retained or committed histories."
-owner_module = "Blanc/RootedExecution.lean"
-canonical_example = "Blanc/RootedExecution.lean:Prog.exec_of_rootedRunCompiledTo"
-symbols = [
-  "module:Blanc/RootedExecution.lean",
-  "declaration:rootedRunCompiledTo",
-  "declaration:ninstAllChildRoots",
-  "declaration:ninstAllChildRoots_of_not_exec",
-  "declaration:ninstAllChildRoots_of_exec_spawn",
-  "declaration:funcExecFree",
-  "declaration:rootedRunCompiledTo_of_execFree",
-  "declaration:Prog.exec_of_rootedRunCompiledTo",
-  "declaration:NonExecInstruction",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-29"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "trace-admitted-frame-invariant"
@@ -607,47 +393,11 @@ review_owner = "proof-infrastructure"
 review_date = "2026-10-23"
 
 [[recipe]]
-id = "raw-sstore-free-compiled-path"
-status = "active"
-triggers = ["goal-shape:raw-sstore-free-compiled-path"]
-preferred_path = "Build `Func.RunCompiledTo.NoRawSstorePath` over the exact selected compiled derivation, supplying childlessness for every reached external instruction. Use `NoRawSstorePath.of_entrySstoreFree_reachableExecFree` when the executable finite-component checkers prove both local SSTORE freedom and reachable exec freedom; otherwise use `NoRawSstorePath.of_execFree` for an execution-free, locally SSTORE-free body, `NoRawSstorePath.of_prepend_nonexec` for an instruction-only prefix, `NoRawSstorePath.of_revertWith` for a symbolic constant-error body, or `NoRawSstorePath.of_emptyRevertGuard` for a selected nonzero guard calling an empty-revert auxiliary. When a failing prefix is checker-safe only with a harmless success continuation, certify that source and use `NoRawSstorePath.replaceStopWith_of_error` to reinstate the production continuation that the exact error path never enters; `Func.replaceStopWith_prepend` normalizes an instruction-only prefix around that replacement. For a warm fixed-width SHA-256 precompile step, preserve the empty child slot with `Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext`; finish with `Prog.exists_exec_noRawSstore`. When an exact `Exec` already exists, use `Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree` to combine the two executable entry certificates occurrence-first."
-boundary = "This is raw construction-direction chronology, not rollback reasoning. An empty retained-write list or reverted terminal state does not prove the certificate because an earlier raw SSTORE may have executed and then rolled back. Entered child frames require their own evidence; synchronously resolved childless precompiles may use the explicit done-frame constructor."
-owner_module = "Blanc/ForwardNoRawSstore.lean"
-canonical_example = "Blanc/ForwardNoRawSstore.lean:Func.RunCompiledTo.NoRawSstorePath.of_execFree"
-symbols = [
-  "module:Blanc/ForwardNoRawSstore.lean",
-  "declaration:Blanc.Ninst.ChildlessRunCompiled",
-  "declaration:Blanc.Ninst.ChildlessRunCompiled.toRunCompiled",
-  "declaration:Blanc.Ninst.childlessRunCompiled_exec_doneFrame",
-  "declaration:Blanc.Ninst.childlessRunCompiled_staticcall_doneFrame",
-  "declaration:Blanc.Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext",
-  "declaration:Blanc.emptyRevertGuardCost",
-  "declaration:Blanc.Func.runCompiledTo_emptyRevertGuard",
-  "declaration:Blanc.Exec.NoRawSstore",
-  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath",
-  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_execFree",
-  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_revertWith",
-  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_emptyRevertGuard",
-  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_prepend_nonexec",
-  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.of_entrySstoreFree_reachableExecFree",
-  "declaration:Blanc.Func.replaceStopWith",
-  "declaration:Blanc.Func.replaceStopWith_prepend",
-  "declaration:Blanc.Func.RunCompiledTo.NoRawSstorePath.replaceStopWith_of_error",
-  "declaration:Blanc.Prog.exists_exec_noRawSstore",
-  "declaration:Blanc.Exec.noRawSstore_of_exactMain_entrySstoreFree_reachableExecFree",
-  "declaration:Blanc.Exec.NoRawSstore.no_successfulSstoreOccurrence",
-  "declaration:Blanc.Exec.NoRawSstore.retainedStorageWrites_eq_nil",
-  "declaration:Blanc.Exec.NoRawSstore.retainedStorageEffectTriples_eq_nil",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-30"
-
-[[recipe]]
 id = "retained-write-noninterference"
 status = "active"
 triggers = ["goal-shape:retained-write-noninterference"]
-preferred_path = "For `Exec.NoRetainedWriteTo`, split first on `Execution.commits out = true`. Close the rollback arm with `Exec.noRetainedWriteTo_of_not_commits`; on a committing exact-main invocation use `Exec.noRetainedWriteTo_of_exactMain_reachableExecFree` when the selected entry and its finite internal-call component pass `Prog.reachableExecFree`. For a dispatcher-selected non-main entry, route an actual `SourceCursor` through `Toward.linearDispatchWith_selectedBody`, discharge same-frame exec absence with `SourceCursor.noExec_of_reachableExecFree`, and finish with `Exec.noRetainedWriteTo_of_no_sameFrame_execAt`. For a certified stateful `Reach` dispatcher route toward an actual `AtExec` target, use `Lift.rr_cmp_gt` and `Lift.rr_cmp_eq` in `Lift.ReachDispatch` with the instruction-relation soundness projection, then refute a checked exec-free region with `Reach.false_of_execFree`; these projections preserve the target and continuation stack. Whole-program source-childlessness and entered-frame owner separation remain the other committing routes."
-boundary = "The noncommitting theorem proves retained-write absence by rollback, not raw instruction absence. `Prog.reachableExecFree` checks both arms and a finite lookup-resolved call-closed source component, but says nothing about unselected entries, child outcomes, commitment, gas, or liveness. The exact-main endpoint applies only to `program.main`; a selected dispatcher body needs the explicit actual-route cursor bridge. Do not infer childlessness merely from a static call flag."
+preferred_path = "For `Exec.NoRetainedWriteTo`, split first on `Execution.commits out = true`. Close the rollback arm with `Exec.noRetainedWriteTo_of_not_commits`. For a committing execution supply actual occurrence absence through `Exec.noRetainedWriteTo_of_no_execOccurrence`, source-site exclusion through `Exec.noRetainedWriteTo_of_sourceSites_no_exec`, or the entered-frame owner separation required by `Exec.noRetainedWriteTo_of_frame_owners_ne`. The retained checked-cursor route uses `Lift.rr_cmp_gt` and `Lift.rr_cmp_eq` in `Lift.ReachDispatch` with the instruction-relation soundness projection, then refutes a checked exec-free region with `Reach.false_of_execFree`; it preserves the target and continuation stack."
+boundary = "The noncommitting theorem proves retained-write absence by rollback, not raw instruction absence. Committing routes need the supplied actual occurrence, source-site or frame-owner premises. No unselected entry, child outcome, gas budget or liveness follows. Do not infer childlessness merely from a static call flag. Probe: Blanc/ExecutionNoninterference.lean:Exec.noRetainedWriteTo_of_not_commits. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/ExecutionNoninterference.lean"
 canonical_example = "Blanc/ExecutionNoninterference.lean:Exec.noRetainedWriteTo_of_not_commits"
 symbols = [
@@ -657,92 +407,12 @@ symbols = [
   "declaration:Exec.noRetainedWriteTo_of_no_execOccurrence",
   "declaration:Exec.noRetainedWriteTo_of_sourceSites_no_exec",
   "declaration:Exec.noRetainedWriteTo_of_frame_owners_ne",
-  "module:Blanc/ReachableExecFree.lean",
-  "declaration:Prog.reachableExecFree",
-  "declaration:Prog.reachableExecFree_iff",
-  "declaration:Exec.Deriv.SourceCursor.Toward.linearDispatchWith_selectedBody",
-  "declaration:Exec.Deriv.SourceCursor.noExec_of_reachableExecFree",
-  "declaration:Exec.noRetainedWriteTo_of_no_sameFrame_execAt",
-  "declaration:Exec.noRetainedWriteTo_of_exactMain_reachableExecFree",
   "module:Blanc/Lift/ReachDispatch.lean",
   "declaration:Blanc.Lift.rr_cmp_gt",
   "declaration:Blanc.Lift.rr_cmp_eq",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-30"
-
-[[recipe]]
-id = "exact-retained-storage-effects"
-status = "active"
-triggers = ["goal-shape:exact-retained-storage-effects"]
-preferred_path = "For a committing selected compiled walk, build `Func.RunCompiledTo.StorageEffectPath` in source order. For a long construction that must thread the indexed run and annotation together, use `Func.StorageEffectRun` and its source-shaped constructors; `next_effectNeutral` preserves the tail list across an ordinary non-SSTORE step, while `of_noRawSstorePath` packages an existing empty selected-path certificate. Its `.run` projection recovers the exact indexed `Func.RunCompiledTo` witness without rebuilding the selected walk. Use `storage_effect_run` to walk a childless neutral prefix with the `func_run` state/gas/hint engine; it hands external instructions, SSTOREs, internal calls, and terminals back to the caller. To replace a designated successful STOP with an exact-effect continuation, certify the selected neutral walk with `RunCompiledTo.SuccessfulStopPrefix.of_execFree` and apply `SuccessfulStopPrefix.splice`. Convert an existing raw-SSTORE-free certificate with `StorageEffectPath.of_noRawSstorePath`; convert an exact empty annotation back to raw freedom with `StorageEffectPath.noRawSstorePath_of_nil` or `StorageEffectRun.noRawSstorePath`. Otherwise supply `Ninst.ChildlessRunCompiled` at each synchronously resolved external step. Finish with `Prog.exists_exec_retainedStorageEffectTriples`, or `_appended` when the compiled program is only the exact prefix of a larger creation-code image. When composing an `Exec` directly, use `Exec.retainedStorageEffectTriples_cont`, `Exec.retainedStorageEffectTriples_doneOk`, and `Exec.retainedStorageEffectTriples_halt`."
-boundary = "The certificate is exact retained chronology, including successful no-op SSTOREs. It requires a committing successful result and explicit childlessness at external steps; it does not infer child-frame absence from same-frame source classification or final storage equality. The `.run` projection preserves the certificate's exact compiled-run indices; it does not convert an arbitrary source `Func.Run` into compiled evidence."
-owner_module = "Blanc/ForwardStorageEffects.lean"
-canonical_example = "Blanc/ForwardStorageEffects.lean:Prog.exists_exec_retainedStorageEffectTriples"
-symbols = [
-  "module:Blanc/ForwardStorageEffects.lean",
-  "declaration:Blanc.Ninst.storageEffectTriple?",
-  "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath",
-  "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.next_of_not_exec",
-  "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.of_noRawSstorePath",
-  "declaration:Blanc.Func.RunCompiledTo.StorageEffectPath.noRawSstorePath_of_nil",
-  "declaration:Blanc.Func.StorageEffectRun",
-  "declaration:Blanc.Func.StorageEffectRun.of_noRawSstorePath",
-  "declaration:Blanc.Func.StorageEffectRun.noRawSstorePath",
-  "declaration:Blanc.Func.StorageEffectRun.last",
-  "declaration:Blanc.Func.StorageEffectRun.next",
-  "declaration:Blanc.Func.StorageEffectRun.next_effectNeutral",
-  "declaration:Blanc.Func.StorageEffectRun.zero",
-  "declaration:Blanc.Func.StorageEffectRun.succ",
-  "declaration:Blanc.Func.StorageEffectRun.call",
-  "declaration:Blanc.Func.storageEffectRun_branch_zero",
-  "declaration:Blanc.Func.storageEffectRun_branch_succ",
-  "declaration:Blanc.Func.SuccessStopOnly",
-  "declaration:Blanc.Func.RunCompiledTo.SuccessfulStopPrefix",
-  "declaration:Blanc.Func.RunCompiledTo.SuccessfulStopPrefix.of_execFree",
-  "declaration:Blanc.Func.RunCompiledTo.SuccessfulStopPrefix.splice",
-  "declaration:Blanc.Prog.exists_exec_retainedStorageEffectTriples",
-  "declaration:Blanc.Prog.exists_exec_retainedStorageEffectTriples_appended",
-  "declaration:Blanc.Exec.retainedStorageEffectTriples_cont",
-  "declaration:Blanc.Exec.retainedStorageEffectTriples_doneOk",
-  "declaration:Blanc.Exec.retainedStorageEffectTriples_halt",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-30"
-
-[[recipe]]
-id = "binary-dispatch-miss"
-status = "active"
-triggers = ["goal-shape:raw-sstore-free-compiled-path"]
-preferred_path = "For an unmatched selector in a `DispatchTree`, prove `¬ tree.HasSelector selector`, supply selected PUSH0 availability (`sevm.benvStat.rules.op.push0 = true`), and apply `DispatchTree.dispatchMiss_runCompiledTo_with_path`. The result is the exact selector-dependent empty-revert `RunCompiledTo` paired with `NoRawSstorePath` for that identical proof; `DispatchTree.dispatchMissGas` names its exact cost."
-boundary = "This follows only the selected miss path. It does not inspect or certify unselected sibling bodies, prove a contract-specific selector census, or add the selector-extraction and program-main prefix around `dispatch tree`."
-owner_module = "Blanc/ForwardDispatchMiss.lean"
-canonical_example = "Blanc/ForwardDispatchMiss.lean:DispatchTree.dispatchMiss_runCompiledTo_with_path"
-symbols = [
-  "module:Blanc/ForwardDispatchMiss.lean",
-  "declaration:Blanc.DispatchTree.HasSelector",
-  "declaration:Blanc.DispatchTree.dispatchMissGas",
-  "declaration:Blanc.DispatchTree.dispatchMiss_runCompiledTo_with_path",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-31"
-
-[[recipe]]
-id = "accepted-boolean-settlement"
-status = "active"
-triggers = ["goal-shape:accepted-bool-word"]
-preferred_path = "For a clean full-word ABI output, use `acceptedBoolWord_iff_of_output` instead of repeating the slice/read normalization. Remove a successful execution wrapper with `acceptedBoolExecution_ok_iff`, and specialize rejected-answer executions with `boolQueryExecutionFailure_ok_iff`."
-boundary = "These adapters identify one already-clean 32-byte boolean observation. They do not prove message settlement, output production, or that the returned word is canonical zero or one."
-owner_module = "Blanc/PinnedPauseTarget.lean"
-canonical_example = "Blanc/PinnedPauseTarget.lean:acceptedBoolWord_iff_of_output"
-symbols = [
-  "module:Blanc/PinnedPauseTarget.lean",
-  "declaration:acceptedBoolWord_iff_of_output",
-  "declaration:acceptedBoolExecution_ok_iff",
-  "declaration:boolQueryExecutionFailure_ok_iff",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-30"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "devm-common-update-laws"
@@ -776,23 +446,6 @@ review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
 
 [[recipe]]
-id = "compiled-terminal-at-zero"
-status = "active"
-triggers = ["goal-shape:terminal-return-revert"]
-preferred_path = "For two PUSH1-zero instructions followed by an empty RETURN from an empty stack and empty memory, use `Func.runCompiledTo_push1Zero_return_empty`, which pays exactly six gas. For an offset-zero 32-byte RETURN or empty REVERT, use `Func.runCompiledTo_return_word_at_zero` or `Func.runCompiledTo_revert_empty_at_zero`; use the more general `Func.runCompiledTo_return_word` and `Func.runCompiledTo_revert` only when the offset, size, stack tail, or payload differs."
-boundary = "These construction lemmas cover the stated terminal sequences, including the exact two-PUSH1-zero prefix; they are not inversion theorems or replacements for the general terminal APIs."
-owner_module = "Blanc/ExecutionTerminal.lean"
-canonical_example = "Blanc/ExecutionTerminal.lean:Func.runCompiledTo_return_word_at_zero"
-symbols = [
-  "module:Blanc/ExecutionTerminal.lean",
-  "declaration:Func.runCompiledTo_return_word_at_zero",
-  "declaration:Func.runCompiledTo_revert_empty_at_zero",
-  "declaration:Func.runCompiledTo_push1Zero_return_empty",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-08-29"
-
-[[recipe]]
 id = "full-length-slice"
 status = "active"
 triggers = ["goal-shape:full-length-slice"]
@@ -811,16 +464,12 @@ review_date = "2026-08-29"
 id = "retained-wrapper-trace"
 status = "active"
 triggers = ["goal-shape:retained-wrapper-trace"]
-preferred_path = "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `ProcessMessageTrace.result` or `ProcessCreateMessageTrace.result` to recover the exact deterministic core-wrapper equation. At a retained delegated-child boundary, use `DelegatecallSpawnDescriptor.certificate_of_runCompiled` to invert an existing successful compiled step into its arbitrary child outcome and resume equation, `DelegatecallSpawnDescriptor.runCompiled_of_certificate` to construct the exact compiled step from such a child plus its resume equation, or `.settled_of_runCompiled` to retain the settled child together with exact parent observations. Then use `DelegatedChildCertificate.process`, `.result`, or `.rollback_of_error` for the retained child. Use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state. For a successful message call, transaction, transaction fold or unchecked system transaction with the actual selected rules satisfying `stateGas = none`, use `exists_messageCallTrace_of_stateGas_none`, `exists_transactionTrace_of_stateGas_none`, `exists_applyTransactionsTrace_of_stateGas_none` or `exists_systemMessageTrace_of_stateGas_none`, respectively. The original CoveredFork entry points remain compatibility wrappers. For a retained canonical system message, `SystemMessageTrace.delegation_empty` identifies its skipped authorization wrapper; `systemTransactionMessage_auths_nil` and `systemTransactionMessage_delegation_eq` expose the canonical empty list and exact wrapper equation. For supplied optional beacon/history/request stages, use BeaconStageTrace, HistoryStageTrace and RequestStageTrace; StagedBodyTrace and ConfiguredBlockTraceIn/ConfiguredHistoryTraceIn retain exact selected-fork stages. Use ExecutionStagedFrames rawFrames or settledFrames at the required traversal boundary, disabled-stage nil lemmas and mem_rawFrames_of_mem_settledFrames to transport only membership. The modern toStaged/toModern/toIn projection equalities reuse the supplied traces. Historical body extraction uses exists_stagedBodyTrace and conditional request coverage; configured In extraction retains its explicit reward-inclusive budget."
-boundary = "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay. The empty system-authorization result does not exclude system VM child calls, recovery checks or storage effects. The explicit state-gas premise supports execution extraction only: it does not provide modern refund, touched-account, no-deletion, request-enablement or reward-free conclusions. Optional stages contribute no frames when skipped. Raw traversal includes rolled-back entries; settled traversal retains the full message and CREATE settlement tests. List order and committed-to-raw membership do not prove occurrence uniqueness, state chronology, target survival or historical contract preservation."
+preferred_path = "Choose the carrier at the wrapper boundary you actually have, then use its matching `exists_*Trace` theorem to retain Jaune's deterministic recursive witness. Start with `RetainedXlot` for a filled execution slot; use `ProcessMessageTrace.result` or `ProcessCreateMessageTrace.result` to recover the exact deterministic core-wrapper equation. At a retained delegated-child boundary, use `DelegatecallSpawnDescriptor.certificate_of_runCompiled` to invert an existing successful compiled step into its arbitrary child outcome and resume equation, `DelegatecallSpawnDescriptor.runCompiled_of_certificate` to construct the exact compiled step from such a child plus its resume equation, or `.settled_of_runCompiled` to retain the settled child together with exact parent observations. Then use `DelegatedChildCertificate.process`, `.result`, or `.rollback_of_error` for the retained child. Use `MessageCallTrace`, `TransactionTrace`, `AppliedBodyTrace`, or the configured block/history carriers instead of reconstructing a trace from only the terminal state. For a successful message call, transaction, transaction fold or unchecked system transaction with the actual selected rules satisfying `stateGas = none`, use `exists_messageCallTrace_of_stateGas_none`, `exists_transactionTrace_of_stateGas_none`, `exists_applyTransactionsTrace_of_stateGas_none` or `exists_systemMessageTrace_of_stateGas_none`, respectively. The original CoveredFork entry points remain compatibility wrappers. For supplied optional beacon/history/request stages, use BeaconStageTrace, HistoryStageTrace and RequestStageTrace; StagedBodyTrace and ConfiguredBlockTraceIn/ConfiguredHistoryTraceIn retain exact selected-fork stages. Use ExecutionStagedFrames rawFrames or settledFrames at the required traversal boundary, disabled-stage nil lemmas and mem_rawFrames_of_mem_settledFrames to transport only membership. The modern toStaged/toModern/toIn projection equalities reuse the supplied traces. Historical body extraction uses exists_stagedBodyTrace and conditional request coverage; configured In extraction retains its explicit reward-inclusive budget."
+boundary = "These carriers remember execution and wrapper structure but assign no contract-specific meaning to effects. Use the `Execution*Effects` modules for `ContractSpec` transport, `ExecutionPath` for stable call-tree locations, and the `Execution*StateTrace` modules for ordered world-state replay. The explicit state-gas premise supports execution extraction only: it does not provide modern refund, touched-account, no-deletion, request-enablement or reward-free conclusions. Optional stages contribute no frames when skipped. Raw traversal includes rolled-back entries; settled traversal retains the full message and CREATE settlement tests. List order and committed-to-raw membership do not prove occurrence uniqueness, state chronology, target survival or historical contract preservation. Probe: Blanc/ExecutionTrace.lean:ExecutionTrace.exists_messageCallTrace. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/ExecutionTrace.lean"
 canonical_example = "Blanc/ExecutionTrace.lean:ExecutionTrace.exists_messageCallTrace"
 symbols = [
   "module:Blanc/ExecutionTrace.lean",
-  "module:Blanc/ExecutionSystemDelegation.lean",
-  "declaration:ExecutionTrace.systemTransactionMessage_auths_nil",
-  "declaration:ExecutionTrace.systemTransactionMessage_delegation_eq",
-  "declaration:ExecutionTrace.SystemMessageTrace.delegation_empty",
   "module:Blanc/ExecutionHistory.lean",
   "module:Blanc/DelegatecallEnvelope.lean",
   "declaration:ExecutionTrace.RetainedXlot",
@@ -912,7 +561,7 @@ symbols = [
   "declaration:ExecutionTrace.ConfiguredHistoryTraceIn.toModern_settledFrames",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-08-30"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "trace-local-frame-admission"
@@ -1064,23 +713,6 @@ review_owner = "proof-infrastructure"
 review_date = "2026-08-30"
 
 [[recipe]]
-id = "upgrade-migration-refinement"
-status = "active"
-triggers = ["goal-head:MigrationSound", "goal-head:BehavioralRefinement"]
-preferred_path = "Start from `UpgradeArchitecture`, keeping `proxyProg`, v1, v2, the migration, and the relation explicit. Prove `MigrationSound` from the named state transformer independently of `BehavioralRefinement`; then prove the latter from version-specific shared steps. A product theorem must separately connect an exact proxy execution to the migration."
-boundary = "These predicates describe a migration and shared logical behavior. They do not execute a proxy, establish authorization or installation, transport a child through delegatecall, prove rollback, or turn one predicate into evidence for the other."
-owner_module = "Blanc/Upgrade.lean"
-canonical_example = "Blanc/Upgrade.lean:MigrationSound"
-symbols = [
-  "module:Blanc/Upgrade.lean",
-  "declaration:Blanc.UpgradeArchitecture",
-  "declaration:Blanc.MigrationSound",
-  "declaration:Blanc.BehavioralRefinement",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-09-01"
-
-[[recipe]]
 id = "memory-window-transport"
 status = "active"
 triggers = [
@@ -1088,10 +720,10 @@ triggers = [
   "goal-head:MemImage",
   "implication-premise:MemWordAt",
 ]
-preferred_path = "A long-lived memory word that must survive unrelated scratch traffic is carried by the shared proof-carrying window in `Blanc/MemoryImage.lean`; import it with `import Blanc.MemoryImage` and do not declare a contract-local survival predicate. Use `MemImage` while the proof still needs the whole reader image, then drop to `MemWordAt` as soon as only one 32-byte window matters. For several writes, import `Blanc/MemoryLayout.lean` and state one ordered `MemoryStage`: `applyImage` and `applyMemory` fold the actual primitives in the listed order, `wf_reads` proves their correspondence, and `footprint` retains exact byte spans. Use the decidable `avoids`/`avoidsAll` guards for preserved padded windows and `read_written` when only later writes must miss the selected payload; use `words`, `applyMemory_words_size`, and `read_written_word` for word stores. When a hashed or observed region spans more than one staged write, join the per-window readbacks with `List.sliceD_add` (`Blanc/BytesWrite.lean`); for the adjacent-word case, `Mem.read_two_word_writes_at` gives the readback directly. `MemImage.applyStage`, `MemWordAt.applyStage`, and `MemoryStage.wordFrameFrom` bridge the finite stage back to the existing carriers. For a Solidity length-header store followed by a payload copy, `SolcStringAllocation.allocation_facts` derives the unwrapped copy bound, rounded next pointer and header preservation from the actual post-memory size bound; `allocation_of_run` and `allocation_of_runP` connect actual instructions and post-Pot. The empty-copy case uses the header store, and wrapper stack/memory producers remain obligations. For solc ABI string decoding from calldata, `SolcAbiStringStaging.strFrag_runP`, `rotFrag_runP` and `staticFrag_runP` invert the exact decoder fragments over an abstract stack tail and memory, producing `allocMem` memories; `SolcAbiStringStaging.stage3` then derives the final headers, pointer chain, final free pointer, ordered allocation bounds and prior-word survival from `96 <= p1` and the final post-`Pot` size bound. Compose the fragment lemmas after an `rfl` code-shape equation rather than unfolding one long walk (`Blanc/Lift/Usdc/OldInitializerV1Staging.lean:wrapper_strengthen`). To strengthen the whole wrapper run afterwards, use the `_lift` forms, whose `Lifts` rebuilds the state-silent prefix under the stronger relation (`Blanc/Lift/Usdc/OldInitializerV1Callee.lean:initialize_observed`). For one write or an execution boundary, continue with `writeMiss`/`writeMissBytes`, `extend`/`extends`, `extendsWrite`, the `across*` family, and `Bytes.WordFrameFrom`. `Blanc/BeaconDepositAbiMemory.lean:depositDecodedMemory_carrier` is the ordered fresh-layout example; `Blanc/BeaconDepositConstructorStorageEffects.lean:constructorPairWindow_storageEffectRun` remains the single-write scratch example."
-boundary = "Stage order is semantic: overlapping writes are not sorted or commuted, and `read_written` constrains only its later suffix. `footprint` is an exact byte-span list, while `applyMemory_size` uses `memExtsSize`; neither `avoids` nor byte coverage implies an unrounded allocation equation. `applyMemory_size_of_covered` therefore requires every write to fit the initial allocated size. Empty payloads, padding, extension and word byte order stay those of `Mem.write`, `Bytes.writeAt`, and `B256.toBytes`. The execution transport theorems remain frame-shaped and prove nothing about what a step computed; their disjointness and call-relation premises stay at the call site. These small structural proofs do not justify a raised `maxRecDepth` or `maxHeartbeats` scope."
+preferred_path = "A long-lived memory word that must survive unrelated scratch traffic is carried by the shared proof-carrying window in `Blanc/MemoryImage.lean`; import it with `import Blanc.MemoryImage` and do not declare a contract-local survival predicate. Use `MemImage` while the proof still needs the whole reader image, then drop to `MemWordAt` as soon as only one 32-byte window matters. For several writes, import `Blanc/MemoryLayout.lean` and state one ordered `MemoryStage`: `applyImage` and `applyMemory` fold the actual primitives in the listed order, `wf_reads` proves their correspondence, and `footprint` retains exact byte spans. Use the decidable `avoids`/`avoidsAll` guards for preserved padded windows and `read_written` when only later writes must miss the selected payload; use `words`, `applyMemory_words_size`, and `read_written_word` for word stores. When a hashed or observed region spans more than one staged write, join the per-window readbacks with `List.sliceD_add` (`Blanc/BytesWrite.lean`); for the adjacent-word case, `Mem.read_two_word_writes_at` gives the readback directly. `MemImage.applyStage`, `MemWordAt.applyStage`, and `MemoryStage.wordFrameFrom` bridge the finite stage back to the existing carriers. For a Solidity length-header store followed by a payload copy, `SolcStringAllocation.allocation_facts` derives the unwrapped copy bound, rounded next pointer and header preservation from the actual post-memory size bound; `allocation_of_run` and `allocation_of_runP` connect actual instructions and post-Pot. The empty-copy case uses the header store, and wrapper stack/memory producers remain obligations. For solc ABI string decoding from calldata, `SolcAbiStringStaging.strFrag_runP`, `rotFrag_runP` and `staticFrag_runP` invert the exact decoder fragments over an abstract stack tail and memory, producing `allocMem` memories; `SolcAbiStringStaging.stage3` then derives the final headers, pointer chain, final free pointer, ordered allocation bounds and prior-word survival from `96 <= p1` and the final post-`Pot` size bound. Compose the fragment lemmas after an `rfl` code-shape equation rather than unfolding one long walk (`Blanc/Lift/Usdc/OldInitializerV1Staging.lean:wrapper_strengthen`). To strengthen the whole wrapper run afterwards, use the `_lift` forms, whose `Lifts` rebuilds the state-silent prefix under the stronger relation (`Blanc/Lift/Usdc/OldInitializerV1Callee.lean:initialize_observed`). For one write or an execution boundary, continue with `writeMiss`/`writeMissBytes`, `extend`/`extends`, `extendsWrite`, the `across*` family, and `Bytes.WordFrameFrom`. `Blanc/MemoryLayout.lean:MemWordAt.applyStage` is the retained common consumer that transports an existing word through an ordered stage with an explicit miss guard."
+boundary = "Stage order is semantic: overlapping writes are not sorted or commuted, and `read_written` constrains only its later suffix. `footprint` is an exact byte-span list, while `applyMemory_size` uses `memExtsSize`; neither `avoids` nor byte coverage implies an unrounded allocation equation. `applyMemory_size_of_covered` therefore requires every write to fit the initial allocated size. Empty payloads, padding, extension and word byte order stay those of `Mem.write`, `Bytes.writeAt`, and `B256.toBytes`. The execution transport theorems remain frame-shaped and prove nothing about what a step computed; their disjointness and call-relation premises stay at the call site. These small structural proofs do not justify a raised `maxRecDepth` or `maxHeartbeats` scope. Probe: Blanc/MemoryLayout.lean:MemWordAt.applyStage. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/MemoryImage.lean"
-canonical_example = "Blanc/LidoCircuitBreakerPauseJoin.lean:responder_hcall"
+canonical_example = "Blanc/MemoryLayout.lean:MemWordAt.applyStage"
 symbols = [
   "module:Blanc/MemoryImage.lean",
   "module:Blanc/MemoryLayout.lean",
@@ -1140,52 +772,7 @@ symbols = [
   "declaration:Blanc.MemWordAt.applyStage",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-09-09"
-
-[[recipe]]
-id = "operand-stack-certificate"
-status = "active"
-triggers = [
-  "goal-head:CompiledStackSafety.StepSafe",
-  "goal-head:CompiledStackSafety.Certificate",
-  "goal-shape:operand-stack-fault-free",
-]
-preferred_path = "Absence of an operand-stack fault over fixed compiled bytes is a checked finite table, not a hand-rolled per-contract height counter. Import the chain with `import Blanc.AbstractStackCertificate`. For a real compiled artifact, feed its evaluator-emitted bytes and an explicit maximum to the untrusted `scripts/stack_certificate.py` producer, then discharge the generated table with `checkTable_certificate` applied to one `decide` of `checkTable code table maximum = true`; `python3 scripts/gen-proxy-pair-stack-certificate.py` is the complete compiler-bound check and `--write` is its writer. The four declarations at the end of `Blanc/AbstractStackCertificate.lean` — `exampleCode`, `exampleTable`, `exampleTable_checked`, `exampleTable_certificate` — remain the minimal handwritten use. Transport the resulting `Certificate` over the actual same-frame chronology with `Certificate.parentStep`, `Certificate.parentPrefix` and `Certificate.at_parentPrefix`; they reuse `Exec.Deriv.ParentPrefix` rather than introducing a parallel execution relation. Generated named packs still check successors against the complete table; compose separately proved pieces with `Table.all_node`, and use `Table.count_le_one` or `Table.checkLayout` only when row uniqueness or a contiguous layout is separately wanted. `docs/COMMON_API.md` section E9 is the need-first entry point."
-boundary = "The Python producer is explicitly untrusted data preparation: only the unchanged Lean `checkTable` against the actual code supplies certificate evidence. Its balanced 15-row leaf size is a representation boundary inherited from the DRIP donor, not an optimization claim. The conclusion is local and same-frame. It states that every reached same-frame node satisfies the checked invariant and that no step generates a `StackFault`; it proves nothing about gas, liveness, termination, whether any program counter is reached, or the code of a spawned child frame. A CALL's child is arbitrary: only the parent's resumption is covered, and a stack fault arriving through the child settlement is attributed by `InheritedStackFault`, not excluded. The accepted family is narrow and fails closed to `false` on everything else — `regularTransfer` covers ADD, MUL, SUB, DIV, LT, GT, EQ, ISZERO, AND, SHR, CALLER, CALLVALUE, CALLDATALOAD, CALLDATASIZE, TIMESTAMP, POP, MLOAD, MSTORE, SLOAD, SSTORE, GAS, DUP and SWAP; CALL is the only accepted external instruction; SELFDESTRUCT is rejected. `checkTable` hard-caps the stack ceiling at `maximum ≤ 8`, which is the limit of the proved transfer family rather than a tuning knob: raising it requires new transfer theorems, not a larger literal. Validation is one kernel `decide` over the tree, so its cost grows with row count and pattern width and a very large table should be split with `Table.all_node`. The tree shape supplies no trusted premise — a wrong tree fails `Table.checkOrder` or a row check instead of weakening the theorem."
-owner_module = "Blanc/AbstractStackCertificate.lean"
-canonical_example = "Blanc/AbstractStackCertificate.lean:exampleTable_certificate"
-symbols = [
-  "module:Blanc/AbstractStackCertificate.lean",
-  "module:Blanc/AbstractStackTransfer.lean",
-  "module:Blanc/AbstractStackSafety.lean",
-  "module:Blanc/CompiledStackSafety.lean",
-  "declaration:Blanc.CompiledStackSafety.StackFault",
-  "declaration:Blanc.CompiledStackSafety.NoStackFault",
-  "declaration:Blanc.CompiledStackSafety.InheritedStackFault",
-  "declaration:Blanc.CompiledStackSafety.ResumeSafe",
-  "declaration:Blanc.CompiledStackSafety.StepSafe",
-  "declaration:Blanc.CompiledStackSafety.Certificate",
-  "declaration:Blanc.CompiledStackSafety.Certificate.parentStep",
-  "declaration:Blanc.CompiledStackSafety.Certificate.parentPrefix",
-  "declaration:Blanc.CompiledStackSafety.Certificate.at_parentPrefix",
-  "declaration:Blanc.AbstractStackSafety.Pattern",
-  "declaration:Blanc.AbstractStackSafety.Matches",
-  "declaration:Blanc.AbstractStackSafety.SafeResult",
-  "declaration:Blanc.AbstractStackSafety.regularTransfer",
-  "declaration:Blanc.AbstractStackSafety.terminalTransfer",
-  "declaration:Blanc.AbstractStackSafety.callTransfer",
-  "declaration:Blanc.AbstractStackSafety.Table",
-  "declaration:Blanc.AbstractStackSafety.Table.Invariant",
-  "declaration:Blanc.AbstractStackSafety.Table.all_node",
-  "declaration:Blanc.AbstractStackSafety.Table.count_le_one",
-  "declaration:Blanc.AbstractStackSafety.Table.checkLayout",
-  "declaration:Blanc.AbstractStackSafety.checkTable",
-  "declaration:Blanc.AbstractStackSafety.checkTable_certificate",
-  "declaration:Blanc.AbstractStackSafety.exampleTable_checked",
-  "declaration:Blanc.AbstractStackSafety.exampleTable_certificate",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-09-07"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "finite-coalition-ledger"
@@ -1208,76 +795,13 @@ review_owner = "proof-infrastructure"
 review_date = "2026-09-16"
 
 [[recipe]]
-id = "symbolic-label-linking"
-status = "active"
-triggers = [
-  "goal-shape:symbolic-label-linking",
-  "goal-head:LinkCertificate",
-]
-preferred_path = "A large auxiliary call table is linked by name through `Blanc/SymbolicProgram.lean`, not by hand-maintained numeric targets. Author the program as `SymbolicProg Label` whose `SymbolicFunc.call` carries a label, then prove `resolve p = .ok (p.erase map)` with `resolve_eq_erase_of_callsOk`: its two premises are `SymbolicProg.validateDefinitions p = .ok ()`, normally `rfl`, and `SymbolicProg.callsOk p map = true`, one `decide +kernel` over the closed `SymbolicProg.allCalls` list. That front end is the route to use when `Label` is an infinite type (a label carrying a `Nat` coordinate), where agreement is not total and `cases target <;> rfl` is unavailable; use `resolve_eq_erase` directly when the label type is finite and agreement is total. For the converse direction `erase_eq_of_resolve` is harder to use than its one-line mention suggests: its agreement premise is *total* over `Label`, and `cases target <;> simp_all` does not close it because `simp` will not unfold `SymbolicProg.findLabel?` through a structure literal and leaves one `0 = n`-shaped goal per label — prove the per-label `findLabel?` equations separately, each `rfl`, add a `findLabel? = none` equation for every label the table does not define, and pass them all to `simp_all` explicitly, as `workedProg_erase_of_resolve` does. Pin individual coordinates with `SymbolicProg.findLabel?` equations and bound the table with a `findLabel? = none` negative control, as `LidoTriggerableWithdrawalsGateway.symbolicRuntime_findLabel_base_out_of_range` does. Lift an existing numeric `Func` with the shared `Func.mapCalls` and its erasure law `Func.erase_mapCalls_eq_mapTargets` (corollaries `Func.erase_mapCalls`, `Func.erase_mapCalls_of_inverse`) instead of writing a per-contract four-arm structural recursion; `Func.toSymbolic?`/`Func.liftCallFree` are the deliberately different call-rejecting sibling whose erasure `Func.erase_liftCallFree` is a side-condition-free `simp` lemma. Reuse `symbolicLinearDispatchWith` and `erase_symbolicLinearDispatchWith` for a symbolic selector chain. At a `LinkCertificate sp` goal, supply `resolved`, `resolve_eq` and `compiles` over the existing production `Prog`, leaving that definition exactly as it was, rather than re-anchoring it on a certificate projection and moving every downstream `unfold`/`simp` normal form; `checkLink` is the decision form and `LinkCertificate.bytes`, `compile_eq`, `isSome_compile`, `length_compile`, `table_get_root` and `table_get_aux` are the compiled-artifact interface. `docs/COMMON_API.md` section C6 is the need-first entry point; `LidoCircuitBreaker.symbolicLinkCert` and `LidoTriggerableWithdrawalsGateway.symbolicLinkCert` are the production consumers, each against a thousand-line runtime. The minimal working example is `workedProg` in the owner module's `Control` section: `workedProg_resolve : resolve workedProg = .ok workedNumbered` against a hand-numbered `Prog` written out in full, with both premises, the per-label `findLabel?` coordinates, two `findLabel? = none` bounds, the separate `workedProg_auxLabels` order statement, the `erase_eq_of_resolve` discharge and `workedProg_checkLink`. Copy that one; `nestedBranch_checkLink`, `selfRecursion_checkLink` and `mutualRecursion_checkLink` beside it prove only `(checkLink _).isOk = true` and demonstrate nothing that transports."
-boundary = "Resolution is a coordinate assignment and linking is a compiler witness. Neither states anything about the semantics of the erased program: no `Func.Run`, `Func.RunCompiled`, gas, execution outcome, storage effect, selector route or ABI fact follows from a `LinkCertificate`, and those obligations remain ordinary work about the `Prog` that `resolve` returns. The usage rule that follows from this, and not a caveat to it: a bare `LinkCertificate` transports nothing, because all it gives you is `resolve p = .ok cert.resolved` — an equation against a `Prog` you never wrote down and have proved nothing about. Gas and execution facts transport only when you write the numeric `Prog` out by hand and prove `resolve p = .ok <that program>` against it, at which point the agreement is not proved here but made vacuous by syntactic identity, both sides being the same term, which is exactly what lets a gas or run fact about the hand-numbered program rewrite across it. A consumer that keeps only a certificate has linked its table and transported nothing. `resolve_eq_erase_of_callsOk` needs both halves and neither is implied by the other — `SymbolicProg.validateDefinitions` is only the definition domain (no root reuse in the table, no duplicate auxiliary labels including unused duplicates) and the decidable `SymbolicProg.callsOk` is agreement between the table and `map` restricted to the call targets that actually occur, not total agreement, which is false for an infinite `Label`. Because erasure discards labels, an erasure theorem alone does not catch a reordered table, and this is a separate load-bearing statement rather than a detail: state the label list on its own, as `workedProg_auxLabels` and `LidoTriggerableWithdrawalsGateway.symbolicBaseAux_labels` do. Compilability is `checkLink`'s second half and nothing in `resolve` implies it; a call target at or above `2 ^ 16` compiles to nothing, pinned exactly by `call_target_65535_compiles` and `call_target_65536_rejects`. Cost: `resolve`, `erase` and the erasure lemmas are structural and cheap and `callsOk` is meant for one `decide +kernel` over a closed call list, but do not put `checkLink` or `resolve` of a production-sized program under a decision procedure, because that forces kernel evaluation of `Prog.compile` over the whole table. The matcher reads declaration names in the target: `goal-shape:symbolic-label-linking` needs `resolve`, `checkLink`, `SymbolicProg.findLabel?`, `SymbolicProg.validateDefinitions`, `SymbolicProg.callsOk`, `SymbolicProg.erase` or `SymbolicFunc.erase` to be visible, and `goal-head:LinkCertificate` needs `LinkCertificate` to head the goal, so unfold only the local binding that hides one and invoke `blanc_suggest` again."
-owner_module = "Blanc/SymbolicProgram.lean"
-canonical_example = "Blanc/SymbolicProgram.lean:workedProg_resolve"
-symbols = [
-  "module:Blanc/SymbolicProgram.lean",
-  "declaration:Blanc.SymbolicFunc",
-  "declaration:Blanc.SymbolicProg",
-  "declaration:Blanc.ResolveError",
-  "declaration:Blanc.SymbolicProg.validateDefinitions",
-  "declaration:Blanc.SymbolicProg.findLabel?",
-  "declaration:Blanc.SymbolicProg.erase",
-  "declaration:Blanc.SymbolicFunc.erase",
-  "declaration:Blanc.SymbolicProg.allCalls",
-  "declaration:Blanc.SymbolicProg.callsOk",
-  "declaration:Blanc.resolve",
-  "declaration:Blanc.resolve_eq_erase",
-  "declaration:Blanc.resolve_eq_erase_of_callsOk",
-  "declaration:Blanc.erase_eq_of_resolve",
-  "declaration:Blanc.Func.mapCalls",
-  "declaration:Blanc.Func.erase_mapCalls_eq_mapTargets",
-  "declaration:Blanc.Func.erase_mapCalls",
-  "declaration:Blanc.Func.erase_mapCalls_of_inverse",
-  "declaration:Blanc.Func.toSymbolic?",
-  "declaration:Blanc.Func.liftCallFree",
-  "declaration:Blanc.Func.erase_liftCallFree",
-  "declaration:Blanc.symbolicLinearDispatchWith",
-  "declaration:Blanc.erase_symbolicLinearDispatchWith",
-  "declaration:Blanc.checkLink",
-  "declaration:Blanc.checkLink_isOk",
-  "declaration:Blanc.checkLink_eq_error_compileFailed",
-  "declaration:Blanc.LinkError",
-  "declaration:Blanc.LinkCertificate",
-  "declaration:Blanc.LinkCertificate.bytes",
-  "declaration:Blanc.LinkCertificate.compile_eq",
-  "declaration:Blanc.LinkCertificate.isSome_compile",
-  "declaration:Blanc.LinkCertificate.length_compile",
-  "declaration:Blanc.LinkCertificate.table_get_root",
-  "declaration:Blanc.LinkCertificate.table_get_aux",
-  "declaration:Blanc.Control.workedProg",
-  "declaration:Blanc.Control.workedMap",
-  "declaration:Blanc.Control.workedNumbered",
-  "declaration:Blanc.Control.workedProg_resolve",
-  "declaration:Blanc.Control.workedProg_auxLabels",
-  "declaration:Blanc.Control.workedProg_erase_of_resolve",
-  "declaration:Blanc.Control.workedProg_checkLink",
-]
-anti_patterns = [
-  "hand-numbered-auxiliary-call-table",
-  "certificate-kept-without-hand-numbered-program",
-  "runtime-redefined-as-certificate-projection",
-  "decide-over-production-sized-checklink",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-09-10"
-
-[[recipe]]
 id = "extcodesize-compiled-step"
 status = "active"
 triggers = ["goal-shape:extcodesize-compiled-step"]
 preferred_path = "For flat pricing use Blanc.Ninst.runCompiled_extcodesize_flat from Blanc/ForwardFlatAccess.lean with rules.access = .flat prices, rules.bal = none, the actual stack, exact entry gas G + prices.extCode + rules.gas.codeReadSurcharge, and stack room. It returns the actual pre-state code-size word over d.setMach and preserves d.stateGas. Compose a continuation through existing Ninst.exec_of_stepRun. Blanc.Lift.Usdc.ProxyCreation.isContract_runExact is a concrete flat-pricing source-fragment consumer; it does not by itself prove an actual bytecode entry/return or whole constructor run. For warm/cold pricing use Blanc.Lift.temporal_extcodesize_runCompiled from Blanc/Lift/CodeSizeWalk.lean for the actual code-size word and warm/cold account-access image. Supply the covered-fork fact, selected code-size equality and stack room, and align the entry gas with residual gas plus temporalAccountAccessCost. temporalAccountAccessBase names the possibly warmed successor; temporalAccountAccessBase_state, temporalAccountAccessBase_output and temporalAccountAccessBase_logs project its unchanged state, output and logs. For a lifted exact continuation use rx_extcodesize; for an existing successful instruction use ri_extcodesize directly."
-boundary = "This advice matches only a literal EXTCODESIZE Ninst.RunCompiled goal. It does not solve fork, word, stack, gas or successor-state obligations, match another opcode, invert Ninst.Run, or identify a generic SFunc.RunExact goal as an EXTCODESIZE walk. It does not establish nonzero code size or callee liveness."
+boundary = "This advice matches only a literal EXTCODESIZE Ninst.RunCompiled goal. It does not solve fork, word, stack, gas or successor-state obligations, match another opcode, invert Ninst.Run, or identify a generic SFunc.RunExact goal as an EXTCODESIZE walk. It does not establish nonzero code size or callee liveness. Probe: Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean:isContract_runExact. Measured cost: unmeasured guidance; this adaptation reanchors existing advice and reports no new timing. Simplest alternative tried: no new comparison run; the cited existing declaration is the direct manual route. Date: 2026-11-06."
 owner_module = "Blanc/Lift/CodeSizeWalk.lean"
-canonical_example = "Blanc/LidoCircuitBreakerPauseSuffixWalk.lean:temporal_extcodesize_runCompiled"
+canonical_example = "Blanc/Lift/Usdc/ProxyCreation/CodeSize.lean:isContract_runExact"
 symbols = [
   "module:Blanc/Lift/CodeSizeWalk.lean",
   "module:Blanc/ForwardFlatAccess.lean",
@@ -1294,7 +818,7 @@ symbols = [
   "declaration:Blanc.Lift.rx_extcodesize",
 ]
 review_owner = "proof-infrastructure"
-review_date = "2026-10-03"
+review_date = "2026-11-06"
 
 [[recipe]]
 id = "machine-state-debit"
@@ -1505,24 +1029,6 @@ review_owner = "proof-infrastructure"
 review_date = "2026-10-23"
 
 [[recipe]]
-id = "actual-recovery-invocation"
-status = "active"
-triggers = ["goal-shape:recovery-invocation"]
-preferred_path = "Apply recoveryInvocation_of_successFlag to an actual CallOccurrenceStep at STATICCALL with operand prefix g, address one, input/output offsets and sizes. Supply CoveredFork at the reached node, nondelegation of address one's code and the actual returned nonzero stack flag. The resulting RecoveryInvocation retains the synchronous precompile entry, paid gas, exact input and returned bytes; executed and answer_ne_of_excluded connect that one actual query to an excluded address answer."
-boundary = "Only direct Nonempty with direct argument head Blanc.Lift.RecoveryInvocation matches; unrelated Nonempty and unfolded aliases do not. A successful invocation may return empty bytes. This does not prove that concrete old bytecode consumes an owner address, relevance, a full recovery-query census, root commitment, historical fork coverage or cryptographic exclusion. The concrete consumer must establish the actual success flag and operand/route premises; no invocation is inferred merely from empty returned bytes."
-owner_module = "Blanc/Lift/RecoveryOccurrence.lean"
-canonical_example = "Blanc/Lift/RecoveryOccurrence.lean:recoveryInvocation_of_successFlag"
-symbols = [
-  "module:Blanc/Lift/RecoveryOccurrence.lean",
-  "declaration:Blanc.Lift.RecoveryInvocation",
-  "declaration:Blanc.Lift.recoveryInvocation_of_successFlag",
-  "declaration:Blanc.Lift.RecoveryInvocation.executed",
-  "declaration:Blanc.Lift.RecoveryInvocation.answer_ne_of_excluded",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-10-23"
-
-[[recipe]]
 id = "ordered-observed-keccak-pair"
 status = "active"
 triggers = ["goal-head:Lift.KeccakPairBefore"]
@@ -1591,24 +1097,3 @@ symbols = [
 ]
 review_owner = "proof-infrastructure"
 review_date = "2026-10-26"
-
-[[recipe]]
-id = "sha-readiness-selected-rules"
-status = "active"
-triggers = ["goal-head:ShaReadyRules"]
-preferred_path = "For selected rules with delegation disabled, apply Lift.ShaReadyRules.of_disabled; supply warmth, SHA precompile membership, stateGas = none and bal = none from the actual frame environment. Transport readiness across unchanged code and warm addresses with ShaReadyRules.of_eq. A covered-fork ShaReady gives ShaReady.toRules. The historical SHA call, copy and pack inversions consume the conditional nondelegation premise through their _of_delegation forms."
-boundary = "Disabled delegation does not imply empty code at address 2. With delegation enabled, actual nondelegation remains required. This readiness carrier proves neither a contract invariant nor frame admission, and does not identify a historical observation with an execution state. Warmth is explicit even under flat access."
-owner_module = "Blanc/Lift/HistShaWalk.lean"
-canonical_example = "Blanc/Lift/HistShaWalk.lean:ShaReadyRules.of_disabled"
-symbols = [
-  "declaration:Blanc.Lift.ShaReadyRules",
-  "declaration:Blanc.Lift.ShaReadyRules.of_eq",
-  "declaration:Blanc.Lift.ShaReadyRules.of_disabled",
-  "declaration:Blanc.Lift.ShaReady.toRules",
-  "declaration:Blanc.Lift.ri_staticcall_shaH_of_delegation",
-  "declaration:Blanc.Lift.ric_shaCallH_of_delegation",
-  "declaration:Blanc.Lift.ric_copy_shaH_of_delegation",
-  "declaration:Blanc.Lift.ric_pack_shaH_of_delegation",
-]
-review_owner = "proof-infrastructure"
-review_date = "2026-10-27"

@@ -5,15 +5,14 @@ Every run first executes ``generate-proof-recipes.py --check``. Registry/schema,
 symbol, and generated-surface drift is therefore a blocking integrity failure.
 Ordinary mode additionally enforces the blocking memory-stage discovery
 regression control: the ``memory-window-transport`` preferred path must name
-the spanning-read route, and the retired misleading example name must be gone
-from the recipe, its citations, and the Lean source.
+the spanning-read route, whose shared declarations must remain available.
 The two source findings remain report-only:
 
 * a changed declaration whose bytes match a declaration in a transitively
   imported local Blanc module after replacing only the declaration name and
   removing declaration-boundary documentation trivia; and
-* a new ``List B256`` selector table with at least three selector/literal rows,
-  outside the registry-declared owner of ``local-selector-table``.
+* a new ``List B256`` selector/literal table with at least three rows,
+  as module-local reuse advice without a cross-domain canonical owner.
 
 The exact-copy detector requires five substantive lines and 160 bytes after
 normalization, avoiding accidental matches among tiny wrapper declarations.
@@ -83,18 +82,6 @@ DISCOVERY_ROUTE_SOURCES = (
     ("Blanc/BytesWrite.lean", "List.sliceD_add"),
     ("Blanc/CommonProofs/MemImage.lean", "Mem.read_two_word_writes_at"),
 )
-DISCOVERY_RETIRED_NAME = "constructorPairStage_storageEffectRun"
-DISCOVERY_RENAMED_NAME = "constructorPairWindow_storageEffectRun"
-DISCOVERY_RENAMED_SOURCE = "Blanc/BeaconDepositConstructorStorageEffects.lean"
-DISCOVERY_CITATION_FILES = (
-    "docs/COMMON_API.md",
-    "scripts/proof-recipes.toml",
-)
-DISCOVERY_GENERATED_FILES = (
-    "docs/PROOF_RECIPES.md",
-    "Blanc/ProofRecipesGenerated.lean",
-)
-
 DECL_KINDS = {
     "abbrev", "axiom", "class", "def", "inductive", "instance", "lemma",
     "opaque", "structure", "theorem",
@@ -207,9 +194,6 @@ class Finding:
 @dataclass(frozen=True)
 class RegistryInfo:
     active_ids: frozenset
-    selector_recipe_id: str
-    selector_status: str
-    selector_owner: str
     discovery_preferred_path: str
 
 
@@ -260,16 +244,6 @@ def load_registry_info(root: pathlib.Path) -> RegistryInfo:
         sys.modules.pop(module_name, None)
 
     active_ids = frozenset(recipe.id for recipe in registry.recipes if recipe.status == "active")
-    selectors = [
-        recipe for recipe in registry.recipes
-        if "local-selector-table" in recipe.anti_patterns
-    ]
-    if len(selectors) != 1:
-        raise GateError(
-            "registry must declare local-selector-table on exactly one recipe; "
-            f"found {len(selectors)}"
-        )
-    selector = selectors[0]
     discovery = [recipe for recipe in registry.recipes if recipe.id == DISCOVERY_RECIPE_ID]
     if len(discovery) != 1:
         raise GateError(
@@ -282,8 +256,7 @@ def load_registry_info(root: pathlib.Path) -> RegistryInfo:
             f"(status {discovery[0].status!r})"
         )
     return RegistryInfo(
-        active_ids, selector.id, selector.status, selector.owner_module,
-        discovery[0].preferred_path,
+        active_ids, discovery[0].preferred_path,
     )
 
 
@@ -304,13 +277,11 @@ def _discovery_declared(text: str, name: str) -> bool:
 
 
 def discovery_regression_check(root: pathlib.Path, registry: RegistryInfo) -> None:
-    """Block the two memory-stage discovery defects from regressing.
+    """Keep the live memory-stage spanning-read route discoverable.
 
-    The ``memory-window-transport`` preferred path must name the spanning-read
-    route, the named route declarations must exist in their owning modules,
-    the retired misleading example name must be gone from the recipe, its
-    citations, and the generated surfaces, and the renamed declaration must
-    be declared in the Lean source and cited in both prose surfaces.
+    The preferred path names both shared routes, and each declaration must
+    exist in its registered owner. Historical exhibit names are not owners
+    of this generic memory obligation.
     """
     for name in DISCOVERY_ROUTE_NAMES:
         if name not in registry.discovery_preferred_path:
@@ -325,30 +296,7 @@ def discovery_regression_check(root: pathlib.Path, registry: RegistryInfo) -> No
                 f"discovery regression: spanning-read route {name!r} is not "
                 f"declared in {rel}"
             )
-    watched = (
-        DISCOVERY_RENAMED_SOURCE, *DISCOVERY_CITATION_FILES,
-        *DISCOVERY_GENERATED_FILES,
-    )
-    for rel in watched:
-        if DISCOVERY_RETIRED_NAME in _discovery_read(root, rel):
-            raise GateError(
-                "discovery regression: retired misleading example name "
-                f"{DISCOVERY_RETIRED_NAME!r} is still present in {rel}"
-            )
-    if not _discovery_declared(
-        _discovery_read(root, DISCOVERY_RENAMED_SOURCE), DISCOVERY_RENAMED_NAME
-    ):
-        raise GateError(
-            "discovery regression: renamed example "
-            f"{DISCOVERY_RENAMED_NAME!r} is not declared in "
-            f"{DISCOVERY_RENAMED_SOURCE}"
-        )
-    for rel in DISCOVERY_CITATION_FILES:
-        if DISCOVERY_RENAMED_NAME not in _discovery_read(root, rel):
-            raise GateError(
-                "discovery regression: renamed example "
-                f"{DISCOVERY_RENAMED_NAME!r} is not cited in {rel}"
-            )
+
 
 
 def mask_comments_and_literals(text: str, source: str) -> str:
@@ -894,12 +842,12 @@ def selector_row_count(raw: str) -> int:
 
 
 def selector_findings(
-    changed: Sequence[ChangedDeclaration], registry: RegistryInfo,
+    changed: Sequence[ChangedDeclaration],
 ) -> List[Finding]:
     findings: List[Finding] = []
     for item in changed:
         declaration = item.declaration
-        if not item.is_new or declaration.file == registry.selector_owner:
+        if not item.is_new:
             continue
         if not re.search(r"\bList\s+B256\b", declaration.raw):
             continue
@@ -913,9 +861,10 @@ def selector_findings(
             line=declaration.start_line,
             detail=(
                 f"new List B256 declaration has {rows} selector/literal rows; "
-                f"canonical owner is {registry.selector_owner}"
+                "review module-local reuse of an existing table or selector facts; "
+                "this does not require a cross-domain canonical owner"
             ),
-            recipe_id=registry.selector_recipe_id,
+            recipe_id=None,
             suppressible=False,
         ))
     return findings
@@ -2022,6 +1971,8 @@ def localSelectors : List B256 := [
   transferFromSelector,
 ]
 
+def shortSelectors : List B256 := [approveSelector, transferSelector]
+
 end Blanc.Fixture
 """
     with tempfile.TemporaryDirectory(prefix="proof-recipe-detectors-") as directory:
@@ -2046,16 +1997,13 @@ end Blanc.Fixture
             "Blanc/Owner.lean:Blanc.Fixture.upstreamLongLemma"
         ):
             raise GateError("self-test: legacy strict-match finding detail changed")
-        registry = RegistryInfo(
-            active_ids=frozenset({active_recipe_id}),
-            selector_recipe_id="selector-separation",
-            selector_status="planned",
-            selector_owner="Blanc/CanonicalSelectors.lean",
-            discovery_preferred_path="",
-        )
-        selectors = selector_findings(changed, registry)
+        selectors = selector_findings(changed)
         if len(selectors) != 1 or selectors[0].declaration != "Blanc.Fixture.localSelectors":
-            raise GateError("self-test: new local selector table was not detected")
+            raise GateError("self-test: three-row selector table or two-row exclusion drifted")
+        if selectors[0].recipe_id is not None or "canonical owner is" in selectors[0].detail:
+            raise GateError("self-test: module-local advice acquired a canonical owner")
+        if selector_findings([ChangedDeclaration(item.declaration, False) for item in changed]):
+            raise GateError("self-test: an existing selector table was reported as new")
 
         exception_path = root / "exceptions.json"
         today = dt.date(2026, 8, 20)
@@ -2857,7 +2805,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     advisor_findings, advisor_notes = copy_advisor_findings(root, changed, index)
     findings = [
         *imported_copy_findings(changed, index),
-        *selector_findings(changed, registry),
+        *selector_findings(changed),
         *advisor_findings,
     ]
     exceptions = validate_exceptions(
