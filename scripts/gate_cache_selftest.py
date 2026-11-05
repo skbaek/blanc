@@ -3294,31 +3294,31 @@ def control_shell_reasks_before_escalating_its_own_hold() -> None:
 
 # --- production wrapper lifetime --------------------------------------------
 
-BEACON_CURRENT_MAINNET_WRAPPER = (
-    Path(__file__).resolve().parent / "check-beacon-deposit-current-mainnet.sh"
+WETH10_DEPLOYMENT_WRAPPER = (
+    Path(__file__).resolve().parent / "check-weth10-deployment.sh"
 )
 
 
-def beacon_current_mainnet_wrapper_source() -> str:
+def weth10_deployment_wrapper_source() -> str:
     """The production wrapper, read through a seam for the biting control."""
 
-    return BEACON_CURRENT_MAINNET_WRAPPER.read_text(encoding="utf-8")
+    return WETH10_DEPLOYMENT_WRAPPER.read_text(encoding="utf-8")
 
 
-def run_beacon_current_mainnet_lifecycle(child_exit: int) -> tuple[int, list[str]]:
+def run_weth10_deployment_lifecycle(child_exit: int) -> tuple[int, list[str]]:
     """Run the production shell path against harmless admission and children.
 
-    The disposable `lake` and isolated-target Python stand-ins never elaborate
-    or inspect a target.  They append their completion to the admission trace,
+    The disposable `lake`, Jaune and EELS-Python stand-ins never elaborate
+    or inspect a target.  The fake lake and checker append to the admission trace,
     so the control can prove that the shell releases only after the final child
     returns while preserving that child's status.
     """
 
-    directory = Path(tempfile.mkdtemp(prefix="beacon-mainnet-lifecycle-"))
-    coordination_directory = Path(tempfile.mkdtemp(prefix="beacon-mainnet-host-"))
+    directory = Path(tempfile.mkdtemp(prefix="weth10-deployment-lifecycle-"))
+    coordination_directory = Path(tempfile.mkdtemp(prefix="weth10-deployment-host-"))
     try:
         coordination = Coordination(coordination_directory)
-        repository = directory / "blanc" / ".worktrees" / "blanc-mainnet-lifecycle-control"
+        repository = directory / "blanc" / ".worktrees" / "blanc-wrapper-lifecycle-control"
         scripts = repository / "scripts"
         scripts.mkdir(parents=True)
         (scripts / "gate-semaphore.sh").write_text(
@@ -3330,10 +3330,10 @@ def run_beacon_current_mainnet_lifecycle(child_exit: int) -> tuple[int, list[str
         observer = scripts / "read-audit"
         observer.mkdir()
         for name in ("launch.sh", "launcher.py", "bootstrap.py", "sitecustomize.py"):
-            shutil.copyfile(BEACON_CURRENT_MAINNET_WRAPPER.parent / "read-audit" / name,
+            shutil.copyfile(WETH10_DEPLOYMENT_WRAPPER.parent / "read-audit" / name,
                             observer / name)
-        wrapper = scripts / "check-beacon-deposit-current-mainnet.sh"
-        wrapper.write_text(beacon_current_mainnet_wrapper_source(), encoding="utf-8")
+        wrapper = scripts / "check-weth10-deployment.sh"
+        wrapper.write_text(weth10_deployment_wrapper_source(), encoding="utf-8")
         wrapper.chmod(0o755)
 
         fake_bin = directory / "bin"
@@ -3346,19 +3346,21 @@ def run_beacon_current_mainnet_lifecycle(child_exit: int) -> tuple[int, list[str
         (fake_bin / "lake").chmod(0o755)
 
         target = directory / "target"
-        target_python = target / ".venv" / "bin" / "python"
+        target_python = target / "venv" / "bin" / "python"
         target_python.parent.mkdir(parents=True)
         child_status = directory / "child-status"
         child_status.write_text(f"{child_exit}\n", encoding="utf-8")
         # The semantic body stays synthetic, but its interpreter must really
         # be Python so inherited observation can acknowledge the bootstrap.
         target_python.symlink_to(sys.executable)
-        (scripts / "gen-beacon-deposit-current-mainnet.py").write_text(
+        jaune = repository / ".lake/packages/jaune/.lake/build/bin/jaune"
+        jaune.parent.mkdir(parents=True)
+        jaune.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
+        jaune.chmod(0o755)  # The wrapper checks executability; the synthetic checker never calls it.
+        (scripts / "check-weth10-deployment.py").write_text(
             "import sys\n"
-            'if "--static-self-check" in sys.argv:\n'
-            "    raise SystemExit(0)\n"
             f'with open({str(coordination.calls)!r}, "a", encoding="utf-8") as stream:\n'
-            '    stream.write("generator-child\\n")\n'
+            '    stream.write("checker-child\\n")\n'
             f'with open({str(child_status)!r}, encoding="utf-8") as stream:\n'
             "    raise SystemExit(int(stream.read()))\n",
             encoding="utf-8",
@@ -3378,7 +3380,7 @@ def run_beacon_current_mainnet_lifecycle(child_exit: int) -> tuple[int, list[str
                 env={
                     **os.environ,
                     "CREME_ROOT": str(creme),
-                    "JAUNE_T8N_TARGET": str(target),
+                    "EELS_ROOT": str(target),
                     "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}",
                 },
             )
@@ -3388,18 +3390,18 @@ def run_beacon_current_mainnet_lifecycle(child_exit: int) -> tuple[int, list[str
         shutil.rmtree(coordination_directory, ignore_errors=True)
 
 
-def control_beacon_current_mainnet_releases_after_its_final_child() -> None:
-    """The production wrapper keeps its EXIT trap past the generator child."""
+def control_weth10_deployment_releases_after_its_final_child() -> None:
+    """The production wrapper keeps its EXIT trap past the checker child."""
 
     for child_exit in (0, 17):
-        status, trace = run_beacon_current_mainnet_lifecycle(child_exit)
-        require(status == child_exit, "the final generator exit status must reach the gate caller")
+        status, trace = run_weth10_deployment_lifecycle(child_exit)
+        require(status == child_exit, "the final checker exit status must reach the gate caller")
         require(
             trace == [
-                "adaptive-acquire blanc-mainnet-lifecycle-control --note Blanc gate: the BeaconDeposit current-mainnet artifacts --memory-gib 4 --contention tolerant",
+                "adaptive-acquire blanc-wrapper-lifecycle-control --note Blanc gate: the WETH10 deployment artifacts --memory-gib 4 --contention tolerant",
                 "lean-child",
-                "generator-child",
-                "release blanc-mainnet-lifecycle-control",
+                "checker-child",
+                "release blanc-wrapper-lifecycle-control",
             ],
             "the real wrapper must release exactly once, after its harmless final child",
         )
@@ -5199,20 +5201,20 @@ def control_negative_shell_short_circuits_its_own_escalation() -> None:
                   "a tolerant process hold bypassed the exclusive re-admission")
 
 
-def control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold() -> None:
+def control_negative_weth10_deployment_exec_leaks_the_gate_hold() -> None:
     """Replacing the final child call with `exec` must fail the lifetime control."""
 
-    committed = beacon_current_mainnet_wrapper_source()
-    final_child = '\ngate_audit_python /usr/bin/env -i "${CHILD_ENV[@]}" "$TARGET_PYTHON" -B -s \\\n'
+    committed = weth10_deployment_wrapper_source()
+    final_child = '\nPYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" "$SCRIPT_DIR/check-weth10-deployment.py" \\\n'
     require(committed.count(final_child) == 1,
-            "the negative control no longer matches the final current-mainnet child")
+            "the negative control no longer matches the final WETH10 deployment child")
     with_exec = committed.replace(
         final_child, final_child.replace("gate_audit_python ", "gate_audit_exec_python ", 1)
     )
-    with patched(sys.modules[__name__], "beacon_current_mainnet_wrapper_source",
+    with patched(sys.modules[__name__], "weth10_deployment_wrapper_source",
                  lambda: with_exec):
         try:
-            control_beacon_current_mainnet_releases_after_its_final_child()
+            control_weth10_deployment_releases_after_its_final_child()
         except ControlFailure as error:
             require(str(error) ==
                     "the real wrapper must release exactly once, after its harmless final child",
@@ -6034,7 +6036,7 @@ NEGATIVE_CONTROLS = (
     control_negative_ignoring_the_declared_coordination_mode,
     control_negative_shell_ignoring_the_declared_coordination_mode,
     control_negative_shell_short_circuits_its_own_escalation,
-    control_negative_beacon_current_mainnet_exec_leaks_the_gate_hold,
+    control_negative_weth10_deployment_exec_leaks_the_gate_hold,
     control_negative_name_only_authority_walk_misses_import_bindings,
     control_negative_trusting_only_built_source_entries,
     control_negative_reading_configuration_from_the_traces,
@@ -6111,7 +6113,7 @@ CONTROLS = (
     control_shell_admission_request_states_the_goal_the_estimate_and_the_wait,
     control_shell_authoritative_admission_refuses_automatic_inheritance,
     control_shell_reasks_before_escalating_its_own_hold,
-    control_beacon_current_mainnet_releases_after_its_final_child,
+    control_weth10_deployment_releases_after_its_final_child,
     control_build_certificate_refuses_every_identity_and_trace_uncertainty,
     control_build_certificate_requires_source_currency,
     control_source_currency_accepts_exactly_current_lake_records,
