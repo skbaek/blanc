@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
-"""Blocking whole-tree, shrink-only checks for registered proof residues."""
+"""Blocking whole-tree, shrink-only checks for registered proof residues.
+
+Ordinary --write-baseline still refuses predicate removal. Explicit retirement
+additionally requires --retire-predicate ID (repeatable), --previous-registry
+PATH and --expected-baseline-sha256 SHA. It verifies the old registry/baseline
+binding, absent old subjects and unchanged surviving patterns/populations before
+using the same shrink-only writer. Retirement cannot admit new predicates.
+"""
 from __future__ import annotations
 
 import argparse
@@ -9,6 +16,7 @@ import io
 import json
 import pathlib
 import re
+import stat
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -20,6 +28,10 @@ SCHEMA = 1
 
 class GateError(RuntimeError):
     pass
+
+
+class NoPredicateFiles(GateError):
+    """Only the exact empty-population refusal, never a filesystem failure."""
 
 
 @dataclass(frozen=True)
@@ -40,11 +52,15 @@ def digest_payload(value: dict) -> str:
 
 
 def load_registry(root: pathlib.Path) -> tuple[list[Predicate], str]:
-    path = root / REGISTRY
+    return load_registry_file(root / REGISTRY)
+
+
+def load_registry_file(path: pathlib.Path) -> tuple[list[Predicate], str]:
     if not path.is_file():
         raise GateError(f"missing registry: {REGISTRY}")
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
+        data = path.read_bytes()
+        raw = json.loads(data.decode("utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as e:
         raise GateError(f"malformed registry: {e}") from e
     if set(raw) != {"schema_version", "predicates"} or raw.get("schema_version") != SCHEMA or not isinstance(raw.get("predicates"), list):
@@ -80,7 +96,7 @@ def load_registry(root: pathlib.Path) -> tuple[list[Predicate], str]:
         out.append(Predicate(ident, vals["description"], vals["owner"], vals["reopen"], vals["boundary"], tuple(includes), vals["pattern"]))
     if not out:
         raise GateError("registry contains no predicates")
-    registry_sha = hashlib.sha256(path.read_bytes()).hexdigest()
+    registry_sha = hashlib.sha256(data).hexdigest()
     return out, registry_sha
 
 
@@ -135,8 +151,106 @@ def files_for(root: pathlib.Path, pred: Predicate) -> list[pathlib.Path]:
             raise GateError(f"predicate {pred.id}: resolved path escapes repository root: {p}")
         files.append(p)
     if not files:
-        raise GateError(f"predicate {pred.id}: include globs matched zero files")
+        raise NoPredicateFiles(f"predicate {pred.id}: include globs matched zero files")
     return files
+
+
+def _migration_file_bytes(path: pathlib.Path, label: str) -> bytes:
+    # Canonicalize the parent (including the platform's temporary directory),
+    # but require the file itself to have its exact, unaliased directory entry.
+    parent = path.parent.resolve(strict=True)
+    if path.name not in {entry.name for entry in parent.iterdir()}:
+        raise GateError(f"retirement {label}: missing exact file entry")
+    path = parent / path.name
+    info = path.lstat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+        raise GateError(f"retirement {label}: file alias or non-regular file")
+    return path.read_bytes()
+
+
+def _migration_source_aliases(root: pathlib.Path) -> None:
+    # Path.glob may skip a dangling link or a linked directory. Such a skip
+    # cannot establish that a retired subject is absent. Do not follow links.
+    if (root / "scripts").is_symlink():
+        raise GateError("retirement scripts directory alias")
+    pending = [root / "Blanc"]
+    while pending:
+        path = pending.pop()
+        info = path.lstat()
+        if stat.S_ISLNK(info.st_mode):
+            raise GateError(f"retirement source alias: {path.relative_to(root)}")
+        if stat.S_ISDIR(info.st_mode):
+            pending.extend(path.iterdir())
+        elif path.suffix == ".lean" and (
+            not stat.S_ISREG(info.st_mode) or info.st_nlink != 1
+        ):
+            raise GateError(f"retirement source alias: {path.relative_to(root)}")
+
+
+def _migration_population(root: pathlib.Path, pred: Predicate) -> set[pathlib.Path]:
+    try:
+        return set(files_for(root, pred))
+    except NoPredicateFiles:
+        return set()
+
+
+def validate_retirement(
+    root: pathlib.Path, predicates: list[Predicate], registry_sha: str,
+    old: dict | None, retired: tuple[str, ...],
+    previous_registry: pathlib.Path | None, expected_baseline_sha256: str | None,
+    admit_new: tuple[str, ...],
+) -> set[str]:
+    """Verify a writer-only, exact absent-subject migration; write nothing."""
+    if not retired or previous_registry is None or expected_baseline_sha256 is None:
+        raise GateError("retirement requires exact IDs, previous registry and baseline SHA-256")
+    if admit_new:
+        raise GateError("retirement cannot be mixed with new predicate admission")
+    if len(retired) != len(set(retired)):
+        raise GateError("retirement refuses duplicate predicate ID")
+    if old is None:
+        raise GateError("retirement requires an existing validated baseline")
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_baseline_sha256):
+        raise GateError("retirement baseline SHA-256 must be 64 lowercase hex digits")
+    try:
+        _migration_source_aliases(root)
+        baseline_bytes = _migration_file_bytes(root / BASELINE, "baseline")
+        if hashlib.sha256(baseline_bytes).hexdigest() != expected_baseline_sha256:
+            raise GateError("retirement baseline SHA-256 mismatch")
+        if json.loads(baseline_bytes) != old:
+            raise GateError("retirement baseline changed during validation")
+        current_bytes = _migration_file_bytes(root / REGISTRY, "current registry")
+        current, current_sha = load_registry(root)
+        if (hashlib.sha256(current_bytes).hexdigest() != registry_sha or
+                current_sha != registry_sha or current != predicates):
+            raise GateError("retirement current registry changed during validation")
+        previous_bytes = _migration_file_bytes(previous_registry, "previous registry")
+        if hashlib.sha256(previous_bytes).hexdigest() != old["registry_sha256"]:
+            raise GateError("retirement previous registry/baseline hash mismatch")
+        previous, previous_sha = load_registry_file(previous_registry)
+        if previous_sha != old["registry_sha256"]:
+            raise GateError("retirement previous registry changed during validation")
+        old_by_id = {pred.id: pred for pred in previous}
+        new_by_id = {pred.id: pred for pred in predicates}
+        if set(old_by_id) != set(old["predicates"]):
+            raise GateError("retirement previous registry/baseline membership mismatch")
+        if set(new_by_id) - set(old_by_id):
+            raise GateError("retirement cannot add new predicates")
+        missing = set(old_by_id) - set(new_by_id)
+        if set(retired) != missing:
+            raise GateError("retirement IDs must exactly equal removed predicates: "
+                            f"expected {sorted(missing)}, got {sorted(set(retired))}")
+        for ident in sorted(missing):
+            if _migration_population(root, old_by_id[ident]):
+                raise GateError(f"retirement subject population still live: {ident}")
+        for ident, pred in new_by_id.items():
+            previous_pred = old_by_id[ident]
+            if pred.pattern != previous_pred.pattern:
+                raise GateError(f"retirement surviving pattern changed: {ident}")
+            if _migration_population(root, previous_pred) != set(files_for(root, pred)):
+                raise GateError(f"retirement surviving population changed: {ident}")
+        return missing
+    except OSError as exc:
+        raise GateError(f"retirement filesystem query failed: {exc}") from exc
 
 
 def inventory(root: pathlib.Path, predicates: list[Predicate]) -> tuple[dict[str, list[str]], int, int]:
@@ -197,17 +311,25 @@ def write_baseline(
     hits: dict[str, list[str]],
     quiet: bool = False,
     admit_new: tuple[str, ...] = (),
+    retire: tuple[str, ...] = (),
+    previous_registry: pathlib.Path | None = None,
+    expected_baseline_sha256: str | None = None,
 ) -> int:
     counts = {p.id: len(hits[p.id]) for p in predicates}
     path = root / BASELINE
     old = load_baseline(root) if path.exists() else None
+    migration = bool(retire or previous_registry is not None or expected_baseline_sha256 is not None)
+    removed = validate_retirement(
+        root, predicates, registry_sha, old, retire, previous_registry,
+        expected_baseline_sha256, admit_new,
+    ) if migration else set()
     if len(admit_new) != len(set(admit_new)):
         raise GateError(f"writer refuses duplicate admission id: {list(admit_new)}")
     admitted = set(admit_new)
     if old:
         old_counts = old["predicates"]
         missing = set(old_counts) - set(counts)
-        if missing: raise GateError(f"writer refuses predicate removal: {sorted(missing)}")
+        if missing - removed: raise GateError(f"writer refuses predicate removal: {sorted(missing)}")
         rises = {k: (old_counts[k], v) for k, v in counts.items() if k in old_counts and v > old_counts[k]}
         if rises: raise GateError(f"writer refuses count rise: {rises}")
         unknown = admitted - set(counts)
@@ -231,6 +353,9 @@ def write_baseline(
             print(f"NOTICE — residue baseline: exact new predicate admission: {observed}")
     elif admitted:
         raise GateError("writer refuses new predicate admission without an existing baseline")
+    if removed and not quiet:
+        print(f"NOTICE — residue retirement: absent-subject predicates {sorted(removed)}; "
+              f"old baseline SHA-256 {expected_baseline_sha256}")
     doc = baseline_document(registry_sha, counts)
     (root / BASELINE).write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
     if not quiet:
@@ -238,7 +363,13 @@ def write_baseline(
     return 0
 
 
-def run(root: pathlib.Path, write: bool = False, admit_new: tuple[str, ...] = ()) -> int:
+def run(
+    root: pathlib.Path, write: bool = False, admit_new: tuple[str, ...] = (),
+    retire: tuple[str, ...] = (), previous_registry: pathlib.Path | None = None,
+    expected_baseline_sha256: str | None = None,
+) -> int:
+    if (retire or previous_registry is not None or expected_baseline_sha256 is not None) and not write:
+        raise GateError("retirement options are illegal without --write-baseline")
     if admit_new and not write:
         raise GateError("--admit-new is illegal without --write-baseline")
     predicates, registry_sha = load_registry(root)
@@ -250,6 +381,8 @@ def run(root: pathlib.Path, write: bool = False, admit_new: tuple[str, ...] = ()
     if write:
         return write_baseline(
             root, predicates, registry_sha, hits, admit_new=admit_new,
+            retire=retire, previous_registry=previous_registry,
+            expected_baseline_sha256=expected_baseline_sha256,
         )
     base = load_baseline(root)
     if base["registry_sha256"] != registry_sha: raise GateError("baseline registry/digest mismatch")
@@ -433,19 +566,183 @@ def self_test() -> int:
             else: raise GateError("self-test escaping symlink passed")
         finally:
             outside.unlink(missing_ok=True)
-    print("OK — proof residue self-test: 20 green/seed/lexical/query/path/digest/writer/admission controls live")
+    retirement_controls = retirement_self_test()
+    print("OK — proof residue self-test: 20 existing green/seed/lexical/query/path/digest/writer/admission "
+          f"and {retirement_controls} retirement controls live")
     return 0
+
+
+def retirement_self_test() -> int:
+    """Small absent-subject fixtures exercise the real writer and no-write refusals."""
+    controls = 0
+    rejected_cases = [
+        ("ordinary-write", "writer refuses predicate removal"),
+        ("ordinary-read", "registry/digest mismatch"),
+        ("wrong-baseline-hash", "baseline SHA-256 mismatch"),
+        ("wrong-registry-hash", "previous registry/baseline hash mismatch"),
+        ("missing-registry", "missing exact file entry"),
+        ("missing-hash", "requires exact IDs"),
+        ("missing-id", "requires exact IDs"),
+        ("incomplete-id-set", "IDs must exactly equal"),
+        ("missing-baseline", "requires an existing validated baseline"),
+        ("extra-id", "IDs must exactly equal"),
+        ("duplicate-id", "duplicate predicate ID"),
+        ("still-live-zero-hit-subject", "subject population still live"),
+        ("survivor-pattern", "surviving pattern changed"),
+        ("survivor-population", "surviving population changed"),
+        ("mixed-new-zero-predicate", "cannot add new predicates"),
+        ("mixed-admission", "cannot be mixed with new predicate admission"),
+        ("survivor-rise", "writer refuses count rise"),
+        ("empty-registry", "registry contains no predicates"),
+        ("malformed-registry", "malformed registry"),
+        ("previous-registry-alias", "file alias or non-regular"),
+        ("dangling-subject-alias", "source alias"),
+        ("source-directory-alias", "source alias"),
+        ("source-hardlink", "source alias"),
+        ("filesystem-error", "filesystem query failed"),
+    ]
+    for label, expected in [("authorized", "")] + rejected_cases:
+        with tempfile.TemporaryDirectory(prefix="residue-retirement-") as directory:
+            root = pathlib.Path(directory)
+            (root / "Blanc").mkdir(); (root / "scripts").mkdir()
+            keep = root / "Blanc" / "Keep.lean"
+            subject = root / "Blanc" / "Retired.lean"
+            keep.write_text("theorem keep : True := by\n  forbidden\n", encoding="utf-8")
+            subject.write_text("theorem old : True := by\n  forbidden\n", encoding="utf-8")
+            def row(ident: str, include: str) -> dict:
+                return {"id": ident, "description": "retirement fixture",
+                        "owner": "self-test", "reopen": "seed", "boundary": "text",
+                        "include": [include], "pattern": r"forbidden\b"}
+            old_rows = [row("live", "Blanc/Keep*.lean"), row("retired", "Blanc/Retired.lean")]
+            if label == "incomplete-id-set":
+                old_rows.append(row("retired-extra", "Blanc/RetiredExtra.lean"))
+                (root / "Blanc" / "RetiredExtra.lean").write_text("forbidden\n", encoding="utf-8")
+            def registry(rows: list[dict]) -> None:
+                (root / REGISTRY).write_text(json.dumps({"schema_version": SCHEMA,
+                                                       "predicates": rows}, indent=2) + "\n",
+                                             encoding="utf-8")
+            registry(old_rows)
+            previous = root / "previous-registry.json"
+            previous.write_bytes((root / REGISTRY).read_bytes())
+            old_preds, old_sha = load_registry(root)
+            old_hits, _, _ = inventory(root, old_preds)
+            write_baseline(root, old_preds, old_sha, old_hits, quiet=True)
+            baseline_before = (root / BASELINE).read_bytes()
+            old_baseline_sha = hashlib.sha256(baseline_before).hexdigest()
+            subject.unlink()
+            if label == "incomplete-id-set":
+                (root / "Blanc" / "RetiredExtra.lean").unlink()
+            live_rows = [dict(old_rows[0])]
+            registry(live_rows)
+            kwargs = {"write": True, "retire": ("retired",),
+                      "previous_registry": previous,
+                      "expected_baseline_sha256": old_baseline_sha}
+            if label == "ordinary-write":
+                kwargs = {"write": True}
+            elif label == "ordinary-read":
+                kwargs = {}
+            elif label == "wrong-baseline-hash":
+                kwargs["expected_baseline_sha256"] = "0" * 64
+            elif label == "wrong-registry-hash":
+                previous.write_bytes(previous.read_bytes() + b"\n")
+            elif label == "missing-registry":
+                previous.unlink()
+            elif label == "missing-hash":
+                kwargs["expected_baseline_sha256"] = None
+            elif label == "missing-id":
+                kwargs["retire"] = ()
+            elif label == "missing-baseline":
+                (root / BASELINE).unlink()
+                baseline_before = None
+            elif label == "extra-id":
+                kwargs["retire"] = ("retired", "unknown")
+            elif label == "duplicate-id":
+                kwargs["retire"] = ("retired", "retired")
+            elif label == "still-live-zero-hit-subject":
+                subject.write_text("theorem old : True := by\n  trivial\n", encoding="utf-8")
+            elif label == "survivor-pattern":
+                live_rows[0]["pattern"] = r"never_matches\b"; registry(live_rows)
+            elif label == "survivor-population":
+                (root / "Blanc" / "KeepExtra.lean").write_text("-- no hit\n", encoding="utf-8")
+                live_rows[0]["include"] = ["Blanc/Keep.lean"]; registry(live_rows)
+            elif label == "mixed-new-zero-predicate":
+                new = row("new-zero", "Blanc/Keep.lean"); new["pattern"] = r"never_matches\b"
+                registry(live_rows + [new])
+            elif label == "mixed-admission":
+                kwargs["admit_new"] = ("new",)
+            elif label == "survivor-rise":
+                keep.write_text("forbidden forbidden\n", encoding="utf-8")
+            elif label == "empty-registry":
+                registry([])
+            elif label == "malformed-registry":
+                (root / REGISTRY).write_text("{bad", encoding="utf-8")
+            elif label == "previous-registry-alias":
+                alias = root / "previous-alias.json"; alias.symlink_to(previous)
+                kwargs["previous_registry"] = alias
+            elif label == "dangling-subject-alias":
+                subject.symlink_to(root / "absent.lean")
+            elif label == "source-directory-alias":
+                actual = root / "actual-source"; (root / "Blanc").rename(actual)
+                (root / "Blanc").symlink_to(actual, target_is_directory=True)
+            elif label == "source-hardlink":
+                (root / "Blanc" / "KeepAlias.lean").hardlink_to(keep)
+            original_files_for = files_for
+            if label == "filesystem-error":
+                def query_error(query_root: pathlib.Path, pred: Predicate) -> list[pathlib.Path]:
+                    if pred.id == "retired":
+                        raise OSError("retired population fixture query error")
+                    return original_files_for(query_root, pred)
+                globals()["files_for"] = query_error
+            try:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    run(root, **kwargs)
+            except GateError as exc:
+                if label == "authorized" or expected not in str(exc):
+                    raise GateError(f"retirement self-test {label}: wrong refusal: {exc}") from exc
+                if ((baseline_before is None and (root / BASELINE).exists()) or
+                        (baseline_before is not None and (root / BASELINE).read_bytes() != baseline_before)):
+                    raise GateError(f"retirement self-test {label}: rejected request wrote baseline")
+                print(f"CONTROL — residue retirement {label}: {exc}; baseline unchanged")
+            else:
+                if label != "authorized":
+                    raise GateError(f"retirement self-test {label}: invalid retirement passed")
+                after = load_baseline(root)
+                _, current_sha = load_registry(root)
+                if (after["predicates"] != {"live": 1} or after["total"] != 1 or
+                        after["registry_sha256"] != current_sha or
+                        (root / BASELINE).read_text(encoding="utf-8") !=
+                        json.dumps(baseline_document(current_sha, {"live": 1}), indent=2) + "\n"):
+                    raise GateError("retirement self-test authorized: registered output differs")
+                with contextlib.redirect_stdout(io.StringIO()):
+                    run(root)
+                print("CONTROL — residue retirement authorized: exact registered output and ordinary check green")
+            finally:
+                globals()["files_for"] = original_files_for
+            controls += 1
+    return controls
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(); ap.add_argument("--root", type=pathlib.Path, default=pathlib.Path(__file__).resolve().parent.parent); ap.add_argument("--write-baseline", action="store_true"); ap.add_argument("--admit-new", action="append", default=[], metavar="ID"); ap.add_argument("--self-test", action="store_true")
+    ap.add_argument("--retire-predicate", action="append", default=[], metavar="ID",
+                    help="writer-only exact removed predicate ID; repeat for every retirement")
+    ap.add_argument("--previous-registry", type=pathlib.Path, metavar="PATH",
+                    help="writer-only previous registry bound by the validated old baseline")
+    ap.add_argument("--expected-baseline-sha256", metavar="SHA",
+                    help="writer-only SHA-256 of the exact old baseline bytes")
     args = ap.parse_args()
     try:
+        retirement = bool(args.retire_predicate or args.previous_registry is not None or
+                          args.expected_baseline_sha256 is not None)
+        if retirement and (not args.write_baseline or args.self_test):
+            raise GateError("retirement options require --write-baseline without --self-test")
         if args.admit_new and not args.write_baseline:
             raise GateError("--admit-new is illegal without --write-baseline")
         if args.self_test: return self_test()
         root = args.root.resolve()
-        return run(root, args.write_baseline, tuple(args.admit_new))
+        return run(root, args.write_baseline, tuple(args.admit_new),
+                   tuple(args.retire_predicate), args.previous_registry,
+                   args.expected_baseline_sha256)
     except GateError as e:
         print(f"REGRESSION — proof residue: {e}")
         return 1
