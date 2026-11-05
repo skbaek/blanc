@@ -1,3 +1,4 @@
+import Blanc.Lift.AccumulatedWalk
 import Blanc.Composition.UniswapV2PairUsdcWeth9SwapLiveFacts
 import Blanc.Composition.UniswapV2PairUsdcWeth9JointF
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckpointF
@@ -385,7 +386,7 @@ theorem pair_usdc_weth9_history_swap_live_finite {pair usdc weth : Adr} {cfg : C
     obtain ⟨y1, h1⟩ := swapFrontCutWorld_withGasLeft sevm pre (usdcLeg0Skel sevm pre finish)
       (leg1Skel sevm pre finish (usdcLeg0Skel sevm pre finish)) dC x1
     refine ⟨y0, ?_⟩
-    rw [skel0, h0, skel1, h1, withGasLeft_withGasLeft]
+    rw [skel0, h0, skel1, h1, Blanc.Lift.AccumulatedWalk.withGasLeft_withGasLeft]
   have hM : swapFrontCutMem sevm d0 d1 dC = swapFrontCutMem sevm (usdcLeg0Skel sevm pre finish)
       (leg1Skel sevm pre finish (usdcLeg0Skel sevm pre finish)) dC := by
     rw [skel0, skel1, swapFrontCutMem_withGasLeft0, swapFrontCutMem_withGasLeft]
