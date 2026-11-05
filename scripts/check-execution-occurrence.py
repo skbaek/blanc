@@ -929,7 +929,7 @@ def main(argv: list[str]) -> int:
         command_controls: list[tuple[pathlib.Path, str]] = []
         wrapped_alias_path = temp_root / "DonorWrappedAlias.lean"
         wrapped_alias_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc.Weth10\n"
             "set_option linter.unusedVariables false in\n"
             f"alias occurrenceWrappedLegacy := {first_fqn}\n"
@@ -945,7 +945,7 @@ def main(argv: list[str]) -> int:
 
         alias_path = temp_root / "DonorAlias.lean"
         alias_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc.Weth10\n"
             "@[deprecated] public alias occurrenceLegacy :=\n"
             f"  {first_fqn}\n"
@@ -961,7 +961,7 @@ def main(argv: list[str]) -> int:
 
         relative_alias_path = temp_root / "DonorRelativeAlias.lean"
         relative_alias_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc\n"
             "namespace Weth10\n"
             "alias occurrenceRelativeLegacy :=\n"
@@ -982,7 +982,7 @@ def main(argv: list[str]) -> int:
 
         root_alias_path = temp_root / "DonorRootAlias.lean"
         root_alias_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc.Weth10\n"
             "alias occurrenceRootLegacy :=\n"
             f"  _root_.{first_fqn}\n"
@@ -998,7 +998,7 @@ def main(argv: list[str]) -> int:
 
         export_path = temp_root / "DonorExport.lean"
         export_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc.Weth10\n"
             f"export {export_namespace} ({export_item})\n"
             "end Blanc.Weth10\n",
@@ -1013,7 +1013,7 @@ def main(argv: list[str]) -> int:
 
         relative_export_path = temp_root / "DonorRelativeExport.lean"
         relative_export_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             f"namespace {ancestor}\n"
             "namespace Weth10\n"
             f"export {relative_owner} ({export_item})\n"
@@ -1033,7 +1033,7 @@ def main(argv: list[str]) -> int:
 
         root_export_path = temp_root / "DonorRootExport.lean"
         root_export_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc\n"
             "namespace Weth10\n"
             f"export _root_.{export_namespace} ({export_item})\n"
@@ -1065,7 +1065,7 @@ def main(argv: list[str]) -> int:
 
         lido_alias_path = temp_root / "LidoAlias.lean"
         lido_alias_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc.LidoCircuitBreaker\n"
             f"alias occurrenceLidoLegacy := {first_fqn}\n"
             "end Blanc.LidoCircuitBreaker\n",
@@ -1116,7 +1116,7 @@ def main(argv: list[str]) -> int:
 
         canonical_alias_path = temp_root / "CanonicalDirectCodeAlias.lean"
         canonical_alias_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc.Weth10.Xinst\n"
             "alias step_spawn_codeAddress_eq_currentTarget :=\n"
             f"  {CANONICAL_DIRECT_CODE}\n"
@@ -1132,7 +1132,7 @@ def main(argv: list[str]) -> int:
 
         retired_alias_path = temp_root / "RetiredDirectCodeAlias.lean"
         retired_alias_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc.Weth10\n"
             f"alias xinst_spawn_direct := {CANONICAL_DIRECT_CODE}\n"
             "end Blanc.Weth10\n",
@@ -1147,7 +1147,7 @@ def main(argv: list[str]) -> int:
 
         canonical_export_path = temp_root / "CanonicalDirectCodeExport.lean"
         canonical_export_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc.Weth10\n"
             "export Blanc.Xinst (step_spawn_codeAddress_eq_currentTarget)\n"
             "end Blanc.Weth10\n",
@@ -1162,7 +1162,7 @@ def main(argv: list[str]) -> int:
 
         renamed_copy_path = temp_root / "RenamedDirectCodeCopy.lean"
         renamed_copy_path.write_text(
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             "namespace Blanc.LidoCircuitBreaker\n"
             "open Jaune Blanc\n"
             "@[simp] theorem unrelatedSpawnInvariant\n"
@@ -1219,7 +1219,7 @@ def main(argv: list[str]) -> int:
 
         extra_consumer_path = temp_root / "UnexpectedLidoConsumer.lean"
         extra_consumer_source = (
-            "import Blanc.CommonProofs\n"
+            "import Blanc.CommonProofs.Messages\n"
             f"#check {CANONICAL_DIRECT_CODE}\n"
         )
         extra_consumer_path.write_text(extra_consumer_source, encoding="utf-8")
