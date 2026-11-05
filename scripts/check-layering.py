@@ -21,8 +21,11 @@ Seven checks, all falsifiable, all exercised by negative controls:
      an upstream layer below a contract -- the same break, other direction.
   4. The composition stratum is strictly downstream. A `Blanc/Composition/*`
      module is the one place a theorem may name two or more contract families
-     at once, so it may import shared modules and any number of contracts. The
-     relation is one-way: no shared module and no contract module may import
+     at once. Each COMPOSITION entry declares its contract families: it may
+     import shared modules, those families, and compositions whose declared
+     families are a subset of its own. Declarations fail closed on malformed,
+     empty, duplicate or unknown families; total classification rejects a
+     missing entry. The relation is one-way: no shared module and no contract module may import
      composition, and composition may not import a root. Roots aggregate
      composition, never the reverse.
 
@@ -2000,296 +2003,326 @@ CONTRACTS["vyper-nonreentrant-deployed"].extend([
     "Lift.VyperNonreentrantDeployed.Token20.RunTransferFrom",
 ])
 
-# The composition stratum: `Blanc/Composition/*.lean`, spelled here exactly as
-# `import Blanc.Composition.X` writes them. This is the only category permitted
-# to name more than one contract family, and adding a module here is the moment
-# check 4 starts binding it. Nothing may import back into this list.
-COMPOSITION = [
-    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway",
-    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl",
-    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing",
-    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayRun",
-    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun",
-    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControl",
-    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun",
-    "Composition.ProrataWethVaultBoundary",
-    "Composition.WithdrawalRequestFeeCounterexample",
-    "Composition.WithdrawalRequestFeeRefutation",
-    "Composition.WithdrawalRequestFeeHeadline",
-    "Composition.WithdrawalRequestDrainControl",
-    "Composition.ProrataWethVaultEffects",
-    "Composition.ProrataWethVaultStaging",
-    "Composition.ProrataWethVaultViews",
-    "Composition.ProrataWethVaultConversions",
-    "Composition.ProrataWethVaultCapacities",
-    "Composition.ProrataWethVaultInbound",
-    "Composition.ProrataWethVaultOutbound",
-    "Composition.ProrataWethVaultNonrevert",
-    "Composition.ProrataWethVaultTerminals",
-    "Composition.ProrataWethVaultRevertSteps",
-    "Composition.ProrataWethVaultNonrevertViews",
-    "Composition.ProrataWethVaultNonrevertInbound",
-    "Composition.ProrataWethVaultNonrevertOutbound",
-    "Composition.ProrataWethVaultBacking",
-    "Composition.ProrataWethVaultAccounting",
-    "Composition.ProrataWethVaultCoalition",
-    "Composition.ProrataWethVaultMessage",
-    "Composition.ProrataWethVaultPair",
-    "Composition.ProrataWethVaultRely",
-    "Composition.ProrataWethVaultEnvironment",
-    "Composition.ProrataWethVaultHistory",
-    "Composition.ProrataWethVaultPairWethSegment",
-    "Composition.ProrataWethVaultPairVaultSegment",
-    "Composition.ProrataWethVaultWithdrawPayout",
-    "Composition.ProrataWethVaultPairReplay",
-    "Composition.ProrataWethVaultPairLadder",
-    "Composition.ProrataWethVaultPairHistory",
-    "Composition.ProrataWethVaultAccountingHistory",
-    "Composition.ProrataWethVaultCoalitionHistory",
-    "Composition.ProrataWethVaultCoalitionInhabitant",
-    "Composition.ProrataWethVaultLedgerVisits",
-    "Composition.ProrataWethVaultWithdrawLocator",
-    "Composition.ProrataWethVaultLedgerFaithful",
-    "Composition.Weth9WethGas",
-    "Composition.Curve3Pool3CrvCheckpoint",
-    "Composition.Curve3CrvTokenCore",
-    "Composition.Curve3CrvPositional",
-    "Composition.Curve3PoolSupplyFrames",
-    "Composition.Curve3PoolSupplyCalls",
-    "Composition.Curve3PoolSupplyStep",
-    "Composition.Curve3PoolSupply",
-    "Composition.Curve3Pool3CrvU3",
-    "Composition.Curve3PoolCalleeLive",
-    "Composition.Curve3PoolCalleeExactProfiles",
-    "Composition.Curve3Pool3CrvHeadlines",
-    "Composition.Curve3Pool3CrvWorld",
-    "Composition.Curve3Pool3CrvTxData",
-    "Composition.Curve3Pool3CrvSigningEncoding",
-    "Composition.Curve3Pool3CrvSigningHash",
-    "Composition.Curve3Pool3CrvSigningRecover",
-    "Composition.Curve3Pool3CrvBlock",
-    "Composition.Curve3Pool3CrvCoinCalls",
-    "Composition.Curve3Pool3CrvExRoot",
-    "Composition.Curve3Pool3CrvTxFrame",
-    "Composition.Curve3Pool3CrvTraceEnv",
-    "Composition.Curve3Pool3CrvCapstoneModel",
-    "Composition.Curve3Pool3CrvWorldAgrees",
-    "Composition.Curve3Pool3CrvCoinExactTransport",
-    "Composition.Curve3Pool3CrvCoinExact",
-    "Composition.Curve3Pool3CrvCoinAnswers",
-    "Composition.Curve3Pool3CrvCapstoneFrame",
-    "Composition.Curve3Pool3CrvCapstoneTx",
-    "Composition.Curve3Pool3CrvCapstone",
-    "Composition.Curve3Pool3CrvLiveWitness",
-    "Composition.Curve3Pool3CrvExactAssembly",
-    "Composition.Curve3Pool3CrvHeadlinesExact",
-    "Composition.Curve3Pool3CrvExactWitness",
-    "Composition.Curve3Pool3CrvExactLiteralWitness",
-    "Composition.Curve3Pool3CrvExactLiteralHeadlines",
-    "Composition.Curve3Pool3CrvLiveConcrete",
-    "Composition.Curve3Pool3CrvLiveEndEntry",
-    "Composition.Curve3Pool3CrvLiveEndRL",
-    "Composition.Curve3Pool3CrvLiveEndOC",
-    "Composition.Curve3Pool3CrvLiveEndKeep",
-    "Composition.Curve3Pool3CrvLiveEndRLI",
-    "Composition.Curve3Pool3CrvLiveEndAL",
-    "Composition.Curve3Pool3CrvLiveEndKeepAL",
-    "Composition.Curve3Pool3CrvLiveEndKeepRLI",
+# Explicit semantic ownership, not the union of existing imports. Abstract token
+# interfaces do not add WETH9/USDC to PairToken/PairTwoToken; concrete instances
+# do. Single-family token adapters and Curve replay adapters stay narrow. The
+# Pair/USDC provenance bridges genuinely compose those two families; their
+# current imports must not widen them to the WETH9 exhibit. Named exhibit kits
+# retain their exhibit ownership until moved to a neutral shared owner.
+# Each entry is a nonempty tuple of distinct CONTRACTS keys. Adding a composition
+# declares its boundary here; no default family or production exception exists.
+COMPOSITION = {
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGateway": ('lido-circuit-breaker', 'lido-twg'),
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControl": ('lido-circuit-breaker', 'lido-twg'),
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayCrossing": ('lido-circuit-breaker', 'lido-twg'),
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayRun": ('lido-circuit-breaker', 'lido-twg'),
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewayControlRun": ('lido-circuit-breaker', 'lido-twg'),
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControl": ('lido-circuit-breaker', 'lido-twg'),
+    "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun": ('lido-circuit-breaker', 'lido-twg'),
+    "Composition.ProrataWethVaultBoundary": ('prorata-weth-vault', 'weth'),
+    "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),
+    "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request',),
+    "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request',),
+    "Composition.WithdrawalRequestDrainControl": ('withdrawal-request',),
+    "Composition.ProrataWethVaultEffects": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultStaging": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultViews": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultConversions": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultCapacities": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultInbound": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultOutbound": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultNonrevert": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultTerminals": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultRevertSteps": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultNonrevertViews": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultNonrevertInbound": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultNonrevertOutbound": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultBacking": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultAccounting": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultCoalition": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultMessage": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultPair": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultRely": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultEnvironment": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultHistory": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultPairWethSegment": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultPairVaultSegment": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultWithdrawPayout": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultPairReplay": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultPairLadder": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultPairHistory": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultAccountingHistory": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultCoalitionHistory": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultCoalitionInhabitant": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultLedgerVisits": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultWithdrawLocator": ('prorata-weth-vault', 'weth'),
+    "Composition.ProrataWethVaultLedgerFaithful": ('prorata-weth-vault', 'weth'),
+    "Composition.Weth9WethGas": ('weth9', 'weth'),
+    "Composition.Curve3Pool3CrvCheckpoint": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3CrvTokenCore": ('curve-3crv',),
+    "Composition.Curve3CrvPositional": ('curve-3crv',),
+    "Composition.Curve3PoolSupplyFrames": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3PoolSupplyCalls": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3PoolSupplyStep": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3PoolSupply": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvU3": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3PoolCalleeLive": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3PoolCalleeExactProfiles": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvHeadlines": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvWorld": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvTxData": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvSigningEncoding": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvSigningHash": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvSigningRecover": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvBlock": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvCoinCalls": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvExRoot": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvTxFrame": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvTraceEnv": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvCapstoneModel": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvWorldAgrees": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvCoinExactTransport": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvCoinExact": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvCoinAnswers": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvCapstoneFrame": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvCapstoneTx": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvCapstone": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveWitness": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvExactAssembly": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvHeadlinesExact": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvExactWitness": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvExactLiteralWitness": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvExactLiteralHeadlines": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveConcrete": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveEndEntry": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveEndRL": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveEndOC": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveEndKeep": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveEndRLI": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveEndAL": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveEndKeepAL": ('curve-3pool', 'curve-3crv'),
+    "Composition.Curve3Pool3CrvLiveEndKeepRLI": ('curve-3pool', 'curve-3crv'),
     # uniswap-weth9-composition-v1: the Pair x WETH9 instance and the generic token joint.
-    "Composition.PairTokenCallers",
-    "Composition.PairTokenJointAt",
-    "Composition.PairTokenStepFrames",
-    "Composition.PairTokenStepOracle",
-    "Composition.UniswapV2PairWeth9Block",
-    "Composition.UniswapV2PairWeth9BlockBody",
-    "Composition.UniswapV2PairWeth9BlockData",
-    "Composition.UniswapV2PairWeth9CheckJoint",
-    "Composition.UniswapV2PairWeth9Checkpoint",
-    "Composition.UniswapV2PairWeth9CheckpointCore",
-    "Composition.UniswapV2PairWeth9Deploy",
-    "Composition.UniswapV2PairWeth9SigningData",
-    "Composition.UniswapV2PairWeth9SigningTx1Encoding",
-    "Composition.UniswapV2PairWeth9SigningTx1Hash",
-    "Composition.UniswapV2PairWeth9SigningTx1Recover",
-    "Composition.UniswapV2PairWeth9SigningTx2Encoding",
-    "Composition.UniswapV2PairWeth9SigningTx2Hash",
-    "Composition.UniswapV2PairWeth9SigningTx2Recover",
-    "Composition.UniswapV2PairWeth9Tx1",
-    "Composition.UniswapV2PairWeth9Tx1Effects",
-    "Composition.UniswapV2PairWeth9Tx1Frame",
-    "Composition.UniswapV2PairWeth9Tx2Data",
-    "Composition.UniswapV2PairWeth9W0",
-    "Composition.Weth9Token",
-    "Composition.Weth9TokenCore",
-    "Composition.Weth9TokenFrames",
-    "Composition.Weth9TokenFramesExec",
-    "Composition.Weth9TokenFramesNode",
-    "Composition.Weth9TokenOutputsTransfer",
-    "Composition.Weth9TokenOutputsWalk",
+    "Composition.PairTokenCallers": ('uniswap-v2-pair',),
+    "Composition.PairTokenJointAt": ('uniswap-v2-pair',),
+    "Composition.PairTokenStepFrames": ('uniswap-v2-pair',),
+    "Composition.PairTokenStepOracle": ('uniswap-v2-pair',),
+    "Composition.UniswapV2PairWeth9Block": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9BlockBody": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9BlockData": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CheckJoint": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Checkpoint": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CheckpointCore": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Deploy": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SigningData": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SigningTx1Encoding": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SigningTx1Hash": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SigningTx1Recover": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SigningTx2Encoding": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SigningTx2Hash": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SigningTx2Recover": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx1": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx1Effects": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx1Frame": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx2Data": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9W0": ('uniswap-v2-pair', 'weth9'),
+    "Composition.Weth9Token": ('weth9',),
+    "Composition.Weth9TokenCore": ('weth9',),
+    "Composition.Weth9TokenFrames": ('weth9',),
+    "Composition.Weth9TokenFramesExec": ('weth9',),
+    "Composition.Weth9TokenFramesNode": ('weth9',),
+    "Composition.Weth9TokenOutputsTransfer": ('weth9',),
+    "Composition.Weth9TokenOutputsWalk": ('weth9',),
     # uniswap-weth9-composition-v1, final integration: C3 joint, C4 share-value and liveness rows,
     # the factory-quiet bridge, the closed block's transactions and the C6 capstone.
-    "Composition.PairTokenJoint",
-    "Composition.PairTokenJointControl",
-    "Composition.PairTokenJointWalk",
-    "Composition.PairTokenShareValue",
-    "Composition.PairTokenStepGhost",
-    "Composition.PairTokenStepGhostStart",
-    "Composition.PairTokenStepModel",
-    "Composition.UniswapV2FactoryQuiet",
-    "Composition.UniswapV2PairWeth9BurnEnv",
-    "Composition.UniswapV2PairWeth9BurnEnvOne",
-    "Composition.UniswapV2PairWeth9BurnLive",
-    "Composition.UniswapV2PairWeth9BurnLiveOne",
-    "Composition.UniswapV2PairWeth9BurnWorld",
-    "Composition.UniswapV2PairWeth9BurnWorldOne",
-    "Composition.UniswapV2PairWeth9Capstone",
-    "Composition.UniswapV2PairWeth9CapstoneFeeTo",
-    "Composition.UniswapV2PairWeth9CapstoneFeeToHash",
-    "Composition.UniswapV2PairWeth9CapstoneKeySlots",
-    "Composition.UniswapV2PairWeth9CapstoneKeys",
-    "Composition.UniswapV2PairWeth9CapstoneRaw",
-    "Composition.UniswapV2PairWeth9CapstoneShare",
-    "Composition.UniswapV2PairWeth9CapstoneSwapRaw",
-    "Composition.UniswapV2PairWeth9CapstoneTrace",
-    "Composition.UniswapV2PairWeth9CapstoneTx2Raw",
-    "Composition.UniswapV2PairWeth9CapstoneUniversal",
-    "Composition.UniswapV2PairWeth9CapstoneW0Slots",
-    "Composition.UniswapV2PairWeth9CapstoneWorld",
-    "Composition.UniswapV2PairWeth9Joint",
-    "Composition.UniswapV2PairWeth9LegsBurn",
-    "Composition.UniswapV2PairWeth9LegsBurn1",
-    "Composition.UniswapV2PairWeth9LegsBurnFinal",
-    "Composition.UniswapV2PairWeth9LegsBurnRead",
-    "Composition.UniswapV2PairWeth9LegsMint",
-    "Composition.UniswapV2PairWeth9LegsSkim",
-    "Composition.UniswapV2PairWeth9LegsSkim1",
-    "Composition.UniswapV2PairWeth9LegsSkimRead1",
-    "Composition.UniswapV2PairWeth9LegsSwap0",
-    "Composition.UniswapV2PairWeth9LegsSwap0Read",
-    "Composition.UniswapV2PairWeth9LegsSync",
-    "Composition.UniswapV2PairWeth9LiveHistory",
-    "Composition.UniswapV2PairWeth9LiveWorld",
-    "Composition.UniswapV2PairWeth9MintLive",
-    "Composition.UniswapV2PairWeth9ShareValue",
-    "Composition.UniswapV2PairWeth9SkimEnvOne",
-    "Composition.UniswapV2PairWeth9SkimLive",
-    "Composition.UniswapV2PairWeth9SkimLiveOne",
-    "Composition.UniswapV2PairWeth9SwapLegs",
-    "Composition.UniswapV2PairWeth9SwapLegsBoth",
-    "Composition.UniswapV2PairWeth9SwapLegsCall",
-    "Composition.UniswapV2PairWeth9SwapLegsRead",
-    "Composition.UniswapV2PairWeth9SwapLegsRun",
-    "Composition.UniswapV2PairWeth9SwapLive",
-    "Composition.UniswapV2PairWeth9SwapLiveBothFacts",
-    "Composition.UniswapV2PairWeth9SwapLiveFacts",
-    "Composition.UniswapV2PairWeth9SwapLiveZero",
-    "Composition.UniswapV2PairWeth9SyncLive",
-    "Composition.UniswapV2PairWeth9Tx2",
-    "Composition.UniswapV2PairWeth9Tx2Back",
-    "Composition.UniswapV2PairWeth9Tx2Frame",
-    "Composition.UniswapV2PairWeth9Tx2Leg",
-    "Composition.UniswapV2PairWeth9Tx2Post",
-    "Composition.UniswapV2PairWeth9Tx2Run",
-    "Composition.UniswapV2PairWeth9Tx2View",
-    "Composition.UniswapV2PairWeth9Tx2XRead",
-    "Composition.UniswapV2PairWeth9XLegCall",
-    "Composition.UniswapV2PairWeth9XLegFactory",
-    "Composition.UniswapV2PairWeth9XLegLocked",
-    "Composition.UniswapV2PairWeth9XLegStatic",
-    "Composition.UniswapV2PairWeth9XLegWeth",
+    "Composition.PairTokenJoint": ('uniswap-v2-pair',),
+    "Composition.PairTokenJointControl": ('uniswap-v2-pair', 'weth9'),
+    "Composition.PairTokenJointWalk": ('uniswap-v2-pair',),
+    "Composition.PairTokenShareValue": ('uniswap-v2-pair',),
+    "Composition.PairTokenStepGhost": ('uniswap-v2-pair',),
+    "Composition.PairTokenStepGhostStart": ('uniswap-v2-pair',),
+    "Composition.PairTokenStepModel": ('uniswap-v2-pair',),
+    "Composition.UniswapV2FactoryQuiet": ('uniswap-v2-pair',),
+    "Composition.UniswapV2PairWeth9BurnEnv": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9BurnEnvOne": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9BurnLive": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9BurnLiveOne": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9BurnWorld": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9BurnWorldOne": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Capstone": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneFeeTo": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneFeeToHash": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneKeySlots": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneKeys": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneRaw": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneShare": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneSwapRaw": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneTrace": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneTx2Raw": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneUniversal": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneW0Slots": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9CapstoneWorld": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Joint": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsBurn": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsBurn1": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsBurnFinal": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsBurnRead": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsMint": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsSkim": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsSkim1": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsSkimRead1": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsSwap0": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsSwap0Read": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LegsSync": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LiveHistory": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9LiveWorld": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9MintLive": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9ShareValue": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SkimEnvOne": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SkimLive": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SkimLiveOne": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SwapLegs": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SwapLegsBoth": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SwapLegsCall": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SwapLegsRead": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SwapLegsRun": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SwapLive": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SwapLiveBothFacts": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SwapLiveFacts": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SwapLiveZero": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9SyncLive": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx2": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx2Back": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx2Frame": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx2Leg": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx2Post": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx2Run": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx2View": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9Tx2XRead": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9XLegCall": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9XLegFactory": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9XLegLocked": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9XLegStatic": ('uniswap-v2-pair', 'weth9'),
+    "Composition.UniswapV2PairWeth9XLegWeth": ('uniswap-v2-pair', 'weth9'),
     # usdc-weth9-pair-composition-v1: the two-token Pair, the USDC token core and liveness, the
     # signed-token bridges, the USDC x WETH9 joint, share-value rows, legs, checker and deployment.
-    "Composition.PairTwoToken",
-    "Composition.PairTwoTokenCallShare",
-    "Composition.PairTwoTokenShareValue",
-    "Composition.UniswapV2PairUsdcWeth9CheckJoint",
-    "Composition.UniswapV2PairUsdcWeth9Checkpoint",
-    "Composition.UniswapV2PairUsdcWeth9Deploy",
-    "Composition.UniswapV2PairUsdcWeth9Joint",
-    "Composition.UniswapV2PairUsdcWeth9LegsBal",
-    "Composition.UniswapV2PairUsdcWeth9LegsBalFrame",
-    "Composition.UniswapV2PairUsdcWeth9LegsBalLive",
-    "Composition.UniswapV2PairUsdcWeth9LegsCall",
-    "Composition.UniswapV2PairUsdcWeth9LegsFacts",
-    "Composition.UniswapV2PairUsdcWeth9LegsFrame",
-    "Composition.UniswapV2PairUsdcWeth9LegsImpl",
-    "Composition.UniswapV2PairUsdcWeth9LegsKit",
-    "Composition.UniswapV2PairUsdcWeth9LegsProxy",
-    "Composition.UniswapV2PairUsdcWeth9LegsRead",
-    "Composition.UniswapV2PairUsdcWeth9LegsSwap0",
-    "Composition.UniswapV2PairUsdcWeth9LegsXfer",
-    "Composition.UniswapV2PairUsdcWeth9ShareValue",
-    "Composition.UsdcToken",
-    "Composition.UsdcTokenCore",
-    "Composition.UsdcTokenLive",
-    "Composition.UsdcNeverSigner",
-    "Composition.Weth9TokenSigned",
-    "Composition.UniswapV2PairUsdcWeth9BurnEnv",
-    "Composition.UniswapV2PairUsdcWeth9BurnLive",
-    "Composition.UniswapV2PairUsdcWeth9LegsBurn",
-    "Composition.UniswapV2PairUsdcWeth9LegsMint",
-    "Composition.UniswapV2PairUsdcWeth9LegsSkim",
-    "Composition.UniswapV2PairUsdcWeth9LegsSync",
-    "Composition.UniswapV2PairUsdcWeth9LegsXferKeep",
-    "Composition.UniswapV2PairUsdcWeth9MintLive",
-    "Composition.UniswapV2PairUsdcWeth9SkimEnv",
-    "Composition.UniswapV2PairUsdcWeth9SkimLive",
-    "Composition.UniswapV2PairUsdcWeth9SwapLive",
-    "Composition.UniswapV2PairUsdcWeth9SwapLiveFacts",
-    "Composition.UniswapV2PairUsdcWeth9SyncLive",
-    "Composition.UniswapV2PairUsdcWeth9BurnLiveF",
-    "Composition.UniswapV2PairUsdcWeth9CheckJointF",
-    "Composition.UniswapV2PairUsdcWeth9CheckpointF",
-    "Composition.UniswapV2PairUsdcWeth9P1",
-    "Composition.UniswapV2PairUsdcOriginSeed",
-    "Composition.UniswapV2PairUsdcCallersIn",
-    "Composition.UniswapV2PairUsdcOwnersIn",
-    "Composition.UniswapV2PairUsdcWeth9JointF",
-    "Composition.UniswapV2PairUsdcWeth9MintLiveF",
-    "Composition.UniswapV2PairUsdcWeth9ShareValueF",
-    "Composition.UniswapV2PairUsdcWeth9SkimLiveF",
-    "Composition.UniswapV2PairUsdcWeth9SwapLiveF",
-    "Composition.UniswapV2PairUsdcWeth9SyncLiveF",
-    "Composition.UsdcTokenF",
-    "Composition.LiveUsdcWeth9B26213219AllowanceHistory",
-    "Composition.LiveUsdcWeth9B26213219AllowanceReplay",
-    "Composition.LiveUsdcWeth9B26213219Anchor",
-    "Composition.LiveUsdcWeth9B26213219ApprovalObservation",
-    "Composition.LiveUsdcWeth9B26213219Burn",
-    "Composition.LiveUsdcWeth9B26213219CDObservation",
-    "Composition.LiveUsdcWeth9B26213219Checkpoint",
-    "Composition.LiveUsdcWeth9B26213219Code",
-    "Composition.LiveUsdcWeth9B26213219Data.Data",
-    "Composition.LiveUsdcWeth9B26213219History",
-    "Composition.LiveUsdcWeth9B26213219Joint",
-    "Composition.LiveUsdcWeth9B26213219Headlines",
-    "Composition.LiveUsdcWeth9B26213219WethExit",
-    "Composition.LiveUsdcWeth9B26213219WethObserved",
-    "Composition.LiveUsdcWeth9B26213219WethAnchor",
-    "Composition.LiveUsdcWeth9B26213219Liquidity",
-    "Composition.LiveUsdcWeth9B26213219Mint",
-    "Composition.LiveUsdcWeth9B26213219ObservedHistory",
-    "Composition.LiveUsdcWeth9B26213219P1",
-    "Composition.LiveUsdcWeth9B26213219PairObservation",
-    "Composition.LiveUsdcWeth9B26213219PrePairCallers",
-    "Composition.LiveUsdcWeth9B26213219CallShare",
-    "Composition.LiveUsdcWeth9B26213219Skim",
-    "Composition.LiveUsdcWeth9B26213219Swap",
-    "Composition.LiveUsdcWeth9B26213219Sync",
-    "Composition.LiveUsdcWeth9B26213219UsdcCensus",
-    "Composition.LiveUsdcWeth9B26213219WethObservation",
-    "Composition.LiveUsdcWeth9B26213219Words",
-    "Composition.LiveUsdcWeth9FactoryAnchor",
-    "Composition.LiveUsdcWeth9FactoryAnchorData",
-    "Composition.UniswapV2PairUsdcRetainedP1",
-    "Composition.UniswapV2PairUsdcWeth9HybridCheckpoint",
+    "Composition.PairTwoToken": ('uniswap-v2-pair',),
+    "Composition.PairTwoTokenCallShare": ('uniswap-v2-pair',),
+    "Composition.PairTwoTokenShareValue": ('uniswap-v2-pair',),
+    "Composition.UniswapV2PairUsdcWeth9CheckJoint": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9Checkpoint": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9Deploy": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9Joint": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsBal": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsBalFrame": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsBalLive": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsCall": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsFacts": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsFrame": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsImpl": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsKit": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsProxy": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsRead": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsSwap0": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsXfer": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9ShareValue": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UsdcToken": ('usdc',),
+    "Composition.UsdcTokenCore": ('usdc',),
+    "Composition.UsdcTokenLive": ('usdc',),
+    "Composition.UsdcNeverSigner": ('uniswap-v2-pair', 'usdc'),
+    "Composition.Weth9TokenSigned": ('weth9',),
+    "Composition.UniswapV2PairUsdcWeth9BurnEnv": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9BurnLive": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsBurn": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsMint": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsSkim": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsSync": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9LegsXferKeep": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9MintLive": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9SkimEnv": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9SkimLive": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9SwapLive": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9SwapLiveFacts": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9SyncLive": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9BurnLiveF": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9CheckJointF": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9CheckpointF": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9P1": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UniswapV2PairUsdcOriginSeed": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UniswapV2PairUsdcCallersIn": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UniswapV2PairUsdcOwnersIn": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UniswapV2PairUsdcWeth9JointF": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9MintLiveF": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9ShareValueF": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9SkimLiveF": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9SwapLiveF": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcWeth9SyncLiveF": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UsdcTokenF": ('usdc',),
+    "Composition.LiveUsdcWeth9B26213219AllowanceHistory": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219AllowanceReplay": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Anchor": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219ApprovalObservation": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Burn": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219CDObservation": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Checkpoint": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Code": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Data.Data": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219History": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Joint": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Headlines": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219WethExit": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219WethObserved": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219WethAnchor": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Liquidity": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Mint": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219ObservedHistory": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219P1": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219PairObservation": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219PrePairCallers": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219CallShare": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Skim": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Swap": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Sync": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219UsdcCensus": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219WethObservation": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9B26213219Words": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9FactoryAnchor": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.LiveUsdcWeth9FactoryAnchorData": ('uniswap-v2-pair', 'usdc', 'weth9'),
+    "Composition.UniswapV2PairUsdcRetainedP1": ('uniswap-v2-pair', 'usdc'),
+    "Composition.UniswapV2PairUsdcWeth9HybridCheckpoint": ('uniswap-v2-pair', 'usdc', 'weth9'),
     # Every joint owner is explicit; no family or shared module may import back.
-]
+}
 
 ROOTS = ["Blanc", "Main"]
 
+def composition_declaration_failures(declarations, contracts):
+    """Validate the semantic declarations before any import can be admitted."""
+    if not isinstance(declarations, dict) or not declarations:
+        return ["COMPOSITION must be a nonempty module-to-family-tuple mapping"]
+    failures = []
+    for mod, families in declarations.items():
+        if (not isinstance(mod, str) or not mod.startswith("Composition.")
+                or not mod.removeprefix("Composition.")):
+            failures.append(f"COMPOSITION key {mod!r} must name a Composition module")
+        if not isinstance(families, tuple) or not families:
+            failures.append(f"{mod}: declared families must be a nonempty tuple")
+            continue
+        seen = set()
+        for family in families:
+            if not isinstance(family, str) or family not in contracts:
+                failures.append(f"{mod}: unknown declared contract family {family!r}")
+            elif family in seen:
+                failures.append(f"{mod}: duplicate declared contract family {family!r}")
+            else:
+                seen.add(family)
+    return failures
+
+
 def classify():
-    """-> module -> category, where category is 'shared', 'root', or a contract."""
+    """-> module -> category: shared, root, composition, or a contract family."""
+    invalid = composition_declaration_failures(COMPOSITION, CONTRACTS)
+    if invalid:
+        raise SystemExit("REGRESSION — layering: " + "; ".join(invalid))
     owner = {}
     for group, category in (
         [(mod, "shared") for mod in SHARED]
@@ -2822,31 +2855,18 @@ def load_inventory_generator():
     return module
 
 
-def main(argv):
-    root = None
-    args = list(argv[1:])
-    while args:
-        arg = args.pop(0)
-        if arg == "--root":
-            if not args:
-                raise SystemExit("REGRESSION — layering: --root needs a directory")
-            root = args.pop(0)
-        else:
-            raise SystemExit(f"REGRESSION — layering: unknown argument {arg!r}")
-    if root is None:
-        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+def architecture_failures(root, owner, found, compositions):
+    """Pure source audit shared by the gate and disposable minimal controls.
 
-    owner = classify()
-    found = modules_on_disk(root)
-    if not found:
-        raise SystemExit(f"REGRESSION — layering: no Lean modules found under {root}")
-
+    `owner` and `compositions` come from validated classification. No discovery
+    surface or Lean elaboration is needed to exercise this import relation.
+    """
     failures = []
 
     for mod in sorted(set(found) - set(owner)):
         failures.append(
             f"{mod} is not classified in scripts/check-layering.py — add it to "
-            f"SHARED, a CONTRACTS entry, or ROOTS"
+            f"SHARED, a CONTRACTS entry, COMPOSITION, or ROOTS"
         )
 
     for mod in sorted(set(owner) - set(found)):
@@ -2888,6 +2908,15 @@ def main(argv):
                         f"module — the composition stratum is downstream of the "
                         f"shared and contract layers"
                     )
+                else:
+                    excess = set(compositions[imported]) - set(compositions[mod])
+                    if excess:
+                        failures.append(
+                            f"{mod} (composition) imports Blanc.{imported}, a composition "
+                            f"with undeclared family/families {', '.join(sorted(excess))} "
+                            f"— imported composition families must be a subset of "
+                            f"{', '.join(compositions[mod])}"
+                        )
                 continue
             if target == "shared":
                 continue
@@ -2897,13 +2926,41 @@ def main(argv):
                     f"a shared layer must not depend on a contract"
                 )
             elif category == "composition":
-                # The point of the stratum: one module may name several families.
-                continue
+                if target not in compositions[mod]:
+                    failures.append(
+                        f"{mod} (composition) imports Blanc.{imported}, owned by "
+                        f"undeclared family {target} — declared families: "
+                        f"{', '.join(compositions[mod])}"
+                    )
             elif target != category:
                 failures.append(
                     f"{mod} ({category}) imports Blanc.{imported}, owned by {target} "
                     f"— contracts are siblings; factor the shared part upstream"
                 )
+
+    return failures
+
+
+def main(argv):
+    root = None
+    args = list(argv[1:])
+    while args:
+        arg = args.pop(0)
+        if arg == "--root":
+            if not args:
+                raise SystemExit("REGRESSION — layering: --root needs a directory")
+            root = args.pop(0)
+        else:
+            raise SystemExit(f"REGRESSION — layering: unknown argument {arg!r}")
+    if root is None:
+        root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    owner = classify()
+    found = modules_on_disk(root)
+    if not found:
+        raise SystemExit(f"REGRESSION — layering: no Lean modules found under {root}")
+
+    failures = architecture_failures(root, owner, found, COMPOSITION)
 
     discovery, n_shared_recipes, n_citations = discovery_failures(root, owner)
     failures.extend(discovery)
@@ -2940,7 +2997,7 @@ def main(argv):
         f"OK — layering: {len(CONTRACTS)} contract(s) are siblings; "
         f"{len(found)} module(s) classified, {n_checked} non-root checked, "
         f"{n_composition} composition module(s) downstream, "
-        f"no cross-contract, inverted or composition-inverted import; "
+        f"no cross-contract, inverted or undeclared-family composition import; "
         f"{n_shared_recipes} shared facility recipe(s) reachable from "
         f"{n_citations} need-first registry citation(s), none stale; "
         f"{n_shared_cited}/{n_shared} shared module(s) cited by the need-first "

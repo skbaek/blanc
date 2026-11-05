@@ -4,7 +4,9 @@
 This is intentionally separate from `check-layering.sh`: the production gate is
 static, while these controls independently elaborate each grammar claim with the
 configured Lean toolchain.  The architecture mutations run in temporary trees;
-they never edit the candidate.
+they never edit the candidate. `--composition-only` exercises declared-family
+ownership and its schema through the production classifier and import relation
+on a minimal temporary source tree, without Lean or a green production corpus.
 """
 
 from __future__ import annotations
@@ -181,7 +183,7 @@ def category_agnostic_imports() -> None:
 def gate_patched(root: Path, extra_composition: list[str]) -> tuple[int, str]:
     """Run the checker in-process with a temporarily extended COMPOSITION table.
 
-    The classified-composition edges are exercised by appending a probe entry
+    The classified-composition edges are exercised by declaring a probe entry
     to the imported checker's COMPOSITION table — which now carries the
     stratum's real inhabitants — exactly as the category-agnostic control
     patches `classify`.  The patch is restored unconditionally, and the
@@ -191,14 +193,16 @@ def gate_patched(root: Path, extra_composition: list[str]) -> tuple[int, str]:
     import contextlib
     import io
 
-    original = list(layering.COMPOSITION)
-    layering.COMPOSITION[:] = original + extra_composition
+    original = layering.COMPOSITION
+    layering.COMPOSITION = {**original, **{
+        mod: ("weth", "fmint") for mod in extra_composition
+    }}
     buffer = io.StringIO()
     try:
         with contextlib.redirect_stdout(buffer):
             code = layering.main(["check-layering.py", "--root", str(root)])
     finally:
-        layering.COMPOSITION[:] = original
+        layering.COMPOSITION = original
     return code, buffer.getvalue()
 
 
@@ -286,6 +290,127 @@ def composition_edge_controls() -> None:
             patched_must_pass(with_probe(raw, legal),
                               f"composition-to-{root_name} restoration", [probe])
 
+
+
+def composition_family_controls() -> None:
+    """Run the production classifier/import relation on a minimal source tree.
+
+    This deliberately needs neither the current corpus to pass nor a Lean
+    toolchain. It tests the tightened relation while W1 records the real-tree
+    failures for W2; the full parser/discovery suite remains unchanged.
+    """
+    import contextlib
+
+    # Validate the entire production declaration schema before narrowing the
+    # source population. An absent corpus declaration is checked by the real
+    # gate's authoritative inventory, rather than hidden by this fixture.
+    layering.classify()
+
+    @contextlib.contextmanager
+    def minimal_fixture():
+        original = {name: getattr(layering, name)
+                    for name in ("SHARED", "ROOTS", "CONTRACTS", "COMPOSITION")}
+        with tempfile.TemporaryDirectory(prefix="layering-families-") as raw:
+            root = Path(raw)
+            layering.SHARED = ["Basic"]
+            layering.ROOTS = ["Blanc", "Main"]
+            layering.CONTRACTS = {
+                "weth": ["Weth"], "fmint": ["Fmint"], "weth9": ["Lift.Weth9.Check"]
+            }
+            layering.COMPOSITION = {
+                "Composition.Both": ("weth", "fmint"),
+                "Composition.One": ("weth",),
+                "Composition.Other": ("fmint",),
+                "Composition.Equal": ("fmint", "weth"),
+            }
+            sources = {
+                "Blanc": "import Blanc.Composition.Both\n",
+                "Main": "import Blanc\n",
+                "Basic": "", "Weth": "import Blanc.Basic\n",
+                "Fmint": "import Blanc.Basic\n", "Lift.Weth9.Check": "",
+                "Composition.One": "import Blanc.Weth\n",
+                "Composition.Other": "import Blanc.Fmint\n",
+                "Composition.Equal": "import Blanc.Weth\nimport Blanc.Fmint\n",
+                "Composition.Both": (
+                    "import Blanc.Basic\nimport Blanc.Weth\nimport Blanc.Fmint\n"
+                    "import Blanc.Composition.One\nimport Blanc.Composition.Equal\n"
+                ),
+            }
+            for mod, source in sources.items():
+                relative = mod if mod in ("Blanc", "Main") else "Blanc." + mod
+                path = root / (relative.replace(".", "/") + ".lean")
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(source, encoding="utf-8")
+            try:
+                yield root
+            finally:
+                for name, value in original.items():
+                    setattr(layering, name, value)
+
+    def audit(root):
+        try:
+            owner = layering.classify()
+        except SystemExit as exc:
+            return [str(exc)]
+        return layering.architecture_failures(
+            root, owner, layering.modules_on_disk(root), layering.COMPOSITION
+        )
+
+    with minimal_fixture() as root:
+        baseline = {path: path.read_bytes() for path in root.rglob("*.lean")}
+        declarations = dict(layering.COMPOSITION)
+        if failures := audit(root):
+            fail("declared-family positive witness: " + "\n".join(failures))
+        print("PASS — declared-family positive: shared, two declared contracts, "
+              "equal-family and strict-subset compositions; root aggregation")
+
+        def control(label, needle, mutate):
+            mutate()
+            failures = audit(root)
+            if len(failures) != 1 or needle not in failures[0]:
+                fail(f"{label}: expected {needle!r}, got {failures!r}")
+            for path, source in baseline.items():
+                path.write_bytes(source)
+            layering.COMPOSITION = dict(declarations)
+            if any(path.read_bytes() != source for path, source in baseline.items()):
+                fail(f"{label}: source restoration differs from green baseline")
+            if layering.COMPOSITION != declarations:
+                fail(f"{label}: declaration restoration differs from green baseline")
+            print(f"PASS — {label}: {needle}; baseline bytes/declarations restored")
+
+        def imports(mod, source):
+            (root / "Blanc" / "Composition" / f"{mod}.lean").write_text(
+                source, encoding="utf-8"
+            )
+
+        control("undeclared contract family", "owned by undeclared family weth9",
+                lambda: imports("Both", "import Blanc.Lift.Weth9.Check\n"))
+        control("superset composition", "a composition with undeclared family/families fmint",
+                lambda: imports("One", "import Blanc.Composition.Both\n"))
+        control("incomparable composition", "a composition with undeclared family/families fmint",
+                lambda: imports("One", "import Blanc.Composition.Other\n"))
+        control("missing declaration", "Composition.One is not classified",
+                lambda: layering.COMPOSITION.pop("Composition.One"))
+        for label, value, needle in (
+            ("unknown family", ("no-such-family",), "unknown declared contract family"),
+            ("reserved category as family", ("shared",), "unknown declared contract family"),
+            ("empty declaration", (), "declared families must be a nonempty tuple"),
+            ("string declaration", "weth", "declared families must be a nonempty tuple"),
+            ("list declaration", ["weth"], "declared families must be a nonempty tuple"),
+            ("duplicate family", ("weth", "weth"), "duplicate declared contract family"),
+            ("non-string family", ([],), "unknown declared contract family"),
+        ):
+            control(label, needle,
+                    lambda value=value: layering.COMPOSITION.__setitem__("Composition.One", value))
+        control("invalid module key", "must name a Composition module",
+                lambda: layering.COMPOSITION.__setitem__("Outside.Probe", ("weth",)))
+        control("empty declaration table", "COMPOSITION must be a nonempty",
+                lambda: setattr(layering, "COMPOSITION", {}))
+        control("list declaration table", "COMPOSITION must be a nonempty",
+                lambda: setattr(layering, "COMPOSITION", list(declarations)))
+
+    print("OK — layering composition-family controls: positive witness and all "
+          "family-boundary/schema controls bite; no Lean elaboration")
 
 
 def discovery_controls() -> None:
@@ -499,6 +624,12 @@ def inventory_controls() -> None:
 
 
 def main() -> int:
+    if sys.argv[1:] == ["--composition-only"]:
+        composition_family_controls()
+        return 0
+    if sys.argv[1:]:
+        fail("usage: check-layering-controls.py [--composition-only]")
+    composition_family_controls()
     positives = [
         ("plain", "import Blanc.Weth\n", ["Weth"], "import Init\n"),
         ("prelude", "prelude\n\nimport Blanc.Weth\n", ["Weth"],
