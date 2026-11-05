@@ -1992,6 +1992,7 @@ CONTRACTS["weth9"].extend([
 
 CONTRACTS["usdc"].extend(['Lift.Usdc.TransferLiveImpl', 'Lift.Usdc.TransferLiveProxy', 'Lift.Usdc.TransferLiveFrame', 'Lift.Usdc.TransferLiveFacts'])
 SHARED += ["Lift.AccumulatedWalk", "Lift.GasField"]
+SHARED += ["SyntheticSystemWorld", "SyntheticBpo2Envelope"]
 
 CONTRACTS["uniswap-v2-pair"].append("Lift.PairCode")
 

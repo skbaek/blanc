@@ -80,12 +80,9 @@ theorem deployment_target_nonce : (deploymentPost.state.get contractAddress).non
   rw [deployment_contract]
 
 /-- The selected protocol addresses, all outside WETH9. -/
-def systemAddresses : List Adr :=
-  [beaconRootsAddress, historyStorageAddress, withdrawalRequestPredeployAddress,
-    consolidationRequestPredeployAddress]
+def systemAddresses : List Adr := SyntheticSystemWorld.systemAddresses
 
-def SystemCodes (st : Jaune.State) : Prop :=
-  ∀ a ∈ systemAddresses, st.getCode a = systemCode
+def SystemCodes (st : Jaune.State) : Prop := SyntheticSystemWorld.SystemCodes st
 
 theorem systemAddresses_foreign (a : Adr) (ha : a ∈ systemAddresses) :
     a ≠ contractAddress := by
@@ -94,7 +91,7 @@ theorem systemAddresses_foreign (a : Adr) (ha : a ∈ systemAddresses) :
 
 theorem initialWorld_systemCodes : SystemCodes initialWorld := by
   intro a ha
-  simp only [systemAddresses, List.mem_cons, List.not_mem_nil, or_false] at ha
+  simp only [List.mem_cons, List.not_mem_nil, or_false] at ha
   rcases ha with rfl | rfl | rfl | rfl <;> decide +kernel
 
 theorem deployment_systemCodes : SystemCodes deploymentPost.state := by

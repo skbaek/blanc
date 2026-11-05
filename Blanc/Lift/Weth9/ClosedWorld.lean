@@ -1,6 +1,6 @@
 import Blanc.Lift.Weth9.ClosedSigningData
 import Blanc.Lift.Weth9.Creation.Deploy
-import Blanc.DeploymentMessage
+import Blanc.SyntheticSystemWorld
 
 /-!
 Finite synthetic funding for the closed WETH9 applicability witness. The
@@ -13,13 +13,10 @@ namespace Blanc.Lift.Weth9.ClosedInstance
 
 open Jaune Blanc
 
-/-- Compiled nonempty STOP fixture at the four required system addresses. -/
-def systemCode : ByteArray := ⟨#[0x5b, 0]⟩
+/-- Compatibility names for the neutral synthetic system fixture. -/
+def systemCode : ByteArray := SyntheticSystemWorld.systemCode
 
-def systemWorld : Jaune.State :=
-  (((Jaune.State.setCode (.empty : Jaune.State) beaconRootsAddress systemCode).setCode
-    historyStorageAddress systemCode).setCode withdrawalRequestPredeployAddress
-    systemCode).setCode consolidationRequestPredeployAddress systemCode
+def systemWorld : Jaune.State := SyntheticSystemWorld.systemWorld
 
 def holderAccount : Acct := { Acct.nil with bal := 1000000 }
 def deployerAccount : Acct := { Acct.nil with bal := 1, nonce := 446 }
@@ -29,21 +26,15 @@ def initialWorld : Jaune.State :=
   (systemWorld.set senderE holderAccount).set Creation.deployer deployerAccount
 
 theorem systemCode_compile : some systemCode.toList =
-    Prog.compile deploymentSystemProgram := by decide +kernel
+    Prog.compile deploymentSystemProgram := SyntheticSystemWorld.systemCode_compile
 
-theorem systemWorld_bal (a : Adr) : (systemWorld.get a).bal = 0 := by
-  unfold systemWorld
-  rw [State.setCode_get_bal, State.setCode_get_bal, State.setCode_get_bal,
-    State.setCode_get_bal]
-  rfl
+theorem systemWorld_bal (a : Adr) : (systemWorld.get a).bal = 0 :=
+  SyntheticSystemWorld.systemWorld_bal a
 
-theorem systemCode_size : systemCode.size ≠ 0 := by decide +kernel
+theorem systemCode_size : systemCode.size ≠ 0 := SyntheticSystemWorld.systemCode_size
 
-theorem systemWorld_stor (a : Adr) : (systemWorld.get a).stor = .empty := by
-  unfold systemWorld
-  rw [State.setCode_get_stor systemCode_size, State.setCode_get_stor systemCode_size,
-    State.setCode_get_stor systemCode_size, State.setCode_get_stor systemCode_size]
-  rfl
+theorem systemWorld_stor (a : Adr) : (systemWorld.get a).stor = .empty :=
+  SyntheticSystemWorld.systemWorld_stor a
 
 theorem initialWorld_canonical : initialWorld.Canonical :=
   (((((State.canonical_empty.setCode beaconRootsAddress systemCode).setCode
