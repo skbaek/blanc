@@ -1,3 +1,5 @@
+import Blanc.Lift.OutermostFrames
+import Blanc.ExecutionTargetPrefix
 import Blanc.Composition.PairTokenStepModel
 import Blanc.Composition.PairTokenCallers
 import Blanc.ExecutionTraceSettledForest
@@ -6,7 +8,7 @@ import Blanc.ExecutionTraceSettledForest
 # The positional walk of C3
 
 A list-level induction over settled positions (design §2.2).  A settled prefix is *Pair-closed*
-when every non-static Pair frame in it has its whole block of descendants in it (`PairClosed`).
+when every non-static Pair frame in it has its whole block of descendants in it (`Blanc.ExecutionTrace.TargetClosed`).
 Along an observed Pair replay whose steps observe exactly a Pair-closed run of settled frames:
 
 * between two outer Pair steps lies a *gap* with no non-static Pair frame; the Pair calls no token
@@ -28,100 +30,6 @@ namespace Blanc.Composition.PairTokenJoint
 
 open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.UniswapV2Pair
 
-/-! ## Pair-closed prefixes -/
-
-/-- Every non-static Pair frame of `pre` has its whole block of descendants inside `pre`. -/
-def PairClosed (pair : Adr) (pre : List Exec.Frame) : Prop :=
-  ∀ (b₁ : List Exec.Frame) (G : Exec.Frame) (b₂ : List Exec.Frame), pre = b₁ ++ G :: b₂ →
-    G.sevm.currentTarget = pair → G.sevm.isStatic = false →
-      (Exec.descendantFrames G.run).length ≤ b₂.length
-
-theorem PairClosed.nil (pair : Adr) : PairClosed pair [] := by
-  intro b₁ G b₂ split
-  cases b₁ <;> cases split
-
-/-- A Pair-closed prefix extended by a part that is Pair-closed in itself. -/
-theorem PairClosed.append {pair : Adr} {X Y : List Exec.Frame} (closed : PairClosed pair X)
-    (inY : PairClosed pair Y) : PairClosed pair (X ++ Y) := by
-  intro b₁ G b₂ split atPair mutable
-  rcases List.split_append_cons split with ⟨m, inX, rfl⟩ | ⟨n, -, inY'⟩
-  · have short := closed b₁ G m inX atPair mutable
-    rw [List.length_append]
-    omega
-  · exact inY n G b₂ inY' atPair mutable
-
-/-- A frame observed by the Pair lies in the observation of every list holding it. -/
-theorem mem_pairObs {pair : Adr} {fs : List Exec.Frame} {G : Exec.Frame} (member : G ∈ fs)
-    (atPair : G.sevm.currentTarget = pair) (mutable : G.sevm.isStatic = false) :
-    G ∈ fs.flatMap (pairFrameObs pair) := by
-  refine List.mem_flatMap.mpr ⟨G, member, ?_⟩
-  rw [pairFrameObs, ite_eq_left_of_eq_true _ _ (eq_true ⟨atPair, mutable⟩)]
-  exact List.mem_singleton_self G
-
-/-- A gap (a list with no non-static Pair frame) is Pair-closed. -/
-theorem PairClosed.gap {pair : Adr} {gap : List Exec.Frame}
-    (quiet : gap.flatMap (pairFrameObs pair) = []) : PairClosed pair gap := by
-  intro b₁ G b₂ split atPair mutable
-  have inGap : G ∈ gap := by
-    rw [split]
-    exact List.mem_append_right _ List.mem_cons_self
-  have member := mem_pairObs (pair := pair) inGap atPair mutable
-  rw [quiet] at member
-  cases member
-
-/-- A frame's committed subtree is Pair-closed. -/
-theorem PairClosed.committed (pair : Adr) (F : Exec.Frame) :
-    PairClosed pair (Exec.committedFrames F.run) := by
-  intro b₁ G b₂ split _ _
-  rw [Exec.Frame.committedFrames_self] at split
-  cases b₁ with
-  | nil =>
-      obtain ⟨rfl, rfl⟩ := List.cons.inj split
-      exact Nat.le_refl _
-  | cons x b₁' =>
-      obtain ⟨-, inDesc⟩ := List.cons.inj split
-      obtain ⟨r, rfl⟩ := Exec.descendantFrames_contig F.run inDesc
-      rw [List.length_append]
-      omega
-
-/-- The whole settled list is Pair-closed. -/
-theorem settledFrames_pairClosed {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) :
-    PairClosed pair trace.settledFrames := by
-  intro b₁ G b₂ split _ _
-  obtain ⟨r, rfl⟩ := trace.settledFrames_contig split
-  rw [List.length_append]
-  omega
-
-/-- The settled frames before an unlocked position are Pair-closed: a non-static Pair frame whose
-block reached the position would enclose it. -/
-theorem before_pairClosed {pair : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) {before : List Exec.Frame}
-    {f : Exec.Frame} {after : List Exec.Frame} (split : trace.settledFrames = before ++ f :: after)
-    (noOpaque : ∀ A ∈ before, A.Encloses f →
-      ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) :
-    PairClosed pair before := by
-  intro b₁ G b₂ inBefore atPair mutable
-  rw [inBefore, List.append_assoc, List.cons_append] at split
-  obtain ⟨r, rest⟩ := trace.settledFrames_contig split
-  have inB : G ∈ before := by
-    rw [inBefore]
-    exact List.mem_append_right _ List.mem_cons_self
-  refine Nat.le_of_not_lt fun longer => noOpaque G inB ?_ ⟨atPair, mutable⟩
-  rcases List.append_eq_append_iff.mp rest with ⟨a', descEq, tailEq⟩ | ⟨c', b₂Eq, -⟩
-  · cases a' with
-    | nil =>
-        rw [List.append_nil] at descEq
-        rw [descEq] at longer
-        exact absurd longer (Nat.lt_irrefl _)
-    | cons y a'' =>
-        obtain ⟨rfl, -⟩ := List.cons.inj tailEq
-        change f ∈ Exec.descendantFrames G.run
-        rw [descEq]
-        exact List.mem_append_right _ List.mem_cons_self
-  · rw [b₂Eq, List.length_append] at longer
-    omega
-
 /-! ## Gaps -/
 
 /-- **The Pair calls no token entry inside a gap after a Pair-closed prefix.** -/
@@ -133,7 +41,7 @@ theorem gap_no_pair_entries {pair T : Adr} {B : Book} (C : CoreW T B) (self : Se
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeys pair trace))
     (hist : C.Hist trace) (apart : pair ≠ T) (notSystem : pair ≠ systemAddress)
     {pre gap post : List Exec.Frame} (split : trace.settledFrames = pre ++ gap ++ post)
-    (closed : PairClosed pair pre) (quiet : gap.flatMap (pairFrameObs pair) = []) :
+    (closed : Blanc.ExecutionTrace.TargetClosed pair pre) (quiet : gap.flatMap (Blanc.Exec.Frame.obsAt pair) = []) :
     ∀ F ∈ gap, IsEntry T F → F.sevm.isStatic = false → F.sevm.caller = pair → False := by
   intro F member entry mutable caller
   obtain ⟨g₁, g₂, rfl⟩ := List.mem_iff_append.mp member
@@ -160,39 +68,12 @@ theorem gap_no_pair_entries {pair T : Adr} {B : Book} (C : CoreW T B) (self : Se
       · have inG₁ : G ∈ g₁ := by
           rw [inGap]
           exact List.mem_append_right _ List.mem_cons_self
-        have obs := mem_pairObs (pair := pair) (fs := g₁ ++ F :: g₂)
+        have obs := Blanc.ExecutionTrace.mem_flatMap_obsAt (pair := pair) (fs := g₁ ++ F :: g₂)
           (List.mem_append_left _ inG₁) atPair mutableG
         rw [quiet] at obs
         cases obs
     · rw [static mutableG] at mutable
       cases mutable
-
-/-- The first observed frame of a list splits it into a gap, that frame and the rest. -/
-theorem pairFrameObs_first {pair : Adr} :
-    ∀ {fs : List Exec.Frame} {F₀ : Exec.Frame} {xs : List Exec.Frame},
-      fs.flatMap (pairFrameObs pair) = F₀ :: xs →
-      ∃ gap rest, fs = gap ++ F₀ :: rest ∧ gap.flatMap (pairFrameObs pair) = [] ∧
-        F₀.sevm.currentTarget = pair ∧ F₀.sevm.isStatic = false ∧
-        xs = rest.flatMap (pairFrameObs pair)
-  | [], _, _, h => by cases h
-  | y :: ys, F₀, xs, h => by
-      rw [List.flatMap_cons] at h
-      by_cases hy : y.sevm.currentTarget = pair ∧ y.sevm.isStatic = false
-      · rw [pairFrameObs, ite_eq_left_of_eq_true _ _ (eq_true hy), List.singleton_append] at h
-        obtain ⟨rfl, rfl⟩ := List.cons.inj h
-        exact ⟨[], ys, rfl, rfl, hy.1, hy.2, rfl⟩
-      · rw [pairFrameObs, ite_eq_right_of_eq_false _ _ (eq_false hy), List.nil_append] at h
-        obtain ⟨gap, rest, rfl, quiet, atPair, mutable, rfl⟩ := pairFrameObs_first h
-        refine ⟨y :: gap, rest, rfl, ?_, atPair, mutable, rfl⟩
-        rw [List.flatMap_cons, pairFrameObs, ite_eq_right_of_eq_false _ _ (eq_false hy), List.nil_append]
-        exact quiet
-
-/-- A non-static Pair frame's subtree observation begins with the frame itself. -/
-theorem pairSubtreeFrames_self {pair : Adr} {F : Exec.Frame} (atPair : F.sevm.currentTarget = pair)
-    (mutable : F.sevm.isStatic = false) :
-    pairSubtreeFrames pair F = F :: (Exec.descendantFrames F.run).flatMap (pairFrameObs pair) := by
-  rw [pairSubtreeFrames, Exec.Frame.committedFrames_self, List.flatMap_cons, pairFrameObs,
-    ite_eq_left_of_eq_true _ _ (eq_true ⟨atPair, mutable⟩), List.singleton_append]
 
 /-- **The booked balance of the Pair does not fall across a gap** after a Pair-closed prefix. -/
 theorem pair_token_gap {pair T : Adr} {B : Book} (C : CoreW T B)
@@ -207,7 +88,7 @@ theorem pair_token_gap {pair T : Adr} {B : Book} (C : CoreW T B)
     (factoryQuiet : ∀ G ∈ trace.settledFrames, G.sevm.currentTarget = pair →
       G.sevm.isStatic = false → G.sevm.caller ≠ st₀.factory)
     {pre gap post : List Exec.Frame} (split : trace.settledFrames = pre ++ gap ++ post)
-    (closed : PairClosed pair pre) (quiet : gap.flatMap (pairFrameObs pair) = [])
+    (closed : Blanc.ExecutionTrace.TargetClosed pair pre) (quiet : gap.flatMap (Blanc.Exec.Frame.obsAt pair) = [])
     {l l' : B.Ledger} (atPre : B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l)
     (step : B.run l (entryAsks T gap) = some l') (zero : ∀ g, B.allow l pair g = 0) :
     B.bal l pair ≤ B.bal l' pair ∧ ∀ g, B.allow l' pair g = 0 := by
@@ -244,9 +125,9 @@ theorem pair_token_walk {pair T : Adr} {B : Book} (C : CoreW T B)
       {l : B.Ledger},
       PairObservedReplayWith PairAdmittedConsumes st steps st' →
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) →
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = fs.flatMap (pairFrameObs pair) →
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = fs.flatMap (Blanc.Exec.Frame.obsAt pair) →
       trace.settledFrames = pre ++ fs ++ post →
-      PairClosed pair pre → PairClosed pair (pre ++ fs) →
+      Blanc.ExecutionTrace.TargetClosed pair pre → Blanc.ExecutionTrace.TargetClosed pair (pre ++ fs) →
       TokensFix st₀.token0 st₀.token1 st₀.factory st → st.unlocked = 1 →
       B.run (C.ledgerOf trace checkpoint.state) (entryAsks T pre) = some l →
       st.reserveOn side ≤ B.bal l pair → (∀ g, B.allow l pair g = 0) →
@@ -278,8 +159,8 @@ theorem pair_token_walk {pair T : Adr} {B : Book} (C : CoreW T B)
       cases replay with
       | @cons _ _ _ _ out consumed successful tail =>
       obtain ⟨-, -, atPair, mutable, -⟩ := auth s List.mem_cons_self
-      rw [List.flatMap_cons, pairSubtreeFrames_self atPair mutable, List.cons_append] at observed
-      obtain ⟨gap, rest', rfl, quiet, -, -, restObs⟩ := pairFrameObs_first observed.symm
+      rw [List.flatMap_cons, Blanc.Exec.Frame.subtreeAt_of_target atPair mutable, List.cons_append] at observed
+      obtain ⟨gap, rest', rfl, quiet, -, -, restObs⟩ := Blanc.ExecutionTrace.obsAt_first observed.symm
       -- the step's subtree is contiguous and inside `fs`
       have closedAt := closedAll (pre ++ gap) s.frame rest' (by
         simp only [List.append_assoc]) atPair mutable
@@ -330,8 +211,8 @@ theorem pair_token_walk {pair T : Adr} {B : Book} (C : CoreW T B)
         fun D member => factoryQuiet D
           (stepSplit ▸ List.mem_append_left _ (List.mem_append_right _ member))
       obtain ⟨outFix, outOpen, -, -⟩ := PairStep.consumedFix consumed atPair quietStep tokens opened
-      have closedNext : PairClosed pair ((pre ++ gap) ++ Exec.committedFrames s.frame.run) :=
-        (closedPre.append (PairClosed.gap quiet)).append (PairClosed.committed pair s.frame)
+      have closedNext : Blanc.ExecutionTrace.TargetClosed pair ((pre ++ gap) ++ Exec.committedFrames s.frame.run) :=
+        (closedPre.append (Blanc.ExecutionTrace.TargetClosed.gap quiet)).append (Blanc.ExecutionTrace.TargetClosed.committed pair s.frame)
       obtain ⟨l'', run'', reserve'', zero'', tokens'', opened'', noShrinkRest⟩ :=
         ih tail (fun s' member => auth s' (List.mem_cons_of_mem _ member)) restObs
           (pre := (pre ++ gap) ++ Exec.committedFrames s.frame.run) (post := post)

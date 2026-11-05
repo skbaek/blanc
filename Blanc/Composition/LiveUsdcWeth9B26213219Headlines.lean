@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Composition.LiveUsdcWeth9B26213219Joint
 import Blanc.Lift.UniswapV2Pair.StorageObservers
 import Blanc.Lift.UniswapV2Pair.RawCallers
@@ -111,13 +112,13 @@ theorem pair_minimum_liquidity {checkpoint : BlockChain} (d : PairDeploymentTo c
     intro s member
     obtain ⟨_, _, target, mutable, _⟩ := auth s member
     have own : s.frame ∈ steps.flatMap
-        (fun s => pairSubtreeFrames UniswapV2Pair.Creation.pairAddress s.frame) :=
+        (fun s => Blanc.Exec.Frame.subtreeAt UniswapV2Pair.Creation.pairAddress s.frame) :=
       List.mem_flatMap.mpr ⟨s, member, by
-        rw [PairTokenJoint.pairSubtreeFrames_self target mutable]
+        rw [Blanc.Exec.Frame.subtreeAt_of_target target mutable]
         exact List.mem_cons_self⟩
     rw [observed] at own
     obtain ⟨G, settled, obs⟩ := List.mem_flatMap.mp own
-    unfold pairFrameObs at obs
+    unfold Blanc.Exec.Frame.obsAt at obs
     split at obs
     · rw [List.mem_singleton.mp obs]
       exact d.trace.mem_rawFrames_of_mem_settledFrames G settled

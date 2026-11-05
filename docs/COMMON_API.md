@@ -1319,8 +1319,7 @@ registered: use this branch and the named theorem.
 For a committed-replay history that takes one step per *outermost* settled,
 non-static frame at an address (a re-entered frame consumed inside its
 ancestor), use [`Blanc/Lift/OutermostFrames.lean`](../Blanc/Lift/OutermostFrames.lean):
-`Exec.Frame.obsAt` / `Exec.Frame.subtreeAt` (the Pair's `pairFrameObs` /
-`pairSubtreeFrames` shape), `ConfiguredHistoryTrace.committedFramesAt` (all
+`Exec.Frame.obsAt` / `Exec.Frame.subtreeAt` (used by the Pair and Curve), `ConfiguredHistoryTrace.committedFramesAt` (all
 settled non-static frames at `ca`, in trace order) and
 `ConfiguredHistoryTrace.outermostFramesAt` (the outermost ones, via
 `Exec.outermostDescAt` / `Exec.Frame.outermostAt`). Facts:
@@ -1412,6 +1411,15 @@ For a source-level `mstoreAt 0 +++ returnMemoryRange 0 32` tail, use
 [`Blanc/LadderBase.lean`](../Blanc/LadderBase.lean).
 
 ### E5. I need to inspect what happened in an `Exec`
+
+- Complete settled prefixes at an arbitrary non-static target:
+  `Blanc/ExecutionTargetPrefix.lean` owns `ExecutionTrace.TargetClosed`
+  with `.nil`, `.append`, `.gap`, `.committed`, `settledFrames_targetClosed`
+  and `before_targetClosed`. The last retains the actual split and no-enclosing
+  target-frame premise. `mem_flatMap_obsAt` and `obsAt_first` expose list
+  membership and the first observed frame without contract code or token laws.
+  They reuse `Exec.Frame.obsAt` / `subtreeAt` and `subtreeAt_of_target` from
+  `Blanc/Lift/OutermostFrames.lean`; concrete Pair book/replay facts stay local.
 
 - For operand-stack safety at every reached same-frame node, use
   [`Blanc/CompiledStackSafety.lean`](../Blanc/CompiledStackSafety.lean).

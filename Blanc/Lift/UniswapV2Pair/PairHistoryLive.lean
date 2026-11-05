@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.ReplayWriterGas
 import Blanc.Lift.UniswapV2Pair.SwapForwardAccept
@@ -43,7 +44,7 @@ def PairHistoryReplayedWith
     (trace : ConfiguredHistoryTrace cfg checkpoint future) (K₀ : WriterKey → Prop) (st₀ : State)
     (finish : State) (K' : WriterKey → Prop) : Prop :=
   ∃ steps : List PairStep,
-    steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+    steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
     (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
     PairObservedReplayWith Consumes st₀ steps finish ∧
     runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧

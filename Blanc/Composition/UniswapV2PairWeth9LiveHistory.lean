@@ -1,3 +1,4 @@
+import Blanc.ExecutionTargetPrefix
 import Blanc.Composition.UniswapV2PairWeth9Joint
 import Blanc.Lift.Weth9.FootHistory
 
@@ -62,8 +63,8 @@ theorem pair_weth9_end {pair weth : Adr} (side : TokenSide)
     pairFresh
   obtain ⟨steps, observed, auth, replay, -⟩ := id replayed
   obtain ⟨l', run', reserve, -, tokens, opened, -⟩ := walk steps replay auth observed (pre := [])
-    (post := []) (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
-    (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ joint.unlocked rfl start.1 start.2
+    (post := []) (by rw [List.nil_append, List.append_nil]) (Blanc.ExecutionTrace.TargetClosed.nil pair)
+    (Blanc.ExecutionTrace.settledFrames_targetClosed trace) ⟨rfl, rfl, rfl⟩ joint.unlocked rfl start.1 start.2
   rw [List.nil_append, (weth9Core weth K₀).weak.replayEnd trace hist] at run'
   cases run'
   refine ⟨finish, K', replayed, ?_, opened, ?_⟩

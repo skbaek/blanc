@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Lift.UniswapV2Pair.PairStepShape
 import Blanc.Lift.UniswapV2Pair.PairPositionalState
 import Blanc.Lift.UniswapV2Pair.PairHistoryLive
@@ -25,13 +26,13 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
 
 /-- Every non-static Pair frame of a step's subtree is one of the given frames. -/
 theorem factoryQuiet_of_subtree {f pair : Adr} {frames : List Exec.Frame} {s : PairStep}
-    (inFrames : ∀ D ∈ pairSubtreeFrames pair s.frame, D ∈ frames)
+    (inFrames : ∀ D ∈ Blanc.Exec.Frame.subtreeAt pair s.frame, D ∈ frames)
     (quiet : FactoryQuiet f pair frames) : FactoryQuiet f pair (Exec.committedFrames s.frame.run) := by
   intro D member atPair mutable
   apply quiet D _ atPair mutable
   apply inFrames
   refine List.mem_flatMap.mpr ⟨D, member, ?_⟩
-  rw [pairFrameObs, ite_eq_left_of_eq_true _ _ (eq_true ⟨atPair, mutable⟩)]
+  rw [Blanc.Exec.Frame.obsAt, ite_eq_left_of_eq_true _ _ (eq_true ⟨atPair, mutable⟩)]
   exact List.mem_singleton_self D
 
 /-- **One consumed outer step from an unlocked state with the tokens and factory fixed.** -/
@@ -79,16 +80,16 @@ theorem PairObservedReplayWith.fixed {t0 t1 f pair : Adr} {st st' : State} {step
 
 /-- A non-static Pair frame of a step's subtree is a settled frame when the observation is. -/
 theorem mem_of_pairSubtree {pair : Adr} {steps : List PairStep} {frames settled : List Exec.Frame}
-    (observed : steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
-      frames.flatMap (pairFrameObs pair))
+    (observed : steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) =
+      frames.flatMap (Blanc.Exec.Frame.obsAt pair))
     (sub : ∀ F ∈ frames, F ∈ settled) :
-    ∀ s ∈ steps, ∀ D ∈ pairSubtreeFrames pair s.frame, D ∈ settled := by
+    ∀ s ∈ steps, ∀ D ∈ Blanc.Exec.Frame.subtreeAt pair s.frame, D ∈ settled := by
   intro s member D inSubtree
-  have inObserved : D ∈ frames.flatMap (pairFrameObs pair) := by
+  have inObserved : D ∈ frames.flatMap (Blanc.Exec.Frame.obsAt pair) := by
     rw [← observed]
     exact List.mem_flatMap.mpr ⟨s, member, inSubtree⟩
   obtain ⟨F, inFrames, obs⟩ := List.mem_flatMap.mp inObserved
-  unfold pairFrameObs at obs
+  unfold Blanc.Exec.Frame.obsAt at obs
   split at obs
   · rw [List.mem_singleton.mp obs]
     exact sub F inFrames
@@ -105,8 +106,8 @@ theorem pair_history_stateAt_auth {pair : Adr} {cfg : ChainConfig}
       trace.settledFrames = before ++ f :: after →
       (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) →
       ∃ (steps : List PairStep) (st : State) (K : WriterKey → Prop),
-        steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
-          before.flatMap (pairFrameObs pair) ∧
+        steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) =
+          before.flatMap (Blanc.Exec.Frame.obsAt pair) ∧
         (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
         PairObservedReplayWith PairAdmittedConsumes st₀ steps st ∧
         WriterRep K (f.pre.state.getStor pair) st := by
@@ -123,7 +124,7 @@ theorem pair_history_stateAt_auth {pair : Adr} {cfg : ChainConfig}
       trace admitted start before f after split noOpaque
   change PairReplayWith PairAdmittedConsumes PairEntryAuth pair U
     (checkpoint.state.getStor pair).get frames (f.pre.state.getStor pair).get at replay
-  change frames.flatMap (pairSubtreeFrames pair) = before.flatMap (pairFrameObs pair) at observed
+  change frames.flatMap (Blanc.Exec.Frame.subtreeAt pair) = before.flatMap (Blanc.Exec.Frame.obsAt pair) at observed
   obtain ⟨steps, framesEq, auth, st, K, source, _, _, s, view, rep⟩ :=
     replay st₀ K₀ (fun _ h => Or.inl h) ⟨_, rfl, initial⟩
   refine ⟨steps, st, K, ?_, auth, source, WriterRep.congr (fun k => (congrFun view k).symm) rep⟩
@@ -199,13 +200,13 @@ theorem pair_history_mutable_children {pair : Adr} {cfg : ChainConfig}
   obtain ⟨-, -, consumedSteps⟩ := replay.fixed auth quiet ⟨rfl, rfl, rfl⟩ unlocked
   have inPair : G ∈ committedPairFrames pair trace := by
     refine List.mem_flatMap.mpr ⟨G, settled, ?_⟩
-    rw [pairFrameObs, ite_eq_left_of_eq_true _ _ (eq_true ⟨atPair, mutableG⟩)]
+    rw [Blanc.Exec.Frame.obsAt, ite_eq_left_of_eq_true _ _ (eq_true ⟨atPair, mutableG⟩)]
     exact List.mem_singleton_self G
   rw [← observedEq] at inPair
   obtain ⟨s, stepMem, inSubtree⟩ := List.mem_flatMap.mp inPair
   obtain ⟨F, frameMem, obs⟩ := List.mem_flatMap.mp inSubtree
   have sameF : G = F := by
-    unfold pairFrameObs at obs
+    unfold Blanc.Exec.Frame.obsAt at obs
     split at obs
     · exact List.mem_singleton.mp obs
     · cases obs

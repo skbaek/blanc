@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.ExecutionWholeFrameAccountingIn
 import Blanc.ExecutionAccountingHistoryIn
@@ -52,7 +53,7 @@ def pairLadderWithIn
 order. -/
 def committedPairFramesIn {F : Fork → Prop} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (pair : Adr) (trace : ConfiguredHistoryTraceIn F cfg checkpoint future) : List Exec.Frame :=
-  trace.settledFrames.flatMap (pairFrameObs pair)
+  trace.settledFrames.flatMap (Blanc.Exec.Frame.obsAt pair)
 
 /-- **The Pair model replays the committed history over a neutral fork domain.** The statement
 of `pair_history_committed_with` for a `ConfiguredHistoryTraceIn F` history: the runtime stays
@@ -77,7 +78,7 @@ theorem pair_history_committed_withIn
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeysIn pair trace)) :
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFramesIn pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFramesIn pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         PairObservedReplayWith Consumes st₀ steps finish ∧
@@ -102,8 +103,8 @@ theorem pair_history_committed_withIn
       start installedCert pairSem_image
   change PairReplayWith Consumes Auth pair U (checkpoint.state.getStor pair).get frames
     (future.state.getStor pair).get at replay
-  change frames.flatMap (pairSubtreeFrames pair) =
-    trace.settledFrames.flatMap (pairFrameObs pair) at observed
+  change frames.flatMap (Blanc.Exec.Frame.subtreeAt pair) =
+    trace.settledFrames.flatMap (Blanc.Exec.Frame.obsAt pair) at observed
   obtain ⟨steps, framesEq, auth, finish, K', source, grows, inside, s, view, rep⟩ :=
     replay st₀ K₀ (fun _ h => Or.inl h) ⟨_, rfl, initial⟩
   refine ⟨finishInv.code, steps, ?_, auth, finish, K', source, source.sourceReplay weaken,
@@ -132,7 +133,7 @@ theorem pair_history_initialized_withIn
     (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeysIn pair trace)) :
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFramesIn pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFramesIn pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         PairObservedReplayWith Consumes (initializedState factory domain token0 token1) steps finish ∧
@@ -170,7 +171,7 @@ theorem pair_history_committedHist {pair : Adr} {cfg : ChainConfig}
     (fresh : WriterFreshKeys K₀ (pairHistoryTouchedKeysIn pair trace)) :
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFramesIn pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFramesIn pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumesH st₀ steps finish ∧
@@ -195,7 +196,7 @@ theorem pair_history_initializedReplayHist {pair : Adr} {cfg : ChainConfig}
     (fresh : WriterFreshKeys (fun _ => False) (pairHistoryTouchedKeysIn pair trace)) :
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFramesIn pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFramesIn pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumesH (initializedState factory domain token0 token1)

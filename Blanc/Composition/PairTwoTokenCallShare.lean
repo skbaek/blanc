@@ -1,3 +1,5 @@
+import Blanc.Lift.OutermostFrames
+import Blanc.ExecutionTargetPrefix
 import Blanc.Composition.PairTwoToken
 import Blanc.Lift.UniswapV2Pair.PairOuterCalls
 import Blanc.Lift.UniswapV2Pair.PairFeeAnswer
@@ -35,7 +37,7 @@ open Jaune Blanc Blanc.ExecutionTrace Blanc.Lift Blanc.Lift.Token Blanc.Lift.Uni
 
 /-- A frame's own block (the frame, then its committed descendants) is Pair-closed. -/
 theorem block_pairClosed (pair : Adr) (F : Exec.Frame) :
-    PairClosed pair (F :: Exec.descendantFrames F.run) := by
+    Blanc.ExecutionTrace.TargetClosed pair (F :: Exec.descendantFrames F.run) := by
   intro b₁ G b₂ split _ _
   cases b₁ with
   | nil =>
@@ -113,23 +115,23 @@ theorem pair_two_token_call_product {pair T0 T1 : Adr} {B0 B1 : Book} (C0 : Core
   have split' : trace.settledFrames =
       [] ++ (before ++ f :: Exec.descendantFrames f.run) ++ r := by
     rw [split, afterEq, List.nil_append, List.append_assoc, List.cons_append]
-  have closed : PairClosed pair ([] ++ (before ++ f :: Exec.descendantFrames f.run)) := by
+  have closed : Blanc.ExecutionTrace.TargetClosed pair ([] ++ (before ++ f :: Exec.descendantFrames f.run)) := by
     rw [List.nil_append]
-    exact (before_pairClosed trace split noOpaque).append (block_pairClosed pair f)
+    exact (Blanc.ExecutionTrace.before_targetClosed trace split noOpaque).append (block_pairClosed pair f)
   have auth' : ∀ s' ∈ steps ++ [s], s'.AuthenticWith PairEntryAuth pair := by
     intro s' member
     rcases List.mem_append.mp member with h | h
     · exact auth s' h
     · rw [List.mem_singleton.mp h]
       exact authS
-  have observed' : (steps ++ [s]).flatMap (fun s => pairSubtreeFrames pair s.frame) =
-      (before ++ f :: Exec.descendantFrames f.run).flatMap (pairFrameObs pair) := by
+  have observed' : (steps ++ [s]).flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) =
+      (before ++ f :: Exec.descendantFrames f.run).flatMap (Blanc.Exec.Frame.obsAt pair) := by
     rw [List.flatMap_append, List.flatMap_append, observed, List.flatMap_singleton, frameEq,
-      pairSubtreeFrames, Exec.Frame.committedFrames_self]
+      Blanc.Exec.Frame.subtreeAt, Exec.Frame.committedFrames_self]
   obtain ⟨-, -, -, -, -, -, side0⟩ := walk0 (steps ++ [s]) replay' auth' observed' split'
-    (PairClosed.nil pair) closed ⟨rfl, rfl, rfl⟩ unlocked rfl start0.1 start0.2
+    (Blanc.ExecutionTrace.TargetClosed.nil pair) closed ⟨rfl, rfl, rfl⟩ unlocked rfl start0.1 start0.2
   obtain ⟨-, -, -, -, -, -, side1⟩ := walk1 (steps ++ [s]) replay' auth' observed' split'
-    (PairClosed.nil pair) closed ⟨rfl, rfl, rfl⟩ unlocked rfl start1.1 start1.2
+    (Blanc.ExecutionTrace.TargetClosed.nil pair) closed ⟨rfl, rfl, rfl⟩ unlocked rfl start1.1 start1.2
   have source := replay.sourceReplay fun _ _ _ _ consumed => consumed.positional.forget
   rw [List.map_append, List.map_singleton] at side0 side1
   have noShrink : EntryNoShrink st s.source.context s.source.entry s.source.transcript :=

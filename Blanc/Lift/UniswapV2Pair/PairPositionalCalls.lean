@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.Lift.UniswapV2Pair.PairPositionalAdmission
 import Blanc.Lift.RetainedTargetCompleteness
@@ -330,8 +331,8 @@ theorem PairObservedReplayWith.children_shape
       Consumes root segment transcript out → PairRootedConsumes root segment transcript out)
     {pair : Adr} {frames : List Exec.Frame} {steps : List PairStep} {st finish : State}
     (replay : PairObservedReplayWith Consumes st steps finish)
-    (observedEq : steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
-      frames.flatMap (pairFrameObs pair))
+    (observedEq : steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) =
+      frames.flatMap (Blanc.Exec.Frame.obsAt pair))
     (auth : ∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) :
     ∀ G ∈ frames, G.sevm.currentTarget = pair → G.sevm.isStatic = false →
       ∀ c ∈ Exec.childFrames G.run, c.sevm.isStatic = false →
@@ -340,15 +341,15 @@ theorem PairObservedReplayWith.children_shape
             c.sevm.codeAddress = some c.sevm.currentTarget) ∧
           (Blanc.Sevm.selector c.sevm = 0xa9059cbb ∨ Blanc.Sevm.selector c.sevm = 0x10d1e85c) := by
   intro G settled atPair mutableG c child mutable
-  have inPair : G ∈ frames.flatMap (pairFrameObs pair) := by
+  have inPair : G ∈ frames.flatMap (Blanc.Exec.Frame.obsAt pair) := by
     refine List.mem_flatMap.mpr ⟨G, settled, ?_⟩
-    rw [pairFrameObs, ite_eq_left ⟨atPair, mutableG⟩]
+    rw [Blanc.Exec.Frame.obsAt, ite_eq_left ⟨atPair, mutableG⟩]
     exact List.mem_singleton_self G
   rw [← observedEq] at inPair
   obtain ⟨s, stepMem, inSubtree⟩ := List.mem_flatMap.mp inPair
   obtain ⟨F, frameMem, obs⟩ := List.mem_flatMap.mp inSubtree
   have sameF : G = F := by
-    unfold pairFrameObs at obs
+    unfold Blanc.Exec.Frame.obsAt at obs
     split at obs
     · exact List.mem_singleton.mp obs
     · cases obs
@@ -373,8 +374,8 @@ theorem pair_replay_children_shape
     (positional : ∀ root segment transcript out,
       Consumes root segment transcript out → PairRootedConsumes root segment transcript out)
     {pair : Adr} {frames : List Exec.Frame} {steps : List PairStep} {st finish : State}
-    (observedEq : steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
-      frames.flatMap (pairFrameObs pair))
+    (observedEq : steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) =
+      frames.flatMap (Blanc.Exec.Frame.obsAt pair))
     (auth : ∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair)
     (replay : PairObservedReplayWith Consumes st steps finish) :
     ∀ G ∈ frames, G.sevm.currentTarget = pair → G.sevm.isStatic = false →

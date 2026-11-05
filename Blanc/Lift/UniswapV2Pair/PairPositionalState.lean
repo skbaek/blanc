@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Lift.UniswapV2Pair.PairHistory
 import Blanc.ExecutionAccountingPositionalHistory
 
@@ -42,8 +43,8 @@ theorem pair_history_stateAt {pair : Adr} {cfg : ChainConfig}
       trace.settledFrames = before ++ f :: after →
       (∀ A ∈ before, A.Encloses f → ¬ (A.sevm.currentTarget = pair ∧ A.sevm.isStatic = false)) →
       ∃ (steps : List PairStep) (st : State) (K : WriterKey → Prop),
-        steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
-          before.flatMap (pairFrameObs pair) ∧
+        steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) =
+          before.flatMap (Blanc.Exec.Frame.obsAt pair) ∧
         PairObservedReplayWith PairAdmittedConsumes st₀ steps st ∧
         WriterRep K (f.pre.state.getStor pair) st := by
   intro before f after split noOpaque
@@ -59,7 +60,7 @@ theorem pair_history_stateAt {pair : Adr} {cfg : ChainConfig}
       trace admitted start before f after split noOpaque
   change PairReplayWith PairAdmittedConsumes PairEntryAuth pair U
     (checkpoint.state.getStor pair).get frames (f.pre.state.getStor pair).get at replay
-  change frames.flatMap (pairSubtreeFrames pair) = before.flatMap (pairFrameObs pair) at observed
+  change frames.flatMap (Blanc.Exec.Frame.subtreeAt pair) = before.flatMap (Blanc.Exec.Frame.obsAt pair) at observed
   obtain ⟨steps, framesEq, _, st, K, source, _, _, s, view, rep⟩ :=
     replay st₀ K₀ (fun _ h => Or.inl h) ⟨_, rfl, initial⟩
   refine ⟨steps, st, K, ?_, source, WriterRep.congr (fun k => (congrFun view k).symm) rep⟩

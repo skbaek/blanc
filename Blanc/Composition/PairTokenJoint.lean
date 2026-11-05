@@ -1,3 +1,5 @@
+import Blanc.Lift.OutermostFrames
+import Blanc.ExecutionTargetPrefix
 import Blanc.Composition.PairTokenJointWalk
 
 /-!
@@ -18,7 +20,7 @@ positional conclusion only at unshadowed frames), and the `Core` headlines are t
 `laws.holderLaws`, `self.weak` (Route R).  The `_w` forms are the positional walk
 (`pair_token_walk`) over the Pair's observed replay: at a position, the
 replay of the steps before it (`pair_history_stateAt_auth`) over the Pair-closed prefix
-(`before_pairClosed`); at the end, the history's full replay (`pair_history_replayed`).
+(`Blanc.ExecutionTrace.before_targetClosed`); at the end, the history's full replay (`pair_history_replayed`).
 
 `tokenEntered` (A11, trace-local): at every node of every settled non-static Pair frame, `T`'s code
 is not an EIP-7702 designator and `T` is not a precompile of that frame's rules.  It gives the
@@ -73,8 +75,8 @@ theorem pair_token_joint_w {pair T : Adr} {B : Book} (C : CoreW T B)
   · obtain ⟨steps, st, K, observed, auth, replay, rep⟩ :=
       pair_history_stateAt_auth trace installed initial fresh before f after split noOpaque
     obtain ⟨l', run', reserve, zero, tokens, opened, -⟩ := walk steps replay auth observed
-      (pre := []) (post := f :: after) split (PairClosed.nil pair)
-      (before_pairClosed trace split noOpaque) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
+      (pre := []) (post := f :: after) split (Blanc.ExecutionTrace.TargetClosed.nil pair)
+      (Blanc.ExecutionTrace.before_targetClosed trace split noOpaque) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
     have atF := C.replayAt trace hist before f after split lit
     rw [List.nil_append, atF] at run'
     cases run'
@@ -82,8 +84,8 @@ theorem pair_token_joint_w {pair T : Adr} {B : Book} (C : CoreW T B)
   · obtain ⟨-, finish, K', replayed⟩ := pair_history_replayed trace installed initial fresh
     obtain ⟨steps, observed, auth, replay, -⟩ := id replayed
     obtain ⟨l', run', reserve, zero, -⟩ := walk steps replay auth observed (pre := [])
-      (post := []) (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
-      (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
+      (post := []) (by rw [List.nil_append, List.append_nil]) (Blanc.ExecutionTrace.TargetClosed.nil pair)
+      (Blanc.ExecutionTrace.settledFrames_targetClosed trace) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
     rw [List.nil_append, C.replayEnd trace hist] at run'
     cases run'
     exact ⟨finish, K', replayed, reserve, zero⟩
@@ -108,7 +110,7 @@ theorem pair_token_noShrinkSide_w {pair T : Adr} {B : Book} (C : CoreW T B)
             ¬ node.sevm.benvStat.rules.isPrecomp T)
     (start : JointAtW C trace pair side st₀ checkpoint.state) :
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop) (steps : List PairStep),
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
       runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
@@ -119,8 +121,8 @@ theorem pair_token_noShrinkSide_w {pair T : Adr} {B : Book} (C : CoreW T B)
   obtain ⟨-, -, -, -, -, -, noShrink⟩ := pair_token_walk C abi self side trace laws installed
     initial fresh hist token unlocked apart answerable distinct notSystem factoryQuiet tokenEntered
     steps replay auth observed (pre := []) (post := [])
-    (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
-    (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
+    (by rw [List.nil_append, List.append_nil]) (Blanc.ExecutionTrace.TargetClosed.nil pair)
+    (Blanc.ExecutionTrace.settledFrames_targetClosed trace) ⟨rfl, rfl, rfl⟩ unlocked rfl start.1 start.2
   exact ⟨finish, K', steps, observed, auth, replay, realized, rep, noShrink⟩
 
 /-- **C3, the joint invariant (headline).**  Over any configured history from a checkpoint where the
@@ -185,7 +187,7 @@ theorem pair_token_noShrinkSide {pair T : Adr} {B : Book} (C : Core T B) (laws :
             ¬ node.sevm.benvStat.rules.isPrecomp T)
     (start : JointAt C trace pair side st₀ checkpoint.state) :
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop) (steps : List PairStep),
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
       runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧

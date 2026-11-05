@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Lift.UniswapV2Pair.PairHistoryShape
 
 /-!
@@ -92,8 +93,8 @@ theorem run_lockedBelow {pair : Adr} {U : WriterKey → Prop} (inj : WriterInj U
   obtain ⟨frames, replay, observed⟩ := replayOf bound
   change PairReplayWith PairAdmittedConsumes PairEntryAuth pair U (pre.state.getStor pair).get frames
     ((Execution.committedPost out committed).state.getStor pair).get at replay
-  change frames.flatMap (pairSubtreeFrames pair) =
-    (Exec.committedFrames run).flatMap (pairFrameObs pair) at observed
+  change frames.flatMap (Blanc.Exec.Frame.subtreeAt pair) =
+    (Exec.committedFrames run).flatMap (Blanc.Exec.Frame.obsAt pair) at observed
   obtain ⟨steps, framesEq, auth, finish, K', source, -, -, -⟩ := replay st K sub ⟨_, rfl, rep⟩
   rw [← framesEq, List.flatMap_map] at observed
   have inRun := mem_of_pairSubtree observed (settled := Exec.committedFrames run)
@@ -101,15 +102,15 @@ theorem run_lockedBelow {pair : Adr} {U : WriterKey → Prop} (inj : WriterInj U
   have below := PairObservedReplayWith.lockedBelow source auth
     (fun s member => factoryQuiet_of_subtree (inRun s member) quiet) ⟨rfl, rfl, rfl⟩ locked
   intro D member atPair mutableD
-  have inObs : D ∈ (Exec.committedFrames run).flatMap (pairFrameObs pair) := by
+  have inObs : D ∈ (Exec.committedFrames run).flatMap (Blanc.Exec.Frame.obsAt pair) := by
     refine List.mem_flatMap.mpr ⟨D, member, ?_⟩
-    rw [pairFrameObs, ite_eq_left_of_eq_true _ _ (eq_true ⟨atPair, mutableD⟩)]
+    rw [Blanc.Exec.Frame.obsAt, ite_eq_left_of_eq_true _ _ (eq_true ⟨atPair, mutableD⟩)]
     exact List.mem_singleton_self D
   rw [← observed] at inObs
   obtain ⟨s, stepMem, inSubtree⟩ := List.mem_flatMap.mp inObs
   obtain ⟨F, frameMem, obs⟩ := List.mem_flatMap.mp inSubtree
   have sameF : D = F := by
-    unfold pairFrameObs at obs
+    unfold Blanc.Exec.Frame.obsAt at obs
     split at obs
     · exact List.mem_singleton.mp obs
     · cases obs

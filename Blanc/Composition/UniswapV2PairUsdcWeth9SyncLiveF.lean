@@ -1,3 +1,4 @@
+import Blanc.ExecutionTargetPrefix
 import Blanc.Composition.UniswapV2PairUsdcWeth9LegsSync
 import Blanc.Composition.UniswapV2PairUsdcWeth9CheckpointF
 import Blanc.Composition.UniswapV2PairWeth9SyncLive
@@ -63,8 +64,8 @@ theorem pair_usdc_frame {pair usdc weth : Adr} {cfg : ChainConfig}
     joint.weth9.pairRep pairFresh
   obtain ⟨steps, observed, auth, replay, -⟩ := id replayed
   obtain ⟨-, -, -, -, tokens, -, -⟩ := walk steps replay auth observed (pre := []) (post := [])
-    (by rw [List.nil_append, List.append_nil]) (PairClosed.nil pair)
-    (settledFrames_pairClosed trace) ⟨rfl, rfl, rfl⟩ joint.weth9.unlocked rfl start.1 start.2
+    (by rw [List.nil_append, List.append_nil]) (Blanc.ExecutionTrace.TargetClosed.nil pair)
+    (Blanc.ExecutionTrace.settledFrames_targetClosed trace) ⟨rfl, rfl, rfl⟩ joint.weth9.unlocked rfl start.1 start.2
   obtain ⟨-, -, -, -, -, -, -, rep⟩ := replayed
   obtain ⟨-, -, -, slot6, -⟩ := rep.fixed
   obtain ⟨inst, admin⟩ := Usdc.usdc_history_end_installedF trace

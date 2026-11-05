@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Composition.PairTwoTokenShareValue
 import Blanc.Composition.UniswapV2PairUsdcWeth9Joint
 import Blanc.Composition.UniswapV2PairUsdcWeth9ShareValueF
@@ -34,7 +35,7 @@ theorem pair_usdc_weth9_history_feeOn_product {pair usdc weth : Adr}
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -63,7 +64,7 @@ theorem pair_usdc_weth9_history_feeOff_product {pair usdc weth : Adr}
       some (checkpoint.state.getCode st₀.factory).toList = UniswapV2Factory.factorySem.image)
     (factoryNotSystem : st₀.factory ≠ systemAddress) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧

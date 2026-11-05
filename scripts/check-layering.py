@@ -2000,6 +2000,8 @@ CONTRACTS["usdc"].append("Lift.Usdc.AllowanceQuiet")
 
 SHARED += ["Lift.CallMessageFacts", "Lift.CalldataWords", "Lift.ExactWalkStaticCallChild"]
 
+SHARED += ["ExecutionTargetPrefix"]
+
 # Fixed synthetic 299-byte token fixture, shared without V± instance worlds.
 SHARED += ['Lift.Token20.Cert', 'Lift.Token20.Check', 'Lift.Token20.Creation.Cert', 'Lift.Token20.Creation.Check', 'Lift.Token20.Creation.Deploy', 'Lift.Token20.Creation.Input', 'Lift.Token20.Frame', 'Lift.Token20.Run', 'Lift.Token20.RunBalance', 'Lift.Token20.RunTransfer', 'Lift.Token20.RunTransferFrom']
 

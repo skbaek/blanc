@@ -1,6 +1,7 @@
+import Blanc.Lift.OutermostFrames
+import Blanc.ExecutionTargetPrefix
 import Blanc.Composition.Curve3PoolSupplyStep
 import Blanc.Composition.Curve3Pool3CrvCheckpoint
-import Blanc.Composition.PairTokenJointWalk
 import Blanc.Lift.Curve3Pool.History
 import Blanc.ExecutionHistoryFrameTime
 
@@ -22,7 +23,7 @@ option B) and 3Crv's collision premise, the pool history's conclusion holds and
   frame's entry plus the invocation's own minted amounts minus its burned amounts.
 
 The proof is a positional walk over the settled frames in the shape of the sibling's pair walk
-(`PairTokenJointWalk.lean`, whose `PairClosed` prefixes and first-observation split it reuses):
+(`PairTokenJointWalk.lean`, whose `Blanc.ExecutionTrace.TargetClosed` prefixes and first-observation split it reuses):
 between two outermost pool invocations lies a *gap* holding no non-static pool frame, where no 3Crv
 invocation is sent by the pool (`gap_callers`), so supply and minter are kept
 (`SupplyFacet.run_keep`); each invocation's committed subtree moves the supply by its own token
@@ -219,7 +220,7 @@ theorem viewObs_eq_committed {ca : Adr} {U : Key → Prop} {cfg : ChainConfig}
 
 /-! ## Gaps -/
 
-theorem poolFrameObs_eq_pair (pool : Adr) : poolFrameObs pool = UniswapV2Pair.pairFrameObs pool := rfl
+theorem poolFrameObs_eq_pair (pool : Adr) : poolFrameObs pool = Blanc.Exec.Frame.obsAt pool := rfl
 
 /-- **The pool sends no 3Crv invocation inside a gap** after a pool-closed prefix: such an
 invocation's positional parent would be a non-static pool frame whose block ends inside the gap,
@@ -229,7 +230,7 @@ theorem gap_callers {pool ca : Adr} {U : Key → Prop} {cfg : ChainConfig}
     (ready : ∀ f ∈ trace.settledFrames, FrameReady ca U f)
     (roots : ∀ R ∈ trace.settledRoots, R.sevm.caller ≠ pool)
     {pre gap post : List Exec.Frame} (split : trace.settledFrames = pre ++ gap ++ post)
-    (closed : PairTokenJoint.PairClosed pool pre)
+    (closed : Blanc.ExecutionTrace.TargetClosed pool pre)
     (quiet : gap.flatMap (poolFrameObs pool) = []) :
     ∀ inv ∈ gap.flatMap (viewFrameObs ca), inv.sevm.caller ≠ pool := by
   intro inv member caller
@@ -265,7 +266,7 @@ theorem gap_callers {pool ca : Adr} {U : Key → Prop} {cfg : ChainConfig}
         · have inG₁ : G ∈ g₁ := by
             rw [inGap']
             exact List.mem_append_right _ List.mem_cons_self
-          have obs' := PairTokenJoint.mem_pairObs (pair := pool) (fs := g₁ ++ F :: g₂)
+          have obs' := Blanc.ExecutionTrace.mem_flatMap_obsAt (pair := pool) (fs := g₁ ++ F :: g₂)
             (List.mem_append_left _ inG₁) atPool mutableG
           rw [← poolFrameObs_eq_pair, quiet] at obs'
           cases obs'
@@ -320,7 +321,7 @@ theorem WalkEnv.gap_keep {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainCon
     {trace : ConfiguredHistoryTrace cfg checkpoint future}
     (W : WalkEnv trace pool ca coins cs₀ K₀ U) {pre gap post : List Exec.Frame}
     (split : trace.settledFrames = pre ++ gap ++ post)
-    (closed : PairTokenJoint.PairClosed pool pre) (quiet : gap.flatMap (poolFrameObs pool) = [])
+    (closed : Blanc.ExecutionTrace.TargetClosed pool pre) (quiet : gap.flatMap (poolFrameObs pool) = [])
     {X Y : Blanc.Curve3Crv.State} (hX : runInvocations cs₀ (pre.flatMap (viewFrameObs ca)) = some X)
     (hY : runInvocations cs₀ ((pre ++ gap).flatMap (viewFrameObs ca)) = some Y)
     (minter : X.minter = pool) :
@@ -352,7 +353,7 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
       PoolRun st invs st' → PoolEntries st invs → (∀ i ∈ invs, i.Authentic pool) →
       invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = fs.flatMap (poolFrameObs pool) →
       trace.settledFrames = pre ++ fs ++ post →
-      PairTokenJoint.PairClosed pool pre → PairTokenJoint.PairClosed pool (pre ++ fs) →
+      Blanc.ExecutionTrace.TargetClosed pool pre → Blanc.ExecutionTrace.TargetClosed pool (pre ++ fs) →
       st.coins = coins → st.token = ca.toNat →
       runInvocations cs₀ (pre.flatMap (viewFrameObs ca)) = some X → X.minter = pool →
       ∃ Y, runInvocations cs₀ ((pre ++ fs).flatMap (viewFrameObs ca)) = some Y ∧ Y.minter = pool ∧
@@ -375,10 +376,10 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
     obtain ⟨hpc, -, atPool, mutable, -⟩ := auth i List.mem_cons_self
     have selfObs : poolSubtreeFrames pool i.frame =
         i.frame :: (Exec.descendantFrames i.frame.run).flatMap (poolFrameObs pool) :=
-      PairTokenJoint.pairSubtreeFrames_self atPool mutable
+      Blanc.Exec.Frame.subtreeAt_of_target atPool mutable
     rw [List.flatMap_cons, selfObs, List.cons_append] at observed
     obtain ⟨gap, rest', rfl, quiet, -, -, restObs⟩ :=
-      PairTokenJoint.pairFrameObs_first (pair := pool) (by
+      Blanc.ExecutionTrace.obsAt_first (pair := pool) (by
         rw [← poolFrameObs_eq_pair]; exact observed.symm)
     rw [← poolFrameObs_eq_pair] at quiet restObs
     -- the invocation's subtree is contiguous and inside `fs`
@@ -465,10 +466,10 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
         ((pre ++ gap) ++ Exec.committedFrames i.frame.run) ++ rest'' ++ post := by
       rw [globalSplit, Exec.Frame.committedFrames_self]
       simp only [List.append_assoc, List.cons_append]
-    have closedNext : PairTokenJoint.PairClosed pool ((pre ++ gap) ++ Exec.committedFrames i.frame.run) :=
-      (closedPre.append (PairTokenJoint.PairClosed.gap (by rw [← poolFrameObs_eq_pair]; exact quiet))).append
-        (PairTokenJoint.PairClosed.committed pool i.frame)
-    have closedAll' : PairTokenJoint.PairClosed pool
+    have closedNext : Blanc.ExecutionTrace.TargetClosed pool ((pre ++ gap) ++ Exec.committedFrames i.frame.run) :=
+      (closedPre.append (Blanc.ExecutionTrace.TargetClosed.gap (by rw [← poolFrameObs_eq_pair]; exact quiet))).append
+        (Blanc.ExecutionTrace.TargetClosed.committed pool i.frame)
+    have closedAll' : Blanc.ExecutionTrace.TargetClosed pool
         (((pre ++ gap) ++ Exec.committedFrames i.frame.run) ++ rest'') := by
       rw [Exec.Frame.committedFrames_self]
       simpa only [List.append_assoc, List.cons_append] using closedAll
@@ -624,8 +625,8 @@ theorem pool_3crv_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future
         env.idNoAuthority env.idNoFrame env.sysNe)
   obtain ⟨Y, runY, minY, supY, steps⟩ := supply_walk W invs run entries auth obs
     (pre := []) (post := []) (by rw [List.nil_append, List.append_nil])
-    (PairTokenJoint.PairClosed.nil pool) (by
-      rw [List.nil_append]; exact PairTokenJoint.settledFrames_pairClosed trace)
+    (Blanc.ExecutionTrace.TargetClosed.nil pool) (by
+      rw [List.nil_append]; exact Blanc.ExecutionTrace.settledFrames_targetClosed trace)
     rfl joint.tokenIs rfl joint.minterIs
   rw [List.nil_append, viewObs_eq_committed trace ready] at runY
   obtain ⟨-, cs, -, runCs, final, -⟩ :=

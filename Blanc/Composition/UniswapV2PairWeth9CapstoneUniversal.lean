@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Composition.UniswapV2PairWeth9CapstoneShare
 import Blanc.Composition.UniswapV2PairWeth9CapstoneTrace
 import Blanc.Composition.UniswapV2PairWeth9CapstoneWorld
@@ -78,7 +79,7 @@ def ClosedSwapOutcome (st : Jaune.State) : Prop :=
                 (.allow pair g) → ((swapWorld st).getStor weth).get (Weth9.allowSlot pair g) = 0) ∧
       -- C4(a) over the history, its `X`-side antecedent discharged; strict increase at equal supply
         ∃ steps : List PairStep,
-          steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+          steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
           (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
           ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
             PairObservedReplayWith PairAdmittedConsumes w0PairState steps finish ∧

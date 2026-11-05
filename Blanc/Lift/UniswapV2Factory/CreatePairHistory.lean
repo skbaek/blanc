@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Lift.UniswapV2Factory.CreatePairTransaction
 import Blanc.Lift.UniswapV2Pair.PairMidHistoryIn
 
@@ -61,7 +62,7 @@ theorem pair_history_initialized_from_createPair_block {pre completed : BlockCha
         some (future.state.getCode UniswapV2Pair.Creation.pairAddress).toList =
             UniswapV2Pair.pairSem.image ∧
         ∃ steps : List UniswapV2Pair.PairStep,
-          steps.flatMap (fun s => UniswapV2Pair.pairSubtreeFrames
+          steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt
               UniswapV2Pair.Creation.pairAddress s.frame) =
             UniswapV2Pair.committedPairFramesMidIn UniswapV2Pair.Creation.pairAddress
               ((MidHistoryTraceIn.tail block cut).append history) ∧
@@ -153,7 +154,7 @@ theorem pair_history_initialized_from_createPair_block_noCollision {pre complete
         some (future.state.getCode UniswapV2Pair.Creation.pairAddress).toList =
             UniswapV2Pair.pairSem.image ∧
         ∃ steps : List UniswapV2Pair.PairStep,
-          steps.flatMap (fun s => UniswapV2Pair.pairSubtreeFrames
+          steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt
               UniswapV2Pair.Creation.pairAddress s.frame) =
             UniswapV2Pair.committedPairFramesMidIn UniswapV2Pair.Creation.pairAddress
               ((MidHistoryTraceIn.tail block cut).append history) ∧

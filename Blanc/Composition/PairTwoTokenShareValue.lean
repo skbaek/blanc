@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Composition.PairTwoToken
 
 /-!
@@ -54,7 +55,7 @@ theorem pair_two_token_feeOn_product {pair T0 T1 : Adr} {B0 B1 : Book} (C0 : Cor
     (start0 : JointAtW C0 trace pair .zero st₀ checkpoint.state)
     (start1 : JointAtW C1 trace pair .one st₀ checkpoint.state) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -103,7 +104,7 @@ theorem pair_two_token_feeOff_product {pair T0 T1 : Adr} {B0 B1 : Book} (C0 : Co
     (start0 : JointAtW C0 trace pair .zero st₀ checkpoint.state)
     (start1 : JointAtW C1 trace pair .one st₀ checkpoint.state) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧

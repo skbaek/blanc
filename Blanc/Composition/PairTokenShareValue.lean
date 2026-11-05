@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Composition.PairTokenJoint
 
 /-!
@@ -45,7 +46,7 @@ theorem pair_token_feeOff_product_w {pair T : Adr} {B : Book} (C : CoreW T B)
             ¬ node.sevm.benvStat.rules.isPrecomp T)
     (start : JointAtW C trace pair side st₀ checkpoint.state) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -83,7 +84,7 @@ theorem pair_token_feeOn_product_w {pair T : Adr} {B : Book} (C : CoreW T B)
             ¬ node.sevm.benvStat.rules.isPrecomp T)
     (start : JointAtW C trace pair side st₀ checkpoint.state) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -127,7 +128,7 @@ theorem pair_token_feeOff_product {pair T : Adr} {B : Book} (C : Core T B) (laws
             ¬ node.sevm.benvStat.rules.isPrecomp T)
     (start : JointAt C trace pair side st₀ checkpoint.state) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
@@ -162,7 +163,7 @@ theorem pair_token_feeOn_product {pair T : Adr} {B : Book} (C : Core T B) (laws 
             ¬ node.sevm.benvStat.rules.isPrecomp T)
     (start : JointAt C trace pair side st₀ checkpoint.state) :
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop),
         PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧

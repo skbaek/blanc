@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Lift.UniswapV2Pair.PairHistoryIn
 import Blanc.ExecutionAccountingMidHistoryIn
 import Blanc.ExecutionMidHistoryInFacts
@@ -34,7 +35,7 @@ noncomputable def pairMidTouchedKeysIn {F : Fork → Prop} {cfg : ChainConfig} {
 def committedPairFramesMidIn {F : Fork → Prop} {cfg : ChainConfig} {start : Benv}
     {future : BlockChain} (pair : Adr) (trace : MidHistoryTraceIn F cfg start future) :
     List Exec.Frame :=
-  trace.settledFrames.flatMap (pairFrameObs pair)
+  trace.settledFrames.flatMap (Blanc.Exec.Frame.obsAt pair)
 
 /-- Every Pair frame root of a mid history is admitted by `pairEntry` over a universe holding the
 history's touched rows; calldata is short on a domain whose nonzero calldata byte costs at least
@@ -82,7 +83,7 @@ theorem pair_mid_history_committed_withIn
     (fresh : WriterFreshKeys K₀ (pairMidTouchedKeysIn pair trace)) :
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) =
         committedPairFramesMidIn pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),
@@ -108,8 +109,8 @@ theorem pair_mid_history_committed_withIn
       startInv installedCert pairSem_image
   change PairReplayWith Consumes Auth pair U (start.state.getStor pair).get frames
     (future.state.getStor pair).get at replay
-  change frames.flatMap (pairSubtreeFrames pair) =
-    trace.settledFrames.flatMap (pairFrameObs pair) at observed
+  change frames.flatMap (Blanc.Exec.Frame.subtreeAt pair) =
+    trace.settledFrames.flatMap (Blanc.Exec.Frame.obsAt pair) at observed
   obtain ⟨steps, framesEq, auth, finish, K', source, grows, inside, s, view, rep⟩ :=
     replay st₀ K₀ (fun _ h => Or.inl h) ⟨_, rfl, initial⟩
   refine ⟨finishInv.code, steps, ?_, auth, finish, K', source, source.sourceReplay weaken,
@@ -138,7 +139,7 @@ theorem pair_mid_history_initialized_withIn
     (fresh : WriterFreshKeys (fun _ => False) (pairMidTouchedKeysIn pair trace)) :
     some (future.state.getCode pair).toList = pairSem.image ∧
     ∃ steps : List PairStep,
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) =
         committedPairFramesMidIn pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith Auth pair) ∧
       ∃ (finish : State) (K' : WriterKey → Prop),

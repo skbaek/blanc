@@ -1,3 +1,5 @@
+import Blanc.Lift.OutermostFrames
+import Blanc.ExecutionTargetPrefix
 import Blanc.Composition.PairTokenJoint
 
 /-!
@@ -69,7 +71,7 @@ theorem pair_two_token_joint {pair T0 T1 : Adr} {B0 B1 : Book} (C0 : CoreW T0 B0
           st.token1 = T1 ∧ JointAtW C0 trace pair .zero st f.pre.state ∧
           JointAtW C1 trace pair .one st f.pre.state) ∧
     ∃ (finish : UniswapV2Pair.State) (K' : WriterKey → Prop) (steps : List PairStep),
-      steps.flatMap (fun s => pairSubtreeFrames pair s.frame) = committedPairFrames pair trace ∧
+      steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) = committedPairFrames pair trace ∧
       (∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) ∧
       PairObservedReplayWith PairAdmittedConsumes st₀ steps finish ∧
       runSourceInvocations st₀ (steps.map PairStep.source) = some finish ∧
@@ -85,12 +87,12 @@ theorem pair_two_token_joint {pair T0 T1 : Adr} {B0 B1 : Book} (C0 : CoreW T0 B0
   · -- one Pair witness (the replay of the steps before `f`) for both sides
     obtain ⟨steps, st, K, observed, auth, replay, rep⟩ :=
       pair_history_stateAt_auth trace installed initial fresh before f after split noOpaque
-    have closed := before_pairClosed trace split noOpaque
+    have closed := Blanc.ExecutionTrace.before_targetClosed trace split noOpaque
     obtain ⟨l0, run0, reserve0, zero0, tokens, opened, -⟩ := walk0 steps replay auth observed
-      (pre := []) (post := f :: after) split (PairClosed.nil pair) closed ⟨rfl, rfl, rfl⟩
+      (pre := []) (post := f :: after) split (Blanc.ExecutionTrace.TargetClosed.nil pair) closed ⟨rfl, rfl, rfl⟩
       unlocked rfl start0.1 start0.2
     obtain ⟨l1, run1, reserve1, zero1, -⟩ := walk1 steps replay auth observed
-      (pre := []) (post := f :: after) split (PairClosed.nil pair) closed ⟨rfl, rfl, rfl⟩
+      (pre := []) (post := f :: after) split (Blanc.ExecutionTrace.TargetClosed.nil pair) closed ⟨rfl, rfl, rfl⟩
       unlocked rfl start1.1 start1.2
     rw [List.nil_append, C0.replayAt trace hist0 before f after split lit0] at run0
     rw [List.nil_append, C1.replayAt trace hist1 before f after split lit1] at run1
@@ -104,10 +106,10 @@ theorem pair_two_token_joint {pair T0 T1 : Adr} {B0 B1 : Book} (C0 : CoreW T0 B0
     have whole : trace.settledFrames = [] ++ trace.settledFrames ++ [] := by
       rw [List.nil_append, List.append_nil]
     obtain ⟨l0, run0, reserve0, zero0, -, -, side0⟩ := walk0 steps replay auth observed
-      (pre := []) (post := []) whole (PairClosed.nil pair) (settledFrames_pairClosed trace)
+      (pre := []) (post := []) whole (Blanc.ExecutionTrace.TargetClosed.nil pair) (Blanc.ExecutionTrace.settledFrames_targetClosed trace)
       ⟨rfl, rfl, rfl⟩ unlocked rfl start0.1 start0.2
     obtain ⟨l1, run1, reserve1, zero1, -, -, side1⟩ := walk1 steps replay auth observed
-      (pre := []) (post := []) whole (PairClosed.nil pair) (settledFrames_pairClosed trace)
+      (pre := []) (post := []) whole (Blanc.ExecutionTrace.TargetClosed.nil pair) (Blanc.ExecutionTrace.settledFrames_targetClosed trace)
       ⟨rfl, rfl, rfl⟩ unlocked rfl start1.1 start1.2
     rw [List.nil_append, C0.replayEnd trace hist0] at run0
     rw [List.nil_append, C1.replayEnd trace hist1] at run1

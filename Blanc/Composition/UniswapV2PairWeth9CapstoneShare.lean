@@ -1,3 +1,4 @@
+import Blanc.Lift.OutermostFrames
 import Blanc.Composition.UniswapV2PairWeth9CapstoneKeys
 import Blanc.Composition.UniswapV2PairWeth9ShareValue
 
@@ -49,23 +50,23 @@ theorem history_steps_swap {cfg : ChainConfig} {checkpoint future : BlockChain}
     (cases : ∀ D ∈ trace.rawFrames, D.sevm.currentTarget ∈ systemAddresses ∨
       D.sevm.currentTarget = tokenX ∨ D = ⟨0, sevm, St b [] Mem.empty G, out, run⟩ ∨ Tx2Callee D)
     {steps : List PairStep}
-    (observed : steps.flatMap (fun s => pairSubtreeFrames pair s.frame) =
+    (observed : steps.flatMap (fun s => Blanc.Exec.Frame.subtreeAt pair s.frame) =
       committedPairFrames pair trace)
     (auth : ∀ s ∈ steps, s.AuthenticWith PairEntryAuth pair) :
     ∀ inv ∈ steps.map PairStep.source, ∃ a b r d, inv.entry = .swap a b r d := by
   intro inv hinv
   obtain ⟨s, hs, rfl⟩ := List.mem_map.mp hinv
   obtain ⟨-, -, target, static, entryAt⟩ := auth s hs
-  have inSub : s.frame ∈ pairSubtreeFrames pair s.frame := by
+  have inSub : s.frame ∈ Blanc.Exec.Frame.subtreeAt pair s.frame := by
     refine List.mem_flatMap.mpr ⟨s.frame, Exec.Frame.mem_committedFrames.mpr (Or.inl rfl), ?_⟩
-    rw [pairFrameObs, ite_eq_left ⟨target, static⟩]
+    rw [Blanc.Exec.Frame.obsAt, ite_eq_left ⟨target, static⟩]
     exact List.mem_singleton_self _
   have inCommitted : s.frame ∈ committedPairFrames pair trace := by
     rw [← observed]
     exact List.mem_flatMap.mpr ⟨s, hs, inSub⟩
   obtain ⟨F, settled, obs⟩ := List.mem_flatMap.mp inCommitted
   have sameF : s.frame = F := by
-    unfold pairFrameObs at obs
+    unfold Blanc.Exec.Frame.obsAt at obs
     split at obs
     · exact List.mem_singleton.mp obs
     · cases obs
