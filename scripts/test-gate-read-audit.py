@@ -533,28 +533,28 @@ def legacy_descendant_controls() -> None:
         PROBE = 'import json,os,sys\nfrom pathlib import Path\nprobe={"environment":dict(os.environ),"path":sys.path,"argv":sys.argv,"orig_argv":sys.orig_argv,"executable":sys.executable,"prefix":sys.prefix,"base_prefix":sys.base_prefix,"flags":repr(sys.flags),"file":globals().get("__file__"),"package":globals().get("__package__"),"spec":({k:getattr(__spec__,k) for k in ["name","origin","parent","has_location","cached"]} if globals().get("__spec__") is not None else None),"loader":repr(type(globals().get("__loader__"))),"dont_write_bytecode":sys.dont_write_bytecode}\nassert Path(os.environ["HOLE"]).read_text()=="undeclared payload\\n"\n'
         # Test-owned callback/check_output contract: retained helpers wrap errors or
         # use a different output API. Product register/template-fill semantics are
-        # deliberately absent; the real shared run_t8n descendant remains above it.
+        # deliberately absent; a test-owned module child exercises the real callback.
         templates = {"schema": "synthetic-template-v1"}
         SCHEMA_FIXTURE = 'def schema_contract():\n    command = [sys.executable, str(SCHEMA_TOOL), "schema"]\n    run = getattr(sys, "_blanc_gate_read_audit_run", None)\n    if run is None:\n        raw = subprocess.check_output(command, cwd=REPO)\n    else:\n        raw = run(command, cwd=REPO, stdout=subprocess.PIPE, check=True).stdout\n    value = json.loads(raw)\n    assert set(value) == {"documentFill"}\n    contract = value["documentFill"]\n    assert contract["templates"] == SCHEMA_TEMPLATES\n    return contract\n'
-        PARENT = ('import importlib.util,json,os,sys,subprocess\nfrom pathlib import Path\nsource=Path(os.environ["SOURCE"])\nPath(os.environ["DECLARED"]).read_text()\nspec=importlib.util.spec_from_file_location("prague_actual", source/"scripts/prague_fixture.py")\np=importlib.util.module_from_spec(spec);spec.loader.exec_module(p)\npost,result,body=p.run_t8n({}, {}, [], eels_root=Path(os.environ["EELS_ROOT"]))\nassert (post,result,body)==({}, {}, [])\nSCHEMA_TOOL=Path(os.environ["SCHEMA_TOOL"])\nREPO=Path(os.environ["SYNTHETIC_ROOT"])\n'
+        MODULE_FIXTURE = "def module_contract():\n    with tempfile.TemporaryDirectory() as directory:\n        output = Path(directory)\n        for name, value in [('first.json', {}), ('second.json', {}), ('third.json', [])]:\n            (output / name).write_text(json.dumps(value))\n        command = [sys.executable, '-m', 'synthetic_module',\n                   '--input-first', str(output / 'first.json'),\n                   '--input-second', str(output / 'second.json'),\n                   '--input-third', str(output / 'third.json'),\n                   '--output-dir', directory]\n        run = getattr(sys, '_blanc_gate_read_audit_run', subprocess.run)\n        run(command, check=True, capture_output=True, text=True,\n            env={**os.environ, 'PYTHONPATH': str(Path(os.environ['MODULE_ROOT']) / 'src')})\n        return tuple(json.loads((output / name).read_text())\n                     for name in ('first-result.json', 'second-result.json', 'third-result.json'))\n"
+        PARENT = ('import json,os,sys,subprocess,tempfile\nfrom pathlib import Path\nPath(os.environ["DECLARED"]).read_text()\n' + MODULE_FIXTURE + 'assert module_contract()==({}, {}, [])\nSCHEMA_TOOL=Path(os.environ["SCHEMA_TOOL"])\nREPO=Path(os.environ["SYNTHETIC_ROOT"])\n'
                   + "SCHEMA_TEMPLATES=" + repr(templates) + "\n"
                   + SCHEMA_FIXTURE + 'try:\n    contract=schema_contract()\n    assert contract=={"templates":SCHEMA_TEMPLATES}\n    print("legacy descendant success")\nexcept subprocess.CalledProcessError as e:\n    print(json.dumps({"type":type(e).__name__,"returncode":e.returncode,"cmd":e.cmd,"output":e.output.hex(),"stderr":e.stderr}))\n    raise SystemExit(23)\n')
 
         def setup(name, failure=False):
             root = WORK / name
             root.mkdir(exist_ok=True)
-            eels = root / 'eels'
-            src = eels / 'src'
-            package = src / 'ethereum_spec_tools/evm_tools'
-            write(src / 'ethereum_spec_tools/__init__.py', '')
+            package_root = root / 'module-package'
+            src = package_root / 'src'
+            package = src / 'synthetic_module'
             write(package / '__init__.py', '')
             write(root / 'declared.txt', 'declared parent input\n')
             write(root / 'undeclared.txt', 'undeclared payload\n')
-            write(package / '__main__.py', PROBE + 'Path(os.environ["T8N_PROBE"]).write_text(json.dumps(probe,sort_keys=True))\na=sys.argv[1:];out=Path(a[a.index("--output.basedir")+1])\nfor n,v in [("out-alloc.json",{}),("out-result.json",{}),("out-body.txt",[])]:\n    (out/n).write_text(json.dumps(v))\n')
+            write(package / '__main__.py', PROBE + 'Path(os.environ["MODULE_PROBE"]).write_text(json.dumps(probe,sort_keys=True))\na=sys.argv[1:];out=Path(a[a.index("--output-dir")+1])\nfor n,v in [("first-result.json",{}),("second-result.json",{}),("third-result.json",[])]:\n    (out/n).write_text(json.dumps(v))\n')
             schema = write(root / 'schema.py', PROBE + 'Path(os.environ["SCHEMA_PROBE"]).write_text(json.dumps(probe,sort_keys=True))\n' + ('print("failure stdout");print("failure stderr",file=sys.stderr);raise SystemExit(7)\n' if failure else 'print(' + repr(json.dumps({'documentFill': {'templates': templates}})) + ')\n'))
             parent = write(root / 'parent.py', PARENT)
-            wrapper = write(root / 'wrapper.sh', '#!/usr/bin/env bash\nset -eu\nSCRIPT_DIR=' + shlex.quote(str(SOURCE / 'scripts')) + '\n. "$SCRIPT_DIR/read-audit/launch.sh"\nPYTHONPATH="$EELS_ROOT/src" gate_audit_python ' + shlex.quote(PYTHON) + ' ' + shlex.quote(str(parent)) + '\n')
-            env = dict(os.environ, SOURCE=str(SOURCE), SYNTHETIC_ROOT=str(root), DECLARED=str(root / 'declared.txt'), EELS_ROOT=str(eels), HOLE=str(root / 'undeclared.txt'), SCHEMA_TOOL=str(schema), T8N_PROBE=str(root / 't8n-probe.json'), SCHEMA_PROBE=str(root / 'schema-probe.json'), PYTHONDONTWRITEBYTECODE='1')
+            wrapper = write(root / 'wrapper.sh', '#!/usr/bin/env bash\nset -eu\nSCRIPT_DIR=' + shlex.quote(str(SOURCE / 'scripts')) + '\n. "$SCRIPT_DIR/read-audit/launch.sh"\nPYTHONPATH="$MODULE_ROOT/src" gate_audit_python ' + shlex.quote(PYTHON) + ' ' + shlex.quote(str(parent)) + '\n')
+            env = dict(os.environ, SOURCE=str(SOURCE), SYNTHETIC_ROOT=str(root), DECLARED=str(root / 'declared.txt'), MODULE_ROOT=str(package_root), HOLE=str(root / 'undeclared.txt'), SCHEMA_TOOL=str(schema), MODULE_PROBE=str(root / 'module-probe.json'), SCHEMA_PROBE=str(root / 'schema-probe.json'), PYTHONDONTWRITEBYTECODE='1')
             return (root, parent, wrapper, env)
         summaries = []
 
@@ -566,14 +566,14 @@ def legacy_descendant_controls() -> None:
             m.OUT_DIR = root / 'observation'
             m.OUT_DIR.mkdir(exist_ok=True)
             log = m.OUT_DIR / (name + '.log')
-            baseline_env = dict(env, PYTHONPATH=env['EELS_ROOT'] + '/src', GATE_READ_AUDIT=str(log))
+            baseline_env = dict(env, PYTHONPATH=env['MODULE_ROOT'] + '/src', GATE_READ_AUDIT=str(log))
             ordinary = write(root / 'ordinary-wrapper.sh', wrapper.read_text().replace('gate_audit_python ', ''))
             plain = subprocess.run(['bash', str(ordinary)], cwd=root, env=baseline_env, capture_output=True, text=True)
             assert plain.returncode == (23 if failure else 0), (plain.stdout, plain.stderr)
-            probes = {n: json.loads((root / (n + '-probe.json')).read_text()) for n in ['t8n', 'schema']}
+            probes = {n: json.loads((root / (n + '-probe.json')).read_text()) for n in ['module', 'schema']}
             if disable_callback:
                 parent.write_text('import sys\nif hasattr(sys,"_blanc_gate_read_audit_run"): del sys._blanc_gate_read_audit_run\n' + parent.read_text())
-            files = [p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file() and p.name not in ['undeclared.txt', 't8n-probe.json', 'schema-probe.json'] and ('observation' not in p.parts)]
+            files = [p.relative_to(root).as_posix() for p in root.rglob('*') if p.is_file() and p.name not in ['undeclared.txt', 'module-probe.json', 'schema-probe.json'] and ('observation' not in p.parts)]
             gate = {'id': name, 'kind': 'cacheable', 'command': ['bash', str(wrapper)], 'inputs': {'files': files}}
             m.gc.load_registry = lambda _: {'gates': [gate]}
             m.interesting_roots = lambda: [root]
@@ -601,14 +601,14 @@ def legacy_descendant_controls() -> None:
                 for n, expected in probes.items():
                     got = json.loads((root / (n + '-probe.json')).read_text())
                     for k in ['argv', 'orig_argv']:
-                        if n == 't8n':
+                        if n == 'module':
 
                             def norm(v):
-                                index = v.index('--output.basedir')
+                                index = v.index('--output-dir')
                                 base = Path(v[index + 1])
                                 assert base.parent.resolve() == Path(tempfile.gettempdir()).resolve() and base.name.startswith('tmp'), base
                                 exact = {str(base / name): '<actual-temporary-path>/' + name
-                                         for name in ('env.json', 'alloc.json', 'txs.json')}
+                                         for name in ('first.json', 'second.json', 'third.json')}
                                 exact[str(base)] = '<actual-temporary-path>'
                                 return [exact.get(x, x) for x in v]
                             expected[k] = norm(expected[k])
@@ -637,7 +637,7 @@ def legacy_descendant_controls() -> None:
             source = source.replace('except subprocess.CalledProcessError as e:', 'except subprocess.TimeoutExpired as e:').replace('"returncode":e.returncode', '"timeout":e.timeout')
             parent.write_text(source)
             log = root / 'timeout.log'
-            same_env = dict(env, PYTHONPATH=env['EELS_ROOT'] + '/src', GATE_READ_AUDIT=str(log))
+            same_env = dict(env, PYTHONPATH=env['MODULE_ROOT'] + '/src', GATE_READ_AUDIT=str(log))
             ordinary = write(root / 'ordinary-wrapper.sh', wrapper.read_text().replace('gate_audit_python ', ''))
             plain = subprocess.run(['bash', str(ordinary)], cwd=root, env=same_env, capture_output=True, text=True)
             actual = subprocess.run(['bash', str(wrapper)], cwd=root, env=same_env, capture_output=True, text=True)
@@ -816,17 +816,15 @@ def launch_event_regression_controls() -> None:
                           b'elif False and first == "#!/usr/bin/env python3":',
                           lambda: python("env-python-sole-recognition-removal", parent, [subject.name]))
 
-        # Extract the actual helper with a synthetic generator. Its clean child
-        # env strips PYTHONPATH, so full target probe parity is meaningful here.
-        source = Path(__file__).with_name("test-lido-ossifiable-proxy-artifact-falsifiers.py")
-        node = next(node for node in ast.parse(source.read_text()).body
-                    if isinstance(node, ast.FunctionDef) and node.name == "generator_process")
+        # Test-owned sanitized child calls the real audit callback.
+        # Its clean environment strips PYTHONPATH; full probe parity remains required.
+        generator_fixture = "def generator_process(root, *arguments):\n    environment = {'LANG': 'C', 'LC_ALL': 'C', 'PATH': os.environ.get('PATH', ''),\n                   'PYTHONDONTWRITEBYTECODE': '1'}\n    run = getattr(sys, '_blanc_gate_read_audit_run', subprocess.run)\n    return run([sys.executable, str(root / GENERATOR), *arguments], cwd=root,\n               env=environment, text=True, capture_output=True, timeout=20, check=False)\n"
         generator = root / "generator.py"
         generator.write_text("import os,sys,json\n" + payload + "\n"
                              "print(json.dumps({'environment':dict(os.environ),'argv':sys.argv,'orig':sys.orig_argv,'path':sys.path,'flags':repr(sys.flags),'cwd':os.getcwd()},sort_keys=True))\n")
         parent_file = root / "artifact-parent.py"
         parent_file.write_text("import os,subprocess,sys\nfrom pathlib import Path\nGENERATOR=Path('generator.py')\n"
-                               + ast.unparse(node) + f"\nr=generator_process(Path({str(root)!r}),'unchanged');assert r.returncode==0,r.stderr;print(r.stdout,end='')\n")
+                               + generator_fixture + f"\nr=generator_process(Path({str(root)!r}),'unchanged');assert r.returncode==0,r.stderr;print(r.stdout,end='')\n")
         shell = 'SCRIPT_DIR="$1"; . "$SCRIPT_DIR/read-audit/launch.sh"; shift; gate_audit_python "$@"'
         command = ["bash", "-c", shell, "artifact-control", str(copied.parent), sys.executable, str(parent_file)]
         baseline = subprocess.run([sys.executable, str(parent_file)], cwd=root,
@@ -923,53 +921,62 @@ def material_authority_coverage_controls() -> None:
 
 def current_wrapper_source_controls() -> None:
     source = Path(__file__).resolve().parent
-    wrappers = ("check-current-mainnet.sh", "check-weth10-current-mainnet.sh",
-                "check-beacon-deposit-current-mainnet.sh", "check-prorata-current-mainnet.sh",
-                "check-lido-ossifiable-proxy-current-mainnet.sh", "check-drip-current-mainnet.sh",
-                "check-lido-twg-pinned-target-current-mainnet.sh")
+    wrappers = ("check-current-mainnet.sh",)
     for name in wrappers:
         result = subprocess.run(["bash", "-n", str(source / name)], capture_output=True, text=True)
         assert result.returncode == 0, result.stderr
-    # Exercise the retained wrapper's actual preflight and immediately following
-    # early return. The syntax inventory above still describes the live corpus;
-    # pending product retirement must update that list explicitly, not skip files.
+    # The explicit syntax inventory names the retained current-mainnet wrapper.
+    # Retired product wrappers are not test fixtures; missing retained sources fail.
+    #
+    # The static-return control instead exercises a neutral, test-owned
+    # fixture branch against the real shared `read-audit/launch.sh` in
+    # ordinary mode.  It uses `gate_audit_python` (not the exec form) before
+    # `exit "$?"`, so disabling the exit still has an observable fallthrough.
     import hashlib
-    name = "check-weth10-current-mainnet.sh"
-    wrapper = source / name
-    text = wrapper.read_text()
-    start = text.index("gate_audit_python /usr/bin/env -i ")
-    stop = text.index('if [ "$STATIC_SELF_CHECK" -eq 1 ]; then', start)
-    branch = text[start:text.index("\nfi", stop) + 3]
+    import shlex
+    name = "neutral-static-return-fixture"
+    branch = ('if [ "$STATIC_SELF_CHECK" -eq 1 ]; then\n'
+              '  gate_audit_python "$STATIC_PYTHON" -B "$STATIC_CHILD" "$CHILD_STATUS"\n'
+              '  exit "$?"\n'
+              'fi')
+    static_env = dict(os.environ)
+    static_env.pop("GATE_READ_AUDIT", None)
+    with tempfile.TemporaryDirectory(prefix="gate-read-static-") as static_directory:
+        static_child = Path(static_directory) / "static-child.py"
+        static_child.write_text("import sys\nraise SystemExit(int(sys.argv[1]))\n")
 
-    def verify_static_return(candidate):
-        for child_exit in (0, 19):
-            control = ('set -euo pipefail\nSCRIPT_DIR=/unused\nTARGET_PYTHON=/unused/python\n'
-                       'CHILD_ENV=("SYNTHETIC=1")\nHISTORICAL_BOUNDARY=synthetic\nEVIDENCE_BOUNDARY_FALSIFIERS=4\n'
-                       'STATIC_SELF_CHECK=1\n'
-                       'gate_audit_python() { return ' + str(child_exit) + '; }\n'
-                       'gate_audit_exec_python() { return ' + str(child_exit) + '; }\n'
-                       + candidate + '\nexit 77\n')
-            result = subprocess.run(["bash", "-c", control, "static-branch", "--static-self-check"], capture_output=True, text=True)
-            assert result.returncode == child_exit, (name, child_exit, result.returncode, result.stderr)
+        def verify_static_return(candidate):
+            for child_exit in (0, 19):
+                control = ('set -euo pipefail\n'
+                           'SCRIPT_DIR=' + shlex.quote(str(source)) + '\n'
+                           '. "$SCRIPT_DIR/read-audit/launch.sh"\n'
+                           'STATIC_SELF_CHECK=1\n'
+                           'STATIC_PYTHON=' + shlex.quote(sys.executable) + '\n'
+                           'STATIC_CHILD=' + shlex.quote(str(static_child)) + '\n'
+                           'CHILD_STATUS=' + str(child_exit) + '\n'
+                           + candidate + '\nexit 77\n')
+                result = subprocess.run(["bash", "-c", control, "static-branch"],
+                                        env=static_env, capture_output=True, text=True)
+                assert result.returncode == child_exit, (name, child_exit, result.returncode, result.stderr)
 
-    verify_static_return(branch)
-    green = branch
-    green_sha = hashlib.sha256(green.encode()).hexdigest()
-    assert branch.count("  exit 0\n") == 1
-    try:
-        # Keep the if body syntactically valid while removing only its exit effect.
-        branch = branch.replace("  exit 0\n", "  :\n", 1)
+        verify_static_return(branch)
+        green = branch
+        green_sha = hashlib.sha256(green.encode()).hexdigest()
+        assert branch.count('  exit "$?"\n') == 1
         try:
-            verify_static_return(branch)
-        except AssertionError as error:
-            assert error.args == ((name, 0, 77, ""),), error
-            print("CONTROL retained WETH10 exit-effect disabled bites at fallthrough sentinel 77")
-        else:
-            raise AssertionError("removing the static return escaped the fallthrough control")
-    finally:
-        branch = green
-    assert hashlib.sha256(branch.encode()).hexdigest() == green_sha and wrapper.read_text() == text
-    print("CONTROL static-return source restored SHA256 " + green_sha + "; no identical restored rerun")
+            # Keep the if body syntactically valid while removing only its exit effect.
+            branch = branch.replace('  exit "$?"\n', "  :\n", 1)
+            try:
+                verify_static_return(branch)
+            except AssertionError as error:
+                assert error.args == ((name, 0, 77, ""),), error
+                print("CONTROL neutral static-branch exit-effect disabled bites at fallthrough sentinel 77")
+            else:
+                raise AssertionError("removing the static return escaped the fallthrough control")
+        finally:
+            branch = green
+        assert hashlib.sha256(branch.encode()).hexdigest() == green_sha
+    print("CONTROL static-return fixture restored SHA256 " + green_sha + "; no identical restored rerun")
     with tempfile.TemporaryDirectory(prefix="gate-read-ordinary-") as directory:
         root = Path(directory)
         script = root / "ordinary.py"
@@ -1140,51 +1147,15 @@ raise SystemExit(result.returncode)
         configure(missing=True)
         unknown(observed('real-absent-backend'), 'native')
 
-        # Actual source-owned dynamic DRIP producer and copied real mock routing.
-        producer = Path(__file__).with_name('test-drip-gate-coordination.py')
-        harness = root / 'routing.py'
-        harness.write_text('''import hashlib,importlib.util,json,os,sys,unittest,tempfile
-from pathlib import Path
-tempfile.tempdir=str(Path(__file__).resolve().parent)
-spec=importlib.util.spec_from_file_location('actual_drip',sys.argv[1]);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
-records=[];original=m.DripGateCoordination.run_gate
-if sys.argv[2]=='ordinary': sys.__dict__.pop('_blanc_gate_read_audit_shell_run',None)
-def recording(self,*args):
- env={k:v.replace(str(self.root),'$FIXTURE') for k,v in self.env.items() if k!='GATE_READ_AUDIT'}
- result,rows=original(self,*args)
- records.append({'args':list(args),'environment_sha256':hashlib.sha256(json.dumps(env,sort_keys=True).encode()).hexdigest(),'status':result.returncode,'stdout':result.stdout,'stderr':result.stderr,'calls':rows})
- return result,rows
-m.DripGateCoordination.run_gate=recording
-result=unittest.TestResult();unittest.defaultTestLoader.loadTestsFromTestCase(m.DripGateCoordination).run(result)
-assert result.testsRun==7 and not result.failures and not result.errors,(result.failures,result.errors)
-print(json.dumps(records,sort_keys=True))
-''')
-        cap = json.loads(json.dumps(seed))
-        cap['observer_sources'] = {name: hashlib.sha256((HOOK/name).read_bytes()).hexdigest()
-                                   for name in module.native_process.SOURCE_FILES}
-        cap['boundaries'] = {'drip-routing': {'kind':'drip-routing-v1', 'producer':str(producer),
-            'producer_sha256':hashlib.sha256(producer.read_bytes()).hexdigest(),
-            'copied':{name:{'source':str(producer.parent/name),'sha256':hashlib.sha256((producer.parent/name).read_bytes()).hexdigest()}
-                      for name in ('check-drip.sh','gate-semaphore.sh')}}}
-        raw = (json.dumps(cap,sort_keys=True,separators=(',',':'))+'\n').encode();capfile.write_bytes(raw)
-        module.NATIVE_CAPABILITY = {'origin':str(capfile),'sha256':hashlib.sha256(raw).hexdigest(),'data':cap}
-        def routing(name,mode):
-            gate={'id':name,'command':[sys.executable,'-B',str(harness),str(producer),mode],
-                  'inputs':{'files':[str(harness),str(producer),str(producer.parent/'check-drip.sh'),str(producer.parent/'gate-semaphore.sh')]}}
-            outcome=module.audit_gate(gate,[root],set());facts.append({'name':name,'result':outcome})
-            return outcome,json.loads((module.OUT_DIR/(name+'.stdout.log')).read_text())
-        positive, traced = routing('actual-integrated-drip','observed')
-        assert positive['exit']==0 and not positive['unverified'] and not positive['undeclared'],positive
-        assert len(positive['native_process_captures'])==9 and len(traced)==9
-        baseline, ordinary = routing('actual-drip-ordinary','ordinary')
-        assert baseline['exit']==0 and len(ordinary)==9 and baseline['unverified'],baseline
-        assert traced==ordinary,(traced,ordinary)
+        # The product-specific DRIP routing producer retires with that lane.
+        # Generic native source/capability/callback controls above remain live;
+        # no product fixture is kept merely as a transport test subject.
         if artifact_root is not None:
             target=Path(artifact_root);target.mkdir(parents=True,exist_ok=True)
             (target/'results.json').write_text(json.dumps(facts,indent=2)+'\n')
             shutil.copytree(module.OUT_DIR,target/'audit',dirs_exist_ok=True)
             (target/'capability.json').write_bytes(capfile.read_bytes())
-        print('CONTROL integrated native protocol: real hidden Python HOLE, missing receipts/callback, nonce/orphan/U, source/backend/capability refusals, exact restoration; actual seven DRIP methods/nine launches parity')
+        print('CONTROL integrated native protocol: real hidden Python HOLE, missing receipts/callback, nonce/orphan/U, source/backend/capability refusals, exact restoration; product routing fixtures retired')
 
 
 def native_cancellation_control(seed, artifact_root) -> None:

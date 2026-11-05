@@ -3292,30 +3292,62 @@ def control_shell_reasks_before_escalating_its_own_hold() -> None:
                 "the process-owned admitted unit is released once at shell exit")
 
 
-# --- production wrapper lifetime --------------------------------------------
+# --- wrapper lifetime fixture -------------------------------------------------
+#
+# A neutral, test-owned shell fixture stands in for a production gate wrapper:
+# it sources the real shared launch and semaphore helpers, installs the EXIT
+# release trap, acquires the default tolerant hold, runs a fake lake child and
+# then a final `gate_audit_python` checker child.  It deliberately names no
+# product gate, so this generic lifetime contract survives product retirement.
 
-WETH10_DEPLOYMENT_WRAPPER = (
-    Path(__file__).resolve().parent / "check-weth10-deployment.sh"
-)
+NEUTRAL_WRAPPER_LIFETIME_FIXTURE = """#!/usr/bin/env bash
+# Neutral wrapper lifetime fixture (test-owned; no product semantics).
+
+set -u
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/read-audit/launch.sh"
+ROOT="$(dirname "$SCRIPT_DIR")"
+FIXTURE_PY="${FIXTURE_PY:-}"
+. "$SCRIPT_DIR/gate-semaphore.sh"
+ARTIFACTS="$(mktemp)"
+trap 'gate_semaphore_release; rm -f "$ARTIFACTS"' EXIT
+
+if [ ! -x "$FIXTURE_PY" ]; then
+  echo "REGRESSION - neutral wrapper lifetime fixture: fixture python not found at $FIXTURE_PY" >&2
+  exit 1
+fi
+
+gate_semaphore_acquire "the neutral wrapper lifetime fixture artifacts" || exit 2
+
+if ! (cd "$ROOT" && lake env lean scripts/eval-neutral-lifetime-fixture.lean \\
+    >"$ARTIFACTS" 2>&1); then
+  cat "$ARTIFACTS" >&2
+  echo "REGRESSION - neutral wrapper lifetime fixture: artifact evaluation failed" >&2
+  exit 1
+fi
+
+gate_audit_python "$FIXTURE_PY" "$SCRIPT_DIR/neutral-lifetime-checker.py"
+"""
 
 
-def weth10_deployment_wrapper_source() -> str:
-    """The production wrapper, read through a seam for the biting control."""
+def neutral_wrapper_lifetime_fixture_source() -> str:
+    """The test-owned wrapper fixture, read through a seam for the biting control."""
 
-    return WETH10_DEPLOYMENT_WRAPPER.read_text(encoding="utf-8")
+    return NEUTRAL_WRAPPER_LIFETIME_FIXTURE
 
 
-def run_weth10_deployment_lifecycle(child_exit: int) -> tuple[int, list[str]]:
-    """Run the production shell path against harmless admission and children.
+def run_neutral_wrapper_lifecycle(child_exit: int) -> tuple[int, list[str]]:
+    """Run the wrapper fixture shell path against harmless admission and children.
 
-    The disposable `lake`, Jaune and EELS-Python stand-ins never elaborate
-    or inspect a target.  The fake lake and checker append to the admission trace,
-    so the control can prove that the shell releases only after the final child
-    returns while preserving that child's status.
+    The disposable `lake` stand-in never elaborates or inspects a target.
+    The fake lake and checker append to the admission trace, so the control
+    can prove that the shell releases only after the final child returns
+    while preserving that child's status.
     """
 
-    directory = Path(tempfile.mkdtemp(prefix="weth10-deployment-lifecycle-"))
-    coordination_directory = Path(tempfile.mkdtemp(prefix="weth10-deployment-host-"))
+    directory = Path(tempfile.mkdtemp(prefix="neutral-wrapper-lifecycle-"))
+    coordination_directory = Path(tempfile.mkdtemp(prefix="neutral-wrapper-host-"))
     try:
         coordination = Coordination(coordination_directory)
         repository = directory / "blanc" / ".worktrees" / "blanc-wrapper-lifecycle-control"
@@ -3324,16 +3356,16 @@ def run_weth10_deployment_lifecycle(child_exit: int) -> tuple[int, list[str]]:
         (scripts / "gate-semaphore.sh").write_text(
             gate_semaphore_shell_source(), encoding="utf-8"
         )
-        # Copy the production observer closure: the wrapper sources its launch
+        # Copy the production observer closure: the fixture sources its launch
         # helper even in ordinary mode, and inherited audit configuration must
         # still reach real, observable synthetic Python children.
         observer = scripts / "read-audit"
         observer.mkdir()
         for name in ("launch.sh", "launcher.py", "bootstrap.py", "sitecustomize.py"):
-            shutil.copyfile(WETH10_DEPLOYMENT_WRAPPER.parent / "read-audit" / name,
+            shutil.copyfile(Path(__file__).resolve().parent / "read-audit" / name,
                             observer / name)
-        wrapper = scripts / "check-weth10-deployment.sh"
-        wrapper.write_text(weth10_deployment_wrapper_source(), encoding="utf-8")
+        wrapper = scripts / "neutral-wrapper-lifetime-fixture.sh"
+        wrapper.write_text(neutral_wrapper_lifetime_fixture_source(), encoding="utf-8")
         wrapper.chmod(0o755)
 
         fake_bin = directory / "bin"
@@ -3345,19 +3377,14 @@ def run_weth10_deployment_lifecycle(child_exit: int) -> tuple[int, list[str]]:
         )
         (fake_bin / "lake").chmod(0o755)
 
-        target = directory / "target"
-        target_python = target / "venv" / "bin" / "python"
-        target_python.parent.mkdir(parents=True)
+        fixture_python = directory / "fixture" / "venv" / "bin" / "python"
+        fixture_python.parent.mkdir(parents=True)
         child_status = directory / "child-status"
         child_status.write_text(f"{child_exit}\n", encoding="utf-8")
         # The semantic body stays synthetic, but its interpreter must really
         # be Python so inherited observation can acknowledge the bootstrap.
-        target_python.symlink_to(sys.executable)
-        jaune = repository / ".lake/packages/jaune/.lake/build/bin/jaune"
-        jaune.parent.mkdir(parents=True)
-        jaune.write_text("#!/bin/sh\nexit 99\n", encoding="utf-8")
-        jaune.chmod(0o755)  # The wrapper checks executability; the synthetic checker never calls it.
-        (scripts / "check-weth10-deployment.py").write_text(
+        fixture_python.symlink_to(sys.executable)
+        (scripts / "neutral-lifetime-checker.py").write_text(
             "import sys\n"
             f'with open({str(coordination.calls)!r}, "a", encoding="utf-8") as stream:\n'
             '    stream.write("checker-child\\n")\n'
@@ -3380,7 +3407,7 @@ def run_weth10_deployment_lifecycle(child_exit: int) -> tuple[int, list[str]]:
                 env={
                     **os.environ,
                     "CREME_ROOT": str(creme),
-                    "EELS_ROOT": str(target),
+                    "FIXTURE_PY": str(fixture_python),
                     "PATH": f"{fake_bin}{os.pathsep}{os.environ.get('PATH', '')}",
                 },
             )
@@ -3390,20 +3417,20 @@ def run_weth10_deployment_lifecycle(child_exit: int) -> tuple[int, list[str]]:
         shutil.rmtree(coordination_directory, ignore_errors=True)
 
 
-def control_weth10_deployment_releases_after_its_final_child() -> None:
-    """The production wrapper keeps its EXIT trap past the checker child."""
+def control_neutral_wrapper_releases_after_its_final_child() -> None:
+    """The wrapper fixture keeps its EXIT trap past the checker child."""
 
     for child_exit in (0, 17):
-        status, trace = run_weth10_deployment_lifecycle(child_exit)
+        status, trace = run_neutral_wrapper_lifecycle(child_exit)
         require(status == child_exit, "the final checker exit status must reach the gate caller")
         require(
             trace == [
-                "adaptive-acquire blanc-wrapper-lifecycle-control --note Blanc gate: the WETH10 deployment artifacts --memory-gib 4 --contention tolerant",
+                "adaptive-acquire blanc-wrapper-lifecycle-control --note Blanc gate: the neutral wrapper lifetime fixture artifacts --memory-gib 4 --contention tolerant",
                 "lean-child",
                 "checker-child",
                 "release blanc-wrapper-lifecycle-control",
             ],
-            "the real wrapper must release exactly once, after its harmless final child",
+            "the wrapper fixture must release exactly once, after its harmless final child",
         )
 
 
@@ -4725,22 +4752,21 @@ def control_named_root_follows_its_override() -> None:
     declared paths were the wrong ones both times.
     """
 
-    with scratch() as s, scratch() as elsewhere:
-        (elsewhere.root / "venv/bin").mkdir(parents=True)
-        (elsewhere.root / "venv/bin/python").write_text("#!/bin/sh\n", encoding="utf-8")
-        s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
-        s.registry([simple_gate(
-            "g", ["scripts/g.sh"], {"files": ["@weth10ref/venv/bin/python"]},
-            "^OK — g.sh: ")])
-        os.environ["WETH10_REFERENCE_DIR"] = str(elsewhere.root)
-        try:
-            s.run()
-            require(s.disposition("g") == "reused", "unchanged redirected tree should reuse")
-            (elsewhere.root / "venv/bin/python").write_text("#!/bin/bash\n", encoding="utf-8")
-            require(s.disposition("g") == "fresh",
-                    "editing the redirected tree must force execution")
-        finally:
-            os.environ.pop("WETH10_REFERENCE_DIR", None)
+    # The alias is fixture data; resolver and fingerprinting code stay real.
+    with patched(gc, "NAMED_ROOTS", {"controlref": ("GATE_CONTROL_REFERENCE_DIR", "unused-reference")}):
+        with scratch() as s, scratch() as elsewhere:
+            (elsewhere.root / "venv/bin").mkdir(parents=True)
+            (elsewhere.root / "venv/bin/python").write_text("#!/bin/sh\n", encoding="utf-8")
+            s.gate("g.sh", '#!/bin/sh\necho "OK — g.sh: 1/1 fine"\n')
+            s.registry([simple_gate(
+                "g", ["scripts/g.sh"], {"files": ["@controlref/venv/bin/python"]},
+                "^OK — g.sh: ")])
+            with environment({"GATE_CONTROL_REFERENCE_DIR": str(elsewhere.root)}):
+                s.run()
+                require(s.disposition("g") == "reused", "unchanged redirected tree should reuse")
+                (elsewhere.root / "venv/bin/python").write_text("#!/bin/bash\n", encoding="utf-8")
+                require(s.disposition("g") == "fresh",
+                        "editing the redirected tree must force execution")
 
 
 def control_environment_value_cannot_imitate_absence() -> None:
@@ -5201,26 +5227,28 @@ def control_negative_shell_short_circuits_its_own_escalation() -> None:
                   "a tolerant process hold bypassed the exclusive re-admission")
 
 
-def control_negative_weth10_deployment_exec_leaks_the_gate_hold() -> None:
+def control_negative_neutral_wrapper_exec_leaks_the_gate_hold() -> None:
     """Replacing the final child call with `exec` must fail the lifetime control."""
 
-    committed = weth10_deployment_wrapper_source()
-    final_child = '\nPYTHONPATH="$EELS_ROOT/src" gate_audit_python "$EELS_PY" "$SCRIPT_DIR/check-weth10-deployment.py" \\\n'
-    require(committed.count(final_child) == 1,
-            "the negative control no longer matches the final WETH10 deployment child")
+    committed = neutral_wrapper_lifetime_fixture_source()
+    final_child = '\ngate_audit_python "$FIXTURE_PY" "$SCRIPT_DIR/neutral-lifetime-checker.py"\n'
+    require(committed.count(final_child) == 1 and committed.endswith(final_child),
+            "the negative control no longer matches the fixture's exact unique final child line")
     with_exec = committed.replace(
         final_child, final_child.replace("gate_audit_python ", "gate_audit_exec_python ", 1)
     )
-    with patched(sys.modules[__name__], "weth10_deployment_wrapper_source",
+    with patched(sys.modules[__name__], "neutral_wrapper_lifetime_fixture_source",
                  lambda: with_exec):
         try:
-            control_weth10_deployment_releases_after_its_final_child()
+            control_neutral_wrapper_releases_after_its_final_child()
         except ControlFailure as error:
             require(str(error) ==
-                    "the real wrapper must release exactly once, after its harmless final child",
+                    "the wrapper fixture must release exactly once, after its harmless final child",
                     f"the exec negative must bite at missing release, not setup: {error}")
         else:
             raise ControlFailure("an exec that bypasses the wrapper EXIT trap was accepted")
+    require(neutral_wrapper_lifetime_fixture_source() == committed,
+            "the negative control must restore the exact fixture source seam bytes")
 
 
 def control_negative_frozen_tracked_selection_is_caught() -> None:
@@ -6036,7 +6064,7 @@ NEGATIVE_CONTROLS = (
     control_negative_ignoring_the_declared_coordination_mode,
     control_negative_shell_ignoring_the_declared_coordination_mode,
     control_negative_shell_short_circuits_its_own_escalation,
-    control_negative_weth10_deployment_exec_leaks_the_gate_hold,
+    control_negative_neutral_wrapper_exec_leaks_the_gate_hold,
     control_negative_name_only_authority_walk_misses_import_bindings,
     control_negative_trusting_only_built_source_entries,
     control_negative_reading_configuration_from_the_traces,
@@ -6113,7 +6141,7 @@ CONTROLS = (
     control_shell_admission_request_states_the_goal_the_estimate_and_the_wait,
     control_shell_authoritative_admission_refuses_automatic_inheritance,
     control_shell_reasks_before_escalating_its_own_hold,
-    control_weth10_deployment_releases_after_its_final_child,
+    control_neutral_wrapper_releases_after_its_final_child,
     control_build_certificate_refuses_every_identity_and_trace_uncertainty,
     control_build_certificate_requires_source_currency,
     control_source_currency_accepts_exactly_current_lake_records,
