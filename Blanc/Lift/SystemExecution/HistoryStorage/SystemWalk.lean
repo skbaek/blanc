@@ -1,5 +1,5 @@
-import Blanc.Lift.HistoryStorage.Jumps
-import Blanc.Lift.HistoryStorage.Prog
+import Blanc.Lift.SystemExecution.HistoryStorage.Jumps
+import Blanc.Lift.SystemExecution.HistoryStorage.Prog
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.WalkSteps
 import Blanc.Lift.Vyper
@@ -8,7 +8,7 @@ import Blanc.ExecutionNoninterference
 import Blanc.SystemCallForward
 import Blanc.StorageRefund
 
-namespace Blanc.Lift.HistoryStorage
+namespace Blanc.Lift.SystemExecution.HistoryStorage
 
 open Jaune
 open ExecutionTrace
@@ -274,4 +274,4 @@ theorem processUncheckedSystemTransaction_historyStorage {benv : Benv} {lastHash
       facts.1 facts.2.1
   · rw [facts.2.2, State.get_setStorVal_ne _ _ _ different]
 
-end Blanc.Lift.HistoryStorage
+end Blanc.Lift.SystemExecution.HistoryStorage

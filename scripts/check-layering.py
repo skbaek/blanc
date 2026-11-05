@@ -466,6 +466,10 @@ SHARED += [
     "ExecutionHistoryInCreateAvoid",
 ]
 
+# Concrete canonical system-operation proof support for featured configured histories.
+# These modules implement required system calls; they are not standalone exhibits.
+SHARED += ['Lift.SystemExecution.BeaconRoots.Cert', 'Lift.SystemExecution.BeaconRoots.Check', 'Lift.SystemExecution.BeaconRoots.Jumps', 'Lift.SystemExecution.BeaconRoots.Prog', 'Lift.SystemExecution.BeaconRoots.SystemWalk', 'Lift.SystemExecution.HistoryStorage.Cert', 'Lift.SystemExecution.HistoryStorage.Check', 'Lift.SystemExecution.HistoryStorage.Jumps', 'Lift.SystemExecution.HistoryStorage.Prog', 'Lift.SystemExecution.HistoryStorage.SystemWalk', 'Lift.SystemExecution.ConsolidationRequest.Cert', 'Lift.SystemExecution.ConsolidationRequest.Check', 'Lift.SystemExecution.ConsolidationRequest.Jumps', 'Lift.SystemExecution.ConsolidationRequest.Prog', 'Lift.SystemExecution.ConsolidationRequest.SystemWalk']
+
 CONTRACTS = {
     "uniswap-v2-pair": [
         "Lift.UniswapV2Pair.Cert",
@@ -855,15 +859,6 @@ CONTRACTS = {
                            "Lift.WithdrawalRequest.HeadlineFee",
                            "Lift.WithdrawalRequest.HeadlineSystem",
                            "Lift.WithdrawalRequest.HeadlineHistory"],
-    "beacon-roots": ["Lift.BeaconRoots.Cert", "Lift.BeaconRoots.Check",
-                      "Lift.BeaconRoots.Jumps", "Lift.BeaconRoots.Prog",
-                      "Lift.BeaconRoots.SystemWalk"],
-    "history-storage": ["Lift.HistoryStorage.Cert", "Lift.HistoryStorage.Check",
-                         "Lift.HistoryStorage.Jumps", "Lift.HistoryStorage.Prog",
-                         "Lift.HistoryStorage.SystemWalk"],
-    "consolidation-request": ["Lift.ConsolidationRequest.Cert", "Lift.ConsolidationRequest.Check",
-                               "Lift.ConsolidationRequest.Jumps", "Lift.ConsolidationRequest.Prog",
-                               "Lift.ConsolidationRequest.SystemWalk"],
     "beacon-deposit": ["BeaconDepositModel", "BeaconDepositCorrectness",
                        # the deployed runtime, lifted (decision beacon-lift-layering-family-20260926)
                        "Lift.BeaconDeposit.Body", "Lift.BeaconDeposit.BodyCount", "Lift.BeaconDeposit.BodyEvent", "Lift.BeaconDeposit.BodyEventHead", "Lift.BeaconDeposit.BodyEventKit", "Lift.BeaconDeposit.BodyEventLoop", "Lift.BeaconDeposit.BodyEventSig", "Lift.BeaconDeposit.BodyGuards", "Lift.BeaconDeposit.BodyInsertDead", "Lift.BeaconDeposit.BodyInsertLive", "Lift.BeaconDeposit.BodyNode", "Lift.BeaconDeposit.BodyPubkeyRoot", "Lift.BeaconDeposit.BodyShaKit", "Lift.BeaconDeposit.BodySignatureRoot", "Lift.BeaconDeposit.BodySpec", "Lift.BeaconDeposit.Cert", "Lift.BeaconDeposit.Check", "Lift.BeaconDeposit.Creation.Cert", "Lift.BeaconDeposit.Creation.Check", "Lift.BeaconDeposit.Creation.Deploy", "Lift.BeaconDeposit.Creation.Walk", "Lift.BeaconDeposit.CountView", "Lift.BeaconDeposit.DepositArgs", "Lift.BeaconDeposit.DepositDecode", "Lift.BeaconDeposit.DepositExec", "Lift.BeaconDeposit.Erc165", "Lift.BeaconDeposit.Jumps", "Lift.BeaconDeposit.Ladder", "Lift.BeaconDeposit.Layout", "Lift.BeaconDeposit.Init", "Lift.BeaconDeposit.Lift", "Lift.BeaconDeposit.LittleEndian", "Lift.BeaconDeposit.Prog", "Lift.BeaconDeposit.Refines", "Lift.BeaconDeposit.CommittedReplay", "Lift.BeaconDeposit.CommittedExec", "Lift.BeaconDeposit.CommittedHistory", "Lift.BeaconDeposit.BeaconEnv", "Lift.BeaconDeposit.Liveness", "Lift.BeaconDeposit.RootLoop", "Lift.BeaconDeposit.RootView", "Lift.BeaconDeposit.Safe", "Lift.BeaconDeposit.SafeCount", "Lift.BeaconDeposit.SafeDecoder", "Lift.BeaconDeposit.SafeDispatch", "Lift.BeaconDeposit.SafeEvent", "Lift.BeaconDeposit.SafeGuards", "Lift.BeaconDeposit.SafeInsertDead", "Lift.BeaconDeposit.SafeInsertLive", "Lift.BeaconDeposit.SafeLittleEndian", "Lift.BeaconDeposit.SafeNode", "Lift.BeaconDeposit.SafePubkeyRoot", "Lift.BeaconDeposit.SafeSignatureRoot", "Lift.BeaconDeposit.SafeViews", "Lift.BeaconDeposit.Views", "Lift.BeaconDeposit.HistSafeWorld", "Lift.BeaconDeposit.HistSafeGuards", "Lift.BeaconDeposit.HistSafeCount", "Lift.BeaconDeposit.HistSafeInsert", "Lift.BeaconDeposit.HistSafePubkeyRoot", "Lift.BeaconDeposit.HistSafeNode", "Lift.BeaconDeposit.HistSafeSignatureRoot", "Lift.BeaconDeposit.HistSafe", "Lift.BeaconDeposit.HistLadder",
@@ -2012,8 +2007,8 @@ SHARED += ['Lift.Token20.Cert', 'Lift.Token20.Check', 'Lift.Token20.Creation.Cer
 # Pair/USDC provenance bridges genuinely compose those two families; their
 # current imports must not widen them to the WETH9 exhibit. Named exhibit kits
 # retain their exhibit ownership until moved to a neutral shared owner.
-# Withdrawal witnesses execute concrete beacon/history/consolidation system
-# transactions; those are genuine composed protocols, not generic scaffolding.
+# Withdrawal witnesses retain concrete canonical system operations through the
+# shared SystemExecution owner; those operations add no standalone exhibit family.
 # Each entry is a nonempty tuple of distinct CONTRACTS keys. Adding a composition
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
@@ -2025,10 +2020,10 @@ COMPOSITION = {
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControl": ('lido-circuit-breaker', 'lido-twg'),
     "Composition.LidoCircuitBreakerTriggerableWithdrawalsGatewaySentinelControlRun": ('lido-circuit-breaker', 'lido-twg'),
     "Composition.ProrataWethVaultBoundary": ('prorata-weth-vault', 'weth'),
-    "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request', 'beacon-roots', 'history-storage'),
-    "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request', 'beacon-roots', 'history-storage', 'consolidation-request'),
-    "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request', 'beacon-roots', 'history-storage', 'consolidation-request'),
-    "Composition.WithdrawalRequestDrainControl": ('withdrawal-request', 'beacon-roots', 'history-storage', 'consolidation-request'),
+    "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),
+    "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request',),
+    "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request',),
+    "Composition.WithdrawalRequestDrainControl": ('withdrawal-request',),
     "Composition.ProrataWethVaultEffects": ('prorata-weth-vault', 'weth'),
     "Composition.ProrataWethVaultStaging": ('prorata-weth-vault', 'weth'),
     "Composition.ProrataWethVaultViews": ('prorata-weth-vault', 'weth'),

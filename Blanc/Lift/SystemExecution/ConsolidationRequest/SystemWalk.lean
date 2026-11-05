@@ -1,5 +1,5 @@
-import Blanc.Lift.ConsolidationRequest.Jumps
-import Blanc.Lift.ConsolidationRequest.Prog
+import Blanc.Lift.SystemExecution.ConsolidationRequest.Jumps
+import Blanc.Lift.SystemExecution.ConsolidationRequest.Prog
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.CreationOps
@@ -24,7 +24,7 @@ bookkeeping segments (`Blanc.Lift.WithdrawalRequest.SystemSetup`,
 `Blanc.Lift.WithdrawalRequest.SystemBookkeeping`); only the entry indices,
 branch constants and the return size differ. -/
 
-namespace Blanc.Lift.ConsolidationRequest
+namespace Blanc.Lift.SystemExecution.ConsolidationRequest
 
 open Jaune
 open ExecutionTrace
@@ -817,4 +817,4 @@ theorem processCheckedSystemTransaction_consolidationRequest_empty {benv : Benv}
   · exact facts.2.2.1
   · exact facts.2.2.2
 
-end Blanc.Lift.ConsolidationRequest
+end Blanc.Lift.SystemExecution.ConsolidationRequest

@@ -1,4 +1,4 @@
-import Blanc.Lift.HistoryStorage.Cert
+import Blanc.Lift.SystemExecution.HistoryStorage.Cert
 import Blanc.Lift.CheckFast
 import Blanc.Lift.CheckRange
 
@@ -6,7 +6,7 @@ import Blanc.Lift.CheckRange
 The node and jump checks are decided in ranges against trie-backed reads of the exact runtime.
 Cert.rangeOkT_eq rewrites each range decision to Cert.rangeOk (Blanc/Lift/CheckRange.lean). -/
 
-namespace Blanc.Lift.HistoryStorage
+namespace Blanc.Lift.SystemExecution.HistoryStorage
 
 open Jaune
 
@@ -25,4 +25,4 @@ theorem cert_rangeOk : Cert.rangeOk code (Cert.entries cert) [] false true 0 (ce
 theorem cert_check : Cert.check code cert = true :=
   Cert.check_of_rangeOk (by decide +kernel) cert_rangeOk
 
-end Blanc.Lift.HistoryStorage
+end Blanc.Lift.SystemExecution.HistoryStorage

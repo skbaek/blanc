@@ -531,9 +531,9 @@ import Blanc.Lift.ExactWalkCall
 import Blanc.Lift.ExactCallProfile
 import Blanc.Lift.CallProfileTransport
 import Blanc.Lift.StaticGasTransport
-import Blanc.Lift.BeaconRoots.SystemWalk
-import Blanc.Lift.HistoryStorage.SystemWalk
-import Blanc.Lift.ConsolidationRequest.Prog
+import Blanc.Lift.SystemExecution.BeaconRoots.SystemWalk
+import Blanc.Lift.SystemExecution.HistoryStorage.SystemWalk
+import Blanc.Lift.SystemExecution.ConsolidationRequest.Prog
 import Blanc.Lift.Weth9.LiveApprove
 import Blanc.Lift.Weth9.LiveDeposit
 import Blanc.Lift.Weth9.LiveTransfer

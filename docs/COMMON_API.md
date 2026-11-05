@@ -7854,11 +7854,26 @@ non-negative refund counter (and, for the block-level forms, the canonical code 
 `systemContracts_nonempty` are the envelope facts; `afterSstore_state`,
 `afterSstore_getAcct_ne`, `State.get_setStorVal_ne`, `State.get_setStorVal_self` and
 `State.getStor_setStorVal_self` (both `setPresent` and `set` arms) read a store's world-state effect and account/storage preservation. Worked uses: the EIP-4788 and
-EIP-2935 walks `Blanc/Lift/BeaconRoots/SystemWalk.lean` and
-`Blanc/Lift/HistoryStorage/SystemWalk.lean` (`processUncheckedSystemTransaction_beaconRoots`,
+EIP-2935 walks `Blanc/Lift/SystemExecution/BeaconRoots/SystemWalk.lean` and
+`Blanc/Lift/SystemExecution/HistoryStorage/SystemWalk.lean` (`processUncheckedSystemTransaction_beaconRoots`,
 `processUncheckedSystemTransaction_historyStorage`), and the EIP-7251 empty-queue walk
-`Blanc/Lift/ConsolidationRequest/SystemWalk.lean`
+`Blanc/Lift/SystemExecution/ConsolidationRequest/SystemWalk.lean`
 (`processCheckedSystemTransaction_consolidationRequest_empty`, via the checked form).
+
+The canonical system-operation support is owned by `Blanc/Lift/SystemExecution/`.
+For each walk above, the exact runtime certificate, checked lift, jump table, and
+program bridge are its supporting modules:
+
+- `Blanc/Lift/SystemExecution/BeaconRoots/Cert.lean`, `Blanc/Lift/SystemExecution/BeaconRoots/Check.lean`, `Blanc/Lift/SystemExecution/BeaconRoots/Jumps.lean`, `Blanc/Lift/SystemExecution/BeaconRoots/Prog.lean`.
+
+- `Blanc/Lift/SystemExecution/HistoryStorage/Cert.lean`, `Blanc/Lift/SystemExecution/HistoryStorage/Check.lean`, `Blanc/Lift/SystemExecution/HistoryStorage/Jumps.lean`, `Blanc/Lift/SystemExecution/HistoryStorage/Prog.lean`.
+
+- `Blanc/Lift/SystemExecution/ConsolidationRequest/Cert.lean`, `Blanc/Lift/SystemExecution/ConsolidationRequest/Check.lean`, `Blanc/Lift/SystemExecution/ConsolidationRequest/Jumps.lean`, `Blanc/Lift/SystemExecution/ConsolidationRequest/Prog.lean`.
+
+These concrete implementations support the featured configured histories; this
+owner does not introduce standalone protocol exhibits or a generic replacement
+for their checked runtime behavior.
+
 
 ### T6. The wrapper is a configured block or a whole chain history
 

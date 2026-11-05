@@ -1,5 +1,5 @@
-import Blanc.Lift.BeaconRoots.Jumps
-import Blanc.Lift.BeaconRoots.Prog
+import Blanc.Lift.SystemExecution.BeaconRoots.Jumps
+import Blanc.Lift.SystemExecution.BeaconRoots.Prog
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.CreationOps
 import Blanc.Lift.WalkSteps
@@ -9,7 +9,7 @@ import Blanc.ExecutionNoninterference
 import Blanc.SystemCallForward
 import Blanc.StorageRefund
 
-namespace Blanc.Lift.BeaconRoots
+namespace Blanc.Lift.SystemExecution.BeaconRoots
 
 open Jaune
 open ExecutionTrace
@@ -540,4 +540,4 @@ theorem processUncheckedSystemTransaction_beaconRoots {benv : Benv}
   rw [facts.2.2, State.get_setStorVal_ne _ _ _ different,
     State.get_setStorVal_ne _ _ _ different]
 
-end Blanc.Lift.BeaconRoots
+end Blanc.Lift.SystemExecution.BeaconRoots

@@ -3,8 +3,8 @@ import Blanc.Lift.WithdrawalRequest.FloodTxRecover
 import Blanc.Lift.WithdrawalRequest.ProtocolOccurrences
 import Blanc.Lift.WithdrawalRequest.BalanceHistory
 import Blanc.BlockForward
-import Blanc.Lift.BeaconRoots.SystemWalk
-import Blanc.Lift.HistoryStorage.SystemWalk
+import Blanc.Lift.SystemExecution.BeaconRoots.SystemWalk
+import Blanc.Lift.SystemExecution.HistoryStorage.SystemWalk
 import Blanc.Lift.WithdrawalRequest.SystemProtocol
 import Blanc.Lift.WithdrawalRequest.SystemFrameEffects
 
@@ -27,6 +27,7 @@ three blocks and proves `nat_fee_guarantee_refuted` with no hypotheses.
 namespace Blanc.Lift.WithdrawalRequest.FeeCounterexample
 
 open Jaune Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward FloodTx
+open Blanc.Lift.SystemExecution
 
 /-- The transaction fold over a single indexed transaction is that transaction's
 settlement, its state installed. -/

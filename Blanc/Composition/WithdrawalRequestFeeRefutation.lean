@@ -3,7 +3,7 @@ import Blanc.ExecutionTraceCallOnly
 import Blanc.ExecutionTraceRootFrame
 import Blanc.Lift.WithdrawalRequest.NumericFacts
 import Blanc.Lift.WithdrawalRequest.SystemProtocol
-import Blanc.Lift.ConsolidationRequest.SystemWalk
+import Blanc.Lift.SystemExecution.ConsolidationRequest.SystemWalk
 import Blanc.SystemCallForward
 import Blanc.Lift.ExactWalkSolc
 import Blanc.BlockForward
@@ -103,8 +103,8 @@ theorem slots7251Zero_of_getStor {w w' : State}
 /-- The 7251 system call's transaction-original storage is the storage it runs on: a system
 call opens a fresh transaction context. -/
 theorem systemC_original (b : Benv) (k : B256) :
-    getOrigStorVal (Blanc.Lift.ConsolidationRequest.systemSevm b)
-      (Blanc.Lift.ConsolidationRequest.systemSevm b).currentTarget k =
+    getOrigStorVal (Blanc.Lift.SystemExecution.ConsolidationRequest.systemSevm b)
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemSevm b).currentTarget k =
       (b.state.getStor consolidationRequestPredeployAddress).get k := rfl
 
 /-- **The 7251 checked call on an empty queue**, from the four slot reads of the state it runs
@@ -114,42 +114,42 @@ theorem checkedC_of_zero (b : Benv) (hfork : CoveredFork b.stat.fork)
       Blanc.consolidationRequestCode)
     (hz : Slots7251Zero b.state) :
     processCheckedSystemTransaction b consolidationRequestPredeployAddress [] =
-      .ok ((Blanc.Lift.ConsolidationRequest.systemPost b).state,
-        systemCallOutput (Blanc.Lift.ConsolidationRequest.systemPost b)) ∧
-    (Blanc.Lift.ConsolidationRequest.systemPost b).state =
+      .ok ((Blanc.Lift.SystemExecution.ConsolidationRequest.systemPost b).state,
+        systemCallOutput (Blanc.Lift.SystemExecution.ConsolidationRequest.systemPost b)) ∧
+    (Blanc.Lift.SystemExecution.ConsolidationRequest.systemPost b).state =
       (((b.state.setStorVal consolidationRequestPredeployAddress 2 0).setStorVal
         consolidationRequestPredeployAddress 3 0).setStorVal
         consolidationRequestPredeployAddress 0 0).setStorVal
         consolidationRequestPredeployAddress 1 0 := by
   obtain ⟨h0, h1, h2, h3⟩ := hz
   obtain ⟨_, htarg, _, _, _, _, _, _, _, _, _, hstate, _⟩ :=
-    Blanc.Lift.ConsolidationRequest.system_seed b
+    Blanc.Lift.SystemExecution.ConsolidationRequest.system_seed b
   have hread : ∀ k : B256,
-      (Blanc.Lift.ConsolidationRequest.systemBase b).getStorVal
-        (Blanc.Lift.ConsolidationRequest.systemSevm b).currentTarget k =
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemBase b).getStorVal
+        (Blanc.Lift.SystemExecution.ConsolidationRequest.systemSevm b).currentTarget k =
         (b.state.getStor consolidationRequestPredeployAddress).get k := by
     intro k
     simp only [Devm.getStorVal, Devm.getAcct, State.getStor, htarg, hstate]
   have hs3 := (hread 3).trans h3
-  have hs2 : (afterSload (Blanc.Lift.ConsolidationRequest.systemSevm b)
-      (Blanc.Lift.ConsolidationRequest.systemBase b) 3).getStorVal
-      (Blanc.Lift.ConsolidationRequest.systemSevm b).currentTarget 2 = 0 := by
+  have hs2 : (afterSload (Blanc.Lift.SystemExecution.ConsolidationRequest.systemSevm b)
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemBase b) 3).getStorVal
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemSevm b).currentTarget 2 = 0 := by
     rw [getStorVal_afterSload]
     exact (hread 2).trans h2
-  have hs0 : (Blanc.Lift.ConsolidationRequest.setupBase
-      (Blanc.Lift.ConsolidationRequest.systemSevm b)
-      (Blanc.Lift.ConsolidationRequest.systemBase b)).getStorVal
-      (Blanc.Lift.ConsolidationRequest.systemSevm b).currentTarget 0 = 0 := by
-    simp only [Blanc.Lift.ConsolidationRequest.setupBase, getStorVal_afterSload]
+  have hs0 : (Blanc.Lift.SystemExecution.ConsolidationRequest.setupBase
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemSevm b)
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemBase b)).getStorVal
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemSevm b).currentTarget 0 = 0 := by
+    simp only [Blanc.Lift.SystemExecution.ConsolidationRequest.setupBase, getStorVal_afterSload]
     exact (hread 0).trans h0
-  have hs1 : (Blanc.Lift.ConsolidationRequest.setupBase
-      (Blanc.Lift.ConsolidationRequest.systemSevm b)
-      (Blanc.Lift.ConsolidationRequest.systemBase b)).getStorVal
-      (Blanc.Lift.ConsolidationRequest.systemSevm b).currentTarget 1 = 0 := by
-    simp only [Blanc.Lift.ConsolidationRequest.setupBase, getStorVal_afterSload]
+  have hs1 : (Blanc.Lift.SystemExecution.ConsolidationRequest.setupBase
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemSevm b)
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemBase b)).getStorVal
+      (Blanc.Lift.SystemExecution.ConsolidationRequest.systemSevm b).currentTarget 1 = 0 := by
+    simp only [Blanc.Lift.SystemExecution.ConsolidationRequest.setupBase, getStorVal_afterSload]
     exact (hread 1).trans h1
   obtain ⟨hrun, -, -, hpost⟩ :=
-    Blanc.Lift.ConsolidationRequest.processCheckedSystemTransaction_consolidationRequest_empty
+    Blanc.Lift.SystemExecution.ConsolidationRequest.processCheckedSystemTransaction_consolidationRequest_empty
       hfork hcode hs3 hs2 hs0 hs1
       ((systemC_original b 0).trans h0) ((systemC_original b 1).trans h1)
       ((systemC_original b 2).trans h2) ((systemC_original b 3).trans h3)
@@ -160,7 +160,7 @@ theorem systemC_post_get_other (b : Benv) (hfork : CoveredFork b.stat.fork)
     (hcode : b.state.getCode consolidationRequestPredeployAddress =
       Blanc.consolidationRequestCode)
     (hz : Slots7251Zero b.state) (a : Adr) (hne : consolidationRequestPredeployAddress ≠ a) :
-    (Blanc.Lift.ConsolidationRequest.systemPost b).state.get a = b.state.get a := by
+    (Blanc.Lift.SystemExecution.ConsolidationRequest.systemPost b).state.get a = b.state.get a := by
   rw [(checkedC_of_zero b hfork hcode hz).2]
   simp only [Blanc.State.get_setStorVal_ne _ _ _ hne]
 
@@ -168,7 +168,7 @@ theorem systemC_post_zero (b : Benv) (hfork : CoveredFork b.stat.fork)
     (hcode : b.state.getCode consolidationRequestPredeployAddress =
       Blanc.consolidationRequestCode)
     (hz : Slots7251Zero b.state) :
-    Slots7251Zero (Blanc.Lift.ConsolidationRequest.systemPost b).state := by
+    Slots7251Zero (Blanc.Lift.SystemExecution.ConsolidationRequest.systemPost b).state := by
   rw [(checkedC_of_zero b hfork hcode hz).2]
   unfold Slots7251Zero
   simp only [State.getStor_setStorVal_self, Stor.get_set_self,
@@ -199,13 +199,13 @@ theorem benvC_state (benv : Benv) (s : State) :
 
 /-- The body's final state. -/
 def bodyPost (benv : Benv) (s : State) : State :=
-  (Blanc.Lift.ConsolidationRequest.systemPost (benvC benv s)).state
+  (Blanc.Lift.SystemExecution.ConsolidationRequest.systemPost (benvC benv s)).state
 
 /-- The body's block output, from the transactions' output. -/
 def bodyOut (benv : Benv) (s : State) (bout : BlockOutput) : BlockOutput :=
   requestsOutput bout
     (Blanc.Lift.WithdrawalRequest.systemProtocolOutput ((benvH benv).withState s)).returnData
-    (systemCallOutput (Blanc.Lift.ConsolidationRequest.systemPost (benvC benv s))).returnData
+    (systemCallOutput (Blanc.Lift.SystemExecution.ConsolidationRequest.systemPost (benvC benv s))).returnData
 
 theorem benvC_state_getStor7251 (benv : Benv) (s : State) :
     (benvC benv s).state.getStor consolidationRequestPredeployAddress =
