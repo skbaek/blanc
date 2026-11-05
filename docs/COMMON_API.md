@@ -7975,6 +7975,26 @@ the consumer instead of adding a premise that assumes the new semantics away.
 
 ### T7. I must construct a configured block forward from its parts
 
+For the fixed synthetic BPO2-from-genesis fixture, use
+[`Blanc/SyntheticBpo2Envelope.lean`](../Blanc/SyntheticBpo2Envelope.lean):
+`SyntheticBpo2Envelope.config` selects chain 1 and BPO2 at every height;
+`checkpointHeader`, `checkpointBlock`, `checkpoint` retain the supplied state;
+`executionHeader` and `input` set up its successor with gas limit 1,000,000.
+`checkpoint_validContext` takes the supplied state's canonicality.
+`committedHeader` fills body commitments independently of any transaction;
+`committedHeader_input`, `committedHeader_valid` and `input_lastHash` supply
+the corresponding input, header validation and retained-hash facts.
+This is a synthetic fixed-fork envelope, with no mainnet or arbitrary-fork claim.
+For its four system addresses, use
+[`Blanc/SyntheticSystemWorld.lean`](../Blanc/SyntheticSystemWorld.lean):
+`SyntheticSystemWorld.systemCode` is exactly `#[0x5b, 0]` (JUMPDEST; STOP),
+`systemWorld` installs it at the beacon-roots, history-storage, withdrawal-request
+and consolidation-request addresses, and `systemCode_compile`, `systemCode_size`,
+`systemWorld_bal`, `systemWorld_stor` give its compile/nonempty/zero balance/storage
+facts. `systemAddresses` and `SystemCodes` state that a supplied world carries
+this fixture at those addresses. These are fixture bytes, not mainnet system
+contract code; funding, signing and contract deployment belong to each instance.
+
 Use [`Blanc/BlockForward.lean`](../Blanc/BlockForward.lean), the forward
 direction of T5/T6: it turns proof-produced evidence about the parts of a block
 body into Jaune's own `applyBody`, `stateTransitionUsing` and

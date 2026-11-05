@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-630 shared modules, 603 with a module summary.
+632 shared modules, 605 with a module summary.
 
 ## `Blanc/`
 
@@ -326,6 +326,8 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`StorageRefund.lean`](../Blanc/StorageRefund.lean) | Refund monotonicity for a store to an unchanged original slot. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term) |
 | [`StorageRefundPotential.lean`](../Blanc/StorageRefundPotential.lean) | **The refund potential: `SSTORE` never lowers it.** Jaune's EIP-2200 refund counter (`sstoreNewRefundCounter`) can go down: re-filling a slot whose transaction-original value is nonzero and which an earlier write in the transaction cleared takes the clear refund back. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term) |
 | [`SymbolicProgram.lean`](../Blanc/SymbolicProgram.lean) | **Symbolic programs and checked linking.** This module provides symbolic auxiliary-call linking over `Blanc.CommonCore`. | [C6](COMMON_API.md#c6-i-need-to-link-an-auxiliary-call-table-by-name-instead-of-by-index) |
+| [`SyntheticBpo2Envelope.lean`](../Blanc/SyntheticBpo2Envelope.lean) | Fixed synthetic BPO2-from-genesis chain envelope. | [T7](COMMON_API.md#t7-i-must-construct-a-configured-block-forward-from-its-parts) |
+| [`SyntheticSystemWorld.lean`](../Blanc/SyntheticSystemWorld.lean) | Synthetic four-address system world. | [T7](COMMON_API.md#t7-i-must-construct-a-configured-block-forward-from-its-parts) |
 | [`SystemCallForward.lean`](../Blanc/SystemCallForward.lean) | **The forward direction of a successful system call.** Jaune's `processSystemTransaction` wraps the SYSTEM caller's message to a system contract in `processMessageCall`. | [T5](COMMON_API.md#t5-the-wrapper-is-a-block-body-and-the-fact-is-about-an-installed-contract) |
 | [`SystemContracts.lean`](../Blanc/SystemContracts.lean) | **The canonical system-contract code.** The four contracts a block's system messages call: the EIP-4788 beacon-roots contract, the EIP-2935 history-storage contract, the EIP-7002 withdrawal-request contract and the EIP-7251 consolidation-request contract. | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
 | [`Tactics.lean`](../Blanc/Tactics.lean) | **Goal-time proof recipe lookup.** `blanc_suggest` deliberately matches raw declaration names. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [I1](COMMON_API.md#i1-one-instructionlinefunction-preserves-an-observation) |

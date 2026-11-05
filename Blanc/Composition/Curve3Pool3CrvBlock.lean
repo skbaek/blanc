@@ -1,6 +1,6 @@
 import Blanc.Composition.Curve3Pool3CrvTxData
-import Blanc.Lift.Weth9.ClosedBlock
-import Blanc.Lift.Weth9.ClosedDeployment
+import Blanc.SyntheticBpo2Envelope
+import Blanc.SyntheticSystemWorld
 import Blanc.ExecutionTraceSettledFrames
 import Blanc.ExecutionTraceSystemCode
 import Blanc.DeploymentMessage
@@ -8,8 +8,8 @@ import Blanc.DeploymentMessage
 /-!
 # U9(b): one signed transaction in one configured BPO2 block
 
-The closed block of U9(b) reuses the configured chain envelope of the WETH9 closed witness
-(`Weth9.ClosedInstance`: the BPO2-from-genesis `config`, the checkpoint `checkpoint st` carrying the
+The closed block of U9(b) uses the neutral synthetic chain envelope
+(`SyntheticBpo2Envelope`: the BPO2-from-genesis `config`, the checkpoint `checkpoint st` carrying the
 supplied state unchanged, the execution header template) with a one-transaction body.  Everything
 here is stated for an arbitrary transaction `tx`, run as the block's only transaction:
 
@@ -24,14 +24,15 @@ here is stated for an arbitrary transaction `tx`, run as the block's only transa
 namespace Blanc.Composition.Curve3Pool3CrvInstance
 
 open Jaune Blanc Blanc.BlockForward Blanc.ExecutionTrace
-open Blanc.Lift.Weth9.ClosedInstance (config config_valid config_forkAt checkpoint checkpointBlock
-  checkpointHeader checkpoint_validContext executionHeader input input_lastHash depositBlock_header
-  depositBlock_input systemCode systemCode_compile SystemCodes systemAddresses)
+open Blanc.SyntheticBpo2Envelope (config config_valid config_forkAt checkpoint checkpointBlock
+  checkpointHeader checkpoint_validContext executionHeader input input_lastHash committedHeader
+  committedHeader_valid committedHeader_input)
+open Blanc.SyntheticSystemWorld (systemCode systemCode_compile SystemCodes systemAddresses)
 
 /-- **The closed block** after `checkpoint st`, carrying the one transaction `tx` and committing to
 the body result `(post, bout)`. -/
 def oneTxBlock (tx : Tx) (st post : Jaune.State) (bout : BlockOutput) : Block :=
-  { header := commitHeader Fork.bpo2.ruleSet (checkpointBlock st) (executionHeader st) post bout
+  { header := committedHeader st post bout
     txs := [.inr tx]
     wds := []
     ommers := [] }
@@ -52,10 +53,10 @@ theorem oneTx_transition {tx : Tx} {st post : Jaune.State} {bout : BlockOutput}
       (oneTxBlock tx st post bout).txs (oneTxBlock tx st post bout).ommers
       (oneTxBlock tx st post bout).wds = .ok (post, bout) := by
     rw [show initBenv .bpo2 (checkpoint st) (oneTxBlock tx st post bout).header = input st from
-      depositBlock_input st post bout]
+      committedHeader_input st post bout]
     exact body
   exact stateTransitionUsing_forward rfl (config_forkAt _ _) CoveredFork.bpo2
-    (depositBlock_header (post := post) gas) rfl body' rfl rfl rfl rfl rfl rfl rfl rfl
+    (committedHeader_valid (post := post) gas) rfl body' rfl rfl rfl rfl rfl rfl rfl rfl
 
 /-- **The body from its one transaction**, the STOP fixture at the system addresses before and
 after it. -/

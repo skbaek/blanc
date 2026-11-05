@@ -14,19 +14,14 @@ def depositChain (st post : Jaune.State) (bout : BlockOutput) : BlockChain :=
   ⟨appendBlock (checkpoint st).blocks (depositBlock st post bout), post, 1⟩
 
 theorem input_lastHash (st : Jaune.State) :
-    (input st).stat.blockHashes.getLast? = some (checkpointHeader st).hash := by
-  rfl
+    (input st).stat.blockHashes.getLast? = some (checkpointHeader st).hash :=
+  SyntheticBpo2Envelope.input_lastHash st
 
 theorem depositBlock_header {st post : Jaune.State} {bout : BlockOutput}
     (hgas : bout.blockGasUsed ≤ 1000000) :
     validateHeader Fork.bpo2.ruleSet (checkpoint st)
-      (depositBlock st post bout).header = .ok () := by
-  exact commitHeader_ok (fork := .bpo2) (parentFee := 1) (fee := 1) CoveredFork.bpo2 rfl rfl rfl
-    (by
-      change calculateBaseFeePerGas 1000000 1000000 500000 1 = .ok 1
-      exact calculateBaseFeePerGas_unit (by decide +kernel) (by decide +kernel)
-        (by decide +kernel) (by decide +kernel))
-    rfl hgas (by change ([] : Bytes).length ≤ 32; decide +kernel) rfl rfl
+      (depositBlock st post bout).header = .ok () :=
+  SyntheticBpo2Envelope.committedHeader_valid hgas
 
 theorem depositBlock_transition {st post : Jaune.State} {bout : BlockOutput}
     (hgas : bout.blockGasUsed ≤ 1000000)

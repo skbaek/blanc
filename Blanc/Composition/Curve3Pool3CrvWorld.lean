@@ -1,7 +1,7 @@
 import Blanc.Composition.Curve3Pool3CrvCheckpoint
 import Blanc.Lift.Curve3Pool.Ladder
 import Blanc.Lift.Curve3Crv.Ladder
-import Blanc.Lift.Weth9.ClosedWorld
+import Blanc.SyntheticSystemWorld
 import Blanc.Lift.Token20.Check
 import Blanc.LadderBase
 
@@ -12,7 +12,7 @@ import Blanc.LadderBase
 joint checkpoint) with the code installed: the certified 3pool runtime at `poolAddr`, the certified
 3Crv runtime at `c3crvAddr`, the synthetic token `Token20` (`Blanc.Lift.Token20`) at
 the three coins standing in for DAI, USDC and USDT, the STOP fixture at the four system addresses
-(`Weth9.ClosedInstance.systemWorld`), and the funded code-free trader (the published secp256k1 test
+(`SyntheticSystemWorld.systemWorld`), and the funded code-free trader (the published secp256k1 test
 key `1`'s address) that signs the exchange.
 
 The coins' ledgers back the pool's stored balances (`1000`, `2000`, `3000`); the trader holds
@@ -69,7 +69,7 @@ def traderAcct : Acct := { Acct.nil with bal := traderEther }
 
 /-- **The synthetic world `P0`.** -/
 def P0 : Jaune.State :=
-  ((((((Weth9.ClosedInstance.systemWorld.set poolAddr poolAcct).set c3crvAddr
+  ((((((SyntheticSystemWorld.systemWorld.set poolAddr poolAcct).set c3crvAddr
     c3crvAcct).set coin0Addr (coinAcct coin0Stor)).set coin1Addr
     (coinAcct coin1Stor)).set coin2Addr (coinAcct coin2Stor)).set trader traderAcct)
 
@@ -143,7 +143,7 @@ theorem p0_bal (a : Adr) : P0.bal a = if a = trader then traderEther else 0 := b
     simp only [ite_true]
     rfl
   · rw [ite_eq_right (Ne.symm ht), ite_eq_right ht]
-    split_ifs <;> first | rfl | exact Weth9.ClosedInstance.systemWorld_bal a
+    split_ifs <;> first | rfl | exact SyntheticSystemWorld.systemWorld_bal a
 
 /-- **`P0`'s total ether is representable.** -/
 theorem p0_sumNof : SumNof P0.bal := by

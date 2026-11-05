@@ -1,103 +1,56 @@
-import Blanc.BlockForward
+import Blanc.SyntheticBpo2Envelope
 import Blanc.Lift.Weth9.ClosedSigningData
 
 /-!
 The concrete chain envelope for the synthetic WETH9 applicability witness.
-The checkpoint carries its supplied state unchanged and commits to its root.
-The successor's commitments will be filled from the proved body result.
+The neutral fixed BPO2 fixture owns the header/input scaffold. This module
+keeps its compatibility names and the WETH deposit transaction instance.
 -/
 
 namespace Blanc.Lift.Weth9.ClosedInstance
 
 open Jaune Blanc Blanc.BlockForward Blanc.ExecutionTrace
 
-def config : ChainConfig := ChainConfig.single 1 .bpo2
+def config : ChainConfig :=
+  SyntheticBpo2Envelope.config
 
-theorem config_valid : config.Valid := ChainConfig.single_valid 1 .bpo2
+theorem config_valid : config.Valid :=
+  SyntheticBpo2Envelope.config_valid
 
 theorem config_forkAt (number t : Nat) : config.forkAt number t = .ok .bpo2 :=
-  ChainConfig.single_forkAt 1 .bpo2 number t
+  SyntheticBpo2Envelope.config_forkAt number t
 
 theorem config_covered (number t : Nat) (fork : Fork)
-    (h : config.forkAt number t = .ok fork) : CoveredFork fork := by
-  rw [config_forkAt] at h
-  cases h
-  decide +kernel
+    (h : config.forkAt number t = .ok fork) : CoveredFork fork :=
+  SyntheticBpo2Envelope.config_covered number t fork h
 
 def checkpointHeader (st : Jaune.State) : Header :=
-  { parentHash := 0
-    ommersHash := emptyOmmerHash
-    coinbase := 0
-    stateRoot := st.root
-    txsRoot := getTransactionsRoot BlockOutput.init
-    receiptRoot := getReceiptRoot BlockOutput.init
-    bloom := List.replicate 256 0
-    difficulty := 0
-    number := 0
-    gasLimit := 1000000
-    gasUsed := 500000
-    timestamp := 0
-    extraData := []
-    prevRandao := 0
-    nonce := 0
-    baseFeePerGas := some 1
-    withdrawalsRoot := some (getWithdrawalsRoot BlockOutput.init)
-    blobGasUsed := some 0
-    excessBlobGas := some 0
-    parentBeaconBlockRoot := some 0
-    requestsHash := none
-    blockAccessListHash := none
-    slotNumber := none }
+  SyntheticBpo2Envelope.checkpointHeader st
 
 def checkpointBlock (st : Jaune.State) : Block :=
-  { header := checkpointHeader st, txs := [], wds := [], ommers := [] }
+  SyntheticBpo2Envelope.checkpointBlock st
 
 def checkpoint (st : Jaune.State) : BlockChain :=
-  { blocks := [checkpointBlock st], state := st, chainId := 1 }
+  SyntheticBpo2Envelope.checkpoint st
 
 def executionHeader (st : Jaune.State) : Header :=
-  { checkpointHeader st with
-    parentHash := (checkpointHeader st).hash
-    number := 1
-    gasUsed := 0
-    timestamp := 1 }
+  SyntheticBpo2Envelope.executionHeader st
 
 def input (st : Jaune.State) : Benv :=
-  initBenv .bpo2 (checkpoint st) (executionHeader st)
+  SyntheticBpo2Envelope.input st
 
 def depositBlock (st post : Jaune.State) (bout : BlockOutput) : Block :=
-  { header := commitHeader Fork.bpo2.ruleSet (checkpointBlock st)
-      (executionHeader st) post bout
+  { header := SyntheticBpo2Envelope.committedHeader st post bout
     txs := [Sum.inr depositTx]
     wds := []
     ommers := [] }
 
 theorem checkpoint_validContext {st : Jaune.State} (hcanon : st.Canonical) :
-    (checkpoint st).ValidContext := by
-  refine ⟨?_, hcanon, ?_, ?_⟩
-  · simp only [checkpoint, ne_eq, List.cons_ne_self, not_false_eq_true]
-  · simp only [BlockChain.RetainedHistoryValid, checkpoint, List.isChain_singleton,
-      List.mem_singleton, forall_eq, List.length_singleton, List.head?_cons,
-      Option.mem_some_iff, checkpointBlock, checkpointHeader, true_and]
-    constructor
-    · change (List.replicate 256 (0 : UInt8)).length = 256 ∧
-        0 < 2 ^ 256 ∧ 0 < 2 ^ 256 ∧ 1000000 < 2 ^ 256 ∧
-        500000 < 2 ^ 256 ∧ 0 < 2 ^ 256 ∧ (∀ b ∈ some 1, b < 2 ^ 256) ∧
-        (∀ b ∈ some 0, b < 2 ^ 64) ∧ (∀ b ∈ some 0, b < 2 ^ 64)
-      decide +kernel
-    · refine Or.inr ?_
-      intro b hb
-      cases hb
-      rfl
-  · intro tip htip
-    have ht : tip = checkpointBlock st := by
-      simpa only [checkpoint, List.getLast?_singleton, Option.mem_def,
-        Option.some.injEq] using htip.symm
-    subst tip
-    rfl
+    (checkpoint st).ValidContext :=
+  SyntheticBpo2Envelope.checkpoint_validContext hcanon
 
 theorem depositBlock_input (st post : Jaune.State) (bout : BlockOutput) :
-    initBenv .bpo2 (checkpoint st) (depositBlock st post bout).header = input st := by
-  rfl
+    initBenv .bpo2 (checkpoint st) (depositBlock st post bout).header = input st :=
+  SyntheticBpo2Envelope.committedHeader_input st post bout
 
 end Blanc.Lift.Weth9.ClosedInstance
