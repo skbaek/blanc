@@ -18,7 +18,8 @@ premise of the closed block is read off these accounts:
 namespace Blanc.Composition.Curve3Pool3CrvInstance
 
 open Jaune Blanc Blanc.Lift Blanc.Composition.Curve3Pool3CrvJoint
-open Blanc.Lift.Weth9.ClosedInstance (systemAddresses SystemCodes systemCode input)
+open Blanc.SyntheticSystemWorld (systemAddresses SystemCodes systemCode)
+open Blanc.SyntheticBpo2Envelope (input)
 
 /-- The accounts the closed block touches or whose content its premises read. -/
 def touchedAccounts : List Adr :=

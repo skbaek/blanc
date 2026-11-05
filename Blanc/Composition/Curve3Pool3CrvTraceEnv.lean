@@ -23,7 +23,7 @@ namespace Blanc.Composition.Curve3Pool3CrvInstance
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool Blanc.ExecutionTrace
 open Blanc.Composition.Curve3Pool3CrvJoint
-open Blanc.Lift.Weth9.ClosedInstance (systemAddresses)
+open Blanc.SyntheticSystemWorld (systemAddresses)
 
 theorem poolStor_token : (poolStor.get tokenSlot).toAdr = c3crvAddr := by decide +kernel
 

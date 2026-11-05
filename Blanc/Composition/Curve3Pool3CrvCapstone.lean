@@ -36,8 +36,8 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.BlockForward
 open Blanc.Composition.Curve3Pool3CrvJoint
 open Blanc.Composition.Curve3PoolSupply (supplyAt pool_3crv_u3)
 open Blanc.Lift.Curve3Pool (PoolInvocation PoolRun poolSubtreeFrames)
-open Blanc.Lift.Weth9.ClosedInstance (config checkpoint input systemAddresses SystemCodes
-  systemCode)
+open Blanc.SyntheticBpo2Envelope (config checkpoint input)
+open Blanc.SyntheticSystemWorld (systemAddresses SystemCodes systemCode)
 
 /-- A settled frame of a configured history is one of its raw frames. -/
 theorem history_rawFrames_of_settled {cfg : ChainConfig} {pre post : BlockChain}
