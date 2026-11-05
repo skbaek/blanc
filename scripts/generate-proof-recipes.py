@@ -592,7 +592,7 @@ DISPATCH_NAME_RE = re.compile(r"``?(Blanc\.[A-Za-z_][A-Za-z0-9_'!?]*(?:\.[A-Za-z
 ANY_DISPATCH_NAME_RE = re.compile(r"``?([A-Za-z_][A-Za-z0-9_'!?]*(?:\.[A-Za-z_][A-Za-z0-9_'!?]*)*)")
 
 # A call to one of this module's own trigger helper predicates. Several arms
-# state their whole condition as `proofRecipeIsByteSizeComposition target` and
+# state their whole condition as `proofRecipeIsCompileShapePrependCongruence target` and
 # name nothing themselves; the names they dispatch on live one level down, in
 # the helper. Following the call is what makes those arms checkable at all.
 DISPATCH_HELPER_RE = re.compile(r"\b(proofRecipe[A-Za-z0-9_']*[?!]?)")
@@ -617,9 +617,6 @@ UNCHECKED_DISPATCH_ARMS: Dict[str, str] = {
         "counts local hypotheses headed by Jaune.Devm",
     "goal-shape:devm-common-update-law":
         "names Jaune.Devm and Jaune state updaters only",
-    "goal-shape:devm-update-projection":
-        "proofRecipeIsDevmProjectionBridge dispatches on Jaune.Devm projections "
-        "and updaters only",
     "goal-shape:full-length-slice":
         "names Jaune.List.sliceD only",
     "goal-shape:message-execution-settlement":
@@ -631,24 +628,19 @@ UNCHECKED_DISPATCH_ARMS: Dict[str, str] = {
     "goal-shape:successor-projection":
         "names Jaune.Devm updaters and reuses the same Jaune-only projection "
         "bridge",
-    "goal-shape:shared-subject-kernel-decision":
-        "structural: proofRecipeHasRepeatedClosedLetSubject decides on the "
-        "shape of the term and names no declaration at all",
 }
 
 # The reasons above divide in two, and the division is checkable: a foreign arm
 # must still dispatch on some name, and a structural arm must dispatch on none.
-STRUCTURAL_DISPATCH_ARMS = frozenset({"goal-shape:shared-subject-kernel-decision"})
+STRUCTURAL_DISPATCH_ARMS = frozenset()
 
 # Every Jaune name any trigger arm dispatches on, through its helper predicates.
 #
 # ``validate_trigger_dispatch`` above can only see this repository's own names,
-# so the Jaune half of the dispatch was unchecked in two different ways. Six
-# arms dispatch on Jaune names only and sit in ``UNCHECKED_DISPATCH_ARMS``; two
-# more -- ``goal-shape:operand-stack-fault-free`` and
-# ``goal-shape:terminal-return-revert`` -- are *inside* the checked population
-# because they also name Blanc declarations, and their Jaune disjuncts were
-# silently unchecked while the arm reported green. Blanc consumes Jaune through
+# so the Jaune half of each surviving arm's dispatch needs its own exact
+# inventory. Both foreign-only arms and mixed-owner arms must be covered;
+# checking a Blanc name cannot establish liveness of a Jaune disjunct.
+# Blanc consumes Jaune through
 # a Git-pinned Lake dependency, so a pin bump that renames one of these leaves
 # every one of those arms compiling and comparing against a name nothing
 # produces.
@@ -694,10 +686,6 @@ JAUNE_DISPATCH_SURFACE = frozenset({
     "Jaune.Devm.state",
     "Jaune.Devm.transientStorage",
     "Jaune.Devm.world",
-    "Jaune.ExceptionalHalt.stackOverflow",
-    "Jaune.ExceptionalHalt.stackUnderflow",
-    "Jaune.Linst.return_",
-    "Jaune.Linst.revert",
     "Jaune.List.sliceD",
     "Jaune.addAccessedStorageKey",
     "Jaune.exec",
@@ -709,7 +697,7 @@ JAUNE_DISPATCH_SURFACE = frozenset({
 # Names outside both namespaces that an arm may dispatch on. These are Lean core
 # and are not pinned by this repository at all, so they are stated here rather
 # than left to fall through whichever of the two checks happens to ignore them.
-CORE_DISPATCH_NAMES = frozenset({"Eq", "Iff", "LE.le", "LT.lt", "Ne", "Except.ok", "Nonempty"})
+CORE_DISPATCH_NAMES = frozenset({"Eq", "Except.ok"})
 
 # Registered recipes with no case in ``scripts/ProofRecipeSuggestions.lean``,
 # each with what a case would have to exhibit.
@@ -857,7 +845,7 @@ def constructor_inventory(root: Path) -> Set[str]:
 def proof_recipe_helper_bodies(root: Path) -> Dict[str, str]:
     """The source of every ``proofRecipe*`` helper predicate, by name.
 
-    An arm's condition is often a single call -- ``proofRecipeIsByteSizeComposition
+    An arm's condition is often a single call -- ``proofRecipeIsCompileShapePrependCongruence
     target`` -- and the Lean names it really dispatches on are inside the
     helper. ``blanc_suggest`` stops firing just as silently when one of those is
     renamed, so the closure over these bodies, not the arm's own text, is the
@@ -2065,8 +2053,8 @@ def self_test(root: Path) -> None:
             "dead-helper-dispatch",
             replace_once(
                 tactics_original,
-                "compileShapeName == `Blanc.Func.compileShape",
-                "compileShapeName == `Blanc.Func.departedCompileShape",
+                "prependName == `Blanc.prepend",
+                "prependName == `Blanc.departedPrepend",
                 "dead-helper-dispatch",
             ),
             "can never fire",
