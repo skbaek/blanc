@@ -13,13 +13,6 @@ running the real runtimes on the execution specs' Prague interpreter; no theorem
 
 namespace Blanc.Composition.Curve3PoolPublic
 
-open Classical in
-/-- What USDC's older versions cost beyond V2_2 on a `transfer` (or, `pull`, a `transferFrom`). -/
-noncomputable def usdcOlder (w : Jaune.State) (pull : Bool) : Nat :=
-  if w.getCode (usdcImplOf w) = Lift.Usdc.ImplV2.code then (if pull then 3465 else 3321)
-  else if w.getCode (usdcImplOf w) = Lift.Usdc.ImplV2_1.code then (if pull then 3443 else 3365)
-  else 0
-
 /-- A credit that starts an empty entry costs `17100` more than one that adds to a nonzero entry. -/
 def startsEntry (old v : Nat) : Nat := if old = 0 ∧ 0 < v then 17100 else 0
 
@@ -39,13 +32,11 @@ def paymentGas (w : Jaune.State) (E : Jaune.Adr) (k : Fin 3) (v : Nat) : Nat :=
   startsEntry (rawHeld w E k) (netOf w k v) + if k = 2 then usdtFeeGas w v false else 0
 
 /-- `remove_liquidity`'s cost for one coin, beyond the frame's fixed cost. -/
-noncomputable def exitCoinGas (w : Jaune.State) (E : Jaune.Adr) (a : Nat) (k : Fin 3) : Nat :=
-  (if k = 1 then usdcOlder w false else 0) +
-    if share w a k = 0 then 0
-    else (if k = 2 then 8466 else 8400) + paymentGas w E k (share w a k)
+def exitCoinGas (w : Jaune.State) (E : Jaune.Adr) (a : Nat) (k : Fin 3) : Nat :=
+  if share w a k = 0 then 0 else (if k = 2 then 8466 else 8400) + paymentGas w E k (share w a k)
 
 /-- `remove_liquidity`'s frame at a transaction's entry: the fixed cost, the burn's two writes, the coins. -/
-noncomputable def exitFrameGas (w : Jaune.State) (E : Jaune.Adr) (a : Nat) : Nat :=
+def exitFrameGas (w : Jaune.State) (E : Jaune.Adr) (a : Nat) : Nat :=
   110162 + (if a = 0 then 0 else 5600) + exitCoinGas w E a 0 + exitCoinGas w E a 1 + exitCoinGas w E a 2
 
 /-- `1` if a nonzero debit of `v` empties a word holding `old`. -/
@@ -67,12 +58,12 @@ def callIntrinsic (data : Jaune.Bytes) : Nat := 21000 + 4 * Blanc.calldataTokens
 def afterRefund (spent refund : Nat) : Nat := spent - min (spent / 5) refund
 
 /-- **The gas a `remove_liquidity` transaction uses.** -/
-noncomputable def exitGasUsed (w : Jaune.State) (data : Jaune.Bytes) (E : Jaune.Adr) (a : Nat) : Nat :=
+def exitGasUsed (w : Jaune.State) (data : Jaune.Bytes) (E : Jaune.Adr) (a : Nat) : Nat :=
   afterRefund (callIntrinsic data + exitFrameGas w E a) (exitRefund w E a)
 
-/-- A gas limit's room above the frame that the proof requires of `remove_liquidity`: `167000 + 5 * U`
-with `U = 95000`. Conservative: on the measured run `2201` was enough. -/
-def exitRoom : Nat := 642000
+/-- The gas that must remain above what an entry spends: its last write, the lock's release, costs `100`
+and `SSTORE` refuses at `2300` or less left. Measured minimal on twelve runs. -/
+def callRoom : Nat := 2201
 
 /-! ## `exchange` -/
 
@@ -96,13 +87,13 @@ def allowanceGas (unlimited : Bool) : Fin 3 → Nat
   | 2 => if unlimited then 0 else 3194
 
 /-- The pull of `dx` of coin `i` from `E` to the pool. -/
-noncomputable def pullGas (w : Jaune.State) (i : Fin 3) (dx : Nat) (unlimited : Bool) : Nat :=
-  pullBase i + allowanceGas unlimited i + (if i = 1 then usdcOlder w true else 0) +
+def pullGas (w : Jaune.State) (i : Fin 3) (dx : Nat) (unlimited : Bool) : Nat :=
+  pullBase i + allowanceGas unlimited i +
     startsEntry (rawHeld w pool i) (netOf w i dx) + if i = 2 then usdtFeeGas w dx true else 0
 
 /-- The push of `dy` of coin `j` to `E`. -/
-noncomputable def pushGas (w : Jaune.State) (E : Jaune.Adr) (j : Fin 3) (dy : Nat) : Nat :=
-  pushBase j + (if j = 1 then usdcOlder w false else 0) + paymentGas w E j dy
+def pushGas (w : Jaune.State) (E : Jaune.Adr) (j : Fin 3) (dy : Nat) : Nat :=
+  pushBase j + paymentGas w E j dy
 
 /-- What reading `_A()` costs beyond the plain case, while a ramp runs at timestamp `t`. -/
 def rampReadGas (w : Jaune.State) (t : Nat) : Nat :=
@@ -117,7 +108,7 @@ def newtonGas (w : Jaune.State) (amp : Nat) (i j : Fin 3) (x D : Nat) : Nat :=
     Lift.Curve3Pool.gyCostFrom0 i j x (scaled w 0) (scaled w 1) (scaled w 2) D (amp * 3) (D, 0)
 
 /-- `exchange`'s frame at a transaction's entry. `x` and `D` are what `get_y` was given. -/
-noncomputable def swapFrameGas (w : Jaune.State) (E : Jaune.Adr) (t amp : Nat) (i j : Fin 3)
+def swapFrameGas (w : Jaune.State) (E : Jaune.Adr) (t amp : Nat) (i j : Fin 3)
     (dx dy x D : Nat) (unlimited : Bool) : Nat :=
   pullGas w i dx unlimited + pushGas w E j dy + rampReadGas w t + newtonGas w amp i j x D
 

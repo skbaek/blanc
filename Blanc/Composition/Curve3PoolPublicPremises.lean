@@ -10,6 +10,12 @@ import Blanc.Lift.Usdc.Constants
 import Blanc.ExecutionHistoryInAppend
 import Blanc.ExecutionHistoryInPreCancun
 import Blanc.ExecutionHistoryInFrameEnv
+import Blanc.Lift.CurveCoins.DaiLocality
+import Blanc.Lift.CurveCoins.UsdtLocality
+import Blanc.Lift.Usdc.EntryChain
+import Blanc.Lift.Usdc.ImplV2Ws.Ann
+import Blanc.Lift.Usdc.ImplV2_1Ws.Ann
+import Blanc.Lift.Usdc.ImplWs.Ann
 
 /-!
 # The Curve 3pool's public statements: what they assume
@@ -70,51 +76,25 @@ structure StartingCode (w : State) : Prop where
 
 /-! ## The operators -/
 
-/-- The first argument word of a frame's calldata. -/
-def firstArg (f : Exec.Frame) : B256 := Sevm.dataWord f.sevm 4
-
-/-- USDT's owner confiscates the pool's balance: a committed `destroyBlackFunds(pool)`. -/
-def DestroysBlackFunds (f : Exec.Frame) : Prop :=
-  f.sevm.currentTarget = usdt ∧ Sevm.selector f.sevm = 0xf3bdc228 ∧ firstArg f = pool.toB256
-
-/-- The address USDC's proxy delegates to, in a state. -/
-def usdcImplOf (w : State) : Adr := ((w.getStor usdc).get Usdc.implSlot).toAdr
-
-/-- USDC's implementation in `w` holds one of the three audited versions. -/
-def UsdcCertified (w : State) : Prop :=
-  w.getCode (usdcImplOf w) = Usdc.ImplV2.code ∨ w.getCode (usdcImplOf w) = Usdc.ImplV2_1.code ∨
-    w.getCode (usdcImplOf w) = Usdc.Impl.code
-
-/-- USDC's implementation in `w` is V2_2, which reads bit 255 of a balance word as a blacklist flag. -/
-def UsdcPacked (w : State) : Prop := w.getCode (usdcImplOf w) = Usdc.Impl.code
-
-/-- USDC's initializer entries, each run once at an upgrade. -/
-def usdcInitializers : List B256 := [0x3357162b, 0xd608ea64, 0x2fc81e09, 0x430239b4]
-
-/-- **Tether's owner's powers over the pool's USDT entry**, restrained, over a history's frames. -/
-structure TetherRestrained (settled : List Exec.Frame) (raw : List Exec.Deriv) : Prop where
+/-- **Tether's owner's powers over the pool's USDT entry**, restrained, over a history's retained frames. -/
+structure TetherRestrained (settled : List Exec.Frame) : Prop where
   /-- The owner never destroys the pool's USDT. -/
-  noConfiscation : ∀ f ∈ settled, ¬ DestroysBlackFunds f
+  noConfiscation : ∀ F ∈ coinFrames usdt (fun _ => True) settled, ¬ CurveCoins.Usdt.Confiscates pool F.sevm
   /-- The owner never redirects USDT through `deprecate`. -/
-  notDeprecated : ∀ r ∈ raw, r.sevm.currentTarget = usdt →
-    Usdt.flag20 ((r.devm.getStor usdt).get 10) = 0
-  /-- The owner never hands ownership to the pool, whose balance `redeem` would then debit. -/
-  ownerNotPool : ∀ f ∈ settled, f.sevm.currentTarget = usdt →
-    Usdt.ownerOf (f.pre.getStor usdt) ≠ pool
+  notDeprecated : ∀ F ∈ coinFrames usdt (fun _ => True) settled, CurveCoins.Usdt.NotDeprecated usdt F
 
-/-- **Circle's powers over the pool's USDC entry**, restrained, over a history's frames. -/
-structure CircleRestrained (settled : List Exec.Frame) (raw : List Exec.Deriv) : Prop where
+/-- **Circle's powers over the pool's USDC entry**, restrained, over a history's retained frames. -/
+structure CircleRestrained (settled : List Exec.Frame) : Prop where
   /-- USDC stays behind its proxy's code. -/
-  proxyStays : ∀ r ∈ raw, r.devm.getCode usdc = Lift.Usdc.Proxy.code
-  /-- The proxy admin only upgrades USDC to a certified version. -/
-  usdcCertified : ∀ r ∈ raw, r.sevm.currentTarget = usdc → UsdcCertified r.devm.state
-  /-- An initializer leaves the pool's USDC entry alone. Shape to be settled by U3. -/
-  initializerBoundary : ∀ f ∈ settled, f.sevm.currentTarget = usdc →
-    Sevm.selector f.sevm ∈ usdcInitializers → word f.post.state usdc (Usdc.balSlot pool) =
-      word f.pre.state usdc (Usdc.balSlot pool)
-  /-- The minters never take the pool's whole word to `2^255` before V2_2 reads that bit. -/
-  belowFlag : ∀ f ∈ settled, f.sevm.currentTarget = usdc → ¬ UsdcPacked f.post.state →
-    word f.post.state usdc (Usdc.balSlot pool) < 2 ^ 255
+  proxyStays : ∀ f ∈ settled, f.pre.getCode usdc = Lift.Usdc.Proxy.code
+  /-- The proxy admin only upgrades USDC to one of the three versions, and V2_2 finds its library. -/
+  usdcCertified : ∀ f ∈ settled, f.sevm.currentTarget = usdc → Usdc.UsdcCertified f.pre usdc
+  /-- An initializer does not lower the pool's entry. -/
+  initializers : Usdc.InitializerKeeps usdc pool settled
+  /-- The rescuer's call does not re-enter USDC. -/
+  rescueQuiet : Usdc.RescueQuiet usdc settled
+  /-- The pool's whole word is below `2^255` where USDC moves to V2_2, which reads that bit. -/
+  belowFlag : Usdc.BelowFlagAt usdc pool (coinFrames usdc (Usdc.EntryObs usdc) settled)
 
 /-! ## Signatures -/
 
@@ -124,43 +104,45 @@ def allowanceEntry (o s : Adr) : Fin 3 → B256
   | 1 => Usdc.allowSlot o s
   | 2 => Usdt.allowSlot o s
 
-/-- DAI's and USDC's signature-authorized entries, whose first argument names the signer. -/
-def signedSelectors : List B256 :=
-  [0x8fcbaf0c, 0xd505accf, 0x9fd5a6cf, 0xe3ee160e, 0xcf092995, 0xef55bec6, 0x88b7ab63]
+/-- USDC's signature-authorized entries, whose first argument names the signer. -/
+def usdcSignedSelectors : List B256 := [0xd505accf, 0x9fd5a6cf, 0xe3ee160e, 0xcf092995, 0xef55bec6, 0x88b7ab63]
 
-/-- A committed coin call authorized by a signature naming the pool as the signer. -/
-def SignedAsPool (f : Exec.Frame) : Prop :=
-  (f.sevm.currentTarget = dai ∨ f.sevm.currentTarget = usdc) ∧ f.sevm.isStatic = false ∧
-    Sevm.selector f.sevm ∈ signedSelectors ∧ firstArg f = pool.toB256
+/-- A USDC message authorized by a signature naming `h` as the signer. -/
+def UsdcSignedAs (h : Adr) (e : Sevm) : Prop :=
+  Sevm.selector e ∈ usdcSignedSelectors ∧ (Sevm.dataWord e 4).toAdr = h
 
 /-- **Nobody holds a key for the pool's address or for address 4.** -/
 structure NoKeyHolder (w : State) (settled : List Exec.Frame) (noAuthority : Prop) : Prop where
-  /-- No signature recovers to the pool for a coin's signed entries. -/
-  noSignature : ∀ f ∈ settled, ¬ SignedAsPool f
+  /-- DAI's `Approval` never names the pool as owner; a `permit` naming it would log that. -/
+  daiNoApproval : ∀ F ∈ coinFrames dai (fun _ => True) settled, ¬ CurveCoins.Dai.LogsApprovalAs dai pool F
+  /-- No signature recovers to the pool for USDC's signed entries. -/
+  usdcNoSignature : ∀ F ∈ coinFrames usdc (fun _ => True) settled, ¬ UsdcSignedAs pool F.sevm
   /-- The pool's allowance rows are empty when it is created: before its code exists only its key could
   set one. A universal over spenders, checkable for any finite set, not one RPC read. -/
-  rowsAtCut : ∀ k g, word w (coinAt k) (allowanceEntry pool g k) = 0
+  rowsAtCut : ∀ k g, wordsAt (coinAt k) w (allowanceEntry pool g k) = 0
   /-- No EIP-7702 authorization recovers to address 4. -/
   idNoAuthority : noAuthority
 
 /-! ## Hashes -/
 
-/-- The addresses a coin frame can name as a balance key: its caller and its first two arguments. -/
-def namedKeys (f : Exec.Frame) : List B256 :=
-  [f.sevm.caller.toB256, firstArg f, Sevm.dataWord f.sevm 36]
+/-- The sites USDC's three versions can write. -/
+def usdcSites : List WriteSite.Site :=
+  WriteSite.wsRoot Usdc.ImplV2Ws.implWsAnn ++ WriteSite.wsRoot Usdc.ImplV2_1Ws.implWsAnn ++
+    WriteSite.wsRoot Usdc.ImplWs.implWsAnn
 
-/-- No address a coin frame names shares a balance entry with the pool. Shape to be settled by U3. -/
-def CoinKeysFresh (frames : List Exec.Frame) : Prop :=
-  ∀ f ∈ frames, ∀ k : Fin 3, f.sevm.currentTarget = coinAt k → ∀ a ∈ namedKeys f,
-    a.toAdr ≠ pool → coinEntry a.toAdr k ≠ coinEntry pool k
+/-- **The pool's entries in each coin are collision-free over that coin's retained frames (HASH-T).** -/
+structure CoinKeysHold (settled : List Exec.Frame) : Prop where
+  dai : CoinKeysFresh (WriteSite.wsRoot DaiWs.implWsAnn) 2 3 pool (coinFrames dai (fun _ => True) settled)
+  usdc : CoinKeysFresh usdcSites 9 10 pool (coinFrames usdc (fun _ => True) settled)
+  usdt : CurveCoins.Usdt.UsdtKeysFresh pool (coinFrames usdt (fun _ => True) settled)
 
 /-- **The history's hashes do not collide on what the proofs compare.** -/
 structure HashesFresh (d : Deployment) {future : BlockChain}
     (h : MainnetHistory d.minter.post future) : Prop where
   /-- 3Crv's storage keys are collision-free over the history (HASH-T). -/
   c3Keys : Curve3Crv.FreshKeys (fun _ => False) (Curve3Crv.midTouchedKeysIn c3 (d.sinceCreation h))
-  /-- The pool's balance entries in the coins are collision-free over the history (HASH-T). -/
-  coinKeys : CoinKeysFresh (d.sincePool h).settledFrames
+  /-- The pool's entries in the coins are collision-free (HASH-T). -/
+  coinKeys : CoinKeysHold (d.sincePool h).settledFrames
   /-- No contract creation lands on the identity precompile's address. -/
   noCreateAt4 : ∀ r ∈ (d.sinceC3Block h).rawFrames, r.sevm.codeAddress = none → r.sevm.currentTarget ≠ 4
 
@@ -170,9 +152,9 @@ structure Assumes (d : Deployment) {future : BlockChain}
   /-- DAI and USDT are their deployed bytes, and address 4 holds no code. -/
   code : StartingCode d.c3.post.state
   /-- Tether's owner's powers are restrained. -/
-  tether : TetherRestrained (d.sincePool h).settledFrames (d.sincePool h).rawFrames
+  tether : TetherRestrained (d.sincePool h).settledFrames
   /-- Circle's powers are restrained. -/
-  circle : CircleRestrained (d.sincePool h).settledFrames (d.sincePool h).rawFrames
+  circle : CircleRestrained (d.sincePool h).settledFrames
   /-- Nobody holds a key for the pool's address or for address 4. -/
   keys : NoKeyHolder d.poolCut.afterBenv.state (d.sincePool h).settledFrames
     ((d.sinceC3Block h).PragueNoAuthorityAt 4)

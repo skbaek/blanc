@@ -5,6 +5,7 @@ import Blanc.Lift.Curve3Crv.Layout
 import Blanc.Lift.DaiFrames
 import Blanc.Lift.UsdtFrames
 import Blanc.Lift.Usdc.Slots
+import Blanc.Lift.Usdc.Constants
 
 /-!
 # The Curve 3pool's public statements: what they read from the world
@@ -58,9 +59,17 @@ def coinAt : Fin 3 → Adr
   | 1 => usdc
   | 2 => usdt
 
-/-- What coin `k`'s storage says `a` holds. USDC's word is read as its low 255 bits. -/
-def coinHeld (w : State) (a : Adr) (k : Fin 3) : Nat :=
-  if k = 1 then Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot a))
+/-- The address USDC's proxy delegates to, in a state. -/
+def usdcImplOf (w : State) : Adr := ((w.getStor usdc).get Usdc.implSlot).toAdr
+
+/-- USDC's implementation word in `w` names V2_2, which reads bit 255 of a balance word as a blacklist flag. -/
+def UsdcPacked (w : State) : Prop := (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256
+
+open Classical in
+/-- What coin `k`'s storage says `a` holds, as the running USDC version reads it: its low 255 bits under
+V2_2, the whole word before. -/
+noncomputable def coinHeld (w : State) (a : Adr) (k : Fin 3) : Nat :=
+  if k = 1 ∧ UsdcPacked w then Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot a))
   else word w (coinAt k) (coinEntry a k)
 
 /-- **The pool's books are covered**: for each coin, the recorded balance is at most what that coin's

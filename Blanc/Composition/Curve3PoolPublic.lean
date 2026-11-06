@@ -54,7 +54,7 @@ def lp_exit : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
     ∀ (tx : Tx) (E : Adr) (a : Nat) (mins : V3),
       tx.data = exitCalldata a mins →
-      TxAdmitted m.benv m.bout tx E (exitGasUsed m.world tx.data E a + exitRoom) →
+      TxAdmitted m.benv m.bout tx E (exitGasUsed m.world tx.data E a + exitRefund m.world E a + callRoom) →
       CoinsOpen m.world E → ExitRequest m.world E a mins →
       ExitWorks m.benv m.bout tx m.nextIndex E a
 
@@ -104,10 +104,6 @@ def SwapWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
     swapAdmin benv.state benv.stat.time.toNat i j dx = some admin ∧
     SwapPaid benv.state st E i j dx dy admin
 
-/-- A gas limit's room above the frame that the proof requires of `exchange`: `60000 + U` with
-`U = 120000`. Conservative. -/
-def swapRoom : Nat := 180000
-
 /-- **A swap works.** At any moment of mainnet after the minter assignment, an admissible `exchange`
 transaction, with no named power in force against it, is processed at exact gas and pays what the
 curve quotes. -/
@@ -116,7 +112,9 @@ def swap : Prop :=
     ∀ (tx : Tx) (E : Adr) (i j : Fin 3) (dx dy minDy gas : Nat),
       tx.data = swapCalldata i j dx minDy →
       swapGasUsed m.world tx.data E m.benv.stat.time.toNat i j dx = some gas →
-      TxAdmitted m.benv m.bout tx E (gas + swapRoom) → CoinsOpen m.world E →
+      TxAdmitted m.benv m.bout tx E
+        (gas + swapRefund m.world E i j dx dy (allowanceOf m.world E i) + callRoom) →
+      CoinsOpen m.world E →
       SwapRequest m.world E m.benv.stat.time.toNat i j dx dy minDy →
       SwapWorks m.benv m.bout tx m.nextIndex E i j dx dy
 
@@ -161,7 +159,7 @@ def lp_exit_message : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
     ∀ (msg : Msg) (E : Adr) (a : Nat) (mins : V3), Asked msg m.world E (exitCalldata a mins) →
       ExitRequest m.world E a mins →
-      MsgDoes msg exitRoom (exitFrameGas m.world E a) (exitRefund m.world E a)
+      MsgDoes msg callRoom (exitFrameGas m.world E a) (exitRefund m.world E a)
         (fun st => ExitPaid m.world st E a)
 
 /-- `exchange`'s frame cost at `E`'s own allowance. -/
@@ -175,7 +173,7 @@ def swap_message : Prop :=
       Asked msg m.world E (swapCalldata i j dx minDy) → t = msg.benv.stat.time.toNat →
       SwapRequest m.world E t i j dx dy minDy → SwapInputs m.world t i dx amp D x →
       swapAdmin m.world t i j dx = some admin →
-      MsgDoes msg swapRoom (swapCost m.world E t amp i j dx dy x D)
+      MsgDoes msg callRoom (swapCost m.world E t amp i j dx dy x D)
         (swapRefund m.world E i j dx dy (allowanceOf m.world E i))
         (fun st => SwapPaid m.world st E i j dx dy admin)
 

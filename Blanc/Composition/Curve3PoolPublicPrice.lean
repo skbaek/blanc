@@ -1,5 +1,7 @@
 import Blanc.Composition.Curve3PoolPublicPremises
 import Blanc.Lift.Curve3Pool.LadderH
+import Blanc.Lift.Curve3Pool.Creation.Deploy
+import Blanc.Lift.Curve3Crv.Creation.Deploy
 
 /-!
 # The Curve 3pool's public statements: the virtual price
@@ -34,7 +36,7 @@ def feeGap (w : State) (amp : Nat) (new : V3) : Nat :=
 
 /-- What `add_liquidity` credits for coin `k`: the amount asked, or for USDT what the pool's own
 balance gained across the call. -/
-def creditedIn (w w' : State) (am : V3) (k : Fin 3) : Nat :=
+noncomputable def creditedIn (w w' : State) (am : V3) (k : Fin 3) : Nat :=
   if k = 2 ∧ am.get k > 0 then coinHeld w' pool k - coinHeld w pool k else am.get k
 
 /-- `V3` from a function on the three coins. -/
@@ -62,7 +64,7 @@ def opOf (e : Sevm) : PoolOp :=
   else .other
 
 /-- **The rounding `D` may lose across a call**, per operation, with `w`, `w'` the states around it. -/
-def allowance (w w' : State) (amp D : Nat) : PoolOp → Nat
+noncomputable def allowance (w w' : State) (amp D : Nat) : PoolOp → Nat
   | .donateAdminFees => overshoot (scaled w) amp D
   | .addLiquidity am => feeGap w amp (v3Of fun k => recorded w k + creditedIn w w' am k)
   | .imbalance am => feeGap w amp (v3Of fun k => recorded w k - am.get k)
@@ -106,27 +108,45 @@ def ReturnsPrice (env : BenvStat) (w : State) (p : Nat) : Prop :=
   ∃ m post, AsksPrice m w ∧ m.benv.stat = env ∧ exec (initEvm m) = .ok post ∧ post.error = none ∧
     Curve3Pool.answerWord post.output = p
 
-/-- The pool, 3Crv and the coins hold their deployed bytes in `w`, with a certified USDC version. -/
-structure Installed (w : State) : Prop where
-  poolCode : w.getCode pool = Curve3Pool.code
-  c3Code : w.getCode c3 = Curve3Crv.code
-  coins : StartingCode w
-  usdcCode : w.getCode usdc = Lift.Usdc.Proxy.code
-  usdcCertified : UsdcCertified w
-
-/-- A message to the pool at `w` commits and ends in `post`. -/
+/-- A message to the pool at `w`, under a fork the history covers, commits and ends in `post`. -/
 structure CallCommits (m : Msg) (w : State) (post : Devm) : Prop where
   target : m.currentTarget = pool
   state : m.benv.state = w
   code : m.code = w.getCode pool
+  fork : HistFork m.benv.stat.fork
   ran : exec (initEvm m) = .ok post
   ok : post.error = none
 
-/-- **The word `get_virtual_price()` returns falls across one call at fixed amplification**, in a state
-where the contracts hold their deployed bytes. A claim about the bytes, not about any chain state. -/
+/-- `poolDeployTime`: the pool's creation block's timestamp, which sets its kill deadline. -/
+def poolDeployTime : B256 := 1599414978
+
+/-- 3Crv's words after its recorded creation and the minter assignment. -/
+def c3DeployedWords (x : B256) : B256 :=
+  if x = Curve3Crv.vyMinterSlot then pool.toB256
+  else (Curve3Crv.Creation.deployedStor Curve3Crv.Creation.deployer.toB256).get x
+
+/-- **The world the recorded creations and the minter assignment leave**: the contracts' storage exactly,
+each coin its deployed bytes, and the pool holding none of any coin. Who else holds coins is free. -/
+structure AtDeployment (w : State) : Prop where
+  poolCode : w.getCode pool = Curve3Pool.code
+  poolWords : wordsAt pool w = (Curve3Pool.Creation.deployedStor poolDeployTime).get
+  c3Code : w.getCode c3 = Curve3Crv.code
+  c3Words : wordsAt c3 w = c3DeployedWords
+  coins : StartingCode w
+  usdcCode : w.getCode usdc = Lift.Usdc.Proxy.code
+  usdcVersion : CurveCoins.UsdcVersion (w.getCode (usdcImplOf w))
+  empty : ∀ k, word w (coinAt k) (coinEntry pool k) = 0
+
+/-- The message is a call of `add_liquidity`. -/
+def IsDeposit (m : Msg) : Prop := ∃ rest, m.data = abiSelectorBytes Curve3Pool.selAddLiquidity ++ rest
+
+/-- **The word `get_virtual_price()` returns falls across one call at fixed amplification**, from the
+world the recorded deployment leaves plus one first deposit. A claim about the bytes: the deposit is a path
+the chain could have taken, not one it took. -/
 def VirtualPriceFalls : Prop :=
-  ∃ (w : State) (m : Msg) (post : Devm) (p p' : Nat), Installed w ∧ CallCommits m w post ∧
-    ampAt w m.benv.stat.time.toNat = ampAt post.state m.benv.stat.time.toNat ∧
-    ReturnsPrice m.benv.stat w p ∧ ReturnsPrice m.benv.stat post.state p' ∧ p' < p
+  ∃ (w : State) (dep m : Msg) (mid post : Devm) (p p' : Nat),
+    AtDeployment w ∧ IsDeposit dep ∧ CallCommits dep w mid ∧ CallCommits m mid.state post ∧
+    ampAt mid.state m.benv.stat.time.toNat = ampAt post.state m.benv.stat.time.toNat ∧
+    ReturnsPrice m.benv.stat mid.state p ∧ ReturnsPrice m.benv.stat post.state p' ∧ p' < p
 
 end Blanc.Composition.Curve3PoolPublic

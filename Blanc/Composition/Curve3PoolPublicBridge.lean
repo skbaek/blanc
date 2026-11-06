@@ -140,4 +140,33 @@ theorem within_oneCoin {a i mn : Nat} (hi : i < 3)
 
 end Within
 
+section Authority
+
+/-- **`NoKeyHolder` gives `dai_entry_local`'s `PoolAuthorityEmpty`**, given what the pool sends DAI
+(`ownCalls`, U4's to discharge). -/
+theorem NoKeyHolder.daiAuthority {cfg : ChainConfig} {start : Benv} {future : BlockChain} {noAuthority : Prop}
+    (trace : MidHistoryTraceIn HistFork cfg start future)
+    (keys : NoKeyHolder start.state trace.settledFrames noAuthority)
+    (installed : start.state.getCode dai = Lift.Dai.code)
+    (own : ∀ F ∈ coinFrames dai (fun _ => True) trace.settledFrames, F.sevm.caller = pool →
+      CurveCoins.PoolCoinSel (Sevm.selector F.sevm)) :
+    PoolAuthorityEmpty CurveCoins.Dai.SignedAs Dai.allowSlot CurveCoins.PoolCoinSel pool
+      (wordsAt dai start.state) (coinFrames dai (fun _ => True) trace.settledFrames) where
+  rowsAtCut := keys.rowsAtCut 0
+  noSignature := CurveCoins.Dai.dai_noSignature_of_logs trace installed keys.daiNoApproval
+  ownCalls := own
+
+/-- **`NoKeyHolder` gives `usdt_entry_local`'s `PoolAuthorityEmpty`**: USDT has no signed writer. -/
+theorem NoKeyHolder.usdtAuthority {settled : List Exec.Frame} {w : Jaune.State} {noAuthority : Prop}
+    (keys : NoKeyHolder w settled noAuthority)
+    (own : ∀ F ∈ coinFrames usdt (fun _ => True) settled, F.sevm.caller = pool →
+      CurveCoins.PoolCoinSel (Sevm.selector F.sevm)) :
+    PoolAuthorityEmpty CurveCoins.Usdt.NoSigned Usdt.allowSlot CurveCoins.PoolCoinSel pool
+      (wordsAt usdt w) (coinFrames usdt (fun _ => True) settled) where
+  rowsAtCut := keys.rowsAtCut 2
+  noSignature := fun _ _ h => h
+  ownCalls := own
+
+end Authority
+
 end Blanc.Composition.Curve3PoolPublic

@@ -3,7 +3,6 @@ import Blanc.TransactionForward
 import Blanc.CommonProofs.NoDel
 import Blanc.ExecutionTrace
 import Blanc.Lift.Usdc.Footprint
-import Blanc.Lift.Usdc.V2Frames
 
 /-!
 # The Curve 3pool's public statements: a transaction at a point of history
@@ -96,10 +95,9 @@ def netOf (w : State) (k : Fin 3) (v : Nat) : Nat := if k = 2 then v - usdtFee w
 /-- USDC is not paused: the flag at byte 20 of its slot 1. -/
 def UsdcOpen (w : State) : Prop := Usdc.flag20 ((w.getStor usdc).get 1) = false
 
-/-- USDC has not blacklisted `a`: bit 255 of its word under V2_2, its own mapping before that. -/
+/-- USDC has not blacklisted `a`: bit 255 of its word, under V2_2. -/
 def UsdcUnlisted (w : State) (a : Adr) : Prop :=
-  (UsdcPacked w → Usdc.frozenBit ((w.getStor usdc).get (Usdc.balSlot a)) = false) ∧
-    (¬ UsdcPacked w → Usdc.ImplV2.listedByte (w.getStor usdc) a = 0)
+  Usdc.frozenBit ((w.getStor usdc).get (Usdc.balSlot a)) = false
 
 /-- USDT is not paused and has not blacklisted `a`. -/
 def UsdtOpen (w : State) (a : Adr) : Prop :=
@@ -115,6 +113,8 @@ def UsdtFeeFits (w : State) (v : Nat) : Prop :=
 
 /-- **No named liveness power is in force against the pool or `E`.** -/
 structure CoinsOpen (w : State) (E : Adr) : Prop where
+  /-- USDC runs V2_2, as it has since well before `CoveredFork`'s first block. -/
+  usdcV22 : UsdcPacked w
   usdtOpen : UsdtOpen w pool
   usdtLive : Usdt.flag20 ((w.getStor usdt).get 10) = 0
   usdcOpen : UsdcOpen w
