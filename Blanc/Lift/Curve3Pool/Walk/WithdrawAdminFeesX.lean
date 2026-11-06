@@ -122,7 +122,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
     (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (k : Fin 3) (hid : IdReadyH sevm d)
     (hpc : d.getCode sevm.currentTarget ≠ .empty)
-    (hkeep : RlKeep sevm L)
+    (hkeep : KeepCoin sevm ((d.getStor sevm.currentTarget).get (coinSlot k)) L)
     (hctrR : Region img 0x140 (Nat.toB256 ↑k).toBytes)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hcoinK : ¬ sevm.benvStat.rules.isPrecomp
@@ -237,8 +237,10 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
     hclogs, hcpre, hcpost⟩
   · exact absurd hpre hcoinK
   clear hk hw
+  rw [wdx_input] at hdata
   have h4 : d1.getCode 4 = d.getCode 4 := by
-    rw [hcpost, (hkeep c (by rw [hL]; exact List.mem_cons_self)).2, hcpre, afterSloadH_getCode]
+    rw [hcpost, (hkeep c (by rw [hL]; exact List.mem_cons_self) htgt
+      (poolCoinSel_balanceOfData hdata)).2, hcpre, afterSloadH_getCode]
   have hid1 : IdReadyH sevm d1 :=
     ⟨by rw [h4]; exact hid.nodeleg,
       hacc _ (by rw [afterSloadH_accessedAddresses]; exact hid.warm), hid.pre, hid.stateGas⟩
@@ -246,7 +248,6 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
     have hpc0 : (afterSloadH sevm d (coinSlot k)).getCode sevm.currentTarget ≠ .empty := by
       rw [afterSloadH_getCode]; exact hpc
     rw [hcodeKeep _ hpc0, afterSloadH_getCode]
-  rw [wdx_input] at hdata
   xa 5
   xji 0x4daf 0x4db3 hw
   · xdead
@@ -717,7 +718,7 @@ theorem wdx_xfer_call {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
       (transferSel ++ sevm.caller.toB256.toBytes ++ fees.toBytes)))
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp coin.toAdr)
-    (hK : RlKeep sevm L)
+    (hK : KeepCoin sevm coin L)
     (h : XAt sevm post 0x4e94
       (St b [Bytes.toB256 [3], Bytes.toB256 [1, 0x40]] M G) L) :
     ∃ c L' d G', L = c :: L' ∧
@@ -755,7 +756,7 @@ theorem wdx_xfer_call {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
   · exact absurd hp hcoin
   xjd 0x4eb1
   rw [zero_lit] at hc
-  refine ⟨c, L', d, _, rfl, ?_, hK.head, hR, hW, hrd, h⟩
+  refine ⟨c, L', d, _, rfl, ?_, hK c List.mem_cons_self hc.target (poolCoinSel_transferData hc.data), hR, hW, hrd, h⟩
   exact hc.congr_left (fun _ => rfl) (fun _ => rfl) rfl rfl rfl
 
 /-- The transfer reply passes the deployed raw-call check (`0x4eb1 → 0x4f3c`). -/

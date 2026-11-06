@@ -1,6 +1,7 @@
 import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD0
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
+import Blanc.Lift.Curve3Pool.Walk.KeepSel
 
 /-!
 # `add_liquidity`, part 4: the pull loop
@@ -195,7 +196,7 @@ theorem xa_al_pl2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hv : WordAt img 0x4e0 v)
     (hC : WordAt img 0x500 C) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
     (hidk : ∀ c ∈ L, c.sevm.currentTarget = C.toAdr →
-      c.post.getCode 4 = c.pre.getCode 4)
+      CurveCoins.PoolCoinSel (Sevm.selector c.sevm) → c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x10b6 (St b [3, 0x4c0] M G) L) :
     (v = 0 ∧ ∃ M' G', Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       XAt sevm post 0x12d6 (St b [3, 0x4c0] M' G') L) ∨
@@ -247,7 +248,8 @@ theorem xa_al_pl2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
       · exact absurd hpre hcoin
       clear hk
       have h4 : d1.getCode 4 = b.getCode 4 := by
-        rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self) htgt, hcpre]
+        rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self) htgt
+          (poolCoinSel_balanceOfData (a := sevm.currentTarget) (by rw [hdata, al_balanceOf_input])), hcpre]
       xa 5
       xji 0x10fd 0x1101 hw2
       · xdead
@@ -294,7 +296,7 @@ theorem xa_al_pl2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
         WordAt img' o w) ∧
       WordAt img' 0x4e0 (Bytes.toB256 (c.post.output.take 32)) ∧
       XAt sevm post 0x110d (St d [3, 0x4c0] M' G') L') :=
-  xa_al_pl2C hcode hfork hi hR hW hA hctr hv hC hcoin (fun c hc _ => hidk c hc) h
+  xa_al_pl2C hcode hfork hi hR hW hA hctr hv hC hcoin (fun c hc _ _ => hidk c hc) h
 
 theorem al_tf_copy {img : Bytes} (E Cw S V : B256) (hsel : Region img 0x6a0 transferFromSel) :
     ((Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt img 0x6a4 Cw.toBytes) 0x6c4
@@ -329,9 +331,7 @@ theorem xa_al_pl3C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     (hdepth : 0 < sevm.depth) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hC : WordAt img 0x500 C)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
-    (hK : ∀ c ∈ L, c.sevm.currentTarget = C.toAdr →
-      (∀ x, (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x) ∧
-        c.post.getCode 4 = c.pre.getCode 4)
+    (hK : KeepCoin sevm C L)
     (h : XAt sevm post 0x110d (St b [3, 0x4c0] M G) L) :
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b3 d : Devm) (G' : Nat), L = c :: L' ∧
       BaseRel b b3 ∧
@@ -466,7 +466,7 @@ theorem xa_al_pl3C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   rcases hch with ⟨hp, -⟩ | ⟨c, rfl, -, -, hc⟩
   · exact absurd hp hcoin
   refine ⟨c, L4, b3, d4, _, rfl, hb12.trans hb23, ?_,
-    hK c List.mem_cons_self hc.target, ⟨img3, hR, hW, hA, hrd4,
+    hK c List.mem_cons_self hc.target (poolCoinSel_transferFromData hc.data), ⟨img3, hR, hW, hA, hrd4,
     k_ctr, fun o w hw ho => P3 o w (P2 o w (P1 o w hw ho) ho) ho⟩, h⟩
   exact hc.congr_left (fun _ => rfl) (fun _ => rfl) rfl rfl rfl
 
@@ -493,6 +493,6 @@ theorem xa_al_pl3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
         (∀ o w, WordAt img o w → (o + 32 ≤ 0x620 ∨ 0x7e0 ≤ o) → WordAt img3 o w)) ∧
       XAt sevm post 0x11e6 (St d [3, 0x4c0] d.memory G') L' :=
   xa_al_pl3C hcode hfork hi hid hdepth hR hW hA hctr hC hcoin
-    (fun c hc _ => ⟨hkeep c hc, hidk c hc⟩) h
+    (fun c hc _ _ => ⟨hkeep c hc, hidk c hc⟩) h
 
 end Blanc.Lift.Curve3Pool
