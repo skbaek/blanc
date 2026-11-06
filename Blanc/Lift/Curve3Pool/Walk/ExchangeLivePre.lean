@@ -26,6 +26,12 @@ theorem ex_clamp_lo {x : B256} (h : x.toNat < 3) :
   obtain h' | h' | h' : x.toNat = 0 ∨ x.toNat = 1 ∨ x.toNat = 2 := by omega
   all_goals rw [h']; decide
 
+/-- Across an EIP-2929 `SLOAD`, for the exact lanes. -/
+theorem ExBase.sloadP {sevm : Sevm} {b0 b : Devm} {σ : Stor} (h : ExBase sevm b0 b σ) (k : B256) :
+    ExBase sevm b0 (afterSload sevm b k) σ :=
+  ⟨fun x => by rw [afterSload_getStor]; exact h.stor x, by rw [afterSload_getCode]; exact h.code,
+    by rw [afterSload_output]; exact h.output, h.id.afterSload k⟩
+
 /-- Across an `SSTORE` of the pool. -/
 theorem ExBase.sstore {sevm : Sevm} {b0 b : Devm} {σ : Stor} (h : ExBase sevm b0 b σ)
     (k v : B256) : ExBase sevm b0 (afterSstore sevm b k v) (σ.set k v) :=
@@ -205,10 +211,10 @@ theorem rx_ex_pre_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : 
   xr (rxm_mload (o := 0x280) hR hsz rfl (by decide) (by hr) ·); try wsimp
   have hB4 : ExBase sevm b0 b4 (σ.set lockSlot 1) := by
     rw [hb4, hb2, lockSlot_lit, show Bytes.toB256 [1] = (1 : B256) by decide]
-    exact (hB.sload _).sstore _ _
+    exact (hB.sloadP _).sstore _ _
   have hW4 : W b4 := by rw [hb4, hb2]; exact hWc.sstore _ _ _ (hWc.sload _ _ hWb)
   have hB12 : ExBase sevm b0 b12 (σ.set lockSlot 1) := by
-    rw [hb12, hb10, hb8, hb6]; exact (((hB4.sload _).sload _).sload _).sload _
+    rw [hb12, hb10, hb8, hb6]; exact (((hB4.sloadP _).sloadP _).sloadP _).sloadP _
   have hW12 : W b12 := by
     rw [hb12, hb10, hb8, hb6]
     exact hWc.sload _ _ (hWc.sload _ _ (hWc.sload _ _ (hWc.sload _ _ hW4)))

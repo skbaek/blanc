@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceD1
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -133,7 +134,7 @@ theorem xa_rli_feeA0 (hcode : sevm.code = code)
 
 -- SEGMENT: rliFeeB0
 /-- **Fee iteration 0, from the branch join** (`0x3458` → `0x336e`). -/
-theorem xa_rli_feeB0 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+theorem xa_rli_feeB0 (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {b0 : Devm} {σ : Stor} (hB : ExBase sevm b0 b σ)
     {M : Mem} {D0 D1 T F AF A o0 o1 o2 m0 m1 m2  dif : B256}
     (hV : VW M [(0x640, dif), (0x600, Nat.toB256 0), (0x480, D1), (0x340, D0), (0x140, T), (0x1e0, F),
@@ -212,7 +213,7 @@ theorem xa_rli_feeB0 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   xa 2
   xk 0x3543 0xc0  -- 3542 SHA3
   xs 0x3544 (.reg .add) ri_add  -- 3543 ADD
-  xw 0x3545 (.reg .sstore) ri_sstore  -- 3544 SSTORE
+  xw 0x3545 (.reg .sstore) ri_sstoreF  -- 3544 SSTORE
   xa 2
   xl 0x354c 0x600  -- 354b MLOAD
   xa 4
@@ -247,11 +248,11 @@ theorem xa_rli_feeB0 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   simp only [show Bytes.toB256 [1] = (1 : B256) from by decide, balancesBase_eq,
     show (1 : B256) + Nat.toB256 0 = Nat.toB256 1 from by decide] at h hV
   refine ⟨hm2, hm3, hs3, hs4, _, _, _, ⟨fun x => ?_, ?_, ?_, ?_⟩, ?_, h, hV.sub ?_⟩
-  · rw [afterSstore_getStor_self, Stor.get_set_ite, Stor.get_set_ite, hB.stor]
-  · rw [afterSstore_getCode, hB.code]
-  · rw [afterSstore_output, hB.output]
-  · exact hB.id.afterSstore _ _
-  · rw [afterSstore_logs]
+  · rw [afterSstoreH_getStor_self, Stor.get_set_ite, Stor.get_set_ite, hB.stor]
+  · rw [afterSstoreH_getCode, hB.code]
+  · rw [afterSstoreH_output, hB.output]
+  · exact hB.id.afterSstoreH _ _
+  · rw [afterSstoreH_logs]
   · simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
 
 -- SEGMENT: rliFeeA1
@@ -355,7 +356,7 @@ theorem xa_rli_feeA1 (hcode : sevm.code = code)
 
 -- SEGMENT: rliFeeB1
 /-- **Fee iteration 1, from the branch join** (`0x3458` → `0x336e`). -/
-theorem xa_rli_feeB1 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+theorem xa_rli_feeB1 (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {b0 : Devm} {σ : Stor} (hB : ExBase sevm b0 b σ)
     {M : Mem} {D0 D1 T F AF A o0 o1 o2 m0 m1 m2 f0 dif : B256}
     (hV : VW M [(0x640, dif), (0x600, Nat.toB256 1), (0x480, D1), (0x340, D0), (0x140, T), (0x1e0, F),
@@ -434,7 +435,7 @@ theorem xa_rli_feeB1 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   xa 2
   xk 0x3543 0xc0  -- 3542 SHA3
   xs 0x3544 (.reg .add) ri_add  -- 3543 ADD
-  xw 0x3545 (.reg .sstore) ri_sstore  -- 3544 SSTORE
+  xw 0x3545 (.reg .sstore) ri_sstoreF  -- 3544 SSTORE
   xa 2
   xl 0x354c 0x600  -- 354b MLOAD
   xa 4
@@ -469,11 +470,11 @@ theorem xa_rli_feeB1 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   simp only [show Bytes.toB256 [1] = (1 : B256) from by decide, balancesBase_eq,
     show (1 : B256) + Nat.toB256 1 = Nat.toB256 2 from by decide] at h hV
   refine ⟨hm2, hm3, hs3, hs4, _, _, _, ⟨fun x => ?_, ?_, ?_, ?_⟩, ?_, h, hV.sub ?_⟩
-  · rw [afterSstore_getStor_self, Stor.get_set_ite, Stor.get_set_ite, hB.stor]
-  · rw [afterSstore_getCode, hB.code]
-  · rw [afterSstore_output, hB.output]
-  · exact hB.id.afterSstore _ _
-  · rw [afterSstore_logs]
+  · rw [afterSstoreH_getStor_self, Stor.get_set_ite, Stor.get_set_ite, hB.stor]
+  · rw [afterSstoreH_getCode, hB.code]
+  · rw [afterSstoreH_output, hB.output]
+  · exact hB.id.afterSstoreH _ _
+  · rw [afterSstoreH_logs]
   · simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
 
 -- SEGMENT: rliFeeA2
@@ -577,7 +578,7 @@ theorem xa_rli_feeA2 (hcode : sevm.code = code)
 
 -- SEGMENT: rliFeeB2
 /-- **Fee iteration 2, from the branch join** (`0x3458` → `0x35a2`). -/
-theorem xa_rli_feeB2 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+theorem xa_rli_feeB2 (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {b0 : Devm} {σ : Stor} (hB : ExBase sevm b0 b σ)
     {M : Mem} {D0 D1 T F AF A o0 o1 o2 m0 m1 m2 f0 f1 dif : B256}
     (hV : VW M [(0x640, dif), (0x600, Nat.toB256 2), (0x480, D1), (0x340, D0), (0x140, T), (0x1e0, F),
@@ -656,7 +657,7 @@ theorem xa_rli_feeB2 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   xa 2
   xk 0x3543 0xc0  -- 3542 SHA3
   xs 0x3544 (.reg .add) ri_add  -- 3543 ADD
-  xw 0x3545 (.reg .sstore) ri_sstore  -- 3544 SSTORE
+  xw 0x3545 (.reg .sstore) ri_sstoreF  -- 3544 SSTORE
   xa 2
   xl 0x354c 0x600  -- 354b MLOAD
   xa 4
@@ -693,11 +694,11 @@ theorem xa_rli_feeB2 (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvSt
   simp only [show Bytes.toB256 [1] = (1 : B256) from by decide, balancesBase_eq,
     show (1 : B256) + Nat.toB256 2 = Nat.toB256 3 from by decide] at h hV
   refine ⟨hm2, hm3, hs3, hs4, _, _, _, ⟨fun x => ?_, ?_, ?_, ?_⟩, ?_, h, hV.sub ?_⟩
-  · rw [afterSstore_getStor_self, Stor.get_set_ite, Stor.get_set_ite, hB.stor]
-  · rw [afterSstore_getCode, hB.code]
-  · rw [afterSstore_output, hB.output]
-  · exact hB.id.afterSstore _ _
-  · rw [afterSstore_logs]
+  · rw [afterSstoreH_getStor_self, Stor.get_set_ite, Stor.get_set_ite, hB.stor]
+  · rw [afterSstoreH_getCode, hB.code]
+  · rw [afterSstoreH_output, hB.output]
+  · exact hB.id.afterSstoreH _ _
+  · rw [afterSstoreH_logs]
   · simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
 
 end

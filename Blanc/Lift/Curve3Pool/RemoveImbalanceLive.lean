@@ -136,9 +136,9 @@ theorem removeLiquidityImbalance_live {sevm : Sevm} {pre : Devm} {s : State} {o 
     hsup hW1 hU1 hg1 hin1 htok hS1
   -- the safety result for that execution
   obtain ⟨hkp, hidk⟩ := hkeep D exc
-  obtain ⟨T', o', hstep', hraw, c', L'', hL', hc'⟩ := removeLiquidityImbalance_rawE exc hcode hfork
+  obtain ⟨T', o', hstep', hraw, c', L'', hL', hc'⟩ := removeLiquidityImbalance_rawE exc hcode hfork.histFork
     hlen hcd hsel rfl rfl (by omega) hck htok hcoin hpc
-    (hid.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩) hkp hidk
+    (hid.toH.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩) hkp hidk
   rw [hL] at hL'
   obtain ⟨rfl, -⟩ := List.cons.inj hL'
   have hTT : T' = T := hc'.symm.trans hcT

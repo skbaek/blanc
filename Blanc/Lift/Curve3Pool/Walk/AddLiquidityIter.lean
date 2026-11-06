@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPull2
 
 /-!
@@ -37,8 +38,8 @@ structure AlPull (sevm : Sevm) (C : B256) (i : Nat) (c : Exec.Frame) : Prop wher
   ok : RawCallOk c.post.output
 
 theorem AlStatic.idReady {sevm : Sevm} {b d : Devm} {t : Adr} {input : Bytes} {c : Exec.Frame}
-    (h : AlStatic sevm b d t input c) (hid : IdReady sevm b) : IdReady sevm d :=
-  ⟨by rw [h.code4]; exact hid.nodeleg, h.acc _ hid.warm, hid.pre, hid.fork⟩
+    (h : AlStatic sevm b d t input c) (hid : IdReadyH sevm b) : IdReadyH sevm d :=
+  ⟨by rw [h.code4]; exact hid.nodeleg, h.acc _ hid.warm, hid.pre, hid.stateGas⟩
 
 theorem AlStatic.bal {sevm : Sevm} {b d : Devm} {C : B256} {c : Exec.Frame}
     (h : AlStatic sevm b d C.toAdr (balanceOfData sevm.currentTarget) c) : AlBal sevm C c :=
@@ -48,12 +49,12 @@ theorem AlStatic.bal {sevm : Sevm} {b d : Devm} {C : B256} {c : Exec.Frame}
 theorem xa_al_pullTxC {sevm : Sevm} {P : Adr → Prop}
     {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {σ : Stor} {i : Nat} {v F AF A T D0 : B256} {old nv : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlPullImg img i F AF A T D0 old nv) (hv : WordAt img 0x4e0 v)
     (hC : WordAt img 0x500 (coinAt σ i))
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
     (hP : P (coinAt σ i).toAdr)
     (hK : ∀ c ∈ L, P c.sevm.currentTarget →
@@ -69,7 +70,7 @@ theorem xa_al_pullTxC {sevm : Sevm} {P : Adr → Prop}
       ¬ old i + cr < old i ∧
       (∀ x, (b'.getStor sevm.currentTarget).get x = σ.get x) ∧
       b'.logs = b.logs ++ c.post.logs ∧ b'.output = b.output ∧
-      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReady sevm b' ∧
+      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReadyH sevm b' ∧
       Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       AlPullImg img' (i + 1) F AF A T D0 old (Function.update nv i (old i + cr)) ∧
       XAt sevm post (if i + 1 = 3 then 0x1333 else 0x105d) (St b' [3, 0x4c0] M' G') L' := by
@@ -78,9 +79,9 @@ theorem xa_al_pullTxC {sevm : Sevm} {P : Adr → Prop}
       (fun c hc ht => hK c hc (by rw [ht]; exact hP)) h
   have hpc3 : b3.getCode sevm.currentTarget ≠ .empty := by rw [hb3.code]; exact hpc
   have hid3 := hid.of_rel hb3
-  have hidd : IdReady sevm d :=
+  have hidd : IdReadyH sevm d :=
     ⟨by rw [hc.codePost, hidc, hc.codePre]; exact hid3.nodeleg, hc.warm _ hid3.warm, hid.pre,
-      hid.fork⟩
+      hid.stateGas⟩
   replace h3 := xa_jumpdestAt (pc' := 0x11e7) (atJ hcode (by kernel_rfl)) (by rfl) h3
   obtain ⟨_, h3⟩ := h3
   obtain ⟨hok, b6, M6, img6, G6, hb6, hR6, hW6, hA6, P6, h6⟩ :=
@@ -118,12 +119,12 @@ theorem xa_al_pullTxC {sevm : Sevm} {P : Adr → Prop}
 /-- **`xa_al_pullTx`**: `xa_al_pullTxC` with every child keeping the pool. -/
 theorem xa_al_pullTx {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {σ : Stor} {i : Nat} {v F AF A T D0 : B256} {old nv : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlPullImg img i F AF A T D0 old nv) (hv : WordAt img 0x4e0 v)
     (hC : WordAt img 0x500 (coinAt σ i))
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
@@ -138,7 +139,7 @@ theorem xa_al_pullTx {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
       ¬ old i + cr < old i ∧
       (∀ x, (b'.getStor sevm.currentTarget).get x = σ.get x) ∧
       b'.logs = b.logs ++ c.post.logs ∧ b'.output = b.output ∧
-      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReady sevm b' ∧
+      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReadyH sevm b' ∧
       Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       AlPullImg img' (i + 1) F AF A T D0 old (Function.update nv i (old i + cr)) ∧
       XAt sevm post (if i + 1 = 3 then 0x1333 else 0x105d) (St b' [3, 0x4c0] M' G') L' :=
@@ -180,11 +181,11 @@ theorem AlPullKids.target {sevm : Sevm} {C amt cr : B256} {i : Nat} {Lc : List E
 theorem xa_al_pullIterC {sevm : Sevm} {P : Adr → Prop}
     {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {σ : Stor} {i : Nat} {F AF A T D0 : B256} {old nv : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlPullImg img i F AF A T D0 old nv)
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
     (hP : P (coinAt σ i).toAdr)
     (hK : ∀ c ∈ L, P c.sevm.currentTarget →
@@ -197,19 +198,19 @@ theorem xa_al_pullIterC {sevm : Sevm} {P : Adr → Prop}
       ¬ old i + cr < old i ∧
       (∀ x, (b'.getStor sevm.currentTarget).get x = σ.get x) ∧
       b'.logs = b.logs ++ Lc.flatMap (fun c => c.post.logs) ∧ b'.output = b.output ∧
-      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReady sevm b' ∧
+      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReadyH sevm b' ∧
       Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       AlPullImg img' (i + 1) F AF A T D0 old (Function.update nv i (old i + cr)) ∧
       XAt sevm post (if i + 1 = 3 then 0x1333 else 0x105d) (St b' [3, 0x4c0] M' G') L' := by
   obtain ⟨M1, img1, G1, hR1, hW1, hA1, hm1, hv1, hC1, hT0, h1⟩ :=
     xa_al_pl1 hcode hfork hi hst hR hW hA hm h
   refine ⟨hT0, ?_⟩
-  have hst1 : ∀ x, ((afterSload sevm b (coinsBase + Nat.toB256 i)).getStor
+  have hst1 : ∀ x, ((afterSloadH sevm b (coinsBase + Nat.toB256 i)).getStor
       sevm.currentTarget).get x = σ.get x := by
-    intro x; rw [afterSload_getStor, hst]
-  have hpc1 : (afterSload sevm b (coinsBase + Nat.toB256 i)).getCode sevm.currentTarget ≠ .empty := by
-    rw [afterSload_getCode]; exact hpc
-  have hid1 := hid.afterSload (coinsBase + Nat.toB256 i)
+    intro x; rw [afterSloadH_getStor, hst]
+  have hpc1 : (afterSloadH sevm b (coinsBase + Nat.toB256 i)).getCode sevm.currentTarget ≠ .empty := by
+    rw [afterSloadH_getCode]; exact hpc
+  have hid1 := hid.afterSloadH (coinsBase + Nat.toB256 i)
   rcases xa_al_pl2C hcode hfork hi hR1 hW1 hA1 hm1.ctr hv1 hC1 hcoin
       (fun c hc ht => (hK c hc (by rw [ht]; exact hP)).2) h1 with
     ⟨hv0, M2, G2, hR2, hW2, hA2, h2⟩ | ⟨hv0, hi2, M2, G2, hR2, hW2, hA2, h2⟩ |
@@ -217,18 +218,18 @@ theorem xa_al_pullIterC {sevm : Sevm} {P : Adr → Prop}
   · obtain ⟨hadd, M8, img8, G8, hR8, hW8, hA8, hP8, h8⟩ := xa_al_pl6 hcode hi hR2 hW2 hA2 hm1 hv1 h2
     refine ⟨[], L, _, M8, img8, G8, _, rfl, .inl ⟨hv0, rfl, hv0⟩, hadd, hst1, ?_, ?_, ?_, hid1,
       hR8, hW8, hA8, hP8, h8⟩
-    · rw [afterSload_logs, List.flatMap_nil, List.append_nil]
-    · rw [afterSload_output]
-    · rw [afterSload_getCode]
+    · rw [afterSloadH_logs, List.flatMap_nil, List.append_nil]
+    · rw [afterSloadH_output]
+    · rw [afterSloadH_getCode]
   · obtain ⟨c, Lr, L', b', M8, img8, G8, cr, rfl, hpull, hcase, hadd, hst8, hl8, ho8, hcd8, hid8,
       hR8, hW8, hA8, hP8, h8⟩ := xa_al_pullTxC hcode hfork hi hR2 hW2 hA2 hm1 hv1 hC1 hst1 hpc1 hid1
       hdepth hcoin hP hK h2
     rcases hcase with ⟨-, rfl, rfl⟩ | ⟨hi2', -⟩
     · refine ⟨[c], L', b', M8, img8, G8, _, rfl, .inr (.inl ⟨hv0, hi2, c, rfl, hpull, rfl⟩), hadd,
         hst8, ?_, ?_, ?_, hid8, hR8, hW8, hA8, hP8, h8⟩
-      · rw [hl8, afterSload_logs, List.flatMap_cons, List.flatMap_nil, List.append_nil]
-      · rw [ho8, afterSload_output]
-      · rw [hcd8, afterSload_getCode]
+      · rw [hl8, afterSloadH_logs, List.flatMap_cons, List.flatMap_nil, List.append_nil]
+      · rw [ho8, afterSloadH_output]
+      · rw [hcd8, afterSloadH_getCode]
     · exact absurd hi2' hi2
   · have hst0 : ∀ x, (d0.getStor sevm.currentTarget).get x = σ.get x := by
       intro x; rw [hs0.stor, hst1]
@@ -243,19 +244,19 @@ theorem xa_al_pullIterC {sevm : Sevm} {P : Adr → Prop}
     · refine ⟨[c0, c, c1], L', b', M8, img8, G8, _, rfl,
         .inr (.inr ⟨hv0, hi2, c0, c, c1, rfl, hs0.bal, hpull, hb1, hge, rfl⟩), hadd, hst8, ?_, ?_,
         ?_, hid8, hR8, hW8, hA8, hP8, h8⟩
-      · rw [hl8, hs0.logs, afterSload_logs, List.flatMap_cons, List.flatMap_cons, List.flatMap_cons,
+      · rw [hl8, hs0.logs, afterSloadH_logs, List.flatMap_cons, List.flatMap_cons, List.flatMap_cons,
           List.flatMap_nil, hs0.clogs, hb1.logs, List.nil_append, List.append_nil, List.append_nil]
-      · rw [ho8, hs0.out, afterSload_output]
-      · rw [hcd8, hs0.codeK _ hpc1, afterSload_getCode]
+      · rw [ho8, hs0.out, afterSloadH_output]
+      · rw [hcd8, hs0.codeK _ hpc1, afterSloadH_getCode]
 
 /-- **`xa_al_pullIter`**: `xa_al_pullIterC` with every child keeping the pool. -/
 theorem xa_al_pullIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {σ : Stor} {i : Nat} {F AF A T D0 : B256} {old nv : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlPullImg img i F AF A T D0 old nv)
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
@@ -267,7 +268,7 @@ theorem xa_al_pullIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
       ¬ old i + cr < old i ∧
       (∀ x, (b'.getStor sevm.currentTarget).get x = σ.get x) ∧
       b'.logs = b.logs ++ Lc.flatMap (fun c => c.post.logs) ∧ b'.output = b.output ∧
-      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReady sevm b' ∧
+      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReadyH sevm b' ∧
       Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       AlPullImg img' (i + 1) F AF A T D0 old (Function.update nv i (old i + cr)) ∧
       XAt sevm post (if i + 1 = 3 then 0x1333 else 0x105d) (St b' [3, 0x4c0] M' G') L' :=
@@ -280,11 +281,11 @@ child groups and the actual checked credit for each coin. -/
 theorem xa_al_pullLoopC {sevm : Sevm} {P : Adr → Prop}
     {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {σ : Stor} {F AF A T D0 : B256} {old : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlPullImg img 0 F AF A T D0 old old)
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
     (hP : ∀ i, i < 3 → P (coinAt σ i).toAdr)
     (hK : ∀ c ∈ L, P c.sevm.currentTarget →
@@ -302,7 +303,7 @@ theorem xa_al_pullLoopC {sevm : Sevm} {P : Adr → Prop}
       (∀ x, (b'.getStor sevm.currentTarget).get x = σ.get x) ∧
       b'.logs = b.logs ++ (L0 ++ L1 ++ L2).flatMap (fun c => c.post.logs) ∧
       b'.output = b.output ∧ b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧
-      IdReady sevm b' ∧ Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
+      IdReadyH sevm b' ∧ Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       AlPullImg img' 3 F AF A T D0 old
         (Function.update (Function.update (Function.update old 0 (old 0 + cr0))
           1 (old 1 + cr1)) 2 (old 2 + cr2)) ∧
@@ -341,11 +342,11 @@ theorem xa_al_pullLoopC {sevm : Sevm} {P : Adr → Prop}
 /-- **`xa_al_pullLoop`**: `xa_al_pullLoopC` with every child keeping the pool. -/
 theorem xa_al_pullLoop {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {σ : Stor} {F AF A T D0 : B256} {old : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlPullImg img 0 F AF A T D0 old old)
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
@@ -362,7 +363,7 @@ theorem xa_al_pullLoop {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
       (∀ x, (b'.getStor sevm.currentTarget).get x = σ.get x) ∧
       b'.logs = b.logs ++ (L0 ++ L1 ++ L2).flatMap (fun c => c.post.logs) ∧
       b'.output = b.output ∧ b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧
-      IdReady sevm b' ∧ Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
+      IdReadyH sevm b' ∧ Mem.Reads M' img' ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       AlPullImg img' 3 F AF A T D0 old
         (Function.update (Function.update (Function.update old 0 (old 0 + cr0))
           1 (old 1 + cr1)) 2 (old 2 + cr2)) ∧

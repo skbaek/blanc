@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ExchangeModel
 import Blanc.Lift.Curve3Pool.Walk.ExchangeObserve
 
@@ -33,14 +34,14 @@ indices and the observed `balanceOf` answers, the raw effect, and its `get_y` ca
 bytecode passed (`x`, the stored `xp` at the model's `amp` for the frame's time) and received (`y`). -/
 theorem exchange_rawEY {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selExchange)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
     (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0,sevm,pre,.ok post,exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3) (bp bq : Option Nat) (o : Out),
@@ -133,14 +134,14 @@ theorem exchange_rawEY {sevm : Sevm} {pre post : Devm} {s : State}
 `exEnv` at the decoded indices and the observed `balanceOf` answers. -/
 theorem exchange_rawE {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selExchange)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
     (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0,sevm,pre,.ok post,exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3) (bp bq : Option Nat) (o : Out),
@@ -155,14 +156,14 @@ its `get_y` call: the decoded coins `i`, `j`, and the words the bytecode passed 
 at the model's `amp` for the frame's time) and received (`y`). -/
 theorem exchange_raw_getY {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selExchange)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
     (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0,sevm,pre,.ok post,exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧ RawEffect ⟨0,sevm,pre,.ok post,exc⟩ post e o ∧
@@ -177,14 +178,14 @@ theorem exchange_raw_getY {sevm : Sevm} {pre post : Devm} {s : State}
 /-- A successful exchange on the deployed runtime computes the model step and raw effect. -/
 theorem exchange_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selExchange)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
     (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0,sevm,pre,.ok post,exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧ RawEffect ⟨0,sevm,pre,.ok post,exc⟩ post e o := by

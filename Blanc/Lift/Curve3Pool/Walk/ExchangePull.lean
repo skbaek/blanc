@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ExchangeMid
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -69,9 +70,9 @@ macro "ex_pull_mid" : tactic => `(tactic| (
 /-- **The pull** (`0x2517` → the `raw_call` tail at `0x25dc`). -/
 theorem xa_ex_pull {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {B X : Nat → B256} {D C : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hF : ExFrame img B X D C)
-    (hid : IdReady sevm b) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
+    (hid : IdReadyH sevm b) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
     (h : XAt sevm post 0x2517 (St b [] M G) L) :
     0 < sevm.depth ∧ ∃ b' c L' d img' G', BaseRel b b' ∧ L = c :: L' ∧
       ChildOf b' d C.toAdr (exPullData sevm) 0 sevm.isStatic c ∧
@@ -102,7 +103,7 @@ theorem xa_ex_pull {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     · xdead
     · exact absurd rfl hw
   have hdepth : 0 < sevm.depth := Nat.pos_of_ne_zero hd0
-  replace h := xa_identity_img (pc' := 0x255e) (i := 0x4e0) (n := 4) (o := 0x540) (z := 4) hid
+  replace h := xa_identity_imgH (pc' := 0x255e) (i := 0x4e0) (n := 4) (o := 0x540) (z := 4) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, L1, h, hk⟩ := h
@@ -116,7 +117,7 @@ theorem xa_ex_pull {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   have hb12 : BaseRel b b2 := ⟨hsha.stor, hsha.code, hsha.addrs, hsha.logs, hsha.output, hsha.error⟩
   clear hsha hsel4
   ex_pull_mid
-  replace h := xa_identity_img (pc' := 0x25b4) (i := 0x520) (n := 0x84) (o := 0x5e0) (z := 0x84)
+  replace h := xa_identity_imgH (pc' := 0x25b4) (i := 0x520) (n := 0x84) (o := 0x5e0) (z := 0x84)
     (hid.of_rel hb12) (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide)
     (by decide) hR hW h
   clear hR hW
@@ -159,7 +160,7 @@ theorem xa_ex_pull {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xs 0x25d2 (.reg .gas) ri_gas_remaining
   have hin : img3.sliceD 0x600 0x64 0 = exPullData sevm :=
     Region.slice g_data.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
-  replace h := xa_call_img (pc' := 0x25d3) (i := 0x600) (n := 0x64) (o := 0x6c0) (z := 0x20) hfork
+  replace h := xa_call_imgH (pc' := 0x25d3) (i := 0x600) (n := 0x64) (o := 0x6c0) (z := 0x20) hfork.stateGas_none
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d4, flag, L4, h, _, hrd4, hk⟩ := h

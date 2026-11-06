@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceTransfers
 
 /-!
@@ -45,13 +46,13 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
 
 /-- **The `remove_liquidity_imbalance` frame** (see the module note). -/
 theorem xa_rli (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance)
     (hσ : b.getStor sevm.currentTarget = σ) (ha : Abstracts σ s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
     (hcoin : ∀ k, k < 3 → ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + Nat.toB256 k)).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
     (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
@@ -222,13 +223,13 @@ as `xa_rli` when only the children at neither the pool nor `4` are known to keep
 (`RlKeepC`, which every frame at depth `1` satisfies), given that 3Crv and the coins are
 neither. -/
 theorem xa_rliC (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance)
     (hσ : b.getStor sevm.currentTarget = σ) (ha : Abstracts σ s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
     (hcoin : ∀ k, k < 3 → ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + Nat.toB256 k)).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (htokne : (σ.get tokenSlot).toAdr ≠ sevm.currentTarget ∧ (σ.get tokenSlot).toAdr ≠ 4)
     (hcoinne : ∀ k, k < 3 → (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ sevm.currentTarget ∧
       (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ 4)

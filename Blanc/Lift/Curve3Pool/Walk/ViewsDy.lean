@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyKit
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -35,10 +36,10 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : Stat
 -- SEGMENT: dyX
 /-- **`get_dy` up to the frame save before `get_y`.** -/
 theorem xa_dy_x (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (h : XAt sevm post 0x1d22 (St b [] (vdMem sevm) G) L) :
-    sevm.value = 0 ∧ ∃ (x0 x1 x2 : B256) (b1 : Devm) (M : Mem) (G1 : Nat), SloadsOnly sevm b b1 ∧
+    sevm.value = 0 ∧ ∃ (x0 x1 x2 : B256) (b1 : Devm) (M : Mem) (G1 : Nat), SloadsOnlyH sevm b b1 ∧
       (dyI sevm).toNat < 3 ∧ xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
       B256.Nofm (dyDx sevm) (pickWord3 (dyI sevm).toNat rP rQ rQ) ∧
       (pickWord3 (dyI sevm).toNat x0 x1 x2).toNat +
@@ -186,12 +187,12 @@ theorem xa_dy_x (hc : Cert.CheckedM code cert mems true)
 -- SEGMENT: dyY
 /-- **`get_dy` from the frame save to past the frame restore around `get_y`.** -/
 theorem xa_dy_y (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 X : B256}
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) {x0 x1 x2 X : B256}
     {M : Mem} (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hV : VW M [(0x2c0, Bytes.toB256 [1, 64]), (0x280, X), (0x140, rP), (0x160, rQ), (0x180, rQ),
       (0x1a0, x0), (0x1c0, x1), (0x1e0, x2)])
     (h : XAt sevm post 0x1e9a (St b [] M G) L) :
-    ∃ (y : B256) (b2 : Devm) (M2 : Mem) (G2 : Nat), SloadsOnly sevm b b2 ∧
+    ∃ (y : B256) (b2 : Devm) (M2 : Mem) (G2 : Nat), SloadsOnlyH sevm b b2 ∧
       XAt sevm post 0x1f43 (St b2 [] M2 G2) L ∧
       ∃ amp, aChk s sevm.benvStat.time.toNat = some amp ∧
       ∃ (hi : (dyI sevm).toNat < 3) (hj : (dyJ sevm).toNat < 3),
@@ -273,7 +274,7 @@ theorem xa_dy_y (hc : Cert.CheckedM code cert mems true)
   have hV := hV1
   clear hV1
   vnorm
-  refine ⟨y, _, M4, _, aBase_sloadsOnly sevm b, h, amp, hamp, hi, hj, hy, hV.sub ?_⟩
+  refine ⟨y, _, M4, _, aBaseH_sloadsOnly sevm b, h, amp, hamp, hi, hj, hy, hV.sub ?_⟩
   simp only [List.cons_subset, List.mem_append, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
 
 end

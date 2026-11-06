@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsKit
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -42,11 +43,11 @@ abbrev ctaB (sevm : Sevm) (b : Devm) (k : Fin 3) : B256 :=
 `D0 = get_D_mem(balances, amp)`; the balances at `0x140…0x180`, `amp` at `0x1a0`, `D0` at
 `0x200`. -/
 theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (h : XAt sevm post 0xb07 (St b [] (vdMem sevm) G) L) :
     sevm.value = 0 ∧ Sevm.dataWord sevm (Bytes.toB256 [100]) < Bytes.toB256 [2] ∧
-      ∃ amp D0 b2 M G', SloadsOnly sevm b b2 ∧
+      ∃ amp D0 b2 M G', SloadsOnlyH sevm b b2 ∧
       aChk s sevm.benvStat.time.toNat = some amp.toNat ∧
       getDMem ⟨(ctaB sevm b 0).toNat, (ctaB sevm b 1).toNat, (ctaB sevm b 2).toNat⟩ amp.toNat =
         some D0.toNat ∧
@@ -71,7 +72,7 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
   xsw 0xb2c 0xc0  -- 0b2b MSTORE
   xa 2
   xk 0xb31 0xc0  -- 0b30 SHA3
-  xw 0xb32 (.reg .sload) ri_sload  -- 0b31 SLOAD
+  xw 0xb32 (.reg .sload) ri_sloadF  -- 0b31 SLOAD
   xs 0xb33 (.reg (.dup 2)) (ri_dup (by rfl))  -- 0b32 DUP3
   xsw 0xb34 0x140  -- 0b33 MSTORE
   xa 3
@@ -79,7 +80,7 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
   xa 2
   xk 0xb3f 0xc0  -- 0b3e SHA3
   xs 0xb40 (.reg .add) ri_add  -- 0b3f ADD
-  xw 0xb41 (.reg .sload) ri_sload  -- 0b40 SLOAD
+  xw 0xb41 (.reg .sload) ri_sloadF  -- 0b40 SLOAD
   xa 3
   xsw 0xb46 0x160  -- 0b45 MSTORE
   xa 3
@@ -87,7 +88,7 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
   xa 2
   xk 0xb51 0xc0  -- 0b50 SHA3
   xs 0xb52 (.reg .add) ri_add  -- 0b51 ADD
-  xw 0xb53 (.reg .sload) ri_sload  -- 0b52 SLOAD
+  xw 0xb53 (.reg .sload) ri_sloadF  -- 0b52 SLOAD
   xa 3
   xsw 0xb58 0x180  -- 0b57 MSTORE
   xa 3
@@ -102,11 +103,11 @@ theorem xa_cta_pre (hc : Cert.CheckedM code cert mems true)
   cvpc 0xb6d  -- 0b6c PC
   xa 2
   xjmp 0xa9  -- 0b71 JUMP
-  have hb1 := (((SloadsOnly.refl (sevm := sevm) (b := b)).sload
+  have hb1 := (((SloadsOnlyH.refl (sevm := sevm) (b := b)).sload
     (Bytes.toB256 [1]).toBytes.keccak).sload ((Bytes.toB256 [1]).toBytes.keccak + Bytes.toB256 [1])).sload
     ((Bytes.toB256 [1]).toBytes.keccak + Bytes.toB256 [2])
-  generalize afterSload sevm (afterSload sevm (afterSload sevm b _) _) _ = b1 at h hb1
-  simp only [getStorVal_eq, afterSload_getStor, cta_slot0, cta_slot1,
+  generalize afterSloadH sevm (afterSloadH sevm (afterSloadH sevm b _) _) _ = b1 at h hb1
+  simp only [getStorVal_eq, afterSloadH_getStor, cta_slot0, cta_slot1,
     cta_slot2] at hV h
   have ha1 : Abstracts (b1.getStor sevm.currentTarget) s := by rw [hb1.getStor]; exact ha
   obtain ⟨amp, b2, M, _, hb2, h, hamp, hV1⟩ := xa_vAV hc hcode hfork ha1 hV h

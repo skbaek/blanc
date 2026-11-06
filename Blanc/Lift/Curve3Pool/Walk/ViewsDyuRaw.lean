@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyuPost
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyRaw
 
@@ -18,7 +19,7 @@ passed (the stored `xp` at the model's `amp` for the frame's time), returned the
 theorem dyu_raw_getY (hc : Cert.CheckedM code cert mems true)
     {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selGetDyUnderlying)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -91,7 +92,7 @@ change. -/
 theorem dyu_raw_of (hc : Cert.CheckedM code cert mems true)
     {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selGetDyUnderlying)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)

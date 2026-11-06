@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ExchangeFrame
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidity
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -32,7 +33,7 @@ theorem ex_bal2 : balancesBase + Bytes.toB256 [2] = balancesBase + Nat.toB256 2 
 
 /-- **`exchange` up to `_xp_mem`** (see the module note). -/
 theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    {img : Bytes} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (h : XAt sevm post 0x2319 (St b [] M G) L) :
     (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
@@ -41,13 +42,13 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       (∀ x, (b1.getStor sevm.currentTarget).get x =
         ((b.getStor sevm.currentTarget).set lockSlot 1).get x) ∧
       b1.logs = b.logs ∧ b1.output = b.output ∧ (∀ a, b1.getCode a = b.getCode a) ∧
-      (IdReady sevm b → IdReady sevm b1) ∧ Mem.Reads M1 img1 ∧ Mem.Wf M1 ∧
+      (IdReadyH sevm b → IdReadyH sevm b1) ∧ Mem.Reads M1 img1 ∧ Mem.Wf M1 ∧
       XAt sevm post 0x3a1 (St b1 [Nat.toB256 0x2458, balAt (b.getStor sevm.currentTarget) 0,
         balAt (b.getStor sevm.currentTarget) 1, balAt (b.getStor sevm.currentTarget) 2, z2, z1, z0,
         balAt (b.getStor sevm.currentTarget) 2, balAt (b.getStor sevm.currentTarget) 1,
         balAt (b.getStor sevm.currentTarget) 0, exR1, exR1, exR0, Bytes.toB256 [2, 0]] M1 G1) L := by
   xs 0x231d (.push [0xff, 0xff, 0xff] (by decide)) ri_push
-  xw 0x231e (.reg .sload) ri_sload
+  xw 0x231e (.reg .sload) ri_sloadF
   xa 2
   xji 0x2323 0x2327 hw
   · xdead
@@ -57,7 +58,7 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     exact e
   clear hw
   xa 3
-  xw 0x232f (.reg .sstore) ri_sstore
+  xw 0x232f (.reg .sstore) ri_sstoreF
   xa 3
   xji 0x2335 0x2339 hw
   · xdead
@@ -92,13 +93,13 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xa 2
   -- `assert not self.is_killed`
   xs 0x2386 (.push [0x0f] (by decide)) ri_push
-  xw 0x2387 (.reg .sload) ri_sload
+  xw 0x2387 (.reg .sload) ri_sloadF
   xa 2
   xji 0x238c 0x2390 hw
   · xdead
   have hkill : (b.getStor sevm.currentTarget).get isKilledSlot = 0 := by
     have e := B256.eq_of_eqCheck_ne_zero hw
-    rw [isKilledSlot_lit, getStorVal_afterSstore_ne (by decide), getStorVal_afterSload,
+    rw [isKilledSlot_lit, getStorVal_afterSstoreH_ne (by decide), getStorVal_afterSloadH,
       getStorVal_eq] at e
     exact e
   clear hw
@@ -117,7 +118,7 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xa 2
   xmo 0x23d4 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one] at h
-  xw 0x23d5 (.reg .sload) ri_sload
+  xw 0x23d5 (.reg .sload) ri_sloadF
   xs 0x23d6 (.reg (.dup 2)) (ri_dup (by rfl))
   xmo 0x23d7 (.reg .mstore) (ri_mstore_imgAt (o := 0x1a0) rfl)
   xa 3
@@ -126,7 +127,7 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xmo 0x23e2 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one] at h
   xs 0x23e3 (.reg .add) ri_add
-  xw 0x23e4 (.reg .sload) ri_sload
+  xw 0x23e4 (.reg .sload) ri_sloadF
   xa 3
   xmo 0x23e9 (.reg .mstore) (ri_mstore_imgAt (o := 0x1c0) (by decide))
   xa 3
@@ -135,14 +136,14 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xmo 0x23f4 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one] at h
   xs 0x23f5 (.reg .add) ri_add
-  xw 0x23f6 (.reg .sload) ri_sload
+  xw 0x23f6 (.reg .sload) ri_sloadF
   xa 3
   xmo 0x23fb (.reg .mstore) (ri_mstore_imgAt (o := 0x1e0) (by decide))
   xa 2
-  simp only [getStorVal_afterSload] at h hR
-  rw [getStorVal_afterSstore_ne (by decide), getStorVal_afterSload, getStorVal_eq,
-    getStorVal_afterSstore_ne (by decide), getStorVal_afterSload, getStorVal_eq,
-    getStorVal_afterSstore_ne (by decide), getStorVal_afterSload, getStorVal_eq] at hR
+  simp only [getStorVal_afterSloadH] at h hR
+  rw [getStorVal_afterSstoreH_ne (by decide), getStorVal_afterSloadH, getStorVal_eq,
+    getStorVal_afterSstoreH_ne (by decide), getStorVal_afterSloadH, getStorVal_eq,
+    getStorVal_afterSstoreH_ne (by decide), getStorVal_afterSloadH, getStorVal_eq] at hR
   -- the frame words and the call of `_xp_mem`
   xa 2
   xmo 0x2404 (.reg .mload) (ri_mload_imgAt (o := 0x140) rfl)
@@ -192,11 +193,11 @@ theorem xa_ex_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   rw [ex_bal1, ex_bal2, e0, show Nat.toB256 9298 + Bytes.toB256 [6] = Nat.toB256 0x2458 by decide]
     at h
   refine ⟨_, _, img1, _, _, _, _, fun x => ?_, ?_, ?_, fun a => ?_, fun hid => ?_, hR1, hW, h⟩
-  · simp only [afterSload_getStor, afterSstore_getStor_self, lockSlot_lit]
+  · simp only [afterSloadH_getStor, afterSstoreH_getStor_self, lockSlot_lit]
     rfl
-  · simp only [afterSload_logs, afterSstore_logs]
-  · simp only [afterSload_output, afterSstore_output]
-  · simp only [afterSload_getCode, afterSstore_getCode]
-  · exact (((((hid.afterSload _).afterSstore _ _).afterSload _).afterSload _).afterSload _).afterSload _
+  · simp only [afterSloadH_logs, afterSstoreH_logs]
+  · simp only [afterSloadH_output, afterSstoreH_output]
+  · simp only [afterSloadH_getCode, afterSstoreH_getCode]
+  · exact (((((hid.afterSloadH _).afterSstoreH _ _).afterSloadH _).afterSloadH _).afterSloadH _).afterSloadH _
 
 end Blanc.Lift.Curve3Pool

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceBurn
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -24,7 +25,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
 
 /-- **One transfer iteration** (`0x3769` → `0x38f7`) for coin `k`. -/
 theorem xa_rli_iter {b0 : Devm} {σ : Stor} {k : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hB : ExBase sevm b0 b σ) (hpc : b0.getCode sevm.currentTarget ≠ .empty)
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
@@ -81,7 +82,7 @@ the same conclusion as `xa_rli_iter` when only the children at neither the pool 
 known to keep the pool (`RlKeepC`, which every frame at depth `1` satisfies), given that coin
 `k` is neither. -/
 theorem xa_rli_iterC {b0 : Devm} {σ : Stor} {k : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hB : ExBase sevm b0 b σ) (hpc : b0.getCode sevm.currentTarget ≠ .empty)
     (hcoinne : (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ sevm.currentTarget ∧
       (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ 4)
@@ -168,7 +169,7 @@ abbrev rliTopic : B256 := Bytes.toB256 [0x17, 0x35, 0x99, 0xdb, 0xf9, 0xc6, 0xca
   0xe7, 0xde, 0x6c, 0x46, 0xa6, 0x24, 0xc2]
 
 /-- **The event and the lock** (`0x390b` → `STOP`). -/
-theorem xa_rli_log (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+theorem xa_rli_log (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hI : RliImg img X D1 T f0 f1 f2)
     (h : XAt sevm post 0x390b (St b [] M G) L) :
     ¬ T < X ∧ L = [] ∧
@@ -253,20 +254,20 @@ theorem xa_rli_log (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat
     show (Bytes.toB256 [0x01, 0x00]).toNat = 0x100 from rfl,
     hdata.slice (by simp only [List.length_append, B256.length_toBytes])] at h
   xa 2
-  xw 0x3990 (.reg .sstore) ri_sstore
+  xw 0x3990 (.reg .sstore) ri_sstoreF
   obtain ⟨hrun, hL⟩ := xa_halt (l := .stop) (atL hcode (by kernel_rfl)) h
   have hp := (Except.ok.inj hrun).symm
   subst hp hL
   refine ⟨hTX, rfl, ?_, ?_, ?_⟩
   · intro x
-    show ((afterSstore sevm _ _ _).getStor _).get x = _
-    rw [afterSstore_getStor_self, lockSlot_lit, zero_lit]
+    show ((afterSstoreH sevm _ _ _).getStor _).get x = _
+    rw [afterSstoreH_getStor_self, lockSlot_lit, zero_lit]
     rfl
-  · show (afterSstore sevm _ _ _).logs = _
-    rw [afterSstore_logs]
+  · show (afterSstoreH sevm _ _ _).logs = _
+    rw [afterSstoreH_logs]
     rfl
-  · show (afterSstore sevm _ _ _).output = _
-    rw [afterSstore_output]
+  · show (afterSstoreH sevm _ _ _).output = _
+    rw [afterSstoreH_output]
     rfl
 
 end

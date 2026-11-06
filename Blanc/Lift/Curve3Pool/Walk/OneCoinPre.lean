@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXFirst
 import Blanc.Lift.Curve3Pool.Walk.Exchange
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -21,7 +22,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : Stat
 -- SEGMENT: ocA2
 /-- **The guards and the quote, with the second `get_y_D` call** (`0x440c` → `0x4491`). -/
 theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (h : XAt sevm post 0x440c (St b [] (vdMem sevm) G) L) :
@@ -38,7 +39,7 @@ theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
         ((b.getStor sevm.currentTarget).set lockSlot 1).get x) ∧
       b'.logs = b.logs ∧ b'.output = b.output ∧
       (∀ x, b.getCode x ≠ .empty → b'.getCode x = b.getCode x) ∧
-      (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm b') ∧
+      (IdReadyH sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReadyH sevm b') ∧
       XAt sevm post 0x4491 (St b' [dy, fee, Bytes.toB256 [0x00], Bytes.toB256 [0x00]] M' G') L' ∧
       VW M' [] ∧
       CwFirstGetYD s sevm.benvStat.time.toNat (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
@@ -48,7 +49,7 @@ theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
   have hV : VW (vdMem sevm) [] := ⟨Words.nil _, vyMem_wf Mem.wf_empty _,
     by rw [vyMem_empty_size]⟩
   xs 0x4410 (.push [0xff, 0xff, 0xff] (by decide)) ri_push  -- 440c PUSH3 0xffffff
-  xw 0x4411 (.reg .sload) ri_sload  -- 4410 SLOAD
+  xw 0x4411 (.reg .sload) ri_sloadF  -- 4410 SLOAD
   xa 2
   xji 0x4416 0x441a hw
   · xdead
@@ -58,7 +59,7 @@ theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
     exact e
   clear hw
   xa 3
-  xw 0x4422 (.reg .sstore) ri_sstore  -- 4421 SSTORE
+  xw 0x4422 (.reg .sstore) ri_sstoreF  -- 4421 SSTORE
   xa 3
   xji 0x4428 0x442c hw
   · xdead
@@ -77,13 +78,13 @@ theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
   · xdead
   clear hw
   xa 3
-  xw 0x4455 (.reg .sload) ri_sload  -- 4454 SLOAD
+  xw 0x4455 (.reg .sload) ri_sloadF  -- 4454 SLOAD
   xa 2
   xji 0x445a 0x445e hw
   · xdead
   have hkill : (b.getStor sevm.currentTarget).get isKilledSlot = 0 := by
     have e := B256.eq_of_eqCheck_ne_zero hw
-    rw [isKilledSlot_lit, getStorVal_afterSstore_ne (by decide), getStorVal_afterSload,
+    rw [isKilledSlot_lit, getStorVal_afterSstoreH_ne (by decide), getStorVal_afterSloadH,
       getStorVal_eq] at e
     exact e
   clear hw
@@ -107,12 +108,12 @@ theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
   cvpc 0x448c  -- 448b PC
   xa 2
   xjmp 0x3cca  -- 4490 JUMP
-  have hs2 : ∀ x, ((afterSload sevm (afterSstore sevm (afterSload sevm b
+  have hs2 : ∀ x, ((afterSloadH sevm (afterSstoreH sevm (afterSloadH sevm b
       (Bytes.toB256 [255, 255, 255])) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [1]))
       (Bytes.toB256 [15])).getStor sevm.currentTarget).get x =
       ((b.getStor sevm.currentTarget).set lockSlot 1).get x := by
     intro x
-    rw [afterSload_getStor, afterSstore_getStor_self, afterSload_getStor, lockSlot_lit,
+    rw [afterSloadH_getStor, afterSstoreH_getStor_self, afterSloadH_getStor, lockSlot_lit,
       show Bytes.toB256 [1] = (1 : B256) from by decide]
   have ha2 := ha.of_lock fun x hx => by rw [hs2, Stor.get_set_ne _ (Ne.symm hx)]
   have htok2 := htok
@@ -123,17 +124,17 @@ theorem xa_oc_a2 (hc : Cert.CheckedM code cert mems true)
   rw [hs2, Stor.get_set_ne _ lock_ne_token] at hsw
   rw [show (Nat.toB256 17547 + Bytes.toB256 [6]).toNat = 0x4491 from by decide] at h
   refine ⟨hlock, hval, hkill, c, L', hi, dy, fee, b', M', G', hL, hsw, hmod,
-    fun x => by rw [hst, hs2], by rw [hlg, afterSload_logs, afterSstore_logs, afterSload_logs],
-    by rw [hout, afterSload_output, afterSstore_output, afterSload_output], fun x hx => ?_,
-    fun hb h4 => hid (((hb.afterSload _).afterSstore _ _).afterSload _) h4, h, hV',
+    fun x => by rw [hst, hs2], by rw [hlg, afterSloadH_logs, afterSstoreH_logs, afterSloadH_logs],
+    by rw [hout, afterSloadH_output, afterSstoreH_output, afterSloadH_output], fun x hx => ?_,
+    fun hb h4 => hid (((hb.afterSloadH _).afterSstoreH _ _).afterSloadH _) h4, h, hV',
     ⟨A, x0, x1, x2, D0, D1, y, hA, hxp, hD0, hD1, hy⟩, hsec⟩
-  rw [hcd x (by rw [afterSload_getCode, afterSstore_getCode, afterSload_getCode]; exact hx),
-    afterSload_getCode, afterSstore_getCode, afterSload_getCode]
+  rw [hcd x (by rw [afterSloadH_getCode, afterSstoreH_getCode, afterSloadH_getCode]; exact hx),
+    afterSloadH_getCode, afterSstoreH_getCode, afterSloadH_getCode]
 
 -- SEGMENT: ocA
 /-- **The guards and the quote** (`0x440c` → `0x4491`). -/
 theorem xa_oc_a (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (h : XAt sevm post 0x440c (St b [] (vdMem sevm) G) L) :
@@ -150,7 +151,7 @@ theorem xa_oc_a (hc : Cert.CheckedM code cert mems true)
         ((b.getStor sevm.currentTarget).set lockSlot 1).get x) ∧
       b'.logs = b.logs ∧ b'.output = b.output ∧
       (∀ x, b.getCode x ≠ .empty → b'.getCode x = b.getCode x) ∧
-      (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm b') ∧
+      (IdReadyH sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReadyH sevm b') ∧
       XAt sevm post 0x4491 (St b' [dy, fee, Bytes.toB256 [0x00], Bytes.toB256 [0x00]] M' G') L' ∧
       VW M' [] ∧
       CwFirstGetYD s sevm.benvStat.time.toNat (Sevm.dataWord sevm (Bytes.toB256 [4])).toNat
@@ -164,7 +165,7 @@ abbrev ocDen : B256 := Bytes.toB256 [0x02, 0x54, 0x0b, 0xe4, 0x00]
 
 /-- `self.balances[i] -= dy + dy_fee * admin_fee / FEE_DENOMINATOR`'s guard and store
 (`0x4491` → `0x458e`). -/
-theorem xa_oc_b (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+theorem xa_oc_b (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {b0 : Devm} {σ : Stor} {M : Mem} {dy fee : B256} (hB : ExBase sevm b0 b σ) (hV : VW M [])
     (h : XAt sevm post 0x4491 (St b [dy, fee, Bytes.toB256 [0x00], Bytes.toB256 [0x00]] M G) L) :
     ¬ dy < Sevm.dataWord sevm (Bytes.toB256 [0x44]) ∧ fee.Nofm (σ.get adminFeeSlot) ∧
@@ -219,13 +220,13 @@ theorem xa_oc_b (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fo
   xk 0x4521 0xc0  -- 4520 SHA3
   rw [show Bytes.toB256 [1] = (1 : B256) from by decide, balancesBase_eq] at h
   xa 2
-  xw 0x4524 (.reg .sload) ri_sload  -- 4523 SLOAD
+  xw 0x4524 (.reg .sload) ri_sloadF  -- 4523 SLOAD
   xs 0x4527 (.push [0x01, 0x40] (by decide)) ri_push  -- 4524 PUSH2 0x0140
   xl 0x4528 0x140  -- 4527 MLOAD
   xs 0x452b (.push [0x01, 0x60] (by decide)) ri_push  -- 4528 PUSH2 0x0160
   xl 0x452c 0x160  -- 452b MLOAD
   xs 0x452e (.push [0x03] (by decide)) ri_push  -- 452c PUSH1 0x03
-  xw 0x452f (.reg .sload) ri_sload  -- 452e SLOAD
+  xw 0x452f (.reg .sload) ri_sloadF  -- 452e SLOAD
   xa 12
   xji 0x453e 0x4542 hw
   · xdead
@@ -246,23 +247,23 @@ theorem xa_oc_b (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fo
   have hsub := B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hw)
   clear hw
   xa 9
-  xw 0x458d (.reg .sstore) ri_sstore  -- 458c SSTORE
+  xw 0x458d (.reg .sstore) ri_sstoreF  -- 458c SSTORE
   xs 0x458e (.reg .pop) ri_pop  -- 458d POP
-  have haf : (afterSload sevm b (balancesBase + Sevm.dataWord sevm (Bytes.toB256 [36]))).getStorVal
+  have haf : (afterSloadH sevm b (balancesBase + Sevm.dataWord sevm (Bytes.toB256 [36]))).getStorVal
       sevm.currentTarget (Bytes.toB256 [3]) = σ.get adminFeeSlot := by
-    rw [afterSload_getStorVal, getStorVal_eq, hB.stor, adminFeeSlot_lit]
+    rw [afterSloadH_getStorVal, getStorVal_eq, hB.stor, adminFeeSlot_lit]
   have hbal : b.getStorVal sevm.currentTarget (balancesBase + Sevm.dataWord sevm (Bytes.toB256 [36])) =
       σ.get (balancesBase + Sevm.dataWord sevm (Bytes.toB256 [36])) := by
     rw [getStorVal_eq, hB.stor]
   rw [haf] at hmf hadd hsub h
   rw [hbal] at hsub h
   refine ⟨hmin, hmf, hadd, hsub, _, _, _, ⟨fun x => ?_, ?_, ?_, ?_⟩, ?_, h, hV.sub ?_⟩
-  · rw [afterSstore_getStor_self, Stor.get_set_ite, Stor.get_set_ite, afterSload_getStor,
-      afterSload_getStor, hB.stor]
-  · rw [afterSstore_getCode, afterSload_getCode, afterSload_getCode, hB.code]
-  · rw [afterSstore_output, afterSload_output, afterSload_output, hB.output]
-  · exact ((hB.id.afterSload _).afterSload _).afterSstore _ _
-  · rw [afterSstore_logs, afterSload_logs, afterSload_logs]
+  · rw [afterSstoreH_getStor_self, Stor.get_set_ite, Stor.get_set_ite, afterSloadH_getStor,
+      afterSloadH_getStor, hB.stor]
+  · rw [afterSstoreH_getCode, afterSloadH_getCode, afterSloadH_getCode, hB.code]
+  · rw [afterSstoreH_output, afterSloadH_output, afterSloadH_output, hB.output]
+  · exact ((hB.id.afterSloadH _).afterSloadH _).afterSstoreH _ _
+  · rw [afterSstoreH_logs, afterSloadH_logs, afterSloadH_logs]
   · simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
 
 

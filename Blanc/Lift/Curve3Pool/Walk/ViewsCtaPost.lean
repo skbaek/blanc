@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsCtaD1
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvp
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -51,7 +52,7 @@ theorem xa_cta_fin {M : Mem} {df T D0 : B256}
 frame's only child, static, a word back), the checked difference by the deposit flag, and the
 output `diff · supply / D0`. -/
 theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hV : VW M [(0x340, D1), (0x200, D0)])
     (h : XAt sevm post 0xd77 (St b [] M G) L) :
@@ -65,7 +66,7 @@ theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
   have hW0 := hV.wf
   xsw 0xd87 0x480  -- d86 MSTORE
   xa 2
-  xw 0xd8d (.reg .sload) ri_sload  -- d8c SLOAD
+  xw 0xd8d (.reg .sload) ri_sloadF  -- d8c SLOAD
   xs 0xd8e (.reg .gas) ri_gas_remaining  -- d8d GAS
   obtain ⟨d, flag, out, M', L1, h, hVo, hrd, hob, hstor, hlogs, hk⟩ :=
     xa_staticcallV (pc' := 0xd8f) (o := 0x4e0) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl hV h
@@ -117,7 +118,7 @@ theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
       hcode (hV.sub (by
       simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])) h
     refine ⟨c, _, by rw [hL, hL1], ⟨?_, ?_, hstat, hlen, hclogs⟩, .inr ⟨hd0, hle, rfl⟩, hm, hD0,
-      fun a => by rw [hs, hstor, afterSload_getStor], by rw [hl, hlogs, afterSload_logs], ho⟩
+      fun a => by rw [hs, hstor, afterSloadH_getStor], by rw [hl, hlogs, afterSloadH_logs], ho⟩
     · rw [htgt, getStorVal_eq, tokenSlot_lit]
     · rw [hdata, show (Bytes.toB256 [4, 0x9c]).toNat = 1180 from rfl,
         show (Bytes.toB256 [4]).toNat = 4 from rfl,
@@ -142,7 +143,7 @@ theorem xa_cta_tail {M : Mem} {D0 D1 : B256}
     hcode (hV.sub (by
     simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self])) h
   refine ⟨c, _, by rw [hL, hL1], ⟨?_, ?_, hstat, hlen, hclogs⟩, .inl ⟨hd1, hle, rfl⟩, hm, hD0,
-    fun a => by rw [hs, hstor, afterSload_getStor], by rw [hl, hlogs, afterSload_logs], ho⟩
+    fun a => by rw [hs, hstor, afterSloadH_getStor], by rw [hl, hlogs, afterSloadH_logs], ho⟩
   · rw [htgt, getStorVal_eq, tokenSlot_lit]
   · rw [hdata, show (Bytes.toB256 [4, 0x9c]).toNat = 1180 from rfl,
       show (Bytes.toB256 [4]).toNat = 4 from rfl,

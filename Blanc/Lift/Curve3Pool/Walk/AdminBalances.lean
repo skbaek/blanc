@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Quiet
 import Blanc.Lift.StaticCall
 import Blanc.Lift.RunPWalk
@@ -14,7 +15,7 @@ answer covers it and returns the difference.
 
 `safe_adminBalances` states the frame's one observation directly at the step: the answer `out`
 of a successful static child message to `coins[i]` with calldata `balanceOfData self`
-(`StaticAnswered`, `Blanc/Lift/StaticCall.lean`), at least 32 bytes long, and the model's step
+(`StaticAnsweredH`, `Blanc/Lift/StaticCall.lean`), at least 32 bytes long, and the model's step
 under `balEnv` (coin `i`'s `balPre` its first word, every other answer absent). Tying that answer
 to the frame's committed child (`EnvOf`'s `ReplyAt`) is the frame-level bridge, not a walk fact.
 -/
@@ -31,18 +32,21 @@ def balEnv (sevm : Sevm) (k : Fin 3) (w : Nat) : Env :=
     coin := fun j => if j = k then ⟨some w, none, false, false⟩ else ⟨none, none, false, false⟩ }
 
 /-- A selected `SLOAD` keeps the world state. -/
-theorem afterSload_state' {sevm : Sevm} {b : Devm} {k : B256} :
-    (afterSload sevm b k).state = b.state := by
-  unfold afterSload; split <;> rfl
+theorem afterSloadH_state' {sevm : Sevm} {b : Devm} {k : B256} :
+    (afterSloadH sevm b k).state = b.state := by
+  unfold afterSloadH
+  split
+  · unfold afterSload; split <;> rfl
+  · rfl
 
 /-- A static answer over a load's base is one over the base. -/
-theorem StaticAnswered.of_afterSload {sevm : Sevm} {b : Devm} {k : B256} {t : Adr}
-    {input out : Bytes} (h : StaticAnswered sevm (afterSload sevm b k) t input out) :
-    StaticAnswered sevm b t input out := by
-  have hc : ∀ a, (afterSload sevm b k).getCode a = b.getCode a := fun a => by
-    simp only [Devm.getCode, Devm.getAcct, afterSload_state']
-  unfold StaticAnswered at h ⊢
-  simp only [hc, afterSload_state'] at h
+theorem StaticAnsweredH.of_afterSload {sevm : Sevm} {b : Devm} {k : B256} {t : Adr}
+    {input out : Bytes} (h : StaticAnsweredH sevm (afterSloadH sevm b k) t input out) :
+    StaticAnsweredH sevm b t input out := by
+  have hc : ∀ a, (afterSloadH sevm b k).getCode a = b.getCode a := fun a => by
+    simp only [Devm.getCode, Devm.getAcct, afterSloadH_state']
+  unfold StaticAnsweredH CallCodeH at h ⊢
+  simp only [hc, afterSloadH_state'] at h
   exact h
 
 /-- A write of `k` bytes reads back. -/
@@ -90,12 +94,12 @@ variable {sevm : Sevm} {b : Devm} {s : State}
 local notation "stor₀" => Devm.getStor b sevm.currentTarget
 
 -- SEGMENT: safeAdminBalances
-theorem safe_adminBalances (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_adminBalances (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selAdminBalances)
     (hlen : 4 ≤ sevm.data.length) :
     ∀ G post, SFunc.Run cert.prog sevm (quietSt sevm b G) t_4c93_c0 (.halted post) →
       ∃ (k : Fin 3) (out : Bytes), (Sevm.argWord sevm 0).toNat = k.val ∧
-        StaticAnswered sevm b ((stor₀).get (coinSlot k)).toAdr
+        StaticAnsweredH sevm b ((stor₀).get (coinSlot k)).toAdr
           (balanceOfData sevm.currentTarget) out ∧ 32 ≤ out.length ∧
         ∃ o, step s (balEnv sevm k (answerWord out)) (decodeCall sevm) = some o ∧
           QuietLands sevm b post o := by
@@ -109,10 +113,10 @@ theorem safe_adminBalances (hfork : CoveredFork sevm.benvStat.fork)
   winv 15
   obtain ⟨hi, G17, run⟩ := ric_assertJump rfl run
   winv 7
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_sloadF hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨gw, G26, rfl⟩ := ri_gas s1
   obtain ⟨d1, s1, run⟩ := ric_next run
-  obtain ⟨flag, out, hpost, hlenb, hans⟩ := ri_staticcall_bounded hfork s1
+  obtain ⟨flag, out, hpost, hlenb, hans⟩ := ri_staticcall_boundedH hfork.stateGas_none s1
   rw [hpost.eq_St] at run
   obtain ⟨hfl, G27, run⟩ := ric_assertJump rfl run
   winv 3
@@ -120,7 +124,7 @@ theorem safe_adminBalances (hfork : CoveredFork sevm.benvStat.fork)
   winv 9
   obtain ⟨-, G41, run⟩ := ric_assertJump rfl run
   winv 7
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G49, rfl⟩ := ri_sload hfork s2
+  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G49, rfl⟩ := ri_sloadF hfork s2
   winv 4
   obtain ⟨hge, G54, run⟩ := ric_assertJump rfl run
   winv 11
@@ -169,8 +173,8 @@ theorem safe_adminBalances (hfork : CoveredFork sevm.benvStat.fork)
   have ht : (out.take 32).length = 32 := by rw [List.length_take]; omega
   simp (disch := mem_wf) only [Mem.read_write_len _ 448 ht] at hge hout
   have hq : QStep sevm b d1 (b.getStor sevm.currentTarget) :=
-    ⟨by rw [hpost.stor, afterSload_getStor], fun a _ => by rw [hpost.stor, afterSload_getStor],
-      by rw [hpost.logs, afterSload_logs], by rw [hpost.output hf1, afterSload_output]⟩
+    ⟨by rw [hpost.stor, afterSloadH_getStor], fun a _ => by rw [hpost.stor, afterSloadH_getStor],
+      by rw [hpost.logs, afterSloadH_logs], by rw [hpost.output hf1, afterSloadH_output]⟩
   let k : Fin 3 := ⟨_, hiN⟩
   have hbal : d1.getStorVal sevm.currentTarget (balancesBase + Sevm.argWord sevm 0) =
       (b.getStor sevm.currentTarget).get (balanceSlot k) := by
@@ -181,9 +185,9 @@ theorem safe_adminBalances (hfork : CoveredFork sevm.benvStat.fork)
   have hle := toNat_ge_of_ltCheck_eq_zero (eq_zero_of_iszero_ne_zero hge)
   rw [hc.abs.balances k] at hle
   refine ⟨k, out, rfl, ?_, h32, ⟨viewOut s (answerWord out - s.balances.get k), ?_, ?_⟩⟩
-  · have h := StaticAnswered.of_afterSload (hans hf1)
+  · have h := StaticAnsweredH.of_afterSload (hans hf1)
     rw [getStorVal_eq_getStor] at h
-    show StaticAnswered sevm b ((b.getStor sevm.currentTarget).get
+    show StaticAnsweredH sevm b ((b.getStor sevm.currentTarget).get
       (coinsBase + Nat.toB256 (Sevm.argWord sevm 0).toNat)).toAdr _ out
     rw [hk]
     exact h

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyu
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -17,7 +18,7 @@ abbrev dyuFee (sevm : Sevm) (b : Devm) (x0 x1 x2 y : B256) : B256 :=
 /-- `get_dy_underlying`'s suffix reads every arithmetic guard and returns the exact net amount. -/
 theorem xa_dyu_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     {M : Mem} {x0 x1 x2 y : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hj : (dyJ sevm).toNat < 3)
     (hV : VW M [(0x3e0, y), (0x140, x0), (0x160, x1), (0x180, x2), (0x220, dyuP1),
       (0x240, dyuPm), (0x260, dyuPm)])
@@ -75,7 +76,7 @@ theorem xa_dyu_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xa 8
   xsw 0x22a7 0x400  -- 22a6 MSTORE
   xs 0x22a9 (.push [0x02] (by decide)) ri_push  -- 22a7 PUSH1 0x02
-  xw 0x22aa (.reg .sload) ri_sload  -- 22a9 SLOAD
+  xw 0x22aa (.reg .sload) ri_sloadF  -- 22a9 SLOAD
   xs 0x22ad (.push [0x04, 0x00] (by decide)) ri_push  -- 22aa PUSH2 0x0400
   xl 0x22ae 0x400  -- 22ad MLOAD
   xa 12
@@ -105,7 +106,7 @@ theorem xa_dyu_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   obtain ⟨hrun, rfl⟩ := xa_halt (l := .return_) (atL hcode (by kernel_rfl)) h
   obtain ⟨hout, hstor, hlogs⟩ := ri_return hrun
   refine ⟨rfl, hsub0, hsub1, hrate, hmul1, hsub2,
-    fun a => by rw [hstor, afterSload_getStor], by rw [hlogs, afterSload_logs], ?_⟩
+    fun a => by rw [hstor, afterSloadH_getStor], by rw [hlogs, afterSloadH_logs], ?_⟩
   rw [hout, show (Bytes.toB256 [0]).toNat = 0 from rfl,
     show (Bytes.toB256 [32]).toNat = 32 from rfl, Mem.read_write_word_of_wf hfinalwf]
 

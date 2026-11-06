@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFee
 
 /-! # `add_liquidity`: composing the checked fee iterations -/
@@ -32,7 +33,7 @@ def AlFeeFacts (F AF D0 D1 B N f stored aft : B256) : Prop :=
 /-- One complete fee iteration, with all checked scalar values and the precise storage row. -/
 theorem xa_al_feeIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {i : Nat} {F AF A T D0 D1 : B256} {old nv fees : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlFeeImg img i F AF A T D0 D1 old nv fees)
     (h : XAt sevm post 0x1409 (St b [3, 0xa40] M G) L) :
@@ -42,7 +43,7 @@ theorem xa_al_feeIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
       AlFeeImg img' (i + 1) F AF A T D0 D1 old (Function.update nv i aft)
         (Function.update fees i f) ∧
       XAt sevm post (if i + 1 = 3 then 0x163a else 0x1409)
-        (St (afterSstore sevm b (balancesBase + Nat.toB256 i) stored) [3, 0xa40] M' G') L := by
+        (St (afterSstoreH sevm b (balancesBase + Nat.toB256 i) stored) [3, 0xa40] M' G') L := by
   obtain ⟨dif, M1, img1, G1, hmI, hd0, hdiff, hR1, hW1, hA1, P1, hc1, hi1, hdf1, h1⟩ :=
     xa_al_feeDiff hcode hi hR hW hA hm.ctr hm.d0 hm.d1 (hm.ob i hi) (hm.nb i hi) h
   obtain ⟨hmF, M2, G2, hR2, hW2, hA2, h2⟩ := xa_al_feeWord hcode hi hR1 hW1 hA1 hc1
@@ -101,7 +102,7 @@ theorem xa_al_feeIter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
 /-- Three fee iterations in coin order, with each stored balance and invariant balance retained. -/
 theorem xa_al_feeLoop {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {F AF A T D0 D1 : B256} {old nv fees : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlFeeImg img 0 F AF A T D0 D1 old nv fees)
     (h : XAt sevm post 0x1409 (St b [3, 0xa40] M G) L) :
@@ -114,7 +115,7 @@ theorem xa_al_feeLoop {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
         (Function.update (Function.update (Function.update nv 0 a0) 1 a1) 2 a2)
         (Function.update (Function.update (Function.update fees 0 f0) 1 f1) 2 f2) ∧
       XAt sevm post 0x163a (St
-        (afterSstore sevm (afterSstore sevm (afterSstore sevm b
+        (afterSstoreH sevm (afterSstoreH sevm (afterSstoreH sevm b
           (balancesBase + Nat.toB256 0) s0) (balancesBase + Nat.toB256 1) s1)
           (balancesBase + Nat.toB256 2) s2) [3, 0xa40] M' G') L := by
   obtain ⟨f0, s0, a0, M0, img0, G0, hF0, hR0, hW0, hA0, hm0, h0⟩ :=

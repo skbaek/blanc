@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ExchangeMid
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -30,7 +31,7 @@ abbrev exDyOut (xj y fee r : B256) : B256 :=
 /-- **`dy`** (`0x27fd` → `0x296f`). -/
 theorem xa_ex_dy {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {B X : Nat → B256} {D C y : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hj3 : (exJ sevm).toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hF : ExFrame img B X D C) (hy : WordAt img 0x900 y)
     (h : XAt sevm post 0x27fd (St b [] M G) L) :
@@ -53,7 +54,7 @@ theorem xa_ex_dy {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
         ((b.getStor sevm.currentTarget).get feeSlot) (exRate (exJ sevm).toNat)) ∧
       WordAt img' 0x940 (exDyFee (X (exJ sevm).toNat) y
         ((b.getStor sevm.currentTarget).get feeSlot)) ∧
-      XAt sevm post 0x2970 (St (afterSload sevm b feeSlot) [] M' G') L := by
+      XAt sevm post 0x2970 (St (afterSloadH sevm b feeSlot) [] M' G') L := by
   have hr := hF.rate _ hj3
   have hx := hF.xp _ hj3
   xs 0x2800 (.push [0x09, 0x00] (by decide)) ri_push
@@ -85,7 +86,7 @@ theorem xa_ex_dy {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xmo 0x2853 (.reg .mload) (ri_mload_imgAt (o := 0x920) rfl)
   rw [Bytes.readWord_writeAt_self] at h
   xs 0x2855 (.push [0x02] (by decide)) ri_push
-  xw 0x2856 (.reg .sload) ri_sload
+  xw 0x2856 (.reg .sload) ri_sloadF
   rw [getStorVal_eq, feeSlot_lit] at h
   xa 12
   xji 0x2865 0x2869 hm1
@@ -163,7 +164,7 @@ abbrev exAdm (fee af r : B256) : B256 := exAdm0 fee af * exR0 / r
 /-- **The admin share and the new balances** (`0x2970` → `0x2ab4`). -/
 theorem xa_ex_store {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {B X : Nat → B256} {D C dyOut dyFee : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hi3 : (exI sevm).toNat < 3) (hj3 : (exJ sevm).toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hF : ExFrame img B X D C)
     (hout : WordAt img 0x920 dyOut) (hfee : WordAt img 0x940 dyFee)
@@ -179,7 +180,7 @@ theorem xa_ex_store {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     ∃ M' img' G', Mem.Reads M' img' ∧ Mem.Wf M' ∧
       (∀ o v, WordAt img o v → (o + 32 ≤ 0xc0 ∨ 0xe0 ≤ o) → (o + 32 ≤ 0xa20 ∨ 0xa40 ≤ o) →
         WordAt img' o v) ∧
-      XAt sevm post 0x2ab4 (St (afterSstore sevm (afterSstore sevm (afterSload sevm b adminFeeSlot)
+      XAt sevm post 0x2ab4 (St (afterSstoreH sevm (afterSstoreH sevm (afterSloadH sevm b adminFeeSlot)
         (balancesBase + exI sevm) (B (exI sevm).toNat + D)) (balancesBase + exJ sevm)
         (B (exJ sevm).toNat - dyOut -
           exAdm dyFee ((b.getStor sevm.currentTarget).get adminFeeSlot) (exRate (exJ sevm).toNat)))
@@ -191,7 +192,7 @@ theorem xa_ex_store {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xmo 0x2974 (.reg .mload) (ri_mload_imgAt (o := 0x940) rfl)
   rw [hfee.read] at h
   xs 0x2976 (.push [0x03] (by decide)) ri_push
-  xw 0x2977 (.reg .sload) ri_sload
+  xw 0x2977 (.reg .sload) ri_sloadF
   rw [getStorVal_eq, adminFeeSlot_lit] at h
   xa 12
   xji 0x2986 0x298a hm1
@@ -249,7 +250,7 @@ theorem xa_ex_store {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xmo 0x2a4e (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one] at h
   xs 0x2a4f (.reg .add) ri_add
-  xw 0x2a50 (.reg .sstore) ri_sstore
+  xw 0x2a50 (.reg .sstore) ri_sstoreF
   -- `self.balances[j] = old_balances[j] - dy - dy_admin_fee`
   xa 7
   xji 0x2a5e 0x2a62 hw
@@ -284,7 +285,7 @@ theorem xa_ex_store {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xmo 0x2ab2 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one] at h
   xs 0x2ab3 (.reg .add) ri_add
-  xw 0x2ab4 (.reg .sstore) ri_sstore
+  xw 0x2ab4 (.reg .sstore) ri_sstoreF
   refine ⟨(or_ne_zero hm1).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero,
     (or_ne_zero hm2).imp B256.eq_of_eqCheck_ne_zero B256.eq_of_eqCheck_ne_zero,
     B256.not_lt_of_ltCheck_eq_zero (B256.eq_of_eqCheck_ne_zero hadd),

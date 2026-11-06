@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.OneCoinCalls
 
 /-!
@@ -37,14 +38,14 @@ abbrev ocBal (σ : Stor) (iw dy fee : B256) : B256 :=
 neither the pool nor `4` are known to keep the pool (`RlKeepC`, which every frame at depth `1`
 satisfies), given that 3Crv and coin `i` are neither. -/
 theorem xa_oneCoin2C (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
     (hσ : b.getStor sevm.currentTarget = σ) (ha : Abstracts σ s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
     (hcoin : (exJ sevm).toNat < 3 →
       ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + exJ sevm)).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (htokne : (σ.get tokenSlot).toAdr ≠ sevm.currentTarget ∧ (σ.get tokenSlot).toAdr ≠ 4)
     (hcoinne : (σ.get (coinsBase + exJ sevm)).toAdr ≠ sevm.currentTarget ∧
       (σ.get (coinsBase + exJ sevm)).toAdr ≠ 4)
@@ -146,14 +147,14 @@ machine-word check of lines 679–681 passed; the pool's storage is `σ` with `b
 stored; the frame logged its children's logs and then `RemoveLiquidityOne`; the output is the
 entry output. -/
 theorem xa_oneCoin2 (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
     (hσ : b.getStor sevm.currentTarget = σ) (ha : Abstracts σ s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
     (hcoin : (exJ sevm).toNat < 3 →
       ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + exJ sevm)).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
     (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
@@ -254,14 +255,14 @@ machine-word check of lines 679–681 passed; the pool's storage is `σ` with `b
 stored; the frame logged its children's logs and then `RemoveLiquidityOne`; the output is the
 entry output. -/
 theorem xa_oneCoin (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
     (hσ : b.getStor sevm.currentTarget = σ) (ha : Abstracts σ s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
     (hcoin : (exJ sevm).toNat < 3 →
       ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + exJ sevm)).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
     (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)

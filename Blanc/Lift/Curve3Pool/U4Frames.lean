@@ -95,7 +95,7 @@ theorem pool_getYD_rootOrSucc_cwo {sevm : Sevm} {pre post : Devm} {s : State}
       ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
         CwFirstGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
   obtain ⟨e, o, hstep, hraw, hi, T, hT, hfirst⟩ :=
-    cwo_raw_getYD_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
+    cwo_raw_getYD_of checkedM exc hcode hfork.histFork hlen hcd hsel hstack hmem hgas hck htok
   exact ⟨e, o, hstep, hraw, hi, T, hT, cwFirstGetYD_law hfirst⟩
 
 /-- **U4 `get_y_D` at the `remove_liquidity_one_coin` frame.**  A successful frame on the
@@ -116,8 +116,8 @@ theorem pool_getYD_rootOrSucc_oneCoin {sevm : Sevm} {pre post : Devm} {s : State
       ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
         CwFirstGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
   obtain ⟨e, o, hstep, hraw, hi, T, hT, hfirst⟩ :=
-    removeLiquidityOneCoin_raw_getYD_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas
-      hck henv.htok henv.hcoin hpc henv.id henv.keep henv.hidk
+    removeLiquidityOneCoin_raw_getYD_of checkedM exc hcode hfork.histFork hlen hcd hsel hstack hmem hgas
+      hck henv.htok henv.hcoin hpc henv.id.toH henv.keep henv.hidk
   exact ⟨e, o, hstep, hraw, hi, T, hT, cwFirstGetYD_law hfirst⟩
 
 /-- **U4 second `get_y_D` at the `calc_withdraw_one_coin` frame.**  A successful frame of the certified
@@ -138,7 +138,7 @@ theorem pool_getYD2_rootOrSucc_cwo {sevm : Sevm} {pre post : Devm} {s : State}
       ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
         CwSecondGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
   obtain ⟨e, o, hstep, hraw, hi, T, hT, -, hsec⟩ :=
-    cwo_raw_getYD2_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok
+    cwo_raw_getYD2_of checkedM exc hcode hfork.histFork hlen hcd hsel hstack hmem hgas hck htok
   exact ⟨e, o, hstep, hraw, hi, T, hT, cwSecondGetYD_law hsec⟩
 
 /-- **U4 second `get_y_D` at the `remove_liquidity_one_coin` frame.**  A successful frame on the
@@ -159,8 +159,8 @@ theorem pool_getYD2_rootOrSucc_oneCoin {sevm : Sevm} {pre post : Devm} {s : Stat
       ∃ (hi : arg sevm 1 < 3) (T : Nat), e.supply = some T ∧
         CwSecondGetYDLaw s e.time (arg sevm 0) ⟨arg sevm 1, hi⟩ T := by
   obtain ⟨e, o, hstep, hraw, hi, T, hT, -, hsec⟩ :=
-    removeLiquidityOneCoin_raw_getYD2_of checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas
-      hck henv.htok henv.hcoin hpc henv.id henv.keep henv.hidk
+    removeLiquidityOneCoin_raw_getYD2_of checkedM exc hcode hfork.histFork hlen hcd hsel hstack hmem hgas
+      hck henv.htok henv.hcoin hpc henv.id.toH henv.keep henv.hidk
   exact ⟨e, o, hstep, hraw, hi, T, hT, cwSecondGetYD_law hsec⟩
 
 /-- **U4 `get_y` at the `exchange` frame.**  A successful frame on the selector, entered fresh at a
@@ -192,7 +192,7 @@ theorem pool_getY_rootOrSucc_exchange {sevm : Sevm} {pre post : Devm} {s : State
             (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
           (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) y.toNat := by
   obtain ⟨e, o, hstep, hraw, i, j, dx, md, hdec, amp, x0, x1, x2, x, y, hA, hxp, hy⟩ :=
-    exchange_raw_getY exc hcode hfork hlen hcd hsel hstack hmem hgas hck henv.hcoin hpc henv.id
+    exchange_raw_getY exc hcode hfork.histFork hlen hcd hsel hstack hmem hgas hck henv.hcoin hpc henv.id.toH
       henv.keep henv.hidk
   exact ⟨e, o, hstep, hraw, i, j, dx, md, hdec, amp, x0, x1, x2, x, y, hA, hxp, hy,
     getYChk_rootOrSucc hy⟩
@@ -225,7 +225,7 @@ theorem pool_getY_rootOrSucc_dy {sevm : Sevm} {pre post : Devm} {s : State}
             (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
           (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) y.toNat := by
   obtain ⟨e, o, hstep, hraw, hi, hj, amp, x0, x1, x2, y, hA, hxp, hy⟩ :=
-    dy_raw_getY checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
+    dy_raw_getY checkedM exc hcode hfork.histFork hlen hcd hsel hstack hmem hgas hck
   exact ⟨e, o, hstep, hraw, hi, hj, amp, x0, x1, x2, y, hA, hxp, hy, getYChk_rootOrSucc hy⟩
 
 /-- **U4 `get_y` at the `get_dy_underlying` frame.** The `get_dy_underlying` analogue of `pool_getY_rootOrSucc_dy`, on the word `dyuX` the bytecode passed. -/
@@ -256,7 +256,7 @@ theorem pool_getY_rootOrSucc_dyu {sevm : Sevm} {pre post : Devm} {s : State}
             (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) (amp * 3))
           (getD (V3.mk x0.toNat x1.toNat x2.toNat).get amp 1) y.toNat := by
   obtain ⟨e, o, hstep, hraw, hi, hj, amp, x0, x1, x2, y, hA, hxp, hy⟩ :=
-    dyu_raw_getY checkedM exc hcode hfork hlen hcd hsel hstack hmem hgas hck
+    dyu_raw_getY checkedM exc hcode hfork.histFork hlen hcd hsel hstack hmem hgas hck
   exact ⟨e, o, hstep, hraw, hi, hj, amp, x0, x1, x2, y, hA, hxp, hy, getYChk_rootOrSucc hy⟩
 
 end Blanc.Lift.Curve3Pool

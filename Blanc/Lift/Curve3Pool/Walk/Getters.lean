@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Quiet
 import Blanc.Lift.WalkInvKit
 
@@ -34,7 +35,7 @@ def getterTree (sl : UInt8) : SFunc :=
 
 /-- **A scalar getter is safe**: its body returns the word stored at its slot. -/
 theorem safe_getter {s : State} {c : Call} {sl h l : UInt8} {fail : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hf : fail.noOk = true) (hdec : decodeCall sevm = c)
+    (hfork : HistFork sevm.benvStat.fork) (hf : fail.noOk = true) (hdec : decodeCall sevm = c)
     (hfp : footprint c = [])
     (hstep : (quietEnv sevm).value = 0 → step s (quietEnv sevm) c =
       some (viewOut s ((b.getStor sevm.currentTarget).get (Bytes.toB256 [sl])).toNat)) :
@@ -45,7 +46,7 @@ theorem safe_getter {s : State} {c : Call} {sl h l : UInt8} {fail : SFunc}
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable hf run
   unfold getterTree at run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G3, rfl⟩ := ri_sloadF hfork s1
   winv 4
   cases run with
   | last hl =>
@@ -58,7 +59,7 @@ theorem safe_getter {s : State} {c : Call} {sl h l : UInt8} {fail : SFunc}
 
 -- SEGMENT: safeScalarGetters
 /-- `fee()`: returns the word at slot 2. -/
-theorem safe_feeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_feeGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selFee) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_5103_c0 :=
   safe_getter (sl := 0x2) (fail := t_5109_c0) hfork rfl (decodeCall_at (k := 26) rfl hsel hlen) rfl
@@ -67,7 +68,7 @@ theorem safe_feeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint
       rw [show Bytes.toB256 [0x2] = feeSlot from by decide, hc.abs.fee]
 
 /-- `adminFee()`: returns the word at slot 3. -/
-theorem safe_adminFeeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_adminFeeGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selAdminFee) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_512a_c0 :=
   safe_getter (sl := 0x3) (fail := t_5130_c0) hfork rfl (decodeCall_at (k := 27) rfl hsel hlen) rfl
@@ -76,7 +77,7 @@ theorem safe_adminFeeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Check
       rw [show Bytes.toB256 [0x3] = adminFeeSlot from by decide, hc.abs.adminFee]
 
 /-- `owner()`: returns the word at slot 4. -/
-theorem safe_ownerGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_ownerGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selOwner) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_5151_c0 :=
   safe_getter (sl := 0x4) (fail := t_5157_c0) hfork rfl (decodeCall_at (k := 28) rfl hsel hlen) rfl
@@ -85,7 +86,7 @@ theorem safe_ownerGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoi
       rw [show Bytes.toB256 [0x4] = ownerSlot from by decide, hc.abs.owner]
 
 /-- `initialA()`: returns the word at slot 6. -/
-theorem safe_initialAGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_initialAGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selInitialA) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_5178_c0 :=
   safe_getter (sl := 0x6) (fail := t_517e_c0) hfork rfl (decodeCall_at (k := 29) rfl hsel hlen) rfl
@@ -94,7 +95,7 @@ theorem safe_initialAGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Check
       rw [show Bytes.toB256 [0x6] = initialASlot from by decide, hc.abs.initialA]
 
 /-- `futureA()`: returns the word at slot 7. -/
-theorem safe_futureAGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_futureAGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selFutureA) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_519f_c0 :=
   safe_getter (sl := 0x7) (fail := t_51a5_c0) hfork rfl (decodeCall_at (k := 30) rfl hsel hlen) rfl
@@ -103,7 +104,7 @@ theorem safe_futureAGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkp
       rw [show Bytes.toB256 [0x7] = futureASlot from by decide, hc.abs.futureA]
 
 /-- `initialATime()`: returns the word at slot 8. -/
-theorem safe_initialATimeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_initialATimeGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selInitialATime) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_51c6_c0 :=
   safe_getter (sl := 0x8) (fail := t_51cc_c0) hfork rfl (decodeCall_at (k := 31) rfl hsel hlen) rfl
@@ -112,7 +113,7 @@ theorem safe_initialATimeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : C
       rw [show Bytes.toB256 [0x8] = initialATimeSlot from by decide, hc.abs.initialATime]
 
 /-- `futureATime()`: returns the word at slot 9. -/
-theorem safe_futureATimeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_futureATimeGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selFutureATime) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_51ed_c0 :=
   safe_getter (sl := 0x9) (fail := t_51f3_c0) hfork rfl (decodeCall_at (k := 32) rfl hsel hlen) rfl
@@ -121,7 +122,7 @@ theorem safe_futureATimeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Ch
       rw [show Bytes.toB256 [0x9] = futureATimeSlot from by decide, hc.abs.futureATime]
 
 /-- `adminActionsDeadline()`: returns the word at slot 10. -/
-theorem safe_adminActionsDeadlineGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_adminActionsDeadlineGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selAdminActionsDeadline) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_5214_c0 :=
   safe_getter (sl := 0xa) (fail := t_521a_c0) hfork rfl (decodeCall_at (k := 33) rfl hsel hlen) rfl
@@ -130,7 +131,7 @@ theorem safe_adminActionsDeadlineGetter (hfork : CoveredFork sevm.benvStat.fork)
       rw [show Bytes.toB256 [0xa] = adminActionsDeadlineSlot from by decide, hc.abs.adminActionsDeadline]
 
 /-- `transferOwnershipDeadline()`: returns the word at slot 11. -/
-theorem safe_transferOwnershipDeadlineGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_transferOwnershipDeadlineGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selTransferOwnershipDeadline) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_523b_c0 :=
   safe_getter (sl := 0xb) (fail := t_5241_c0) hfork rfl (decodeCall_at (k := 34) rfl hsel hlen) rfl
@@ -139,7 +140,7 @@ theorem safe_transferOwnershipDeadlineGetter (hfork : CoveredFork sevm.benvStat.
       rw [show Bytes.toB256 [0xb] = transferOwnershipDeadlineSlot from by decide, hc.abs.transferOwnershipDeadline]
 
 /-- `futureFee()`: returns the word at slot 12. -/
-theorem safe_futureFeeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_futureFeeGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selFutureFee) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_5262_c0 :=
   safe_getter (sl := 0xc) (fail := t_5268_c0) hfork rfl (decodeCall_at (k := 35) rfl hsel hlen) rfl
@@ -148,7 +149,7 @@ theorem safe_futureFeeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Chec
       rw [show Bytes.toB256 [0xc] = futureFeeSlot from by decide, hc.abs.futureFee]
 
 /-- `futureAdminFee()`: returns the word at slot 13. -/
-theorem safe_futureAdminFeeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_futureAdminFeeGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selFutureAdminFee) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_5289_c0 :=
   safe_getter (sl := 0xd) (fail := t_528f_c0) hfork rfl (decodeCall_at (k := 36) rfl hsel hlen) rfl
@@ -157,7 +158,7 @@ theorem safe_futureAdminFeeGetter (hfork : CoveredFork sevm.benvStat.fork) (hc :
       rw [show Bytes.toB256 [0xd] = futureAdminFeeSlot from by decide, hc.abs.futureAdminFee]
 
 /-- `futureOwner()`: returns the word at slot 14. -/
-theorem safe_futureOwnerGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_futureOwnerGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selFutureOwner) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_52b0_c0 :=
   safe_getter (sl := 0xe) (fail := t_52b6_c0) hfork rfl (decodeCall_at (k := 37) rfl hsel hlen) rfl
@@ -180,7 +181,7 @@ def arrayGetterTree (h l sl : UInt8) (fail : SFunc) : SFunc :=
 /-- **An array getter is safe**: for an index below 3 it returns the word at
 `keccak(sl) + i`. -/
 theorem safe_arrayGetter {s : State} {c : Call} {sl h l h' l' : UInt8} {fail fail' : SFunc}
-    {base : B256} (hfork : CoveredFork sevm.benvStat.fork) (hf : fail.noOk = true)
+    {base : B256} (hfork : HistFork sevm.benvStat.fork) (hf : fail.noOk = true)
     (hf' : fail'.noOk = true) (hbase : Bytes.keccak (Bytes.toB256 [sl]).toBytes = base)
     (hdec : decodeCall sevm = c) (hfp : footprint c = [])
     (hstep : (quietEnv sevm).value = 0 → ∀ i : Fin 3, (Sevm.argWord sevm 0).toNat = i.val →
@@ -196,7 +197,7 @@ theorem safe_arrayGetter {s : State} {c : Call} {sl h l h' l' : UInt8} {fail fai
   winv 5
   obtain ⟨hi, G7, run⟩ := ric_assertJump hf' run
   winv 7
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G15, rfl⟩ := ri_sloadF hfork s1
   winv 4
   cases run with
   | last hl =>
@@ -221,7 +222,7 @@ theorem safe_arrayGetter {s : State} {c : Call} {sl h l h' l' : UInt8} {fail fai
     Mem.read_write_word_of_wf hwf0, hbase, getStorVal_eq_getStor, word, Jaune.toB256_toNat, hidx]
 
 /-- `coins(i)`. -/
-theorem safe_coinsGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_coinsGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selCoins) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_5083_c0 :=
   safe_arrayGetter (sl := 0x00) (base := coinsBase) (fail := t_5089_c0) (fail' := t_5099_c0) hfork rfl rfl
@@ -234,7 +235,7 @@ theorem safe_coinsGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoi
       rfl
 
 /-- `balances(i)`. -/
-theorem safe_balancesGetter (hfork : CoveredFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
+theorem safe_balancesGetter (hfork : HistFork sevm.benvStat.fork) (hc : Checkpoint stor₀ s)
     (hsel : Sevm.selector sevm = selBalances) (hlen : 4 ≤ sevm.data.length) :
     QuietSafe sevm b s t_50c3_c0 :=
   safe_arrayGetter (sl := 0x01) (base := balancesBase) (fail := t_50c9_c0) (fail' := t_50d9_c0) hfork rfl rfl

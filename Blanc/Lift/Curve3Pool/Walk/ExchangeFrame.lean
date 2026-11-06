@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Kit
 import Blanc.Lift.InvWalkCallNext
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -122,18 +123,14 @@ theorem ri_mload_imgAl {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : N
 
 /-- **A value-0 identity `CALL` at depth `0`** fails without a child: it pushed `0` over the same
 base and the same memory bytes. -/
-theorem ri_call_identity_depth0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {g ii is oi os : B256} {d : Devm} (hid : IdReady sevm b) (hdepth : sevm.depth = 0)
+theorem ri_call_identity_depth0H {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {g ii is oi os : B256} {d : Devm} (hid : IdReadyH sevm b) (hdepth : sevm.depth = 0)
     (h : Ninst.Run sevm (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G) (.exec .call) d) :
     ∃ G', d = St (b.withReturnData []) (0 :: S)
       (M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]) G' := by
-  have hfork := hid.fork
-  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   rcases h with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    Bind.bind, Except.bind, hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled hdeleg] at h_run
+    Bind.bind, Except.bind, hid.stateGas] at h_run
   rw [show (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G).pop =
     .ok (g, St b (4 :: 0 :: ii :: is :: oi :: os :: S) M G) from rfl] at h_run
   simp only at h_run
@@ -155,35 +152,33 @@ theorem ri_call_identity_depth0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Me
   rw [show (St b (os :: S) M G).popToNat =
     .ok (os.toNat, St b S M G) from rfl] at h_run
   simp only at h_run
-  have hAD : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress (St b S M G) 4) 4 =
-      ⟨false, 4, b.getCode 4, 0, addAccessedAddress (St b S M G) 4⟩ := by
-    unfold GasSchedule.accessDelegation
-    simp only [show (addAccessedAddress (St b S M G) 4).state.getCode 4 = b.getCode 4 from rfl,
-      hid.nodeleg]
   have hA : addAccessedAddress (St b S M G) 4 = St b S M G :=
     addAccessedAddress_eq_self_of_mem hid.warm
-  rw [hAD, hA] at h_run
-  simp only [or_true, ↓reduceIte, Except.assert] at h_run
-  have hbal : ∀ x : B256, ¬ x < 0 := fun x hx => by
-    rw [B256.lt_iff_toNat_lt_toNat] at hx; exact Nat.not_lt_zero _ hx
-  split at h_run
-  · cases XStep.run_ofExcept_error h_run
-  rename_i v hcharge
-  simp only [hbal, ↓reduceIte] at h_run
-  obtain ⟨Gv, rfl⟩ : ∃ Gv, v = St b S M Gv :=
-    ⟨_, Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas hcharge)⟩
-  simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdepth, ite_true] at h_run
-  simp only [bind, Except.bind] at h_run
-  split at h_run
-  · simp only [XStep.Run, ExceptT.stM_eq, reduceCtorEq, and_false] at h_run
-  · rename_i d' hp
-    split at hp
-    · cases hp
-    · rename_i d'' hpush
-      cases hp
-      simp only [XStep.Run, Except.ok.injEq] at h_run
-      rw [h_run.2, Devm.eq_of_push_ok hpush]
-      exact ⟨_, rfl⟩
+  cases hacc0 : sevm.benvStat.rules.access <;> simp only [hacc0] at h_run
+  all_goals try rw [hA] at h_run
+  all_goals rw [hid.delegation (St b S M G) rfl] at h_run
+  all_goals (
+    simp only [or_true, ↓reduceIte, Except.assert] at h_run
+    have hbal : ∀ x : B256, ¬ x < 0 := fun x hx => by
+      rw [B256.lt_iff_toNat_lt_toNat] at hx; exact Nat.not_lt_zero _ hx
+    split at h_run
+    · cases XStep.run_ofExcept_error h_run
+    rename_i v hcharge
+    simp only [hbal, ↓reduceIte] at h_run
+    obtain ⟨Gv, rfl⟩ : ∃ Gv, v = St b S M Gv :=
+      ⟨_, Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas hcharge)⟩
+    simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdepth, ite_true] at h_run
+    simp only [bind, Except.bind] at h_run
+    split at h_run
+    · simp only [XStep.Run, ExceptT.stM_eq, reduceCtorEq, and_false] at h_run
+    · rename_i d' hp
+      split at hp
+      · cases hp
+      · rename_i d'' hpush
+        cases hp
+        simp only [XStep.Run, Except.ok.injEq] at h_run
+        rw [h_run.2, Devm.eq_of_push_ok hpush]
+        exact ⟨_, rfl⟩)
 
 theorem BaseRel.withReturnData (b : Devm) (rd : Bytes) : BaseRel b (b.withReturnData rd) :=
   ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩
@@ -192,14 +187,14 @@ theorem BaseRel.withReturnData (b : Devm) (rd : Bytes) : BaseRel b (b.withReturn
 base (up to the return data) and the same memory image. -/
 theorem xa_identity_depth0 {sevm : Sevm} {post : Devm} {pc pc' : Nat} {L : List Exec.Frame}
     {b : Devm} {S : List B256} {M : Mem} {G : Nat} {img : Bytes} {g ii is oi os : B256}
-    (hid : IdReady sevm b) (hdepth : sevm.depth = 0) (hat : Ninst.At sevm.code pc (.exec .call))
+    (hid : IdReadyH sevm b) (hdepth : sevm.depth = 0) (hat : Ninst.At sevm.code pc (.exec .call))
     (hpc : pc + 1 = pc') (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (h : XAt sevm post pc (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G) L) :
     ∃ L' M' G', XAt sevm post pc' (St (b.withReturnData []) (0 :: S) M' G') L' ∧
       Mem.Reads M' img ∧ Mem.Wf M' := by
   subst hpc
-  obtain ⟨d, s, L', h, -⟩ := xa_call hid.fork hat rfl h
-  obtain ⟨G', rfl⟩ := ri_call_identity_depth0 hid hdepth s
+  obtain ⟨d, s, L', h, -⟩ := xa_callH hid.stateGas hat rfl h
+  obtain ⟨G', rfl⟩ := ri_call_identity_depth0H hid hdepth s
   exact ⟨L', _, G', h, Mem.Reads.extends _ hR, Mem.Wf.extends _ hW⟩
 
 /-- One iteration of the frame save at counter `p`. -/

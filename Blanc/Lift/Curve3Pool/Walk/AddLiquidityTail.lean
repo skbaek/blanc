@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityMint
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -19,7 +20,7 @@ def alLog (sevm : Sevm) (f0 f1 f2 D1 T' : B256) : Log :=
 /-- The successful final tail emits the exact event and clears the reentrancy lock. -/
 theorem xa_al_finish {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {f0 f1 f2 T D1 mint : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hf0 : WordAt img 0x140 f0) (hf1 : WordAt img 0x160 f1) (hf2 : WordAt img 0x180 f2)
     (ht : WordAt img 0x240 T) (hd1 : WordAt img 0x900 D1) (hmint : WordAt img 0xba0 mint)
@@ -87,20 +88,20 @@ theorem xa_al_finish {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Na
     show (Bytes.toB256 [0x01, 0x00]).toNat = 0x100 from rfl,
     hdata.slice (by simp only [List.length_append, B256.length_toBytes])] at h
   xa 2
-  xw 0x189b (.reg .sstore) ri_sstore
+  xw 0x189b (.reg .sstore) ri_sstoreF
   obtain ⟨hrun, hL⟩ := xa_halt (l := .stop) (atL hcode (by kernel_rfl)) h
   have hp := (Except.ok.inj hrun).symm
   subst hp hL
   refine ⟨hTa, rfl, ?_, ?_, ?_⟩
   · intro x
-    show ((afterSstore sevm _ _ _).getStor _).get x = _
-    rw [afterSstore_getStor_self, lockSlot_lit, zero_lit]
+    show ((afterSstoreH sevm _ _ _).getStor _).get x = _
+    rw [afterSstoreH_getStor_self, lockSlot_lit, zero_lit]
     rfl
-  · show (afterSstore sevm _ _ _).logs = _
-    rw [afterSstore_logs]
+  · show (afterSstoreH sevm _ _ _).logs = _
+    rw [afterSstoreH_logs]
     rfl
-  · show (afterSstore sevm _ _ _).output = _
-    rw [afterSstore_output]
+  · show (afterSstoreH sevm _ _ _).output = _
+    rw [afterSstoreH_output]
     rfl
 
 end Blanc.Lift.Curve3Pool

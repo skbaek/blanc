@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawX
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -17,12 +18,12 @@ variable {sevm : Sevm} {post b : Devm} {ρ : B256} {S : List B256} {M : Mem} {G 
 `[0x140, 0x380)` (copied to `0x320…0x360`), `get_D(xp, amp)` inside the save of
 `[0x140, 0x420)` (`D0` at `0x400`), and the checked `D0 - amount · D0 / supply`. -/
 theorem xa_cw_b (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {a i A F T : B256}
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) {a i A F T : B256}
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hV : VW M [(0x280, T), (0x260, cwPm), (0x240, cwPm), (0x220, cwP1), (0x200, F),
       (0x1a0, A), (0x180, ρ), (0x160, i), (0x140, a)])
     (h : XAt sevm post 0x3d9a (St b S M G) L) :
-    ∃ (x0 x1 x2 D0 : B256) (b' : Devm) (M' : Mem) (G' : Nat), SloadsOnly sevm b b' ∧
+    ∃ (x0 x1 x2 D0 : B256) (b' : Devm) (M' : Mem) (G' : Nat), SloadsOnlyH sevm b b' ∧
       xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
       getDChk (V3.mk x0.toNat x1.toNat x2.toNat).get A.toNat 1 = some D0.toNat ∧
       B256.Nofm a D0 ∧ T ≠ 0 ∧ (a * D0 / T).toNat ≤ D0.toNat ∧

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityTail
 import Blanc.Lift.Curve3Pool.Callee.ABase
 
@@ -33,17 +34,17 @@ theorem al_alB1_facts (sevm : Sevm) (b : Devm) :
     (alB1 sevm b).logs = b.logs ∧ (alB1 sevm b).output = b.output ∧
       (∀ a, (alB1 sevm b).getCode a = b.getCode a) := by
   refine ⟨?_, ?_, fun a => ?_⟩ <;>
-    simp only [alB1, afterSload_logs, afterSstore_logs, afterSload_output, afterSstore_output,
-      afterSload_getCode, afterSstore_getCode]
+    simp only [alB1, afterSloadH_logs, afterSstoreH_logs, afterSloadH_output, afterSstoreH_output,
+      afterSloadH_getCode, afterSstoreH_getCode]
 
-theorem al_alB1_id {sevm : Sevm} {b : Devm} (h : IdReady sevm b) : IdReady sevm (alB1 sevm b) :=
-  (((h.afterSload _).afterSstore _ _).afterSload _).afterSload _ |>.afterSload _
+theorem al_alB1_id {sevm : Sevm} {b : Devm} (h : IdReadyH sevm b) : IdReadyH sevm (alB1 sevm b) :=
+  (((h.afterSloadH _).afterSstoreH _ _).afterSloadH _).afterSloadH _ |>.afterSloadH _
 
 /-- **`add_liquidity` up to `D1`** (see the module note). -/
 theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
     {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : State}
     (hchk : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAddLiquidity)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
@@ -51,7 +52,7 @@ theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
       ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp
       (coinAt (b.getStor sevm.currentTarget) i).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (hPt : P ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hPc : ∀ i, i < 3 → P (coinAt (b.getStor sevm.currentTarget) i).toAdr)
     (hK : ∀ c ∈ L, P c.sevm.currentTarget →
@@ -92,7 +93,7 @@ theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
         (alLocked (b.getStor sevm.currentTarget)).get x) ∧
       b'.logs = b.logs ++ (L0 ++ L1 ++ L2).flatMap (fun c => c.post.logs) ∧
       b'.output = b.output ∧ b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧
-      IdReady sevm b' ∧ Mem.Reads M img ∧ Mem.Wf M ∧ M.size % 32 = 0 ∧
+      IdReadyH sevm b' ∧ Mem.Reads M img ∧ Mem.Wf M ∧ M.size % 32 = 0 ∧
       AlPullImg img 3 (alFee (b.getStor sevm.currentTarget))
         ((b.getStor sevm.currentTarget).get adminFeeSlot) A (alWord cT) D0
         (balAt (alLocked (b.getStor sevm.currentTarget)))
@@ -105,13 +106,13 @@ theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
       (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyMem_wf Mem.wf_empty _)
       (by rw [vyMem_empty_size]) h
   refine ⟨hlock, hval, hkill, hfee, ?_⟩
-  have hAs := aBase_getStor sevm (alB1 sevm b)
-  have hAl := aBase_logs sevm (alB1 sevm b)
-  have hAo := aBase_output sevm (alB1 sevm b)
-  have hAc := aBase_getCode sevm (alB1 sevm b)
-  have hAid := IdReady_aBase (al_alB1_id hid) (sevm := sevm)
+  have hAs := aBaseH_getStor sevm (alB1 sevm b)
+  have hAl := aBaseH_logs sevm (alB1 sevm b)
+  have hAo := aBaseH_output sevm (alB1 sevm b)
+  have hAc := aBaseH_getCode sevm (alB1 sevm b)
+  have hAid := IdReadyH_aBaseH (al_alB1_id hid) (sevm := sevm)
   obtain ⟨hBl, hBo, hBc⟩ := al_alB1_facts sevm b
-  have hst1 : ∀ x, ((aBase sevm (alB1 sevm b)).getStor sevm.currentTarget).get x =
+  have hst1 : ∀ x, ((aBaseH sevm (alB1 sevm b)).getStor sevm.currentTarget).get x =
       (alLocked (b.getStor sevm.currentTarget)).get x := by
     intro x; rw [hAs, alB1_getStor]
   have htok1 : ¬ sevm.benvStat.rules.isPrecomp
@@ -139,11 +140,11 @@ theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
   obtain ⟨D0, M3, img3, G3, hR3, hW3, hA3, hm3, hD00, hD0, h⟩ :=
     xa_al_p3 hchk hcode hfork hR2 hW2 hA2 hm0 h
   obtain ⟨M4, img4, G4, hR4, hW4, hA4, hm4, h⟩ := xa_al_p4 hcode hR3 hW3 hA3 hm3 h
-  have hpcB : (aBase sevm (alB1 sevm b)).getCode sevm.currentTarget ≠ .empty := by
+  have hpcB : (aBaseH sevm (alB1 sevm b)).getCode sevm.currentTarget ≠ .empty := by
     rw [hAc, hBc]; exact hpc
   have hpc2 : b1.getCode sevm.currentTarget ≠ .empty := by rw [hcK2 _ hpcB]; exact hpcB
-  have hid2 : IdReady sevm b1 :=
-    ⟨by rw [hc42]; exact hAid.nodeleg, hacc2 _ hAid.warm, hid.pre, hid.fork⟩
+  have hid2 : IdReadyH sevm b1 :=
+    ⟨by rw [hc42]; exact hAid.nodeleg, hacc2 _ hAid.warm, hid.pre, hid.stateGas⟩
   have hcoin1 : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp
       (coinAt (alLocked (b.getStor sevm.currentTarget)) i).toAdr := fun i hi => by
     rw [coinAt, Stor.get_set_ne _ (coin_ne_lock hi)]; exact hcoin i hi
@@ -163,7 +164,7 @@ theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
 /-- **`xa_al_front`**: `xa_al_frontC` with every child keeping the pool. -/
 theorem xa_al_front {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : State}
     (hchk : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAddLiquidity)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
@@ -171,7 +172,7 @@ theorem xa_al_front {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
       ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp
       (coinAt (b.getStor sevm.currentTarget) i).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
     (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
@@ -210,7 +211,7 @@ theorem xa_al_front {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
         (alLocked (b.getStor sevm.currentTarget)).get x) ∧
       b'.logs = b.logs ++ (L0 ++ L1 ++ L2).flatMap (fun c => c.post.logs) ∧
       b'.output = b.output ∧ b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧
-      IdReady sevm b' ∧ Mem.Reads M img ∧ Mem.Wf M ∧ M.size % 32 = 0 ∧
+      IdReadyH sevm b' ∧ Mem.Reads M img ∧ Mem.Wf M ∧ M.size % 32 = 0 ∧
       AlPullImg img 3 (alFee (b.getStor sevm.currentTarget))
         ((b.getStor sevm.currentTarget).get adminFeeSlot) A (alWord cT) D0
         (balAt (alLocked (b.getStor sevm.currentTarget)))

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Bridge
 import Blanc.Lift.Curve3Pool.Callee.Xp
 import Blanc.Lift.Curve3Pool.Callee.GetY
@@ -33,7 +34,7 @@ theorem xpMem_free :
 /-- **`_xp_mem` crossed from a walked state** (`0x3a1`, return tag `ρ`). -/
 theorem xa_ex_xpMem {sevm : Sevm} {post b : Devm} {ρ a0 a1 a2 : B256} {S : List B256} {M : Mem}
     {G : Nat} {L : List Exec.Frame} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (hW : Mem.Wf M)
+    (hfork : HistFork sevm.benvStat.fork) (hW : Mem.Wf M)
     (h : XAt sevm post 0x3a1 (St b (ρ :: a0 :: a1 :: a2 :: S) M G) L) :
     ∃ x0 x1 x2 M' G', XAt sevm post ρ.toNat (St b (x0 :: x1 :: x2 :: S) M' G') L ∧
       xpChk ⟨a0.toNat, a1.toNat, a2.toNat⟩ = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
@@ -66,10 +67,10 @@ theorem getY_mems : mems.getD 252 [] = [] := by decide +kernel
 abstracts `s`. -/
 theorem xa_ex_getY {sevm : Sevm} {post b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List B256}
     {M : Mem} {G : Nat} {L : List Exec.Frame} {s : State} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hW : Mem.Wf M) (hsz : M.size % 32 = 0)
     (h : XAt sevm post 0x18a4 (St b (ρ :: i :: j :: x :: x0 :: x1 :: x2 :: S) M G) L) :
-    ∃ v M' G', XAt sevm post ρ.toNat (St (aBase sevm b) (v :: S) M' G') L ∧
+    ∃ v M' G', XAt sevm post ρ.toNat (St (aBaseH sevm b) (v :: S) M' G') L ∧
       ∃ amp, aChk s sevm.benvStat.time.toNat = some amp ∧
       ∃ (hi : i.toNat < 3) (hj : j.toNat < 3),
         getYChk amp ⟨i.toNat, hi⟩ ⟨j.toNat, hj⟩ x.toNat (V3.mk x0.toNat x1.toNat x2.toNat).get =

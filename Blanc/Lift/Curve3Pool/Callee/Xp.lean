@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.KitCheck
 import Blanc.Lift.Curve3Pool.Layout
 import Blanc.Lift.VyperCallee
@@ -41,12 +42,20 @@ def xpBase (sevm : Sevm) (b : Devm) : Devm :=
   afterSload sevm (afterSload sevm (afterSload sevm b (balanceSlot 0)) (balanceSlot 1))
     (balanceSlot 2)
 
+/-- The base `_xp` leaves: the three `balances` words loaded. -/
+def xpBaseH (sevm : Sevm) (b : Devm) : Devm :=
+  afterSloadH sevm (afterSloadH sevm (afterSloadH sevm b (balanceSlot 0)) (balanceSlot 1))
+    (balanceSlot 2)
+
 /-- **What `_xp` leaves**: the words of `xpChk s.balances` (coin 0 on top) over the caller's
-stack, over `xpBase`, with the entry memory kept off `xpWin`. -/
+stack, over `xpBaseH`, with the entry memory kept off `xpWin`. -/
 def XpLands (sevm : Sevm) (s : State) (b : Devm) (S : List B256) (M : Mem) (d : Devm) : Prop :=
-  ∃ x0 x1 x2 M' G', d = St (xpBase sevm b) (x0 :: x1 :: x2 :: S) M' G' ∧
+  ∃ x0 x1 x2 M' G', d = St (xpBaseH sevm b) (x0 :: x1 :: x2 :: S) M' G' ∧
     xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧ Mem.KeepsOff M M' xpWin ∧
     Mem.Wf M' ∧ (M.size % 32 = 0 → M'.size % 32 = 0)
+
+theorem xpBaseH_sloadsOnly (sevm : Sevm) (b : Devm) : SloadsOnlyH sevm b (xpBaseH sevm b) :=
+  (((SloadsOnlyH.refl).sload _).sload _).sload _
 
 theorem xpBase_sloadsOnly (sevm : Sevm) (b : Devm) : SloadsOnly sevm b (xpBase sevm b) :=
   (((SloadsOnly.refl).sload _).sload _).sload _
@@ -127,9 +136,9 @@ theorem xp_slot2 : (Bytes.toB256 [1]).toBytes.keccak +
 -- SEGMENT: xpSpec
 /-- **`_xp`'s contract**: every run of entry 31 from its return address over the caller's stack
 returns, and lands as `XpLands`: the three words of `xpChk s.balances` on top of `S`, over the
-loads of `xpBase`, the memory kept off `xpWin`. -/
+loads of `xpBaseH`, the memory kept off `xpWin`. -/
 theorem xp_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ret : B256}
-    {s : State} {o : Outcome} (hfork : CoveredFork sevm.benvStat.fork)
+    {s : State} {o : Outcome} (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hwf : Mem.Wf M)
     (run : SFunc.Run prog sevm (St b (ret :: S) M G) t_0281_c31 o) :
     ∃ d, o = .returned d ∧ XpLands sevm s b S M d := by
@@ -166,7 +175,7 @@ theorem xp_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {re
   imload 0x140
   obtain ⟨G', hr⟩ := ric_ret run
   cases hr
-  simp only [xp_slot0, xp_slot1, xp_slot2, afterSload_getStorVal] at hm0 hm1 hm2 ⊢
+  simp only [xp_slot0, xp_slot1, xp_slot2, afterSloadH_getStorVal] at hm0 hm1 hm2 ⊢
   refine ⟨_, rfl, _, _, _, _, G', rfl, ?_, hT.keeps, hT.wf, hT.aligned⟩
   have c0 := xp_coin (k := 0) hm0 hd0 (by decide) (by decide)
   have c1 := xp_coin (k := 1) hm1 hd1 (by decide) (by decide)

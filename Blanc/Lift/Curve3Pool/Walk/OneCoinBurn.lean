@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.OneCoinPre
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityPost
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -38,7 +39,7 @@ abbrev ocAmt (sevm : Sevm) : B256 := Sevm.dataWord sevm (Bytes.toB256 [4])
 
 /-- **The burn** (`0x458e` → `0x45d1`). -/
 theorem xa_oc_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {dy tw : B256} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    {dy tw : B256} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hV : VW M [(0x140, dy)])
     (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
     (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)
@@ -60,10 +61,10 @@ theorem xa_oc_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xa 3
   xmo 0x45aa (.reg .mstore) (ri_mstore_imgAt (o := 0x340) rfl)
   xa 3
-  xw 0x45b2 (.reg .sload) ri_sload
+  xw 0x45b2 (.reg .sload) ri_sloadF
   rw [tokenSlot_lit, getStorVal_eq, htw] at h
   xs 0x45b3 (.reg .gas) ri_gas_remaining
-  replace h := xa_call_img (pc' := 0x45b4) (i := 0x31c) (n := 0x44) (o := 0x3a0) (z := 0x20) hfork
+  replace h := xa_call_imgH (pc' := 0x45b4) (i := 0x31c) (n := 0x44) (o := 0x3a0) (z := 0x20) hfork.stateGas_none
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, flag, L1, h, -, hrd, hk⟩ := h
@@ -78,8 +79,8 @@ theorem xa_oc_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   have hc' : ChildOf b d tw.toAdr (burnFromSel ++ sevm.caller.toB256.toBytes ++
       (ocAmt sevm).toBytes) 0 sevm.isStatic c := by
     rw [zero_lit] at hc
-    exact hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
-      (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
+    exact hc.congr_left (fun _ => afterSloadH_getCode _ _ _ _) (fun _ => afterSloadH_getStor _ _ _ _)
+      (afterSloadH_logs _ _ _) (afterSloadH_output _ _ _) (afterSloadH_accessedAddresses _ _ _)
   clear hc
   xa 5
   xji 0x45c5 0x45c9 hw

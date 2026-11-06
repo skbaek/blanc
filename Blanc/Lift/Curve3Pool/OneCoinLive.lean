@@ -125,8 +125,8 @@ theorem removeLiquidityOneCoin_live {sevm : Sevm} {pre : Devm} {s : State} {o : 
   obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the safety result for that execution
   obtain ⟨hkp, hidk⟩ := hkeep D exc
-  obtain ⟨hi3'', T', o', hstep', hraw⟩ := removeLiquidityOneCoin_rawE exc hcode hfork hlen hcd hsel
-    rfl rfl (by omega) hck htok hcoin hpc (hid.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩)
+  obtain ⟨hi3'', T', o', hstep', hraw⟩ := removeLiquidityOneCoin_rawE exc hcode hfork.histFork hlen hcd hsel
+    rfl rfl (by omega) hck htok hcoin hpc (hid.toH.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩)
     hkp hidk
   obtain ⟨-, hrl'⟩ := oc_body hi3 hlen hsel hstep'
   obtain ⟨-, dy', fee', p', q', take', bi', -, -, -, -, htake', -, -, -, ho'⟩ :=

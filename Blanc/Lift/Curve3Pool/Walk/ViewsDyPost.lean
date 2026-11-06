@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsDy
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -18,7 +19,7 @@ abbrev dyFee (sevm : Sevm) (b : Devm) (x0 x1 x2 y : B256) : B256 :=
 /-- `get_dy`'s suffix reads every arithmetic guard and returns the exact net amount. -/
 theorem xa_dy_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     {M : Mem} {x0 x1 x2 y : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hj : (dyJ sevm).toNat < 3)
     (hV : VW M [(0x3e0, y), (0x140, rP), (0x160, rQ), (0x180, rQ),
       (0x1a0, x0), (0x1c0, x1), (0x1e0, x2)])
@@ -82,7 +83,7 @@ theorem xa_dy_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xa 8
   xsw 0x1fe2 0x400
   xs 0x1fe4 (.push [0x02] (by decide)) ri_push
-  xw 0x1fe5 (.reg .sload) ri_sload
+  xw 0x1fe5 (.reg .sload) ri_sloadF
   xs 0x1fe8 (.push [0x04, 0x00] (by decide)) ri_push
   xl 0x1fe9 0x400
   xa 12
@@ -112,7 +113,7 @@ theorem xa_dy_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   obtain ⟨hrun, rfl⟩ := xa_halt (l := .return_) (atL hcode (by kernel_rfl)) h
   obtain ⟨hout, hstor, hlogs⟩ := ri_return hrun
   refine ⟨rfl, hsub0, hsub1, hmul0, hrate, hmul1, hsub2,
-    fun a => by rw [hstor, afterSload_getStor], by rw [hlogs, afterSload_logs], ?_⟩
+    fun a => by rw [hstor, afterSloadH_getStor], by rw [hlogs, afterSloadH_logs], ?_⟩
   rw [hout, show (Bytes.toB256 [0]).toNat = 0 from rfl,
     show (Bytes.toB256 [32]).toNat = 32 from rfl, Mem.read_write_word_of_wf hfinalwf]
 

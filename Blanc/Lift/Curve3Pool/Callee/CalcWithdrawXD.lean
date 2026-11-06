@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXLoop
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -21,7 +22,7 @@ variable {sevm : Sevm} {post b : Devm} {ρ : B256} {S : List B256} {M : Mem} {G 
 D1)` inside the save of `[0x140, 0x780)`, the checked `dy = (xp_reduced[i] - y - 1) /
 PRECISION_MUL[i]` and `dy_0 - dy`, returned as two words. -/
 theorem xa_cw_d (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {a i A F T x0 x1 x2 D0 D1 y dy0 r0 r1 r2 ck : B256} (hi : i.toNat < 3)
     (hV : VW M [(0x720, ck), (0x700, dy0), (0x5a0, y), (0x580, r2), (0x560, r1),
       (0x540, r0), (0x520, D1), (0x400, D0), (0x360, x2), (0x340, x1), (0x320, x0),

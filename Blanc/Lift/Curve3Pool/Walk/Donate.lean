@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AdminBalances
 import Blanc.Lift.WalkInvKit
 
@@ -66,26 +67,26 @@ variable {sevm : Sevm}
 
 /-- **One loop iteration of `donate_admin_fees`, inverted.** -/
 theorem ric_donateIter {C : List Nat} {r : Seg} {B : Devm} {S : List B256} {M : Mem} {G i : Nat}
-    {f1 f2 tail : SFunc} (hfork : CoveredFork sevm.benvStat.fork) (hf1 : f1.noOk = true)
+    {f1 f2 tail : SFunc} (hfork : HistFork sevm.benvStat.fork) (hf1 : f1.noOk = true)
     (hf2 : f2.noOk = true) (hwf : Mem.Wf M) (hi : i < 3)
     (hctr : (M.read 320 32).1 = (Nat.toB256 i).toBytes)
     (run : SFunc.RunCut cert.prog sevm C (St B S M G) (donateIter f1 f2 tail) r) :
     ∃ out d1 M' G', 32 ≤ out.length ∧
-      StaticAnswered sevm B (B.getStorVal sevm.currentTarget (coinsBase + Nat.toB256 i)).toAdr
+      StaticAnsweredH sevm B (B.getStorVal sevm.currentTarget (coinsBase + Nat.toB256 i)).toAdr
         (balanceOfData sevm.currentTarget) out ∧
       QStep sevm B d1 (B.getStor sevm.currentTarget) ∧ Mem.Wf M' ∧
       (M'.read 320 32).1 = (Nat.toB256 i).toBytes ∧
-      SFunc.RunCut cert.prog sevm C (St (afterSstore sevm d1 (balancesBase + Nat.toB256 i)
+      SFunc.RunCut cert.prog sevm C (St (afterSstoreH sevm d1 (balancesBase + Nat.toB256 i)
         (Bytes.toB256 (out.take 32))) S M' G') tail r := by
   unfold donateIter at run
   winv 17
   rcases ric_branch run with ⟨-, G18, run⟩ | ⟨-, G18, run⟩
   · exact (ric_undefined run).elim
   winv 8
-  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_sload hfork s2
+  obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨G27, rfl⟩ := ri_sloadF hfork s2
   obtain ⟨d2, s2, run⟩ := ric_next run; obtain ⟨gw, G28, rfl⟩ := ri_gas s2
   obtain ⟨d2, s2, run⟩ := ric_next run
-  obtain ⟨flag, out, hpost, hlenb, hans⟩ := ri_staticcall_bounded hfork s2
+  obtain ⟨flag, out, hpost, hlenb, hans⟩ := ri_staticcall_boundedH hfork.stateGas_none s2
   rw [hpost.eq_St] at run
   obtain ⟨hfl, G29, run⟩ := ric_assertJump hf1 run
   winv 3
@@ -94,7 +95,7 @@ theorem ric_donateIter {C : List Nat} {r : Seg} {B : Devm} {S : List B256} {M : 
   rcases ric_branch run with ⟨-, G44, run⟩ | ⟨-, G44, run⟩
   · exact (ric_undefined run).elim
   winv 8
-  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G53, rfl⟩ := ri_sstore hfork s3
+  obtain ⟨d3, s3, run⟩ := ric_next run; obtain ⟨G53, rfl⟩ := ri_sstoreF hfork s3
   clear s2 s3
   clear * - hctr hwf hi hpost hlenb hans hfl hrds run hfork
   simp only [show (Bytes.toB256 [1, 64]).toNat = 320 from by decide,
@@ -131,9 +132,9 @@ theorem ric_donateIter {C : List Nat} {r : Seg} {B : Devm} {S : List B256} {M : 
     Mem.read_write_word_disjoint, hctr, B256.toB256_toBytes, Jaune.toB256_toNat] at run
   rw [hsel] at hans
   have hf1 : flag = 1 := hpost.flag.resolve_left hfl
-  refine ⟨out, d2, _, _, h32, StaticAnswered.of_afterSload (hans hf1),
-    ⟨by rw [hpost.stor, afterSload_getStor], fun a _ => by rw [hpost.stor, afterSload_getStor],
-      by rw [hpost.logs, afterSload_logs], by rw [hpost.output hf1, afterSload_output]⟩,
+  refine ⟨out, d2, _, _, h32, StaticAnsweredH.of_afterSload (hans hf1),
+    ⟨by rw [hpost.stor, afterSloadH_getStor], fun a _ => by rw [hpost.stor, afterSloadH_getStor],
+      by rw [hpost.logs, afterSloadH_logs], by rw [hpost.output hf1, afterSloadH_output]⟩,
     ?_, ?_, run⟩
   · mem_wf
   · simp (disch := first | mem_wf | omega) only [Mem.extend_read_fst, Mem.extends_read_fst,
@@ -194,16 +195,16 @@ variable {sevm : Sevm} {b : Devm} {s : State}
 local notation "stor₀" => Devm.getStor b sevm.currentTarget
 
 -- SEGMENT: safeDonateAdminFees
-theorem safe_donateAdminFees (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_donateAdminFees (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selDonateAdminFees)
     (hlen : 4 ≤ sevm.data.length) :
     ∀ G post, SFunc.Run cert.prog sevm (quietSt sevm b G) t_4f60_c0 (.halted post) →
       ∃ out0 out1 out2 : Bytes, 32 ≤ out0.length ∧ 32 ≤ out1.length ∧ 32 ≤ out2.length ∧
-        (∃ B, StaticAnswered sevm B ((stor₀).get (coinSlot 0)).toAdr
+        (∃ B, StaticAnsweredH sevm B ((stor₀).get (coinSlot 0)).toAdr
           (balanceOfData sevm.currentTarget) out0) ∧
-        (∃ B, StaticAnswered sevm B ((stor₀).get (coinSlot 1)).toAdr
+        (∃ B, StaticAnsweredH sevm B ((stor₀).get (coinSlot 1)).toAdr
           (balanceOfData sevm.currentTarget) out1) ∧
-        (∃ B, StaticAnswered sevm B ((stor₀).get (coinSlot 2)).toAdr
+        (∃ B, StaticAnsweredH sevm B ((stor₀).get (coinSlot 2)).toAdr
           (balanceOfData sevm.currentTarget) out2) ∧
         ∃ o, step s (donEnv sevm (fn3 (answerWord out0) (answerWord out1) (answerWord out2)))
           (decodeCall sevm) = some o ∧ QuietLands sevm b post o := by
@@ -258,19 +259,19 @@ theorem safe_donateAdminFees (hfork : CoveredFork sevm.benvStat.fork)
   | last hl =>
   cases hl
   clear * - hc hdec hv hown h0 h1 h2 hans0 hans1 hans2 hq0 hq1 hq2
-  have hqA : QStep sevm b (afterSload sevm b ownerSlot) (stor₀) :=
+  have hqA : QStep sevm b (afterSloadH sevm b ownerSlot) (stor₀) :=
     (QStep.refl sevm b).sload ownerSlot
   have hqB := (hqA.chain hq0).sstore (balancesBase + Nat.toB256 0) (Bytes.toB256 (List.take 32 out0))
   have hqC := (hqB.chain hq1).sstore (balancesBase + Nat.toB256 1) (Bytes.toB256 (List.take 32 out1))
   have hqD := (hqC.chain hq2).sstore (balancesBase + Nat.toB256 2) (Bytes.toB256 (List.take 32 out2))
-  have ec0 : (afterSload sevm b ownerSlot).getStorVal sevm.currentTarget
+  have ec0 : (afterSloadH sevm b ownerSlot).getStorVal sevm.currentTarget
       (coinsBase + Nat.toB256 0) = (stor₀).get (coinSlot 0) := by
     rw [hqA.getStorVal]; rfl
-  have ec1 : (afterSstore sevm e1 (balancesBase + Nat.toB256 0)
+  have ec1 : (afterSstoreH sevm e1 (balancesBase + Nat.toB256 0)
       (Bytes.toB256 (List.take 32 out0))).getStorVal sevm.currentTarget
       (coinsBase + Nat.toB256 1) = (stor₀).get (coinSlot 1) := by
     rw [hqB.getStorVal, Stor.get_set_ne _ (by decide)]; rfl
-  have ec2 : (afterSstore sevm e2 (balancesBase + Nat.toB256 1)
+  have ec2 : (afterSstoreH sevm e2 (balancesBase + Nat.toB256 1)
       (Bytes.toB256 (List.take 32 out1))).getStorVal sevm.currentTarget
       (coinsBase + Nat.toB256 2) = (stor₀).get (coinSlot 2) := by
     rw [hqC.getStorVal, Stor.get_set_ne _ (by decide), Stor.get_set_ne _ (by decide)]; rfl

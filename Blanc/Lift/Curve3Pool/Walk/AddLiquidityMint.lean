@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD2
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -117,7 +118,7 @@ theorem al_mint_input (img : Bytes) (C A : B256) :
 /-- The actual LP token mint child; the returned boolean is discarded but a word is required. -/
 theorem xa_al_mintCallC {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {mint tw : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hmint : WordAt img 0xba0 mint) (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
     (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)
@@ -141,11 +142,10 @@ theorem xa_al_mintCallC {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G :
   xs 0x17ec (.push [0x0c, 0xa0] (by decide)) ri_push
   xma 0x17ed (.reg .mstore) (ri_mstore_imgAtA (o := 0xca0) rfl)
   xa 3
-  xw 0x17f5 (.reg .sload) ri_sload
+  xw 0x17f5 (.reg .sload) ri_sloadF
   rw [tokenSlot_lit, getStorVal_eq, htw] at h
   xs 0x17f6 (.reg .gas) ri_gas_remaining
-  replace h := xa_call_imgA (pc' := 0x17f7) (i := 0xc7c) (n := 0x44) (o := 0xd00) (z := 0x20)
-    hfork (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW hA h
+  replace h := xa_call_imgAH (pc' := 0x17f7) (i := 0xc7c) (n := 0x44) (o := 0xd00) (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW hA h
   clear hR hW hA
   obtain ⟨d, flag, L1, h, -, hrd, hk⟩ := h
   rw [al_mint_input] at hk
@@ -159,8 +159,8 @@ theorem xa_al_mintCallC {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G :
   have hc' : ChildOf b d tw.toAdr (mintSel ++ sevm.caller.toB256.toBytes ++ mint.toBytes)
       0 sevm.isStatic c := by
     rw [zero_lit] at hc
-    exact hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
-      (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
+    exact hc.congr_left (fun _ => afterSloadH_getCode _ _ _ _) (fun _ => afterSloadH_getStor _ _ _ _)
+      (afterSloadH_logs _ _ _) (afterSloadH_output _ _ _) (afterSloadH_accessedAddresses _ _ _)
   clear hc
   have hdk : ∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x :=
     fun x => by
@@ -183,7 +183,7 @@ theorem xa_al_mintCallC {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G :
 /-- **`xa_al_mintCall`**: `xa_al_mintCallC` with every child keeping the pool. -/
 theorem xa_al_mintCall {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {mint tw : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hmint : WordAt img 0xba0 mint) (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
     (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)

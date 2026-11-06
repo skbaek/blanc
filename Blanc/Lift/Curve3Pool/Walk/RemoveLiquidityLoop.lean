@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Kit
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -93,7 +94,7 @@ total_supply` with its checks, `min_amounts[i] ≤ value`, `balances[i] -= value
 `amounts[i] = value`. -/
 theorem xa_rl_s1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {σ : Stor} {i : Nat} {T : B256} {a : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hL : LoopImg img i T a)
     (hstor : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
     (h : XAt sevm post 0x2cdb (St b [3, 0x2a0] M G) L) :
@@ -102,7 +103,7 @@ theorem xa_rl_s1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
       ∃ M' img' G', Mem.Reads M' img' ∧ Mem.Wf M' ∧
         LoopImg img' i T (Function.update a i (rlVal sevm σ T i)) ∧
         WordAt img' 0x2c0 (rlVal sevm σ T i) ∧
-        XAt sevm post 0x2e12 (St (afterSstore sevm (afterSload sevm (afterSload sevm b
+        XAt sevm post 0x2e12 (St (afterSstoreH sevm (afterSloadH sevm (afterSloadH sevm b
           (balancesBase + Nat.toB256 i)) (balancesBase + Nat.toB256 i))
           (balancesBase + Nat.toB256 i) (balAt σ i - rlVal sevm σ T i)) [3, 0x2a0] M' G') L := by
   have hctr := hL.ctr
@@ -120,7 +121,7 @@ theorem xa_rl_s1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xmo 0x2cf7 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one] at h
   xs 0x2cf8 (.reg .add) ri_add
-  xw 0x2cf9 (.reg .sload) ri_sload
+  xw 0x2cf9 (.reg .sload) ri_sloadF
   rw [getStorVal_eq, hstor] at h
   xa 14
   xji 0x2d0b 0x2d0f hmul
@@ -171,8 +172,8 @@ theorem xa_rl_s1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xmo 0x2dd7 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one] at h
   xa 2
-  xw 0x2dda (.reg .sload) ri_sload
-  rw [getStorVal_afterSload, getStorVal_eq, hstor] at h
+  xw 0x2dda (.reg .sload) ri_sloadF
+  rw [getStorVal_afterSloadH, getStorVal_eq, hstor] at h
   xs 0x2ddd (.push [0x02, 0xc0] (by decide)) ri_push
   xmo 0x2dde (.reg .mload) (ri_mload_imgAt (o := 0x2c0) rfl)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self] at h
@@ -180,7 +181,7 @@ theorem xa_rl_s1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xji 0x2de6 0x2dea hle
   · xdead
   xa 9
-  xw 0x2df4 (.reg .sstore) ri_sstore
+  xw 0x2df4 (.reg .sstore) ri_sstoreF
   xa 2
   xmo 0x2df9 (.reg .mload) (ri_mload_imgAt (o := 0x2c0) rfl)
   simp (disch := decide) only [Bytes.readWord_writeAt_of_disjoint, Bytes.readWord_writeAt_self] at h
@@ -210,7 +211,7 @@ theorem xa_rl_s1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
 theorem xa_rl_s2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {i : Nat} {T v : B256} {a : Nat → B256}
     (hcode : sevm.code = code) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hL : LoopImg img i T a)
-    (hv : WordAt img 0x2c0 v) (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hv : WordAt img 0x2c0 v) (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (h : XAt sevm post 0x2e12 (St b [3, 0x2a0] M G) L) :
     ∃ b' M' img' G', BaseRel b b' ∧ Mem.Reads M' img' ∧ Mem.Wf M' ∧ LoopImg img' i T a ∧
       Region img' 0x500 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
@@ -233,7 +234,7 @@ theorem xa_rl_s2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   have f_amt : ∀ j, j < 6 → WordAt img1 (0x1e0 + 32 * j) (a j) := by
     intro j hj; rw [hI]; wchainT; exact hL.amt j hj
   clear hI hL hv
-  replace h := xa_identity_img (pc' := 0x2e58) (i := 0x420) (n := 4) (o := 0x480) (z := 4) hid
+  replace h := xa_identity_imgH (pc' := 0x2e58) (i := 0x420) (n := 4) (o := 0x480) (z := 4) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, L1, h, hk⟩ := h
@@ -263,7 +264,7 @@ theorem xa_rl_s2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xmo 0x2e90 (.reg .mload) (ri_mload_imgAt (o := 0x460) rfl)
   rw [Bytes.readWord_writeAt_self] at h
   xa 9
-  replace h := xa_identity_img (pc' := 0x2e9f) (i := 0x460) (n := 0x64) (o := 0x500) (z := 0x64) (hid.of_rel hb12)
+  replace h := xa_identity_imgH (pc' := 0x2e9f) (i := 0x460) (n := 0x64) (o := 0x500) (z := 0x64) (hid.of_rel hb12)
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, L2, h, hk⟩ := h
@@ -302,7 +303,7 @@ theorem xa_rl_s2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
 input the payload's last `0x44` bytes, output window `0x5c0`; a zero flag reverts. -/
 theorem xa_rl_s3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {i : Nat} {v cw : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hctr : WordAt img 0x2a0 (Nat.toB256 i))
     (hdata : Region img 0x500 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +
       Bytes.toB256 [32]).toBytes ++ (transferSel ++ sevm.caller.toB256.toBytes ++ v.toBytes)))
@@ -334,14 +335,14 @@ theorem xa_rl_s3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xmo 0x2ed3 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_zero] at h
   xs 0x2ed4 (.reg .add) ri_add
-  xw 0x2ed5 (.reg .sload) ri_sload
+  xw 0x2ed5 (.reg .sload) ri_sloadF
   rw [getStorVal_eq, hcw] at h
   xs 0x2ed6 (.reg .gas) ri_gas_remaining
   have hin : (Bytes.writeAt img 0xc0 (Bytes.toB256 [0]).toBytes).sliceD 0x520 0x44 0 =
       transferSel ++ sevm.caller.toB256.toBytes ++ (v).toBytes := by
     refine Region.slice (Region.write_other hdata.right (by simp only [B256.length_toBytes]; omega))
       (by simp only [List.length_append, B256.length_toBytes]; rfl)
-  replace h := xa_call_img (pc' := 0x2ed7) (i := 0x520) (n := 0x44) (o := 0x5c0) (z := 0x20) hfork
+  replace h := xa_call_imgH (pc' := 0x2ed7) (i := 0x520) (n := 0x44) (o := 0x5c0) (z := 0x20) hfork.stateGas_none
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d4, flag, L4, h, hrun4, hrd4, hk⟩ := h
@@ -354,10 +355,10 @@ theorem xa_rl_s3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   rcases hch with ⟨hp, -⟩ | ⟨c, rfl, -, -, hc⟩
   · exact absurd hp hcoin
   xjd 0x2ee0
-  have hX : (St (afterSload sevm b (coinsBase + Nat.toB256 i)) [] M G).getCode
+  have hX : (St (afterSloadH sevm b (coinsBase + Nat.toB256 i)) [] M G).getCode
       sevm.currentTarget ≠ .empty := by
-    show (afterSload sevm b _).getCode _ ≠ _
-    rw [afterSload_getCode]; exact hpc
+    show (afterSloadH sevm b _).getCode _ ≠ _
+    rw [afterSloadH_getCode]; exact hpc
   have hkc : (∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x) ∧ c.post.getCode 4 = c.pre.getCode 4 := by
     rcases hK with hK | hK
@@ -366,15 +367,15 @@ theorem xa_rl_s3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   refine ⟨c, L4, d4, _, rfl, ?_, hkc, hR, hW, hrd4, h⟩
   have e0 : Bytes.toB256 [0] = 0 := zero_lit
   rw [e0] at hc
-  exact hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
-    (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
+  exact hc.congr_left (fun _ => afterSloadH_getCode _ _ _ _) (fun _ => afterSloadH_getStor _ _ _ _)
+    (afterSloadH_logs _ _ _) (afterSloadH_output _ _ _) (afterSloadH_accessedAddresses _ _ _)
 
 /-- **Segment 4** (`0x2ee0` → `0x2f6b`): Vyper's `raw_call(…, max_outsize=32)` success test
 after the `transfer` call (`len = min(RETURNDATASIZE, 32)` at `0x5a0`, the checked identity copy
 of `0x5a0[0 : 32 + len]` to `0x3a0`, and the `len > 0` conversion test): the returned data
 passes `RawCallOk`. -/
 theorem xa_rl_s4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} (hcode : sevm.code = code) (hid : IdReady sevm d)
+    {img : Bytes} (hcode : sevm.code = code) (hid : IdReadyH sevm d)
     (hR : Mem.Reads M (Bytes.writeAt img 0x5c0 (d.returnData.take 0x20))) (hW : Mem.Wf M)
     (hrd : d.returnData.length < 2 ^ 256)
     (h : XAt sevm post 0x2ee0 (St d [3, 0x2a0] M G) L) :
@@ -416,7 +417,7 @@ theorem xa_rl_s4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {
   have hsz : (Bytes.toB256 [0x20] + nW).toNat = 32 + (d.returnData.take 32).length := by
     rw [B256.toNat_add, hn, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
     exact Nat.mod_eq_of_lt (by omega)
-  replace h := xa_identity_img (pc' := 0x2f0f) (i := 0x5a0) (n := 32 + (d.returnData.take 32).length)
+  replace h := xa_identity_imgH (pc' := 0x2f0f) (i := 0x5a0) (n := 32 + (d.returnData.take 32).length)
     (o := 0x3a0) (z := 32 + (d.returnData.take 32).length) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) hsz (by decide) hsz hR hW h
   clear hR hW
@@ -551,11 +552,11 @@ the pool's storage is `σ` with `balances[i] -= value`, the frame's logs gained 
 child's, and the loop continues at counter `i + 1` with `amounts[i] = value`. -/
 theorem xa_rl_iter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {σ : Stor} {i : Nat} {T : B256} {a : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hL : LoopImg img i T a)
     (hstor : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
     (hpc : b.getCode sevm.currentTarget ≠ .empty)
-    (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp (coinAt σ i).toAdr)
     (hK : RlKeepAt sevm (coinAt σ i) L ∨ RlKeep sevm L)
     (h : XAt sevm post 0x2cdb (St b [3, 0x2a0] M G) L) :
@@ -568,33 +569,33 @@ theorem xa_rl_iter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
         (∀ x, (b'.getStor sevm.currentTarget).get x =
           (σ.set (balancesBase + Nat.toB256 i) (balAt σ i - rlVal sevm σ T i)).get x) ∧
         b'.logs = b.logs ++ c.post.logs ∧ b'.output = b.output ∧
-        b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReady sevm b' ∧
+        b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReadyH sevm b' ∧
         Mem.Reads M' img' ∧ Mem.Wf M' ∧
         LoopImg img' (i + 1) T (Function.update a i (rlVal sevm σ T i)) ∧
         XAt sevm post (if i + 1 = 3 then 0x2f7b else 0x2cdb) (St b' [3, 0x2a0] M' G') L' := by
   obtain ⟨hmul, hT0, hmin, hle, M1, img1, G1, hR1, hW1, hL1, hv1, h1⟩ :=
     xa_rl_s1 hcode hfork hi hR hW hL hstor h
-  have hid1 := ((hid.afterSload (balancesBase + Nat.toB256 i)).afterSload
-    (balancesBase + Nat.toB256 i)).afterSstore (balancesBase + Nat.toB256 i)
+  have hid1 := ((hid.afterSloadH (balancesBase + Nat.toB256 i)).afterSloadH
+    (balancesBase + Nat.toB256 i)).afterSstoreH (balancesBase + Nat.toB256 i)
     (balAt σ i - rlVal sevm σ T i)
   obtain ⟨b3, M3, img3, G3, hb13, hR3, hW3, hL3, hdata, h3⟩ :=
     xa_rl_s2 hcode hR1 hW1 hL1 hv1 hid1 hdepth h1
   have hs3 : ∀ x, (b3.getStor sevm.currentTarget).get x =
       (σ.set (balancesBase + Nat.toB256 i) (balAt σ i - rlVal sevm σ T i)).get x := by
     intro x
-    rw [hb13.stor, afterSstore_getStor_self, afterSload_getStor, afterSload_getStor,
+    rw [hb13.stor, afterSstoreH_getStor_self, afterSloadH_getStor, afterSloadH_getStor,
       Stor.get_set_ite, Stor.get_set_ite, hstor]
   have hcw : (b3.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = coinAt σ i := by
     rw [hs3, Stor.get_set_ne _ (coin_ne_bal hi)]
   have hcode3 : b3.getCode sevm.currentTarget = b.getCode sevm.currentTarget := by
-    rw [hb13.code, afterSstore_getCode, afterSload_getCode, afterSload_getCode]
+    rw [hb13.code, afterSstoreH_getCode, afterSloadH_getCode, afterSloadH_getCode]
   have hpc3 : b3.getCode sevm.currentTarget ≠ .empty := by rw [hcode3]; exact hpc
   obtain ⟨c, L', d, G4, rfl, hc, ⟨hkc, hidc⟩, hR4, hW4, hrd, h4⟩ :=
     xa_rl_s3 hcode hfork hi hR3 hW3 hL3.ctr hdata hcw hcoin hpc3 hK h3
   have hid3 := hid1.of_rel hb13
-  have hidd : IdReady sevm d :=
+  have hidd : IdReadyH sevm d :=
     ⟨by rw [hc.codePost, hidc, hc.codePre]; exact hid3.nodeleg,
-      hc.warm _ hid3.warm, hid.pre, hid.fork⟩
+      hc.warm _ hid3.warm, hid.pre, hid.stateGas⟩
   obtain ⟨hok, b6, M6, img6, G6, hb6, hR6, hW6, hk6, h6⟩ := xa_rl_s4 hcode hidd hR4 hW4 hrd h4
   have hw4 : ∀ o w, WordAt img3 o w → o + 32 ≤ 0xc0 ∨ 0xe0 ≤ o → (o + 32 ≤ 0x3a0 ∨ 0x3e0 ≤ o) →
       (o + 32 ≤ 0x5a0 ∨ 0x5e0 ≤ o) → WordAt img6 o w := fun o w hw h0 h1 h2 =>
@@ -606,9 +607,9 @@ theorem xa_rl_iter {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   · intro x
     rw [hb6.stor, hc.storPost _ hpc3 x, hkc x, hc.storPre _ hpc3,
       hs3]
-  · rw [hb6.logs, hc.logs, hb13.logs, afterSstore_logs, afterSload_logs, afterSload_logs]
-  · rw [hb6.output, hc.outputKeep, hb13.output, afterSstore_output, afterSload_output,
-      afterSload_output]
+  · rw [hb6.logs, hc.logs, hb13.logs, afterSstoreH_logs, afterSloadH_logs, afterSloadH_logs]
+  · rw [hb6.output, hc.outputKeep, hb13.output, afterSstoreH_output, afterSloadH_output,
+      afterSloadH_output]
   · rw [hb6.code, hc.code _ hpc3, hcode3]
   · exact WordAt.write_self _ _ _
   · exact WordAt.write_other (hw4 _ _ hL3.supply (by omega) (by omega) (by omega))

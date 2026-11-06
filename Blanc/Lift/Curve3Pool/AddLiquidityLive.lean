@@ -229,8 +229,8 @@ theorem addLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1
       hck.unlocked hval hkill hamp hmf hsup htok (by rw [hcost] at hG; omega) (by omega) exc
     obtain ⟨hkp, hidk⟩ := hkeep D exc
     obtain ⟨T₂, L0, L1, L2, o', hstep', hraw, c', L', hL', hc'⟩ := addLiquidity_rawE exc hcode
-      hfork hlen hcd hsel rfl rfl (by omega) hck htok hcoin hpc
-      (hid.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩) hkp hidk
+      hfork.histFork hlen hcd hsel rfl rfl (by omega) hck htok hcoin hpc
+      (hid.toH.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩) hkp hidk
     rw [hL] at hL'
     obtain ⟨rfl, -⟩ := List.cons.inj hL'
     obtain rfl : T₂ = 0 := hc'.symm.trans hcT
@@ -291,8 +291,8 @@ theorem addLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1
       hck.unlocked hval hkill hamp hmf hsup htok (by rw [hcost] at hG; omega) (by omega) exc
     obtain ⟨hkp, hidk⟩ := hkeep D exc
     obtain ⟨T₂, L0, L1, L2, o', hstep', hraw, c', L', hL', hc'⟩ := addLiquidity_rawE exc hcode
-      hfork hlen hcd hsel rfl rfl (by omega) hck htok hcoin hpc
-      (hid.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩) hkp hidk
+      hfork.histFork hlen hcd hsel rfl rfl (by omega) hck htok hcoin hpc
+      (hid.toH.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩) hkp hidk
     rw [hL] at hL'
     obtain ⟨rfl, -⟩ := List.cons.inj hL'
     have hTT : T = T₂ := (hc'.symm.trans hcT).symm

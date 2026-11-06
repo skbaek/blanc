@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ExchangeFront
 import Blanc.Lift.Curve3Pool.Walk.ExchangeY
 import Blanc.Lift.Curve3Pool.Walk.ExchangeDy
@@ -20,10 +21,10 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift Blanc.StableSwapNewton
 
-theorem ExBase.aBase {sevm : Sevm} {b0 b : Devm} {σ : Stor} (h : ExBase sevm b0 b σ) :
-    ExBase sevm b0 (aBase sevm b) σ :=
-  ⟨fun x => by rw [aBase_getStor]; exact h.stor x, by rw [aBase_getCode]; exact h.code,
-    by rw [aBase_output]; exact h.output, IdReady_aBase h.id⟩
+theorem ExBase.aBaseH {sevm : Sevm} {b0 b : Devm} {σ : Stor} (h : ExBase sevm b0 b σ) :
+    ExBase sevm b0 (aBaseH sevm b) σ :=
+  ⟨fun x => by rw [aBaseH_getStor]; exact h.stor x, by rw [aBaseH_getCode]; exact h.code,
+    by rw [aBaseH_output]; exact h.output, IdReadyH_aBaseH h.id⟩
 
 /-- The storage abstracts `s` after the lock moved. -/
 theorem Abstracts.of_lock {σ σ' : Stor} {s : State} (h : Abstracts σ s)
@@ -40,13 +41,13 @@ and then the `transfer` of `dy` to `coins[j]`; `get_y` returned `y` (`getYChk` a
 `balances[i]` and `balances[j]` stored; the frame logged its children's logs and then
 `TokenExchange`; the output is the entry output. -/
 theorem xa_exchange {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {σ : Stor}
-    {s : State} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    {s : State} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selExchange)
     (hσ : b.getStor sevm.currentTarget = σ) (ha : Abstracts σ s)
     (hcoinI : (exI sevm).toNat < 3 → ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + exI sevm)).toAdr)
     (hcoinJ : (exJ sevm).toNat < 3 → ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + exJ sevm)).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (hkeep : ∀ c ∈ L, ExCoinChild sevm b c → ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
     (hidk : ∀ c ∈ L, ExCoinChild sevm b c → c.post.getCode 4 = c.pre.getCode 4)
@@ -154,20 +155,20 @@ theorem xa_exchange {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   have hy6 : WordAt img6 0x900 y :=
     hk6 _ _ ((WordAt.write_self _ _ _).write_other (by simp only [B256.length_toBytes]; omega))
       (.inr (.inr (by omega)))
-  have hB6 := hB.aBase
+  have hB6 := hB.aBaseH
   -- `dy`, the fee, the slippage check
   obtain ⟨hy1, hy2, hm1, hf1, hm2, hmin, M7, img7, G7, hR7, hW7, hF7, hout7, hfee7, h⟩ :=
     xa_ex_dy hcode hfork hj hR6 hW6 hF6 hy6 h
-  have hfeeS : ((aBase sevm d).getStor sevm.currentTarget).get feeSlot =
+  have hfeeS : ((aBaseH sevm d).getStor sevm.currentTarget).get feeSlot =
       (b.getStor sevm.currentTarget).get feeSlot := by
     rw [hB6.stor, Stor.get_set_ne _ (by decide)]
   rw [hfeeS] at hm1 hf1 hm2 hmin hout7 hfee7
   -- the admin share and the two stores
   obtain ⟨ha1', ha2', hbi, hbj1, hbj2, M8, img8, G8, hR8, hW8, hk8, h⟩ :=
     xa_ex_store hcode hfork hi3 hj hR7 hW7 hF7 hout7 hfee7 h
-  have hafS : ((afterSload sevm (aBase sevm d) feeSlot).getStor sevm.currentTarget).get
+  have hafS : ((afterSloadH sevm (aBaseH sevm d) feeSlot).getStor sevm.currentTarget).get
       adminFeeSlot = (b.getStor sevm.currentTarget).get adminFeeSlot := by
-    rw [afterSload_getStor, hB6.stor, Stor.get_set_ne _ (by decide)]
+    rw [afterSloadH_getStor, hB6.stor, Stor.get_set_ne _ (by decide)]
   rw [hafS] at ha1' ha2' hbj2 h
   have hiN : balancesBase + exI sevm = balancesBase + Nat.toB256 (exI sevm).toNat := by
     rw [toB256_toNat]
@@ -184,16 +185,16 @@ theorem xa_exchange {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
       ((b.getStor sevm.currentTarget).get feeSlot) (exRate (exJ sevm).toNat) -
     exAdm (exDyFee (exW3 x0 x1 x2 (exJ sevm).toNat) y ((b.getStor sevm.currentTarget).get feeSlot))
       ((b.getStor sevm.currentTarget).get adminFeeSlot) (exRate (exJ sevm).toNat) = VJ at h
-  have hB8 : ExBase sevm b (afterSstore sevm (afterSstore sevm (afterSload sevm
-      (afterSload sevm (aBase sevm d) feeSlot) adminFeeSlot) (balancesBase + exI sevm) VI)
+  have hB8 : ExBase sevm b (afterSstoreH sevm (afterSstoreH sevm (afterSloadH sevm
+      (afterSloadH sevm (aBaseH sevm d) feeSlot) adminFeeSlot) (balancesBase + exI sevm) VI)
       (balancesBase + exJ sevm) VJ) ((((b.getStor sevm.currentTarget).set lockSlot 1).set
       (balancesBase + exI sevm) VI).set (balancesBase + exJ sevm) VJ) :=
     ⟨fun x => by
-      simp only [afterSstore_getStor_self, afterSload_getStor, Stor.get_set_ite, aBase_getStor,
+      simp only [afterSstoreH_getStor_self, afterSloadH_getStor, Stor.get_set_ite, aBaseH_getStor,
         hB.stor],
-      by simp only [afterSstore_getCode, afterSload_getCode, aBase_getCode, hB.code],
-      by simp only [afterSstore_output, afterSload_output, aBase_output, hB.output],
-      (((((IdReady_aBase hB.id).afterSload _).afterSload _).afterSstore _ _).afterSstore _ _)⟩
+      by simp only [afterSstoreH_getCode, afterSloadH_getCode, aBaseH_getCode, hB.code],
+      by simp only [afterSstoreH_output, afterSloadH_output, aBaseH_output, hB.output],
+      (((((IdReadyH_aBaseH hB.id).afterSloadH _).afterSloadH _).afterSstoreH _ _).afterSstoreH _ _)⟩
   have hcw : _ := hB8.stor (coinsBase + exJ sevm)
   rw [Stor.get_set_ne _ (by rw [hjN, hcJ]; exact bal_ne_coin hj hj),
     Stor.get_set_ne _ (by rw [hiN, hcJ]; exact bal_ne_coin hi3 hj),
@@ -222,7 +223,7 @@ theorem xa_exchange {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     · rw [ite_eq_right hx, Stor.get_set_ite, Stor.get_set_ite, Stor.get_set_ite, Stor.get_set_ite,
         Stor.get_set_ite, ite_eq_right hx]
   · rw [hlP, hb10.logs, hcq.logs, hbq.logs]
-    simp only [afterSstore_logs, afterSload_logs, aBase_logs, hlogs, List.flatMap_append,
+    simp only [afterSstoreH_logs, afterSloadH_logs, aBaseH_logs, hlogs, List.flatMap_append,
       List.flatMap_cons, List.flatMap_nil, List.append_nil, List.append_assoc]
   · rw [hoP, hb10.output, hcq.outputKeep, hbq.output, hB8.output]
 

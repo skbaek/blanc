@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.OneCoin
 import Blanc.Lift.Curve3Pool.Walk.ExchangeSafe
 
@@ -83,7 +84,7 @@ calls**, given the certificate's checkedness: `ocEnv` at the frame's `i` and the
 whose time the walk's two `get_y_D` calls (`CwFirstGetYD`, `CwSecondGetYD`) were made. -/
 theorem removeLiquidityOneCoin_rawEYD_of (hc : Cert.CheckedM code cert mems true)
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -92,7 +93,7 @@ theorem removeLiquidityOneCoin_rawEYD_of (hc : Cert.CheckedM code cert mems true
       ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ (hi : (exJ sevm).toNat < 3) (T : Nat) (o : Out),
@@ -199,7 +200,7 @@ theorem removeLiquidityOneCoin_rawEYD_of (hc : Cert.CheckedM code cert mems true
 observed environment exposed: `ocEnv` at the frame's `i` and the supply reply `T`. -/
 theorem removeLiquidityOneCoin_rawE_of (hc : Cert.CheckedM code cert mems true)
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -208,7 +209,7 @@ theorem removeLiquidityOneCoin_rawE_of (hc : Cert.CheckedM code cert mems true)
       ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ (hi : (exJ sevm).toNat < 3) (T : Nat) (o : Out),
@@ -223,7 +224,7 @@ certificate's checkedness: the frame's observed environment `e` (its time, the s
 read) is the one at which the walk's first `get_y_D` call (`CwFirstGetYD`) was made. -/
 theorem removeLiquidityOneCoin_raw_getYD2_of (hc : Cert.CheckedM code cert mems true)
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -232,7 +233,7 @@ theorem removeLiquidityOneCoin_raw_getYD2_of (hc : Cert.CheckedM code cert mems 
       ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧
@@ -249,7 +250,7 @@ certificate's checkedness: the frame's observed environment `e` (its time, the s
 read) is the one at which the walk's first `get_y_D` call (`CwFirstGetYD`) was made. -/
 theorem removeLiquidityOneCoin_raw_getYD_of (hc : Cert.CheckedM code cert mems true)
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -258,7 +259,7 @@ theorem removeLiquidityOneCoin_raw_getYD_of (hc : Cert.CheckedM code cert mems t
       ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧
@@ -273,7 +274,7 @@ theorem removeLiquidityOneCoin_raw_getYD_of (hc : Cert.CheckedM code cert mems t
 /-- **`remove_liquidity_one_coin`'s raw effect**, given the certificate's checkedness. -/
 theorem removeLiquidityOneCoin_raw_of (hc : Cert.CheckedM code cert mems true)
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -282,7 +283,7 @@ theorem removeLiquidityOneCoin_raw_of (hc : Cert.CheckedM code cert mems true)
       ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧

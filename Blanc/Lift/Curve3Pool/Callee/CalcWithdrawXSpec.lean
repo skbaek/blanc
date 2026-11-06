@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXD
 import Blanc.Lift.Curve3Pool.Walk.ViewsDyKit
 
@@ -155,7 +156,7 @@ and `calcWithdrawOne` computes `(dy, dy_fee)` in every environment with the fram
 the reply as supply. The first `get_y_D` call is exposed with its actual stack arguments
 `(amp, i, xp, D1)` at `0x3999` and the model's checked prefix that produces them. -/
 theorem xa_cw2 (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {a i : B256}
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) {a i : B256}
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hV : VW M [])
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (h : XAt sevm post 0x3cca (St b (ρ :: a :: i :: S) M G) L) :
@@ -177,7 +178,7 @@ theorem xa_cw2 (hc : Cert.CheckedM code cert mems true)
       (∀ x, b'.getStor x = b.getStor x) ∧ b'.logs = b.logs ∧
       XAt sevm post ρ.toNat (St b' (dy :: fee :: S) M' G') L' ∧ VW M' [] ∧
       b'.output = b.output ∧ (∀ x, b.getCode x ≠ .empty → b'.getCode x = b.getCode x) ∧
-      (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm b') := by
+      (IdReadyH sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReadyH sevm b') := by
   obtain ⟨A, F, c, d, M1, G1, L1, hL, hsw, hamp, hfee, hdst, hdlg, h, hV, hdo, hdc, hdi⟩ :=
     xa_cw_a hc hcode hfork ha hV htok h
   have had : Abstracts (d.getStor sevm.currentTarget) s := by rw [hdst]; exact ha
@@ -211,7 +212,7 @@ and `calcWithdrawOne` computes `(dy, dy_fee)` in every environment with the fram
 the reply as supply. The first `get_y_D` call is exposed with its actual stack arguments
 `(amp, i, xp, D1)` at `0x3999` and the model's checked prefix that produces them. -/
 theorem xa_cw (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {a i : B256}
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) {a i : B256}
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hV : VW M [])
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (h : XAt sevm post 0x3cca (St b (ρ :: a :: i :: S) M G) L) :
@@ -232,7 +233,7 @@ theorem xa_cw (hc : Cert.CheckedM code cert mems true)
       (∀ x, b'.getStor x = b.getStor x) ∧ b'.logs = b.logs ∧
       XAt sevm post ρ.toNat (St b' (dy :: fee :: S) M' G') L' ∧ VW M' [] ∧
       b'.output = b.output ∧ (∀ x, b.getCode x ≠ .empty → b'.getCode x = b.getCode x) ∧
-      (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm b') := by
+      (IdReadyH sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReadyH sevm b') := by
   obtain ⟨c, L', hi, dy, fee, b', M', G', hL, hsw, hmod, hfirst, -, hst, hlg, h, hV, ho, hcd, hid⟩ :=
     xa_cw2 hc hcode hfork ha hV htok h
   exact ⟨c, L', hi, dy, fee, b', M', G', hL, hsw, hmod, hfirst, hst, hlg, h, hV, ho, hcd, hid⟩

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Quiet
 import Blanc.StaticStorage
@@ -92,6 +93,20 @@ theorem pool_other_fails {sevm : Sevm} {pre post : Devm}
   · exact fb_miss hcode hlen hcd hmiss hx
 
 /-- **Static frames write no storage and emit no logs**: a successful, committing
+(`post.error = none`) static frame at a historical fork whose target carries code writes no
+storage at any address (`post.getStor a = pre.getStor a` for every `a`) and emits no logs
+(`post.logs = pre.logs`). -/
+theorem pool_static_noEffectH {sevm : Sevm} {pre post : Devm}
+    (exc : Exec 0 sevm pre (.ok post)) (hs : sevm.isStatic = true)
+    (hfork : HistFork sevm.benvStat.fork) (hpc : pre.getCode sevm.currentTarget ≠ .empty)
+    (hcommit : post.error = none) :
+    post.logs = pre.logs ∧ ∀ a, post.getStor a = pre.getStor a :=
+  ⟨Exec.logs_eq_of_static_okH exc hs hfork.stateGas_none post rfl, fun a => congrFun
+    (Exec.getStor_committedPost_eq_of_static_noStateGas exc hs (by simp only [Execution.commits, hcommit,
+      Option.isNone_none]) hfork.stateGas_none
+      (.inl (State.Protected.of_code_ne_nil (ByteArray.toList_ne_nil_of_ne_empty hpc)))) a⟩
+
+/-- **Static frames write no storage and emit no logs**: a successful, committing
 (`post.error = none`) static frame on a covered fork whose target carries code writes no
 storage at any address (`post.getStor a = pre.getStor a` for every `a`) and emits no logs
 (`post.logs = pre.logs`). -/
@@ -100,9 +115,6 @@ theorem pool_static_noEffect {sevm : Sevm} {pre post : Devm}
     (hfork : CoveredFork sevm.benvStat.fork) (hpc : pre.getCode sevm.currentTarget ≠ .empty)
     (hcommit : post.error = none) :
     post.logs = pre.logs ∧ ∀ a, post.getStor a = pre.getStor a :=
-  ⟨Exec.logs_eq_of_static_ok exc hs hfork post rfl, fun a => congrFun
-    (Exec.getStor_committedPost_eq_of_static exc hs (by simp only [Execution.commits, hcommit,
-      Option.isNone_none]) hfork
-      (.inl (State.Protected.of_code_ne_nil (ByteArray.toList_ne_nil_of_ne_empty hpc)))) a⟩
+  pool_static_noEffectH exc hs hfork.histFork hpc hcommit
 
 end Blanc.Lift.Curve3Pool

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidity
 import Blanc.Lift.Curve3Pool.Spec
 
@@ -83,7 +84,7 @@ storage and address 4's code (`RlKeep`), or every child at neither the pool nor 
 (`RlKeepC`) and the coins and 3Crv are neither. -/
 theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidity)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -92,7 +93,7 @@ theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
       ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ k : Fin 3,
       ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hK : ((∀ k : Fin 3,
         ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr ≠ sevm.currentTarget ∧
         ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr ≠ 4) ∧

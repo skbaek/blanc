@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ExchangeMid
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -17,7 +18,7 @@ open Jaune Blanc.Lift
 /-- **The second `balanceOf(self)`** for `i == 2` (`0x2667` → `0x26c9`). -/
 theorem xa_ex_bal2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {B X : Nat → B256} {D C : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hF : ExFrame img B X D C)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
     (h : XAt sevm post 0x2667 (St b [] M G) L) :
@@ -42,8 +43,7 @@ theorem xa_ex_bal2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by decide),
     Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by decide), hF.coin.read] at h
   xs 0x268f (.reg .gas) ri_gas_remaining
-  replace h := xa_staticcall_img (pc' := 0x2690) (i := 0x71c) (n := 0x24) (o := 0x780) (z := 0x20)
-    hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
+  replace h := xa_staticcall_imgH (pc' := 0x2690) (i := 0x71c) (n := 0x24) (o := 0x780) (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
   obtain ⟨d1, flag, out, M1, L1, h, _, hR, hW, hrd, hob, hstor, hlogs, hk⟩ := h
   xs 0x2693 (.push [0x26, 0x98] (by decide)) ri_push

@@ -11,6 +11,7 @@ import Blanc.Lift.Curve3Pool.Walk.DonateX
 import Blanc.Lift.Curve3Pool.Walk.AdminBalancesX
 import Blanc.Lift.Curve3Pool.Walk.AdminRaw
 import Blanc.Lift.Curve3Pool.Walk.Fallback
+import Blanc.Lift.Curve3Pool.LadderH
 
 /-!
 # Curve 3pool: every successful pc-`0` pool frame at a `Checkpoint` with `PoolFrameEnv` on installed code over a covered fork refines the model (U2(a))
@@ -36,18 +37,18 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc Blanc.Lift
 
-/-- **U2(a) headline.** Every successful pc-`0` frame of the certified runtime on a covered fork,
+/-- **The frame refinement over the historical forks.** Every successful pc-`0` frame of the certified runtime at a `HistFork`,
 entered with empty stack and memory at a `Checkpoint` abstracting `s`, whose target carries code
-and whose world satisfies the ENV bundle `PoolFrameEnv`, is accepted by `Model.step` on its decoded
+and whose world satisfies the ENV bundle `PoolFrameEnvH`, is accepted by `Model.step` on its decoded
 call and some environment `e`, with the frame's exact raw effect. -/
-theorem pool_frame_refines_env {sevm : Sevm} {pre post : Devm} {s : State}
+theorem pool_frame_refines_envH {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hcd : sevm.data.length < 2 ^ 256)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
     (hpc : pre.getCode sevm.currentTarget ≠ .empty)
     (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
-    (henv : PoolFrameEnv ⟨0, sevm, pre, .ok post, exc⟩) :
+    (henv : PoolFrameEnvH ⟨0, sevm, pre, .ok post, exc⟩) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   by_cases hlen : 4 ≤ sevm.data.length
@@ -108,6 +109,22 @@ theorem pool_frame_refines_env {sevm : Sevm} {pre post : Devm} {s : State}
   · exact absurd (decodeCall_short (by omega))
       (pool_other_fails exc hcode hcd hstack hmem hgas)
 
+/-- **U2(a) headline.** Every successful pc-`0` frame of the certified runtime on a covered fork,
+entered with empty stack and memory at a `Checkpoint` abstracting `s`, whose target carries code
+and whose world satisfies the ENV bundle `PoolFrameEnv`, is accepted by `Model.step` on its decoded
+call and some environment `e`, with the frame's exact raw effect. -/
+theorem pool_frame_refines_env {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcd : sevm.data.length < 2 ^ 256)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (henv : PoolFrameEnv ⟨0, sevm, pre, .ok post, exc⟩) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o :=
+  pool_frame_refines_envH exc hcode hfork.histFork hcd hstack hmem hgas hpc hck henv.toH
+
 /-! ## The entry condition of the history ladder -/
 
 /-- **The pool frame entry condition**: a fresh machine (empty stack and memory), calldata length
@@ -161,6 +178,28 @@ theorem pool_frame_refines_at (cs : V3) (tok : Nat) :
   obtain ⟨hkeep, hkeepT, hcode4⟩ := hkids _ exc
   have habs : Abstracts (entryStor ⟨0, sevm, pre, .ok post, exc⟩) s := hck.abs
   refine pool_frame_refines_env exc hcode hfork hcd hstack hmem hgas hpc hck
+    ⟨hkeep, hkeepT, hcode4, hid, fun k => ?_, ?_⟩
+  · rw [coinAdr_eq habs k, hq.1]
+    exact hcs k
+  · rw [tokenAdr_eq habs, hq.2]
+    exact htk
+
+/-! ## The entry condition at fixed parties, over the historical forks -/
+
+/-- The per-child premises and readiness at fixed parties under the frame's actual rules. -/
+def poolEntryAtH (cs : V3) (tok : Nat) (sevm : Sevm) (pre : Devm) : Prop :=
+  Exec.FreshEntry sevm pre ∧ sevm.data.length < 2 ^ 256 ∧ pre.gasMeasure < 2 ^ 256 ∧
+    IdReadyH sevm pre ∧ (∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp (adrOf (cs.get k))) ∧
+    ¬ sevm.benvStat.rules.isPrecomp (adrOf tok) ∧ Exec.derivEntry PoolChildrenKeep sevm pre
+
+/-- **The frame refinement at fixed parties, over the historical forks.** -/
+theorem pool_frame_refines_atH (cs : V3) (tok : Nat) :
+    PoolFrameRefinesInH (PoolParties cs tok) (poolEntryAtH cs tok) := by
+  intro sevm pre post s exc hcode hfork hentry _ hpc _ hck hq
+  obtain ⟨⟨hstack, hmem⟩, hcd, hgas, hid, hcs, htk, hkids⟩ := hentry
+  obtain ⟨hkeep, hkeepT, hcode4⟩ := hkids _ exc
+  have habs : Abstracts (entryStor ⟨0, sevm, pre, .ok post, exc⟩) s := hck.abs
+  refine pool_frame_refines_envH exc hcode hfork hcd hstack hmem hgas hpc hck
     ⟨hkeep, hkeepT, hcode4, hid, fun k => ?_, ?_⟩
   · rw [coinAdr_eq habs k, hq.1]
     exact hcs k

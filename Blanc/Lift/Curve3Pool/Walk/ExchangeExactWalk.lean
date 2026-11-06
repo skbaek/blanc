@@ -549,7 +549,7 @@ theorem rx_ex_head_exact {sevm : Sevm} {pre : Devm} {R : Nat} {Q : Outcome → P
   rw [show R + 422 + (661 + exPreCost sevm pre) = (R + (661 + exPreCost sevm pre)) + 422 by omega]
   refine rx_dispatch_ex hlen hcd hsel ?_
   refine rx_ex_pre_core (b0 := pre) (σ := pre.getStor sevm.currentTarget) (R := 0) hfork
-    hstatic ⟨fun _ => rfl, rfl, rfl, hid⟩ hWc hWb hlock hval hkill hi hj
+    hstatic ⟨fun _ => rfl, rfl, rfl, hid.toH⟩ hWc hWb hlock hval hkill hi hj
     (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyMem_wf Mem.wf_empty _)
     (vyMem_empty_size _) (vyImg_clamps _ _) (by omega) ?_
   intro b1 M1 img1 g1 z0 z1 z2 hB1 hW1 hR1 hWf1 hsz1 _ hg1' hgx1 hb1 hM1 hz0 hz1 hz2
@@ -876,7 +876,7 @@ theorem rx_ex_frame_exact {sevm : Sevm} {pre : Devm} {s0 : State} {R U amp v : N
       (by omega) ?_
     intro img2 hB2 hW2 hR2 hWf2 hsz2 hF2
     rw [eci] at hF2
-    refine rx_ex_fee_exact hfee hfork hdepth ⟨hB2.stor, hB2.id, hWc, hW2⟩ hW'c hR2 hWf2 hsz2 hF2 hb1
+    refine rx_ex_fee_exact hfee hfork hdepth ⟨hB2.stor, (hB2.id.toCovered hfork), hWc, hW2⟩ hW'c hR2 hWf2 hsz2 hF2 hb1
       hb2 hsub hpull (by omega) (by omega) ?_
     intro b7 M7 img7 hL7 hR7 hWf7 hsz7 hF7 hn7 hM7
     rw [hM7] at hR7 hWf7 hsz7 ⊢
@@ -901,7 +901,7 @@ theorem rx_ex_frame_exact {sevm : Sevm} {pre : Devm} {s0 : State} {R U amp v : N
       (by omega) ?_
     intro img2 hB2 hW2 hR2 hWf2 hsz2 hF2
     rw [eci] at hF2
-    refine rx_ex_nofee_exact hfee hfork hdepth ⟨hB2.stor, hB2.id, hWc, hW2⟩ hW'c hR2 hWf2 hsz2 hF2
+    refine rx_ex_nofee_exact hfee hfork hdepth ⟨hB2.stor, (hB2.id.toCovered hfork), hWc, hW2⟩ hW'c hR2 hWf2 hsz2 hF2
       hpull (by omega) (by omega) ?_
     intro b5 M5 img5 hL5 hR5 hWf5 hsz5 hF5 hn5 hM5
     rw [hM5] at hR5 hWf5 hsz5 ⊢

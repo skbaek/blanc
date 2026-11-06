@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.WithdrawAdminFeesX
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquiditySafe
 
@@ -24,8 +25,8 @@ theorem wdx_lit140 : Bytes.toB256 [1, 0x40] = 0x140 := by decide
 goes to the caller with one `transfer` child whose reply passes `RawCallOk`; the pool's
 storage, output and code are kept and the frame's logs gained the child's. -/
 theorem wdx_push {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem} {img : Bytes}
-    {G : Nat} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (k : Fin 3) (feesW coin : B256) (hdepth : 0 < sevm.depth) (hid : IdReady sevm d)
+    {G : Nat} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
+    (k : Fin 3) (feesW coin : B256) (hdepth : 0 < sevm.depth) (hid : IdReadyH sevm d)
     (hpc : d.getCode sevm.currentTarget ≠ .empty)
     (hcoinW : (d.getStor sevm.currentTarget).get (coinSlot k) = coin)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp coin.toAdr) (hK : RlKeep sevm L)
@@ -39,7 +40,7 @@ theorem wdx_push {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem} {
       p.sevm.value = 0 ∧ p.sevm.isStatic = sevm.isStatic ∧ RawCallOk p.post.output ∧
       (∀ x, (d'.getStor sevm.currentTarget).get x = (d.getStor sevm.currentTarget).get x) ∧
       d'.logs = d.logs ++ p.post.logs ∧ d'.output = d.output ∧
-      d'.getCode sevm.currentTarget = d.getCode sevm.currentTarget ∧ IdReady sevm d' ∧
+      d'.getCode sevm.currentTarget = d.getCode sevm.currentTarget ∧ IdReadyH sevm d' ∧
       Region img' 0x140 (Nat.toB256 ↑k).toBytes ∧ Mem.Reads M' img' ∧ Mem.Wf M' ∧
       XAt sevm post 0x4f3c
         (St d' [Bytes.toB256 [0x03], Bytes.toB256 [0x01, 0x40]] M' G') L' := by
@@ -54,10 +55,10 @@ theorem wdx_push {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem} {
     wdx_xfer_call hcode hfork coin feesW hcoin3 hdata3 hR3 hW3 hcoin hK h
   have hrel : BaseRel d b3 := hd1.trans hb3
   have hpc3 : b3.getCode sevm.currentTarget ≠ .empty := by rw [hrel.code]; exact hpc
-  have hid3 : IdReady sevm b3 := hid.of_rel hrel
-  have hid2 : IdReady sevm d2 :=
+  have hid3 : IdReadyH sevm b3 := hid.of_rel hrel
+  have hid2 : IdReadyH sevm d2 :=
     ⟨by rw [hc.codePost, h4p, hc.codePre]; exact hid3.nodeleg, hc.warm _ hid3.warm, hid.pre,
-      hid.fork⟩
+      hid.stateGas⟩
   rw [wdx_lit3, wdx_lit140] at h
   obtain ⟨hok, b6, M6, img6, G6, hb6, hR6, hW6, hk6, h⟩ :=
     wdx_xfer_tail hcode hid2 hR4 hW4 hrd4 h
@@ -99,8 +100,8 @@ structure WdKids (sevm : Sevm) (σ : Stor) (k : Fin 3) (c : Exec.Frame) (Lp : Li
 /-- **One `withdraw_admin_fees` iteration** (`0x4d5e → 0x4f3c`): coin `k`'s `balanceOf`, then
 the excess transfer when there is one. -/
 theorem wdx_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem} {img : Bytes}
-    {G : Nat} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (k : Fin 3) (hid : IdReady sevm d) (hpc : d.getCode sevm.currentTarget ≠ .empty)
+    {G : Nat} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
+    (k : Fin 3) (hid : IdReadyH sevm d) (hpc : d.getCode sevm.currentTarget ≠ .empty)
     (hkeep : RlKeep sevm L)
     (hctrR : Region img 0x140 (Nat.toB256 ↑k).toBytes) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hcoinK : ¬ sevm.benvStat.rules.isPrecomp
@@ -111,7 +112,7 @@ theorem wdx_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem} {
       L = c :: (Lp ++ L') ∧ WdKids sevm (d.getStor sevm.currentTarget) k c Lp ∧
       (∀ x, (d'.getStor sevm.currentTarget).get x = (d.getStor sevm.currentTarget).get x) ∧
       d'.logs = d.logs ++ Lp.flatMap (fun p => p.post.logs) ∧ d'.output = d.output ∧
-      d'.getCode sevm.currentTarget = d.getCode sevm.currentTarget ∧ IdReady sevm d' ∧
+      d'.getCode sevm.currentTarget = d.getCode sevm.currentTarget ∧ IdReadyH sevm d' ∧
       Region img' 0x140 (Nat.toB256 ↑k).toBytes ∧ Mem.Reads M' img' ∧ Mem.Wf M' ∧
       XAt sevm post 0x4f3c
         (St d' [Bytes.toB256 [0x03], Bytes.toB256 [0x01, 0x40]] M' G') L' := by
@@ -153,10 +154,10 @@ guards (no value, the caller is the owner), three iterations ran (`WdKids` over 
 storage for coins `0, 1, 2`) and the frame halted at `STOP` with the pool's storage, output
 and code kept and the transfer children's logs appended. -/
 theorem xa_withdraw {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selWithdrawAdminFees)
-    (hid : IdReady sevm b) (hpc : b.getCode sevm.currentTarget ≠ .empty)
+    (hid : IdReadyH sevm b) (hpc : b.getCode sevm.currentTarget ≠ .empty)
     (hkeep : RlKeep sevm L)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       (((b.getStor sevm.currentTarget).get (coinSlot k)).toAdr))
@@ -174,13 +175,13 @@ theorem xa_withdraw {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   obtain ⟨G4, h⟩ := xa_dispatch (q := 0x4d3a) hcode hlen hcd hsel h
   obtain ⟨hval, hown, G5, M5, img5, hW5, hR5, hctr5, h⟩ := wdx_guards hcode hfork h
   refine ⟨hval, hown, ?_⟩
-  have hs0 : ∀ x, ((afterSload sevm b ownerSlot).getStor sevm.currentTarget).get x =
-      (b.getStor sevm.currentTarget).get x := fun x => by rw [afterSload_getStor]
-  have hpc0 : (afterSload sevm b ownerSlot).getCode sevm.currentTarget ≠ .empty := by
-    rw [afterSload_getCode]; exact hpc
+  have hs0 : ∀ x, ((afterSloadH sevm b ownerSlot).getStor sevm.currentTarget).get x =
+      (b.getStor sevm.currentTarget).get x := fun x => by rw [afterSloadH_getStor]
+  have hpc0 : (afterSloadH sevm b ownerSlot).getCode sevm.currentTarget ≠ .empty := by
+    rw [afterSloadH_getCode]; exact hpc
   -- iteration 0
   obtain ⟨c0, Lp0, L1, d1, M1, img1, G6, rfl, hk0, hs1, hl1, ho1, hc1, hid1, hctr1, hR1, hW1, h⟩ :=
-    wdx_iter hcode hfork 0 (hid.afterSload _) hpc0 hkeep hctr5 hR5 hW5
+    wdx_iter hcode hfork 0 (hid.afterSloadH _) hpc0 hkeep hctr5 hR5 hW5
       (by rw [hs0]; exact hcoin 0) h
   have hkeep1 := wdx_keep_drop hkeep
   rcases wdx_tail hcode 0 (by omega) hctr1 hR1 hW1 h with backArm | exitArm
@@ -221,10 +222,10 @@ theorem xa_withdraw {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     rw [hs3, hs2']
   · rw [← hpost]
     show d3.logs = _
-    rw [hl3, hl2, hl1, afterSload_logs]
+    rw [hl3, hl2, hl1, afterSloadH_logs]
   · rw [← hpost]
     show d3.output = _
-    rw [ho3, ho2, ho1, afterSload_output]
+    rw [ho3, ho2, ho1, afterSloadH_output]
 
 /-! ## The model -/
 
@@ -346,14 +347,14 @@ computed the model's step on the decoded call in the environment `wdEnv` it obse
 raw effect Spec states. -/
 theorem withdrawAdminFees_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selWithdrawAdminFees)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
     (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧

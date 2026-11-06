@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceD2
 import Blanc.Lift.Curve3Pool.Walk.ExchangePush
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -44,9 +45,9 @@ theorem rli_transfer_copy2 (img : Bytes) (E C V : B256) :
 /-- **The push** of coin `k` (`0x378a` → `0x386c`). -/
 theorem xa_rli_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {cw : B256} {S : List B256} {k : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hctr : WordAt img 0x900 (Nat.toB256 k))
-    (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcw : (b.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 k) = cw)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp cw.toAdr)
     (h : XAt sevm post 0x378a (St b S M G) L) :
@@ -69,7 +70,7 @@ theorem xa_rli_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   have f_sel : WordAt img1 0x9a0 (Bytes.toB256 [0xa9, 0x05, 0x9c, 0xbb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]) := by
     rw [hI]; wchainT
   clear hI
-  replace h := xa_identity_img (pc' := 0x37d0) (i := 0x9a0) (n := 4) (o := 0xa00) (z := 4) hid
+  replace h := xa_identity_imgH (pc' := 0x37d0) (i := 0x9a0) (n := 4) (o := 0xa00) (z := 4) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, L1, h, hk⟩ := h
@@ -103,7 +104,7 @@ theorem xa_rli_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xmo 0x381c (.reg .mload) (ri_mload_imgAt (o := 0x9e0) rfl)
   rw [Bytes.readWord_writeAt_self] at h
   xa 9
-  replace h := xa_identity_img (pc' := 0x382b) (i := 0x9e0) (n := 0x64) (o := 0xa80) (z := 0x64)
+  replace h := xa_identity_imgH (pc' := 0x382b) (i := 0x9e0) (n := 0x64) (o := 0xa80) (z := 0x64)
     (hid.of_rel hb12) (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide)
     (by decide) hR hW h
   clear hR hW
@@ -148,14 +149,14 @@ theorem xa_rli_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xmo 0x385f (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_zero] at h
   xs 0x3860 (.reg .add) ri_add
-  xw 0x3861 (.reg .sload) ri_sload
+  xw 0x3861 (.reg .sload) ri_sloadF
   rw [getStorVal_eq, hb23.stor, hb12.stor, hcw] at h
   xs 0x3862 (.reg .gas) ri_gas_remaining
   have hin : (Bytes.writeAt img3 0xc0 (Bytes.toB256 [0]).toBytes).sliceD 0xaa0 0x44 0 =
       exPushData sevm (rliAmt sevm k) :=
     Region.slice (Region.write_other g_data.right (by simp only [B256.length_toBytes]; omega))
       (by simp only [List.length_append, B256.length_toBytes]; rfl)
-  replace h := xa_call_img (pc' := 0x3863) (i := 0xaa0) (n := 0x44) (o := 0xb40) (z := 0x20) hfork
+  replace h := xa_call_imgH (pc' := 0x3863) (i := 0xaa0) (n := 0x44) (o := 0xb40) (z := 0x20) hfork.stateGas_none
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d4, flag, L4, h, _, hrd4, hk⟩ := h
@@ -170,15 +171,15 @@ theorem xa_rli_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xjd 0x386c
   rw [zero_lit] at hc
   exact ⟨b3, c, L4, d4, _, _, hb12.trans hb23, rfl,
-    hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
-      (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _),
+    hc.congr_left (fun _ => afterSloadH_getCode _ _ _ _) (fun _ => afterSloadH_getStor _ _ _ _)
+      (afterSloadH_logs _ _ _) (afterSloadH_output _ _ _) (afterSloadH_accessedAddresses _ _ _),
     fun o w hw h1 h2 => (g_k o w hw h2).write_other (by simp only [B256.length_toBytes]; omega),
     hR, hW, hrd4, h⟩
 
 
 /-- The `raw_call` test after the `transfer` (`0x386c` → `0x38f7`). -/
 theorem xa_rli_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} {S : List B256} (hcode : sevm.code = code) (hid : IdReady sevm d)
+    {img : Bytes} {S : List B256} (hcode : sevm.code = code) (hid : IdReadyH sevm d)
     (hR : Mem.Reads M (Bytes.writeAt img 0xb40 (d.returnData.take 0x20))) (hW : Mem.Wf M)
     (hrd : d.returnData.length < 2 ^ 256)
     (h : XAt sevm post 0x386c (St d S M G) L) :
@@ -220,7 +221,7 @@ theorem xa_rli_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat
   have hsz : (Bytes.toB256 [0x20] + nW).toNat = 32 + (d.returnData.take 32).length := by
     rw [B256.toNat_add, hn, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
     exact Nat.mod_eq_of_lt (by omega)
-  replace h := xa_identity_img (pc' := 0x389b) (i := 0xb20) (n := 32 + (d.returnData.take 32).length)
+  replace h := xa_identity_imgH (pc' := 0x389b) (i := 0xb20) (n := 32 + (d.returnData.take 32).length)
     (o := 0x920) (z := 32 + (d.returnData.take 32).length) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) hsz (by decide) hsz hR hW h
   clear hR hW

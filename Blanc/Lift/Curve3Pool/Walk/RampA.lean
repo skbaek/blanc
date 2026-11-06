@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RampKit
 import Blanc.Lift.WordWindowMemory
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -30,7 +31,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : Stat
 -- SEGMENT: rampAPre
 /-- **`ramp_A` up to the bound checks**: the guards and `_A`. -/
 theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (h : XAt sevm post 0x4777 (St b [] (vdMem sevm) G) L) :
     sevm.value = 0 ∧ sevm.caller.toB256 = (b.getStor sevm.currentTarget).get ownerSlot ∧
@@ -38,7 +39,7 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
       ¬ sevm.benvStat.time < (b.getStor sevm.currentTarget).get initialATimeSlot + rampMin ∧
       sevm.benvStat.time.toNat + rampMin.toNat < 2 ^ 256 ∧
       ¬ rampFT sevm < sevm.benvStat.time + rampMin ∧
-      ∃ (A : B256) (b2 : Devm) (M : Mem) (G2 : Nat), SloadsOnly sevm b b2 ∧
+      ∃ (A : B256) (b2 : Devm) (M : Mem) (G2 : Nat), SloadsOnlyH sevm b b2 ∧
         aChk s sevm.benvStat.time.toNat = some A.toNat ∧
         XAt sevm post 0x47ff (St b2 [] M G2) L ∧ VW M [(0x140, A)] := by
   have hV : VW (vdMem sevm) [] := ⟨Words.nil _, vyMem_wf Mem.wf_empty _,
@@ -49,14 +50,14 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xa 2
-  xw 0x4785 (.reg .sload) ri_sload  -- 4784 SLOAD
+  xw 0x4785 (.reg .sload) ri_sloadF  -- 4784 SLOAD
   xa 3
   xji 0x478b 0x478f hw
   · xdead  -- 478a JUMPI
   have hown := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xa 2
-  xw 0x4793 (.reg .sload) ri_sload  -- 4792 SLOAD
+  xw 0x4793 (.reg .sload) ri_sloadF  -- 4792 SLOAD
   xa 8
   xji 0x47a1 0x47a5 hw
   · xdead  -- 47a0 JUMPI
@@ -85,9 +86,9 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
   cvpc 0x47e9  -- 47e8 PC
   xa 2
   xjmp 0xa9  -- 47ed JUMP
-  have ha1 : Abstracts ((afterSload sevm (afterSload sevm b (Bytes.toB256 [4]))
+  have ha1 : Abstracts ((afterSloadH sevm (afterSloadH sevm b (Bytes.toB256 [4]))
       (Bytes.toB256 [8])).getStor sevm.currentTarget) s := by
-    rw [afterSload_getStor, afterSload_getStor]; exact ha
+    rw [afterSloadH_getStor, afterSloadH_getStor]; exact ha
   obtain ⟨A, b2, M, _, hb2, h, hA, hV1⟩ := xa_vAV hc hcode hfork ha1 hV h
   clear hV
   have hV := hV1
@@ -101,9 +102,9 @@ theorem xa_rampA_pre (hc : Cert.CheckedM code cert mems true)
   xl 0x47fb 0x180  -- 47fa MLOAD
   xs 0x47fe (.push [0x01, 0x40] (by decide)) ri_push  -- 47fb PUSH2 0x0140
   xsw 0x47ff 0x140  -- 47fe MSTORE
-  simp only [getStorVal_eq, afterSload_getStor] at hown hn0 ht0
+  simp only [getStorVal_eq, afterSloadH_getStor] at hown hn0 ht0
   refine ⟨hval, by rw [hown]; rfl, hn0, ht0, hn1, ht1, A, b2, _, _,
-    (((SloadsOnly.refl).sload _).sload _).trans hb2, hA, h, hV.sub ?_⟩
+    (((SloadsOnlyH.refl).sload _).sload _).trans hb2, hA, h, hV.sub ?_⟩
   intro x hx
   simp only [List.mem_cons, List.not_mem_nil, or_false] at hx ⊢
   exact .inl hx
@@ -223,7 +224,7 @@ theorem rampA_topic : Bytes.toB256 [0xa2, 0xb7, 0x1e, 0xc6, 0xdf, 0x94, 0x93, 0x
 -- SEGMENT: rampATail
 /-- **The writes and the log** (`0x48b0` to the `STOP`). -/
 theorem xa_rampA_tail {b2 : Devm} {M : Mem} {A : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hV : VW M [(0x140, A)]) (h : XAt sevm post 0x48b0 (St b2 [] M G) L) :
     L = [] ∧
       (∀ x, (post.getStor sevm.currentTarget).get x =
@@ -235,13 +236,13 @@ theorem xa_rampA_tail {b2 : Devm} {M : Mem} {A : B256}
   xa 2
   xl 0x48b5 0x140  -- 48b4 MLOAD
   xs 0x48b7 (.push [0x06] (by decide)) ri_push  -- 48b5 PUSH1 0x06
-  xw 0x48b8 (.reg .sstore) ri_sstore  -- 48b7 SSTORE
+  xw 0x48b8 (.reg .sstore) ri_sstoreF  -- 48b7 SSTORE
   xa 3
-  xw 0x48be (.reg .sstore) ri_sstore  -- 48bd SSTORE
+  xw 0x48be (.reg .sstore) ri_sstoreF  -- 48bd SSTORE
   xa 2
-  xw 0x48c2 (.reg .sstore) ri_sstore  -- 48c1 SSTORE
+  xw 0x48c2 (.reg .sstore) ri_sstoreF  -- 48c1 SSTORE
   xa 3
-  xw 0x48c8 (.reg .sstore) ri_sstore  -- 48c7 SSTORE
+  xw 0x48c8 (.reg .sstore) ri_sstoreF  -- 48c7 SSTORE
   xs 0x48cb (.push [0x01, 0x40] (by decide)) ri_push  -- 48c8 PUSH2 0x0140
   xl 0x48cc 0x140  -- 48cb MLOAD
   xs 0x48cf (.push [0x01, 0xa0] (by decide)) ri_push  -- 48cc PUSH2 0x01a0
@@ -267,21 +268,21 @@ theorem xa_rampA_tail {b2 : Devm} {M : Mem} {A : B256}
   refine ⟨rfl, fun x => ?_, ?_, ?_⟩
   · simp only [St]
     rw [← getStorVal_eq, Devm.getStorVal_setMach, getStorVal_eq, getStor_addLog,
-      afterSstore_getStor_self, afterSstore_getStor_self, afterSstore_getStor_self,
-      afterSstore_getStor_self, slot_06, slot_07, slot_08, slot_09]
+      afterSstoreH_getStor_self, afterSstoreH_getStor_self, afterSstoreH_getStor_self,
+      afterSstoreH_getStor_self, slot_06, slot_07, slot_08, slot_09]
   · simp only [St, Devm.setMach_logs]
-    rw [Devm.addLog_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs,
+    rw [Devm.addLog_logs, afterSstoreH_logs, afterSstoreH_logs, afterSstoreH_logs, afterSstoreH_logs,
       rampA_topic, show (Bytes.toB256 [1, 160]).toNat = 0x1a0 from rfl,
       show (Bytes.toB256 [128]).toNat = 128 from rfl]
     exact congrArg (fun z => b2.logs ++ [⟨sevm.currentTarget, [topicRampA], z⟩]) hdata
   · simp only [St, Devm.setMach_output]
-    rw [Devm.addLog_output, afterSstore_output, afterSstore_output, afterSstore_output,
-      afterSstore_output]
+    rw [Devm.addLog_output, afterSstoreH_output, afterSstoreH_output, afterSstoreH_output,
+      afterSstoreH_output]
 
 /-- **`ramp_A`'s raw effect**, given the certificate's checkedness. -/
 theorem rampA_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRampA)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)

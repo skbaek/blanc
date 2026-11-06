@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsKit
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvp
 import Blanc.Lift.Curve3Pool.Callee.GetYD
@@ -40,7 +41,7 @@ theorem cw_yd_mems : mems.getD 753 [] = [] := by decide +kernel
 `getYDChk A i xp D = some y`, the base unchanged, the words off its window kept and `y` at the
 scratch word `0`. -/
 theorem xa_vGetYD (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {A i x0 x1 x2 D : B256} (hV : VW M LW) (hcov : 0x340 ≤ M.size)
     (h : XAt sevm post 0x3999 (St b (ρ :: A :: i :: x0 :: x1 :: x2 :: D :: S) M G) L) :
     ∃ v M' G', XAt sevm post ρ.toNat (St b (v :: S) M' G') L ∧
@@ -71,7 +72,7 @@ abbrev cwPm : B256 := Bytes.toB256 [0xe8, 0xd4, 0xa5, 0x10, 0x00]
 _A()`, the adjusted fee, `PRECISION_MUL`, and `totalSupply()` read from the token (the next
 child, static, a word back) into `0x280`. -/
 theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {a i : B256}
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) {a i : B256}
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hV : VW M [])
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (h : XAt sevm post 0x3cca (St b (ρ :: a :: i :: S) M G) L) :
@@ -84,7 +85,7 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
       VW M' [(0x280, vSupply c), (0x260, cwPm), (0x240, cwPm), (0x220, cwP1), (0x200, F),
         (0x1a0, A), (0x180, ρ), (0x160, i), (0x140, a)] ∧
       d.output = b.output ∧ (∀ x, b.getCode x ≠ .empty → d.getCode x = b.getCode x) ∧
-      (IdReady sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReady sevm d) := by
+      (IdReadyH sevm b → c.post.getCode 4 = c.pre.getCode 4 → IdReadyH sevm d) := by
   xa 2
   xsw 0x3ccf 0x180  -- 3cce MSTORE
   xs 0x3cd2 (.push [0x01, 0x40] (by decide)) ri_push  -- 3ccf PUSH2 0x0140
@@ -123,7 +124,7 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   xs 0x3d0b (.push [0x01, 0xa0] (by decide)) ri_push  -- 3d08 PUSH2 0x01a0
   xsw 0x3d0c 0x1a0  -- 3d0b MSTORE
   xs 0x3d0e (.push [0x02] (by decide)) ri_push  -- 3d0c PUSH1 0x02
-  xw 0x3d0f (.reg .sload) ri_sload  -- 3d0e SLOAD
+  xw 0x3d0f (.reg .sload) ri_sloadF  -- 3d0e SLOAD
   xa 13
   xji 0x3d20 0x3d24 hw
   · xdead
@@ -145,7 +146,7 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   have hW0 := hV.wf
   xsw 0x3d71 0x2a0  -- 3d70 MSTORE
   xa 2
-  xw 0x3d77 (.reg .sload) ri_sload  -- 3d76 SLOAD
+  xw 0x3d77 (.reg .sload) ri_sloadF  -- 3d76 SLOAD
   xs 0x3d78 (.reg .gas) ri_gas_remaining  -- 3d77 GAS
   obtain ⟨d, flag, out, M', L1, h, hVo, hrd, hob, hstor, hlogs, hk⟩ :=
     xa_staticcallV (pc' := 0x3d79) (o := 0x300) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl hV h
@@ -158,7 +159,7 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   clear hw
   rcases hk hwf with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout,
     hclogs, hcpre, hcpost⟩
-  · exact absurd hpre (by rw [getStorVal_eq, afterSload_getStor, hb1.getStor, tokenSlot_lit]; exact htok)
+  · exact absurd hpre (by rw [getStorVal_eq, afterSloadH_getStor, hb1.getStor, tokenSlot_lit]; exact htok)
   clear hk
   subst hcout
   xji 0x3d8a 0x3d8e hw
@@ -180,7 +181,7 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
   refine ⟨A, b1.getStorVal sevm.currentTarget (Bytes.toB256 [2]) * Bytes.toB256 [3] /
     Bytes.toB256 [8], c, d, _, _, L1, hL, ?_, hA, ?_, ?_, ?_, h, hV.sub ?_, ?_, ?_, ?_⟩
   · refine ⟨?_, ?_, hstat, hlen, hclogs⟩
-    · rw [htgt, getStorVal_eq, afterSload_getStor, hb1.getStor, tokenSlot_lit]
+    · rw [htgt, getStorVal_eq, afterSloadH_getStor, hb1.getStor, tokenSlot_lit]
     · rw [hdata, show (Bytes.toB256 [2, 0xbc]).toNat = 700 from rfl,
         show (Bytes.toB256 [4]).toNat = 4 from rfl,
         Mem.read_write_word_inside hW0 672 _ (by decide) (by decide)]
@@ -190,17 +191,17 @@ theorem xa_cw_a (hc : Cert.CheckedM code cert mems true)
       Option.bind_eq_bind, Option.bind_some, show (8 : Nat) = (Bytes.toB256 [8]).toNat from rfl,
       chkDiv_toNat_of_ne (by decide)]
   · intro x
-    rw [hstor, afterSload_getStor, afterSload_getStor, hb1.getStor]
-  · rw [hlogs, afterSload_logs, afterSload_logs, hb1.logs]
+    rw [hstor, afterSloadH_getStor, afterSloadH_getStor, hb1.getStor]
+  · rw [hlogs, afterSloadH_logs, afterSloadH_logs, hb1.logs]
   · simp only [List.cons_subset, List.mem_cons, true_or, or_true, List.nil_subset, and_self]
-  · rw [hout, afterSload_output, afterSload_output, hb1.output]
+  · rw [hout, afterSloadH_output, afterSloadH_output, hb1.output]
   · intro x hx
-    rw [hcodeK x (by rw [afterSload_getCode, afterSload_getCode, hb1.getCode]; exact hx),
-      afterSload_getCode, afterSload_getCode, hb1.getCode]
+    rw [hcodeK x (by rw [afterSloadH_getCode, afterSloadH_getCode, hb1.getCode]; exact hx),
+      afterSloadH_getCode, afterSloadH_getCode, hb1.getCode]
   · intro hid h4
-    have hB := ((hb1.idReady hid).afterSload (Bytes.toB256 [2])).afterSload
+    have hB := ((hb1.idReady hid).afterSloadH (Bytes.toB256 [2])).afterSloadH
       (Bytes.toB256 [5])
-    exact ⟨by rw [hcpost, h4, hcpre]; exact hB.nodeleg, hacc _ hB.warm, hid.pre, hid.fork⟩
+    exact ⟨by rw [hcpost, h4, hcpre]; exact hB.nodeleg, hacc _ hB.warm, hid.pre, hid.stateGas⟩
 
 end
 

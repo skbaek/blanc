@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLoop
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -42,7 +43,7 @@ logs `RemoveLiquidity(msg.sender, amounts, fees, total_supply - _amount)` from t
 `0x1e0` and clears the lock. -/
 theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {T tw : B256} {a : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hT : WordAt img 0x140 T)
     (hamt : ∀ j, j < 6 → WordAt img (0x1e0 + 32 * j) (a j))
     (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
@@ -69,10 +70,10 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xa 3
   xmo 0x2f9a (.reg .mstore) (ri_mstore_imgAt (o := 0x640) rfl)
   xa 3
-  xw 0x2fa2 (.reg .sload) ri_sload
+  xw 0x2fa2 (.reg .sload) ri_sloadF
   rw [tokenSlot_lit, getStorVal_eq, htw] at h
   xs 0x2fa3 (.reg .gas) ri_gas_remaining
-  replace h := xa_call_img (pc' := 0x2fa4) (i := 0x61c) (n := 0x44) (o := 0x6a0) (z := 0x20) hfork
+  replace h := xa_call_imgH (pc' := 0x2fa4) (i := 0x61c) (n := 0x44) (o := 0x6a0) (z := 0x20) hfork.stateGas_none
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, flag, L1, h, hrun, hrd, hk⟩ := h
@@ -87,8 +88,8 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   have hc' : ChildOf b d tw.toAdr (burnFromSel ++ sevm.caller.toB256.toBytes ++
       (rlAmt sevm).toBytes) 0 sevm.isStatic c := by
     rw [zero_lit] at hc
-    exact hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
-      (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
+    exact hc.congr_left (fun _ => afterSloadH_getCode _ _ _ _) (fun _ => afterSloadH_getStor _ _ _ _)
+      (afterSloadH_logs _ _ _) (afterSloadH_output _ _ _) (afterSloadH_accessedAddresses _ _ _)
   clear hc
   have hdk : ∀ x, (d.getStor sevm.currentTarget).get x = (b.getStor sevm.currentTarget).get x := by
     intro x
@@ -179,20 +180,20 @@ theorem xa_rl_post {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     show (Bytes.toB256 [0xe0]).toNat = 0xe0 from rfl,
     hdata.slice (by simp only [List.length_append, B256.length_toBytes])] at h
   xa 2
-  xw 0x303f (.reg .sstore) ri_sstore
+  xw 0x303f (.reg .sstore) ri_sstoreF
   obtain ⟨hrun, hL⟩ := xa_halt (l := .stop) (atL hcode (by kernel_rfl)) h
   have hp := (Except.ok.inj hrun).symm
   subst hp hL
   refine ⟨hTa, c, d, rfl, hc', hlen, hdk, ?_, ?_, ?_⟩
   · intro x
-    show ((afterSstore sevm _ _ _).getStor _).get x = _
-    rw [afterSstore_getStor_self, lockSlot_lit, zero_lit]
+    show ((afterSstoreH sevm _ _ _).getStor _).get x = _
+    rw [afterSstoreH_getStor_self, lockSlot_lit, zero_lit]
     rfl
-  · show (afterSstore sevm _ _ _).logs = _
-    rw [afterSstore_logs]
+  · show (afterSstoreH sevm _ _ _).logs = _
+    rw [afterSstoreH_logs]
     rfl
-  · show (afterSstore sevm _ _ _).output = _
-    rw [afterSstore_output]
+  · show (afterSstoreH sevm _ _ _).output = _
+    rw [afterSstoreH_output]
     rfl
 
 end Blanc.Lift.Curve3Pool

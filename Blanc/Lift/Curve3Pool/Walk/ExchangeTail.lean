@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Kit
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -19,7 +20,7 @@ open Jaune Blanc.Lift
 
 /-- The `raw_call` test after the `transferFrom`. -/
 theorem xa_ex_tail1 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} (hcode : sevm.code = code) (hid : IdReady sevm d)
+    {img : Bytes} (hcode : sevm.code = code) (hid : IdReadyH sevm d)
     (hR : Mem.Reads M (Bytes.writeAt img 0x6c0 (d.returnData.take 0x20))) (hW : Mem.Wf M)
     (hrd : d.returnData.length < 2 ^ 256)
     (h : XAt sevm post 0x25dc (St d [] M G) L) :
@@ -61,7 +62,7 @@ theorem xa_ex_tail1 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat
   have hsz : (Bytes.toB256 [0x20] + nW).toNat = 32 + (d.returnData.take 32).length := by
     rw [B256.toNat_add, hn, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
     exact Nat.mod_eq_of_lt (by omega)
-  replace h := xa_identity_img (pc' := 0x260b) (i := 0x6a0) (n := 32 + (d.returnData.take 32).length)
+  replace h := xa_identity_imgH (pc' := 0x260b) (i := 0x6a0) (n := 32 + (d.returnData.take 32).length)
     (o := 0x460) (z := 32 + (d.returnData.take 32).length) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) hsz (by decide) hsz hR hW h
   clear hR hW
@@ -152,7 +153,7 @@ theorem xa_ex_tail1 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat
 
 /-- The `raw_call` test after the `transfer`. -/
 theorem xa_ex_tail2 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} (hcode : sevm.code = code) (hid : IdReady sevm d)
+    {img : Bytes} (hcode : sevm.code = code) (hid : IdReadyH sevm d)
     (hR : Mem.Reads M (Bytes.writeAt img 0xc00 (d.returnData.take 0x20))) (hW : Mem.Wf M)
     (hrd : d.returnData.length < 2 ^ 256)
     (h : XAt sevm post 0x2b81 (St d [] M G) L) :
@@ -194,7 +195,7 @@ theorem xa_ex_tail2 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat
   have hsz : (Bytes.toB256 [0x20] + nW).toNat = 32 + (d.returnData.take 32).length := by
     rw [B256.toNat_add, hn, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
     exact Nat.mod_eq_of_lt (by omega)
-  replace h := xa_identity_img (pc' := 0x2bb0) (i := 0xbe0) (n := 32 + (d.returnData.take 32).length)
+  replace h := xa_identity_imgH (pc' := 0x2bb0) (i := 0xbe0) (n := 32 + (d.returnData.take 32).length)
     (o := 0x460) (z := 32 + (d.returnData.take 32).length) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) hsz (by decide) hsz hR hW h
   clear hR hW

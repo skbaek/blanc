@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFeeLoop
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -11,7 +12,7 @@ open Jaune Blanc.Lift
 theorem xa_al_d2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {F AF A T D0 D1 : B256} {old nv fees : Nat → B256}
     (hchk : Cert.CheckedM code cert mems true) (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlFeeImg img 3 F AF A T D0 D1 old nv fees)
     (h : XAt sevm post 0x163a (St b [3, 0xa40] M G) L) :
@@ -105,13 +106,13 @@ theorem xa_al_d2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
 /-- A first deposit stores all three new balances directly (`0x16e3` → `0x170b`). -/
 theorem xa_al_initialStore {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {N0 N1 N2 : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (h0 : WordAt img 0x460 N0) (h1 : WordAt img 0x480 N1) (h2 : WordAt img 0x4a0 N2)
     (h : XAt sevm post 0x16e3 (St b [] M G) L) :
     ∃ M' G', Mem.Reads M' (Bytes.writeAt img 0xc0 (Bytes.toB256 [1]).toBytes) ∧
       Mem.Wf M' ∧ M'.size % 32 = 0 ∧ XAt sevm post 0x170b
-        (St (afterSstore sevm (afterSstore sevm (afterSstore sevm b balancesBase N0)
+        (St (afterSstoreH sevm (afterSstoreH sevm (afterSstoreH sevm b balancesBase N0)
           (balancesBase + Bytes.toB256 [1]) N1) (balancesBase + Bytes.toB256 [2]) N2) [] M' G') L := by
   xa 3
   xma 0x16e9 (.reg .mstore) (ri_mstore_imgAtA (o := 0xc0) rfl)
@@ -121,15 +122,15 @@ theorem xa_al_initialStore {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {
   xa 2
   xml 0x16f3 0x460 h0
   xs 0x16f4 (.reg (.dup 2)) (ri_dup (by rfl))
-  xw 0x16f5 (.reg .sstore) ri_sstore
+  xw 0x16f5 (.reg .sstore) ri_sstoreF
   xa 3
   xml 0x16fa 0x480 h1
   xa 3
-  xw 0x16ff (.reg .sstore) ri_sstore
+  xw 0x16ff (.reg .sstore) ri_sstoreF
   xa 3
   xml 0x1704 0x4a0 h2
   xa 3
-  xw 0x1709 (.reg .sstore) ri_sstore
+  xw 0x1709 (.reg .sstore) ri_sstoreF
   xa 2
   exact ⟨_, _, hR, hW, hA, h⟩
 

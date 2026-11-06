@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityPre
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityPost
@@ -58,12 +59,12 @@ structure RLPush (sevm : Sevm) (B C T : B256) (i : Nat) (c : Exec.Frame) : Prop 
 /-- **One iteration**, over the balance and coin words it reads. -/
 theorem xa_rl_step {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {i : Nat} {B C T : B256} {a : Nat → B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hL : LoopImg img i T a)
     (hB : (b.getStor sevm.currentTarget).get (balancesBase + Nat.toB256 i) = B)
     (hC : (b.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) = C)
     (hpc : b.getCode sevm.currentTarget ≠ .empty)
-    (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
     (hK : RlKeepAt sevm C L ∨ RlKeep sevm L)
     (h : XAt sevm post 0x2cdb (St b [3, 0x2a0] M G) L) :
@@ -72,7 +73,7 @@ theorem xa_rl_step {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
         ((b.getStor sevm.currentTarget).set (balancesBase + Nat.toB256 i)
           (B - B * rlAmt sevm / T)).get x) ∧
       b'.logs = b.logs ++ c.post.logs ∧ b'.output = b.output ∧
-      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReady sevm b' ∧
+      b'.getCode sevm.currentTarget = b.getCode sevm.currentTarget ∧ IdReadyH sevm b' ∧
       Mem.Reads M' img' ∧ Mem.Wf M' ∧
       LoopImg img' (i + 1) T (Function.update a i (B * rlAmt sevm / T)) ∧
       XAt sevm post (if i + 1 = 3 then 0x2f7b else 0x2cdb) (St b' [3, 0x2a0] M' G') L' := by
@@ -105,13 +106,13 @@ exactly `totalSupply` (static, a word returned), the three `transfer`s of iterat
 pool's storage is the entry storage with the three balances lowered; the frame logged its
 children's logs and then `RemoveLiquidity`; the output is the entry output. -/
 theorem xa_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidity)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ i, i < 3 →
       ¬ sevm.benvStat.rules.isPrecomp (coinAt (b.getStor sevm.currentTarget) i).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (hK : ((∀ i, i < 3 → (coinAt (b.getStor sevm.currentTarget) i).toAdr ≠ sevm.currentTarget ∧
         (coinAt (b.getStor sevm.currentTarget) i).toAdr ≠ 4) ∧
       ((b.getStor sevm.currentTarget).get tokenSlot).toAdr ≠ sevm.currentTarget ∧
@@ -156,9 +157,9 @@ theorem xa_removeLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {
   refine ⟨hlock, hval, ?_⟩
   have hL0 : LoopImg img1 0 (rlSupply c0) (fun _ => 0) := ⟨hctr, hT, hz⟩
   have hpc1 : b1.getCode sevm.currentTarget ≠ .empty := by rw [hcd1 _ hpc]; exact hpc
-  have hid1 : IdReady sevm b1 :=
+  have hid1 : IdReadyH sevm b1 :=
     ⟨by rw [h41]; exact hid.nodeleg,
-      hacc1 _ hid.warm, hid.pre, hid.fork⟩
+      hacc1 _ hid.warm, hid.pre, hid.stateGas⟩
   clear hT hz hctr
   -- iteration 0
   obtain ⟨c1, L1, b2, M2, img2, G2, rfl, hp1, hs2, hl2, ho2, hcd2, hid2, hR, hW, hL1, h⟩ :=

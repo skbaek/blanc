@@ -156,7 +156,7 @@ theorem rx_ex_mid_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {g R : Nat} {Q : 
     all_goals wauto
   obtain ⟨img2, hR2, hI⟩ := Mem.Reads.forget hR
   rw [← hI] at hF
-  have hB2 : ExBase sevm b0 b2 σ := by rw [hb2]; exact hB.sload _
+  have hB2 : ExBase sevm b0 b2 σ := by rw [hb2]; exact hB.sloadP _
   have hW2 : W b2 := by rw [hb2]; exact hWc.sload _ _ hWb
   have hC : v2 = σ.get (coinsBase + exI sevm) := by rw [hv2, getStorVal_eq, hB.stor]
   refine k b2 _ img2 h3 x0 x1 x2 hxp hB2 hW2 hR2 hW (by rw [hsz]) hF (by omega) (by omega)
