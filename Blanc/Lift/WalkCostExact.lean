@@ -135,35 +135,6 @@ elab "xsum " "[" ls:term,* "]" : tactic => withMainContext do
       (← getMainGoal).assign (mkAppN pf (atoms ++ hyps.map fun (_, _, p) => p))
       replaceMainGoal []
 
-open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
-/-- A sum's literal part. -/
-private partial def sumLit (e : Expr) : MetaM Nat := do
-  match e.getAppFnArgs with
-  | (``HAdd.hAdd, #[_, _, _, _, a, c]) => return (← sumLit a) + (← sumLit c)
-  | _ =>
-    if let some n := e.nat? then return n
-    unless e.hasFVar || e.hasMVar do
-      if let some n := (← whnf e).rawNatLit? then return n
-    return 0
-
-open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
-/-- Report a charge's literal part and its atoms, after the listed equations. A development aid. -/
-elab "xsum? " "[" ls:term,* "]" : tactic => withMainContext do
-  let tgt := (← instantiateMVars (← getMainTarget)).cleanupAnnotations
-  let some (_, lhs, _) := tgt.eq? | throwError "xsum?: not an equation"
-  let lemmas ← ls.getElems.mapM fun l => Term.withSynthesize (elabTerm l none)
-  let (atoms, hyps) ← sumAtoms lemmas lhs (#[], #[])
-  let m ← hyps.mapM fun (i, y, _) => do return (i, ← sumLit y)
-  logInfo m!"literal {← sumLit lhs}; atoms {atoms.size}; lemma literals {m}"
-  let pp1 (a : Expr) : MetaM Format :=
-    withOptions (fun o => (o.setBool `pp.deepTerms false).setBool `pp.proofs false) (ppExpr a)
-  if let some (_, _, rhs) := tgt.eq? then
-    let (ra, _) ← sumAtoms lemmas rhs (#[], #[])
-    for a in atoms do
-      unless ← ra.anyM (fun x => sumSame x a) do logInfo m!"only left: {← pp1 a}"
-    for a in ra do
-      unless ← atoms.anyM (fun x => sumSame x a) do logInfo m!"only right: {← pp1 a}"
-
 section Charges
 
 variable (sevm : Sevm) (b : Devm) (k k' v : B256)
@@ -219,10 +190,6 @@ theorem sloadCost_withGasLeft : sloadCost s (a.withGasLeft G) k = sloadCost s a 
 theorem sstoreCost_withGasLeft : sstoreCost s (a.withGasLeft G) k v = sstoreCost s a k v := rfl
 
 end GasLeft
-
-/-- Two entries agree modulo gas when one is the other at another gas. -/
-theorem eqModGas_withGasLeft_left (a : Devm) (G : Nat) : Devm.EqModGas (a.withGasLeft G) a :=
-  (Devm.EqModGas.withGasLeft a G).symm
 
 section Cold
 
