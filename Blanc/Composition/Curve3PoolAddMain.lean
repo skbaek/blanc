@@ -165,7 +165,7 @@ theorem held_same {k : Fin 3} (h : w'.getStor (coinAt k) = w.getStor (coinAt k))
 
 /-- **The final state is `AddPaid`.** -/
 theorem add_paid {am : V3} {minted : Nat} {stored : V3} (ho : CoinsOpen w E) (hap : AddApart w E)
-    (hheld : ∀ k, am.get k ≤ coinHeld w E k) (hcr : ∀ k, CreditFits w pool k (netOf w k (am.get k))) (hfee : ∀ k, UsdtFeeFits w (am.get k))
+    (hheld : ∀ k, am.get k ≤ coinHeld w E k) (hcr : ∀ k, CreditFits w pool k (netOf w k (am.get k))) (hfee : UsdtFeeFits w (am.get 2))
     (hcoin0 : ∀ k, am.get k = 0 → w'.getStor (coinAt k) = w.getStor (coinAt k))
     (hcoin : ∀ k, am.get k ≠ 0 → w'.getStor (coinAt k) = pulledAll w E k (am.get k))
     (hc3 : w'.getStor c3 = mintStor (w.getStor c3) E.toB256 (Nat.toB256 minted))
@@ -189,7 +189,7 @@ theorem add_paid {am : V3} {minted : Nat} {stored : V3} (ho : CoinsOpen w E) (ha
   · by_cases hz : am.get k = 0
     · rw [held_same (hcoin0 k hz), held_same (hcoin0 k hz), hz, netOf_zero]
       exact ⟨rfl, rfl⟩
-    · exact pulled_held ho hap.toSwapApart k (hcoin k hz) (Nat.lt_of_le_of_lt (hheld k) coinHeld_lt) (hheld k) (hcr k) (fun _ => hfee k)
+    · exact pulled_held ho hap.toSwapApart k (hcoin k hz) (Nat.lt_of_le_of_lt (hheld k) coinHeld_lt) (hheld k) (hcr k) (fun h => by rw [h]; exact hfee)
 
 /-! ## The run's end -/
 
@@ -455,8 +455,8 @@ theorem add_core (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (ad
   have hpf : ∀ k : Fin 3, alAmt (initSevm msg) k.val ≠ 0 → PullFitsK k ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) k))
       (initSevm msg).caller (initSevm msg).currentTarget (alAmt (initSevm msg) k.val) := fun k _ => by
     rw [hco k, hcoinS, hTt, hTc, hamW k]
-    exact pull_fits hopen hE0 hap.toSwapApart hsrc k (hN k) (hheld k) (hall k) (hcr k) (fun _ => hfees k)
-  have hP2 := usdt_pulled_get (w := w) (E := E) (v := am.get 2) hap.toSwapApart (hN 2) (hfees 2).2.2 (hfees 2).1 (hcr 2)
+    exact pull_fits hopen hE0 hap.toSwapApart hsrc k (hN k) (hheld k) (hall k) (hcr k) (fun h => by rw [h]; exact hfees)
+  have hP2 := usdt_pulled_get (w := w) (E := E) (v := am.get 2) hap.toSwapApart (hN 2) hfees.2.2 hfees.1 (hcr 2)
   have hcE : pulledK 2 ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) 2)) (initSevm msg).caller (initSevm msg).currentTarget (alAmt (initSevm msg) 2) =
       pulledK 2 (w.getStor usdt) E pool (Nat.toB256 (am.get 2)) := by
     rw [hco 2, show coinAt 2 = usdt from rfl, show (initDevm msg).getStor usdt = w.getStor usdt from hcoinS 2, hTt, hTc,

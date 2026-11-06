@@ -128,18 +128,41 @@ structure CallCommits (m : Msg) (w : State) (post : Devm) : Prop where
   ran : exec (initEvm m) = .ok post
   ok : post.error = none
 
+/-- The pool is its deployed bytes, with the storage its creation leaves. -/
+structure PoolDeployed (w : State) : Prop where
+  /-- Its code is the deployed bytes. -/
+  code : w.getCode pool = Curve3Pool.code
+  /-- Its storage is exactly what its creation leaves. -/
+  stor : w.getStor pool = Curve3Pool.Creation.deployedStor Curve3Pool.Creation.deployTime
+
+/-- 3Crv is its deployed bytes, with the storage its creation leaves and the pool as minter. -/
+structure TokenDeployed (w : State) : Prop where
+  /-- Its code is the deployed bytes. -/
+  code : w.getCode c3 = Curve3Crv.code
+  /-- Its storage is exactly what its creation leaves, with the pool as minter. -/
+  stor : w.getStor c3 = (Curve3Crv.Creation.deployedStor Curve3Crv.Creation.deployer.toB256).set
+    Curve3Crv.vyMinterSlot pool.toB256
+
+/-- USDC is its proxy's bytes over `FiatTokenV2`. -/
+structure UsdcDeployed (w : State) : Prop where
+  /-- USDC's own code is the proxy's. -/
+  proxy : w.getCode usdc = Lift.Usdc.Proxy.code
+  /-- The implementation word names `FiatTokenV2`'s bytes. -/
+  v2 : w.getCode (usdcImplOf w) = Lift.Usdc.ImplV2.code
+
 /-- **The world the recorded creations and the minter assignment leave**: the contracts' storage exactly,
 each coin its deployed bytes, USDC's proxy over `FiatTokenV2`, and the pool holding none of any coin. Who
 else holds coins is free. -/
 structure AtDeployment (w : State) : Prop where
-  poolCode : w.getCode pool = Curve3Pool.code
-  poolStor : w.getStor pool = Curve3Pool.Creation.deployedStor Curve3Pool.Creation.deployTime
-  c3Code : w.getCode c3 = Curve3Crv.code
-  c3Stor : w.getStor c3 = (Curve3Crv.Creation.deployedStor Curve3Crv.Creation.deployer.toB256).set
-    Curve3Crv.vyMinterSlot pool.toB256
+  /-- The pool, as created. -/
+  poolAt : PoolDeployed w
+  /-- 3Crv, as created, with the pool as minter. -/
+  tokenAt : TokenDeployed w
+  /-- DAI and USDT are their deployed bytes, and address 4 holds no code. -/
   coins : StartingCode w
-  usdcCode : w.getCode usdc = Lift.Usdc.Proxy.code
-  usdcV2 : w.getCode (usdcImplOf w) = Lift.Usdc.ImplV2.code
+  /-- USDC, its proxy over `FiatTokenV2`. -/
+  usdcAt : UsdcDeployed w
+  /-- The pool holds none of any coin. -/
   empty : ∀ k, word w (coinAt k) (coinEntry pool k) = 0
 
 /-- The message is a call of `add_liquidity`. -/

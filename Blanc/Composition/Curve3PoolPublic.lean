@@ -140,17 +140,30 @@ structure SwapApart (w : State) (E : Adr) : Prop extends CoinsApart w E where
   /-- `E`'s USDC allowance entry is not the proxy's two words nor the pause word. -/
   allowUsdc : allowanceEntry E pool 1 ∉ [Bytes.toB256 [1], Usdc.adminSlot, Usdc.implSlot]
 
-/-- `E` can pull `dx`, the coins differ, the minimum is met, and the contract's arithmetic fits. -/
-structure SwapRequest (w : State) (E : Adr) (i j : Fin 3) (dx dy minDy : Nat) : Prop where
-  live : PoolLive w
-  differ : i ≠ j
-  moved : 0 < dx ∧ minDy ≤ dy ∧ 0 < dy
-  holds : dx ≤ coinHeld w E i ∧ dx ≤ allowanceOf w E i
-  pullFrom : UsdtOpen w E
+/-- **The contract's arithmetic fits a swap of `dx` for `dy`.** -/
+structure SwapFits (w : State) (E : Adr) (i j : Fin 3) (dx dy : Nat) : Prop where
+  /-- The pool's credit in coin `i` and `E`'s in coin `j` each fit. -/
   creditFits : CreditFits w pool i (netOf w i dx) ∧ CreditFits w E j (netOf w j dy)
+  /-- USDT's fee fits on the amount pulled and on the amount paid. -/
   feeFits : UsdtFeeFits w dx ∧ UsdtFeeFits w dy
   /-- The pool's scaled balance of the coin paid out is below `2^190`, so the admin's cut fits a word. -/
   booksFit : scaled w j < 2 ^ 190
+
+/-- `E` can pull `dx`, the coins differ, the minimum is met, and the contract's arithmetic fits. -/
+structure SwapRequest (w : State) (E : Adr) (i j : Fin 3) (dx dy minDy : Nat) : Prop where
+  /-- The pool's owner has not killed it. -/
+  live : PoolLive w
+  /-- The two coins differ. -/
+  differ : i ≠ j
+  /-- Something moves each way, and the payout meets the minimum. -/
+  moved : 0 < dx ∧ minDy ≤ dy ∧ 0 < dy
+  /-- `E` holds `dx` and has allowed the pool that much. -/
+  holds : dx ≤ coinHeld w E i ∧ dx ≤ allowanceOf w E i
+  /-- USDT's gate lets `E` be pulled from. -/
+  pullFrom : UsdtOpen w E
+  /-- The contract's arithmetic fits. -/
+  fits : SwapFits w E i j dx dy
+  /-- The swap's entries miss each other. -/
   apart : SwapApart w E
 
 /-- **The swap is processed, uses exactly `swapGasUsed`, and pays out.** -/
@@ -285,9 +298,13 @@ def ImbalancePaid (w w' : State) (E : Adr) (am : V3) (burned : Nat) (stored : V3
 
 /-- `E` can move these amounts of each coin, and every credit fits. -/
 structure AmountsFit (w : State) (src dst : Adr) (am : V3) : Prop where
+  /-- The source holds each amount. -/
   holds : ∀ k, am.get k ≤ coinHeld w src k
+  /-- The destination's credit of each amount fits. -/
   credit : ∀ k, CreditFits w dst k (netOf w k (am.get k))
-  fee : ∀ k, UsdtFeeFits w (am.get k)
+  /-- USDT's fee fits on its amount. -/
+  fee : UsdtFeeFits w (am.get 2)
+  /-- USDT's gate lets the source be pulled from. -/
   srcOpen : UsdtOpen w src
 
 /-- `add_liquidity(am, minMint)`'s calldata. -/

@@ -27,7 +27,7 @@ theorem usdc_window (m : Moment d) (A : Assumes d m.through) : recorded m.world 
   have capabilities := BodyStageCapabilities.historical
   have certified := A.circle.usdcCertified
   have code : m.world.getCode usdc = Lift.Usdc.Proxy.code :=
-    Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut capabilities A.usdcCode certified
+    Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut capabilities A.circle.usdcCode certified
   have tail := (Usdc.usdc_viewChain_certified (MidHistoryTraceIn.tail m.block m.cut) capabilities code
     fun F member => certified F (by
       rw [m.settled_split]

@@ -61,22 +61,25 @@ theorem world_acct : AcctAgree worldW acsW :=
   acctAgree_stateFoldStor worldWrites (acctAgree_stateFoldAcct acctsW)
 
 theorem world_at : AtDeployment worldW where
-  poolCode := by rw [acctAgree_get_code world_acct]; kernel_rfl
-  poolStor := by kernel_rfl
-  c3Code := by rw [acctAgree_get_code world_acct]; kernel_rfl
-  c3Stor := by kernel_rfl
+  poolAt :=
+    { code := by rw [acctAgree_get_code world_acct]; kernel_rfl
+      stor := by kernel_rfl }
+  tokenAt :=
+    { code := by rw [acctAgree_get_code world_acct]; kernel_rfl
+      stor := by kernel_rfl }
   coins :=
     { daiCode := by rw [acctAgree_get_code world_acct]; kernel_rfl
       usdtCode := by rw [acctAgree_get_code world_acct]; kernel_rfl
       idEmpty := by rw [acctAgree_get_code world_acct]; kernel_rfl }
-  usdcCode := by rw [acctAgree_get_code world_acct]; kernel_rfl
-  usdcV2 := by
-    have h : (worldW.getStor usdcA).get Usdc.implSlot = implA.toB256 :=
-      (world_stor usdcA Usdc.implSlot).trans (by kernel_rfl)
-    have hi : implA.toB256.toAdr = implA := by decide +kernel
-    show worldW.getCode ((worldW.getStor usdcA).get Usdc.implSlot).toAdr = _
-    rw [h, hi]
-    exact (acctAgree_get_code world_acct implA).trans (by kernel_rfl)
+  usdcAt :=
+    { proxy := by rw [acctAgree_get_code world_acct]; kernel_rfl
+      v2 := by
+        have h : (worldW.getStor usdcA).get Usdc.implSlot = implA.toB256 :=
+          (world_stor usdcA Usdc.implSlot).trans (by kernel_rfl)
+        have hi : implA.toB256.toAdr = implA := by decide +kernel
+        show worldW.getCode ((worldW.getStor usdcA).get Usdc.implSlot).toAdr = _
+        rw [h, hi]
+        exact (acctAgree_get_code world_acct implA).trans (by kernel_rfl) }
   empty := by
     have h : ∀ k, lookupS storW (Curve3PoolPublic.coinAt k) (Curve3PoolPublic.coinEntry poolA k) = 0 := by
       decide +kernel

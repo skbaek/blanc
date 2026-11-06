@@ -459,7 +459,7 @@ theorem ExitPaid.congr {w w₁ w₂ : State} {E : Adr} {a : Nat} (h : ExitPaid w
 /-- What a moment gives a message beyond `MomentFacts`. -/
 theorem Moment.marked {d : Deployment} (m : Moment d) (A : Assumes d m.through) : ExitMarked m.world :=
   { covered := m.backed A
-    usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
+    usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.circle.usdcCode
       A.circle.usdcCertified
     minter := m.minter A
     id4 := m.id4 A

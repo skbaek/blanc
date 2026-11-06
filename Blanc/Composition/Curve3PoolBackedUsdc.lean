@@ -112,7 +112,7 @@ theorem pool_not_version : ¬ CurveCoins.UsdcVersion Curve3Pool.code := by
 theorem usdc_kid_caller (A : Assumes d h) {G F : Exec.Frame} (member : G ∈ (d.sincePool h).settledFrames)
     (parent : G.sevm.currentTarget = usdc) (child : F ∈ Exec.childFrames G.run) (code : F.sevm.code = Usdc.Proxy.code) :
     F.sevm.caller = usdc :=
-  Usdc.settled_child_caller (d.sincePool h) BodyStageCapabilities.historical A.usdcCode A.circle.usdcCertified member
+  Usdc.settled_child_caller (d.sincePool h) BodyStageCapabilities.historical A.circle.usdcCode A.circle.usdcCertified member
     parent child code
 
 /-- **USDC's locality over the history from the pool's creation**, from `Assumes` alone. -/
@@ -121,8 +121,8 @@ theorem usdc_local (A : Assumes d h) :
       (ownCredit pool) (Usdc.ledgerView (wordsAt usdc d.poolCut.afterBenv.state))
       (Usdc.ledgerView (wordsAt usdc future.state)) (d.sincePool h).settledFrames := by
   have capabilities := BodyStageCapabilities.historical
-  refine Usdc.usdc_entryLocalAt (d.sincePool h) capabilities A.usdcCode A.circle.usdcCertified Usdc.entryApart_pool
-    A.hashes.coinKeys.usdc (NoKeyHolder.usdcAuthority (d.sincePool h) capabilities A.keys A.usdcCode
+  refine Usdc.usdc_entryLocalAt (d.sincePool h) capabilities A.circle.usdcCode A.circle.usdcCertified Usdc.entryApart_pool
+    A.hashes.coinKeys.usdc (NoKeyHolder.usdcAuthority (d.sincePool h) capabilities A.keys A.circle.usdcCode
       A.circle.usdcCertified fun F hF caller => ?_)
   obtain ⟨member, target, mutable, obs⟩ := mem_coinFrames.mp hF
   refine pool_ownCalls_history A (T := usdc) (by decide) member target mutable caller fun G hG child mg te => ?_
@@ -292,10 +292,10 @@ theorem usdcWalk (A : Assumes d h) :
       exact List.mem_append_left _ hF
     have poolCode := (A.poolOwn Pmem at').1
     have above : Exec.NoOpaqueAbove (Usdc.LinkFrame usdc) pre P :=
-      Usdc.noLink_above (d.sincePool h) capabilities A.usdcCode A.circle.usdcCertified subPre mutable
+      Usdc.noLink_above (d.sincePool h) capabilities A.circle.usdcCode A.circle.usdcCertified subPre mutable
         (by rw [poolCode]; exact pool_ne_lib) (by rw [poolCode]; exact pool_not_version)
     have noOp := noOpaque_child (L₁ := L₁) (c := c) above fun op => usdc_ne_pool (op.1.symm.trans at')
-    have chain := Usdc.usdc_viewAt_links (d.sincePool h) capabilities A.usdcCode A.circle.usdcCertified splitC noOp
+    have chain := Usdc.usdc_viewAt_links (d.sincePool h) capabilities A.circle.usdcCode A.circle.usdcCertified splitC noOp
     have cfP : coinFrames usdc (Usdc.ChainObs usdc) (pre ++ P :: blocks L₁) =
         coinFrames usdc (Usdc.ChainObs usdc) pre ++ coinFrames usdc (Usdc.ChainObs usdc) (blocks L₁) := by
       rw [show pre ++ P :: blocks L₁ = pre ++ ([P] ++ blocks L₁) from rfl, coinFrames_append, coinFrames_append]

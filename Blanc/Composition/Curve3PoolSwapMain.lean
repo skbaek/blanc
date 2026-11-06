@@ -724,7 +724,7 @@ theorem swap_core {msg : Msg} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx dy m
   have hjw : exJ (initSevm msg) = Nat.toB256 j.val := w36
   have hdxw : exDx (initSevm msg) = Nat.toB256 dx := w68
   have hmdw : exMinDy (initSevm msg) = Nat.toB256 minDy := w100
-  obtain ⟨hLive, hij, ⟨hdx0, hmin, hdy0⟩, ⟨hle, hal⟩, hPF, ⟨hcrP, hcrE⟩, ⟨hfeeI, hfeeJ⟩, hfit, hap⟩ := req
+  obtain ⟨hLive, hij, ⟨hdx0, hmin, hdy0⟩, ⟨hle, hal⟩, hPF, ⟨⟨hcrP, hcrE⟩, ⟨hfeeI, hfeeJ⟩, hfit⟩, hap⟩ := req
   have hdxN : dx < 2 ^ 256 := Nat.lt_of_le_of_lt hle coinHeld_lt
   have hq : swapOut w msg.benv.stat.time.toNat i j dx = some dy := by
     unfold quote at hdyq
