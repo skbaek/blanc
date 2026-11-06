@@ -16,25 +16,6 @@ def StoreSource (Q : Sevm → Devm → Ninst → Devm → Prop)
   T.f = .next (.reg .sstore) .ret ∧
   ObservedKeccak Q observe sevm (account.toB256.toBytes ++ (9 : B256).toBytes) (fun _ => True)
 
-/-- The packed blacklist query returns into its original continuation. -/
-theorem blacklist_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
-    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
-    {sevm : Sevm} {b : Devm} {account tag : B256} {S : List B256}
-    {M : Mem} {G : Nat} {f : SFunc} {K : List SFunc} {T : Conf}
-    (run : ObservedReach Q observe Impl.cert.prog sevm
-      ⟨St b (account :: tag :: S) M G, Impl.t_3f6a_c83, f :: K⟩ T)
-    (hT : AtSstore T) :
-    ∃ b' value M' G', ObservedReach Q observe Impl.cert.prog sevm
-      ⟨St b' (value :: S) M' G', f, K⟩ T := by
-  unfold Impl.t_3f6a_c83 at run
-  orsd
-  iterate 12 orsx
-  orsld
-  iterate 5 orsx
-  obtain ⟨f', K', b', G', same, run⟩ := ObservedReach.rs_retM run hT
-  cases same
-  exact ⟨_, _, _, _, run⟩
-
 /-- The packed balance query returns into its original continuation. -/
 theorem balance_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
@@ -128,6 +109,19 @@ theorem blacklist_reach_valued {Q : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨f', K', G', same, run⟩ := ObservedReach.rs_retBase run hT
   cases same
   exact ⟨_, _, _, _, fun k => (storage k).symm, run⟩
+
+/-- The packed blacklist query returns into its original continuation. -/
+theorem blacklist_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {b : Devm} {account tag : B256} {S : List B256}
+    {M : Mem} {G : Nat} {f : SFunc} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe Impl.cert.prog sevm
+      ⟨St b (account :: tag :: S) M G, Impl.t_3f6a_c83, f :: K⟩ T)
+    (hT : AtSstore T) :
+    ∃ b' value M' G', ObservedReach Q observe Impl.cert.prog sevm
+      ⟨St b' (value :: S) M' G', f, K⟩ T :=
+  have ⟨b', value, M', G', _, reach⟩ := blacklist_reach_valued erase run hT
+  ⟨b', value, M', G', reach⟩
 
 /-- The packed balance query returns the low bits of the account's entry and keeps the storage. -/
 theorem balance_reach_valued {Q : Sevm → Devm → Ninst → Devm → Prop}

@@ -24,6 +24,10 @@ an initializer's stores are classified by the prefix walks, whatever the frame's
 
 One premise is left, `MigrationsApart`, of the hash class: `initializeV2_2` writes `0` at each listed
 account's `keccak(a ‖ 3)`, so a collision with the entry there would lower it.
+
+`initializerRowsKeep` keeps a holder's zero allowance rows across these frames. A row isn't computable, so
+`RowApart` is its premise, of the hash class. A clearing store writes `0`, so a row may lie in a string's
+clearing range and only the payload windows count, at most `2 ^ 155` words wide.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -185,6 +189,34 @@ def MigrationApart (k : B256) (sevm : Sevm) : Prop :=
   ∀ j < min (InitReachV2_2.arrLen sevm).toNat (2 ^ 32),
     k ≠ mapSlot (InitReachV2_2.acctAt sevm (InitReachV2_2.arrPtr sevm) j) 3
 
+theorem self_mask (T : Adr) : T.toB256 &&& InitReachV2_2.addrMask = T.toB256 := by
+  rw [B256.and_comm]
+  exact ff20_and_adr T
+
+/-- FiatTokenV2 stores nothing under these selectors. -/
+theorem v2_no_store {G N : Exec.Deriv} (hpc : G.pc = 0)
+    (hsg : G.sevm.benvStat.rules.stateGas = none) (code : G.sevm.code = ImplV2.code)
+    (sel : Blanc.Sevm.selector G.sevm = 0x2fc81e09 ∨ Blanc.Sevm.selector G.sevm = 0x430239b4)
+    (chain : Exec.Deriv.ParentPrefix G N) {w : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? N = some w) : False := by
+  obtain ⟨site, inRoot, -, guards, -⟩ := WriteSite.successfulSstore_site ImplV2.cert_check
+    implV2_wsCert hpc code hsg chain found
+  have mem := WriteSite.hasSel_sound (List.all_eq_true.mp v2_sites site inRoot) rfl guards
+  rw [selV2T_root] at mem
+  rcases sel with hs | hs <;> rw [hs] at mem <;> exact absurd mem (by decide)
+
+/-- FiatTokenV2_1 stores nothing under `initializeV2_2`. -/
+theorem v2_1_no_store {G N : Exec.Deriv} (hpc : G.pc = 0)
+    (hsg : G.sevm.benvStat.rules.stateGas = none) (code : G.sevm.code = ImplV2_1.code)
+    (hs : Blanc.Sevm.selector G.sevm = 0x430239b4)
+    (chain : Exec.Deriv.ParentPrefix G N) {w : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? N = some w) : False := by
+  obtain ⟨site, inRoot, -, guards, -⟩ := WriteSite.successfulSstore_site ImplV2_1.cert_check
+    implV2_1_wsCert hpc code hsg chain found
+  have mem := WriteSite.hasSel_sound (List.all_eq_true.mp v2_1_sites site inRoot) rfl guards
+  rw [selV2T_root, hs] at mem
+  exact absurd mem (by decide)
+
 /-- **Under V2_1's code a store on these selectors doesn't lower the entry's word.** V2 has no such
 selector, nor V2_1 `initializeV2_2`. -/
 theorem init2_word {T : Adr} {k : B256} (a : EntryApart T k) {G N : Exec.Deriv} (hpc : G.pc = 0)
@@ -195,12 +227,7 @@ theorem init2_word {T : Adr} {k : B256} (a : EntryApart T k) {G N : Exec.Deriv} 
     (found : Exec.Deriv.successfulSstore? N = some w) (key : w.key = k) :
     (N.devm.getStorVal T k).toNat ≤ w.value.toNat := by
   rcases version with code | code | code
-  · exfalso
-    obtain ⟨site, inRoot, -, guards, -⟩ := WriteSite.successfulSstore_site ImplV2.cert_check
-      implV2_wsCert hpc code hsg chain found
-    have mem := WriteSite.hasSel_sound (List.all_eq_true.mp v2_sites site inRoot) rfl guards
-    rw [selV2T_root] at mem
-    rcases sel with hs | hs <;> rw [hs] at mem <;> exact absurd mem (by decide)
+  · exact (v2_no_store hpc hsg code sel chain found).elim
   · rcases sel with hs | hs
     · have same := Exec.Deriv.ParentPrefix.sevm_eq chain
       rcases V21InitializerReach.successfulSstore_all_source hpc code hsg chain hs found with
@@ -210,12 +237,7 @@ theorem init2_word {T : Adr} {k : B256} (a : EntryApart T k) {G N : Exec.Deriv} 
       · rw [same, target, key] at bound
         exact bound
       · exact absurd (key.symm.trans e) (by rw [target]; exact a.self3)
-    · exfalso
-      obtain ⟨site, inRoot, -, guards, -⟩ := WriteSite.successfulSstore_site ImplV2_1.cert_check
-        implV2_1_wsCert hpc code hsg chain found
-      have mem := WriteSite.hasSel_sound (List.all_eq_true.mp v2_1_sites site inRoot) rfl guards
-      rw [selV2T_root, hs] at mem
-      exact absurd mem (by decide)
+    · exact (v2_1_no_store hpc hsg code hs chain found).elim
   · exact absurd code notV22
 
 /-- **Under V2_2's code a store on these selectors doesn't lower the entry's balance bits**, given the
@@ -384,8 +406,8 @@ theorem MigrationApart.of_data {k : B256} {s s' : Sevm} (e : s'.data = s.data)
 
 /-- **What a committed proxy frame on an initializer does to the entry**: the proxy's own stores miss it,
 so only the stores of the implementation frames below it count. -/
-theorem frame_init_cell {T : Adr} {k : B256} {Inv : B256 → Prop} (a : EntryApart T k) (F : Exec.Frame)
-    (hpc : F.pc = 0) (hcode : F.sevm.code = Proxy.code) (hsg : F.sevm.benvStat.rules.stateGas = none)
+theorem frame_init_cell {T : Adr} {k : B256} {Inv : B256 → Prop} (impl : k ≠ implSlot)
+    (admin : k ≠ adminSlot) (F : Exec.Frame) (hpc : F.pc = 0) (hcode : F.sevm.code = Proxy.code) (hsg : F.sevm.benvStat.rules.stateGas = none)
     (bal : F.sevm.benvStat.rules.bal = none) (hsize : F.sevm.data.length < 2 ^ 256)
     (gas : F.pre.gasMeasure < 2 ^ 256) (target : F.sevm.currentTarget = T)
     (hne : (F.pre.getCode T).toList ≠ []) (hI : CurveCoins.UsdcImplAt F.pre T)
@@ -410,9 +432,9 @@ theorem frame_init_cell {T : Adr} {k : B256} {Inv : B256 → Prop} (a : EntryApa
     obtain ⟨hat, rest, stack⟩ := successfulSstore?_decoded found
     rcases Proxy.proxy_sstoreNodeH run hcode hsg bal chain hat with ⟨rest', hs⟩ | ⟨rest', hs, -, -⟩
     · rw [stack] at hs
-      exact a.admin (key.symm.trans (List.cons.inj hs).1)
+      exact admin (key.symm.trans (List.cons.inj hs).1)
     · rw [stack] at hs
-      exact a.impl (key.symm.trans (List.cons.inj hs).1)
+      exact impl (key.symm.trans (List.cons.inj hs).1)
   · exact child r m (init_children run hcode hsg bal hsize hI sel r hr)
       (Exec.rawFrameDescendants_entered enteredCondition_fresh run r hr)
       ((Exec.rawFrameRoots_gasMeasure_le run r rootCase).trans_lt gas) chain w found key held
@@ -427,7 +449,7 @@ theorem frame_init_keep {T : Adr} {k : B256} (a : EntryApart T k) (F : Exec.Fram
     (F.post.getStor T).get k = (F.pre.getStor T).get k := by
   have member : Blanc.Sevm.selector F.sevm ∈ usdcInitializers :=
     mem_inits.mpr (sel.elim .inl (.inr ∘ .inl))
-  refine frame_init_cell (Inv := fun v => v = (F.pre.getStor T).get k) a F hpc hcode hsg bal hsize gas
+  refine frame_init_cell (Inv := fun v => v = (F.pre.getStor T).get k) a.impl a.admin F hpc hcode hsg bal hsize gas
     target hne hI member rfl ?_
   intro G N child fresh rgas chain w found key _
   have same : Blanc.Sevm.selector G.sevm = Blanc.Sevm.selector F.sevm := by
@@ -455,14 +477,14 @@ theorem frame_init_mono {T : Adr} {k : B256} (a : EntryApart T k) (F : Exec.Fram
     simp only [Blanc.Sevm.selector, Sevm.dataWord, e]
   constructor
   · intro isV22
-    refine frame_init_cell (Inv := fun v => balanceBits ((F.pre.getStor T).get k) ≤ balanceBits v) a F
+    refine frame_init_cell (Inv := fun v => balanceBits ((F.pre.getStor T).get k) ≤ balanceBits v) a.impl a.admin F
       hpc hcode hsg bal hsize gas target hne hI member le_rfl ?_
     intro G N child fresh _ chain w found key held
     exact held.trans (init2_bits a child.pc child.stateGas fresh.1 (child.code.trans isV22) child.target
       (same G child.sameData ▸ sel)
       (fun hs => (migration ((same G child.sameData).symm.trans hs)).of_data child.sameData) chain found key)
   · intro notV22
-    refine frame_init_cell (Inv := fun v => ((F.pre.getStor T).get k).toNat ≤ v.toNat) a F
+    refine frame_init_cell (Inv := fun v => ((F.pre.getStor T).get k).toNat ≤ v.toNat) a.impl a.admin F
       hpc hcode hsg bal hsize gas target hne hI member le_rfl ?_
     intro G N child _ _ chain w found key held
     exact held.trans (init2_word a child.pc child.stateGas child.version
@@ -520,5 +542,201 @@ theorem initializerKeeps {cfg : ChainConfig} {start : Benv} {future : BlockChain
       exact bits hv
     · rw [if_neg hv, if_neg hv]
       exact word hv
+
+/-! ## The holder's allowance rows -/
+
+/-- A word apart from the payload a string's store can write: its window is at most `2 ^ 155` words, from
+the decoder's `2 ^ 160`-byte cap. -/
+def StrWindow (s r : B256) : Prop := ∀ j < 2 ^ 155, r ≠ s.toBytes.keccak + j.toB256
+
+/-- **What a zero row at USDC `T` lies apart from under an initializer**: of the hash class, a row being
+`keccak(g ‖ keccak(h ‖ 10))`. The calldata's own keys are read from the frame's `sevm`. -/
+structure RowApart (T : Adr) (sevm : Sevm) (r : B256) : Prop where
+  low : 256 ≤ r.toNat
+  name : StrWindow 4 r
+  symbol : StrWindow 5 r
+  currency : StrWindow 7 r
+  impl : r ≠ implSlot
+  admin : r ≠ adminSlot
+  self3 : r ≠ mapSlot T.toB256 3
+  self9 : r ≠ mapSlot T.toB256 9
+  recipient : Blanc.Sevm.selector sevm = 0x2fc81e09 → r ≠ mapSlot (Sevm.dataWord sevm 4).toAdr.toB256 9
+  migration : Blanc.Sevm.selector sevm = 0x430239b4 →
+    ∀ j < min (InitReachV2_2.arrLen sevm).toNat (2 ^ 32),
+      r ≠ mapSlot (InitReachV2_2.acctAt sevm (InitReachV2_2.arrPtr sevm) j) 3 ∧
+        r ≠ mapSlot (InitReachV2_2.acctAt sevm (InitReachV2_2.arrPtr sevm) j &&& InitReachV2_2.addrMask) 9
+
+theorem RowApart.of_data {T : Adr} {r : B256} {s s' : Sevm} (e : s'.data = s.data)
+    (a : RowApart T s r) : RowApart T s' r := by
+  have sel : Blanc.Sevm.selector s' = Blanc.Sevm.selector s := by
+    simp only [Blanc.Sevm.selector, Sevm.dataWord, e]
+  refine ⟨a.low, a.name, a.symbol, a.currency, a.impl, a.admin, a.self3, a.self9, fun h => ?_, fun h => ?_⟩
+  · simpa only [Sevm.dataWord, e] using a.recipient (sel ▸ h)
+  · simpa only [InitReachV2_2.arrLen, InitReachV2_2.arrPtr, InitReachV2_2.acctAt, Sevm.dataWord, e] using
+      a.migration (sel ▸ h)
+
+theorem RowApart.ne_low {T : Adr} {s : Sevm} {r x : B256} (a : RowApart T s r) (hx : x.toNat < 256) :
+    r ≠ x := by
+  rintro rfl
+  have := a.low
+  omega
+
+theorem payload_window {L j : Nat} (h : L ≤ 2 ^ 160) (hj : j < (L + 31) / 32) : j < 2 ^ 155 := by omega
+
+/-- **A store under an initializer that lands on a row writes `0`**, at a node below a frame of any outcome
+running a certified version from pc `0`. -/
+theorem init_row_zero {T : Adr} {r : B256} {G N : Exec.Deriv} (a : RowApart T G.sevm r) (hpc : G.pc = 0)
+    (hsg : G.sevm.benvStat.rules.stateGas = none) (fresh : Exec.FreshEntry G.sevm G.devm)
+    (gas : G.devm.gasMeasure < 2 ^ 256) (version : CurveCoins.UsdcVersion G.sevm.code)
+    (target : G.sevm.currentTarget = T) (sel : Blanc.Sevm.selector G.sevm ∈ usdcInitializers)
+    (chain : Exec.Deriv.ParentPrefix G N) {w : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? N = some w) (key : w.key = r) : w.value = 0 := by
+  obtain ⟨hat, rest, hstack⟩ := successfulSstore?_decoded found
+  obtain ⟨stack, memory⟩ := fresh
+  have eraseP : ∀ {s d n d'}, FreePtr.PotStep (StepIn G) s d n d' → Ninst.Run s d n d' :=
+    fun h => StepIn.toRun h.1
+  have erase : ∀ {s d n d'}, StepIn G s d n d' → Ninst.Run s d n d' := fun h => StepIn.toRun h
+  have word := selWord_eq_selector G.sevm
+  have use06 : ∀ {C : Conf}, Init06.InitRange06 G.sevm C → C.d = N.devm → w.value = 0 := by
+    intro C range e
+    rcases range _ _ _ (e ▸ hstack) with keys | ⟨zero, -⟩
+    · exfalso
+      rw [key] at keys
+      rcases keys with fixed | ⟨j, hj, e⟩ | ⟨j, hj, e⟩ | ⟨j, hj, e⟩
+      · simp only [List.mem_cons, List.not_mem_nil, or_false] at fixed
+        rcases fixed with e | e | e | e | e | e | e | e <;> exact a.ne_low (by decide) e
+      · exact a.name _ (payload_window (cap160 _) hj) e
+      · exact a.symbol _ (payload_window (cap160 _) hj) e
+      · exact a.currency _ (payload_window (cap160 _) hj) e
+    · exact zero
+  have useV2 : ∀ {C : Conf}, InitRangeV2 G.sevm C → C.d = N.devm → w.value = 0 := by
+    intro C range e
+    rcases range _ _ _ (e ▸ hstack) with keys | ⟨zero, -⟩
+    · exfalso
+      rw [key] at keys
+      rcases keys with e | e | e | ⟨j, hj, e⟩
+      · exact a.ne_low (by decide) e
+      · exact a.ne_low (by decide) e
+      · exact a.ne_low (by decide) e
+      · exact a.name _ (payload_window ((Nat.min_le_right _ _).trans (by decide)) hj) e
+    · exact zero
+  rcases mem_inits.mp sel with hs | hs | hs | hs
+  · rcases version with code | code | code
+    · obtain ⟨C, run, hT, e⟩ := Reach.sstoreNode_pot ImplV2.cert_check hpc code hsg stack memory
+        gas chain hat
+      exact use06 (Init06.init_reach_V2_range erase (word.trans hs) run hT) e
+    · obtain ⟨C, run, hT, e⟩ := Reach.sstoreNode_pot ImplV2_1.cert_check hpc code hsg stack memory
+        gas chain hat
+      exact use06 (Init06.init_reach_V2_1_range erase (word.trans hs) run hT) e
+    · obtain ⟨C, run, hT, e⟩ := Reach.sstoreNode_pot Impl.cert_check hpc code hsg stack memory
+        gas chain hat
+      exact use06 (Init06.init_reach_V2_2_range erase (word.trans hs) run hT) e
+  · rcases version with code | code | code
+    · obtain ⟨C, run, hT, e⟩ := Reach.sstoreNode_pot ImplV2.cert_check hpc code hsg stack memory
+        gas chain hat
+      exact useV2 (InitReachV2.initV2_reach_range eraseP (word.trans hs) run hT) e
+    · obtain ⟨C, run, hT, e⟩ := Reach.sstoreNode_pot ImplV2_1.cert_check hpc code hsg stack memory
+        gas chain hat
+      exact useV2 (InitReachV2_1.initV2_reach_range eraseP (word.trans hs) run hT) e
+    · obtain ⟨C, run, hT, e⟩ := Reach.sstoreNode_pot Impl.cert_check hpc code hsg stack memory
+        gas chain hat
+      exact useV2 (InitReachV2_2.initV2_reach_range eraseP (word.trans hs) run hT) e
+  · exfalso
+    rcases version with code | code | code
+    · exact v2_no_store hpc hsg code (.inl hs) chain found
+    · rcases V21InitializerReach.successfulSstore_all_source hpc code hsg chain hs found with
+        e | ⟨-, -, e, -⟩ | ⟨-, -, e, -⟩ | ⟨-, e, -⟩
+      · exact a.ne_low (x := 18) (by decide) (key.symm.trans e)
+      · exact a.self9 (by rw [← target]; exact key.symm.trans e)
+      · exact a.recipient hs (key.symm.trans e)
+      · exact a.self3 (by rw [← target]; exact key.symm.trans e)
+    · rcases V22InitializerReach.successfulSstore_source hpc code hsg chain hs found with
+        e | ⟨-, e, -⟩ | ⟨-, e, -⟩ | ⟨-, e, -⟩
+      · exact a.ne_low (x := 18) (by decide) (key.symm.trans e)
+      · exact a.self9 (by rw [← target]; exact key.symm.trans e)
+      · exact a.recipient hs (key.symm.trans e)
+      · exact a.self9 (by rw [← target]; exact key.symm.trans e)
+  · rcases version with code | code | code
+    · exact (v2_no_store hpc hsg code (.inr hs) chain found).elim
+    · exact (v2_1_no_store hpc hsg code hs chain found).elim
+    · obtain ⟨C, run, hT, e⟩ := Reach.sstoreNode_pot Impl.cert_check hpc code hsg stack memory
+        gas chain hat
+      rcases InitReachV2_2.initV2_2_reach_range eraseP (word.trans hs) run hT _ _ _ (e ▸ hstack) with
+        keys | ⟨zero, -⟩
+      · exfalso
+        rw [key] at keys
+        rcases keys with e | ⟨j, hj, e⟩ | ⟨j, hj, e | e⟩ | e | e | e
+        · exact a.ne_low (by decide) e
+        · exact a.symbol _ (payload_window ((Nat.min_le_right _ _).trans (by decide)) hj) e
+        · exact (a.migration hs j hj).1 e
+        · exact (a.migration hs j hj).2 e
+        · rw [target, self_mask] at e
+          exact a.self9 e
+        · rw [target] at e
+          exact a.self3 e
+        · exact a.ne_low (by decide) e
+      · exact zero
+
+/-- **A committed proxy frame on an initializer keeps a zero row zero.** -/
+theorem frame_init_row {T : Adr} {r : B256} (F : Exec.Frame) (a : RowApart T F.sevm r) (hpc : F.pc = 0)
+    (hcode : F.sevm.code = Proxy.code) (hsg : F.sevm.benvStat.rules.stateGas = none)
+    (bal : F.sevm.benvStat.rules.bal = none) (hsize : F.sevm.data.length < 2 ^ 256)
+    (gas : F.pre.gasMeasure < 2 ^ 256) (target : F.sevm.currentTarget = T)
+    (hne : (F.pre.getCode T).toList ≠ []) (hI : CurveCoins.UsdcImplAt F.pre T)
+    (sel : Blanc.Sevm.selector F.sevm ∈ usdcInitializers) (zero : (F.pre.getStor T).get r = 0) :
+    (F.post.getStor T).get r = 0 := by
+  refine frame_init_cell (Inv := fun v => v = 0) a.impl a.admin F hpc hcode hsg bal hsize gas target hne hI
+    sel zero ?_
+  intro G N child fresh rgas chain w found key _
+  have same : Blanc.Sevm.selector G.sevm = Blanc.Sevm.selector F.sevm := by
+    simp only [Blanc.Sevm.selector, Sevm.dataWord, child.sameData]
+  exact init_row_zero (a.of_data child.sameData) child.pc child.stateGas fresh rgas child.version child.target
+    (same ▸ sel) chain found key
+
+/-- `RowApart` for each tracked row of the holder at each initializer frame. A statement of the hash class,
+trace-local: only the rows of `Tracked` and the words the frames compute are compared. -/
+def RowsApart (T h : Adr) (Tracked : Adr → Prop) (settled : List Exec.Frame) : Prop :=
+  ∀ F ∈ settled, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
+    Blanc.Sevm.selector F.sevm ∈ usdcInitializers →
+    ∀ g, Tracked g → RowApart T F.sevm (allowSlot h g)
+
+/-- The view reads a word apart from the proxy's slots as it stands. -/
+theorem ledgerView_of_ne {w : StorWords} {k : B256} (hi : k ≠ implSlot) (ha : k ≠ adminSlot) :
+    ledgerView w k = w k := by
+  unfold ledgerView
+  refine ite_eq_right ?_
+  rintro (e | e)
+  · exact (hi e).elim
+  · exact (ha e).elim
+
+/-- **The holder's tracked rows stay zero across an initializer frame, over a mid history**, as the chain
+reads them: with `Tracked := CallerOf frames` this is `InitializerRowsKeep T h frames settled` unfolded. -/
+theorem initializerRowsKeep {cfg : ChainConfig} {start : Benv} {future : BlockChain} {T h : Adr}
+    {Tracked : Adr → Prop} (trace : MidHistoryTraceIn HistFork cfg start future)
+    (capabilities : BodyStageCapabilities HistFork)
+    (hasCode : ∀ F ∈ trace.settledFrames, F.sevm.currentTarget = T → EntryObs T F →
+      (F.pre.getCode T).toList ≠ [])
+    (certified : ∀ F ∈ trace.settledFrames, F.sevm.currentTarget = T → EntryObs T F →
+      CurveCoins.UsdcImplAt F.pre T)
+    (apart : RowsApart T h Tracked trace.settledFrames) :
+    ∀ F ∈ trace.settledFrames, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
+      Blanc.Sevm.selector F.sevm ∈ usdcInitializers →
+      (∀ g, Tracked g → ledgerView (wordsAt T F.pre.state) (allowSlot h g) = 0) →
+      ∀ g, Tracked g → ledgerView (wordsAt T F.post.state) (allowSlot h g) = 0 := by
+  intro F member target nonstatic obs sel zero g tracked
+  have row := apart F member target nonstatic obs sel g tracked
+  have raw := trace.mem_rawFrames_of_mem_settledFrames F member
+  obtain ⟨pc, fork⟩ := trace.rootEntryIn _ raw
+  obtain ⟨_, _, block, inBlock⟩ := trace.rawFrames_mem_block _ raw
+  have gas : F.pre.gasMeasure < 2 ^ 256 := by
+    have := block.gas_bound capabilities _ inBlock
+    change F.pre.gasMeasure < _ at this
+    omega
+  have before := zero g tracked
+  rw [ledgerView_of_ne row.impl row.admin] at before
+  rw [ledgerView_of_ne row.impl row.admin]
+  exact frame_init_row F row pc obs.1 fork.stateGas_none fork.bal_none
+    (trace.calldata_bound capabilities (fun _ hf => hf.dataNonZero_ge) _ raw) gas target
+    (hasCode F member target obs) (certified F member target obs) sel before
 
 end Blanc.Lift.Usdc
