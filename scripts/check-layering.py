@@ -1537,6 +1537,8 @@ COMPOSITION = {
     "Composition.Curve3PoolExitCold": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolExitFits": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolExitMain": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
+    "Composition.Curve3PoolImbalanceMain": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
+    "Composition.Curve3PoolRemoveMessage": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolExitMoment": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolExitRequest": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolExitSites": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
