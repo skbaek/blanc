@@ -918,6 +918,148 @@ theorem lock_restore {s : Sevm} {b : Devm} (hg : s.benvStat.rules.gas.storageCle
   rw [ho, hc, show Bytes.toB256 [0] = (0 : B256) by decide, sstoreNewRefundCounter_restore_set _ _ _ (by decide)]
   rfl
 
+theorem token_warm : Curve3Pool.tokenSlot ∈ headKeys 3 := by decide
+theorem lock_warm : lockW ∈ headKeys 3 := by decide
+theorem lock_token : Curve3Pool.tokenSlot ≠ lockW := by decide
+theorem tok_five : Curve3Pool.tokenSlot = Bytes.toB256 [5] := by decide
+
+/-- The state past the loop: the token read and the burn. -/
+theorem ExitFrame.pastLoop (f : ExitFrame msg w E a T) (st : LoopSteps msg w E a T) (hE : E ≠ 0)
+    (win : RLWindows 𝐬 𝐩 T (exitCalls msg)) :
+    (exitCalls msg).burnDebit (rlBurnBase 𝐬 𝐩 T (exitCalls msg)) [] (rlBurnMem 𝐬 (rlHeadMem3 𝐬 𝐩 T (exitCalls msg))) =
+        6876 + debitG a + debitG a ∧
+      Mv (loopParties ++ [Curve3PoolPublic.pool] ++ (c3 :: [c3]))
+        ((loopRefund w a : Nat) + 0 + ((4800 * (empties (supply w) a + empties (shares w E) a) : Nat) : Int)) 𝐩
+        ((exitCalls msg).burnNext (rlBurnBase 𝐬 𝐩 T (exitCalls msg)) [] (rlBurnMem 𝐬 (rlHeadMem3 𝐬 𝐩 T (exitCalls msg)))) ∧
+      Devm.getStor ((exitCalls msg).burnNext (rlBurnBase 𝐬 𝐩 T (exitCalls msg)) [] (rlBurnMem 𝐬 (rlHeadMem3 𝐬 𝐩 T (exitCalls msg)))) c3 =
+        burnStor (w.getStor c3) E.toB256 (Nat.toB256 a) ∧
+      Mv (c3 :: [c3]) ((4800 * (empties (supply w) a + empties (shares w E) a) : Nat) : Int) (rlBurnBase 𝐬 𝐩 T (exitCalls msg))
+        ((exitCalls msg).burnNext (rlBurnBase 𝐬 𝐩 T (exitCalls msg)) [] (rlBurnMem 𝐬 (rlHeadMem3 𝐬 𝐩 T (exitCalls msg)))) := by
+  obtain ⟨-, -, ac, awm, -, -⟩ := stage_supply f
+  obtain ⟨ac3, aw3, -, -, -⟩ := st.after ac awm
+  have hm : Mv [Curve3PoolPublic.pool] 0 (rlHead3 𝐬 𝐩 T (exitCalls msg)) (rlBurnBase 𝐬 𝐩 T (exitCalls msg)) := by
+    have := mv_afterSload 𝐬 (rlHead3 𝐬 𝐩 T (exitCalls msg)) Curve3Pool.tokenSlot
+    rw [f.target] at this
+    exact this
+  have hRef : (loopRefund w a : Int) = 0 + ((4800 * empties (recorded w 0) (share w a 0) : Nat) : Int) + ((4800 * empties (word w dai (Dai.balSlot pool)) (share w a 0) : Nat) : Int) + 0 +
+      ((4800 * empties (recorded w 1) (share w a 1) : Nat) : Int) + ((4800 * empties (word w usdc (Usdc.balSlot pool)) (share w a 1) : Nat) : Int) + 0 +
+      ((4800 * empties (recorded w 2) (share w a 2) : Nat) : Int) + ((4800 * empties (word w usdt (Usdt.balSlot pool)) (share w a 2) : Nat) : Int) + 0 := by
+    unfold loopRefund
+    push_cast
+    omega
+  have hb := st.h3.mv.trans hm
+  obtain ⟨d, n, c⟩ := burn_stage f hE hb (ac3.ofMv hm (by decide))
+    (((hm.same c3 (by decide)).warm).2 aw3) win.burn
+  refine ⟨d, ?_, c, ?_⟩
+  · have := hb.trans n
+    rw [← hRef] at this
+    exact this
+  · exact n
+
+theorem headStor_lock (s : Sevm) (pre : Devm) (T : B256) : (headStor s pre T 3).get lockW = Bytes.toB256 [1] := by
+  show ((((headStor s pre T 0).set (rlKey 0) _).set (rlKey 1) _).set (rlKey 2) _).get lockW = _
+  rw [Stor.get_set_ne _ (by decide), Stor.get_set_ne _ (by decide), Stor.get_set_ne _ (by decide)]
+  exact Stor.get_set_self _ _ _
+
+/-- The chain's cost at a cold entry is `exitFrameGas`. -/
+theorem ExitFrame.costEq (f : ExitFrame msg w E a T) (st : LoopSteps msg w E a T) (hE : E ≠ 0)
+    (win : RLWindows 𝐬 𝐩 T (exitCalls msg)) :
+    rlExactCost 𝐬 𝐩 T (exitCalls msg) = exitFrameGas w E a := by
+  obtain ⟨-, -, -, -, dS, pro⟩ := stage_supply f
+  obtain ⟨bd, bm, -, n⟩ := f.pastLoop st hE win
+  have hA3 := st.h3.poolAt
+  have hAB := hA3.sload Curve3Pool.tokenSlot
+  have hBN := hAB.ofMv n (by rw [f.target]; decide)
+  have hcN := bm.clean f.clean
+  have hO : ((exitCalls msg).burnNext (rlBurnBase 𝐬 𝐩 T (exitCalls msg)) [] (rlBurnMem 𝐬 (rlHeadMem3 𝐬 𝐩 T (exitCalls msg)))).getOrigStorVal 𝐬 𝐬.currentTarget lockW = 0 := by
+    rw [hcN.orig, f.poolStor.2, ← f.poolStor.1]
+    exact f.lock
+  have hE' : rlEdgeStorageCost 𝐬 𝐩 T (exitCalls msg) = 24200 + 100 + 100 := by
+    unfold rlEdgeStorageCost
+    rw [pro, hA3.sloadCost_warm token_warm, hBN.sstoreCost_warm (List.mem_cons_of_mem _ lock_warm), hO]
+    rw [headStor_lock]
+    rfl
+  have hg0 : debitG (share w a 0) + (debitG (share w a 0) + creditG (word w dai (Dai.balSlot E)) (share w a 0)) = 300 + exitCoinGas w E a 0 :=
+    coin_gas w E a 0 (by decide)
+  have hg1 : debitG (share w a 1) + (debitG (share w a 1) + creditG (word w usdc (Usdc.balSlot E)) (share w a 1)) = 300 + exitCoinGas w E a 1 :=
+    coin_gas w E a 1 (by decide)
+  have hg2 := usdt_gas w E a f.feeFits.2.2
+  have hga : debitG a + debitG a = 200 + (if a = 0 then 0 else 5600) := by
+    unfold debitG
+    split <;> omega
+  rw [rlExactCost_eq, hE', st.c0, st.c1, st.c2]
+  unfold rlDebits rlRawTails exitFrameGas
+  rw [dS, st.d0, st.d1, st.d2, bd, ext_push_grow win.push0.size, ext_push_flat win.push1.size, ext_push_flat win.push2.size,
+    st.l0, st.l1, st.l2, rawTail_vals.1, rawTail_vals.2]
+  omega
+
+/-- **The canonical chain's cost, refund and effect at a cold entry.** -/
+theorem ExitFrame.cold (f : ExitFrame msg w E a T) (hE : E ≠ 0) (win : RLWindows 𝐬 𝐩 T (exitCalls msg)) :
+    ExitCold msg w E a T := by
+  have st := f.steps win
+  refine ⟨f.costEq st hE win, fun d l S M G hd => ?_⟩
+  obtain ⟨-, -, ac0, awm0, -, -⟩ := stage_supply f
+  obtain ⟨-, -, sD, sU, sT⟩ := st.after ac0 awm0
+  obtain ⟨bd, bm, bs, n⟩ := f.pastLoop st hE win
+  have hdb := hd.symm
+  have hdm := bm.congr hdb
+  have hcd := hdm.clean f.clean
+  have hA3 := st.h3.poolAt
+  have hBN := (hA3.sload Curve3Pool.tokenSlot).ofMv n (by rw [f.target]; decide)
+  have hdA := hBN.congr_gas hdb
+  have hLog := mv_addLog d l
+  have hcl := hLog.clean hcd
+  have hdAL : At 𝐬.currentTarget _ _ (d.addLog l) := ⟨hdA.keys, hdA.stor⟩
+  have hR := lock_restore (s := 𝐬) (b := d.addLog l) (CoveredFork.rules_storageClearRefund f.fork)
+    (by rw [hcl.orig, f.poolStor.2, ← f.poolStor.1]; exact f.lock) (by rw [hdAL.val]; exact headStor_lock 𝐬 𝐩 T)
+  have hAll := (hdm.trans hLog).trans hR
+  have hX : exitLast msg d l = afterSstore 𝐬 (d.addLog l) lockW (Bytes.toB256 [0]) := rfl
+  have hcX := hAll.clean f.clean
+  rw [hX]
+  have hStP : ∀ x, x ≠ pool → Devm.getStor (afterSstore 𝐬 (d.addLog l) lockW (Bytes.toB256 [0])) x = Devm.getStor d x := fun x hx => by
+    rw [afterSstore_getStor_ne _ _ _ _ _ (by rw [f.target]; exact Ne.symm hx)]; rfl
+  have hToBN : ∀ x, x ≠ pool → x ≠ c3 → Devm.getStor d x = Devm.getStor (rlHead3 𝐬 𝐩 T (exitCalls msg)) x := fun x hx hc => by
+    rw [hd.getStor_eq x, (n.same x (by simp only [List.mem_cons, List.not_mem_nil, or_false, or_self]; exact hc)).stor]
+    exact afterSload_getStor ..
+  refine ⟨hcX.error, ?_, ?_, ?_⟩
+  · show (afterSstore 𝐬 (d.addLog l) lockW (Bytes.toB256 [0])).refundCounter = _
+    rw [hAll.refund]
+    show (0 : Int) + _ = _
+    unfold exitRefund exitCoinEmpties loopRefund rawHeld
+    push_cast
+    show _ = (19900 : Int) + 4800 * (_ + _ + (_ + (empties (word w dai (Dai.balSlot pool)) _ : Int)) + (_ + (empties (word w usdc (Usdc.balSlot pool)) _ : Int)) + (_ + (empties (word w usdt (Usdt.balSlot pool)) _ : Int)))
+    omega
+  · exact List.eq_nil_iff_forall_not_mem.2 fun x h => hcX.del x (Std.HashSet.mem_toList.1 h)
+  · refine exit_paid f (w' := (St (afterSstore 𝐬 (d.addLog l) lockW (Bytes.toB256 [0])) S M G).state) ?_ ?_ ?_ ?_ ?_
+    · intro k
+      have hAX := hdAL.sstore lockW (Bytes.toB256 [0])
+      have hS : ((St (afterSstore 𝐬 (d.addLog l) lockW (Bytes.toB256 [0])) S M G).state.getStor pool) =
+          (headStor 𝐬 𝐩 T 3).set lockW (Bytes.toB256 [0]) := by
+        rw [← f.target]; exact hAX.stor
+      rw [hS]
+      have hV := f.sharesW k
+      have hB : rlB 𝐬 𝐩 k.val = (w.getStor pool).get (Curve3Pool.balanceSlot k) := by
+        show ((𝐩.getStor 𝐬.currentTarget).get _) = _
+        rw [f.poolStor.1]; rfl
+      rw [← hB, ← hV]
+      match k with
+      | 0 =>
+        show (((((headStor 𝐬 𝐩 T 0).set (rlKey 0) _).set (rlKey 1) _).set (rlKey 2) _).set lockW _).get (rlKey 0) = _
+        rw [Stor.get_set_ne _ lock_ne0, Stor.get_set_ne _ lock_ne2.2.1.symm, Stor.get_set_ne _ lock_ne1.2.symm, Stor.get_set_self]
+        rfl
+      | 1 =>
+        show (((((headStor 𝐬 𝐩 T 0).set (rlKey 0) _).set (rlKey 1) _).set (rlKey 2) _).set lockW _).get (rlKey 1) = _
+        rw [Stor.get_set_ne _ lock_ne1.1, Stor.get_set_ne _ lock_ne2.2.2.symm, Stor.get_set_self]
+        rfl
+      | 2 =>
+        show (((((headStor 𝐬 𝐩 T 0).set (rlKey 0) _).set (rlKey 1) _).set (rlKey 2) _).set lockW _).get (rlKey 2) = _
+        rw [Stor.get_set_ne _ lock_ne2.1, Stor.get_set_self]
+        rfl
+    · exact (hStP c3 (by decide)).trans ((hd.getStor_eq c3).trans bs)
+    · exact (hStP dai (by decide)).trans ((hToBN dai (by decide) (by decide)).trans (sD.trans st.daiS))
+    · exact (hStP usdc (by decide)).trans ((hToBN usdc (by decide) (by decide)).trans (sU.trans st.usdcS))
+    · exact (hStP usdt (by decide)).trans ((hToBN usdt (by decide) (by decide)).trans (sT.trans st.usdtS))
+
 end Chain
 
 end Blanc.Composition.Curve3PoolPublic
