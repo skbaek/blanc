@@ -423,4 +423,114 @@ theorem bal_runE {sevm : Sevm} {pre : Devm}
   rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
   exact ⟨hle, _, rfl, h⟩
 
+/-! ## The costs where the transaction form needs them -/
+
+section Cold
+
+variable {s : Sevm} {b : Devm} {v f t r a : B256}
+
+/-- The fee rule with its two slots cold: the cap arm is `108` dearer. -/
+theorem feeG_cold (h3 : (⟨s.currentTarget, Bytes.toB256 [3]⟩ : Adr × B256) ∉ b.accessedStorageKeys)
+    (h4 : (⟨s.currentTarget, Bytes.toB256 [4]⟩ : Adr × B256) ∉ b.accessedStorageKeys) :
+    feeG s b v = 4200 + e61G v + if Capped (Devm.getStor b s.currentTarget) v then 336 else 228 := by
+  have h34 : Bytes.toB256 [3] ≠ Bytes.toB256 [4] := by decide
+  unfold feeG
+  rw [sloadCost_cold h3, sloadCost_cold (notMem_afterSload h34 h4)]
+  by_cases hc : Capped (Devm.getStor b s.currentTarget) v
+  · rw [ite_eq_left hc, ite_eq_left hc, sloadCost_of_warm (mem_afterSload _ _ _)]
+    simp only [gasColdSload, gasWarmAccess]
+    omega
+  · rw [ite_eq_right hc, ite_eq_right hc]
+    simp only [gasColdSload]
+    omega
+
+/-- The gate's three slots cold: `6300`. -/
+theorem gateG_cold (h0 : (⟨s.currentTarget, Bytes.toB256 [0]⟩ : Adr × B256) ∉ b.accessedStorageKeys)
+    (hl : (⟨s.currentTarget, mapSlot (m20 &&& (m20 &&& a)) (Bytes.toB256 [6])⟩ : Adr × B256) ∉ b.accessedStorageKeys)
+    (h10 : (⟨s.currentTarget, Bytes.toB256 [10]⟩ : Adr × B256) ∉ b.accessedStorageKeys)
+    (h0l : Bytes.toB256 [0] ≠ mapSlot (m20 &&& (m20 &&& a)) (Bytes.toB256 [6]))
+    (hl10 : mapSlot (m20 &&& (m20 &&& a)) (Bytes.toB256 [6]) ≠ Bytes.toB256 [10]) :
+    gateG s b a = 6300 := by
+  have h010 : Bytes.toB256 [0] ≠ Bytes.toB256 [10] := by decide
+  unfold gateG
+  rw [sloadCost_cold h0, sloadCost_cold (notMem_afterSload h0l hl),
+    sloadCost_cold (notMem_afterSload hl10 (notMem_afterSload h010 h10))]
+  rfl
+
+/-- A move with both its slots cold and apart, no fee or a fee: `4200`, its two stores' value classes,
+and with a fee the owner's cut. -/
+theorem mvG_cold (lz ln : Nat) (hr : (⟨s.currentTarget, ky r⟩ : Adr × B256) ∉ b.accessedStorageKeys)
+    (ht : (⟨s.currentTarget, ky t⟩ : Adr × B256) ∉ b.accessedStorageKeys) (hne : ky r ≠ ky t) :
+    mvG lz ln s b v f t r =
+      (if f = 0 then lz else ln + ownG s (mvCredited s b v (v - f) t r) f) + 4200 +
+        sstoreValueCost (b.getOrigStorVal s s.currentTarget (ky r)) (b.getStorVal s.currentTarget (ky r))
+          (b.getStorVal s.currentTarget (ky r) - v) +
+        sstoreValueCost (b.getOrigStorVal s s.currentTarget (ky t)) (b.getStorVal s.currentTarget (ky t))
+          (b.getStorVal s.currentTarget (ky t) + (v - f)) := by
+  have hcu : (mvDebited s b v r).getStorVal s.currentTarget (ky t) = b.getStorVal s.currentTarget (ky t) := by
+    unfold mvDebited
+    rw [curVal_afterSstore_ne hne, curVal_afterSload]
+  have hm : mvCoreG s b v (v - f) t r = 4200 +
+      sstoreValueCost (b.getOrigStorVal s s.currentTarget (ky r)) (b.getStorVal s.currentTarget (ky r))
+        (b.getStorVal s.currentTarget (ky r) - v) +
+      sstoreValueCost (b.getOrigStorVal s s.currentTarget (ky t)) (b.getStorVal s.currentTarget (ky t))
+        (b.getStorVal s.currentTarget (ky t) + (v - f)) := by
+    unfold mvCoreG
+    rw [hcu]
+    unfold mvDebited
+    exact move_charges_cold hr ht hne
+  unfold mvG
+  rw [hm]
+  split <;> omega
+
+/-- The owner's cut with slot 0 warm and the owner's entry cold: `2400` and the store's value class. -/
+theorem ownG_cold {C : Devm} {x : B256} (h0 : (⟨s.currentTarget, Bytes.toB256 [0]⟩ : Adr × B256) ∈ C.accessedStorageKeys)
+    (hk : (⟨s.currentTarget, oky s C⟩ : Adr × B256) ∉ C.accessedStorageKeys) :
+    ownG s C x = 2400 +
+      sstoreValueCost (C.getOrigStorVal s s.currentTarget (oky s C)) (C.getStorVal s.currentTarget (oky s C))
+        (C.getStorVal s.currentTarget (oky s C) + x) := by
+  have hD0 : (⟨s.currentTarget, Bytes.toB256 [0]⟩ : Adr × B256) ∈
+      (afterSload s C (oky s C)).accessedStorageKeys := mem_afterSload_of_mem h0
+  have hR : ownRead s C = afterSload s C (oky s C) := by
+    unfold ownRead
+    rw [afterSload_of_warm h0]
+  have hOk : oky s (afterSload s C (oky s C)) = oky s C := by
+    unfold oky
+    rw [curVal_afterSload]
+  have hkw : (⟨s.currentTarget, oky s C⟩ : Adr × B256) ∈
+      (afterSload s C (oky s C)).accessedStorageKeys := mem_afterSload s C _
+  unfold ownG ownCredited
+  rw [hR, hOk, afterSload_of_warm h0, sloadCost_of_warm h0, sloadCost_cold hk, sloadCost_of_warm hD0,
+    afterSload_of_warm hD0, sstoreCost_warm_eq hkw, origVal_afterSload, curVal_afterSload,
+    sloadCost_of_warm (mem_afterSstore_of_mem hD0)]
+  simp only [gasColdSload, gasWarmAccess]
+  omega
+
+/-- `transferFrom`'s allowance step with the allowance's slot warm: unlimited or the store's value class. -/
+theorem e10G_warm {al : B256}
+    (hw : (⟨s.currentTarget, ak r s.caller.toB256⟩ : Adr × B256) ∈ b.accessedStorageKeys) :
+    e10G s b al v f t r = if al = maxUint then 26 + mvG 2593 4838 s b v f t r
+      else 320 + sstoreValueCost (b.getOrigStorVal s s.currentTarget (ak r s.caller.toB256))
+          (b.getStorVal s.currentTarget (ak r s.caller.toB256)) (al - v) +
+        mvG 2593 4838 s (afterSstore s b (ak r s.caller.toB256) (al - v)) v f t r := by
+  unfold e10G
+  rw [sstoreCost_warm_eq hw]
+
+/-- `balanceOf` with both slots cold: `5031`, the bounded theorem's figure. -/
+theorem balG_cold (h10 : (⟨s.currentTarget, Bytes.toB256 [10]⟩ : Adr × B256) ∉ b.accessedStorageKeys)
+    (hk : (⟨s.currentTarget, ky (bHolder s)⟩ : Adr × B256) ∉ b.accessedStorageKeys)
+    (hne : Bytes.toB256 [10] ≠ ky (bHolder s)) : balG s b = 5031 := by
+  unfold balG
+  rw [sloadCost_cold h10, sloadCost_cold (notMem_afterSload hne hk)]
+  rfl
+
+/-- `balanceOf` with both slots warm: `1031`. -/
+theorem balG_warm (h10 : (⟨s.currentTarget, Bytes.toB256 [10]⟩ : Adr × B256) ∈ b.accessedStorageKeys)
+    (hk : (⟨s.currentTarget, ky (bHolder s)⟩ : Adr × B256) ∈ b.accessedStorageKeys) : balG s b = 1031 := by
+  unfold balG
+  rw [sloadCost_of_warm h10, sloadCost_of_warm (mem_afterSload_of_mem hk)]
+  rfl
+
+end Cold
+
 end Blanc.Lift.Usdt

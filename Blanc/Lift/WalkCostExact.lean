@@ -311,6 +311,73 @@ theorem move_charges (hw : (⟨s.currentTarget, kr⟩ : Adr × B256) ∈ a.acces
   simp only [gasWarmAccess, gasColdSload]
   omega
 
+/-- A read keeps a slot's snapshot value. -/
+theorem origVal_afterSload (k k' : B256) :
+    (afterSload s a k').getOrigStorVal s s.currentTarget k = a.getOrigStorVal s s.currentTarget k := by
+  unfold Devm.getOrigStorVal
+  rw [afterSload_createdAccounts]
+
+/-- A read keeps a slot's value. -/
+theorem curVal_afterSload (k k' : B256) :
+    (afterSload s a k').getStorVal s.currentTarget k = a.getStorVal s.currentTarget k := by
+  rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSload_getStor]
+
+/-- A store keeps a slot's snapshot value. -/
+theorem origVal_afterSstore (k k' v : B256) :
+    (afterSstore s a k' v).getOrigStorVal s s.currentTarget k = a.getOrigStorVal s s.currentTarget k := by
+  unfold Devm.getOrigStorVal
+  rw [afterSstore_createdAccounts]
+
+/-- A store keeps another slot's value. -/
+theorem curVal_afterSstore_ne {k k' v : B256} (h : k' ≠ k) :
+    (afterSstore s a k' v).getStorVal s.currentTarget k = a.getStorVal s.currentTarget k := by
+  rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSstore_getStor_self]
+  exact Stor.get_set_ne _ h _
+
+/-- A store keeps a slot warm. -/
+theorem mem_afterSstore_of_mem {k k' v : B256} {t : Adr}
+    (h : (⟨t, k⟩ : Adr × B256) ∈ a.accessedStorageKeys) :
+    (⟨t, k⟩ : Adr × B256) ∈ (afterSstore s a k' v).accessedStorageKeys := by
+  unfold afterSstore
+  by_cases hk : (⟨s.currentTarget, k'⟩ : Adr × B256) ∈ a.accessedStorageKeys
+  · rw [ite_eq_left hk]; exact h
+  · rw [ite_eq_right hk]; exact Std.HashSet.mem_insert.mpr (Or.inr h)
+
+/-- A store to another slot leaves this slot cold. -/
+theorem notMem_afterSstore {k k' v : B256} (hne : k' ≠ k)
+    (h : (⟨s.currentTarget, k⟩ : Adr × B256) ∉ a.accessedStorageKeys) :
+    (⟨s.currentTarget, k⟩ : Adr × B256) ∉ (afterSstore s a k' v).accessedStorageKeys := by
+  unfold afterSstore
+  by_cases hk : (⟨s.currentTarget, k'⟩ : Adr × B256) ∈ a.accessedStorageKeys
+  · rw [ite_eq_left hk]; exact h
+  · rw [ite_eq_right hk]
+    intro hm
+    rcases Std.HashSet.mem_insert.mp hm with e | e
+    · have : (⟨s.currentTarget, k'⟩ : Adr × B256) = ⟨s.currentTarget, k⟩ := by simpa using e
+      exact hne (Prod.mk.inj this).2
+    · exact h e
+
+/-- A store to a warm slot pays its value's class. -/
+theorem sstoreCost_warm_eq (hw : (⟨s.currentTarget, kr⟩ : Adr × B256) ∈ a.accessedStorageKeys) :
+    sstoreCost s a kr w = sstoreValueCost (a.getOrigStorVal s s.currentTarget kr)
+      (a.getStorVal s.currentTarget kr) w := by
+  unfold sstoreCost
+  rw [ite_eq_left hw, Nat.zero_add]
+
+/-- **A cold debit and a cold credit, at their states**: `4200` and the stores' value classes. -/
+theorem move_charges_cold (hr : (⟨s.currentTarget, kr⟩ : Adr × B256) ∉ a.accessedStorageKeys)
+    (hc : (⟨s.currentTarget, kt⟩ : Adr × B256) ∉ a.accessedStorageKeys) (hne : kr ≠ kt) :
+    sloadCost s a kr + sstoreCost s (afterSload s a kr) kr w +
+        sloadCost s (afterSstore s (afterSload s a kr) kr w) kt +
+        sstoreCost s (afterSload s (afterSstore s (afterSload s a kr) kr w) kt) kt u =
+      4200 + sstoreValueCost (a.getOrigStorVal s s.currentTarget kr) (a.getStorVal s.currentTarget kr) w +
+        sstoreValueCost (a.getOrigStorVal s s.currentTarget kt) (a.getStorVal s.currentTarget kt) u := by
+  have hc' := notMem_afterSstore (s := s) (a := afterSload s a kr) (v := w) hne (notMem_afterSload hne hc)
+  rw [sloadCost_cold hr, sstoreCost_afterSload_self, sloadCost_cold hc', sstoreCost_afterSload_self,
+    origVal_afterSstore, origVal_afterSload, curVal_afterSstore_ne hne, curVal_afterSload]
+  simp only [gasColdSload]
+  omega
+
 end Move
 
 end Blanc.Lift.AccumulatedWalk

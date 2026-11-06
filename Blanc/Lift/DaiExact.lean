@@ -435,22 +435,11 @@ theorem mvGas_warm (hw : (⟨s.currentTarget, ky r⟩ : Adr × B256) ∈ b.acces
         (b.getStorVal s.currentTarget (ky t) + v) := by
   have hcu : (mvDebited s b v r).getStorVal s.currentTarget (ky t) = b.getStorVal s.currentTarget (ky t) := by
     unfold mvDebited
-    rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSstore_getStor_self, afterSload_getStor]
-    exact Stor.get_set_ne _ hne _
+    rw [curVal_afterSstore_ne hne, curVal_afterSload]
   unfold mvGas
   rw [hcu]
   unfold mvDebited
   exact move_charges hw hc hne
-
-/-- `afterSload` keeps the value classes' inputs. -/
-theorem orig_afterSload (k k' : B256) :
-    (afterSload s b k').getOrigStorVal s s.currentTarget k = b.getOrigStorVal s s.currentTarget k := by
-  unfold Devm.getOrigStorVal
-  rw [afterSload_createdAccounts]
-
-theorem cur_afterSload (k k' : B256) :
-    (afterSload s b k').getStorVal s.currentTarget k = b.getStorVal s.currentTarget k := by
-  rw [getStorVal_eq_getStor, getStorVal_eq_getStor, afterSload_getStor]
 
 /-- **`transfer` with both slots cold**: the fixed `7274` and the two stores' value classes. -/
 theorem xferG_cold (hr : (⟨s.currentTarget, ky s.caller.toB256⟩ : Adr × B256) ∉ b.accessedStorageKeys)
@@ -462,8 +451,8 @@ theorem xferG_cold (hr : (⟨s.currentTarget, ky s.caller.toB256⟩ : Adr × B25
       sstoreValueCost (b.getOrigStorVal s s.currentTarget (ky (xTo s)))
         (b.getStorVal s.currentTarget (ky (xTo s))) (b.getStorVal s.currentTarget (ky (xTo s)) + xVal s) := by
   unfold xferG e34SelfG
-  rw [mvGas_warm (mem_afterSload _ _ _) (notMem_afterSload hne ht) hne, orig_afterSload, orig_afterSload,
-    cur_afterSload, cur_afterSload, sloadCost_cold hr]
+  rw [mvGas_warm (mem_afterSload _ _ _) (notMem_afterSload hne ht) hne, origVal_afterSload, origVal_afterSload,
+    curVal_afterSload, curVal_afterSload, sloadCost_cold hr]
   simp only [gasColdSload]
   omega
 
@@ -480,7 +469,7 @@ theorem e34MaxG_cold (hr : (⟨s.currentTarget, ky r⟩ : Adr × B256) ∉ b.acc
   unfold e34MaxG
   rw [mvGas_warm (mem_afterSload_of_mem (mem_afterSload s b (ky r)))
     (notMem_afterSload hta (notMem_afterSload hne ht)) hne]
-  simp only [orig_afterSload, cur_afterSload]
+  simp only [origVal_afterSload, curVal_afterSload]
   rw [sloadCost_cold hr, sloadCost_cold (notMem_afterSload (Ne.symm hra) ha)]
   simp only [gasColdSload]
   omega
@@ -504,9 +493,9 @@ theorem e34LimG_cold (hr : (⟨s.currentTarget, ky r⟩ : Adr × B256) ∉ b.acc
   have ht2 := notMem_afterSload hta (notMem_afterSload hne ht)
   generalize hb2 : afterSload s (afterSload s b (ky r)) (ak r s.caller.toB256) = b2 at ha2 hr2 ht2
   have ho : ∀ k, b2.getOrigStorVal s s.currentTarget k = b.getOrigStorVal s s.currentTarget k := by
-    intro k; rw [← hb2, orig_afterSload, orig_afterSload]
+    intro k; rw [← hb2, origVal_afterSload, origVal_afterSload]
   have hcu : ∀ k, b2.getStorVal s.currentTarget k = b.getStorVal s.currentTarget k := by
-    intro k; rw [← hb2, cur_afterSload, cur_afterSload]
+    intro k; rw [← hb2, curVal_afterSload, curVal_afterSload]
   have hL : limBase s b v r s.caller.toB256 =
       afterSstore s b2 (ak r s.caller.toB256) (b2.getStorVal s.currentTarget (ak r s.caller.toB256) - v) := by
     unfold limBase
