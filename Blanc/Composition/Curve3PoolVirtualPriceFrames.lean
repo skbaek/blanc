@@ -21,7 +21,6 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 open Blanc.Lift.Curve3Pool
 open Blanc.Lift.CurveCoins
 open Blanc.Composition.Curve3PoolCoinKeep
-open Blanc.Composition.Curve3PoolVirtualPrice
 open Blanc.Composition.Curve3PoolSupply (descendantFrames_eq_children)
 
 /-- What a frame's walks take, at the recorded parties. -/

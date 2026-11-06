@@ -36,9 +36,6 @@ namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.WriteSite
 
-export Blanc.Lift.WriteSite (addrMaskT callerWordT ownerWordT SelTable hasSel AllowedFrame AllowKey
-  hasSel_sound addrMaskT_eval)
-
 /-- A root site is allowed by the table, at the allowance mapping (slot 10). -/
 abbrev allowSiteOk (t : SelTable) (s : Site) : Bool := rowSiteOk 10 t s
 

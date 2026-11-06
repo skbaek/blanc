@@ -33,10 +33,12 @@ private def sumSame (x e : Expr) : MetaM Bool := do
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- The atoms of a `Nat` sum (not sums, not closed literals), each with the equation of the first listed
 lemma whose left side matches it, whose right side's atoms join. -/
-private partial def sumAtoms (ls : Array Expr) (e : Expr) (st : Array Expr × Array (Nat × Expr × Expr)) :
-    MetaM (Array Expr × Array (Nat × Expr × Expr)) := do
+private def sumAtoms (ls : Array Expr) : Nat → Expr → Array Expr × Array (Nat × Expr × Expr) →
+    MetaM (Array Expr × Array (Nat × Expr × Expr))
+  | 0, e, _ => throwError "xsum: sum too deep at {e}"
+  | fuel + 1, e, st => do
   match e.getAppFnArgs with
-  | (``HAdd.hAdd, #[_, _, _, _, a, c]) => sumAtoms ls c (← sumAtoms ls a st)
+  | (``HAdd.hAdd, #[_, _, _, _, a, c]) => sumAtoms ls fuel c (← sumAtoms ls fuel a st)
   | _ =>
     if e.nat?.isSome then return st
     unless e.hasFVar || e.hasMVar do
@@ -52,16 +54,18 @@ private partial def sumAtoms (ls : Array Expr) (e : Expr) (st : Array Expr × Ar
       if ← sumSame x e then
         let y ← instantiateMVars y
         let pf ← instantiateMVars (mkAppN l xs)
-        let (as, hs) ← sumAtoms ls y st
+        let (as, hs) ← sumAtoms ls fuel y st
         return (as, hs.push (i, y, pf))
     return st
 
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- A `Nat` sum over the atoms, each replaced by its local variable. -/
-private partial def sumAbstract (atoms xs : Array Expr) (e : Expr) : MetaM Expr := do
+private def sumAbstract (atoms xs : Array Expr) : Nat → Expr → MetaM Expr
+  | 0, e => throwError "xsum: sum too deep at {e}"
+  | fuel + 1, e => do
   match e.getAppFnArgs with
   | (``HAdd.hAdd, #[_, _, _, _, a, c]) =>
-    return ← mkAdd (← sumAbstract atoms xs a) (← sumAbstract atoms xs c)
+    return ← mkAdd (← sumAbstract atoms xs fuel a) (← sumAbstract atoms xs fuel c)
   | _ =>
     if let some n := e.nat? then return mkNatLit n
     unless e.hasFVar || e.hasMVar do
@@ -91,11 +95,13 @@ theorem sum_close {l n1 r1 R n2 r2 : Nat} (p1 : l = n1 + r1) (g : n1 + r1 = n2 +
 open _root_.Lean _root_.Lean.Meta in
 /-- A sum over local variables as `literal + variables`, with its proof: a walk's sum nests hundreds of
 literals, too much for `omega` as it stands. -/
-private partial def sumNorm (e : Expr) : MetaM (Nat × Expr × Expr) := do
+private def sumNorm : Nat → Expr → MetaM (Nat × Expr × Expr)
+  | 0, e => throwError "xsum: sum too deep at {e}"
+  | fuel + 1, e => do
   match e.getAppFnArgs with
   | (``HAdd.hAdd, #[_, _, _, _, a, c]) =>
-    let (na, ra, pa) ← sumNorm a
-    let (nc, rc, pc) ← sumNorm c
+    let (na, ra, pa) ← sumNorm fuel a
+    let (nc, rc, pc) ← sumNorm fuel c
     if ra.nat? == some 0 then
       return (na + nc, rc, mkApp7 (mkConst ``sum_stepL) a (mkNatLit na) c (mkNatLit nc) rc pa pc)
     if rc.nat? == some 0 then
@@ -114,17 +120,17 @@ elab "xsum " "[" ls:term,* "]" : tactic => withMainContext do
   let tgt := (← instantiateMVars (← getMainTarget)).cleanupAnnotations
   let some (_, lhs, rhs) := tgt.eq? | throwError "xsum: not an equation"
   let lemmas ← ls.getElems.mapM fun l => Term.withSynthesize (elabTerm l none)
-  let st ← sumAtoms lemmas lhs (#[], #[])
-  let (atoms, hyps) ← sumAtoms lemmas rhs st
+  let st ← sumAtoms lemmas 100000 lhs (#[], #[])
+  let (atoms, hyps) ← sumAtoms lemmas 100000 rhs st
   let decls := atoms.mapIdx fun i _ => ((`x).appendIndexAfter i, fun _ => pure (mkConst ``Nat))
   withLocalDeclsD decls fun xs => do
     let hdecls ← hyps.mapM fun (i, y, _) => do
-      return (`h, (← mkEq xs[i]! (← sumAbstract atoms xs y)))
+      return (`h, (← mkEq xs[i]! (← sumAbstract atoms xs 100000 y)))
     withLocalDeclsD (hdecls.map fun (n, t) => (n, fun _ => pure t)) fun hs => do
-      let lhs' ← sumAbstract atoms xs lhs
-      let rhs' ← sumAbstract atoms xs rhs
-      let (n1, r1, p1) ← sumNorm lhs'
-      let (n2, r2, p2) ← sumNorm rhs'
+      let lhs' ← sumAbstract atoms xs 100000 lhs
+      let rhs' ← sumAbstract atoms xs 100000 rhs
+      let (n1, r1, p1) ← sumNorm 100000 lhs'
+      let (n2, r2, p2) ← sumNorm 100000 rhs'
       let goal ← mkEq (mkNatAdd (mkNatLit n1) r1) (mkNatAdd (mkNatLit n2) r2)
       let mv ← mkFreshExprMVar goal
       let [] ← Tactic.run mv.mvarId! (evalTactic (← `(tactic| omega)))

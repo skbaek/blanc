@@ -12,7 +12,7 @@ writer. `V1ApproveRetainedLog.frame_approve_write_emits` is the walk.
 
 namespace Blanc.Lift.CurveCoins.UsdcV1
 
-open Jaune Blanc Blanc.Lift
+open Jaune Blanc Blanc.Lift Blanc.Lift.WriteSite
 
 /-- **A committed V1 frame with a store that raises one of `pair`'s tracked rows, other than in `initialize`, logs
 `Approval` with `pair` as owner.** `sep` is hash freshness for the frame, as in `implV1_allowLocality`. -/

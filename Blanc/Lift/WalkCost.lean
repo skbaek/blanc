@@ -29,11 +29,13 @@ theorem sstoreCost_le_lit (sevm : Sevm) (d : Devm) (k v : B256) : sstoreCost sev
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- A literal bound of a `Nat` sum and its proof, by recursion on the sum: a summand is a literal, a
 closed term that evaluates to one, or the left side of a lemma in `ls`. -/
-private partial def sumBound (ls : Array Expr) (e : Expr) : MetaM (Nat × Expr) := do
+private def sumBound (ls : Array Expr) : Nat → Expr → MetaM (Nat × Expr)
+  | 0, e => throwError "xcost: sum too deep at {e}"
+  | fuel + 1, e => do
   match e.getAppFnArgs with
   | (``HAdd.hAdd, #[_, _, _, _, a, c]) =>
-    let (na, pa) ← sumBound ls a
-    let (nc, pc) ← sumBound ls c
+    let (na, pa) ← sumBound ls fuel a
+    let (nc, pc) ← sumBound ls fuel c
     return (na + nc, mkApp6 (mkConst ``Nat.add_le_add) a (mkNatLit na) c (mkNatLit nc) pa pc)
   | _ =>
     if let some n := e.nat? then return (n, mkApp (mkConst ``Nat.le_refl) e)
@@ -59,7 +61,7 @@ elab "xcost " "[" ls:term,* "]" : tactic => withMainContext do
   let some (_, lhs, K) := tgt.le? | throwError "xcost: not a `≤` goal"
   let some k := K.nat? | throwError "xcost: bound {K} is not a literal"
   let lemmas ← ls.getElems.mapM fun l => Term.withSynthesize (elabTerm l none)
-  let (n, pf) ← sumBound (#[mkConst ``sloadCost_le_lit, mkConst ``sstoreCost_le_lit] ++ lemmas) lhs
+  let (n, pf) ← sumBound (#[mkConst ``sloadCost_le_lit, mkConst ``sstoreCost_le_lit] ++ lemmas) 100000 lhs
   unless n ≤ k do throwError "xcost: the charge is at most {n}, above {k}"
   let close := mkApp2 (mkConst ``Nat.le_of_ble_eq_true) (mkNatLit n) K
   let close := mkApp close (mkApp2 (mkConst ``Eq.refl [1]) (mkConst ``Bool) (mkConst ``true))

@@ -32,7 +32,7 @@ clearing range and only the payload windows count, at most `2 ^ 155` words wide.
 
 namespace Blanc.Lift.Usdc
 
-open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.Lift.WriteSite
 
 /-- **A word apart from a string's whole interval**: the string at `s` occupies words from `keccak s`,
 and no header's length reaches past `2 ^ 251` words. -/
