@@ -31,11 +31,6 @@ structure AlDebits (P : ALExactCalls) : Prop where
   balA : ∀ b S M, P.balADebit b S M ≤ 8047
   mint : ∀ b S M, P.mintDebit b S M ≤ 56100
 
-theorem costGetDMem_le (x : V3) (amp : Nat) : costGetDMem x amp ≤ 517397 := by
-  have h := costGetD_le x.v0 x.v1 x.v2 amp
-  unfold costGetDMem
-  omega
-
 theorem alHeadX_le (s : Sevm) (n : Devm) (k : Nat) (T : B256) : alHeadCostX s n k T ≤ 2329 := by
   have h0 := sloadCost_le_lit s n (coinsBase + Nat.toB256 0)
   have h1 := sloadCost_le_lit s n (coinsBase + Nat.toB256 k)

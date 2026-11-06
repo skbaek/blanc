@@ -108,6 +108,25 @@ theorem aGas_le (s : Sevm) (b : Devm) : aGas s b ≤ 458 + 4 * 2100 := by
   · split <;> omega
   · omega
 
+/-- `get_D` at its largest pass charge, `1676`, for every pass. -/
+theorem costGetD_sharp (x0 x1 x2 amp : Nat) : costGetD x0 x1 x2 amp ≤ 505 + (157 + 255 * 1676) := by
+  have key : ∀ (b : Nat → Option Nat) (D : Nat), fuelCost b (fun new prev => decide (closeEnough 1 new prev)) gdStepC gdStopC gdCapC 255 D ≤ 255 * 1676 :=
+    fun _ D => fuelCost_le (fun a b => by unfold gdStepC; split <;> omega) (fun a b => by unfold gdStopC; split <;> omega)
+      (fun a b => by unfold gdCapC; split <;> omega) 255 D
+  unfold costGetD
+  split
+  · split
+    · omega
+    · split
+      · refine Nat.add_le_add_left (Nat.add_le_add_left (key _ _) _) _
+      · omega
+  · omega
+
+theorem costGetDMem_le (x : V3) (amp : Nat) : costGetDMem x amp ≤ 6676 + (505 + (157 + 255 * 1676)) := by
+  have := costGetD_sharp x.v0 x.v1 x.v2 amp
+  unfold costGetDMem
+  omega
+
 theorem costGetY_le (s : Sevm) (b : Devm) (amp i j x x0 x1 x2 : Nat) : costGetY s b amp i j x x0 x1 x2 ≤ 2100 + (458 + 4 * 2100) + (505 + (59 + 157 + 255 * 2000) + (450 + (450 + (450 + (363 + 255 * 600))))) := by
   unfold costGetY
   have h := aGas_le s b

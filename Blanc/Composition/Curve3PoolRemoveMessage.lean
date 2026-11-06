@@ -222,25 +222,6 @@ open Blanc.Composition.Curve3PoolCalleeLive (acc ext acc_le ext_le callMsg0 call
 open Blanc.Lift.AccumulatedWalk (sloadCost_le_lit sstoreCost_le_lit)
 open Blanc.Composition.Curve3PoolCalleeExactProfiles (mutDebit mutBodyCost)
 
-/-- `get_D` at its largest pass charge, `1676`, for every pass. -/
-theorem costGetD_sharp (x0 x1 x2 amp : Nat) : costGetD x0 x1 x2 amp ≤ 505 + (157 + 255 * 1676) := by
-  have key : ∀ (b : Nat → Option Nat) (D : Nat), fuelCost b (fun new prev => decide (closeEnough 1 new prev)) gdStepC gdStopC gdCapC 255 D ≤ 255 * 1676 :=
-    fun _ D => fuelCost_le (fun a b => by unfold gdStepC; split <;> omega) (fun a b => by unfold gdStopC; split <;> omega)
-      (fun a b => by unfold gdCapC; split <;> omega) 255 D
-  unfold costGetD
-  split
-  · split
-    · omega
-    · split
-      · refine Nat.add_le_add_left (Nat.add_le_add_left (key _ _) _) _
-      · omega
-  · omega
-
-theorem costGetDMem_le (x : V3) (amp : Nat) : costGetDMem x amp ≤ 6676 + (505 + (157 + 255 * 1676)) := by
-  have := costGetD_sharp x.v0 x.v1 x.v2 amp
-  unfold costGetDMem
-  omega
-
 /-- `get_y_D`'s loop at its largest pass charge, `588`, for every pass. -/
 theorem ydPostCost_sharp (c s D ann : Nat) : ydPostCost c s D ann ≤ 363 + 255 * 588 := by
   unfold ydPostCost
