@@ -263,7 +263,7 @@ theorem usdcSelfCallerF (P : Adr) (K₀ : Key → Prop) : SelfCallerW (usdcCoreF
       rw [one, List.mem_singleton] at child
       subst child
       exact (installed.implApart (Option.some.inj (entry.2.symm.trans cca))).elim
-  · rcases impl_children run codeEq facts.fork facts.codes.2.2 c child with
+  · rcases impl_children run codeEq facts.fork.histFork facts.codes.2.2 c child with
       ⟨-, cca, -⟩ | ⟨caller, -⟩
     · exact (installed.libApart (Option.some.inj (entry.2.symm.trans cca))).elim
     · rw [caller, target]

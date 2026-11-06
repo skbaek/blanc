@@ -282,8 +282,9 @@ structure WalkEnv (frames rootList : List Exec.Frame) (σ₀ : Stor) (pool ca : 
   parties : ∀ f ∈ frames, f.sevm.currentTarget = pool →
     (∀ k : Fin 3, ¬ f.sevm.benvStat.rules.isPrecomp (Curve3Pool.adrOf (coins.get k))) ∧
       ¬ f.sevm.benvStat.rules.isPrecomp (Curve3Pool.adrOf ca.toNat)
-  keepToken : ∀ f ∈ frames, f.sevm.currentTarget = pool →
-    Curve3Pool.PoolCoinCallsKeepToken (Blanc.Exec.Frame.rootDeriv f)
+  keepToken : ∀ f ∈ frames, f.sevm.currentTarget = pool → f.sevm.isStatic = false →
+    ∀ s : Curve3Pool.State, Curve3Pool.Checkpoint (f.pre.getStor pool) s → s.coins = coins →
+      s.token = ca.toNat → Curve3Pool.PoolCoinCallsKeepToken (Blanc.Exec.Frame.rootDeriv f)
 
 theorem runInvocations_prefix {s t : Blanc.Curve3Crv.State} {xs ys : List WriterInvocation}
     (h : runInvocations s (xs ++ ys) = some t) : ∃ m, runInvocations s xs = some m := by
@@ -437,7 +438,7 @@ theorem supply_walk {frames rootList : List Exec.Frame} {σ₀ : Stor} {pool ca 
           (Curve3Pool.tokenAdr (Blanc.Exec.Frame.rootDeriv i.frame))
         rw [Curve3Pool.tokenAdr_eq abs, htoken]
         exact parties.2
-    have keepToken := W.keepToken _ settledP atPool
+    have keepToken := W.keepToken _ settledP atPool mutable st entryCk hcoins htoken
     obtain ⟨X', Y', runX', runY', invX', invY', moved, kept, prefixes⟩ :=
       pool_frame_supply W.injective W.apartU W.ready W.hK W.invariant W.apart globalSplit ⟨r, contig⟩
         atPool (W.view globalSplit mutable) token calls keepToken
@@ -631,7 +632,7 @@ theorem pool_3crv_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future
       whole := ⟨Z, runZ⟩
       parties := fun f member =>
         env'.parties _ (settled_mem_rawFrames trace f member)
-      keepToken := fun f member target => (derivEntry_frame (ready f member).1
+      keepToken := fun f member target _ _ _ _ _ => (derivEntry_frame (ready f member).1
         ((trace.frameAdmitted_iff_rawFrames pool _).1 env'.callbacks _
           (settled_mem_rawFrames trace f member) target)).2 }
   obtain ⟨code, invs, obs, auth, entries, s, run, fold, hc, hcoins, htoken, -⟩ :=

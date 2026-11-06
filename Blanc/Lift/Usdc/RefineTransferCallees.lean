@@ -93,7 +93,7 @@ variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 
 /-- **Entry 83, `_isBlacklisted(a)`**: reads the packed word of `a` and returns its top bit
 compared with `1`. -/
-theorem e83_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e83_inv {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_3f6a_c83 o) :
     ∃ b' M' G', o = .returned (St b' (B256.eqCheck 1
         (b.getStorVal sevm.currentTarget (balSlot a.toAdr) >>> 255) :: S) M' G') ∧
@@ -104,10 +104,10 @@ theorem e83_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.f
   obtain ⟨_, e⟩ := ric_ret h
   cases e
   rw [keccak_scratch, ff20_word, lit9, lit1, lit255] at *
-  exact ⟨_, _, _, rfl, funext fun x => afterSload_getStor _ _ _ x⟩
+  exact ⟨_, _, _, rfl, funext fun x => afterSloadH_getStor _ _ _ x⟩
 
 /-- **Entry 96, `_balanceOf(a)`**: the low 255 bits of `a`'s packed word. -/
-theorem e96_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e96_inv {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_41da_c96 o) :
     ∃ b' M' G', o = .returned (St b' ((Nat.toB256 (2 ^ 255 - 1) &&&
         b.getStorVal sevm.currentTarget (balSlot a.toAdr)) :: S) M' G') ∧
@@ -118,10 +118,10 @@ theorem e96_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.f
   obtain ⟨_, e⟩ := ric_ret h
   cases e
   rw [keccak_scratch, ff20_word, lit9, litMask255] at *
-  exact ⟨_, _, _, rfl, funext fun x => afterSload_getStor _ _ _ x⟩
+  exact ⟨_, _, _, rfl, funext fun x => afterSloadH_getStor _ _ _ x⟩
 
 /-- **Entry 100, SafeMath `sub`**. -/
-theorem e100_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e100_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_4163_c100 o) :
     x.toNat ≤ y.toNat ∧ ∃ G', o = .returned (St b ((y - x) :: S) M G') := by
   have h := run.cut
@@ -134,7 +134,7 @@ theorem e100_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSta
   exact ⟨toNat_le_of_gtCheck_eq_zero (eq_zero_of_iszero_ne_zero c), _, rfl⟩
 
 /-- **Entry 98, SafeMath `add`** (its tail is entry 7). -/
-theorem e98_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e98_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_43b5_c98 o) :
     x.toNat + y.toNat < 2 ^ 256 ∧ ∃ G', o = .returned (St b ((x + y) :: S) M G') := by
   have h := run.cut
@@ -148,7 +148,7 @@ theorem e98_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   exact ⟨(add_nof_of_ltCheck (eq_zero_of_iszero_ne_zero c)).1, _, rfl⟩
 
 /-- **Entry 99, `_setBalance(a, v)`**. -/
-theorem e99_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e99_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_4430_c99 o) :
     x.toNat ≤ 2 ^ 255 - 1 ∧
       frozenBit (b.getStorVal sevm.currentTarget (balSlot y.toAdr)) = false ∧
@@ -173,13 +173,13 @@ theorem e99_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
     refine ⟨?_, frozen_false_of_check c2, _, _, _, rfl, ?_⟩
     · have := le_of_gt_check c1
       rwa [toNat_low255] at this
-    · rw [afterSstore_getStor_self, hs]
+    · rw [afterSstoreH_getStor_self, hs]
       rfl
   · obtain ⟨_, _, _, e, _⟩ := e83_inv fork hc
     cases e
 
 /-- **Entry 93, `_transfer(from, to, value)`**. -/
-theorem e93_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e93_inv {x y z ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: z :: ret :: S) M G) t_3f98_c93 o) :
     z.toAdr ≠ 0 ∧ y.toAdr ≠ 0 ∧
       x.toNat ≤ balanceBits ((Devm.getStor b sevm.currentTarget).get (balSlot z.toAdr)) ∧
@@ -265,7 +265,7 @@ theorem e93_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
     rfl
 
 /-- **Entry 81, `_approve(owner, spender, value)`**. -/
-theorem e81_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e81_inv {x y z ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: z :: ret :: S) M G) t_3e18_c81 o) :
     z.toAdr ≠ 0 ∧ y.toAdr ≠ 0 ∧
       ∃ b' M' G', o = .returned (St b' S M' G') ∧ Devm.getStor b' sevm.currentTarget =
@@ -283,11 +283,11 @@ theorem e81_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   clear e
   rw [Devm.addLog_getStor] at sB
   refine ⟨adr_ne_zero_of_mask c1, adr_ne_zero_of_mask c2, B, MB, GB, eo, ?_⟩
-  rw [sB, afterSstore_getStor_self, keccak_scratch, keccak_scratch, word_ff20, word_ff20, lit10]
+  rw [sB, afterSstoreH_getStor_self, keccak_scratch, keccak_scratch, word_ff20, word_ff20, lit10]
   rfl
 
 /-- **Entry 102, `_increaseAllowance(owner, spender, increment)`**. -/
-theorem e102_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e102_inv {x y z ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: z :: ret :: S) M G) t_436b_c102 o) :
     z.toAdr ≠ 0 ∧ y.toAdr ≠ 0 ∧
       ((Devm.getStor b sevm.currentTarget).get (allowSlot z.toAdr y.toAdr)).toNat + x.toNat <
@@ -315,7 +315,7 @@ theorem e102_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvS
   clear e
   rw [keccak_scratch, keccak_scratch, word_ff20, word_ff20, lit10] at c1 s2
   rw [gsv] at c1
-  rw [afterSload_getStor, gsv, add_word c1] at s2
+  rw [afterSloadH_getStor, gsv, add_word c1] at s2
   have slot : Blanc.Lift.mapSlot y.toAdr.toB256 (Blanc.Lift.mapSlot z.toAdr.toB256 10) =
     allowSlot z.toAdr y.toAdr := rfl
   rw [slot] at c1 s2
@@ -326,7 +326,7 @@ theorem e102_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvS
 theorem revertCopy_noExit : NoExitSet cert.prog [12, 13, 119] = true := by decide +kernel
 
 /-- **Entry 115, SafeMath `sub(a, b, message)`**. -/
-theorem e115_inv {x y w ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e115_inv {x y w ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: w :: ret :: S) M G) t_50c5_c115 o) :
     y.toNat ≤ w.toNat ∧ ∃ G', o = .returned (St b ((w - y) :: S) M G') := by
   have h := run.cut
@@ -339,7 +339,7 @@ theorem e115_inv {x y w ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvS
   exact ⟨le_of_gt_check c, _, Seg.done.inj e⟩
 
 /-- **Entry 92, `_decreaseAllowance(owner, spender, decrement)`**. -/
-theorem e92_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e92_inv {x y z ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: z :: ret :: S) M G) t_4956_c92 o) :
     z.toAdr ≠ 0 ∧ y.toAdr ≠ 0 ∧
       x.toNat ≤ ((Devm.getStor b sevm.currentTarget).get (allowSlot z.toAdr y.toAdr)).toNat ∧
@@ -368,11 +368,11 @@ theorem e92_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   have slot : Blanc.Lift.mapSlot y.toAdr.toB256 (Blanc.Lift.mapSlot z.toAdr.toB256 10) =
     allowSlot z.toAdr y.toAdr := rfl
   rw [slot, gsv] at c1 s2
-  rw [afterSload_getStor, sub_word c1] at s2
+  rw [afterSloadH_getStor, sub_word c1] at s2
   exact ⟨c2, c3, c1, B, MB, GB, eo, by rw [sB, s2]⟩
 
 /-- **Entry 71, the body of `approve(spender, value)`**. -/
-theorem e71_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e71_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_12d3_c71 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧ sevm.caller ≠ 0 ∧
       y.toAdr ≠ 0 ∧ ∃ b' M' G', o = .returned (St b' (1 :: S) M' G') ∧
@@ -395,11 +395,11 @@ theorem e71_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   have p := flag20_false_of_check c1
   rw [lit1] at p eo s2
   rw [toAdr_toB256] at c2 s2
-  rw [afterSload_getStor] at s2
+  rw [afterSloadH_getStor] at s2
   exact ⟨p, c2, c3, B, MB, GB, eo, by rw [sB, s2]⟩
 
 /-- **Entry 58, the body of `increaseAllowance(spender, increment)`**. -/
-theorem e58_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e58_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_1d6a_c58 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧ sevm.caller ≠ 0 ∧
       y.toAdr ≠ 0 ∧
@@ -427,11 +427,11 @@ theorem e58_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   have p := flag20_false_of_check c1
   rw [lit1] at p eo s2
   rw [toAdr_toB256] at c2 c4 s2
-  rw [afterSload_getStor] at s2 c4
+  rw [afterSloadH_getStor] at s2 c4
   exact ⟨p, c2, c3, c4, B, MB, GB, eo, by rw [sB, s2]⟩
 
 /-- **Entry 36, the body of `decreaseAllowance(spender, decrement)`**. -/
-theorem e36_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e36_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_2f0e_c36 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧ sevm.caller ≠ 0 ∧
       y.toAdr ≠ 0 ∧
@@ -458,11 +458,11 @@ theorem e36_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   have p := flag20_false_of_check c1
   rw [lit1] at p eo s2
   rw [toAdr_toB256] at c2 c4 s2
-  rw [afterSload_getStor] at s2 c4
+  rw [afterSloadH_getStor] at s2 c4
   exact ⟨p, c2, c3, c4, B, MB, GB, eo, by rw [sB, s2]⟩
 
 /-- **Entry 37, the body of `transfer(to, value)`**. -/
-theorem e37_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e37_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_2fa6_c37 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot y.toAdr)) = false ∧
@@ -507,13 +507,13 @@ theorem e37_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   have p := flag20_false_of_check c1
   have f := frozen_false_of_check c3
   rw [lit1] at p eo
-  rw [getStorVal_of_getStor s1, gsv, afterSload_getStor] at f
+  rw [getStorVal_of_getStor s1, gsv, afterSloadH_getStor] at f
   rw [toAdr_toB256] at c4 c6 c7 c8 c9 s3
-  rw [s2, s1, afterSload_getStor] at c6 c7 c8 c9 s3
+  rw [s2, s1, afterSloadH_getStor] at c6 c7 c8 c9 s3
   exact ⟨p, f, c4, c5, c6, c7, c8, c9, B, MB, GB, eo, by rw [sB, s3]⟩
 
 /-- **Entry 68, the body of `transferFrom(from, to, value)`**. -/
-theorem e68_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e68_inv {x y z ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: z :: ret :: S) M G) t_1437_c68 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
       frozenBit ((Devm.getStor b sevm.currentTarget).get (balSlot sevm.caller)) = false ∧
@@ -588,7 +588,7 @@ theorem e68_inv {x y z ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   have t3 := congrFun s3 sevm.currentTarget
   have tB := congrFun sB sevm.currentTarget
   clear s1 s2 s3 sB
-  simp only [keccak_scratch, word_ff20, lit10, lit1, gsv, afterSload_getStor, afterSstore_getStor_self,
+  simp only [keccak_scratch, word_ff20, lit10, lit1, gsv, afterSloadH_getStor, afterSstoreH_getStor_self,
     toAdr_toB256, slot, t1, t2, t3] at p eo f1 f2 f3 a1 d3 d4 d5 d6 d7 s4 tB
   rw [s4] at d7 tB
   rw [sub_word d7] at tB

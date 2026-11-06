@@ -197,7 +197,7 @@ theorem frameChild_stor {sevm : Sevm} {pre : Devm} {X : Nat} (fork : CoveredFork
     funext i; unfold Sevm.dataWord; rw [hd]
   have sel' : Blanc.Sevm.selector (initSevm (dMsg sevm pre (frameY sevm pre X))) = 0xa9059cbb := by
     unfold Blanc.Sevm.selector; rw [hw]; exact sel
-  have h := (frame_transfer fork' sel' r).2.2.2.2.2.2.2.2
+  have h := (frame_transfer fork'.histFork sel' r).2.2.2.2.2.2.2.2
   rw [hw] at h
   have hs : ∀ a, Devm.getStor (initDevm (dMsg sevm pre (frameY sevm pre X))) a =
       Devm.getStor pre a := fun a => by

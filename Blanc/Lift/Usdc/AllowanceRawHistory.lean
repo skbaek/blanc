@@ -61,16 +61,8 @@ theorem rawWrite_allowClass {G m : Exec.Deriv} (hpc : G.pc = 0)
     {w : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? m = some w)
     (tracked : ∃ g, Tr g ∧ allowSlot pair g = w.key) :
     AllowedFrame t pair (WriteSite.Env.root G.sevm) ∨
-      w.value.toNat ≤ (m.devm.getStorVal m.sevm.currentTarget w.key).toNat := by
-  obtain ⟨site, member, den, guards, nonInc⟩ :=
-    successfulSstore_site hc hw hpc hcode hsg chain found
-  obtain ⟨-, rest, stack⟩ := successfulSstore?_decoded found
-  have obs : WsObs (wsRoot ann) (Env.root G.sevm) m.sevm m.devm (.reg .sstore) := by
-    intro _ key value tail actualStack
-    obtain ⟨rfl, tailEq⟩ := List.cons.inj (stack.symm.trans actualStack)
-    obtain ⟨rfl, -⟩ := List.cons.inj tailEq
-    exact ⟨site, member, den, guards, nonInc⟩
-  exact allow_class_of_wsObs hsel hok sep obs stack tracked
+      w.value.toNat ≤ (m.devm.getStorVal m.sevm.currentTarget w.key).toNat :=
+  rawWrite_rowClass hpc hsg chain hc hw hcode hsel hok sep found tracked
 
 /-- The library runtime never writes. -/
 theorem lib_no_sstore_node {G m : Exec.Deriv} (hpc : G.pc = 0)
