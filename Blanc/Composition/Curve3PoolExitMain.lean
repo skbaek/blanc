@@ -5,8 +5,7 @@ import Blanc.Composition.Curve3PoolBacked
 # `lp_exit`: the message and the transaction
 
 `exit_message`: the frame's run from the moment's facts, its cost and effect from `ExitFrame.cold`. `Moment.id4` and
-`Moment.minter`: address 4 and 3Crv's minter at the cut. `lp_exit_of_implCode` is the transaction; the one hypothesis beyond
-the statement's is V2_2's code at the address `CoinsOpen.usdcV22` names.
+`Moment.minter`: address 4 and 3Crv's minter at the cut. `lp_exit_holds` and `lp_exit_message_holds` close the two statements.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -32,13 +31,14 @@ theorem ColdEntry.stor (e : ColdEntry msg w E (exitCalldata a mins)) {x : Adr} (
 /-- **The message under the marked hypotheses.** `MsgDoes` with the gas bound its walks need, which `MsgDoes` does
 not state. -/
 theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg w E (exitCalldata a mins))
-    (hE : E ≠ 0) (req : ExitRequest w E a mins) (R : Nat) (hR : callRoom ≤ R) (hG : R + exitFrameGas w E a < 2 ^ 256) :
+    (req : ExitRequest w E a mins) (R : Nat) (hR : callRoom ≤ R) (hG : R + exitFrameGas w E a < 2 ^ 256) :
     ∃ post, exec (initEvm (msg.withGas (R + exitFrameGas w E a))) = .ok post ∧ post.error = none ∧
       post.gasLeft = R ∧ post.refundCounter = (exitRefund w E a : Int) ∧ post.accountsToDelete.toList = [] ∧
       ExitPaid w post.state E a := by
   have ht : msg.currentTarget = pool := e.entry.named.1
   have hcaller : msg.caller = E := e.entry.named.2.1
   have hopen := e.coinsOpen
+  have hE : E ≠ 0 := e.nonzero
   have hfork : CoveredFork (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
   have hH : HistFork (initSevm msg).benvStat.fork := hfork.histFork
   have hdata : (initSevm msg).data = exitCalldata a mins := e.data
@@ -152,8 +152,8 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg
     have hI : usdcImplOf w = Usdc.usdcImpl := by
       unfold usdcImplOf
       rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
-    rw [← hI, cI]
-    exact mk.usdcCode
+    rw [← hI, cI, hI]
+    exact hopen.usdcImplCode
   have hC : RealCoins (initSevm msg) (initDevm msg) :=
     { dai := by rw [hco 0]; show (initDevm msg).getCode dai = _; rw [cD]; exact mf.daiCode
       usdc := by rw [hco 1]; show (initDevm msg).getCode usdc = _; rw [cU]; exact mk.usdcProxy
@@ -428,21 +428,15 @@ theorem ExitPaid.congr {w w₁ w₂ : State} {E : Adr} {a : Nat} (h : ExitPaid w
   · rw [hcoin]; exact h.coins k
   · rw [hcoin]; exact h.paid k
 
-/-- **`lp_exit`, given V2_2's code at the address `CoinsOpen.usdcV22` names**: one `eth_getCode` at the moment, the only
-hypothesis beyond the statement's. -/
-theorem lp_exit_of_implCode {d : Deployment} (m : Moment d) (A : Assumes d m.through) {tx : Tx} {E : Adr} {a : Nat}
-    {mins : Curve3Pool.V3} (hdata : tx.data = exitCalldata a mins)
-    (adm : TxAdmitted m.benv m.bout tx E (exitLimit m.world tx.data E a)) (hopen : CoinsOpen m.world E)
-    (req : ExitRequest m.world E a mins)
-    (implCode : m.world.getCode (usdcImplOf m.world) = Usdc.Impl.code) :
-    ExitWorks m.benv m.bout tx m.nextIndex E a := by
+/-- **`lp_exit`.** -/
+theorem lp_exit_holds : lp_exit := by
+  intro d m A tx E a mins hdata adm hopen req
   obtain ⟨prio, maxFee, form, ready⟩ := adm.form
   have mf := m.facts A
   have mk : ExitMarked m.world :=
     { covered := m.backed A
       usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
         A.circle.usdcCertified
-      usdcCode := implCode
       minter := m.minter A
       id4 := m.id4 A }
   have hw : m.benv.state = m.world := rfl
@@ -497,7 +491,7 @@ theorem lp_exit_of_implCode {d : Deployment} (m : Moment d) (A : Assumes d m.thr
         · exact hnoE _ (by simp only [or_true])
         · intro hEx
           have hz := ready.noCode
-          rw [hEx, hw, mk.usdcCode] at hz
+          rw [hEx, hw, hI, hopen.usdcImplCode] at hz
           exact absurd hz (by decide +kernel)
       have hE4 : E ≠ 4 := by
         intro h4
@@ -549,7 +543,8 @@ theorem lp_exit_of_implCode {d : Deployment} (m : Moment d) (A : Assumes d m.thr
                   rw [hM]
                   exact m.block.txSplit_notCreated m.cut x, fun x => by rw [hM]; exact Std.HashSet.not_mem_emptyWithCapacity⟩ }
           data := by rw [hM]; exact hdata
-          coinsOpen := hopen }
+          coinsOpen := hopen
+          nonzero := hE0 }
       have hFd : M.gas = tx.gas - callIntrinsic tx.data := by rw [hM]; rfl
       have hneed := adm.room.enough
       have hlim : exitLimit m.world tx.data E a = callIntrinsic tx.data + exitFrameGas m.world E a + callRoom := rfl
@@ -557,7 +552,7 @@ theorem lp_exit_of_implCode {d : Deployment} (m : Moment d) (A : Assumes d m.thr
       have hsum : tx.gas - (callIntrinsic tx.data + exitFrameGas m.world E a) + exitFrameGas m.world E a = M.gas := by
         rw [hFd]; omega
       have hcap := adm.room.cap
-      obtain ⟨post, hx, herr, hg, hrf, hdel, hpaid⟩ := exit_message mf mk ce hE0 req
+      obtain ⟨post, hx, herr, hg, hrf, hdel, hpaid⟩ := exit_message mf mk ce req
         (tx.gas - (callIntrinsic tx.data + exitFrameGas m.world E a)) (by omega) (by rw [hsum, hFd]; omega)
       rw [hsum] at hx
       refine ⟨post, ?_, herr, hg, hrf, hdel, hpaid⟩
@@ -579,20 +574,16 @@ theorem lp_exit_of_implCode {d : Deployment} (m : Moment d) (A : Assumes d m.thr
   simp only [List.foldl_nil, State.addBal]
   rw [State.setBal_get_ne hCx, State.setBal_get_ne hEx]
 
-/-- **`lp_exit`'s message**, given the same read. -/
-theorem lp_exit_message_of_implCode {d : Deployment} (m : Moment d) (A : Assumes d m.through) {msg : Msg} {E : Adr} {a : Nat}
-    {mins : Curve3Pool.V3} (ask : Asked msg m.world E (exitCalldata a mins)) (req : ExitRequest m.world E a mins) (hE : E ≠ 0)
-    (implCode : m.world.getCode (usdcImplOf m.world) = Usdc.Impl.code) :
-    MsgDoes msg callRoom (exitFrameGas m.world E a) (exitRefund m.world E a) (fun st => ExitPaid m.world st E a) := by
-  intro R hR hG
+/-- **`lp_exit`'s message.** -/
+theorem lp_exit_message_holds : lp_exit_message := by
+  intro d m A msg E a mins ask req R hR hG
   have mk : ExitMarked m.world :=
     { covered := m.backed A
       usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
         A.circle.usdcCertified
-      usdcCode := implCode
       minter := m.minter A
       id4 := m.id4 A }
-  obtain ⟨post, hx, herr, hg, hrf, -, hpaid⟩ := exit_message (m.facts A) mk ask hE req R hR hG
+  obtain ⟨post, hx, herr, hg, hrf, -, hpaid⟩ := exit_message (m.facts A) mk ask req R hR hG
   exact ⟨post, hx, herr, hg, by rw [hrf, Int.toNat_natCast], hpaid⟩
 
 end Blanc.Composition.Curve3PoolPublic

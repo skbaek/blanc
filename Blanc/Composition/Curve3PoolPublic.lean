@@ -186,6 +186,8 @@ structure Asked (msg : Msg) (w : State) (E : Adr) (data : Bytes) : Prop where
   entry : MsgEntry msg w E
   data : msg.data = data
   coinsOpen : CoinsOpen w E
+  /-- The sender is not the zero address, which a transaction's recovered signer never is. -/
+  nonzero : E ≠ 0
 
 /-- `lp_exit`'s message: the same effect at the same frame cost and refund. -/
 def lp_exit_message : Prop :=

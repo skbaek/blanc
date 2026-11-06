@@ -164,8 +164,6 @@ structure ExitMarked (w : State) : Prop where
   covered : PoolBacked w
   /-- USDC's proxy at its address. -/
   usdcProxy : w.getCode usdc = Usdc.Proxy.code
-  /-- V2_2's code at the address `CoinsOpen.usdcV22` names: not derived; one `eth_getCode`. -/
-  usdcCode : w.getCode (usdcImplOf w) = Usdc.Impl.code
   /-- 3Crv's minter at the cut (`Moment.minter`). -/
   minter : (w.getStor c3).get Curve3Crv.vyMinterSlot = pool.toB256
   /-- Address 4's code at the cut (`Moment.id4`). -/

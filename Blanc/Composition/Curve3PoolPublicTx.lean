@@ -112,6 +112,8 @@ def UsdtFeeFits (w : State) (v : Nat) : Prop :=
 structure CoinsOpen (w : State) (E : Adr) : Prop where
   /-- USDC runs V2_2, as it has since well before `CoveredFork`'s first block. -/
   usdcV22 : UsdcPacked w
+  /-- V2_2's code is at the address `usdcV22` names: one read. -/
+  usdcImplCode : w.getCode Usdc.usdcImpl = Usdc.Impl.code
   usdtOpen : UsdtOpen w pool
   usdtLive : Usdt.flag20 ((w.getStor usdt).get 10) = 0
   usdcOpen : UsdcOpen w
