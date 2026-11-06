@@ -1,5 +1,5 @@
 import Blanc.Composition.Curve3PoolExitMain
-import Blanc.Composition.Curve3PoolSwapEval
+import Blanc.Composition.Curve3PoolSwapBound
 
 /-!
 # What the withdrawing messages share
@@ -7,6 +7,7 @@ import Blanc.Composition.Curve3PoolSwapEval
 `pushK_profile`: coin `k`'s `transfer`, at any call window, as an exact profile over worlds that pin the coin to the entry,
 landing where the coin's ledger is `pushedK`. `pushed_held`: what that ledger says each party holds. `burn_fitsAt`: 3Crv
 accepts the burn. `afterSstore_refund_congr`: the frame's last write earns what it earns at the canonical state. `burn_paid`: the burn, read back.
+`rli_cost_le`, `oc_cost_le`: the two exact costs are small, whatever the frame's entry.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -211,5 +212,199 @@ theorem burn_paid {a : Nat} (hap : ExitApart w E) (hs : a ≤ shares w E) (hT : 
     omega
 
 end Held
+
+/-! ## The exact costs are small, whatever the frame's entry -/
+
+section Cost
+
+open Blanc.Lift.Curve3Pool Blanc.StableSwapNewton
+open Blanc.Composition.Curve3PoolCalleeLive (acc ext acc_le ext_le callMsg0 callMsg0_data)
+open Blanc.Lift.AccumulatedWalk (sloadCost_le_lit sstoreCost_le_lit)
+open Blanc.Composition.Curve3PoolCalleeExactProfiles (mutDebit mutBodyCost)
+
+theorem costGetDMem_le (x : V3) (amp : Nat) : costGetDMem x amp ≤ 6676 + (505 + (59 + 157 + 255 * 2000)) := by
+  have := costGetD_le x.v0 x.v1 x.v2 amp
+  unfold costGetDMem
+  omega
+
+theorem ydCoin_le (i j : Nat) : ydCoinCost i j ≤ 417 := by
+  unfold ydCoinCost
+  split <;> omega
+
+theorem yd2_le (i x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom2 i x2 D ann cs ≤ 417 + (363 + 255 * 600) := by
+  unfold ydCostFrom2
+  have h := ydCoin_le i 2
+  split
+  · have := ydPostCost_le ‹Nat × Nat›.1 ‹Nat × Nat›.2 D ann
+    omega
+  · omega
+
+theorem yd1_le (i x1 x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom1 i x1 x2 D ann cs ≤ 417 + (417 + (363 + 255 * 600)) := by
+  unfold ydCostFrom1
+  have h := ydCoin_le i 1
+  split
+  · have := yd2_le i x2 D ann ‹Nat × Nat›
+    omega
+  · omega
+
+theorem yd0_le (i x0 x1 x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom0 i x0 x1 x2 D ann cs ≤ 417 + (417 + (417 + (363 + 255 * 600))) := by
+  unfold ydCostFrom0
+  have h := ydCoin_le i 0
+  split
+  · have := yd1_le i x1 x2 D ann ‹Nat × Nat›
+    omega
+  · omega
+
+theorem costGetYD_le (amp i x0 x1 x2 D : Nat) : costGetYD amp i x0 x1 x2 D ≤ 233 + (417 + (417 + (417 + (363 + 255 * 600)))) := by
+  unfold costGetYD
+  split
+  · have := yd0_le i x0 x1 x2 D ‹Nat› (D, 0)
+    omega
+  · omega
+
+variable {sevm : Sevm} {t ii oi : B256}
+
+/-- Coin `k`'s `transfer` debit at a window inside the frame's memory: USDT's is the largest. -/
+theorem pushDk_le (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096) (k : Fin 3) (b : Devm) (S : List B256) (M : Mem) :
+    pushDk sevm t ii oi k b S M ≤ 2600 + 416 + 97756 := by
+  have ha : acc (b.withGasLeft 0) t ≤ 2600 := acc_le
+  have he : ext (b.withGasLeft 0) S M ii 0x44 oi 0x20 ≤ 416 := ext_le hii hoi
+  match k with
+  | 0 =>
+    have := dai_xferG_le (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+    show coinDebit Lift.Dai.xferG sevm t ii 0x44 oi b S M ≤ _
+    unfold coinDebit
+    omega
+  | 1 =>
+    have := proxy_xferG_le (e := initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+      (d := initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+      (by rw [callMsg0_data, mem_read_len]; decide)
+    show coinDebit Blanc.Composition.UsdcLive.xferG sevm t ii 0x44 oi b S M ≤ _
+    unfold coinDebit
+    omega
+  | 2 =>
+    have := usdt_xferG_le (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+    show coinDebit Lift.Usdt.xferG sevm t ii 0x44 oi b S M ≤ _
+    unfold coinDebit
+    omega
+
+/-- 3Crv's `burnFrom` debit at a window inside the frame's memory. -/
+theorem burnDebit_le (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096) (b : Devm) (S : List B256) (M : Mem) :
+    mutDebit Curve3Crv.burnBodyCost 8 sevm t ii oi b S M ≤ 2600 + 416 + (2107 + 3 * 2100 + 2 * 22100 + 360) := by
+  unfold mutDebit mutBodyCost
+  have h1 : acc (b.withGasLeft 0) t ≤ 2600 := acc_le
+  have h2 : ext (b.withGasLeft 0) S M ii 0x44 oi 0x20 ≤ 416 := ext_le hii hoi
+  have h3 := Blanc.Composition.Curve3PoolCalleeExactProfiles.burnBodyCost_le
+    (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+    (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+  have h4 : Curve3Crv.dispatchGas 8 = 360 := rfl
+  omega
+
+/-! ### `remove_liquidity_imbalance` -/
+
+section Imbalance
+
+variable (s : Sevm) (p : Devm) {P : RLIExactCalls} (T : B256) (w : RliWords)
+
+theorem rliPreCost1_le (b : Devm) : rliPreCost1 s b ≤ 109 + 2100 + 22100 + 2100 + 2100 :=
+  Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _) (sloadCost_le_lit _ _ _))
+    (sstoreCost_le_lit _ _ _ _)) (sloadCost_le_lit _ _ _)) (sloadCost_le_lit _ _ _)
+
+theorem rliPreCost2_le (d : Devm) : rliPreCost2 s d ≤ 668 + 2100 + 2100 + (458 + 4 * 2100) + 2100 + 2100 + 2100 :=
+  Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _)
+    (sloadCost_le_lit _ _ _)) (sloadCost_le_lit _ _ _)) (aGas_le _ _)) (sloadCost_le_lit _ _ _))
+    (sloadCost_le_lit _ _ _)) (sloadCost_le_lit _ _ _)
+
+theorem rliFeeCost_le (c : Nat) (D0 D1 B N : B256) : rliFeeCost c D0 D1 B N ≤ c + 10 + 192 := by
+  unfold rliFeeCost
+  split <;> omega
+
+theorem rliFeeLoopCost_le (P : RLIExactCalls) :
+    rliFeeLoopCost s p P w ≤ (868 + 10 + 192) + 22100 + (861 + 10 + 192) + 22100 + (861 + 10 + 192) + 22100 :=
+  Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (rliFeeCost_le _ _ _ _ _)
+    (sstoreCost_le_lit _ _ _ _)) (rliFeeCost_le _ _ _ _ _)) (sstoreCost_le_lit _ _ _ _)) (rliFeeCost_le _ _ _ _ _))
+    (sstoreCost_le_lit _ _ _ _)
+
+theorem rliBurnCost_le {KB : Nat} (hb : ∀ b S M, P.burnDebit b S M ≤ KB) :
+    rliBurnCost s p P T w ≤ 6358 + (6676 + (505 + (59 + 157 + 255 * 2000))) + 2100 + 2 + KB + 70 :=
+  Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _)
+    (costGetDMem_le _ _)) (sloadCost_le_lit _ _ _)) (Nat.le_refl _)) (hb _ _ _)) (Nat.le_refl _)
+
+theorem rliPushCost_le {KP : Nat} (hp : ∀ k b S M, P.pushDebit k b S M ≤ KP) (n : Devm) (m : Mem) (k : Nat) (seen : Bool) :
+    rliPushCost s P n m k seen ≤ 732 + 2100 + 2 + KP + 46 + 1000 := by
+  unfold rliPushCost
+  split
+  · omega
+  · exact Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (by split <;> omega)
+      (sloadCost_le_lit _ _ _)) (Nat.le_refl _)) (hp _ _ _ _)) (Nat.le_refl _)) (rawTail_min _)
+
+theorem rliEndCostAt_le (n : Devm) (grown : Bool) : rliEndCostAt s n grown ≤ 3432 + 22100 :=
+  Nat.add_le_add (by split <;> omega) (sstoreCost_le_lit _ _ _ _)
+
+theorem rliTail0Cost_le {KP : Nat} (hp : ∀ k b S M, P.pushDebit k b S M ≤ KP) (n : Devm) (m : Mem) :
+    rliTail0Cost s P n m ≤ 3 * (732 + 2100 + 2 + KP + 46 + 1000) + (3432 + 22100) := by
+  unfold rliTail0Cost rliTail1Cost rliTail2Cost
+  have h0 := rliPushCost_le s hp n m 0 false
+  have h1 := rliPushCost_le s hp (rliPushBase s P n m 0) (rliPushMemNext s P n m 0) 1 (!decide (rliAmt s 0 = 0))
+  have h2 := rliPushCost_le s hp (rliPushBase s P (rliPushBase s P n m 0) (rliPushMemNext s P n m 0) 1)
+    (rliPushMemNext s P (rliPushBase s P n m 0) (rliPushMemNext s P n m 0) 1) 2
+    ((!decide (rliAmt s 0 = 0)) || !decide (rliAmt s 1 = 0))
+  have h3 := rliEndCostAt_le s (rliPushBase s P (rliPushBase s P (rliPushBase s P n m 0) (rliPushMemNext s P n m 0) 1)
+    (rliPushMemNext s P (rliPushBase s P n m 0) (rliPushMemNext s P n m 0) 1) 2)
+    (((!decide (rliAmt s 0 = 0)) || !decide (rliAmt s 1 = 0)) || !decide (rliAmt s 2 = 0))
+  omega
+
+/-- **`rliExactCost` at most its closed figure**, from bounds on the calls' debits. Every read is priced cold, every write at
+its largest, every Newton loop at its fuel. -/
+theorem rli_cost_le (hs : ∀ b S M, P.supplyDebit b S M ≤ 5336)
+    (hb : ∀ b S M, P.burnDebit b S M ≤ 2600 + 416 + (2107 + 3 * 2100 + 2 * 22100 + 360))
+    (hp : ∀ k b S M, P.pushDebit k b S M ≤ 2600 + 416 + 97756) :
+    rliExactCost s p P T w ≤ 2087054 := by
+  unfold rliExactCost
+  refine Nat.le_trans (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add
+    (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _) (rliPreCost1_le _ _)) (hs _ _ _)) (rliPreCost2_le _ _))
+    (Nat.add_le_add_left (costGetDMem_le _ _) _)) (Nat.add_le_add_left (costGetDMem_le _ _) _))
+    (rliFeeLoopCost_le _ _ _ _)) (rliBurnCost_le _ _ _ _ hb)) (rliTail0Cost_le _ hp _ _)) (by decide)
+
+end Imbalance
+
+/-! ### `remove_liquidity_one_coin` -/
+
+section OneCoin
+
+variable (s : Sevm) {P : OCExactCalls}
+
+theorem ocPreCost_le (b : Devm) : ocPreCost s b ≤ 233 + 2100 + 22100 + 2100 :=
+  Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _) (sloadCost_le_lit _ _ _)) (sstoreCost_le_lit _ _ _ _))
+    (sloadCost_le_lit _ _ _)
+
+theorem ocP1Cost_le (b : Devm) (σ : Stor) (dy fee : B256) : ocP1Cost s b σ dy fee ≤ 494 + 2100 + 2100 + 22100 + 2100 :=
+  Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _) (sloadCost_le_lit _ _ _))
+    (sloadCost_le_lit _ _ _)) (sstoreCost_le_lit _ _ _ _)) (sloadCost_le_lit _ _ _)
+
+theorem ocP2Cost_le {KP : Nat} (hp : ∀ b S M, P.pushDebit b S M ≤ KP) (n : Devm) (M : Mem) (dy : B256) :
+    ocP2Cost s P n M dy ≤ 586 + 2100 + KP + 1000 + 1679 + 22100 :=
+  Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _) (sloadCost_le_lit _ _ _))
+    (hp _ _ _)) (rawTail_min _)) (Nat.le_refl _)) (sstoreCost_le_lit _ _ _ _)
+
+/-- **`ocExactCost` at most its closed figure**, from bounds on the calls' debits, for a valid coin index. -/
+theorem oc_cost_le (p : Devm) (T : B256) (amp : Nat) (x0 x1 x2 D0 y r0 r1 r2 y2 : B256) (hi3 : (ocI s).toNat < 3)
+    (hs : ∀ b S M, P.supplyDebit b S M ≤ 5336)
+    (hb : ∀ b S M, P.burnDebit b S M ≤ 2600 + 416 + (2107 + 3 * 2100 + 2 * 22100 + 360))
+    (hp : ∀ b S M, P.pushDebit b S M ≤ 2600 + 416 + 97756) :
+    ocExactCost s p T P amp x0 x1 x2 D0 y r0 r1 r2 y2 ≤ 1108057 := by
+  rw [ocExactCost_eq p T P amp x0 x1 x2 D0 y r0 r1 r2 y2 hi3]
+  refine Nat.le_trans (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add
+    (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _) (aGas_le _ _))
+    (xpGas_le _ _)) (costGetD_le _ _ _ _)) (costGetYD_le _ _ _ _ _ _)) (costGetYD_le _ _ _ _ _ _))
+    (Nat.sub_le_sub_right (ocPreCost_le _ _) 233)) (Nat.add_le_add (sloadCost_le_lit _ _ _) (sloadCost_le_lit _ _ _)))
+    (hs _ _ _)) (Nat.sub_le_sub_right (ocP1Cost_le _ _ _ _ _) 494)) (hb _ _ _))
+    (Nat.sub_le_sub_right (ocP2Cost_le _ hp _ _ _) 2265)) (by decide)
+
+end OneCoin
+
+end Cost
 
 end Blanc.Composition.Curve3PoolPublic

@@ -5,7 +5,8 @@ import Blanc.Composition.Curve3PoolSwapRequest
 # `one_coin_message`
 
 `oneCoin_accepts`: the model's `remove_liquidity_one_coin` from `oneCoinOutcome`, whose checks are the contract's. `one_coin_run`:
-the frame's run from the moment's facts, with the chain's cost and refund fixed before the residual gas.
+the frame's run from the moment's facts, with the chain's cost at most `1108057` (`oc_cost_le`) and its refund fixed before the residual
+gas. `one_coin_message_bounded` closes the message at a bounded cost, and `one_coin_message_holds` the statement.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -264,7 +265,7 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
     (mf : MomentFacts w) (mk : ExitMarked w) (hfee : word w pool Curve3Pool.feeSlot ≤ feeDen)
     (hadm : word w pool Curve3Pool.adminFeeSlot ≤ feeDen) (ask : Asked msg w E (oneCoinCalldata a i minDy))
     (req : OneCoinRequest w E msg.benv.stat.time.toNat a i minDy dy admin) :
-    MsgDoesAtNamedCost msg (fun st => OneCoinPaid w st E a i dy admin) := by
+    ∃ cost refund, cost ≤ 1108057 ∧ MsgDoes msg liquidityRoom cost refund (fun st => OneCoinPaid w st E a i dy admin) := by
   have ht : msg.currentTarget = pool := ask.entry.named.1
   have hcaller : msg.caller = E := ask.entry.named.2.1
   have hopen := ask.coinsOpen
@@ -360,7 +361,10 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
     (afterSstore (initSevm msg) (ocEnd (initSevm msg) (initDevm msg) (ocC3Calls (initSevm msg) (initDevm msg)
       (pushDk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
       (pushNk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) T amp' x0 x1 x2 D0 y r0 r1 r2 y2)
-      (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])).refundCounter.toNat, fun R hR hG => ?_⟩
+      (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])).refundCounter.toNat,
+    oc_cost_le _ _ T amp' x0 x1 x2 D0 y r0 r1 r2 y2 hi3
+      (fun b S M => Blanc.Composition.Curve3PoolCalleeExactProfiles.supplyDebit_le (by decide) (by decide) b S M)
+      (fun b S M => burnDebit_le (by decide) (by decide) b S M) (fun b S M => pushDk_le (by decide) (by decide) i b S M), fun R hR hG => ?_⟩
   obtain ⟨F, hF⟩ : ∃ F, F = R + ocExactCost (initSevm msg) (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg)
       (pushDk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
       (pushNk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) amp' x0 x1 x2 D0 y r0 r1 r2 y2 := ⟨_, rfl⟩
@@ -411,10 +415,17 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
   rw [← hF]
   exact ⟨D, Lift.exec_withGas_of_frame exD, herr, hDg, hrf, hpaid⟩
 
-/-- **`one_coin_message`.** -/
-theorem one_coin_message_holds : one_coin_message := by
-  intro d m A msg E a minDy dy admin i ask req
+/-- **`one_coin_message` at a bounded cost.** -/
+theorem one_coin_message_bounded (d : Deployment) (m : Moment d) (A : Assumes d m.through) (msg : Msg) (E : Adr) (a minDy dy admin : Nat)
+    (i : Fin 3) (ask : Asked msg m.world E (oneCoinCalldata a i minDy))
+    (req : OneCoinRequest m.world E msg.benv.stat.time.toNat a i minDy dy admin) :
+    ∃ cost refund, cost < 30000000 ∧ MsgDoes msg liquidityRoom cost refund (fun st => OneCoinPaid m.world st E a i dy admin) := by
   have fees := m.feesWithin A
-  exact one_coin_run (m.facts A) (m.marked A) fees.1 fees.2 ask req
+  obtain ⟨cost, refund, hc, h⟩ := one_coin_run (m.facts A) (m.marked A) fees.1 fees.2 ask req
+  exact ⟨cost, refund, by omega, h⟩
+
+/-- **`one_coin_message`.** -/
+theorem one_coin_message_holds : one_coin_message := fun d m A msg E a minDy dy admin i ask req =>
+  (one_coin_message_bounded d m A msg E a minDy dy admin i ask req).imp fun _ ⟨r, _, h⟩ => ⟨r, h⟩
 
 end Blanc.Composition.Curve3PoolPublic

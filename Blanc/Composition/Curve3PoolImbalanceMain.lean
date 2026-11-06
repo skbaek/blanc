@@ -5,7 +5,8 @@ import Blanc.Composition.Curve3PoolRemoveMessage
 
 `imbalance_accepts`: the model accepts what `ImbalanceRequest` states. `imbalance_frame`: the frame's run at the named cost
 `rliExactCost`, read from `rx_rli_frame_exact`'s end: the coin chain `rmChain` carries each coin's ledger, 3Crv's world its
-burn, the frame's storage the books. `imbalance_message_holds` closes the statement.
+burn, the frame's storage the books, the cost at most `2087054` (`rli_cost_le`). `imbalance_message_bounded` closes the message at a
+bounded cost, and `imbalance_message_holds` the statement.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -342,10 +343,20 @@ theorem rliStor_bal (σ : Stor) (s0 s1 s2 : B256) :
 
 variable {w : State} {E : Adr} {am : V3} {maxBurn burned : Nat} {stored : V3} {msg : Msg}
 
-/-- **The frame's run at a cost and refund fixed before the residual gas.** -/
+/-- The transfers' debits, whichever the coin. -/
+theorem rliPushD_le (sevm : Sevm) (pre : Devm) (i : Nat) (b : Devm) (S : List B256) (M : Mem) :
+    rliPushD sevm pre i b S M ≤ 2600 + 416 + 97756 := by
+  unfold rliPushD
+  split
+  · exact pushDk_le (by decide) (by decide) _ _ _ _
+  · split
+    · exact pushDk_le (by decide) (by decide) _ _ _ _
+    · exact pushDk_le (by decide) (by decide) _ _ _ _
+
+/-- **The frame's run at a small cost and a refund fixed before the residual gas.** -/
 theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (imbalanceCalldata am maxBurn))
     (req : ImbalanceRequest w E msg.benv.stat.time.toNat am maxBurn burned stored) :
-    ∃ cost refund, ∀ R, 380232 ≤ R → R + cost < 2 ^ 256 →
+    ∃ cost refund, cost ≤ 2087054 ∧ ∀ R, 380232 ≤ R → R + cost < 2 ^ 256 →
       ∃ post, exec (initEvm (msg.withGas (R + cost))) = .ok post ∧ post.error = none ∧ post.gasLeft = R ∧
         post.refundCounter.toNat = refund ∧ ImbalancePaid w post.state E am burned stored := by
   have ht : msg.currentTarget = pool := e.entry.named.1
@@ -440,7 +451,9 @@ theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg 
     show BurnFits ((initDevm msg).getStor c3) _ _ _
     rw [sC, hw, hcall, hBw]
     exact burn_fits mk.minter hE req.apart hS hsup
-  obtain ⟨W, P, herrS, herrB, herrP, hWc, hWb, hskip, hW4, hP⟩ : ∃ (W : Nat → Devm → Prop) (P : RLIExactCalls),
+  obtain ⟨W, P, hdS, hdB, hdP, herrS, herrB, herrP, hWc, hWb, hskip, hW4, hP⟩ : ∃ (W : Nat → Devm → Prop) (P : RLIExactCalls),
+      (∀ b S M, P.supplyDebit b S M ≤ 5336) ∧ (∀ b S M, P.burnDebit b S M ≤ 2600 + 416 + (2107 + 3 * 2100 + 2 * 22100 + 360)) ∧
+      (∀ k b S M, P.pushDebit k b S M ≤ 2600 + 416 + 97756) ∧
       (∀ b S M, (P.supplyNext b S M).error = b.error) ∧ (∀ b S M, (P.burnNext b S M).error = b.error) ∧
       (∀ k b S M, (P.pushNext k b S M).error = b.error) ∧
       (∀ j, j ≤ 4 → WClosed (initSevm msg) (W j)) ∧ W 0 (initDevm msg) ∧
@@ -451,6 +464,8 @@ theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg 
     refine ⟨rliC3W c3 (Devm.getStor (initDevm msg) c3)
         (burnStor (Devm.getStor (initDevm msg) c3) (initSevm msg).caller.toB256 (rliBurnW (Nat.toB256 v0) (Nat.toB256 v2) T)) (rmChain (initSevm msg) (initDevm msg)),
       rliC3Calls (initSevm msg) (initDevm msg) (rliPushD (initSevm msg) (initDevm msg)) (rliPushN (initSevm msg) (initDevm msg)),
+      fun b S M => Blanc.Composition.Curve3PoolCalleeExactProfiles.supplyDebit_le (by decide) (by decide) b S M,
+      fun b S M => burnDebit_le (by decide) (by decide) b S M, fun k b S M => rliPushD_le _ _ k b S M,
       fun _ _ _ => rfl, fun _ _ _ => rfl, fun k b S M => rliPushN_error _ _ k b S M, ?_, ?_, ?_, ?_, ?_⟩
     · intro k hk
       rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2 ∨ k = 3 ∨ k = 4) with rfl | rfl | rfl | rfl | rfl
@@ -470,7 +485,7 @@ theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg 
     rw [hck.abs.isKilled, hk]; rfl
   refine ⟨rliExactCost (initSevm msg) (initDevm msg) P T Wd, (afterSstore (initSevm msg)
     (rliEnd0 (initSevm msg) P (rliP0 (initSevm msg) (initDevm msg) P T Wd) (rliPM0 (initSevm msg) (initDevm msg) P T Wd))
-    (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])).refundCounter.toNat, fun R hR hG => ?_⟩
+    (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])).refundCounter.toNat, rli_cost_le _ _ T Wd hdS hdB hdP, fun R hR hG => ?_⟩
   obtain ⟨F, hF⟩ : ∃ F, F = R + rliExactCost (initSevm msg) (initDevm msg) P T Wd := ⟨_, rfl⟩
   have hcost := Curve3Pool.rliExactCost_withStaticGas (initSevm msg) F (initDevm msg) P T Wd
   subst hWd
@@ -517,13 +532,19 @@ theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg 
       unfold rliPaid
       rw [hco j, hcs j, hamt j, hw, hcall]
 
-/-- **`imbalance_message`.** -/
-theorem imbalance_message_holds : imbalance_message := by
-  intro d m A msg E am maxBurn burned stored ask req
-  obtain ⟨cost, refund, h⟩ := imbalance_frame (m.facts A) (m.marked A) ask req
-  refine ⟨cost, refund, fun R hR hG => ?_⟩
+/-- **`imbalance_message` at a bounded cost.** -/
+theorem imbalance_message_bounded (d : Deployment) (m : Moment d) (A : Assumes d m.through) (msg : Msg) (E : Adr) (am : V3)
+    (maxBurn burned : Nat) (stored : V3) (ask : Asked msg m.world E (imbalanceCalldata am maxBurn))
+    (req : ImbalanceRequest m.world E msg.benv.stat.time.toNat am maxBurn burned stored) :
+    ∃ cost refund, cost < 30000000 ∧ MsgDoes msg liquidityRoom cost refund (fun st => ImbalancePaid m.world st E am burned stored) := by
+  obtain ⟨cost, refund, hc, h⟩ := imbalance_frame (m.facts A) (m.marked A) ask req
+  refine ⟨cost, refund, by omega, fun R hR hG => h R ?_ hG⟩
   have hR' : 800000 ≤ R := hR
-  exact h R (by omega) hG
+  omega
+
+/-- **`imbalance_message`.** -/
+theorem imbalance_message_holds : imbalance_message := fun d m A msg E am maxBurn burned stored ask req =>
+  (imbalance_message_bounded d m A msg E am maxBurn burned stored ask req).imp fun _ ⟨r, _, h⟩ => ⟨r, h⟩
 
 end Frame
 
