@@ -68,14 +68,14 @@ theorem daiWalk (A : Assumes d h) :
     (fun _ _ _ hd => ownDebit_transfer hd)
     (fun _ _ _ hd hs => ownDebit_transferFrom hd hs)
     (fun _ _ _ _ caller hd hs fits => ownCredit_transferFrom caller hd hs fits)
-    (fun H c hc member tc hd => by
+    (fun H c hc member tc hd _ _ _ => by
       have good := H.child_good H.world.daiCode (by decide +kernel) (by decide +kernel) hc tc
       have sel : Blanc.Sevm.selector c.sevm = 0x70a08231 :=
         selector_eq_of_data_eq_abiSelectorBytes_append (by decide) hd
       have word4 : Sevm.dataWord c.sevm 4 = pool.toB256 :=
         Curve3PoolSupply.dataWord_eq_of_append (pre := Curve3Pool.balanceOfSel) (rest := [])
           (by rw [hd, List.append_nil]; rfl) (by decide)
-      have out := CurveCoins.Dai.frame_balanceOf_answer good tc (Curve3PoolBacked.frame_wf _ member) sel
+      have out := CurveCoins.Dai.frame_balanceOf_answer good tc (CurveCoins.settled_wf _ member) sel
       rw [word4, toAdr_toB256] at out
       rw [answerWord, out, List.take_of_length_le (by rw [B256.length_toBytes]), B256.toB256_toBytes])
 

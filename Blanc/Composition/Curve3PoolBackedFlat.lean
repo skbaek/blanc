@@ -22,11 +22,6 @@ open Blanc.Lift.Curve3Pool (PoolInvocation PoolRun PoolEntries poolFrameObs pool
   balanceOfData transferSel transferFromSel)
 open Blanc.Lift.CurveCoins (PoolCoinSel)
 
-/-- A settled frame's memory starts well formed. -/
-theorem frame_wf {cfg : ChainConfig} {start : Benv} {future : BlockChain} (trace : MidHistoryTraceIn HistFork cfg start future)
-    {F : Exec.Frame} (member : F ∈ trace.settledFrames) : Mem.Wf F.pre.memory :=
-  CurveCoins.settled_wf trace member
-
 /-! ## The messages of the pool's calls -/
 
 theorem word_length (n : Nat) : (Curve3Pool.word n).length = 32 := B256.length_toBytes _
@@ -334,7 +329,9 @@ theorem flat_walk (A : Assumes d h) {k : Fin 3} {T : Adr} {Good : Exec.Frame →
       adrOf src ≠ pool → amt < 2 ^ 256 → credit e = amt)
     (answer : ∀ {sevm : Sevm} {pb post : Devm} {exc : Exec 0 sevm pb (.ok post)} {s : Curve3Pool.State}, PoolAt exc s →
       ∀ c ∈ Exec.childFrames exc, c ∈ (d.sincePool h).settledFrames → c.sevm.currentTarget = T →
-      c.sevm.data = balanceOfData pool → answerWord c.post.output = held (wordsAt T c.pre.state)) :
+      c.sevm.data = balanceOfData pool → ∀ before : List Exec.Frame, (∀ F ∈ before, F ∈ (d.sincePool h).settledFrames) →
+      FrameChain T Good a (coinFrames T (fun _ => True) before) (wordsAt T c.pre.state) →
+      answerWord c.post.output = held (wordsAt T c.pre.state)) :
     CoinWalk (flatBook T Good held debit credit) pool k (d.sincePool h).settledFrames (d.sincePool h).settledRoots a b
       Curve3Pool.Creation.coinsN Curve3Pool.Creation.tokenN where
   ledger := ledger_flat L third
@@ -399,6 +396,10 @@ theorem flat_walk (A : Assumes d h) {k : Fin 3} {T : Adr} {Good : Exec.Frame →
       cases this
     have noOp := noOpaque_child (L₁ := L₁) (c := c) above fun op => hPool (op.1.symm.trans at')
     have chain := L.at_ splitC noOp
+    have sub : ∀ F ∈ pre ++ P :: blocks L₁, F ∈ (d.sincePool h).settledFrames := fun F hF => by
+      rw [splitC]
+      exact List.mem_append_left _ hF
+    have chain₀ := chain
     have cfP : coinFrames T (fun _ => True) (pre ++ P :: blocks L₁) =
         coinFrames T (fun _ => True) pre ++ coinFrames T (fun _ => True) (blocks L₁) := by
       rw [show pre ++ P :: blocks L₁ = pre ++ ([P] ++ blocks L₁) from rfl, coinFrames_append, coinFrames_append]
@@ -414,7 +415,7 @@ theorem flat_walk (A : Assumes d h) {k : Fin 3} {T : Adr} {Good : Exec.Frame →
     obtain ⟨st, ck, hc, ht⟩ := A.poolFrames Pmem at' mutable
     obtain ⟨sevm, pb, post, exc, cm, e, H⟩ := A.poolAt Pmem at' mutable ck ⟨hc, ht⟩
     subst e
-    exact ⟨wordsAt T c.pre.state, viewChain_id chain, answer H c cKid cmem tc hd⟩
+    exact ⟨wordsAt T c.pre.state, viewChain_id chain, answer H c cKid cmem tc hd _ sub chain₀⟩
 
 /-! ## What the pool sends a coin -/
 
