@@ -4,7 +4,9 @@
 from __future__ import annotations
 
 import argparse
+import copy
 import hashlib
+import importlib.util
 import json
 import pathlib
 import re
@@ -249,7 +251,7 @@ def declaration_names(text: str, matches: list[re.Match]) -> dict[int, str]:
 
 def declarations(text: str, *, qualified: bool = True) -> dict[str, tuple[str, str]]:
     result: dict[str, tuple[str, str]] = {}
-    # The manifest and WETH aggregate predate full-name keys. Keep their
+    # The manifest predates full-name keys. Keep its
     # source-spelled projection explicit and reject ambiguous projections;
     # corpus ownership/shadow scans use qualified identities instead.
     commands = command_text(text)
@@ -264,7 +266,7 @@ def declarations(text: str, *, qualified: bool = True) -> dict[str, tuple[str, s
         if head.end() not in matched_keyword_ends:
             fail("unsupported Lean declaration spelling")
     text = without_comments(text)
-    # Keep exact historic header boundaries for the immutable schema-1 hashes.
+    # Keep exact historic header boundaries for the frozen manifest hashes.
     header_matches = {m.start(3): m for m in DECL_RE.finditer(text)}
     seen: set[str] = set()
     for i, match in enumerate(matches):
@@ -306,7 +308,7 @@ def declarations(text: str, *, qualified: bool = True) -> dict[str, tuple[str, s
 
 
 def legacy_declarations(text: str) -> dict[str, tuple[str, str]]:
-    """Frozen schema-1 source-spelled keys, never for contract shadow scans."""
+    """Frozen manifest source-spelled keys, never for contract shadow scans."""
     return declarations(text, qualified=False)
 
 
@@ -374,12 +376,12 @@ def load_manifest() -> dict:
     expected = {
         "schema", "commonModule", "rootModule", "requiredRootImport",
         "exactCommonImports", "owners", "signatureHashes", "movedDonors",
-        "donorSource", "touchedConsumers", "forbiddenTraceFamily",
+        "forbiddenTraceFamily",
         "requiredPositiveTheorems", "frozenAssuranceFiles",
-        "movedSignatureHashes", "touchedConsumerHashes", "jaunePinFiles",
-        "wethPublicHeaderAggregate", "requiredSharedClassification",
+        "movedSignatureHashes", "jaunePinFiles",
+        "requiredSharedClassification",
     }
-    if set(data) != expected or data["schema"] != 1:
+    if set(data) != expected or data["schema"] != 2:
         fail("manifest schema/keys are not exact")
     for key in expected - {"schema", "signatureHashes", "frozenAssuranceFiles"}:
         if not data[key]:
@@ -425,23 +427,171 @@ def shadows(candidate: str, protected: str) -> bool:
     return candidate.rsplit(".", 1)[-1] == protected.rsplit(".", 1)[-1]
 
 
+def load_classifier():
+    """Use the executed production tables, including append/extend additions."""
+    path = ROOT / "scripts/check-layering.py"
+    spec = importlib.util.spec_from_file_location("transient_layering", path)
+    if spec is None or spec.loader is None:
+        fail("cannot load the authoritative layering classifier")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def classified_contracts(classifier, root: pathlib.Path):
+    """Validate the full live family inventory and its actual module paths."""
+    contracts = classifier.CONTRACTS
+    if not isinstance(contracts, dict) or not contracts:
+        fail("authoritative contract family inventory is empty or malformed")
+    expected = {}
+    for family, modules in contracts.items():
+        if (not isinstance(family, str) or not family
+                or family in {"shared", "root", "composition"}):
+            fail(f"malformed contract family {family!r}")
+        if not isinstance(modules, (list, tuple)) or not modules:
+            fail(f"contract family {family!r} has an empty or malformed module list")
+        for module in modules:
+            if (not isinstance(module, str) or not module
+                    or not all(part.isidentifier() for part in module.split("."))):
+                fail(f"malformed contract module {module!r} in {family}")
+            if module in expected:
+                fail(f"duplicate contract module {module!r} in family inventory")
+            expected[module] = family
+    try:
+        owner = classifier.classify()
+    except SystemExit as exc:
+        fail(f"authoritative classifier refused: {exc}")
+    if not isinstance(owner, dict) or not owner:
+        fail("authoritative classification is empty or malformed")
+    if any(not isinstance(module, str) or not isinstance(category, str)
+           or category not in {*contracts, "shared", "root", "composition"}
+           for module, category in owner.items()):
+        fail("authoritative classification has malformed ownership entries")
+    if {module: category for module, category in owner.items()
+            if category in contracts} != expected:
+        fail("contract family inventory disagrees with authoritative ownership")
+    found = classifier.modules_on_disk(root)
+    if not isinstance(found, dict) or not found:
+        fail("actual module inventory is empty or malformed")
+    paths = []
+    for module, family in sorted(expected.items()):
+        path = root / "Blanc" / (module.replace(".", "/") + ".lean")
+        if module not in found or not path.is_file():
+            fail(f"contract module {module} ({family}) is absent at {path}")
+        if pathlib.Path(found[module]).resolve() != path.resolve():
+            fail(f"actual path disagrees with contract module {module}")
+        if not path.resolve().is_relative_to((root / "Blanc").resolve()):
+            fail(f"contract module {module} escapes the source root")
+        paths.append(path)
+    return owner, tuple(paths)
+
+
+def load_contract_identity_reader():
+    """Reuse the reviewed Unicode/dotted-name inventory for contract names only.
+
+    The frozen transient public-owner and header parsers remain unchanged.
+    Static input dependency: occurrence plus its extraction-ownership parser.
+    """
+    path = ROOT / "scripts/check-execution-occurrence.py"
+    spec = importlib.util.spec_from_file_location("transient_contract_identity", path)
+    if spec is None or spec.loader is None:
+        fail("cannot load the checked contract identity reader")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module, module.load_ownership_parser()
+
+
+def classification_controls() -> None:
+    """Bounded static controls for the authoritative classifier reader."""
+    classifier = load_classifier()
+    names = ("SHARED", "ROOTS", "CONTRACTS", "COMPOSITION")
+    original = {name: getattr(classifier, name) for name in names}
+    try:
+        with tempfile.TemporaryDirectory(prefix="transient-classifier-controls-") as raw:
+            root = pathlib.Path(raw)
+            classifier.SHARED = ["TransientSettlement"]
+            classifier.ROOTS = ["Blanc", "Main"]
+            classifier.CONTRACTS = {"probe": ["Native"]}
+            classifier.CONTRACTS["probe"].extend(["Lift.Probe.Base"])
+            classifier.CONTRACTS["probe"].append("Lift.Probe.Extended")
+            classifier.COMPOSITION = {"Composition.Probe": ("probe",)}
+            sources = {
+                root / "Blanc.lean": b"", root / "Main.lean": b"",
+                root / "Blanc/TransientSettlement.lean": b"",
+                root / "Blanc/Native.lean": b"",
+                root / "Blanc/Lift/Probe/Base.lean": b"",
+                root / "Blanc/Lift/Probe/Extended.lean": b"",
+            }
+            for path, text in sources.items():
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(text)
+            baseline = {name: copy.deepcopy(getattr(classifier, name)) for name in names}
+            owner, paths = classified_contracts(classifier, root)
+            expected = {root / "Blanc/Native.lean", root / "Blanc/Lift/Probe/Base.lean",
+                        root / "Blanc/Lift/Probe/Extended.lean"}
+            if set(paths) != expected or owner.get("TransientSettlement") != "shared":
+                fail("classifier positive dotted/extended inventory control failed")
+
+            def reject(label, mutate, needle):
+                mutate()
+                try:
+                    classified_contracts(classifier, root)
+                except SystemExit as exc:
+                    if needle not in str(exc):
+                        fail(f"classifier {label} failed at wrong boundary: {exc}")
+                else:
+                    fail(f"classifier {label} control did not bite")
+                finally:
+                    for name, value in baseline.items():
+                        setattr(classifier, name, copy.deepcopy(value))
+                    for path, text in sources.items():
+                        path.write_bytes(text)
+                if any(path.read_bytes() != text for path, text in sources.items()):
+                    fail(f"classifier {label} source restoration differs")
+                if any(getattr(classifier, name) != value for name, value in baseline.items()):
+                    fail(f"classifier {label} table restoration differs")
+
+            reject("empty table", lambda: setattr(classifier, "CONTRACTS", {}),
+                   "family inventory is empty or malformed")
+            reject("empty family", lambda: classifier.CONTRACTS.__setitem__("probe", []),
+                   "empty or malformed module list")
+            reject("missing dotted module", lambda: (root / "Blanc/Lift/Probe/Extended.lean").unlink(),
+                   "contract module Lift.Probe.Extended (probe) is absent")
+            reject("malformed list", lambda: classifier.CONTRACTS.__setitem__("probe", "Native"),
+                   "empty or malformed module list")
+            reject("malformed module", lambda: classifier.CONTRACTS["probe"].append("Lift..Bad"),
+                   "malformed contract module")
+            reject("duplicate module", lambda: classifier.CONTRACTS["probe"].append("Native"),
+                   "duplicate contract module")
+            reject("duplicate family owner", lambda: classifier.CONTRACTS.__setitem__("other", ["Native"]),
+                   "duplicate contract module")
+            reject("shared overlap", lambda: classifier.CONTRACTS["probe"].append("TransientSettlement"),
+                   "authoritative classifier refused")
+            reject("reserved family", lambda: classifier.CONTRACTS.__setitem__("shared", ["Other"]),
+                   "malformed contract family")
+    finally:
+        for name, value in original.items():
+            setattr(classifier, name, value)
+    print("OK — transient-settlement classifier controls: dotted and append/extend inventory; "
+          "9 refusals bite; exact source/table restoration")
+
+
 def audit_moves(data: dict) -> None:
-    donor_text = read(ROOT / data["donorSource"])
-    layering = read(ROOT / "scripts/check-layering.py")
-    contract_match = re.search(r"(?s)^CONTRACTS\s*=\s*\{(.*?)\n\}\n", layering, re.M)
-    if contract_match is None:
-        fail("cannot parse contract modules from the layering classification")
-    contract_modules = [ROOT / "Blanc" / f"{name}.lean" for name in
-        re.findall(r'"([A-Z][A-Za-z0-9_]*)"', contract_match.group(1))]
-    if not contract_modules or any(not path.is_file() for path in contract_modules):
-        fail("layering contract classification contains an absent module")
+    _, contract_modules = classified_contracts(load_classifier(), ROOT)
+    identity, identity_parser = load_contract_identity_reader()
     protected_names = {name for name, _ in data["owners"]}
-    contract_inventory: dict[pathlib.Path, dict[str, tuple[str, str]]] = {}
+    contract_inventory: dict[pathlib.Path, set[str]] = {}
     for contract_path in contract_modules:
         contract_text = read(contract_path)
         if re.search(r"(?m)^\s*(?:export|alias)\b", command_text(contract_text)):
             fail(f"contract alias/export command is forbidden: {contract_path.relative_to(ROOT)}")
-        contract_decls = declarations(contract_text)
+        try:
+            contract_decls = {name for name, _, _ in
+                              identity.checked_declarations(identity_parser, contract_path)}
+        except (OSError, ValueError) as exc:
+            fail(f"contract identity scan refused at {contract_path.relative_to(ROOT)}: {exc}")
         contract_inventory[contract_path] = contract_decls
         for name in protected_names:
             if any(shadows(candidate, name) for candidate in contract_decls):
@@ -464,42 +614,16 @@ def audit_moves(data: dict) -> None:
             if any(shadows(candidate, name) for candidate in
                    contract_inventory[contract_path]):
                 fail(f"contract shadow survives for {name} in {contract_path.relative_to(ROOT)}")
-    if set(data["touchedConsumerHashes"]) != set(data["touchedConsumers"]):
-        fail("touched-consumer hash keys do not exactly match touched consumers")
-    for consumer in data["touchedConsumers"]:
-        if not (ROOT / consumer).is_file():
-            fail(f"touched consumer is absent: {consumer}")
-        if sha256(ROOT / consumer) != data["touchedConsumerHashes"][consumer]:
-            fail(f"touched consumer drifted beyond its pinned owner-reference edit: {consumer}")
 
 
 def audit_architecture(data: dict) -> None:
-    layering = read(ROOT / "scripts/check-layering.py")
+    owner, _ = classified_contracts(load_classifier(), ROOT)
     module = data["requiredSharedClassification"]
-    shared_match = re.search(r"(?s)^SHARED\s*=\s*\[(.*?)\]\n\nCONTRACTS", layering, re.M)
-    if shared_match is None:
-        fail("cannot parse the layering SHARED classification")
-    shared = re.findall(r'"([A-Za-z0-9_]+)"', shared_match.group(1))
-    if shared.count(module) != 1:
-        fail(f"{module} is absent or duplicated in the shared classification")
-    contract_text = layering[layering.find("CONTRACTS ="):layering.find("ROOTS =")]
-    if re.search(rf'"{re.escape(module)}"', contract_text):
-        fail(f"{module} is also classified as a contract module")
+    if owner.get(module) != "shared":
+        fail(f"{module} is not owned by the authoritative shared classification")
     for rel, expected in data["jaunePinFiles"].items():
         if sha256(ROOT / rel) != expected:
             fail(f"Blanc's Jaune pin file changed: {rel}")
-
-    # Public WETH statements are frozen as one order-independent digest. This
-    # permits no unrecorded statement drift while avoiding a large per-file
-    # manifest. The two intentionally edited consumers are additionally
-    # pinned byte-for-byte above.
-    headers: list[str] = []
-    for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
-        for name, (kind, header) in sorted(legacy_declarations(read(path)).items()):
-            headers.append(f"{path.name}:{kind}:{name}:{header}")
-    aggregate = hashlib.sha256("\n".join(headers).encode()).hexdigest()
-    if aggregate != data["wethPublicHeaderAggregate"]:
-        fail(f"WETH public-statement aggregate drifted: {aggregate}")
 
 
 def audit_frozen(data: dict) -> None:
@@ -632,16 +756,6 @@ def write_manifest(data: dict) -> None:
         ).hexdigest()
         for owner_file, name, _ in data["movedDonors"]
     }
-    data["touchedConsumerHashes"] = {
-        relative: sha256(ROOT / relative) for relative in data["touchedConsumers"]
-    }
-    headers = []
-    for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
-        for name, (kind, header) in sorted(legacy_declarations(read(path)).items()):
-            headers.append(f"{path.name}:{kind}:{name}:{header}")
-    data["wethPublicHeaderAggregate"] = hashlib.sha256(
-        "\n".join(headers).encode()
-    ).hexdigest()
     data["frozenAssuranceFiles"] = {
         relative: sha256(ROOT / relative)
         for relative in data["frozenAssuranceFiles"]
@@ -659,10 +773,14 @@ def main() -> None:
     phase.add_argument("--static-only", action="store_true")
     phase.add_argument("--semantic-only", action="store_true")
     phase.add_argument("--self-test", action="store_true")
+    phase.add_argument("--classification-controls", action="store_true")
     parser.add_argument("--print-signatures", action="store_true")
     parser.add_argument("--print-compatibility", action="store_true")
     parser.add_argument("--write-manifest", action="store_true")
     arguments = parser.parse_args()
+    if arguments.classification_controls:
+        classification_controls()
+        return
     data = load_manifest()
     if arguments.write_manifest:
         write_manifest(data)
@@ -678,26 +796,18 @@ def main() -> None:
             moved[name] = hashlib.sha256(
                 legacy_declarations(read(ROOT / owner_file))[name][1].encode()
             ).hexdigest()
-        headers = []
-        for path in sorted((ROOT / "Blanc").glob("Weth*.lean")):
-            for name, (kind, header) in sorted(legacy_declarations(read(path)).items()):
-                headers.append(f"{path.name}:{kind}:{name}:{header}")
         print(json.dumps({
             "movedSignatureHashes": moved,
-            "touchedConsumerHashes": {
-                rel: sha256(ROOT / rel) for rel in data["touchedConsumers"]
-            },
-            "wethPublicHeaderAggregate": hashlib.sha256(
-                "\n".join(headers).encode()
-            ).hexdigest(),
         }, indent=2))
         return
     if arguments.self_test:
         # Harness self-test (evidence economy rule 3): the parser falsifiers,
         # the static and live positive-deletion controls, and the mutants
-        # whose failure a pinned control already implies. Its registry inputs
-        # are the harness and fixture only; the fixture's green compile is the
-        # prerequisite main semantic row's verdict.
+        # whose failure a pinned control already implies. Registry inputs now
+        # include the harness, fixture and authoritative classifier; WSL must
+        # reconcile that added classifier fingerprint. The fixture's green
+        # compile is the prerequisite main semantic row's verdict.
+        classification_controls()
         parser_controls()
         audit_source(data)  # a clean baseline, so each deletion is what bites
         deletion_controls(data, static=True, semantic=True)

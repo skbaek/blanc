@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """Fail-closed checker for docs/DEPLOYED_BYTECODE_CLAIM_MAP.md.
 
-The map is a claim index over Blanc's results about deployed EVM bytecode (WETH9, the Beacon
-deposit contract, Curve 3Crv, the Lido CircuitBreaker, the Vyper nonreentrancy pair, the EIP-7002
-predeploy, the Uniswap V2 Pair and Factory, the Pair composed with WETH9, and the Curve 3pool
-with 3Crv), not an
+The map is a claim index over Blanc's paper-v2 results about deployed EVM bytecode
+(Curve 3Crv/3pool, USDC, Vyper V± and EIP-7002), not an
 independent theorem authority.  This checker therefore holds it to the repository:
 
 * every fully qualified declaration it writes (``Blanc.…``) resolves, spelled in full, to a public
@@ -16,11 +14,9 @@ independent theorem authority.  This checker therefore holds it to the repositor
   exactly, in both directions, and the leaf count it quotes equals ``scripts/leaf-count.json``;
 * the trust-base figures it can see (Jaune revision, Lean toolchain, covered forks) equal the
   repository's, the artifact table's byte counts and codehashes equal the lifted input files, its
-  creation transactions equal the certificate provenance, the Lido creation timestamp equals the
-  reference input and follows the BPO2 activation, and the system-contract table equals the bytes
-  written in ``Blanc/SystemContracts.lean``; the Uniswap V2 Pair and Factory code-read records
-  appear in their certificate provenance, and the factory runtime embeds the Pair creation code at
-  the stated bytes;
+  creation transactions equal the certificate provenance, the USDC code-read records,
+  implementation slot and library links agree with their authorities, and the system-contract
+  table equals the bytes written in ``Blanc/SystemContracts.lean``;
 * the document carries no process or bookkeeping vocabulary, keeps its section structure, its
   required headline theorems and its load-bearing non-claims.
 
@@ -48,8 +44,8 @@ DOCUMENT = "docs/DEPLOYED_BYTECODE_CLAIM_MAP.md"
 AXIOM_CHECK = "scripts/AxiomCheck.lean"
 LEAF_COUNT = "scripts/leaf-count.json"
 CERTIFICATES = "scripts/lift/certificates.json"
-LIDO_DEPLOYED = "scripts/reference/lido-circuit-breaker/inputs/deployed.mainnet.json"
-BPO2_MANIFEST = "scripts/fixtures/weth10-current-mainnet/manifest.json"
+
+
 SYSTEM_CONTRACTS = "Blanc/SystemContracts.lean"
 SEMANTICS = "Blanc/Semantics.lean"
 CATALOGUE = "scripts/GATES.md"
@@ -69,334 +65,191 @@ H2 = [
     "9. Named premises and definitions",
     "10. Checking this document",
 ]
-H3 = [
-    "5.1 WETH9",
-    "5.2 Beacon deposit",
-    "5.3 Curve 3Crv",
-    "5.4 Lido CircuitBreaker",
-    "5.5 Vyper V+",
-    "5.6 Vyper V−",
-    "5.7 EIP-7002 withdrawal requests",
-    "5.8 Uniswap V2 Pair",
-    "5.9 Uniswap V2 Pair × WETH9",
-    "5.10 Uniswap V2 Pair × USDC × WETH9",
-    "5.11 Curve 3pool StableSwap",
-]
+H3 = ['5.3 Curve 3Crv',
+ '5.5 Vyper V+',
+ '5.6 Vyper V−',
+ '5.7 EIP-7002 withdrawal requests',
+ '5.10 USDC',
+ '5.11 Curve 3pool StableSwap']
 
 # The headline results the map exists to carry.  A row deleted from the document fails here.
-REQUIRED_HEADLINES = [
-    "Blanc.Lift.Weth9.weth9_history_footprint",
-    "Blanc.Lift.Weth9.weth9_history_committed",
-    "Blanc.Lift.Weth9.weth9_tx_withdraw",
-    "Blanc.Lift.BeaconDeposit.configuredHistory_solInv_sys",
-    "Blanc.Lift.BeaconDeposit.Creation.beacon_deploy_covered",
-    "Blanc.Lift.Curve3Crv.c3crv_history_committed_derived",
-    "Blanc.Lift.Curve3Crv.c3crv_frame_refines",
-    "Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered",
-    "Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_covered",
-    "Blanc.Lift.LidoCircuitBreakerDeployed.Creation.lido_deploy_init_covered",
-    "Blanc.Lift.VyperNonreentrantDeployed.Fixed.vplus_exclusion",
-    "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.vplus_witness_covered",
-    "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.vplus_witness2_covered",
-    "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness_covered",
-    "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process",
-    "Blanc.Lift.WithdrawalRequest.history_fifo",
-    "Blanc.Lift.WithdrawalRequest.history_fifo_mainnet",
-    "Blanc.Lift.WithdrawalRequest.block_word_delivery",
-    "Blanc.Lift.WithdrawalRequest.wordSystem_excess_wraps",
-    "Blanc.Lift.WithdrawalRequest.word_fee_eq_iff_natFeeDomain",
-    "Blanc.Lift.WithdrawalRequest.FeeCounterexample.nat_fee_guarantee_refuted",
-    "Blanc.Lift.WithdrawalRequest.history_submission_nat_live",
-    "Blanc.Lift.UniswapV2Pair.pair_history_committed",
-    "Blanc.Lift.UniswapV2Pair.pair_history_initialized",
-    "Blanc.Lift.UniswapV2Pair.permit_bytecode_admitted_consumes",
-    "Blanc.Lift.UniswapV2Pair.burnRaw_source_authentic",
-    "Blanc.Lift.UniswapV2Pair.staticView_bytecode_inv",
-    "Blanc.Lift.UniswapV2Pair.pair_history_writer_live",
-    "Blanc.Lift.UniswapV2Pair.pair_history_sync_live",
-    "Blanc.Lift.UniswapV2Pair.pair_history_mint_live",
-    "Blanc.Lift.UniswapV2Pair.pair_history_swap_live",
-    "Blanc.Lift.UniswapV2Pair.pair_history_burn_live",
-    "Blanc.Lift.UniswapV2Pair.pair_history_skim_live",
-    "Blanc.Lift.UniswapV2Pair.pair_history_permit_live",
-    "Blanc.Lift.UniswapV2Pair.pair_history_initialize_live",
-    "Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialized",
-    "Blanc.Lift.UniswapV2Pair.Creation.pair_create2_initialize_live",
-    "Blanc.Lift.UniswapV2Pair.Creation.exhibit_create2",
-    # The Pair x WETH9 composition (Section 5.9).
-    "Blanc.Lift.Token.BookLaws",
-    "Blanc.Lift.Token.Core",
-    "Blanc.Lift.Token.SelfCaller",
-    "Blanc.Lift.Token.TransferLive",
-    "Blanc.Composition.Weth9Token.weth9Book_laws",
-    "Blanc.Composition.Weth9Token.weth9Core",
-    "Blanc.Composition.Weth9Token.weth9SelfCaller",
-    "Blanc.Composition.Weth9Token.weth9TransferLive",
-    "Blanc.Lift.UniswapV2Factory.cert_check",
-    "Blanc.Lift.UniswapV2Factory.factory_children_fresh",
-    "Blanc.Composition.UniswapV2FactoryQuiet.pair_history_factoryQuiet",
-    "Blanc.Composition.PairTokenJoint.pair_token_joint",
-    "Blanc.Composition.PairTokenJoint.pair_token_noShrinkSide",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_joint",
-    "Blanc.Composition.UniswapV2PairWeth9ShareValue.pair_weth9_history_feeOff_product",
-    "Blanc.Composition.UniswapV2PairWeth9ShareValue.pair_weth9_history_feeOn_product",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_sync_live_zero",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_sync_live_one",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_mint_live_zero",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_mint_live_one",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_burn_live_zero",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_burn_live_one",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_skim_live_zero",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_skim_live_one",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_swap_live_zero",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_swap_live_one",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_history_swap_live_one_both",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.JointCheckpoint",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_create2_jointCheckpoint",
-    "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_create2_jointCheckpoint_zero",
-    "Blanc.Composition.UniswapV2PairWeth9Instance.w0_jointCheckpoint",
-    "Blanc.Composition.UniswapV2PairWeth9Capstone.uniswap_weth9_closed_agreeing",
-    "Blanc.Composition.UniswapV2PairWeth9Capstone.uniswap_weth9_closed_instance",
-    # The Pair x USDC x WETH9 composition (Section 5.10).
-    "Blanc.Lift.checkNode_call_at_delegatecall",
-    "Blanc.Lift.Usdc.proxy_forwards",
-    "Blanc.Lift.Usdc.proxy_forwards_control",
-    "Blanc.Lift.Usdc.impl_children",
-    "Blanc.Lift.Usdc.lib_children",
-    "Blanc.Lift.Usdc.usdcBook_lawsS",
-    "Blanc.Lift.Usdc.usdc_history_replayAt",
-    "Blanc.Lift.Usdc.usdc_history_slots",
-    "Blanc.Lift.Usdc.usdc_history_end",
-    "Blanc.Composition.UsdcToken.usdcCore",
-    "Blanc.Composition.PairTwoToken.pair_two_token_joint",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.JointCheckpoint2",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_joint",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOn_product",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOff_product",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_sync_live",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_mint_live",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_burn_live",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_skim_live",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_swap_live",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_create2_jointCheckpoint2",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.checkJoint2_sound",
-    # The support-free checkpoint (Section 5.10): the same exhibit rows from
-    # `JointCheckpoint2F` with the trace-local `PairUsdcAllowQuiet`, checked, sound.
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.JointCheckpoint2F",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.PairUsdcAllowQuiet",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_joint_finite",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOn_product_finite",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_feeOff_product_finite",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_sync_live_finite",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_mint_live_finite",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_burn_live_finite",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_skim_live_finite",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_history_swap_live_finite",
-    "Blanc.Composition.UniswapV2PairUsdcWeth9.u0F_stray_accepted",
-    # The Curve 3pool StableSwap pool and its composition with 3Crv (Section 5.11).
-    "Blanc.Lift.Curve3Pool.pool_frame_refines_env",
-    "Blanc.Lift.Curve3Pool.pool_other_fails",
-    "Blanc.Lift.Curve3Pool.pool_static_noEffect",
-    "Blanc.Lift.Curve3Pool.pool_history_committed_derived",
-    "Blanc.Lift.Curve3Pool.pool_history_initialized",
-    "Blanc.Lift.Curve3Pool.exchange_live",
-    "Blanc.Lift.Curve3Pool.addLiquidity_live",
-    "Blanc.Lift.Curve3Pool.removeLiquidity_live",
-    "Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live",
-    "Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live",
-    "Blanc.Lift.Curve3Pool.pool_history_exchange_live",
-    "Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live",
-    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live",
-    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live",
-    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live",
-    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidity_live_entry",
-    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_addLiquidity_live_entry",
-    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityImbalance_live_entry",
-    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityOneCoin_live_entry",
-    "Blanc.Composition.Curve3Pool3CrvInstance.ex_frame_live",
-    "Blanc.Composition.Curve3Pool3CrvInstance.rl_frame_live",
-    "Blanc.Composition.Curve3Pool3CrvInstance.oc_frame_live",
-    "Blanc.Composition.Curve3Pool3CrvInstance.al_frame_live",
-    "Blanc.Composition.Curve3Pool3CrvInstance.rli_frame_live",
-    "Blanc.Composition.Curve3Pool3CrvJoint.checkJoint_sound",
-    "Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_agreeing",
-    "Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_instance",
-    "Blanc.StableSwapNewton.getDChk_lower",
-    "Blanc.StableSwapNewton.getD_not_mono",
-    "Blanc.StableSwapNewton.getYDChk_rootOrSucc",
-    "Blanc.StableSwapNewton.getYChk_rootOrSucc",
-    "Blanc.Lift.Curve3Pool.u3_refuted_exchange",
-    "Blanc.Lift.Curve3Pool.u3_refuted_add_liquidity",
-    "Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity",
-    "Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_imbalance",
-    "Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_one_coin_deployed",
-    "Blanc.Lift.Curve3Pool.u3_refuted_donate_admin_fees",
-    "Blanc.Lift.Curve3Pool.pool_history_u3",
-    "Blanc.Composition.Curve3PoolSupply.pool_3crv_u3",
-    "Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_u3_deployed",
-    "Blanc.Lift.Curve3Pool.pool_history_amp",
-    "Blanc.Lift.Curve3Pool.dMonoInA",
-    "Blanc.Lift.Curve3Pool.u5_ramp_control",
-    "Blanc.Composition.Curve3PoolSupply.pool_3crv_history",
-    "Blanc.Lift.Curve3Pool.Creation.pool_deploy_covered",
-    # The Curve 3pool exact-gas liveness forms and their premise-bundle witnesses (Section 5.11).
-    "Blanc.Lift.Curve3Pool.removeLiquidity_live_exact",
-    "Blanc.Lift.Curve3Pool.exchange_live_exact",
-    "Blanc.Lift.Curve3Pool.addLiquidity_live_exact",
-    "Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live_exact",
-    "Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live_exact",
-    "Blanc.Lift.Curve3Pool.removeLiquidity_msg_exact",
-    "Blanc.Lift.Curve3Pool.exchange_msg_exact",
-    "Blanc.Lift.Curve3Pool.addLiquidity_msg_exact",
-    "Blanc.Lift.Curve3Pool.removeLiquidityImbalance_msg_exact",
-    "Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_msg_exact",
-    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live_exact",
-    "Blanc.Lift.Curve3Pool.pool_history_exchange_live_exact",
-    "Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live_exact",
-    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live_exact",
-    "Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live_exact",
-    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidity_live_exact",
-    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_addLiquidity_live_exact",
-    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityImbalance_live_exact",
-    "Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityOneCoin_live_exact",
-    "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidity_exactPremises_satisfiable",
-    "Blanc.Composition.Curve3Pool3CrvInstance.addLiquidity_exactPremises_satisfiable",
-    "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_exactPremises_satisfiable",
-    "Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityOneCoin_exactPremises_satisfiable",
-    "Blanc.Composition.Curve3Pool3CrvInstance.exchange_exactPremises_satisfiable",
-    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidity_live_exact_literal",
-    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_addLiquidity_live_exact_literal",
-    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityImbalance_live_exact_literal",
-    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityOneCoin_live_exact_literal",
-    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidity_live_entry_literal",
-    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_addLiquidity_live_entry_literal",
-    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityImbalance_live_entry_literal",
-    "Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityOneCoin_live_entry_literal",
-    # The trimmed public headlines, each one named Prop over direct observers.
-    "Blanc.Lift.WithdrawalRequest.fee_le_spec",
-    "Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff",
-    "Blanc.Lift.WithdrawalRequest.FeeCounterexample.fee_guarantee_refuted",
-    "Blanc.Lift.WithdrawalRequest.system_call_succeeds",
-    "Blanc.Lift.WithdrawalRequest.history_system_call_succeeds",
-    "Blanc.Lift.WithdrawalRequest.history_submission_live",
-    "Blanc.Lift.WithdrawalRequest.history_submission_queued",
-    "Blanc.Lift.WithdrawalRequest.history_system_call_succeeds_mainnet",
-    "Blanc.Lift.WithdrawalRequest.history_submission_live_mainnet",
-    "Blanc.Lift.WithdrawalRequest.history_submission_queued_mainnet",
-    "Blanc.Lift.WithdrawalRequest.deploy",
-    "Blanc.Lift.WithdrawalRequest.deploy_mainnet",
-    "Blanc.Lift.WithdrawalRequest.history_payments",
-    "Blanc.Lift.WithdrawalRequest.history_payments_mainnet",
-    "Blanc.Lift.WithdrawalRequest.history_delivery",
-    "Blanc.Lift.WithdrawalRequest.history_delivery_mainnet",
-    "Blanc.Lift.WithdrawalRequest.DrainControl.historyFifo_of_checkpoint_needs_systemEmpty",
-    "Blanc.Lift.Curve3Crv.c3crv_conserved",
-    "Blanc.Lift.Curve3Crv.c3crv_policy",
-    "Blanc.Lift.BeaconDeposit.beacon_deposits",
-    "Blanc.Lift.LidoCircuitBreakerDeployed.lido_registry_consistent",
-    "Blanc.Lift.LidoCircuitBreakerDeployed.lido_remove_repairs",
-    "Blanc.Lift.LidoCircuitBreakerDeployed.lido_deployment_finite_init",
-    "Blanc.Lift.LidoCircuitBreakerDeployed.Live.lido_live_registryOn",
-    "Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_attack",
-    "Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_exit",
-    "Blanc.Lift.UniswapV2Pair.pair_oracle",
-    "Blanc.Lift.UniswapV2Pair.pair_share_value",
-    "Blanc.Lift.UniswapV2Pair.pair_share_value_feeOff",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_deployment",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_backed",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_net_flow",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_exit_from_deployment",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_exit_from_deployment_after",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_backed_observed",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_net_flow_observed",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_exit_observed",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_backed_anchored",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_net_flow_anchored",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.weth9_exit_anchored",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.pair_ledger",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.pair_minimum_liquidity",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.live_pair_reserves_backed",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.live_pair_share_value",
-    "Blanc.Composition.LiveUsdcWeth9B26213219.live_pair_share_value_feeOff",
-]
+REQUIRED_HEADLINES = ['Blanc.Lift.Curve3Crv.c3crv_history_committed_derived',
+ 'Blanc.Lift.Curve3Crv.c3crv_frame_refines',
+ 'Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered',
+ 'Blanc.Lift.VyperNonreentrantDeployed.Fixed.vplus_exclusion',
+ 'Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.vplus_witness_covered',
+ 'Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.vplus_witness2_covered',
+ 'Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness_covered',
+ 'Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process',
+ 'Blanc.Lift.WithdrawalRequest.history_fifo',
+ 'Blanc.Lift.WithdrawalRequest.history_fifo_mainnet',
+ 'Blanc.Lift.WithdrawalRequest.block_word_delivery',
+ 'Blanc.Lift.WithdrawalRequest.wordSystem_excess_wraps',
+ 'Blanc.Lift.WithdrawalRequest.word_fee_eq_iff_natFeeDomain',
+ 'Blanc.Lift.WithdrawalRequest.FeeCounterexample.nat_fee_guarantee_refuted',
+ 'Blanc.Lift.WithdrawalRequest.history_submission_nat_live',
+ 'Blanc.Lift.Token.BookLaws',
+ 'Blanc.Lift.Token.Core',
+ 'Blanc.Lift.Token.SelfCaller',
+ 'Blanc.Lift.Token.TransferLive',
+ 'Blanc.Lift.checkNode_call_at_delegatecall',
+ 'Blanc.Lift.Usdc.proxy_forwards',
+ 'Blanc.Lift.Usdc.proxy_forwards_control',
+ 'Blanc.Lift.Usdc.impl_children',
+ 'Blanc.Lift.Usdc.lib_children',
+ 'Blanc.Lift.Usdc.usdcBook_lawsS',
+ 'Blanc.Lift.Usdc.usdc_history_replayAt',
+ 'Blanc.Lift.Usdc.usdc_history_slots',
+ 'Blanc.Lift.Usdc.usdc_history_end',
+ 'Blanc.Composition.UsdcToken.usdcCore',
+ 'Blanc.Composition.UniswapV2PairUsdcWeth9.PairUsdcAllowQuiet',
+ 'Blanc.Lift.Curve3Pool.pool_frame_refines_env',
+ 'Blanc.Lift.Curve3Pool.pool_other_fails',
+ 'Blanc.Lift.Curve3Pool.pool_static_noEffect',
+ 'Blanc.Lift.Curve3Pool.pool_history_committed_derived',
+ 'Blanc.Lift.Curve3Pool.pool_history_initialized',
+ 'Blanc.Lift.Curve3Pool.exchange_live',
+ 'Blanc.Lift.Curve3Pool.addLiquidity_live',
+ 'Blanc.Lift.Curve3Pool.removeLiquidity_live',
+ 'Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live',
+ 'Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live',
+ 'Blanc.Lift.Curve3Pool.pool_history_exchange_live',
+ 'Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live',
+ 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live',
+ 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live',
+ 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live',
+ 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidity_live_entry',
+ 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_addLiquidity_live_entry',
+ 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityImbalance_live_entry',
+ 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityOneCoin_live_entry',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.ex_frame_live',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.rl_frame_live',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.oc_frame_live',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.al_frame_live',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.rli_frame_live',
+ 'Blanc.Composition.Curve3Pool3CrvJoint.checkJoint_sound',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_agreeing',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_instance',
+ 'Blanc.StableSwapNewton.getDChk_lower',
+ 'Blanc.StableSwapNewton.getD_not_mono',
+ 'Blanc.StableSwapNewton.getYDChk_rootOrSucc',
+ 'Blanc.StableSwapNewton.getYChk_rootOrSucc',
+ 'Blanc.Lift.Curve3Pool.u3_refuted_exchange',
+ 'Blanc.Lift.Curve3Pool.u3_refuted_add_liquidity',
+ 'Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity',
+ 'Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_imbalance',
+ 'Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_one_coin_deployed',
+ 'Blanc.Lift.Curve3Pool.u3_refuted_donate_admin_fees',
+ 'Blanc.Lift.Curve3Pool.pool_history_u3',
+ 'Blanc.Composition.Curve3PoolSupply.pool_3crv_u3',
+ 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_u3_deployed',
+ 'Blanc.Lift.Curve3Pool.pool_history_amp',
+ 'Blanc.Lift.Curve3Pool.dMonoInA',
+ 'Blanc.Lift.Curve3Pool.u5_ramp_control',
+ 'Blanc.Composition.Curve3PoolSupply.pool_3crv_history',
+ 'Blanc.Lift.Curve3Pool.Creation.pool_deploy_covered',
+ 'Blanc.Lift.Curve3Pool.removeLiquidity_live_exact',
+ 'Blanc.Lift.Curve3Pool.exchange_live_exact',
+ 'Blanc.Lift.Curve3Pool.addLiquidity_live_exact',
+ 'Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live_exact',
+ 'Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live_exact',
+ 'Blanc.Lift.Curve3Pool.removeLiquidity_msg_exact',
+ 'Blanc.Lift.Curve3Pool.exchange_msg_exact',
+ 'Blanc.Lift.Curve3Pool.addLiquidity_msg_exact',
+ 'Blanc.Lift.Curve3Pool.removeLiquidityImbalance_msg_exact',
+ 'Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_msg_exact',
+ 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live_exact',
+ 'Blanc.Lift.Curve3Pool.pool_history_exchange_live_exact',
+ 'Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live_exact',
+ 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live_exact',
+ 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live_exact',
+ 'Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidity_live_exact',
+ 'Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_addLiquidity_live_exact',
+ 'Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityImbalance_live_exact',
+ 'Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityOneCoin_live_exact',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidity_exactPremises_satisfiable',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.addLiquidity_exactPremises_satisfiable',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_exactPremises_satisfiable',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityOneCoin_exactPremises_satisfiable',
+ 'Blanc.Composition.Curve3Pool3CrvInstance.exchange_exactPremises_satisfiable',
+ 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidity_live_exact_literal',
+ 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_addLiquidity_live_exact_literal',
+ 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityImbalance_live_exact_literal',
+ 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityOneCoin_live_exact_literal',
+ 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidity_live_entry_literal',
+ 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_addLiquidity_live_entry_literal',
+ 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityImbalance_live_entry_literal',
+ 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityOneCoin_live_entry_literal',
+ 'Blanc.Lift.WithdrawalRequest.fee_le_spec',
+ 'Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff',
+ 'Blanc.Lift.WithdrawalRequest.FeeCounterexample.fee_guarantee_refuted',
+ 'Blanc.Lift.WithdrawalRequest.system_call_succeeds',
+ 'Blanc.Lift.WithdrawalRequest.history_system_call_succeeds',
+ 'Blanc.Lift.WithdrawalRequest.history_submission_live',
+ 'Blanc.Lift.WithdrawalRequest.history_submission_queued',
+ 'Blanc.Lift.WithdrawalRequest.history_system_call_succeeds_mainnet',
+ 'Blanc.Lift.WithdrawalRequest.history_submission_live_mainnet',
+ 'Blanc.Lift.WithdrawalRequest.history_submission_queued_mainnet',
+ 'Blanc.Lift.WithdrawalRequest.deploy',
+ 'Blanc.Lift.WithdrawalRequest.deploy_mainnet',
+ 'Blanc.Lift.WithdrawalRequest.history_payments',
+ 'Blanc.Lift.WithdrawalRequest.history_payments_mainnet',
+ 'Blanc.Lift.WithdrawalRequest.history_delivery',
+ 'Blanc.Lift.WithdrawalRequest.history_delivery_mainnet',
+ 'Blanc.Lift.WithdrawalRequest.DrainControl.historyFifo_of_checkpoint_needs_systemEmpty',
+ 'Blanc.Lift.Curve3Crv.c3crv_conserved',
+ 'Blanc.Lift.Curve3Crv.c3crv_policy',
+ 'Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_attack',
+ 'Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_exit']
 
 # Load-bearing disclosures; a rewording that drops one fails.
-NONCLAIM_PHRASES = [
-    "not a deployment audit",
-    "amsterdam is not covered",
-    "modeled deployment",
-    "not historical inclusion",
-    "bpo2 rules",
-    "heuristic bound",
-    "synthetic",
-    "fixed signed transaction",
-    "no lido liveness claim",
-    "there is no transaction-level beacon liveness",
-    "not a kernel fact",
-    "vacuous on mainnet",
-    "not chained",
-    "no closed cost formula",
-    "not reproduced by any gate",
-    "at most 2^254 committed submission-payment occurrences",
-    "the witness lives only in the model",
-    "success is classified, failure is not",
-    "not a code-only fact",
-    "no claim that the chain produces those later blocks",
-    "not a proved minimum",
-    "no transaction-level liveness",
-    "validator authorization",
-    "not a practical attack",
-    "not that one fits mainnet's gas limits",
-    "noshrink constrains only the pair's own balance answers",
-    "first transfer carries a trace-local hash premise",
-    "not a flat per-frame replay",
-    "composition with weth9 is not claimed",
-    "permit signature unforgeability is not claimed",
-    "the factory's feeto answers are not discharged",
-    "no transaction-level uniswap liveness",
-    "it states no sum over the history",
-    "not an existential cost",
-    # The Pair x WETH9 composition (Section 5.9, Section 7 items 27 to 34).
-    "the other token's half stays a named premise",
-    "no premise about weth9's answers",
-    "the live state is not checked",
-    "the full deployment sequence is not executed",
-    "deliberately left for later work, not overlooked",
-    "exercises the discharged weth9 side at frame level",
-    "form takes `canonical` and `sumnof`",
-    "the factory code premise",
-    "checked by the kernel-evaluated checker",
-    "noshrink's weth9 half is trivially true",
-    "hash-t over child frames",
-    # The Pair x USDC x WETH9 composition (Section 5.10, Section 7 items 35 to 40).
-    "governance premise",
-    "never-signer premise",
-    "excluded positions",
-    "liveness premises",
-    "key universe",
-    "the closed single-block usdc instance",
-    # The Curve 3pool (Section 5.11, Section 7 items 42 to 55).
-    "virtual price is not monotone",
-    "only a synthetic coin is shown to satisfy it",
-    "not exact-gas equalities",
-    "jaune counts call depth down",
-    "only `exchange` is shown at a transaction's entry",
-    "the answer is unconstrained",
-    "not pinned to the premised `t`",
-    "no such world is instantiated",
-    "the index-2 path is not instantiated",
-    "not the recorded constructor arguments",
-    # The Curve 3pool exact-gas rows (Section 5.11, Section 6 [ah], Section 7 items 48 and 53).
-    "no exact-gas theorem is instantiated end to end",
-    "the composed headlines' coin-chain hypotheses as stated",
-    "taken as world conditions, not discharged",
-    "no composed headline is instantiated end to end",
-    "a coin's gas use is the coin's, not a blanc fact",
-    "headroom and the no-wrap bound are separate premises",
-    "it reads no residual gas and is not an existential cost",
-    "declared in blanc, not by jaune",
-    "the sufficient-gas rows above remain, unchanged",
-]
+NONCLAIM_PHRASES = ['not a deployment audit',
+ 'amsterdam is not covered',
+ 'modeled deployment',
+ 'not historical inclusion',
+ 'heuristic bound',
+ 'synthetic',
+ 'fixed signed transaction',
+ 'not a kernel fact',
+ 'not chained',
+ 'no closed cost formula',
+ 'not reproduced by any gate',
+ 'at most 2^254 committed submission-payment occurrences',
+ 'the witness lives only in the model',
+ 'success is classified, failure is not',
+ 'not a code-only fact',
+ 'no claim that the chain produces those later blocks',
+ 'not a proved minimum',
+ 'no transaction-level liveness',
+ 'validator authorization',
+ 'not a practical attack',
+ "not that one fits mainnet's gas limits",
+ 'not an existential cost',
+ 'governance premise',
+ 'never-signer premise',
+ 'excluded positions',
+ 'liveness premises',
+ 'key universe',
+ 'the closed single-block usdc instance',
+ 'virtual price is not monotone',
+ 'only a synthetic coin is shown to satisfy it',
+ 'not exact-gas equalities',
+ 'jaune counts call depth down',
+ "only `exchange` is shown at a transaction's entry",
+ 'the answer is unconstrained',
+ 'not pinned to the premised `t`',
+ 'no such world is instantiated',
+ 'the index-2 path is not instantiated',
+ 'not the recorded constructor arguments',
+ 'no exact-gas theorem is instantiated end to end',
+ "the composed headlines' coin-chain hypotheses as stated",
+ 'taken as world conditions, not discharged',
+ 'no composed headline is instantiated end to end',
+ "a coin's gas use is the coin's, not a blanc fact",
+ 'headroom and the no-wrap bound are separate premises',
+ 'it reads no residual gas and is not an existential cost',
+ 'declared in blanc, not by jaune',
+ 'the sufficient-gas rows above remain, unchanged']
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
 FORBIDDEN = [
@@ -422,30 +275,50 @@ NON_LEAN_IDENTIFIERS = {
 
 # The artifacts the map states: address -> (label, lifted input file or None for a proxy,
 # certificate ids whose provenance records the creation, implementation address for a proxy).
-ARTIFACTS = {
-    "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2": ("WETH9", "weth9-runtime.hex", ["weth9", "weth9-creation"], None),
-    "0x00000000219ab540356cBB839Cbe05303d7705Fa": ("Beacon deposit", "beacon-deposit-runtime.hex", ["beacon-deposit", "beacon-deposit-creation"], None),
-    "0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490": ("Curve 3Crv LP token", "curve-3crv-runtime.hex", ["curve-3crv", "curve-3crv-creation"], None),
-    "0x6019CB557978296BA3C08a7B73225C0975DFB2F7": ("Lido CircuitBreaker", "lido-circuit-breaker-runtime.hex", ["lido-circuit-breaker", "lido-circuit-breaker-creation"], None),
-    "0x847ee1227a9900b73aeeb3a47fac92c52fd54ed9": ("V+ implementation", "vyper-847e-runtime.hex", ["vyper-847e"], None),
-    "0x21e27a5e5513d6e65c4f830167390997aa84843a": ("V+ proxy", None, [], "0x847ee1227a9900b73aeeb3a47fac92c52fd54ed9"),
-    "0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e": ("V- implementation", "vyper-6326-runtime.hex", ["vyper-6326"], None),
-    "0x9848482da3ee3076165ce6497eda906e66bb85c5": ("V- proxy", None, [], "0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e"),
-    "0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc": ("Uniswap V2 Pair", "uniswap-v2-pair-runtime.hex", ["uniswap-v2-pair"], None),
-    "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f": ("Uniswap V2 Factory", "uniswap-v2-factory-runtime.hex", ["uniswap-v2-factory"], None),
-    "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48": ("USDC FiatTokenProxy", "usdc-proxy-runtime.hex", ["usdc-proxy"], None),
-    "0x43506849D7C04F9138D1A2050bbF3A0c054402dd": ("USDC FiatTokenV2_2 implementation", "usdc-impl-runtime.hex", ["usdc-impl"], None),
-    "0x800C32EaA2a6c93cF4CB51794450ED77fBfbB172": ("USDC SignatureChecker library", "usdc-lib-runtime.hex", ["usdc-lib"], None),
-    "0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7": ("Curve 3pool StableSwap", "curve-3pool-runtime.hex", ["curve-3pool", "curve-3pool-creation"], None),
-}
+ARTIFACTS = {'0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490': ('Curve 3Crv LP token',
+                                                'curve-3crv-runtime.hex',
+                                                ['curve-3crv', 'curve-3crv-creation'],
+                                                None),
+ '0x847ee1227a9900b73aeeb3a47fac92c52fd54ed9': ('V+ implementation',
+                                                'vyper-847e-runtime.hex',
+                                                ['vyper-847e'],
+                                                None),
+ '0x21e27a5e5513d6e65c4f830167390997aa84843a': ('V+ proxy',
+                                                None,
+                                                [],
+                                                '0x847ee1227a9900b73aeeb3a47fac92c52fd54ed9'),
+ '0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e': ('V- implementation',
+                                                'vyper-6326-runtime.hex',
+                                                ['vyper-6326'],
+                                                None),
+ '0x9848482da3ee3076165ce6497eda906e66bb85c5': ('V- proxy',
+                                                None,
+                                                [],
+                                                '0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e'),
+ '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': ('USDC FiatTokenProxy',
+                                                'usdc-proxy-runtime.hex',
+                                                ['usdc-proxy'],
+                                                None),
+ '0x43506849D7C04F9138D1A2050bbF3A0c054402dd': ('USDC FiatTokenV2_2 implementation',
+                                                'usdc-impl-runtime.hex',
+                                                ['usdc-impl'],
+                                                None),
+ '0x800C32EaA2a6c93cF4CB51794450ED77fBfbB172': ('USDC SignatureChecker library',
+                                                'usdc-lib-runtime.hex',
+                                                ['usdc-lib'],
+                                                None),
+ '0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7': ('Curve 3pool StableSwap',
+                                                'curve-3pool-runtime.hex',
+                                                ['curve-3pool', 'curve-3pool-creation'],
+                                                None)}
 # The Uniswap V2 Pair runtime is one runtime for every pair: its row records the block at which the
 # exhibit instance's code was read, not a creation transaction, and its creation code is a separate
 # input whose hash is the factory's init-code hash.
-UNISWAP_CREATION_INPUT = "uniswap-v2-pair-creation.hex"
+
 # The factory runtime, like the Pair's, is a code read at a finalized block; it embeds the Pair
 # creation code as data.
-UNISWAP_FACTORY_INPUT = "uniswap-v2-factory-runtime.hex"
-UNISWAP_FACTORY_MARKER = "**The Uniswap V2 Factory row.**"
+
+
 # The three USDC runtimes, like the Pair's, are code reads at one finalized block; the
 # implementation is the address the proxy's implementation slot holds there, and the library is
 # linked into the implementation by PUSH20.
@@ -645,8 +518,6 @@ class Authority:
         self.certificates = {
             entry.get("id"): entry for entry in self._json(CERTIFICATES).get("certificates", [])
         }
-        self.lido = self._json(LIDO_DEPLOYED)
-        self.bpo2 = self._json(BPO2_MANIFEST)
         self.lakefile = self._text("lakefile.lean")
         self.manifest = self._json("lake-manifest.json")
         self.toolchain = self._text("lean-toolchain").strip()
@@ -660,7 +531,6 @@ class Authority:
         for _label, filename, _ids, _impl in ARTIFACTS.values():
             if filename is not None:
                 self.runtime[filename] = self._runtime(filename)
-        self.uniswap_creation = self._runtime(UNISWAP_CREATION_INPUT)
 
     def _text(self, relative: str) -> str:
         try:
@@ -948,73 +818,10 @@ def check_trust_base(auth: Authority, text: str, errors: list[str]) -> None:
         errors.append("the covered forks are not stated as Prague, Osaka, BPO1 and BPO2")
 
 
-def check_uniswap_record(auth: Authority, body: str, errors: list[str]) -> None:
-    """The Uniswap V2 Pair row's code-read record and creation code, recomputed from the repository."""
-
-    flat = " ".join(body.split())
-    runtime = auth.runtime.get("uniswap-v2-pair-runtime.hex", b"")
-    creation = auth.uniswap_creation
-    provenance = auth.provenance(["uniswap-v2-pair"]).lower()
-    read = re.search(
-        r"finalized block (\d[\d,]*) \(block hash (0x[0-9a-fA-F]{64})\)", flat
-    )
-    if read is None:
-        errors.append("Uniswap V2 Pair: the code-read block and block hash are not stated")
-    else:
-        if not re.search(r"\bblock\s+" + str(to_int(read.group(1))) + r"\b", provenance):
-            errors.append(f"Uniswap V2 Pair: code-read block {read.group(1)} is not in the certificate provenance")
-        if read.group(2).lower() not in provenance:
-            errors.append("Uniswap V2 Pair: the code-read block hash is not in the certificate provenance")
-    init = re.search(r"init-code hash (0x[0-9a-fA-F]{64})", flat)
-    window = re.search(r"bytes (\d[\d,]*) to (\d[\d,]*) of it are the lifted runtime", flat)
-    stated = re.search(r"(\d[\d,]*)-byte input `scripts/lift/inputs/" + re.escape(UNISWAP_CREATION_INPUT), flat)
-    if not creation or not runtime:
-        errors.append("Uniswap V2 Pair: the creation code or the runtime input is missing")
-        return
-    if init is None or init.group(1).lower() != "0x" + keccak.keccak256(creation).hex():
-        errors.append("Uniswap V2 Pair: the creation code does not hash to the stated init-code hash")
-    if stated is None or to_int(stated.group(1)) != len(creation):
-        errors.append(f"Uniswap V2 Pair: the creation code is not the stated size ({len(creation)})")
-    if window is None:
-        errors.append("Uniswap V2 Pair: the embedded runtime window is not stated")
-    else:
-        start, end = to_int(window.group(1)), to_int(window.group(2))
-        if creation[start:end + 1] != runtime:
-            errors.append("Uniswap V2 Pair: the stated window of the creation code is not the lifted runtime")
 
 
-def check_factory_record(auth: Authority, body: str, errors: list[str]) -> None:
-    """The Uniswap V2 Factory row's code-read record and embedded Pair creation code."""
 
-    at = body.find(UNISWAP_FACTORY_MARKER)
-    if at < 0:
-        errors.append("Uniswap V2 Factory: the factory row's record is not stated")
-        return
-    end = body.find("\n\n", at)
-    flat = " ".join(body[at:end if end >= 0 else len(body)].split())
-    runtime = auth.runtime.get(UNISWAP_FACTORY_INPUT, b"")
-    creation = auth.uniswap_creation
-    provenance = auth.provenance(["uniswap-v2-factory"]).lower()
-    read = re.search(r"finalized block (\d[\d,]*) \(block hash (0x[0-9a-fA-F]{64})\)", flat)
-    if read is None:
-        errors.append("Uniswap V2 Factory: the code-read block and block hash are not stated")
-    else:
-        if not re.search(r"\bblock\s+" + str(to_int(read.group(1))) + r"\b", provenance):
-            errors.append(f"Uniswap V2 Factory: factory code-read block {read.group(1)} is not in the certificate provenance")
-        if read.group(2).lower() not in provenance:
-            errors.append("Uniswap V2 Factory: the factory code-read block hash is not in the certificate provenance")
-    if f"`scripts/lift/inputs/{UNISWAP_FACTORY_INPUT}`" not in flat:
-        errors.append("Uniswap V2 Factory: the lifted input is not named")
-    window = re.search(r"Bytes (\d[\d,]*) to (\d[\d,]*) of it are the Pair creation code", flat)
-    if not creation or not runtime:
-        errors.append("Uniswap V2 Factory: the factory runtime or the Pair creation input is missing")
-        return
-    if window is None:
-        errors.append("Uniswap V2 Factory: the embedded Pair creation code window is not stated")
-    else:
-        start, end_byte = to_int(window.group(1)), to_int(window.group(2))
-        if runtime[start:end_byte + 1] != creation:
-            errors.append("Uniswap V2 Factory: the stated window of the factory runtime is not the Pair creation code")
+
 
 
 def check_usdc_record(auth: Authority, body: str, errors: list[str]) -> None:
@@ -1107,8 +914,6 @@ def check_artifacts(auth: Authority, text: str, errors: list[str]) -> int:
             errors.append(f"{label}: no certificate ids")
     if seen != set(ARTIFACTS):
         errors.append(f"artifact population drifted: missing {sorted(set(ARTIFACTS) - seen)!r}")
-    check_uniswap_record(auth, body, errors)
-    check_factory_record(auth, body, errors)
     check_usdc_record(auth, body, errors)
 
     system_seen = set()
@@ -1134,27 +939,6 @@ def check_artifacts(auth: Authority, text: str, errors: list[str]) -> int:
     if system_seen != set(SYSTEM_ARTIFACTS):
         errors.append("system-contract population drifted")
 
-    # The Lido creation happened after BPO2: the disclosure's figures come from the reference input.
-    meta = auth.lido.get("meta", {}) if isinstance(auth.lido.get("meta"), dict) else {}
-    bpo2 = auth.bpo2.get("mainnetBpo2Activation") if isinstance(auth.bpo2, dict) else None
-    if not isinstance(bpo2, int):
-        found = json.dumps(auth.bpo2)
-        match = re.search(r'"mainnetBpo2Activation":\s*(\d+)', found)
-        bpo2 = int(match.group(1)) if match else None
-    timestamp = meta.get("timestamp")
-    stamp = re.search(r"timestamp (\d[\d,]*)", text)
-    activation = re.search(r"BPO2 activation\s+at (\d[\d,]*)", text)
-    if not isinstance(timestamp, int) or not isinstance(bpo2, int):
-        errors.append("cannot read the Lido creation timestamp or the BPO2 activation")
-    else:
-        if not stamp or to_int(stamp.group(1)) != timestamp:
-            errors.append(f"the Lido creation timestamp differs from {LIDO_DEPLOYED} ({timestamp})")
-        if not activation or to_int(activation.group(1)) != bpo2:
-            errors.append(f"the BPO2 activation differs from {BPO2_MANIFEST} ({bpo2})")
-        if timestamp <= bpo2:
-            errors.append("the Lido creation no longer follows the BPO2 activation")
-        if meta.get("blockNumber") is not None and f"block {meta['blockNumber']:,}" not in text:
-            errors.append(f"the Lido creation block differs from {LIDO_DEPLOYED}")
     return len(seen) + len(system_seen)
 
 
@@ -1241,7 +1025,7 @@ def drop_headline(text: str, name: str | None = None) -> str:
 def falsifiers(auth: Authority, text: str) -> list[tuple[str, str, object]]:
     """``(label, expected diagnostic, mutate)``; `mutate(auth, text)` returns `(auth, text)`."""
 
-    first_claim = sorted(auth.stricter)[0]
+    first_claim = sorted(auth.stricter)[0] if auth.stricter else "Blanc.Lift.Usdc.proxy_forwards"
 
     def with_authority(**changes):
         import copy
@@ -1250,6 +1034,30 @@ def falsifiers(auth: Authority, text: str) -> list[tuple[str, str, object]]:
             setattr(clone, key, value)
         return clone
 
+    def stricter_fixture(a, t):
+        if a.stricter:
+            return a, t
+        clone = with_authority(stricter={first_claim: frozenset()})
+        seeded = t.replace("**The 0 stricter claims**", "**The 1 stricter claims**", 1)
+        marker = "| # | Declaration | Exact set | Stated by |\n|---|---|---|---|"
+        seeded = replace_once(seeded, marker, marker + f"\n| 1 | `{first_claim}` | none | synthetic control authority |")
+        return clone, seeded
+
+    def missing_stricter(a, t):
+        seeded_a, seeded_t = stricter_fixture(a, t)
+        return seeded_a, "\n".join(line for line in seeded_t.splitlines() if f"`{first_claim}`" not in line)
+
+    def wrong_stricter(a, t):
+        seeded_a, seeded_t = stricter_fixture(a, t)
+        clone = copy_authority(seeded_a)
+        old = seeded_a.stricter[first_claim]
+        clone.stricter = {**seeded_a.stricter, first_claim: frozenset({"propext", "Quot.sound"}) if old != frozenset({"propext", "Quot.sound"}) else frozenset()}
+        return clone, seeded_t
+
+    def copy_authority(a):
+        import copy
+        return copy.copy(a)
+
     def leaf_text(t):
         return replace_once(t, "1381 leaf results", "1380 leaf results") if "1381 leaf results" in t else t
 
@@ -1257,8 +1065,8 @@ def falsifiers(auth: Authority, text: str) -> list[tuple[str, str, object]]:
 
     return [
         ("misspelled declaration", "unresolved declaration",
-         lambda a, t: (a, replace_once(t, "`Blanc.Lift.Weth9.weth9_history_footprint`",
-                                       "`Blanc.Lift.Weth9.weth9_history_footprintt`"))),
+         lambda a, t: (a, replace_once(t, "`Blanc.Lift.Curve3Crv.c3crv_frame_refines`",
+                                       "`Blanc.Lift.Curve3Crv.c3crv_frame_refinest`"))),
         ("stale line", "stale line", lambda a, t: (a, bump_first_line(t))),
         ("wrong file", "is not declared in", lambda a, t: (a, swap_first_file(t))),
         ("orphan line reference", "orphan line reference",
@@ -1266,60 +1074,38 @@ def falsifiers(auth: Authority, text: str) -> list[tuple[str, str, object]]:
         ("missing cited file", "cited file does not exist",
          lambda a, t: (a, t + "\nSee `scripts/no-such-file.py`.\n")),
         ("stale bare name", "bare name is no declaration's name",
-         lambda a, t: (a, t + "\nSee also `weth9_history_footprintt`.\n")),
+         lambda a, t: (a, t + "\nSee also `c3crv_frame_refinest`.\n")),
         ("wrong leaf count", "leaf count differs",
          lambda a, t: (a, re.sub(LEAF_FULL_RE, lambda m: f"{to_int(m.group(1)) + 1} leaf results ({m.group(2)} public, {m.group(3)} private)", t, count=1))),
         ("extra stricter claim in the audit source", "stricter claims differ",
          lambda a, t: (with_authority(stricter={**a.stricter, "Blanc.Fabricated.claim": frozenset()}), t)),
         ("missing stricter row in the document", "stricter claims differ",
-         lambda a, t: (a, "\n".join(l for l in t.splitlines() if f"`{first_claim}`" not in l))),
+         missing_stricter),
         ("wrong stricter axiom set", "stricter claim set differs",
-         lambda a, t: (with_authority(stricter={**a.stricter, first_claim: frozenset({"propext", "Quot.sound"}) if a.stricter[first_claim] != frozenset({"propext", "Quot.sound"}) else frozenset()}), t)),
+         wrong_stricter),
         ("wrong codehash", "codehash",
-         lambda a, t: (a, replace_once(t, "0xd0a06b12ac47863b", "0xd0a06b12ac47863c"))),
+         lambda a, t: (a, replace_once(t, "0xb731b7a9a74c6c60", "0xb731b7a9a74c6c61"))),
         ("wrong runtime size", "runtime bytes",
-         lambda a, t: (a, replace_once(t, "| 3,124 |", "| 3,125 |"))),
+         lambda a, t: (a, replace_once(t, "| 2,276 |", "| 2,277 |"))),
         ("wrong creation transaction", "creation transaction is not in the certificate provenance",
-         lambda a, t: (a, replace_once(t, "0xb95343413e459a0f", "0xb95343413e459a0e"))),
+         lambda a, t: (a, replace_once(t, "0xa7d90e460bed5618", "0xa7d90e460bed5619"))),
         ("wrong system-contract digest", "SHA-256 differs",
-         lambda a, t: (a, replace_once(t, "cb7bd3e115730f7d", "cb7bd3e115730f7e"))),
+         lambda a, t: (a, replace_once(t, "22ac79b68752353c", "22ac79b68752353d"))),
         ("wrong Jaune revision", "Jaune revision",
          lambda a, t: (a, re.sub(r"Jaune revision `[0-9a-f]+`", "Jaune revision `b019bbe`", t, count=1))),
-        ("wrong Lido timestamp", "Lido creation timestamp",
-         lambda a, t: (a, replace_once(t, "timestamp 1,777,555,319", "timestamp 1,777,555,318"))),
         ("process vocabulary", "process vocabulary",
          lambda a, t: (a, t + "\nThe master session decided this.\n")),
         ("deleted headline", "required headline", lambda a, t: (a, drop_headline(t))),
         ("dropped disclosure", "load-bearing disclosure vanished",
          lambda a, t: (a, remove_all(t, "not a deployment audit"))),
-        ("wrong Uniswap codehash", "codehash",
-         lambda a, t: (a, replace_once(t, "0x5b83bdbcc56b2e63", "0x5b83bdbcc56b2e64"))),
-        ("wrong Uniswap code-read block", "code-read block",
-         lambda a, t: (a, replace_once(t, "finalized block 26,098,569", "finalized block 26,098,570"))),
-        ("wrong Uniswap init-code hash", "init-code hash",
-         lambda a, t: (a, replace_once(t, "0x96e8ac4277198ff8", "0x96e8ac4277198ff9"))),
-        ("wrong Uniswap runtime window", "window of the creation code",
-         lambda a, t: (a, replace_once(t, "261 to 11,553 of it are the lifted runtime", "262 to 11,554 of it are the lifted runtime"))),
-        ("deleted Uniswap headline", "required headline",
-         lambda a, t: (a, drop_headline(t, "Blanc.Lift.UniswapV2Pair.pair_history_committed"))),
-        ("dropped Uniswap disclosure", "load-bearing disclosure vanished",
-         lambda a, t: (a, remove_all(t, "composition with WETH9 is not claimed"))),
-        ("wrong factory code-read block", "factory code-read block",
-         lambda a, t: (a, replace_once(t, "finalized block 26,209,011", "finalized block 26,209,012"))),
-        ("wrong factory embedded window", "window of the factory runtime",
-         lambda a, t: (a, replace_once(t, "Bytes 2,171 to 13,806 of it are the Pair creation code", "Bytes 2,172 to 13,807 of it are the Pair creation code"))),
-        ("deleted composition headline", "required headline",
-         lambda a, t: (a, drop_headline(t, "Blanc.Composition.UniswapV2PairWeth9Joint.pair_weth9_joint"))),
-        ("dropped composition disclosure", "load-bearing disclosure vanished",
-         lambda a, t: (a, remove_all(t, "the other token's half stays a named premise"))),
         ("wrong USDC code-read block", "USDC: code-read block",
          lambda a, t: (a, replace_once(t, "finalized block 26,213,219", "finalized block 26,213,220"))),
         ("wrong USDC library site", "is not PUSH20 of the library address",
          lambda a, t: (a, replace_once(t, "PUSH20 sites (bytes 18,390 and 20,105)", "PUSH20 sites (bytes 18,391 and 20,105)"))),
         ("wrong USDC implementation slot", "implementation slot",
          lambda a, t: (a, replace_once(t, "0x7050c9e0f4ca769c", "0x7050c9e0f4ca769d"))),
-        ("deleted USDC composition headline", "required headline",
-         lambda a, t: (a, drop_headline(t, "Blanc.Composition.UniswapV2PairUsdcWeth9.pair_usdc_weth9_joint"))),
+        ("deleted USDC headline", "required headline",
+         lambda a, t: (a, drop_headline(t, "Blanc.Lift.Usdc.usdc_history_end"))),
         ("dropped USDC disclosure", "load-bearing disclosure vanished",
          lambda a, t: (a, remove_all(t, "never-signer premise"))),
     ]

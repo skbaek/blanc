@@ -38,18 +38,6 @@ catalogue state; measure on your host before relying on them. Lift producer: `do
   diagnostic and exit status 2. Controls: `python3 scripts/test-read-discharge-trace.py`.
 - **Cost.** One elaboration of the file you trace (build its imports first); the reader is instant. Opt-in; no gate.
 
-### Gate precision matrix (`gate-precision-matrix.py`)
-
-- **What.** For each control it makes one real edit a Blanc change would make, asks the selective runner
-  (`scripts/gate-cache.py plan`) which gates it would rerun, asserts that the consuming gates are listed and the others
-  are not, and reverts the edit (the tree must be clean again before the next control).
-- **Run.** `python3 scripts/gate-precision-matrix.py --output /path/outside/the/checkout.json [--root DIR]
-  [--eels-root DIR]`; it edits and reverts the tree in place, so start from a clean checkout. It needs a pinned EELS git
-  checkout (`--eels-root`, `EELS_ROOT`, or `~/execution-specs`).
-- **Cost.** Plan mode runs no gate body. The Lean-source controls call `lake build` themselves before planning, which is
-  a whole-library build; the shared Creme workflow forbids a bare `lake build`, so run the matrix only in a standalone
-  checkout.
-
 ### Census tools: `LeafCensus`, `ExternalUseCensus`, `leaf_audit.py`
 
 - **What.** The leaf search. `scripts/LeafCensus.lean` elaborates over the built library and lists every declaration that

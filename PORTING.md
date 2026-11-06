@@ -1,15 +1,15 @@
 # Porting policy
 
-Blanc contracts often have a preexisting reference — WETH9, WETH10, a
-Solidity original. The same questions recur in every such project and every
-review of one: how closely must the Blanc artifact track the reference, and
-which differences are defects? This document is the standing answer.
-Principles 1–2 apply to all Blanc development; 3–5 apply whenever a
-reference exists. Of the ten contracts in, seven are ports of a deployed or
-published reference — WETH, WETH10, BeaconDeposit, Lido's CircuitBreaker,
-TriggerableWithdrawalsGateway and OssifiableProxy, and the ERC-4626 vault over
-WETH — and three are études composed from scratch: FMINT, PRORATA and DRIP,
-of which FMINT is still referenced against OpenZeppelin's `ERC20FlashMint`.
+Whenever a Blanc contract has a preexisting reference, the same questions
+recur in every such project and every review of one: how closely must the
+Blanc artifact track the reference, and which differences are defects? This
+document is the standing answer. Principles 1–2 apply to all Blanc
+development; 3–5 apply whenever a reference exists. Its historical
+instantiations (the former ports and études) are archive-era exhibits.
+
+For current proof development, use the [common API](docs/COMMON_API.md) and [proof recipes](docs/PROOF_RECIPES.md).
+
+Historical exhibits outside paper v2, including WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The archive is outside the live corpus and is not promised to build against later revisions.
 
 ## 1. Byte-identity is a non-goal, permanently
 
@@ -19,8 +19,7 @@ is out of scope by design. A compiler that chases another compiler's bytes
 inherits every choice that compiler made — its dispatcher, its stack
 discipline, its bugs — and can justify nothing beyond "same as before."
 Reading deployed artifacts as *evidence* is a different matter and is
-routine (see the disassembly provenance note in
-[WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md)); what is excluded is making their
+routine; what is excluded is making their
 bytes the compilation target. Directly verifying a reference artifact is a
 third thing again — worth doing, and a project someone should undertake, but
 not one a Blanc port undertakes or claims (principle 5).
@@ -57,9 +56,8 @@ to build it.** That headline is carried by exactly three parts, and
 nothing more:
 
 - **Differential agreement on a stated corpus.** The port is tested
-  against the reference under a published per-contract coverage criterion
-  (WETH10's: 147 rows over all 27 selectors and the receive path, frozen
-  in [WETH10_COMPATIBILITY.md](docs/registers/WETH10_COMPATIBILITY.md)). Fixture
+  against the reference under a published per-contract coverage criterion.
+  Fixture
   agreement is specification-checked differential testing on chosen
   inputs — not a proof, and not a liveness result (principle 5).
 - **Proved specifications, each offered as intent.** Parts of that
@@ -108,8 +106,8 @@ nothing here. The "shown what it entails" clause is load-bearing:
 under a flat keyspace it entails writing through a third party's balance
 slot on a hash collision, and Blanc's refusal instead is defended as a
 priced design trade — the flat keyspace bought verifiability and size,
-and fail-loud beat fail-silent — recorded in
-[WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md), not as a claim that users
+and fail-loud beat fail-silent — recorded in the (now archived) WETH
+registry, not as a claim that users
 secretly wanted refusals.
 
 The test is a heuristic for judgment, not a court. Asked in advance, it
@@ -137,9 +135,8 @@ does not include, then, is continuity with reliance on those accidents. A
 caller bound to one — a code-hash pin, a storage proof against WETH9's
 slot scheme — has bound itself to the artifact rather than the contract,
 and no reimplementation can or should satisfy it. (Precedent: the Blanc
-WETH's balance slots are deliberately not WETH9's;
-[WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md) records the choice and declines
-any storage-layout compatibility claim.)
+WETH's balance slots were deliberately not WETH9's; the archived WETH
+registry records the choice and declines any storage-layout compatibility claim.)
 
 The labels are presumptions, not verdicts: they settle the routine cases
 without a fresh survey. Where one is contested, or where a behavior fits
@@ -156,13 +153,9 @@ improvement. The freedom is paid for in bookkeeping:
 
 - Every known observable deviation is recorded in a per-contract registry —
   reference semantics, Blanc semantics, observable consequence, project
-  stance, evidence. [WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md),
-  [WETH10_DEVIATIONS.md](docs/registers/WETH10_DEVIATIONS.md) and
-  [FMINT_DEVIATIONS.md](docs/registers/FMINT_DEVIATIONS.md) are the practice this policy
-  canonizes; every later port keeps one too, beside them in `docs/registers/` —
-  `BEACON_DEPOSIT_DEVIATIONS.md`, `LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`,
-  `LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`,
-  `OSSIFIABLE_PROXY_DEVIATIONS.md` and `PRORATA_WETH_VAULT_DEVIATIONS.md`.
+  stance, evidence. A per-contract registry in `docs/registers/` is the
+  forward policy; no live instance is claimed here (former registries are
+  archived with their subjects).
 - An observable difference, once discovered, is dispositioned or it is a
   defect: either restore fidelity or record and defend the divergence.
   The registry is non-exhaustive as a matter of fact — no enumeration of
@@ -210,168 +203,9 @@ A port's conformance claim is therefore exactly this: the properties proved
 of the Blanc artifact, the behaviors differentially tested against the
 reference, and the recorded deviations. State what was checked; stop there.
 Where the stakes warrant it, the public boundary itself is frozen in a
-compatibility contract with differential evidence
-([WETH10_COMPATIBILITY.md](docs/registers/WETH10_COMPATIBILITY.md)).
+compatibility contract with differential evidence.
 
-WETH10's deployment root follows the same boundary. Its theorem establishes
-the freshly generated Blanc runtime and `Weth10.Stable` after one strict,
-collision-free singleton type-2 deployment through the transition its chain
-configuration selects, under its explicit valid-context, funding, gas,
-arithmetic, and system-predeploy premises. The public instance fixes that
-configuration to Ethereum mainnet's `mainnetChainConfig` and its deployment
-block to the BPO2 era; the Prague-only form is a retained corollary. It does
-not establish the deployed Solidity artifact, construct or custody a signing
-key, guarantee propagation or block inclusion, or cover arbitrary co-block,
-factory, CREATE2, endowment, or fork shapes. The executable deployment fixture
-witnesses one concrete transaction and receipt; it does not enlarge the theorem
-or the port-conformance claim.
-
-WETH10's committed holder-flow family has an equally exact Blanc-only
-boundary. From a stable checkpoint, its proof-carrying `AccountedHistory cfg`
-retains every applied block, the rules `cfg` selects at that block, the
-configured transition and `applyBody` result, `BlockOutput`, ordinary
-transaction roots, and all four system-message roots (beacon, history,
-withdrawal request, and consolidation request). Its public fold discards failed
-or reverted effects at their actual settlement boundary, including failed
-nested, outer, and top-level execution;
-only committed effects enter the ledger. Every ordinary `ReachUsing cfg` reach
-from the checkpoint admits such a history, and the history projects back to
-that ordinary reach.
-
-For natural-number checkpoint and later booked balances `B0` and `Bt`, that
-family first proves that committed balance credits do not wrap, then proves
-the gross equation
-`B0 + ordinaryIn + selfTransfer + flashCredit = Bt + redeemed +
-externalTransferredOut + selfTransfer + flashRepayment`. Exact same-receiver,
-same-principal flash pairing and cancellation of the matched flash and
-self-transfer terms then give
-`B0 + ordinaryIn = Bt + redeemed + externalTransferredOut`, and therefore the
-residual floor `B0 ≤ Bt + redeemed + externalTransferredOut` (together with
-its truncated-subtraction and no-external-transfer forms). Here a debit is
-only **runtime-authorized**: the ledger records the actual caller and the
-direct, accepted allowance, or flash-settlement branch. It retains the raw
-branch words separately from their normalized balance addresses, and exact
-invocation evidence excludes `DELEGATECALL`/`CALLCODE` execution against
-another storage owner and foreign lookalike slots or logs.
-
-This holder-flow result assumes no `NoCollision` condition and says nothing
-about holder consent or intent, allowance-value provenance, future
-enabledness/liveness, or the successor's any-order claim. It does not verify
-the deployed Solidity runtime. Concrete redemption fixtures are finite checks
-of chosen histories; they neither construct a Lean `AccountedHistory` nor
-widen the theorem's scope.
-
-The Lido CircuitBreaker Registry-history family has an exact Blanc-only
-boundary of the same kind. From a checkpoint at which the exact compiled
-Blanc runtime is installed at an address and that address's storage admits a
-`RegistryWitness`, every state reachable by the configured valid-chain
-relation still has that exact runtime installed and still admits a
-`RegistryWitness` — possibly a different one. The quantifier covers
-arbitrary finite sequences of successful and reverting transactions and
-arbitrary callee bytecode, including code that re-enters the same instance;
-there is no target-honesty premise and no count or interval noninterference
-premise. Its reader-facing corollaries deliver, at the reached state and at
-the configured-chain and Prague rungs alike, the exact installed runtime, an
-actual witness, membership and index equivalence at an arbitrary canonical
-target, and global count conservation.
-
-The history theorem itself takes that checkpoint as a hypothesis, and its
-synthetic satisfiability exhibit remains a hand-built non-deployment. A
-separate Blanc deployment-root family now discharges the hypothesis for one
-exact official case: a valid base world, the frozen official constructor
-arguments and full CREATE input, zero endowment, and a strict singleton type-2
-Prague block whose configured transition succeeds. Under explicit recovered-
-sender and computed-address premises, it derives the prepared message target
-and execution at that address, then proves actual constructor/message/
-transaction/block execution, successful receipt and three ordered constructor
-logs, empty requests, the exact installed Blanc runtime and configuration
-slots, an empty Registry witness, and a valid deployed context. Its root
-methods instantiate the history theorem for every configured future reachable
-from that deployed checkpoint.
-
-The base and strict-envelope predicates carry valid context, sender recovery
-and transaction checking, funding, gas/code-size, system-predeploy,
-nonce/address, and block-shape obligations. The prepared context derives the
-collision check after the system prefix, nonce increment, and fee debit. The
-root theorem does not prove the named configured transition from no premises:
-it takes the successful `stateTransitionUsing` equation and reconstructs the
-body/poststate/receipt/root relationship from it.
-
-This does not say that an arbitrary deployment establishes the checkpoint. It
-does not cover arbitrary constructor parameters, co-blocks,
-factory/proxy/clone/CREATE2 creation, nonzero endowment, arbitrary block shapes
-or forks, signing-key or signature construction, transaction propagation or
-historical mainnet inclusion, or the deployed Solidity bytecode. Because the invariant is
-existential, nothing claims a transaction returns the entry list it began
-with, and nothing produces a source-level history trace. The family states
-nothing about count and expiry coherence at callback time, composes nothing
-from the public `pause` entry through `setPauser`, and makes no liveness or
-universal differential claim. Its reachability relation carries a bound of its own: a
-block enters only when total wei plus that block's withdrawals stays below
-`2 ^ 256`, so any history crossing that bound falls outside "every reachable
-state" — a restriction the Registry invariant itself never consults. It does
-not verify the deployed Solidity runtime; agreement with the pinned v1.0.0
-reference rests on
-[LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md](docs/registers/LIDO_CIRCUIT_BREAKER_COMPATIBILITY.md)
-and
-[LIDO_CIRCUIT_BREAKER_DEVIATIONS.md](docs/registers/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md).
-The exact Blanc root is stated in
-[LidoCircuitBreakerDeploymentRoot.lean](Blanc/LidoCircuitBreakerDeploymentRoot.lean).
-A temporary pinned-EELS/Jaune replay checks one synthetic strict singleton
-block as a separate finite channel. It is no Lean premise, and neither it nor
-the finite differential manifest enlarges the Lean theorems or the
-port-conformance claim.
-
-The PRORATA WETH vault, an ERC-4626 share vault over WETH, has an exact
-Blanc-only boundary of the same kind. Its theorems are about the compiled Blanc
-vault and the exact inherited Blanc WETH runtime, installed directly at
-configured distinct accounts; they cover no CREATE transaction, no WETH9, and
-no deployed code. Every successful call to each of the vault's 25 functions has
-its stated exact effect: the flows quote before the WETH transfer, call the
-exact WETH child, mint or burn, pay, return, and log by the frozen floor/ceil
-formulas, and the views, converters, previews and `max*` return their frozen
-formulas. These are statements about successful runs. Capacity is stated
-about the actual execution instead: at a stable pair state (`PairStable`,
-proved at the configured root and, at a state the real chain reaches from it,
-only under the key-noncollision premise below, `pair_history_stable`), with the
-vault's own call-validity conditions, a `deposit`, `mint`, `withdraw` or
-`redeem` of at most its advertised `max*` value that reverts has run a refused
-exact-WETH child call — for the inbound transfer, the caller's WETH balance or
-allowance, and for any WETH child, gas, the call-depth limit or a static context
-(`deposit_exec_revert_visits_refused_weth_child` and its three siblings);
-with the views' own call-validity conditions — zero call value, calldata
-covering the one-word argument head, and a canonical address argument
-(`ValidAdr`) — `maxDeposit`, `maxMint` and `maxWithdraw` revert only through a
-refused `balanceOf`, and `maxRedeem` never reverts
-(`maxRedeem_exec_never_reverts`);
-and every successful flow stays within `max*`
-(`deposit_success_within_maxDeposit` and its three siblings). An exceptional
-halt of the vault frame — out of gas, or a write in a static context — is not a
-revert and is not covered, and no theorem says that a call within `max*`
-succeeds: there is no liveness or gas-sufficiency claim. From
-a configured root, every configured continuation is backed, or a realization of
-it retains a positive runtime-authorized debit of the vault's WETH row
-(`pair_reachable_backed_or_debit`). Under an explicit finite, trace-local
-premise — no vault-owned WETH allowance key collides with another written key
-among the allowance pairs that the history's frames visit, including frames
-later rolled back — the state reached keeps the share ledger conserved, keeps
-the supply within the offset-weighted WETH row, and keeps WETH solvent
-(`pair_history_backed`, `pair_history_stable`). Under the same premise, the
-whole-history rounding equality and the inflation-attack open-context and
-victim-loss bounds hold for some realization of the history that is faithful to
-the chain (`pair_history_realized_dust_trace_exact`,
-`pair_history_attacker_open_context`, `pair_history_victim_loss_bound`), not
-for the executed operations as such. Faithfulness there is membership only:
-each realized record's allowance visit occurs among the history's visits, and
-inbound records are matched by visits induced from the vault's own frames. The
-no-profit bound (`pair_attacker_no_profit`) attributes coalition input by
-actor, not by the account a credit came from. The attack carrier's inhabitant
-is model-level; no executed chain history satisfying the attack premises is
-exhibited. Agreement with OpenZeppelin v5.7.0 rests on finite evidence — the
-vendored-reference, oracle and differential gates — and on
-`docs/registers/PRORATA_WETH_VAULT_DEVIATIONS.md`; none of it enters a theorem, and nothing
-here certifies ERC-4626 conformance. `docs/PRORATA_WETH_VAULT_CLAIM_MAP.md`
-maps each sentence to its theorems.
+Historical exhibits outside paper v2, including WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The archive is outside the live corpus and is not promised to build against later revisions.
 
 Two registers are available for what a port has not established, and only
 one of them is honest. Declaring a non-claim in advance — this boundary is
@@ -440,18 +274,12 @@ discipline with its publish-when-discovered norm, and principle 5's rule
 that claims end where evidence ends — a rule the wager, a standing
 commitment of burden with no evidence behind it, always sat uneasily
 beside. Adjudications recorded while the wager stood (the 2026-08-09
-value-rejection row in [WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md)) remain
+value-rejection row in the WETH registry, now archived) remain
 valid records of their day and are marked where they cite it. The full
 former text is in git history — this file as of commit `30f3f99`.
 
-## Precedent: WETH9
+## Precedent (historical)
 
-The Blanc WETH is several times smaller than the deployed WETH9 and cheaper
-on the call paths measured, and where its simpler storage scheme introduces
-a key-collision possibility WETH9's layout cannot express, it refuses the
-operation rather than silently overwriting a balance (the fail-on-collision
-row in [WETH_DEVIATIONS.md](docs/registers/WETH_DEVIATIONS.md)). Each of these is a
-deviation from the letter of the reference, and each is a feature: no user
-wants larger code, dearer calls, or silent writes through a collision.
-Rejecting them for the sake of resemblance would have been an error. That
-judgment — made once for WETH9 — is this policy.
+The WETH9 precedent that shaped this policy is an archive-era exhibit; its size, cost and fail-on-collision judgments are preserved there and make no live claim here.
+
+Historical exhibits outside paper v2, including WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The archive is outside the live corpus and is not promised to build against later revisions.

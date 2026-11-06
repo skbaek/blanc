@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed owner and contract-shadow check for raw attribution APIs."""
+"""Fail-closed owner and corpus-shadow check for raw attribution APIs."""
 
 from __future__ import annotations
 
@@ -17,6 +17,16 @@ MANIFEST = ROOT / "scripts" / "execution-raw-attribution-owner-manifest.json"
 EXPECTED_OWNERS = 28
 EXPECTED_COMMON_MODULES = 2
 SHADOW_POLICIES = {"owner-only", "forbid-contract-basename"}
+# UNADOPTED PROPOSAL (pending WSL protected adoption): one exact
+# path/FQN/kind authority exception, double-pinned so a manifest-only
+# edit cannot grow it. No module- or file-wide exemption exists.
+EXPECTED_LEGITIMATE_COLLISIONS = [
+    {
+        "module": "Blanc/ExecutionOccurrence.lean",
+        "declaration": "Blanc.Exec.Frame.successfulSstore_sourceSite",
+        "kind": "theorem",
+    },
+]
 SOURCE_SITE_DECLARATION = "Blanc.Exec.NinstOccurrence.sourceSite_of_rawFrameRoot"
 SOURCE_SITE_SIGNATURE = """theorem Exec.NinstOccurrence.sourceSite_of_rawFrameRoot
     {globalRoot frameRoot : Exec.Deriv} {program : Prog}
@@ -75,22 +85,34 @@ def load_lean_parser():
     return module
 
 
-def read_manifest() -> tuple[tuple[str, ...], tuple[str, ...], tuple[Owner, ...]]:
+def load_checked_inventory():
+    # Coupled runtime/input dependency: occurrence owns the bounded lexical
+    # declaration channel. Importing its module does not run either gate.
+    path = ROOT / "scripts" / "check-execution-occurrence.py"
+    spec = importlib.util.spec_from_file_location("raw_occurrence_inventory", path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError("could not load checked occurrence inventory")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def read_manifest() -> tuple[tuple[str, ...], tuple[Owner, ...], tuple[tuple[str, str, str], ...]]:
     try:
         value = json.loads(MANIFEST.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
         raise ValueError(f"manifest is unreadable: {exc}") from exc
     if not isinstance(value, dict) or set(value) != {
-        "schema", "commonModules", "contractModuleGlobs", "owners"
+        "schema", "commonModules", "owners", "legitimateCollisions"
     }:
         raise ValueError(
             "manifest must contain exactly "
-            "schema/commonModules/contractModuleGlobs/owners"
+            "schema/commonModules/owners/legitimateCollisions"
         )
-    if value["schema"] != 2:
+    if value["schema"] != 3:
         raise ValueError("unsupported manifest schema")
     modules = value["commonModules"]
-    globs = value["contractModuleGlobs"]
     rows = value["owners"]
     if (not isinstance(modules, list) or
             len(modules) != EXPECTED_COMMON_MODULES or
@@ -100,9 +122,6 @@ def read_manifest() -> tuple[tuple[str, ...], tuple[str, ...], tuple[Owner, ...]
             f"commonModules must contain exactly {EXPECTED_COMMON_MODULES} "
             "unique nonempty strings"
         )
-    if (not isinstance(globs, list) or not globs or
-            not all(isinstance(pattern, str) and pattern for pattern in globs)):
-        raise ValueError("contractModuleGlobs must be a nonempty string list")
     if not isinstance(rows, list) or len(rows) != EXPECTED_OWNERS:
         raise ValueError(f"manifest must contain exactly {EXPECTED_OWNERS} owners")
     owners: list[Owner] = []
@@ -128,11 +147,23 @@ def read_manifest() -> tuple[tuple[str, ...], tuple[str, ...], tuple[Owner, ...]
         owners.append(Owner(declaration, kind, shadow, module))
     if len({owner.declaration for owner in owners}) != len(owners):
         raise ValueError("owner declarations must be unique")
-    return tuple(modules), tuple(globs), tuple(owners)
+    if value["legitimateCollisions"] != EXPECTED_LEGITIMATE_COLLISIONS:
+        raise ValueError(
+            "unadopted legitimate-collision authority exceptions drifted"
+        )
+    collisions = tuple(
+        (row["module"], row["declaration"], row["kind"])
+        for row in value["legitimateCollisions"]
+    )
+    return tuple(modules), tuple(owners), collisions
 
 
-def contract_files(globs: tuple[str, ...]) -> list[Path]:
-    return sorted({path for pattern in globs for path in ROOT.glob(pattern)})
+def corpus_files() -> list[Path]:
+    paths = sorted((ROOT / "Blanc").rglob("*.lean"))
+    root_module = ROOT / "Blanc.lean"
+    if root_module.is_file():
+        paths.insert(0, root_module)
+    return paths
 
 
 def owner_errors(
@@ -182,23 +213,57 @@ def owner_module(declaration: str, owners: tuple[Owner, ...]) -> str:
     return matches[0]
 
 
+def _declaration_items(declarations):
+    if isinstance(declarations, dict):
+        return [(name, kind, line)
+                for name, (kind, line) in declarations.items()]
+    return list(declarations)
+
+
 def shadow_errors(
-    declarations: dict[str, tuple[str, int]],
+    declarations,
     owners: tuple[Owner, ...],
     label: str,
+    exempt=frozenset(),
 ) -> list[str]:
+    """Basename shadows in one file; `exempt` holds exact (FQN, kind) tuples
+    for that file only (its own rightful owners and legitimate collisions)."""
     forbidden = {
         owner.declaration.rsplit(".", 1)[-1]: owner.declaration
         for owner in owners if owner.shadow == "forbid-contract-basename"
     }
     errors: list[str] = []
-    for name, (kind, line) in declarations.items():
+    for name, kind, line in _declaration_items(declarations):
+        if (name, kind) in exempt:
+            continue
         basename = name.rsplit(".", 1)[-1]
         if basename in forbidden:
             errors.append(
-                f"CONTRACT-SHADOW — {label}:{line}: {kind} {name} "
+                f"CORPUS-SHADOW — {label}:{line}: {kind} {name} "
                 f"shadows {forbidden[basename]}"
             )
+    return errors
+
+
+def owner_redeclaration_errors(
+    declarations,
+    owners: tuple[Owner, ...],
+    label: str,
+) -> list[str]:
+    """Exact owner FQNs (owner-only rows included) may be declared only at
+    their rightful (module, kind) tuple, anywhere in the corpus."""
+    by_declaration = {owner.declaration: owner for owner in owners}
+    errors: list[str] = []
+    for name, kind, line in _declaration_items(declarations):
+        owner = by_declaration.get(name)
+        if owner is None:
+            continue
+        if label == owner.module and kind == owner.kind:
+            continue
+        errors.append(
+            f"OWNER-REDECLARED — {label}:{line}: {kind} {name} redeclared "
+            f"outside its rightful tuple ({owner.module}, {owner.kind})"
+        )
     return errors
 
 
@@ -276,7 +341,8 @@ def shared_kernel_errors(source: str, strip_comments) -> list[str]:
 def audit() -> list[str]:
     try:
         parser = load_lean_parser()
-        modules, globs, owners = read_manifest()
+        inventory = load_checked_inventory()
+        modules, owners, collisions = read_manifest()
         sources: dict[str, str] = {}
         declarations: dict[str, dict[str, tuple[str, int]]] = {}
         for relative in modules:
@@ -284,7 +350,7 @@ def audit() -> list[str]:
             if not path.is_file():
                 return [f"COMMON-MISSING — common module is absent: {path}"]
             sources[relative] = path.read_text(encoding="utf-8")
-            declarations[relative] = parser.declarations(path)
+            declarations[relative] = inventory.checked_declaration_dict(parser, path)
         errors = owner_errors(declarations, owners)
         source_site_source = sources[owner_module(SOURCE_SITE_DECLARATION, owners)]
         errors.extend(
@@ -303,13 +369,32 @@ def audit() -> list[str]:
             TOWARD_HEADER, TOWARD_DECLARATION,
         ))
         errors.extend(shared_kernel_errors(toward_source, parser.strip_comments))
-        files = contract_files(globs)
-        if not files:
-            errors.append("SETUP — no contract module matched the manifest globs")
+        files = corpus_files()
+        if not any(path.is_relative_to(ROOT / "Blanc") for path in files):
+            errors.append("SETUP — first-party Blanc population is empty")
+        collision_set = set(collisions)
+        collision_counts = {tuple_: 0 for tuple_ in collisions}
         for path in files:
             rel = path.relative_to(ROOT).as_posix()
-            declarations = parser.declarations(path)
-            errors.extend(shadow_errors(declarations, owners, rel))
+            found = inventory.checked_declarations(parser, path)
+            exempt = {
+                (owner.declaration, owner.kind)
+                for owner in owners if owner.module == rel
+            } | {
+                (declaration, kind)
+                for module, declaration, kind in collisions if module == rel
+            }
+            for name, kind, _line in found:
+                if (rel, name, kind) in collision_set:
+                    collision_counts[(rel, name, kind)] += 1
+            errors.extend(shadow_errors(found, owners, rel, exempt))
+            errors.extend(owner_redeclaration_errors(found, owners, rel))
+        for (module, declaration, kind), count in collision_counts.items():
+            if count != 1:
+                errors.append(
+                    f"COLLISION-INVENTORY — {declaration} as {kind} at "
+                    f"{module} must occur exactly once, found {count}"
+                )
         return errors
     except (OSError, RuntimeError, ValueError) as exc:
         return [f"SETUP — raw attribution ownership: {exc}"]
@@ -317,13 +402,14 @@ def audit() -> list[str]:
 
 def negative_controls() -> list[str]:
     parser = load_lean_parser()
-    modules, _globs, owners = read_manifest()
+    inventory = load_checked_inventory()
+    modules, owners, _collisions = read_manifest()
     sources = {
         relative: (ROOT / relative).read_text(encoding="utf-8")
         for relative in modules
     }
     common = {
-        relative: parser.declarations(ROOT / relative)
+        relative: inventory.checked_declaration_dict(parser, ROOT / relative)
         for relative in modules
     }
     first = owners[0]
@@ -348,7 +434,7 @@ def negative_controls() -> list[str]:
     )
     synthetic = f"Blanc.Weth10.RawAttribution.{shadow_owner.declaration.rsplit('.', 1)[-1]}"
     shadow_live = any(
-        error.startswith("CONTRACT-SHADOW — synthetic.lean:1:")
+        error.startswith("CORPUS-SHADOW — synthetic.lean:1:")
         for error in shadow_errors(
             {synthetic: ("theorem", 1)}, owners, "synthetic.lean"
         )
@@ -425,13 +511,47 @@ def negative_controls() -> list[str]:
             delegation_mutant, parser.strip_comments
         )
     )
+    owner_only = next(
+        owner for owner in owners if owner.shadow == "owner-only"
+    )
+    redeclared_live = any(
+        error.startswith("OWNER-REDECLARED — Blanc/Synthetic.lean:1:")
+        for error in owner_redeclaration_errors(
+            [(owner_only.declaration, owner_only.kind, 1)],
+            owners, "Blanc/Synthetic.lean",
+        )
+    ) and not owner_redeclaration_errors(
+        [(owner_only.declaration, owner_only.kind, 1)],
+        owners, owner_only.module,
+    )
+    collision = EXPECTED_LEGITIMATE_COLLISIONS[0]
+    collision_basename = collision["declaration"].rsplit(".", 1)[-1]
+    collision_errors = shadow_errors(
+        [(collision["declaration"], collision["kind"], 1),
+         (f"Blanc.Other.{collision_basename}", collision["kind"], 2)],
+        owners, collision["module"],
+        exempt={(collision["declaration"], collision["kind"])},
+    )
+    collision_live = (
+        len(collision_errors) == 1
+        and collision_errors[0].startswith(
+            f"CORPUS-SHADOW — {collision['module']}:2:"
+        )
+    )
+    owner_module_shadow_live = any(
+        error.startswith(f"CORPUS-SHADOW — {shadow_owner.module}:1:")
+        for error in shadow_errors(
+            [(synthetic, "theorem", 1)], owners, shadow_owner.module,
+            exempt={(shadow_owner.declaration, shadow_owner.kind)},
+        )
+    )
     errors: list[str] = []
     if not missing_live:
         errors.append("CONTROL — common-owner removal was not detected")
     if not wrong_module_live:
         errors.append("CONTROL — wrong common-owner module was not detected")
     if not shadow_live:
-        errors.append("CONTROL — contract-basename shadow was not detected")
+        errors.append("CONTROL — corpus-basename shadow was not detected")
     if not selected_live:
         errors.append("CONTROL — selected-root signature weakening was not detected")
     if not prefix_live:
@@ -444,6 +564,12 @@ def negative_controls() -> list[str]:
         errors.append("CONTROL — shared traversal-kernel removal was not detected")
     if not delegation_live:
         errors.append("CONTROL — public traversal delegation removal was not detected")
+    if not redeclared_live:
+        errors.append("CONTROL — owner-only exact-FQN redeclaration was not detected")
+    if not collision_live:
+        errors.append("CONTROL — legitimate collision tuple boundary was not detected")
+    if not owner_module_shadow_live:
+        errors.append("CONTROL — basename shadow inside an owner module was not detected")
     return errors
 
 
@@ -461,10 +587,10 @@ def main() -> int:
         print(error, file=sys.stderr)
     if errors:
         return 1
-    controls = "; 9/9 controls live" if args.negative_controls else ""
+    controls = "; 12/12 controls live" if args.negative_controls else ""
     print(
         f"OK — raw attribution ownership: {EXPECTED_OWNERS}/{EXPECTED_OWNERS} "
-        f"common owners across {EXPECTED_COMMON_MODULES} modules; no contract "
+        f"common owners across {EXPECTED_COMMON_MODULES} modules; no corpus "
         f"basename shadows; exact selected-root source/chronology "
         f"signatures{controls}"
     )

@@ -76,6 +76,7 @@ import json
 import pathlib
 import re
 import sys
+from html.parser import HTMLParser
 
 # --------------------------------------------------------------------------
 # Producers
@@ -126,23 +127,6 @@ def count_script_population(root: pathlib.Path, rel: str, function: str) -> int:
     return len(getattr(load_checker(root, rel), function)(root))
 
 
-def count_deployment_public_theorems(root: pathlib.Path) -> int:
-    """The Lido CircuitBreaker deployment gate's public theorem inventory.
-
-    Derived by that gate's own rule, not a copy of it: `public_theorem_names`
-    over its `source_map`, excluding the constructor owner exactly as
-    `require_axiom_inventory` does. It reads committed Lean source as text and
-    elaborates nothing. The gate pins the same figure as `PUBLIC_THEOREM_COUNT`
-    and fails if the two disagree, so this derivation and that pin cannot drift
-    apart unnoticed.
-    """
-    module = load_checker(root, "scripts/check-lido-circuit-breaker-deployment.py")
-    sources = module.source_map(root)
-    return len(
-        module.public_theorem_names(
-            {owner: text for owner, text in sources.items() if owner != "constructor"}
-        )
-    )
 
 
 # --------------------------------------------------------------------------
@@ -299,172 +283,6 @@ CLAIMS = [
         "foreign": [],
     },
     {
-        "name": "WETH10 differential row count",
-        "producer": (
-            "scripts/fixtures/weth10/manifest.json (rows)",
-            # The committed anti-vacuity manifest names every row the
-            # differential runner checks. It is generated evidence, written by
-            # scripts/gen-weth10-differential.py through
-            # check-weth10-differential.sh --write-manifest, and committed -- so
-            # reading it needs no build, no EELS target and no network.
-            lambda root: count_json_list(root, "scripts/fixtures/weth10/manifest.json", ("rows",)),
-        ),
-        "consumers": [
-            (
-                "README.md",
-                [
-                    re.compile(r"executes (\d{2,5}) canonical-call rows"),
-                    re.compile(r"differential gate's (\d{2,5}) rows"),
-                ],
-            ),
-            (
-                # PORTING.md states the published per-contract coverage
-                # criterion. It is the policy document's one number the tree can
-                # contradict.
-                "PORTING.md",
-                [re.compile(r"WETH10's: (\d{2,5}) rows over all")],
-            ),
-            (
-                "scripts/GATES.md",
-                [
-                    # Keyed on the catalogue row's own command: the Lido TWG row
-                    # eleven lines down states its declared-row count in
-                    # identical table prose.
-                    re.compile(r"check-weth10-differential\.sh[^\n]*\|\s*(\d{2,5}) declared rows;"),
-                    re.compile(r"expanded (\d{2,5})-row matrix"),
-                ],
-            ),
-            (
-                "docs/language.html",
-                [
-                    # The ports table row, keyed on its two size cells: the
-                    # CircuitBreaker paragraph states its own row count in the
-                    # same "N of N" prose.
-                    re.compile(
-                        r'<td>WETH10</td><td class="r">6,313 B</td><td class="r">9,975 B</td>'
-                        r"<td>(\d{2,5}) of (\d{2,5}) differential rows agree</td>"
-                    ),
-                    re.compile(r"beside the deployed original’s: (\d{2,5}) of (\d{2,5}) rows agree"),
-                ],
-            ),
-        ],
-        "census": {
-            "README.md": 2,
-            "PORTING.md": 1,
-            "scripts/GATES.md": 2,
-            "docs/language.html": 4,
-        },
-        "foreign": [],
-    },
-    {
-        "name": "Lido CircuitBreaker differential row count",
-        "producer": (
-            "scripts/fixtures/lido-circuit-breaker/manifest.json (rows)",
-            # The committed anti-vacuity manifest names every row the
-            # differential runner checks -- the same static shape as the WETH10
-            # manifest above, so reading it needs no build, no EELS target and
-            # no network.
-            lambda root: count_json_list(
-                root, "scripts/fixtures/lido-circuit-breaker/manifest.json", ("rows",)
-            ),
-        ),
-        "consumers": [
-            (
-                "scripts/GATES.md",
-                [
-                    # Keyed on the catalogue row's own command: the dispatcher
-                    # row's replay count one line up is the same 175 cases --
-                    # check-lido-circuit-breaker-dispatchers.py replays
-                    # gen.build_cases, the case builder the differential runs --
-                    # stated as cases over boundaries rather than rows. Only
-                    # the 175 is captured; the 464 beside it is a different
-                    # claim.
-                    re.compile(
-                        r"check-lido-circuit-breaker-dispatchers\.sh[^\n]*?"
-                        r"(\d{2,5}) cases/\d{2,5} full boundaries"
-                    ),
-                    re.compile(
-                        r"check-lido-circuit-breaker-differential\.sh[^\n]*\|\s*"
-                        r"(\d{2,5}) rows;"
-                    ),
-                ],
-            ),
-            (
-                "docs/language.html",
-                [
-                    re.compile(
-                        r"(\d{2,5}) of (\d{2,5}) differential rows agree; the register accepts no deviation"
-                    ),
-                ],
-            ),
-        ],
-        "census": {
-            "scripts/GATES.md": 2,
-            "docs/language.html": 2,
-        },
-        "foreign": [],
-    },
-    {
-        "name": "BeaconDeposit differential row count",
-        "producer": (
-            "scripts/fixtures/beacon-deposit/manifest.json (rows)",
-            # The committed anti-vacuity manifest of the deposit-contract port's
-            # differential, the same static shape as the WETH10 manifest.
-            lambda root: count_json_list(root, "scripts/fixtures/beacon-deposit/manifest.json", ("rows",)),
-        ),
-        "consumers": [
-            (
-                "scripts/GATES.md",
-                [re.compile(r"check-beacon-deposit-differential\.sh[^\n]*\|\s*(\d{2,5}) runtime rows;")],
-            ),
-            (
-                "docs/language.html",
-                [re.compile(r"Beside the deployed runtime, (\d{2,5}) of (\d{2,5}) differential rows agree")],
-            ),
-        ],
-        "census": {"scripts/GATES.md": 1, "docs/language.html": 2},
-        # 44 also counts registered proof recipes on scripts/GATES.md, so that
-        # surface is censused by its quotation, not by the bare integer.
-        "census_patterns": {"scripts/GATES.md": re.compile(
-            r"check-beacon-deposit-differential\.sh[^\n]*\|\s*\d{2,5} runtime rows;"
-        )},
-        "foreign": [],
-    },
-    {
-        "name": "OssifiableProxy differential case count",
-        "producer": (
-            "scripts/fixtures/lido-ossifiable-proxy/differential-manifest.json (cases)",
-            lambda root: count_json_list(
-                root, "scripts/fixtures/lido-ossifiable-proxy/differential-manifest.json", ("cases",)
-            ),
-        ),
-        "consumers": [
-            (
-                "scripts/GATES.md",
-                [
-                    re.compile(r"compares all (\d{2,5}) frozen constructor/getter/control"),
-                    re.compile(r"\| (\d{2,5})/(\d{2,5}) required agreement rows;"),
-                    re.compile(r"owns the exact ordered (\d{2,5})-row corpus"),
-                    re.compile(r"manifest binding and (\d{2,5})/(\d{2,5}) all-match verdict"),
-                ],
-            ),
-            (
-                "docs/language.html",
-                [re.compile(r"(\d{2,5}) of (\d{2,5}) differential cases agree")],
-            ),
-        ],
-        "census": {"scripts/GATES.md": 4, "docs/language.html": 2},
-        # 85 also counts the gate-economy controls on scripts/GATES.md, so that
-        # surface is censused by its four quotations, not by the bare integer.
-        "census_patterns": {"scripts/GATES.md": re.compile(
-            r"compares all \d{2,5} frozen constructor/getter/control|"
-            r"\| \d{2,5}/\d{2,5} required agreement rows;|"
-            r"owns the exact ordered \d{2,5}-row corpus|"
-            r"manifest binding and \d{2,5}/\d{2,5} all-match verdict"
-        )},
-        "foreign": [],
-    },
-    {
         "name": "layering module count",
         "producer": (
             "scripts/check-layering.py: modules_on_disk",
@@ -534,34 +352,6 @@ CLAIMS = [
         "foreign": [],
     },
     {
-        "name": "Lido CircuitBreaker deployment public theorem count",
-        "producer": (
-            "scripts/check-lido-circuit-breaker-deployment.py: public_theorem_names",
-            count_deployment_public_theorems,
-        ),
-        "consumers": [
-            (
-                # The deployment gate's catalogue row states the inventory twice
-                # (the derivation and its scale cell) and its helper-script row
-                # once. Count these semantic quotations independently of the
-                # shared-module population, which can have the same integer.
-                "scripts/GATES.md",
-                [
-                    re.compile(r"the exact (\d{2,5})-name public theorem inventory"),
-                    re.compile(r"semantic fragments; (\d{2,5}) public theorems under the union walk"),
-                    re.compile(r"derives all (\d{2,5}) public theorem names"),
-                ],
-            ),
-        ],
-        "census": {"scripts/GATES.md": 3},
-        "census_patterns": {"scripts/GATES.md": re.compile(
-            r"the exact \d{2,5}-name public theorem inventory|"
-            r"semantic fragments; \d{2,5} public theorems under the union walk|"
-            r"derives all \d{2,5} public theorem names"
-        )},
-        "foreign": [],
-    },
-    {
         "name": "registered CI command count",
         "producer": (
             "scripts/gate-cache.py: ci_commands",
@@ -585,31 +375,6 @@ CLAIMS = [
         "census_patterns": {"scripts/GATES.md": re.compile(
             r"Production CI executes its \d{1,4} registered commands"
         )},
-        "foreign": [],
-    },
-    {
-        "name": "Lido CircuitBreaker assurance register row count",
-        "producer": (
-            "docs/registers/LIDO_CIRCUIT_BREAKER_ASSURANCE.md",
-            # One `####` heading per register row. The assurance gate parses
-            # rows with its own grammar and pins the total as
-            # EXPECTED_TOTAL_ROWS; this counting rule is written independently
-            # and the gate's own pin is not read, so a divergence between the
-            # two is self-detecting, as with the claim-pin count above. The
-            # cell's other figures are named in UNCHECKED_PUBLISHED_NUMBERS.
-            lambda root: count_matches(
-                root, "docs/registers/LIDO_CIRCUIT_BREAKER_ASSURANCE.md", re.compile(r"^####\s", re.M)
-            ),
-        ),
-        "consumers": [
-            (
-                "scripts/GATES.md",
-                # Only the row count is captured; the pillar count beside it is
-                # a different figure.
-                [re.compile(r"\| (\d{1,4}) rows across \d{1,4} pillars,")],
-            ),
-        ],
-        "census": {"scripts/GATES.md": 1},
         "foreign": [],
     },
 ]
@@ -695,7 +460,7 @@ PATH_REFERENCES = [
     {
         "surface": "PORTING.md",
         "link": re.compile(r"\[[^\]]*\]\((?!https?:|#)([^)#]+)(?:#[^)]*)?\)"),
-        "count": 7,
+        "count": 2,
         "modules": {"root": "Blanc.lean", "prefix": "Blanc/"},
     },
 ]
@@ -727,45 +492,13 @@ UNCHECKED_PUBLISHED_NUMBERS = [
         "Jaune commits the count as an artifact this tree pins.",
     },
     {
-        "number": "27 WETH10 selectors (and the 28 runtime entries that include receive)",
-        "surfaces": "PORTING.md, README.md, scripts/GATES.md, docs/language.html",
-        "producer": "scripts/fixtures/weth10/manifest.json "
-        "(selectorEndpointEquality.blancSelectorsAscending) -- committed, static",
-        "blocker": "27 and 28 occur in unrelated figures across the in-scope surfaces "
-        "(on docs/language.html, DRIP's 27-decimal fixed point), and no semantic "
-        "quotation census has been written for the four surfaces.",
-    },
-    {
-        "number": "the Lido CircuitBreaker assurance scale cell's figures other than its "
-        "row count: 9 gate-owned rows, 158 cited declarations and 158 axiom "
-        "expectations matched, 10 stricter claims, 82 gate paths, 14 pinned non-claim "
-        "phrases, 5 mutation controls",
-        "surfaces": "scripts/GATES.md (the check-lido-circuit-breaker-assurance.sh row)",
-        "producer": "scripts/check-lido-circuit-breaker-assurance.sh's verdict line -- "
-        "static. 9 and 14 are pinned in that checker as "
-        "EXPECTED_GATE_OWNED_ROWS and NONCLAIM_PHRASES; 158 "
-        "and 82 are counted inline in evaluate() while resolving the register "
-        "against the audit source",
-        "blocker": "9, 10, 5 and 14 are not distinctive on scripts/GATES.md: each occurs "
-        "more than ten times there in unrelated rows, so no census is computable. 82 "
-        "also counts the CircuitBreaker resource row's CALL/STATICCALL traces. 158 is "
-        "distinctive, but no callable in the assurance checker returns it or 82: "
-        "both are tallied inside evaluate(), and re-deriving them here would be a "
-        "second, unowned producer. The row count, the one figure in the cell with "
-        "an independent static producer and an enumerable census, is registered "
-        "above. The rest become checkable when the assurance checker exposes its "
-        "resolution as a function of the tree root.",
-    },
-    {
-        "number": "the proof-recipe generator's 31 self-test controls",
+        "number": "the proof-recipe generator's 35 self-test controls",
         "surfaces": "scripts/GATES.md (the check-proof-recipes.sh --base main row and the "
-        "check-proof-recipes.sh/--write row)",
+        "generate-proof-recipes.py auxiliary row)",
         "producer": "scripts/generate-proof-recipes.py --self-test -- the self-test's "
-        "accounting check (`expected 31 controls, ran N`) and its 31/31 verdict line, "
+        "accounting check (`expected 35 controls, ran N`) and its 35/35 verdict line, "
         "both committed literals",
-        "blocker": "31 is not distinctive on scripts/GATES.md: it also counts a "
-        "SHA chain's calls, reconstructed storage words and a date, so no census is "
-        "computable. And the committed literal is only the self-test's own "
+        "blocker": "The committed literal is only the self-test's own "
         "expectation; the number of controls that actually run is established by "
         "executing the roughly three-minute self-test, which a static gate does not "
         "do. It becomes checkable when the generator exposes its control inventory "
@@ -773,7 +506,7 @@ UNCHECKED_PUBLISHED_NUMBERS = [
     },
 ]
 
-UNCHECKED_PUBLISHED_NUMBER_COUNT = 4
+UNCHECKED_PUBLISHED_NUMBER_COUNT = 2
 
 
 # --------------------------------------------------------------------------
@@ -830,6 +563,143 @@ def collapse(text: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", "", text))).strip()
 
 
+# UNADOPTED: one exact contextual nonclaim slot requires explicit user approval.
+# This is not a date/tag allowlist and does not establish historical date truth.
+def usdc_deployment_year_span(text: str) -> tuple[int, int]:
+    """Locate exactly the reviewed USDC/Deployed/Aug 2018 plain-text cell."""
+    class SlotReader(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=False)
+            self.starts = [0] + [m.end() for m in re.finditer("\n", text)]
+            self.tables = []
+            self.table = self.row = self.cell = None
+            self.stack = []
+
+        def handle_starttag(self, tag, attrs):
+            if self.table is None:
+                if tag != "table" or dict(attrs).get("class") != "corpus":
+                    return
+                if len(dict(attrs)) != len(attrs):
+                    raise ValueError("ambiguous corpus-table attributes")
+                self.table = []
+                self.tables.append(self.table)
+                self.stack = ["table"]
+                return
+            if tag == "table" or len(dict(attrs)) != len(attrs):
+                raise ValueError("unsupported nested table or duplicate attributes")
+            if tag == "tr":
+                if self.row is not None:
+                    raise ValueError("nested corpus row")
+                self.row = []
+                self.table.append(self.row)
+            elif tag in {"td", "th"}:
+                if self.row is None or self.cell is not None:
+                    raise ValueError("unsupported corpus cell structure")
+                self.cell = {"tag": tag, "attrs": dict(attrs), "text": "",
+                             "direct": "", "data": [], "plain": True}
+                self.row.append(self.cell)
+            elif self.cell is not None:
+                self.cell["plain"] = False
+            if tag not in {"br", "hr", "img", "input", "meta", "link"}:
+                self.stack.append(tag)
+
+        def handle_endtag(self, tag):
+            if self.table is None:
+                return
+            if not self.stack or self.stack[-1] != tag:
+                raise ValueError("unbalanced corpus markup")
+            if tag in {"td", "th"}:
+                self.cell = None
+            elif tag == "tr":
+                if self.cell is not None:
+                    raise ValueError("unclosed corpus cell")
+                self.row = None
+            elif tag == "table":
+                if self.row is not None:
+                    raise ValueError("unclosed corpus row")
+                self.table = None
+            self.stack.pop()
+
+        def handle_data(self, data):
+            if self.cell is None:
+                return
+            line, column = self.getpos()
+            offset = self.starts[line - 1] + column
+            self.cell["text"] += data
+            self.cell["data"].append((offset, data))
+            if self.stack[-1] == self.cell["tag"]:
+                self.cell["direct"] += data
+
+        def handle_comment(self, data):
+            if self.cell is not None:
+                self.cell["plain"] = False
+
+        def handle_entityref(self, name):
+            if self.cell is not None:
+                self.cell["plain"] = False
+
+        handle_charref = handle_entityref
+
+    reader = SlotReader()
+    reader.feed(text)
+    reader.close()
+    if len(reader.tables) != 1 or reader.table is not None:
+        raise ValueError("expected one complete real corpus table")
+    rows = reader.tables[0]
+    headers = [row for row in rows if row and all(c["tag"] == "th" for c in row)]
+    expected_headers = ["Artifact", "Produced by", "Runtime", "Deployed", "What is proved"]
+    if (len(headers) != 1 or
+            [" ".join(c["text"].split()) for c in headers[0]] != expected_headers):
+        raise ValueError("USDC date column is not the unique Deployed column")
+    usdc = [row for row in rows if row and row[0]["tag"] == "td"
+            and row[0]["attrs"].get("class") == "name"
+            and row[0]["direct"].strip() == "USDC"]
+    if len(usdc) != 1 or len(usdc[0]) != 5:
+        raise ValueError("expected one five-cell USDC artifact row")
+    row = usdc[0]
+    if sum(c["attrs"].get("class") == "year" for c in row) != 1:
+        raise ValueError("expected one USDC deployment-year cell")
+    cell = row[3]
+    if (cell["tag"] != "td" or cell["attrs"].get("class") != "year"
+            or not cell["plain"] or cell["text"] != "Aug 2018"
+            or len(cell["data"]) != 1):
+        raise ValueError("USDC Deployed cell must remain plain exact Aug 2018")
+    start, raw = cell["data"][0]
+    if text[start:start + len(raw)] != raw:
+        raise ValueError("USDC date source span drifted")
+    return start + 4, start + 8
+
+
+def leaf_index_partition(text: str, expected: int, want: int,
+                         registered: list[tuple[int, int]]) -> int:
+    """Exhaust every raw match with two leaf captures and one exact date slot.
+
+    The historical slot is required even when its year differs from `expected`.
+    Every other produced-value occurrence must be a registered numeric capture;
+    scalar totals alone can neither admit an extra claim nor hide a missing one.
+    """
+    date = usdc_deployment_year_span(text)
+    if want != 2 or len(registered) != 2 or len(set(registered)) != 2:
+        raise ValueError("leaf/date partition requires exactly two unique registered spans")
+    def overlaps(a, b):
+        return a[0] < b[1] and b[0] < a[1]
+    if any(not 0 <= a < b <= len(text) for a, b in registered):
+        raise ValueError("invalid registered leaf source span")
+    if overlaps(registered[0], registered[1]) or any(overlaps(s, date) for s in registered):
+        raise ValueError("leaf/date partition spans are not disjoint")
+    raw = [m.span() for m in standalone(expected).finditer(text)]
+    if any(overlaps(s, date) and s != date for s in raw):
+        raise ValueError("raw count partly overlaps the exact date span")
+    residual = [s for s in raw if s != date]
+    if len(residual) != 2 or set(residual) != set(registered):
+        raise ValueError("leaf/date partition is not exhaustive: extra, missing or unregistered numeric span")
+    # Explicit coverage, not only equal scalar lengths or an ignored HTML tag.
+    owned = registered + ([date] if date in raw else [])
+    if len(set(owned)) != len(owned) or set(raw) != set(owned):
+        raise ValueError("raw leaf/date span ownership is ambiguous or incomplete")
+    return len(residual)
+
+
 def check_claims(root: pathlib.Path, failures: list) -> tuple:
     """Produced values by claim name, and the number of quotations checked."""
     produced: dict = {}
@@ -852,6 +722,7 @@ def check_claims(root: pathlib.Path, failures: list) -> tuple:
         produced[name] = expected
         print(f"produced: {expected} — {name} ({source})")
 
+        leaf_index_spans = []
         for rel, patterns in claim["consumers"]:
             path = root / rel
             if not path.is_file():
@@ -870,6 +741,8 @@ def check_claims(root: pathlib.Path, failures: list) -> tuple:
                     )
                     continue
                 for m in matches:
+                    if name == "leaf count" and rel == "docs/index.html":
+                        leaf_index_spans.extend(m.span(i) for i in range(1, len(m.groups()) + 1))
                     for g in m.groups():
                         checked += 1
                         got = int(g.replace(",", ""))
@@ -888,7 +761,16 @@ def check_claims(root: pathlib.Path, failures: list) -> tuple:
             if not path.is_file():
                 continue
             census_pattern = claim.get("census_patterns", {}).get(rel, pat)
-            found = len(census_pattern.findall(path.read_text(encoding="utf-8")))
+            if name == "leaf count" and rel == "docs/index.html":
+                try:
+                    found = leaf_index_partition(
+                        path.read_text(encoding="utf-8"), expected, want, leaf_index_spans
+                    )
+                except ValueError as exc:
+                    failures.append(f"{rel}: leaf/date census refused — {exc}")
+                    continue
+            else:
+                found = len(census_pattern.findall(path.read_text(encoding="utf-8")))
             if found != want:
                 subject = (
                     "registered quotation(s)"

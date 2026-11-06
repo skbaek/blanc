@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Blanc — nothing but the bytes</title>
-<meta name="description" content="Blanc proves theorems in Lean 4 about Ethereum bytecode as it is deployed — WETH9, USDC, the Beacon deposit contract, Uniswap V2, Curve, Lido and the EIP-7002 system contract — against Jaune, an executable EVM semantics, with exact gas, liveness, and no axioms beyond Lean's three.">
+<meta name="description" content="Blanc proves theorems in Lean 4 about deployed USDC, Curve 3pool and 3Crv, the vulnerable and fixed Vyper pools, and the EIP-7002 system contract — against Jaune, an executable EVM semantics, with explicit premises and no axioms beyond Lean's three.">
 <meta name="theme-color" content="#fbfaf5">
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Blanc">
 <meta property="og:title" content="Blanc — nothing but the bytes">
-<meta property="og:description" content="Blanc proves theorems in Lean 4 about Ethereum bytecode as it is deployed — WETH9, USDC, the Beacon deposit contract, Uniswap V2, Curve, Lido and the EIP-7002 system contract — against Jaune, an executable EVM semantics, with exact gas, liveness, and no axioms beyond Lean's three.">
+<meta property="og:description" content="Blanc proves theorems in Lean 4 about deployed USDC, Curve 3pool and 3Crv, the vulnerable and fixed Vyper pools, and the EIP-7002 system contract — against Jaune, an executable EVM semantics, with explicit premises and no axioms beyond Lean's three.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="site.css">
 </head>
@@ -43,29 +43,17 @@
     <div>
       <p class="eyebrow">EVM bytecode, verified in Lean 4</p>
       <h1>Nothing but<br>the bytes.</h1>
-      <p class="lede">Blanc proves theorems about Ethereum contracts as they are deployed: the exact bytes at mainnet addresses — compiled by solc and Vyper between 2017 and 2026, or written by hand in assembly — read without trusting the tools that produced them.</p>
+      <p class="lede">Blanc proves theorems about Ethereum contracts as they are deployed: the exact bytes at mainnet addresses — compiled by solc and Vyper, or written by hand in assembly — read without trusting the tools that produced them.</p>
       <p class="lede">Every theorem is stated against <a href="https://skbaek.github.io/jaune/">Jaune</a>, an executable semantics of the EVM and of block processing that passes all 73,345 blockchain-test cases of Ethereum’s <code>tests@v21.0.1</code> fixtures for the forks from Byzantium through BPO2. Lean’s kernel checks every proof, and none uses an axiom beyond Lean’s three standard ones. Gas is exact, so a theorem can say not only that a contract keeps its books, but that a transaction sent to it is admitted, and exactly what it costs.</p>
       <div class="cta">
-        <a class="btn solid big" href="#corpus">The eleven artifacts</a>
+        <a class="btn solid big" href="#corpus">The live artifacts</a>
         <a class="btn big" href="method.html">How it works</a>
       </div>
     </div>
 
-    <figure class="plate" aria-labelledby="exhibit-cap">
-      <div class="plate-head">
-        <span class="who"><span class="k">Exhibit</span>WETH9</span>
-        <span class="meta">0xC02a…6Cc2 · 3,124 bytes · solc 0.4.19 · Dec 2017</span>
-      </div>
-      <div class="hexband" aria-hidden="true">60 60 60 40 52 60 04 36 10 61 00 af 57 60 00 35 7c 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 90 04 63 ff ff ff ff 16 80 63 06 fd de 03 14 61 00</div>
-      <div class="plate-body">
-        <p><b>The exit theorem, in short.</b> Start from any state where these bytes are installed and every stored balance is accounted for and backed. Run any valid history of blocks under the rules of Prague, Osaka, BPO1 or BPO2 whose storage keys do not collide. Then a signed <code>withdraw(w)</code> from a holder without code whose balance the history tracks, holding at least <i>w</i>, with sound nonce, fees and gas limit, is admitted by Jaune’s <code>processTransaction</code>, pays the holder exactly <i>w</i> wei, changes no one else’s storage, and uses exactly</p>
-        <div class="formula"><span class="nowrap"><span class="c">gasUsed</span> <span class="op">=</span> 21,000</span> <span class="nowrap"><span class="op">+</span> 4·tokens(calldata)</span> <span class="nowrap"><span class="op">+</span> 13,940</span> <span class="nowrap"><span class="op">−</span> 4,800<span class="op">·</span>[<i>w</i> empties the balance]</span><small>for <i>w</i> &gt; 0. A zero calldata byte counts as one token, a nonzero byte as four; <i>w</i> = 0 costs 4,440 in place of 13,940.</small></div>
-      </div>
-      <div class="plate-foot">
-        <div class="tally"><span class="n num">3,748 / 3,748</span><span class="l">mainnet withdrawals of exactly this shape whose starting balance the logs determine, in 30,000 blocks, used precisely the predicted gas — a test of the model against the chain, not part of the proof.</span></div>
-      </div>
-      <figcaption id="exhibit-cap" style="padding:0 22px 16px;background:var(--wash);margin:0"><a class="more" href="bytecode/weth9.html">The full theorem, all 27 hypotheses, and its premises</a></figcaption>
-    </figure>
+    <div>
+      <p>Historical exhibits outside paper v2, including WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes, are preserved in the <a href="https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">archived corpus</a>. The archive is outside the live corpus and is not promised to build against later revisions.</p>
+    </div>
   </div>
 </section>
 
@@ -74,31 +62,16 @@
   <div class="wrap">
     <div class="section-head">
       <p class="eyebrow">The corpus</p>
-      <h2>Eleven deployed artifacts. None written for a verifier.</h2>
-      <p class="lede-sm">Two source languages and hand-written assembly, nine compiler versions, deployments from 2017 to 2026. The bytes are the ones separately operated providers return for each address; Blanc reads them through certificates the kernel checks, and nothing was recompiled.</p>
+      <h2>The live deployed artifacts. None written for a verifier.</h2>
+      <p class="lede-sm">Two source languages and hand-written assembly (solc 0.4.24 and 0.6.12, Vyper 0.2.4, 0.2.15 and 0.3.7, and assembly). The bytes are the ones separately operated providers return for each address; Blanc reads them through certificates the kernel checks, and nothing was recompiled.</p>
     </div>
     <table class="corpus">
       <thead><tr><th>Artifact</th><th>Produced by</th><th class="r">Runtime</th><th>Deployed</th><th>What is proved</th></tr></thead>
       <tbody>
         <tr>
-          <td class="name"><a href="bytecode/weth9.html">WETH9</a><span class="sub">Canonical wrapped ether; holds about 2.16 million ETH</span></td>
-          <td class="tool">solc 0.4.19</td><td class="size num">3,124 B</td><td class="year">Dec 2017</td>
-          <td class="what">Tracked balances stay backed after any history; storage replays exactly the committed calls; a withdrawal transaction is admitted after any history at a closed-form <code>gasUsed</code>.</td>
-        </tr>
-        <tr>
           <td class="name">USDC<span class="sub">A proxy, its implementation and a signature library</span></td>
           <td class="tool">solc 0.4.24, 0.6.12</td><td class="size num">27,391 B</td><td class="year">Aug 2018</td>
-          <td class="what">Its ledger, read through the implementation’s own decoder, obeys the token laws, signed messages included, under a governance premise; in one history with the Uniswap pair and WETH9, the pair’s stored reserves stay at most its balances in both tokens.</td>
-        </tr>
-        <tr>
-          <td class="name">Uniswap V2 factory<span class="sub">Deploys every pair from one creation code</span></td>
-          <td class="tool">solc 0.5.16</td><td class="size num">13,859 B</td><td class="year">May 2020</td>
-          <td class="what">On every covered fork, each call it makes is static, or goes to address 0 or to an address with no code, so it never calls into an existing pair; the recorded <code>createPair</code> transaction installs the USDC/WETH pair’s runtime with its initialized storage.</td>
-        </tr>
-        <tr>
-          <td class="name"><a href="bytecode/uniswap-v2.html">Uniswap V2 pair</a><span class="sub">One runtime, run by all 524,109 pairs</span></td>
-          <td class="tool">solc 0.5.16</td><td class="size num">11,293 B</td><td class="year">May 2020</td>
-          <td class="what">Storage is the Solidity model replayed over exactly the committed calls, nested ones included; the LP ledger balances; the oracle obeys its law; share value falls only through the protocol fee, given the tokens’ answers; every state-changing function runs at a closed cost.</td>
+          <td class="what">Its ledger, read through the implementation’s own decoder, obeys the token laws, signed messages included, under a governance premise.</td>
         </tr>
         <tr>
           <td class="name"><a href="bytecode/curve-3crv.html">Curve 3Crv</a><span class="sub">LP token of Curve’s DAI/USDC/USDT pool</span></td>
@@ -109,11 +82,6 @@
           <td class="name">Curve 3pool<span class="sub">Curve’s DAI/USDC/USDT pool</span></td>
           <td class="tool">Vyper 0.2.4</td><td class="size num">21,199 B</td><td class="year">Sep 2020</td>
           <td class="what">Storage replays the pool’s model over exactly the committed calls; its liquidity functions run at exact gas, given the coins’ answers; in one history with 3Crv, the LP supply moves by exactly the pool’s mints and burns; its virtual price is shown not to be monotone.</td>
-        </tr>
-        <tr>
-          <td class="name"><a href="bytecode/deposit-contract.html">Beacon deposit contract</a><span class="sub">Every validator deposit; holds about 91.8 million ETH</span></td>
-          <td class="tool">solc 0.6.11</td><td class="size num">6,358 B</td><td class="year">Oct 2020</td>
-          <td class="what">After any history, storage is the Merkle accumulator of exactly the committed deposits, in order, so the count and root are theirs — with no hash premise.</td>
         </tr>
         <tr>
           <td class="name"><a href="bytecode/curve-pools.html">Curve pool, vulnerable</a><span class="sub">Behind three pools drained in July 2023</span></td>
@@ -130,14 +98,9 @@
           <td class="tool">assembly</td><td class="size num">504 B</td><td class="year">Feb 2025</td>
           <td class="what">The end-of-block call succeeds whatever storage holds; each block’s requests are exactly the oldest pending submissions, in order; the EIP’s fee guarantee is refuted for these bytes.</td>
         </tr>
-        <tr>
-          <td class="name"><a href="bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a><span class="sub">Lido’s registry of emergency pausers</span></td>
-          <td class="tool">solc 0.8.34</td><td class="size num">4,584 B</td><td class="year">Apr 2026</td>
-          <td class="what">The pauser registry stays consistent after any history, under hash premises over all addresses; a finite tier replaces those premises with checks the kernel decides.</td>
-        </tr>
       </tbody>
     </table>
-    <p class="small dimmer" style="margin-top:16px">Balances and the pair count were read at block 26,141,229 (7 October 2026). Full addresses, code hashes and creation transactions are on each artifact’s page and in the <a href="https://github.com/skbaek/blanc/blob/428628eeef1ff2dbcf8a26bc714e0cffd0a32699/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">claim map</a>; USDC, the factory and the 3pool, which have no page yet, are in the claim map only.</p>
+    <p class="small dimmer" style="margin-top:16px">Full addresses, code hashes and recorded creation provenance are on each artifact’s page and in the <a href="https://github.com/skbaek/blanc/blob/428628eeef1ff2dbcf8a26bc714e0cffd0a32699/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">claim map</a>; USDC and the 3pool, which have no page yet, are in the claim map only.</p>
   </div>
 </section>
 
@@ -147,25 +110,25 @@
     <div class="section-head">
       <p class="eyebrow">What a result should answer</p>
       <h2>Six questions to ask of any verification result.</h2>
-      <p class="lede-sm">Each has been answered before; to our knowledge, never all six at once. For the eleven artifacts above, Blanc addresses every one; the claim map says how far each answer goes.</p>
+      <p class="lede-sm">Each has been answered before; to our knowledge, never all six at once. For the live artifacts above, Blanc addresses every one; the claim map says how far each answer goes.</p>
     </div>
     <div class="questions">
       <div class="q"><h3>Is it about the code that runs?</h3>
         <p>About the deployed bytes themselves, not the source and not a recompilation, so no compiler stands in the trust base. In 2023 that distinction cost Curve’s pools: their source asked for one shared reentrancy lock, and the compiler emitted one lock per function.</p></div>
       <div class="q"><h3>What does the proof rest on?</h3>
-        <p>Lean’s kernel and its three standard axioms, <code>propext</code>, <code>Classical.choice</code> and <code>Quot.sound</code>. A walk from all 102,646 constants of the library reaches nothing else: no <code>sorry</code>, no native evaluation, no axiom about Keccak-256.</p></div>
+        <p>Lean’s kernel and its three standard axioms, <code>propext</code>, <code>Classical.choice</code> and <code>Quot.sound</code>. A walk from all 104120 constants of the library reaches nothing else: no <code>sorry</code>, no native evaluation, no axiom about Keccak-256.</p></div>
       <div class="q"><h3>Was the code written for the verifier?</h3>
-        <p>No. Nine compiler versions and an assembler, from unoptimized solc 0.4.19 output of 2017 to 504 bytes of hand-written assembly the protocol runs. None of it was shaped for Blanc’s tools.</p></div>
+        <p>No. solc 0.4.24 and 0.6.12, Vyper 0.2.4, 0.2.15 and 0.3.7, and 504 bytes of hand-written assembly the protocol runs. None of it was shaped for Blanc’s tools.</p></div>
       <div class="q"><h3>Is the machine the real machine?</h3>
-        <p>Jaune defines the machine, every transaction type, block validation, system calls, withdrawals and requests, every precompile from <code>ecrecover</code> to BLS12-381, and fork selection by schedule — and it runs: 73,345 of 73,345 blockchain-test cases pass, Byzantium through BPO2, run through the core of the block transition the theorems quantify over. Its gas schedule meets the chain too: in a 30,000-block window, every WETH9 <code>withdraw</code> of the proved shape whose starting balance the logs determine — 3,748 of 3,780 — used exactly the gas Blanc proves, and so did all 542 Uniswap-pair <code>approve</code> calls compared, counting the standard intrinsic charge on top of the proved frame cost.</p></div>
+        <p>Jaune defines the machine, every transaction type, block validation, system calls, withdrawals and requests, every precompile from <code>ecrecover</code> to BLS12-381, and fork selection by schedule — and it runs: 73,345 of 73,345 blockchain-test cases pass, Byzantium through BPO2, run through the core of the block transition the theorems quantify over.</p></div>
       <div class="q"><h3>Does the theorem matter?</h3>
-        <p>The properties are the ones people rely on: balances that stay backed, deposits accumulated exactly, withdrawal requests delivered first in, first out, a lock that actually excludes, a ledger that balances.</p></div>
+        <p>The properties are the ones people rely on: withdrawal requests delivered first in, first out, a lock that actually excludes, a ledger that balances.</p></div>
       <div class="q"><h3>Does it say the contract works?</h3>
-        <p>A contract that always reverts satisfies every invariant. Exact gas lets Blanc construct successful executions too: WETH9’s withdrawal is admitted as a signed transaction after any history; the Uniswap pair’s state-changing functions run at closed costs; the EIP-7002 system call succeeds whatever storage holds.</p></div>
+        <p>A contract that always reverts satisfies every invariant. Exact gas lets Blanc construct successful executions too, as the EIP-7002 system-call result below illustrates.</p></div>
     </div>
     <div class="seventh-wrap" style="margin-top:28px">
       <h3>And a seventh: does a theorem’s starting point hold of the live contract?</h3>
-      <p>For the EIP-7002 contract, yes: at the last block before Prague, mainnet’s storage held exactly the model’s initial state, with the storage root it had at deployment. The CircuitBreaker’s live registry, read from three providers, passes the finite tier’s decidable check on 29 probes, evaluated by a script rather than by the kernel. WETH9, the deposit contract, 3Crv and the USDC/WETH Uniswap pair now have theorems that start from their actual creation transactions on mainnet, carried through any valid history since, rather than from a modeled fresh deployment; the claim map lists what each still assumes.</p>
+      <p>For the EIP-7002 contract, yes: at the last block before Prague, mainnet’s storage held exactly the model’s initial state, with the storage root it had at deployment.</p>
     </div>
   </div>
 </section>
@@ -204,30 +167,7 @@
       </div>
     </article>
 
-    <article class="feature">
-      <div>
-        <span class="kicker">Uniswap V2</span>
-        <h3>One runtime, every pair.</h3>
-        <span class="meta">solc 0.5.16 · 11,293 bytes · 524,109 pairs</span>
-      </div>
-      <div>
-        <p>Uniswap V2’s factory deploys every pair from one creation code, so a single 11,293-byte runtime runs at all 524,109 of them, and Blanc’s theorems quantify over the pair, its tokens and its factory. After any valid history, from a state representing the Solidity model, the pair’s storage represents that model replayed over exactly the committed calls, with calls made back into the pair through a token or the flash-swap callback replayed inside the step that made them. The LP ledger stays balanced; the price accumulators obey their law, wrap-around included; and, under a premise on the tokens’ actual answers, the geometric mean of the reserves per LP token falls only through the protocol fee.</p>
-        <p>A pair learns its balances only from what tokens answer. Those answers are inputs of the statements, never assumptions folded into definitions: the replay, ledger and oracle theorems take no premise about any token or the factory. All ten state-changing functions run at closed gas costs whenever the model accepts the call, given, for the six that call out, their callees’ replies.</p>
-        <a class="more" href="bytecode/uniswap-v2.html">The pair, in full</a>
-      </div>
-    </article>
 
-    <article class="feature">
-      <div>
-        <span class="kicker">The Beacon deposit contract</span>
-        <h3>Exactly the deposits made.</h3>
-        <span class="meta">0x0000…05Fa · 6,358 bytes · solc 0.6.11</span>
-      </div>
-      <div>
-        <p>Every validator deposit on Ethereum mainnet has passed through this contract, which holds about 91.8 million ether and has counted 2,565,727 deposits. It keeps an incremental Merkle tree of depth 32 over the deposit data. After any valid history from a state that accumulates some list of deposits, Blanc proves its storage accumulates that list followed by exactly the committed deposits, in order; the count slot holds their number, and the root is their reference Merkle root — the incremental algorithm is proved to compute it for every hash function, and the history theorems instantiate the hash as Jaune’s SHA-256. A deposit the model accepts executes at exact gas and extends the tree by exactly its own node. No hash premise appears anywhere.</p>
-        <a class="more" href="bytecode/deposit-contract.html">The deposit contract, in full</a>
-      </div>
-    </article>
   </div>
 </section>
 
@@ -270,10 +210,10 @@
       <h2>A small kernel, three axioms, and two facts the proofs take from the world.</h2>
     </div>
     <div class="stats" style="margin-bottom:40px">
-      <div class="stat"><span class="n num">2,170</span><span class="l">leaf results — theorems nothing else builds on — all covered by one axiom walk</span></div>
-      <div class="stat"><span class="n num">1188</span><span class="l">statements pinned exactly, so a weakened claim fails like a broken proof</span></div>
+      <div class="stat"><span class="n num">2018</span><span class="l">leaf results — theorems nothing else builds on — all covered by one axiom walk</span></div>
+      <div class="stat"><span class="n num">310</span><span class="l">statements pinned exactly, so a weakened claim fails like a broken proof</span></div>
       <div class="stat"><span class="n num">73,345</span><span class="l">conformance cases Jaune passes, of 73,345 selected, at the revision Blanc pins</span></div>
-      <div class="stat"><span class="n num">86</span><span class="l">gates in the catalogue, all executed afresh and passing at commit <code>5048a51f</code></span></div>
+      <div class="stat"><span class="n num">29</span><span class="l">gates in the catalogue</span></div>
     </div>
     <div class="ledger">
       <div>
@@ -304,9 +244,9 @@
       <div>
         <p class="eyebrow">Blanc, the language</p>
         <h2>For bytes not yet written: a language whose compiler is a theorem.</h2>
-        <p class="lede-sm" style="margin-top:18px">Blanc began as a programming language: the EVM’s own instructions, arranged by four constructors. Its compiler’s correctness is a Lean theorem, so a property proved of a Blanc program is a fact about the bytes that deploy. Ten contracts are written in it and verified over their compiled bytes, and the history, settlement and liveness machinery they needed is what the lift of deployed bytecode now stands on.</p>
-        <p class="dim">Writing in Blanc buys what reading cannot: storage laid out so that a wrapper’s solvency needs no hash premise at all; runtimes smaller than their references in six ports of seven — WETH in 988 bytes against WETH9’s 3,124; and every implementation choice open, down to the instruction.</p>
-        <p><a class="more" href="language.html">The language and its ten contracts</a></p>
+        <p class="lede-sm" style="margin-top:18px">Blanc began as a programming language: the EVM’s own instructions, arranged by four constructors. Its compiler’s correctness is a Lean theorem, so a property proved of a Blanc program is a fact about the bytes that deploy. Its former contract corpus is archived; the history, settlement and liveness machinery it developed also supports the lift of deployed bytecode.</p>
+        <p class="dim">Writing in Blanc buys what reading cannot: authoring lets one choose proof-friendly layouts. Its former contract corpus is archived (see the archive note above).</p>
+        <p><a class="more" href="language.html">The language</a></p>
       </div>
       <figure>
         <div class="codehead"><span>Blanc/Semantics.lean — the whole syntax</span></div>
@@ -342,7 +282,7 @@
           <h2 style="font-size:clamp(1.5rem,2.6vw,2rem)">Written by agents. Checked by the kernel.</h2>
         </div>
         <div>
-          <p>The lift of deployed bytecode — 236,372 lines of Lean in 912 files — was written by AI agents in fifteen days, from 25 September to 9 October 2026, under one author’s direction and on top of the existing stack. The coordinator–worker workflow they ran in, <a href="https://github.com/skbaek/creme">Creme</a>, accepts a result only on the gate catalogue’s verdict for the exact commit.</p>
+          <p>The lift of deployed bytecode was written by AI agents, under one author’s direction and on top of the existing stack. The retained Blanc library contains 467,521 lines of Lean, counting <code>Blanc.lean</code> and sources under <code>Blanc/</code>; executable, audit-script and dependency sources are excluded. The historical 2026-09-25–10-09 lift campaign remains a separate, dated measurement. The coordinator–worker workflow they ran in, <a href="https://github.com/skbaek/creme">Creme</a>, accepts a result only on the gate catalogue’s verdict for the exact commit.</p>
           <p>Lean’s kernel checks an agent’s proof exactly as it checks a person’s. The trust never lived in the author; it lives in the kernel, the axioms, and the statements, which are there to be read.</p>
         </div>
       </div>
@@ -361,12 +301,12 @@
         <p><a class="more" href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#7-disclosures-and-limits">Every disclosure, item by item</a></p>
       </div>
       <ol class="limits">
-        <li><b>Live state.</b> The theorems that start from an actual creation transaction assume that mainnet’s history since is valid under Jaune’s rules, and take the creation block’s facts as fetched from providers; for WETH9, a second set derives those facts from the block hash alone, against a kernel-checked header hash and transaction and receipt roots, assuming only that the two values each check compares do not collide. None checks the proof-of-work seal. The other contracts’ theorems still start from a modeled deployment or a stated starting state.</li>
+        <li><b>Live state.</b> The theorems that start from an actual creation transaction assume that mainnet’s history since is valid under Jaune’s rules, and take the creation block’s facts as fetched from providers.</li>
         <li><b>Amsterdam.</b> Jaune runs it, but no theorem here is stated for it: every history theorem requires each block to run under a fork no later than BPO2.</li>
-        <li><b>Premises.</b> Signature recovery, for theorems over every signed transaction; callee behaviour, where success depends on another contract; hash separation over the keys a history touches, and for the CircuitBreaker’s history tier over all addresses; for EIP-7002, at most 2<sup>254</sup> committed submissions.</li>
+        <li><b>Premises.</b> Signature recovery, for theorems over every signed transaction; callee behaviour, where success depends on another contract; hash separation over the keys a history touches.</li>
         <li><b>Byte identity.</b> That the lifted bytes are mainnet’s rests on providers agreeing, not on a proof from a block header’s state root.</li>
-        <li><b>Few compositions.</b> The Uniswap pair is composed with WETH9, and with USDC and WETH9 together, and the Curve 3pool with 3Crv, each over one history; elsewhere a theorem takes the answers of the contracts it calls as inputs.</li>
-        <li><b>Messages, not transactions.</b> The Vyper executions from deployment are sequences of messages, with synthetic token, attacker and receiver code.</li>
+        <li><b>Few compositions.</b> The Curve 3pool is composed with 3Crv over one history; elsewhere a theorem takes the answers of the contracts it calls as inputs.</li>
+        <li><b>Witness scope.</b> The message-level Vyper witnesses use sequences of messages with synthetic token, attacker and receiver code. The separate vulnerable-pool transaction witness has its own stated premises.</li>
         <li><b>Admission, not inclusion.</b> Liveness theorems execute a transaction at a given state or block position and say exactly what it does and costs; whether any block will include it is outside them.</li>
         <li><b>Constant jump targets.</b> Certificates accept a jump only to a known constant destination or a function’s own return address; code that jumps to computed targets cannot yet be certified.</li>
       </ol>
@@ -385,8 +325,8 @@
         <p class="dim small">The axiom walk follows every constant of the library once and reports the leaf results; the pin gate elaborates every pinned statement; the claim-map gate checks the public account of the deployed results against the tree; the certificate gate regenerates every certificate from its input and compares it byte for byte. <code>scripts/check-gates.sh --fresh</code> runs the whole catalogue, whose commands and pass criteria are in <a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md"><code>scripts/GATES.md</code></a>.</p>
       </div>
       <div>
-<pre class="term" data-copy><span class="line"><span class="p">$ </span><span class="cmd">git clone https://github.com/skbaek/blanc &amp;&amp; cd blanc</span></span><span class="line"><span class="p">$ </span><span class="cmd">lake exe cache get</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check.sh</span></span><span class="line"><span class="ok">OK — axiom audit: one union walk over Blanc reaches only the standard axioms; 2170 leaf results</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check-claims.sh</span></span><span class="line"><span class="ok">OK — claim statements: 1188 definitions/statements and exact record constructors pinned by Lean</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check-deployed-claim-map.sh</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check-lift-certificates.sh</span></span></pre>
-        <p class="small dimmer" style="margin-top:12px"><code>scripts/check.sh</code> builds the library before it walks the axioms. The two verdict lines illustrate successful runs at the generated counts; run the commands to obtain a verdict for your checkout. Rebuilding the 1,482 modules the library’s root imports, from source, with the toolchain and pinned dependencies already built, took 4,380 seconds on a 10-core Apple M5 with 24 GiB of memory.</p>
+<pre class="term" data-copy><span class="line"><span class="p">$ </span><span class="cmd">git clone https://github.com/skbaek/blanc &amp;&amp; cd blanc</span></span><span class="line"><span class="p">$ </span><span class="cmd">lake exe cache get</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check.sh</span></span><span class="line"><span class="ok">OK — axiom audit: one union walk over Blanc reaches only the standard axioms; 2018 leaf results</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check-claims.sh</span></span><span class="line"><span class="ok">OK — claim statements: 310 definitions/statements and exact record constructors pinned by Lean</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check-deployed-claim-map.sh</span></span><span class="line"><span class="p">$ </span><span class="cmd">scripts/check-lift-certificates.sh</span></span></pre>
+        <p class="small dimmer" style="margin-top:12px"><code>scripts/check.sh</code> builds the library before it walks the axioms. The two verdict lines illustrate successful runs at the generated counts; run the commands to obtain a verdict for your checkout. At the historical pre-retirement commit 5048a51f, rebuilding its 1,482 root-imported modules from source, with the toolchain and pinned dependencies already built, took 4,380 seconds on a 10-core Apple M5 with 24 GiB of memory. This is not a timing or module count for the current paper-v2 tree.</p>
       </div>
     </div>
   </div>
@@ -402,7 +342,7 @@
     </div>
     <div>
       <h4>Deployed bytecode</h4>
-      <a href="bytecode/weth9.html">WETH9</a><a href="bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="bytecode/curve-3crv.html">Curve 3Crv</a><a href="bytecode/deposit-contract.html">Deposit contract</a><a href="bytecode/curve-pools.html">Curve pools</a><a href="bytecode/eip-7002.html">EIP-7002 contract</a><a href="bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
+      <a href="bytecode/curve-3crv.html">Curve 3Crv</a><a href="bytecode/curve-pools.html">Curve pools</a><a href="bytecode/eip-7002.html">EIP-7002 contract</a>
     </div>
     <div>
       <h4>Blanc</h4>

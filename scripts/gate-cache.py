@@ -82,11 +82,6 @@ from typing import Any, Iterable
 import gate_semaphore
 
 from gate_cache_lock import acquire_lock, acquire_lock_wait, read_lock_pid, release_lock
-from gate_cache_t8n_root import (
-    T8N_TARGET_ROOT,
-    T8nPythonBaseError,
-    resolve_t8n_python_base,
-)
 
 SCHEMA_VERSION = 1
 EVIDENCE_SCHEMA_VERSION = 3
@@ -674,7 +669,6 @@ def load_registry(path: Path) -> dict[str, Any]:
                     f"gate {identifier} expects a non-zero exit; only exit 0 passes"
                 )
 
-    _validate_oracle_lanes(gates)
     gates.sort(key=lambda gate: gate["order"])
     position = {gate["id"]: index for index, gate in enumerate(gates)}
     for gate in gates:
@@ -697,10 +691,6 @@ def load_registry(path: Path) -> dict[str, Any]:
     return registry
 
 
-LEGACY_EELS_PIN = "4198b9c5996713b268aed602739d5aa40e277694"
-CURRENT_T8N_PIN = "827a1cad9c9c8528512f90a06888c8bd9171d9ae"
-
-
 def _input_strings(value: Any) -> list[str]:
     if isinstance(value, str):
         return [value]
@@ -711,102 +701,11 @@ def _input_strings(value: Any) -> list[str]:
     return []
 
 
-def _validate_oracle_lanes(gates: list[dict[str, Any]]) -> None:
-    """Keep the frozen Prague oracle and current-mainnet target disjoint.
-
-    This is registry validation, not an optional audit, so planning and cached
-    reuse both refuse a gate whose root or pin was cross-wired.
-    """
-
-    for gate in gates:
-        identifier = gate["id"]
-        inputs = gate.get("inputs", {})
-        strings = _input_strings(inputs)
-        external = inputs.get("external", [])
-        external_ids = {
-            spec.get("id") for spec in external if isinstance(spec, dict)
-        }
-        legacy = (
-            "eels" in external_ids
-            or "EELS_ROOT" in strings
-            or any(value.startswith("@eels/") for value in strings)
-        )
-        current = (
-            "t8n_target" in external_ids
-            or "JAUNE_T8N_TARGET" in strings
-            or any(value.startswith("@t8n_target/") for value in strings)
-            or any(value.startswith("@t8n_python_base/") for value in strings)
-        )
-        if legacy and current:
-            raise GateCacheError(
-                f"gate {identifier} mixes the legacy EELS and current-mainnet roots"
-            )
-        if not legacy and not current:
-            continue
-
-        if legacy:
-            expected = {
-                "id": "eels",
-                "path": "~/execution-specs",
-                "path_env": "EELS_ROOT",
-                "pin": LEGACY_EELS_PIN,
-            }
-            matches = [spec for spec in external if spec == expected]
-            if len(matches) != 1 or len(external) != 1:
-                raise GateCacheError(
-                    f"legacy EELS gate {identifier} must use only the frozen "
-                    f"EELS_ROOT checkout at {LEGACY_EELS_PIN}"
-                )
-            env = inputs.get("env", [])
-            if "EELS_ROOT" not in env or "JAUNE_T8N_TARGET" in env:
-                raise GateCacheError(
-                    f"legacy EELS gate {identifier} has the wrong root environment"
-                )
-            if any(
-                value.startswith(("@t8n_target/", "@t8n_python_base/"))
-                for value in strings
-            ):
-                raise GateCacheError(
-                    f"legacy EELS gate {identifier} reads the current-mainnet root"
-                )
-            continue
-
-        expected = {
-            "id": "t8n_target",
-            "path": "~/execution-specs-t8n-amsterdam",
-            "path_env": "JAUNE_T8N_TARGET",
-            "pin": CURRENT_T8N_PIN,
-        }
-        matches = [spec for spec in external if spec == expected]
-        if len(matches) != 1 or len(external) != 1:
-            raise GateCacheError(
-                f"current-mainnet gate {identifier} must use only the isolated "
-                f"JAUNE_T8N_TARGET checkout at {CURRENT_T8N_PIN}"
-            )
-        env = inputs.get("env", [])
-        if "JAUNE_T8N_TARGET" not in env or "EELS_ROOT" in env:
-            raise GateCacheError(
-                f"current-mainnet gate {identifier} has the wrong root environment"
-            )
-        if any(value.startswith("@eels/") for value in strings):
-            raise GateCacheError(
-                f"current-mainnet gate {identifier} reads the legacy EELS root"
-            )
-        required = {"scripts/current-mainnet-target.json", "scripts/current_mainnet.py"}
-        required.add("scripts/current-mainnet-runtime-lock.json")
-        if not required.issubset(set(inputs.get("files", []))):
-            raise GateCacheError(
-                f"current-mainnet gate {identifier} does not fingerprint its shared "
-                "profile and helper"
-            )
-
-
 def command_text(gate: dict[str, Any]) -> str:
     return " ".join(gate["command"])
 
 
 RUNNER_SOUNDNESS_SOURCE = "gate-cache.py"
-RUNNER_T8N_SOURCE = "gate_cache_t8n_root.py"
 RUNNER_HOST_IDENTITY_SOURCE = "gate_cache_host_identity.py"
 RUNNER_PATH_POLICY_SOURCE = "module_path_policy.py"
 
@@ -818,7 +717,7 @@ RUNNER_PATH_POLICY_SOURCE = "module_path_policy.py"
 SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "EVIDENCE_SCHEMA_VERSION", "LEAN_TRACE_ROOTS", "IMPORT_MODIFIERS",
     "IMPORT_LINE", "IMPORT_LIKE", "INPUT_KINDS", "GATE_KINDS",
-    "TOOL_COMMANDS", "LEGACY_EELS_PIN", "CURRENT_T8N_PIN", "NAMED_ROOTS",
+    "TOOL_COMMANDS", "NAMED_ROOTS",
     "SHARED_STATE_RELATIVE", "EVIDENCE_FILENAME_PREFIX", "LEGACY_EVIDENCE_FILENAME",
     "BUILD_CERTIFICATE_RELATIVE", "RUNNER_HOST_IDENTITY_SOURCE", "RUNNER_PATH_POLICY_SOURCE",
     "AUTHORITY_IMPORT_BINDINGS_KEY", "module_scope_imports", "import_binding_map",
@@ -828,8 +727,8 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
     "sha256_bytes",
     "file_digest", "file_identity", "forget_digests", "canonical", "digest_of",
     "load_registry", "is_code_under_scripts", "economy_work_classes",
-    "_input_strings", "_validate_oracle_lanes",
-    "gate_uses_t8n_resolver", "gate_uses_tracked_population",
+    "_input_strings",
+    "gate_uses_tracked_population",
     "validate_tracked_population", "tracked_population", "semantic_authority_digest", "runner_identity",
     "resolve_path", "component_files", "glob_population", "traversable_population",
     "component_populations", "trace_path_for", "dependency_trace_path_for", "module_dep_hash",
@@ -857,15 +756,6 @@ SOUNDNESS_AUTHORITY_NAMES = frozenset({
 })
 
 
-def gate_uses_t8n_resolver(gate: dict[str, Any]) -> bool:
-    strings = _input_strings(gate.get("inputs", {}))
-    return any(
-        value in {"t8n_target", "JAUNE_T8N_TARGET"}
-        or value.startswith("@t8n_target/")
-        or value.startswith("@t8n_python_base/")
-        for value in strings
-    )
-
 
 def gate_uses_tracked_population(gate: dict[str, Any]) -> bool:
     return any(spec.get("tracked") is True
@@ -876,14 +766,12 @@ def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
     """Soundness code relevant to this gate, excluding pure serialization.
 
     The common engine owns fingerprint construction, verdict validation,
-    drift checks, and cache admission. The native t8n resolver is relevant
-    only to current-mainnet consumers. `gate_cache_lock.py` is intentionally
+    drift checks, and cache admission. A conditional source is relevant only
+    to gates that consume it. `gate_cache_lock.py` is intentionally
     absent: it serializes writes but cannot make evidence reusable.
     """
 
     sources = [f"{RUNNER_SOUNDNESS_SOURCE}#soundness", RUNNER_HOST_IDENTITY_SOURCE]
-    if gate_uses_t8n_resolver(gate):
-        sources.append(RUNNER_T8N_SOURCE)
     if gate_uses_tracked_population(gate):
         sources.append(RUNNER_PATH_POLICY_SOURCE)
     return tuple(sources)
@@ -891,10 +779,10 @@ def runner_identity_sources(gate: dict[str, Any]) -> tuple[str, ...]:
 
 # The digest below matches top-level nodes by *name*, and an `import` statement
 # has none, so before this existed every module-scope import binding sat outside
-# the authority -- including `from gate_cache_t8n_root import T8N_TARGET_ROOT`,
-# which is what turns a declared `@t8n_target/...` input into the file that
-# actually gets fingerprinted.  Rebinding that one line moved the resolved input
-# root while the digest stood still.  Naming the two bindings that were caught
+# the authority -- including every sibling binding, whose names the
+# authorities resolve at call time.  Rebinding one such line changes which
+# imported implementation a verdict-affecting authority actually calls
+# while the digest would otherwise stand still.  Naming the two bindings that were caught
 # would have left the class open for the next sibling module, so the digest
 # covers the module-scope binding map as a whole: every global name an authority
 # can resolve at call time, and the module and attribute it is bound to.
@@ -982,8 +870,6 @@ def runner_identity(gate: dict[str, Any]) -> tuple[str, dict[str, str]]:
         f"scripts/{RUNNER_HOST_IDENTITY_SOURCE}":
             file_digest(here / RUNNER_HOST_IDENTITY_SOURCE),
     }
-    if gate_uses_t8n_resolver(gate):
-        detail[f"scripts/{RUNNER_T8N_SOURCE}"] = file_digest(here / RUNNER_T8N_SOURCE)
     if gate_uses_tracked_population(gate):
         detail[f"scripts/{RUNNER_PATH_POLICY_SOURCE}"] = file_digest(here / RUNNER_PATH_POLICY_SOURCE)
     return digest_of({"schema": SCHEMA_VERSION, "sources": detail}), detail
@@ -996,53 +882,26 @@ def runner_identity(gate: dict[str, Any]) -> tuple[str, dict[str, str]]:
 # `plan --explain` name the file that moved rather than only the component.
 
 
-# Roots the gates themselves resolve from the environment.  Declaring a path
-# as `@eels/...` makes the registry resolve it the same way the gate does, so a
-# run with `EELS_ROOT` pointed elsewhere fingerprints the checkout it actually
-# used rather than the default one it did not.
-NAMED_ROOTS = {
-    "eels": ("EELS_ROOT", "~/execution-specs"),
-    "t8n_target": T8N_TARGET_ROOT,
-    "weth10ref": ("WETH10_REFERENCE_DIR", "scripts/reference/weth10"),
-    "weth10lock": ("WETH10_REFERENCE_LOCK", "scripts/weth10-reference.json"),
-    "weth10doc": ("WETH10_COMPATIBILITY_DOC", "docs/registers/WETH10_COMPATIBILITY.md"),
-    "lidoref": ("LIDO_CIRCUIT_BREAKER_REFERENCE_DIR",
-                "scripts/reference/lido-circuit-breaker"),
-    "lidolock": ("LIDO_CIRCUIT_BREAKER_REFERENCE_LOCK",
-                 "scripts/lido-circuit-breaker-reference.json"),
-    "twgref": ("LIDO_TWG_REFERENCE_DIR", "scripts/reference/lido-twg"),
-    "twglock": ("LIDO_TWG_REFERENCE_LOCK",
-                "scripts/lido-twg-reference.json"),
-    "ossifiableref": ("LIDO_OSSIFIABLE_PROXY_REFERENCE_DIR",
-                       "scripts/reference/lido-ossifiable-proxy"),
-    "ossifiablelock": ("LIDO_OSSIFIABLE_PROXY_REFERENCE_LOCK",
-                        "scripts/lido-ossifiable-proxy-reference.json"),
-    "ossifiabledoc": ("LIDO_OSSIFIABLE_PROXY_COMPATIBILITY_DOC",
-                       "docs/registers/OSSIFIABLE_PROXY_COMPATIBILITY.md"),
-    "ossifiableperfroot": ("LIDO_OSSIFIABLE_PROXY_PERFORMANCE_ROOT", "."),
-    "ossifiableperfmanifest": (
-        "LIDO_OSSIFIABLE_PROXY_PERFORMANCE_MANIFEST",
-        "scripts/fixtures/lido-ossifiable-proxy/performance-manifest.json"),
-}
+# Named roots a gate may resolve from the environment, declared as
+# `@name/...` so the registry resolves a path the same way the gate does:
+# a run with the variable pointed elsewhere fingerprints the tree it
+# actually used rather than a default it did not.  No production aliases
+# remain; an installed mapping is the only way an `@name` resolves, and
+# `resolve_path` refuses an unknown alias instead of supplying a default.
+NAMED_ROOTS: dict[str, tuple[str, str]] = {}
+
 
 
 def resolve_path(root: Path, given: str) -> Path:
     """Repository-relative by default; `@name/`, `~` and absolute kept as given.
 
-    Real inputs live outside the tree: pinned checkout virtualenvs, the native
-    CPython root selected by the current-mainnet venv, and fixture templates a
-    generator reads from `~`. Pretending any is a repository path would
+    Real inputs live outside the tree: pinned checkout virtualenvs and
+    fixture templates a generator reads from `~`. Pretending any is a repository path would
     silently fingerprint nothing.
     """
 
     if given.startswith("@"):
         name, _, rest = given[1:].partition("/")
-        if name == "t8n_python_base":
-            try:
-                base = resolve_t8n_python_base(root)
-            except T8nPythonBaseError as error:
-                raise Unresolvable(str(error)) from error
-            return base / rest if rest else base
         entry = NAMED_ROOTS.get(name)
         if entry is None:
             raise GateCacheError(f"unknown named root: @{name}")
@@ -1201,7 +1060,7 @@ def glob_population(root: Path, spec: dict[str, Any]) -> list[str]:
         if not path.is_file():
             continue
         # Keyed relative to the declared root, so a population outside the
-        # repository — the pinned EELS venv, an external fixture tree — names
+        # repository — a pinned external venv, an external fixture tree — names
         # itself the same way a repository one does.
         name = prefix + path.relative_to(directory).as_posix()
         if any(fnmatch.fnmatch(name, exclude) for exclude in excludes):

@@ -4,16 +4,10 @@
   "scan_root": "Blanc",
   "min_copy_bytes": 160,
   "min_copy_lines": 5,
-  "families": 1,
-  "sites": 2,
-  "restated_lines": 1,
+  "families": 0,
+  "sites": 0,
+  "restated_lines": 0,
   "unparsable_modules": [],
-  "entries": [
-    {
-      "id": "e6f82b02aba1f6e8",
-      "normalized_sha256": "e6f82b02aba1f6e861172b9b6b0dbc738d5c138782f6832001734d239081c2e5",
-      "sites": 2
-    }
-  ],
-  "digest": "29019dd4fbe55dc84ef86a8efdd74c03f21f27df482aaea526404974347183d9"
+  "entries": [],
+  "digest": "05b5662639683bf16f609bcb3fa6f8d5f1a79542b40f9a40e3775d53382ab1ab"
 }

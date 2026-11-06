@@ -1,9 +1,5 @@
 {
-  "schema": 3,
-  "contractModuleGlobs": [
-    "Blanc/Weth10*.lean",
-    "Blanc/Lido*.lean"
-  ],
+  "schema": 4,
   "mappings": [
     {
       "declaration": "ProcessMessage.ok_state_eq_committedPost",
@@ -112,20 +108,70 @@
   ],
   "requiredConsumers": [
     {
-      "module": "Blanc/Weth10HolderFlowEthExec.lean",
+      "module": "Blanc/Composition/UsdcTokenF.lean",
       "references": 1
     },
     {
-      "module": "Blanc/Weth10HolderFlowExecAccounting.lean",
+      "module": "Blanc/Lift/Usdc/HistFSlots.lean",
       "references": 1
     },
     {
-      "module": "Blanc/Weth10AllowanceRecursion.lean",
-      "references": 2
+      "module": "Blanc/Lift/Usdc/ProxyRetainedContextCodes.lean",
+      "references": 1
     },
     {
-      "module": "Blanc/LidoCircuitBreakerOwnerClosure.lean",
+      "module": "Blanc/Lift/Usdc/HistorySlotsCore.lean",
       "references": 1
+    },
+    {
+      "module": "Blanc/Lift/Usdc/HistoryReplayFrames.lean",
+      "references": 1
+    },
+    {
+      "module": "Blanc/Lift/Usdc/HistoryReplay.lean",
+      "references": 1
+    },
+    {
+      "module": "Blanc/Lift/Usdc/HistFFacts.lean",
+      "references": 1
+    }
+  ],
+  "legitimateCollisions": [
+    {
+      "module": "Blanc/CommonProofs/Messages.lean",
+      "declaration": "Blanc.ProcessMessage.rollback_of_error",
+      "kind": "theorem"
+    },
+    {
+      "module": "Blanc/DelegatecallEnvelope.lean",
+      "declaration": "Blanc.DelegatedChildCertificate.rollback_of_error",
+      "kind": "theorem"
+    }
+  ],
+  "legitimateExportCommands": [
+    {
+      "module": "Blanc/ExecutionCellProvenance.lean",
+      "command": "export Jaune.Exec (Deriv)"
+    },
+    {
+      "module": "Blanc/ExecutionCellProvenance.lean",
+      "command": "export Jaune.Exec.Deriv (ParentStep ParentPrefix)"
+    },
+    {
+      "module": "Blanc/ExecutionOccurrence.lean",
+      "command": "export Jaune.Exec (Deriv)"
+    },
+    {
+      "module": "Blanc/ExecutionOccurrence.lean",
+      "command": "export Jaune.Exec.Deriv (ParentStep ParentPrefix)"
+    },
+    {
+      "module": "Blanc/ExecutionSettlement.lean",
+      "command": "export Jaune.Frame (settlementCommits raw_commits_of_settlementCommits)"
+    },
+    {
+      "module": "Blanc/ExecutionSettlement.lean",
+      "command": "export Jaune.Exec (committedFrames descendantFrames)"
     }
   ]
 }

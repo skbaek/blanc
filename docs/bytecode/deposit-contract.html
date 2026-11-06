@@ -3,13 +3,9 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Beacon deposit contract — Blanc</title>
-<meta name="description" content="What Blanc proves about the 6,358 deployed bytes of Ethereum's deposit contract: after any valid history its storage accumulates exactly the committed deposits, its count and Merkle root are theirs, and a deposit executes at exact gas — with no hash premise.">
+<title>Archived: Beacon deposit contract — Blanc</title>
+<meta name="description" content="Mothballed exhibit: Beacon deposit contract. Excluded from Blanc’s current maintained corpus.">
 <meta name="theme-color" content="#fbfaf5">
-<meta property="og:type" content="website">
-<meta property="og:site_name" content="Blanc">
-<meta property="og:title" content="Beacon deposit contract — Blanc">
-<meta property="og:description" content="What Blanc proves about the 6,358 deployed bytes of Ethereum's deposit contract: after any valid history its storage accumulates exactly the committed deposits, its count and Merkle root are theirs, and a deposit executes at exact gas — with no hash premise.">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='9' fill='%23fbfaf5'/%3E%3Crect x='3' y='3' width='58' height='58' rx='7' fill='none' stroke='%23211f1a' stroke-width='4'/%3E%3Ctext x='32' y='46' font-family='Georgia,serif' font-size='40' text-anchor='middle' fill='%23211f1a'%3EB%3C/text%3E%3C/svg%3E">
 <link rel="stylesheet" href="../site.css">
 </head>
@@ -19,7 +15,7 @@
   <div class="wrap nav">
     <a class="brand" href="../"><span class="sq"></span><b>Blanc</b><i>/blɑ̃/ — fr. “white”</i></a>
     <nav class="navlinks" aria-label="Site">
-      <a class="opt" href="../#corpus" aria-current="page">Corpus</a>
+      <a class="opt" href="../#corpus">Corpus</a>
       <a class="opt" href="../method.html">How it works</a>
       <a class="opt" href="../language.html">Language</a>
       <a class="opt" href="../#limits">Limits</a>
@@ -38,139 +34,30 @@
 <main>
 <section class="page-hero">
   <div class="wrap">
-    <p class="crumbs"><a href="../">Blanc</a><span>/</span><a href="../#corpus">Deployed bytecode</a><span>/</span>Beacon deposit contract</p>
-    <div class="hero-grid">
-      <div>
-        <h1>The Beacon deposit contract.</h1>
-        <p class="lede">Every validator deposit on Ethereum mainnet has passed through these 6,358 bytes, compiled by solc 0.6.11 in 2020. The contract holds about 91.8 million ether and has counted 2,565,727 deposits.</p>
-        <p class="lede-sm">It keeps an incremental Merkle tree of depth 32 over the deposit data. Blanc proves that after any valid history its storage accumulates exactly the deposits that were committed, in order; that its count is their number and its root their reference Merkle root; and that a new deposit executes at exact gas, extending the tree by exactly its own node. No hash premise appears anywhere.</p>
-      </div>
-      <div class="plate idplate">
-        <div class="plate-head"><span class="who"><span class="k">Artifact</span>Deposit contract</span><span class="meta">Ethereum mainnet</span></div>
-        <div class="hexband wrapband" aria-hidden="true">60 80 60 40 52 60 04 36 10 61 00 3f 57 60 00 35 60 e0 1c 80 63 01 ff c9 a7 14 61 00 44 57 80 63 22 89 51 18 14 61 00 a4 57 80 63 62 1f d1 30 14 61 01 ba 57 80 63 c5 f2 89 2f 14 61 02 44 57 5b 60 00 80 fd 5b 34 80 15 61 00 50 57 60 00 80 fd 5b 50 61 00 90 60 04 80 36 03 60 20 81 10 15 61</div>
-        <dl class="kv">
-          <dt>Address</dt><dd><code>0x00000000219ab540356cBB839Cbe05303d7705Fa</code></dd>
-          <dt>Runtime</dt><dd>6,358 bytes; Keccak-256 <code>0x6c029a231254fadb724d63be769f75eedd66362df034a3e663252b49d062a666</code></dd>
-          <dt>Compiler</dt><dd>solc 0.6.11</dd>
-          <dt>Created</dt><dd>block 11,052,984 (14 October 2020), transaction <code>0xe75f…e1d0</code>, deployer nonce 0</dd>
-          <dt>Holds</dt><dd>about 91,765,085 ETH and 2,565,727 deposits at block 26,141,229</dd>
-          <dt>Proofs</dt><dd><a href="https://github.com/skbaek/blanc/tree/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit"><code>Blanc/Lift/BeaconDeposit/</code></a>, 15,410 lines of Lean</dd>
-        </dl>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section>
-  <div class="wrap layout">
-    <nav class="toc" aria-label="On this page">
-      <span class="t">On this page</span>
-      <a href="#history">Exactly the deposits made</a>
-      <a href="#root">The root, for every hash</a>
-      <a href="#live">A deposit, at exact gas</a>
-      <a href="#environment">The environment</a>
-      <a href="#deploy">Deployment</a>
-      <a href="#limits">Not claimed</a>
-      <a href="#prior">Earlier work</a>
-    </nav>
-
-    <div class="prose">
-      <section id="history">
-        <p class="eyebrow">Safety, after any history</p>
-        <h2>Exactly the deposits made.</h2>
-        <p>From the contract’s actual deployment block, over the whole retained history to a later block, the count word is the number of committed deposits and the root computed from the stored words is the reference root of exactly those deposits, in order. Rolled-back deposits are filtered out by settlement; nothing is added and nothing is lost.</p>
-        <div class="thm">
-          <div class="head"><span class="tag">Definition, verbatim</span><a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/BeaconDeposit/HistDeployment.lean#L157"><code>DepositHistory</code> · HistDeployment.lean:157</a></div>
-<pre class="lean"><span class="kw">def</span> <span class="nm">DepositHistory</span> {cfg : ChainConfig} {D B : BlockChain}
-    (history : ConfiguredHistoryTraceIn HistFork cfg D B) : Prop :=
-  depositCount history = (committedDeposits history).length ∧
-    storedRoot history = BeaconDeposit.mixedRootOf Bytes.sha256 (committedDeposits history)</pre>
-        </div>
-        <div class="thm">
-          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/BeaconDeposit/HistDeployment.lean#L166"><code>Blanc.Lift.BeaconDeposit.beacon_deposits</code> · HistDeployment.lean:166</a></div>
-<pre class="lean"><span class="kw">theorem</span> <span class="nm">beacon_deposits</span> {B : BlockChain} (d : BeaconDeploymentTo B) :
-    DepositHistory d.trace</pre>
-        </div>
-        <p>The deployment record <a href="https://github.com/skbaek/blanc/blob/2c4d19c0c6ad64f5b002926ad0ccd1ff98445f62/Blanc/Lift/BeaconDeposit/HistDeployment.lean#L40"><code>BeaconDeploymentTo</code></a> is the only premise. Its fields are the retained deployment block, whose slot 2 is the recorded creation transaction with a successful receipt and no log at the contract; the configured histories through the adopted Shanghai, Cancun and Prague anchors to the later block; empty code at the SHA-256 precompile’s address, 0x02, after the deployment block; and exclusions, trace-local and finite, of frames targeting 0x02 and of EIP-7702 authorizations signed by 0x02 or the system contracts. There is no hash premise at all: the layout is fixed, and the tree uses SHA-256.</p>
-        <p>Beneath it lies the checkpoint form: from a checkpoint at which the contract’s storage is the accumulator of some list of deposits, after any configured history the storage is the accumulator of that list followed by exactly the committed deposits (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/BeaconEnv.lean#L155"><code>configuredHistory_solInv_sys</code></a>).</p>
-      </section>
-
-      <section id="root">
-        <p class="eyebrow">An algorithm, proved once</p>
-        <h2>The root, for every hash function.</h2>
-        <p>The contract does not store its tree: it keeps a branch of 32 nodes and recomputes the root on demand. Blanc proves that this incremental algorithm computes the recursively defined depth-32 Merkle root, with the count mixed in, from any state satisfying its invariant — for every hash function <i>H</i>:</p>
-<pre class="lean"><span class="kw">theorem</span> <span class="nm">root_correct</span> (H : Bytes → B256) (s : Acc) (ls : List B256)
-    (hInv : Inv H s ls) : Acc.root H s = mixedRootOf H ls</pre>
-        <p>The history theorems instantiate <i>H</i> as the SHA-256 that Jaune executes for the precompile at address 0x02, which the bytecode calls. Jaune proves its optimized SHA-256 equal, on every input, to a transcription of NIST FIPS 180-4; that theorem lives in a Jaune module outside the Blanc library’s import closure, so Blanc’s axiom walk does not cover it.</p>
-        <p class="small dimmer"><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/BeaconDepositCorrectness.lean#L284"><code>Blanc.BeaconDeposit.root_correct</code></a> · BeaconDepositCorrectness.lean:284</p>
-      </section>
-
-      <section id="live">
-        <p class="eyebrow">Constructed executions</p>
-        <h2>A deposit, at exact gas.</h2>
-        <p>After any configured history, a deposit the model accepts at the final storage — given calldata the deployed decoder accepts — executes from a fresh frame at exactly <i>G</i> + 656 + its body’s cost and leaves exactly <i>G</i>; it ends in the model’s accumulator, extends the list by exactly the new deposit-data node, changes no other account’s storage, and emits exactly the model’s <code>DepositEvent</code> (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/Liveness.lean#L24"><code>configuredHistory_deposit_live</code></a>). The body’s cost is 14,551 plus the actual charges of reading and storing the count and of the tree insertion, whose terms depend on the deposit’s position in the tree.</p>
-        <p>The views succeed too, at exact gas: <code>get_deposit_count</code> costs 1,514 with its count slot warm, <code>get_deposit_root</code> an exact cost, and <code>supportsInterface</code> answers true exactly for the ERC-165 and deposit interface ids. The liveness and view theorems take an entry condition at every frame the history entered at the contract: the SHA-256 precompile’s address is warm and holds no delegation. Every precompile is warm from the start of a transaction, so inside a transaction it always holds.</p>
-      </section>
-
-      <section id="environment">
-        <p class="eyebrow">Statements that can fail</p>
-        <h2>A premise found false, and its replacement.</h2>
-        <p>An earlier family of deposit-contract statements in the repository assumed that no system contract’s code contains a call- or create-type instruction byte at any offset. That premise is false on mainnet: the canonical EIP-7002 contract carries such bytes inside its push data, at offsets 67, 123, 128 and 141, and Blanc proves the premise false of that code from the first of them (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/SystemContracts.lean#L135"><code>withdrawalRequestCode_not_spawnFree</code></a>). The statements above replace it with the premise that the canonical code is installed — and at block 26,141,229, three providers report that mainnet’s four system contracts held exactly that code, and that the SHA-256 precompile’s address held none.</p>
-        <p>It is the kind of defect that only reading a statement against the chain can catch, and the reason the statements here are written to be read.</p>
-      </section>
-
-      <section id="deploy">
-        <p class="eyebrow">Where a history can start</p>
-        <h2>Deployment.</h2>
-        <p>Under every covered fork, the recorded creation input, run as a <code>CREATE</code> from the recorded deployer at nonce 0, installs the certified runtime at the contract’s mainnet address — the kernel evaluates the address from the deployer and nonce — and leaves storage that accumulates the empty list, with no hash premise (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Lift/BeaconDeposit/Creation/Deploy.lean#L146"><code>beacon_deploy_covered</code></a>). It is a modeled deployment: it does not prove that the 2020 transaction was included.</p>
-      </section>
-
-      <section id="limits">
-        <p class="eyebrow">Stated, so it is not inferred</p>
-        <h2>Not claimed.</h2>
-        <ul class="nc">
-          <li>That today’s storage accumulates the deposits mainnet saw: the contract’s <code>DepositEvent</code> logs rebuild the list of all 2,565,727 deposits, whose recomputed accumulator must match the branch slots and count in storage — a finite check that has not been run.</li>
-          <li>Anything about revert routes and their payloads, or about the BLS validity of deposit data.</li>
-          <li>Transaction-level liveness: a deposit carries value, which needs a value-carrying transaction envelope.</li>
-          <li>Since EIP-6110 the beacon chain consumes the stream of <code>DepositEvent</code> logs; about logs there are single-call statements only.</li>
-        </ul>
-        <p>The claim map’s <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md#52-beacon-deposit-exact-committed-deposit-history">deposit-contract section</a> lists every theorem with its premises, file and line.</p>
-      </section>
-
-      <section id="prior">
-        <p class="eyebrow">Context</p>
-        <h2>Earlier work, and Blanc’s own deposit contract.</h2>
-        <p>Park, Zhang and Roșu verified the contract’s original Vyper version in K, and then a solc 0.6.8 build of its Solidity rewrite with per-function gas bounds; the deployed bytes were compiled by solc 0.6.11. Cassez verified the incremental Merkle tree algorithm in Dafny.</p>
-        <p>Blanc also contains a reimplementation of the deposit contract in its own language, proved over its own compiled bytes and tested beside the deployed runtime — the same 6,358 bytes the theorems above are about. <a href="../language.html#deposit">More on Blanc’s deposit contract</a>.</p>
-      </section>
-
-      <nav class="pager" aria-label="Artifacts">
-        <a href="curve-3crv.html"><span class="d">Previous artifact</span><span class="t">Curve 3Crv</span></a>
-        <a class="next" href="curve-pools.html"><span class="d">Next artifact</span><span class="t">The Curve pools</span></a>
-      </nav>
-    </div>
+    <span id="history"></span>
+    <span id="root"></span>
+    <span id="live"></span>
+    <span id="environment"></span>
+    <span id="deploy"></span>
+    <span id="limits"></span>
+    <span id="prior"></span>
+    <p class="crumbs"><a href="../">Blanc</a><span>/</span>Archive</p>
+    <p class="eyebrow">Mothballed exhibit</p>
+    <h1>Beacon deposit contract.</h1>
+    <p class="lede">This exhibit is mothballed and excluded from Blanc’s current maintained corpus.</p>
+    <p>Historical page and proof sources are preserved in the <code>corpus-v1-20261105</code> archive.</p>
+    <ul>
+      <li><a href="https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/bytecode/deposit-contract.html">Archived page source on GitHub</a></li>
+      <li><a href="https://github.com/skbaek/blanc/tree/corpus-v1-20261105/Blanc/Lift/BeaconDeposit">Archived proof source on GitHub</a></li>
+    </ul>
+    <p><a href="../#corpus">View the current maintained corpus</a>.</p>
   </div>
 </section>
 </main>
 
 <footer>
-  <div class="wrap footgrid">
-    <div class="colophon">
-      <a class="brand" href="../" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
-    </div>
-    <div>
-      <h4>Deployed bytecode</h4>
-      <a href="../bytecode/weth9.html">WETH9</a><a href="../bytecode/uniswap-v2.html">Uniswap V2 pair</a><a href="../bytecode/curve-3crv.html">Curve 3Crv</a><a href="../bytecode/deposit-contract.html">Deposit contract</a><a href="../bytecode/curve-pools.html">Curve pools</a><a href="../bytecode/eip-7002.html">EIP-7002 contract</a><a href="../bytecode/lido-circuit-breaker.html">Lido CircuitBreaker</a>
-    </div>
-    <div>
-      <h4>Blanc</h4>
-      <a href="../method.html">How it works</a><a href="../language.html">The language</a><a href="https://github.com/skbaek/blanc/blob/main/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md">Claim map</a><a href="https://github.com/skbaek/blanc/blob/main/scripts/GATES.md">Gate catalogue</a><a href="https://github.com/skbaek/blanc/blob/main/SECURITY.md">Security</a>
-    </div>
-    <div>
-      <h4>Elsewhere</h4>
-      <a href="https://github.com/skbaek/blanc">GitHub</a><a href="https://skbaek.github.io/jaune/">Jaune</a><a href="https://github.com/skbaek/creme">Creme</a>
-    </div>
+  <div class="wrap">
+    <p><a href="../">Blanc</a> <a href="../method.html">How it works</a> <a href="../language.html">Language</a></p>
   </div>
 </footer>
 <script src="../site.js"></script>

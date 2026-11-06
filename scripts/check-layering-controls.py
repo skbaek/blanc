@@ -180,6 +180,30 @@ def category_agnostic_imports() -> None:
 
 
 
+# Production-tree probes use two actual featured sibling families. The Weth/Fmint
+# names in the independent synthetic family/parser fixtures below remain data.
+PRODUCTION_CONTRACT_FIXTURES = (
+    ("curve-3crv", "Lift.Curve3Crv.Prog", "Blanc/Lift/Curve3Crv/Prog.lean"),
+    ("withdrawal-request", "Lift.WithdrawalRequest.Prog", "Blanc/Lift/WithdrawalRequest/Prog.lean"),
+)
+
+
+def production_contract_fixtures() -> tuple[tuple[str, str, str], ...]:
+    """Refuse a stale or misclassified real fixture before testing its edge."""
+    owner = layering.classify()
+    families = [family for family, _, _ in PRODUCTION_CONTRACT_FIXTURES]
+    if len(families) != 2 or len(set(families)) != 2:
+        fail("production controls require two distinct retained contract families")
+    for family, module, relative in PRODUCTION_CONTRACT_FIXTURES:
+        if family not in layering.CONTRACTS or owner.get(module) != family:
+            fail(f"production fixture {module} is not owned by declared family {family}")
+        if relative != "Blanc/" + module.replace(".", "/") + ".lean" or not (ROOT / relative).is_file():
+            fail(f"production fixture {module} has no actual retained source at {relative}")
+    if owner.get("Basic") != "shared" or not (ROOT / "Blanc/Basic.lean").is_file():
+        fail("production controls require the actual shared Basic module")
+    return PRODUCTION_CONTRACT_FIXTURES
+
+
 def gate_patched(root: Path, extra_composition: list[str]) -> tuple[int, str]:
     """Run the checker in-process with a temporarily extended COMPOSITION table.
 
@@ -195,7 +219,8 @@ def gate_patched(root: Path, extra_composition: list[str]) -> tuple[int, str]:
 
     original = layering.COMPOSITION
     layering.COMPOSITION = {**original, **{
-        mod: ("weth", "fmint") for mod in extra_composition
+        mod: tuple(family for family, _, _ in production_contract_fixtures())
+        for mod in extra_composition
     }}
     buffer = io.StringIO()
     try:
@@ -228,6 +253,9 @@ def composition_edge_controls() -> None:
     while a probe importing the shared layer and two distinct contract
     families passes -- the permission that is the stratum's point.
     """
+    contracts = production_contract_fixtures()
+    _, contract_module, contract_path = contracts[0]
+    _, other_module, _ = contracts[1]
     probe = "Composition.Probe"
 
     def with_probe(raw: str, header: str) -> Path:
@@ -237,7 +265,7 @@ def composition_edge_controls() -> None:
         (target / "Probe.lean").write_text(header, encoding="utf-8")
         return root
 
-    legal = "import Blanc.Basic\nimport Blanc.Weth\nimport Blanc.Fmint\n"
+    legal = f"import Blanc.Basic\nimport Blanc.{contract_module}\nimport Blanc.{other_module}\n"
 
     # Positive witness: shared plus two contract families is exactly legal.
     with fixture() as raw:
@@ -270,11 +298,11 @@ def composition_edge_controls() -> None:
     # 3. contract -> composition inverts it from the other side.
     with fixture() as raw:
         root = with_probe(raw, legal)
-        weth = root / "Blanc" / "Weth.lean"
-        weth.write_text("import Blanc.Composition.Probe\n" + weth.read_text(encoding="utf-8"),
+        contract = root / contract_path
+        contract.write_text("import Blanc.Composition.Probe\n" + contract.read_text(encoding="utf-8"),
                         encoding="utf-8")
         patched_must_fail(root, "contract-to-composition mutation",
-                          "Weth (weth) imports Blanc.Composition.Probe, a composition",
+                          f"{contract_module} ({contracts[0][0]}) imports Blanc.Composition.Probe, a composition",
                           [probe])
     with fixture() as raw:
         patched_must_pass(with_probe(raw, legal), "contract-to-composition restoration", [probe])
@@ -480,7 +508,7 @@ def discovery_controls() -> None:
         text = registry_path.read_text(encoding="utf-8")
         for shared_module in set(shared_owned):
             text = text.replace(f'owner_module = "{shared_module}"',
-                                'owner_module = "Blanc/Weth.lean"')
+                                f'owner_module = "{production_contract_fixtures()[0][2]}"')
         registry_path.write_text(text, encoding="utf-8")
         must_fail(root, "no-shared-recipe mutation",
                   "check 5 would pass over an empty population")
@@ -623,6 +651,39 @@ def inventory_controls() -> None:
         must_pass(Path(raw), "inventory restoration")
 
 
+def architecture_controls() -> None:
+    """Exercise the three real-tree architecture failures without Lean grammar checks."""
+    contracts = production_contract_fixtures()
+    _, contract_module, contract_path = contracts[0]
+    _, other_module, _ = contracts[1]
+    with fixture() as raw:
+        root = Path(raw)
+        must_pass(root, "unmodified architecture fixture")
+        unclassified = f"import\n  Blanc.{contract_module}\n\ndef x := 1\n"
+        check_imports("unclassified-line-split", unclassified, [contract_module])
+        (root / "Blanc" / "LayeringUnclassified.lean").write_text(unclassified)
+        must_fail(root, "unclassified-module mutation", "LayeringUnclassified is not classified")
+    with fixture() as raw:
+        must_pass(Path(raw), "unclassified-module restoration")
+
+    with fixture() as raw:
+        root = Path(raw)
+        basic = root / "Blanc" / "Basic.lean"
+        quoted = ".".join(f"«{part}»" for part in ("Blanc." + contract_module).split("."))
+        basic.write_text(f"import {quoted}\n" + basic.read_text())
+        must_fail(root, "quoted shared-to-contract mutation", f"Basic (shared) imports Blanc.{contract_module}")
+    with fixture() as raw:
+        must_pass(Path(raw), "quoted shared-to-contract restoration")
+
+    with fixture() as raw:
+        root = Path(raw)
+        contract = root / contract_path
+        contract.write_text(f"import Blanc.{other_module} -- still a header import\n" + contract.read_text())
+        must_fail(root, "comment-trailed cross-contract mutation", f"{contract_module} ({contracts[0][0]}) imports Blanc.{other_module}")
+    with fixture() as raw:
+        must_pass(Path(raw), "comment-trailed cross-contract restoration")
+
+
 def main() -> int:
     if sys.argv[1:] == ["--composition-only"]:
         composition_family_controls()
@@ -686,31 +747,7 @@ def main() -> int:
 
     category_agnostic_imports()
 
-    with fixture() as raw:
-        root = Path(raw)
-        must_pass(root, "unmodified architecture fixture")
-        unclassified = "import\n  Blanc.Weth\n\ndef x := 1\n"
-        check_imports("unclassified-line-split", unclassified, ["Weth"])
-        (root / "Blanc" / "LayeringUnclassified.lean").write_text(unclassified)
-        must_fail(root, "unclassified-module mutation", "LayeringUnclassified is not classified")
-    with fixture() as raw:
-        must_pass(Path(raw), "unclassified-module restoration")
-
-    with fixture() as raw:
-        root = Path(raw)
-        basic = root / "Blanc" / "Basic.lean"
-        basic.write_text("import «Blanc».«Weth»\n" + basic.read_text())
-        must_fail(root, "quoted shared-to-contract mutation", "Basic (shared) imports Blanc.Weth")
-    with fixture() as raw:
-        must_pass(Path(raw), "quoted shared-to-contract restoration")
-
-    with fixture() as raw:
-        root = Path(raw)
-        weth = root / "Blanc" / "Weth.lean"
-        weth.write_text("import Blanc.Fmint -- still a header import\n" + weth.read_text())
-        must_fail(root, "comment-trailed cross-contract mutation", "Weth (weth) imports Blanc.Fmint")
-    with fixture() as raw:
-        must_pass(Path(raw), "comment-trailed cross-contract restoration")
+    architecture_controls()
 
     for name, source in [
         ("unterminated-comment", "import Blanc.Weth\n/- never closes\n"),

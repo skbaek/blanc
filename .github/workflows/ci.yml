@@ -49,8 +49,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
-          # Full history: the OssifiableProxy performance contract verifies its
-          # campaign base commit with git cat-file, which a shallow clone fails.
+          # Full history supports reviewed base comparisons and proof-change audits.
           fetch-depth: 0
       - name: CI gate selection and trust policy
         env:
@@ -73,10 +72,6 @@ jobs:
       # Static and fail-closed: it reads committed files only, so it needs no
       # Lean toolchain, no build and no network, and fails in well under a
       # second when the assurance register stops describing the tree.
-      - name: Lido CircuitBreaker assurance register
-        run: scripts/check-lido-circuit-breaker-assurance.sh
-      - name: BeaconDeposit assurance register
-        run: scripts/check-beacon-deposit-assurance.sh
       - name: Deployed-bytecode claim map
         run: scripts/check-deployed-claim-map.sh
       - name: Proof-resource ceiling debt
@@ -92,23 +87,6 @@ jobs:
         run: scripts/check-layering.sh
       - name: Imported source trust surface
         run: scripts/check-trust-surface.sh
-      - name: Deployed WETH10 reference lock (offline)
-        run: scripts/check-weth10-reference.sh
-      - name: Lido CircuitBreaker reference lock (offline)
-        run: scripts/check-lido-circuit-breaker-reference.sh
-      - name: Lido TWG reference lock (offline)
-        run: scripts/check-lido-twg-reference.sh
-      - name: Lido OssifiableProxy reference lock (offline)
-        run: scripts/check-lido-ossifiable-proxy-reference.sh
-      - name: Lido OssifiableProxy performance contract (static)
-        run: scripts/check-lido-ossifiable-proxy-performance.sh
-      - name: Lido OssifiableProxy generated artifacts (offline)
-        run: scripts/check-lido-ossifiable-proxy-artifacts.sh
-      - name: WETH9 creation block generated modules (offline)
-        run: python3 -B scripts/weth9-creation-block-generate.py --check
-      # The Lido dispatcher and both differential matrices remain mandatory
-      # local candidate gates. The narrowly provisioned EELS checkout below is
-      # owned by the deployment-root singleton replay only.
       - uses: leanprover/lean-action@v1
         with:
           build: true
@@ -116,30 +94,9 @@ jobs:
       # (.lake/packages/jaune) to check the relocated execution declarations.
       - name: Execution-settlement extraction ownership
         run: scripts/check-extraction-ownership.sh
-      - name: Lido CircuitBreaker Registry RI7 static assurance
-        run: scripts/check-lido-circuit-breaker-registry.sh --static-only
-      - name: Lido CircuitBreaker Registry RI7 semantic assurance
-        run: scripts/check-lido-circuit-breaker-registry.sh --semantic-only
-      - name: Lido CircuitBreaker enumeration and observability S3 assurance
-        run: scripts/check-lido-circuit-breaker-enumeration.sh
-      - name: Lido CircuitBreaker access and temporal-authority S5 assurance
-        run: scripts/check-lido-circuit-breaker-access.sh
-      - name: Lido CircuitBreaker Registry-history S7 assurance
-        run: scripts/check-lido-circuit-breaker-history.sh
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Checkout pinned execution-specs for deployment-root replay
-        uses: actions/checkout@v6
-        with:
-          repository: ethereum/execution-specs
-          ref: 4198b9c5996713b268aed602739d5aa40e277694
-          path: execution-specs
-          fetch-depth: 1
-      - name: Install pinned execution-specs environment
-        run: |
-          python -m venv execution-specs/venv
-          execution-specs/venv/bin/python -m pip install --disable-pip-version-check -e execution-specs
       - name: Build the Jaune fixture runner
         run: lake build jaune/jaune
       # The write-site checker tops sit outside the Blanc root until L3
@@ -168,51 +125,19 @@ jobs:
         run: lake build Blanc.ProofRecipeTactic
       - name: Certify checked build artifacts
         run: scripts/certify-checked-build.sh
-      - name: DRIP exact-integer evidence (offline)
-        run: scripts/check-drip.sh
-      - name: Lido CircuitBreaker direct deployment-root S9 assurance
-        env:
-          EELS_ROOT: ${{ github.workspace }}/execution-specs
-        run: scripts/check-lido-circuit-breaker-deployment.sh
-      - name: Lido launch/current artifact ownership ledgers (offline)
-        run: scripts/check-lido-circuit-breaker-artifact-profile.sh
-      - name: Lido constructor emitted-byte schema (offline)
-        run: scripts/check-lido-circuit-breaker-constructor.sh
-      - name: Lido runtime error-table schema (offline)
-        run: scripts/check-lido-circuit-breaker-runtime-errors.sh
       - name: Execution-settlement CREATE rollback regression
         run: scripts/check-execution-settlement.sh
       - name: Execution-occurrence static corpus assurance
         run: scripts/check-execution-occurrence.sh --static-only
       - name: Execution-occurrence compiled semantic regression
         run: scripts/check-execution-occurrence.sh --semantic-only --composed-prerequisites
-      - name: Cycle-safe same-frame static corpus assurance
-        run: scripts/check-cycle-write-free.sh --static-only
-      - name: Cycle-safe same-frame compiled semantic regression
-        run: scripts/check-cycle-write-free.sh --semantic-only
       - name: Transaction-scoped transient settlement static assurance
         run: scripts/check-transient-settlement.sh --static-only
       - name: Transaction-scoped transient settlement semantic regression
         run: scripts/check-transient-settlement.sh --semantic-only
-      - name: Error(string) payload cross-derivation (offline)
-        run: scripts/check-error-data.sh
       - name: One union axiom walk over the whole library, and the leaf search
         run: scripts/check.sh --no-build
       - name: Leaf-search bite controls
         run: scripts/check-leaf-audit.sh --self-test
-      - name: Pin WETH10/Lido artifact statements
+      - name: Pin featured and shared headline statements
         run: scripts/check-claims.sh
-      - name: Proxy-pair upgrade static migration and R2 assurance
-        run: scripts/check-proxy-pair-upgrade.sh --static-only
-      - name: Proxy-pair upgrade compiled witnesses
-        run: scripts/check-proxy-pair-upgrade.sh --semantic-only --composed-prerequisites
-      - name: WETH fixture suite (Jaune vs frozen EELS on the witnessed bytes)
-        run: scripts/check-weth.sh --no-build
-      - name: PRORATA fixture suite (Jaune vs frozen EELS on the witnessed bytes)
-        run: scripts/check-prorata.sh --no-build
-      - name: WETH selector coverage (shrink-only budget)
-        run: scripts/check-weth-coverage.sh
-      - name: fmint fixture suite (Jaune vs frozen EELS on the witnessed bytes)
-        run: scripts/check-fmint.sh --no-build
-      - name: fmint selector coverage (shrink-only budget)
-        run: scripts/check-fmint-coverage.sh

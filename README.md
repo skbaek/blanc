@@ -11,8 +11,9 @@ here is stated against.
 
 Blanc is a verification stack for EVM smart contracts, built in Lean 4 on Jaune's
 executable EVM semantics. It proves theorems about Ethereum bytecode as it is
-deployed — WETH9, the Beacon deposit contract, Uniswap V2, Curve, Lido and the
-EIP-7002 system contract — with exact gas, liveness, and no axioms beyond
+deployed — Curve 3pool and its 3Crv LP token, USDC, the Vyper nonreentrancy
+pair (V+/V-) and the EIP-7002 system contract — with exact gas, liveness, and
+no axioms beyond
 Lean's three. The bytes are read from mainnet without trusting the compilers
 that produced them; what is claimed about each artifact, and where, is mapped
 in [`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md).
@@ -22,9 +23,11 @@ the EVM's own instructions, arranged by four constructors, with a compiler
 whose correctness is a Lean theorem. Because every implementation choice stays
 open, down to the instruction, it lets developers push performance
 optimization, proof simplicity and customization as far as they choose.
-Contracts written in it, several of them reimplementations of contracts that
-exist on mainnet, are verified over their compiled bytes
+Contracts formerly written in it are historical exhibits outside paper v2
+(see the archive note below); the language and its compiler theorem remain
 ([the language](https://skbaek.github.io/blanc/language.html)).
+
+Historical exhibits outside paper v2, including WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The archive is outside the live corpus and is not promised to build against later revisions.
 **A Blanc theorem is a statement about Jaune's modeled semantics, not a
 deployment audit** — see
 [`SECURITY.md`](SECURITY.md) before treating any result here as a safety claim
@@ -96,12 +99,6 @@ launch the agent client with Creme as its project directory, and follow
 `../creme/docs/guides/execution.md` for host setup and coordination. Blanc's
 repository-specific commands and pass criteria remain in `scripts/GATES.md`.
 
-The TriggerableWithdrawalsGateway port's finite differential boundary and
-known observable differences are recorded in
-[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md`](docs/registers/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_COMPATIBILITY.md)
-and
-[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`](docs/registers/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md).
-
 This repo contains the following files:
 
 - [Basic.lean](Blanc/Basic.lean): Blanc's own prefix/split algebra over lists
@@ -114,10 +111,10 @@ This repo contains the following files:
   settlement, chronology and message execution) is owned by Jaune
   (`Jaune.ExecFrame` … `Jaune.MessageExecution`) and imported here.
 - [CommonCore.lean](Blanc/CommonCore.lean), [Tactics.lean](Blanc/Tactics.lean),
-  and [CommonProofs.lean](Blanc/CommonProofs.lean): definitions and lemmas for
-  writing and verifying Blanc programs, including the Blanc compiler's
+  and the [CommonProofs modules](Blanc/CommonProofs/): definitions and lemmas
+  for writing and verifying Blanc programs, including the Blanc compiler's
   correctness proof and tactics for automating Blanc program verification.
-  They import in that order.
+  Import the specific common module needed for a proof.
 - [ProofRecipeTactic.lean](Blanc/ProofRecipeTactic.lean): the unimported
   authoring leaf that joins `Tactics` with the generated recipe registry and
   provides `blanc_suggest` without putting registry churn on production import
@@ -129,10 +126,6 @@ This repo contains the following files:
   `Prog.compile` instance of the same ladder over an arbitrary certified code
   image ([LadderSem.lean](Blanc/LadderSem.lean), `ContractSpecSem`); the
   vocabulary both share is in [LadderBase.lean](Blanc/LadderBase.lean).
-- [Upgrade.lean](Blanc/Upgrade.lean): contract-neutral vocabulary for an
-  explicit five-part upgrade architecture. It keeps migration soundness and
-  shared behavioral refinement as separate predicates; product families must
-  still prove that an exact proxy execution realizes the named migration.
 - [Compiled.lean](Blanc/Compiled.lean): a gas-exact sibling of `Func.Run`/
   `Prog.Run` — `Func.RunCompiled`, `Prog.RunCompiled` — and
   `Prog.runCompiled_iff_exec`, the biconditional relating a gas-exact run of a
@@ -145,8 +138,7 @@ This repo contains the following files:
   **This is not liveness.** The biconditional
   converts run witnesses into executions and back; it does not produce a run
   witness for any contract, and nothing in this module says any contract call
-  ever succeeds — the first theorems that do are `FmintLive.lean`'s and
-  `WethLive.lean`'s below. At every external call the witness
+  ever succeeds. At every external call the witness
   *contains* the callee's execution as a premise, so for a contract with an
   external call every consequence stays conditional on callee behaviour. It
   also says nothing about transaction-level execution (intrinsic gas, the
@@ -201,288 +193,12 @@ This repo contains the following files:
   storage, balance, and `ContractSpec` invariant transports for each retained
   wrapper layer. The [common API registry](docs/COMMON_API.md) is the
   need-first index for the carriers, chronologies, and effect families.
-- [CycleWriteFree.lean](Blanc/CycleWriteFree.lean): a total finite-component
-  certificate and arbitrary-outcome theorem for **same-frame source-level
-  SSTORE-occurrence freedom**. It scans selected bodies structurally, treats
-  internal `Func.call` as a finite-component edge, and accepts SSTORE-free
-  source cycles without fuel or a termination premise. The theorem follows an
-  actual finite source cursor and says nothing about endpoint storage equality,
-  TSTORE, logs, balances, memory/code effects, EVM CALL-family or CREATE child
-  frames, settlement, gas sufficiency, termination, or any particular
-  contract until that contract supplies the exact cursor and certificate. It
-  does not establish installation, authorization, transaction behavior, ABI
-  enumeration, or any Lido-specific claim.
-- [LidoCircuitBreakerRegistry.lean](Blanc/LidoCircuitBreakerRegistry.lean):
-  the contract-local Registry integrity family. It relates the ordered pure
-  model to concrete owner storage, proves tagged-region separation and all
-  length/index/count bounds from `RegistryWitness`, replays every chronological
-  shared-kernel write, extracts the stable post-Registry state from successful
-  exact-code execution, constructs the target-zero pre-write revert, carries
-  register success and pause pre-yield boundaries, and proves frame-settled
-  Registry rollback. Its three report-shaped corollaries cover membership,
-  removal cleanup, and global count conservation. These are Blanc partial-
-  correctness statements over canonical address words and one named message
-  frame; they are not deployed-Solidity verification, arbitrary enumeration,
-  callback noninterference, access-control completeness, or a whole-history
-  theorem.
-- [LidoCircuitBreakerEnumeration.lean](Blanc/LidoCircuitBreakerEnumeration.lean):
-  the contract-local Registry read and observability family. For every finite
-  `RegistryWitness` it constructs the exact emitted `getPausables()` run with
-  no contract-chosen cap, exact ordered dynamic-`address[]` ABI bytes, finite
-  length-scaled resources, constant stack cursor height, and successful
-  state/log silence. It packages exact `getPauser` and `getPausableCount`
-  bodies over the same snapshot, lifts the enumeration cycle certificate to
-  actual same-frame SSTORE-occurrence freedom, and connects the sole
-  production `PauserSet` suffix to the stable Registry poststate and its
-  register/pre-yield-pause continuation. Direct-register success preserves
-  that event through optional heartbeat records and clean message settlement,
-  while exact direct-message errors expose neither the rolled-back event nor
-  Registry writes. The committed local-monitor corollary re-runs the three
-  exact views on the matching clean snapshot; it is not a history, finality,
-  delivery, callback, or real-block-feasibility claim.
-- [LidoCircuitBreakerHistory.lean](Blanc/LidoCircuitBreakerHistory.lean),
-  [LidoCircuitBreakerHistoryEndpoints.lean](Blanc/LidoCircuitBreakerHistoryEndpoints.lean)
-  and
-  [LidoCircuitBreakerHistoryChain.lean](Blanc/LidoCircuitBreakerHistoryChain.lean):
-  the induction principle that carries Registry integrity through arbitrary
-  histories. Registry coherence — *some* ordered entry list witnesses every
-  projected Registry region of the contract's own storage — is packaged as a
-  storage-only `ContractSpec`, discharged one dispatch target at a time, joined
-  across the exact three-pivot hybrid dispatcher rather than either dispatcher
-  shape the generic ladder already supports, and lifted from there to messages,
-  transactions, blocks and chain reachability: from a checkpoint where the exact
-  compiled runtime is installed at an address and that address's storage carries
-  a `RegistryWitness`, every state reachable by the configured valid-chain
-  relation still has that runtime installed and still admits a witness. The
-  family is discharged in full — no `sorry` anywhere in it, and every theorem
-  depends on nothing beyond `propext`, `Classical.choice` and `Quot.sound`. The
-  reach is in what the premises decline to say — the frame theorem quantifies
-  over arbitrary successful runs of the exact runtime and over arbitrary callee
-  bytecode, including code that re-enters this very instance, and the transport
-  above it takes arbitrary finite sequences of successful and reverting
-  transactions. There is no target-honesty premise and no count or interval
-  noninterference premise anywhere in the family. The witness it produces need
-  not be the one it started with, and that is deliberate: a callback re-entering
-  as admin may register a pauser, so requiring the returned entry list to be the
-  entered list would be a false strengthening. Four corollaries hand a reader
-  that content at the reached state rather than making it unfold the invariant —
-  the exact installed runtime, an actual `RegistryWitness`, membership and index
-  equivalence at an arbitrary canonical target, and global count conservation —
-  at the configured-chain and the Prague rung alike.
-  `emptyRegistryWorld_registryStable` exhibits a state satisfying the
-  checkpoint, so none of this is vacuously true; that state is synthetic, built
-  by hand rather than reached, and it is not a deployment. The general history
-  theorem itself remains conditional on such a checkpoint. The exact official
-  direct-deployment family below now supplies one non-synthetic checkpoint and
-  then applies these same arbitrary-future consequences from it.
-
-  Read the remaining boundary as closely as the statement. Because the
-  invariant is existential, nothing says a transaction returns the entry list
-  it began with, and nothing produces a source-level history trace. Nothing
-  states that the pauser count and the recorded expiry are coherent at callback
-  time — the source has a real mid-pause state with a zero assignment count and
-  a still-live old expiry — and nothing composes the public `pause` entry through
-  `setPauser`. One limit sits in the reachability relation rather than in the Registry:
-  `BlockChain.ReachUsing.step` and `BlockChain.Reach.step`
-  ([LadderBase.lean](Blanc/LadderBase.lean)) admit a block only when the world's total
-  wei balance plus that block's withdrawals stays below `2 ^ 256`, so "every
-  reachable state" silently excludes any history that would cross that bound — a
-  restriction the Registry invariant itself never consults. Every statement is
-  partial correctness over storage: no gas, liveness, or differential claim,
-  universal or otherwise. And none of it speaks about Lido's deployed bytecode —
-  that remains the interface/accident port claim [`PORTING.md`](PORTING.md)
-  owns, supported separately by the pinned differential campaign.
-  `scripts/check-lido-circuit-breaker-history.sh` is the family's assurance
-  gate, and its own summary line is the authority on which owners are live.
-- [LidoCircuitBreakerDeploymentInput.lean](Blanc/LidoCircuitBreakerDeploymentInput.lean),
-  [LidoCircuitBreakerDeploymentLayout.lean](Blanc/LidoCircuitBreakerDeploymentLayout.lean),
-  [LidoCircuitBreakerDeploymentTrace.lean](Blanc/LidoCircuitBreakerDeploymentTrace.lean),
-  [LidoCircuitBreakerDeploymentMessage.lean](Blanc/LidoCircuitBreakerDeploymentMessage.lean),
-  [LidoCircuitBreakerDeploymentTransaction.lean](Blanc/LidoCircuitBreakerDeploymentTransaction.lean),
-  [LidoCircuitBreakerDeploymentBlock.lean](Blanc/LidoCircuitBreakerDeploymentBlock.lean),
-  [LidoCircuitBreakerDeploymentRoot.lean](Blanc/LidoCircuitBreakerDeploymentRoot.lean),
-  [DeploymentCompiled.lean](Blanc/DeploymentCompiled.lean), and
-  [DeploymentMessage.lean](Blanc/DeploymentMessage.lean): the exact official
-  direct-deployment ladder. From a valid base world and a strict singleton
-  type-2 Prague block envelope, its only named-chain premise is the configured
-  `stateTransitionUsing` equation. Under the envelope's explicit recovered-
-  sender and computed-address premises, the ladder derives the prepared message
-  target and executes at that address, runs the frozen 5,122-byte official
-  creation input through the actual constructor and creation-message machinery,
-  proves the collision check,
-  transaction settlement, successful receipt, request-empty system suffix, and
-  deployed valid context, and reconstructs the resulting root. That root pins
-  the 4,282-byte official runtime, the two official configuration values, the
-  empty Registry witness, three ordered constructor logs, successful receipt,
-  empty requests, and `RegistryStable`; its methods then carry code, witness,
-  membership, and count conservation through every configured reachable future.
-
-  The public base and envelope predicates explicitly carry valid-context,
-  sender-recovery and transaction-checking, funding, gas/code-size, system-
-  predeploy, nonce/address, and strict block-shape facts. Collision freedom is
-  reconstructed at the prepared post-prefix, post-nonce, post-fee-debit message
-  state. No execution result, poststate, receipt, installed-code fact, or
-  `RegistryStable` result is smuggled into those inputs.
-
-  This is one exact direct, zero-endowment, singleton-block deployment of the
-  Blanc port. It is not a claim about the deployed Solidity bytes or historical
-  mainnet inclusion, and it does not cover arbitrary constructor parameters,
-  factory/proxy/clone/CREATE2 creation, nonzero endowment, or arbitrary block
-  shapes. The finite clone namespace remains differential evidence for distinct
-  storage owners, not a second deployment root. A temporary strict singleton
-  replay against the pinned EELS and Jaune evaluators is a separate finite
-  channel and no Lean premise. The assurance gate is
-  `scripts/check-lido-circuit-breaker-deployment.sh`.
-- [FmintLive.lean](Blanc/FmintLive.lean): fmint's demonstration of that layer,
-  and the first place in this repository where a contract call is proved to
-  **succeed**. `fmint_totalSupply_succeeds` drives `func_run` over `fmint`'s
-  compiled `Func` to build the run witness for a `totalSupply()` call, and
-  composes it through `Prog.exec_of_runCompiled`. Six of the seven hints the
-  walk takes are what the dispatch comparisons decided; everything else — the
-  twenty-two instruction steps, the state chain, and every gas and headroom side
-  condition — is derived. It costs 2218 gas, exactly, of which
-  `gasColdSload`'s 2100 is the storage read. Read the scope off the docstring:
-  it is one call-free entrypoint of one contract, at message-call altitude
-  rather than transaction level, for one fixed selector, with an exact gas
-  figure rather than a bound. No entrypoint that makes an external call can
-  have a statement of this shape — its witness contains the callee's execution
-  as a premise, which is arbitrary and, for a flash loan, adversarial.
-- [WethLive.lean](Blanc/WethLive.lean): WETH's demonstration of the same layer,
-  and the evidence that it is not target-specific. `weth_balanceOf_succeeds`
-  drives the same `func_run` over `weth`'s compiled `Func` for a
-  `balanceOf(guy)` call, at 2260 gas exactly — 19 of them the shared
-  `nonpayable` entry guard every recognized WETH selector now sits behind,
-  which is also why the statement carries a zero-call-value hypothesis. It
-  differs from fmint's
-  demonstration where it matters: the storage key is read from calldata rather
-  than being a constant, so the statement is quantified over the argument word
-  and WETH's lack of address validation is visible in it; and `wethTree` puts
-  the target four dispatch forks down instead of three. Nothing had to be added
-  to `Forward.lean` for it — the whole module is the target's own text. Its
-  scope caveats are `FmintLive.lean`'s, unchanged.
-- [FmintGas.lean](Blanc/FmintGas.lean) and [WethGas.lean](Blanc/WethGas.lean):
-  what those calls *cost* — the same runs restated with exact cold and warm
-  gas as a conjunct of the statement, plus the `fmintGas`/`wethGas` closed
-  forms and their maxima. `WethGas.lean`'s module docstring carries the
-  rationale; `FmintGas.lean` mirrors it.
-- [Weth.lean](Blanc/Weth.lean): proof-of-concept implementation of the Wrapped 
-  Ether (WETH) contract in Blanc.
-- [WethCode.lean](Blanc/WethCode.lean): the compiled WETH runtime bytecode and
-  the witness that Blanc's compiler emits it. Generated in full by
-  [`scripts/gen-weth-code.lean`](scripts/gen-weth-code.lean) — do not edit by
-  hand.
-- [Solvent.lean](Blanc/Solvent.lean): proof of solvency for the WETH implementation.
-- [Fmint.lean](Blanc/Fmint.lean): implementation of an ERC-3156 flash-mint
-  token (FMINT) in Blanc — the second contract, and the one that makes the
-  hierarchy rule below load-bearing.
-- [FmintCode.lean](Blanc/FmintCode.lean): the compiled FMINT runtime bytecode
-  and its compile witness. Generated in full by
-  [`scripts/gen-fmint-code.lean`](scripts/gen-fmint-code.lean) — do not edit by
-  hand.
-- [Conserved.lean](Blanc/Conserved.lean): proof of supply conservation for the
-  FMINT implementation — `totalSupply = Σ balances` at every observable point,
-  preserved by arbitrary executions, including the reentrant borrower code a
-  flash loan hands control to. Conservation is an equality about storage: it is
-  **not** solvency and not liveness, and during a flash loan the minted supply
-  is unbacked by construction — that is the design, and the claim is that the
-  books balance at every point an observer can reach.
-- [FlashSpec.lean](Blanc/FlashSpec.lean): fmint's `flashLoan` specification —
-  the entry route, the callback calldata image, `CallbackBoundary`, the
-  headline `fmint_flashLoan_spec` with its seven `no_success_of_*`
-  corollaries and their seven `settles_with_error_of_*` strengthenings, and
-  the frame-level restoration family. Partial correctness throughout: every
-  theorem takes a successful run as a hypothesis or rules one out, and each
-  restoration claim names a frame, never a transaction.
-- [FmintReverts.lean](Blanc/FmintReverts.lean): fmint's deliberate reverts,
-  constructed rather than ruled out — the unknown-selector and
-  `token ≠ self` executions built instruction by instruction to
-  `.error (.revert, _)` with empty returndata: statements that a call
-  *reverts*, with *this* error and *no* data, on the exact compiled bytes.
-- [FmintSettles.lean](Blanc/FmintSettles.lean): the walk that runs
-  `flashLoan`'s state-changing half — three guards passed, the mint written,
-  the frame handed to the callback — and, across the `CALL`, the settlement
-  trichotomy `fmint_flashLoan_settles` and its corollaries: with no premise
-  about the borrower, a non-static canonical call funded at
-  `flashLoanGas data.length` ends in a success, a deliberate revert, or the
-  non-consensus fault channel — never a consensus exceptional halt.
-- [Weth10.lean](Blanc/Weth10.lean) and
-  [Weth10Code.lean](Blanc/Weth10Code.lean): the parameterized 27-selector plus
-  payable-receive WETH10 runtime and its universal compiler witness. Concrete
-  deployment parameters select one exact member of the 6,313-byte runtime
-  family; the generated byte module also owns the fixed patch offsets and
-  canonical mainnet artifact.  The downstream
-  [Weth10MainnetCodeEq.lean](Blanc/Weth10MainnetCodeEq.lean) owner derives the
-  artifact equality from the parameterized deployment-patch correspondence,
-  keeping the generated byte owner free of the duplicate whole-compiler
-  decision while preserving the exact public theorem name and byte statement.
-- [Weth10Sound.lean](Blanc/Weth10Sound.lean),
-  [Weth10StateFunctional.lean](Blanc/Weth10StateFunctional.lean),
-  [Weth10StateSound.lean](Blanc/Weth10StateSound.lean),
-  [Weth10Functional.lean](Blanc/Weth10Functional.lean),
-  [Weth10TransferFunctional.lean](Blanc/Weth10TransferFunctional.lean),
-  [Weth10Erc677Functional.lean](Blanc/Weth10Erc677Functional.lean),
-  [Weth10FlashFunctional.lean](Blanc/Weth10FlashFunctional.lean),
-  [Weth10Permit.lean](Blanc/Weth10Permit.lean),
-  [Weth10Read.lean](Blanc/Weth10Read.lean),
-  [Weth10Live.lean](Blanc/Weth10Live.lean), and
-  [Weth10Errors.lean](Blanc/Weth10Errors.lean): the backing, endpoint-effect,
-  callback, permit, read, exact-gas, and rollback/error proof families for all
-  27 selectors and receive.
-- [Weth10DeployDomainSlices.lean](Blanc/Weth10DeployDomainSlices.lean),
-  [Weth10DeployUpperSlices.lean](Blanc/Weth10DeployUpperSlices.lean),
-  [Weth10Deploy.lean](Blanc/Weth10Deploy.lean),
-  [Weth10DeployExec.lean](Blanc/Weth10DeployExec.lean), and
-  [Weth10DeployProof.lean](Blanc/Weth10DeployProof.lean): fixed-width runtime
-  span proofs, the separate generic constructor, exact runtime-parameter
-  patching, phase-composed constructor execution, fresh-state invariant,
-  creation-message settlement, and Blanc deployment-gas evidence.
-- [Weth10Stable.lean](Blanc/Weth10Stable.lean),
-  [Weth10DeploymentRoot.lean](Blanc/Weth10DeploymentRoot.lean),
-  [Weth10Mainnet.lean](Blanc/Weth10Mainnet.lean), and
-  [Weth10PragueCompat.lean](Blanc/Weth10PragueCompat.lean): the packaged
-  code/backing/zero-flash stable predicate, schedule-parametric preservation
-  and deployment root, the public Ethereum-mainnet specialization, and the
-  retained Prague compatibility corollaries. The generic root crosses Jaune's
-  selected-rule system prefix, transaction preparation and collision check,
-  successful receipt insertion, empty withdrawals, both checked request-system
-  suffix calls, and deployed-context reconstruction. The mainnet module
-  specializes that root to BPO2 and exports future configured-chain stability
-  plus literal code/flash/solvency projections.
-- [BeaconDeposit.lean](Blanc/BeaconDeposit.lean) and
-  [BeaconDepositCode.lean](Blanc/BeaconDepositCode.lean): the compiled port of
-  the pinned beacon deposit contract's four-selector runtime and its
-  compiler-owned bytes; the pure model in
-  [BeaconDepositModel.lean](Blanc/BeaconDepositModel.lean) is its
-  specification, and the rest of the `BeaconDeposit*` family carries the
-  port's proofs.
-- [LidoTriggerableWithdrawalsGateway.lean](Blanc/LidoTriggerableWithdrawalsGateway.lean)
-  and the `LidoTriggerableWithdrawalsGateway*` family: the port of Lido's
-  TriggerableWithdrawalsGateway, every selector with an executable dispatch
-  entry.
-- [ProxyPairOssifiableProgram.lean](Blanc/ProxyPairOssifiableProgram.lean)
-  and the `ProxyPair*` family: the port of Lido's OssifiableProxy (its seven
-  named endpoints over a forwarding body) beside a selector-free forwarding
-  proxy, and the upgrade relation between two implementations
-  ([`docs/PROXY_PAIR_UPGRADE.md`](docs/PROXY_PAIR_UPGRADE.md)).
-- [ProrataWethVault.lean](Blanc/ProrataWethVault.lean) and the
-  `ProrataWethVault*` family: a full-width ERC-4626 share vault over the exact
-  Blanc WETH, ported after OpenZeppelin's `ERC4626`; its chain-level pair
-  theorems with WETH live in the composition stratum below, and
-  [`docs/PRORATA_WETH_VAULT_CLAIM_MAP.md`](docs/PRORATA_WETH_VAULT_CLAIM_MAP.md)
-  maps each claim to its theorem.
-- [Prorata.lean](Blanc/Prorata.lean) and the `Prorata*` family: PRORATA, the
-  pro-rata share ledger étude — an ETH-native, non-transferable share ledger
-  with a virtual-offset price that never decreases.
-- [Drip.lean](Blanc/Drip.lean), [DripCore.lean](Blanc/DripCore.lean) and the
-  `Drip*` family: DRIP, the accrual-index savings ledger étude — fail-closed
-  ingress, one shared fresh-index machine, a checked Maker-shaped `rpow`, and a
-  checks-effects-interactions exit.
 - [`Blanc/Lift/`](Blanc/Lift/): kernel-checked lifts of bytecode already on
-  mainnet — among them WETH9, the Beacon deposit contract, Curve's 3Crv token
-  and 3pool, Lido's CircuitBreaker, USDC's proxy and implementations, the
-  Uniswap V2 Pair and Factory, the EIP-4788, EIP-2935, EIP-7002 and EIP-7251
-  system contracts, and the fixed and vulnerable Vyper pool pair, plus token
-  and attacker fixtures. The certificate registry
+  mainnet — among them Curve's 3Crv token and 3pool, USDC's proxy and
+  implementations, the EIP-7002 system contract, and the fixed and vulnerable
+  Vyper pool pair, plus token and attacker fixtures. The EIP-4788, EIP-2935 and
+  EIP-7251 SystemExecution support groups are concrete dependencies
+  of configured EIP histories, not standalone paper-v2 exhibits. The certificate registry
   [`scripts/lift/certificates.json`](scripts/lift/certificates.json) is the
   authoritative list of lifted inputs.
   [`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md)
@@ -491,23 +207,8 @@ This repo contains the following files:
   How a deployed contract is lifted and certified:
   [`docs/LIFT_WORKFLOW.md`](docs/LIFT_WORKFLOW.md).
 
-Each of the ten contracts — seven ports (WETH, WETH10, BeaconDeposit, Lido's
-CircuitBreaker, TriggerableWithdrawalsGateway and OssifiableProxy, and the
-ERC-4626 vault) and three études (FMINT, PRORATA, DRIP) — has a page of
-receipts under [`docs/contracts/`](docs/contracts/).
+Historical exhibits outside paper v2, including WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The archive is outside the live corpus and is not promised to build against later revisions.
 
-Blanc's WETH is a reimplementation; observable deviations from deployed WETH9
-are catalogued in [`WETH_DEVIATIONS.md`](docs/registers/WETH_DEVIATIONS.md). FMINT's
-deviations from OpenZeppelin's `ERC20FlashMint` are catalogued in
-[`FMINT_DEVIATIONS.md`](docs/registers/FMINT_DEVIATIONS.md). WETH10's implementation
-freedoms, exclusions, deployed quirks, and current-main drift are catalogued in
-[`WETH10_DEVIATIONS.md`](docs/registers/WETH10_DEVIATIONS.md); no true in-scope deviation is
-accepted. The later ports keep the same kind of register:
-[`BEACON_DEPOSIT_DEVIATIONS.md`](docs/registers/BEACON_DEPOSIT_DEVIATIONS.md),
-[`LIDO_CIRCUIT_BREAKER_DEVIATIONS.md`](docs/registers/LIDO_CIRCUIT_BREAKER_DEVIATIONS.md),
-[`LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md`](docs/registers/LIDO_TRIGGERABLE_WITHDRAWALS_GATEWAY_DEVIATIONS.md),
-[`OSSIFIABLE_PROXY_DEVIATIONS.md`](docs/registers/OSSIFIABLE_PROXY_DEVIATIONS.md) and
-[`PRORATA_WETH_VAULT_DEVIATIONS.md`](docs/registers/PRORATA_WETH_VAULT_DEVIATIONS.md).
 
 Every module is wrapped in `namespace Blanc`, and Blanc's Jaune imports are
 wrapped in `namespace Jaune`, so downstream code writes qualified names or
@@ -521,24 +222,19 @@ functional, error, gas, deployment or callback proof modules it needs.
 **Every contract's modules sit at the same level of the import hierarchy as
 every other's.** No contract's module imports another contract's, in either
 direction, at any layer. This binds contracts not yet written exactly as it
-binds the ten contracts here.
+binds every retained contract family.
 
 The rule earns its keep as a diagnostic. When one contract needs something
 another already defines, that is not a licence to import across; it is evidence
 that the thing was never the property of whichever contract happened to define
 it first. Rename it if its name says otherwise, then move it upstream into a
 layer both contracts already import — `CommonCore.lean` for definitions,
-`CommonProofs.lean` for lemmas, `Ladder.lean` for generic verification
+the relevant `CommonProofs/` module for lemmas, `Ladder.lean` for generic verification
 machinery.
 
-`balSum` is the worked example. It began as `wbsum` — "weth balance sum" — in
-`Solvent.lean`, both named and placed as though summing a contract's
-address-keyed balances were a WETH notion. It is not: WETH pairs that sum with
-its ETH balance to state solvency, FMINT pairs it with its supply slot to state
-conservation, and neither use is prior to the other. So it moved to
-`CommonCore.lean`, beside the `sum` it was already built from, and lost the
-`w`. A future contract that finds itself reaching into `Weth.lean` or
-`Solvent.lean` has found the same kind of factoring defect, not a shortcut.
+A worked factoring example from the archive era (`balSum`, factored out of
+a retired WETH module into `CommonCore.lean`) is preserved in the archived
+corpus; the rule it illustrates is the sibling rule above, stated abstractly.
 
 The rule is enforced, not merely documented:
 [`scripts/check-layering.sh`](scripts/check-layering.sh) reads the actual Lean
@@ -571,8 +267,7 @@ separately pairs the accepted forms with real Lean elaboration.
 
 ### The composition stratum
 
-Some theorems are genuinely about two contracts at once — a CircuitBreaker
-pausing a Triggerable Withdrawals Gateway is the first of them. Such a theorem
+Some theorems are genuinely about two contracts at once. Such a theorem
 has no honest home in either family: putting it in one makes the other family's
 name that family's property, and the sibling rule above rightly rejects both
 directions.
@@ -590,8 +285,10 @@ distinct **COMPOSITION** stratum, and the graph is one-way:
         shared modules                         upstream of every contract
 ```
 
-* A composition module may import shared modules and **any number** of contract
-  families. That is the whole point of the stratum.
+* Every composition module declares its contract families with `COMPOSITION`.
+  Its direct contract imports must belong to that declaration, and any imported
+  composition must declare a subset of those families. Missing, empty, malformed
+  or unknown family declarations fail closed. Shared-module imports remain allowed.
 * No shared module and no contract module may import composition, and a
   composition module may not import a root. Roots aggregate composition; the
   dependency never runs back.
@@ -603,19 +300,7 @@ exempt from the import checks by construction, so a cross-family theorem hidden
 in a root would be invisible to the gate — which is precisely why composition
 gets its own classified, checked category instead.
 
-The first inhabitant is
-[`Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean`](Blanc/Composition/LidoCircuitBreakerTriggerableWithdrawalsGateway.lean),
-and the PRORATA WETH vault's pair theorems with WETH
-(`Blanc/Composition/ProrataWethVault*.lean`) are the second; later
-cross-contract goals add their own.
-
-
-The goal-local representation-changing v1/v2 witness and its exact compiled
-OssifiableProxy route are documented in
-[`docs/PROXY_PAIR_UPGRADE.md`](docs/PROXY_PAIR_UPGRADE.md). That boundary
-states the R2 projection, primary and identity routes, forwarding premises,
-executable rollback controls, and deliberate non-claims; it is not a deployed
-Solidity or mainnet verification claim.
+Retained compositions include Curve 3pool with 3Crv, USDC's own histories, and configured EIP histories, within the scope stated by the claim map.
 
 ## Proof recipe lookup
 
@@ -657,6 +342,12 @@ and recipe discoverability updates in the same change. Follow it there rather
 than restating it elsewhere.
 
 ## Proof-performance conventions: defeq, wide-record updates, state towers, and walk term size
+
+The examples and measurements in this section are historical methodology
+evidence from the named dates and source revisions. Retired contract names and
+source paths identify the archived corpus, not live paper-v2 modules. Their
+measured populations, timings and failed alternatives are preserved to explain
+the conventions; they are not current corpus counts or performance claims.
 
 Several elaboration-cost bombs have been measured in this repository,
 including definitional-equality bombs and term-size growth in forward walks.
@@ -858,9 +549,10 @@ contained deletable scopes. Of 415 launch scopes, 352 deleted, nine ambient
 scopes narrowed to 40 measured command owners, 16 right-sized, and 38 were
 retained after a named failure; zero ambient scopes remain.
 
-The linked catalogue joins that historical disposition evidence to all 94
-current scope identities and distinguishes exact adjacent boundaries from the
-weaker retained-justified and reopen-triggered cases.
+The linked catalogue joined that historical disposition evidence to the 94
+scope identities current at that measurement and distinguished exact adjacent
+boundaries from the weaker retained-justified and reopen-triggered cases.
+Those 94 identities are not a census of the current paper-v2 tree.
 
 New ceilings are never ambient, file-wide, namespace-wide, unlimited,
 unexplained, or “just in case.” Use the smallest measured finite value on the
@@ -1023,28 +715,25 @@ and proof falls. It is not duplicated here. Blanc adds exactly:
 2. **the axiom audit** below, which is stricter than Jaune's own gates: one
    from-scratch walk over every constant of the library fails on any axiom
    outside `propext`, `Classical.choice` and `Quot.sound`, and the leaf search
-   finds the 2170 leaf results — theorems no other
+   finds the 2018 leaf results — theorems no other
    theorem uses — that this one walk covers.
-   Run `scripts/check.sh --no-build`; its `2170 leaf results` summary belongs to
+   Run `scripts/check.sh --no-build`; its `2018 leaf results` summary belongs to
    the source identity printed by `git rev-parse HEAD`;
 3. **Blanc's own source**, guarded by
    [`scripts/check-trust-surface.sh`](scripts/check-trust-surface.sh). The gate
    traverses the exact transitive local import closure of `Blanc.lean` and
    fail-closed checks `sorry`, bespoke `axiom`, `opaque`, `@[extern]`,
    `implemented_by`, `native_decide`, object-level `partial def`, and
-   `dbg_trace`. Its 21 current occurrences are exact reviewed rows: nine are
-   comment-only explanations, five are `TacticM`/`MetaM` partial procedures,
-   and seven are tactic diagnostics. Unimported Lean helpers and generators are
+   `dbg_trace`. Its current occurrences are exact reviewed rows
+   (`1616` on the paper-v2 tree; the gate is the authority). Unimported Lean helpers and generators are
    outside this library-root gate; importing one immediately brings it into
    scope. A non-terminating or chatty tactic can fail to produce a proof, but
    any proof it does produce is still checked by the kernel, so none of these
    proof-automation rows enlarges the trusted base.
 
 As in Jaune's document, this section is about whether the proofs are sound, not
-about whether they are the right theorems. Read the statements in
-[`Blanc/Solvent.lean`](Blanc/Solvent.lean) and
-[`Blanc/Conserved.lean`](Blanc/Conserved.lean) rather than inferring them from
-a theorem's name.
+about whether they are the right theorems. Read the statement in the file
+the claim map cites rather than inferring it from a theorem's name.
 
 Blanc builds against a **pinned revision** of
 [Jaune](https://github.com/skbaek/jaune) — `require jaune from git … @ b019bbf5…`
@@ -1054,151 +743,15 @@ without a sibling checkout, and bumping Jaune is a reviewed one-line change.
 CI builds the library and runs an
 **axiom audit** ([`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean)): one
 union walk over every constant of the library, then a leaf search that finds
-the **2170** leaf results — theorems no other theorem
+the **2018** leaf results — theorems no other theorem
 uses, each covered by that walk. The leaf search is the authority on
 membership and its number is the generated
 [`scripts/leaf-count.json`](scripts/leaf-count.json), never edited by hand; run
 `scripts/check.sh --no-build` and bind its verdict to
 `git rev-parse HEAD`. The review ledger separately records the last review;
-the audit reports new or changed leaves. The separate `scripts/check-claims.sh` Lean-checks the
-exact statements of the WETH10 flagship set; the protected Lido Registry
-mutation, enumeration, view-coherence, observability, exact official
-constructor/message/transaction/block, direct-root, and rooted-future
-boundaries; the proxy-pair, PRORATA, PRORATA WETH vault and BeaconDeposit
-headlines; the CircuitBreaker × gateway composition closure; and DRIP's R1–R4
-headlines; the axiom audit itself checks dependency closures, not theorem
-statements. The families follow. Seven are WETH's
-headline solvency theorems:
+the audit reports new or changed leaves. The separate `scripts/check-claims.sh` Lean-checks the exact statements of the live paper-v2 families mapped in [`docs/DEPLOYED_BYTECODE_CLAIM_MAP.md`](docs/DEPLOYED_BYTECODE_CLAIM_MAP.md); the axiom audit itself checks dependency closures, not theorem statements.
 
-- `Blanc.weth_preserves_solvent`
-- `Blanc.stateTransition_preserves_solvent`
-- `Blanc.chain_preserves_solvent`
-- `Blanc.addBlockToChain_preserves_solvent`
-- `Blanc.stateTransitionUsing_preserves_solvent`
-- `Blanc.chainUsing_preserves_solvent`
-- `Blanc.addBlockToChainUsing_preserves_solvent`
-
-Seven are FMINT's headline conservation theorems, the same family at the same
-rungs:
-
-- `Blanc.fmint_preserves_conserved`
-- `Blanc.stateTransition_preserves_conserved`
-- `Blanc.chain_preserves_conserved`
-- `Blanc.addBlockToChain_preserves_conserved`
-- `Blanc.stateTransitionUsing_preserves_conserved`
-- `Blanc.chainUsing_preserves_conserved`
-- `Blanc.addBlockToChainUsing_preserves_conserved`
-
-All fourteen are stated under the fork coverage fixed on 2026-09-23 when Blanc moved to a Jaune pin with Amsterdam semantics. The frame theorems (`weth_preserves_solvent`, `fmint_preserves_conserved`) take `CoveredFork sevm.benvStat.fork`. The configured-chain (`…Using`) rungs take `∀ t f, cfg.forkAt t = .ok f → CoveredFork f`. The fixed-schedule rungs keep their statements. The covered forks are exactly Prague, Osaka, BPO1 and BPO2, the four forks the previous pin defined. No statement covers an Amsterdam frame or block.
-
-They are a different *kind* of claim, not a stronger version of the same one:
-solvency is an inequality relating a contract's bookkeeping to the ETH it
-holds, conservation is an equality internal to storage. FMINT's says that
-`totalSupply` equals the sum of the balances at every observable point, under
-arbitrary executions and arbitrary reentrant borrower code. It does not say the
-minted supply is backed — during a flash loan it is not, by construction — and
-neither family says anything about liveness.
-
-Preservation needs the invariant to hold *once* before it can carry it forward,
-and for a genesis-installed FMINT it does: storage that reads zero at every key
-is conserved, because both sides of the equality are then zero
-(`Blanc.Stor.Conserved.of_get_eq_zero`, which covers the canonical empty map
-as well). That covers the genesis case and only the genesis
-case — FMINT compiles one runtime and has no constructor, so **no
-initcode/`CREATE` deployment theorem exists**, and nothing here says an FMINT
-deployed by a transaction starts conserved. That remains a declared non-claim;
-`rg -n 'processCreateMessage|createTransaction' Blanc/Fmint*.lean` is the
-runnable source check for the absent deployment layer.
-
-Eight are FMINT's `flashLoan` specification — the headline
-`Blanc.Fmint.fmint_flashLoan_spec` and its seven `no_success_of_*` corollaries
-(`callback_never_magic`, `callback_never_returns_word`, `token_ne_self`,
-`receiver_not_address`, `amount_over_maxFlashLoan`, `allowance_below_amount`,
-`balance_below_amount`), all in
-[`Blanc/FlashSpec.lean`](Blanc/FlashSpec.lean). They are **partial
-correctness, never liveness**: the headline factors a successful top-level
-execution *given as a hypothesis*, and the corollaries rule executions out.
-Nothing in them — or anywhere in this repository — says a `flashLoan` call
-ever succeeds, and none of them is a state-restoration claim — the
-restoration family below carries those.
-
-Their scope is stated in that module's headline docstring, which is the
-authority on it, and it is narrower than the names suggest in two ways worth
-naming here. **Four premises** restrict the headline: canonically encoded
-calldata, the `196 + ceil32 data.length < 2 ^ 256` size bound, an explicit
-frame-freshness premise, and the selector premise. And the seven corollaries
-are **not one kind of theorem**: two (`callback_never_magic`,
-`callback_never_returns_word`) are contrapositives of the headline, and their
-premise quantifies over the callback **boundaries** the headline could
-produce, *not* over the receiver's code — the weaker and honest form, because
-this repository has no determinism lemma pinning that frame uniquely. The
-other five are contrapositives of `flashLoan`'s own guards.
-
-Four are the **compile-witness declarations**:
-
-- `Blanc.wethCode_compile` — `Prog.compile weth = some wethCode` — and
-  `Blanc.fmintCode_compile`, the same equation for FMINT. Every theorem above
-  is conditioned on its contract's account code being what `Prog.compile`
-  returns, so without these equations they could all hold vacuously; the
-  witnesses state that the compiler really does emit the 988-byte
-  [`wethCode`](Blanc/WethCode.lean) for `weth`, and the 1257-byte
-  [`fmintCode`](Blanc/FmintCode.lean) for `fmint`. These two fixed-program
-  witnesses are proved by `decide +kernel` — kernel evaluation of the same
-  reduction, no raised elaboration limit and nothing added to the trusted base
-  (in particular, not `native_decide`).
-- `Blanc.Weth10.weth10_compiles` kernel-checks compiler success for every
-  `DeployParams`, and `Blanc.Weth10.weth10Code_compile` exposes the universal
-  equation `Prog.compile (weth10 dp) = some (weth10Code dp)`. The first reuses
-  one closed `decide +kernel` result through a proved compile-shape equation;
-  the second derives the exact bytes equation from that Boolean witness. The
-  pair connects each concrete WETH10 comparison world to its exact member of
-  the parameterized runtime family; it is not a liveness or functional theorem.
-
-The longstanding restoration, liveness, gas, error-genre and settlement rows
-are catalogued here by family:
-
-- **Frame-level state restoration** (nine rows, in
-  [`Blanc/FlashSpec.lean`](Blanc/FlashSpec.lean), with the shared
-  `Blanc.ProcessMessage.rollback_of_error` in `CommonProofs.lean` and the shared
-  `Blanc.rollback_of_no_success` with its `_total` form in `LadderBase.lean`):
-  `rollback_of_callback_failure` at the borrower's frame, and
-  seven per-guard instantiations of the shared `rollback_of_no_success`
-  at fmint's own message frame — a frame that cannot succeed
-  comes back with its world state restored. Every claim names a frame, never
-  a transaction.
-- **View-call liveness and exact gas** (the longstanding 27 WETH/FMINT rows
-  plus eight WETH10 compiled-walk rows, in
-  [`Blanc/FmintLive.lean`](Blanc/FmintLive.lean),
-  [`Blanc/WethLive.lean`](Blanc/WethLive.lean),
-  [`Blanc/FmintGas.lean`](Blanc/FmintGas.lean) and
-  [`Blanc/WethGas.lean`](Blanc/WethGas.lean), with the three
-  `Prog.runCompiled`-to-`exec` bridge rows): `fmint_totalSupply_succeeds`,
-  `weth_balanceOf_succeeds` and `weth_decimals_succeeds` construct successful
-  message-call executions (for FMINT's `decimals`, `decimals_gas_exact` carries
-  the same premises and a stronger conclusion),
-  together with exact cold and warm gas and the `fmintGas`/`wethGas` closed
-  forms and maxima. [`Blanc/Weth10Live.lean`](Blanc/Weth10Live.lean) adds
-  successful compiled walks and exact cold/warm gas for `flashFee`,
-  `balanceOf`, `totalSupply`, and `maxFlashLoan`, uniformly over
-  `DeployParams` and at the declarations' stated compiled-function altitude.
-- **Error genre** (thirteen rows: the seven `settles_with_error_of_*`
-  corollaries in `FlashSpec.lean`, and six rows in
-  [`Blanc/FmintReverts.lean`](Blanc/FmintReverts.lean)): each no-success
-  condition settles with *some* error, and the unknown-selector and
-  `token ≠ self` families are constructed all the way to
-  `.error (.revert, _)` with empty returndata — *this* error, *no* data.
-- **Settlement** (six rows, in
-  [`Blanc/FmintSettles.lean`](Blanc/FmintSettles.lean) over
-  [`Blanc/ForwardCall.lean`](Blanc/ForwardCall.lean)):
-  `fmint_flashLoan_settles` — with **no premise about the borrower**, a
-  non-static, canonically-encoded `flashLoan` frame funded at
-  `flashLoanGas data.length` ends in a success, a deliberate `.revert`, or
-  the non-consensus machine-fault channel, never a consensus exceptional
-  halt — with `fmint_flashLoan_settles_of_call` dropping the three guard
-  premises (its two further guard walks included) and
-  `fmint_flashLoan_frame_settles` restating it at `ProcessMessage`
-  altitude. A trichotomy over outcomes, not a success theorem: nothing in
-  this repository says a `flashLoan` call ever succeeds.
+Historical exhibits outside paper v2, including WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The archive is outside the live corpus and is not promised to build against later revisions.
 
 Every constant of the library is covered by one union walk in
 `scripts/check.sh`: it fails on any axiom other than `propext`,
@@ -1209,247 +762,12 @@ axiom is in the trusted path of these results. There is no list of audited
 theorems to keep in step: the walk's population is what
 [`scripts/AxiomCheck.lean`](scripts/AxiomCheck.lean) imports, and the audit
 refuses a Blanc module that its imports do not reach. A smaller axiom set is
-checked only where a register or a gate states one — ten such claims, the
+checked only where a register or a gate states one — `0` such claims, the
 `#expect_axioms` rows of `AxiomCheck.lean`, each checked in both directions.
 
-## WETH fixture suite — execution evidence
+## Archived fixture and assurance exhibits
 
-The audit above proves things *about* `wethCode`'s bytes; it never runs them.
-[`scripts/check-weth.sh`](scripts/check-weth.sh) closes that gap: it runs
-eleven committed fixtures ([`scripts/fixtures/weth/`](scripts/fixtures/weth/),
-generated by [`scripts/gen-weth-fixtures.py`](scripts/gen-weth-fixtures.py))
-through [Jaune](https://github.com/skbaek/jaune)'s fixture runner, each with
-`Blanc.wethCode` as the WETH account's code and every expectation filled by
-the pinned frozen EELS oracle's `t8n`: the five happy paths (deposit,
-withdraw, transfer, approve+transferFrom, and an adversarial reentrancy
-attempt against `withdraw`), two view-function probes that make the
-hand-rolled ABI return encoding externally observable, the balance and
-allowance guards refusing, and the two `WETH_DEVIATIONS.md` claims that are
-testable at all. This is external adjudication: Jaune and the frozen oracle
-agreeing on what the exact bytes the compile witness is about actually do,
-including that the reentrancy attempt does not double-spend and that every
-guard fires rather than the suite passing for a contract that refuses
-nothing.
-
-The generator also computes each case's WETH-semantic expectation from the
-pre-state and the transaction alone and asserts it against the oracle's
-answer before writing the fixture — agreement between Jaune and the oracle
-alone cannot see a contract that is wrong the same way to everyone — and a
-[selector coverage gate](scripts/check-weth-coverage.sh) obtains Blanc's own
-ten selectors from `wethFuncs`. It records four direct entries and six
-internal CALLs whose straight-line prop commits a changed recorder slot after
-the call; a selector-shaped PUSH alone receives no credit. All ten, plus the
-direct fallback, are reached against a shrink-only budget currently empty.
-See [the fixtures
-README](scripts/fixtures/weth/README.md#what-the-suite-establishes) for what
-this is worth and what it is not: specification-checked differential testing
-on chosen inputs, not a liveness proof — the theorems above
-remain pure safety statements.
-
-It is a local gate (CI does not get the Jaune executable for free from the
-dependency build, so CI runs `lake build jaune/jaune` before it), and both it
-and the coverage gate are wired into
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-
-## fmint fixture suite — execution evidence
-
-The same closure for contract #2.
-[`scripts/check-fmint.sh`](scripts/check-fmint.sh) runs **eleven** committed
-fixtures ([`scripts/fixtures/fmint/`](scripts/fixtures/fmint/), generated by
-[`scripts/gen-fmint-fixtures.py`](scripts/gen-fmint-fixtures.py)) through the
-same Jaune fixture runner, each with `Blanc.fmintCode` as the lender account's
-code and every expectation filled by the pinned frozen EELS oracle's `t8n`:
-the full `flashLoan` success path, a wrong magic word and a reverting
-borrower, spectra over returndata shape / `data` length / allowance arm, a
-depth-2 reentrant loan, a borrower that moves its minted balance away before
-answering, nine guard and dispatcher probes in one case, the ERC-20 view and
-`transferFrom` surface, and a Solidity-compiled borrower.
-
-Every **borrower** here is a real Blanc program compiled by Blanc's own
-compiler ([`scripts/gen-fmint-borrowers.lean`](scripts/gen-fmint-borrowers.lean)
-→ [`scripts/fmint-borrowers.json`](scripts/fmint-borrowers.json)) rather than
-hand-authored bytecode — a second, cheap exercise of the code-reuse question.
-The trigger/prober contracts that drive them stay hand-authored Python-built
-bytecode, on the WETH suite's precedent: they are the fixture's own *input*,
-not an oracle-derived expectation.
-
-Four things this harness has that the WETH one does not:
-
-- **A scenario manifest, cross-checked by the harness.**
-  [`manifest.json`](scripts/fixtures/fmint/manifest.json) carries each case's
-  name, outcome class and assertion count — eleven scenarios, 188 assertions
-  — and `check-fmint.sh` cross-checks it against the directory, so a deleted
-  or never-generated case fails the gate instead of silently shrinking the
-  "all PASS" count.
-- **A runtime-byte equality gate.**
-  [`scripts/check-runtime-bytes.py`](scripts/check-runtime-bytes.py) parses
-  the committed Lean literal straight from source and requires every fixture's
-  lender account to be byte-identical to it — 1257 bytes here. It was written
-  for this suite and is now run by **both** suite gates, `check-weth.sh`
-  included at 988, so neither suite's evidence can drift from the contract it
-  is about.
-- **An independently checked Solidity-source digest.**
-  [`scripts/check-fmint-borrower-source.py`](scripts/check-fmint-borrower-source.py)
-  hashes the checker-pinned borrower source with an in-repo Keccak
-  implementation independent of the fixture generator and requires the result
-  to equal the compiler artifact's `sourceKeccak256`. This catches silent
-  source drift; it does not recompile Solidity or claim that the runtime was
-  produced by those bytes.
-- **A discriminating clean-failure triple.** Each of the twelve *rejected*
-  probes, spread across six cases, asserts flag `0`, `RETURNDATASIZE + 1 = 1`
-  and an in-EVM gas-floor bit — not merely that the call failed. That triple
-  is exactly the `PUSH0 PUSH0 REVERT` shape, and each of the three shapes
-  Blanc's older bare `.rev` produced (a garbage-data revert, a stack-underflow
-  halt, a memory-expansion out-of-gas halt) breaks at least one of its legs;
-  the demonstration is a [falsifier
-  table](scripts/fixtures/fmint/README.md#what-the-clean-failure-triple-discriminates),
-  not an argument.
-
-**Events are asserted from the specification, not only locked as a golden.**
-Jaune recomputes each block's receipts root and logs bloom from its own
-execution and fails the block on either mismatch, so the committed goldens pin
-fmint's exact emissions — but those goldens are the oracle running our own
-bytecode, which locks the behavior without saying it is the right one. So
-every case additionally *declares*, at generation time, the log sequence
-proposal D6 says it must produce — per transaction, in emission order, with
-the revert-only and view-only cases declaring the **empty** sequence — and
-generation aborts, writing nothing, if the declaration disagrees with what the
-oracle executed. That moves the question from "do two implementations of our
-bytecode agree" to "does our bytecode match the specification we wrote down".
-What it does not buy: the declarations are only as good as their reading of
-D6, so a misreading shared with `Blanc/Fmint.lean` would still agree, and the
-RLP and bloom encoders are the oracle's own — deliberately, since they are
-consensus rules adjudicated elsewhere and are not what D6 decides.
-
-**One borrower is not Blanc's**, and it is evidence **diversity** rather than
-a second proof. `11-flashloan-solc-borrower.json` installs a borrower compiled
-by a pinned, digest-verified `solc` into a committed artifact (so neither CI
-nor fixture generation needs a Solidity compiler). Every other borrower
-decodes `onFlashLoan`'s arguments with the same machinery that encoded them,
-and `Blanc.Fmint.fmint_flashLoan_spec` proves the callback window equals
-*Blanc's definition* of the canonical ABI encoding — so neither can see a
-definition that misstates the standard. An independent decoder can, and this
-one recovers the five arguments the suite claims are sent, agreeing word for
-word with the Blanc borrower's mid-callback observations. It is one borrower
-on one set of chosen inputs: it says nothing about borrowers in general and
-widens no theorem. The FMINT gate independently re-hashes the source named by
-the compiler artifact before running the fixture; that verifies source
-identity, not a fresh Solidity compilation.
-
-A [selector coverage gate](scripts/check-fmint-coverage.sh) obtains fmint's
-twelve selectors from `fmintFuncs` and separates two direct entries, seven
-internal CALLs tied to changed recorder slots, and mere embedding. Nine are
-currently reached; `totalSupply`, `balanceOf`, and `transfer` occur in
-branching borrower code but have no callsite-execution witness, so the honest
-budget is three. Five built-in corruptions keep embedding, a wrong target, a
-missing marker, a branchable recorder, or overwritten calldata from earning
-credit. The corrected budget is shrink-only from here.
-Both gates are wired into
-[`.github/workflows/ci.yml`](.github/workflows/ci.yml) beside WETH's.
-
-**What this is not** is what it is not for WETH: specification-checked
-differential testing on chosen inputs. It is not a proof — the conservation
-family and the `flashLoan` specification above are the proofs, and nothing in
-this directory discharges either — and it is not a liveness result. See [the
-fixtures README](scripts/fixtures/fmint/README.md#what-the-suite-establishes)
-for the case-by-case account and for what each mechanism is separately worth.
-
-## WETH10 assurance boundary — Blanc proofs and deployed-oracle tests
-
-WETH10 is a high-level Blanc implementation of WETH10's ordinary public
-functionality; it is not bytecode-identical to, or a proof of, the deployed
-9,975-byte Solidity runtime at
-`0xf4BB2e28688e89fCcE3c0580D37d36A7672E8A9F`. The standing semantics of that
-port claim are in [`PORTING.md`](PORTING.md). Its 6,313-byte Blanc runtime is
-parameterized by deployment chain ID and cached domain separator.
-`Blanc.Weth10.weth10Code_compile` proves
-`Prog.compile (weth10 dp) = some (weth10Code dp)` for every `DeployParams`.
-The named mainnet member has SHA-256
-`7e8db17e5ef02cfdc0637547e6a6054a0bfb62aa501a59ccc342f3ac83f5aefc`;
-the synthetic chain-31337/address-`0x1000` member has SHA-256
-`7adf0712b839be5d46bf10e24e4c860e63593fe4b67ec5ffb3892ca14635b1e8`.
-
-| Assurance class | What is established | Artifact boundary |
-|---|---|---|
-| Formally proved | Compilation to each named Blanc runtime; compiled endpoint effects; backing preservation; exact flash-counter restoration; and transaction/block/chain preservation of `Weth10.Stable`. The holder-flow carrier, deployment root, redemption envelopes, and protected headlines quantify over an arbitrary `ChainConfig` whose schedule selects only covered forks (`∀ t f, cfg.forkAt t = .ok f → CoveredFork f`), or a selected covered `Fork`: the block retains its own `cfg.forkAt` witness and `CoveredFork` certificate, executes under that fork's rules, and steps with `stateTransitionUsing cfg`. A strict canonical singleton type-2 deployment generically establishes `DeploymentRoot cfg`; `canonicalMainnetBpo2DeploymentStep_establishes_root` specializes it to Ethereum mainnet's configured Prague → Osaka → BPO1 → BPO2 schedule, and the public `_mainnet` theorems carry that root through arbitrary later `ReachUsing mainnetChainConfig` histories. Prague-only forms remain audited compatibility corollaries. Constructive canonical `withdraw`/`withdrawTo` redemption is proved at message and rule-parametric type-2 transaction altitude with the precompile set, transaction validation, and EIP-7825 gas cap explicit. Root projections conclude exact code, `flashMinted = 0`, and `balSum ≤ ETH balance` at every reachable configured-chain boundary. Committed credits do not wrap, and a proof-carrying `AccountedHistory cfg` gives the exact `Nat` flow identity; exact flash pairing and cancellation yield `B0 + ordinaryIn = Bt + redeemed + externalTransferredOut`, the residual floors, and the dual-selector enabledness guarantee at every configured future. Hardened provenance remains conditional only on trace-local `NoAllowanceKeyCollision`; the conservation, floor, and redemption results do not use it. Full-window corollaries trace permanent outflow to the holder's own call, `approve`, or recovered `permit`, give dormant-holder monotonicity, and establish any-order message redemption for every permutation of an admissible supplied holder list. | All results are about the Blanc program and generated runtime. The mainnet schedule is Jaune's `mainnetChainConfig`, not an assertion that arbitrary unknown forks preserve semantics. Fork coverage is exactly Prague, Osaka, BPO1 and BPO2 (`CoveredFork`); no result covers Amsterdam, and a rule record that is not one of those four forks' is no longer covered (the earlier `…With` theorems over arbitrary `ForkRules` were replaced by `…At` theorems over a covered `Fork`). Deployment and redemption consume explicit selected-rule, valid-base, strict-block, collision-free, funding, gas, system-predeploy, arithmetic, and successful-transition premises. Debits are only **runtime-authorized**; attribution is not consent, intent, or awareness. Exact invocation excludes `DELEGATECALL`/`CALLCODE` against another account's storage and foreign lookalike slots or logs. Raw-message theorems do not authenticate a caller or mine a transaction; transaction theorems do not manufacture a signature. Direct `withdraw` retains the code-free-recipient restriction, while `withdrawTo` permits an explicit nonzero, selected-rule nonprecompile, code-free recipient. A non-delegation contract holder unable to call WETH10 keeps a conserved balance but has no transaction-altitude exit of its own. The supplied everyone-list is input, not state enumeration. The results do not verify the deployed oracle, construct keys, promise inclusion, generalize to arbitrary deployment shapes, or cover arbitrary receiver code. |
-| Executably tested | `scripts/check-weth10-current-mainnet.sh` consumes the shared locked BPO2 lane: it byte-compares one fresh singleton type-2 creation block at the Lean-pinned mainnet timestamp, the zero/nonzero/failed type-2 redemption sequence, one valid type-4 authorization mutation, and a 28-row selector-plus-receive matrix, then replays all three blocks through Jaune at `--network BPO2`. The matrix records status, receipt gas, exact logs, projected storage, and fee-normalized ETH against both the locked deployed runtime and evaluated Blanc runtime. The preserved Prague owners remain unchanged: `scripts/check-weth10-differential.sh` executes 147 canonical-call rows with exact returndata and live CALL traces, `scripts/check-weth10-redemption.sh --no-build` replays its two committed fixtures, and `scripts/check-weth10-deployment.sh` checks and replays its temporary creation block. | Finite differential rows and transaction fixtures on chosen inputs, not semantic equivalence or a proof. The BPO2 lane supplies executable non-vacuity for the current-mainnet specialization; Prague remains the historical evidence lane. Neither constructs a signing key or proves inclusion. |
-| Not established | Verification of the deployed runtime; deployed-vs-Blanc semantic equivalence; arbitrary co-block/factory/CREATE2 deployment shapes; key custody, propagation, or inclusion; malformed/noncanonical input-calldata closure; arbitrary receiver/borrower liveness or settlement; exact deployed gas, storage, or codehash parity. | These are non-claims, not assumptions supplied by the proof or test suites. See `WETH10_COMPATIBILITY.md` and `WETH10_DEVIATIONS.md`. |
-
-The generated differential gate's 147 rows include 69 live
-CALL/STATICCALL traces, seven state-mutating or hostile reentrancy rows, 26
-static-context rows, and eight channel falsifiers. They include a callback
-that catches a failed nested WETH10 transfer while its parent commits without
-child flow, and a successful flash callback whose ordinary transfer commits
-between the paired mint and settlement burn. Public compiled-effect
-theorems separately cover 28/28 runtime entries, including transfer/withdraw,
-all three ERC-677-style typed callbacks, permit, flash-loan
-callback/repayment/log ordering, exact rollback and error genres, and backing
-preservation through recursive calls. `Weth10Live.lean` gives exact Blanc
-cold/warm gas for the required views.
-
-The separate constructor is 6,490 bytes: a 177-byte prefix copies and patches
-the 6,313-byte zero-parameter template. The historical deployment gate executes
-it in two fresh identity worlds under the pinned Prague EELS. The additive
-current-mainnet gate executes a fresh strict singleton type-2 creation block at
-a BPO2 timestamp and checks its successful receipt, exact installed family
-member, empty storage/logs, fee accounting, and state-neutral system predeploys
-before Jaune replays it at BPO2. The constructor family checks nonpayability,
-independently derived chain and domain words, no constructor
-calls/logs/storage instructions, and six falsifiers. Blanc's
-closed accounting is 1,471 init-execution gas, 1,262,600 code-deposit gas,
-1,264,071 for the direct creation message, 406 for EIP-3860 initcode metering,
-and a 1,421,317 top-level arithmetic ceiling. These are Blanc/Jaune modeled
-costs, not deployed-gas parity. `weth10Init_exec_zero` and
-`weth10Init_exec_nonzero` connect the actual appended-data initcode to its
-successful and nonpayable-rejection executions. Under its explicit
-exact-initcode, zero-value, no-code-address, adequate-gas, and code-size
-premises, `processCreateMessage_weth10_success` proves that Jaune creation
-succeeds, installs the exact freshly parameterized runtime, leaves target
-storage empty satisfying `Weth10Inv`, emits no logs, returns the runtime bytes,
-and subtracts the named direct creation-message cost.
-
-`canonicalDeploymentStep_establishes_root` is the transaction/block crossing:
-for arbitrary `cfg` and a selected covered `fork` (`CoveredFork fork`), from a valid configured base, strict
-`CanonicalBlock` evidence, the closed type-2 envelope, and an actual
-`stateTransitionUsing cfg` success, it reconstructs
-the post-system prepared message rather than assuming it, proves the collision
-branch and receipt success, preserves backing and zero flash debt across both
-checked request-predeploy suffix calls, and derives the deployed valid context.
-`DeploymentRoot.reachable_stable` then composes that root with the existing
-configured-chain preservation theorem under the schedule-coverage premise, which `mainnetChainConfig_covered` discharges for mainnet. The strict shape remains deliberately
-specific — no factory, CREATE2, or co-block anchor — while
-`canonicalMainnetBpo2DeploymentStep_establishes_root` supplies the BPO2
-mainnet instance. The finite fixture witnesses that specialization but is not
-admitted as a proof premise.
-
-Both the Blanc runtime and initcode contain `PUSH0`, so Shanghai is the minimum
-execution fork. Current executable evidence is under the pinned BPO2 lane, with
-the pinned Prague EELS retained as history. Neither fact implies deployability
-on pre-Shanghai forks.
-
-Here “mainnet” means Jaune's configured Ethereum schedule: Prague at Unix
-`1746612311`, Osaka at `1764798551`, BPO1 at `1765290071`, and BPO2 at
-`1767747671`; BPO2 has been live on mainnet since 2026-01-07. A future fork
-that changes only rule data Jaune already models — blob parameters, the
-precompile set, transaction/block/code limits, or opcode activation — is a
-Jaune pin bump and re-verification, with any new rule facts stated as explicit
-premises. A fork that changes execution semantics, such as Amsterdam gas
-metering or block-level access lists, changes Jaune itself. Blanc now consumes such a Jaune pin (Amsterdam semantics) with its theorems restricted to the covered forks Prague, Osaka, BPO1 and BPO2. Amsterdam coverage is not claimed and awaits a later proof wave.
-
-The execution proof is deliberately compositional: copy, chain-word patches,
-five prehash writes, hash, separator patches, and return are proved separately
-and then joined. This replaced an all-at-once elaboration that ran beyond
-1,000 seconds and drove anomalous aggregate memory use. With no resource limit
-raised, historical targeted snapshots completed `lake build
-Blanc.Weth10DeployExec` at 917/917 in 28.48 seconds and `lake build
-Blanc.Weth10DeployProof` at 920/920 in 132 seconds. Those commands regenerate
-current receipts; the recorded figures are proof-engineering snapshots, not
-runtime-gas measurements or an industry deployment-verification standard.
-
-The precise behavior contract, evidence ownership, and non-claims are in
-[`WETH10_COMPATIBILITY.md`](docs/registers/WETH10_COMPATIBILITY.md) and
-[`WETH10_DEVIATIONS.md`](docs/registers/WETH10_DEVIATIONS.md). No arbitrary-borrower
-settlement theorem is established, and no such claim is implied here.
+Historical exhibits outside paper v2, including WETH9, Beacon deposit, Lido, Uniswap and Blanc-native programmes, are preserved in the [archived corpus](https://github.com/skbaek/blanc/blob/corpus-v1-20261105/docs/DEPLOYED_BYTECODE_CLAIM_MAP.md). The archive is outside the live corpus and is not promised to build against later revisions.
 
 ## Contact
 
@@ -1465,7 +783,7 @@ it slipped is the strongest available evidence that the discipline is real.
 Open an issue; it will be treated as a defect, not a disagreement.
 
 After that: a divergence from a deployed original that is missing from the
-relevant `*_DEVIATIONS.md` registry, a gate that passes when it should fail, or
+relevant live register or claim map, a gate that passes when it should fail, or
 a source program whose compiled bytecode does not do what the source semantics
 say. [`SECURITY.md`](SECURITY.md) has the full list and the private-report
 address.

@@ -2,79 +2,15 @@
   "schema_version": 1,
   "predicates": [
     {
-      "id": "registration-inline-staging",
-      "description": "Inline registration-leaf staging size and hstage walk",
-      "owner": "registration-leaf-ports",
-      "reopen": "Any registration leaf regains the private staging block",
-      "boundary": "Textual declaration-body check; does not inspect elaborated terms",
-      "include": [
-        "Blanc/LidoCircuitBreakerFreshRegistration.lean",
-        "Blanc/LidoCircuitBreakerAbsentRegistration.lean"
-      ],
-      "pattern": "(?ms)^\\s*have\\s+hM1Size\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?^\\s*have\\s+hstage\\b"
-    },
-    {
-      "id": "selector-decide-kernel",
-      "description": "Selector rewrite immediately followed by a kernel decision",
-      "owner": "exec-accounting-selector-retrofit",
-      "reopen": "A selector accounting site again carries rw [hselector] followed by decide +kernel",
-      "boundary": "Textual adjacent-line check; ignores comments and string literals",
-      "include": ["Blanc/Weth10HolderFlowExecAccounting.lean"],
-      "pattern": "(?m)^\\s*(?:·\\s*)?rw\\s+\\[hselector\\]\\s*$\\n\\s*(?:·\\s*)?decide\\s+\\+kernel\\b"
-    },
-    {
-      "id": "approve-local-selector-separations",
-      "description": "Approve accounting manually kernel-computes selector separations instead of using the childless sibling path",
-      "owner": "exec-accounting-selector-retrofit",
-      "reopen": "The approve accounting theorem regains a local selector-string inequality closed by decide +kernel",
-      "boundary": "Named declaration body only; numeral-bridged sibling-path exclusions are outside the predicate",
-      "include": ["Blanc/Weth10HolderFlowExecAccounting.lean"],
-      "pattern": "(?ms)^theorem\\s+Exec\\.Frame\\.hasProofIndexedStorageAccounting_of_approve\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?^\\s*have\\s+hne\\w*\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?selector\\s+\"approve\"(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?:=\\s+by\\s+decide\\s+\\+kernel\\b"
-    },
-    {
-      "id": "weth10-deploy-inline-size-decision",
-      "description": "WETH10 deployment byteAt proofs kernel-decide a local compileShape size obligation",
-      "owner": "weth10-bytesize-composition",
-      "reopen": "A deployment byteAt proof regains an inline honSize or hcoreSize decide +kernel obligation",
-      "boundary": "Local have-bindings named honSize/hcoreSize; the one shared permitCoreX_size fact and unrelated instruction-size decisions are outside the predicate",
-      "include": ["Blanc/Weth10Deploy.lean"],
-      "pattern": "(?ms)^\\s*have\\s+h(?:on|core)Size\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?:=\\s+by\\s*\\n\\s*decide\\s+\\+kernel\\b"
-    },
-    {
-      "id": "sites-direct-let",
-      "description": "Official runtime external-call theorem directly kernel-computes its sites inventory",
-      "owner": "sites-a1-fold",
-      "reopen": "Reprofile after the shared inventory changes or the owner row otherwise moves enough to justify folding this decide +kernel",
-      "boundary": "Named declaration bounded by the next top-level declaration; not a semantic proof check",
-      "include": ["Blanc/LidoCircuitBreakerSites.lean"],
-      "pattern": "(?ms)^theorem\\s+runtimeExternalCallInstructions_official\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?:=\\s+by\\s*\\n\\s*decide\\s+\\+kernel\\b"
-    },
-    {
-      "id": "weth10-entry-shapes-rfl",
-      "description": "weth10EntryShapes_eq retains a bare rfl proof",
-      "owner": "weth10-layer-naming",
-      "reopen": "The entry-shapes equality returns to a bare rfl body",
-      "boundary": "Named declaration bounded by the next top-level declaration",
-      "include": ["Blanc/Weth10.lean"],
-      "pattern": "(?ms)^private\\s+theorem\\s+weth10EntryShapes_eq\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?:=\\s+by\\s*\\n\\s*rfl\\s*$"
-    },
-    {
       "id": "run-core-pc-irrel-depth",
       "description": "runCore_pc_irrel carries the 803 recursion-depth scope",
       "owner": "compiled-tag-dispatch",
       "reopen": "The runCore_pc_irrel declaration is no longer scoped at the measured maxRecDepth 803 boundary",
       "boundary": "Exact option-to-named-declaration textual check; does not prove the option is necessary",
-      "include": ["Blanc/Compiled.lean"],
+      "include": [
+        "Blanc/Compiled.lean"
+      ],
       "pattern": "(?m)^set_option\\s+maxRecDepth\\s+803\\s+in\\s*\\n(?:[ \\t]*\\n)*lemma\\s+Rinst\\.runCore_pc_irrel\\b"
-    },
-    {
-      "id": "enum-loop-memory-cursor-rfl",
-      "description": "Enumeration cursor-independent memory theorem retains bare rfl",
-      "owner": "enumeration-kit-reach",
-      "reopen": "The enumLoop_pre_memory_independent_of_cursor theorem again closes by rfl",
-      "boundary": "Named declaration bounded by the next top-level declaration",
-      "include": ["Blanc/LidoCircuitBreakerEnumeration.lean"],
-      "pattern": "(?ms)^theorem\\s+enumLoop_pre_memory_independent_of_cursor\\b(?:(?!^(?:private\\s+)?(?:theorem|lemma|def)\\b).)*?\\n\\s*rfl\\s*$"
     },
     {
       "id": "ceiling-debt-ambient",
@@ -82,74 +18,19 @@
       "owner": "elab-cure-3-ceiling-debt",
       "reopen": "Any production maxHeartbeats or maxRecDepth option is introduced without a trailing in command scope",
       "boundary": "Exact non-in set_option lines in production Lean sources after comments and string literals are masked",
-      "include": ["Blanc/**/*.lean"],
+      "include": [
+        "Blanc/**/*.lean"
+      ],
       "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)[ \\t\\r\\n]+(?:0|[1-9][0-9]*)(?![ \\t\\r\\n]+in\\b)[ \\t]*(?:\\r?\\n|$)"
     },
     {
-      "id": "ceiling-debt-registration",
-      "description": "Production maxHeartbeats and maxRecDepth scopes in the treated registration family",
-      "owner": "elab-cure-3-ceiling-debt-registration",
-      "reopen": "The registration-family ceiling count rises above its final campaign value",
-      "boundary": "Exact set_option lines in the seven treated registration modules after comments and string literals are masked",
-      "include": [
-        "Blanc/LidoCircuitBreakerRegistrationWorld.lean",
-        "Blanc/LidoCircuitBreakerFreshRegistration.lean",
-        "Blanc/LidoCircuitBreakerUnregisterWorld.lean",
-        "Blanc/LidoCircuitBreakerAbsentRegistration.lean",
-        "Blanc/LidoCircuitBreakerReplacementRegistration.lean",
-        "Blanc/LidoCircuitBreakerUnregisterRegistration.lean",
-        "Blanc/LidoCircuitBreakerReplacementWorld.lean"
-      ],
-      "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)\\b"
-    },
-    {
-      "id": "ceiling-debt-pause",
-      "description": "Production maxHeartbeats and maxRecDepth scopes in the treated pause family",
-      "owner": "elab-cure-3-ceiling-debt-pause",
-      "reopen": "The pause-family ceiling count rises above its final campaign value",
-      "boundary": "Exact set_option lines in the complete LidoCircuitBreakerPause*.lean production family after comments and string literals are masked",
-      "include": ["Blanc/LidoCircuitBreakerPause*.lean"],
-      "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)\\b"
-    },
-    {
-      "id": "ceiling-debt-lido-core",
-      "description": "Production maxHeartbeats and maxRecDepth scopes in the treated Lido core family",
-      "owner": "elab-cure-3-ceiling-debt-lido-core",
-      "reopen": "The Lido-core ceiling count rises above its final campaign value",
-      "boundary": "Exact set_option lines in the thirteen treated Lido core modules after comments and string literals are masked",
-      "include": [
-        "Blanc/LidoCircuitBreaker.lean",
-        "Blanc/LidoCircuitBreakerAccess.lean",
-        "Blanc/LidoCircuitBreakerAttainment.lean",
-        "Blanc/LidoCircuitBreakerDeploy.lean",
-        "Blanc/LidoCircuitBreakerDeploymentLayout.lean",
-        "Blanc/LidoCircuitBreakerDeploymentTrace.lean",
-        "Blanc/LidoCircuitBreakerEnumeration.lean",
-        "Blanc/LidoCircuitBreakerPreControl.lean",
-        "Blanc/LidoCircuitBreakerRegistry.lean",
-        "Blanc/LidoCircuitBreakerRegistrySubstrate.lean",
-        "Blanc/LidoCircuitBreakerSites.lean",
-        "Blanc/LidoCircuitBreakerSuccess.lean",
-        "Blanc/LidoCircuitBreakerUnregisterAttainment.lean"
-      ],
-      "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)\\b"
-    },
-    {
       "id": "ceiling-debt-pre-lido",
-      "description": "Production maxHeartbeats and maxRecDepth scopes in the treated pre-Lido family",
+      "description": "Production maxHeartbeats and maxRecDepth scopes in the retained Compiled module",
       "owner": "elab-cure-3-ceiling-debt-pre-lido",
-      "reopen": "The pre-Lido ceiling count rises above its final campaign value",
-      "boundary": "Exact set_option lines in the nine treated pre-Lido modules after comments and string literals are masked",
+      "reopen": "The retained Compiled ceiling-scope count rises above its reviewed baseline",
+      "boundary": "Exact set_option lines in Blanc/Compiled.lean after comments and string literals are masked",
       "include": [
-        "Blanc/Compiled.lean",
-        "Blanc/FmintGas.lean",
-        "Blanc/FmintLive.lean",
-        "Blanc/FmintReverts.lean",
-        "Blanc/FmintSettles.lean",
-        "Blanc/Weth10DeploymentRoot.lean",
-        "Blanc/Weth10Redeemable.lean",
-        "Blanc/WethGas.lean",
-        "Blanc/WethLive.lean"
+        "Blanc/Compiled.lean"
       ],
       "pattern": "(?m)^[ \\t]*set_option[ \\t\\r\\n]+(?:maxHeartbeats|maxRecDepth)\\b"
     }

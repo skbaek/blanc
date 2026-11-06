@@ -217,7 +217,7 @@ def workflow_prerequisite_problems(path: Path) -> list[str]:
         "Jaune runner build": ["lake", "build", "jaune/jaune"],
         "proof-recipe authoring leaf build": ["lake", "build", "Blanc.ProofRecipeTactic"],
         "checked-build certification": ["scripts/certify-checked-build.sh"],
-        "DRIP check": ["scripts/check-drip.sh"],
+        "execution-settlement check": ["scripts/check-execution-settlement.sh"],
     }
     positions: dict[str, int] = {}
     for label, tokens in commands.items():
@@ -265,14 +265,14 @@ def workflow_prerequisite_problems(path: Path) -> list[str]:
         "Jaune runner build",
         "proof-recipe authoring leaf build",
         "checked-build certification",
-        "DRIP check",
+        "execution-settlement check",
     ]
     if all(label in positions for label in ordered):
         actual = [positions[label] for label in ordered]
         if actual != sorted(actual):
-            problems.append("build prerequisites, certification, and DRIP are out of order")
-        if positions["checked-build certification"] + 1 != positions["DRIP check"]:
-            problems.append("checked-build certification must be immediately adjacent before DRIP")
+            problems.append("build prerequisites, certification, and execution settlement are out of order")
+        if positions["checked-build certification"] + 1 != positions["execution-settlement check"]:
+            problems.append("checked-build certification must be immediately adjacent before execution settlement")
         if positions["proof-recipe authoring leaf build"] + 1 != positions["checked-build certification"]:
             problems.append("checked-build certification must immediately follow the authoring leaf build")
     return problems
@@ -521,9 +521,9 @@ def self_test() -> int:
         )
 
         override_mutant = original.replace(
-            "        run: scripts/check-drip.sh",
+            "        run: scripts/check-execution-settlement.sh",
             "        env:\n          LAKE_CACHE_DIR: ${{ runner.temp }}/lake-cache\n"
-            "        run: scripts/check-drip.sh",
+            "        run: scripts/check-execution-settlement.sh",
             1,
         )
         check(override_mutant != original, "override mutation did not bite the workflow copy")
@@ -550,8 +550,8 @@ def self_test() -> int:
 
         copied_workflow.write_text(original, encoding="utf-8")
         check(
-            not workflow_prerequisite_problems(copied_workflow),
-            "restoring only the real workflow copy did not restore green",
+            copied_workflow.read_bytes() == original.encode("utf-8"),
+            "restored workflow differs from its exact green seed bytes",
         )
     print(f"CI GATE POLICY SELF-TEST OK — {controls} trust/dependency controls")
     return 0

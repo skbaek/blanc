@@ -72,8 +72,6 @@ PIN_WRITERS: Dict[str, str] = {
         "(header.json records the dependency pins; adoption is a reviewed act)"
     ),
     "elab": "none: re-measures; the pin files are cache keys of its own selector",
-    "drip-evidence": "none: evaluates live at the pin; the pin files are snapshot inputs",
-    "drip-self-test": "none: evaluates live at the pin; the pin files are snapshot inputs",
 }
 
 

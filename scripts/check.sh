@@ -15,10 +15,9 @@
 # Jaune's own `ExecutionAxioms` (its `Assurance` library, built with Blanc's default target) pins
 # the canonical execution layer's axiom sets; Blanc keeps no copy of those.
 #
-# The only per-declaration checks left are the STRICTER CLAIMS: a smaller-than-standard axiom set
-# that a register or a gate states for a named declaration (the four frozen Lido deployment names
-# and the Registry / access-inventory rows of LIDO_CIRCUIT_BREAKER_ASSURANCE.md). They are the
-# `#expect_axioms` rows of `scripts/AxiomCheck.lean`; the register gates read them from there.
+# No retained register currently states a smaller axiom set for a named declaration. The generic
+# driver still supports exact stricter claims when a retained register or gate states one; their
+# rows belong in scripts/AxiomCheck.lean together with the claim that requires them.
 # `scripts/axiom_audit.py` validates that file (imports, exactly one union command, only claim rows)
 # and refuses the audit if any `Blanc/**/*.lean` module is not reachable from its imports, since the
 # population is what is imported.
@@ -115,8 +114,8 @@ if [ "$BUILD" -eq 1 ]; then
     echo "REGRESSION — axiom audit: proof-recipe leaf build failed"
     exit 1
   fi
-  # The write-site checker tops sit outside the Blanc root until L3 consumes
-  # them; scripts/AxiomCheck.lean imports them, so the union walk needs them.
+  # Keep the write-site checker tops as explicit audit entry targets.
+  # scripts/AxiomCheck.lean also imports them for the union walk.
   if ! (cd "$ROOT" && lake build Blanc.Lift.Usdc.ImplWs Blanc.Lift.WriteSiteLocality Blanc.Lift.Usdc.AllowLocality); then
     echo "REGRESSION — axiom audit: write-site checker tops build failed"
     exit 1
