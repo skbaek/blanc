@@ -97,8 +97,9 @@ variable {h : Adr} {frames : List Exec.Frame}
 def ownerKey (F : Exec.Frame) : CoinKey :=
   .map 2 (ownerOf (Devm.getStor F.pre F.sevm.currentTarget)).toB256
 
-/-- The keys the certificate's terms cannot name: the owner's and supply words, and each frame's owner's entry. -/
-def topKeys (frames : List Exec.Frame) : List CoinKey := .raw 0 :: .raw 1 :: frames.map ownerKey
+/-- The keys the certificate's terms cannot name: the owner's and supply words, the `deprecated` flag's word, and each
+frame's owner's entry. -/
+def topKeys (frames : List Exec.Frame) : List CoinKey := .raw 0 :: .raw 1 :: .raw 10 :: frames.map ownerKey
 
 /-- What the hash premise speaks of. -/
 noncomputable abbrev coinKeyList (h : Adr) (frames : List Exec.Frame) : List CoinKey :=
@@ -125,8 +126,12 @@ theorem zero_mem : CoinKey.raw 0 ∈ KeyList h frames := List.mem_append_left _ 
 theorem one_mem : CoinKey.raw 1 ∈ KeyList h frames :=
   List.mem_append_left _ (List.mem_cons_of_mem _ List.mem_cons_self)
 
+theorem flag_mem : CoinKey.raw 10 ∈ KeyList h frames :=
+  List.mem_append_left _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ List.mem_cons_self))
+
 theorem owner_mem {F : Exec.Frame} (hF : F ∈ frames) : ownerKey F ∈ KeyList h frames :=
-  List.mem_append_left _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_map.mpr ⟨F, hF, rfl⟩)))
+  List.mem_append_left _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _
+    (List.mem_map.mpr ⟨F, hF, rfl⟩))))
 
 theorem held_mem : CoinKey.map 2 h.toB256 ∈ KeyList h frames :=
   Blanc.Lift.held_mem
@@ -156,6 +161,12 @@ theorem bal_eq (keys : UsdtKeysFresh h frames) {a : Adr} (mem : CoinKey.map 2 a.
 theorem bal_ne_zero (keys : UsdtKeysFresh h frames) {a : Adr} (mem : CoinKey.map 2 a.toB256 ∈ KeyList h frames) :
     balSlot a ≠ 0 := fun eq => by
   have := keys.2 _ mem _ (zero_mem (h := h) (frames := frames)) eq
+  cases this
+
+/-- A listed balance slot is not the `deprecated` flag's word. -/
+theorem bal_ne_flag (keys : UsdtKeysFresh h frames) {a : Adr} (mem : CoinKey.map 2 a.toB256 ∈ KeyList h frames) :
+    balSlot a ≠ 10 := fun eq => by
+  have := keys.2 _ mem _ (flag_mem (h := h) (frames := frames)) eq
   cases this
 
 /-- A listed balance slot is none of the holder's tracked rows. -/
