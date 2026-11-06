@@ -100,4 +100,101 @@ theorem moveStor_source (ok : MoveOk σ src dst v f) :
   have := ok.debit_le
   omega
 
+/-! ## `balanceOf`'s answer -/
+
+section Output
+
+variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+
+/-- **Entry 57, `BasicToken.balanceOf(a)`**, with the memory it leaves: only the scratch words move. -/
+theorem e57_out {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
+    (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_2652_c57 o) :
+    ∃ b' M' G', o = .returned (St b' ((Devm.getStor b sevm.currentTarget).get (balSlot a.toAdr) :: S) M' G') ∧
+      Devm.getStor b' = Devm.getStor b ∧ Mem.Wf M' ∧ (M'.read 64 32).1 = (M.read 64 32).1 := by
+  have h := run.cut
+  clear run
+  repeat ustep h
+  obtain ⟨_, e⟩ := ric_ret h
+  clear h
+  cases e
+  simp only [keccak_u, ff20_and_word, toAdr_toB256, lit2, gsv, balSlot]
+  refine ⟨_, _, _, rfl, funext fun x => afterSloadH_getStor _ _ _ x, by uwf, ?_⟩
+  rw [memRead_snd_fst, Mem.read_write_word_disjoint (wf.write _ _) _ _ (.inl (by decide +kernel)),
+    Mem.read_write_word_disjoint wf _ _ (.inl (by decide +kernel))]
+
+/-- **Entry 33, `TetherToken.balanceOf(a)`, not deprecated**, with the memory it leaves. -/
+theorem e33_out {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
+    (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) = 0)
+    (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_1239_c33 o) :
+    ∃ b' M' G', o = .returned (St b' ((Devm.getStor b sevm.currentTarget).get (balSlot a.toAdr) :: S) M' G') ∧
+      Devm.getStor b' = Devm.getStor b ∧ Mem.Wf M' ∧ (M'.read 64 32).1 = (M.read 64 32).1 := by
+  have h := run.cut
+  clear run
+  repeat ustep h
+  unorm h
+  rw [lit10] at h
+  have h' := ric_branch h
+  clear h
+  rcases h' with ⟨c3, _, h⟩ | ⟨c3, _, h⟩
+  · exfalso
+    rw [show (Bytes.toB256 [255] &&& (Devm.getStor b sevm.currentTarget).get 10 /
+      B256.bexp (Bytes.toB256 [1, 0]) (Bytes.toB256 [20])) = 0 from hdep] at c3
+    exact absurd c3 (by decide)
+  repeat ustep h
+  ucall h hc 57 t_2652_c57
+  obtain ⟨B, MB, GB, e, sB, wB, rB⟩ := e57_out fork wf hc
+  cases e
+  clear hc
+  repeat ustep h
+  obtain ⟨_, e⟩ := ric_ret h
+  clear h
+  cases e
+  simp only [afterSloadH_getStor] at sB ⊢
+  have sB' := funext fun x => (congrFun sB x).trans (afterSloadH_getStor _ _ _ x)
+  exact ⟨_, _, _, rfl, sB', wB, rB⟩
+
+/-- **The `balanceOf(a)` frame of TetherToken, not deprecated, answers `a`'s entry.** -/
+theorem frame_balanceOf_output {post : Devm} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
+    (sel : Blanc.Sevm.selector sevm = 0x70a08231)
+    (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) = 0)
+    (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
+    post.output = ((Devm.getStor b sevm.currentTarget).get (balSlot (Sevm.dataWord sevm 4).toAdr)).toBytes := by
+  have h := run.cut
+  clear run
+  iterate 7 ustep h
+  ibranch h c0
+  iterate 7 ustep h
+  rw [legacy_selector_word, sel] at h
+  repeat udisp h
+  repeat ustep h
+  ibranch h c1
+  repeat ustep h
+  ucall h hc 33 t_1239_c33
+  obtain ⟨B, MB, GB, e, sB, wB, rB⟩ := e33_out fork (by uwf) hdep hc
+  cases e
+  clear hc
+  repeat ustep h
+  have fp : (MB.read (Bytes.toB256 [64]).toNat 32).1 = (Bytes.toB256 [96]).toBytes := by
+    rw [show (Bytes.toB256 [64]).toNat = 64 by decide +kernel, rB,
+      show (Bytes.toB256 [64]).toNat = 64 by decide +kernel]
+    exact Mem.read_write_word_of_wf wf 64 _
+  rw [fp] at h
+  simp only [ff20_and_word, toAdr_toB256, lit4] at h
+  generalize (Devm.getStor b sevm.currentTarget).get (balSlot (Sevm.dataWord sevm 4).toAdr) = v at h ⊢
+  have w96 : (Bytes.toB256 [96]).toBytes.toB256 = Bytes.toB256 [96] := by decide +kernel
+  have l96 : (Bytes.toB256 [96]).toNat = 96 := by decide +kernel
+  rw [w96, l96] at h
+  have wN : Mem.Wf (MB.read (Bytes.toB256 [64]).toNat 32).2 := by uwf
+  have r2 : (((MB.read (Bytes.toB256 [64]).toNat 32).2.write 96 v.toBytes).read
+      (Bytes.toB256 [64]).toNat 32).1 = (Bytes.toB256 [96]).toBytes := by
+    rw [Mem.read_write_word_disjoint wN 96 v (.inr (by decide +kernel)), memRead_snd_fst, fp]
+  rw [r2, w96] at h
+  cases h with
+  | last hl =>
+    rw [(ri_return hl).1, memRead_snd_fst, l96,
+      show (Bytes.toB256 [32] + Bytes.toB256 [96] - Bytes.toB256 [96]).toNat = 32 by decide +kernel]
+    exact Mem.read_write_word_of_wf wN 96 v
+
+end Output
+
 end Blanc.Lift.Usdt

@@ -202,7 +202,7 @@ end Keys
 
 /-- A good frame's run through the certificate. -/
 theorem codeFrame_run {T : Adr} {F : Exec.Frame} (good : CodeFrame T HistFork code F) :
-    ∃ S M G, SFunc.Run cert.prog F.sevm (St F.pre S M G) t_0000_c0 (.halted F.post) := by
+    SFunc.Run cert.prog F.sevm (St F.pre F.pre.stack F.pre.memory F.pre.gasLeft) t_0000_c0 (.halted F.post) := by
   obtain ⟨pc, sevm, pre, out, run, committed⟩ := F
   obtain ⟨hpc, hcode, fork, -⟩ := good
   dsimp only at hpc hcode fork
@@ -213,7 +213,7 @@ theorem codeFrame_run {T : Adr} {F : Exec.Frame} (good : CodeFrame T HistFork co
     obtain ⟨f, hf0, hrun⟩ := lift_sound_noStateGas cert_check hcode fork.stateGas_none run
     obtain rfl : f = t_0000_c0 := Option.some.inj (hf0.symm.trans rfl)
     rw [St.self' pre] at hrun
-    exact ⟨_, _, _, hrun⟩
+    exact hrun
 
 /-- A good frame, not deprecated, is a `CertFrame`: it has no descendant, static or not. -/
 theorem certFrame {T : Adr} {G : Exec.Frame} (good : CodeFrame T HistFork code G)
@@ -424,10 +424,10 @@ theorem frame_law {F : Exec.Frame} (hF : F ∈ frames) (good : CodeFrame T HistF
     (rows : RowsEmpty h frames (wordsAt T F.pre.state)) :
     RowsEmpty h frames (wordsAt T F.post.state) ∧
       ((wordsAt T F.pre.state) (balSlot h)).toNat ≤ ((wordsAt T F.post.state) (balSlot h)).toNat + usdtDebit h F.sevm := by
-  obtain ⟨S, M, G, run⟩ := codeFrame_run good
+  have run := codeFrame_run good
   have fork : HistFork F.sevm.benvStat.fork := good.2.2.1
   have C := certFrame good target live
-  have hdep : flag20 ((Devm.getStor (St F.pre S M G) F.sevm.currentTarget).get 10) = 0 := by
+  have hdep : flag20 ((Devm.getStor (St F.pre F.pre.stack F.pre.memory F.pre.gasLeft) F.sevm.currentTarget).get 10) = 0 := by
     simp only [St_getStor, target]
     exact live
   change (∀ g, CallerOf frames g → (Devm.getStor F.post T).get (allowSlot h g) = 0) ∧
@@ -504,6 +504,17 @@ theorem frame_law {F : Exec.Frame} (hF : F ∈ frames) (good : CodeFrame T HistF
       rw [show Devm.getStor F.post T = F.post.getStor T from rfl, keep]
       exact Nat.le_add_right _ _
 
+/-- **`balanceOf`'s answer, at a frame not deprecated, is the entry it names**, as the pool measures its credit. -/
+theorem frame_balanceOf_answer {F : Exec.Frame} (good : CodeFrame T HistFork code F)
+    (target : F.sevm.currentTarget = T) (live : NotDeprecated T F) (wf : Mem.Wf F.pre.memory)
+    (sel : Blanc.Sevm.selector F.sevm = 0x70a08231) :
+    F.post.output = (wordsAt T F.pre.state (balSlot (Sevm.dataWord F.sevm 4).toAdr)).toBytes := by
+  have e := frame_balanceOf_output good.2.2.1 wf sel (by
+    simp only [St_getStor, target]
+    exact live) (codeFrame_run good)
+  simp only [St_getStor, target] at e
+  exact e
+
 end Frame
 
 /-! ## The history -/
@@ -546,6 +557,15 @@ theorem usdt_entry_local (capabilities : BodyStageCapabilities HistFork)
       obtain ⟨r, e⟩ := frame_law hF good target (notDeprecated F hF)
         (authority.ownCalls F hF) (noConfiscation F hF) keys rows
       exact ⟨r, by simpa only [Nat.add_zero] using e⟩)
+
+/-- `notDeprecated` from the statement over raw frames: a settled frame is a raw one. -/
+theorem notDeprecated_of_raw (trace : MidHistoryTraceIn HistFork cfg start future)
+    (raw : ∀ R ∈ trace.rawFrames, R.sevm.currentTarget = T → flag20 ((Devm.getStor R.devm T).get 10) = 0) :
+    ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, NotDeprecated T F := by
+  intro F hF
+  have e := raw (Blanc.Exec.Frame.rootDeriv F) (trace.mem_rawFrames_of_mem_settledFrames F (mem_coinFrames.mp hF).1)
+    (mem_coinFrames.mp hF).2.1
+  exact e
 
 /-- A third party's frame does not lower the entry. -/
 theorem usdt_third_party {a b : StorWords} {settled : List Exec.Frame} {Good : Exec.Frame → Prop}
