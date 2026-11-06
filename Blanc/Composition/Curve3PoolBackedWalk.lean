@@ -168,4 +168,243 @@ theorem sums {coin : Fin 3 → Adr} {token : Adr} (hk : coin k = B.T) (hj : ∀ 
           | mint dst a => simpa only [pushed, pulled] using ih
           | burn src a => simpa only [pushed, pulled] using ih
 
+/-- **What the walk needs of one coin**, over the settled frames below their roots. -/
+structure CoinWalk (B : CoinBook) (pool : Adr) (k : Fin 3) (frames rootList : List Exec.Frame) (a b : StorWords)
+    (coins : V3) (tok : Nat) : Prop where
+  ledger : Ledger B pool frames a b
+  forest : frames = rootList.flatMap fun R => Exec.committedFrames R.run
+  roots : ∀ R ∈ rootList, R.sevm.caller ≠ pool
+  targetNe : B.T ≠ pool
+  coinAt : adrOf (coins.get k) = B.T
+  coinOther : ∀ j, j ≠ k → adrOf (coins.get j) ≠ B.T
+  tokNe : adrOf tok ≠ B.T
+  parties : ∀ f ∈ frames, f.sevm.currentTarget = pool →
+    (∀ j : Fin 3, ¬ f.sevm.benvStat.rules.isPrecomp (adrOf (coins.get j))) ∧
+      ¬ f.sevm.benvStat.rules.isPrecomp (adrOf tok)
+  /-- A chain frame that keeps its parent's target is not the pool's call. -/
+  delegate : ∀ F ∈ B.cf frames, ∀ G ∈ frames, F ∈ Exec.childFrames G.run → G.sevm.isStatic = false →
+    G.sevm.currentTarget = F.sevm.currentTarget → F.sevm.caller ≠ pool
+  kids : ∀ f ∈ frames, f.sevm.currentTarget = pool → f.sevm.isStatic = false → ∀ st : Curve3Pool.State,
+    Curve3Pool.Checkpoint (f.pre.getStor f.sevm.currentTarget) st → st.coins = coins → st.token = tok →
+    KidFacts B pool k (Exec.childFrames f.run)
+  /-- What a pool frame's `balanceOf` child reads is the position there. -/
+  reply : ∀ {pre rest L₁ L₂ : List Exec.Frame} {P c : Exec.Frame},
+    frames = pre ++ P :: (blocks (L₁ ++ c :: L₂) ++ rest) → Exec.childFrames P.run = L₁ ++ c :: L₂ →
+    P.sevm.currentTarget = pool → P.sevm.isStatic = false → c.sevm.currentTarget = B.T →
+    c.sevm.data = balanceOfData pool → 32 ≤ c.post.output.length → ReadsAt B a pre L₁ (answerWord c.post.output)
+
+/-- **At each step that moves nothing out of coin `k`, what the coin answers covers the books at the frame's entry.** -/
+def RepliesCovered (T pool : Adr) (k : Fin 3) : Curve3Pool.State → List PoolInvocation → Prop
+  | _, [] => True
+  | s, i :: rest => ∀ o, step s i.env (decodeCall i.frame.sevm) = some o →
+      (pushed k o.calls = 0 → ∀ n w, ReplyAt (Exec.Frame.rootDeriv i.frame) n T (balanceOfData pool) w →
+        s.balances.get k ≤ w) ∧ RepliesCovered T pool k o.state rest
+
+section Walk
+
+variable {frames rootList : List Exec.Frame} {a b : StorWords} {coins : V3} {tok : Nat}
+
+/-- A reply's position among a pool frame's children. -/
+theorem CoinWalk.replyAt (W : CoinWalk B pool k frames rootList a b coins tok) {pre rest : List Exec.Frame}
+    {P : Exec.Frame} (split : frames = pre ++ P :: (blocks (Exec.childFrames P.run) ++ rest))
+    (at' : P.sevm.currentTarget = pool) (mutable : P.sevm.isStatic = false) {n w : Nat}
+    (h : ReplyAt (Exec.Frame.rootDeriv P) n B.T (balanceOfData pool) w) :
+    ReadsAt B a pre ((Exec.childFrames P.run).take n) w := by
+  obtain ⟨c, hget, ht, hd, hlen, rfl⟩ := h
+  have hget' : (Exec.childFrames P.run)[n]? = some c := hget
+  obtain ⟨hn, hc⟩ := List.getElem?_eq_some_iff.mp hget'
+  have hsplit : Exec.childFrames P.run =
+      (Exec.childFrames P.run).take n ++ c :: (Exec.childFrames P.run).drop (n + 1) := by
+    have e := List.take_append_drop n (Exec.childFrames P.run)
+    rw [List.drop_eq_getElem_cons hn, hc] at e
+    exact e.symm
+  refine W.reply (rest := rest) (P := P) ?_ hsplit at' mutable ht hd hlen
+  rw [← hsplit]
+  exact split
+
+/-- **The pool sends coin `T` no chain frame inside a gap.** -/
+theorem CoinWalk.gap_callers (W : CoinWalk B pool k frames rootList a b coins tok) {pre gap post : List Exec.Frame}
+    (split : frames = pre ++ gap ++ post) (closed : TargetClosed pool pre)
+    (quiet : gap.flatMap (poolFrameObs pool) = []) : ∀ F ∈ B.cf gap, F.sevm.caller ≠ pool := by
+  intro F hF
+  obtain ⟨inGap, target, mutable, obs⟩ := mem_coinFrames.mp hF
+  obtain ⟨g₁, g₂, rfl⟩ := List.mem_iff_append.mp inGap
+  have memF : F ∈ frames := by
+    rw [split]
+    exact List.mem_append_left _ (List.mem_append_right _ inGap)
+  have quiet₁ : g₁.flatMap (poolFrameObs pool) = [] := by
+    rw [List.flatMap_append] at quiet
+    exact (List.append_eq_nil_iff.mp quiet).1
+  have split' : frames = pre ++ g₁ ++ F :: (g₂ ++ post) := by
+    rw [split]
+    simp only [List.append_assoc, List.cons_append]
+  exact caller_ne_of_closed W.forest W.roots split' closed quiet₁ mutable fun G hG child mg te _ =>
+    W.delegate F (mem_coinFrames.mpr ⟨memF, target, mutable, obs⟩) G hG child mg te
+
+/-- The word a frame's caller is, read back. -/
+theorem adrOf_caller (x : Adr) : adrOf x.toB256.toNat = x := by
+  simp only [adrOf, toB256_toNat, toAdr_toB256]
+
+/-- **The walk.** Along a replay whose invocations observe exactly the settled run `fs` after a pool-closed prefix, the
+books stay covered. -/
+theorem coin_walk (W : CoinWalk B pool k frames rootList a b coins tok) :
+    ∀ (invs : List PoolInvocation) {st st' : Curve3Pool.State} {pre fs post : List Exec.Frame},
+      PoolRun st invs st' → PoolEntries st invs → (∀ i ∈ invs, i.Authentic pool) →
+      invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = fs.flatMap (poolFrameObs pool) →
+      frames = pre ++ fs ++ post → TargetClosed pool pre → TargetClosed pool (pre ++ fs) →
+      st.coins = coins → st.token = tok → B.Covered a pre (st.balances.get k) →
+      B.Covered a (pre ++ fs) (st'.balances.get k) ∧ RepliesCovered B.T pool k st invs := by
+  intro invs
+  induction invs with
+  | nil =>
+    intro st st' pre fs post run _ _ observed split closedPre _ _ _ cover
+    have quiet : fs.flatMap (poolFrameObs pool) = [] := observed.symm
+    cases run
+    exact ⟨W.ledger.gap split (W.gap_callers split closedPre quiet) cover, trivial⟩
+  | cons i rest ih =>
+    intro st st' pre fs post run entries auth observed split closedPre closedAll hcoins htoken cover
+    obtain ⟨o, hstep, hraw, tail⟩ := run
+    obtain ⟨hpc, -, atPool, mutable, -⟩ := auth i List.mem_cons_self
+    have selfObs : poolSubtreeFrames pool i.frame =
+        i.frame :: (Exec.descendantFrames i.frame.run).flatMap (poolFrameObs pool) :=
+      Blanc.Exec.Frame.subtreeAt_of_target atPool mutable
+    rw [List.flatMap_cons, selfObs, List.cons_append] at observed
+    obtain ⟨gap, rest', rfl, quiet, -, -, restObs⟩ := obsAt_first (pair := pool) (by
+      rw [← poolFrameObs_eq_pair]; exact observed.symm)
+    rw [← poolFrameObs_eq_pair] at quiet restObs
+    have closedAt := closedAll (pre ++ gap) i.frame rest' (by simp only [List.append_assoc]) atPool mutable
+    have globalSplit : frames = (pre ++ gap) ++ i.frame :: (rest' ++ post) := by
+      rw [split]
+      simp only [List.append_assoc, List.cons_append]
+    obtain ⟨r, contig⟩ := (rootFrames_forest (W.forest.symm.trans globalSplit)).1
+    have descPrefix : Exec.descendantFrames i.frame.run <+: rest' :=
+      List.prefix_of_prefix_length_le ⟨r, contig.symm⟩ (List.prefix_append rest' post) closedAt
+    obtain ⟨rest'', rfl⟩ := descPrefix
+    rw [List.flatMap_append, List.append_cancel_left_eq] at restObs
+    -- across the gap
+    have gapSplit : frames = pre ++ gap ++ (i.frame :: (Exec.descendantFrames i.frame.run ++ rest'' ++ post)) := by
+      rw [globalSplit]
+    have coverGap := W.ledger.gap gapSplit (W.gap_callers gapSplit closedPre quiet) cover
+    -- the invocation's frame
+    have settledP : i.frame ∈ frames := by
+      rw [globalSplit]
+      exact List.mem_append_right _ List.mem_cons_self
+    have entryCk := entries.1
+    have callerP : i.frame.sevm.caller ≠ pool :=
+      caller_ne_of_closed W.forest W.roots (pre := pre) (gap := gap) globalSplit closedPre quiet mutable
+        fun _ _ _ _ _ hne => absurd atPool hne
+    have F := W.kids _ settledP atPool mutable st entryCk hcoins htoken
+    have abs : Curve3Pool.Abstracts (Curve3Pool.entryStor (Exec.Frame.rootDeriv i.frame)) st := entryCk.abs
+    have coinIs : ∀ j, Curve3Pool.coinAdr (Exec.Frame.rootDeriv i.frame) j = adrOf (coins.get j) := fun j => by
+      rw [Curve3Pool.coinAdr_eq abs, hcoins]
+    have tokIs : Curve3Pool.tokenAdr (Exec.Frame.rootDeriv i.frame) = adrOf tok := by
+      rw [Curve3Pool.tokenAdr_eq abs, htoken]
+    have parties := W.parties _ settledP atPool
+    have notPre : ∀ t, ¬ i.frame.sevm.benvStat.rules.isPrecomp t →
+        Curve3Pool.framed (Exec.Frame.rootDeriv i.frame) t = true := by
+      intro t ht
+      simp only [Curve3Pool.framed, Bool.or_eq_true, Bool.not_eq_eq_eq_not, Bool.not_true, decide_eq_false_iff_not]
+      exact Or.inl ht
+    have calls : CallsOf (Exec.Frame.rootDeriv i.frame) = o.calls.map (encodeCall pool
+        (Curve3Pool.coinAdr (Exec.Frame.rootDeriv i.frame)) (Curve3Pool.tokenAdr (Exec.Frame.rootDeriv i.frame))) := by
+      rw [hraw.calls mutable, ← atPool]
+      apply Curve3Pool.modelCalls_of_framed
+      intro req member
+      obtain ⟨call, -, rfl⟩ := List.mem_map.mp member
+      cases call with
+      | pull j _ _ => exact notPre (Curve3Pool.coinAdr (Exec.Frame.rootDeriv i.frame) j) (by rw [coinIs]; exact parties.1 j)
+      | push j _ _ => exact notPre (Curve3Pool.coinAdr (Exec.Frame.rootDeriv i.frame) j) (by rw [coinIs]; exact parties.1 j)
+      | mint _ _ => exact notPre (Curve3Pool.tokenAdr (Exec.Frame.rootDeriv i.frame)) (by rw [tokIs]; exact parties.2)
+      | burn _ _ => exact notPre (Curve3Pool.tokenAdr (Exec.Frame.rootDeriv i.frame)) (by rw [tokIs]; exact parties.2)
+    have hsrc : adrOf i.env.caller ≠ pool := by
+      rw [hraw.env.caller]
+      change adrOf i.frame.sevm.caller.toB256.toNat ≠ pool
+      rw [adrOf_caller]
+      exact callerP
+    obtain ⟨sumD, sumC⟩ := sums (B := B) (pool := pool) (k := k)
+      (coin := Curve3Pool.coinAdr (Exec.Frame.rootDeriv i.frame))
+      (token := Curve3Pool.tokenAdr (Exec.Frame.rootDeriv i.frame)) (by rw [coinIs]; exact W.coinAt)
+      (fun j hj => by rw [coinIs]; exact W.coinOther j hj) (by rw [tokIs]; exact W.tokNe) hsrc
+      (Exec.childFrames i.frame.run) o.calls F calls (fun _ _ _ m => step_pull_src hstep m)
+    have flow := step_flow hstep k
+    have fits : k ≠ feeIndex → pulled k o.calls < 2 ^ 256 := fun hf => by
+      cases flow with
+      | plain _ fits _ => exact fits
+      | measured fee => exact absurd fee hf
+      | read _ _ inn =>
+        rw [inn]
+        exact Nat.two_pow_pos _
+    have descEq : Exec.descendantFrames i.frame.run = blocks (Exec.childFrames i.frame.run) :=
+      descendantFrames_eq_children _
+    have split2 : frames = (pre ++ gap) ++ i.frame :: (blocks (Exec.childFrames i.frame.run) ++ (rest'' ++ post)) := by
+      rw [globalSplit, descEq]
+      simp only [List.append_assoc]
+    have notAt : B.cf [i.frame] = [] := by
+      refine List.eq_nil_iff_forall_not_mem.mpr fun F' hF' => ?_
+      obtain ⟨m, target, -, -⟩ := mem_coinFrames.mp hF'
+      rw [List.mem_singleton] at m
+      subst m
+      exact W.targetNe (target.symm.trans atPool)
+    have unframed : ∀ {x : Prop}, Curve3Pool.framed (Exec.Frame.rootDeriv i.frame) B.T = false → x := fun h => by
+      have := notPre B.T (by rw [← W.coinAt]; exact parties.1 k)
+      rw [this] at h
+      cases h
+    have tEq : Curve3Pool.coinAdr (Exec.Frame.rootDeriv i.frame) k = B.T := by
+      rw [coinIs]
+      exact W.coinAt
+    have dEq : (Exec.Frame.rootDeriv i.frame).sevm.currentTarget = pool := atPool
+    have readsAll : ∀ w, (i.env.coin k).balPre = some w →
+        ∃ L₁ L₂, Exec.childFrames i.frame.run = L₁ ++ L₂ ∧ ReadsAt B a (pre ++ gap) L₁ w := by
+      intro w hw
+      rcases (hraw.env.coin k).balPre w hw with un | ⟨n, hr⟩
+      · rw [tEq] at un
+        exact unframed un
+      · rw [tEq, dEq] at hr
+        exact ⟨_, _, (List.take_append_drop n _).symm, W.replyAt split2 atPool mutable hr⟩
+    have pairAll : ∀ p q, (i.env.coin k).balPre = some p → (i.env.coin k).balPost = some q →
+        ∃ L₁ M L₂, Exec.childFrames i.frame.run = L₁ ++ M ++ L₂ ∧ ReadsAt B a (pre ++ gap) L₁ p ∧
+          ReadsAt B a (pre ++ gap) (L₁ ++ M) q := by
+      intro p q hp hq
+      rcases (hraw.env.coin k).balPost q hq with un | ⟨w, n, m, hw, hlt, h₁, h₂⟩
+      · rw [tEq] at un
+        exact unframed un
+      · cases Option.some.inj (hp.symm.trans hw)
+        rw [tEq, dEq] at h₁ h₂
+        have e₁ : (Exec.childFrames i.frame.run).take n ++ ((Exec.childFrames i.frame.run).take m).drop n =
+            (Exec.childFrames i.frame.run).take m := by
+          conv => rhs; rw [← List.take_append_drop n ((Exec.childFrames i.frame.run).take m)]
+          rw [List.take_take, Nat.min_eq_left (Nat.le_of_lt hlt)]
+        refine ⟨(Exec.childFrames i.frame.run).take n, ((Exec.childFrames i.frame.run).take m).drop n,
+          (Exec.childFrames i.frame.run).drop m, ?_, W.replyAt split2 atPool mutable h₁, ?_⟩
+        · rw [e₁, List.take_append_drop]
+        · rw [e₁]
+          exact W.replyAt split2 atPool mutable h₂
+    have coverNext := W.ledger.invocation (k := k) (s := st) (e := i.env) (o := o) split2 notAt flow sumD
+      (fun hf => sumC hf (fits hf)) readsAll pairAll rfl coverGap
+    -- the rest of the walk
+    have restSplit : frames = ((pre ++ gap) ++ Exec.committedFrames i.frame.run) ++ rest'' ++ post := by
+      rw [globalSplit, Exec.Frame.committedFrames_self]
+      simp only [List.append_assoc, List.cons_append]
+    have closedNext : TargetClosed pool ((pre ++ gap) ++ Exec.committedFrames i.frame.run) :=
+      (closedPre.append (TargetClosed.gap (by rw [← poolFrameObs_eq_pair]; exact quiet))).append
+        (TargetClosed.committed pool i.frame)
+    have closedAll' : TargetClosed pool (((pre ++ gap) ++ Exec.committedFrames i.frame.run) ++ rest'') := by
+      rw [Exec.Frame.committedFrames_self]
+      simpa only [List.append_assoc, List.cons_append] using closedAll
+    obtain ⟨hc', ht'⟩ := (Curve3Pool.step_keeps hstep).coins_token
+    have coverNext' : B.Covered a ((pre ++ gap) ++ Exec.committedFrames i.frame.run) (o.state.balances.get k) := by
+      rw [Exec.Frame.committedFrames_self, descEq]
+      exact coverNext
+    obtain ⟨final, repliesRest⟩ := ih tail (entries.2 o hstep) (fun j member => auth j (List.mem_cons_of_mem _ member))
+      restObs restSplit closedNext closedAll' (hc'.trans hcoins) (ht'.trans htoken) coverNext'
+    refine ⟨?_, fun o' hstep' => ?_⟩
+    · rw [Exec.Frame.committedFrames_self] at final
+      simpa only [List.append_assoc, List.cons_append] using final
+    · cases Option.some.inj (hstep.symm.trans hstep')
+      refine ⟨fun none n w hr => ?_, repliesRest⟩
+      exact W.ledger.reply_cover split2 notAt (List.take_append_drop n _).symm
+        (Nat.le_zero.mp (none ▸ sumD)) (W.replyAt split2 atPool mutable hr) coverGap
+
+end Walk
+
 end Blanc.Composition.Curve3PoolBacked
