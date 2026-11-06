@@ -294,7 +294,8 @@ theorem e15_inv {s r v n before after val t f ret : B256} {o : Outcome} (fork : 
   exact ⟨x, d1, d2, _, _, _, Seg.done.inj e, wf1, st, lg⟩
 
 /-- **The `transferWithAuthorization` frame of FiatTokenV2**: the flag at `(from, nonce)`, then the move from `from`
-to `to`. What the signature recovers is not read; `noSignature` is what speaks for a holder that is `from`. -/
+to `to`. What the signature recovers is not read; `noSignature` is what speaks for a holder that is `from`.
+Its committed frame logs `AuthorizationUsed` with its authorizer, the check a reader of `noSignature` makes. -/
 theorem frame_twa_logged {post : Devm} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
     (sel : Blanc.Sevm.selector sevm = 0xe3ee160e)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
@@ -335,12 +336,6 @@ theorem frame_twa {post : Devm} (fork : HistFork sevm.benvStat.fork) (wf : Mem.W
         moveStor σ (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68) :=
   (frame_twa_logged fork wf sel run).1
 
-/-- **A committed signed move logs `AuthorizationUsed` with its authorizer**, the check a reader of `noSignature` makes. -/
-theorem frame_twa_logs {post : Devm} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
-    (sel : Blanc.Sevm.selector sevm = 0xe3ee160e)
-    (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
-    AuthLogged sevm post (Sevm.dataWord sevm 4).toAdr :=
-  (frame_twa_logged fork wf sel run).2
 
 /-- The minter's allowance (`minterAllowed`, slot 13). -/
 def minterSlot (a : Adr) : B256 := mapSlot a.toB256 13
