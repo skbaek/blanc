@@ -237,6 +237,14 @@ theorem pool_head : j.poolCut.benv.stat.fork = .muirGlacier ∧ j.poolCut.benv.s
   rw [time, j.poolTime]
   rfl
 
+/-- **Nonce 0 and no code at the pool's address just before its creation.** What backs the check that
+the pool's allowance rows are empty at creation: before its code exists only its key could set one. -/
+theorem pool_fresh_before_creation :
+    j.poolCut.benv.state.getNonce pool = 0 ∧ (j.poolCut.benv.state.getCode pool).isEmpty = true := by
+  obtain ⟨hfork, hbasefee, -, _, head, success⟩ := j.pool_head
+  exact Lift.CurveCoins.fresh_of_no_collision
+    (Lift.Curve3Pool.Creation.HistoricalTx.actual_fresh_of_success head hfork hbasefee success)
+
 end JointDeployment
 
 /-! ## The pool's environment, from the history -/
