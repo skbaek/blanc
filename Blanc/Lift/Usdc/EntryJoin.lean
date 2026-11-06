@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.EntryLawV2
+import Blanc.Lift.Usdc.EntryLawV22
 import Blanc.Lift.Usdc.EntryChainSettled
 import Blanc.Lift.Usdc.InitializerKeeps
 
@@ -11,8 +11,8 @@ literal slots, the string windows, and the rows `initializeV2_1` and `initialize
 
 `usdc_initializerKeeps`, `usdc_initializerRowsKeep`: the two fields, over the chain's frames.
 
-`usdc_entryLocalAt_of_v22`: `EntryLocalAt` with the observation `ChainObs T`, from certification at the settled
-frames, the authority of the holder and the keys. FiatTokenV2_2's frame law is its one further hypothesis.
+`usdc_entryLocalAt`: `EntryLocalAt` with the observation `ChainObs T`, from certification at the settled frames, the
+authority of the holder and the keys.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -196,13 +196,6 @@ theorem usdc_initializerRowsKeep (installed : start.state.getCode T = Proxy.code
       obtain ⟨G, hG, rfl⟩ := tracked
       exact keys.rowApart (init_frame_mem member target nonstatic obs sel) hG
 
-/-- A frame's law, as the chain reads it. -/
-def UsdcFrameLaw (T h : Adr) (frames : List Exec.Frame) (F : Exec.Frame) : Prop :=
-  RowsView h frames (ledgerView (wordsAt T F.pre.state)) →
-    RowsView h frames (ledgerView (wordsAt T F.post.state)) ∧
-      heldAt T h F (ledgerView (wordsAt T F.pre.state)) + ownCredit h F.sevm ≤
-        heldAt T h F (ledgerView (wordsAt T F.post.state)) + ownDebit h F.sevm
-
 /-- An initializer has no `ownCredit`. -/
 theorem init_credit_zero {e : Sevm} (sel : Blanc.Sevm.selector e ∈ usdcInitializers) : ownCredit h e = 0 :=
   ite_eq_right fun c => by
@@ -210,24 +203,24 @@ theorem init_credit_zero {e : Sevm} (sel : Blanc.Sevm.selector e ∈ usdcInitial
     exact absurd this (by decide)
 
 include capabilities in
-/-- **USDC's entry locality, FiatTokenV2_2's frame law aside**: over a mid history from the proxy, certified at its
-settled frames, with the holder's authority and the keys. The chain's frames are the entry frames off `rescueERC20`.
-The word-reading versions' laws, both initializer fields and the rows' induction are discharged here. -/
-theorem usdc_entryLocalAt_of_v22 (installed : start.state.getCode T = Proxy.code)
+/-- **USDC's entry locality**: over a mid history from the proxy, certified at its settled frames, with the holder's
+authority and the keys. The chain's frames are the entry frames off `rescueERC20`. Each frame's law is its version's,
+or an initializer's fields, and the rows run along the chain. -/
+theorem usdc_entryLocalAt (installed : start.state.getCode T = Proxy.code)
     (certified : CertifiedSettled T trace.settledFrames) (a : EntryApart T (balSlot h))
     (keys : UsdcKeysFreshInit T h (usdcFrames T trace.settledFrames))
     (authority : PoolAuthorityEmpty SignedAs allowSlot CurveCoins.PoolCoinSel h
-      (ledgerView (wordsAt T start.state)) (usdcFrames T trace.settledFrames))
-    (v22 : ∀ F ∈ usdcFrames T trace.settledFrames, V22At T F →
-      Blanc.Sevm.selector F.sevm ∉ usdcInitializers → UsdcFrameLaw T h (usdcFrames T trace.settledFrames) F) :
+      (ledgerView (wordsAt T start.state)) (usdcFrames T trace.settledFrames)) :
     EntryLocalAt T ledgerView (ChainObs T) (EntryGood T) (heldAt T h) (ownDebit h) (ownCredit h)
       (ledgerView (wordsAt T start.state)) (ledgerView (wordsAt T future.state)) trace.settledFrames := by
   have viewChain := usdc_viewChain_certified trace capabilities installed certified
-  have base := keys.base
   have keepInit := usdc_initializerKeeps trace capabilities installed certified a keys
   have keepRows := usdc_initializerRowsKeep trace capabilities installed certified keys
   have law : ∀ F ∈ usdcFrames T trace.settledFrames, EntryGood T F →
-      UsdcFrameLaw T h (usdcFrames T trace.settledFrames) F := by
+      RowsView h (usdcFrames T trace.settledFrames) (ledgerView (wordsAt T F.pre.state)) →
+      RowsView h (usdcFrames T trace.settledFrames) (ledgerView (wordsAt T F.post.state)) ∧
+        heldAt T h F (ledgerView (wordsAt T F.pre.state)) + ownCredit h F.sevm ≤
+          heldAt T h F (ledgerView (wordsAt T F.post.state)) + ownDebit h F.sevm := by
     intro F hF good rows
     obtain ⟨member, target, nonstatic, obs, notRescue⟩ := mem_coinFrames.mp hF
     obtain ⟨pc, code, fork, hasCode⟩ := good
@@ -236,17 +229,9 @@ theorem usdc_entryLocalAt_of_v22 (installed : start.state.getCode T = Proxy.code
       have := keepInit F member target nonstatic obs init
       rw [init_credit_zero init]
       omega
-    by_cases hv : V22At T F
-    · exact v22 F hF hv init rows
-    have cert := certified F member target code obs.2
-    have hsize := settled_data_bound trace capabilities F member
-    have notPrecompile := cert.2.2 F.sevm.benvStat.fork
-    rcases cert.1 with version | version | version
-    · exact v2.entry_law base base.v2 (by decide) hF pc code fork target hasCode obs.2 version notPrecompile
-        hsize notRescue init (authority.ownCalls F hF) (authority.noSignature F hF) rows
-    · exact v2_1.entry_law base base.v2_1 (by decide) hF pc code fork target hasCode obs.2 version notPrecompile
-        hsize notRescue init (authority.ownCalls F hF) (authority.noSignature F hF) rows
-    · exact (hv version).elim
+    exact usdc_entry_law keys.base hF pc code fork target hasCode obs.2 (certified F member target code obs.2)
+      (settled_data_bound trace capabilities F member) notRescue init (authority.ownCalls F hF)
+      (authority.noSignature F hF) rows
   refine ⟨viewChain.1, viewChain.2, fun F hF => ?_⟩
   have rows := viewChain.1.inv_all (I := RowsView h (usdcFrames T trace.settledFrames))
     (fun G hG good r => (law G hG good r).1) (fun g _ => authority.rowsAtCut g) F hF
