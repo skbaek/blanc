@@ -292,16 +292,32 @@ def imbalanceCalldata (am : V3) (maxBurn : Nat) : Bytes :=
   abiSelectorBytes Curve3Pool.selRemoveLiquidityImbalance ++ Curve3Pool.word am.v0 ++
     Curve3Pool.word am.v1 ++ Curve3Pool.word am.v2 ++ Curve3Pool.word maxBurn
 
+/-- **The deposit's entries miss each other**: the swap's, and `E`'s 3Crv entry against the supply word. -/
+structure AddApart (w : State) (E : Adr) : Prop extends SwapApart w E where
+  /-- `E`'s 3Crv entry is not 3Crv's supply word. -/
+  c3 : Curve3Crv.vyBalSlot E ≠ Curve3Crv.vySupplySlot
+
+/-- The books a deposit of `am` reaches, before fees. -/
+def afterDeposit (w : State) (am : V3) : V3 := v3Of fun k => recorded w k + netOf w k (am.get k)
+
+/-- On a positive supply the mint's checked arithmetic passes: `D0` is positive, `D2` is at least `D0`,
+and `supply * (D2 - D0)` fits a word. -/
+def MintInRange (w : State) (amp : Nat) (new : V3) : Prop :=
+  supply w ≠ 0 → ∀ r D0 D2, feeRun w amp new = some r → invariant w amp = some D0 → getDMem r.2 amp = some D2 →
+    0 < D0 ∧ D0 ≤ D2 ∧ supply w * (D2 - D0) < 2 ^ 256
+
 /-- `E` can add `am` at timestamp `t`, and the contract computes `minted` and `stored`. -/
 structure AddRequest (w : State) (E : Adr) (t : Nat) (am : V3) (minMint minted : Nat) (stored : V3) :
     Prop where
   live : PoolLive w
   amounts : AmountsFit w E pool am
   allowed : ∀ k, am.get k ≤ allowanceOf w E k
-  outcome : ∃ amp, ampAt w t = some amp ∧
-    addOutcome w amp (v3Of fun k => recorded w k + netOf w k (am.get k)) = some (minted, stored)
+  outcome : ∃ amp, ampAt w t = some amp ∧ addOutcome w amp (afterDeposit w am) = some (minted, stored) ∧
+    MintInRange w amp (afterDeposit w am)
   minimum : minMint ≤ minted ∧ (supply w = 0 → ∀ k, 0 < am.get k)
-  mintFits : supply w + minted < 2 ^ 256
+  /-- The supply and `E`'s 3Crv each take the mint within a word. -/
+  mintFits : supply w + minted < 2 ^ 256 ∧ shares w E + minted < 2 ^ 256
+  apart : AddApart w E
 
 /-- `add_liquidity`'s message, at the fallback cost. -/
 def add_liquidity_message : Prop :=
