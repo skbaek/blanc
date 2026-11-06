@@ -603,7 +603,7 @@ theorem swap_B {msg : Msg} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx : Nat} 
     (hB1 : B1 = swapB1 (initSevm msg) (initDevm msg) i) (hB2 : B2 = swapB2 (initSevm msg) (initDevm msg) i)
     (hcoi : coinOf (initSevm msg) (initDevm msg) i = coinAt i) (hcoinS : (initDevm msg).getStor (coinAt i) = w.getStor (coinAt i))
     (hTt : (initSevm msg).currentTarget = pool) (hTc : (initSevm msg).caller = E) (hdxw : exDx (initSevm msg) = Nat.toB256 dx)
-    (hopen : CoinsOpen w E) (hap : SwapApart w E) (hdxN : dx < 2 ^ 256) (hfeeI : UsdtFeeFits w dx) (hcrP : CreditFits w pool i (netOf w i dx)) :
+    (mk : ExitMarked w) (hap : SwapApart w E) (hdxN : dx < 2 ^ 256) (hfeeI : UsdtFeeFits w dx) (hcrP : CreditFits w pool i (netOf w i dx)) :
     (i = 2 → B1.toNat = word w usdt (Usdt.balSlot pool) ∧ B2.toNat = word w usdt (Usdt.balSlot pool) + netOf w i dx ∧
       Usdt.NotDeprecated (pulledK i ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) i)) (initSevm msg).caller (initSevm msg).currentTarget (exDx (initSevm msg)))) ∧
     pullIn (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2)) i dx = some (netOf w i dx) := by
@@ -625,7 +625,7 @@ theorem swap_B {msg : Msg} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx : Nat} 
     · rw [hEn, hTt, hTc, hdxw]
       show Usdt.flag20 _ = 0
       rw [hP.2]
-      exact hopen.usdtLive
+      exact mk.usdtLive
   have hnet : pullIn (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2)) i dx = some (netOf w i dx) := by
     by_cases hi2 : i = 2
     · subst hi2
@@ -746,7 +746,7 @@ theorem swap_core {msg : Msg} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx dy m
   have hTt : (initSevm msg).currentTarget = pool := ht
   have hTc : (initSevm msg).caller = E := hcaller
   have hcoi := hco i
-  obtain ⟨hBw, hnet⟩ := swap_B hB1 hB2 hcoi (hcoinS i) hTt hTc hdxw hopen hap hdxN hfeeI hcrP
+  obtain ⟨hBw, hnet⟩ := swap_B hB1 hB2 hcoi (hcoinS i) hTt hTc hdxw mk hap hdxN hfeeI hcrP
   have hE0 : E ≠ 0 := e.nonzero
   obtain ⟨x0, x1, x2, v, admin, hi3, hj3, hadm, M⟩ := swap_model (e0 := initSevm msg) (σ := (initDevm msg).getStor (initSevm msg).currentTarget) (s0 := s) (B1 := B1) (B2 := B2)
     hσ hck.abs hkill hij hiw hjw hdxw hmdw hdxN hmdN hnet hinv hA hfee haf hq hmin hfit hbi

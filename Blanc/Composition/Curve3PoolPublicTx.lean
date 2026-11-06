@@ -115,7 +115,6 @@ structure CoinsOpen (w : State) (E : Adr) : Prop where
   /-- V2_2's code is at the address `usdcV22` names: one read. -/
   usdcImplCode : w.getCode Usdc.usdcImpl = Usdc.Impl.code
   usdtOpen : UsdtOpen w pool
-  usdtLive : Usdt.flag20 ((w.getStor usdt).get 10) = 0
   usdcOpen : UsdcOpen w
   usdcParties : UsdcUnlisted w pool ∧ UsdcUnlisted w E
   /-- The pool is not USDC's proxy admin, whose calls the proxy refuses to forward: Circle's power. -/

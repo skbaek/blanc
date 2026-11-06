@@ -100,16 +100,39 @@ theorem dai_window (m : Moment d) (A : Assumes d m.through) : recorded m.world 0
   exact m.coin_window A (daiWalk A) (viewChain_id ((CurveCoins.Dai.dai_chain (MidHistoryTraceIn.tail m.block m.cut) code).1
     fun _ _ => trivial))
 
-/-- **USDT's books at a transaction boundary.** -/
-theorem usdt_window (m : Moment d) (A : Assumes d m.through) :
-    recorded m.world 2 ≤ coinHeld m.world pool 2 := by
+/-- USDT's frames after the moment carry its storage from the world at the moment to the block's end. -/
+theorem usdt_tail (m : Moment d) (A : Assumes d m.through) :
+    FrameChain usdt (CodeFrame usdt HistFork Lift.Usdt.code) (wordsAt usdt m.world)
+      (coinFrames usdt (fun _ => True) m.tailFrames) (wordsAt usdt m.post.state) := by
   have code : m.world.getCode usdt = Lift.Usdt.code :=
     cutCode_of_cert usdtInstalledCert (d.sinceC3Block m.history) m.block m.cut A.code.usdtCode
-  refine m.coin_window A (usdtWalk A) (viewChain_id ((CurveCoins.Usdt.usdt_chain BodyStageCapabilities.historical
-    (MidHistoryTraceIn.tail m.block m.cut) code).1 fun F hF => ?_))
+  refine (CurveCoins.Usdt.usdt_chain BodyStageCapabilities.historical
+    (MidHistoryTraceIn.tail m.block m.cut) code).1 fun F hF => ?_
   obtain ⟨member, target, mutable, -⟩ := mem_coinFrames.mp hF
   refine A.notDeprecated F (mem_coinFrames.mpr ⟨?_, target, mutable, trivial⟩)
   rw [m.settled_split]
   exact List.mem_append_right _ member
 
+/-- **USDT's books at a transaction boundary.** -/
+theorem usdt_window (m : Moment d) (A : Assumes d m.through) :
+    recorded m.world 2 ≤ coinHeld m.world pool 2 :=
+  m.coin_window A (usdtWalk A) (viewChain_id (usdt_tail m A))
+
 end Blanc.Composition.Curve3PoolBacked
+
+namespace Blanc.Composition.Curve3PoolPublic
+
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
+open Blanc.Composition.Curve3PoolBacked
+
+/-- **USDT is not redirected at a moment of mainnet**: clear when the pool is created, and no `deprecate` since. -/
+theorem Moment.usdtLive {d : Deployment} (m : Moment d) (A : Assumes d m.through) :
+    Usdt.flag20 ((m.world.getStor usdt).get 10) = 0 := by
+  have whole := (CurveCoins.Usdt.usdt_chain BodyStageCapabilities.historical (d.sincePool m.through) A.usdtStart).1
+    A.notDeprecated
+  rw [m.settled_split, coinFrames_append] at whole
+  obtain ⟨b, before, after⟩ := whole.split
+  obtain rfl := chain_start (B := usdtBook) (viewChain_id (usdt_tail m A)) (viewChain_id after)
+  exact usdt_flag_clear A (fun F hF => by rw [m.settled_split]; exact List.mem_append_left _ hF) before
+
+end Blanc.Composition.Curve3PoolPublic

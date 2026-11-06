@@ -103,7 +103,7 @@ theorem asked_facts {data : Bytes} (mf : MomentFacts w) (mk : ExitMarked w) (e :
           rw [show Blanc.Composition.UsdcLive.pKA = Usdc.adminSlot by decide +kernel]
           exact hopen.usdcAdmin
       usdt := by rw [hco 2]; show (initDevm msg).getCode usdt = _; rw [cT]; exact mf.usdtCode
-      live := by rw [hco 2]; show Lift.Usdt.NotDeprecated ((initDevm msg).getStor usdt); rw [sT]; exact hopen.usdtLive
+      live := by rw [hco 2]; show Lift.Usdt.NotDeprecated ((initDevm msg).getStor usdt); rw [sT]; exact mk.usdtLive
       prec := fun k => by
         rw [hco k]
         have := hprec.1 k
@@ -462,7 +462,8 @@ theorem Moment.marked {d : Deployment} (m : Moment d) (A : Assumes d m.through) 
     usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
       A.circle.usdcCertified
     minter := m.minter A
-    id4 := m.id4 A }
+    id4 := m.id4 A
+    usdtLive := m.usdtLive A }
 
 /-- `E` is none of the five contracts, by its empty code. -/
 theorem tx_noE {w : State} {tx : Tx} {E : Adr} {benv : Benv} {maxFee : Nat} (hw : benv.state = w) (mf : MomentFacts w) (mk : ExitMarked w) (ready : SignerReady benv tx E maxFee) :

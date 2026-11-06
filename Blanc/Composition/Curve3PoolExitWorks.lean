@@ -168,6 +168,8 @@ structure ExitMarked (w : State) : Prop where
   minter : (w.getStor c3).get Curve3Crv.vyMinterSlot = pool.toB256
   /-- Address 4's code at the cut (`Moment.id4`). -/
   id4 : w.getCode 4 = ByteArray.empty
+  /-- USDT is not redirected at the cut (`Moment.usdtLive`). -/
+  usdtLive : Usdt.flag20 ((w.getStor usdt).get 10) = 0
 
 /-- A message as a transaction's entry prepares it. -/
 abbrev ColdEntry (msg : Msg) (w : State) (E : Adr) (data : Bytes) : Prop := Asked msg w E data

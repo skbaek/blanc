@@ -466,7 +466,7 @@ theorem add_core (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (ad
     rw [hcE]
     show Usdt.flag20 _ = 0
     rw [hP2.2]
-    exact hopen.usdtLive
+    exact mk.usdtLive
   have hml : minted < 2 ^ 256 := by have := hfit.1; omega
   have hmn : (Nat.toB256 minted).toNat = minted := B256.toNat_toB256_of_lt hml
   have hmintF : MintFits (Devm.getStor (initDevm msg) (tokOf (initSevm msg) (initDevm msg))) (initSevm msg).currentTarget (initSevm msg).caller.toB256 (Nat.toB256 minted) := by
