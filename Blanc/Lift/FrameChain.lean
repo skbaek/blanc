@@ -29,13 +29,13 @@ namespace Blanc.Lift
 open Jaune Blanc Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
 
 /-- A storage, as the words it reads. -/
-abbrev Words := B256 → B256
+abbrev StorWords := B256 → B256
 
 /-- The words of `T`'s storage in a world. -/
-def wordsAt (T : Adr) (w : State) : Words := (w.getStor T).get
+def wordsAt (T : Adr) (w : State) : StorWords := (w.getStor T).get
 
 /-- Frames `fs` carry `T`'s storage from `a` to `b`, each entered where the last one left it. -/
-def FrameChain (T : Adr) (Good : Exec.Frame → Prop) : Words → List Exec.Frame → Words → Prop
+def FrameChain (T : Adr) (Good : Exec.Frame → Prop) : StorWords → List Exec.Frame → StorWords → Prop
   | a, [], b => b = a
   | a, F :: fs, b => Good F ∧ wordsAt T F.pre.state = a ∧ FrameChain T Good (wordsAt T F.post.state) fs b
 
@@ -43,7 +43,7 @@ namespace FrameChain
 
 variable {T : Adr} {Good : Exec.Frame → Prop}
 
-theorem append : ∀ {a b c : Words} {xs ys : List Exec.Frame},
+theorem append : ∀ {a b c : StorWords} {xs ys : List Exec.Frame},
     FrameChain T Good a xs b → FrameChain T Good b ys c → FrameChain T Good a (xs ++ ys) c
   | _, _, _, [], _, hx, hy => by
     cases hx
@@ -51,7 +51,7 @@ theorem append : ∀ {a b c : Words} {xs ys : List Exec.Frame},
   | _, _, _, _ :: _, _, hx, hy => ⟨hx.1, hx.2.1, append hx.2.2 hy⟩
 
 /-- Every frame of a chain is good. -/
-theorem good : ∀ {a b : Words} {xs : List Exec.Frame}, FrameChain T Good a xs b →
+theorem good : ∀ {a b : StorWords} {xs : List Exec.Frame}, FrameChain T Good a xs b →
     ∀ F ∈ xs, Good F
   | _, _, [], _, _, h => absurd h List.not_mem_nil
   | _, _, _ :: _, hx, F, h => by
@@ -60,7 +60,7 @@ theorem good : ∀ {a b : Words} {xs : List Exec.Frame}, FrameChain T Good a xs 
     · exact good hx.2.2 F h
 
 /-- A chain splits at any point, through the storage the second part starts from. -/
-theorem split : ∀ {a c : Words} {xs ys : List Exec.Frame}, FrameChain T Good a (xs ++ ys) c →
+theorem split : ∀ {a c : StorWords} {xs ys : List Exec.Frame}, FrameChain T Good a (xs ++ ys) c →
     ∃ b, FrameChain T Good a xs b ∧ FrameChain T Good b ys c
   | a, _, [], _, h => ⟨a, rfl, h⟩
   | _, _, _ :: _, _, h => by
@@ -69,8 +69,8 @@ theorem split : ∀ {a c : Words} {xs ys : List Exec.Frame}, FrameChain T Good a
 
 /-- **A property every frame carries holds along the chain, and a quantity moves by the frames'
 amounts.** Each frame keeps `I` and moves `held` by `credit` and `debit`. -/
-theorem fold {held : Words → Nat} {I : Words → Prop} {debit credit : Exec.Frame → Nat} :
-    ∀ {a b : Words} {xs : List Exec.Frame}, FrameChain T Good a xs b →
+theorem fold {held : StorWords → Nat} {I : StorWords → Prop} {debit credit : Exec.Frame → Nat} :
+    ∀ {a b : StorWords} {xs : List Exec.Frame}, FrameChain T Good a xs b →
       (∀ F ∈ xs, Good F → I (wordsAt T F.pre.state) → I (wordsAt T F.post.state) ∧
         held (wordsAt T F.pre.state) + credit F ≤ held (wordsAt T F.post.state) + debit F) → I a →
       I b ∧ held a + (xs.map credit).sum ≤ held b + (xs.map debit).sum
@@ -86,8 +86,8 @@ theorem fold {held : Words → Nat} {I : Words → Prop} {debit credit : Exec.Fr
     omega
 
 /-- A property every frame carries holds at each frame's entry and exit. -/
-theorem inv_all {I : Words → Prop} :
-    ∀ {a b : Words} {xs : List Exec.Frame}, FrameChain T Good a xs b →
+theorem inv_all {I : StorWords → Prop} :
+    ∀ {a b : StorWords} {xs : List Exec.Frame}, FrameChain T Good a xs b →
       (∀ F ∈ xs, Good F → I (wordsAt T F.pre.state) → I (wordsAt T F.post.state)) → I a →
       ∀ F ∈ xs, I (wordsAt T F.pre.state)
   | _, _, [], _, _, _, _, h => absurd h List.not_mem_nil
@@ -136,7 +136,7 @@ theorem coinFrames_append (T : Adr) (Obs : Exec.Frame → Prop) (xs ys : List Ex
 every frame is allowed, is a `FrameChain`. -/
 noncomputable def chainCarrier (T : Adr) (Good Allowed : Exec.Frame → Prop) : ReplayCarrier T where
   readsStorage := true
-  Snap := Words
+  Snap := StorWords
   Step := Exec.Frame
   Tag := Unit
   Replay a xs b := (∀ F ∈ xs, Allowed F) → FrameChain T Good a xs b
@@ -164,7 +164,7 @@ noncomputable def chainView (T : Adr) (Obs Good Allowed : Exec.Frame → Prop) :
     intro _ pre post _ storage _ _
     exact ⟨[], fun _ => congrArg Stor.get storage, rfl⟩
 
-theorem chainCarrier_append {T : Adr} {Good Allowed : Exec.Frame → Prop} {a b c : Words}
+theorem chainCarrier_append {T : Adr} {Good Allowed : Exec.Frame → Prop} {a b c : StorWords}
     {xs ys : List Exec.Frame} (hx : (chainCarrier T Good Allowed).Replay a xs b)
     (hy : (chainCarrier T Good Allowed).Replay b ys c) :
     (chainCarrier T Good Allowed).Replay a (xs ++ ys) c := fun all =>
@@ -178,7 +178,7 @@ def CodeFrame (T : Adr) (F : Fork → Prop) (C : ByteArray) (f : Exec.Frame) : P
 /-- What `mid_frameChain` concludes: the settled frames at `T` carry its storage to the end and to
 the entry of every settled frame no earlier non-static frame at `T` encloses, whenever the frames
 concerned are allowed. -/
-def SettledChain (T : Adr) (Obs Good Allowed : Exec.Frame → Prop) (a b : Words)
+def SettledChain (T : Adr) (Obs Good Allowed : Exec.Frame → Prop) (a b : StorWords)
     (frames : List Exec.Frame) : Prop :=
   ((∀ F ∈ coinFrames T Obs frames, Allowed F) → FrameChain T Good a (coinFrames T Obs frames) b) ∧
     ∀ {before : List Exec.Frame} {f : Exec.Frame} {after : List Exec.Frame},
