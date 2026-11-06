@@ -66,15 +66,16 @@ def ChildKeepsSel (exc : Exec 0 sevm b (.ok post)) (t : Adr) : Prop :=
         c.post.getCode a = c.pre.getCode a
 
 /-- How a frame's coins enter its keep premises: deployed bytes at the entry, and the named operator
-premises at each child's entry. -/
+premises at each non-static child's entry. A static child keeps the world whatever it runs. -/
 structure PoolCoinWorld (exc : Exec 0 sevm b (.ok post)) (dai usdc usdt : Adr) : Prop where
   daiCode : b.getCode dai = Dai.code
   usdcCode : b.getCode usdc = Usdc.Proxy.code
   usdtCode : b.getCode usdt = Usdt.code
   /-- Circle's proxy admin: USDC's implementation word names one of the three versions. -/
-  usdcImpl : ∀ c ∈ Exec.childFrames exc, c.sevm.currentTarget = usdc → UsdcImplAt c.pre usdc
+  usdcImpl : ∀ c ∈ Exec.childFrames exc, c.sevm.currentTarget = usdc → c.sevm.isStatic = false →
+    UsdcImplAt c.pre usdc
   /-- Tether's owner: USDT is not deprecated. -/
-  usdtLive : ∀ c ∈ Exec.childFrames exc, c.sevm.currentTarget = usdt →
+  usdtLive : ∀ c ∈ Exec.childFrames exc, c.sevm.currentTarget = usdt → c.sevm.isStatic = false →
     Usdt.flag20 ((Devm.getStor c.pre usdt).get 10) = 0
 
 section World
@@ -97,6 +98,32 @@ private theorem code_of_bytes {C : ByteArray} (hne : C.toList ≠ []) (hnd : ¬ 
   obtain ⟨-, -, -, -, ccode⟩ := poolChild_facts hcode hfork.stateGas_none exc c hc
   rw [ccode t (by rw [htc]; exact hne) (by rw [htc]; exact hnd) ht, htc]
 
+/-- A child of a pool frame that is static has a code address. -/
+theorem poolChild_codeAddress (hsg : sevm.benvStat.rules.stateGas = none) :
+    ∀ c ∈ Exec.childFrames exc, c.sevm.isStatic = true → c.sevm.codeAddress ≠ none := by
+  intro c hc hs
+  obtain ⟨N, f, rsm, pc', cevm, pp, hstep, henter, hsevm, -⟩ :=
+    Exec.childFrames_spawnedAt_entry exc (.refl _) c hc
+  have hNs : N.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq pp
+  obtain ⟨x, -, hxs, -⟩ := Evm.step_spawn_inv hstep
+  have hst : f.inner.isStatic = true := by
+    rw [← Frame.enter_run_isStatic henter, ← hsevm]
+    exact hs
+  have hca := Xinst.step_spawn_codeAddress_of_static_noStateGas (by rw [hNs]; exact hsg) hxs hst
+  obtain ⟨_, _, hcev⟩ := Frame.enter_run_inv henter
+  rw [hsevm, hcev]
+  exact hca
+
+/-- A static child keeps the foreign world, whatever it runs. -/
+private theorem keeps_of_static (hcode : sevm.code = Curve3Pool.code) (hfork : HistFork sevm.benvStat.fork)
+    {c : Exec.Frame} (hc : c ∈ Exec.childFrames exc) (hs : c.sevm.isStatic = true) (a : Adr) :
+    ((b.getCode a).toList ≠ [] → ∀ x, (c.post.getStor a).get x = (c.pre.getStor a).get x) ∧
+      c.post.getCode a = c.pre.getCode a := by
+  obtain ⟨-, stat, -, cpre, -⟩ := poolChild_facts hcode hfork.stateGas_none exc c hc
+  obtain ⟨hst, hcd⟩ := frameKeeps_of_static c (by rw [stat]; exact hfork.stateGas_none) hs
+    (poolChild_codeAddress hfork.stateGas_none c hc hs) a
+  exact ⟨fun hna => hst (by rw [cpre a hna]; exact hna), hcd⟩
+
 theorem PoolCoinWorld.dai_keeps (w : PoolCoinWorld exc dai usdc usdt)
     (hcode : sevm.code = Curve3Pool.code) (hfork : HistFork sevm.benvStat.fork) :
     ChildKeepsSel exc dai := by
@@ -110,21 +137,27 @@ theorem PoolCoinWorld.usdt_keeps (w : PoolCoinWorld exc dai usdc usdt)
     (hcode : sevm.code = Curve3Pool.code) (hfork : HistFork sevm.benvStat.fork) :
     ChildKeepsSel exc usdt := by
   intro c hc ht sel a hne
+  cases hs : c.sevm.isStatic with
+  | true => exact keeps_of_static hcode hfork hc hs a
+  | false => ?_
   obtain ⟨pc0, stat, -, -, -⟩ := poolChild_facts hcode hfork.stateGas_none exc c hc
   refine keeps_of_frame hcode hfork hc ht
     (usdt_frameKeeps c pc0 (code_of_bytes (by decide +kernel) (by decide +kernel) hcode hfork w.usdtCode hc ht)
       (by rw [stat]; exact hfork.stateGas_none) (by rw [stat]; exact hfork.bal_none)
-      (by rw [ht]; exact w.usdtLive c hc ht) sel) a hne
+      (by rw [ht]; exact w.usdtLive c hc ht hs) sel) a hne
 
 theorem PoolCoinWorld.usdc_keeps (w : PoolCoinWorld exc dai usdc usdt)
     (hcode : sevm.code = Curve3Pool.code) (hfork : HistFork sevm.benvStat.fork) :
     ChildKeepsSel exc usdc := by
   intro c hc ht sel a hne
+  cases hs : c.sevm.isStatic with
+  | true => exact keeps_of_static hcode hfork hc hs a
+  | false => ?_
   obtain ⟨pc0, stat, hsize, -, -⟩ := poolChild_facts hcode hfork.stateGas_none exc c hc
   refine keeps_of_frame hcode hfork hc ht
     (usdc_frameKeeps c pc0 (code_of_bytes (by decide +kernel) (by decide +kernel) hcode hfork w.usdcCode hc ht)
       (by rw [stat]; exact hfork.stateGas_none) (by rw [stat]; exact hfork.bal_none) hsize
-      (by rw [ht]; exact w.usdcImpl c hc ht) sel) a hne
+      (by rw [ht]; exact w.usdcImpl c hc ht hs) sel) a hne
 
 end World
 
