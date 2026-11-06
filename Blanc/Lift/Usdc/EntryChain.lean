@@ -1,0 +1,118 @@
+import Blanc.Lift.ViewChain
+import Blanc.Lift.BalanceLocality
+import Blanc.Lift.CurveCoins.Keep
+import Blanc.Lift.Usdc.RefineShape
+
+/-!
+# USDC's entry frames: the statement of balance-entry locality
+
+The contract of U3c, compiled ahead of its proof, so that its consumers and the initializer unit can
+build on the names:
+
+* `ledgerView`: the words apart from the proxy's two slots. An upgrade writes the implementation slot
+  between two token frames, so USDC's frames chain on this view;
+* `EntryObs`: the chain's frames, the non-admin proxy frames. The admin word's frames write only
+  the proxy's slots, so they are unobserved, and the frame an `upgradeToAndCall` calls below itself
+  observes itself;
+* `V22At`, `heldAt`: a frame reads the holder's entry by the implementation word at its own entry, not
+  through the view: the whole word under V2 and V2_1, the low 255 bits under V2_2;
+* `UsdcCertified`: the proxy admin's power, restrained at one state;
+* `BelowFlagAt`: the seam where the reading changes. `bridged_of_belowFlag` is what `ViewChain.segment`
+  takes;
+* `InitializerKeeps`, `RescueQuiet`: the named powers still open as fields.
+-/
+
+namespace Blanc.Lift.Usdc
+
+open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
+
+/-- The words apart from the proxy's implementation and admin slots. -/
+def ledgerView (w : StorWords) : StorWords := fun k =>
+  if k = implSlot ∨ k = adminSlot then 0 else w k
+
+/-- **The chain's frames**: frames of the proxy's runtime whose caller is not the admin word at their
+entry. -/
+def EntryObs (T : Adr) (F : Exec.Frame) : Prop :=
+  F.sevm.code = Proxy.code ∧ F.sevm.caller ≠ adminOf F.pre.state T
+
+/-- The implementation word at the frame's entry names FiatTokenV2_2. -/
+def V22At (T : Adr) (F : Exec.Frame) : Prop :=
+  (F.pre.state.getStor T).get implSlot = usdcImpl.toB256
+
+open Classical in
+/-- **How a frame reads `h`'s entry in a view**, by the implementation word at its own entry: the low
+255 bits under V2_2, the whole word before it. -/
+noncomputable def heldAt (T h : Adr) (F : Exec.Frame) (w : StorWords) : Nat :=
+  if V22At T F then balanceBits (w (balSlot h)) else (w (balSlot h)).toNat
+
+/-- **The implementation word names one of the three versions, and V2_2 finds its library** (the proxy
+admin's power, at one state). The library is deployed after the pool's cut, so this is not a fact of
+the start state. -/
+def UsdcCertified (d : Devm) (T : Adr) : Prop :=
+  CurveCoins.UsdcImplAt d T ∧
+    (d.getCode (d.getStorVal T implSlot).toAdr = Impl.code → d.getCode usdcLib = Lib.code)
+
+/-- **The seam where the reading changes**: the first frame reading bits, after one reading words, finds
+the entry below the flag. One storage read at the upgrade to V2_2 for a reader. -/
+def BelowFlagAt (T h : Adr) (frames : List Exec.Frame) : Prop :=
+  ∀ (before : List Exec.Frame) (F G : Exec.Frame) (after : List Exec.Frame),
+    frames = before ++ F :: G :: after → ¬ V22At T F → V22At T G →
+    ((G.pre.state.getStor T).get (balSlot h)).toNat < 2 ^ 255
+
+/-- The four initializers. -/
+def usdcInitializers : List B256 := [0x3357162b, 0xd608ea64, 0x2fc81e09, 0x430239b4]
+
+/-- **What the initializer unit discharges**: an initializer that commits does not lower the holder's
+entry, as the frame reads it. The admin's power, by way of the upgrade that runs it. -/
+def InitializerKeeps (T h : Adr) (settled : List Exec.Frame) : Prop :=
+  ∀ F ∈ settled, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
+    Blanc.Sevm.selector F.sevm ∈ usdcInitializers →
+    heldAt T h F (ledgerView (wordsAt T F.pre.state)) ≤ heldAt T h F (ledgerView (wordsAt T F.post.state))
+
+/-- **The rescuer's call does not re-enter USDC** (the rescuer's power, open until the rescue frame's
+model replay removes it). -/
+def RescueQuiet (T : Adr) (settled : List Exec.Frame) : Prop :=
+  ∀ F ∈ settled, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
+    Blanc.Sevm.selector F.sevm = rescueSelector →
+    (Exec.descendantFrames F.run).flatMap (coinObs T (EntryObs T)) = []
+
+variable {T h : Adr}
+
+/-- Bits never exceed the word. -/
+theorem bits_le_word (w : B256) : balanceBits w ≤ w.toNat :=
+  Nat.mod_le _ _
+
+/-- A word below the flag is its bits. -/
+theorem bits_eq_of_lt {w : B256} (hw : w.toNat < 2 ^ 255) : balanceBits w = w.toNat :=
+  Nat.mod_eq_of_lt hw
+
+/-- The view does not hide a balance entry apart from the proxy's slots. -/
+theorem ledgerView_bal {w : StorWords} {a : Adr} (hi : balSlot a ≠ implSlot) (ha : balSlot a ≠ adminSlot) :
+    ledgerView w (balSlot a) = w (balSlot a) := by
+  unfold ledgerView
+  refine ite_eq_right ?_
+  rintro (e | e)
+  · exact (hi e).elim
+  · exact (ha e).elim
+
+/-- **The seam's bridge**: `BelowFlagAt` is what telescoping across versions needs. -/
+theorem bridged_of_belowFlag (hi : balSlot h ≠ implSlot) (ha : balSlot h ≠ adminSlot) :
+    ∀ {frames : List Exec.Frame}, BelowFlagAt T h frames →
+      Bridged T ledgerView (heldAt T h) frames
+  | [], _ => trivial
+  | [_], _ => trivial
+  | F :: G :: rest, below => by
+    refine ⟨?_, bridged_of_belowFlag hi ha fun before A B after split =>
+      below (F :: before) A B after (by rw [split]; rfl)⟩
+    unfold heldAt
+    rw [ledgerView_bal hi ha]
+    change _ ≤ _
+    by_cases hF : V22At T F <;> by_cases hG : V22At T G
+    · rw [ite_eq_left hF, ite_eq_left hG]
+    · rw [ite_eq_left hF, ite_eq_right fun c => (hG c).elim]
+      exact bits_le_word _
+    · rw [ite_eq_right fun c => (hF c).elim, ite_eq_left hG]
+      exact Nat.le_of_eq (bits_eq_of_lt (below [] F G rest rfl hF hG)).symm
+    · rw [ite_eq_right fun c => (hF c).elim, ite_eq_right fun c => (hG c).elim]
+
+end Blanc.Lift.Usdc
