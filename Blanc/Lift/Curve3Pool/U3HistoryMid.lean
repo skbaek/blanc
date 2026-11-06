@@ -1,12 +1,12 @@
 import Blanc.Lift.Curve3Pool.U3History
-import Blanc.Lift.Curve3Pool.HistoryMid
+import Blanc.Lift.Curve3Pool.AmpHistoryMid
 
 /-!
 # Curve 3pool: the U3 bounds over the committed mid history at historical forks
 
 `pool_history_u3` over `pool_mid_history`. The six bounds are the model's (`u3Step_of_step`); only the
-history they are read along changes. An invocation's recorded time is its frame's block time
-(`EnvOf.time`).
+history they are read along changes. An invocation's recorded time is the header timestamp of the block
+that retained it (`pool_mid_invocation_time`).
 -/
 
 namespace Blanc.Lift.Curve3Pool
@@ -14,8 +14,8 @@ namespace Blanc.Lift.Curve3Pool
 open Jaune Blanc Blanc.ExecutionTrace
 
 /-- **U3 along the mid history.** Every invocation of the replay, at the state its prefix reaches,
-is an accepted step with its raw effect, recorded at its frame's block time, and its result
-satisfies the six U3 bounds. -/
+ran at its block's header timestamp, which is its recorded time, and is an accepted step with its raw
+effect, whose result satisfies the six U3 bounds. -/
 theorem pool_mid_history_u3 {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {start : Benv} {s₀ : State}
     {full : ConfiguredHistoryTraceIn HistFork cfg checkpoint future}
@@ -29,7 +29,8 @@ theorem pool_mid_history_u3 {pool : Adr} {cfg : ChainConfig} {checkpoint future 
       (∃ s, PoolRun s₀ invs s ∧ Checkpoint (future.state.getStor pool) s) ∧
       ∀ (pre : List PoolInvocation) (i : PoolInvocation) (post : List PoolInvocation)
         (sᵢ : State), invs = pre ++ i :: post → PoolRun s₀ pre sᵢ →
-        i.env.time = i.frame.sevm.benvStat.time.toNat ∧
+        (∃ blk : Block, (blk, i.frame) ∈ trace.blockFrames ∧
+          i.env.time = blk.header.timestamp.toB256.toNat) ∧
         ∃ o, step sᵢ i.env (decodeCall i.frame.sevm) = some o ∧
           RawEffect (Exec.Frame.rootDeriv i.frame) i.frame.post i.env o ∧
           U3Step sᵢ i.env (decodeCall i.frame.sevm) o := by
@@ -40,6 +41,6 @@ theorem pool_mid_history_u3 {pool : Adr} {cfg : ChainConfig} {checkpoint future 
     rw [hsplit]
     exact List.mem_append_right _ (List.mem_cons_self ..)
   obtain ⟨o, hstep, hraw, -⟩ := PoolRun.split (hsplit ▸ run) hpre
-  exact ⟨(auth i hi).2.2.2.2.time, o, hstep, hraw, u3Step_of_step hstep⟩
+  exact ⟨pool_mid_invocation_time hobs hi (auth i hi), o, hstep, hraw, u3Step_of_step hstep⟩
 
 end Blanc.Lift.Curve3Pool

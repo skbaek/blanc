@@ -5449,7 +5449,9 @@ consumer needs canonical interpreter ingress as one conjunct:
   For retained traces, `ExecutionTrace.RetainedXlot.frameAdmitted_benvStat_of_runFrame`
   admits every retained frame at the message's `benv.stat` (take `Q := (· = msg.benv.stat)`), and
   `ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time` admits every frame of
-  a configured block at `block.header.timestamp.toB256`.  The same module fixes
+  a configured block at `block.header.timestamp.toB256`; `SystemMessageTrace.frameAdmitted_time` and
+  `ApplyTransactionsTrace.frameAdmitted_time` do the same for a system call and a transaction fold at a
+  given time.  The same module fixes
   the new chain tip (`ConfiguredBlockTrace.post_blocks_getLast`) and orders a
   block strictly after its parent from Jaune's header validation
   (`ConfiguredBlockTrace.parent_timestamp_lt`).
@@ -6087,17 +6089,29 @@ ladder in [`Blanc/ExecutionAccountingPositional.lean`](../Blanc/ExecutionAccount
 `PositionalLadder` is an `AccountingLadderAdmitted` with an `Opaque` frame predicate and the
 frame-level root law `rootAt` (a replay from the root's entry boundary to the entry of any committed
 frame `f` whose prefix holds no opaque frame enclosing `f`, `Exec.Frame.Encloses`). The descent
-invariant `Exec.PositionalAccounting` is proved for every admitted derivation by
-`Exec.positionalAccounting`; the producers are `modelPositionalLadder` (`Opaque := False`) and
-`wholeFramePositionalLadder` (`Opaque` = non-static target frames). Two generic helpers live there:
-`Blanc.List.split_append_cons` and `Exec.descendantFrames_getStor_of_static`.
+invariant `Exec.PositionalAccountingIn F` is proved for every admitted derivation over a fork domain
+`F` without state gas by `Exec.positionalAccountingIn` (`Exec.PositionalAccounting` and
+`Exec.positionalAccounting` are the `CoveredFork` instances); the producer is
+`wholeFramePositionalLadder` (`Opaque` = non-static target frames). Generic helpers live there:
+`Blanc.List.split_append_cons`, `Exec.descendantFrames_getStor_of_static_noStateGas` and
+`Exec.spawn_seam_noStateGas`.
 [`Blanc/ExecutionAccountingPositionalHistory.lean`](../Blanc/ExecutionAccountingPositionalHistory.lean)
-lifts the root law along `settledFrames`' own structure: `PositionalLadder.At` with `At.nil`,
-`At.append`, `At.prefix`, `At.ite`, the per-wrapper rungs (`processMessage_at`, `messageCall_at`,
-`transaction_at`, `systemMessage_at`, `requests_at`, `body_at`, `configuredBlock_at`) and the
-headline `PositionalLadder.configuredHistory_at` (with `modelPositionalLadder_configuredHistory_at`):
-every split `before ++ f :: after` of a configured history's settled frames gives a replay from the
-checkpoint to `f`'s entry that observes exactly `before`.
+lifts the root law through **the frame carrier** `framesCarrier` (a step is a settled frame; a replay
+carries the full replay beside the positional claim `PositionalAt`), so the ordinary history rungs do
+the assembly on any fork domain: `PositionalLadder.configuredHistory_at` over a configured history,
+and `wholeFramePositionalLadderIn` with `framesCarrier_read` over `AccountingLadderAdmittedIn.midHistoryIn`:
+every split `before ++ f :: after` of the settled frames gives a replay from the start to `f`'s entry
+that observes exactly `before`.
+
+To exclude a contract as the caller of every root of a mid history without a premise about senders,
+use `MidHistoryTraceIn.settledRoots_caller_ne_of_stateInv`
+([`Blanc/ExecutionMidHistoryInRootCallers.lean`](../Blanc/ExecutionMidHistoryInRootCallers.lean)).
+
+To read a settled frame's block time over a mid history, use `MidHistoryTraceIn.settledFrames_time`
+([`Blanc/ExecutionMidHistoryInFrameTime.lean`](../Blanc/ExecutionMidHistoryInFrameTime.lean)): each frame pairs with
+the block that retained it in `MidHistoryTraceIn.blockFrames` (`blockFrames_map_snd`), and runs at that block's header
+timestamp (`blockFrames_time`). The same module gives `StagedBodyTrace.frameAdmitted_time` and
+`ConfiguredBlockTraceIn.frameAdmitted_time`, `settledFrames_time` on any fork domain.
 
 
 When the owner's frames run a *family* of codes (a proxy's `DELEGATECALL` children run the

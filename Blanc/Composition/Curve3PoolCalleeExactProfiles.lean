@@ -89,7 +89,7 @@ private theorem c3crv_msg_exact {msg : Msg} {k : Nat} {f : SFunc} {R : Nat} {pos
     rcases member with rfl | member
     · exact absurd hnone hca
     · exact absurd hnone (Exec.staticOnly_rawFrameDescendants Curve3Crv.cert_check
-        Curve3CrvToken.c3crv_cert_staticOnly (root := ⟨0, _, _, _, run⟩) rfl hcode hfork run
+        Blanc.Lift.Curve3Crv.cert_onlyStaticcall (root := ⟨0, _, _, _, run⟩) rfl hcode hfork run
         (Exec.Deriv.ParentPrefix.refl _) root member)
 
 /-! ## `totalSupply()`: the exact `STATICCALL` profile -/

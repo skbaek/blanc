@@ -30,19 +30,18 @@ theorem pool_frame_mem_committedFrames (f : Exec.Frame) : f ∈ Exec.committedFr
   rw [dite_eq_left_of_eq_true (eq_true f.committed)]
   exact List.mem_cons_self ..
 
-/-- **An authentic invocation of the replay is a settled frame of the trace.** -/
-theorem pool_invocation_settled {pool : Adr} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {trace : ConfiguredHistoryTrace cfg checkpoint future}
-    {invs : List PoolInvocation}
-    (hobs : invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace)
-    {i : PoolInvocation} (hi : i ∈ invs) (auth : i.Authentic pool) :
-    i.frame ∈ trace.settledFrames := by
+/-- **An authentic invocation of a replay over a frame list's pool frames lies in that list.** -/
+theorem pool_invocation_mem {pool : Adr} {frames : List Exec.Frame} {invs : List PoolInvocation}
+    (hobs : invs.flatMap (fun i => poolSubtreeFrames pool i.frame) =
+      frames.flatMap (poolFrameObs pool))
+    {i : PoolInvocation} (hi : i ∈ invs) (auth : i.Authentic pool) : i.frame ∈ frames := by
   have hself : i.frame ∈ poolSubtreeFrames pool i.frame := by
     unfold poolSubtreeFrames
     refine List.mem_flatMap.mpr ⟨i.frame, pool_frame_mem_committedFrames i.frame, ?_⟩
     unfold poolFrameObs
     simp only [auth.2.2.1, auth.2.2.2.1, and_self, ↓reduceIte, List.mem_singleton]
-  have hmem : i.frame ∈ committedPoolFrames pool trace := hobs ▸ List.mem_flatMap.mpr ⟨i, hi, hself⟩
+  have hmem : i.frame ∈ frames.flatMap (poolFrameObs pool) :=
+    hobs ▸ List.mem_flatMap.mpr ⟨i, hi, hself⟩
   obtain ⟨f, hf, hfo⟩ := List.mem_flatMap.mp hmem
   unfold poolFrameObs at hfo
   split at hfo
@@ -50,6 +49,15 @@ theorem pool_invocation_settled {pool : Adr} {cfg : ChainConfig}
     rw [hfo]
     exact hf
   · exact absurd hfo List.not_mem_nil
+
+/-- **An authentic invocation of the replay is a settled frame of the trace.** -/
+theorem pool_invocation_settled {pool : Adr} {cfg : ChainConfig}
+    {checkpoint future : BlockChain} {trace : ConfiguredHistoryTrace cfg checkpoint future}
+    {invs : List PoolInvocation}
+    (hobs : invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = committedPoolFrames pool trace)
+    {i : PoolInvocation} (hi : i ∈ invs) (auth : i.Authentic pool) :
+    i.frame ∈ trace.settledFrames :=
+  pool_invocation_mem hobs hi auth
 
 /-- **An authentic invocation ran at its block's header timestamp**, and its recorded time is that
 timestamp. -/
