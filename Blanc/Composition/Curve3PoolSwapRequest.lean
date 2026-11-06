@@ -227,4 +227,44 @@ theorem exchange_accepts {w : State} {s : Curve3Pool.State} {e : Env} {i j : Fin
   · rw [← ey']; exact hd1
   · exact ⟨by omega, hf2, hdy, by rw [hqd], by rw [← hAd]; omega, hfd⟩
 
+section Args
+
+variable {e : Sevm} {i j : Fin 3} {dx minDy : Nat}
+
+theorem swapCalldata_length : (swapCalldata i j dx minDy).length = 132 := by
+  simp only [swapCalldata, Curve3Pool.word, List.length_append, B256.length_toBytes, abiSelectorBytes_length]
+
+/-- `swapCalldata`'s selector. -/
+theorem swap_selector (h : e.data = swapCalldata i j dx minDy) : Sevm.selector e = Curve3Pool.selExchange := by
+  refine selector_eq_of_data_eq_abiSelectorBytes_append (by decide)
+    (tail := Curve3Pool.word i ++ Curve3Pool.word j ++ Curve3Pool.word dx ++ Curve3Pool.word minDy) ?_
+  rw [h]
+  simp only [swapCalldata, List.append_assoc]
+
+/-- `swapCalldata`'s four words. -/
+theorem swap_words (h : e.data = swapCalldata i j dx minDy) :
+    Sevm.dataWord e 4 = Nat.toB256 i ∧ Sevm.dataWord e 36 = Nat.toB256 j ∧
+      Sevm.dataWord e 68 = Nat.toB256 dx ∧ Sevm.dataWord e 100 = Nat.toB256 minDy := by
+  have l4 := abiSelectorBytes_length Curve3Pool.selExchange
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · refine Curve3PoolSupply.dataWord_eq_of_append (pre := abiSelectorBytes Curve3Pool.selExchange)
+      (rest := Curve3Pool.word j ++ Curve3Pool.word dx ++ Curve3Pool.word minDy) ?_ (by rw [l4]; rfl)
+    rw [h]; simp only [swapCalldata, Curve3Pool.word, List.append_assoc]
+  · refine Curve3PoolSupply.dataWord_eq_of_append (pre := abiSelectorBytes Curve3Pool.selExchange ++ Curve3Pool.word i)
+      (rest := Curve3Pool.word dx ++ Curve3Pool.word minDy) ?_
+      (by simp only [Curve3Pool.word, List.length_append, B256.length_toBytes, l4]; rfl)
+    rw [h]; simp only [swapCalldata, Curve3Pool.word, List.append_assoc]
+  · refine Curve3PoolSupply.dataWord_eq_of_append
+      (pre := abiSelectorBytes Curve3Pool.selExchange ++ Curve3Pool.word i ++ Curve3Pool.word j)
+      (rest := Curve3Pool.word minDy) ?_
+      (by simp only [Curve3Pool.word, List.length_append, B256.length_toBytes, l4]; rfl)
+    rw [h]; simp only [swapCalldata, Curve3Pool.word, List.append_assoc]
+  · refine Curve3PoolSupply.dataWord_eq_of_append
+      (pre := abiSelectorBytes Curve3Pool.selExchange ++ Curve3Pool.word i ++ Curve3Pool.word j ++
+        Curve3Pool.word dx) (rest := []) ?_
+      (by simp only [Curve3Pool.word, List.length_append, B256.length_toBytes, l4]; rfl)
+    rw [h]; simp only [swapCalldata, Curve3Pool.word, List.append_assoc, List.append_nil]
+
+end Args
+
 end Blanc.Composition.Curve3PoolPublic

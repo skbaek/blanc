@@ -28,6 +28,120 @@ theorem ColdEntry.stor (e : ColdEntry msg w E (exitCalldata a mins)) {x : Adr} (
   have h := (e.entry.world x hx).1
   exact ⟨congrArg Acct.stor h, congrArg Acct.code h⟩
 
+/-- **What an asked message stands on at a moment**, whatever its calldata: the pool's model state, its coins and token, the coins' code,
+and address 4. -/
+theorem asked_facts {data : Bytes} (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E data) :
+    ∃ s : Curve3Pool.State, Checkpoint (w.getStor pool) s ∧ Checkpoint ((initDevm msg).getStor msg.currentTarget) s ∧
+      (∀ k, coinOf (initSevm msg) (initDevm msg) k = coinAt k) ∧ tokOf (initSevm msg) (initDevm msg) = c3 ∧
+      RealCoins (initSevm msg) (initDevm msg) ∧ (initSevm msg).code = Curve3Pool.code ∧ IdReady (initSevm msg) (initDevm msg) := by
+  have ht : msg.currentTarget = pool := e.entry.named.1
+  have hopen := e.coinsOpen
+  have hfork : CoveredFork (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
+  have hH : HistFork (initSevm msg).benvStat.fork := hfork.histFork
+  have hmemP : pool ∈ parties w := by unfold parties; exact List.mem_cons_self
+  have hmemD : dai ∈ parties w := by simp only [parties, List.mem_cons, true_or, or_true]
+  have hmemU : usdc ∈ parties w := by simp only [parties, List.mem_cons, true_or, or_true]
+  have hmemT : usdt ∈ parties w := by simp only [parties, List.mem_cons, true_or, or_true]
+  have hmemI : usdcImplOf w ∈ parties w := by simp only [parties, List.mem_cons, true_or, or_true]
+  have stor : ∀ {x : Adr}, x ∈ parties w → (initDevm msg).getStor x = w.getStor x ∧ (initDevm msg).getCode x = w.getCode x := fun hx => by
+    have h := (e.entry.world _ hx).1
+    exact ⟨congrArg Acct.stor h, congrArg Acct.code h⟩
+  obtain ⟨sP, cP⟩ := stor hmemP
+  obtain ⟨sD, cD⟩ := stor hmemD
+  obtain ⟨sU, cU⟩ := stor hmemU
+  obtain ⟨sT, cT⟩ := stor hmemT
+  obtain ⟨-, cI⟩ := stor hmemI
+  obtain ⟨s, hck0, hsc, hst⟩ := mf.ck
+  have hck : Checkpoint ((initDevm msg).getStor msg.currentTarget) s := by rw [ht, sP]; exact hck0
+  have hcn : ∀ k : Fin 3, ((w.getStor pool).get (Curve3Pool.coinSlot k)).toAdr = coinAt k := by
+    intro k
+    have h : ((w.getStor pool).get (Curve3Pool.coinSlot k)).toAdr = Curve3Pool.adrOf (s.coins.get k) := by
+      rw [Curve3Pool.adrOf, ← hck0.abs.coins k, toB256_toNat]
+    rw [h, hsc]
+    match k with
+    | 0 => exact coin0_eq
+    | 1 => exact coin1_eq
+    | 2 => exact coin2_eq
+  have htn : ((w.getStor pool).get Curve3Pool.tokenSlot).toAdr = c3 := by
+    have h : ((w.getStor pool).get Curve3Pool.tokenSlot).toAdr = Curve3Pool.adrOf s.token := by
+      rw [Curve3Pool.adrOf, ← hck0.abs.token, toB256_toNat]
+    rw [h, hst]
+    decide +kernel
+  have hprec := Curve3PoolJointRoot.parties_not_precompile hH
+  have hprecP := parties_not_precomp hH
+  have hw : (initSevm msg).currentTarget = pool := ht
+  have hco : ∀ k, coinOf (initSevm msg) (initDevm msg) k = coinAt k := fun k => by
+    show ((initDevm msg).getStor msg.currentTarget |>.get _).toAdr = _
+    rw [ht, sP]; exact hcn k
+  have hto : tokOf (initSevm msg) (initDevm msg) = c3 := by
+    show ((initDevm msg).getStor msg.currentTarget |>.get _).toAdr = _
+    rw [ht, sP]; exact htn
+  have hKI : (initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKI = Usdc.usdcImpl.toB256 := by
+    rw [getStorVal_eq_getStor, sU]
+    exact hopen.usdcV22
+  have himplC : (initDevm msg).getCode ((initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKI).toAdr =
+      Usdc.Impl.code := by
+    rw [hKI, toAdr_toB256]
+    have hI : usdcImplOf w = Usdc.usdcImpl := by
+      unfold usdcImplOf
+      rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
+    rw [← hI, cI, hI]
+    exact hopen.usdcImplCode
+  have hC : RealCoins (initSevm msg) (initDevm msg) :=
+    { dai := by rw [hco 0]; show (initDevm msg).getCode dai = _; rw [cD]; exact mf.daiCode
+      usdc := by rw [hco 1]; show (initDevm msg).getCode usdc = _; rw [cU]; exact mk.usdcProxy
+      impl := by
+        rw [hco 1]
+        refine ⟨getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel), himplC, ?_, ?_⟩
+        · show (initSevm msg).benvStat.rules.isPrecomp
+            ((initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKI).toAdr = _
+          rw [hKI, toAdr_toB256]
+          exact Blanc.Composition.Curve3Pool3CrvHeadlines.precomp_false hprecP.2.1
+        · rw [hw]
+          show pool ≠ ((initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKA).toAdr
+          rw [getStorVal_eq_getStor, sU]
+          rw [show Blanc.Composition.UsdcLive.pKA = Usdc.adminSlot by decide +kernel]
+          exact hopen.usdcAdmin
+      usdt := by rw [hco 2]; show (initDevm msg).getCode usdt = _; rw [cT]; exact mf.usdtCode
+      live := by rw [hco 2]; show Lift.Usdt.NotDeprecated ((initDevm msg).getStor usdt); rw [sT]; exact hopen.usdtLive
+      prec := fun k => by
+        rw [hco k]
+        have := hprec.1 k
+        match k with
+        | 0 => rw [coin0_eq] at this; exact this
+        | 1 => rw [coin1_eq] at this; exact this
+        | 2 => rw [coin2_eq] at this; exact this
+      pool := fun k => by rw [hco k, hw]; match k with
+        | 0 => decide
+        | 1 => decide
+        | 2 => decide
+      tok := fun k => by rw [hco k, hto]; match k with
+        | 0 => decide
+        | 1 => decide
+        | 2 => decide
+      apart := fun j k hjk => by
+        rw [hco j, hco k]
+        match j, k with
+        | 0, 0 => exact absurd rfl hjk
+        | 0, 1 => decide
+        | 0, 2 => decide
+        | 1, 0 => decide
+        | 1, 1 => exact absurd rfl hjk
+        | 1, 2 => decide
+        | 2, 0 => decide
+        | 2, 1 => decide
+        | 2, 2 => exact absurd rfl hjk }
+  have hcode : (initSevm msg).code = Curve3Pool.code := by
+    show msg.code = _
+    rw [e.entry.named.2.2]; exact mf.poolCode
+  have hid : IdReady (initSevm msg) (initDevm msg) :=
+    ⟨by
+      show getDelegatedCodeAddress (msg.benv.state.getCode 4) = none
+      rw [e.entry.identity.2, mk.id4]
+      exact getDelegatedCodeAddress_eq_none_of_size_ne (by decide), e.entry.identity.1,
+      decide_eq_true (Curve3Pool.pool_four_mem_precompilesH hH), hfork⟩
+  exact ⟨s, hck0, hck, hco, hto, hC, hcode, hid⟩
+
 /-- **The message under the marked hypotheses.** `MsgDoes` with the gas bound its walks need, which `MsgDoes` does
 not state. -/
 theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg w E (exitCalldata a mins))
@@ -54,22 +168,7 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg
   obtain ⟨sU, cU⟩ := e.stor hmemU
   obtain ⟨sT, cT⟩ := e.stor hmemT
   obtain ⟨-, cI⟩ := e.stor hmemI
-  obtain ⟨s, hck0, hsc, hst⟩ := mf.ck
-  have hck : Checkpoint ((initDevm msg).getStor msg.currentTarget) s := by rw [ht, sP]; exact hck0
-  have hcn : ∀ k : Fin 3, ((w.getStor pool).get (Curve3Pool.coinSlot k)).toAdr = coinAt k := by
-    intro k
-    have h : ((w.getStor pool).get (Curve3Pool.coinSlot k)).toAdr = Curve3Pool.adrOf (s.coins.get k) := by
-      rw [Curve3Pool.adrOf, ← hck0.abs.coins k, toB256_toNat]
-    rw [h, hsc]
-    match k with
-    | 0 => exact coin0_eq
-    | 1 => exact coin1_eq
-    | 2 => exact coin2_eq
-  have htn : ((w.getStor pool).get Curve3Pool.tokenSlot).toAdr = c3 := by
-    have h : ((w.getStor pool).get Curve3Pool.tokenSlot).toAdr = Curve3Pool.adrOf s.token := by
-      rw [Curve3Pool.adrOf, ← hck0.abs.token, toB256_toNat]
-    rw [h, hst]
-    decide +kernel
+  obtain ⟨s, hck0, hck, hco, hto, hC, hcode, hid⟩ := asked_facts mf mk e
   have hT0 : 0 < supply w := req.holds.2.2
   have hle : a ≤ supply w := req.holds.2.1
   have hla : a < 2 ^ 256 := Nat.lt_of_le_of_lt hle (word_lt _ _)
@@ -135,69 +234,7 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg
     exact ho
   -- the coins and 3Crv
   have hprec := Curve3PoolJointRoot.parties_not_precompile hH
-  have hprecP := parties_not_precomp hH
   have hw : (initSevm msg).currentTarget = pool := ht
-  have hco : ∀ k, coinOf (initSevm msg) (initDevm msg) k = coinAt k := fun k => by
-    show ((initDevm msg).getStor msg.currentTarget |>.get _).toAdr = _
-    rw [ht, sP]; exact hcn k
-  have hto : tokOf (initSevm msg) (initDevm msg) = c3 := by
-    show ((initDevm msg).getStor msg.currentTarget |>.get _).toAdr = _
-    rw [ht, sP]; exact htn
-  have hKI : (initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKI = Usdc.usdcImpl.toB256 := by
-    rw [getStorVal_eq_getStor, sU]
-    exact hopen.usdcV22
-  have himplC : (initDevm msg).getCode ((initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKI).toAdr =
-      Usdc.Impl.code := by
-    rw [hKI, toAdr_toB256]
-    have hI : usdcImplOf w = Usdc.usdcImpl := by
-      unfold usdcImplOf
-      rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
-    rw [← hI, cI, hI]
-    exact hopen.usdcImplCode
-  have hC : RealCoins (initSevm msg) (initDevm msg) :=
-    { dai := by rw [hco 0]; show (initDevm msg).getCode dai = _; rw [cD]; exact mf.daiCode
-      usdc := by rw [hco 1]; show (initDevm msg).getCode usdc = _; rw [cU]; exact mk.usdcProxy
-      impl := by
-        rw [hco 1]
-        refine ⟨getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel), himplC, ?_, ?_⟩
-        · show (initSevm msg).benvStat.rules.isPrecomp
-            ((initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKI).toAdr = _
-          rw [hKI, toAdr_toB256]
-          exact Blanc.Composition.Curve3Pool3CrvHeadlines.precomp_false hprecP.2.1
-        · rw [hw]
-          show pool ≠ ((initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKA).toAdr
-          rw [getStorVal_eq_getStor, sU]
-          rw [show Blanc.Composition.UsdcLive.pKA = Usdc.adminSlot by decide +kernel]
-          exact hopen.usdcAdmin
-      usdt := by rw [hco 2]; show (initDevm msg).getCode usdt = _; rw [cT]; exact mf.usdtCode
-      live := by rw [hco 2]; show Lift.Usdt.NotDeprecated ((initDevm msg).getStor usdt); rw [sT]; exact hopen.usdtLive
-      prec := fun k => by
-        rw [hco k]
-        have := hprec.1 k
-        match k with
-        | 0 => rw [coin0_eq] at this; exact this
-        | 1 => rw [coin1_eq] at this; exact this
-        | 2 => rw [coin2_eq] at this; exact this
-      pool := fun k => by rw [hco k, hw]; match k with
-        | 0 => decide
-        | 1 => decide
-        | 2 => decide
-      tok := fun k => by rw [hco k, hto]; match k with
-        | 0 => decide
-        | 1 => decide
-        | 2 => decide
-      apart := fun j k hjk => by
-        rw [hco j, hco k]
-        match j, k with
-        | 0, 0 => exact absurd rfl hjk
-        | 0, 1 => decide
-        | 0, 2 => decide
-        | 1, 0 => decide
-        | 1, 1 => exact absurd rfl hjk
-        | 1, 2 => decide
-        | 2, 0 => decide
-        | 2, 1 => decide
-        | 2, 2 => exact absurd rfl hjk }
   have hc3 : Blanc.Composition.Curve3Pool3CrvInstance.C3Entry (initSevm msg) (initDevm msg) T :=
     { code := by rw [hto, cC]; exact mf.c3Code
       supply := by rw [hto, sC, hTdef]
@@ -206,15 +243,6 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg
         rw [hto]
         have := hprec.2
         rwa [show Curve3Pool.adrOf Curve3Pool.Creation.tokenN = c3 by decide +kernel] at this }
-  have hcode : (initSevm msg).code = Curve3Pool.code := by
-    show msg.code = _
-    rw [e.entry.named.2.2]; exact mf.poolCode
-  have hid : IdReady (initSevm msg) (initDevm msg) :=
-    ⟨by
-      show getDelegatedCodeAddress (msg.benv.state.getCode 4) = none
-      rw [e.entry.identity.2, mk.id4]
-      exact getDelegatedCodeAddress_eq_none_of_size_ne (by decide), e.entry.identity.1,
-      decide_eq_true (Curve3Pool.pool_four_mem_precompilesH hH), hfork⟩
   have hb : ∀ k : Fin 3, Curve3Pool.balAt ((initDevm msg).getStor (initSevm msg).currentTarget) k.val *
       rlAmt (initSevm msg) / T = Nat.toB256 (share w a k) := fun k => by
     rw [hw, sP, hamt]; exact hV k
