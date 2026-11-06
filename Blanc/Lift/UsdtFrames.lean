@@ -27,7 +27,7 @@ macro "ucall " h:ident hc:ident k:num T:term : tactic => `(tactic|
    obtain ⟨_, _, $hc:ident, $h:ident⟩ := h'))
 
 /-- **Entry 50, SafeMath `sub(y, x)`**. -/
-theorem e50_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e50_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_2ae0_c50 o) :
     x.toNat ≤ y.toNat ∧ ∃ G', o = .returned (St b ((y - x) :: S) M G') := by
   have h := run.cut
@@ -40,7 +40,7 @@ theorem e50_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   exact ⟨toNat_le_of_gtCheck_eq_zero (zero_of_iszero3 c), _, rfl⟩
 
 /-- **Entry 51, SafeMath `add(y, x)`**. -/
-theorem e51_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e51_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_2af9_c51 o) :
     x.toNat + y.toNat < 2 ^ 256 ∧ ∃ G', o = .returned (St b ((y + x) :: S) M G') := by
   have h := run.cut
@@ -55,7 +55,7 @@ theorem e51_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
 
 /-- **Entry 61, SafeMath `mul(y, x)`**: `y = 0` returns `0`, otherwise the product, its division
 checked. -/
-theorem e61_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e61_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_2a03_c61 o) :
     ∃ G', o = .returned (St b ((y * x) :: S) M G') := by
   have h := run.cut
@@ -84,7 +84,7 @@ theorem e61_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
     exact ⟨_, rfl⟩
 
 /-- **Entry 63, SafeMath `div(y, x)`**. -/
-theorem e63_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e63_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_2ac5_c63 o) :
     ∃ G', o = .returned (St b ((y / x) :: S) M G') := by
   have h := run.cut
@@ -131,8 +131,8 @@ theorem lit5 : Bytes.toB256 [5] = 5 := by decide
 /-- The word normal form of a USDT walk's stack and facts. -/
 macro "unorm " h:ident : tactic => `(tactic|
   (simp (config := { failIfUnchanged := false }) only [keccak_u, ff20_and_word, word_ff20,
-     toAdr_toB256, getStorVal_afterSload, div_bexp_zero, lit2, lit5, afterSstore_getStor_self,
-     AccumulatedWalk.getStorVal_afterSstore_self, afterSload_getStor, gsv] at $h:ident
+     toAdr_toB256, getStorVal_afterSloadH, div_bexp_zero, lit2, lit5, afterSstoreH_getStor_self,
+     afterSloadH_getStor, gsv] at $h:ident
    simp (config := { failIfUnchanged := false }) only [lit0] at $h:ident))
 
 /-- `unorm` and `umem`, across a segment. -/
@@ -142,7 +142,7 @@ macro "useg " h:ident : tactic => `(tactic|
    umem $h))
 
 /-- **Tree `0x26f1` of entry 13, the moves of `BasicToken.transfer`**. -/
-theorem e13_inv {p q f v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e13_inv {p q f v t ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (h : SFunc.RunCut cert.prog sevm [] (St b (p :: q :: f :: v :: t :: ret :: S) M G) t_26f1_c13 (Seg.done o)) :
     MoveOk (Devm.getStor b sevm.currentTarget) sevm.caller t.toAdr v f ∧
       ∃ b' M' G', o = .returned (St b' S M' G') ∧
@@ -181,9 +181,9 @@ theorem e13_inv {p q f v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.be
     unorm c5
     refine ⟨⟨c1, c2, c3, fun _ => c5⟩, B, MB, GB, eo, ?_⟩
     rw [sB]
-    simp only [Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor, keccak_u,
-      ff20_and_word, toAdr_toB256, getStorVal_afterSload, div_bexp_zero, lit2, gsv,
-      AccumulatedWalk.getStorVal_afterSstore_self]
+    simp only [Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor, keccak_u,
+      ff20_and_word, toAdr_toB256, getStorVal_afterSloadH, div_bexp_zero, lit2, gsv,
+      ]
     unfold moveStor
     rw [if_neg hf]
     rfl
@@ -200,7 +200,7 @@ theorem e13_inv {p q f v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.be
     clear e
     refine ⟨⟨c1, c2, c3, fun h => absurd rfl h⟩, B, MB, GB, eo, ?_⟩
     rw [sB]
-    simp only [Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor]
+    simp only [Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor]
     unfold moveStor
     rw [if_pos rfl]
     rfl
@@ -235,7 +235,7 @@ theorem feeOf_keep {σ : Stor} {v : B256}
 
 /-- **Entry 60, `BasicToken.transfer(t, v)`**: a short payload reverts; the move of `v` with fee
 `feeOf`. -/
-theorem e60_inv {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e60_inv {v t ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (v :: t :: ret :: S) M G) t_269b_c60 o) :
     MoveOk (Devm.getStor b sevm.currentTarget) sevm.caller t.toAdr v
         (feeOf (Devm.getStor b sevm.currentTarget) v) ∧
@@ -263,18 +263,18 @@ theorem e60_inv {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   · iterate 4 ustep h
     unorm h
     have e13 := e13_inv fork h
-    simp only [afterSload_getStor] at e13
+    simp only [afterSloadH_getStor] at e13
     rw [feeOf_cap c2]
     rw [lit3, lit4] at *
     exact e13
   · have e13 := e13_inv fork h
-    simp only [afterSload_getStor] at e13
+    simp only [afterSloadH_getStor] at e13
     rw [feeOf_keep c2]
     rw [lit3] at *
     exact e13
 
 /-- **Tree `0x233e` of entry 11, the moves of `StandardToken.transferFrom`**. -/
-theorem e11_inv {p q f a v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e11_inv {p q f a v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (h : SFunc.RunCut cert.prog sevm []
       (St b (p :: q :: f :: a :: v :: t :: r :: ret :: S) M G) t_233e_c11 (Seg.done o)) :
     MoveOk (Devm.getStor b sevm.currentTarget) r.toAdr t.toAdr v f ∧
@@ -314,9 +314,9 @@ theorem e11_inv {p q f a v t r ret : B256} {o : Outcome} (fork : CoveredFork sev
     unorm c5
     refine ⟨⟨c1, c2, c3, fun _ => c5⟩, B, MB, GB, eo, ?_⟩
     rw [sB]
-    simp only [Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor, keccak_u,
-      ff20_and_word, toAdr_toB256, getStorVal_afterSload, div_bexp_zero, lit2, gsv,
-      AccumulatedWalk.getStorVal_afterSstore_self]
+    simp only [Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor, keccak_u,
+      ff20_and_word, toAdr_toB256, getStorVal_afterSloadH, div_bexp_zero, lit2, gsv,
+      ]
     unfold moveStor
     rw [if_neg hf]
     rfl
@@ -333,7 +333,7 @@ theorem e11_inv {p q f a v t r ret : B256} {o : Outcome} (fork : CoveredFork sev
     clear e
     refine ⟨⟨c1, c2, c3, fun h => absurd rfl h⟩, B, MB, GB, eo, ?_⟩
     rw [sB]
-    simp only [Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor]
+    simp only [Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor]
     unfold moveStor
     rw [if_pos rfl]
     rfl
@@ -357,7 +357,7 @@ theorem eq_max_of {a : B256} (c : B256.eqCheck (B256.ltCheck a maxUint) 0 ≠ 0)
   omega
 
 /-- **Tree `0x2282` of entry 10, `transferFrom`'s allowance step and moves**. -/
-theorem e10_inv {p q f a v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e10_inv {p q f a v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (ha : a = (Devm.getStor b sevm.currentTarget).get (allowSlot r.toAdr sevm.caller))
     (h : SFunc.RunCut cert.prog sevm []
       (St b (p :: q :: f :: a :: v :: t :: r :: ret :: S) M G) t_2282_c10 (Seg.done o)) :
@@ -383,7 +383,7 @@ theorem e10_inv {p q f a v t r ret : B256} {o : Outcome} (fork : CoveredFork sev
     iterate 40 ustep h
     unorm h
     have e11 := e11_inv fork h
-    simp only [afterSstore_getStor_self, afterSload_getStor] at e11
+    simp only [afterSstoreH_getStor_self, afterSloadH_getStor] at e11
     have hs : spendStor (Devm.getStor b sevm.currentTarget) r.toAdr sevm.caller v =
         (Devm.getStor b sevm.currentTarget).set (allowSlot r.toAdr sevm.caller)
           ((Devm.getStor b sevm.currentTarget).get (allowSlot r.toAdr sevm.caller) - v) := by
@@ -401,7 +401,7 @@ theorem e10_inv {p q f a v t r ret : B256} {o : Outcome} (fork : CoveredFork sev
     exact ⟨fun hne => absurd he hne, e11⟩
 
 /-- **Entry 56, `StandardToken.transferFrom(r, t, v)`**. -/
-theorem e56_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e56_inv {v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (v :: t :: r :: ret :: S) M G) t_21ab_c56 o) :
     ((Devm.getStor b sevm.currentTarget).get (allowSlot r.toAdr sevm.caller) ≠ maxUint →
         v.toNat ≤ ((Devm.getStor b sevm.currentTarget).get (allowSlot r.toAdr sevm.caller)).toNat) ∧
@@ -431,14 +431,14 @@ theorem e56_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   · iterate 4 ustep h
     unorm h
     have e10 := e10_inv fork (a := (Devm.getStor b sevm.currentTarget).get
-      (mapSlot sevm.caller.toB256 (mapSlot r.toAdr.toB256 5))) (by simp only [afterSload_getStor]; rfl) h
-    simp only [afterSload_getStor] at e10
+      (mapSlot sevm.caller.toB256 (mapSlot r.toAdr.toB256 5))) (by simp only [afterSloadH_getStor]; rfl) h
+    simp only [afterSloadH_getStor] at e10
     rw [feeOf_cap c2]
     rw [lit3, lit4] at *
     exact e10
   · have e10 := e10_inv fork (a := (Devm.getStor b sevm.currentTarget).get
-      (mapSlot sevm.caller.toB256 (mapSlot r.toAdr.toB256 5))) (by simp only [afterSload_getStor]; rfl) h
-    simp only [afterSload_getStor] at e10
+      (mapSlot sevm.caller.toB256 (mapSlot r.toAdr.toB256 5))) (by simp only [afterSloadH_getStor]; rfl) h
+    simp only [afterSloadH_getStor] at e10
     rw [feeOf_keep c2]
     rw [lit3] at *
     exact e10
@@ -453,7 +453,7 @@ def listedByte (σ : Stor) (a : Adr) : B256 := Bytes.toB256 [255] &&& σ.get (ma
 theorem lit10 : Bytes.toB256 [10] = 10 := by decide
 
 /-- **Entry 39, `TetherToken.transfer(t, v)`, not deprecated**. -/
-theorem e39_inv {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e39_inv {v t ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) = 0)
     (run : SFunc.Run cert.prog sevm (St b (v :: t :: ret :: S) M G) t_14f4_c39 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 0) = 0 ∧
@@ -486,7 +486,7 @@ theorem e39_inv {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   obtain ⟨d1, B, MB, GB, e, sB⟩ := e60_inv fork hc
   cases e
   clear hc
-  simp only [afterSload_getStor] at d1 sB
+  simp only [afterSloadH_getStor] at d1 sB
   repeat ustep h
   obtain ⟨_, e⟩ := ric_ret h
   clear h
@@ -494,7 +494,7 @@ theorem e39_inv {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   exact ⟨zero_of_iszero3 c1, zero_of_iszero3 c2, d1, B', MB', GB', eo, by rw [sB', sB]⟩
 
 /-- **Entry 23, `TetherToken.transferFrom(r, t, v)`, not deprecated**. -/
-theorem e23_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e23_inv {v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) = 0)
     (run : SFunc.Run cert.prog sevm (St b (v :: t :: r :: ret :: S) M G) t_0ebd_c23 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 0) = 0 ∧
@@ -529,7 +529,7 @@ theorem e23_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   obtain ⟨d0, d1, B, MB, GB, e, sB⟩ := e56_inv fork hc
   cases e
   clear hc
-  simp only [afterSload_getStor] at d0 d1 sB
+  simp only [afterSloadH_getStor] at d0 d1 sB
   repeat ustep h
   obtain ⟨_, e⟩ := ric_ret h
   clear h
@@ -537,7 +537,7 @@ theorem e23_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   exact ⟨zero_of_iszero3 c1, zero_of_iszero3 c2, d0, d1, B', MB', GB', eo, by rw [sB', sB]⟩
 
 /-- **Entry 57, `BasicToken.balanceOf(a)`**. -/
-theorem e57_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e57_inv {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_2652_c57 o) :
     ∃ b' M' G', o = .returned (St b' ((Devm.getStor b sevm.currentTarget).get (balSlot a.toAdr) :: S) M' G') ∧
       Devm.getStor b' = Devm.getStor b := by
@@ -548,10 +548,10 @@ theorem e57_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.f
   clear h
   cases e
   simp only [keccak_u, ff20_and_word, toAdr_toB256, lit2, gsv, balSlot]
-  refine ⟨_, _, _, rfl, funext fun x => afterSload_getStor _ _ _ x⟩
+  refine ⟨_, _, _, rfl, funext fun x => afterSloadH_getStor _ _ _ x⟩
 
 /-- **Entry 33, `TetherToken.balanceOf(a)`, not deprecated**. -/
-theorem e33_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e33_inv {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) = 0)
     (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_1239_c33 o) :
     ∃ b' M' G', o = .returned (St b' ((Devm.getStor b sevm.currentTarget).get (balSlot a.toAdr) :: S) M' G') ∧
@@ -576,14 +576,14 @@ theorem e33_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.f
   obtain ⟨_, e⟩ := ric_ret h
   clear h
   cases e
-  simp only [afterSload_getStor] at sB ⊢
-  have sB' := funext fun x => (congrFun sB x).trans (afterSload_getStor _ _ _ x)
+  simp only [afterSloadH_getStor] at sB ⊢
+  have sB' := funext fun x => (congrFun sB x).trans (afterSloadH_getStor _ _ _ x)
   exact ⟨_, _, _, rfl, sB'⟩
 
 theorem lit36 : Bytes.toB256 [32] + Bytes.toB256 [4] = 36 := by decide
 
 /-- **The `balanceOf(a)` frame of TetherToken, not deprecated**: it keeps the storage. -/
-theorem frame_balanceOf {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_balanceOf {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Blanc.Sevm.selector sevm = 0x70a08231)
     (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) = 0)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
@@ -606,7 +606,7 @@ theorem frame_balanceOf {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   rw [ric_return_getStor h, sB]
 
 /-- **The `transfer(to, v)` frame of TetherToken, not deprecated.** -/
-theorem frame_transfer {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_transfer {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Blanc.Sevm.selector sevm = 0xa9059cbb)
     (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) = 0)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
@@ -639,7 +639,7 @@ theorem frame_transfer {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   exact ⟨d1, d2, d3, by rw [sp, sB]⟩
 
 /-- **The `transferFrom(r, to, v)` frame of TetherToken, not deprecated.** -/
-theorem frame_transferFrom {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_transferFrom {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Blanc.Sevm.selector sevm = 0x23b872dd)
     (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) = 0)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
@@ -684,7 +684,7 @@ def issueStor (σ : Stor) (a : B256) : Stor :=
     ((σ.set (balSlot (ownerOf σ)) (σ.get (balSlot (ownerOf σ)) + a)).get 1 + a)
 
 /-- **Tree `0x18c2` of entry 41, `issue`'s writes.** -/
-theorem e41_tail {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e41_tail {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (h : SFunc.RunCut cert.prog sevm [] (St b (a :: ret :: S) M G) t_18c2_c41 (Seg.done o)) :
     ∃ b' M' G', o = .returned (St b' S M' G') ∧
       Devm.getStor b' sevm.currentTarget = issueStor (Devm.getStor b sevm.currentTarget) a := by
@@ -703,12 +703,12 @@ theorem e41_tail {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.
   clear e
   refine ⟨B, MB, GB, eo, ?_⟩
   rw [sB, s0]
-  simp only [Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor,
+  simp only [Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor,
     show Bytes.toB256 [1] = 1 by decide]
   rfl
 
 /-- **Entry 41, `issue(a)`**: the caller is the owner, and the write's slot is the owner's entry. -/
-theorem e41_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e41_inv {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_1783_c41 o) :
     sevm.caller = ownerOf (Devm.getStor b sevm.currentTarget) ∧
       ∃ b' M' G', o = .returned (St b' S M' G') ∧
@@ -726,7 +726,7 @@ theorem e41_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.f
   ibranch h c3
   have e := e41_tail fork h
   clear h c2 c3
-  simp only [afterSload_getStor] at e
+  simp only [afterSloadH_getStor] at e
   unorm c1
   exact ⟨Adr.toB256_inj (eq_of_iszero2 (eq_zero_of_iszero_ne_zero c1)), e⟩
 
@@ -736,7 +736,7 @@ def redeemStor (σ : Stor) (a : B256) : Stor :=
     ((σ.set 1 (σ.get 1 - a)).get (balSlot (ownerOf (σ.set 1 (σ.get 1 - a)))) - a)
 
 /-- **Tree `0x1a55` of entry 42, `redeem`'s writes.** -/
-theorem e42_tail {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e42_tail {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (h : SFunc.RunCut cert.prog sevm [] (St b (a :: ret :: S) M G) t_1a55_c42 (Seg.done o)) :
     ∃ b' M' G', o = .returned (St b' S M' G') ∧
       Devm.getStor b' sevm.currentTarget = redeemStor (Devm.getStor b sevm.currentTarget) a := by
@@ -758,12 +758,12 @@ theorem e42_tail {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.
   clear e
   refine ⟨B, MB, GB, eo, ?_⟩
   rw [sB, s0]
-  simp only [Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor,
+  simp only [Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor,
     show Bytes.toB256 [1] = 1 by decide]
   rfl
 
 /-- **Entry 42, `redeem(a)`**: the caller is the owner; the debit's slot is the owner's entry. -/
-theorem e42_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e42_inv {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_197a_c42 o) :
     sevm.caller = ownerOf (Devm.getStor b sevm.currentTarget) ∧
       ∃ b' M' G', o = .returned (St b' S M' G') ∧
@@ -781,12 +781,12 @@ theorem e42_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.f
   ibranch h c3
   have e := e42_tail fork h
   clear h c2 c3
-  simp only [afterSload_getStor] at e
+  simp only [afterSloadH_getStor] at e
   unorm c1
   exact ⟨Adr.toB256_inj (eq_of_iszero2 (eq_zero_of_iszero_ne_zero c1)), e⟩
 
 /-- **The `issue(a)` frame**: the caller is the owner; the entry written is the owner's. -/
-theorem frame_issue {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_issue {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Blanc.Sevm.selector sevm = 0xcc872b66)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     sevm.caller = ownerOf (Devm.getStor b sevm.currentTarget) ∧
@@ -813,7 +813,7 @@ theorem frame_issue {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   exact ⟨d1, by rw [sp, sB]⟩
 
 /-- **The `redeem(a)` frame**: the caller is the owner; the entry debited is the owner's. -/
-theorem frame_redeem {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_redeem {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Blanc.Sevm.selector sevm = 0xdb006a75)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     sevm.caller = ownerOf (Devm.getStor b sevm.currentTarget) ∧
@@ -846,7 +846,7 @@ makes one `CALL` to `upgradedAddress` (slot 10, the same word as the flag), and 
 with is what that call left.  What the callee does is the owner's choice: this is the named power. -/
 
 /-- **Entry 39, `transfer`, deprecated.** -/
-theorem e39_deprecated {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e39_deprecated {v t ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) ≠ 0)
     (run : SFunc.Run cert.prog sevm (St b (v :: t :: ret :: S) M G) t_14f4_c39 o) :
     ∃ b1 gw rest M1 G1 d,
@@ -887,18 +887,17 @@ theorem e39_deprecated {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.b
     clear e
     simp only [lit10] at hcall
     refine ⟨_, _, _, _, _, d, ?_, hcall, B, MB, GB, eo, sB⟩
-    have hk : ∀ (x : Devm) (a : Adr), Devm.getStor (temporalAccountAccessBase x a) = Devm.getStor x := by
+    have hk : ∀ (x : Devm) (a : Adr), Devm.getStor (accountAccessH sevm x a) = Devm.getStor x := by
       intro x a
       funext y
-      show (temporalAccountAccessBase x a).state.getStor y = x.state.getStor y
-      rw [temporalAccountAccessBase_state]
+      exact accountAccessH_getStor sevm x a y
     rw [hk]
     funext x
-    simp only [afterSload_getStor]
+    simp only [afterSloadH_getStor]
   · exact absurd (eq_zero_of_iszero_ne_zero c3) hdep
 
 /-- **Entry 23, `transferFrom`, deprecated.** -/
-theorem e23_deprecated {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e23_deprecated {v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) ≠ 0)
     (run : SFunc.Run cert.prog sevm (St b (v :: t :: r :: ret :: S) M G) t_0ebd_c23 o) :
     ∃ b1 gw rest M1 G1 d,
@@ -939,18 +938,17 @@ theorem e23_deprecated {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm
     clear e
     simp only [lit10] at hcall
     refine ⟨_, _, _, _, _, d, ?_, hcall, B, MB, GB, eo, sB⟩
-    have hk : ∀ (x : Devm) (a : Adr), Devm.getStor (temporalAccountAccessBase x a) = Devm.getStor x := by
+    have hk : ∀ (x : Devm) (a : Adr), Devm.getStor (accountAccessH sevm x a) = Devm.getStor x := by
       intro x a
       funext y
-      show (temporalAccountAccessBase x a).state.getStor y = x.state.getStor y
-      rw [temporalAccountAccessBase_state]
+      exact accountAccessH_getStor sevm x a y
     rw [hk]
     funext x
-    simp only [afterSload_getStor]
+    simp only [afterSloadH_getStor]
   · exact absurd (eq_zero_of_iszero_ne_zero c3) hdep
 
 /-- **Entry 33, `balanceOf`, deprecated**: the answer is what the call left in memory. -/
-theorem e33_deprecated {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e33_deprecated {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) ≠ 0)
     (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_1239_c33 o) :
     ∃ b1 gw rest M1 G1 d,
@@ -989,14 +987,13 @@ theorem e33_deprecated {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.ben
     clear e
     simp only [lit10] at hcall
     refine ⟨_, _, _, _, _, d, ?_, hcall, _, B, MB, GB, eo, sB⟩
-    have hk : ∀ (x : Devm) (a : Adr), Devm.getStor (temporalAccountAccessBase x a) = Devm.getStor x := by
+    have hk : ∀ (x : Devm) (a : Adr), Devm.getStor (accountAccessH sevm x a) = Devm.getStor x := by
       intro x a
       funext y
-      show (temporalAccountAccessBase x a).state.getStor y = x.state.getStor y
-      rw [temporalAccountAccessBase_state]
+      exact accountAccessH_getStor sevm x a y
     rw [hk]
     funext x
-    simp only [afterSload_getStor]
+    simp only [afterSloadH_getStor]
   · exact absurd (eq_zero_of_iszero_ne_zero c3) hdep
 
 /-! ## Credits: a move lowers only its source -/
