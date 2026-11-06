@@ -103,7 +103,7 @@ theorem inhibited_mid_history_preservesIn {F : Fork → Prop}
     ⟨by rw [installed]; rfl, trivial, initialStorage⟩
   have finishInv := trace.stateInv_admitted_semIn (inhibitedSpec_preservesIn neutral)
     capabilities (inhibited_mid_admitted trace callers) (trace.rewardCreditsFunded capabilities)
-    startInv inhibitedInstalledCert rfl
+    startInv inhibitedInstalledCert.runtimeSafety rfl
   refine ⟨?_, finishInv.inv⟩
   apply ByteArray.ext
   apply Array.toList_inj.mp

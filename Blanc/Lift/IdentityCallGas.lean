@@ -82,18 +82,14 @@ theorem Resume.call_gasLeft_error {parent child sf : Devm} {oi os : Nat}
     rw [Devm.eq_of_push_ok hp]
     rfl
 
-theorem ri_call_identity_gas_fail {ii is oi os : B256} {d : Devm} (hid : IdReady sevm b)
+theorem ri_call_identity_gas_failH {ii is oi os : B256} {d : Devm} (hid : IdReadyH sevm b)
     (hdepth : 0 < sevm.depth) (hG : G < 2 ^ 256) (his : is.toNat ≤ 32)
     (h : Ninst.Run sevm (St b (Nat.toB256 G :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G)
       (.exec .call) d)
     (h0 : d.stack = 0 :: S) : d.gasLeft = 0 := by
-  have hfork := hid.fork
-  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   rcases h with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    Bind.bind, Except.bind, hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled hdeleg] at h_run
+    Bind.bind, Except.bind, hid.stateGas] at h_run
   rw [show (St b (Nat.toB256 G :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G).pop =
     .ok (Nat.toB256 G, St b (4 :: 0 :: ii :: is :: oi :: os :: S) M G) from rfl] at h_run
   simp only at h_run
@@ -115,70 +111,79 @@ theorem ri_call_identity_gas_fail {ii is oi os : B256} {d : Devm} (hid : IdReady
   rw [show (St b (os :: S) M G).popToNat =
     .ok (os.toNat, St b S M G) from rfl] at h_run
   simp only at h_run
-  have hAD : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress (St b S M G) 4) 4 =
-      ⟨false, 4, b.getCode 4, 0, addAccessedAddress (St b S M G) 4⟩ := by
-    unfold GasSchedule.accessDelegation
-    simp only [show (addAccessedAddress (St b S M G) 4).state.getCode 4 = b.getCode 4 from rfl,
-      hid.nodeleg]
   have hA : addAccessedAddress (St b S M G) 4 = St b S M G :=
     addAccessedAddress_eq_self_of_mem hid.warm
-  rw [hAD, hA] at h_run
-  simp only [or_true, ↓reduceIte, Except.assert] at h_run
-  have hbal : ∀ x : B256, ¬ x < 0 := fun x hx => by
-    rw [B256.lt_iff_toNat_lt_toNat] at hx; exact Nat.not_lt_zero _ hx
-  split at h_run
-  · cases XStep.run_ofExcept_error h_run
-  rename_i v hcharge
-  simp only [hbal, ↓reduceIte] at h_run
-  have hdep : sevm.depth ≠ 0 := Nat.pos_iff_ne_zero.mp hdepth
-  have hcost := Devm.gasLeft_of_chargeGas hcharge
-  simp only [St.gasLeft, B256.toNat_toB256_of_lt hG] at hcost h_run
-  unfold calculateMsgCallGas at hcost h_run
-  simp only [show B256.toNat (0 : B256) = 0 from rfl, ↓reduceIte] at hcost h_run
-  split_ifs at hcost h_run with hlt
-  · dsimp only at hcost
-    omega
-  dsimp only at hcost h_run
-  simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdep, ite_false,
-    XStep.Run] at h_run
-  rcases h_run with ⟨ex', run_pm₀, h_split⟩
-  rcases ex' with err' | child
-  · cases Resume.call_run_error h_split.symm
-  have hsplit := h_split.symm
-  have hstk := Resume.call_stack_flag hsplit
-  have herr : child.error.isSome = true := by
-    cases e : child.error.isSome with
-    | true => rfl
-    | false =>
-      rw [e] at hstk
-      rw [h0] at hstk
-      exact absurd (List.cons.inj hstk).1 (by decide)
-  obtain ⟨Gv, rfl⟩ : ∃ Gv, v = St b S M Gv :=
-    ⟨_, Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas hcharge)⟩
-  set ext := (St b S M G).extCost [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] with hext
-  set acc := sevm.benvStat.rules.gas.accessCost 4 (St b S M G).accessedAddresses + 0 + 0 + 0
-    with hacc
-  set P := ((St b S M Gv).memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
-    [] with hP
-  have hcd : Array.sliceD P.memory.data ii.toNat is.toNat 0 = (M.read ii.toNat is.toNat).1 := rfl
-  rw [hcd] at run_pm₀
-  have pm : ProcessMessage (callMsg sevm P (min G (except64th (G - ext - acc))) 0
-      sevm.currentTarget 4 4 true false (M.read ii.toNat is.toNat).1 (b.getCode 4) false) xl
-      (.ok child) := by
-    simpa only [ProcessMessage, add_zero] using run_pm₀
-  obtain ⟨hcg, hlow⟩ := processMessage_identity_error hid.pre pm herr
-  rw [Resume.call_gasLeft_error hsplit herr, hcg]
-  have hlen : (M.read ii.toNat is.toNat).1.length = is.toNat := by
-    show (Array.sliceD M.data ii.toNat is.toNat 0).length = is.toNat
-    rw [Array.sliceD_eq_map, List.length_map, List.length_range]
-  rw [hlen] at hlow
-  have hid18 : idCost is.toNat ≤ 18 := by
-    unfold idCost ceilDiv
-    split <;> omega
-  show Gv + 0 = 0
-  simp only [St.gasLeft] at hcost
-  unfold except64th at hcost hlow
-  omega
+  cases hacc0 : sevm.benvStat.rules.access <;> simp only [hacc0] at h_run
+  case' flat gf => skip
+  all_goals try rw [hA] at h_run
+  all_goals rw [hid.delegation (St b S M G) rfl] at h_run
+  all_goals (
+    simp only [or_true, ↓reduceIte, Except.assert] at h_run
+    have hbal : ∀ x : B256, ¬ x < 0 := fun x hx => by
+      rw [B256.lt_iff_toNat_lt_toNat] at hx; exact Nat.not_lt_zero _ hx
+    split at h_run
+    · cases XStep.run_ofExcept_error h_run
+    rename_i v hcharge
+    simp only [hbal, ↓reduceIte] at h_run
+    have hdep : sevm.depth ≠ 0 := Nat.pos_iff_ne_zero.mp hdepth
+    have hcost := Devm.gasLeft_of_chargeGas hcharge
+    simp only [St.gasLeft, B256.toNat_toB256_of_lt hG] at hcost h_run
+    unfold calculateMsgCallGas at hcost h_run
+    simp only [show B256.toNat (0 : B256) = 0 from rfl, ↓reduceIte] at hcost h_run
+    split_ifs at hcost h_run with hlt
+    · dsimp only at hcost
+      omega
+    dsimp only at hcost h_run
+    simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdep, ite_false,
+      XStep.Run] at h_run
+    rcases h_run with ⟨ex', run_pm₀, h_split⟩
+    rcases ex' with err' | child
+    · cases Resume.call_run_error h_split.symm
+    have hsplit := h_split.symm
+    have hstk := Resume.call_stack_flag hsplit
+    have herr : child.error.isSome = true := by
+      cases e : child.error.isSome with
+      | true => rfl
+      | false =>
+        rw [e] at hstk
+        rw [h0] at hstk
+        exact absurd (List.cons.inj hstk).1 (by decide)
+    obtain ⟨Gv, rfl⟩ : ∃ Gv, v = St b S M Gv :=
+      ⟨_, Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas hcharge)⟩
+    set ext := (St b S M G).extCost [(ii.toNat, is.toNat), (oi.toNat, os.toNat)] with hext
+    simp only [Nat.add_zero] at hcost run_pm₀
+    first
+    | set acc := gf.call with hacc
+    | set acc := sevm.benvStat.rules.gas.accessCost 4 (St b S M G).accessedAddresses with hacc
+    set P := ((St b S M Gv).memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+      [] with hP
+    have hcd : Array.sliceD P.memory.data ii.toNat is.toNat 0 = (M.read ii.toNat is.toNat).1 := rfl
+    rw [hcd] at run_pm₀
+    have pm : ProcessMessage (callMsg sevm P (min G (except64th (G - ext - acc))) 0
+        sevm.currentTarget 4 4 true false (M.read ii.toNat is.toNat).1 (b.getCode 4) false) xl
+        (.ok child) := by
+      simpa only [ProcessMessage, add_zero] using run_pm₀
+    obtain ⟨hcg, hlow⟩ := processMessage_identity_error hid.pre pm herr
+    rw [Resume.call_gasLeft_error hsplit herr, hcg]
+    have hlen : (M.read ii.toNat is.toNat).1.length = is.toNat := by
+      show (Array.sliceD M.data ii.toNat is.toNat 0).length = is.toNat
+      rw [Array.sliceD_eq_map, List.length_map, List.length_range]
+    rw [hlen] at hlow
+    have hid18 : idCost is.toNat ≤ 18 := by
+      unfold idCost ceilDiv
+      split <;> omega
+    show Gv + 0 = 0
+    simp only [St.gasLeft] at hcost
+    unfold except64th at hcost hlow
+    omega)
+
+/-- The covered-fork form of `ri_call_identity_gas_failH`. -/
+theorem ri_call_identity_gas_fail {ii is oi os : B256} {d : Devm} (hid : IdReady sevm b)
+    (hdepth : 0 < sevm.depth) (hG : G < 2 ^ 256) (his : is.toNat ≤ 32)
+    (h : Ninst.Run sevm (St b (Nat.toB256 G :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G)
+      (.exec .call) d)
+    (h0 : d.stack = 0 :: S) : d.gasLeft = 0 :=
+  ri_call_identity_gas_failH hid.toH hdepth hG his h h0
 
 /-- A `POP` needs gas. -/
 theorem gasLeft_of_run_pop {d d' : Devm} (h : Ninst.Run sevm d (.reg .pop) d') :

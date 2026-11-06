@@ -428,7 +428,7 @@ theorem StagedBodyTrace.afterTransactions_stateInv_admitted_semIn {F : Fork → 
     (txBound : sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256)
     (rewards : trace.RewardCreditsFunded)
     (txInv : c.BenvInv ca trace.transactionBenv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca state := by
   have txStat : trace.transactionBenv.stat = benv.stat := trace.transactions.stat_eq
   have withdrawalInv : c.BenvInv ca (trace.transactionBenv.withState trace.withdrawalState) := by
@@ -471,7 +471,7 @@ theorem ConfiguredBlockTraceIn.tail_stateInv_admitted_semIn {F : Fork → Prop} 
     (admitted : (MidHistoryTraceIn.tail block cut).FrameAdmitted ca entry)
     (rewards : block.RewardCreditsFunded)
     (inv : c.StateInv ca cut.afterBenv.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca post.state := by
   have hsg : (initBenv block.fork pre block.block.header).stat.rules.stateGas = none :=
     capabilities.stateGas_none block.forkIn
@@ -504,7 +504,7 @@ theorem MidHistoryTraceIn.stateInv_admitted_semIn {F : Fork → Prop} {C : ByteA
     (admitted : trace.FrameAdmitted ca entry)
     (rewards : trace.RewardCreditsFunded)
     (inv : c.StateInv ca start.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca future.state := by
   induction trace with
   | tail block cut =>
@@ -532,7 +532,7 @@ theorem MidHistoryTraceIn.stateInv_admittedIn {F : Fork → Prop} {C : ByteArray
     (admitted : trace.FrameAdmitted ca entry)
     (rewards : trace.RewardCreditsFunded)
     (inv : c.StateInv ca start.state)
-    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : Prog.compile c.prog = some C.toList) :
     c.StateInv ca future.state :=
   stateInv_ofSem (trace.stateInv_admitted_semIn (c := c.toSem)
     (preservesAdmittedIn_toSem c ca entry preserves) capabilities admitted rewards

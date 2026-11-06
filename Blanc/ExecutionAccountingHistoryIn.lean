@@ -177,7 +177,7 @@ theorem requestsIn (L : AccountingLadderAdmittedIn F c ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (hF : F benv.stat.fork)
     (hsg : benv.stat.rules.stateGas = none)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
       (L.carrier.ofState state) ∧
@@ -273,7 +273,7 @@ theorem requestStageIn (L : AccountingLadderAdmittedIn F c ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (hF : F benv.stat.fork)
     (hsg : benv.stat.rules.stateGas = none)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
       (L.carrier.ofState state) ∧
@@ -335,7 +335,7 @@ theorem transactionsWithdrawalsRequestsReplayIn
     (txBound : sum trace.transactionBenv.state.bal + wdsum wds < 2 ^ 256)
     (hF : F benv.stat.fork)
     (hsg : benv.stat.rules.stateGas = none)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState trace.historyState) steps
       (L.carrier.ofState trace.requestState) ∧
@@ -428,7 +428,7 @@ theorem stagedBody (L : AccountingLadderAdmittedIn F c ca entry)
     (inv : c.BenvInv ca benv)
     (hF : F benv.stat.fork)
     (hsg : benv.stat.rules.stateGas = none)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
       (L.carrier.ofState state) ∧
@@ -519,7 +519,7 @@ theorem configuredBlockIn (L : AccountingLadderAdmittedIn F c ca entry)
     (capabilities : BodyStageCapabilities F)
     (rewards : trace.RewardCreditsFunded)
     (inv : c.StateInv ca pre.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState pre.state) steps
       (L.carrier.ofState post.state) ∧
@@ -546,7 +546,7 @@ theorem configuredHistoryIn (L : AccountingLadderAdmittedIn F c ca entry)
     (capabilities : BodyStageCapabilities F)
     (rewards : history.RewardCreditsFunded)
     (inv : c.StateInv ca checkpoint.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∃ frames, L.carrier.Replay (L.carrier.ofState checkpoint.state) frames
         (L.carrier.ofState future.state) ∧
       L.view.obs frames =

@@ -411,7 +411,7 @@ theorem transactionIn (L : AccountingLadderAdmittedIn F c ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (hF : F benv.stat.fork)
     (hsg : benv.stat.rules.stateGas = none)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     (blockIndex : Nat) (transactionIndex : Option Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
       (L.carrier.ofState state) ∧
@@ -523,7 +523,7 @@ theorem transactionListIn (L : AccountingLadderAdmittedIn F c ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (hF : F benv.stat.fork)
     (hsg : benv.stat.rules.stateGas = none)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState benv.state) steps
       (L.carrier.ofState finalBenv.state) ∧

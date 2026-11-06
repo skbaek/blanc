@@ -71,7 +71,7 @@ theorem ApplyTransactionsTrace.rawFrames_codeImageIn {F : Fork → Prop} {C : By
     (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
     (admitted : trace.FrameAdmitted ca entry) (sumNof : sum benv.state.bal < 2 ^ 256)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ root ∈ trace.rawFrames, some (root.devm.getCode ca).toList = c.sem.image := by
   induction trace with
   | nil => intro root member; simp only [rawFrames, List.not_mem_nil] at member
@@ -97,7 +97,7 @@ theorem RequestsTrace.rawFrames_codeImageIn {F : Fork → Prop} {C : ByteArray}
     (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ root ∈ trace.rawFrames, some (root.devm.getCode ca).toList = c.sem.image := by
   have withdrawal := trace.withdrawal.stateInv_and_sum_le_admitted_semIn
     preserves hF hsg admitted.withdrawal inv K image
@@ -144,7 +144,7 @@ theorem RequestStageTrace.rawFrames_codeImageIn {F : Fork → Prop} {C : ByteArr
     (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ root ∈ trace.rawFrames, some (root.devm.getCode ca).toList = c.sem.image := by
   cases trace with
   | skipped => intro root member; simp only [rawFrames, List.not_mem_nil] at member
@@ -183,7 +183,7 @@ theorem StagedBodyTrace.rawFrames_codeImageIn {F : Fork → Prop} {C : ByteArray
     (admitted : trace.FrameAdmitted ca entry)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ root ∈ trace.rawFrames, some (root.devm.getCode ca).toList = c.sem.image := by
   have beacon := trace.beacon.stateInv_and_sum_le_admitted_semIn
     preserves hF hsg admitted.beacon inv K image
@@ -236,7 +236,7 @@ theorem ConfiguredBlockTraceIn.rawFrames_codeImageIn {F : Fork → Prop} {C : By
     (capabilities : BodyStageCapabilities F)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.StateInv ca pre.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ root ∈ trace.rawFrames, some (root.devm.getCode ca).toList = c.sem.image :=
   trace.bodyTrace.rawFrames_codeImageIn preserves trace.forkIn
     (capabilities.stateGas_none trace.forkIn) admitted trace.withdrawalsBound
@@ -253,7 +253,7 @@ theorem ConfiguredHistoryTraceIn.rawFrames_codeImageIn {F : Fork → Prop} {C : 
     (admitted : history.FrameAdmitted ca entry)
     (rewards : history.RewardCreditsFunded)
     (inv : c.StateInv ca checkpoint.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ root ∈ history.rawFrames, some (root.devm.getCode ca).toList = c.sem.image := by
   induction history with
   | refl => intro root member; simp only [rawFrames, List.not_mem_nil] at member
@@ -278,7 +278,7 @@ theorem StagedBodyTrace.rawFrames_codeImage_of_installedIn (sem : CodeSem) (a : 
     (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (inv : (ContractSpecSem.ofStorageOnly sem (fun _ => True)).BenvInv a benv)
-    (K : InstalledCert C) (image : sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : sem.image = some C.toList) :
     ∀ root ∈ trace.rawFrames, some (root.devm.getCode a).toList = sem.image :=
   trace.rawFrames_codeImageIn
     (c := ContractSpecSem.ofStorageOnly sem (fun _ => True)) (ca := a)
@@ -294,7 +294,7 @@ theorem ConfiguredBlockTraceIn.rawFrames_codeImage_of_installedIn (sem : CodeSem
     (trace : ConfiguredBlockTraceIn F cfg pre post)
     (capabilities : BodyStageCapabilities F)
     (inv : (ContractSpecSem.ofStorageOnly sem (fun _ => True)).StateInv a pre.state)
-    (K : InstalledCert C) (image : sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : sem.image = some C.toList) :
     ∀ root ∈ trace.rawFrames, some (root.devm.getCode a).toList = sem.image :=
   trace.rawFrames_codeImageIn
     (c := ContractSpecSem.ofStorageOnly sem (fun _ => True)) (ca := a)
@@ -311,7 +311,7 @@ theorem ConfiguredHistoryTraceIn.rawFrames_codeImage_of_installedIn (sem : CodeS
     (capabilities : BodyStageCapabilities F)
     (rewards : history.RewardCreditsFunded)
     (inv : (ContractSpecSem.ofStorageOnly sem (fun _ => True)).StateInv a checkpoint.state)
-    (K : InstalledCert C) (image : sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : sem.image = some C.toList) :
     ∀ root ∈ history.rawFrames, some (root.devm.getCode a).toList = sem.image :=
   history.rawFrames_codeImageIn
     (c := ContractSpecSem.ofStorageOnly sem (fun _ => True)) (ca := a)
@@ -330,7 +330,7 @@ theorem ConfiguredHistoryTraceIn.settled_codeImageIn (sem : CodeSem) (a : Adr)
     (capabilities : BodyStageCapabilities F)
     (rewards : history.RewardCreditsFunded)
     (installed : some (checkpoint.state.getCode a).toList = sem.image)
-    (K : InstalledCert C) (image : sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : sem.image = some C.toList) :
     ∀ f ∈ history.settledFrames, some (f.pre.getCode a).toList = sem.image := by
   have inv : (ContractSpecSem.ofStorageOnly sem (fun _ => True)).StateInv a checkpoint.state :=
     ⟨installed, trivial, trivial⟩
@@ -352,7 +352,7 @@ private theorem tail_rawFrames_codeImageIn {F : Fork → Prop} {C : ByteArray}
     (capabilities : BodyStageCapabilities F)
     (admitted : (MidHistoryTraceIn.tail block cut).FrameAdmitted ca entry)
     (inv : c.StateInv ca cut.afterBenv.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ root ∈ (MidHistoryTraceIn.tail block cut).rawFrames,
       some (root.devm.getCode ca).toList = c.sem.image := by
   have afterF : F cut.afterBenv.stat.fork := by
@@ -393,7 +393,7 @@ theorem MidHistoryTraceIn.rawFrames_codeImageIn {F : Fork → Prop} {C : ByteArr
     (admitted : history.FrameAdmitted ca entry)
     (rewards : history.RewardCreditsFunded)
     (inv : c.StateInv ca start.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ root ∈ history.rawFrames, some (root.devm.getCode ca).toList = c.sem.image := by
   induction history with
   | tail block cut =>
@@ -415,7 +415,7 @@ theorem MidHistoryTraceIn.settled_codeImageIn (sem : CodeSem) (a : Adr)
     (capabilities : BodyStageCapabilities F)
     (rewards : history.RewardCreditsFunded)
     (installed : some (start.state.getCode a).toList = sem.image)
-    (K : InstalledCert C) (image : sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : sem.image = some C.toList) :
     ∀ frame ∈ history.settledFrames, some (frame.pre.getCode a).toList = sem.image := by
   have inv : (ContractSpecSem.ofStorageOnly sem (fun _ => True)).StateInv a start.state :=
     ⟨installed, trivial, trivial⟩

@@ -39,19 +39,33 @@ theorem IdReady.of_rel {sevm : Sevm} {b b' : Devm} (h : IdReady sevm b) (hr : Ba
     IdReady sevm b' :=
   ⟨by rw [hr.code]; exact h.nodeleg, by rw [hr.addrs]; exact h.warm, h.pre, h.fork⟩
 
+/-- The identity precompile premises of a frame, under the frame's actual rules. -/
+structure IdReadyH (sevm : Sevm) (b : Devm) : Prop where
+  nodeleg : getDelegatedCodeAddress (b.getCode 4) = none
+  warm : (4 : Adr) ∈ b.accessedAddresses
+  pre : decide (sevm.benvStat.rules.isPrecomp 4) = true
+  stateGas : sevm.benvStat.rules.stateGas = none
+
+theorem IdReady.toH {sevm : Sevm} {b : Devm} (h : IdReady sevm b) : IdReadyH sevm b :=
+  ⟨h.nodeleg, h.warm, h.pre, h.fork.rules_stateGas_none⟩
+
+theorem IdReadyH.of_rel {sevm : Sevm} {b b' : Devm} (h : IdReadyH sevm b) (hr : BaseRel b b') :
+    IdReadyH sevm b' :=
+  ⟨by rw [hr.code]; exact h.nodeleg, by rw [hr.addrs]; exact h.warm, h.pre, h.stateGas⟩
+
 /-- The identity precompile's charge on `n` input bytes. -/
 def idCost (n : Nat) : Nat := 15 + 3 * ceilDiv n 32
 
 /-- **A clean identity child**, for a value-0 message of either kind: it returned its calldata,
 kept the parent's world and access sets, logged nothing, and was funded. -/
-theorem processMessage_identity_clean
+theorem processMessage_identity_cleanH
     {sevm : Sevm} {parent child : Devm} {gas : Nat} {calldata : Bytes} {stv st : Bool}
     {code : ByteArray} {xl : Xlot}
     (hpre : decide (sevm.benvStat.rules.isPrecomp 4) = true)
     (hpm : ProcessMessage
       (callMsg sevm parent gas 0 sevm.currentTarget 4 4 stv st calldata code false) xl
         (.ok child))
-    (hclean : child.error.isSome = false) (hfork : CoveredFork sevm.benvStat.fork) :
+    (hclean : child.error.isSome = false) (hsg : sevm.benvStat.rules.stateGas = none) :
     child.output = calldata ∧ child.state = parent.state ∧
       child.accessedAddresses = parent.accessedAddresses ∧
       child.accessedStorageKeys = parent.accessedStorageKeys ∧ child.logs = [] ∧
@@ -87,7 +101,7 @@ theorem processMessage_identity_clean
           all_goals first
             | rfl
             | (rename_i heq
-               exact absurd (heq.symm.trans hfork.rules_stateGas_none)
+               exact absurd (heq.symm.trans hsg)
                  (by simp only [reduceCtorEq, not_false_eq_true]))
     · simp only [applyPrecompResult, executeCode.handleErrorWith] at hexec
       split at hexec <;>
@@ -102,24 +116,49 @@ theorem processMessage_identity_clean
         contradiction
   · exact False.elim (hinterp.1 hpre)
 
+
+/-- The covered-fork form of `processMessage_identity_cleanH`. -/
+theorem processMessage_identity_clean
+    {sevm : Sevm} {parent child : Devm} {gas : Nat} {calldata : Bytes} {stv st : Bool}
+    {code : ByteArray} {xl : Xlot}
+    (hpre : decide (sevm.benvStat.rules.isPrecomp 4) = true)
+    (hpm : ProcessMessage
+      (callMsg sevm parent gas 0 sevm.currentTarget 4 4 stv st calldata code false) xl
+        (.ok child))
+    (hclean : child.error.isSome = false) (hfork : CoveredFork sevm.benvStat.fork) :
+    child.output = calldata ∧ child.state = parent.state ∧
+      child.accessedAddresses = parent.accessedAddresses ∧
+      child.accessedStorageKeys = parent.accessedStorageKeys ∧ child.logs = [] ∧
+      child.createdAccounts = parent.createdAccounts ∧ idCost calldata.length ≤ gas ∧
+      child.refundCounter = 0 :=
+  processMessage_identity_cleanH hpre hpm hclean hfork.rules_stateGas_none
+
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+
+/-- Whichever delegation flag the rules select, `4` resolves to its own code without delegation. -/
+theorem IdReadyH.delegation (hid : IdReadyH sevm b) (D : Devm) (hD : D.state = b.state) :
+    sevm.benvStat.rules.accessDelegation D 4 = ⟨false, 4, b.getCode 4, 0, D⟩ := by
+  have code : D.state.getCode 4 = b.getCode 4 := by rw [hD]; rfl
+  cases hdel : sevm.benvStat.rules.delegationEnabled with
+  | false =>
+    rw [ForkRules.accessDelegation_disabled hdel, code]
+  | true =>
+    rw [ForkRules.accessDelegation_enabled hdel]
+    unfold GasSchedule.accessDelegation
+    simp only [code, hid.nodeleg]
 
 /-- **A value-0 `CALL` of the identity precompile, inverted.**  A successful step either pushed
 `0`, or pushed `1` over a base `b'` that `ShaCallPost`-extends `b` with the input window as
 return data, the input written (truncated to `os`) over the extended output window. -/
-theorem ri_call_identity {g ii is oi os : B256} {d : Devm} (hid : IdReady sevm b)
+theorem ri_call_identityH {g ii is oi os : B256} {d : Devm} (hid : IdReadyH sevm b)
     (h : Ninst.Run sevm (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G) (.exec .call) d) :
     d.stack = 0 :: S ∨
       ∃ b' G', ShaCallPost b b' (M.read ii.toNat is.toNat).1 ∧
         d = St b' (1 :: S) ((M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
           oi.toNat ((M.read ii.toNat is.toNat).1.take os.toNat)) G' := by
-  have hfork := hid.fork
-  have hdeleg : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true) rfl rfl rfl rfl
   rcases h with ⟨xl, h_fill, pc, h_run⟩
   simp only [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep, Xinst.step,
-    Bind.bind, Except.bind, hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled hdeleg] at h_run
+    Bind.bind, Except.bind, hid.stateGas] at h_run
   rw [show (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G).pop =
     .ok (g, St b (4 :: 0 :: ii :: is :: oi :: os :: S) M G) from rfl] at h_run
   simp only at h_run
@@ -141,74 +180,82 @@ theorem ri_call_identity {g ii is oi os : B256} {d : Devm} (hid : IdReady sevm b
   rw [show (St b (os :: S) M G).popToNat =
     .ok (os.toNat, St b S M G) from rfl] at h_run
   simp only at h_run
-  have hAD : sevm.benvStat.rules.gas.accessDelegation (addAccessedAddress (St b S M G) 4) 4 =
-      ⟨false, 4, b.getCode 4, 0, addAccessedAddress (St b S M G) 4⟩ := by
-    unfold GasSchedule.accessDelegation
-    simp only [show (addAccessedAddress (St b S M G) 4).state.getCode 4 = b.getCode 4 from rfl,
-      hid.nodeleg]
   have hA : addAccessedAddress (St b S M G) 4 = St b S M G :=
     addAccessedAddress_eq_self_of_mem hid.warm
-  rw [hAD, hA] at h_run
-  simp only [or_true, ↓reduceIte, Except.assert] at h_run
-  have hbal : ∀ x : B256, ¬ x < 0 := fun x hx => by
-    rw [B256.lt_iff_toNat_lt_toNat] at hx; exact Nat.not_lt_zero _ hx
-  split at h_run
-  · cases XStep.run_ofExcept_error h_run
-  rename_i v hcharge
-  simp only [hbal, ↓reduceIte] at h_run
-  obtain ⟨Gv, rfl⟩ : ∃ Gv, v = St b S M Gv :=
-    ⟨_, Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas hcharge)⟩
-  by_cases hdepth : sevm.depth = 0
-  · left
-    simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdepth, ite_true] at h_run
-    simp only [bind, Except.bind] at h_run
+  cases hacc0 : sevm.benvStat.rules.access <;> simp only [hacc0] at h_run
+  case' flat gf => skip
+  all_goals try rw [hA] at h_run
+  all_goals rw [hid.delegation (St b S M G) rfl] at h_run
+  all_goals (
+    simp only [or_true, ↓reduceIte, Except.assert] at h_run
+    have hbal : ∀ x : B256, ¬ x < 0 := fun x hx => by
+      rw [B256.lt_iff_toNat_lt_toNat] at hx; exact Nat.not_lt_zero _ hx
     split at h_run
-    · simp only [XStep.Run, ExceptT.stM_eq, reduceCtorEq, and_false] at h_run
-    · rename_i d' hp
-      split at hp
-      · cases hp
-      · rename_i d'' hpush
-        cases hp
-        simp only [XStep.Run, Except.ok.injEq] at h_run
-        rw [h_run.2, Devm.eq_of_push_ok hpush]
-        rfl
-  simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdepth, ite_false] at h_run
-  simp only [XStep.Run] at h_run
-  rcases h_run with ⟨ex', run_pm₀, h_split⟩
-  rcases ex' with err' | child
-  · cases Resume.call_run_error h_split.symm
-  have hsplit := h_split.symm
-  have hstk := Resume.call_stack_flag hsplit
-  by_cases herr : child.error.isSome
-  · left
-    simp only [herr, ↓reduceIte] at hstk
-    exact hstk
-  right
-  have hclean : child.error.isSome = false := by simpa only [Option.isSome_eq_false_iff,
-    Option.isNone_iff_eq_none, Bool.not_eq_true] using herr
-  simp only [hclean, Bool.false_eq_true, ↓reduceIte] at hstk
-  set P := ((St b S M Gv).memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
-    [] with hP
-  have hcd : Array.sliceD P.memory.data ii.toNat is.toNat 0 = (M.read ii.toNat is.toNat).1 := rfl
-  rw [hcd] at run_pm₀
-  obtain ⟨gas, pm⟩ : ∃ gas, ProcessMessage (callMsg sevm P gas 0 sevm.currentTarget 4 4 true false
-      (M.read ii.toNat is.toNat).1 (b.getCode 4) false) xl (.ok child) :=
-    ⟨_, by simpa only [ProcessMessage, St.gasLeft, add_zero] using run_pm₀⟩
-  obtain ⟨hout, hcst, hca, hck, hcl, hcc, -, hcr⟩ :=
-    processMessage_identity_clean hid.pre pm hclean hfork
-  obtain ⟨hra, hrk, hre, hrc, hrr⟩ := Resume.call_ok_meta hsplit hclean
-  have hlogs := Resume.call_logs hsplit
-  simp only [hclean, Bool.false_eq_true, ↓reduceIte, hcl, List.append_nil] at hlogs
-  have hmem := Resume.call_memory hsplit
-  rw [hout] at hmem
-  have hst := Resume.call_state hsplit
-  refine ⟨d, d.gasLeft, ⟨fun a => ?_, fun a => ?_, ?_, ?_, hlogs,
-    (Resume.call_output hsplit).trans rfl, hre, (Resume.call_returnData hsplit).trans hout,
-    hrc.trans (hcc.trans rfl), by rw [hrr, hcr, Int.add_zero]; rfl⟩, St.self hstk hmem⟩
-  · exact getStor_eq_of_state_eq (hst.trans hcst) a
-  · exact getCode_eq_of_state_eq (hst.trans hcst) a
-  · rw [hra, hca, hashSet_union_self]; rfl
-  · rw [hrk, hck, hashSet_union_self]; rfl
+    · cases XStep.run_ofExcept_error h_run
+    rename_i v hcharge
+    simp only [hbal, ↓reduceIte] at h_run
+    obtain ⟨Gv, rfl⟩ : ∃ Gv, v = St b S M Gv :=
+      ⟨_, Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas hcharge)⟩
+    by_cases hdepth : sevm.depth = 0
+    · left
+      simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdepth, ite_true] at h_run
+      simp only [bind, Except.bind] at h_run
+      split at h_run
+      · simp only [XStep.Run, ExceptT.stM_eq, reduceCtorEq, and_false] at h_run
+      · rename_i d' hp
+        split at hp
+        · cases hp
+        · rename_i d'' hpush
+          cases hp
+          simp only [XStep.Run, Except.ok.injEq] at h_run
+          rw [h_run.2, Devm.eq_of_push_ok hpush]
+          rfl
+    simp only [pure, Except.pure, XStep.ofExcept, genericCall.step, hdepth, ite_false] at h_run
+    simp only [XStep.Run] at h_run
+    rcases h_run with ⟨ex', run_pm₀, h_split⟩
+    rcases ex' with err' | child
+    · cases Resume.call_run_error h_split.symm
+    have hsplit := h_split.symm
+    have hstk := Resume.call_stack_flag hsplit
+    by_cases herr : child.error.isSome
+    · left
+      simp only [herr, ↓reduceIte] at hstk
+      exact hstk
+    right
+    have hclean : child.error.isSome = false := by simpa only [Option.isSome_eq_false_iff,
+      Option.isNone_iff_eq_none, Bool.not_eq_true] using herr
+    simp only [hclean, Bool.false_eq_true, ↓reduceIte] at hstk
+    set P := ((St b S M Gv).memExtends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).withReturnData
+      [] with hP
+    have hcd : Array.sliceD P.memory.data ii.toNat is.toNat 0 = (M.read ii.toNat is.toNat).1 := rfl
+    rw [hcd] at run_pm₀
+    obtain ⟨gas, pm⟩ : ∃ gas, ProcessMessage (callMsg sevm P gas 0 sevm.currentTarget 4 4 true false
+        (M.read ii.toNat is.toNat).1 (b.getCode 4) false) xl (.ok child) :=
+      ⟨_, by simpa only [ProcessMessage, St.gasLeft, add_zero] using run_pm₀⟩
+    obtain ⟨hout, hcst, hca, hck, hcl, hcc, -, hcr⟩ :=
+      processMessage_identity_cleanH hid.pre pm hclean hid.stateGas
+    obtain ⟨hra, hrk, hre, hrc, hrr⟩ := Resume.call_ok_meta hsplit hclean
+    have hlogs := Resume.call_logs hsplit
+    simp only [hclean, Bool.false_eq_true, ↓reduceIte, hcl, List.append_nil] at hlogs
+    have hmem := Resume.call_memory hsplit
+    rw [hout] at hmem
+    have hst := Resume.call_state hsplit
+    refine ⟨d, d.gasLeft, ⟨fun a => ?_, fun a => ?_, ?_, ?_, hlogs,
+      (Resume.call_output hsplit).trans rfl, hre, (Resume.call_returnData hsplit).trans hout,
+      hrc.trans (hcc.trans rfl), by rw [hrr, hcr, Int.add_zero]; rfl⟩, St.self hstk hmem⟩
+    · exact getStor_eq_of_state_eq (hst.trans hcst) a
+    · exact getCode_eq_of_state_eq (hst.trans hcst) a
+    · rw [hra, hca, hashSet_union_self]; rfl
+    · rw [hrk, hck, hashSet_union_self]; rfl)
+
+/-- The covered-fork form of `ri_call_identityH`. -/
+theorem ri_call_identity {g ii is oi os : B256} {d : Devm} (hid : IdReady sevm b)
+    (h : Ninst.Run sevm (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G) (.exec .call) d) :
+    d.stack = 0 :: S ∨
+      ∃ b' G', ShaCallPost b b' (M.read ii.toNat is.toNat).1 ∧
+        d = St b' (1 :: S) ((M.extends [(ii.toNat, is.toNat), (oi.toNat, os.toNat)]).write
+          oi.toNat ((M.read ii.toNat is.toNat).1.take os.toNat)) G' :=
+  ri_call_identityH hid.toH h
 
 /-- **The identity call's canonical successor**: the post a successful value-0 identity `CALL`
 from base `b`, stack tail `S` and explicit memory `M` resumes in, with every gas column at zero.
