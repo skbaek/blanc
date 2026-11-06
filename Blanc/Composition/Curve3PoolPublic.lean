@@ -23,7 +23,7 @@ namespace Blanc.Composition.Curve3PoolPublic
 
 open Jaune Blanc Blanc.Lift
 open Blanc.Lift.Curve3Pool (V3 rates precision feeDen getDMem)
-open Blanc.StableSwapNewton (chkAdd chkDiv chkMul getYDChk)
+open Blanc.StableSwapNewton (chkAdd chkDiv chkMul chkSub getYDChk)
 
 /-! ## `lp_exit` -/
 
