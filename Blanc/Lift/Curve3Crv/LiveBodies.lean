@@ -973,6 +973,18 @@ theorem live_mint (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isSta
     {r : Raw} (hr : rawMint sevm stor₀ = some r) : BodyLive sevm b t_056e_c0 r :=
   (live_mint_le hfork hstatic hr).live
 
+/-- The state `burnFrom`'s body halts in, over its final image `M`, with `G` left. -/
+def burnPost (s : Sevm) (b : Devm) (M : Mem) (G : Nat) : Devm :=
+  let d := Sevm.argWord s 0
+  let v := Sevm.argWord s 1
+  let k := mapSlot 3 d
+  let b1 := afterSload s b vyMinterSlot
+  let u := b1.getStorVal s.currentTarget vySupplySlot
+  let b2 := afterSstore s (afterSload s b1 vySupplySlot) vySupplySlot (u - v)
+  let y := b2.getStorVal s.currentTarget k
+  ((St ((afterSstore s (afterSload s b2 k) k (y - v)).addLog
+    ⟨s.currentTarget, [transferTopic, d, 0], v.toBytes⟩) [] M G).memRead 0 32).2.withOutput (1 : B256).toBytes
+
 -- SEGMENT: liveMintBurn (see `live_mint`)
 /- Keep the body memory abstract after the nonpayable prefix. -/
 private theorem live_burnFrom_mem (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
@@ -981,7 +993,7 @@ private theorem live_burnFrom_mem (hfork : CoveredFork sevm.benvStat.fork) (hsta
     (hM0eq : M0 = vyMem Mem.empty (Sevm.dataWord sevm 0)) :
     ∀ G, gCallStipend < G → ∃ post,
       SFunc.RunExact prog sevm (entrySt sevm b (G + burnBodyCost sevm b)) t_0644_c0 (.halted post) ∧
-      post.gasLeft = G ∧ Lands sevm b post r := by
+      post.gasLeft = G ∧ Lands sevm b post r ∧ ∃ M, post = burnPost sevm b M G := by
   simp only [rawBurnFrom] at hr
   split_ifs at hr with hg
   obtain ⟨hv, hd, hmin, hnz, hsup, hbal⟩ := hg
@@ -1022,7 +1034,7 @@ private theorem live_burnFrom_mem (hfork : CoveredFork sevm.benvStat.fork) (hsta
   set b4 := (afterSstore sevm (afterSload sevm b2 s2) s2 (y - v)).addLog
     ⟨sevm.currentTarget, [transferTopic, d, 0], v.toBytes⟩
   set M5 := M3.write 0 (1 : B256).toBytes
-  refine ⟨((St b4 [] M5 G).memRead 0 32).2.withOutput (1 : B256).toBytes, ?_, rfl, ?_⟩
+  refine ⟨((St b4 [] M5 G).memRead 0 32).2.withOutput (1 : B256).toBytes, ?_, rfl, ?_, M5, rfl⟩
   · unfold entrySt
     rw [show G + (3 + 3 + 3 + 3 + 3 + 1756 + 3 + 3 + 3 + 3 + 3 + 3 + 12 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b2 s2 + 3 + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b1 vySupplySlot) vySupplySlot (sup - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b1 vySupplySlot + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 2 + sloadCost sevm b vyMinterSlot + 3 + 34 + 19) = G + 3 + 3 + 3 + 3 + 3 + 1756 + 3 + 3 + 3 + 3 + 3 + 3 + 12 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b2 s2) s2 (y - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b2 s2 + 3 + 42 + 3 + 3 + 3 + 3 + 9 + 3 + 3 + 3 + 3 + 2 + sstoreCost sevm (afterSload sevm b1 vySupplySlot) vySupplySlot (sup - v) + 3 + 2 + 3 + 2 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + sloadCost sevm b1 vySupplySlot + 3 + 3 + 1 + 10 + 3 + 3 + 3 + 3 + 3 + 1 + 10 + 3 + 3 + 2 + sloadCost sevm b vyMinterSlot + 3 + 34 + 19 by omega]
     refine rx_vyNonpayable (h := 0x06) (l := 0x4e) (fail := t_064a_c0) hv (by simp only [List.length_nil,
@@ -1109,7 +1121,21 @@ theorem live_burnFrom_cost (hfork : CoveredFork sevm.benvStat.fork)
     ∀ G, gCallStipend < G → ∃ post,
       SFunc.RunExact prog sevm (entrySt sevm b (G + burnBodyCost sevm b)) t_0644_c0 (.halted post) ∧
       post.gasLeft = G ∧ Lands sevm b post r := by
-  exact live_burnFrom_mem hfork hstatic hr _ (vyMem_empty_size _) (vyMem_wf Mem.wf_empty _) rfl
+  intro G hG
+  obtain ⟨post, h1, h2, h3, -⟩ := live_burnFrom_mem hfork hstatic hr _ (vyMem_empty_size _)
+    (vyMem_wf Mem.wf_empty _) rfl G hG
+  exact ⟨post, h1, h2, h3⟩
+
+/-- `burnFrom`: the body's run, with the post named. -/
+theorem live_burnFrom_post (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = false) {r : Raw} (hr : rawBurnFrom sevm stor₀ = some r) :
+    ∀ G, gCallStipend < G → ∃ M,
+      SFunc.RunExact prog sevm (entrySt sevm b (G + burnBodyCost sevm b)) t_0644_c0
+        (.halted (burnPost sevm b M G)) := by
+  intro G hG
+  obtain ⟨post, h1, -, -, M, rfl⟩ := live_burnFrom_mem hfork hstatic hr _ (vyMem_empty_size _)
+    (vyMem_wf Mem.wf_empty _) rfl G hG
+  exact ⟨M, h1⟩
 
 /-- `burnFrom` costs at most `2107 + 3 * 2100 + 2 * 22100`. -/
 theorem live_burnFrom_le (hfork : CoveredFork sevm.benvStat.fork)

@@ -109,7 +109,7 @@ theorem removeLiquidity_live_floor {sevm : Sevm} {pre : Devm} {s : State} {o : O
         pre.mach.stateGas.committedSpill := rfl
     omega
   obtain ⟨hval, hT0, hmulw, hminw, hlew, hTa⟩ := removeLiquidity_walkChecks hlen hsel hck hstep
-  obtain ⟨r, hr, D, rfl, hDg, -, hlogs⟩ := rx_rl_frame_floor P hfork hstatic hdepth hlen hcd hsel hid
+  obtain ⟨r, hr, D, rfl, hDg, -, hlogs, -⟩ := rx_rl_frame_floor P hfork hstatic hdepth hlen hcd hsel hid
     hck.unlocked hval hWc hWb hP hmulw hT0 hminw hlew hTa hR hG256
   obtain ⟨exD⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   obtain ⟨hraw, hckp⟩ := removeLiquidity_effect exD hcode hfork hlen hcd hsel rfl rfl hGm hck hstep htok

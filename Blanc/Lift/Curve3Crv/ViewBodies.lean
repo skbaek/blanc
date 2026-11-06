@@ -29,7 +29,9 @@ theorem word_tail (hfork : CoveredFork sevm.benvStat.fork) {M : Mem} {img : Byte
         (.next (.push [0x20] (by decide)) (.next (.push [0x00] (by decide)) (.last .return_))))))
       (.halted post) ∧ post.gasLeft = G ∧
       Lands sevm b post (Devm.getStor b sevm.currentTarget, [],
-        some (b.getStorVal sevm.currentTarget k).toBytes) := by
+        some (b.getStorVal sevm.currentTarget k).toBytes) ∧
+      post = ((St (afterSload sevm b k) [] (M.write 0 (b.getStorVal sevm.currentTarget k).toBytes)
+        G).memRead 0 32).2.withOutput (b.getStorVal sevm.currentTarget k).toBytes := by
   have hsz : (M.write 0 (b.getStorVal sevm.currentTarget k).toBytes).size = M.size :=
     Mem.size_write_of_le (by rw [B256.length_toBytes]; omega)
   have h0 : (0 : B256).toNat = 0 := by decide
@@ -40,7 +42,7 @@ theorem word_tail (hfork : CoveredFork sevm.benvStat.fork) {M : Mem} {img : Byte
     exact sliceD_word_same _ _ _
   refine ⟨((St (afterSload sevm b k) [] (M.write 0 (b.getStorVal sevm.currentTarget k).toBytes)
     G).memRead 0 32).2.withOutput (b.getStorVal sevm.currentTarget k).toBytes,
-    rx_sload_sel hfork (by simp only [List.length_nil, Nat.ofNat_pos]) ?_, rfl, ?_⟩
+    rx_sload_sel hfork (by simp only [List.length_nil, Nat.ofNat_pos]) ?_, rfl, ?_, rfl⟩
   · refine rx_push (w := 0) rfl (by simp only [List.length_cons, List.length_nil, zero_add,
     Nat.one_lt_ofNat]) ?_
     refine rx_mstore (c := 3) ?_ rfl ?_
@@ -75,7 +77,7 @@ theorem live_totalSupply (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   split_ifs at hr with hv
   cases hr
   refine ⟨34 + sloadCost sevm b vySupplySlot, fun G _ => ?_⟩
-  obtain ⟨post, hrun, hg, hl⟩ := word_tail (b := b) hfork (entry_wf sevm) (entry_reads sevm)
+  obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b) hfork (entry_wf sevm) (entry_reads sevm)
     (by rw [vyMem_size]; omega) (by rw [vyMem_size]) vySupplySlot G
   refine ⟨post, ?_, hg, hl⟩
   unfold entrySt t_0240_c0
@@ -99,7 +101,7 @@ theorem live_decimals (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   split_ifs at hr with hv
   cases hr
   refine ⟨34 + sloadCost sevm b vyDecimalsSlot, fun G _ => ?_⟩
-  obtain ⟨post, hrun, hg, hl⟩ := word_tail (b := b) hfork (entry_wf sevm) (entry_reads sevm)
+  obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b) hfork (entry_wf sevm) (entry_reads sevm)
     (by rw [vyMem_size]; omega) (by rw [vyMem_size]) vyDecimalsSlot G
   refine ⟨post, ?_, hg, hl⟩
   unfold entrySt
@@ -124,7 +126,7 @@ theorem live_balanceOf (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   refine ⟨140 + sloadCost sevm b (mapSlot 3 a), fun G _ => ?_⟩
   have hM := vyMem_size (Sevm.dataWord sevm 0)
   set M := vyMem Mem.empty (Sevm.dataWord sevm 0)
-  obtain ⟨post, hrun, hg, hl⟩ := word_tail (b := b)
+  obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b)
     (M := (M.write 224 a.toBytes).write 192 (3 : B256).toBytes) hfork
     (((entry_wf sevm).write _ _).write _ _) (((entry_reads sevm).write (entry_wf sevm) _ _).write
       ((entry_wf sevm).write _ _) _ _)
@@ -173,7 +175,7 @@ theorem live_allowance (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   have hwf1 : Mem.Wf M1 := ((entry_wf sevm).write _ _).write _ _
   have hr1 : Mem.Reads M1 (Bytes.writeAt (Bytes.writeAt (vyImg [] (Sevm.dataWord sevm 0)) 224
       o.toBytes) 192 (4 : B256).toBytes) := ((entry_reads sevm).write (entry_wf sevm) _ _).write ((entry_wf sevm).write _ _) _ _
-  obtain ⟨post, hrun, hg, hl⟩ := word_tail (b := b)
+  obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b)
     (M := (M1.write 224 q.toBytes).write 192 (mapSlot 4 o).toBytes) hfork
     ((hwf1.write _ _).write _ _) ((hr1.write hwf1 _ _).write (hwf1.write _ _) _ _)
     (by rw [Mem.size_write_word_at, Mem.size_write_word_at, hs1]; decide)

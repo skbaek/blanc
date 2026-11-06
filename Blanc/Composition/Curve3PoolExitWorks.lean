@@ -50,6 +50,32 @@ theorem rlBurn_withStaticGas (sevm : Sevm) (F : Nat) (pre : Devm) (T : B256) (P 
     Curve3Pool.rlV, Curve3Pool.rlB, rlAmt, afterSload_withStaticGas, afterSstore_withStaticGas,
     dataWord_withStaticGas, identityCallNext_withStaticGas, rawTailBaseNext_withStaticGas, and_self]
 
+/-- The canonical schedule's memories ignore the frame's static initial gas. -/
+theorem RLWindows.ofStaticGas {sevm : Sevm} {F : Nat} {pre : Devm} {T : B256} {P : RLExactCalls}
+    (h : Curve3Pool.RLWindows {sevm with gas := F} pre T P) : Curve3Pool.RLWindows sevm pre T P := by
+  have hb : ∀ M, rlBurnMem {sevm with gas := F} M = rlBurnMem sevm M := fun M => by
+    simp only [rlBurnMem, dataWord_withStaticGas]
+  have hh : ∀ i (m : Mem), Curve3Pool.rlPushMem {sevm with gas := F} pre T i m = Curve3Pool.rlPushMem sevm pre T i m := fun i m => by
+    simp only [Curve3Pool.rlPushMem, Curve3Pool.rlS2MemOf, Curve3Pool.rlS2Mem, Curve3Pool.rlS2Mem2, Curve3Pool.rlV,
+      Curve3Pool.rlB, rlAmt, dataWord_withStaticGas]
+  have e0 := rlBurn_withStaticGas sevm F pre T P
+  have hm0 : Curve3Pool.rlHeadMem0 {sevm with gas := F} pre T P = Curve3Pool.rlHeadMem0 sevm pre T P ∧
+      Curve3Pool.rlHeadMem1 {sevm with gas := F} pre T P = Curve3Pool.rlHeadMem1 sevm pre T P ∧
+      Curve3Pool.rlHeadMem2 {sevm with gas := F} pre T P = Curve3Pool.rlHeadMem2 sevm pre T P := by
+    simp only [Curve3Pool.rlHeadMem0, Curve3Pool.rlHeadMem1, Curve3Pool.rlHeadMem2, Curve3Pool.rlHead0, Curve3Pool.rlHead1,
+      Curve3Pool.rlHead2, Curve3Pool.rlIterBase, Curve3Pool.rlIterMem, Curve3Pool.rlSupplyBase, Curve3Pool.rlSupplyMem,
+      Curve3Pool.rlLoopMem0, Curve3Pool.rlPushNext, Curve3Pool.rlPushBase, Curve3Pool.rlPushMem, Curve3Pool.rlReplyLen,
+      Curve3Pool.rlS2Base, Curve3Pool.rlS2MemOf, Curve3Pool.rlS1Base, Curve3Pool.rlS2Next, Curve3Pool.rlS2Mem,
+      Curve3Pool.rlS2Mem2, Curve3Pool.rlS2Base1, Curve3Pool.rlV, Curve3Pool.rlB, rlAmt, afterSload_withStaticGas,
+      afterSstore_withStaticGas, dataWord_withStaticGas, identityCallNext_withStaticGas, rawTailBaseNext_withStaticGas,
+      and_self]
+  obtain ⟨⟨r0, s0⟩, ⟨r1, s1⟩, ⟨r2, s2⟩, ⟨r3, s3⟩⟩ := h
+  rw [hm0.1, hh] at r0 s0
+  rw [hm0.2.1, hh] at r1 s1
+  rw [hm0.2.2, hh] at r2 s2
+  rw [e0.2, hb] at r3 s3
+  exact ⟨⟨r0, s0⟩, ⟨r1, s1⟩, ⟨r2, s2⟩, ⟨by simpa only [rlAmt, dataWord_withStaticGas] using r3, s3⟩⟩
+
 /-- `rx_rl_frame_floor` at message entry, keeping the frame's end. -/
 theorem rl_msg_end {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : B256} {W : Nat → Devm → Prop} {U : Nat}
     (P : RLExactCalls) (hcode : (initSevm msg).code = Curve3Pool.code)
@@ -66,12 +92,12 @@ theorem rl_msg_end {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : 
     ∃ post, exec (initEvm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T P))) = .ok post ∧
       post.gasLeft = R ∧ ∃ d l, Devm.EqModGas d (P.burnNext (rlBurnBase (initSevm msg) (initDevm msg) T P) []
           (rlBurnMem (initSevm msg) (rlHeadMem3 (initSevm msg) (initDevm msg) T P))) ∧
-        ∃ S M G, post = St (afterSstore (initSevm msg) (d.addLog l) (Bytes.toB256 [255, 255, 255])
-          (Bytes.toB256 [0])) S M G := by
+        (∃ S M G, post = St (afterSstore (initSevm msg) (d.addLog l) (Bytes.toB256 [255, 255, 255])
+          (Bytes.toB256 [0])) S M G) ∧ Curve3Pool.RLWindows (initSevm msg) (initDevm msg) T P := by
   obtain ⟨hval, hT0, hmulw, hminw, hlew, hTa⟩ := Curve3Pool.removeLiquidity_walkChecks hlen hsel hck hstep
   obtain ⟨F, hF⟩ : ∃ F, F = R + rlExactCost (initSevm msg) (initDevm msg) T P := ⟨_, rfl⟩
   have hcost := Curve3Pool.rlExactCost_withStaticGas (initSevm msg) F (initDevm msg) T P
-  obtain ⟨r, hr, D, rfl, hDg, ⟨d, l, hd, S, M, G, hD⟩, -⟩ := Curve3Pool.rx_rl_frame_floor
+  obtain ⟨r, hr, D, rfl, hDg, ⟨d, l, hd, S, M, G, hD⟩, -, hwin⟩ := Curve3Pool.rx_rl_frame_floor
     (sevm := {initSevm msg with gas := F}) (pre := initDevm msg) (T := T) P hfork hstatic hdepth hlen hcd hsel
     (hid.withStaticGas F) hck.unlocked hval (fun k hk => (hWc k hk).withStaticGas F) hWb (hP.withStaticGas F)
     hmulw hT0 hminw hlew hTa hR (by rw [hcost]; omega)
@@ -84,7 +110,7 @@ theorem rl_msg_end {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : 
       rlBurnMem (initSevm msg) (rlHeadMem3 (initSevm msg) (initDevm msg) T P) := by
     simp only [rlBurnMem, rlAmt, dataWord_withStaticGas]
   rw [e1, e2, hb] at hd
-  exact ⟨D, Lift.exec_withGas_of_frame exD, hDg, d, l, hd, S, M, G, hD⟩
+  exact ⟨D, Lift.exec_withGas_of_frame exD, hDg, d, l, hd, ⟨S, M, G, hD⟩, RLWindows.ofStaticGas hwin⟩
 
 /-- **The frame's run at any residual `R ≥ 2201`, ending at its canonical final state.** -/
 theorem exit_run {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : B256}
@@ -112,7 +138,7 @@ theorem exit_run {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : B2
     {R : Nat} (hR : 2201 ≤ R) (hG : R + rlExactCost (initSevm msg) (initDevm msg) T (exitCalls msg) < 2 ^ 256) :
     ∃ post, exec (initEvm (msg.withGas (R + rlExactCost (initSevm msg) (initDevm msg) T (exitCalls msg)))) = .ok post ∧
       post.gasLeft = R ∧ ∃ d l, Devm.EqModGas d (exitAfterBurn msg T) ∧
-        ∃ S M G, post = St (exitLast msg d l) S M G := by
+        (∃ S M G, post = St (exitLast msg d l) S M G) ∧ Curve3Pool.RLWindows (initSevm msg) (initDevm msg) T (exitCalls msg) := by
   have hne : (initSevm msg).currentTarget ≠ tokOf (initSevm msg) (initDevm msg) := Ne.symm hc3.pool
   have hdep0 : (initSevm msg).depth ≠ 0 := by omega
   have hpush := exit_pushesF (c3 := tokOf (initSevm msg) (initDevm msg))
@@ -379,7 +405,7 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w E a) (e : ColdEntry
   have hE0 : E ≠ 0 := hE
   have hcall : (initSevm msg).caller = E := hcaller
   have hRm : 2201 ≤ R := hR
-  obtain ⟨post, hex, hg, d, l, hd, S, M, G, rfl⟩ := exit_run (msg := msg) (T := T) (R := R) hcode hfork
+  obtain ⟨post, hex, hg, d, l, hd, ⟨S, M, G, rfl⟩, -⟩ := exit_run (msg := msg) (T := T) (R := R) hcode hfork
     e.asked.entry.plain.2.1 (by have : (2 : Nat) ≤ msg.depth := e.asked.entry.plain.2.2.1; exact this)
     (by omega) (by omega) hsel hck hstep hid hc3 hC
     (by rw [hto, sC, hw, hcall, hamt]; exact burn_fits mk.minter hE0 mk.apart req.holds.1 req.holds.2.1)
