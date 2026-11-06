@@ -88,4 +88,52 @@ theorem libStep_qdKeep {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none)
         exact ⟨g, s, by rw [h1]⟩
     exact ⟨delegatecall_lib_keep hsg hfork hs hcode step.1, codeKeep⟩
 
+/-- **Crossing the library `DELEGATECALL`** (permit's inline call), without state gas. -/
+theorem skip_libCallH {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm}
+    {g ii is oi os : B256} {S : List B256} {M : Mem} {G : Nat} {f : SFunc} {r : Seg}
+    (hfork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (run : SFunc.RunCut fs sevm C (St b (g :: usdcLib.toB256 :: ii :: is :: oi :: os :: S) M G)
+      (.next (.exec .delegatecall) f) r) :
+    ∃ b' x M' G', Devm.getStor b' sevm.currentTarget = Devm.getStor b sevm.currentTarget ∧
+      b'.getCode usdcLib = Lib.code ∧ SFunc.RunCut fs sevm C (St b' (x :: S) M' G') f r := by
+  have hcode' : b.getCode usdcLib.toB256.toAdr = Lib.code := by rw [usdcLib_word]; exact hcode
+  obtain ⟨d, step, k⟩ := ric_next run
+  have hframe : FrameMatches 0 [.unk, .unk, .unk, .unk, .unk, .unk] [g, usdcLib.toB256, ii, is, oi, os] :=
+    .cons trivial (.cons trivial (.cons trivial (.cons trivial (.cons trivial (.cons trivial .nil)))))
+  obtain ⟨X, hX, hfr⟩ := Cursor.absNinst_run_stack_noStateGas (a' := [.unk]) hfork.stateGas_none rfl (rest := S) rfl
+    hframe step
+  obtain ⟨x, rfl⟩ : ∃ x, X = [x] := by
+    match X, List.Forall₂.length_eq hfr with
+    | [x], _ => exact ⟨x, rfl⟩
+  refine ⟨d, x, d.memory, d.gasLeft, delegatecall_lib_keep (pre := St b _ M G) hfork.stateGas_none hfork rfl hcode' step,
+    (Ninst.Run.getCode_eq step (by rw [St_getCode, hcode]; exact lib_nonempty)).trans hcode, ?_⟩
+  rw [← St.self (S := x :: S) hX rfl]
+  exact k
+
+/-- `ric_call_silent` without state gas. -/
+theorem ric_call_silent_noStateGas {code : ByteArray} {c : Cert} {sevm : Sevm} (hc : Cert.check code c = true)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    {Sk : List Nat} (hS : SilentSet c.prog Sk = true) {k : Nat} (hkS : k ∈ Sk) {e : Entry}
+    {g : SFunc} (he : c.entries[k]? = some e) (hg : c.prog[k]? = some g)
+    {C : List Nat} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {dd ρ : B256} {f : SFunc}
+    {r : Seg} (hframe : FrameMatches ρ e.frame (S.take e.frame.length))
+    (run : SFunc.RunCut c.prog sevm C (St b (dd :: S) M G) (.callNext k f) r) :
+    (∃ b' Y M' G', b'.state = b.state ∧ Y.length = e.rets ∧
+        SFunc.RunCut c.prog sevm C (St b' (Y ++ S.drop e.frame.length) M' G') f r) ∨
+      (∃ D, D.state = b.state ∧ r = .done (.halted D)) := by
+  have hgS : g.silent = true ∧ g.refs.all (· ∈ Sk) = true := by
+    have h := (List.all_eq_true.mp hS) k hkS
+    rw [hg] at h
+    simpa only [Bool.and_eq_true] using h
+  obtain ⟨G', h⟩ := ric_call hg run
+  rcases h with ⟨D, callee, cont⟩ | ⟨D, callee, hr⟩
+  · have hstate : D.state = b.state := SFunc.Run.state_of_silent hS hgS.1 hgS.2 callee
+    obtain ⟨Y, hY, hlen⟩ := callee.entry_stack_below_noStateGas id hc hsg he hg
+      (List.take_append_drop _ _).symm hframe
+    rw [St.stack] at hY
+    refine .inl ⟨D, Y, D.memory, D.gasLeft, hstate, hlen, ?_⟩
+    rw [← St.self hY rfl]
+    exact cont
+  · exact .inr ⟨D, SFunc.Run.state_of_silent hS hgS.1 hgS.2 callee, hr⟩
+
 end Blanc.Lift.Usdc

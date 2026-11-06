@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.SignedSkip
+import Blanc.Lift.Usdc.SignedSkipH
 import Blanc.Lift.Usdc.ProxyForward
 import Blanc.Lift.Usdc.ShuffleSegments
 import Blanc.Lift.Usdc.RefineSignedCallees
@@ -33,11 +33,11 @@ theorem sil79_silent : SilentSet cert.prog [79] = true := by decide +kernel
 
 /-- **Crossing `_domainSeparator`** (entry 78, frame `[ret]`, one return word). -/
 theorem skip_e78 {C : List Nat} {f : SFunc} {r : Seg} {dd ρ : B256}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.RunCut cert.prog sevm C (St b (dd :: ρ :: S) M G) (.callNext 78 f) r) :
     (∃ b' y M' G', b'.state = b.state ∧ SFunc.RunCut cert.prog sevm C (St b' (y :: S) M' G') f r) ∨
       ∃ D, r = .done (.halted D) := by
-  rcases ric_call_silent (e := ⟨0x4276, [.ret], 1⟩) (ρ := ρ) (S := ρ :: S) cert_check fork
+  rcases ric_call_silent_noStateGas (e := ⟨0x4276, [.ret], 1⟩) (ρ := ρ) (S := ρ :: S) cert_check fork.stateGas_none
       (Sk := sil78) sil78_silent (by decide) rfl rfl (List.Forall₂.cons rfl .nil) run with
     ⟨b', Y, M', G', hs, hlen, cont⟩ | ⟨D, -, hr⟩
   · match Y, hlen, cont with
@@ -46,12 +46,12 @@ theorem skip_e78 {C : List Nat} {f : SFunc} {r : Seg} {dd ρ : B256}
 
 /-- **Crossing `_hashTypedDataV4`** (entry 79, frame `[_, _, ret]`, one return word). -/
 theorem skip_e79 {C : List Nat} {f : SFunc} {r : Seg} {dd x y ρ : B256}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.RunCut cert.prog sevm C (St b (dd :: x :: y :: ρ :: S) M G) (.callNext 79 f) r) :
     (∃ b' z M' G', b'.state = b.state ∧ SFunc.RunCut cert.prog sevm C (St b' (z :: S) M' G') f r) ∨
       ∃ D, r = .done (.halted D) := by
-  rcases ric_call_silent (e := ⟨0x508b, [.unk, .unk, .ret], 1⟩) (ρ := ρ) (S := x :: y :: ρ :: S)
-      cert_check fork (Sk := [79]) sil79_silent (by decide) rfl rfl
+  rcases ric_call_silent_noStateGas (e := ⟨0x508b, [.unk, .unk, .ret], 1⟩) (ρ := ρ) (S := x :: y :: ρ :: S)
+      cert_check fork.stateGas_none (Sk := [79]) sil79_silent (by decide) rfl rfl
       (List.Forall₂.cons trivial (.cons trivial (.cons rfl .nil))) run with
     ⟨b', Y, M', G', hs, hlen, cont⟩ | ⟨D, -, hr⟩
   · match Y, hlen, cont with
@@ -66,32 +66,53 @@ theorem getStor_of_state {b' : Devm} (h : b'.state = b.state) : Devm.getStor b' 
 theorem libWord_lit : Nat.toB256 0x800c32eaa2a6c93cf4cb51794450ed77fbfbb172 = usdcLib.toB256 := by
   decide +kernel
 
+/-- **Entry 81, `_approve(owner, spender, value)`, logs `Approval` with its owner.** -/
+theorem e81_logged {x y z ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm (St b (x :: y :: z :: ret :: S) M G) t_3e18_c81 o) :
+    ∀ {d : Devm}, o = .returned d → ApprovalLogged sevm d z.toAdr := by
+  have h := run.cut
+  clear run
+  repeat istep h
+  ibranch h c1
+  repeat istep h
+  ibranch h c2
+  repeat istep h
+  obtain ⟨_, e⟩ := ric_ret h
+  clear h
+  intro d hd
+  rw [Seg.done.inj e] at hd
+  cases hd
+  refine ⟨_, List.mem_append_right _ List.mem_cons_self, rfl, ?_⟩
+  simp only [word_ff20, List.take_succ_cons, List.take_zero]
+  exact congrArg₂ List.cons (by decide) rfl
+
 /-- **The tail of `_permit`** from its library `DELEGATECALL` (entry 9): the call is skipped, its
 result checked, and `_approve(owner, spender, value)` (entry 81) writes the allowance. -/
 theorem permit_tail {C : List Nat} {r : Seg} {g ii is oi os y0 y1 y2 y3 y4 y5 y6 y7 y8 ret : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.RunCut cert.prog sevm C (St b (g :: usdcLib.toB256 :: ii :: is :: oi :: os :: y0 ::
       y1 :: y2 :: y3 :: y4 :: y5 :: y6 :: y7 :: y8 :: ret :: S) M G) (SFunc.lineDrop 3 t_48ac_c9) r) :
     y8.toAdr ≠ 0 ∧ y7.toAdr ≠ 0 ∧ ∃ b' M' G', r = .done (.returned (St b' S M' G')) ∧
       Devm.getStor b' sevm.currentTarget =
-        (Devm.getStor b sevm.currentTarget).set (allowSlot y8.toAdr y7.toAdr) y6 := by
-  obtain ⟨b1, x, M1, G1, hs1, -, h⟩ := skip_libCall fork hcode run
+        (Devm.getStor b sevm.currentTarget).set (allowSlot y8.toAdr y7.toAdr) y6 ∧ ApprovalLogged sevm b' y8.toAdr := by
+  obtain ⟨b1, x, M1, G1, hs1, -, h⟩ := skip_libCallH fork hcode run
   clear run
-  obtain ⟨b2, M2, G2, hs2, h⟩ := ric_seg_e9call id fork.histFork h
+  obtain ⟨b2, M2, G2, hs2, h⟩ := ric_seg_e9call id fork h
   icall h hc 81 t_3e18_c81
-  obtain ⟨d1, d2, b3, M3, G3, e, s3⟩ := e81_inv fork.histFork hc
+  obtain ⟨d1, d2, b3, M3, G3, e, s3⟩ := e81_inv fork hc
   cases e
+  have lg := e81_logged fork hc rfl
   clear hc
   repeat istep h
   obtain ⟨_, e⟩ := ric_ret h
-  refine ⟨d1, d2, b3, _, _, e, ?_⟩
+  refine ⟨d1, d2, b3, _, _, e, ?_, lg⟩
   rw [s3, congrFun (getStor_of_state hs2) _, hs1]
 
 /-- **The signature-bytes copy loop** (entry 80, solc's word copy into the call's calldata): every
 run of the loop from its head, whose every exit satisfies `Q` (a finished segment), satisfies `Q`.
 Each iteration keeps the base machine and the words below the counter. -/
 theorem copy80 {a1 a2 a3 : B256} {R0 : List B256} {r : Seg} (Q : Seg → Prop)
-    (fork : CoveredFork sevm.benvStat.fork) (hQ : ∀ r, Q r → ∃ o, r = .done o)
+    (fork : HistFork sevm.benvStat.fork) (hQ : ∀ r, Q r → ∃ o, r = .done o)
     (exit : ∀ i M G r, SFunc.RunCut cert.prog sevm [80] (St b (i :: a1 :: a2 :: a3 :: R0) M G)
       t_4860_c80 r → Q r)
     {i : B256} (run : SFunc.RunCut cert.prog sevm [] (St b (i :: a1 :: a2 :: a3 :: R0) M G)
@@ -112,7 +133,7 @@ theorem copy80 {a1 a2 a3 : B256} {R0 : List B256} {r : Seg} (Q : Seg → Prop)
 
 /-- **`_permit`'s body** (entry 8, from its deadline flag): the nonce bump, the digest, the library
 check (skipped) and `_approve(owner, spender, value)`. -/
-theorem e8_inv {fl x0 x1 x2 x3 x4 ret : B256} {r : Seg} (fork : CoveredFork sevm.benvStat.fork)
+theorem e8_inv {fl x0 x1 x2 x3 x4 ret : B256} {r : Seg} (fork : HistFork sevm.benvStat.fork)
     (hcode : b.getCode usdcLib = Lib.code) (nh : ∀ D, r ≠ .done (.halted D))
     (run : SFunc.RunCut cert.prog sevm [] (St b (fl :: x0 :: x1 :: x2 :: x3 :: x4 :: ret :: S) M G)
       t_46c0_c8 r) :
@@ -120,7 +141,7 @@ theorem e8_inv {fl x0 x1 x2 x3 x4 ret : B256} {r : Seg} (fork : CoveredFork sevm
       Devm.getStor b' sevm.currentTarget =
         ((Devm.getStor b sevm.currentTarget).set (nonceSlot x4.toAdr)
           ((Devm.getStor b sevm.currentTarget).get (nonceSlot x4.toAdr) + 1)).set
-          (allowSlot x4.toAdr x3.toAdr) x2 := by
+          (allowSlot x4.toAdr x3.toAdr) x2 ∧ ApprovalLogged sevm b' x4.toAdr := by
   have h := run
   clear run
   repeat istep h
@@ -130,38 +151,39 @@ theorem e8_inv {fl x0 x1 x2 x3 x4 ret : B256} {r : Seg} (fork : CoveredFork sevm
   swap
   · exact absurd rfl (nh D)
   iterate 27 istep h
-  obtain ⟨b2, u0, M2, G2, hs2, h⟩ := ric_seg_e8digest id fork.histFork h
+  obtain ⟨b2, u0, M2, G2, hs2, h⟩ := ric_seg_e8digest id fork h
   rcases skip_e79 fork h with ⟨b3, z, M3, G3, hs3, h⟩ | ⟨D, rfl⟩
   swap
   · exact absurd rfl (nh D)
-  obtain ⟨b4, v0, v1, v2, v3, v4, v5, v6, v7, M4, G4, hs4, h⟩ := ric_seg_e8encode id fork.histFork h
+  obtain ⟨b4, v0, v1, v2, v3, v4, v5, v6, v7, M4, G4, hs4, h⟩ := ric_seg_e8encode id fork h
   rw [libWord_lit] at h
   have code4 : b4.getCode usdcLib = Lib.code := by
-    rw [getCode_of_state hs4, getCode_of_state hs3, getCode_of_state hs2, afterSstore_getCode,
-      afterSload_getCode, getCode_of_state hs1, hcode]
+    rw [getCode_of_state hs4, getCode_of_state hs3, getCode_of_state hs2, afterSstoreH_getCode,
+      afterSloadH_getCode, getCode_of_state hs1, hcode]
   have key : x4.toAdr ≠ 0 ∧ x3.toAdr ≠ 0 ∧ ∃ b' M' G', r = .done (.returned (St b' S M' G')) ∧
       Devm.getStor b' sevm.currentTarget =
-        (Devm.getStor b4 sevm.currentTarget).set (allowSlot x4.toAdr x3.toAdr) x2 := by
+        (Devm.getStor b4 sevm.currentTarget).set (allowSlot x4.toAdr x3.toAdr) x2 ∧ ApprovalLogged sevm b' x4.toAdr := by
     repeat istep h
     ibranch h c2
     · repeat istep h
       obtain ⟨_, h⟩ := ric_jump (by decide) rfl h
       refine copy80 (fun r => x4.toAdr ≠ 0 ∧ x3.toAdr ≠ 0 ∧ ∃ b' M' G',
           r = .done (.returned (St b' S M' G')) ∧ Devm.getStor b' sevm.currentTarget =
-            (Devm.getStor b4 sevm.currentTarget).set (allowSlot x4.toAdr x3.toAdr) x2) fork
+            (Devm.getStor b4 sevm.currentTarget).set (allowSlot x4.toAdr x3.toAdr) x2 ∧
+            ApprovalLogged sevm b' x4.toAdr) fork
         (fun r q => ?_) (fun i M G r h => ?_) h
-      · obtain ⟨-, -, b', M', G', e, -⟩ := q
+      · obtain ⟨-, -, b', M', G', e, -, -⟩ := q
         exact ⟨_, e⟩
-      · obtain ⟨b5, w0, w1, w2, w3, w4, M5, G5, hs5, h⟩ := ric_seg_e80exit id fork.histFork (by decide) h
-        obtain ⟨d1, d2, b6, M6, G6, e, s6⟩ := permit_tail fork (by rw [getCode_of_state hs5]; exact code4) h
-        exact ⟨d1, d2, b6, M6, G6, e, by rw [s6, getStor_of_state hs5]⟩
-    · obtain ⟨b5, w0, w1, w2, w3, w4, M5, G5, hs5, h⟩ := ric_seg_e8exit id fork.histFork (by decide) h
-      obtain ⟨d1, d2, b6, M6, G6, e, s6⟩ := permit_tail fork (by rw [getCode_of_state hs5]; exact code4) h
-      exact ⟨d1, d2, b6, M6, G6, e, by rw [s6, getStor_of_state hs5]⟩
-  obtain ⟨d1, d2, b', M', G', e, s'⟩ := key
-  refine ⟨d1, d2, b', M', G', e, ?_⟩
-  rw [s', getStor_of_state hs4, getStor_of_state hs3, getStor_of_state hs2, afterSstore_getStor_self,
-    afterSload_getStor, getStor_of_state hs1, keccak_scratch, word_ff20, gsv, getStor_of_state hs1]
+      · obtain ⟨b5, w0, w1, w2, w3, w4, M5, G5, hs5, h⟩ := ric_seg_e80exit id fork (by decide) h
+        obtain ⟨d1, d2, b6, M6, G6, e, s6, lg⟩ := permit_tail fork (by rw [getCode_of_state hs5]; exact code4) h
+        exact ⟨d1, d2, b6, M6, G6, e, by rw [s6, getStor_of_state hs5], lg⟩
+    · obtain ⟨b5, w0, w1, w2, w3, w4, M5, G5, hs5, h⟩ := ric_seg_e8exit id fork (by decide) h
+      obtain ⟨d1, d2, b6, M6, G6, e, s6, lg⟩ := permit_tail fork (by rw [getCode_of_state hs5]; exact code4) h
+      exact ⟨d1, d2, b6, M6, G6, e, by rw [s6, getStor_of_state hs5], lg⟩
+  obtain ⟨d1, d2, b', M', G', e, s', lg⟩ := key
+  refine ⟨d1, d2, b', M', G', e, ?_, lg⟩
+  rw [s', getStor_of_state hs4, getStor_of_state hs3, getStor_of_state hs2, afterSstoreH_getStor_self,
+    afterSloadH_getStor, getStor_of_state hs1, keccak_scratch, word_ff20, gsv, getStor_of_state hs1]
   rfl
 
 /-- The callees of the permit paths: none halts the frame. -/
@@ -185,14 +207,14 @@ macro "itime " h:ident : tactic => `(tactic|
 
 /-- **`_permit(owner, spender, value, deadline, signature)`** (entry 94, with its goto into entry 8):
 the nonce bump and the allowance write. -/
-theorem e94_inv {x0 x1 x2 x3 x4 ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e94_inv {x0 x1 x2 x3 x4 ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm (St b (x0 :: x1 :: x2 :: x3 :: x4 :: ret :: S) M G) t_4692_c94 o) :
     x4.toAdr ≠ 0 ∧ x3.toAdr ≠ 0 ∧ ∃ b' M' G', o = .returned (St b' S M' G') ∧
       Devm.getStor b' sevm.currentTarget =
         ((Devm.getStor b sevm.currentTarget).set (nonceSlot x4.toAdr)
           ((Devm.getStor b sevm.currentTarget).get (nonceSlot x4.toAdr) + 1)).set
-          (allowSlot x4.toAdr x3.toAdr) x2 := by
+          (allowSlot x4.toAdr x3.toAdr) x2 ∧ ApprovalLogged sevm b' x4.toAdr := by
   have nh : ∀ D, Seg.done o ≠ .done (.halted D) := fun D e =>
     SFunc.RunP.not_halted_entry permitCallees_noHalt (k := 94) (by decide) rfl run (Seg.done.inj e)
   have h := run.cut
@@ -202,10 +224,10 @@ theorem e94_inv {x0 x1 x2 x3 x4 ret : B256} {o : Outcome} (fork : CoveredFork se
   · repeat istep h
     itime h
     iterate 3 istep h
-    obtain ⟨d1, d2, b', M', G', e, s'⟩ := e8_inv fork hcode nh h
-    exact ⟨d1, d2, b', M', G', Seg.done.inj e, s'⟩
-  · obtain ⟨d1, d2, b', M', G', e, s'⟩ := e8_inv fork hcode nh h
-    exact ⟨d1, d2, b', M', G', Seg.done.inj e, s'⟩
+    obtain ⟨d1, d2, b', M', G', e, s', lg⟩ := e8_inv fork hcode nh h
+    exact ⟨d1, d2, b', M', G', Seg.done.inj e, s', lg⟩
+  · obtain ⟨d1, d2, b', M', G', e, s', lg⟩ := e8_inv fork hcode nh h
+    exact ⟨d1, d2, b', M', G', Seg.done.inj e, s', lg⟩
 
 /-- One straight-line step, also over `SHL`, `MUL`, `CALLDATACOPY` and `TIMESTAMP`. -/
 macro "istepX " h:ident : tactic => `(tactic| first
@@ -219,75 +241,75 @@ macro "istepX " h:ident : tactic => `(tactic| first
 
 /-- The common conclusion of the permit callees: the owner and spender are nonzero, and the
 returned storage bumps the owner's nonce and writes the allowance. -/
-def PermitPost (b : Devm) (P : Adr) (owner spender value : B256) (S : List B256) (o : Outcome) :
+def PermitPost (b : Devm) (sevm : Sevm) (owner spender value : B256) (S : List B256) (o : Outcome) :
     Prop :=
   owner.toAdr ≠ 0 ∧ spender.toAdr ≠ 0 ∧ ∃ b' M' G', o = .returned (St b' S M' G') ∧
-    Devm.getStor b' P = ((Devm.getStor b P).set (nonceSlot owner.toAdr)
-      ((Devm.getStor b P).get (nonceSlot owner.toAdr) + 1)).set
-      (allowSlot owner.toAdr spender.toAdr) value
+    Devm.getStor b' sevm.currentTarget = ((Devm.getStor b sevm.currentTarget).set (nonceSlot owner.toAdr)
+      ((Devm.getStor b sevm.currentTarget).get (nonceSlot owner.toAdr) + 1)).set
+      (allowSlot owner.toAdr spender.toAdr) value ∧ ApprovalLogged sevm b' owner.toAdr
 
 /-- **`_permit(owner, spender, value, deadline, v, r, s)`** (entry 88): `abi.encodePacked(r, s, v)`,
 then entry 94. -/
 theorem e88_inv {y0 y1 y2 y3 y4 y5 y6 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm (St b (y0 :: y1 :: y2 :: y3 :: y4 :: y5 :: y6 :: ret :: S) M G)
-      t_4be7_c88 o) : PermitPost b sevm.currentTarget y6 y5 y4 S o := by
+      t_4be7_c88 o) : PermitPost b sevm y6 y5 y4 S o := by
   have h := run.cut
   clear run
   repeat istepX h
   icallP h hc 94 t_4692_c94
-  obtain ⟨d1, d2, b1, M1, G1, e, s1⟩ := e94_inv fork hcode hc
+  obtain ⟨d1, d2, b1, M1, G1, e, s1, lg⟩ := e94_inv fork hcode hc
   cases e
   clear hc
   repeat istep h
   obtain ⟨_, e⟩ := ric_ret h
-  exact ⟨d1, d2, b1, _, _, Seg.done.inj e, s1⟩
+  exact ⟨d1, d2, b1, _, _, Seg.done.inj e, s1, lg⟩
 
 /-- **`permit(owner, spender, value, deadline, v, r, s)`'s body** (entry 24): `whenNotPaused`, then
 entry 88. -/
 theorem e24_inv {y0 y1 y2 y3 y4 y5 y6 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm (St b (y0 :: y1 :: y2 :: y3 :: y4 :: y5 :: y6 :: ret :: S) M G)
       t_36a2_c24 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
-      PermitPost b sevm.currentTarget y6 y5 y4 S o := by
+      PermitPost b sevm y6 y5 y4 S o := by
   have h := run.cut
   clear run
   repeat istep h
   ibranch h c
   repeat istep h
   icallP h hc 88 t_4be7_c88
-  obtain ⟨d1, d2, b1, M1, G1, e, s1⟩ := e88_inv fork (by rw [afterSload_getCode]; exact hcode) hc
+  obtain ⟨d1, d2, b1, M1, G1, e, s1, lg⟩ := e88_inv fork (by rw [afterSloadH_getCode]; exact hcode) hc
   cases e
   clear hc
   repeat istep h
   obtain ⟨_, e⟩ := ric_ret h
-  rw [afterSload_getStor] at s1
+  rw [afterSloadH_getStor] at s1
   rw [gsv] at c
-  exact ⟨flag20_false_of_check c, d1, d2, b1, _, _, Seg.done.inj e, s1⟩
+  exact ⟨flag20_false_of_check c, d1, d2, b1, _, _, Seg.done.inj e, s1, lg⟩
 
 /-- **`permit(owner, spender, value, deadline, signature)`'s body** (entry 41): `whenNotPaused`,
 then entry 94. -/
 theorem e41_inv {y0 y1 y2 y3 y4 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm (St b (y0 :: y1 :: y2 :: y3 :: y4 :: ret :: S) M G)
       t_2e53_c41 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
-      PermitPost b sevm.currentTarget y4 y3 y2 S o := by
+      PermitPost b sevm y4 y3 y2 S o := by
   have h := run.cut
   clear run
   repeat istep h
   ibranch h c
   repeat istep h
   icallP h hc 94 t_4692_c94
-  obtain ⟨d1, d2, b1, M1, G1, e, s1⟩ := e94_inv fork (by rw [afterSload_getCode]; exact hcode) hc
+  obtain ⟨d1, d2, b1, M1, G1, e, s1, lg⟩ := e94_inv fork (by rw [afterSloadH_getCode]; exact hcode) hc
   cases e
   clear hc
   repeat istep h
   obtain ⟨_, e⟩ := ric_ret h
-  rw [afterSload_getStor] at s1
+  rw [afterSloadH_getStor] at s1
   rw [gsv] at c
-  exact ⟨flag20_false_of_check c, d1, d2, b1, _, _, Seg.done.inj e, s1⟩
+  exact ⟨flag20_false_of_check c, d1, d2, b1, _, _, Seg.done.inj e, s1, lg⟩
 
 /-- The callees of the cancellation paths: none halts the frame. -/
 def cancelCallees : List Nat := [4, 6, 11, 28, 52, 76, 77, 78, 79, 89, 97, 106, 107, 110, 111, 117]

@@ -78,8 +78,10 @@ theorem implStepLaw_permit : ImplStepLaw (fun c => ∃ o s v, c = .permit o s v)
           ∃ w, N.devm.state.getStor sevm.currentTarget = (pre.state.getStor sevm.currentTarget).set
             (nonceSlot (Sevm.dataWord sevm 4).toAdr) w := by
     rcases sel with sel | sel
-    · exact ⟨frame_permitBytes fork hcode sel hrun, permit_node_bytes run codeEq fork sel⟩
-    · exact ⟨frame_permitVrs fork hcode sel hrun, permit_node_vrs run codeEq fork sel⟩
+    · exact ⟨(fun ⟨a, b, c, d, _⟩ => ⟨a, b, c, d⟩) (frame_permitBytes fork.histFork hcode sel hrun),
+        permit_node_bytes run codeEq fork sel⟩
+    · exact ⟨(fun ⟨a, b, c, d, _⟩ => ⟨a, b, c, d⟩) (frame_permitVrs fork.histFork hcode sel hrun),
+        permit_node_vrs run codeEq fork sel⟩
   clear hrun
   have hp : (ledger U (pre.state.getStor sevm.currentTarget)).paused = false := p0
   refine ⟨?_, ?_, ?_, ?_, fun N hN x hx => ?_⟩
