@@ -7,22 +7,12 @@ import Blanc.Composition.Curve3PoolUsdcCoinExact
 /-!
 # `ExitRequest`, `CoinsOpen` and the books' cover give each coin's law its premise
 
-`ExitApart` is the small named premise of the hash class: `E`'s entries against the pool's and USDT's owner's, and `E`'s
-3Crv entry against 3Crv's supply word. It is finite. Each comparison failing is a Keccak collision on `E`'s address.
+`ExitApart` is the small named premise of the hash class.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
 
 open Jaune Blanc Blanc.Lift
-
-/-- **`E`'s entries miss what the withdrawal writes or reads beside them.** -/
-structure ExitApart (w : State) (E : Adr) : Prop where
-  /-- `E`'s entry in each coin is not the pool's. -/
-  pool : ∀ k, coinEntry E k ≠ coinEntry pool k
-  /-- `E`'s USDT entry is not the word holding USDT's owner, nor the owner's entry. -/
-  usdtOwner : coinEntry E 2 ≠ 0 ∧ coinEntry E 2 ≠ coinEntry (Lift.Usdt.ownerOf (w.getStor usdt)) 2
-  /-- `E`'s 3Crv entry is not 3Crv's supply word. -/
-  c3Supply : Curve3Crv.vyBalSlot E ≠ Curve3Crv.vySupplySlot
 
 variable {w : State} {E : Adr} {a : Nat}
 
@@ -53,7 +43,7 @@ theorem dai_fits (hc : recorded w 0 ≤ coinHeld w pool 0) (hT : 0 < supply w) (
   refine ⟨?_, ?_⟩
   · rw [hs]; have : (((w.getStor dai).get (Lift.Dai.balSlot pool)).toNat) = coinHeld w pool 0 := hh.symm
     omega
-  · have hne : Lift.Dai.balSlot pool ≠ Lift.Dai.balSlot E := Ne.symm (hap.pool 0)
+  · have hne : Lift.Dai.balSlot pool ≠ Lift.Dai.balSlot E := Ne.symm (hap.poolEntry 0)
     rw [Stor.get_set_ne _ hne, hs]
     have : word w dai (Lift.Dai.balSlot E) + share w a 0 < 2 ^ 255 := hcr
     have e : word w dai (Lift.Dai.balSlot E) = ((w.getStor dai).get (Lift.Dai.balSlot E)).toNat := rfl
@@ -67,7 +57,7 @@ theorem usdc_fits (ho : CoinsOpen w E) (hE : E ≠ 0) (hc : recorded w 1 ≤ coi
     unfold coinHeld; rw [ite_eq_left ⟨rfl, ho.usdcV22⟩]
   have hs := share_word hT hle 1
   have hb := share_le hT hle 1
-  have hne : Lift.Usdc.balSlot pool ≠ Lift.Usdc.balSlot E := Ne.symm (hap.pool 1)
+  have hne : Lift.Usdc.balSlot pool ≠ Lift.Usdc.balSlot E := Ne.symm (hap.poolEntry 1)
   have hd : (Lift.Usdc.debitStor (w.getStor usdc) pool (Nat.toB256 (share w a 1)).toNat).get (Lift.Usdc.balSlot E) =
       (w.getStor usdc).get (Lift.Usdc.balSlot E) := by
     unfold Lift.Usdc.debitStor
@@ -91,7 +81,7 @@ theorem burn_fits (hm : (w.getStor c3).get Curve3Crv.vyMinterSlot = pool.toB256)
   · intro h
     exact hE (by rw [← toAdr_toB256 E, h]; rfl)
   · rw [B256.le_iff_toNat_le_toNat, hv]; exact hT
-  · have hne : Curve3Crv.vySupplySlot ≠ mapSlot 3 E.toB256 := Ne.symm hap.c3Supply
+  · have hne : Curve3Crv.vySupplySlot ≠ mapSlot 3 E.toB256 := Ne.symm hap.c3.1
     rw [Stor.get_set_ne _ hne, B256.le_iff_toNat_le_toNat, hv]
     exact hs
 
@@ -114,19 +104,22 @@ theorem feeOf_word (hT : 0 < supply w) (hle : a ≤ supply w) (hf : share w a 2 
 /-- **USDT's move.** `hfle` is what the statement does not yet carry: the fee is at most the amount. -/
 theorem usdt_fits (ho : CoinsOpen w E) (hc : recorded w 2 ≤ coinHeld w pool 2) (hT : 0 < supply w)
     (hle : a ≤ supply w) (hap : ExitApart w E) (hcr : CreditFits w E 2 (netOf w 2 (share w a 2)))
-    (hfee : UsdtFeeFits w (share w a 2)) (hfle : usdtFee w (share w a 2) ≤ share w a 2) :
+    (hfee : UsdtFeeFits w (share w a 2)) :
     Lift.Usdt.XferFits (w.getStor usdt) pool E (Nat.toB256 (share w a 2)) := by
   have hh : coinHeld w pool 2 = ((w.getStor usdt).get (Lift.Usdt.balSlot pool)).toNat := by
     unfold coinHeld; rw [if_neg (by rintro ⟨h, -⟩; exact absurd h (by decide))]; rfl
   have hs := share_word hT hle 2
   have hb := share_le hT hle 2
+  have hfle := hfee.2.2
   have hf := feeOf_word hT hle hfee.1
   generalize hfd : Lift.Usdt.feeOf (w.getStor usdt) (Nat.toB256 (share w a 2)) = f at hf
   have hnet : netOf w 2 (share w a 2) = share w a 2 - usdtFee w (share w a 2) := rfl
   have hsub : (Nat.toB256 (share w a 2) - f).toNat = share w a 2 - usdtFee w (share w a 2) := by
     rw [B256.toNat_sub_eq_of_le _ _ (by rw [B256.le_iff_toNat_le_toNat, hs, hf]; exact hfle), hs, hf]
-  have hEp : Lift.Usdt.balSlot pool ≠ Lift.Usdt.balSlot E := Ne.symm (hap.pool 2)
-  have hE0 : Lift.Usdt.balSlot E ≠ 0 := hap.usdtOwner.1
+  have hEp : Lift.Usdt.balSlot pool ≠ Lift.Usdt.balSlot E := Ne.symm (hap.poolEntry 2)
+  have hE0 : Lift.Usdt.balSlot E ≠ 0 := fun e => hap.usdtE.1 (by
+    rw [show coinEntry E 2 = Lift.Usdt.balSlot E from rfl, e, show (0 : B256) = Bytes.toB256 [0] by decide]
+    simp only [usdtGateSlots, List.mem_cons, true_or, or_true])
   have hp0 : Lift.Usdt.balSlot pool ≠ 0 := usdt_pool_ne_zero
   have hcr' : ((w.getStor usdt).get (Lift.Usdt.balSlot E)).toNat + (share w a 2 - usdtFee w (share w a 2)) < 2 ^ 255 := hcr
   refine ⟨ho.usdtOpen.1, ho.usdtOpen.2, by
@@ -145,9 +138,9 @@ theorem usdt_fits (ho : CoinsOpen w E) (hc : recorded w 2 ≤ coinHeld w pool 2)
       unfold Lift.Usdt.ownerOf Lift.Usdt.credit Lift.Usdt.debit
       rw [Stor.get_set_ne _ hE0, Stor.get_set_ne _ hp0]
     rw [hown]
-    have hown2 : Lift.Usdt.balSlot E ≠ Lift.Usdt.balSlot (Lift.Usdt.ownerOf (w.getStor usdt)) := hap.usdtOwner.2
+    have hown2 : Lift.Usdt.balSlot E ≠ Lift.Usdt.balSlot (Lift.Usdt.ownerOf (w.getStor usdt)) := hap.usdtE.2
     have hfit : ((w.getStor usdt).get (Lift.Usdt.balSlot (Lift.Usdt.ownerOf (w.getStor usdt)))).toNat +
-        usdtFee w (share w a 2) < 2 ^ 255 := hfee.2
+        usdtFee w (share w a 2) < 2 ^ 255 := hfee.2.1
     have hfn : f.toNat = usdtFee w (share w a 2) := by rw [← hfd]; exact feeOf_word hT hle hfee.1
     unfold Lift.Usdt.credit Lift.Usdt.debit
     rw [Stor.get_set_ne _ hown2, hfn]

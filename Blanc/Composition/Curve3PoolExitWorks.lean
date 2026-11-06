@@ -160,29 +160,18 @@ theorem exit_run {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : B2
 /-! ## The message, from the moment's facts -/
 
 /-- **Marked: what the proof takes and this module does not prove.** -/
-structure ExitMarked (w : State) (E : Adr) (a : Nat) : Prop where
+structure ExitMarked (w : State) : Prop where
   /-- MARKED, the Mac's `Moment.backed`: the pool's books are covered at the moment. -/
   covered : PoolBacked w
   /-- MARKED, the Mac's read at the cut: USDC's proxy, and V2_2 at its word. -/
   usdcCode : w.getCode usdc = Usdc.Proxy.code ∧ w.getCode (usdcImplOf w) = Usdc.Impl.code
-  /-- MARKED, for the statement: the pool is not USDC's proxy admin. `proxy_notAdmin` needs a committed frame. -/
-  notAdmin : pool ≠ ((w.getStor usdc).get Blanc.Composition.UsdcLive.pKA).toAdr
-  /-- MARKED, for the statement: the hash class of the new `E`. -/
-  apart : ExitApart w E
-  /-- MARKED, for the statement: USDT's fee is at most the amount, which `sub` needs. -/
-  feeLe : usdtFee w (share w a 2) ≤ share w a 2
   /-- MARKED, provable: 3Crv's minter at the cut (`supply_walk` over the window). -/
   minter : (w.getStor c3).get Curve3Crv.vyMinterSlot = pool.toB256
   /-- MARKED, provable: address 4's code at the cut (`codeAt_empty` over the window). -/
   id4 : w.getCode 4 = ByteArray.empty
 
-/-- A message as a transaction's entry prepares it, beyond `Asked`. -/
-structure ColdEntry (msg : Msg) (w : State) (E : Adr) (data : Bytes) : Prop where
-  asked : Asked msg w E data
-  /-- Address 4 is warm and a precompile, and its code is as in `w`. -/
-  warm4 : (4 : Adr) ∈ msg.accessedAddresses
-  code4 : msg.benv.state.getCode 4 = w.getCode 4
-  gasFits : msg.gas < 2 ^ 256
+/-- A message as a transaction's entry prepares it. -/
+abbrev ColdEntry (msg : Msg) (w : State) (E : Adr) (data : Bytes) : Prop := Asked msg w E data
 
 theorem parties_not_precomp {f : Fork} (h : HistFork f) :
     ¬ (Fork.ruleSet f).isPrecomp pool ∧ ¬ (Fork.ruleSet f).isPrecomp Usdc.usdcImpl ∧ (Fork.ruleSet f).isPrecomp 4 ∧
@@ -207,24 +196,24 @@ variable {w : State} {E : Adr} {a : Nat} {mins : Curve3Pool.V3} {msg : Msg}
 /-- The storage and code a cold entry reads are the moment's, at the parties. -/
 theorem ColdEntry.stor (e : ColdEntry msg w E (exitCalldata a mins)) {x : Adr} (hx : x ∈ parties w) :
     (initDevm msg).getStor x = w.getStor x ∧ (initDevm msg).getCode x = w.getCode x := by
-  have h := (e.asked.entry.world x hx).1
+  have h := (e.entry.world x hx).1
   exact ⟨congrArg Acct.stor h, congrArg Acct.code h⟩
 
 /-- **The message under the marked hypotheses.** `MsgDoes` with the gas bound its walks need, which `MsgDoes` does
 not state. -/
-theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w E a) (e : ColdEntry msg w E (exitCalldata a mins))
+theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg w E (exitCalldata a mins))
     (hE : E ≠ 0) (req : ExitRequest w E a mins)
     (cold : ExitCold msg w E a ((w.getStor c3).get Curve3Crv.vySupplySlot))
     (R : Nat) (hR : callRoom ≤ R) (hG : R + exitFrameGas w E a < 2 ^ 256) :
     ∃ post, exec (initEvm (msg.withGas (R + exitFrameGas w E a))) = .ok post ∧ post.error = none ∧
       post.gasLeft = R ∧ post.refundCounter = (exitRefund w E a : Int) ∧ post.accountsToDelete.toList = [] ∧
       ExitPaid w post.state E a := by
-  have ht : msg.currentTarget = pool := e.asked.entry.named.1
-  have hcaller : msg.caller = E := e.asked.entry.named.2.1
-  have hopen := e.asked.coinsOpen
-  have hfork : CoveredFork (initSevm msg).benvStat.fork := e.asked.entry.plain.2.2.2
+  have ht : msg.currentTarget = pool := e.entry.named.1
+  have hcaller : msg.caller = E := e.entry.named.2.1
+  have hopen := e.coinsOpen
+  have hfork : CoveredFork (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
   have hH : HistFork (initSevm msg).benvStat.fork := hfork.histFork
-  have hdata : (initSevm msg).data = exitCalldata a mins := e.asked.data
+  have hdata : (initSevm msg).data = exitCalldata a mins := e.data
   have hmemP : pool ∈ parties w := by unfold parties; exact List.mem_cons_self
   have hmemC : c3 ∈ parties w := by simp only [parties, List.mem_cons, true_or, or_true]
   have hmemD : dai ∈ parties w := by simp only [parties, List.mem_cons, true_or, or_true]
@@ -277,7 +266,7 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w E a) (e : ColdEntry
   -- the model accepts
   have hlen : (initSevm msg).data.length = 132 := exit_length hdata
   have hsel := exit_selector (e := initSevm msg) hdata
-  have hval : (initSevm msg).value = 0 := e.asked.entry.plain.1
+  have hval : (initSevm msg).value = 0 := e.entry.plain.1
   have hmn : ∀ k, mins.get k < 2 ^ 256 := fun k => Nat.lt_of_le_of_lt (req.mins k) (share_lt hT0 hle k)
   have hmin : ∀ k, mins.get k ≤ s.balances.get k * a / T.toNat := fun k => by
     have := req.mins k
@@ -351,7 +340,8 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w E a) (e : ColdEntry
         · rw [hw]
           show pool ≠ ((initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKA).toAdr
           rw [getStorVal_eq_getStor, sU]
-          exact mk.notAdmin
+          rw [show Blanc.Composition.UsdcLive.pKA = Usdc.adminSlot by decide +kernel]
+          exact hopen.usdcAdmin
       usdt := by rw [hco 2]; show (initDevm msg).getCode usdt = _; rw [cT]; exact mf.usdtCode
       live := by rw [hco 2]; show Lift.Usdt.NotDeprecated ((initDevm msg).getStor usdt); rw [sT]; exact hopen.usdtLive
       prec := fun k => by
@@ -391,12 +381,12 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w E a) (e : ColdEntry
         rwa [show Curve3Pool.adrOf Curve3Pool.Creation.tokenN = c3 by decide +kernel] at this }
   have hcode : (initSevm msg).code = Curve3Pool.code := by
     show msg.code = _
-    rw [e.asked.entry.named.2.2]; exact mf.poolCode
+    rw [e.entry.named.2.2]; exact mf.poolCode
   have hid : IdReady (initSevm msg) (initDevm msg) :=
     ⟨by
       show getDelegatedCodeAddress (msg.benv.state.getCode 4) = none
-      rw [e.code4, mk.id4]
-      exact getDelegatedCodeAddress_eq_none_of_size_ne (by decide), e.warm4,
+      rw [e.entry.identity.2, mk.id4]
+      exact getDelegatedCodeAddress_eq_none_of_size_ne (by decide), e.entry.identity.1,
       decide_eq_true (Curve3Pool.pool_four_mem_precompilesH hH), hfork⟩
   have hb : ∀ k : Fin 3, Curve3Pool.balAt ((initDevm msg).getStor (initSevm msg).currentTarget) k.val *
       rlAmt (initSevm msg) / T = Nat.toB256 (share w a k) := fun k => by
@@ -406,18 +396,18 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w E a) (e : ColdEntry
   have hcall : (initSevm msg).caller = E := hcaller
   have hRm : 2201 ≤ R := hR
   obtain ⟨post, hex, hg, d, l, hd, ⟨S, M, G, rfl⟩, -⟩ := exit_run (msg := msg) (T := T) (R := R) hcode hfork
-    e.asked.entry.plain.2.1 (by have : (2 : Nat) ≤ msg.depth := e.asked.entry.plain.2.2.1; exact this)
+    e.entry.plain.2.1 (by have : (2 : Nat) ≤ msg.depth := e.entry.plain.2.2.1; exact this)
     (by omega) (by omega) hsel hck hstep hid hc3 hC
-    (by rw [hto, sC, hw, hcall, hamt]; exact burn_fits mk.minter hE0 mk.apart req.holds.1 req.holds.2.1)
+    (by rw [hto, sC, hw, hcall, hamt]; exact burn_fits mk.minter hE0 req.apart req.holds.1 req.holds.2.1)
     (by have := hb 0; rw [show (0 : Fin 3).val = 0 from rfl] at this; rw [this, hco 0, hw, hcall]
         show Lift.Dai.MoveFits ((initDevm msg).getStor dai) _ _ _
-        rw [sD]; exact dai_fits (hpc 0) hT0 hle mk.apart (req.creditFits 0))
+        rw [sD]; exact dai_fits (hpc 0) hT0 hle req.apart (req.creditFits 0))
     (by have := hb 1; rw [show (1 : Fin 3).val = 1 from rfl] at this; rw [this, hco 1, hw, hcall]
         show Blanc.Composition.UsdcLive.MoveFits ((initDevm msg).getStor usdc) _ _ _
-        rw [sU]; exact usdc_fits hopen hE0 (hpc 1) hT0 hle mk.apart (req.creditFits 1))
+        rw [sU]; exact usdc_fits hopen hE0 (hpc 1) hT0 hle req.apart (req.creditFits 1))
     (by have := hb 2; rw [show (2 : Fin 3).val = 2 from rfl] at this; rw [this, hco 2, hw, hcall]
         show Lift.Usdt.XferFits ((initDevm msg).getStor usdt) _ _ _
-        rw [sT]; exact usdt_fits hopen (hpc 2) hT0 hle mk.apart (req.creditFits 2) req.feeFits mk.feeLe)
+        rw [sT]; exact usdt_fits hopen (hpc 2) hT0 hle req.apart (req.creditFits 2) req.feeFits)
     hRm (by rw [cold.cost]; exact hG)
   rw [cold.cost] at hex
   obtain ⟨herr, hrf, hdel, hpaid⟩ := cold.last d l S M G hd
@@ -459,7 +449,7 @@ premises and the model's acceptance. -/
 theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.through) {tx : Tx} {E : Adr} {a : Nat}
     {mins : Curve3Pool.V3} (hdata : tx.data = exitCalldata a mins)
     (adm : TxAdmitted m.benv m.bout tx E (exitLimit m.world tx.data E a)) (hopen : CoinsOpen m.world E)
-    (req : ExitRequest m.world E a mins) (mk : ExitMarked m.world E a)
+    (req : ExitRequest m.world E a mins) (mk : ExitMarked m.world)
     (cold : ∀ msg, ColdEntry msg m.world E (exitCalldata a mins) →
       ExitCold msg m.world E a ((m.world.getStor c3).get Curve3Crv.vySupplySlot)) :
     ExitWorks m.benv m.bout tx m.nextIndex E a := by
@@ -537,7 +527,7 @@ theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.throu
           simpa only [parties, List.tail_cons, List.mem_cons, List.not_mem_nil, or_false, hI] using hx
         rw [hM] at hmem
         rcases tx_addr_mem form.type hmem with h | h | h | h
-        · apply adm.block.apart.2
+        · apply adm.block.2
           rw [← h]
           exact List.mem_of_mem_tail hx
         · rcases hx' with rfl | rfl | rfl | rfl | rfl
@@ -549,30 +539,27 @@ theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.throu
         · exact hEp x (List.mem_of_mem_tail hx) h.symm
         · rcases hx' with rfl | rfl | rfl | rfl | rfl <;> exact absurd h (by decide +kernel)
       have ce : ColdEntry M m.world E (exitCalldata a mins) :=
-        { asked :=
-            { entry :=
-                { named := ⟨by rw [hM]; rfl, by rw [hM]; rfl, by
-                    rw [hM]
-                    exact congrArg Acct.code (hget pool (hEp pool List.mem_cons_self))⟩
-                  plain := ⟨by rw [hM]; show tx.value.toB256 = 0; rw [form.value]; decide, by rw [hM]; rfl,
-                    by rw [hM]; show (2 : Nat) ≤ 1024; decide, by rw [hM]; exact adm.fork⟩
-                  cold := ⟨by
-                      rw [hM]
-                      show (Std.HashSet.ofList ((tx.accessList.map _).flatten)).isEmpty = true
-                      rw [hl]
-                      rfl, hTail⟩
-                  world := fun x hx => ⟨by rw [hM]; exact hget x (hEp x hx), by rw [hM]; rfl⟩ }
-              data := by rw [hM]; exact hdata
-              coinsOpen := hopen }
-          warm4 := by
-            rw [hM]
-            exact tx_addr_precomp (Curve3Pool.pool_four_mem_precompilesH hstatFork.histFork)
-          code4 := by rw [hM]; exact congrArg Acct.code (hget 4 hE4)
-          gasFits := by
-            rw [hM]
-            show tx.gas - callIntrinsic tx.data < 2 ^ 256
-            have := adm.room.cap
-            omega }
+        { entry :=
+            { named := ⟨by rw [hM]; rfl, by rw [hM]; rfl, by
+                rw [hM]
+                exact congrArg Acct.code (hget pool (hEp pool List.mem_cons_self))⟩
+              plain := ⟨by rw [hM]; show tx.value.toB256 = 0; rw [form.value]; decide, by rw [hM]; rfl,
+                by rw [hM]; show (2 : Nat) ≤ 1024; decide, by rw [hM]; exact adm.fork⟩
+              cold := ⟨by
+                  rw [hM]
+                  show (Std.HashSet.ofList ((tx.accessList.map _).flatten)).isEmpty = true
+                  rw [hl]
+                  rfl, hTail⟩
+              world := fun x hx => ⟨by rw [hM]; exact hget x (hEp x hx), by rw [hM]; rfl⟩
+              identity := ⟨by
+                  rw [hM]
+                  exact tx_addr_precomp (Curve3Pool.pool_four_mem_precompilesH hstatFork.histFork),
+                by rw [hM]; exact congrArg Acct.code (hget 4 hE4)⟩
+              fresh := ⟨fun x => by
+                  rw [hM]
+                  exact m.block.txSplit_notCreated m.cut x, fun x => by rw [hM]; exact Std.HashSet.not_mem_emptyWithCapacity⟩ }
+          data := by rw [hM]; exact hdata
+          coinsOpen := hopen }
       have hFd : M.gas = tx.gas - callIntrinsic tx.data := by rw [hM]; rfl
       have hneed := adm.room.enough
       have hlim : exitLimit m.world tx.data E a = callIntrinsic tx.data + exitFrameGas m.world E a + callRoom := rfl
@@ -594,7 +581,7 @@ theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.throu
   have hEx := hnoE x hx
   have hCx : m.benv.stat.coinbase ≠ x := by
     intro hc
-    apply adm.block.apart.2
+    apply adm.block.2
     rw [hc]
     show x ∈ parties m.benv.state
     rcases hx with rfl | rfl | rfl | rfl | rfl <;> simp only [parties, List.mem_cons, true_or, or_true]

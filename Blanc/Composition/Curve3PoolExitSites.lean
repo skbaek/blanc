@@ -230,7 +230,8 @@ theorem canon_of_run {e : Sevm} {d post : Devm} {f : SFunc} {c : Nat} (hsg : e.b
 theorem supply_site {ii oi : B256} (hfork : CoveredFork s.benvStat.fork) (hclean : Clean b) {σ : Stor}
     (hA : At t.toAdr [] σ b) :
     supplyBodyCost s t ii oi b S M = 2134 ∧
-      Mv (t.toAdr :: [t.toAdr]) 0 b (supplyNext s t ii oi b S M) ∧ At t.toAdr [vySupplySlot] σ (supplyNext s t ii oi b S M) := by
+      Mv (t.toAdr :: [t.toAdr]) 0 b (supplyNext s t ii oi b S M) ∧ At t.toAdr [vySupplySlot] σ (supplyNext s t ii oi b S M) ∧
+      t.toAdr ∈ (supplyNext s t ii oi b S M).accessedAddresses := by
   obtain ⟨c, hc⟩ : ∃ c, c = staticMsg s (b.withGasLeft 0) S M 0 t ii 4 oi 0x20 := ⟨_, rfl⟩
   have hfc : CoveredFork (initSevm c).benvStat.fork := by rw [hc]; exact hfork
   have ct : (initSevm c).currentTarget = t.toAdr := by rw [hc]; rfl
@@ -268,7 +269,7 @@ theorem supply_site {ii oi : B256} (hfork : CoveredFork s.benvStat.fork) (hclean
   have hNext : supplyNext s t ii oi b S M = callChildPost (parent (b.withGasLeft 0) S M 0 t ii 4 oi 0x20)
       (bodyCanon (initSevm c) (initDevm c) t_0240_c0 (totalSupplyBodyCost (initSevm c) (initDevm c))) oi.toNat (0x20 : B256).toNat := by
     rw [hc]; rfl
-  refine ⟨by unfold supplyBodyCost; rw [← hc]; exact hcost, ?_, ?_⟩
+  refine ⟨by unfold supplyBodyCost; rw [← hc]; exact hcost, ?_, ?_, ?_⟩
   · rw [hNext]
     refine mv_callChild (T := t.toAdr :: [t.toAdr]) _ _ (fun a ha => parent_same _ _ _ 0 t ii 4 oi 0x20 (fun e => ha (e ▸ List.mem_cons_self))) rfl
       (fun h => parent_clean _ _ _ 0 t ii 4 oi 0x20 ⟨h.created, h.del, h.error⟩) (fun a ha => ?_) (hm'.refund.trans (Int.zero_add _)) (fun _ => hm'.clean hcC)
@@ -281,6 +282,8 @@ theorem supply_site {ii oi : B256} (hfork : CoveredFork s.benvStat.fork) (hclean
       fun k hm => absurd ((hA.keys k).1 hm) List.not_mem_nil
     refine Iff.trans ⟨fun hm => (Std.HashSet.mem_union_iff.1 hm).elim (fun e => absurd e (hkp k)) id,
       fun hm => Std.HashSet.mem_union_iff.2 (Or.inr hm)⟩ (ha'.keys k)
+  · rw [hNext]
+    exact Std.HashSet.mem_union_iff.2 (Or.inl (Std.HashSet.mem_insert.mpr (Or.inl (beq_self_eq_true _))))
 
 /-- **`burnFrom` at a site**, the supply warm. -/
 theorem burn_site {ii oi : B256} (hfork : CoveredFork s.benvStat.fork) (hclean : Clean b) (hstatic : s.isStatic = false)

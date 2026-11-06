@@ -33,6 +33,26 @@ def exitCalldata (a : Nat) (mins : V3) : Bytes :=
 /-- The pool's owner has not killed it. `remove_liquidity` alone does not ask this. -/
 def PoolLive (w : State) : Prop := word w pool Curve3Pool.isKilledSlot = 0
 
+/-- The slots USDT's gate and fee rule read when the pool pays: its fee words, its owner word, and the pool's blacklist word. -/
+def usdtGateSlots : List B256 :=
+  [Bytes.toB256 [4], Bytes.toB256 [3], Bytes.toB256 [10],
+    mapSlot pool.toB256 (Bytes.toB256 [6]), Bytes.toB256 [0]]
+
+/-- **`E`'s entries miss what the withdrawal reads and writes beside them.** Each comparison failing is a Keccak
+collision. -/
+structure ExitApart (w : State) (E : Adr) : Prop where
+  /-- `E`'s entry in each coin is not the pool's. -/
+  poolEntry : ∀ k, coinEntry E k ≠ coinEntry pool k
+  /-- `E`'s USDT entry is none of the slots USDT's gate reads, nor its owner's entry. -/
+  usdtE : coinEntry E 2 ∉ usdtGateSlots ∧ coinEntry E 2 ≠ coinEntry (Usdt.ownerOf (w.getStor usdt)) 2
+  /-- USDT's owner's entry is none of those slots, nor the pool's entry. -/
+  usdtOwner : coinEntry (Usdt.ownerOf (w.getStor usdt)) 2 ∉ usdtGateSlots ∧
+    coinEntry (Usdt.ownerOf (w.getStor usdt)) 2 ≠ coinEntry pool 2
+  /-- `E`'s USDC entry is not the proxy's two words nor the pause word. -/
+  usdcE : coinEntry E 1 ∉ [Bytes.toB256 [1], Usdc.adminSlot, Usdc.implSlot]
+  /-- `E`'s 3Crv entry is not 3Crv's supply or minter word. -/
+  c3 : Curve3Crv.vyBalSlot E ≠ Curve3Crv.vySupplySlot ∧ Curve3Crv.vyBalSlot E ≠ Curve3Crv.vyMinterSlot
+
 /-- `E` holds the shares it burns, the minimums are met, and the contract's arithmetic fits. -/
 structure ExitRequest (w : State) (E : Adr) (a : Nat) (mins : V3) : Prop where
   holds : a ≤ shares w E ∧ a ≤ supply w ∧ 0 < supply w
@@ -40,6 +60,7 @@ structure ExitRequest (w : State) (E : Adr) (a : Nat) (mins : V3) : Prop where
   mulFits : ∀ k, recorded w k * a < 2 ^ 256
   creditFits : ∀ k, CreditFits w E k (netOf w k (share w a k))
   feeFits : UsdtFeeFits w (share w a 2)
+  apart : ExitApart w E
 
 /-- **The withdrawal is processed, uses exactly `exitGasUsed`, and pays out.** -/
 def ExitWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Adr) (a : Nat) : Prop :=
@@ -150,10 +171,14 @@ structure MsgEntry (msg : Msg) (w : State) (E : Adr) : Prop where
   plain : msg.value = 0 ∧ msg.isStatic = false ∧ 2 ≤ msg.depth ∧ CoveredFork msg.benv.stat.fork
   cold : msg.accessedStorageKeys.isEmpty ∧ ∀ a ∈ (parties w).tail, a ∉ msg.accessedAddresses
   world : ∀ a ∈ parties w, msg.benv.state.get a = w.get a ∧ msg.benv.stat.origState.get a = w.get a
+  /-- Address 4, the identity precompile, is warm with the code it has in `w`. -/
+  identity : (4 : Adr) ∈ msg.accessedAddresses ∧ msg.benv.state.getCode 4 = w.getCode 4
+  /-- Nothing created or marked for deletion yet in this transaction. -/
+  fresh : (∀ a, a ∉ msg.benv.createdAccounts) ∧ ∀ a, a ∉ msg.inheritedDeletions
 
-/-- With `R + cost` gas the message commits, leaves exactly `R`, earns `refund`, and has the effect. -/
+/-- With `R + cost` gas, a word, the message commits, leaves exactly `R`, earns `refund`, and has the effect. -/
 def MsgDoes (msg : Msg) (room cost refund : Nat) (effect : State → Prop) : Prop :=
-  ∀ R, room ≤ R → ∃ post, exec (initEvm (msg.withGas (R + cost))) = .ok post ∧ post.error = none ∧
+  ∀ R, room ≤ R → R + cost < 2 ^ 256 → ∃ post, exec (initEvm (msg.withGas (R + cost))) = .ok post ∧ post.error = none ∧
     post.gasLeft = R ∧ post.refundCounter.toNat = refund ∧ effect post.state
 
 /-- The message enters as a transaction would, with this calldata, and no named power is in force. -/

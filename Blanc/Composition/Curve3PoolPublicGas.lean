@@ -8,7 +8,7 @@ import Blanc.TransactionForward
 `exitGasUsed` and `swapGasUsed`, each intrinsic gas plus the frame's, less the capped refund, each coin's
 cost its own short definition. The shape comes from `rlExactCost_eq` and `exExactCost` at a transaction's
 entry, where every slot starts cold and every original value is current. The literals are **measured**, by
-running the real runtimes on the execution specs' Prague interpreter; no theorem confirms them yet.
+running the real runtimes on the execution specs' Prague interpreter; for `remove_liquidity` `exit_cold` proves them.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -31,9 +31,12 @@ own write: USDT's fee path and the recipient's first credit. -/
 def paymentGas (w : Jaune.State) (E : Jaune.Adr) (k : Fin 3) (v : Nat) : Nat :=
   startsEntry (rawHeld w E k) (netOf w k v) + if k = 2 then usdtFeeGas w v false else 0
 
-/-- `remove_liquidity`'s cost for one coin, beyond the frame's fixed cost. -/
+/-- `remove_liquidity`'s cost for one coin, beyond the frame's fixed cost: two debits, `E`'s credit unless the fee took
+it all, and USDT's arithmetic on a nonzero amount. -/
 def exitCoinGas (w : Jaune.State) (E : Jaune.Adr) (a : Nat) (k : Fin 3) : Nat :=
-  if share w a k = 0 then 0 else (if k = 2 then 8466 else 8400) + paymentGas w E k (share w a k)
+  if share w a k = 0 then 0
+  else (if k = 2 then 5666 else 5600) + (if netOf w k (share w a k) = 0 then 0 else 2800) +
+    paymentGas w E k (share w a k)
 
 /-- `remove_liquidity`'s frame at a transaction's entry: the fixed cost, the burn's two writes, the coins. -/
 def exitFrameGas (w : Jaune.State) (E : Jaune.Adr) (a : Nat) : Nat :=
