@@ -5449,7 +5449,9 @@ consumer needs canonical interpreter ingress as one conjunct:
   For retained traces, `ExecutionTrace.RetainedXlot.frameAdmitted_benvStat_of_runFrame`
   admits every retained frame at the message's `benv.stat` (take `Q := (· = msg.benv.stat)`), and
   `ExecutionTrace.ConfiguredBlockTrace.frameAdmitted_time` admits every frame of
-  a configured block at `block.header.timestamp.toB256`.  The same module fixes
+  a configured block at `block.header.timestamp.toB256`; `SystemMessageTrace.frameAdmitted_time` and
+  `ApplyTransactionsTrace.frameAdmitted_time` do the same for a system call and a transaction fold at a
+  given time.  The same module fixes
   the new chain tip (`ConfiguredBlockTrace.post_blocks_getLast`) and orders a
   block strictly after its parent from Jaune's header validation
   (`ConfiguredBlockTrace.parent_timestamp_lt`).
@@ -6104,6 +6106,12 @@ that observes exactly `before`.
 To exclude a contract as the caller of every root of a mid history without a premise about senders,
 use `MidHistoryTraceIn.settledRoots_caller_ne_of_stateInv`
 ([`Blanc/ExecutionMidHistoryInRootCallers.lean`](../Blanc/ExecutionMidHistoryInRootCallers.lean)).
+
+To read a settled frame's block time over a mid history, use `MidHistoryTraceIn.settledFrames_time`
+([`Blanc/ExecutionMidHistoryInFrameTime.lean`](../Blanc/ExecutionMidHistoryInFrameTime.lean)): each frame pairs with
+the block that retained it in `MidHistoryTraceIn.blockFrames` (`blockFrames_map_snd`), and runs at that block's header
+timestamp (`blockFrames_time`). The same module gives `StagedBodyTrace.frameAdmitted_time` and
+`ConfiguredBlockTraceIn.frameAdmitted_time`, `settledFrames_time` on any fork domain.
 
 
 When the owner's frames run a *family* of codes (a proxy's `DELEGATECALL` children run the

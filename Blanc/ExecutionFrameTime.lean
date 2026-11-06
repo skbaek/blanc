@@ -126,7 +126,7 @@ private theorem MessageCallTrace.frameAdmitted_time
         messageCallDelegation_benv_stat delegation]
       exact htime
 
-private theorem SystemMessageTrace.frameAdmitted_time
+theorem SystemMessageTrace.frameAdmitted_time
     {benv : Benv} {target : Adr} {data : Bytes}
     {state : State} {out : MsgCallOutput} {time : B256}
     (trace : SystemMessageTrace benv target data state out)
@@ -134,7 +134,7 @@ private theorem SystemMessageTrace.frameAdmitted_time
     trace.FrameAdmitted ca (fun sevm _ => sevm.benvStat.time = time) :=
   trace.message.frameAdmitted_time htime ca
 
-private theorem ApplyTransactionsTrace.frameAdmitted_time
+theorem ApplyTransactionsTrace.frameAdmitted_time
     {txs : List (Nat × Tx)} {benv finalBenv : Benv}
     {bout finalBout : BlockOutput} {time : B256}
     (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
