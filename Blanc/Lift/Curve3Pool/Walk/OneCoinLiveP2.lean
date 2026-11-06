@@ -83,6 +83,8 @@ theorem rx_oc_p2E {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome 
       Devm.EqModGas b' (rawTailBaseNext sevm d [] d.memory ocPushSite) →
       d.gasLeft = D.gasLeft + 1679 + sstoreCost sevm b' (Bytes.toB256 [255, 255, 255])
         (Bytes.toB256 [0]) + rawTailCost (min d.returnData.length 32) →
+      (∃ l S' M' G', D = St (afterSstore sevm (b'.addLog l) (Bytes.toB256 [255, 255, 255])
+        (Bytes.toB256 [0])) S' M' G') →
       Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [] M G) t_45c9_c0 Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 584 := ⟨G - 584, by omega⟩
@@ -237,7 +239,7 @@ theorem rx_oc_p2E {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome 
   refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb9]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_⟩
     bI1 bI d b' hcan1 hcan2 (by rw [show g1 + 584 - (586 + sloadCost sevm bI
       (coinsBase + Sevm.dataWord sevm (Bytes.toB256 [36]))) = g3 by omega]; exact hE) hcanT
-    (by simp only [St.gasLeft]; omega)⟩
+    (by simp only [St.gasLeft]; omega) ⟨_, _, _, _, by rw [hb9]⟩⟩
   rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide),
     show (Bytes.toB256 [0x06, 0x20]).toNat + 0x20 = 0x640 by decide]
   exact (congrArg Bytes.toB256 (WordAt.write_self _ _ _)).trans (B256.toB256_toBytes _)
@@ -257,6 +259,6 @@ theorem rx_oc_p2 {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome �
         Bytes.toB256 (data.sliceD 0x20 32 0) = dy) → Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [] M G) t_45c9_c0 Q :=
   rx_oc_p2E hfork hstatic hdepth hL hW'c hi3 hR hW hsz hdy hpush.withE hG hGb
-    fun D h1 h2 _ _ _ _ _ _ _ _ _ => k D h1 h2
+    fun D h1 h2 _ _ _ _ _ _ _ _ _ _ => k D h1 h2
 
 end Blanc.Lift.Curve3Pool

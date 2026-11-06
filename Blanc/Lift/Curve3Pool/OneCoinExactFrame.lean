@@ -111,8 +111,8 @@ theorem removeLiquidityOneCoin_live_exact {sevm : Sevm} {pre : Devm} {s : State}
   obtain ⟨r, hr, D, rfl, hDg⟩ := rx_oc_frame_exact (pre := pre) (s := s)
     (Q := fun r => ∃ D', r = .halted D' ∧ D'.gasLeft = R) P hfork hstatic hdepth hlen hcd hsel hid
     hWc hW'c hWb hck.abs hck.unlocked hval (by rw [hck.abs.isKilled, hk]; rfl) hi3' hA hP' hmf hX
-    hD0 hm hT0 hle hy hyl h0 h1 h2 hy2 hs0 hs1 hs2 hmin hma hadd hsub hW''c hR hG256
-    (fun D' _ _ hg => ⟨D', rfl, hg⟩)
+    hD0 hm hT0 hle hy hyl h0 h1 h2 hy2 hs0 hs1 hs2 hmin hma hadd hsub hW''c hR (by omega)
+    (fun D' _ _ hg _ => ⟨D', rfl, hg⟩)
   obtain ⟨exD⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the effect, at the same entry gas
   obtain ⟨post, exc, T', hraw, hckp, hW''⟩ := removeLiquidityOneCoin_live

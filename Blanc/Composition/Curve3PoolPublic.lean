@@ -337,20 +337,22 @@ structure OneCoinPaid (w w' : State) (E : Adr) (a : Nat) (i : Fin 3) (dy admin :
   books : recorded w' i + dy + admin = recorded w i
 
 /-- The balances the second `get_y_D` runs at: each scaled balance less the fee on its move to the level `D1`. -/
-def oneCoinReduced (w : State) (i : Fin 3) (D0 D1 newY fee : Nat) (k : Fin 3) : Nat :=
-  let held := scaled w k * D1 / D0
-  scaled w k - fee * (if k = i then held - newY else scaled w k - held) / feeDen
+def oneCoinReduced (w : State) (i : Fin 3) (D0 D1 newY fee : Nat) : Option V3 :=
+  Curve3Pool.V3.ofFnM fun k => do
+    let held ← chkDiv (← chkMul (scaled w k) D1) D0
+    let dx ← if k = i then chkSub held newY else chkSub (scaled w k) held
+    chkSub (scaled w k) (← chkDiv (← chkMul fee dx) feeDen)
 
-/-- `remove_liquidity_one_coin`'s payout and the admin's share, in coin `i`'s own units. -/
+/-- `remove_liquidity_one_coin`'s payout and the admin's share, in coin `i`'s own units, when the contract's
+checked arithmetic passes. -/
 def oneCoinOutcome (w : State) (amp a : Nat) (i : Fin 3) : Option (Nat × Nat) := do
   let D0 ← invariant w amp
-  let D1 := D0 - a * D0 / supply w
+  let D1 ← chkSub D0 (← chkDiv (← chkMul a D0) (supply w))
   let newY ← getYDChk amp i (scaled w) D1
-  let fee := word w pool Curve3Pool.feeSlot * 3 / 8
-  let r := oneCoinReduced w i D0 D1 newY fee
-  let dy := (r i - (← getYDChk amp i r D1) - 1) / Curve3Pool.precMul.get i
-  let dy0 := (scaled w i - newY) / Curve3Pool.precMul.get i
-  some (dy, (dy0 - dy) * word w pool Curve3Pool.adminFeeSlot / feeDen)
+  let dy0 ← chkDiv (← chkSub (scaled w i) newY) (Curve3Pool.precMul.get i)
+  let r ← oneCoinReduced w i D0 D1 newY (word w pool Curve3Pool.feeSlot * 3 / 8)
+  let dy ← chkDiv (← chkSub (← chkSub (r.get i) (← getYDChk amp i r.get D1)) 1) (Curve3Pool.precMul.get i)
+  some (dy, ← chkDiv (← chkMul (← chkSub dy0 dy) (word w pool Curve3Pool.adminFeeSlot)) feeDen)
 
 /-- `remove_liquidity_one_coin(a, i, minDy)`'s calldata. -/
 def oneCoinCalldata (a : Nat) (i : Fin 3) (minDy : Nat) : Bytes :=
@@ -363,6 +365,7 @@ structure OneCoinRequest (w : State) (E : Adr) (t a : Nat) (i : Fin 3) (minDy dy
   outcome : ∃ amp, ampAt w t = some amp ∧ oneCoinOutcome w amp a i = some (dy, admin)
   limits : minDy ≤ dy ∧ a ≤ shares w E ∧ a ≤ supply w
   fits : CreditFits w E i (netOf w i dy) ∧ UsdtFeeFits w dy
+  apart : ExitApart w E
 
 /-- `remove_liquidity_one_coin`'s message, at the fallback cost. -/
 def one_coin_message : Prop :=
