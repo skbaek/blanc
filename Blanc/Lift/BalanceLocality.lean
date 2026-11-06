@@ -6,6 +6,7 @@ import Blanc.ExecutionCellProvenance
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
 import Blanc.SlotFootprint
+import Blanc.Lift.LinearRuntimeSafety
 
 /-!
 # Locality of one holder's balance entry over a mid history
@@ -171,6 +172,15 @@ theorem write_onChain {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     have nonstatic := of_run_sstore_not_static storeRun
     rw [hnode, hs, hstatic] at nonstatic
     exact Bool.noConfusion nonstatic
+
+/-- `InstalledRuntimeSafety.of_linearCheck` with the code's emptiness and delegation read off its size. -/
+theorem runtimeSafety_of_sizes {C : ByteArray} (kinds : callKindsCheck C = true)
+    (terminal : selfdestructFreeCheck C = true) (ne : C.size ≠ 0)
+    (notDelegated : C.size ≠ eoaDelegatedCodeLength) : InstalledRuntimeSafety C :=
+  InstalledRuntimeSafety.of_linearCheck kinds terminal (fun h => notDelegated h.1)
+    (fun h => ne (by
+      show C.data.size = 0
+      rw [← Array.length_toList, ← ByteArray.toList_eq_toList_data, h, List.length_nil]))
 
 /-! ## A cell across a committed frame -/
 
