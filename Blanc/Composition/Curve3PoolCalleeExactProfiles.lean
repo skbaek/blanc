@@ -371,7 +371,7 @@ private theorem c3crv_mutExactAt {data : Bytes} {k : Nat} {f : SFunc}
     · exact callChildPost_mem_warm _ _ _ _ 4
         (parent_mem_warm b S M G t ii 0x44 oi 0x20 4 hid.warm)
 
-private theorem mintBodyCost_le (s : Sevm) (b : Devm) :
+theorem mintBodyCost_le (s : Sevm) (b : Devm) :
     mintBodyCost s b ≤ 2119 + 3 * 2100 + 2 * 22100 := by
   let d := Sevm.argWord s 0
   let v := Sevm.argWord s 1
