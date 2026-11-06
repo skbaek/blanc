@@ -109,6 +109,21 @@ theorem EntryChild.env {sevm : Sevm} {pre post : Devm} {C : ByteArray} {G : Exec
   unfold Env.root
   rw [h.caller, h.target, h.data]
 
+/-- **A committed proxy frame off the five admin selectors has a caller other than the admin word**: the fallback
+reverts for the admin. -/
+theorem proxy_notAdmin {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
+    (codeEq : sevm.code = Proxy.code) (hsg : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (sel : Blanc.Sevm.selector sevm ∉ adminSelectors) :
+    sevm.caller ≠ adminOf pre.state sevm.currentTarget := by
+  obtain ⟨f0, hf0, hrun⟩ := lift_sound_in_noStateGas cert_check codeEq hsg run
+  obtain rfl : f0 = t_0000_c0 := Option.some.inj (hf0.symm.trans rfl)
+  generalize hR : (⟨0, sevm, pre, .ok post, run⟩ : Exec.Deriv) = R at hrun
+  rw [St.self' pre] at hrun
+  rcases proxy_haltH_sel (P := StepIn R) (fun h => StepIn.toRun h) bal hrun with step | hadm
+  · rw [adminOf_eq]
+    exact step.1
+  · exact (sel hadm.2).elim
+
 /-- **A committed non-admin proxy frame is its implementation's frame.** -/
 theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
     (codeEq : sevm.code = Proxy.code) (hsg : sevm.benvStat.rules.stateGas = none)

@@ -71,9 +71,10 @@ structure PoolCoinWorld (exc : Exec 0 sevm b (.ok post)) (dai usdc usdt : Adr) :
   daiCode : b.getCode dai = Dai.code
   usdcCode : b.getCode usdc = Usdc.Proxy.code
   usdtCode : b.getCode usdt = Usdt.code
-  /-- Circle's proxy admin: USDC's implementation word names one of the three versions. -/
+  /-- Circle's proxy admin: USDC's implementation word names one of the three versions, at each non-static child on
+  the pool's selectors. -/
   usdcImpl : ∀ c ∈ Exec.childFrames exc, c.sevm.currentTarget = usdc → c.sevm.isStatic = false →
-    UsdcImplAt c.pre usdc
+    PoolCoinSel (Blanc.Sevm.selector c.sevm) → UsdcImplAt c.pre usdc
   /-- Tether's owner: USDT is not deprecated. -/
   usdtLive : ∀ c ∈ Exec.childFrames exc, c.sevm.currentTarget = usdt → c.sevm.isStatic = false →
     Usdt.flag20 ((Devm.getStor c.pre usdt).get 10) = 0
@@ -157,7 +158,7 @@ theorem PoolCoinWorld.usdc_keeps (w : PoolCoinWorld exc dai usdc usdt)
   refine keeps_of_frame hcode hfork hc ht
     (usdc_frameKeeps c pc0 (code_of_bytes (by decide +kernel) (by decide +kernel) hcode hfork w.usdcCode hc ht)
       (by rw [stat]; exact hfork.stateGas_none) (by rw [stat]; exact hfork.bal_none) hsize
-      (by rw [ht]; exact w.usdcImpl c hc ht hs) sel) a hne
+      (by rw [ht]; exact w.usdcImpl c hc ht hs sel) sel) a hne
 
 end World
 
