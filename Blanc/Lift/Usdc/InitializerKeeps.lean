@@ -12,7 +12,8 @@ an initializer's stores are classified by the prefix walks, whatever the frame's
 
 * `StrApart`, `EntryApart`: closed arithmetic on the entry's word. A string's payload stays within
   `2 ^ 251` words of its hash whatever its stored header says, so an entry outside those intervals
-  misses every payload and clearing store. `entryApart_pool` computes this for the pool's entry;
+  misses every payload and clearing store. `entryApart_pool` (`InitializerKeepsPool`) computes this
+  for the pool's entry;
 * `init_write_ne`: `initialize` and `initializeV2`, all three versions;
 * `init2_write_ne`: `initializeV2_1` and `initializeV2_2`, given `recipient` and `migration`;
 * `init_children`: below a proxy frame on these selectors runs one level of implementation frames;
@@ -465,22 +466,5 @@ theorem initializerKeeps {cfg : ChainConfig} {start : Benv} {future : BlockChain
   simp only [words]
   have keep' : (F.post.state.getStor T).get (balSlot h) = (F.pre.state.getStor T).get (balSlot h) := keep
   rw [keep']
-
-/-! ## The pool's entry -/
-
-/-- The pool's address. Curve's `poolAddress`, kept as a literal so as not to import the pool. -/
-def curvePoolWord : Adr := 0xbebc44782c7db0a1a60cb6fe97d0b483032ff1c7
-
-/-- **The pool's USDC entry is apart from the initializers' keys.** Computed from the two addresses:
-a reader can recompute each hash. No hash assumption enters. -/
-theorem entryApart_pool : EntryApart usdcProxy (balSlot curvePoolWord) where
-  low := by decide +kernel
-  name := by unfold StrApart; decide +kernel
-  symbol := by unfold StrApart; decide +kernel
-  currency := by unfold StrApart; decide +kernel
-  impl := by decide +kernel
-  admin := by decide +kernel
-  self3 := by decide +kernel
-  self9 := by decide +kernel
 
 end Blanc.Lift.Usdc
