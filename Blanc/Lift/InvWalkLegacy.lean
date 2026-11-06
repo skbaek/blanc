@@ -1,6 +1,8 @@
 import Blanc.Lift.InvWalkStep
 import Blanc.Lift.InvWalkDispatch
 import Blanc.Lift.AccumulatedWalk
+import Blanc.Lift.CodeSizeWalk
+import Blanc.Lift.MutableCallPost
 
 /-!
 # Inversion walks of old-solc frames
@@ -27,6 +29,42 @@ macro "ustep " h:ident : tactic => `(tactic|
      obtain ⟨_, e⟩ := ri_mul hd
      subst e; clear hd)
   | (have h' := ric_jump List.not_mem_nil rfl $h; clear $h; obtain ⟨_, $h:ident⟩ := h'))
+
+/-- A `LOG1` step of a storage walk: the log's data is forgotten, the storage kept. -/
+theorem ric_log1_keep {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} {i sz t : B256}
+    {S : List B256} {M : Mem} {G : Nat} {f : SFunc} {r : Seg}
+    (run : SFunc.RunCut fs sevm C (St b (i :: sz :: t :: S) M G) (.next (.reg (.log 1)) f) r) :
+    ∃ b' M' G', SFunc.RunCut fs sevm C (St b' S M' G') f r ∧ Devm.getStor b' = Devm.getStor b := by
+  obtain ⟨_, hd, h⟩ := ric_next run
+  obtain ⟨G', e⟩ := ri_log1 hd
+  subst e
+  exact ⟨_, _, G', h, by simp only [Devm.addLog_getStor]⟩
+
+/-- A `CALL` step: the run across it, and the continuation from the state it left, its stack the
+result flag over `S`. -/
+theorem ric_call_step {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm}
+    {g c v ii is oi os : B256} {S : List B256} {M : Mem} {G : Nat} {f : SFunc} {r : Seg}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.RunCut fs sevm C (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G)
+      (.next (.exec .call) f) r) :
+    ∃ d flag M' G', Ninst.Run sevm (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G) (.exec .call) d ∧
+      SFunc.RunCut fs sevm C (St d (flag :: S) M' G') f r := by
+  obtain ⟨d, hd, h⟩ := ric_next run
+  obtain ⟨flag, hp⟩ := ri_call_post hfork hd
+  refine ⟨d, flag, d.memory, d.gasLeft, hd, ?_⟩
+  rwa [St.self hp.stack rfl] at h
+
+/-- An `EXTCODESIZE` step. -/
+macro "ucodesize " h:ident : tactic => `(tactic|
+  (have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
+   obtain ⟨_, e⟩ := ri_extcodesize ‹CoveredFork _› hd
+   subst e; clear hd))
+
+/-- A `GAS` step. -/
+macro "ugas " h:ident : tactic => `(tactic|
+  (have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
+   obtain ⟨_, _, e⟩ := ri_gas hd
+   subst e; clear hd))
 
 /-- A conditional goto whose target stays in the walk: both arms are kept. -/
 macro "ubranchTo " h:ident c:ident : tactic => `(tactic|
@@ -58,6 +96,11 @@ theorem zero_of_iszero3 {a : B256} (h : B256.eqCheck (B256.eqCheck (B256.eqCheck
     apply h
     simp only [B256.eqCheck, h0, ↓reduceIte]
     decide
+
+theorem eq_of_iszero2 {x y : B256} (h : B256.eqCheck (B256.eqCheck x y) 0 = 0) : x = y := by
+  by_contra hne
+  simp only [B256.eqCheck, hne, ↓reduceIte] at h
+  exact absurd h (by decide)
 
 theorem ne_of_iszero3 {x y : B256}
     (h : B256.eqCheck (B256.eqCheck (B256.eqCheck x y) 0) 0 = 0) : x ≠ y := by

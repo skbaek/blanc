@@ -12,8 +12,8 @@ open Jaune Blanc Blanc.Lift
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 
 /-- The internal callees of `transfer`, `transferFrom` and `balanceOf`: none halts the frame. -/
-def familyCallees : List Nat := [5, 10, 11, 12, 13, 14, 15, 23, 33, 39, 50, 51, 55, 56, 57, 59, 60,
-  61, 63]
+def familyCallees : List Nat := [5, 10, 11, 12, 13, 14, 15, 23, 33, 39, 41, 42, 50, 51, 55, 56, 57,
+  59, 60, 61, 63]
 
 theorem familyCallees_noHalt : NoHaltSet cert.prog familyCallees = true := by decide +kernel
 
@@ -677,6 +677,329 @@ theorem frame_transferFrom {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   simp only [lit36, show Bytes.toB256 [32] + 36 = 68 by decide] at d0 d2 d3 sB
   simp only [ff20_and_word, toAdr_toB256, lit4w] at d0 d2 d3 sB
   exact ⟨d1, d2, d0, d3, by rw [sp, sB]⟩
+
+/-! ## The owner's own writes: `issue` and `redeem` -/
+
+/-- `issue`'s storage: the owner's entry and the supply (slot 1) raised by `a`. -/
+def issueStor (σ : Stor) (a : B256) : Stor :=
+  (σ.set (balSlot (ownerOf σ)) (σ.get (balSlot (ownerOf σ)) + a)).set 1
+    ((σ.set (balSlot (ownerOf σ)) (σ.get (balSlot (ownerOf σ)) + a)).get 1 + a)
+
+/-- **Tree `0x18c2` of entry 41, `issue`'s writes.** -/
+theorem e41_tail {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (h : SFunc.RunCut cert.prog sevm [] (St b (a :: ret :: S) M G) t_18c2_c41 (Seg.done o)) :
+    ∃ b' M' G', o = .returned (St b' S M' G') ∧
+      Devm.getStor b' sevm.currentTarget = issueStor (Devm.getStor b sevm.currentTarget) a := by
+  iterate 30 ustep h
+  unorm h
+  umem h
+  iterate 26 ustep h
+  unorm h
+  umem h
+  iterate 19 ustep h
+  obtain ⟨B0, MB0, GB0, h, s0⟩ := ric_log1_keep h
+  repeat ustep h
+  obtain ⟨_, e⟩ := ric_ret h
+  clear h
+  obtain ⟨B, MB, GB, eo, sB⟩ := ret_named e
+  clear e
+  refine ⟨B, MB, GB, eo, ?_⟩
+  rw [sB, s0]
+  simp only [Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor,
+    show Bytes.toB256 [1] = 1 by decide]
+  rfl
+
+/-- **Entry 41, `issue(a)`**: the caller is the owner, and the write's slot is the owner's entry. -/
+theorem e41_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_1783_c41 o) :
+    sevm.caller = ownerOf (Devm.getStor b sevm.currentTarget) ∧
+      ∃ b' M' G', o = .returned (St b' S M' G') ∧
+        Devm.getStor b' sevm.currentTarget = issueStor (Devm.getStor b sevm.currentTarget) a := by
+  have h := run.cut
+  clear run
+  repeat ustep h
+  ibranch h c1
+  useg h
+  ibranch h c2
+  iterate 30 ustep h
+  unorm h
+  umem h
+  useg h
+  ibranch h c3
+  have e := e41_tail fork h
+  clear h c2 c3
+  simp only [afterSload_getStor] at e
+  unorm c1
+  exact ⟨Adr.toB256_inj (eq_of_iszero2 (eq_zero_of_iszero_ne_zero c1)), e⟩
+
+/-- `redeem`'s storage: the supply lowered, then the entry of the owner read after that write. -/
+def redeemStor (σ : Stor) (a : B256) : Stor :=
+  (σ.set 1 (σ.get 1 - a)).set (balSlot (ownerOf (σ.set 1 (σ.get 1 - a))))
+    ((σ.set 1 (σ.get 1 - a)).get (balSlot (ownerOf (σ.set 1 (σ.get 1 - a)))) - a)
+
+/-- **Tree `0x1a55` of entry 42, `redeem`'s writes.** -/
+theorem e42_tail {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (h : SFunc.RunCut cert.prog sevm [] (St b (a :: ret :: S) M G) t_1a55_c42 (Seg.done o)) :
+    ∃ b' M' G', o = .returned (St b' S M' G') ∧
+      Devm.getStor b' sevm.currentTarget = redeemStor (Devm.getStor b sevm.currentTarget) a := by
+  iterate 15 ustep h
+  unorm h
+  umem h
+  iterate 29 ustep h
+  unorm h
+  umem h
+  iterate 12 ustep h
+  unorm h
+  umem h
+  iterate 19 ustep h
+  obtain ⟨B0, MB0, GB0, h, s0⟩ := ric_log1_keep h
+  repeat ustep h
+  obtain ⟨_, e⟩ := ric_ret h
+  clear h
+  obtain ⟨B, MB, GB, eo, sB⟩ := ret_named e
+  clear e
+  refine ⟨B, MB, GB, eo, ?_⟩
+  rw [sB, s0]
+  simp only [Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor,
+    show Bytes.toB256 [1] = 1 by decide]
+  rfl
+
+/-- **Entry 42, `redeem(a)`**: the caller is the owner; the debit's slot is the owner's entry. -/
+theorem e42_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_197a_c42 o) :
+    sevm.caller = ownerOf (Devm.getStor b sevm.currentTarget) ∧
+      ∃ b' M' G', o = .returned (St b' S M' G') ∧
+        Devm.getStor b' sevm.currentTarget = redeemStor (Devm.getStor b sevm.currentTarget) a := by
+  have h := run.cut
+  clear run
+  repeat ustep h
+  ibranch h c1
+  useg h
+  ibranch h c2
+  iterate 30 ustep h
+  unorm h
+  umem h
+  repeat ustep h
+  ibranch h c3
+  have e := e42_tail fork h
+  clear h c2 c3
+  simp only [afterSload_getStor] at e
+  unorm c1
+  exact ⟨Adr.toB256_inj (eq_of_iszero2 (eq_zero_of_iszero_ne_zero c1)), e⟩
+
+/-- **The `issue(a)` frame**: the caller is the owner; the entry written is the owner's. -/
+theorem frame_issue {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+    (sel : Blanc.Sevm.selector sevm = 0xcc872b66)
+    (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
+    sevm.caller = ownerOf (Devm.getStor b sevm.currentTarget) ∧
+      Devm.getStor post sevm.currentTarget =
+        issueStor (Devm.getStor b sevm.currentTarget) (Sevm.dataWord sevm 4) := by
+  have h := run.cut
+  clear run
+  iterate 7 ustep h
+  ibranch h c0
+  iterate 7 ustep h
+  rw [legacy_selector_word, sel] at h
+  repeat udisp h
+  repeat ustep h
+  ibranch h c1
+  repeat ustep h
+  ucall h hc 41 t_1783_c41
+  obtain ⟨d1, B, MB, GB, e, sB⟩ := e41_inv fork hc
+  cases e
+  clear hc
+  repeat ustep h
+  have sp := ric_stop_keeps h
+  clear h
+  simp only [lit4w] at sB
+  exact ⟨d1, by rw [sp, sB]⟩
+
+/-- **The `redeem(a)` frame**: the caller is the owner; the entry debited is the owner's. -/
+theorem frame_redeem {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+    (sel : Blanc.Sevm.selector sevm = 0xdb006a75)
+    (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
+    sevm.caller = ownerOf (Devm.getStor b sevm.currentTarget) ∧
+      Devm.getStor post sevm.currentTarget =
+        redeemStor (Devm.getStor b sevm.currentTarget) (Sevm.dataWord sevm 4) := by
+  have h := run.cut
+  clear run
+  iterate 7 ustep h
+  ibranch h c0
+  iterate 7 ustep h
+  rw [legacy_selector_word, sel] at h
+  repeat udisp h
+  repeat ustep h
+  ibranch h c1
+  repeat ustep h
+  ucall h hc 42 t_197a_c42
+  obtain ⟨d1, B, MB, GB, e, sB⟩ := e42_inv fork hc
+  cases e
+  clear hc
+  repeat ustep h
+  have sp := ric_stop_keeps h
+  clear h
+  simp only [lit4w] at sB
+  exact ⟨d1, by rw [sp, sB]⟩
+
+/-! ## The deprecation route
+
+With `deprecated` set, `transfer`, `transferFrom` and `balanceOf` write nothing themselves: the frame
+makes one `CALL` to `upgradedAddress` (slot 10, the same word as the flag), and what storage it ends
+with is what that call left.  What the callee does is the owner's choice: this is the named power. -/
+
+/-- **Entry 39, `transfer`, deprecated.** -/
+theorem e39_deprecated {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) ≠ 0)
+    (run : SFunc.Run cert.prog sevm (St b (v :: t :: ret :: S) M G) t_14f4_c39 o) :
+    ∃ b1 gw rest M1 G1 d,
+      Devm.getStor b1 = Devm.getStor b ∧
+      Ninst.Run sevm (St b1 (gw :: ((Devm.getStor b sevm.currentTarget).get 10).toAdr.toB256 :: rest) M1 G1)
+        (.exec .call) d ∧
+      ∃ b' M' G', o = .returned (St b' S M' G') ∧ Devm.getStor b' = Devm.getStor d := by
+  have h := run.cut
+  clear run
+  repeat ustep h
+  ibranch h c1
+  useg h
+  ibranch h c2
+  useg h
+  rw [lit10] at h
+  have h' := ric_branch h
+  clear h c1 c2
+  rcases h' with ⟨c3, _, h⟩ | ⟨c3, _, h⟩
+  · iterate 13 ustep h
+    unorm h
+    umem h
+    iterate 4 (iterate 12 ustep h; umem h)
+    iterate 6 ustep h
+    umem h
+    ucodesize h
+    repeat ustep h
+    ibranch h c4
+    iterate 2 ustep h
+    ugas h
+    ustep h
+    obtain ⟨d, flag, M2, G2, hcall, h⟩ := ric_call_step fork h
+    repeat ustep h
+    ibranch h c5
+    repeat ustep h
+    obtain ⟨_, e⟩ := ric_ret h
+    clear h
+    obtain ⟨B, MB, GB, eo, sB⟩ := ret_named e
+    clear e
+    simp only [lit10] at hcall
+    refine ⟨_, _, _, _, _, d, ?_, hcall, B, MB, GB, eo, sB⟩
+    have hk : ∀ (x : Devm) (a : Adr), Devm.getStor (temporalAccountAccessBase x a) = Devm.getStor x := by
+      intro x a
+      funext y
+      show (temporalAccountAccessBase x a).state.getStor y = x.state.getStor y
+      rw [temporalAccountAccessBase_state]
+    rw [hk]
+    funext x
+    simp only [afterSload_getStor]
+  · exact absurd (eq_zero_of_iszero_ne_zero c3) hdep
+
+/-- **Entry 23, `transferFrom`, deprecated.** -/
+theorem e23_deprecated {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) ≠ 0)
+    (run : SFunc.Run cert.prog sevm (St b (v :: t :: r :: ret :: S) M G) t_0ebd_c23 o) :
+    ∃ b1 gw rest M1 G1 d,
+      Devm.getStor b1 = Devm.getStor b ∧
+      Ninst.Run sevm (St b1 (gw :: ((Devm.getStor b sevm.currentTarget).get 10).toAdr.toB256 :: rest) M1 G1)
+        (.exec .call) d ∧
+      ∃ b' M' G', o = .returned (St b' S M' G') ∧ Devm.getStor b' = Devm.getStor d := by
+  have h := run.cut
+  clear run
+  repeat ustep h
+  ibranch h c1
+  useg h
+  ibranch h c2
+  useg h
+  rw [lit10] at h
+  have h' := ric_branch h
+  clear h c1 c2
+  rcases h' with ⟨c3, _, h⟩ | ⟨c3, _, h⟩
+  · iterate 13 ustep h
+    unorm h
+    umem h
+    iterate 5 (iterate 12 ustep h; umem h)
+    iterate 5 ustep h
+    umem h
+    ucodesize h
+    repeat ustep h
+    ibranch h c4
+    iterate 2 ustep h
+    ugas h
+    ustep h
+    obtain ⟨d, flag, M2, G2, hcall, h⟩ := ric_call_step fork h
+    repeat ustep h
+    ibranch h c5
+    repeat ustep h
+    obtain ⟨_, e⟩ := ric_ret h
+    clear h
+    obtain ⟨B, MB, GB, eo, sB⟩ := ret_named e
+    clear e
+    simp only [lit10] at hcall
+    refine ⟨_, _, _, _, _, d, ?_, hcall, B, MB, GB, eo, sB⟩
+    have hk : ∀ (x : Devm) (a : Adr), Devm.getStor (temporalAccountAccessBase x a) = Devm.getStor x := by
+      intro x a
+      funext y
+      show (temporalAccountAccessBase x a).state.getStor y = x.state.getStor y
+      rw [temporalAccountAccessBase_state]
+    rw [hk]
+    funext x
+    simp only [afterSload_getStor]
+  · exact absurd (eq_zero_of_iszero_ne_zero c3) hdep
+
+/-- **Entry 33, `balanceOf`, deprecated**: the answer is what the call left in memory. -/
+theorem e33_deprecated {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+    (hdep : flag20 ((Devm.getStor b sevm.currentTarget).get 10) ≠ 0)
+    (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_1239_c33 o) :
+    ∃ b1 gw rest M1 G1 d,
+      Devm.getStor b1 = Devm.getStor b ∧
+      Ninst.Run sevm (St b1 (gw :: ((Devm.getStor b sevm.currentTarget).get 10).toAdr.toB256 :: rest) M1 G1)
+        (.exec .call) d ∧
+      ∃ w b' M' G', o = .returned (St b' (w :: S) M' G') ∧ Devm.getStor b' = Devm.getStor d := by
+  have h := run.cut
+  clear run
+  repeat ustep h
+  unorm h
+  umem h
+  rw [lit10] at h
+  have h' := ric_branch h
+  clear h
+  rcases h' with ⟨c3, _, h⟩ | ⟨c3, _, h⟩
+  · iterate 13 ustep h
+    unorm h
+    umem h
+    iterate 3 (iterate 12 ustep h; umem h)
+    iterate 6 ustep h
+    umem h
+    ucodesize h
+    repeat ustep h
+    ibranch h c4
+    iterate 2 ustep h
+    ugas h
+    ustep h
+    obtain ⟨d, flag, M2, G2, hcall, h⟩ := ric_call_step fork h
+    repeat ustep h
+    ibranch h c5
+    repeat ustep h
+    obtain ⟨_, e⟩ := ric_ret h
+    clear h
+    obtain ⟨B, MB, GB, eo, sB⟩ := ret_named e
+    clear e
+    simp only [lit10] at hcall
+    refine ⟨_, _, _, _, _, d, ?_, hcall, _, B, MB, GB, eo, sB⟩
+    have hk : ∀ (x : Devm) (a : Adr), Devm.getStor (temporalAccountAccessBase x a) = Devm.getStor x := by
+      intro x a
+      funext y
+      show (temporalAccountAccessBase x a).state.getStor y = x.state.getStor y
+      rw [temporalAccountAccessBase_state]
+    rw [hk]
+    funext x
+    simp only [afterSload_getStor]
+  · exact absurd (eq_zero_of_iszero_ne_zero c3) hdep
 
 /-! ## Credits: a move lowers only its source -/
 
