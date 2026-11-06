@@ -22,7 +22,7 @@ structure Moment (d : Deployment) where
   pre : BlockChain
   post : BlockChain
   history : MainnetHistory d.minter.post pre
-  block : MainnetBlock pre post
+  block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post
   i : Nat
   cut : block.bodyTrace.transactions.TxSplit i
 

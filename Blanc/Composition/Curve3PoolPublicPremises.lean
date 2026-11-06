@@ -1,7 +1,5 @@
 import Blanc.Composition.Curve3PoolPublicObservers
-import Blanc.Lift.Curve3Pool.Creation.HistoricalTxTrace
-import Blanc.Lift.Curve3Crv.HistCommittedHistory
-import Blanc.Lift.Curve3Crv.SetMinterTx
+import Blanc.Composition.Curve3PoolBlockAnchor
 import Blanc.Lift.Dai.Cert
 import Blanc.Lift.Usdt.Cert
 import Blanc.Lift.Usdc.Proxy.Cert
@@ -16,7 +14,7 @@ import Blanc.ExecutionHistoryInFrameEnv
 /-!
 # The Curve 3pool's public statements: what they assume
 
-The deployment record, the code the pool relies on at creation, the operators' powers restrained by
+The anchored deployment, the code the pool relies on at creation, the operators' powers restrained by
 name, and the history's hash and signature facts. `Assumes` collects them; every headline takes it.
 -/
 
@@ -26,65 +24,32 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 
 /-- A configured mainnet history over the forks the kit covers. -/
 abbrev MainnetHistory := ConfiguredHistoryTraceIn HistFork mainnetChainConfig
-/-- One configured mainnet block over those forks. -/
-abbrev MainnetBlock := ConfiguredBlockTraceIn HistFork mainnetChainConfig
 
-/-- Block `b` is mainnet block `n` at time `t`; slot `i` decodes to `tx`, whose receipt succeeded. -/
-structure RecordedTx {pre post : BlockChain} (b : MainnetBlock pre post) (n t i : Nat) (tx : Tx) where
-  number : b.block.header.number = n
-  time : b.block.header.timestamp = t
-  entry : Bytes ⊕ Tx
-  slot : b.block.txs[i]? = some entry
-  decoded : decodeTx b.fork.ruleSet entry = .ok tx
-  receipt : Fin 5 × Receipt
-  lookup : b.blockOutput.receiptsTrie[BLT.toBytes (.bytes i.toBytes)]? = some receipt
-  succeeded : receipt.2.succeeded = true
-
-/-- A mainnet block holding a recorded transaction. -/
-structure RecordedBlock (n t i : Nat) (tx : Tx) where
-  pre : BlockChain
-  post : BlockChain
-  trace : MainnetBlock pre post
-  recorded : RecordedTx trace n t i tx
-
-namespace RecordedBlock
-
-variable {n t i : Nat} {tx : Tx}
-
-/-- The block's transactions cut at the recorded one. -/
-noncomputable def cut (r : RecordedBlock n t i tx) : r.trace.bodyTrace.transactions.TxSplit i :=
-  r.trace.bodyTrace.txSplitOfSlot r.recorded.slot r.recorded.decoded
-
-/-- What remains of the block after the recorded transaction. -/
-noncomputable def rest (r : RecordedBlock n t i tx) :
-    MidHistoryTraceIn HistFork mainnetChainConfig r.cut.afterBenv r.post :=
-  MidHistoryTraceIn.tail r.trace r.cut
-
-end RecordedBlock
-
-/-- **3Crv's creation, the pool's creation and the minter assignment**, in one mainnet history. -/
-structure Deployment where
-  c3 : RecordedBlock 10809467 1599414946 76 Lift.Curve3Crv.Creation.HistoricalTx.tx
-  pool : RecordedBlock 10809473 1599414978 53 Lift.Curve3Pool.Creation.HistoricalTx.tx
-  minter : RecordedBlock 10809482 1599415164 135 Lift.Curve3Crv.SetMinter.tx
-  toPool : MainnetHistory c3.post pool.pre
-  toMinter : MainnetHistory pool.post minter.pre
+/-- **3Crv's creation block, the pool's and the minter assignment's, each by its hash**, in one mainnet
+history. -/
+abbrev Deployment := Curve3PoolBlockAnchor.AnchoredDeployment
 
 namespace Deployment
 
 variable (d : Deployment) {future : BlockChain} (h : MainnetHistory d.minter.post future)
+
+/-- 3Crv's creation block, cut at the creation transaction. -/
+noncomputable def c3Cut := d.c3.trace.bodyTrace.txSplitOfSlot d.c3Recorded.slot rfl
+
+/-- The minter assignment's block, cut at that transaction. -/
+noncomputable def minterCut := d.minter.trace.bodyTrace.txSplitOfSlot d.minterRecorded.slot rfl
 
 /-- Mainnet from the end of 3Crv's creation block to `future`. -/
 noncomputable def sinceC3Block : MainnetHistory d.c3.post future :=
   ((d.toPool.step d.pool.trace).append d.toMinter).step d.minter.trace |>.append h
 
 /-- Mainnet from right after 3Crv's creation to `future`. -/
-noncomputable def sinceCreation : MidHistoryTraceIn HistFork mainnetChainConfig d.c3.cut.afterBenv future :=
-  d.c3.rest.append (d.sinceC3Block h)
+noncomputable def sinceCreation : MidHistoryTraceIn HistFork mainnetChainConfig d.c3Cut.afterBenv future :=
+  (MidHistoryTraceIn.tail d.c3.trace d.c3Cut).append (d.sinceC3Block h)
 
 /-- Mainnet from right after the minter assignment to `future`. -/
-noncomputable def sinceMinter : MidHistoryTraceIn HistFork mainnetChainConfig d.minter.cut.afterBenv future :=
-  d.minter.rest.append h
+noncomputable def sinceMinter : MidHistoryTraceIn HistFork mainnetChainConfig d.minterCut.afterBenv future :=
+  (MidHistoryTraceIn.tail d.minter.trace d.minterCut).append h
 
 end Deployment
 

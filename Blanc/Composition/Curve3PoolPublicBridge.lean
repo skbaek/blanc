@@ -8,8 +8,8 @@ import Blanc.Lift.Curve3Pool.U3Ledger
 Controls for the public statements, not part of them. Each theorem compares an observer with what the
 existing proofs pin, so a mis-stated observer breaks this module:
 
-* the literal addresses are the deployment's, and `Deployment` plus the premises it moved out rebuilds
-  `JointDeployment` field for field (`Deployment.toJoint`);
+* the literal addresses are the deployment's, and `Deployment` plus the premises it moved out gives
+  `JointDeployment` (`Deployment.toJoint`);
 * `recorded`, `books`, `scaled` and `ampAt` read what the replay's `Checkpoint` pins;
 * `Within` follows from `U3Ledger` at those observers, arm by arm, for the arms with no existential.
 -/
@@ -25,58 +25,11 @@ example : dai = Curve3Pool.adrOf (Curve3Pool.Creation.coinsN.get 0) := by decide
 example : usdc = Curve3Pool.adrOf (Curve3Pool.Creation.coinsN.get 1) := by decide +kernel
 example : usdt = Curve3Pool.adrOf (Curve3Pool.Creation.coinsN.get 2) := by decide +kernel
 
-/-- The record rebuilds `JointDeployment`, given the fields that moved to `Assumes` or left the
-statement. So `Deployment` drops nothing else. -/
-noncomputable def Deployment.toJoint (d : Deployment)
-    (fresh : Curve3Crv.FreshKeys (fun _ => False)
-      (Curve3Crv.midTouchedKeysIn Curve3PoolPublic.c3
-        (d.c3.rest.append (((d.toPool.step d.pool.trace).append d.toMinter).step d.minter.trace))))
-    (callbacks : (((MidHistoryTraceIn.tail d.pool.trace d.pool.cut).append d.toMinter).step
-      d.minter.trace).FrameAdmitted Curve3PoolPublic.pool (Exec.derivEntry fun D =>
-        Curve3Pool.PoolCallsKeep D ∧ Curve3Pool.PoolCoinCallsKeepToken D))
-    (idEmpty : d.c3.post.state.getCode 4 = ByteArray.empty)
-    (idNoFrame : ∀ root ∈ (((d.toPool.step d.pool.trace).append d.toMinter).step d.minter.trace).rawFrames,
-      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ 4) :
-    Curve3PoolJointRoot.JointDeployment where
-  c3Pre := d.c3.pre
-  c3Completed := d.c3.post
-  c3Block := d.c3.trace
-  c3Number := d.c3.recorded.number
-  c3Time := d.c3.recorded.time
-  c3Entry := d.c3.recorded.entry
-  c3Slot := d.c3.recorded.slot
-  c3Decoded := d.c3.recorded.decoded
-  c3Receipt := d.c3.recorded.receipt
-  c3Lookup := d.c3.recorded.lookup
-  c3Succeeded := d.c3.recorded.succeeded
-  poolPre := d.pool.pre
-  toPool := d.toPool
-  poolCompleted := d.pool.post
-  poolBlock := d.pool.trace
-  poolNumber := d.pool.recorded.number
-  poolTime := d.pool.recorded.time
-  poolEntry := d.pool.recorded.entry
-  poolSlot := d.pool.recorded.slot
-  poolDecoded := d.pool.recorded.decoded
-  poolReceipt := d.pool.recorded.receipt
-  poolLookup := d.pool.recorded.lookup
-  poolSucceeded := d.pool.recorded.succeeded
-  minterPre := d.minter.pre
-  toMinter := d.toMinter
-  minterCompleted := d.minter.post
-  minterBlock := d.minter.trace
-  minterNumber := d.minter.recorded.number
-  minterTime := d.minter.recorded.time
-  minterEntry := d.minter.recorded.entry
-  minterSlot := d.minter.recorded.slot
-  minterDecoded := d.minter.recorded.decoded
-  minterReceipt := d.minter.recorded.receipt
-  minterLookup := d.minter.recorded.lookup
-  minterSucceeded := d.minter.recorded.succeeded
-  fresh := fresh
-  callbacks := callbacks
-  idEmpty := idEmpty
-  idNoFrame := idNoFrame
+/-- The anchored deployment rebuilds `JointDeployment`, given the fields that moved to `Assumes` or left
+the statement: U5's `toJoint`, on this module's `Deployment`. -/
+noncomputable def Deployment.toJoint (d : Deployment) (facts : d.Facts) :
+    Curve3PoolJointRoot.JointDeployment :=
+  Curve3PoolBlockAnchor.AnchoredDeployment.toJoint facts
 
 section Observers
 
