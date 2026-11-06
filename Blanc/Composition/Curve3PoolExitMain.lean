@@ -152,10 +152,10 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg
       unfold usdcImplOf
       rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
     rw [← hI, cI]
-    exact mk.usdcCode.2
+    exact mk.usdcCode
   have hC : RealCoins (initSevm msg) (initDevm msg) :=
     { dai := by rw [hco 0]; show (initDevm msg).getCode dai = _; rw [cD]; exact mf.daiCode
-      usdc := by rw [hco 1]; show (initDevm msg).getCode usdc = _; rw [cU]; exact mk.usdcCode.1
+      usdc := by rw [hco 1]; show (initDevm msg).getCode usdc = _; rw [cU]; exact mk.usdcProxy
       impl := by
         rw [hco 1]
         refine ⟨getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel), himplC, ?_, ?_⟩
@@ -326,10 +326,19 @@ premises and the model's acceptance. -/
 theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.through) {tx : Tx} {E : Adr} {a : Nat}
     {mins : Curve3Pool.V3} (hdata : tx.data = exitCalldata a mins)
     (adm : TxAdmitted m.benv m.bout tx E (exitLimit m.world tx.data E a)) (hopen : CoinsOpen m.world E)
-    (req : ExitRequest m.world E a mins) (mk : ExitMarked m.world) :
+    (req : ExitRequest m.world E a mins)
+    (implCode : m.world.getCode (usdcImplOf m.world) = Usdc.Impl.code)
+    (minter : (m.world.getStor c3).get Curve3Crv.vyMinterSlot = pool.toB256) (id4 : m.world.getCode 4 = ByteArray.empty) :
     ExitWorks m.benv m.bout tx m.nextIndex E a := by
   obtain ⟨prio, maxFee, form, ready⟩ := adm.form
   have mf := m.facts A
+  have mk : ExitMarked m.world :=
+    { covered := m.backed A
+      usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
+        A.circle.usdcCertified
+      usdcCode := implCode
+      minter := minter
+      id4 := id4 }
   have hw : m.benv.state = m.world := rfl
   have hE0 : E ≠ 0 := ready.named.1
   have hrec : tx.type.receiver? = some pool := by rw [form.type]; rfl
@@ -341,7 +350,7 @@ theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.throu
     · rw [mf.poolCode] at hz; exact absurd hz (by decide +kernel)
     · rw [mf.c3Code] at hz; exact absurd hz (by decide +kernel)
     · rw [mf.daiCode] at hz; exact absurd hz (by decide +kernel)
-    · rw [mk.usdcCode.1] at hz; exact absurd hz (by decide +kernel)
+    · rw [mk.usdcProxy] at hz; exact absurd hz (by decide +kernel)
     · rw [mf.usdtCode] at hz; exact absurd hz (by decide +kernel)
   have hstatFork := adm.fork
   have hpn := parties_not_precomp hstatFork.histFork
@@ -382,7 +391,7 @@ theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.throu
         · exact hnoE _ (by simp only [or_true])
         · intro hEx
           have hz := ready.noCode
-          rw [hEx, hw, mk.usdcCode.2] at hz
+          rw [hEx, hw, mk.usdcCode] at hz
           exact absurd hz (by decide +kernel)
       have hE4 : E ≠ 4 := by
         intro h4

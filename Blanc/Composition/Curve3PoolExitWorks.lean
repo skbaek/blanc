@@ -159,12 +159,14 @@ theorem exit_run {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : B2
 
 /-! ## The message, from the moment's facts -/
 
-/-- **Marked: what the proof takes and this module does not prove.** -/
+/-- What a moment gives the message beyond `MomentFacts`. -/
 structure ExitMarked (w : State) : Prop where
-  /-- MARKED, the Mac's `Moment.backed`: the pool's books are covered at the moment. -/
+  /-- The pool's books are covered at the moment. -/
   covered : PoolBacked w
-  /-- MARKED, the Mac's read at the cut: USDC's proxy, and V2_2 at its word. -/
-  usdcCode : w.getCode usdc = Usdc.Proxy.code ∧ w.getCode (usdcImplOf w) = Usdc.Impl.code
+  /-- USDC's proxy at its address. -/
+  usdcProxy : w.getCode usdc = Usdc.Proxy.code
+  /-- MARKED, for the statement: V2_2's code at the address `CoinsOpen.usdcV22` names. One `eth_getCode`. -/
+  usdcCode : w.getCode (usdcImplOf w) = Usdc.Impl.code
   /-- MARKED, provable: 3Crv's minter at the cut (`supply_walk` over the window). -/
   minter : (w.getStor c3).get Curve3Crv.vyMinterSlot = pool.toB256
   /-- MARKED, provable: address 4's code at the cut (`codeAt_empty` over the window). -/
