@@ -4,6 +4,7 @@ import Blanc.Lift.Usdc.Impl.Check
 import Blanc.Lift.CursorKeccak
 import Blanc.Lift.FrameSkip
 import Blanc.Lift.ObservedReachSplit
+import Blanc.Lift.Usdc.RefineAdminBits
 
 /-!
 # FiatTokenV2_2's `initializeV2` on a prefix reach
@@ -93,7 +94,8 @@ theorem blacklist_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n
     {K : List SFunc} {b : Devm} {x t : B256} {R : List B256} {M : Mem} {G : Nat}
     (run : ObservedReach P observe Impl.cert.prog sevm ⟨St b (x :: t :: R) M G, Impl.t_4224_c86, K⟩ T)
     (hT : AtSstore T) :
-    ((∀ key v S, T.d.stack = key :: v :: S → key = mapSlot (x &&& addrMask) 9) ∧
+    ((∀ key v S, T.d.stack = key :: v :: S → key = mapSlot (x &&& addrMask) 9 ∧
+        balanceBits v = balanceBits (T.d.getStorVal sevm.currentTarget key)) ∧
       ObservedKeccak P observe sevm ((x &&& addrMask).toBytes ++ (9 : B256).toBytes)
         (fun _ => True)) ∨
       ∃ f K' b' M' G', K = f :: K' ∧ ObservedReach P observe Impl.cert.prog sevm ⟨St b' R M' G', f, K'⟩ T := by
@@ -107,7 +109,15 @@ theorem blacklist_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n
   · exact absurd hw (by decide)
   orsd
   iterate 13 orsx
-  orsld
+  obtain ⟨loadedPost, loadStep, run⟩ := ObservedReach.rs_next run hT
+  have loadRun := erase loadStep
+  obtain ⟨loadKey, rest, pop, push⟩ := of_run_sload loadRun
+  simp only [Stack.Pop, Stack.Push, Split, St.stack, List.cons_append, List.nil_append,
+    List.cons.injEq] at pop push
+  obtain ⟨rfl, rfl⟩ := pop
+  rw [St.self push (SolcStorageReturn.sload_memory loadRun), St.getStorVal, keccak_scratch] at run
+  have storage := Devm.getStorVal_of_state (of_run_sload_state loadRun) sevm.currentTarget
+  simp only [St.getStorVal] at storage
   iterate 2 orsx
   orsd
   iterate 13 orsx
@@ -122,8 +132,11 @@ theorem blacklist_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n
   · refine .inl ⟨?_, hash⟩
     intro key v S h
     simp only [St.stack, List.cons.injEq] at h
-    rw [← h.1]
-    rfl
+    obtain ⟨keyEq, valueEq, -⟩ := h
+    subst keyEq
+    subst valueEq
+    refine ⟨rfl, ?_⟩
+    exact (balanceBits_blacklistWord _).trans (congrArg balanceBits (storage _))
   obtain ⟨_, _, e⟩ := SolcStorageReturn.ri_sstore_any (erase hstep)
   subst e
   clear hstep
@@ -143,7 +156,7 @@ theorem blacklist_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n 
       ∃ f K' b' M' G', K = f :: K' ∧ Reach P Impl.cert.prog sevm ⟨St b' R M' G', f, K'⟩ T := by
   rcases blacklist_source erase (ObservedReach.of_reach run) hT with
     ⟨keys, _⟩ | ⟨f, K', b', M', G', same, rest⟩
-  · exact .inl keys
+  · exact .inl fun key v S stack => (keys key v S stack).1
   · exact .inr ⟨f, K', b', M', G', same, rest.forget⟩
 
 theorem head_eq : Impl.t_255a_c55 = Impl.t_255a_c101 := rfl
@@ -173,7 +186,8 @@ theorem pass22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
     (∀ key v S, T.d.stack = key :: v :: S → ∃ j < aL.toNat,
       (key = mapSlot (acctAt sevm aP j) 3 ∧
         ObservedKeccak P observe sevm ((acctAt sevm aP j).toBytes ++ (3 : B256).toBytes) (fun _ => True)) ∨
-      (key = mapSlot (acctAt sevm aP j &&& addrMask) 9 ∧
+      ((key = mapSlot (acctAt sevm aP j &&& addrMask) 9 ∧
+          balanceBits v = balanceBits (T.d.getStorVal sevm.currentTarget key)) ∧
         ObservedKeccak P observe sevm ((acctAt sevm aP j &&& addrMask).toBytes ++ (9 : B256).toBytes)
           (fun _ => True))) ∨
       (∃ b' M' G', i + 1 ≤ aL.toNat ∧ ObservedReach P observe Impl.cert.prog sevm
@@ -247,7 +261,7 @@ theorem pass22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   · refine .inl fun key v S hs => ?_
     obtain ⟨j, hj, h | h⟩ := keys key v S hs
     · exact ⟨j, hj, .inl h.1⟩
-    · exact ⟨j, hj, .inr h.1⟩
+    · exact ⟨j, hj, .inr h.1.1⟩
   · exact .inr (.inl ⟨b', M', G', next, rest.forget⟩)
   · exact .inr (.inr ⟨b', M', G', rest.forget⟩)
 
@@ -275,7 +289,8 @@ theorem after22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d
     {b : Devm} {i sL sP aL aP r : B256} {S : List B256} {M : Mem} {G : Nat}
     (run : ObservedReach P observe Impl.cert.prog sevm ⟨St b (i :: sL :: sP :: aL :: aP :: r :: S) M G,
       Impl.t_2698_c101, []⟩ T) (hT : AtSstore T) : ∀ key v S, T.d.stack = key :: v :: S →
-      (key = mapSlot (sevm.currentTarget.toB256 &&& addrMask) 9 ∧
+      ((key = mapSlot (sevm.currentTarget.toB256 &&& addrMask) 9 ∧
+          balanceBits v = balanceBits (T.d.getStorVal sevm.currentTarget key)) ∧
         ObservedKeccak P observe sevm ((sevm.currentTarget.toB256 &&& addrMask).toBytes ++ (9 : B256).toBytes)
           (fun _ => True)) ∨
       (key = mapSlot sevm.currentTarget.toB256 3 ∧
@@ -322,7 +337,7 @@ theorem after22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
       Impl.t_2698_c101, []⟩ T) (hT : AtSstore T) : ∀ key v S, T.d.stack = key :: v :: S → AfterKeys sevm key := by
   intro key v S hs
   rcases after22_source erase (ObservedReach.of_reach run) hT key v S hs with h | h | h
-  · exact .inl h.1
+  · exact .inl h.1.1
   · exact .inr (.inl h.1)
   · exact .inr (.inr h)
 
@@ -341,7 +356,8 @@ theorem loop22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
     (∀ key v S, T.d.stack = key :: v :: S → ∃ j < aL.toNat,
       (key = mapSlot (acctAt sevm aP j) 3 ∧
         ObservedKeccak P observe sevm ((acctAt sevm aP j).toBytes ++ (3 : B256).toBytes) (fun _ => True)) ∨
-      (key = mapSlot (acctAt sevm aP j &&& addrMask) 9 ∧
+      ((key = mapSlot (acctAt sevm aP j &&& addrMask) 9 ∧
+          balanceBits v = balanceBits (T.d.getStorVal sevm.currentTarget key)) ∧
         ObservedKeccak P observe sevm ((acctAt sevm aP j &&& addrMask).toBytes ++ (9 : B256).toBytes)
           (fun _ => True))) ∨
       ∃ j b' M' G', ObservedReach P observe Impl.cert.prog sevm
@@ -368,7 +384,7 @@ theorem loop22_keys (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
   · refine .inl fun key v S hs => ?_
     obtain ⟨j, hj, h | h⟩ := keys key v S hs
     · exact ⟨j, hj, .inl h.1⟩
-    · exact ⟨j, hj, .inr h.1⟩
+    · exact ⟨j, hj, .inr h.1.1⟩
   · exact .inr ⟨j, b', M', G', rest.forget⟩
 
 theorem loop22 (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
@@ -484,12 +500,15 @@ theorem BodySource22.below {sLen : Nat} {L : List SFunc}
 
 /-- Retain original mapping observations through the actual string helper's return.
 The checked return arity suffices because the caller discards the helper result. -/
-theorem body22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+theorem body22_head (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {sL sP : Nat} {aL aP r : B256} {S : List B256} {b : Devm} {M : Mem} {G : Nat}
     (hsg : sevm.benvStat.rules.stateGas = none) (bound : sP + sL + 32 ≤ 2 ^ 256)
     (run : ObservedReach P observe Impl.cert.prog sevm
       ⟨St b (sL.toB256 :: sP.toB256 :: aL :: aP :: r :: S) M G, Impl.t_2538_c55, []⟩ T)
-    (hT : AtSstore T) : BodySource22 P observe sevm sL T := by
+    (hT : AtSstore T) : StrStore.StoreRangeAt 5 ((sL + 31) / 32) T ∨ ∃ b' M' G',
+      ObservedReach P observe Impl.cert.prog sevm
+        ⟨St b' ((0 : Nat).toB256 :: sL.toB256 :: sP.toB256 :: aL :: aP :: r :: S) M' G',
+          Impl.t_255a_c101, []⟩ T := by
   orsd
   orsx
   orsld
@@ -530,6 +549,17 @@ theorem body22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
   orsd
   iterate 2 orsx
   rw [head_eq] at run
+  exact .inr ⟨_, _, _, run⟩
+
+/-- Retain original mapping observations through the actual string helper's return. -/
+theorem body22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {sL sP : Nat} {aL aP r : B256} {S : List B256} {b : Devm} {M : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none) (bound : sP + sL + 32 ≤ 2 ^ 256)
+    (run : ObservedReach P observe Impl.cert.prog sevm
+      ⟨St b (sL.toB256 :: sP.toB256 :: aL :: aP :: r :: S) M G, Impl.t_2538_c55, []⟩ T)
+    (hT : AtSstore T) : BodySource22 P observe sevm sL T := by
+  rcases body22_head erase hsg bound run hT with stored | ⟨_, _, _, run⟩
+  · exact .inl stored
   rcases loop22_source erase (i := 0) (Nat.zero_le _) run hT with
     loop | ⟨j, b', M', G', run⟩
   · refine .inr fun key value rest stack => .inr ?_
@@ -543,15 +573,44 @@ theorem body22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
         rw [B256.and_comm]
         exact ff20_and_word _
       rw [account] at at9
-      exact ⟨_, .inr at9⟩
+      exact ⟨_, .inr ⟨at9.1.1, at9.2⟩⟩
   · refine .inr fun key value rest stack => ?_
     rcases after22_source erase run hT key value rest stack with at9 | at3 | version
     · have account : sevm.currentTarget.toB256 &&& addrMask = sevm.currentTarget.toB256 := by
         rw [B256.and_comm]
         exact ff20_and_adr _
       rw [account] at at9
-      exact .inr ⟨_, .inr at9⟩
+      exact .inr ⟨_, .inr ⟨at9.1.1, at9.2⟩⟩
     · exact .inr ⟨_, .inl at3⟩
+    · exact .inl version
+
+/-- What a store of `initializeV2_2`'s body does to balance bits: the string range, slot `18`, a
+base-`3` row, or a store keeping its key's bits. -/
+def BodyBits22 (sevm : Sevm) (sLen : Nat) (aP : B256) (aLen : Nat) (T : Conf) : Prop :=
+  StrStore.StoreRangeAt 5 ((sLen + 31) / 32) T ∨
+    ∀ key value rest, T.d.stack = key :: value :: rest →
+      key = 18 ∨ (∃ j < aLen, key = mapSlot (acctAt sevm aP j) 3) ∨
+        key = mapSlot sevm.currentTarget.toB256 3 ∨
+        balanceBits value = balanceBits (T.d.getStorVal sevm.currentTarget key)
+
+theorem body22_bits (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {sL sP : Nat} {aL aP r : B256} {S : List B256} {b : Devm} {M : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none) (bound : sP + sL + 32 ≤ 2 ^ 256)
+    (run : ObservedReach P observe Impl.cert.prog sevm
+      ⟨St b (sL.toB256 :: sP.toB256 :: aL :: aP :: r :: S) M G, Impl.t_2538_c55, []⟩ T)
+    (hT : AtSstore T) : BodyBits22 sevm sL aP aL.toNat T := by
+  rcases body22_head erase hsg bound run hT with stored | ⟨_, _, _, run⟩
+  · exact .inl stored
+  rcases loop22_source erase (i := 0) (Nat.zero_le _) run hT with
+    loop | ⟨j, b', M', G', run⟩
+  · refine .inr fun key value rest stack => ?_
+    obtain ⟨j, hj, at3 | at9⟩ := loop key value rest stack
+    · exact .inr (.inl ⟨j, hj, at3.1⟩)
+    · exact .inr (.inr (.inr at9.1.2))
+  · refine .inr fun key value rest stack => ?_
+    rcases after22_source erase run hT key value rest stack with at9 | at3 | version
+    · exact .inr (.inr (.inr at9.1.2))
+    · exact .inr (.inr (.inl at3.1))
     · exact .inl version
 
 /-- The decoded array's data pointer and length words. -/
@@ -677,6 +736,20 @@ theorem wrap22_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d'
   exact BodySource22.below (body22_source erase hsg
     (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT)
 
+theorem wrap22_bits (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St b S M G, Impl.t_0851_c162, []⟩ T)
+    (hT : AtSstore T) :
+    BodyBits22 sevm (min (strLen sevm) (2 ^ 32)) (arrPtr sevm)
+      (min (arrLen sevm).toNat (2 ^ 32)) T := by
+  obtain ⟨G', T', inside, rfl, small, hs, ha⟩ := wrap22_body erase run hT
+  rw [hs, ha]
+  rcases body22_bits erase hsg
+    (small.trans (Nat.pow_le_pow_right (by decide) (by decide))) inside hT with string | other
+  · exact .inl string
+  · exact .inr other
+
 theorem wrap22_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     {b : Devm} {S : List B256} {M : Mem} {G : Nat}
     (run : Reach P Impl.cert.prog sevm ⟨St b S M G, Impl.t_0851_c162, []⟩ T)
@@ -700,12 +773,12 @@ theorem initV2_2_reach_range (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s
   cases hg
   exact wrap22_reach_range erase run hT
 
-/-- The actual selector0x430239b4 route retains every successful migration key hash. -/
-theorem initV2_2_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+/-- The actual selector0x430239b4 route enters the ABI decoder. -/
+theorem initV2_2_enter (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
-    (hsg : sevm.benvStat.rules.stateGas = none)
     (run : ObservedReach P observe Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
-    (hT : AtSstore T) : BodySource22 P observe sevm (min (strLen sevm) (2 ^ 32)) T := by
+    (hT : AtSstore T) : ∃ b S M G, ObservedReach P observe Impl.cert.prog sevm
+      ⟨St b S M G, Impl.t_0851_c162, []⟩ T := by
   rw [root_eq] at run
   unfold dispatch06 at run
   iterate 7 orsx
@@ -724,7 +797,28 @@ theorem initV2_2_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n 
   obtain ⟨-, g, _, hg, run⟩ := ObservedReach.selWalk_inlS erase route_initV2_2 run hT
   rw [show Impl.cert.prog[162]? = some Impl.t_0851_c162 from rfl] at hg
   cases hg
+  exact ⟨_, _, _, _, run⟩
+
+/-- The actual selector0x430239b4 route retains every successful migration key hash. -/
+theorem initV2_2_source (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) : BodySource22 P observe sevm (min (strLen sevm) (2 ^ 32)) T := by
+  obtain ⟨_, _, _, _, run⟩ := initV2_2_enter erase sel run hT
   exact wrap22_source erase hsg run hT
+
+/-- **`initializeV2_2` on balance bits**: every store is of the string range or slot `18`, a base-`3`
+row, or keeps its key's bits. -/
+theorem initV2_2_bits (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (run : ObservedReach P observe Impl.cert.prog sevm ⟨St d [] M G, Impl.t_0000_c0, []⟩ T)
+    (hT : AtSstore T) :
+    BodyBits22 sevm (min (strLen sevm) (2 ^ 32)) (arrPtr sevm)
+      (min (arrLen sevm).toNat (2 ^ 32)) T := by
+  obtain ⟨_, _, _, _, run⟩ := initV2_2_enter erase sel run hT
+  exact wrap22_bits erase hsg run hT
 
 theorem initV2_2_reach (erase : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
     (sel : initSelWord sevm = 0x430239b4) {d : Devm} {M : Mem} {G : Nat}
