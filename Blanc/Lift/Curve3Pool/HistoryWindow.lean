@@ -42,17 +42,26 @@ theorem pool_window_history {pool : Adr} {cfg : ChainConfig} {checkpoint : Block
         s.token = s₀.token := by
   have capabilities := BodyStageCapabilities.historical
   have start' : poolSpec.StateInv pool start.state := ⟨installed, trivial, trivial⟩
-  have admitted := pool_mid_trace_admitted env
+  have admitted := pool_mid_trace_admitted env.toPoolMidFacts
   obtain ⟨⟨frames, replay, observed⟩, finishInv, -⟩ :=
     (poolLadderH (poolParties_keeps s₀.coins s₀.token) (pool_frame_refines_atH s₀.coins s₀.token) pool).midWindowIn mid block cut
       admitted.1 admitted.2 capabilities (mid.rewardCreditsFunded capabilities) start'
       pool_runtimeSafety rfl
-  change PoolReplay (PoolParties s₀.coins s₀.token) pool (start.state.getStor pool).get frames
+  change PoolReplayIf (PoolParties s₀.coins s₀.token) pool (PoolKeepAt s₀.coins s₀.token)
+    (start.state.getStor pool).get frames
     (cut.afterBenv.state.getStor pool).get at replay
   change frames.flatMap (poolSubtreeFrames pool) =
     (mid.settledFrames ++ block.settledThroughCut cut).flatMap (poolFrameObs pool) at observed
-  obtain ⟨invs, framesEq, auth, s, run, entries, σ', view, hc, -⟩ :=
-    replay s₀ _ rfl initial ⟨rfl, rfl⟩
+  obtain ⟨invs, framesEq, auth, s, run, entries, σ', view, hc, -⟩ := replay (fun f hf => by
+    rw [observed] at hf
+    obtain ⟨member, target⟩ := mem_flatMap_poolFrameObs hf
+    refine env.callbacks f ?_ target
+    change f ∈ mid.settledFrames ++ block.settledFrames
+    rcases List.mem_append.mp member with h | h
+    · exact List.mem_append_left _ h
+    · refine List.mem_append_right _ ?_
+      rw [block.settledFrames_throughCut cut]
+      exact List.mem_append_left _ h) s₀ _ rfl initial ⟨rfl, rfl⟩
   obtain ⟨hcoins, htoken⟩ := run.coins_token
   refine ⟨finishInv.code, invs, ?_, auth, entries, s, run, run.runPool_eq,
     Checkpoint.of_get view hc, hcoins, htoken⟩

@@ -142,7 +142,6 @@ theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint fu
   obtain ⟨viewEnd, viewAt⟩ := c3crv_mid_view trace c3Installed joint.c3 fresh
   have capabilities := BodyStageCapabilities.historical
   have rewards := trace.rewardCreditsFunded capabilities
-  have callbacks := (trace.frameAdmitted_iff_rawFrames pool _).1 env.callbacks
   have poolNe : Curve3Pool.code.toList ≠ [] := fun h => by
     have := Curve3Pool.code_toList_length
     rw [h] at this
@@ -153,7 +152,7 @@ theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint fu
   have roots : ∀ R ∈ trace.settledRoots, R.sevm.caller ≠ pool :=
     trace.settledRoots_caller_ne_of_stateInv
       (Curve3Pool.poolSpec_preservesAdmittedH pool (Curve3Pool.poolEntryAtH ps₀.coins ps₀.token))
-      capabilities (Curve3Pool.pool_mid_trace_admitted env) rewards
+      capabilities (Curve3Pool.pool_mid_trace_admitted env.toPoolMidFacts) rewards
       (c := Curve3Pool.poolSpec) ⟨poolInstalled, trivial, trivial⟩ Curve3Pool.pool_runtimeSafety rfl
       notSystem
   obtain ⟨Z, runZ, -⟩ := replay_run (fun _ hk => Or.inl hk) joint.c3 viewEnd
@@ -178,23 +177,13 @@ theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint fu
       parties := fun f member =>
         partiesTok _ (trace.mem_rawFrames_of_mem_settledFrames f member)
       keepToken := fun f member target mutable st ck hcs hts => by
-        have keep : Curve3Pool.PoolKeepAt ps₀.coins ps₀.token f.sevm f.pre :=
-          callbacks _ (trace.mem_rawFrames_of_mem_settledFrames f member) target
-        have ready0 := (ready f member).1
+        have keep := env.callbacks f member target
         have ownF := own f member
-        obtain ⟨pc, sevm, pre, out, run, committed⟩ := f
-        dsimp only at ready0 target mutable keep ck ownF ⊢
-        subst ready0
-        have hcode : sevm.code = Curve3Pool.code := ownF.2.2.2.2 target
-        have hne : pre.getCode sevm.currentTarget ≠ .empty := by
-          rw [show sevm.currentTarget = pool from target, ownF.1]
+        have hne : f.pre.getCode f.sevm.currentTarget ≠ .empty := by
+          rw [target, ownF.1]
           exact fun h => poolNe (by rw [h, ByteArray.toList_eq_toList_data]; rfl)
-        cases out with
-        | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
-        | ok post =>
-          exact (keep post run st hcode hne mutable (Option.isNone_iff_eq_none.mp (by simpa only [Execution.commits] using committed))
-            (by rw [show sevm.currentTarget = pool from target]; exact ck)
-            ⟨hcs, hts.trans joint.tokenIs.symm⟩).2 }
+        exact (keep st (ownF.2.2.2.2 target) hne mutable (by rw [target]; exact ck)
+          ⟨hcs, hts.trans joint.tokenIs.symm⟩).2 }
   obtain ⟨code, invs, obs, auth, entries, s, run, fold, hc, hcoins, htoken⟩ :=
     Curve3Pool.pool_mid_history trace poolInstalled joint.poolCk env
   obtain ⟨Y, runY, minY, supY, steps⟩ := supply_whole W run entries auth obs joint.tokenIs

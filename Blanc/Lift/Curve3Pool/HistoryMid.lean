@@ -9,15 +9,16 @@ import Blanc.ExecutionHistoryInPreCancun
 one transaction of a block (the pool's creation, in the deployed form), and the readiness of the
 identity precompile is derived from the full chain `full` whose raw frames contain the mid history's.
 
-* `PoolKeepAt` — the keep premises at exactly the frames the replay refines: committed, non-static, running the
+* `PoolKeepAt` — the keep premises at exactly the frames the replay refines: a settled frame, non-static, running the
   pool's code, entered at a `Checkpoint` of a state with the replay's coins and token (`PoolFrameRefinesInH`). Its storage hypotheses
-  come from the replay, so a discharge that needs the coins' addresses from the pool's storage is not circular;
+  come from the replay, so a discharge that needs the coins' addresses from the pool's storage is not circular.
+  A frame inside a reverted parent is not settled, so nothing is asked of it;
 * `pool_mid_trace_admitted` — every pool frame of the mid history is admitted by `poolEntryAtH`;
 * `PoolMidEnv` — the ENV premises, one bundle;
 * `pool_mid_history` — the headline: the replay over exactly the settled non-static pool frames.
 
-The premises keep the shape of `PoolTraceEnv`, with `PoolKeepAt` as the per-frame callback premise, and the
-trace-local `parties`, `idEmpty`, `idNoAuthority`, `idNoFrame` and `sysNe`.
+The premises keep the shape of `PoolTraceEnv`, with `PoolKeepAt` as the per-frame callback premise over settled
+frames, and the trace-local `parties`, `idEmpty`, `idNoAuthority`, `idNoFrame` and `sysNe`.
 -/
 
 namespace Blanc.Lift.Curve3Pool
@@ -30,28 +31,27 @@ theorem pool_four_mem_precompilesH {f : Fork} (hf : HistFork f) :
   revert hf
   cases f <;> decide
 
-/-- The keep premises at the frames the replay refines. -/
-def PoolKeepAt (cs : V3) (tok : Nat) (sevm : Sevm) (pre : Devm) : Prop :=
-  ∀ (post : Devm) (exc : Exec 0 sevm pre (.ok post)) (s : State),
-    sevm.code = code → pre.getCode sevm.currentTarget ≠ .empty → sevm.isStatic = false → post.error = none →
-    Checkpoint (pre.getStor sevm.currentTarget) s → PoolParties cs tok s →
-    PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩ ∧ PoolCoinCallsKeepToken ⟨0, sevm, pre, .ok post, exc⟩
+/-- The keep premises at a frame the replay refines. -/
+def PoolKeepAt (cs : V3) (tok : Nat) (f : Exec.Frame) : Prop :=
+  ∀ s : State, f.sevm.code = code → f.pre.getCode f.sevm.currentTarget ≠ .empty → f.sevm.isStatic = false →
+    Checkpoint (f.pre.getStor f.sevm.currentTarget) s → PoolParties cs tok s →
+    PoolCallsKeep (Exec.Frame.rootDeriv f) ∧ PoolCoinCallsKeepToken (Exec.Frame.rootDeriv f)
 
 /-- The entry condition at fixed parties, over the historical forks: a fresh machine, calldata length and
 gas words in range, the identity precompile ready, the fixed coins and token not precompiles under the
-frame's rules, `PoolKeepAt`, and every direct child keeps the code at `4`. -/
+frame's rules, and every direct child keeps the code at `4`. -/
 def poolEntryAtH (cs : V3) (tok : Nat) (sevm : Sevm) (pre : Devm) : Prop :=
   Exec.FreshEntry sevm pre ∧ sevm.data.length < 2 ^ 256 ∧ pre.gasMeasure < 2 ^ 256 ∧
     IdReadyH sevm pre ∧ (∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp (adrOf (cs.get k))) ∧
-    ¬ sevm.benvStat.rules.isPrecomp (adrOf tok) ∧ PoolKeepAt cs tok sevm pre ∧
+    ¬ sevm.benvStat.rules.isPrecomp (adrOf tok) ∧
     Exec.derivEntry (fun D => ∀ c ∈ children D, c.post.getCode 4 = c.pre.getCode 4) sevm pre
 
 /-- **The frame refinement at fixed parties, over the historical forks.** -/
 theorem pool_frame_refines_atH (cs : V3) (tok : Nat) :
-    PoolFrameRefinesInH (PoolParties cs tok) (poolEntryAtH cs tok) := by
-  intro sevm pre post s exc hcode hfork hentry hstatic hpc herr hck hq
-  obtain ⟨⟨hstack, hmem⟩, hcd, hgas, hid, hcs, htk, hkeep, hcode4⟩ := hentry
-  obtain ⟨hk, hkT⟩ := hkeep post exc s hcode hpc hstatic herr hck hq
+    PoolFrameRefinesInH (PoolParties cs tok) (poolEntryAtH cs tok) (PoolKeepAt cs tok) := by
+  intro sevm pre post s exc committed hcode hfork hentry hstatic hpc herr hck hq hkeep
+  obtain ⟨⟨hstack, hmem⟩, hcd, hgas, hid, hcs, htk, hcode4⟩ := hentry
+  obtain ⟨hk, hkT⟩ := hkeep s hcode hpc hstatic hck hq
   have habs : Abstracts (entryStor ⟨0, sevm, pre, .ok post, exc⟩) s := hck.abs
   refine pool_frame_refines_envH exc hcode hfork hcd hstack hmem hgas hpc hck
     ⟨hk, hkT, hcode4 _ exc, hid, fun k => ?_, ?_⟩
@@ -81,7 +81,7 @@ structure PoolMidEnv {cfg : ChainConfig} {checkpoint future : BlockChain} {start
     (full : ConfiguredHistoryTraceIn HistFork cfg checkpoint future)
     (trace : MidHistoryTraceIn HistFork cfg start future) (pool : Adr) (cs : V3) (tok : Nat) :
     Prop extends PoolMidFacts full trace pool cs tok where
-  callbacks : trace.FrameAdmitted pool (PoolKeepAt cs tok)
+  callbacks : ∀ f ∈ trace.settledFrames, f.sevm.currentTarget = pool → PoolKeepAt cs tok f
 
 /-- What the history gives every raw pool frame, apart from its callbacks. -/
 theorem PoolMidFacts.entry {pool : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
@@ -118,13 +118,12 @@ theorem pool_mid_trace_admitted {pool : Adr} {cfg : ChainConfig} {checkpoint fut
     {start : Benv} {cs : V3} {tok : Nat}
     {full : ConfiguredHistoryTraceIn HistFork cfg checkpoint future}
     {trace : MidHistoryTraceIn HistFork cfg start future}
-    (env : PoolMidEnv full trace pool cs tok) :
+    (env : PoolMidFacts full trace pool cs tok) :
     trace.FrameAdmitted pool (poolEntryAtH cs tok) := by
-  have callbacks := (trace.frameAdmitted_iff_rawFrames pool _).1 env.callbacks
   apply (trace.frameAdmitted_iff_rawFrames pool _).2
   intro root member target
   obtain ⟨h1, h2, h3, h4, h5, h6, h7⟩ := env.entry member target
-  exact ⟨h1, h2, h3, h4, h5, h6, callbacks root member target, h7⟩
+  exact ⟨h1, h2, h3, h4, h5, h6, h7⟩
 
 /-- **The pool model replays the committed mid history, over the historical forks.** From a mid
 history's start with the runtime installed and the pool's storage at a `Checkpoint` of `s₀`, the
@@ -147,7 +146,7 @@ theorem pool_mid_history {pool : Adr} {cfg : ChainConfig} {checkpoint future : B
   obtain ⟨code, invs, obs, auth, ent, s, run, fold, hc, hcoins, htoken, -⟩ :=
     pool_mid_history_entries (poolParties_keeps s₀.coins s₀.token)
       (pool_frame_refines_atH s₀.coins s₀.token) trace installed initial ⟨rfl, rfl⟩
-      (pool_mid_trace_admitted env)
+      (pool_mid_trace_admitted env.toPoolMidFacts) env.callbacks
   exact ⟨code, invs, obs, auth, ent, s, run, fold, hc, hcoins, htoken⟩
 
 end Blanc.Lift.Curve3Pool
