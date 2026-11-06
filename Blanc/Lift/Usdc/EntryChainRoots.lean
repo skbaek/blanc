@@ -60,9 +60,9 @@ theorem usdc_viewSettled {cfg : ChainConfig} {start : Benv} {future : BlockChain
       proxy_not_delegation notDeleted)
     (Blanc.Lift.MidHistoryTraceIn.rootsReady trace capabilities (C := Proxy.code) rfl installed proxy_toList_ne_nil
       proxy_not_delegation notDeleted)
-  · obtain ⟨fork, at_, admitted, bound⟩ := ready
+  · obtain ⟨fork, at_, admitted, bound, -⟩ := ready
     exact (entry_core R.pc R.sevm R.pre R.out R.run at_ R.run R.committed fork at_ admitted).2 bound
-  · obtain ⟨fork, at_, admitted, bound⟩ := ready
+  · obtain ⟨fork, at_, admitted, bound, -⟩ := ready
     obtain ⟨steps, replay, observed⟩ := entry_positional R.pc R.sevm R.pre R.out R.run at_ R.run
       R.committed fork at_ admitted bound before f after split noOpaque
     exact ⟨steps, replay, observed⟩

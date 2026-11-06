@@ -42,7 +42,7 @@ theorem processMessage_rootsReady {msg : Msg} {post : Devm} (trace : ProcessMess
             rw [sevmEq, initSevm_benvStat, Msg.withBenv_benvStat, benvAfterTransfer_stat transfer]
             exact hF
           obtain ⟨at_, bound⟩ := Exec.CoreAccounting.messageRoot_facts transfer evmEq ready sumNof
-          exact ⟨rootFork, at_, fun _ _ _ => trivial, bound⟩
+          exact ⟨rootFork, at_, fun _ _ _ => trivial, bound, congrArg Evm.pc evmEq⟩
         · exact absurd member List.not_mem_nil
       · exact absurd member List.not_mem_nil
 
@@ -80,7 +80,7 @@ theorem processCreateMessage_rootsReady {msg : Msg} {post : Devm}
             exact preparedFork
           obtain ⟨at_, bound⟩ := Exec.CoreAccounting.messageRoot_facts transfer evmEq
             (preparedInv.runReady_of_foreign preparedTargetNe) preparedSum
-          exact ⟨rootFork, at_, fun _ _ _ => trivial, bound⟩
+          exact ⟨rootFork, at_, fun _ _ _ => trivial, bound, congrArg Evm.pc evmEq⟩
         · exact absurd member List.not_mem_nil
       · exact absurd member List.not_mem_nil
 
@@ -254,6 +254,47 @@ theorem stagedBody_rootsReady {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers 
     rw [trace.transactions.createdAccounts_eq]
     exact notCreated
 
+/-- The deletion exclusions of a transaction list, from a root law conditioned on readiness. -/
+theorem applyTransactions_noDel_of_ready {txs : List (Nat × Tx)} {benv finalBenv : Benv}
+    {bout finalBout : BlockOutput} (trace : ApplyTransactionsTrace txs benv bout finalBenv finalBout)
+    (image : sem.image = some C.toList) (hsg : benv.stat.rules.stateGas = none)
+    (hC : benv.state.getCode wa = C) (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (notCreated : wa ∉ benv.createdAccounts) (hF : F benv.stat.fork)
+    (sumNof : sum benv.state.bal < 2 ^ 256)
+    (law : ∀ R ∈ trace.settledRoots, Ready R → Devm.NoDel wa R.pre → Devm.NoDel wa R.post) :
+    trace.OutputNotDeleted wa ∧ finalBenv.state.getCode wa = C := by
+  induction trace with
+  | nil => exact ⟨trivial, hC⟩
+  | cons head tail ih =>
+      obtain ⟨scheduled, -, headCode⟩ := head.noDel_of_settledRoots hCdel hCne hsg hC notCreated
+        fun R member => law R (List.mem_append_left _ member)
+          (transaction_rootsReady head image hC notCreated hF sumNof R member)
+      obtain ⟨later, finalCode⟩ := ih hsg headCode notCreated hF
+        (Nat.lt_of_le_of_lt (by simpa only [Benv.withState] using
+          processTransaction_sum_le head.result hsg) sumNof)
+        fun R member => law R (List.mem_append_right _ member)
+      exact ⟨⟨scheduled, later⟩, finalCode⟩
+
+theorem stagedBody_noDel_of_ready {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header}
+    {wds : List Withdrawal} {state : State} {bout : BlockOutput}
+    (trace : StagedBodyTrace benv txs ommers wds state bout) (image : sem.image = some C.toList)
+    (hsg : benv.stat.rules.stateGas = none) (hC : benv.state.getCode wa = C) (hCne : C.toList ≠ [])
+    (hCdel : ¬ isValidDelegation C) (notCreated : wa ∉ benv.createdAccounts) (hF : F benv.stat.fork)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
+    (law : ∀ R ∈ trace.transactions.settledRoots, Ready R → Devm.NoDel wa R.pre → Devm.NoDel wa R.post) :
+    trace.transactions.OutputNotDeleted wa ∧ state.getCode wa = C := by
+  have beaconCode := (trace.beacon.cell_property_of_settledRoots 0 hsg hC hCne hCdel
+    (fun _ => True) (fun _ _ _ => trivial) trivial).2
+  have historyCode := (trace.history.cell_property_of_settledRoots 0 hsg beaconCode hCne hCdel
+    (fun _ => True) (fun _ _ _ => trivial) trivial).2
+  have beaconLe : sum trace.beaconState.bal ≤ sum benv.state.bal := trace.beacon.sum_le_noStateGas hsg
+  have historyLe : sum trace.historyState.bal ≤ sum trace.beaconState.bal :=
+    trace.history.sum_le_noStateGas (by simpa only [Benv.withState] using hsg)
+  obtain ⟨nd, -⟩ := applyTransactions_noDel_of_ready trace.transactions image hsg historyCode hCne hCdel
+    notCreated hF (by change sum trace.historyState.bal < _; omega) law
+  exact ⟨nd, (trace.cell_property_of_settledRoots 0 hsg hC hCne hCdel nd
+    (fun _ => True) (fun _ _ _ => trivial) trivial).2⟩
+
 end Levels
 
 /-- **Every settled root of a mid history is ready.** -/
@@ -296,5 +337,41 @@ theorem MidHistoryTraceIn.rootsReady {F : Fork → Prop} {cfg : ChainConfig} {st
       · exact stagedBody_rootsReady block.bodyTrace image (capabilities.stateGas_none block.forkIn)
           priorCode hCne hCdel AdrSet.not_mem_empty notDeleted.2 block.forkIn
           block.withdrawalsBound R later
+
+/-- **A mid history's deletion exclusions and code, from a root law conditioned on readiness.** Each
+level knows the code before it reads its roots, so there is no circle with `rootsReady`. -/
+theorem MidHistoryTraceIn.outputNotDeleted_of_ready {F : Fork → Prop} {cfg : ChainConfig} {start : Benv}
+    {future : BlockChain} (history : MidHistoryTraceIn F cfg start future)
+    (capabilities : BodyStageCapabilities F) {wa : Adr} {sem : CodeSem} {C : ByteArray}
+    (image : sem.image = some C.toList) (hC : start.state.getCode wa = C)
+    (hCne : C.toList ≠ []) (hCdel : ¬ isValidDelegation C)
+    (law : ∀ R ∈ history.settledRoots, RootReady F wa sem (fun _ _ => True) R →
+      Devm.NoDel wa R.pre → Devm.NoDel wa R.post) :
+    history.OutputNotDeleted wa ∧ future.state.getCode wa = C := by
+  induction history with
+  | tail block cut =>
+      have stat := block.txSplit_stat cut
+      have afterF : F cut.afterBenv.stat.fork := by rw [stat]; exact block.forkIn
+      have afterSg : cut.afterBenv.stat.rules.stateGas = none := by
+        rw [stat]
+        exact capabilities.stateGas_none block.forkIn
+      have afterBound : sum cut.afterBenv.state.bal + wdsum block.block.wds < 2 ^ 256 :=
+        block.txSplit_bound cut capabilities
+      obtain ⟨nd, code⟩ := applyTransactions_noDel_of_ready cut.after image afterSg hC hCne hCdel
+        (block.txSplit_notCreated cut wa) afterF (Nat.lt_of_le_of_lt (Nat.le_add_right _ _) afterBound)
+        fun R member => law R (List.mem_append_left _ member)
+      exact ⟨nd, (block.bodyTrace.cell_property_after_transactions_of_settledRoots 0
+        (capabilities.stateGas_none block.forkIn) code hCne hCdel (fun _ => True)
+        (fun _ _ _ => trivial) trivial).2 |> fun c => by rw [congrArg BlockChain.state block.postEq]; exact c⟩
+  | step prior block ih =>
+      obtain ⟨nd, code⟩ := ih hC fun R member => law R (List.mem_append_left _ member)
+      have blockLaw : ∀ R ∈ block.settledRoots, RootReady F wa sem (fun _ _ => True) R →
+          Devm.NoDel wa R.pre → Devm.NoDel wa R.post :=
+        fun R member => law R (List.mem_append_right _ member)
+      obtain ⟨blockNd, post⟩ := stagedBody_noDel_of_ready block.bodyTrace image
+        (capabilities.stateGas_none block.forkIn) code hCne hCdel AdrSet.not_mem_empty block.forkIn
+        block.withdrawalsBound fun R member =>
+          blockLaw R (List.mem_append_left _ (List.mem_append_right _ member))
+      exact ⟨⟨nd, blockNd⟩, by rw [congrArg BlockChain.state block.postEq]; exact post⟩
 
 end Blanc.Lift
