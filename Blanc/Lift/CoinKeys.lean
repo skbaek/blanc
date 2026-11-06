@@ -136,6 +136,39 @@ theorem CoinKeysFreshWith.restrict {sites' : List Site} (keys : CoinKeysFreshWit
     obtain ⟨s, hs, e⟩ := List.mem_filterMap.mp mem
     exact List.mem_filterMap.mpr ⟨s, sub s hs, e⟩
 
+/-- A known site of the frame's selector and another shape misses the holder's entry. -/
+theorem slot_apart {selT : Term} (ev : SelEval selT) (keys : CoinKeysFresh sites balBase allowBase h frames)
+    {F : Exec.Frame} (hF : F ∈ frames) {slot : Term} {sel : B256} {ni : Bool}
+    (hs : (⟨slot, [(selT, sel)], ni⟩ : Site) ∈ sites) (hk : slot.known = true)
+    (none : mappingKey? balBase slot = none) (hsel : Blanc.Sevm.selector F.sevm = sel) :
+    slot.eval (Env.root F.sevm) ≠ mapSlot h.toB256 balBase :=
+  slot_ne_of_keys keys hF hs (by
+    intro g hg known
+    simp only [List.mem_singleton] at hg
+    subst hg
+    exact hsel.symm.trans (ev _).symm) hk none
+
+/-- The caller's listed entry on the holder's slot is the holder's. -/
+theorem bal_caller_eq {selT : Term} (ev : SelEval selT) (keys : CoinKeysFresh sites balBase allowBase h frames)
+    {F : Exec.Frame} (hF : F ∈ frames) {sel : B256} {ni : Bool}
+    (hs : (⟨.kecc (.op2 .and .caller addrMaskT) (.const balBase), [(selT, sel)], ni⟩ : Site) ∈ sites)
+    (hsel : Blanc.Sevm.selector F.sevm = sel) :
+    mapSlot F.sevm.caller.toB256 balBase = mapSlot h.toB256 balBase → F.sevm.caller = h := by
+  have mem := map_key_mem (extra := []) (balBase := balBase) (allowBase := allowBase) (h := h) ev hF (key := .caller) hs rfl hsel
+  rw [caller_eval] at mem
+  exact map_inj keys mem (held_mem (extra := []))
+
+/-- A calldata address's listed entry on the holder's slot is the holder's. -/
+theorem bal_cd_eq {selT : Term} (ev : SelEval selT) (keys : CoinKeysFresh sites balBase allowBase h frames)
+    {F : Exec.Frame} (hF : F ∈ frames) {i sel : B256} {ni : Bool}
+    (hs : (⟨.kecc (.op2 .and (.cd (.const i)) addrMaskT) (.const balBase), [(selT, sel)], ni⟩ : Site) ∈ sites)
+    (hsel : Blanc.Sevm.selector F.sevm = sel) :
+    mapSlot (Sevm.dataWord F.sevm i).toAdr.toB256 balBase = mapSlot h.toB256 balBase →
+      (Sevm.dataWord F.sevm i).toAdr = h := by
+  have mem := map_key_mem (extra := []) (balBase := balBase) (allowBase := allowBase) (h := h) ev hF (key := .cd (.const i)) hs rfl hsel
+  rw [cd_eval] at mem
+  exact map_inj keys mem (held_mem (extra := []))
+
 /-- **A committed frame's run through its certificate**, on a lane without state gas. -/
 theorem run_of_frame {code : ByteArray} {c : Cert} {f0 : SFunc} (checked : Cert.check code c = true)
     (root : c.prog[0]? = some f0) {F : Exec.Frame} (pc : F.pc = 0) (hcode : F.sevm.code = code)
