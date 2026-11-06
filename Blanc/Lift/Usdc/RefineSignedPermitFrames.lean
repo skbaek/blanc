@@ -64,13 +64,14 @@ def permitStor (σ : Stor) (o s : Adr) (v : B256) : Stor :=
   (σ.set (nonceSlot o) (σ.get (nonceSlot o) + 1)).set (allowSlot o s) v
 
 /-- **The frame of `permit(owner, spender, value, deadline, v, r, s)`** at its pc-0 tree. -/
-theorem frame_permitVrs {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_permitVrs {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (hcode : b.getCode usdcLib = Lib.code) (sel : Sevm.selector sevm = 0xd505accf)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
       (Sevm.dataWord sevm 4).toAdr ≠ 0 ∧ (Sevm.dataWord sevm 36).toAdr ≠ 0 ∧
       Devm.getStor post sevm.currentTarget = permitStor (Devm.getStor b sevm.currentTarget)
-        (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68) := by
+        (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68) ∧
+      ApprovalLogged sevm post (Sevm.dataWord sevm 4).toAdr := by
   have h := run.cut
   clear run
   repeat istep h
@@ -84,24 +85,26 @@ theorem frame_permitVrs {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   ibranch h c3
   repeat istep h
   icallP h hc 24 t_36a2_c24
-  obtain ⟨p0, d1, d2, b1, M1, G1, e, s1⟩ := e24_inv fork hcode hc
+  obtain ⟨p0, d1, d2, b1, M1, G1, e, s1, lg⟩ := e24_inv fork hcode hc
   cases e
   clear hc
   repeat istep h
   have sp := congrFun (ric_stop_getStor h) sevm.currentTarget
+  have sl := ric_stop_logs h
   clear h
   simp only [lit4_32, lit4_64] at d1 d2 s1
-  simp only [lit4, ff20_word, toAdr_toB256] at d1 d2 s1
-  exact ⟨p0, d1, d2, by rw [sp, s1]; rfl⟩
+  simp only [lit4, ff20_word, toAdr_toB256] at d1 d2 s1 lg
+  exact ⟨p0, d1, d2, by rw [sp, s1]; rfl, lg.of_eq sl⟩
 
 /-- **The frame of `permit(owner, spender, value, deadline, signature)`** at its pc-0 tree. -/
-theorem frame_permitBytes {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_permitBytes {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (hcode : b.getCode usdcLib = Lib.code) (sel : Sevm.selector sevm = 0x9fd5a6cf)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
       (Sevm.dataWord sevm 4).toAdr ≠ 0 ∧ (Sevm.dataWord sevm 36).toAdr ≠ 0 ∧
       Devm.getStor post sevm.currentTarget = permitStor (Devm.getStor b sevm.currentTarget)
-        (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68) := by
+        (Sevm.dataWord sevm 4).toAdr (Sevm.dataWord sevm 36).toAdr (Sevm.dataWord sevm 68) ∧
+      ApprovalLogged sevm post (Sevm.dataWord sevm 4).toAdr := by
   have h := run.cut
   clear run
   repeat istep h
@@ -115,19 +118,20 @@ theorem frame_permitBytes {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   ibranch h c3
   repeat istepX h
   ibranch h c4
-  obtain ⟨b1, u0, M1, G1, hs1, h⟩ := ric_seg_w149 id fork h
+  obtain ⟨b1, u0, M1, G1, hs1, h⟩ := ric_seg_w149_noStateGas id fork.stateGas_none h
   icallP h hc 41 t_2e53_c41
-  obtain ⟨p0, d1, d2, b2, M2, G2, e, s2⟩ :=
+  obtain ⟨p0, d1, d2, b2, M2, G2, e, s2, lg⟩ :=
     e41_inv fork (by rw [getCode_of_state hs1]; exact hcode) hc
   cases e
   clear hc
   repeat istep h
   have sp := congrFun (ric_stop_getStor h) sevm.currentTarget
+  have sl := ric_stop_logs h
   clear h
   rw [congrFun (getStor_of_state hs1)] at p0 s2
   simp only [lit4_32, lit4_64] at d1 d2 s2
-  simp only [lit4, ff20_word, toAdr_toB256] at d1 d2 s2
-  exact ⟨p0, d1, d2, by rw [sp, s2]; rfl⟩
+  simp only [lit4, ff20_word, toAdr_toB256] at d1 d2 s2 lg
+  exact ⟨p0, d1, d2, by rw [sp, s2]; rfl, lg.of_eq sl⟩
 
 theorem ric_seg_w136 {C : List Nat} {r : Seg} {P : Sevm → Devm → Ninst → Devm → Prop}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork)
