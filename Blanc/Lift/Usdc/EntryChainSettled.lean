@@ -362,8 +362,8 @@ theorem settled_child_caller {cfg : ChainConfig} {start : Benv} {future : BlockC
   subst gpc
   obtain ⟨N, f, rsm, pc', cevm, pp, hstep, henter, hsevm, -⟩ := Exec.childFrames_spawnedAt_entry grun (.refl _) F child
   have := child_proxy_caller grun gfork gcode gctx parent (fun c a => certified _ member parent c a) pp hstep henter
-    (by rw [hsevm]; exact code)
-  rw [hsevm] at this
+    (by rw [← hsevm]; exact code)
+  rw [← hsevm] at this
   exact this
 
 /-- **The chain's links**: the entry frames off `rescueERC20`. A rescue frame's re-entrant frames are links
