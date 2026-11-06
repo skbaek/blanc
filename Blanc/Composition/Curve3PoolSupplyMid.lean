@@ -2,6 +2,8 @@ import Blanc.Composition.Curve3PoolSupply
 import Blanc.Composition.Curve3PoolJointRoot
 import Blanc.ExecutionAccountingPositionalHistory
 import Blanc.ExecutionMidHistoryInRootCallers
+import Blanc.ExecutionMidHistoryInOwnCode
+import Blanc.Lift.Curve3Pool.SpawnKinds
 
 /-!
 # The pool and 3Crv over one historical mid history: minter persistence past the minter cut
@@ -16,7 +18,8 @@ checkpoint at the mid history's start:
 * `joint_mid_history` — the same from `JointDeployment`'s minter cut, with the checkpoint's states the
   ones `joint_root_replay` gives.
 
-The remaining premises are 3Crv's collision premise (`FreshKeys`) and the pool's `PoolMidEnv`. No premise
+The remaining premises are 3Crv's collision premise (`FreshKeys`) and the pool's `PoolMidEnv` (which
+`poolMidEnv_of_coins` builds from the coins' premises). No premise
 says who calls 3Crv: the pool sends no 3Crv invocation between its own frames (`gap_callers`), and it
 originates no root because its code is installed (`settledRoots_caller_ne_of_stateInv`).
 -/
@@ -27,6 +30,16 @@ open Jaune Blanc Blanc.Lift Blanc.Lift.Token Blanc.Lift.Curve3Crv Blanc.Executio
   Blanc.ExecutionAccountingReplay Blanc.Composition.Curve3CrvToken
 open Blanc.Lift.Curve3Pool (PoolInvocation PoolRun PoolEntries poolSubtreeFrames)
 open Blanc.Composition.Curve3Pool3CrvJoint (JointCheckpoint)
+
+/-- The pool's runtime spawns only by `CALL` and `STATICCALL`. -/
+theorem pool_ownSpawnsIn (ca : Adr) : OwnSpawnsIn ca Curve3Pool.code := by
+  intro R N x pcZero hcode _ _ chain instruction
+  have hb := Exec.Deriv.ParentPrefix.noPush chain (by rw [pcZero]; exact noPushBefore_zero _ _)
+  have hNs : N.sevm = R.sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
+  rw [hNs, hcode] at hb instruction
+  rcases callKinds_of_check Curve3Pool.code_callKinds hb instruction with h | h
+  · exact .inl h
+  · exact .inr (.inl h)
 
 /-- **3Crv's view replay over a mid history**, to the end and at every settled frame no earlier
 non-static 3Crv frame encloses. -/
@@ -130,6 +143,13 @@ theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint fu
   have capabilities := BodyStageCapabilities.historical
   have rewards := trace.rewardCreditsFunded capabilities
   have callbacks := (trace.frameAdmitted_iff_rawFrames pool _).1 env.callbacks
+  have poolNe : Curve3Pool.code.toList ≠ [] := fun h => by
+    have := Curve3Pool.code_toList_length
+    rw [h] at this
+    cases this
+  have own := trace.settled_ownCodeIn (F := HistFork) Curve3Pool.poolSem pool HistFork.stateGas_none poolNe
+    (Curve3Pool.poolSem.not_delegation (show some Curve3Pool.code.toList = Curve3Pool.poolSem.image from rfl))
+    (pool_ownSpawnsIn pool) capabilities poolInstalled Curve3Pool.pool_runtimeSafety rfl
   have roots : ∀ R ∈ trace.settledRoots, R.sevm.caller ≠ pool :=
     trace.settledRoots_caller_ne_of_stateInv
       (Curve3Pool.poolSpec_preservesAdmittedH pool (Curve3Pool.poolEntryAtH ps₀.coins ps₀.token))
@@ -161,13 +181,18 @@ theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint fu
         have keep : Curve3Pool.PoolKeepAt ps₀.coins ps₀.token f.sevm f.pre :=
           callbacks _ (trace.mem_rawFrames_of_mem_settledFrames f member) target
         have ready0 := (ready f member).1
+        have ownF := own f member
         obtain ⟨pc, sevm, pre, out, run, committed⟩ := f
-        dsimp only at ready0 target mutable keep ck ⊢
+        dsimp only at ready0 target mutable keep ck ownF ⊢
         subst ready0
+        have hcode : sevm.code = Curve3Pool.code := ownF.2.2.2.2 target
+        have hne : pre.getCode sevm.currentTarget ≠ .empty := by
+          rw [show sevm.currentTarget = pool from target, ownF.1]
+          exact fun h => poolNe (by rw [h, ByteArray.toList_eq_toList_data]; rfl)
         cases out with
         | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
         | ok post =>
-          exact (keep post run st mutable (Option.isNone_iff_eq_none.mp (by simpa only [Execution.commits] using committed))
+          exact (keep post run st hcode hne mutable (Option.isNone_iff_eq_none.mp (by simpa only [Execution.commits] using committed))
             (by rw [show sevm.currentTarget = pool from target]; exact ck)
             ⟨hcs, hts.trans joint.tokenIs.symm⟩).2 }
   obtain ⟨code, invs, obs, auth, entries, s, run, fold, hc, hcoins, htoken⟩ :=
