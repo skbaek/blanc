@@ -3290,6 +3290,15 @@ Use the generic frame lemmas in [`Blanc/LadderBase.lean`](../Blanc/LadderBase.le
   contract conditions through state equality, outbound transfer, and a
   successful nonrecursive instruction.
 
+**A token frame's foreign world.**
+
+- [`Blanc/Lift/ForeignKeep.lean`](../Blanc/Lift/ForeignKeep.lean): `FrameKeepsForeign` (a committed frame leaves other addresses' storage and code alone), from `frameKeepsForeign_of_roots`, `_of_noExec` and `_of_staticOnly`; `noExec_of_reach` and the tactics `rstepN`, `rbranchE`, `rdispE` walk a dispatcher into a decided exec-free set.
+- [`Blanc/Lift/ChainNoExec.lean`](../Blanc/Lift/ChainNoExec.lean): `ChainNoExec run` (no chain node decodes an external instruction) and `frameKeeps_of_noExec`.
+- [`Blanc/Lift/ChainStatic.lean`](../Blanc/Lift/ChainStatic.lean): `chain_static_descendants`: a frame whose chain executes only `STATICCALL` has only static descendants.
+- [`Blanc/Lift/ChildCell.lean`](../Blanc/Lift/ChildCell.lean): `cell_upto`, `cell_after`: a foreign storage cell moves only through a frame's settled children.
+- [`Blanc/Lift/ReachKinds.lean`](../Blanc/Lift/ReachKinds.lean): `ExecsSet`, `Reach.execs_of_set`, `execs_of_reach`: which external instructions a closed region of a certificate decodes.
+- [`Blanc/Lift/PoolCoinSel.lean`](../Blanc/Lift/PoolCoinSel.lean): `PoolCoinSel`: `transfer`, `transferFrom`, `balanceOf`, and how calldata shows each.
+
 ## S — state and machine updates
 
 ### S1. I need a projection through one update
@@ -6180,6 +6189,23 @@ the Lift-stratum form of the composition stratum's `mem_rawFrames_of_mem_settled
 use: `Blanc/Lift/Usdc/HistoryReplayFrames.lean`.
 
 
+**A token's storage over a mid history, and receipt-log premises.**
+
+- [`Blanc/Lift/FrameChain.lean`](../Blanc/Lift/FrameChain.lean): `FrameChain`, `coinFrames`, `chainCarrier`, `mid_frameChain`: an account's storage moves through its settled non-static frames over a mid history.
+- [`Blanc/Lift/ViewChain.lean`](../Blanc/Lift/ViewChain.lean): `ViewChain`, `mid_viewChain`, `EntryLocalAt`: the same through a view of the words, for a proxy whose upgrade writes its own slots between token frames.
+- [`Blanc/Lift/RootChain.lean`](../Blanc/Lift/RootChain.lean): `RootChain`, `MidHistoryTraceIn.rootChain`: storage moves root by root with no certificate of the code.
+- [`Blanc/Lift/RootReady.lean`](../Blanc/Lift/RootReady.lean): `MidHistoryTraceIn.rootsReady`, `outputNotDeleted_of_cell`: every settled root is ready for its own accounting.
+- [`Blanc/Lift/RootStanding.lean`](../Blanc/Lift/RootStanding.lean): `MidHistoryTraceIn.live_of_roots`: a cell naming accounts that stand, as a state invariant.
+- [`Blanc/Lift/BalanceLocality.lean`](../Blanc/Lift/BalanceLocality.lean): `EntryLocal`, `CertFrame`, `chain_of_static`, `CoinKey`: locality of one holder's balance entry for a certified code.
+- [`Blanc/Lift/CoinKeys.lean`](../Blanc/Lift/CoinKeys.lean): `CoinKeysFreshWith`, `site_key_mem`, `map_inj`: the keys a coin's frames name, parametric in the site list.
+- [`Blanc/ExecutionWholeFrameAccountingIn.lean`](../Blanc/ExecutionWholeFrameAccountingIn.lean): `WholeFrameReplayIn`, `wholeFrameTargetIn`, `wholeFrameLadderIn`: the whole-frame handler over a selected fork domain.
+- [`Blanc/ExecutionModelFrameNoStateGas.lean`](../Blanc/ExecutionModelFrameNoStateGas.lean): `modelFrameNoStateGas`: the model replay with `stateGas = none` in place of `CoveredFork`.
+- [`Blanc/ExecutionMidWindowIn.lean`](../Blanc/ExecutionMidWindowIn.lean): `settledThroughCut`, `blockThroughCutIn`, `midWindowIn`: observed replay of a window that ends right after a transaction.
+- [`Blanc/ExecutionMidHistoryInOwnCode.lean`](../Blanc/ExecutionMidHistoryInOwnCode.lean): `MidHistoryTraceIn.settled_ownCodeIn`, `rawFrames_closed`: own code at a mid history's settled frames.
+- [`Blanc/ExecutionReceiptLogLink.lean`](../Blanc/ExecutionReceiptLogLink.lean): `log_mem_receipt_of_settledFrame`, `MidHistoryTraceIn.no_log_at`, `SystemConfined`: a settled frame's log reaches its block's receipts, so a filter that finds nothing rules it out.
+- [`Blanc/Lift/LogFilterPremises.lean`](../Blanc/Lift/LogFilterPremises.lean): `ApprovalLog`, `settled_wf`: what a reader's `Approval` filter matches, and an entered frame's well-formed memory.
+- [`Blanc/Lift/ApprovalLog.lean`](../Blanc/Lift/ApprovalLog.lean): `approvalTopic`, `FrameLogsApproval`, `ric_return_logs`: the `Approval` log each token law concludes.
+
 ### T3. The wrapper is a transaction and the fact is about an installed contract
 
 Use
@@ -6784,6 +6810,12 @@ history that crosses later activations; a fresh current-fork creation block is
 evidence for a different claim. If a future fork changes execution semantics
 rather than rule data already represented by Jaune, update Jaune and re-prove
 the consumer instead of adding a premise that assumes the new semantics away.
+
+**Selected-domain history facts.**
+
+- [`Blanc/ExecutionHistoryInFrameEnv.lean`](../Blanc/ExecutionHistoryInFrameEnv.lean): `rawFrames_system_or_tx`, `childFrames_codeAt_keep`, `precompileReadyH`: frame-environment facts over selected-domain histories.
+- [`Blanc/ExecutionHistoryInPreCancun.lean`](../Blanc/ExecutionHistoryInPreCancun.lean): `forksPreCancun_of_mainnet_tip`, `systemRawFrames_nil_of_preCancun`, `precompileReadyPragueH`: histories that end before Cancun.
+- [`Blanc/ExecutionHistoryMuirCut.lean`](../Blanc/ExecutionHistoryMuirCut.lean): `ConfiguredBlockTraceIn.txSplit_muir`: a transaction cut of a retained Muir Glacier block.
 
 ### T7. I must construct a configured block forward from its parts
 
@@ -9209,6 +9241,22 @@ at the V2.2 cut using its original constructor observations.
   The 16-byte constructor mints 10^6 to its creator and installs exactly the
   fixture runtime. Creation.Deploy proves message execution, not historical
   deployment inclusion. Instance worlds and concrete V± histories stay local.
+
+**Walk kits for coin runtimes.**
+
+- [`Blanc/Lift/InvWalkLegacy.lean`](../Blanc/Lift/InvWalkLegacy.lean): step, branch and normalization tactics for inversion walks of pre-0.5 solc runtimes (`EXP` packed reads, `div`-and-mask selectors).
+- [`Blanc/Lift/HistFrameWalk.lean`](../Blanc/Lift/HistFrameWalk.lean): `xa_callH`, `xa_staticcallH` and image forms: spawning walk steps under `stateGas = none`, for every historical fork.
+- [`Blanc/Lift/HistIdentityCall.lean`](../Blanc/Lift/HistIdentityCall.lean): `IdReadyH` across `afterSloadH` and `afterSstoreH`.
+- [`Blanc/Lift/ExactCallFloor.lean`](../Blanc/Lift/ExactCallFloor.lean): `FloorReady`, `StaticWordFloorProfile`, `MutableFloorProfile`: exact call profiles admitted at a call's true floor.
+- [`Blanc/Lift/ExecFreeLogs.lean`](../Blanc/Lift/ExecFreeLogs.lean): `SFunc.Run.logs_keep`: an exec-free synthetic run keeps its logs.
+- [`Blanc/Lift/CoinFrame.lean`](../Blanc/Lift/CoinFrame.lean): `Keeps`, `FrameLands`, `Guards`: the carriers of a forward token law.
+- [`Blanc/Lift/WalkCost.lean`](../Blanc/Lift/WalkCost.lean): `xcost` support: closing a forward walk's charge as a bound.
+- [`Blanc/Lift/WalkCostExact.lean`](../Blanc/Lift/WalkCostExact.lean): `xsum` and the storage-charge facts: closing it as an equality.
+- [`Blanc/Lift/WalkFpMove.lean`](../Blanc/Lift/WalkFpMove.lean): `FpM.moved`, `rx_mstoreMove`, `rx_mstoreGrow`: forward walks past a moving free-memory pointer.
+- [`Blanc/Lift/LinearRuntimeSafety.lean`](../Blanc/Lift/LinearRuntimeSafety.lean): `InstalledRuntimeSafety.of_linearCheck`: the runtime-safety bundle for a runtime lifted only under `Cert.checkM`.
+- [`Blanc/Lift/WriteSiteMapping.lean`](../Blanc/Lift/WriteSiteMapping.lean): `mappingSites`, `successfulSstore_mappingSite`: which certified write sites may touch a one-level mapping.
+- [`Blanc/Lift/WriteSiteRowClass.lean`](../Blanc/Lift/WriteSiteRowClass.lean): `SelTable`, `row_locality`, `rawWrite_rowClass`: classify a write at one owner's rows of a two-level mapping.
+- [`Blanc/Lift/CodeImage.lean`](../Blanc/Lift/CodeImage.lean): `CodeSem.ofBytes`: the code semantics that records only which bytes a frame runs.
 
 ## Common-library-first workflow
 
