@@ -74,7 +74,7 @@
 <span class="kw">structure</span> <span class="nm">Prog</span> : Type <span class="kw">where</span>
   (main : Func)
   (aux : List Func)</pre>
-        <p>A <code>Func</code> is a branch on the top of the stack, a terminal instruction, a straight-line instruction followed by more code, or a call into the program’s table of functions — <b>b</b>ranch, <b>l</b>ast, <b>n</b>ext, <b>c</b>all. There are no expressions, no variables and no loops as syntax: the instructions are the EVM’s own, and recursion through <code>call</code> and the machine’s stack is all there is, which is exactly what a proof has to walk (<a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Semantics.lean#L107"><code>Blanc/Semantics.lean</code></a>).</p>
+        <p>A <code>Func</code> is a branch on the top of the stack, a terminal instruction, a straight-line instruction followed by more code, or a call into the program’s table of functions — <b>b</b>ranch, <b>l</b>ast, <b>n</b>ext, <b>c</b>all. There are no expressions, no variables and no loops as syntax: the instructions are the EVM’s own, and recursion through <code>call</code> and the machine’s stack is all there is, which is exactly what a proof has to walk (<a href="https://github.com/skbaek/blanc/blob/bcf8c9f39b3695d1b138ee4eb822a9cf98f5ac5c/Blanc/Semantics.lean#L107"><code>Blanc/Semantics.lean</code></a>).</p>
         <p>One liberty of raw bytecode is withheld: computed jump targets. Control flow is the tree you wrote, and the compiler owns every offset. That single restriction is what makes a reusable proof stack possible — inversion tactics that take an execution apart along the program’s own shape, and forward tactics that build one, gas included, without per-contract jump reasoning.</p>
       </section>
 
@@ -83,7 +83,7 @@
         <h2>The compiler is a theorem.</h2>
         <p>Between a Blanc program and the chain sits exactly one artifact, the compiler, and it enters the theorems rather than the trust base. Its correctness is a backward simulation: every successful EVM execution of the compiled bytes is a run of the source program, so a property proved of the source is a fact about what the EVM executes.</p>
         <div class="thm">
-          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/CommonCore.lean#L2107"><code>Blanc.correct</code> · CommonCore.lean:2107</a></div>
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/bcf8c9f39b3695d1b138ee4eb822a9cf98f5ac5c/Blanc/CommonCore.lean#L2119"><code>Blanc.correct</code> · CommonCore.lean:2119</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">correct</span> (sevm : Sevm) (pre : Devm) (p : Prog) (post : Devm)
     (exc : Exec 0 sevm pre (.ok post))
     (eq : some sevm.code.toList = p.compile) :
@@ -91,7 +91,7 @@
         </div>
         <p>For liveness a proof must go the other way and construct an execution. A gas-exact companion relates a run of a compiled program to a successful execution of its bytes in both directions, for programs that do not read their own program counter:</p>
         <div class="thm">
-          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/Blanc/Compiled.lean#L1644"><code>Blanc.Prog.runCompiled_iff_exec</code> · Compiled.lean:1644</a></div>
+          <div class="head"><span class="tag">Statement, verbatim</span><a href="https://github.com/skbaek/blanc/blob/bcf8c9f39b3695d1b138ee4eb822a9cf98f5ac5c/Blanc/Compiled.lean#L1658"><code>Blanc.Prog.runCompiled_iff_exec</code> · Compiled.lean:1658</a></div>
 <pre class="lean"><span class="kw">theorem</span> <span class="nm">Prog.runCompiled_iff_exec</span> {sevm : Sevm} {pre : Devm} {p : Prog}
     {post : Devm}
     (h_pcf : Prog.pcFree p = true)
@@ -119,7 +119,7 @@
       <section id="claims">
         <p class="eyebrow">The rules</p>
         <h2>What a port claims.</h2>
-        <p>A port does not claim to be its reference, to the byte; that is a non-goal, permanently. It claims a counterfactual: were the reference being written today, the Blanc implementation would be a better way to build it — behavior that follows a stated, proved specification; an artifact small enough to stay within reach of interactive proof; low-level freedom spent on measured wins. Deviations from the reference are governed, not forbidden: each is a register row with a stance and evidence, and leaving a known divergence unrecorded is the one prohibited move. A port’s theorems concern Blanc’s artifact. Verifying a deployed original is a separate subject, with its own statements and premises in the claim map. <a href="https://github.com/skbaek/blanc/blob/5048a51fb108d8d71dd58c897c4c62c8bff3b437/PORTING.md"><code>PORTING.md</code></a> governs.</p>
+        <p>A port does not claim to be its reference, to the byte; that is a non-goal, permanently. It claims a counterfactual: were the reference being written today, the Blanc implementation would be a better way to build it — behavior that follows a stated, proved specification; an artifact small enough to stay within reach of interactive proof; low-level freedom spent on measured wins. Deviations from the reference are governed, not forbidden: each is a register row with a stance and evidence, and leaving a known divergence unrecorded is the one prohibited move. A port’s theorems concern Blanc’s artifact. Verifying a deployed original is a separate subject, with its own statements and premises in the claim map. <a href="https://github.com/skbaek/blanc/blob/bcf8c9f39b3695d1b138ee4eb822a9cf98f5ac5c/PORTING.md"><code>PORTING.md</code></a> governs.</p>
       </section>
 
       <section id="costs">
@@ -136,7 +136,7 @@
   <div class="wrap footgrid">
     <div class="colophon">
       <a class="brand" href="./" style="margin-bottom:12px"><span class="sq"></span><b>Blanc</b></a>
-      <p>MIT-licensed. Statements, names, line numbers and counts refer to Blanc commit <code>5048a51f</code> and the Jaune revision it pins, <code>2737c8eb</code>. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
+      <p>MIT-licensed. Statements, names, line numbers and counts for the maintained corpus refer to Blanc commit <code>bcf8c9f3</code> and the Jaune revision it pins, <code>e8db2742</code>. Historical measurements and archived exhibits retain the revisions named with them. On-chain figures were read at block 26,141,229 (7 October 2026) from three separately operated providers.</p>
     </div>
     <div>
       <h4>Deployed bytecode</h4>
