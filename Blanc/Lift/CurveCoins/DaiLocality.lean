@@ -1,6 +1,7 @@
 import Blanc.Lift.BalanceLocality
 import Blanc.Lift.CurveCoins.Dai
 import Blanc.Lift.CurveCoins.Sel
+import Blanc.Lift.CurveCoins.DaiPermit
 import Blanc.Lift.DaiFrames
 import Blanc.Lift.LinearRuntimeSafety
 
@@ -30,6 +31,10 @@ open Jaune Blanc Blanc.Lift Blanc.Lift.Dai Blanc.Lift.WriteSite Blanc.ExecutionT
 checks the signature; a committed frame passed that check. -/
 def SignedAs (h : Adr) (e : Sevm) : Prop :=
   Blanc.Sevm.selector e = 0x8fcbaf0c ∧ (Sevm.dataWord e 4).toAdr = h
+
+/-- A frame's logs hold `Approval` with the holder as owner, at `T`. -/
+def LogsApprovalAs (T h : Adr) (F : Exec.Frame) : Prop :=
+  ∃ l ∈ F.post.logs, l.address = T ∧ l.topics.take 2 = [approvalTopic, h.toB256]
 
 /-- DAI's dispatcher word. -/
 def selTerm : Term := .op2 .shr (.const 0xe0) (.cd (.const 0))
@@ -529,7 +534,39 @@ theorem frame_held {F : Exec.Frame} (hF : F ∈ frames) (good : CodeFrame T Hist
 
 end Frame
 
+/-! ## What a reader checks for `noSignature` -/
+
+/-- **A committed `permit` naming the holder logs `Approval` with that owner.** -/
+theorem signedAs_logs {T h : Adr} {F : Exec.Frame} (good : CodeFrame T HistFork code F)
+    (target : F.sevm.currentTarget = T) (signed : SignedAs h F.sevm) : LogsApprovalAs T h F := by
+  obtain ⟨S, M, G, run⟩ := codeFrame_run good
+  obtain ⟨l, mem, addr, topics⟩ := frame_permit_logs good.2.2.1 signed.1 run
+  refine ⟨l, mem, addr.trans target, ?_⟩
+  rw [topics, signed.2]
+
 /-! ## The history -/
+
+/-- DAI's storage moves through its settled frames. -/
+theorem dai_chain {cfg : ChainConfig} {start : Benv} {future : BlockChain} {T : Adr}
+    (trace : MidHistoryTraceIn HistFork cfg start future)
+    (installed : start.state.getCode T = code) :
+    SettledChain T (fun _ => True) (CodeFrame T HistFork code) (fun _ => True)
+      (wordsAt T start.state) (wordsAt T future.state) trace.settledFrames :=
+  mid_frameChain HistFork.stateGas_none BodyStageCapabilities.historical code_ne code_notDelegated
+    runtimeSafety
+    (fun run _ hcode fork _ _ _ =>
+      staticOnly_quiet cert_check staticOnly T _ run hcode fork.stateGas_none)
+    trace installed
+
+/-- **`noSignature` from the logs**: if no settled frame at `T` logs `Approval` with the holder as owner,
+no settled frame at `T` is a `permit` naming the holder. A reader checks the logs with `eth_getLogs`. -/
+theorem dai_noSignature_of_logs {cfg : ChainConfig} {start : Benv} {future : BlockChain} {T h : Adr}
+    (trace : MidHistoryTraceIn HistFork cfg start future)
+    (installed : start.state.getCode T = code)
+    (noLog : ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, ¬ LogsApprovalAs T h F) :
+    ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, ¬ SignedAs h F.sevm := fun F hF signed =>
+  noLog F hF (signedAs_logs (((dai_chain trace installed).1 fun _ _ => trivial).good F hF)
+    (mem_coinFrames.mp hF).2.1 signed)
 
 /-- **DAI's balance locality.** From a state with DAI's code at `T`, over a mid history, the settled non-static
 frames at `T` carry its storage, and each moves the holder `h`'s entry by at most what its message
@@ -546,11 +583,7 @@ theorem dai_entry_local {cfg : ChainConfig} {start : Benv} {future : BlockChain}
     EntryLocal T (fun _ => True) (CodeFrame T HistFork code) (fun σ => (σ (balSlot h)).toNat)
       (ownDebit h) (ownCredit h) (wordsAt T start.state) (wordsAt T future.state)
       trace.settledFrames := by
-  have chain := mid_frameChain (T := T) (C := code) (Allowed := fun _ => True) HistFork.stateGas_none
-    BodyStageCapabilities.historical code_ne code_notDelegated runtimeSafety
-    (fun run _ hcode fork _ _ _ =>
-      staticOnly_quiet cert_check staticOnly T _ run hcode fork.stateGas_none)
-    trace installed
+  have chain := dai_chain trace installed
   refine entryLocal_of_frames (I := RowsEmpty h (coinFrames T (fun _ => True) trace.settledFrames)) chain
     (fun _ _ => trivial) (fun g _ => authority.rowsAtCut g) ?_
   intro F hF good rows
