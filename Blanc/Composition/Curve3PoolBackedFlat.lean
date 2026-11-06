@@ -214,19 +214,20 @@ theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.poolAt (A : Assumes d 
       f = ⟨0, sevm, b, .ok post, exc, cm⟩ ∧ PoolAt exc s :=
   pool_at A.midFactsPool A.framesPool member target mutable (A.poolOwn member target).1 (A.poolOwn member target).2 hck hq
 
-/-- **Every settled non-static pool frame is entered at a checkpoint**: nothing nests, so each is an invocation. -/
-theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.poolFrames (A : Assumes d h) {f : Exec.Frame} (member : f ∈ (d.sincePool h).settledFrames)
-    (target : f.sevm.currentTarget = pool) (mutable : f.sevm.isStatic = false) :
-    ∃ s : Curve3Pool.State, Curve3Pool.Checkpoint (f.pre.getStor f.sevm.currentTarget) s ∧
-      s.coins = Curve3Pool.Creation.coinsN ∧ s.token = Curve3Pool.Creation.tokenN := by
-  obtain ⟨invs, obs, auth, entries, s, run, -⟩ := A.replay
+/-- **Every settled non-static pool frame is an invocation of a replay observing the settled frames**: nothing nests. -/
+theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.frame_invocation (A : Assumes d h) {invs : List PoolInvocation}
+    {s₀ s : Curve3Pool.State} (hc₀ : s₀.coins = Curve3Pool.Creation.coinsN) (ht₀ : s₀.token = Curve3Pool.Creation.tokenN)
+    (obs : invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = Curve3Pool.committedPoolFramesMid pool (d.sincePool h))
+    (auth : ∀ i ∈ invs, i.Authentic pool) (entries : PoolEntries s₀ invs) (run : PoolRun s₀ invs s) {f : Exec.Frame}
+    (member : f ∈ (d.sincePool h).settledFrames) (target : f.sevm.currentTarget = pool)
+    (mutable : f.sevm.isStatic = false) : ∃ i ∈ invs, i.frame = f := by
   have inObs : f ∈ invs.flatMap (fun i => poolSubtreeFrames pool i.frame) := by
     rw [obs]
     refine List.mem_flatMap.mpr ⟨f, member, ?_⟩
     rw [poolFrameObs, ite_eq_left ⟨target, mutable⟩]
     exact List.mem_singleton.mpr rfl
   obtain ⟨i, hi, hf⟩ := List.mem_flatMap.mp inObs
-  obtain ⟨st, ck, hc, ht⟩ := entries_checkpoint run entries rfl rfl i hi
+  obtain ⟨st, ck, hc, ht⟩ := entries_checkpoint run entries hc₀ ht₀ i hi
   obtain ⟨hpc, -, atPool, mutableI, -⟩ := auth i hi
   have selfObs : poolSubtreeFrames pool i.frame =
       i.frame :: (Exec.descendantFrames i.frame.run).flatMap (poolFrameObs pool) :=
@@ -247,7 +248,7 @@ theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.poolFrames (A : Assume
   obtain ⟨sevm, b, post, exc, cm, e, H⟩ := A.poolAt memberI atPool mutableI ck ⟨hc, ht⟩
   rw [selfObs, List.mem_cons] at hf
   rcases hf with rfl | hf
-  · exact ⟨st, ck, hc, ht⟩
+  · exact ⟨i, hi, rfl⟩
   · obtain ⟨g, hg, hobs⟩ := List.mem_flatMap.mp hf
     rw [poolFrameObs] at hobs
     split at hobs
@@ -263,6 +264,15 @@ theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.poolFrames (A : Assume
         exact this
       exact absurd (hq.1.trans hT.symm) (H.no_nested f hd hq.2)
     · cases hobs
+
+/-- **Every settled non-static pool frame is entered at a checkpoint.** -/
+theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.poolFrames (A : Assumes d h) {f : Exec.Frame} (member : f ∈ (d.sincePool h).settledFrames)
+    (target : f.sevm.currentTarget = pool) (mutable : f.sevm.isStatic = false) :
+    ∃ s : Curve3Pool.State, Curve3Pool.Checkpoint (f.pre.getStor f.sevm.currentTarget) s ∧
+      s.coins = Curve3Pool.Creation.coinsN ∧ s.token = Curve3Pool.Creation.tokenN := by
+  obtain ⟨invs, obs, auth, entries, s, run, -⟩ := A.replay
+  obtain ⟨i, hi, rfl⟩ := A.frame_invocation rfl rfl obs auth entries run member target mutable
+  exact entries_checkpoint run entries rfl rfl i hi
 
 /-- The pool originates no settled root of the history. -/
 theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.rootsNe (A : Assumes d h) :
@@ -462,6 +472,7 @@ theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.coin_walk_whole (A : A
     recorded future.state k ≤ B.Rd (B.cf (d.sincePool h).settledFrames) b ∧
       ∃ invs : List PoolInvocation, (∀ i ∈ invs, i.Authentic pool) ∧
         invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = Curve3Pool.committedPoolFramesMid pool (d.sincePool h) ∧
+        PoolEntries (Curve3Pool.Creation.poolInitState Curve3Pool.Creation.deployTime.toNat) invs ∧
         ∃ s, PoolRun (Curve3Pool.Creation.poolInitState Curve3Pool.Creation.deployTime.toNat) invs s ∧
         RepliesCovered B.T pool k (Curve3Pool.Creation.poolInitState Curve3Pool.Creation.deployTime.toNat) invs := by
   obtain ⟨invs, obs, auth, entries, s, run, hc⟩ := A.replay
@@ -477,7 +488,7 @@ theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.coin_walk_whole (A : A
       exact Curve3PoolSupply.targetClosed_of_forest W.forest) rfl rfl start
   rw [List.nil_append] at hm hr
   obtain rfl := chain_det hm W.ledger.loc.chain
-  refine ⟨?_, invs, auth, obs, s, run, replies⟩
+  refine ⟨?_, invs, auth, obs, entries, s, run, replies⟩
   rw [recorded_of_abstracts hc.abs]
   exact hr
 
