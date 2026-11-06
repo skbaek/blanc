@@ -47,10 +47,11 @@ def ScanRoot (T : Adr) (Vs : List UsdcDeployedEntry) (R : Exec.Frame) : Prop :=
 def ScanLive (T : Adr) (Vs : List UsdcDeployedEntry) (R : Exec.Frame) : Prop :=
   ∀ e ∈ Vs, ((R.pre.getStor T).get implSlot).toAdr = e.adr → e.RuntimeReady R.pre
 
-/-- The list of versions: their codes, and apart from the library. -/
+/-- The list of versions: their codes, apart from the library, and no precompile on any fork. -/
 structure VersionList (Vs : List UsdcDeployedEntry) : Prop where
   codes : ∀ e ∈ Vs, CurveCoins.UsdcVersion e.code
   apart : ∀ e ∈ Vs, e.adr ≠ usdcLib
+  notPrecompile : ∀ e ∈ Vs, ∀ f : Fork, ¬ (Fork.ruleSet f).isPrecomp e.adr
 
 theorem version_implCode {C : ByteArray} (h : CurveCoins.UsdcVersion C) : UsdcImplCode C := by
   rcases h with rfl | rfl | rfl
@@ -173,7 +174,11 @@ theorem scan_frames {Vs : List UsdcDeployedEntry} (list : VersionList Vs) {R : E
     change G.pre.getCode ((G.pre.getStor T).get implSlot).toAdr = _
     rw [show ((G.pre.getStor T).get implSlot).toAdr = e.adr from word]
     exact ready.1
-  refine ⟨by unfold CurveCoins.UsdcImplAt; rw [code]; exact list.codes e he, fun impl => ready.2 (code.symm.trans impl)⟩
+  refine ⟨by unfold CurveCoins.UsdcImplAt; rw [code]; exact list.codes e he,
+    fun impl => ready.2 (code.symm.trans impl), fun f => ?_⟩
+  change ¬ (Fork.ruleSet f).isPrecomp ((G.pre.getStor T).get implSlot).toAdr
+  rw [show ((G.pre.getStor T).get implSlot).toAdr = e.adr from word]
+  exact list.notPrecompile e he f
 
 /-- The word at a root's exit is listed, from the word at its entry and the scan of its logs. -/
 theorem scan_post {Vs : List UsdcDeployedEntry} (list : VersionList Vs) {R : Exec.Frame}

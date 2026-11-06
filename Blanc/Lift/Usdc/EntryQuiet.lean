@@ -253,7 +253,7 @@ theorem entryQuiet (T : Adr) : EntryQuiet T (EntryAllowed T) := by
     rw [Blanc.Evm.step_spawn_child_benvStat step enter, sevmEq]
     exact hsg
   have libClause : cevm.sta.code = Impl.code → cevm.dyna.state.getCode usdcLib = Lib.code := fun hi => by
-    have := certified.2 (code.symm.trans hi)
+    have := certified.2.1 (code.symm.trans hi)
     change (cevm.dyna.getCode usdcLib) = _
     rw [childCode, nodeGetCode]
     exact this

@@ -91,7 +91,7 @@ theorem child_context {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0
         have code : f.inner.code = pre.getCode (pre.getStorVal T implSlot).toAdr := by
           rw [shape.2.2.2.2.2, nodeGetCode, parent]
         refine ⟨.inr (.inl (by rw [frameCode, code]; exact version)), fun hi => ?_⟩
-        have := cert.2 (code.symm.trans (frameCode.symm.trans hi))
+        have := cert.2.1 (code.symm.trans (frameCode.symm.trans hi))
         change cevm.dyna.getCode usdcLib = _
         rw [getCode, nodeGetCode]
         exact this

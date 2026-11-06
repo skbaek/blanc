@@ -46,12 +46,14 @@ entry: the low 255 bits under V2_2, the whole word before it. -/
 noncomputable def heldAt (T h : Adr) (F : Exec.Frame) (w : StorWords) : Nat :=
   if V22At T F then balanceBits (w (balSlot h)) else (w (balSlot h)).toNat
 
-/-- **The implementation word names one of the three versions, and V2_2 finds its library** (the proxy
-admin's power, at one state). The library is deployed after the pool's cut, so this is not a fact of
-the start state. -/
+/-- **The implementation word names one of the three versions, V2_2 finds its library, and the word names no
+precompile on any fork** (the proxy admin's power, at one state). The library is deployed after the pool's cut, so
+this is not a fact of the start state. A delegate to a precompile runs it and not the code at the address, so
+`UsdcImplAt` alone does not say what the frame runs. -/
 def UsdcCertified (d : Devm) (T : Adr) : Prop :=
   CurveCoins.UsdcImplAt d T ∧
-    (d.getCode (d.getStorVal T implSlot).toAdr = Impl.code → d.getCode usdcLib = Lib.code)
+    (d.getCode (d.getStorVal T implSlot).toAdr = Impl.code → d.getCode usdcLib = Lib.code) ∧
+    ∀ f : Fork, ¬ (Fork.ruleSet f).isPrecomp (d.getStorVal T implSlot).toAdr
 
 /-- **The seam where the reading changes**: the first frame reading bits, after one reading words, finds
 the entry below the flag. One storage read at the upgrade to V2_2 for a reader. -/
