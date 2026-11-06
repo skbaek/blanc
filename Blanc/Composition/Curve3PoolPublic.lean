@@ -41,20 +41,21 @@ def usdtGateSlots : List B256 :=
   [Bytes.toB256 [4], Bytes.toB256 [3], Bytes.toB256 [10],
     mapSlot pool.toB256 (Bytes.toB256 [6]), Bytes.toB256 [0]]
 
-/-- **`E`'s coin entries miss what moving a coin reads and writes beside them.** Each comparison failing is a Keccak
-collision. -/
+/-- **`E`'s coin entries miss what moving a coin reads and writes beside them.** Each comparison fails only by a Keccak
+collision, or in the case its field names. -/
 structure CoinsApart (w : State) (E : Adr) : Prop where
-  /-- `E`'s entry in each coin is not the pool's. -/
+  /-- `E`'s entry in each coin is not the pool's: `E` is not the pool. -/
   poolEntry : ∀ k, coinEntry E k ≠ coinEntry pool k
-  /-- `E`'s USDT entry is none of the slots USDT's gate reads, nor its owner's entry. -/
+  /-- `E`'s USDT entry is none of the slots USDT's gate reads, nor its owner's entry: `E` is not Tether's owner. -/
   usdtE : coinEntry E 2 ∉ usdtGateSlots ∧ coinEntry E 2 ≠ coinEntry (Usdt.ownerOf (w.getStor usdt)) 2
-  /-- USDT's owner's entry is none of those slots, nor the pool's entry. -/
+  /-- USDT's owner's entry is none of those slots, nor the pool's entry: Tether's owner is not the pool. -/
   usdtOwner : coinEntry (Usdt.ownerOf (w.getStor usdt)) 2 ∉ usdtGateSlots ∧
     coinEntry (Usdt.ownerOf (w.getStor usdt)) 2 ≠ coinEntry pool 2
   /-- `E`'s USDC entry is not the proxy's two words nor the pause word. -/
   usdcE : coinEntry E 1 ∉ [Bytes.toB256 [1], Usdc.adminSlot, Usdc.implSlot]
 
-/-- **The withdrawal's entries miss each other**: the coins', and `E`'s 3Crv entry. -/
+/-- **The withdrawal's entries miss each other**: the coins', and `E`'s 3Crv entry. `c3` fails only by a Keccak collision;
+for the rest, see `CoinsApart`. -/
 structure ExitApart (w : State) (E : Adr) : Prop extends CoinsApart w E where
   /-- `E`'s 3Crv entry is not 3Crv's supply or minter word. -/
   c3 : Curve3Crv.vyBalSlot E ≠ Curve3Crv.vySupplySlot ∧ Curve3Crv.vyBalSlot E ≠ Curve3Crv.vyMinterSlot
@@ -125,7 +126,8 @@ noncomputable def swapGasUsed (w : State) (data : Bytes) (E : Adr) (t : Nat) (i 
 /-- USDT's blacklist word of `E`, which its gate reads when `E` is pulled from. -/
 def usdtListWord (E : Adr) : B256 := mapSlot E.toB256 (Bytes.toB256 [6])
 
-/-- **The swap's entries miss each other.** Each comparison failing is a Keccak collision. -/
+/-- **The swap's entries miss each other.** Each comparison this adds fails only by a Keccak collision; for the rest, see
+`CoinsApart`. -/
 structure SwapApart (w : State) (E : Adr) : Prop extends CoinsApart w E where
   /-- USDT's blacklist word of `E` is none of USDT's fixed words, nor an entry the pull moves. -/
   usdtList : usdtListWord E ∉ [Bytes.toB256 [0], Bytes.toB256 [3], Bytes.toB256 [4], Bytes.toB256 [10],
