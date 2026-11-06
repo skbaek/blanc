@@ -15,14 +15,17 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 open Blanc.Lift.Curve3Pool (V3 Call feeLoop getDMem xpOf adminFeeSlot feeSlot yGap oneGap)
 open Blanc.StableSwapNewton (chkMul chkDiv floorRoot)
 
-/-- The books once a liquidity call's imbalance fees are taken from `new`: the point the contract
-computes `D2` at, when `w` is the state before the call. -/
-def afterFees (w : State) (amp : Nat) (new : V3) : Option V3 := do
+/-- A liquidity call's imbalance fees applied to `new`, with `w` the state before it: the balances it
+stores, and the balances `D2` is computed at. -/
+def feeRun (w : State) (amp : Nat) (new : V3) : Option (V3 × V3) := do
   let D0 ← invariant w amp
   let D1 ← getDMem new amp
   let fee ← chkDiv (← chkMul (word w pool feeSlot) 3) 8
   let r ← feeLoop fee (word w pool adminFeeSlot) D0 D1 (books w) new
-  some r.2.2
+  some r.2
+
+/-- The books once a liquidity call's imbalance fees are taken from `new`. -/
+def afterFees (w : State) (amp : Nat) (new : V3) : Option V3 := (feeRun w amp new).map (·.2)
 
 /-- The overshoot of the Newton loop at the books `afterFees` computes, `0` if the contract's checked
 arithmetic would have stopped it. -/
@@ -89,12 +92,18 @@ structure Installed (w : State) : Prop where
   coins : StartingCode w
   usdcCertified : UsdcCertified w
 
+/-- A message to the pool at `w` commits and ends in `post`. -/
+structure CallCommits (m : Msg) (w : State) (post : Devm) : Prop where
+  target : m.currentTarget = pool
+  state : m.benv.state = w
+  code : m.code = w.getCode pool
+  ran : exec (initEvm m) = .ok post
+  ok : post.error = none
+
 /-- **The word `get_virtual_price()` returns falls across one call at fixed amplification**, in a state
 where the contracts hold their deployed bytes. A claim about the bytes, not about any chain state. -/
 def VirtualPriceFalls : Prop :=
-  ∃ (w : State) (m : Msg) (post : Devm) (p p' : Nat), Installed w ∧
-    m.currentTarget = pool ∧ m.benv.state = w ∧ m.code = w.getCode pool ∧
-    exec (initEvm m) = .ok post ∧ post.error = none ∧
+  ∃ (w : State) (m : Msg) (post : Devm) (p p' : Nat), Installed w ∧ CallCommits m w post ∧
     ampAt w m.benv.stat.time.toNat = ampAt post.state m.benv.stat.time.toNat ∧
     ReturnsPrice m.benv.stat w p ∧ ReturnsPrice m.benv.stat post.state p' ∧ p' < p
 

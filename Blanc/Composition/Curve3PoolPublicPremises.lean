@@ -149,7 +149,7 @@ def namedKeys (f : Exec.Frame) : List B256 :=
 /-- No address a coin frame names shares a balance entry with the pool. Shape to be settled by U3. -/
 def CoinKeysFresh (frames : List Exec.Frame) : Prop :=
   ∀ f ∈ frames, ∀ k : Fin 3, f.sevm.currentTarget = coinAt k → ∀ a ∈ namedKeys f,
-    a ≠ pool.toB256 → coinEntry a.toAdr k ≠ coinEntry pool k
+    a.toAdr ≠ pool → coinEntry a.toAdr k ≠ coinEntry pool k
 
 /-- **The history's hashes do not collide on what the proofs compare.** -/
 structure HashesFresh (d : Deployment) {future : BlockChain}
