@@ -6,7 +6,7 @@ import Blanc.Lift.Curve3Pool.Walk.AddLiquidityBack
 # The per-child keep at the concrete `add_liquidity` entry
 
 * `alw_keep`: the per-execution keep premise of `al_frame_live_of_keep`.  The walk under the
-  conditional keep (`xa_al_frontC`, `xa_al_backC` at the predicate "neither the pool nor `4`")
+  conditional keep (`xa_al_frontC`, `xa_al_backC`, at `KeepSel.of_keepC`)
   names every child's target — 3Crv (`totalSupply`, `mint`) or a coin (`balanceOf`,
   `transferFrom`), neither the pool nor `4` — so `RlKeepC` (`pool_childFrames_keepC`, the frame
   sits at depth `1`) gives every child's keep.
@@ -34,20 +34,19 @@ theorem alw_keep (post : Devm)
   obtain ⟨-, -, -, -, A, cT, L0, L1, L2, L', D0, D1, cr0, cr1, cr2, b', M, img, G', -, hL, hTt,
     -, -, -, -, -, -, hk0, hk1, hk2, -, -, -, -, -, -, hst', -, -, hcd', -, hR, hW, hA, hm, w900,
     h⟩ :=
-    xa_al_frontC (P := fun a => a ≠ (cSevm alDataW).currentTarget ∧ a ≠ 4) checkedM rfl
+    xa_al_frontC checkedM rfl
       (cSevm_fork _).histFork al_lenW.1 al_lenW.2 al_selW (wPre_checkpoint _).abs (wPre_c3Entry _).prec
-      (fun i hi => (wPre_coins _).prec ⟨i, hi⟩) (wPre_poolCode _) (wPre_id _).toH ⟨htt, ht4⟩
-      (fun i hi => hct i hi) (fun c hc hp => hKC c hc hp.1 hp.2) hx
+      (fun i hi => (wPre_coins _).prec ⟨i, hi⟩) (wPre_poolCode _) (wPre_id _).toH (.of_keepC hKC hct ⟨htt, ht4⟩) hx
   have htokB : ∀ k : Nat, k < 3 → balancesBase + Nat.toB256 k ≠ tokenSlot := fun k hk => by
     rcases three_cases hk with rfl | rfl | rfl <;> decide
   obtain ⟨-, -, -, -, -, -, -, -, cm, rfl, -, -, -, -, hmt, -⟩ :=
-    xa_al_backC (P := fun a => a ≠ (cSevm alDataW).currentTarget ∧ a ≠ 4) checkedM rfl
+    xa_al_backC checkedM rfl
       (cSevm_fork _).histFork hR hW hA hm w900 hst'
       (by rw [Stor.get_set_ne _ lock_ne_token]; exact (wPre_c3Entry _).prec) htokB
       (by rw [hcd']; exact wPre_poolCode _)
-      (by rw [Stor.get_set_ne _ lock_ne_token]; exact ⟨htt, ht4⟩)
-      (fun c hc hp => (hKC c (by rw [hL]; exact List.mem_cons_of_mem _ (List.mem_append_right _ hc))
-        hp.1 hp.2).1) h
+      (fun c hc ht => (hKC c (by rw [hL]; exact List.mem_cons_of_mem _ (List.mem_append_right _ hc))
+        (by rw [ht, Stor.get_set_ne _ lock_ne_token]; exact htt)
+        (by rw [ht, Stor.get_set_ne _ lock_ne_token]; exact ht4)).1) h
   have hcoin : ∀ i, i < 3 → ∀ c : Exec.Frame, c.sevm.currentTarget =
       (coinAt (alLocked ((St (St (wPre alDataW) [] Mem.empty 1110000) [] Mem.empty 1110000).getStor
         (cSevm alDataW).currentTarget)) i).toAdr →

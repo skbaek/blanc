@@ -33,7 +33,7 @@ theorem removeLiquidity_rawTK {sevm : Sevm} {pre post : Devm} {s : State}
     ∃ T o, step s (rlEnv sevm T) (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rlEnv sevm T) o :=
   removeLiquidity_rawT_of exc hcode hfork hlen hcd hsel hstack hmem hgas hck htok hcoin hpc hid
-    (.inr (RlKeep.of_pool hkeep hidk))
+    (.of_keep (RlKeep.of_pool hkeep hidk))
 
 /-- **Safety of `remove_liquidity`** under `PoolCallsKeep` and children keeping the code at `4`,
 with the observed environment left abstract. -/

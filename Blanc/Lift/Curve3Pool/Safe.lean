@@ -12,6 +12,7 @@ import Blanc.Lift.Curve3Pool.Walk.AdminBalancesX
 import Blanc.Lift.Curve3Pool.Walk.AdminRaw
 import Blanc.Lift.Curve3Pool.Walk.Fallback
 import Blanc.Lift.Curve3Pool.LadderH
+import Blanc.Lift.Curve3Pool.StepCallFree
 
 /-!
 # Curve 3pool: every successful pc-`0` pool frame at a `Checkpoint` with `PoolFrameEnv` on installed code over a covered fork refines the model (U2(a))
@@ -37,6 +38,64 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc Blanc.Lift
 
+/-- **The call-free entries refine the model with no keep premise.** A successful pc-`0` frame on a selector
+of `callFreeSels` is accepted by `Model.step` with the frame's exact raw effect; its walk asks nothing of its
+children. -/
+theorem pool_frame_refines_callFree {sevm : Sevm} {pre post : Devm} {s : State}
+    (exc : Exec 0 sevm pre (.ok post))
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
+    (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
+    (hin : Sevm.selector sevm ∈ callFreeSels)
+    (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
+    (hck : Checkpoint (pre.getStor sevm.currentTarget) s)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp (tokenAdr ⟨0, sevm, pre, .ok post, exc⟩))
+    (hcoin : ∀ k, ¬ sevm.benvStat.rules.isPrecomp (coinAdr ⟨0, sevm, pre, .ok post, exc⟩ k)) :
+    ∃ e o, step s e (decodeCall sevm) = some o ∧
+      RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
+  simp only [callFreeSels, List.mem_cons, List.not_mem_nil, or_false] at hin
+  rcases hin with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h |
+    h | h | h | h | h | h | h | h | h | h | h | h | h
+  · exact a_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact gvp_raw exc hcode hfork hlen hcd h hstack hmem hgas hck htok
+  · exact cta_raw exc hcode hfork hlen hcd h hstack hmem hgas hck htok
+  · exact dy_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact dyu_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact cwo_raw exc hcode hfork hlen hcd h hstack hmem hgas hck htok
+  · exact rampA_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact stopRampA_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact commitNewFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact applyNewFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact revertNewParameters_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact commitTransferOwnership_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact applyTransferOwnership_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact revertTransferOwnership_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact adminBalances_raw exc hcode hfork hlen hcd h hstack hmem hgas hck hcoin
+  · exact donate_raw exc hcode hfork hlen hcd h hstack hmem hgas hck hcoin
+  · exact killMe_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact unkillMe_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact coins_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact balances_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact fee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact adminFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact owner_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact initialA_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact futureA_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact initialATime_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact futureATime_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact adminActionsDeadline_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact transferOwnershipDeadline_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact futureFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact futureAdminFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+  · exact futureOwner_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
+
+/-- The dispatcher's tests are the call-free selectors and the six calling entries. -/
+theorem sels_split {sel : B256} (h : sel ∈ sels) :
+    sel ∈ callFreeSels ∨ sel = selAddLiquidity ∨ sel = selExchange ∨ sel = selRemoveLiquidity ∨
+      sel = selRemoveLiquidityImbalance ∨ sel = selRemoveLiquidityOneCoin ∨
+      sel = selWithdrawAdminFees := by
+  revert sel
+  decide +kernel
+
 /-- **The frame refinement over the historical forks.** Every successful pc-`0` frame of the certified runtime at a `HistFork`,
 entered with empty stack and memory at a `Checkpoint` abstracting `s`, whose target carries code
 and whose world satisfies the ENV bundle `PoolFrameEnvH`, is accepted by `Model.step` on its decoded
@@ -53,57 +112,24 @@ theorem pool_frame_refines_envH {sevm : Sevm} {pre post : Devm} {s : State}
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post e o := by
   by_cases hlen : 4 ≤ sevm.data.length
   · by_cases hin : Sevm.selector sevm ∈ sels
-    · simp only [sels, List.mem_cons, List.not_mem_nil, or_false] at hin
-      have htok := henv.htok
+    · have htok := henv.htok
       have hcoin := henv.hcoin
       have hid := henv.id
       have hkeep := henv.keep
       have hidk := henv.hidk
-      rcases hin with h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h |
-        h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h | h
-      · exact a_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact gvp_raw exc hcode hfork hlen hcd h hstack hmem hgas hck htok
-      · exact cta_raw exc hcode hfork hlen hcd h hstack hmem hgas hck htok
+      rcases sels_split hin with h | h | h | h | h | h | h
+      · exact pool_frame_refines_callFree exc hcode hfork hlen hcd h hstack hmem hgas hck htok hcoin
       · exact addLiquidity_raw exc hcode hfork hlen hcd h hstack hmem hgas hck htok hcoin hpc hid
           hkeep hidk
-      · exact dy_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact dyu_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
       · exact exchange_raw exc hcode hfork hlen hcd h hstack hmem hgas hck hcoin hpc hid hkeep hidk
       · exact removeLiquidity_rawK exc hcode hfork hlen hcd h hstack hmem hgas hck htok hcoin hpc
           hid hkeep hidk
       · exact removeLiquidityImbalance_raw exc hcode hfork hlen hcd h hstack hmem hgas hck htok
           hcoin hpc hid hkeep hidk
-      · exact cwo_raw exc hcode hfork hlen hcd h hstack hmem hgas hck htok
       · exact removeLiquidityOneCoin_raw exc hcode hfork hlen hcd h hstack hmem hgas hck htok hcoin
           hpc hid hkeep hidk
-      · exact rampA_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact stopRampA_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact commitNewFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact applyNewFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact revertNewParameters_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact commitTransferOwnership_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact applyTransferOwnership_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact revertTransferOwnership_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact adminBalances_raw exc hcode hfork hlen hcd h hstack hmem hgas hck hcoin
       · exact withdrawAdminFees_raw exc hcode hfork hlen hcd h hstack hmem hgas hck hcoin hpc hid
           hkeep hidk
-      · exact donate_raw exc hcode hfork hlen hcd h hstack hmem hgas hck hcoin
-      · exact killMe_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact unkillMe_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact coins_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact balances_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact fee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact adminFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact owner_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact initialA_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact futureA_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact initialATime_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact futureATime_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact adminActionsDeadline_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact transferOwnershipDeadline_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact futureFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact futureAdminFee_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
-      · exact futureOwner_raw exc hcode hfork hlen hcd h hstack hmem hgas hck
     · exact absurd (decodeCall_miss fun s hs he => hin (he ▸ hs))
         (pool_other_fails exc hcode hcd hstack hmem hgas)
   · exact absurd (decodeCall_short (by omega))
@@ -178,28 +204,6 @@ theorem pool_frame_refines_at (cs : V3) (tok : Nat) :
   obtain ⟨hkeep, hkeepT, hcode4⟩ := hkids _ exc
   have habs : Abstracts (entryStor ⟨0, sevm, pre, .ok post, exc⟩) s := hck.abs
   refine pool_frame_refines_env exc hcode hfork hcd hstack hmem hgas hpc hck
-    ⟨hkeep, hkeepT, hcode4, hid, fun k => ?_, ?_⟩
-  · rw [coinAdr_eq habs k, hq.1]
-    exact hcs k
-  · rw [tokenAdr_eq habs, hq.2]
-    exact htk
-
-/-! ## The entry condition at fixed parties, over the historical forks -/
-
-/-- The per-child premises and readiness at fixed parties under the frame's actual rules. -/
-def poolEntryAtH (cs : V3) (tok : Nat) (sevm : Sevm) (pre : Devm) : Prop :=
-  Exec.FreshEntry sevm pre ∧ sevm.data.length < 2 ^ 256 ∧ pre.gasMeasure < 2 ^ 256 ∧
-    IdReadyH sevm pre ∧ (∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp (adrOf (cs.get k))) ∧
-    ¬ sevm.benvStat.rules.isPrecomp (adrOf tok) ∧ Exec.derivEntry PoolChildrenKeep sevm pre
-
-/-- **The frame refinement at fixed parties, over the historical forks.** -/
-theorem pool_frame_refines_atH (cs : V3) (tok : Nat) :
-    PoolFrameRefinesInH (PoolParties cs tok) (poolEntryAtH cs tok) := by
-  intro sevm pre post s exc hcode hfork hentry _ hpc _ hck hq
-  obtain ⟨⟨hstack, hmem⟩, hcd, hgas, hid, hcs, htk, hkids⟩ := hentry
-  obtain ⟨hkeep, hkeepT, hcode4⟩ := hkids _ exc
-  have habs : Abstracts (entryStor ⟨0, sevm, pre, .ok post, exc⟩) s := hck.abs
-  refine pool_frame_refines_envH exc hcode hfork hcd hstack hmem hgas hpc hck
     ⟨hkeep, hkeepT, hcode4, hid, fun k => ?_, ?_⟩
   · rw [coinAdr_eq habs k, hq.1]
     exact hcs k

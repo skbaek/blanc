@@ -25,7 +25,7 @@ macro "ucall " h:ident hc:ident k:num T:term : tactic => `(tactic|
    obtain ⟨_, _, $hc:ident, $h:ident⟩ := h'))
 
 /-- **Entry 77, SafeMath `add`**. -/
-theorem e77_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e77_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_41fd_c77 o) :
     x.toNat + y.toNat < 2 ^ 256 ∧ ∃ G', o = .returned (St b ((x + y) :: S) M G') := by
   have h := run.cut
@@ -41,7 +41,7 @@ theorem e77_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
 theorem revertCopy_noExit : NoExitSet cert.prog [5, 93] = true := by decide +kernel
 
 /-- **Entry 88, SafeMath `sub` with a message**. -/
-theorem e88_inv {m x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e88_inv {m x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (m :: x :: y :: ret :: S) M G) t_4be2_c88 o) :
     x.toNat ≤ y.toNat ∧ ∃ G', o = .returned (St b ((y - x) :: S) M G') := by
   have h := run.cut
@@ -55,7 +55,7 @@ theorem e88_inv {m x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   exact ⟨toNat_le_of_gtCheck_eq_zero (eq_zero_of_iszero_ne_zero c), _, rfl⟩
 
 /-- **Entry 78, SafeMath `sub`**. -/
-theorem e78_inv {x y ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf M)
+theorem e78_inv {x y ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: ret :: S) M G) t_4123_c78 o) :
     x.toNat ≤ y.toNat ∧ ∃ M' G', o = .returned (St b ((y - x) :: S) M' G') ∧ Mem.Wf M' := by
   have h := run.cut
@@ -85,11 +85,11 @@ theorem lit9 : Bytes.toB256 [9] = 9 := by decide
 /-- The word normal form of a walk's stack and facts. -/
 macro "unorm " h:ident : tactic => `(tactic|
   (simp (config := { failIfUnchanged := false }) only [keccak_scratch, ff20_and_word, word_ff20,
-     toAdr_toB256, getStorVal_afterSload, lit9, afterSstore_getStor_self,
-     AccumulatedWalk.getStorVal_afterSstore_self, afterSload_getStor, gsv] at $h:ident))
+     toAdr_toB256, getStorVal_afterSloadH, lit9, afterSstoreH_getStor_self,
+     afterSloadH_getStor, gsv] at $h:ident))
 
 /-- **Entry 74, `_transfer(owner, recipient, amount)`**. -/
-theorem e74_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf M)
+theorem e74_inv {v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
     (run : SFunc.Run cert.prog sevm (St b (v :: t :: r :: ret :: S) M G) t_3ef8_c74 o) :
     v.toNat ≤ ((Devm.getStor b sevm.currentTarget).get (balSlot r.toAdr)).toNat ∧
       v.toNat + (((Devm.getStor b sevm.currentTarget).set (balSlot r.toAdr)
@@ -120,8 +120,8 @@ theorem e74_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   unorm c4
   iterate 26 ustep h
   simp only [keccak_rehash wf1, keccak_scratch, ff20_and_word, word_ff20, toAdr_toB256,
-    getStorVal_afterSload, lit9, afterSstore_getStor_self,
-    AccumulatedWalk.getStorVal_afterSstore_self, afterSload_getStor, gsv] at h
+    getStorVal_afterSloadH, lit9, afterSstoreH_getStor_self,
+    afterSloadH_getStor, gsv] at h
   umemw h wf1
   repeat ustep h
   unorm h
@@ -139,7 +139,7 @@ theorem e74_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   refine ⟨toNat_le_of_gtCheck_eq_zero (eq_zero_of_iszero_ne_zero c3), c5, _, _, _,
     Seg.done.inj e, ?_, ?_⟩
   · uwf
-  · simp only [Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor, keccak_scratch,
+  · simp only [Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor, keccak_scratch,
       ff20_and_word, word_ff20, toAdr_toB256, lit9, gsv]
     rfl
 
@@ -154,7 +154,7 @@ theorem lit1 : Bytes.toB256 [1] = 1 := by decide
 theorem lit3 : Bytes.toB256 [3] = 3 := by decide
 
 /-- **Entry 28, `transfer(to, value)`**. -/
-theorem e28_inv {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf M)
+theorem e28_inv {v t ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
     (run : SFunc.Run cert.prog sevm (St b (v :: t :: ret :: S) M G) t_2bb8_c28 o) :
     pausedByte (Devm.getStor b sevm.currentTarget) = 0 ∧
       listedByte (Devm.getStor b sevm.currentTarget) sevm.caller = 0 ∧
@@ -181,7 +181,7 @@ theorem e28_inv {v t ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat
   obtain ⟨d1, d2, B, MB, GB, e, wfb, sB⟩ := e74_inv fork (by uwf) hc
   cases e
   clear hc
-  simp only [toAdr_toB256, afterSload_getStor] at d1 d2 sB
+  simp only [toAdr_toB256, afterSloadH_getStor] at d1 d2 sB
   repeat ustep h
   obtain ⟨_, e⟩ := ric_ret h
   clear h
@@ -202,7 +202,7 @@ def fromStor (σ : Stor) (r s t : Adr) (v : B256) : Stor :=
   (moveStor σ r t v).set (allowSlot r s) ((moveStor σ r t v).get (allowSlot r s) - v)
 
 /-- **Tree `0x147d` of entry 59, the allowance write.** -/
-theorem e59_tail {v t r ret p q w x : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e59_tail {v t r ret p q w x : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (wf : Mem.Wf M)
     (h : SFunc.RunCut cert.prog sevm []
       (St b (p :: q :: w :: x :: v :: t :: r :: ret :: S) M G) t_147d_c59 (Seg.done o)) :
@@ -213,7 +213,7 @@ theorem e59_tail {v t r ret p q w x : B256} {o : Outcome} (fork : CoveredFork se
             ((Devm.getStor b sevm.currentTarget).get (allowSlot r.toAdr sevm.caller) - v) := by
   repeat ustep h
   simp only [keccak_scratch, ff20_and_word, word_ff20, toAdr_toB256, lit10,
-    getStorVal_afterSload, gsv, afterSload_getStor] at h
+    getStorVal_afterSloadH, gsv, afterSloadH_getStor] at h
   umemw h wf
   ucall h hc 78 t_4123_c78
   obtain ⟨c1, M1, G1, e, wf1⟩ := e78_inv fork wf hc
@@ -225,15 +225,15 @@ theorem e59_tail {v t r ret p q w x : B256} {o : Outcome} (fork : CoveredFork se
   obtain ⟨B, MB, GB, eo, sB⟩ := ret_named e
   clear e
   refine ⟨?_, B, MB, GB, eo, ?_⟩
-  · simp (config := { failIfUnchanged := false }) only [afterSload_getStor] at c1
+  · simp (config := { failIfUnchanged := false }) only [afterSloadH_getStor] at c1
     exact c1
   · rw [sB]
-    simp only [afterSstore_getStor_self, afterSload_getStor, keccak_scratch, ff20_and_word, word_ff20,
+    simp only [afterSstoreH_getStor_self, afterSloadH_getStor, keccak_scratch, ff20_and_word, word_ff20,
       toAdr_toB256, lit10, gsv]
     rfl
 
 /-- **Entry 59, `transferFrom(from, to, value)`**. -/
-theorem e59_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf M)
+theorem e59_inv {v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
     (run : SFunc.Run cert.prog sevm (St b (v :: t :: r :: ret :: S) M G) t_11f1_c59 o) :
     pausedByte (Devm.getStor b sevm.currentTarget) = 0 ∧
       listedByte (Devm.getStor b sevm.currentTarget) sevm.caller = 0 ∧
@@ -270,7 +270,7 @@ theorem e59_inv {v t r ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSt
   obtain ⟨d1, d2, B, MB, GB, e, wfb, sB⟩ := e74_inv fork (by uwf) hc
   cases e
   clear hc wf
-  simp (config := { failIfUnchanged := false }) only [afterSload_getStor] at d1 d2 sB
+  simp (config := { failIfUnchanged := false }) only [afterSloadH_getStor] at d1 d2 sB
   obtain ⟨g1, B', M', G', eo, sB'⟩ := e59_tail fork wfb h
   clear h
   unorm c1
@@ -299,7 +299,7 @@ macro "uhead " h:ident sel:ident : tactic => `(tactic|
    repeat udisp $h))
 
 /-- **The `transfer(to, v)` frame of FiatTokenV2.** -/
-theorem frame_transfer {post : Devm} (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf M)
+theorem frame_transfer {post : Devm} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
     (sel : Blanc.Sevm.selector sevm = 0xa9059cbb)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     pausedByte (Devm.getStor b sevm.currentTarget) = 0 ∧
@@ -330,7 +330,7 @@ theorem frame_transfer {post : Devm} (fork : CoveredFork sevm.benvStat.fork) (wf
   exact ⟨d1, d2, d3, d4, d5, by rw [sp, sB]⟩
 
 /-- **The `transferFrom(from, to, v)` frame of FiatTokenV2.** -/
-theorem frame_transferFrom {post : Devm} (fork : CoveredFork sevm.benvStat.fork) (wf : Mem.Wf M)
+theorem frame_transferFrom {post : Devm} (fork : HistFork sevm.benvStat.fork) (wf : Mem.Wf M)
     (sel : Blanc.Sevm.selector sevm = 0x23b872dd)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     pausedByte (Devm.getStor b sevm.currentTarget) = 0 ∧
@@ -368,7 +368,7 @@ theorem frame_transferFrom {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   exact ⟨d1, d2, d3, d4, d5, d6, d7, by rw [sp, sB]⟩
 
 /-- **The `balanceOf(a)` frame of FiatTokenV2** keeps the storage. -/
-theorem frame_balanceOf {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_balanceOf {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Blanc.Sevm.selector sevm = 0x70a08231)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     Devm.getStor post = Devm.getStor b := by
@@ -387,6 +387,6 @@ theorem frame_balanceOf {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   cases e
   repeat ustep h
   rw [ric_return_getStor h]
-  exact funext fun x => afterSload_getStor _ _ _ x
+  exact funext fun x => afterSloadH_getStor _ _ _ x
 
 end Blanc.Lift.Usdc.ImplV2

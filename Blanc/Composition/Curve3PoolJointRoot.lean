@@ -5,6 +5,7 @@ import Blanc.Lift.Curve3Crv.HistFrameReady
 import Blanc.Lift.Curve3Crv.HistWindow
 import Blanc.Lift.Curve3Crv.SetMinterTx
 import Blanc.ExecutionHistoryInAppend
+import Blanc.Composition.Curve3PoolKeepHistory
 
 /-!
 # The joint deployment root of the Curve 3pool and 3Crv
@@ -18,8 +19,8 @@ the joint checkpoint are theorems.
 Besides the blocks, these facts about the history are fields:
 
 * `fresh`: 3Crv's HASH-T (R4's own premise, over the same frames);
-* `callbacks`: every child of a pool frame keeps the pool's storage and every coin child keeps 3Crv's
-  (`PoolMidEnv.callbacks`, the coin frames' obligation);
+* `coins`: the coins are their deployed bytes and the operators' two powers are restrained, over the span from
+  the pool's creation (`CoinsHold`). The keep premise the replay needs is a theorem from it;
 * `idEmpty`: the identity precompile's account holds no code just after 3Crv's creation block;
 * `idNoFrame`: no CREATE frame of the history lands at the identity precompile's address.
 
@@ -88,10 +89,11 @@ structure JointDeployment where
     (Lift.Curve3Crv.midTouchedKeysIn c3Adr
       ((MidHistoryTraceIn.tail c3Block (c3Block.bodyTrace.txSplitOfSlot c3Slot c3Decoded)).append
         (((toPool.step poolBlock).append toMinter).step minterBlock)))
-  callbacks : (((MidHistoryTraceIn.tail poolBlock
-      (poolBlock.bodyTrace.txSplitOfSlot poolSlot poolDecoded)).append toMinter).step
-      minterBlock).FrameAdmitted pool (Exec.derivEntry fun D =>
-        Lift.Curve3Pool.PoolCallsKeep D ∧ Lift.Curve3Pool.PoolCoinCallsKeepToken D)
+  coins : Curve3PoolCoinKeep.CoinsHold (((MidHistoryTraceIn.tail poolBlock
+      (poolBlock.bodyTrace.txSplitOfSlot poolSlot poolDecoded)).append toMinter).step minterBlock)
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 0))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 1))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 2))
   idEmpty : c3Completed.state.getCode 4 = ByteArray.empty
   idNoFrame : ∀ root ∈ (((toPool.step poolBlock).append toMinter).step minterBlock).rawFrames,
     root.sevm.codeAddress = none → root.sevm.currentTarget ≠ 4
@@ -178,10 +180,22 @@ theorem JointDeployment.forks (j : JointDeployment) : j.history.ForksSatisfy Pre
       (appendBlock_getLast? _ _)
   exact j.history.forksPreCancun_of_mainnet_tip last (by rw [j.minterTime]; decide)
 
-/-- **The pool's history environment over the span**: `parties`, `sysNe` and `idNoAuthority` are
-theorems here, the last two because the history ends before Cancun. -/
-theorem JointDeployment.poolEnv (j : JointDeployment) :
-    Lift.Curve3Pool.PoolMidEnv j.history j.span pool Lift.Curve3Pool.Creation.coinsN
+/-- The pool's recorded coins are the three coins, its token 3Crv, none of them the pool or `4`. -/
+theorem party_words : Curve3PoolCoinKeep.PartyWords Lift.Curve3Pool.Creation.coinsN
+    Lift.Curve3Pool.Creation.tokenN pool
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 0))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 1))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 2)) c3Adr where
+  coin := by decide +kernel
+  token := by decide +kernel
+  coinNe := by decide +kernel
+  tokNe := by decide +kernel
+  apart := by decide +kernel
+
+/-- **The pool's history facts over the span**: `parties`, `sysNe` and `idNoAuthority` are theorems here, the last
+two because the history ends before Cancun. -/
+theorem JointDeployment.poolFacts (j : JointDeployment) :
+    Lift.Curve3Pool.PoolMidFacts j.history j.span pool Lift.Curve3Pool.Creation.coinsN
       Lift.Curve3Pool.Creation.tokenN where
   subset := by
     intro root member
@@ -189,7 +203,6 @@ theorem JointDeployment.poolEnv (j : JointDeployment) :
     · exact List.mem_append_left _
         (MidHistoryTraceIn.rawFrames_subset_full j.toPool j.poolBlock j.poolCut j.toMinter member)
     · exact List.mem_append_right _ member
-  callbacks := j.callbacks
   parties := fun root member _ =>
     parties_not_precompile (j.span.rootEntryIn root member).2
   idEmpty := j.idEmpty
@@ -199,6 +212,26 @@ theorem JointDeployment.poolEnv (j : JointDeployment) :
   sysNe := fun root member => by
     rw [j.history.systemRawFrames_nil_of_preCancun j.forks] at member
     cases member
+
+/-- 3Crv's runtime is at every raw frame of the span: certified bytes installed by its creation. -/
+theorem JointDeployment.c3Code (j : JointDeployment) :
+    ∀ R ∈ j.span.rawFrames, R.devm.getCode c3Adr = Lift.Curve3Crv.code := by
+  obtain ⟨hcode, -, -⟩ := j.c3.created
+  intro R member
+  have memberC3 : R ∈ j.c3.trace.rawFrames := by
+    change R ∈ ((MidHistoryTraceIn.tail j.c3Block j.c3.cut).append j.history).rawFrames
+    rw [MidHistoryTraceIn.append_rawFrames]
+    exact List.mem_append_right _ (j.poolFacts.subset member)
+  exact Curve3PoolCoinKeep.midCode_of_cert Lift.Curve3Crv.c3crvInstalledCert j.c3.trace
+    (Lift.Curve3Crv.code_of_image (by rw [hcode]; rfl)) R memberC3
+
+/-- **The pool's history environment over the span.** -/
+theorem JointDeployment.poolEnv (j : JointDeployment) :
+    Lift.Curve3Pool.PoolMidEnv j.history j.span pool Lift.Curve3Pool.Creation.coinsN
+      Lift.Curve3Pool.Creation.tokenN :=
+  { j.poolFacts with
+    callbacks := Curve3PoolCoinKeep.pool_keepAt_of_frames j.poolFacts party_words
+      (Curve3PoolCoinKeep.framesHold_of_coins j.coins j.c3Code) }
 
 /-! ## 3Crv's minter -/
 

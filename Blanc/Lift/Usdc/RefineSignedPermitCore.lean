@@ -79,7 +79,7 @@ theorem permit_tail {C : List Nat} {r : Seg} {g ii is oi os y0 y1 y2 y3 y4 y5 y6
   clear run
   obtain ⟨b2, M2, G2, hs2, h⟩ := ric_seg_e9call id fork h
   icall h hc 81 t_3e18_c81
-  obtain ⟨d1, d2, b3, M3, G3, e, s3⟩ := e81_inv fork hc
+  obtain ⟨d1, d2, b3, M3, G3, e, s3⟩ := e81_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h

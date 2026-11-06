@@ -65,7 +65,7 @@ theorem e90_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   clear hc
   repeat istep h
   icallA h hc 93 t_3f98_c93
-  obtain ⟨c1, c2, c3, c4, c5, c6, b5, M5, G5, e, s5⟩ := e93_inv fork hc
+  obtain ⟨c1, c2, c3, c4, c5, c6, b5, M5, G5, e, s5⟩ := e93_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -112,7 +112,7 @@ theorem e95_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   clear hc
   repeat istep h
   icallA h hc 93 t_3f98_c93
-  obtain ⟨c1, c2, c3, c4, c5, c6, b5, M5, G5, e, s5⟩ := e93_inv fork hc
+  obtain ⟨c1, c2, c3, c4, c5, c6, b5, M5, G5, e, s5⟩ := e93_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -194,7 +194,7 @@ theorem e20_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st1 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork hc
+  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -202,7 +202,7 @@ theorem e20_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st2 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork hc
+  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -247,7 +247,7 @@ theorem e15_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st1 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork hc
+  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -255,7 +255,7 @@ theorem e15_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st2 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork hc
+  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -300,7 +300,7 @@ theorem e30_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st1 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork hc
+  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -308,7 +308,7 @@ theorem e30_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st2 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork hc
+  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -353,7 +353,7 @@ theorem e43_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st1 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork hc
+  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -361,7 +361,7 @@ theorem e43_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st2 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork hc
+  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h

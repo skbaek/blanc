@@ -41,7 +41,7 @@ theorem al_alB1_id {sevm : Sevm} {b : Devm} (h : IdReadyH sevm b) : IdReadyH sev
   (((h.afterSloadH _).afterSstoreH _ _).afterSloadH _).afterSloadH _ |>.afterSloadH _
 
 /-- **`add_liquidity` up to `D1`** (see the module note). -/
-theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
+theorem xa_al_frontC {sevm : Sevm}
     {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : State}
     (hchk : Cert.CheckedM code cert mems true)
     (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
@@ -53,11 +53,7 @@ theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
     (hcoin : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp
       (coinAt (b.getStor sevm.currentTarget) i).toAdr)
     (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
-    (hPt : P ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
-    (hPc : ∀ i, i < 3 → P (coinAt (b.getStor sevm.currentTarget) i).toAdr)
-    (hK : ∀ c ∈ L, P c.sevm.currentTarget →
-      (∀ x, (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x) ∧
-        c.post.getCode 4 = c.pre.getCode 4)
+    (hK : KeepSel sevm (b.getStor sevm.currentTarget) L)
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
     (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
     (b.getStor sevm.currentTarget).get isKilledSlot = 0 ∧
@@ -121,11 +117,8 @@ theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
   obtain ⟨cT, L1, b1, M2, G2, img2, rfl, hdepth, hTt, hTd, hTs, hTl, hTlogs, hTcpre, hTcpost,
     hst2, hstA, hl2, ho2, hacc2, hc42, hcK2, hR2, hW2, hA2, P2, w240, w2e0, wold, h⟩ :=
     xa_al_p2C hcode hfork hR1 hW1 hA1 hst1 htok1
-      (fun c hc ht => (hK c hc (by rw [ht, Stor.get_set_ne _ lock_ne_token]; exact hPt)).2) h
-  have hK1 : ∀ c ∈ L1, P c.sevm.currentTarget →
-      (∀ x, (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x) ∧
-        c.post.getCode 4 = c.pre.getCode 4 :=
-    fun c hc => hK c (List.mem_cons_of_mem _ hc)
+      (fun c hc ht => (hK.tok c hc (by rw [ht, Stor.get_set_ne _ lock_ne_token])).2) h
+  have hK1 : KeepSel sevm (b.getStor sevm.currentTarget) L1 := hK.tail
   clear hK
   have hm0 : AlMem0 img2 (alFee (b.getStor sevm.currentTarget))
       ((b.getStor sevm.currentTarget).get adminFeeSlot) A (alWord cT) 0
@@ -151,7 +144,7 @@ theorem xa_al_frontC {sevm : Sevm} {P : Adr → Prop}
   obtain ⟨L0, Lp1, Lp2, L', b', M5, img5, G5, cr0, cr1, cr2, rfl, hk0, hk1, hk2, hT0, hc0, hc1,
     hc2, hst5, hl5, ho5, hcd5, hid5, hR5, hW5, hA5, hm5, h⟩ :=
     xa_al_pullLoopC hcode hfork hR4 hW4 hA4 hm4 hst2 hpc2 hid2 hdepth hcoin1
-      (fun i hi => by rw [coinAt, Stor.get_set_ne _ (coin_ne_lock hi)]; exact hPc i hi) hK1 h
+      (fun i hi c hc ht => hK1.coin hi c hc (by rw [ht, coinAt, Stor.get_set_ne _ (coin_ne_lock hi)])) h
   obtain ⟨D1, M6, img6, G6, hD1, hlt, hR6, hW6, hA6, hm6, w900, h⟩ :=
     xa_al_d1 hchk hcode hfork hR5 hW5 hA5 hm5 h
   refine ⟨A, cT, L0, Lp1, Lp2, L', D0, D1, cr0, cr1, cr2, b', M6, img6, G6, hamp, rfl, by rw [hTt, Stor.get_set_ne _ lock_ne_token], hTd,
@@ -218,8 +211,8 @@ theorem xa_al_front {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
         (alNew (b.getStor sevm.currentTarget) cr0 cr1 cr2) ∧
       WordAt img 0x900 D1 ∧
       XAt sevm post 0x13e9 (St b' [] M G') L' :=
-  xa_al_frontC (P := fun _ => True)
-    hchk hcode hfork hlen hcd hsel ha htok hcoin hpc hid trivial
-    (fun _ _ => trivial) (fun c hc _ => ⟨hkeep c hc, hidk c hc⟩) h
+  xa_al_frontC
+    hchk hcode hfork hlen hcd hsel ha htok hcoin hpc hid
+    (.of_keep (RlKeep.of_pool hkeep hidk)) h
 
 end Blanc.Lift.Curve3Pool
