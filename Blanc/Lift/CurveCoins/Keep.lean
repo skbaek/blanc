@@ -17,9 +17,8 @@ import Blanc.OwnerDiscipline
 For each coin's certified code, a frame (of any outcome) whose calldata selector is one of the three the
 pool sends decodes no external instruction on its own chain: the dispatcher sends the reach to the
 selector's wrapper, whose closure lies in a decided exec-free set. The sets are the largest exec-free
-reference-closed sets of each certificate, so what they leave out is what can call out:
-`rescueERC20` (USDC), the library calls and `permit`-family signature checks (V2_2), `permit` (DAI), and
-USDT's deprecated forwards, which enter as the named premise `flag20 (slot 10) = 0`.
+reference-closed sets of each certificate. USDT's selectors do leave its set, at the deprecated forwards,
+so its theorem walks past that branch under the named premise `flag20 (slot 10) = 0`.
 
 Nothing here assumes a storage value but that one flag, and no fit premise. The lane premise is
 `rules.stateGas = none` alone.
@@ -258,8 +257,8 @@ theorem usdcVersion_noExec {C : ByteArray} (hC : UsdcVersion C) {sevm : Sevm} {p
   · exact usdc22_noExec run hcode hsg sel
 
 /-- **A committed USDC proxy frame on the pool's selectors keeps the foreign world**, given its
-implementation word at entry names one of the three versions. Whoever the caller is: the admin's dispatch
-reverts on these selectors. -/
+implementation word at entry names one of the three versions. Whoever the caller is: an admin caller reaches
+an external instruction only on `upgradeToAndCall`. -/
 theorem usdc_frameKeeps (c : Exec.Frame) (hpc : c.pc = 0) (hcode : c.sevm.code = Usdc.Proxy.code)
     (hsg : c.sevm.benvStat.rules.stateGas = none) (bal : c.sevm.benvStat.rules.bal = none)
     (hsize : c.sevm.data.length < 2 ^ 256)

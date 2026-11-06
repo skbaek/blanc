@@ -14,9 +14,12 @@ What the deployed coins give a pool frame's keep premises, over the historical f
   foreign world. `PoolCoinWorld` states how each coin enters: its deployed bytes at the frame's entry, and the
   named operator premises: USDC's implementation word names one of the three versions, USDT's `deprecated`
   flag is clear, each at the child's entry;
-* `exchange_keeps_of_world`: every committed child of an `exchange` frame is at a coin on such a selector, and
-  keeps the pool's storage, the code at `4` and, when it holds code, the token's storage. The walk exposes
-  each child's target and calldata before it needs that child's keep (`ExCoinSel`).
+* `exchange_keeps_of_children`: every committed child of an `exchange` frame is at a coin on such a selector,
+  and keeps the pool's storage and the code at `4`. The walk exposes each child's target and calldata before
+  it needs that child's keep (`ExCoinSel`);
+* `poolCoinCallsKeepToken_of_sel`: coin children on those selectors keep the token, when it holds code.
+
+Only `exchange` is walked here. The other entries' keep is not discharged by this module.
 -/
 
 namespace Blanc.Composition.Curve3PoolCoinKeep
@@ -127,8 +130,8 @@ theorem PoolCoinWorld.usdc_keeps (w : PoolCoinWorld exc dai usdc usdt)
 end World
 
 /-- **Every direct committed child of an `exchange` frame is at a coin on the pool's selectors, and keeps the
-pool's storage, the code at `4`, and the token's storage if the token holds code** (the coin world names the
-keeps; the walk `xa_exchange` exposes each child). `exCoin k` are the coins at entry. -/
+pool's storage and the code at `4`** (the walk `xa_exchange` exposes each child). `exCoin k` are the coins at
+entry. -/
 theorem exchange_keeps_of_children {s : Curve3Pool.State} (exc : Exec 0 sevm b (.ok post))
     (hcode : sevm.code = Curve3Pool.code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
