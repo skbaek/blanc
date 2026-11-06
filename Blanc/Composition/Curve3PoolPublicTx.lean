@@ -65,7 +65,7 @@ structure TxForm (benv : Benv) (tx : Tx) (prio maxFee : Nat) : Prop where
 
 /-- `E` signed `tx`, is ready to send it, and can pay for its gas. -/
 structure SignerReady (benv : Benv) (tx : Tx) (E : Adr) (maxFee : Nat) : Prop where
-  /-- The chain id recovers the transaction's signer as `E`. -/
+  /-- The transaction's signature recovers to `E` under this chain id. -/
   signed : recoverSender benv.stat.chainId tx = .ok E
   /-- The transaction's nonce is `E`'s, and not the largest word. -/
   nonce : (benv.state.get E).nonce = tx.nonce ∧ tx.nonce ≠ UInt64.max
@@ -80,7 +80,7 @@ structure SignerReady (benv : Benv) (tx : Tx) (E : Adr) (maxFee : Nat) : Prop wh
 structure GasRoom (benv : Benv) (bout : BlockOutput) (tx : Tx) (need : Nat) : Prop where
   /-- The gas limit covers what the call needs. -/
   enough : need ≤ tx.gas
-  /-- The gas limit fits the protocol's cap. -/
+  /-- The gas limit is within EIP-7825's per-transaction cap, assumed here on every covered fork. -/
   cap : tx.gas ≤ 16777216
   /-- The gas limit fits the block's remaining gas. -/
   block : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed
@@ -94,13 +94,13 @@ def CoinbaseApart (benv : Benv) (E : Adr) : Prop :=
 
 /-- **`tx`, signed by `E`, is admissible at `benv` with `need` gas.** -/
 structure TxAdmitted (benv : Benv) (bout : BlockOutput) (tx : Tx) (E : Adr) (need : Nat) : Prop where
-  /-- The block's fork is one these theorems cover (Prague onward). -/
+  /-- The block's fork is one these theorems cover: Prague through BPO2. -/
   fork : CoveredFork benv.stat.fork
   /-- Some fees make the transaction a signed type-2 call `E` can pay for. -/
   form : ∃ prio maxFee, TxForm benv tx prio maxFee ∧ SignerReady benv tx E maxFee
   /-- The gas limit covers what the call needs within the cap and the block's room. -/
   room : GasRoom benv bout tx need
-  /-- The block's fee recipient is apart from the parties. -/
+  /-- The block's fee recipient is neither `E` nor a party. -/
   block : CoinbaseApart benv E
 
 /-! ## The liveness powers -/
