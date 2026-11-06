@@ -1,5 +1,6 @@
 import Blanc.Lift.WalkCost
 import Blanc.Lift.GasErasureRun
+import Blanc.Lift.CallProfileTransport
 
 /-!
 # Closing a forward walk's charge exactly
@@ -255,6 +256,23 @@ theorem accessed_afterSstore_of_warm {k : B256} {v : B256}
   rfl
 
 end Cold
+
+/-- A frame's halting state keeps its base's columns: agreement modulo gas, at any residuals. -/
+theorem memRet_congr {B B' : Devm} {S : List B256} {M : Mem} {a n : Nat} {w : Bytes} {G H : Nat}
+    (h : Devm.EqModGas B B') :
+    Devm.EqModGas (((St B S M G).memRead a n).2.withOutput w) (((St B' S M H).memRead a n).2.withOutput w) := by
+  apply Devm.EqModGas.of_normalized_eq
+  have e := h.withGasLeft_eq 0
+  change (((St (B.withGasLeft 0) S M 0).memRead a n).2.withOutput w).withGasLeft 0 =
+    (((St (B'.withGasLeft 0) S M 0).memRead a n).2.withOutput w).withGasLeft 0
+  rw [e]
+
+/-- `memRet_congr` at a base one gas apart. -/
+theorem memRet_canon {B B' : Devm} {S : List B256} {M : Mem} {a n : Nat} {w : Bytes} {F G H : Nat}
+    (h : B = B'.withGasLeft F) :
+    Devm.EqModGas (((St B S M G).memRead a n).2.withOutput w) (((St B' S M H).memRead a n).2.withOutput w) := by
+  subst h
+  exact memRet_congr (Devm.EqModGas.withGasLeft B' F).symm
 
 section Move
 
