@@ -12,8 +12,10 @@ import Blanc.Lift.Curve3Pool.HistoryMid
 * `keepSel_of_world`: every child a walk can name keeps the pool (`KeepSel`), from `PoolWorld`;
 * `children_static_of_callFree`: a non-static frame on a call-free selector enters only static children, so
   they keep the world whatever they run;
-* `pool_keeps_of_world`: the two keep premises at a committed non-static pool frame. The six calling entries
-  read their children off their walks; the other 32 enter only static ones.
+* `pool_children_of_world`: who a committed non-static pool frame's children are. The six calling entries read
+  theirs off their walks; the other 32 enter only static ones;
+* `pool_keeps_of_world`: the two keep premises at such a frame;
+* `pool_ownCalls`: its non-static children at coins are on the pool's coin selectors.
 -/
 
 namespace Blanc.Composition.Curve3PoolCoinKeep
@@ -151,6 +153,45 @@ theorem children_static_of_callFree {s : Curve3Pool.State} {e : Env} {o : Out}
     have := List.filterMap_eq_nil_iff.mp empty c hc
     simp only [hs, Bool.false_eq_true, ↓reduceIte, reduceCtorEq] at this
 
+/-- **Who a committed non-static pool frame's children are**, when its parties are their bytes: all of them are
+ones a walk can name, or all of them are static. The six calling entries read theirs off their walks; the other
+32 name no call. -/
+theorem pool_children_of_world {s : Curve3Pool.State}
+    (hcode : sevm.code = Curve3Pool.code) (hfork : HistFork sevm.benvStat.fork)
+    (hcd : sevm.data.length < 2 ^ 256) (hstack : b.stack = []) (hmem : b.memory = Mem.empty)
+    (hgas : b.gasMeasure < 2 ^ 256) (hstatic : sevm.isStatic = false)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty)
+    (hck : Checkpoint (b.getStor sevm.currentTarget) s) (hid : IdReadyH sevm b)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (w : PoolWorld exc dai usdc usdt tok)
+    (hp : PartiesAt (b.getStor sevm.currentTarget) sevm.currentTarget dai usdc usdt tok) :
+    (∀ c ∈ Exec.childFrames exc, PoolChildSel (b.getStor sevm.currentTarget) c) ∨
+      ∀ c ∈ Exec.childFrames exc, c.sevm.isStatic = true := by
+  have hpne : (b.getCode sevm.currentTarget).toList ≠ [] := ByteArray.toList_ne_nil_of_ne_empty hpc
+  have K := keepSel_of_world w hp hcode hfork hpne
+  have hx : XAt sevm post 0 (St b [] Mem.empty b.gasLeft) (Exec.childFrames exc) :=
+    XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
+  have hcoinN : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp
+      (coinAt (b.getStor sevm.currentTarget) i).toAdr := fun i hi => hcoin ⟨i, hi⟩
+  by_cases hlen : 4 ≤ sevm.data.length
+  · by_cases hin : Sevm.selector sevm ∈ sels
+    · rcases sels_split hin with h | h | h | h | h | h | h
+      · obtain ⟨e, o, hstep, hraw⟩ := pool_frame_refines_callFree exc hcode hfork hlen hcd h hstack hmem hgas
+          hck htok hcoin
+        exact .inr (children_static_of_callFree hlen h hstatic hstep hraw)
+      · exact .inl (al_children_sel checkedM hcode hfork hlen hcd h hck.abs htok hcoinN hpc hid K hx)
+      · exact .inl (ex_children_sel hcode hfork hlen hcd h hck.abs hcoin hpc hid K hx)
+      · exact .inl (rl_children_sel hcode hfork hlen hcd h htok hcoinN hpc hid K hx)
+      · exact .inl (rli_children_sel checkedM hcode hfork hlen hcd h hck.abs htok hcoinN hpc hid K hx)
+      · exact .inl (oc_children_sel checkedM hcode hfork hlen hcd h hck.abs htok
+          (fun hj => by simpa only [coinSlot, toB256_toNat] using hcoin ⟨_, hj⟩) hpc hid K hx)
+      · exact .inl (wd_children_sel hcode hfork hlen hcd h hid hpc K hcoin hx)
+    · exact absurd (decodeCall_miss fun s hs he => hin (he ▸ hs))
+        (pool_other_fails exc hcode hcd hstack hmem hgas)
+  · exact absurd (decodeCall_short (by omega))
+      (pool_other_fails exc hcode hcd hstack hmem hgas)
+
 /-- **The keep premises at a committed non-static pool frame whose parties are their bytes.** -/
 theorem pool_keeps_of_world {s : Curve3Pool.State}
     (hcode : sevm.code = Curve3Pool.code) (hfork : HistFork sevm.benvStat.fork)
@@ -164,30 +205,34 @@ theorem pool_keeps_of_world {s : Curve3Pool.State}
     (hp : PartiesAt (b.getStor sevm.currentTarget) sevm.currentTarget dai usdc usdt tok) :
     PoolCallsKeep ⟨0, sevm, b, .ok post, exc⟩ ∧ PoolCoinCallsKeepToken ⟨0, sevm, b, .ok post, exc⟩ := by
   have hpne : (b.getCode sevm.currentTarget).toList ≠ [] := ByteArray.toList_ne_nil_of_ne_empty hpc
-  have K := keepSel_of_world w hp hcode hfork hpne
-  have hx : XAt sevm post 0 (St b [] Mem.empty b.gasLeft) (Exec.childFrames exc) :=
-    XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
-  have ofAll := keeps_of_children_sel w hp hcode hfork hpne
-  have hcoinN : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp
-      (coinAt (b.getStor sevm.currentTarget) i).toAdr := fun i hi => hcoin ⟨i, hi⟩
-  by_cases hlen : 4 ≤ sevm.data.length
-  · by_cases hin : Sevm.selector sevm ∈ sels
-    · rcases sels_split hin with h | h | h | h | h | h | h
-      · obtain ⟨e, o, hstep, hraw⟩ := pool_frame_refines_callFree exc hcode hfork hlen hcd h hstack hmem hgas
-          hck htok hcoin
-        exact keeps_of_children_static hfork hcode hpne
-          (by rw [show tokenAdr ⟨0, sevm, b, .ok post, exc⟩ = tok from hp.token, w.tokCode]; exact c3crv_code_ne)
-          (children_static_of_callFree hlen h hstatic hstep hraw)
-      · exact ofAll (al_children_sel checkedM hcode hfork hlen hcd h hck.abs htok hcoinN hpc hid K hx)
-      · exact ofAll (ex_children_sel hcode hfork hlen hcd h hck.abs hcoin hpc hid K hx)
-      · exact ofAll (rl_children_sel hcode hfork hlen hcd h htok hcoinN hpc hid K hx)
-      · exact ofAll (rli_children_sel checkedM hcode hfork hlen hcd h hck.abs htok hcoinN hpc hid K hx)
-      · exact ofAll (oc_children_sel checkedM hcode hfork hlen hcd h hck.abs htok
-          (fun hj => by simpa only [coinSlot, toB256_toNat] using hcoin ⟨_, hj⟩) hpc hid K hx)
-      · exact ofAll (wd_children_sel hcode hfork hlen hcd h hid hpc K hcoin hx)
-    · exact absurd (decodeCall_miss fun s hs he => hin (he ▸ hs))
-        (pool_other_fails exc hcode hcd hstack hmem hgas)
-  · exact absurd (decodeCall_short (by omega))
-      (pool_other_fails exc hcode hcd hstack hmem hgas)
+  rcases pool_children_of_world hcode hfork hcd hstack hmem hgas hstatic hpc hck hid htok hcoin w hp with
+    hall | hall
+  · exact keeps_of_children_sel w hp hcode hfork hpne hall
+  · exact keeps_of_children_static hfork hcode hpne
+      (by rw [show tokenAdr ⟨0, sevm, b, .ok post, exc⟩ = tok from hp.token, w.tokCode]; exact c3crv_code_ne) hall
+
+/-- **`ownCalls`: what the pool calls a coin with.** Every non-static child of a committed non-static pool frame,
+at one of its coins, is on a selector the pool sends coins: `transfer`, `transferFrom` or `balanceOf`. -/
+theorem pool_ownCalls {s : Curve3Pool.State}
+    (hcode : sevm.code = Curve3Pool.code) (hfork : HistFork sevm.benvStat.fork)
+    (hcd : sevm.data.length < 2 ^ 256) (hstack : b.stack = []) (hmem : b.memory = Mem.empty)
+    (hgas : b.gasMeasure < 2 ^ 256) (hstatic : sevm.isStatic = false)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty)
+    (hck : Checkpoint (b.getStor sevm.currentTarget) s) (hid : IdReadyH sevm b)
+    (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
+    (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
+    (w : PoolWorld exc dai usdc usdt tok)
+    (hp : PartiesAt (b.getStor sevm.currentTarget) sevm.currentTarget dai usdc usdt tok) :
+    ∀ c ∈ Exec.childFrames exc, c.sevm.isStatic = false →
+      ∀ k : Fin 3, c.sevm.currentTarget = ((b.getStor sevm.currentTarget).get (coinSlot k)).toAdr →
+        PoolCoinSel (Blanc.Sevm.selector c.sevm) := by
+  intro c hc hcs k hk
+  rcases pool_children_of_world hcode hfork hcd hstack hmem hgas hstatic hpc hck hid htok hcoin w hp with
+    hall | hall
+  · rcases hall c hc with ht | ⟨-, sel⟩
+    · exact absurd (hk.symm.trans (ht.trans hp.token)) (hp.apart k)
+    · exact sel
+  · rw [hall c hc] at hcs
+    cases hcs
 
 end Blanc.Composition.Curve3PoolCoinKeep
