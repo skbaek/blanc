@@ -6,6 +6,7 @@ import Blanc.ExecutionCellProvenance
 import Blanc.ExecutionHistoryCellProvenance
 import Blanc.ExecutionInRawNodeOrigin
 import Blanc.SlotFootprint
+import Blanc.Lift.LinearRuntimeSafety
 
 /-!
 # Locality of one holder's balance entry over a mid history
@@ -171,6 +172,15 @@ theorem write_onChain {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     have nonstatic := of_run_sstore_not_static storeRun
     rw [hnode, hs, hstatic] at nonstatic
     exact Bool.noConfusion nonstatic
+
+/-- `InstalledRuntimeSafety.of_linearCheck` with the code's emptiness and delegation read off its size. -/
+theorem runtimeSafety_of_sizes {C : ByteArray} (kinds : callKindsCheck C = true)
+    (terminal : selfdestructFreeCheck C = true) (ne : C.size ≠ 0)
+    (notDelegated : C.size ≠ eoaDelegatedCodeLength) : InstalledRuntimeSafety C :=
+  InstalledRuntimeSafety.of_linearCheck kinds terminal (fun h => notDelegated h.1)
+    (fun h => ne (by
+      show C.data.size = 0
+      rw [← Array.length_toList, ← ByteArray.toList_eq_toList_data, h, List.length_nil]))
 
 /-! ## A cell across a committed frame -/
 
@@ -460,14 +470,14 @@ derived without history from the coin's deployment. `noSignature` reads the fram
 `signedAs`, the coin's one named definition of a message that claims the holder's signature. `ownCalls`
 is what the holder sends the coin. -/
 structure PoolAuthorityEmpty (signedAs : Adr → Sevm → Prop) (allowSlotOf : Adr → Adr → B256)
-    (OwnSel : B256 → Prop) (h : Adr) (a : Words) (frames : List Exec.Frame) : Prop where
+    (OwnSel : B256 → Prop) (h : Adr) (a : StorWords) (frames : List Exec.Frame) : Prop where
   rowsAtCut : ∀ g, a (allowSlotOf h g) = 0
   noSignature : ∀ F ∈ frames, ¬ signedAs h F.sevm
   ownCalls : ∀ F ∈ frames, F.sevm.caller = h → OwnSel (Blanc.Sevm.selector F.sevm)
 
 /-- **Locality of `held` at coin `T`** over the settled frames `settled`, from words `a` to `b`. -/
-structure EntryLocal (T : Adr) (Obs Good : Exec.Frame → Prop) (held : Words → Nat)
-    (debit credit : Sevm → Nat) (a b : Words) (settled : List Exec.Frame) : Prop where
+structure EntryLocal (T : Adr) (Obs Good : Exec.Frame → Prop) (held : StorWords → Nat)
+    (debit credit : Sevm → Nat) (a b : StorWords) (settled : List Exec.Frame) : Prop where
   /-- The coin's storage moves exactly through these frames, to the end. -/
   chain : FrameChain T Good a (coinFrames T Obs settled) b
   /-- The same, to the entry of any settled frame no earlier non-static `T` frame encloses. -/
@@ -481,7 +491,7 @@ structure EntryLocal (T : Adr) (Obs Good : Exec.Frame → Prop) (held : Words �
 
 namespace EntryLocal
 
-variable {T : Adr} {Obs Good : Exec.Frame → Prop} {held : Words → Nat} {a b : Words}
+variable {T : Adr} {Obs Good : Exec.Frame → Prop} {held : StorWords → Nat} {a b : StorWords}
   {settled : List Exec.Frame}
 
 /-- A third party's frame does not lower the entry. -/
@@ -529,7 +539,7 @@ end EntryLocal
 /-- **Assembly**: a `SettledChain` of allowed frames and a per-frame law preserving `I` give
 `EntryLocal`, with `I` at every frame's entry available to the law. -/
 theorem entryLocal_of_frames {T : Adr} {Obs Good : Exec.Frame → Prop} {Allowed : Exec.Frame → Prop}
-    {held : Words → Nat} {debit credit : Sevm → Nat} {I : Words → Prop} {a b : Words}
+    {held : StorWords → Nat} {debit credit : Sevm → Nat} {I : StorWords → Prop} {a b : StorWords}
     {settled : List Exec.Frame} (chain : SettledChain T Obs Good Allowed a b settled)
     (allowed : ∀ F ∈ coinFrames T Obs settled, Allowed F) (start : I a)
     (law : ∀ F ∈ coinFrames T Obs settled, Good F → I (wordsAt T F.pre.state) →
