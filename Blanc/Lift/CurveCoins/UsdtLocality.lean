@@ -195,7 +195,8 @@ theorem certFrame {T : Adr} {G : Exec.Frame} (good : CodeFrame T HistFork code G
   dsimp only [NotDeprecated] at pc hcode fork target hasCode live
   subst pc
   subst target
-  refine ⟨rfl, hcode, fork.stateGas_none, rfl, hasCode, ?_⟩
+  refine ⟨rfl, hcode, fork.stateGas_none, rfl, hasCode, chain_of_static ?_⟩
+  change ∀ D ∈ Exec.rawFrameDescendants run, _
   rw [usdt_descendants_nil run hcode fork.stateGas_none fork.bal_none live]
   exact fun _ h => absurd h List.not_mem_nil
 

@@ -98,6 +98,13 @@ theorem heldAt_word {T h : Adr} {F : Exec.Frame} (notV22 : ¬ V22At T F) (hi : b
   unfold heldAt
   rw [ite_eq_right fun c => (notV22 c).elim, ledgerView_bal hi ha]
 
+/-- A frame reading bits reads the low 255 bits, through the view. -/
+theorem heldAt_bits {T h : Adr} {F : Exec.Frame} (v22 : V22At T F) (hi : balSlot h ≠ implSlot)
+    (ha : balSlot h ≠ adminSlot) (w : StorWords) :
+    heldAt T h F (ledgerView w) = balanceBits (w (balSlot h)) := by
+  unfold heldAt
+  rw [ite_eq_left v22, ledgerView_bal hi ha]
+
 /-- What a proxy frame's implementation child reads of its message. -/
 structure SameMessage (F G : Exec.Frame) : Prop where
   caller : G.sevm.caller = F.sevm.caller
@@ -123,24 +130,25 @@ theorem SameMessage.debit {F G : Exec.Frame} (s : SameMessage F G) (h : Adr) :
   unfold ownDebit
   rw [s.caller, s.sel, s.word, s.word, s.word]
 
-/-- **A word-reading version's implementation law is its proxy frame's.** -/
-theorem proxy_law {T h : Adr} {frames : List Exec.Frame} {F : Exec.Frame} {C : ByteArray} (pc : F.pc = 0)
+/-- **An implementation law is its proxy frame's**, for any reading of the entry's word. -/
+theorem proxy_law {T h : Adr} {frames : List Exec.Frame} {F : Exec.Frame} {C : ByteArray} (read : B256 → Nat) (pc : F.pc = 0)
     (code : F.sevm.code = Proxy.code) (fork : HistFork F.sevm.benvStat.fork) (target : F.sevm.currentTarget = T)
     (hasCode : (F.pre.getCode T).toList ≠ []) (notAdmin : F.sevm.caller ≠ adminOf F.pre.state T)
     (version : F.pre.getCode (F.pre.getStorVal T implSlot).toAdr = C) (notDelegation : ¬ isValidDelegation C)
     (notPrecompile : ¬ F.sevm.benvStat.rules.isPrecomp (F.pre.getStorVal T implSlot).toAdr)
     (hsize : F.sevm.data.length < 2 ^ 256)
     (law : ∀ G : Exec.Frame, G.pc = 0 → G.sevm.code = C → HistFork G.sevm.benvStat.fork →
-      G.sevm.currentTarget = T → (G.pre.getCode T).toList ≠ [] → Env.root G.sevm = Env.root F.sevm →
+      G.sevm.currentTarget = T → (G.pre.getCode T).toList ≠ [] →
+      (∀ a, (F.pre.getCode a).toList ≠ [] → G.pre.getCode a = F.pre.getCode a) → Env.root G.sevm = Env.root F.sevm →
       SameMessage F G → Mem.Wf G.pre.memory →
       RowsEmpty h frames (Devm.getStor G.pre T) →
       RowsEmpty h frames (Devm.getStor G.post T) ∧
-        ((Devm.getStor G.pre T).get (balSlot h)).toNat + ownCredit h G.sevm ≤
-          ((Devm.getStor G.post T).get (balSlot h)).toNat + ownDebit h G.sevm)
+        read ((Devm.getStor G.pre T).get (balSlot h)) + ownCredit h G.sevm ≤
+          read ((Devm.getStor G.post T).get (balSlot h)) + ownDebit h G.sevm)
     (rows : RowsEmpty h frames (Devm.getStor F.pre T)) :
     RowsEmpty h frames (Devm.getStor F.post T) ∧
-      ((Devm.getStor F.pre T).get (balSlot h)).toNat + ownCredit h F.sevm ≤
-        ((Devm.getStor F.post T).get (balSlot h)).toNat + ownDebit h F.sevm := by
+      read ((Devm.getStor F.pre T).get (balSlot h)) + ownCredit h F.sevm ≤
+        read ((Devm.getStor F.post T).get (balSlot h)) + ownDebit h F.sevm := by
   obtain ⟨fpc, sevm, pre, out, run, committed⟩ := F
   dsimp only at pc code fork target hasCode notAdmin version notPrecompile hsize law rows ⊢
   subst pc
@@ -159,7 +167,7 @@ theorem proxy_law {T h : Adr} {frames : List Exec.Frame} {F : Exec.Frame} {C : B
     have result := law G child.pc child.code forkG child.target (by
       have e := child.codeLib sevm.currentTarget hasCode
       rw [e]
-      exact hasCode) child.env same child.wf rowsG
+      exact hasCode) child.codeLib child.env same child.wf rowsG
     rw [same.credit, same.debit, child.preStor, ← child.postStor] at result
     exact result
 
@@ -202,6 +210,77 @@ theorem move_cell (le : v.toNat ≤ (σ.get (balSlot a)).toNat)
     rw [Stor.get_set_self, Stor.get_set_self, B256.toNat_add_eq_of_nof _ _ nof, WriteSite.B256.toNat_sub_of_le le]
     omega
 
+/-- What a move did to the holder's entry, however a version reads the word, by whether the holder is
+the source and the recipient. -/
+structure MoveCell (pre post : Nat) (a d h : Adr) (v : Nat) : Prop where
+  neither : a ≠ h → d ≠ h → post = pre
+  recipient : a ≠ h → d = h → pre + v = post
+  source : a = h → d ≠ h → post + v = pre
+  self : a = h → d = h → post = pre
+
+/-- `transfer`, from what the move did to the entry. -/
+theorem transfer_cell {e : Sevm} {pre post : Nat} (sel : Blanc.Sevm.selector e = 0xa9059cbb)
+    (c : MoveCell pre post e.caller (Sevm.dataWord e 4).toAdr h (Sevm.dataWord e 36).toNat) :
+    pre + ownCredit h e ≤ post + ownDebit h e := by
+  have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd (c.2.1.symm.trans sel) (by decide)
+  rw [credit]
+  by_cases hc : e.caller = h <;> by_cases hd : (Sevm.dataWord e 4).toAdr = h
+  · have := c.self hc hd
+    omega
+  · have debit : ownDebit h e = (Sevm.dataWord e 36).toNat := by
+      simp only [ownDebit, ne_eq, hc, not_true_eq_false, ↓reduceIte, sel, hd, not_false_eq_true, and_self]
+    have := c.source hc hd
+    omega
+  · have := c.recipient hc hd
+    omega
+  · have := c.neither hc hd
+    omega
+
+/-- `transferFrom`, from what the move did to the entry. `zero`: another account pulls nothing from
+the holder, its row being empty. -/
+theorem from_cell {e : Sevm} {pre post : Nat} (sel : Blanc.Sevm.selector e = 0x23b872dd)
+    (zero : e.caller ≠ h → (Sevm.dataWord e 4).toAdr = h → (Sevm.dataWord e 68).toNat = 0)
+    (c : MoveCell pre post (Sevm.dataWord e 4).toAdr (Sevm.dataWord e 36).toAdr h (Sevm.dataWord e 68).toNat) :
+    pre + ownCredit h e ≤ post + ownDebit h e := by
+  by_cases hc : e.caller = h <;> by_cases hf : (Sevm.dataWord e 4).toAdr = h <;>
+    by_cases hd : (Sevm.dataWord e 36).toAdr = h
+  · have := c.self hf hd
+    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd hf c.2.2.1
+    omega
+  · have := c.source hf hd
+    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd hf c.2.2.1
+    have debit : ownDebit h e = (Sevm.dataWord e 68).toNat := by
+      simp only [ownDebit, ne_eq, hc, not_true_eq_false, ↓reduceIte, sel, hf, hd, not_false_eq_true, and_self,
+        show (0x23b872dd : B256) ≠ 0xa9059cbb by decide, false_and, true_and]
+    omega
+  · have := c.recipient hf hd
+    have credit : ownCredit h e = (Sevm.dataWord e 68).toNat := ite_eq_left ⟨hc, sel, hf, hd⟩
+    omega
+  · have := c.neither hf hd
+    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.2.2.2 hd
+    omega
+  · have z := zero hc hf
+    have := c.self hf hd
+    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.1 hc
+    omega
+  · have z := zero hc hf
+    have := c.source hf hd
+    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.1 hc
+    omega
+  · have := c.recipient hf hd
+    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.1 hc
+    omega
+  · have := c.neither hf hd
+    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.1 hc
+    omega
+
+/-- A move whose source is not the holder does not lower the entry. -/
+theorem MoveCell.ge {pre post : Nat} {a d : Adr} {v : Nat} (c : MoveCell pre post a d h v) (ne : a ≠ h) : pre ≤ post := by
+  by_cases hd : d = h
+  · have := c.recipient ne hd
+    omega
+  · exact le_of_eq (c.neither ne hd).symm
+
 /-- **`transfer`'s frame at the holder's entry.** -/
 theorem transfer_ledger {e : Sevm} (sel : Blanc.Sevm.selector e = 0xa9059cbb)
     (le : (Sevm.dataWord e 36).toNat ≤ (σ.get (balSlot e.caller)).toNat)
@@ -213,19 +292,7 @@ theorem transfer_ledger {e : Sevm} (sel : Blanc.Sevm.selector e = 0xa9059cbb)
     (σ.get (balSlot h)).toNat + ownCredit h e ≤ (σ'.get (balSlot h)).toNat + ownDebit h e := by
   subst st
   obtain ⟨c1, c2, c3, c4⟩ := move_cell (h := h) le nof ea ed
-  have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd (c.2.1.symm.trans sel) (by decide)
-  rw [credit]
-  by_cases hc : e.caller = h <;> by_cases hd : (Sevm.dataWord e 4).toAdr = h
-  · have := c4 hc hd
-    omega
-  · have debit : ownDebit h e = (Sevm.dataWord e 36).toNat := by
-      simp only [ownDebit, ne_eq, hc, not_true_eq_false, ↓reduceIte, sel, hd, not_false_eq_true, and_self]
-    have := c3 hc hd
-    omega
-  · have := c2 hc hd
-    omega
-  · have := c1 hc hd
-    omega
+  exact transfer_cell sel ⟨c1, c2, c3, c4⟩
 
 /-- **`transferFrom`'s frame at the holder's entry**, the holder's tracked rows empty. -/
 theorem from_ledger {e : Sevm} (sel : Blanc.Sevm.selector e = 0x23b872dd)
@@ -244,48 +311,21 @@ theorem from_ledger {e : Sevm} (sel : Blanc.Sevm.selector e = 0x23b872dd)
   subst st
   rw [Stor.get_set_ne _ apart]
   obtain ⟨c1, c2, c3, c4⟩ := move_cell (h := h) le nof ea ed
-  by_cases hc : e.caller = h <;> by_cases hf : (Sevm.dataWord e 4).toAdr = h <;>
-    by_cases hd : (Sevm.dataWord e 36).toAdr = h
-  · have := c4 hf hd
-    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd hf c.2.2.1
-    omega
-  · have := c3 hf hd
-    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd hf c.2.2.1
-    have debit : ownDebit h e = (Sevm.dataWord e 68).toNat := by
-      simp only [ownDebit, ne_eq, hc, not_true_eq_false, ↓reduceIte, sel, hf, hd, not_false_eq_true, and_self,
-        show (0x23b872dd : B256) ≠ 0xa9059cbb by decide, false_and, true_and]
-    omega
-  · have := c2 hf hd
-    have credit : ownCredit h e = (Sevm.dataWord e 68).toNat := ite_eq_left ⟨hc, sel, hf, hd⟩
-    omega
-  · have := c1 hf hd
-    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.2.2.2 hd
-    omega
-  · have zero : (Sevm.dataWord e 68).toNat = 0 := by
-      rw [hf, row] at allow
-      exact Nat.le_zero.mp allow
-    have := c4 hf hd
-    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.1 hc
-    omega
-  · have zero : (Sevm.dataWord e 68).toNat = 0 := by
-      rw [hf, row] at allow
-      exact Nat.le_zero.mp allow
-    have := c3 hf hd
-    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.1 hc
-    omega
-  · have := c2 hf hd
-    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.1 hc
-    omega
-  · have := c1 hf hd
-    have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.1 hc
-    omega
+  refine from_cell sel (fun _ hf => ?_) ⟨c1, c2, c3, c4⟩
+  rw [hf, row] at allow
+  exact Nat.le_zero.mp allow
+
+/-- A frame on a selector with no `ownCredit` that credits or keeps the entry, however it is read. -/
+theorem keep_read {e : Sevm} {pre post : Nat} (hle : pre ≤ post) (sel : Blanc.Sevm.selector e ≠ 0x23b872dd) :
+    pre + ownCredit h e ≤ post + ownDebit h e := by
+  have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.2.1 sel
+  omega
 
 /-- A frame on a selector with no `ownCredit` that credits or keeps the entry. -/
 theorem keep_ledger {e : Sevm} (hle : (σ.get (balSlot h)).toNat ≤ (σ'.get (balSlot h)).toNat)
     (sel : Blanc.Sevm.selector e ≠ 0x23b872dd) :
-    (σ.get (balSlot h)).toNat + ownCredit h e ≤ (σ'.get (balSlot h)).toNat + ownDebit h e := by
-  have credit : ownCredit h e = 0 := ite_eq_right fun c => absurd c.2.1 sel
-  omega
+    (σ.get (balSlot h)).toNat + ownCredit h e ≤ (σ'.get (balSlot h)).toNat + ownDebit h e :=
+  keep_read hle sel
 
 /-- **`transferWithAuthorization`'s frame at the holder's entry**, the holder not its signer: credit only. -/
 theorem auth_ge {σ₁ : Stor} {k x : B256} (hσ : σ₁ = σ.set k x)

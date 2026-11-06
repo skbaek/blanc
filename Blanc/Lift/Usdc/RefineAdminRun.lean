@@ -17,7 +17,7 @@ open Jaune Blanc Blanc.Lift
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg}
 
 /-- **`pause` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem pause_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem pause_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0x8456cb59)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       sevm.caller.toB256 =? (ff20 &&& (b.getStor sevm.currentTarget).get (Bytes.toB256 [1])) ≠ 0 ∧
@@ -34,7 +34,7 @@ theorem pause_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   exact ⟨f1, hs⟩
 
 /-- **`unpause` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem unpause_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem unpause_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0x3f4ba83a)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       sevm.caller.toB256 =? (ff20 &&& (b.getStor sevm.currentTarget).get (Bytes.toB256 [1])) ≠ 0 ∧
@@ -51,7 +51,7 @@ theorem unpause_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   exact ⟨f1, hs⟩
 
 /-- **`updatePauser` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem updatePauser_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem updatePauser_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0x554bab3c)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [32]) =? 0 ≠ 0 ∧
@@ -74,7 +74,7 @@ theorem updatePauser_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   exact ⟨h1, f1, f2, hs⟩
 
 /-- **`updateMasterMinter` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem updateMasterMinter_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem updateMasterMinter_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0xaa20e1e4)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [32]) =? 0 ≠ 0 ∧
@@ -97,7 +97,7 @@ theorem updateMasterMinter_run (hfork : CoveredFork sevm.benvStat.fork) {D : Dev
   exact ⟨h1, f1, f2, hs⟩
 
 /-- **`updateBlacklister` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem updateBlacklister_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem updateBlacklister_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0xad38bf22)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [32]) =? 0 ≠ 0 ∧
@@ -120,7 +120,7 @@ theorem updateBlacklister_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm
   exact ⟨h1, f1, f2, hs⟩
 
 /-- **`updateRescuer` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem updateRescuer_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem updateRescuer_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0x2ab60045)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [32]) =? 0 ≠ 0 ∧
@@ -143,7 +143,7 @@ theorem updateRescuer_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   exact ⟨h1, f1, f2, hs⟩
 
 /-- **`transferOwnership` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem transferOwnership_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem transferOwnership_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0xf2fde38b)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [32]) =? 0 ≠ 0 ∧
@@ -166,7 +166,7 @@ theorem transferOwnership_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm
   exact ⟨h1, f1, f2, hs⟩
 
 /-- **`removeMinter` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem removeMinter_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem removeMinter_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0x3092afd5)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [32]) =? 0 ≠ 0 ∧
@@ -187,7 +187,7 @@ theorem removeMinter_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   exact ⟨h1, f1, hs⟩
 
 /-- **`configureMinter` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem configureMinter_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem configureMinter_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0x4e44d956)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [64]) =? 0 ≠ 0 ∧
@@ -209,7 +209,7 @@ theorem configureMinter_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   exact ⟨h1, f1, f2, hs⟩
 
 /-- **`unBlacklist` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem unBlacklist_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem unBlacklist_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0x1a895266)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [32]) =? 0 ≠ 0 ∧
@@ -231,7 +231,7 @@ theorem unBlacklist_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   exact ⟨h1, f1, hs⟩
 
 /-- **`blacklist` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem blacklist_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem blacklist_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0xf9f92be4)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [32]) =? 0 ≠ 0 ∧
@@ -253,7 +253,7 @@ theorem blacklist_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   exact ⟨h1, f1, hs⟩
 
 /-- **`mint` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem mint_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem mint_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0x40c10f19)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [64]) =? 0 ≠ 0 ∧
@@ -285,7 +285,7 @@ theorem mint_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
   exact ⟨h1, f1, f2, f3, f4, f5, f6, f7, f8, f9, f10, f11, f12, hs⟩
 
 /-- **`burn` from the implementation's entry**: the guards it passed and its storage effect. -/
-theorem burn_run (hfork : CoveredFork sevm.benvStat.fork) {D : Devm}
+theorem burn_run (hfork : HistFork sevm.benvStat.fork) {D : Devm}
     (hsel : Blanc.Sevm.selector sevm = 0x42966c68)
     (run : SFunc.RunCut cert.prog sevm [] (St b S M G) t_0000_c0 (.done (.halted D))) :
       ((Nat.toB256 (List.length sevm.data) - Bytes.toB256 [4]) <? Bytes.toB256 [32]) =? 0 ≠ 0 ∧

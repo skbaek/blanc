@@ -29,6 +29,38 @@ def burnSlot : Term := .kecc .caller (.const 9)
 def moveSelectors (auths : List B256) : List B256 :=
   [0x23b872dd, 0xa9059cbb, 0x40c10f19] ++ auths ++ usdcInitializers
 
+/-- **Any version's rows**: a frame whose row table names neither the holder's own approvals, nor its
+signature, nor an initializer keeps the holder's tracked rows empty. -/
+theorem rows_after_of {code : ByteArray} {c : Cert} {ann : List WAnn} {t : SelTable} {F G : Exec.Frame}
+    {h : Adr} {frames : List Exec.Frame} (C : CertFrame G code G.sevm.currentTarget)
+    (checked : Cert.check code c = true) (ws : wsCert c ann = true) (tableSel : t.selT = selV2T)
+    (rowsOk : (wsRoot ann).all (rowSiteOk 10 t) = true) (callers : ∀ c ∈ t.callers, ¬ CurveCoins.PoolCoinSel c)
+    (owners : ∀ c ∈ t.owners, c ∈ signedSelectors) (inits : ∀ c ∈ t.inits, c ∈ usdcInitializers)
+    (hF : F ∈ frames) (env : Env.root G.sevm = Env.root F.sevm) (same : SameMessage F G)
+    (notInit : Blanc.Sevm.selector F.sevm ∉ usdcInitializers)
+    (own : F.sevm.caller = h → CurveCoins.PoolCoinSel (Blanc.Sevm.selector F.sevm))
+    (unsigned : ¬ SignedAs h F.sevm) (keys : CoinKeysFresh (wsRoot ann) 9 10 h frames)
+    (rows : RowsEmpty h frames (Devm.getStor G.pre G.sevm.currentTarget)) :
+    RowsEmpty h frames (Devm.getStor G.post G.sevm.currentTarget) := by
+  refine frame_rows_zero C checked ws (t := t) (b := 10) (pair := h) (Tr := CallerOf frames)
+    (by rw [tableSel]; rfl) rowsOk (by rw [env]; exact rowSep_of_keys keys hF) ?_ rows
+  have ev : t.selT.eval (Env.root G.sevm) = Blanc.Sevm.selector F.sevm := by
+    rw [tableSel, selV2T_eval, same.sel]
+  rintro (⟨hs, caller⟩ | ⟨hs, owner⟩ | hs)
+  · rw [ev] at hs
+    have hc : F.sevm.caller = h := by
+      have e : (Env.root G.sevm).caller = G.sevm.caller.toB256 := rfl
+      rw [e, toAdr_toB256, same.caller] at caller
+      exact caller
+    exact callers _ hs (own hc)
+  · rw [ev] at hs
+    refine unsigned ⟨owners _ hs, ?_⟩
+    have e : (Term.cd (.const 4)).eval (Env.root G.sevm) = Sevm.dataWord G.sevm 4 := rfl
+    rw [e, same.word] at owner
+    exact owner
+  · rw [ev] at hs
+    exact notInit (inits _ hs)
+
 open ImplV2 (moveStor) in
 /-- **What a word-reading version supplies.** -/
 structure WordVersion where
@@ -125,7 +157,7 @@ theorem certFrame (pc : G.pc = 0) (hcode : G.sevm.code = W.code)
   obtain ⟨gpc, sevm, pre, out, run, committed⟩ := G
   dsimp only at pc hcode hsg target hasCode notRescue
   subst pc
-  refine ⟨rfl, hcode, hsg, target, hasCode, chain_static_descendants (root := ⟨0, sevm, pre, out, run⟩) ?_ run (.refl _)⟩
+  refine ⟨rfl, hcode, hsg, target, hasCode, chain_of_static (chain_static_descendants (root := ⟨0, sevm, pre, out, run⟩) ?_ run (.refl _))⟩
   intro N chain x hat
   exact isStaticcall_eq (W.noCall run hcode hsg notRescue N chain x hat)
 
@@ -177,25 +209,8 @@ theorem rows_after (hF : F ∈ frames) (C : CertFrame G W.code G.sevm.currentTar
     (own : F.sevm.caller = h → CurveCoins.PoolCoinSel (Blanc.Sevm.selector F.sevm))
     (unsigned : ¬ SignedAs h F.sevm) (keys : CoinKeysFresh (wsRoot W.ann) 9 10 h frames)
     (rows : RowsEmpty h frames (Devm.getStor G.pre G.sevm.currentTarget)) :
-    RowsEmpty h frames (Devm.getStor G.post G.sevm.currentTarget) := by
-  refine frame_rows_zero C W.checked W.ws (t := W.table) (b := 10) (pair := h) (Tr := CallerOf frames)
-    (by rw [W.tableSel]; rfl) W.rowsOk (by rw [env]; exact rowSep_of_keys keys hF) ?_ rows
-  have ev : W.table.selT.eval (Env.root G.sevm) = Blanc.Sevm.selector F.sevm := by
-    rw [W.tableSel, selV2T_eval, same.sel]
-  rintro (⟨hs, caller⟩ | ⟨hs, owner⟩ | hs)
-  · rw [ev] at hs
-    have hc : F.sevm.caller = h := by
-      have e : (Env.root G.sevm).caller = G.sevm.caller.toB256 := rfl
-      rw [e, toAdr_toB256, same.caller] at caller
-      exact caller
-    exact W.callers _ hs (own hc)
-  · rw [ev] at hs
-    refine unsigned ⟨W.owners _ hs, ?_⟩
-    have e : (Term.cd (.const 4)).eval (Env.root G.sevm) = Sevm.dataWord G.sevm 4 := rfl
-    rw [e, same.word] at owner
-    exact owner
-  · rw [ev] at hs
-    exact notInit (W.inits _ hs)
+    RowsEmpty h frames (Devm.getStor G.post G.sevm.currentTarget) :=
+  rows_after_of C W.checked W.ws W.tableSel W.rowsOk W.callers W.owners W.inits hF env same notInit own unsigned keys rows
 
 theorem transfer_case (hF : F ∈ frames) (pc : G.pc = 0) (hcode : G.sevm.code = W.code)
     (fork : HistFork G.sevm.benvStat.fork) (same : SameMessage F G) (wf : Mem.Wf G.pre.memory)
@@ -332,8 +347,8 @@ theorem entry_law (keys : UsdcKeysFresh h frames) (siteKeys : CoinKeysFresh (wsR
   rw [heldAt_word notV22 keys.bal_ne_impl keys.bal_ne_admin, heldAt_word notV22 keys.bal_ne_impl keys.bal_ne_admin,
     rowsView_iff keys]
   rw [rowsView_iff keys] at rows
-  exact proxy_law pc hcode fork target hasCode notAdmin version W.notDelegation notPrecompile hsize
-    (fun G gpc gcode gfork gtarget ghas env same wf grows =>
+  exact proxy_law B256.toNat pc hcode fork target hasCode notAdmin version W.notDelegation notPrecompile hsize
+    (fun G gpc gcode gfork gtarget ghas _ env same wf grows =>
       W.frame_law hF gpc gcode gfork gtarget ghas env same wf notBurnMove notRescue notInit own unsigned siteKeys grows)
     rows
 
