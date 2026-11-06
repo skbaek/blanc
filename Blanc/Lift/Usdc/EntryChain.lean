@@ -14,8 +14,8 @@ build on the names:
 * `EntryObs`: the chain's frames, the non-admin proxy frames. The admin word's frames write only
   the proxy's slots, so they are unobserved, and the frame an `upgradeToAndCall` calls below itself
   observes itself;
-* `V22At`, `heldAt`: a frame reads the holder's entry by the implementation word at its own entry, not
-  through the view: the whole word under V2 and V2_1, the low 255 bits under V2_2;
+* `V22At`, `heldAt`: a frame reads the holder's entry by the code its implementation word finds at its
+  own entry, not through the view: the whole word under V2 and V2_1, the low 255 bits under V2_2;
 * `UsdcCertified`: the proxy admin's power, restrained at one state;
 * `BelowFlagAt`: the seam where the reading changes. `bridged_of_belowFlag` is what `ViewChain.segment`
   takes;
@@ -35,13 +35,14 @@ entry. -/
 def EntryObs (T : Adr) (F : Exec.Frame) : Prop :=
   F.sevm.code = Proxy.code ∧ F.sevm.caller ≠ adminOf F.pre.state T
 
-/-- The implementation word at the frame's entry names FiatTokenV2_2. -/
+/-- The implementation word at the frame's entry finds FiatTokenV2_2's code: the reading follows the
+code the frame runs, not the address that holds it. -/
 def V22At (T : Adr) (F : Exec.Frame) : Prop :=
-  (F.pre.state.getStor T).get implSlot = usdcImpl.toB256
+  F.pre.getCode ((F.pre.state.getStor T).get implSlot).toAdr = Impl.code
 
 open Classical in
-/-- **How a frame reads `h`'s entry in a view**, by the implementation word at its own entry: the low
-255 bits under V2_2, the whole word before it. -/
+/-- **How a frame reads `h`'s entry in a view**, by the code its implementation word finds at its own
+entry: the low 255 bits under V2_2, the whole word before it. -/
 noncomputable def heldAt (T h : Adr) (F : Exec.Frame) (w : StorWords) : Nat :=
   if V22At T F then balanceBits (w (balSlot h)) else (w (balSlot h)).toNat
 
