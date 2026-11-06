@@ -98,13 +98,6 @@ theorem coinT_apart : ∀ i j : Fin 3, i ≠ j → ∀ x ∈ coinT j, x ∉ [poo
 
 theorem coinAt_apart : ∀ i j : Fin 3, i ≠ j → coinAt i ≠ pool ∧ coinAt i ∉ coinT j := by decide
 
-theorem exW3_get (a b c : B256) : ∀ k : Fin 3, exW3 a b c k.val = (if k = 0 then a else if k = 1 then b else c) := by
-  intro k
-  match k with
-  | 0 => rfl
-  | 1 => rfl
-  | 2 => rfl
-
 /-- **From the base the pull leaves**: the back half's cost, the refund and the effect. -/
 theorem SwapChain.finish (c : SwapChain s p w E i j dx dy admin x0 x1 x2 B1 B2 F O A amp v xv DD) {n : Devm} {M : Mem} {c0 : Nat}
     {Tn : List Adr} {rn : Int} {D' : Devm}

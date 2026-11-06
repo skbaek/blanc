@@ -81,19 +81,6 @@ def replyLen : Fin 3 → Nat
   | 1 => 32
   | 2 => 0
 
-/-- Coin `k`'s address is a party. -/
-theorem coinAt_party (k : Fin 3) : coinAt k = pool ∨ coinAt k = c3 ∨ coinAt k = dai ∨ coinAt k = usdc ∨ coinAt k = usdt := by
-  match k with
-  | 0 => exact Or.inr (Or.inr (Or.inl rfl))
-  | 1 => exact Or.inr (Or.inr (Or.inr (Or.inl rfl)))
-  | 2 => exact Or.inr (Or.inr (Or.inr (Or.inr rfl)))
-
-theorem coinAt_cold (k : Fin 3) : coinAt k = c3 ∨ coinAt k = dai ∨ coinAt k = usdc ∨ coinAt k = usdt ∨ coinAt k = Usdc.usdcImpl := by
-  match k with
-  | 0 => exact Or.inr (Or.inl rfl)
-  | 1 => exact Or.inr (Or.inr (Or.inl rfl))
-  | 2 => exact Or.inr (Or.inr (Or.inr (Or.inl rfl)))
-
 /-- **Coin `j`'s `transfer` at `exchange`'s push.** -/
 theorem CoinStand.pay (f : CoinStand s p w E) (j : Fin 3) {b : Devm} {S : List B256} {M : Mem} {t : B256} {Tb : List Adr} {r : Int} {v : Nat}
     (htx : t.toAdr = coinAt j) (mv : Mv Tb r p b) (hT : ∀ x ∈ coinT j, x ∉ Tb) (hE0 : E ≠ 0)
