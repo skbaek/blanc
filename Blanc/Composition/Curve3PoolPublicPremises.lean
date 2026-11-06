@@ -90,10 +90,6 @@ structure CircleRestrained (settled : List Exec.Frame) : Prop where
   proxyStays : ∀ f ∈ settled, f.pre.getCode usdc = Lift.Usdc.Proxy.code
   /-- The proxy admin only upgrades USDC to one of the three versions, and V2_2 finds its library. -/
   usdcCertified : ∀ f ∈ settled, f.sevm.currentTarget = usdc → Usdc.UsdcCertified f.pre usdc
-  /-- An initializer does not lower the pool's entry. -/
-  initializers : Usdc.InitializerKeeps usdc pool settled
-  /-- The rescuer's call does not re-enter USDC. -/
-  rescueQuiet : Usdc.RescueQuiet usdc settled
   /-- The pool's whole word is below `2^255` where USDC moves to V2_2, which reads that bit. -/
   belowFlag : Usdc.BelowFlagAt usdc pool (coinFrames usdc (Usdc.EntryObs usdc) settled)
 
