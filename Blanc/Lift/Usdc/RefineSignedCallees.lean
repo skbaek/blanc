@@ -1,4 +1,5 @@
 import Blanc.Lift.Usdc.RefineTransferCallees
+import Blanc.Lift.Usdc.AuthLog
 import Jaune.WordFacts
 
 /-!
@@ -138,20 +139,19 @@ theorem e113_inv {n a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.f
     (run : SFunc.Run cert.prog sevm (St b (n :: a :: ret :: S) M G) t_5006_c113 o) :
     ∃ b' M' G', o = .returned (St b' S M' G') ∧ Devm.getStor b' sevm.currentTarget =
       (Devm.getStor b sevm.currentTarget).set (authSlot a.toAdr n)
-        (authMark ((Devm.getStor b sevm.currentTarget).get (authSlot a.toAdr n))) := by
+        (authMark ((Devm.getStor b sevm.currentTarget).get (authSlot a.toAdr n))) ∧ AuthLogged sevm b' a.toAdr := by
   have h := run.cut
   clear run
   repeat istep h
   obtain ⟨_, e⟩ := ric_ret h
   clear h
-  obtain ⟨B, MB, GB, eo, sB⟩ := ret_named e
-  clear e
-  rw [Devm.addLog_getStor] at sB
-  refine ⟨B, MB, GB, eo, ?_⟩
-  rw [sB]
-  rw [afterSstoreH_getStor_self, keccak_scratch, keccak_scratch, word_ff20, lit16, afterSloadH_getStor,
-    gsv]
-  rfl
+  refine ⟨_, _, _, Seg.done.inj e, ?_, ?_⟩
+  · simp only [St_getStor, Devm.addLog_getStor, afterSstoreH_getStor_self, keccak_scratch, word_ff20, lit16,
+      afterSloadH_getStor, gsv]
+    rfl
+  · refine ⟨_, List.mem_append_right _ List.mem_cons_self, rfl, ?_⟩
+    simp only [word_ff20, List.take_succ_cons, List.take_zero]
+    exact congrArg₂ List.cons (by decide) rfl
 
 /-- **The tail of `_cancelAuthorization`** after its signature check (`t_4ac3_c89`): the
 authorization-state write at `0x4b1d`, for any cut and any continuation. -/
