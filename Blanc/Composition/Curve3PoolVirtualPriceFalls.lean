@@ -1,25 +1,16 @@
 import Blanc.Composition.Curve3PoolVirtualPriceFallsChain
-import Blanc.Lift.Curve3Pool.Decode
+import Blanc.Composition.Curve3PoolPublic
 
 /-!
 # The returned virtual price falls on the deployed bytes, from the deployment state
 
-`virtual_price_falls`: starting from the storage the recorded creation left (the pool's
-`Curve3Pool.Creation.deployedStor` at its recorded timestamp, 3Crv's for its recorded deployer with the minter
-set to the pool), with DAI, USDC's proxy over `FiatTokenV2` and USDT holding their deployed bytes,
-there is a first deposit and then a call after which the word `get_virtual_price()` returns is
-lower, the amplification words unchanged.  All four calls, with every child frame, are kernel
-evaluations of the bytes (`Curve3PoolVirtualPriceFallsFacts*`), composed in `Curve3PoolVirtualPriceFallsChain`; no pool or
-coin model enters.
+`virtual_price_falls` proves the public statement `Curve3PoolPublic.virtual_price_falls`.  All four calls,
+with every child frame, are kernel evaluations of the bytes (`Curve3PoolVirtualPriceFallsFacts*`), composed
+in `Curve3PoolVirtualPriceFallsChain`; no pool or coin model enters.
 
-**What this does not claim.**  The deposit is a path the chain could have taken, not one it took: no
-reachability from a real history is stated, and the depositor's coin balances and allowances are a
-choice of the witness.  The calls run under Muir Glacier, the fork of the recorded creation blocks, at
-the pool's creation block number and timestamp.  They are message calls with 10,000,000 gas, not
-validated transactions in a block.  Nothing here speaks of any chain state after the creation.
-
-The deposit is `[540712138941758899472585, 1160326029455, 1949013540497]`, the call
-`remove_liquidity_one_coin(8, 0, 0)`, the word goes from `10^18` to `10^18 - 1`.
+The witness: the deposit is `[540712138941758899472585, 1160326029455, 1949013540497]`, the call
+`remove_liquidity_one_coin(8, 0, 0)`, the word goes from `10^18` to `10^18 - 1` (`falls_at_witness`).
+The public statement's docstring says what this does not claim.
 -/
 
 namespace Blanc.Composition.Curve3PoolVirtualPriceFalls
@@ -28,64 +19,7 @@ open Jaune Blanc Blanc.Lift Blanc.Lift.Witness Blanc.Lift.NodeWalk
 open Blanc.Lift.Curve3Pool.VirtualPriceFalls
 open Blanc.Lift.Curve3Pool (coinSlot balanceSlot feeSlot adminFeeSlot ownerSlot tokenSlot initialASlot futureASlot initialATimeSlot futureATimeSlot killDeadlineSlot answerWord selGetVirtualPrice selAddLiquidity)
 
-/-! ## The statement -/
-
-/-- A message asks the pool for `get_virtual_price()` at `w`, statically. -/
-structure AsksPrice (m : Msg) (w : Jaune.State) : Prop where
-  target : m.currentTarget = poolA
-  state : m.benv.state = w
-  code : m.code = w.getCode poolA
-  data : m.data = abiSelectorBytes selGetVirtualPrice
-
-/-- `get_virtual_price()` at `w`, asked in the environment `env`, returns `p`. -/
-def ReturnsPrice (env : BenvStat) (w : Jaune.State) (p : Nat) : Prop :=
-  ∃ m post, AsksPrice m w ∧ m.benv.stat = env ∧ exec (initEvm m) = .ok post ∧ post.error = none ∧
-    answerWord post.output = p
-
-/-- A top-level message to the pool at `w`, under Muir Glacier, with `w` as its original state, commits
-and ends in `post`. -/
-structure CallCommits (m : Msg) (w : Jaune.State) (post : Devm) : Prop where
-  target : m.currentTarget = poolA
-  state : m.benv.state = w
-  orig : m.benv.stat.origState = w
-  code : m.code = w.getCode poolA
-  fork : m.benv.stat.fork = .muirGlacier
-  ran : exec (initEvm m) = .ok post
-  ok : post.error = none
-
-/-- **The world the recorded creations and the minter assignment leave**: the contracts' storage
-exactly, each coin its deployed bytes, USDC's proxy over the version it served then, and the pool
-holding none of any coin.  Who else holds coins is free. -/
-structure AtDeployment (w : Jaune.State) : Prop where
-  poolCode : w.getCode poolA = Curve3Pool.code
-  poolStor : w.getStor poolA = Curve3Pool.Creation.deployedStor Curve3Pool.Creation.deployTime
-  c3Code : w.getCode c3A = Curve3Crv.code
-  c3Stor : w.getStor c3A =
-    (Curve3Crv.Creation.deployedStor Curve3Crv.Creation.deployer.toB256).set 6 poolA.toB256
-  daiCode : w.getCode daiA = Dai.code
-  usdtCode : w.getCode usdtA = Usdt.code
-  idEmpty : w.getCode 4 = ByteArray.empty
-  usdcCode : w.getCode usdcA = Usdc.Proxy.code
-  usdcV2 : w.getCode ((w.getStor usdcA).get Usdc.implSlot).toAdr = Usdc.ImplV2.code
-  emptyDai : (w.getStor daiA).get (mapSlot poolA.toB256 2) = 0
-  emptyUsdc : (w.getStor usdcA).get (mapSlot poolA.toB256 9) = 0
-  emptyUsdt : (w.getStor usdtA).get (mapSlot poolA.toB256 2) = 0
-
-/-- The pool's four amplification words. -/
-def rampWords (w : Jaune.State) : List B256 :=
-  [initialASlot, futureASlot, initialATimeSlot, futureATimeSlot].map (w.getStor poolA).get
-
-/-- The message is a call of `add_liquidity`. -/
-def IsDeposit (m : Msg) : Prop := ∃ rest, m.data = abiSelectorBytes selAddLiquidity ++ rest
-
-/-- **The word `get_virtual_price()` returns falls across one call at fixed amplification**, from the
-world the recorded deployment leaves plus one first deposit.  A claim about the bytes: the deposit is
-a path the chain could have taken, not one it took. -/
-def VirtualPriceFalls : Prop :=
-  ∃ (w : Jaune.State) (dep m : Msg) (mid post : Devm) (p p' : Nat),
-    AtDeployment w ∧ IsDeposit dep ∧ CallCommits dep w mid ∧ CallCommits m mid.state post ∧
-    rampWords mid.state = rampWords post.state ∧
-    ReturnsPrice m.benv.stat mid.state p ∧ ReturnsPrice m.benv.stat post.state p' ∧ p' < p
+open Curve3PoolPublic (ReturnsPrice AtPoolBlock CallCommits AtDeployment rampWords)
 
 /-! ## One top-level call -/
 
@@ -131,25 +65,29 @@ theorem world_at : AtDeployment worldW where
   poolStor := by kernel_rfl
   c3Code := by rw [acctAgree_get_code world_acct]; kernel_rfl
   c3Stor := by kernel_rfl
-  daiCode := by rw [acctAgree_get_code world_acct]; kernel_rfl
-  usdtCode := by rw [acctAgree_get_code world_acct]; kernel_rfl
-  idEmpty := by rw [acctAgree_get_code world_acct]; kernel_rfl
+  coins :=
+    { daiCode := by rw [acctAgree_get_code world_acct]; kernel_rfl
+      usdtCode := by rw [acctAgree_get_code world_acct]; kernel_rfl
+      idEmpty := by rw [acctAgree_get_code world_acct]; kernel_rfl }
   usdcCode := by rw [acctAgree_get_code world_acct]; kernel_rfl
   usdcV2 := by
     have h : (worldW.getStor usdcA).get Usdc.implSlot = implA.toB256 :=
       (world_stor usdcA Usdc.implSlot).trans (by kernel_rfl)
     have hi : implA.toB256.toAdr = implA := by decide +kernel
+    show worldW.getCode ((worldW.getStor usdcA).get Usdc.implSlot).toAdr = _
     rw [h, hi]
     exact (acctAgree_get_code world_acct implA).trans (by kernel_rfl)
-  emptyDai := (world_stor daiA _).trans (by kernel_rfl)
-  emptyUsdc := (world_stor usdcA _).trans (by kernel_rfl)
-  emptyUsdt := (world_stor usdtA _).trans (by kernel_rfl)
+  empty := by
+    have h : ∀ k, lookupS storW (Curve3PoolPublic.coinAt k) (Curve3PoolPublic.coinEntry poolA k) = 0 := by
+      decide +kernel
+    intro k
+    exact (congrArg B256.toNat ((world_stor _ _).trans (h k))).trans rfl
 
 /-! ## The four calls' boundary decisions -/
 
 theorem statOf_orig (l : StorShadow) : (statOf l).origState = origOf l := rfl
 
-theorem statOf_fork (l : StorShadow) : (statOf l).fork = .muirGlacier := rfl
+theorem statOf_block (l : StorShadow) : AtPoolBlock (statOf l) := ⟨rfl, rfl, rfl⟩
 
 theorem stat1_eq : stat1 = statOf storW := by kernel_rfl
 
@@ -193,14 +131,15 @@ theorem cfg_output (z : XB) (A : AcctShadow) (m : Meta) (w : Jaune.World) :
 
 /-- The depositor's call commits. -/
 theorem commits {W : Jaune.State} {stat : BenvStat} {d : Bytes} {st : Bool} {post : Devm}
-    (hcode : AcctAgree W acsW) (hf : stat.fork = .muirGlacier)
+    (hcode : AcctAgree W acsW) (hf : AtPoolBlock stat)
     (hr : exec (initEvm (msgOf W (stat.withOrig W) d st)) = .ok post) (he : post.error = none) :
     CallCommits (msgOf W (stat.withOrig W) d st) W post where
   target := rfl
   state := rfl
   orig := rfl
   code := by rw [acctAgree_get_code hcode]; show Curve3Pool.code = _; kernel_rfl
-  fork := hf
+  gas := rfl
+  block := ⟨hf.fork, hf.number, hf.time⟩
   ran := hr
   ok := he
 
@@ -211,12 +150,19 @@ theorem returns {W O : Jaune.State} {stat : BenvStat} {post : Devm} {p : Nat}
     (he : post.error = none) (hp : answerWord post.output = p) :
     ReturnsPrice (stat.withOrig O) W p :=
   ⟨msgOf W (stat.withOrig O) priceData true, post,
-    ⟨rfl, rfl, by rw [acctAgree_get_code hcode]; show Curve3Pool.code = _; kernel_rfl,
+    ⟨rfl, rfl, by rw [acctAgree_get_code hcode]; show Curve3Pool.code = _; kernel_rfl, rfl, rfl,
       by show priceData = _; decide +kernel⟩, rfl, hr, he, hp⟩
 
 theorem data1_eq : data1 = depositData amt0 amt1 amt2 := by kernel_rfl
 theorem data2_eq : data2 = oneCoinData 8 := by kernel_rfl
 theorem dataP_eq : dataP = priceData := by kernel_rfl
+
+/-- `rampWords` from a state's storage shadow. -/
+theorem rampWords_of_shadow {W : Jaune.State} {l : StorShadow}
+    (h : ∀ k, (W.getStor Curve3PoolPublic.pool).get k = lookupS l poolA k) :
+    rampWords W = ([initialASlot, futureASlot, initialATimeSlot, futureATimeSlot].map
+      (lookupS l poolA)).map B256.toNat := by
+  simp only [rampWords, Curve3PoolPublic.word, List.map_cons, List.map_nil, h]
 
 /-- **The fall at the witness**: the exact deposit, the exact call, the exact words. -/
 theorem falls_at_witness :
@@ -252,21 +198,15 @@ theorem falls_at_witness :
   obtain ⟨hw1, hw2, hramp⟩ := endFacts
   rw [dataP_eq] at hexp hexq
   refine ⟨_, _, _, _, world_at, data1_eq, data2_eq,
-    commits world_acct (by rw [stat1_eq]; exact statOf_fork _) hex1 (cfg_error _ _ _ _),
-    commits hag1.2.2.2 (by rw [stat2_eq]; exact statOf_fork _) hexc (cfg_error _ _ _ _), ?_,
+    commits world_acct (by rw [stat1_eq]; exact statOf_block _) hex1 (cfg_error _ _ _ _),
+    commits hag1.2.2.2 (by rw [stat2_eq]; exact statOf_block _) hexc (cfg_error _ _ _ _), ?_,
     returns hag1.2.2.2 hexp (cfg_error _ _ _ _) ((congrArg answerWord (cfg_output _ _ _ _)).trans hw1),
     returns hagc.2.2.2 hexq (cfg_error _ _ _ _) ((congrArg answerWord (cfg_output _ _ _ _)).trans hw2)⟩
-  have e1 : ∀ k, ((endDeposit.cfg acsW m1 w1).devm.state.getStor poolA).get k =
-      lookupS endDeposit.stor poolA k := hag1.2.2.1 poolA
-  have e2 : ∀ k, ((endCall.cfg acsW mc wc).devm.state.getStor poolA).get k =
-      lookupS endCall.stor poolA k := hagc.2.2.1 poolA
-  simp only [List.map_cons, List.map_nil] at hramp
-  simp only [rampWords, List.map_cons, List.map_nil]
-  rw [e1, e1, e1, e1, e2, e2, e2, e2]
-  exact hramp
+  rw [rampWords_of_shadow (W := (endDeposit.cfg acsW m1 w1).devm.state) (l := endDeposit.stor) (hag1.2.2.1 poolA),
+    rampWords_of_shadow (W := (endCall.cfg acsW mc wc).devm.state) (l := endCall.stor) (hagc.2.2.1 poolA), hramp]
 
 /-- **The word `get_virtual_price()` returns falls on the deployed bytes, from the deployment state.** -/
-theorem virtual_price_falls : VirtualPriceFalls := by
+theorem virtual_price_falls : Curve3PoolPublic.virtual_price_falls := by
   obtain ⟨dep, m, mid, post, hat, hd, -, hc1, hc2, hr, hp, hp'⟩ := falls_at_witness
   have hsel : depositData amt0 amt1 amt2 = abiSelectorBytes selAddLiquidity ++
       (wordB amt0 ++ wordB amt1 ++ wordB amt2 ++ wordB 0) := by decide +kernel
