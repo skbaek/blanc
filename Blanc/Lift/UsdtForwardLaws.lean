@@ -133,7 +133,7 @@ def MoveApart (σ : Stor) (src dst : Adr) (v f : B256) : Prop :=
     (f ≠ 0 → balSlot (ownerOf (credit (debit σ src v) dst (v - f))) ≠ balSlot src ∧
       balSlot (ownerOf (credit (debit σ src v) dst (v - f))) ≠ balSlot dst)
 
-/-- The moves's stores, first to their slots, do not lower the refund counter. -/
+/-- The move's stores, first to their slots, do not lower the refund counter. -/
 theorem mvPost_refund {v f t r : B256} {σ : Stor}
     (hcr : sevm.currentTarget ∉ b.createdAccounts) (hor : (getOrigAcct sevm sevm.currentTarget).stor = σ)
     (h1 : (Devm.getStor b sevm.currentTarget).get (balSlot r.toAdr) = σ.get (balSlot r.toAdr))
@@ -184,7 +184,7 @@ structure PullFits (σ : Stor) (src sp dst : Adr) (v : B256) : Prop where
   notListed : NotListed σ src
   move : PullMove σ src sp dst v
 
-/-- `NotListed`'s and `NotPaused`'s and `NotDeprecated`'s words, under the gate's reads. -/
+/-- The gate's three reads keep the world. -/
 theorem keeps_gate (sevm : Sevm) (pre : Devm) (a : B256) : Keeps sevm pre (gateBase sevm pre a) :=
   ((((Keeps.refl sevm pre).sload _).sload _).sload _)
 

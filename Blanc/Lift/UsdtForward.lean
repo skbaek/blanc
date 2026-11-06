@@ -41,9 +41,7 @@ local notation "fp60" => Bytes.toB256 [96]
 theorem mul_div_back {x y : B256} (hy : y ≠ 0) (h : y.toNat * x.toNat < 2 ^ 256) : (y * x) / y = x := by
   apply B256.toNat_inj
   have hpos : 0 < y.toNat := Nat.pos_of_ne_zero fun e => hy (B256.toNat_inj _ _ (e.trans B256.toNat_zero.symm))
-  rw [B256.toNat_div hy, show (y * x).toNat = y.toNat * x.toNat from by
-    show (Nat.toB256 (y.toNat * x.toNat)).toNat = _
-    exact B256.toNat_toB256_of_lt h]
+  rw [B256.toNat_div hy, B256.toNat_mul_eq_of_nofm h]
   exact Nat.mul_div_cancel_left _ hpos
 
 /-- **Entry 61, SafeMath `mul(y, x)`, `y = 0`**, forward. -/
@@ -196,13 +194,17 @@ theorem oky_eq (sevm : Sevm) (C : Devm) :
   unfold oky balSlot ownerOf
   rw [ownW_eq, lit2, lit0, gsv]
 
+/-- `BasicToken.transfer`'s move at charge `c`. -/
+abbrev Move13 (sevm : Sevm) (b : Devm) (p q f v t ret : B256) (S : List B256) (M : Mem) (c : Nat) : Prop :=
+  CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 970 →
+    MoveOk (Devm.getStor b sevm.currentTarget) sevm.caller t.toAdr v f → ∀ X, 2300 ≤ X →
+    SFunc.RunExact cert.prog sevm (St b (p :: q :: f :: v :: t :: ret :: S) M (X + c)) t_26f1_c13
+      (.returned (St (mvPost sevm b v f t sevm.caller.toB256) S (mvMem sevm b M v f t sevm.caller.toB256) X))
+
 /-- **`BasicToken.transfer`'s move, no fee**, forward. -/
 @[irreducible] noncomputable def e13ZW (sevm : Sevm) (b : Devm) (p q f v t ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 970 →
-      f = 0 → MoveOk (Devm.getStor b sevm.currentTarget) sevm.caller t.toAdr v f → ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (p :: q :: f :: v :: t :: ret :: S) M (X + c)) t_26f1_c13
-        (.returned (St (mvPost sevm b v f t sevm.caller.toB256) S (mvMem sevm b M v f t sevm.caller.toB256) X))} :=
-  ⟨_, fun fork static hM room hf ok X hX => by
+    {c : Nat // f = 0 → Move13 sevm b p q f v t ret S M c} :=
+  ⟨_, fun hf fork static hM room ok X hX => by
     unfold mvPost mvMem
     rw [ite_eq_left hf, ite_eq_left hf]
     have h1 := ok.fee_le
@@ -224,11 +226,8 @@ theorem oky_eq (sevm : Sevm) (C : Devm) :
 
 /-- **`BasicToken.transfer`'s move, a fee**, forward. -/
 @[irreducible] noncomputable def e13NW (sevm : Sevm) (b : Devm) (p q f v t ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 970 →
-      f ≠ 0 → MoveOk (Devm.getStor b sevm.currentTarget) sevm.caller t.toAdr v f → ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (p :: q :: f :: v :: t :: ret :: S) M (X + c)) t_26f1_c13
-        (.returned (St (mvPost sevm b v f t sevm.caller.toB256) S (mvMem sevm b M v f t sevm.caller.toB256) X))} :=
-  ⟨_, fun fork static hM room hf ok X hX => by
+    {c : Nat // f ≠ 0 → Move13 sevm b p q f v t ret S M c} :=
+  ⟨_, fun hf fork static hM room ok X hX => by
     unfold mvPost mvMem
     rw [ite_eq_right hf, ite_eq_right hf]
     have h1 := ok.fee_le
@@ -266,10 +265,10 @@ noncomputable def e13W (sevm : Sevm) (b : Devm) (p q f0 f v t ret : B256) (S : L
         (.returned (St (mvPost sevm b v f t sevm.caller.toB256) S (mvMem sevm b M v f t sevm.caller.toB256) X))} :=
   if hf : f = 0 then
     ⟨(e13ZW sevm b p q f v t ret S M).1, fun fork static hM room e ok X hX => by
-      subst e; exact (e13ZW sevm b p q f0 v t ret S M).2 fork static hM room hf ok X hX⟩
+      subst e; exact (e13ZW sevm b p q f0 v t ret S M).2 hf fork static hM room ok X hX⟩
   else
     ⟨(e13NW sevm b p q f v t ret S M).1, fun fork static hM room e ok X hX => by
-      subst e; exact (e13NW sevm b p q f0 v t ret S M).2 fork static hM room hf ok X hX⟩
+      subst e; exact (e13NW sevm b p q f0 v t ret S M).2 hf fork static hM room ok X hX⟩
 
 /-! ## The fee -/
 
@@ -299,17 +298,21 @@ theorem feeBase_keeps {sevm : Sevm} {pre b : Devm} (h : Keeps sevm pre b) (v : B
   · exact ((h.sload _).sload _).sload _
   · exact (h.sload _).sload _
 
+/-- Entry 60 at charge `c`. -/
+abbrev Xfer60 (sevm : Sevm) (b : Devm) (v t ret : B256) (S : List B256) (M : Mem) (c : Nat) : Prop :=
+  CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 960 →
+    B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [64] + Bytes.toB256 [4]) = 0 →
+    FeeFits (Devm.getStor b sevm.currentTarget) v →
+    MoveOk (Devm.getStor b sevm.currentTarget) sevm.caller t.toAdr v (feeOf (Devm.getStor b sevm.currentTarget) v) →
+    ∀ X, 2300 ≤ X →
+    SFunc.RunExact cert.prog sevm (St b (v :: t :: ret :: S) M (X + c)) t_269b_c60
+      (.returned (St (mvPost sevm (feeBase sevm b v) v (feeOf (Devm.getStor b sevm.currentTarget) v) t sevm.caller.toB256) S
+        (mvMem sevm (feeBase sevm b v) M v (feeOf (Devm.getStor b sevm.currentTarget) v) t sevm.caller.toB256) X))
+
 /-- **Entry 60, `BasicToken.transfer(t, v)`, the fee capped**, forward. -/
 @[irreducible] noncomputable def e60CW (sevm : Sevm) (b : Devm) (v t ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 960 →
-      B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [64] + Bytes.toB256 [4]) = 0 →
-      FeeFits (Devm.getStor b sevm.currentTarget) v → Capped (Devm.getStor b sevm.currentTarget) v →
-      MoveOk (Devm.getStor b sevm.currentTarget) sevm.caller t.toAdr v (feeOf (Devm.getStor b sevm.currentTarget) v) →
-      ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (v :: t :: ret :: S) M (X + c)) t_269b_c60
-        (.returned (St (mvPost sevm (feeBase sevm b v) v (feeOf (Devm.getStor b sevm.currentTarget) v) t sevm.caller.toB256) S
-          (mvMem sevm (feeBase sevm b v) M v (feeOf (Devm.getStor b sevm.currentTarget) v) t sevm.caller.toB256) X))} :=
-  ⟨_, fun fork static hM room hsz hfee hcap ok X hX => by
+    {c : Nat // Capped (Devm.getStor b sevm.currentTarget) v → Xfer60 sevm b v t ret S M c} :=
+  ⟨_, fun hcap fork static hM room hsz hfee ok X hX => by
     have hm : v.toNat * (b.getStorVal sevm.currentTarget (Bytes.toB256 [3])).toNat < 2 ^ 256 := by
       rw [gsv, lit3]; exact hfee
     have hg : B256.eqCheck (B256.gtCheck ((v * b.getStorVal sevm.currentTarget (Bytes.toB256 [3])) / Bytes.toB256 [39, 16])
@@ -330,15 +333,8 @@ theorem feeBase_keeps {sevm : Sevm} {pre b : Devm} (h : Keeps sevm pre b) (v : B
 
 /-- **Entry 60, `BasicToken.transfer(t, v)`, the fee under its cap**, forward. -/
 @[irreducible] noncomputable def e60KW (sevm : Sevm) (b : Devm) (v t ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 960 →
-      B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [64] + Bytes.toB256 [4]) = 0 →
-      FeeFits (Devm.getStor b sevm.currentTarget) v → ¬ Capped (Devm.getStor b sevm.currentTarget) v →
-      MoveOk (Devm.getStor b sevm.currentTarget) sevm.caller t.toAdr v (feeOf (Devm.getStor b sevm.currentTarget) v) →
-      ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (v :: t :: ret :: S) M (X + c)) t_269b_c60
-        (.returned (St (mvPost sevm (feeBase sevm b v) v (feeOf (Devm.getStor b sevm.currentTarget) v) t sevm.caller.toB256) S
-          (mvMem sevm (feeBase sevm b v) M v (feeOf (Devm.getStor b sevm.currentTarget) v) t sevm.caller.toB256) X))} :=
-  ⟨_, fun fork static hM room hsz hfee hcap ok X hX => by
+    {c : Nat // ¬ Capped (Devm.getStor b sevm.currentTarget) v → Xfer60 sevm b v t ret S M c} :=
+  ⟨_, fun hcap fork static hM room hsz hfee ok X hX => by
     have hm : v.toNat * (b.getStorVal sevm.currentTarget (Bytes.toB256 [3])).toNat < 2 ^ 256 := by
       rw [gsv, lit3]; exact hfee
     have hg : B256.eqCheck (B256.gtCheck ((v * b.getStorVal sevm.currentTarget (Bytes.toB256 [3])) / Bytes.toB256 [39, 16])
@@ -359,20 +355,11 @@ theorem feeBase_keeps {sevm : Sevm} {pre b : Devm} (h : Keeps sevm pre b) (v : B
 
 /-- **Entry 60, `BasicToken.transfer(t, v)`**, forward. -/
 noncomputable def e60W (sevm : Sevm) (b : Devm) (v t ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 960 →
-      B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [64] + Bytes.toB256 [4]) = 0 →
-      FeeFits (Devm.getStor b sevm.currentTarget) v →
-      MoveOk (Devm.getStor b sevm.currentTarget) sevm.caller t.toAdr v (feeOf (Devm.getStor b sevm.currentTarget) v) →
-      ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (v :: t :: ret :: S) M (X + c)) t_269b_c60
-        (.returned (St (mvPost sevm (feeBase sevm b v) v (feeOf (Devm.getStor b sevm.currentTarget) v) t sevm.caller.toB256) S
-          (mvMem sevm (feeBase sevm b v) M v (feeOf (Devm.getStor b sevm.currentTarget) v) t sevm.caller.toB256) X))} :=
+    {c : Nat // Xfer60 sevm b v t ret S M c} :=
   if hc : Capped (Devm.getStor b sevm.currentTarget) v then
-    ⟨(e60CW sevm b v t ret S M).1, fun fork static hM room hsz hfee ok X hX =>
-      (e60CW sevm b v t ret S M).2 fork static hM room hsz hfee hc ok X hX⟩
+    ⟨(e60CW sevm b v t ret S M).1, (e60CW sevm b v t ret S M).2 hc⟩
   else
-    ⟨(e60KW sevm b v t ret S M).1, fun fork static hM room hsz hfee ok X hX =>
-      (e60KW sevm b v t ret S M).2 fork static hM room hsz hfee hc ok X hX⟩
+    ⟨(e60KW sevm b v t ret S M).1, (e60KW sevm b v t ret S M).2 hc⟩
 
 /-! ## The gate: pause, blacklist and deprecation -/
 
@@ -460,13 +447,17 @@ theorem gateW_of {sevm : Sevm} {b : Devm} {a : B256}
     yrun
     all_goals ((try unfold gCallStipend); omega)⟩
 
+/-- `StandardToken.transferFrom`'s move at charge `c`. -/
+abbrev Move11 (sevm : Sevm) (b : Devm) (p q f a v t r ret : B256) (S : List B256) (M : Mem) (c : Nat) : Prop :=
+  CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 970 →
+    MoveOk (Devm.getStor b sevm.currentTarget) r.toAdr t.toAdr v f → ∀ X, 2300 ≤ X →
+    SFunc.RunExact cert.prog sevm (St b (p :: q :: f :: a :: v :: t :: r :: ret :: S) M (X + c)) t_233e_c11
+      (.returned (St (mvPost sevm b v f t r) S (mvMem sevm b M v f t r) X))
+
 /-- **`StandardToken.transferFrom`'s move, no fee**, forward. -/
 @[irreducible] noncomputable def e11ZW (sevm : Sevm) (b : Devm) (p q f a v t r ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 970 →
-      f = 0 → MoveOk (Devm.getStor b sevm.currentTarget) r.toAdr t.toAdr v f → ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (p :: q :: f :: a :: v :: t :: r :: ret :: S) M (X + c)) t_233e_c11
-        (.returned (St (mvPost sevm b v f t r) S (mvMem sevm b M v f t r) X))} :=
-  ⟨_, fun fork static hM room hf ok X hX => by
+    {c : Nat // f = 0 → Move11 sevm b p q f a v t r ret S M c} :=
+  ⟨_, fun hf fork static hM room ok X hX => by
     unfold mvPost mvMem
     rw [ite_eq_left hf, ite_eq_left hf]
     have h1 := ok.fee_le
@@ -487,11 +478,8 @@ theorem gateW_of {sevm : Sevm} {b : Devm} {a : B256}
 
 /-- **`StandardToken.transferFrom`'s move, a fee**, forward. -/
 @[irreducible] noncomputable def e11NW (sevm : Sevm) (b : Devm) (p q f a v t r ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 970 →
-      f ≠ 0 → MoveOk (Devm.getStor b sevm.currentTarget) r.toAdr t.toAdr v f → ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (p :: q :: f :: a :: v :: t :: r :: ret :: S) M (X + c)) t_233e_c11
-        (.returned (St (mvPost sevm b v f t r) S (mvMem sevm b M v f t r) X))} :=
-  ⟨_, fun fork static hM room hf ok X hX => by
+    {c : Nat // f ≠ 0 → Move11 sevm b p q f a v t r ret S M c} :=
+  ⟨_, fun hf fork static hM room ok X hX => by
     unfold mvPost mvMem
     rw [ite_eq_right hf, ite_eq_right hf]
     have h1 := ok.fee_le
@@ -529,10 +517,10 @@ noncomputable def e11W (sevm : Sevm) (b : Devm) (p q f0 f a v t r ret : B256) (S
         (.returned (St (mvPost sevm b v f t r) S (mvMem sevm b M v f t r) X))} :=
   if hf : f = 0 then
     ⟨(e11ZW sevm b p q f a v t r ret S M).1, fun fork static hM room e ok X hX => by
-      subst e; exact (e11ZW sevm b p q f0 a v t r ret S M).2 fork static hM room hf ok X hX⟩
+      subst e; exact (e11ZW sevm b p q f0 a v t r ret S M).2 hf fork static hM room ok X hX⟩
   else
     ⟨(e11NW sevm b p q f a v t r ret S M).1, fun fork static hM room e ok X hX => by
-      subst e; exact (e11NW sevm b p q f0 a v t r ret S M).2 fork static hM room hf ok X hX⟩
+      subst e; exact (e11NW sevm b p q f0 a v t r ret S M).2 hf fork static hM room ok X hX⟩
 
 /-- The word `uint(-1)`. -/
 local notation "mx" => Bytes.toB256 [255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255,
@@ -648,15 +636,18 @@ structure PullMove (σ : Stor) (r sp t : Adr) (v : B256) : Prop where
   allowance : σ.get (allowSlot r sp) ≠ maxUint → v.toNat ≤ (σ.get (allowSlot r sp)).toNat
   move : MoveOk (spendStor σ r sp v) r t v (feeOf σ v)
 
+/-- Entry 56 at charge `c`. -/
+abbrev Pull56 (sevm : Sevm) (b : Devm) (v t r ret : B256) (S : List B256) (M : Mem) (c : Nat) : Prop :=
+  CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 940 →
+    B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [96] + Bytes.toB256 [4]) = 0 →
+    PullMove (Devm.getStor b sevm.currentTarget) r.toAdr sevm.caller t.toAdr v → ∀ X, 2300 ≤ X →
+    SFunc.RunExact cert.prog sevm (St b (v :: t :: r :: ret :: S) M (X + c)) t_21ab_c56
+      (.returned (St (pullPost sevm b v t r) S (pullMem sevm b M v t r) X))
+
 /-- **Entry 56, `StandardToken.transferFrom(r, t, v)`, the fee capped**, forward. -/
 @[irreducible] noncomputable def e56CW (sevm : Sevm) (b : Devm) (v t r ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 940 →
-      B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [96] + Bytes.toB256 [4]) = 0 →
-      Capped (Devm.getStor b sevm.currentTarget) v →
-      PullMove (Devm.getStor b sevm.currentTarget) r.toAdr sevm.caller t.toAdr v → ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (v :: t :: r :: ret :: S) M (X + c)) t_21ab_c56
-        (.returned (St (pullPost sevm b v t r) S (pullMem sevm b M v t r) X))} :=
-  ⟨_, fun fork static hM room hsz hcap pm X hX => by
+    {c : Nat // Capped (Devm.getStor b sevm.currentTarget) v → Pull56 sevm b v t r ret S M c} :=
+  ⟨_, fun hcap fork static hM room hsz pm X hX => by
     obtain ⟨hfee, hal, ok⟩ := pm
     have hm : v.toNat * (b.getStorVal sevm.currentTarget (Bytes.toB256 [3])).toNat < 2 ^ 256 := by
       rw [gsv, lit3]; exact hfee
@@ -685,13 +676,8 @@ structure PullMove (σ : Stor) (r sp t : Adr) (v : B256) : Prop where
 
 /-- **Entry 56, `StandardToken.transferFrom(r, t, v)`, the fee under its cap**, forward. -/
 @[irreducible] noncomputable def e56KW (sevm : Sevm) (b : Devm) (v t r ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 940 →
-      B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [96] + Bytes.toB256 [4]) = 0 →
-      ¬ Capped (Devm.getStor b sevm.currentTarget) v →
-      PullMove (Devm.getStor b sevm.currentTarget) r.toAdr sevm.caller t.toAdr v → ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (v :: t :: r :: ret :: S) M (X + c)) t_21ab_c56
-        (.returned (St (pullPost sevm b v t r) S (pullMem sevm b M v t r) X))} :=
-  ⟨_, fun fork static hM room hsz hcap pm X hX => by
+    {c : Nat // ¬ Capped (Devm.getStor b sevm.currentTarget) v → Pull56 sevm b v t r ret S M c} :=
+  ⟨_, fun hcap fork static hM room hsz pm X hX => by
     obtain ⟨hfee, hal, ok⟩ := pm
     have hm : v.toNat * (b.getStorVal sevm.currentTarget (Bytes.toB256 [3])).toNat < 2 ^ 256 := by
       rw [gsv, lit3]; exact hfee
@@ -720,17 +706,11 @@ structure PullMove (σ : Stor) (r sp t : Adr) (v : B256) : Prop where
 
 /-- **Entry 56, `StandardToken.transferFrom(r, t, v)`**, forward. -/
 noncomputable def e56W (sevm : Sevm) (b : Devm) (v t r ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false → FpM fp60 96 M → S.length < 940 →
-      B256.ltCheck (Nat.toB256 sevm.data.length) (Bytes.toB256 [96] + Bytes.toB256 [4]) = 0 →
-      PullMove (Devm.getStor b sevm.currentTarget) r.toAdr sevm.caller t.toAdr v → ∀ X, 2300 ≤ X →
-      SFunc.RunExact cert.prog sevm (St b (v :: t :: r :: ret :: S) M (X + c)) t_21ab_c56
-        (.returned (St (pullPost sevm b v t r) S (pullMem sevm b M v t r) X))} :=
+    {c : Nat // Pull56 sevm b v t r ret S M c} :=
   if hc : Capped (Devm.getStor b sevm.currentTarget) v then
-    ⟨(e56CW sevm b v t r ret S M).1, fun fork static hM room hsz pm X hX =>
-      (e56CW sevm b v t r ret S M).2 fork static hM room hsz hc pm X hX⟩
+    ⟨(e56CW sevm b v t r ret S M).1, (e56CW sevm b v t r ret S M).2 hc⟩
   else
-    ⟨(e56KW sevm b v t r ret S M).1, fun fork static hM room hsz pm X hX =>
-      (e56KW sevm b v t r ret S M).2 fork static hM room hsz hc pm X hX⟩
+    ⟨(e56KW sevm b v t r ret S M).1, (e56KW sevm b v t r ret S M).2 hc⟩
 
 /-- **Entry 23, `TetherToken.transferFrom(r, t, v)`**, forward. -/
 @[irreducible] noncomputable def e23W (sevm : Sevm) (b : Devm) (v t r ret : B256) (S : List B256) (M : Mem) :
