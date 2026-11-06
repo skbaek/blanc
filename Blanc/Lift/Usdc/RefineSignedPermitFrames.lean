@@ -37,19 +37,6 @@ theorem ric_seg_w149_noStateGas {C : List Nat} {r : Seg} {P : Sevm → Devm → 
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
 
-/-- Covered-fork compatibility projection of the permit-bytes wrapper shuffle step. -/
-theorem ric_seg_w149 {C : List Nat} {r : Seg} {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork)
-    {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 : B256} {R : List B256}
-    (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 ::
-      x9 :: R) M G) t_0be5_c149 r) :
-    ∃ b' u0 M' G', b'.state = b.state ∧ SFunc.RunCutP P cert.prog sevm C
-      (St b' (Nat.toB256 0x2e53 :: u0 :: x4 :: x5 :: x6 :: x7 :: x8 :: x9 :: R) M' G')
-      (.callNext 41 t_0489_c149) r := by
-  exact ric_seg_w149_noStateGas hP fork.rules_stateGas_none run
-
-/-- The shuffle check of `cancelAuthorization(…, bytes)`'s wrapper (entry 136): the `bytes` argument's
-ABI decoding, from its head check to the call of the body (entry 28). -/
 theorem seg_w136_check : shuffle cert.prog cert.entries [] (.callNext 28 t_0489_c136) 0xe77 1000 0xe03
     (argFrame 8) t_0e03_c136 = some (some [.lit (Nat.toB256 0x3498), .unk, .arg 4, .arg 5, .arg 6,
       .arg 7]) := by

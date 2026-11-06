@@ -146,7 +146,7 @@ theorem e113_inv {n a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.f
   obtain ⟨_, e⟩ := ric_ret h
   clear h
   refine ⟨_, _, _, Seg.done.inj e, ?_, ?_⟩
-  · simp only [St_getStor, Devm.addLog_getStor, afterSstoreH_getStor_self, keccak_scratch, word_ff20, lit16,
+  · simp only [Devm.addLog_getStor, afterSstoreH_getStor_self, keccak_scratch, word_ff20, lit16,
       afterSloadH_getStor, gsv]
     rfl
   · refine ⟨_, List.mem_append_right _ List.mem_cons_self, rfl, ?_⟩
