@@ -114,7 +114,7 @@ def ViewSettled (T : Adr) (V : StorWords → StorWords) (Obs Good Allowed : Exec
 def RootReady (F : Fork → Prop) (T : Adr) (sem : CodeSem) (entry : Sevm → Devm → Prop)
     (R : Exec.Frame) : Prop :=
   F R.sevm.benvStat.fork ∧ sem.At T R.pc R.sevm R.pre ∧ Exec.FrameAdmitted T entry R.run ∧
-    sum R.pre.state.bal < 2 ^ 256
+    sum R.pre.state.bal < 2 ^ 256 ∧ R.pc = 0
 
 section Mid
 
