@@ -1,15 +1,18 @@
+import Blanc.Lift.RootStanding
 import Blanc.Lift.Usdc.EntryChainScan
 
 /-!
-# A listed version, once standing, stands: `ScanLive` from one read per version
+# A listed version, once standing, stands: the scan is a complete check
 
 Every certificate of the three versions and the library has no `SELFDESTRUCT` (kernel decided, `*.cert_noSelfdestruct`).
 V2, V2_1 and the library spawn no `DELEGATECALL`, so nothing else runs in their storage context; V2_2's only one runs the
 library (`impl_committed`). So no settled root deletes one of these accounts while it holds its code, and a read at the
 start of a mid history reaches every later settled root (`entry_ready`).
 
-`scanLive_of_suffixes`: `ScanLive` at every settled root from one cut per version, at which that version stands and
-after which every root naming it lies. Nothing is read between interval ends.
+`certifiedSettled_of_scan`: the word's version stands at the start, and each `Upgraded` log names a version standing at
+its root's entry; every settled proxy frame is certified. `MidHistoryTraceIn.live_of_roots` carries the named version
+standing through the history, with `T`'s own deletion exclusion, so nothing is read between upgrades.
+`scanRoot_of_cuts` reads the versions at one cut each: the log's root lies after that cut.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -39,25 +42,19 @@ theorem lib_safety : InstalledRuntimeSafety Lib.code :=
   .of_undelegatedCert Lib.cert_check lib_undelegatedCert Lib.cert_noSelfdestruct
     Lib.code_not_delegation (UsdcContextCode.ne_nil (.inr (.inr (.inr (.inr (.inr rfl))))))
 
-variable {a : Adr}
+theorem v2_size : ImplV2.code.size ≠ 0 ∧ ImplV2.code.size ≠ eoaDelegatedCodeLength := by decide +kernel
 
-/-- A root that finds code with the safety bundle keeps its account out of the deletion set. -/
-theorem root_noDel_of_safety {C : ByteArray} (K : InstalledRuntimeSafety C) {s0 : C.size ≠ 0}
-    {sd : C.size ≠ eoaDelegatedCodeLength} {R : Exec.Frame}
-    (ready : RootReady HistFork a (CodeSem.ofBytes C s0 sd) (fun _ _ => True) R)
-    (initial : Devm.NoDel a R.pre) : Devm.NoDel a R.post := by
-  obtain ⟨fork, at_, -, -, pcZero⟩ := ready
-  rcases R with ⟨pc, sevm, pre, out, run, committed⟩
-  dsimp only at fork at_ initial pcZero
-  subst pcZero
-  have hsg := fork.stateGas_none
-  have result := Exec.inv_noDel_of_retained_terminal_safe run committed hsg
-    (fun N retained => K.safe run hsg (bytes_eq_of_image at_.1)
-      (fun t => ⟨rfl, bytes_eq_of_image (at_.2 t).1⟩) N
-      ((Exec.retainedNodes_sublist_rawNodes run).subset retained)) initial
-  cases out with
-  | error error => cases committed
-  | ok post => exact result
+theorem v2_1_size : ImplV2_1.code.size ≠ 0 ∧ ImplV2_1.code.size ≠ eoaDelegatedCodeLength := by decide +kernel
+
+theorem impl_size : Impl.code.size ≠ 0 ∧ Impl.code.size ≠ eoaDelegatedCodeLength := by decide +kernel
+
+theorem lib_size : Lib.code.size ≠ 0 ∧ Lib.code.size ≠ eoaDelegatedCodeLength := by decide +kernel
+
+/-- A code at an account, under the code's own semantics. -/
+def standingAt (b : Adr) (C : ByteArray) (size : C.size ≠ 0 ∧ C.size ≠ eoaDelegatedCodeLength) : StandingCode :=
+  ⟨b, C, CodeSem.ofBytes C size.1 size.2, rfl⟩
+
+variable {a : Adr}
 
 /-- A spawn's child at `a`, which holds V2_2, runs V2_2 or the library. -/
 theorem impl_child {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 sevm pre out)
@@ -195,25 +192,6 @@ variable {cfg : ChainConfig} {start : Benv} {future : BlockChain}
   (trace : MidHistoryTraceIn HistFork cfg start future) (capabilities : BodyStageCapabilities HistFork)
 
 include capabilities in
-/-- Code standing at the start stands at every settled root, when no root that finds it deletes its account. -/
-theorem stands_of_law {C : ByteArray} (s0 : C.size ≠ 0) (sd : C.size ≠ eoaDelegatedCodeLength)
-    (ne : C.toList ≠ []) (del : ¬ isValidDelegation C) (installed : start.state.getCode a = C)
-    (law : ∀ R ∈ trace.settledRoots, RootReady HistFork a (CodeSem.ofBytes C s0 sd) (fun _ _ => True) R →
-      Devm.NoDel a R.pre → Devm.NoDel a R.post) :
-    ∀ R ∈ trace.settledRoots, R.pre.state.getCode a = C := fun R member =>
-  bytes_eq_of_image (Blanc.Lift.MidHistoryTraceIn.rootsReady trace capabilities (sem := CodeSem.ofBytes C s0 sd) rfl
-    installed ne del (Blanc.Lift.MidHistoryTraceIn.outputNotDeleted_of_ready trace capabilities
-      (sem := CodeSem.ofBytes C s0 sd) rfl installed ne del law).1 R member).2.1.1
-
-include capabilities in
-/-- Code with the safety bundle, standing at the start, stands at every settled root. -/
-theorem stands_of_safety {C : ByteArray} (K : InstalledRuntimeSafety C) (s0 : C.size ≠ 0)
-    (sd : C.size ≠ eoaDelegatedCodeLength) (installed : start.state.getCode a = C) :
-    ∀ R ∈ trace.settledRoots, R.pre.state.getCode a = C :=
-  stands_of_law trace capabilities s0 sd K.nonempty K.notDelegation installed
-    fun _ _ ready => root_noDel_of_safety K ready
-
-include capabilities in
 /-- **A listed version, with the library under V2_2, standing at the start of a mid history stands at every settled
 root.** One read at the start. -/
 theorem entry_ready {e : UsdcDeployedEntry} (version : CurveCoins.UsdcVersion e.code)
@@ -225,36 +203,145 @@ theorem entry_ready {e : UsdcDeployedEntry} (version : CurveCoins.UsdcVersion e.
   intro R member
   refine ⟨?_, fun hi => ?_⟩
   · rcases version with rfl | rfl | rfl
-    · exact stands_of_safety trace capabilities v2_safety (by decide +kernel) (by decide +kernel) code R member
-    · exact stands_of_safety trace capabilities v2_1_safety (by decide +kernel) (by decide +kernel) code R member
-    · have libStands := stands_of_safety trace capabilities lib_safety (by decide +kernel) (by decide +kernel)
+    · exact stands_of_safety capabilities trace v2_safety (standingAt adr _ v2_size).image code R member
+    · exact stands_of_safety capabilities trace v2_1_safety (standingAt adr _ v2_1_size).image code R member
+    · have libStands := stands_of_safety capabilities trace lib_safety (standingAt usdcLib _ lib_size).image
         (lib rfl)
-      exact stands_of_law trace capabilities (by decide +kernel) (by decide +kernel)
+      exact stands_of_law capabilities trace (sem := CodeSem.ofBytes Impl.code impl_size.1 impl_size.2) rfl
         (UsdcContextCode.ne_nil (.inr (.inr (.inr (.inr (.inl rfl)))))) Impl.code_not_delegation code
         (fun Q here ready => impl_root_noDel ready (libStands Q here)) R member
-  · exact stands_of_safety trace capabilities lib_safety (by decide +kernel) (by decide +kernel) (lib hi) R member
-
-variable {T : Adr} {Vs : List UsdcDeployedEntry} (list : VersionList Vs)
-
-include capabilities list in
-/-- `ScanLive` at every settled root, when every listed version stands at the start. -/
-theorem scanLive_of_standing
-    (standing : ∀ e ∈ Vs, start.state.getCode e.adr = e.code ∧
-      (e.code = Impl.code → start.state.getCode usdcLib = Lib.code)) :
-    ∀ R ∈ trace.settledRoots, ScanLive T Vs R := fun R member e he _ =>
-  entry_ready trace capabilities (list.codes e he) (standing e he).1 (standing e he).2 R member
-
-include capabilities list in
-/-- **`ScanLive` at every settled root from one cut per version**: a mid history to the same end, at whose start the
-version (and, under V2_2, the library) stands, holding every root that finds the word naming that version. -/
-theorem scanLive_of_suffixes
-    (cuts : ∀ e ∈ Vs, ∃ (c : Benv) (suffix : MidHistoryTraceIn HistFork cfg c future),
-      (c.state.getCode e.adr = e.code ∧ (e.code = Impl.code → c.state.getCode usdcLib = Lib.code)) ∧
-      ∀ R ∈ trace.settledRoots, ((R.pre.getStor T).get implSlot).toAdr = e.adr → R ∈ suffix.settledRoots) :
-    ∀ R ∈ trace.settledRoots, ScanLive T Vs R := fun R member e he named => by
-  obtain ⟨c, suffix, ⟨code, lib⟩, holds⟩ := cuts e he
-  exact entry_ready suffix capabilities (list.codes e he) code lib R (holds R member named)
+  · exact stands_of_safety capabilities trace lib_safety (standingAt usdcLib _ lib_size).image (lib hi) R member
 
 end Mid
+
+/-! ## The word's version, standing, as a state invariant -/
+
+/-- What must stand for the word `v` to name a listed version. -/
+def VersionWitness (Vs : List UsdcDeployedEntry) (v : B256) (l : List StandingCode) : Prop :=
+  ∃ e ∈ Vs, v.toAdr = e.adr ∧
+    ((e.code = ImplV2.code ∧ l = [standingAt e.adr _ v2_size]) ∨
+     (e.code = ImplV2_1.code ∧ l = [standingAt e.adr _ v2_1_size]) ∨
+     (e.code = Impl.code ∧ l = [standingAt e.adr _ impl_size, standingAt usdcLib _ lib_size]))
+
+variable {T : Adr} {Vs : List UsdcDeployedEntry}
+
+theorem namedReady_of_witness {w : State} {l : List StandingCode}
+    (witness : VersionWitness Vs ((w.getStor T).get implSlot) l) (stands : Stands l w) : NamedReady T Vs w := by
+  obtain ⟨e, he, word, cases⟩ := witness
+  refine ⟨e, he, word, ?_⟩
+  rcases cases with ⟨c, rfl⟩ | ⟨c, rfl⟩ | ⟨c, rfl⟩
+  · exact ⟨(stands _ List.mem_cons_self).trans c.symm,
+      fun i => absurd (c.symm.trans i) (by decide +kernel)⟩
+  · exact ⟨(stands _ List.mem_cons_self).trans c.symm,
+      fun i => absurd (c.symm.trans i) (by decide +kernel)⟩
+  · exact ⟨(stands _ List.mem_cons_self).trans c.symm,
+      fun _ => stands _ (List.mem_cons_of_mem _ List.mem_cons_self)⟩
+
+theorem witness_of_ready {w : State} (list : VersionList Vs) {v : B256} {e : UsdcDeployedEntry} (he : e ∈ Vs)
+    (word : v.toAdr = e.adr) (code : w.getCode e.adr = e.code)
+    (lib : e.code = Impl.code → w.getCode usdcLib = Lib.code) :
+    ∃ l, VersionWitness Vs v l ∧ Stands l w := by
+  rcases list.codes e he with c | c | c
+  · exact ⟨_, ⟨e, he, word, .inl ⟨c, rfl⟩⟩, by
+      intro p hp
+      rw [List.mem_singleton] at hp
+      subst hp
+      exact code.trans c⟩
+  · exact ⟨_, ⟨e, he, word, .inr (.inl ⟨c, rfl⟩)⟩, by
+      intro p hp
+      rw [List.mem_singleton] at hp
+      subst hp
+      exact code.trans c⟩
+  · refine ⟨_, ⟨e, he, word, .inr (.inr ⟨c, rfl⟩)⟩, fun p hp => ?_⟩
+    rcases List.mem_cons.mp hp with rfl | hp
+    · exact code.trans c
+    · rw [List.mem_singleton] at hp
+      subst hp
+      exact lib c
+
+theorem version_stays : WitnessStays HistFork (VersionWitness Vs) := by
+  intro R v l witness stands p hp ready initial
+  obtain ⟨e, -, -, cases⟩ := witness
+  rcases cases with ⟨-, rfl⟩ | ⟨-, rfl⟩ | ⟨-, rfl⟩
+  · rw [List.mem_singleton] at hp
+    subst hp
+    exact root_noDel_of_safety BodyStageCapabilities.historical v2_safety rfl ready initial
+  · rw [List.mem_singleton] at hp
+    subst hp
+    exact root_noDel_of_safety BodyStageCapabilities.historical v2_1_safety rfl ready initial
+  · rcases List.mem_cons.mp hp with rfl | hp
+    · exact impl_root_noDel (s0 := impl_size.1) (sd := impl_size.2) ready
+        (stands _ (List.mem_cons_of_mem _ List.mem_cons_self)) initial
+    · rw [List.mem_singleton] at hp
+      subst hp
+      exact root_noDel_of_safety BodyStageCapabilities.historical lib_safety rfl ready initial
+
+section Scan
+
+variable {cfg : ChainConfig} {checkpoint future' : BlockChain}
+  (history : ConfiguredHistoryTraceIn HistFork cfg checkpoint future')
+  (capabilities : BodyStageCapabilities HistFork)
+  {start : Benv} {future : BlockChain} (trace : MidHistoryTraceIn HistFork cfg start future)
+  (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+  (list : VersionList Vs)
+  (scan : ∀ R ∈ trace.settledRoots, ScanRoot T Vs R)
+  (apart : KnownImplSlotApart T history.rawNodes)
+
+include rootsIn apart in
+/-- The slot exclusion at the retained nodes of one settled root. -/
+theorem scan_apartAt {R : Exec.Frame} (here : R ∈ trace.settledRoots) :
+    KnownImplSlotApart T (Exec.retainedNodes R.run) := fun m hm =>
+  apart m (history.rawNodes_of_mem_rawFrames _
+    (history.mem_rawFrames_of_mem_settledRoots R (rootsIn R here)) m
+    ((Exec.retainedNodes_sublist_rawNodes R.run).subset hm))
+
+include capabilities rootsIn list scan apart in
+/-- **The scan alone excludes `T`'s deletion, keeps its code, and keeps the word's version standing.** -/
+theorem scan_live (installed : start.state.getCode T = Proxy.code) (initial : NamedReady T Vs start.state) :
+    trace.OutputNotDeleted T ∧ future.state.getCode T = Proxy.code ∧ NamedReady T Vs future.state ∧
+      ∀ R ∈ trace.settledRoots, R.pre.state.getCode T = Proxy.code ∧ NamedReady T Vs R.pre.state := by
+  have bal : ∀ {fork}, HistFork fork → fork.ruleSet.bal = none := fun h => h.bal_none
+  have law : ∀ R ∈ trace.settledRoots, RootStep HistFork T entrySem implSlot (VersionWitness Vs) R := by
+    intro R here ready l witness stands
+    have proxy : R.pre.getCode T = Proxy.code := bytes_eq_of_image ready.2.1.1
+    have live := namedReady_of_witness witness stands
+    have apartR := scan_apartAt history trace rootsIn apart here
+    obtain ⟨e, he, word, code⟩ :=
+      scan_post history capabilities bal list (rootsIn R here) proxy live (scan R here) apartR
+    refine ⟨root_noDel ready fun G hG _ _ _ => ?_, witness_of_ready list he word code.1 code.2⟩
+    exact scan_frames history capabilities bal list (rootsIn R here) proxy live (scan R here) apartR G hG
+  obtain ⟨e, he, word, code, lib⟩ := initial
+  obtain ⟨nd, final, roots⟩ := Blanc.Lift.MidHistoryTraceIn.live_of_roots trace capabilities (sem := entrySem) rfl
+    proxy_toList_ne_nil proxy_not_delegation law version_stays ⟨installed, witness_of_ready list he word code lib⟩
+  obtain ⟨finalCode, l, witness, stands⟩ := final
+  exact ⟨nd, finalCode, namedReady_of_witness witness stands, fun R here => by
+    obtain ⟨rootCode, l, witness, stands⟩ := roots R here
+    exact ⟨rootCode, namedReady_of_witness witness stands⟩⟩
+
+include capabilities rootsIn list scan apart in
+/-- **The scan is a complete check**: with the word's version standing at the start and the logs scanned, the settled
+proxy frames are certified. Nothing is asked about deletion, nor about any root between upgrades. -/
+theorem certifiedSettled_of_scan (installed : start.state.getCode T = Proxy.code)
+    (initial : NamedReady T Vs start.state) : CertifiedSettled T trace.settledFrames := by
+  have bal : ∀ {fork}, HistFork fork → fork.ruleSet.bal = none := fun h => h.bal_none
+  obtain ⟨-, -, -, roots⟩ := scan_live history capabilities trace rootsIn list scan apart installed initial
+  intro G member target _ _
+  rw [trace.settledFrames_eq] at member
+  obtain ⟨R, here, frame⟩ := List.mem_flatMap.mp member
+  exact scan_frames history capabilities bal list (rootsIn R here) (roots R here).1 (roots R here).2 (scan R here)
+    (scan_apartAt history trace rootsIn apart here) G frame
+
+end Scan
+
+/-- **A root's scan from one cut per version**: each `Upgraded` log names a listed version with a mid history from a cut,
+at which it (and, under V2_2, the library) stands, holding this root. -/
+theorem scanRoot_of_cuts {cfg : ChainConfig} {future : BlockChain} (capabilities : BodyStageCapabilities HistFork)
+    {R : Exec.Frame}
+    (logs : ∀ entry ∈ R.post.logs, UpgradedTargetSatisfies T (fun a => ∃ e ∈ Vs, a = e.adr ∧
+      CurveCoins.UsdcVersion e.code ∧ ∃ (c : Benv) (suffix : MidHistoryTraceIn HistFork cfg c future),
+        (c.state.getCode e.adr = e.code ∧ (e.code = Impl.code → c.state.getCode usdcLib = Lib.code)) ∧
+        R ∈ suffix.settledRoots) entry) : ScanRoot T Vs R := fun entry present address topics => by
+  obtain ⟨e, he, adr, version, c, suffix, ⟨code, lib⟩, here⟩ := logs entry present address topics
+  exact ⟨e, he, adr, entry_ready suffix capabilities version code lib R here⟩
 
 end Blanc.Lift.Usdc

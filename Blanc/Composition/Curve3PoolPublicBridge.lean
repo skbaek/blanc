@@ -138,6 +138,22 @@ theorem NoKeyHolder.daiAuthority {cfg : ChainConfig} {start : Benv} {future : Bl
   noSignature := CurveCoins.Dai.dai_noSignature_of_logs trace installed keys.daiNoApproval
   ownCalls := own
 
+/-- **`NoKeyHolder` gives `usdc_entryLocalAt`'s `PoolAuthorityEmpty`.** -/
+theorem NoKeyHolder.usdcAuthority {settled : List Exec.Frame} {w : Jaune.State} {noAuthority : Prop}
+    (keys : NoKeyHolder w settled noAuthority)
+    (own : ∀ F ∈ Usdc.usdcFrames usdc settled, F.sevm.caller = pool →
+      CurveCoins.PoolCoinSel (Sevm.selector F.sevm)) :
+    PoolAuthorityEmpty Usdc.SignedAs Usdc.allowSlot CurveCoins.PoolCoinSel pool
+      (Usdc.ledgerView (wordsAt usdc w)) (Usdc.usdcFrames usdc settled) where
+  rowsAtCut := fun g _ => by
+    have := keys.rowsAtCut 1 g
+    unfold Usdc.ledgerView
+    split
+    · rfl
+    · exact this
+  noSignature := keys.usdcNoSignature
+  ownCalls := own
+
 /-- **`NoKeyHolder` gives `usdt_entry_local`'s `PoolAuthorityEmpty`**: USDT has no signed writer. -/
 theorem NoKeyHolder.usdtAuthority {settled : List Exec.Frame} {w : Jaune.State} {noAuthority : Prop}
     (keys : NoKeyHolder w settled noAuthority)

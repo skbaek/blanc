@@ -151,10 +151,10 @@ theorem init_frame_mem {settled : List Exec.Frame} {F : Exec.Frame} (member : F 
   mem_coinFrames.mpr ⟨member, target, nonstatic, obs, init_ne_rescue sel⟩
 
 include capabilities in
-/-- **`T` has code at the entry of every settled frame**, the chain's fact for frames off it as well. -/
-theorem usdc_settled_hasCode (installed : start.state.getCode T = Proxy.code)
+/-- **`T` holds the proxy at the entry of every settled frame**, the chain's fact for frames off it as well. -/
+theorem usdc_settledCode (installed : start.state.getCode T = Proxy.code)
     (certified : CertifiedSettled T trace.settledFrames) :
-    ∀ F ∈ trace.settledFrames, (F.pre.getCode T).toList ≠ [] := by
+    ∀ F ∈ trace.settledFrames, F.pre.getCode T = Proxy.code := by
   intro F member
   rw [trace.settledFrames_eq] at member
   obtain ⟨R, here, frame⟩ := List.mem_flatMap.mp member
@@ -164,10 +164,15 @@ theorem usdc_settled_hasCode (installed : start.state.getCode T = Proxy.code)
   have proxy : R.pre.getCode T = Proxy.code := bytes_eq_of_image ready.2.1.1
   have retained := (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix R.run (Exec.Frame.rootDeriv F)).mpr
     ⟨F, frame, .refl _⟩
-  have code := Exec.rawNodes_getCode R.run proxy proxy_toList_ne_nil _
+  exact Exec.rawNodes_getCode R.run proxy proxy_toList_ne_nil _
     ((Exec.retainedNodes_sublist_rawNodes R.run).subset retained)
-  change F.pre.getCode T = Proxy.code at code
-  rw [code]
+
+include capabilities in
+/-- `T` has code at the entry of every settled frame. -/
+theorem usdc_settled_hasCode (installed : start.state.getCode T = Proxy.code)
+    (certified : CertifiedSettled T trace.settledFrames) :
+    ∀ F ∈ trace.settledFrames, (F.pre.getCode T).toList ≠ [] := fun F member => by
+  rw [usdc_settledCode trace capabilities installed certified F member]
   exact proxy_toList_ne_nil
 
 include capabilities in
