@@ -1,5 +1,7 @@
 import Blanc.Lift.Usdc.Impl.Check
 import Blanc.Lift.WalkCutKit
+import Blanc.Lift.HistAccessWalk
+import Blanc.HistoricalFork
 import Blanc.Lift.WalkInvKit
 
 /-!
@@ -18,15 +20,15 @@ open Jaune Blanc Blanc.Lift
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg}
 
 /-- `_balanceOf(a)` (entry 96): the low 255 bits of `a`'s packed word. -/
-theorem balanceOf_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D : Devm}
+theorem balanceOf_ret (hfork : HistFork sevm.benvStat.fork) {t a : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (a :: t :: S) M G) t_41da_c96 (.returned D)) :
-    ∃ M' G', D = St (afterSload sevm b (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))
+    ∃ M' G', D = St (afterSloadH sevm b (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))
       ((lo255 &&& b.getStorVal sevm.currentTarget (mapSlot (ff20 &&& a) (Bytes.toB256 [9]))) :: S) M' G' := by
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_41da_c96 at run
   winv 13
   rw [keccak_scratch] at run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 3
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
@@ -34,16 +36,16 @@ theorem balanceOf_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D :
   exact ⟨_, _, rfl⟩
 
 /-- `_isBlacklisted(a)` (entry 83): the top bit of `a`'s packed word. -/
-theorem isBlacklisted_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D : Devm}
+theorem isBlacklisted_ret (hfork : HistFork sevm.benvStat.fork) {t a : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (a :: t :: S) M G) t_3f6a_c83 (.returned D)) :
-    ∃ M' G', D = St (afterSload sevm b (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))
+    ∃ M' G', D = St (afterSloadH sevm b (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))
       ((Bytes.toB256 [1] =? (b.getStorVal sevm.currentTarget (mapSlot (ff20 &&& a) (Bytes.toB256 [9])) >>>
         (Bytes.toB256 [255]).toNat)) :: S) M' G' := by
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_3f6a_c83 at run
   winv 13
   rw [keccak_scratch] at run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 5
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
@@ -83,25 +85,25 @@ theorem sub_ret {t x y : B256} {D : Devm}
   exact ⟨_, rfl, B256.eq_of_eqCheck_ne_zero h1⟩
 
 /-- `_setOwner(a)` (entry 85): the address bits of slot 0. -/
-theorem setOwner_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D : Devm}
+theorem setOwner_ret (hfork : HistFork sevm.benvStat.fork) {t a : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (a :: t :: S) M G) t_422f_c85 (.returned D)) :
-    ∃ G', D = St (afterSstore sevm (afterSload sevm b (Bytes.toB256 [0])) (Bytes.toB256 [0])
+    ∃ G', D = St (afterSstoreH sevm (afterSloadH sevm b (Bytes.toB256 [0])) (Bytes.toB256 [0])
       ((ff20 &&& a) ||| (hi96 &&& b.getStorVal sevm.currentTarget (Bytes.toB256 [0])))) S M G' := by
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_422f_c85 at run
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 12
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
   exact ⟨_, rfl⟩
 
 /-- `_setBalance(account, x)` (entry 99): the credit cap, not blacklisted, then the write. -/
-theorem setBalance_ret (hfork : CoveredFork sevm.benvStat.fork) {t x y : B256} {D : Devm}
+theorem setBalance_ret (hfork : HistFork sevm.benvStat.fork) {t x y : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (x :: y :: t :: S) M G) t_4430_c99 (.returned D)) :
-    ∃ M' G', D = St (afterSstore sevm (afterSload sevm b (mapSlot (ff20 &&& y) (Bytes.toB256 [9]))) (mapSlot (y &&& ff20) (Bytes.toB256 [9])) x)
+    ∃ M' G', D = St (afterSstoreH sevm (afterSloadH sevm b (mapSlot (ff20 &&& y) (Bytes.toB256 [9]))) (mapSlot (y &&& ff20) (Bytes.toB256 [9])) x)
         S M' G' ∧ B256.gtCheck x lo255 = 0 ∧
       (Bytes.toB256 [1] =? (b.getStorVal sevm.currentTarget (mapSlot (ff20 &&& y) (Bytes.toB256 [9])) >>> (Bytes.toB256 [255]).toNat)) = 0 := by
   replace run := SFunc.runP_iff_runCutP_nil.mp run
@@ -120,16 +122,16 @@ theorem setBalance_ret (hfork : CoveredFork sevm.benvStat.fork) {t x y : B256} {
   unfold t_4508_c99 at run
   winv 15
   rw [keccak_scratch] at run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
   exact ⟨_, _, rfl, B256.eq_of_eqCheck_ne_zero h1, B256.eq_of_eqCheck_ne_zero h2⟩
 
 /-- `_setBlacklistState(a, false)` (entry 109): the balance bits only. -/
-theorem setBlacklistState0_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D : Devm}
+theorem setBlacklistState0_ret (hfork : HistFork sevm.benvStat.fork) {t a : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (Bytes.toB256 [0] :: a :: t :: S) M G) t_4cc7_c109 (.returned D)) :
-    ∃ M' G', D = St (afterSstore sevm (afterSload sevm b (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))
+    ∃ M' G', D = St (afterSstoreH sevm (afterSloadH sevm b (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))
       (mapSlot (a &&& ff20) (Bytes.toB256 [9]))
       (lo255 &&& b.getStorVal sevm.currentTarget (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))) S M' G' := by
   replace run := SFunc.runP_iff_runCutP_nil.mp run
@@ -148,7 +150,7 @@ theorem setBlacklistState0_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B
   winv 15
   rw [keccak_scratch] at run
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_pop s; clear s
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
@@ -156,9 +158,9 @@ theorem setBlacklistState0_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B
   exact ⟨_, _, rfl⟩
 
 /-- `_setBlacklistState(a, true)` (entry 109): the top bit set. -/
-theorem setBlacklistState1_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D : Devm}
+theorem setBlacklistState1_ret (hfork : HistFork sevm.benvStat.fork) {t a : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (Bytes.toB256 [1] :: a :: t :: S) M G) t_4cc7_c109 (.returned D)) :
-    ∃ M' G', D = St (afterSstore sevm (afterSload sevm b (mapSlot (a &&& ff20) (Bytes.toB256 [9])))
+    ∃ M' G', D = St (afterSstoreH sevm (afterSloadH sevm b (mapSlot (a &&& ff20) (Bytes.toB256 [9])))
       (mapSlot (a &&& ff20) (Bytes.toB256 [9]))
       (Bytes.toB256 [128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0] ||| b.getStorVal sevm.currentTarget (mapSlot (a &&& ff20) (Bytes.toB256 [9])))) S M' G' := by
@@ -170,13 +172,13 @@ theorem setBlacklistState1_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B
   unfold t_4cda_c109 at run
   winv 14
   rw [keccak_scratch] at run
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 2
   unfold t_4d23_c10 at run
   winv 15
   rw [keccak_scratch] at run
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_pop s; clear s
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
@@ -184,9 +186,9 @@ theorem setBlacklistState1_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B
   exact ⟨_, _, rfl⟩
 
 /-- `_unBlacklist(a)` (entry 104). -/
-theorem unBlacklist_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D : Devm}
+theorem unBlacklist_ret (hfork : HistFork sevm.benvStat.fork) {t a : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (a :: t :: S) M G) t_3f5f_c104 (.returned D)) :
-    ∃ M' G', D = St (afterSstore sevm (afterSload sevm b (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))
+    ∃ M' G', D = St (afterSstoreH sevm (afterSloadH sevm b (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))
       (mapSlot (a &&& ff20) (Bytes.toB256 [9]))
       (lo255 &&& b.getStorVal sevm.currentTarget (mapSlot (ff20 &&& a) (Bytes.toB256 [9])))) S M' G' := by
   replace run := SFunc.runP_iff_runCutP_nil.mp run
@@ -202,9 +204,9 @@ theorem unBlacklist_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D
   exact ⟨_, _, rfl⟩
 
 /-- `_blacklist(a)` (entry 86). -/
-theorem blacklist_ret (hfork : CoveredFork sevm.benvStat.fork) {t a : B256} {D : Devm}
+theorem blacklist_ret (hfork : HistFork sevm.benvStat.fork) {t a : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (a :: t :: S) M G) t_4224_c86 (.returned D)) :
-    ∃ M' G', D = St (afterSstore sevm (afterSload sevm b (mapSlot (a &&& ff20) (Bytes.toB256 [9])))
+    ∃ M' G', D = St (afterSstoreH sevm (afterSloadH sevm b (mapSlot (a &&& ff20) (Bytes.toB256 [9])))
       (mapSlot (a &&& ff20) (Bytes.toB256 [9]))
       (Bytes.toB256 [128, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0] ||| b.getStorVal sevm.currentTarget (mapSlot (a &&& ff20) (Bytes.toB256 [9])))) S M' G' := by

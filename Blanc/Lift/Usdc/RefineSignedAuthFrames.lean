@@ -42,7 +42,7 @@ theorem lits_auth : Bytes.toB256 [4] = 4 ∧ Bytes.toB256 [4] + Bytes.toB256 [32
 variable {sevm : Sevm} {pre post : Devm}
 
 theorem frame_twa_vrs (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
     (sel : Blanc.Sevm.selector sevm = 0xe3ee160e) :
     AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) := by
   obtain ⟨-, -, M, G, h⟩ := impl_preamble_cut (impl_run_cut run code fork)
@@ -67,7 +67,7 @@ theorem frame_twa_vrs (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Imp
   exact ⟨p0, f1, f2, by rw [congrFun sp]; exact post1⟩
 
 theorem frame_rwa_vrs (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
     (sel : Blanc.Sevm.selector sevm = 0xef55bec6) :
     sevm.caller = (Sevm.dataWord sevm 36).toAdr ∧ AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) := by
   obtain ⟨-, -, M, G, h⟩ := impl_preamble_cut (impl_run_cut run code fork)
@@ -92,7 +92,7 @@ theorem frame_rwa_vrs (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Imp
   exact ⟨cl, p0, f1, f2, by rw [congrFun sp]; exact post1⟩
 
 theorem frame_twa_bytes (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
     (sel : Blanc.Sevm.selector sevm = 0xcf092995) :
     AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) := by
   obtain ⟨-, -, M, G, h⟩ := impl_preamble_cut (impl_run_cut run code fork)
@@ -122,7 +122,7 @@ theorem frame_twa_bytes (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = I
   exact ⟨p0, f1, f2, by rw [congrFun sp]; exact post1⟩
 
 theorem frame_rwa_bytes (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
     (sel : Blanc.Sevm.selector sevm = 0x88b7ab63) :
     sevm.caller = (Sevm.dataWord sevm 36).toAdr ∧ AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) := by
   obtain ⟨-, -, M, G, h⟩ := impl_preamble_cut (impl_run_cut run code fork)

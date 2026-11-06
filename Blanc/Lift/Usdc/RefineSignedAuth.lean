@@ -135,9 +135,9 @@ theorem implStepLaw_twa :
       ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
         ∀ x, Ninst.At N.sevm.code N.pc (.exec x) → x = .delegatecall ∧ N.devm.state = pre.state := by
     rcases sel with sel | sel
-    · exact ⟨frame_twa_bytes run codeEq fork hcode sel,
+    · exact ⟨frame_twa_bytes run codeEq fork.histFork hcode sel,
         auth_node run codeEq fork sel route_twa_bytes (by decide)⟩
-    · exact ⟨frame_twa_vrs run codeEq fork hcode sel,
+    · exact ⟨frame_twa_vrs run codeEq fork.histFork hcode sel,
         auth_node run codeEq fork sel route_twa_vrs (by decide)⟩
   obtain ⟨step, ki, ka⟩ := auth_ledger inj apart False not_false hs hd ha fr
   refine ⟨?_, ki, ka, fun sup => ?_, fun N hN x hx => ?_⟩
@@ -173,9 +173,9 @@ theorem implStepLaw_rwa :
       ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
         ∀ x, Ninst.At N.sevm.code N.pc (.exec x) → x = .delegatecall ∧ N.devm.state = pre.state := by
     rcases sel with sel | sel
-    · exact ⟨(frame_rwa_bytes run codeEq fork hcode sel).1, (frame_rwa_bytes run codeEq fork hcode sel).2,
+    · exact ⟨(frame_rwa_bytes run codeEq fork.histFork hcode sel).1, (frame_rwa_bytes run codeEq fork.histFork hcode sel).2,
         auth_node run codeEq fork sel route_rwa_bytes (by decide)⟩
-    · exact ⟨(frame_rwa_vrs run codeEq fork hcode sel).1, (frame_rwa_vrs run codeEq fork hcode sel).2,
+    · exact ⟨(frame_rwa_vrs run codeEq fork.histFork hcode sel).1, (frame_rwa_vrs run codeEq fork.histFork hcode sel).2,
         auth_node run codeEq fork sel route_rwa_vrs (by decide)⟩
   obtain ⟨step, ki, ka⟩ := auth_ledger inj apart ((Sevm.dataWord sevm 36).toAdr ≠ sevm.caller)
     (fun h => h cl.symm) hs hd ha fr
