@@ -127,10 +127,10 @@ theorem removeLiquidityImbalance_live_exact {sevm : Sevm} {pre : Devm} {s : Stat
   have hkill : (pre.getStor sevm.currentTarget).get isKilledSlot = 0 := by
     rw [hck.abs.isKilled, hk]; rfl
   -- the exact run
-  obtain ⟨r, hr, D, rfl, hDg⟩ := rx_rli_frame_exact (s := s) P
+  obtain ⟨r, hr, D, rfl, hDg, -⟩ := rx_rli_frame_exact (s := s) P
     ⟨amp, v0, v1, v2, xa, xb, xc, f0, f1, f2, s0, s1, s2, x0, x1, x2⟩ hfork hstatic hdepth hlen hcd
     hsel hid hWc hWb hck.abs hck.unlocked hval hkill hA hT0 hmf hX0 hD0 hu0 hu1 hu2 hX1 hD1 h0 h1 h2
-    hX2 hD2 hD02 hmT hbn hb1 hslip hTX hP' (fun j hj => hskip ⟨j, hj⟩) hR hG256
+    hX2 hD2 hD02 hmT hbn hb1 hslip hTX hP' (fun j hj => hskip ⟨j, hj⟩) hR (by omega)
   obtain ⟨exD⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the effect, at the same entry gas
   obtain ⟨post, exc, hraw, hckp, hW4⟩ := removeLiquidityImbalance_live

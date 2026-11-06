@@ -141,7 +141,7 @@ theorem rx_rli_pushF {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop}
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 k + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 k))
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 k + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 E)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 k + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -281,6 +281,11 @@ theorem rx_rli_pushF {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop}
     have htc : rawTailCost (min d.returnData.length 32) ≤ 500 := by
       unfold rawTailCost rawJoinCost rawCheckCost idCost ceilDiv
       split_ifs <;> omega
+    have htl : 246 ≤ rawTailCost (min d.returnData.length 32) := by
+      unfold rawTailCost rawJoinCost
+      split_ifs <;> omega
+    have hsl : 100 ≤ sloadCost sevm bI2 (coinsBase + Nat.toB256 k) := by
+      unfold sloadCost; split <;> decide
     obtain ⟨G2, hG2⟩ : ∃ G2, d.gasLeft = G2 + rawTailCost (min d.returnData.length 32) :=
       ⟨d.gasLeft - rawTailCost (min d.returnData.length 32), by omega⟩
     rw [hG2]
@@ -358,7 +363,7 @@ theorem rx_rli_push0E {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 0))
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 E)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -396,7 +401,7 @@ theorem rx_rli_push1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 1))
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 E)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -435,7 +440,7 @@ theorem rx_rli_pushG {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop}
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 k + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 k))
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 k + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 E)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 k + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -576,6 +581,11 @@ theorem rx_rli_pushG {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop}
     have htc : rawTailCost (min d.returnData.length 32) ≤ 500 := by
       unfold rawTailCost rawJoinCost rawCheckCost idCost ceilDiv
       split_ifs <;> omega
+    have htl : 246 ≤ rawTailCost (min d.returnData.length 32) := by
+      unfold rawTailCost rawJoinCost
+      split_ifs <;> omega
+    have hsl : 100 ≤ sloadCost sevm bI2 (coinsBase + Nat.toB256 k) := by
+      unfold sloadCost; split <;> decide
     obtain ⟨G2, hG2⟩ : ∃ G2, d.gasLeft = G2 + rawTailCost (min d.returnData.length 32) :=
       ⟨d.gasLeft - rawTailCost (min d.returnData.length 32), by omega⟩
     rw [hG2]
@@ -653,7 +663,7 @@ theorem rx_rli_push1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 1))
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 E)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -690,7 +700,7 @@ theorem rx_rli_push2aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 2))
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 E)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -728,7 +738,7 @@ theorem rx_rli_push2bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 2))
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 E)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -764,7 +774,7 @@ theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop}
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 0))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) U 0xaa0 0xb40)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -792,7 +802,7 @@ theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 1))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) U 0xaa0 0xb40)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -820,7 +830,7 @@ theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 1))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) U 0xaa0 0xb40)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -848,7 +858,7 @@ theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 2))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) U 0xaa0 0xb40)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -876,7 +886,7 @@ theorem rx_rli_push2b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 2))
       (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) U 0xaa0 0xb40)
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
-    (hG : 12000 + U + R ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 12000 + U + R ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes) (g : Nat), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →

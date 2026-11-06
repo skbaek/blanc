@@ -208,7 +208,7 @@ theorem rx_rli_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.is
       ((pre.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 2)) (rliAmt sevm 2) U 0xaa0 0xb40)
     (hskip : ∀ j, j < 3 → rliAmt sevm j = 0 → ∀ b, W (j + 1) b → W (j + 2) b)
     (hG : costGetDMem xa amp + costGetDMem xb amp + costGetDMem xc amp + 240000 + 5 * U ≤ G)
-    (hGb : G + 3000 < 2 ^ 256)
+    (hGb : G < 2 ^ 256)
     (k : ∀ D : Devm, ExLive sevm (W 4) D ((rliStor (pre.getStor sevm.currentTarget) s0 s1 s2).set
         (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧

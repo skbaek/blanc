@@ -111,12 +111,12 @@ theorem removeLiquidityImbalance_live {sevm : Sevm} {pre : Devm} {s : State} {o 
   have hkill : (pre.getStor sevm.currentTarget).get isKilledSlot = 0 := by
     rw [hck.abs.isKilled, hk]; rfl
   -- the forward run
-  obtain ⟨r, hr, D, rfl, hLD⟩ := rx_rli_frame (pre := pre) (s := s)
+  obtain ⟨r, hr, D, rfl, hLD⟩ := rx_rli_frame (pre := pre) (s := s) (G := G)
     (Q := fun r => ∃ D', r = .halted D' ∧ ExLive sevm (W 4) D' _)
     hfork hstatic hdepth hlen hcd hsel hid hWc hWb hck.abs hck.unlocked hval
     hkill hA hsup hT0 hmf hX0 hD0 hu0 hu1 hu2 hX1 hD1 h0 h1 h2 hX2 hD2
     hD02 hmT hbn hb1 hslip hTX hburn (hpush 0) (hpush 1) (hpush 2) (fun j hj => hskip ⟨j, hj⟩)
-    (by rw [hcost] at hG; omega) hG256 (fun D' h _ => ⟨D', rfl, h⟩)
+    (by rw [hcost] at hG; omega) (by omega) (fun D' h _ => ⟨D', rfl, h⟩)
   obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the frame's first child is the supply call the forward run made: it answered `T`
   obtain ⟨r1, hr1, b1, S1, M1, g1, rfl, hW1, hU1, hg1, hin1, hS1⟩ := rx_rli_toSupply (pre := pre)

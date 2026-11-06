@@ -8,7 +8,8 @@ import Blanc.Lift.StaticGasMessage
 Each headline is a `Prop` quantifying over its premises. This module only states them. `pool_backed_holds` and
 `virtual_price_bound_holds` are in `Curve3PoolBacked`, `lp_exit_holds` and `lp_exit_message_holds` in `Curve3PoolExitMain`,
 `swap_holds` and `swap_message_holds` in `Curve3PoolSwapMain`, `virtual_price_falls` in `Curve3PoolVirtualPriceFalls`.
-`add_liquidity_message`, `imbalance_message` and `one_coin_message` are stated and not yet proved.
+`imbalance_message_holds` is in `Curve3PoolImbalanceMain`, `one_coin_message_holds` in `Curve3PoolOneCoinMain`.
+`add_liquidity_message` is stated and not yet proved.
 
 * `pool_backed`: the pool's books are covered by what each coin's storage says it holds.
 * `lp_exit`: a holder's `remove_liquidity` transaction is processed, at exact gas, and pays out.
@@ -311,14 +312,20 @@ def add_liquidity_message : Prop :=
       AddRequest m.world E msg.benv.stat.time.toNat am minMint minted stored →
       MsgDoesAtNamedCost msg (fun st => AddPaid m.world st E am minted stored)
 
-/-- The pool can pay `am` at timestamp `t`, and `E` holds the `burned` shares the contract computes. -/
+/-- The pool's books cover `am` at timestamp `t`, `E` holds the `burned` shares the contract computes, and its arithmetic fits. -/
 structure ImbalanceRequest (w : State) (E : Adr) (t : Nat) (am : V3) (maxBurn burned : Nat)
     (stored : V3) : Prop where
   live : PoolLive w
-  amounts : AmountsFit w pool E am
-  outcome : ∃ amp, ampAt w t = some amp ∧
+  /-- The books cover `am`; the contract's checked subtraction reverts on anything more. -/
+  books : ∀ k, am.get k ≤ recorded w k
+  /-- Each credit to `E` fits, as does USDT's fee on its amount. -/
+  fits : (∀ k, CreditFits w E k (netOf w k (am.get k))) ∧ UsdtFeeFits w (am.get 2)
+  /-- The contract computes `burned` and `stored`, and `burned * D0` bounds the product it checks. -/
+  outcome : ∃ amp D0, ampAt w t = some amp ∧ invariant w amp = some D0 ∧ burned * D0 < 2 ^ 256 ∧
     imbalanceOutcome w amp (v3Of fun k => recorded w k - am.get k) = some (burned, stored)
-  limits : 1 < burned ∧ burned ≤ maxBurn ∧ burned ≤ shares w E ∧ burned ≤ supply w
+  /-- The burn is positive and allowed; `maxBurn` is the calldata's word. -/
+  limits : 1 < burned ∧ burned ≤ maxBurn ∧ maxBurn < 2 ^ 256 ∧ burned ≤ shares w E ∧ burned ≤ supply w
+  apart : ExitApart w E
 
 /-- `remove_liquidity_imbalance`'s message, at the fallback cost. -/
 def imbalance_message : Prop :=
