@@ -193,7 +193,8 @@ theorem Assumes.coinsHold (A : Assumes d h) {s : Benv} {f : BlockChain}
     CoinsHold trace dai usdc usdt where
   daiCode := daiCode
   usdtCode := usdtCode
-  usdcCode := fun F m => A.circle.proxyStays F (sub F m)
+  usdcCode := fun F m => Usdc.usdc_settledCode (d.sincePool h) BodyStageCapabilities.historical A.usdcCode
+    A.circle.usdcCertified F (sub F m)
   usdcImpl := fun F m t _ => (A.circle.usdcCertified F (sub F m) t).1
   usdtLive := fun F m t st => A.tether.notDeprecated F (mem_coinFrames.mpr ⟨sub F m, t, st, trivial⟩)
 

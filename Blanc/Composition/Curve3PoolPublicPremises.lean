@@ -13,10 +13,7 @@ import Blanc.ExecutionHistoryInPreCancun
 import Blanc.ExecutionHistoryInFrameEnv
 import Blanc.Lift.CurveCoins.DaiLocality
 import Blanc.Lift.CurveCoins.UsdtLocality
-import Blanc.Lift.Usdc.EntryChain
-import Blanc.Lift.Usdc.ImplV2Ws.Ann
-import Blanc.Lift.Usdc.ImplV2_1Ws.Ann
-import Blanc.Lift.Usdc.ImplWs.Ann
+import Blanc.Lift.Usdc.EntryJoin
 
 /-!
 # The Curve 3pool's public statements: what they assume
@@ -69,7 +66,7 @@ noncomputable def sinceMinter : MidHistoryTraceIn HistFork mainnetChainConfig d.
 end Deployment
 
 /-- **The code the pool relies on, right after 3Crv's creation block**: one `eth_getCode` each. USDC's
-stays with Circle's powers, because its proxy delegates. -/
+is read at the pool's creation (`Assumes.usdcCode`), since from there Circle's powers are restrained. -/
 structure StartingCode (w : State) : Prop where
   daiCode : w.getCode dai = Lift.Dai.code
   usdtCode : w.getCode usdt = Lift.Usdt.code
@@ -86,10 +83,8 @@ structure TetherRestrained (settled : List Exec.Frame) : Prop where
 
 /-- **Circle's powers over the pool's USDC entry**, restrained, over a history's retained frames. -/
 structure CircleRestrained (settled : List Exec.Frame) : Prop where
-  /-- USDC stays behind its proxy's code. -/
-  proxyStays : ∀ f ∈ settled, f.pre.getCode usdc = Lift.Usdc.Proxy.code
   /-- The proxy admin only upgrades USDC to one of the three versions, and V2_2 finds its library. -/
-  usdcCertified : ∀ f ∈ settled, f.sevm.currentTarget = usdc → Usdc.UsdcCertified f.pre usdc
+  usdcCertified : Usdc.CertifiedSettled usdc settled
   /-- The pool's whole word is below `2^255` where USDC moves to V2_2, which reads that bit. -/
   belowFlag : Usdc.BelowFlagAt usdc pool (coinFrames usdc (Usdc.EntryObs usdc) settled)
 
@@ -101,19 +96,12 @@ def allowanceEntry (o s : Adr) : Fin 3 → B256
   | 1 => Usdc.allowSlot o s
   | 2 => Usdt.allowSlot o s
 
-/-- USDC's signature-authorized entries, whose first argument names the signer. -/
-def usdcSignedSelectors : List B256 := [0xd505accf, 0x9fd5a6cf, 0xe3ee160e, 0xcf092995, 0xef55bec6, 0x88b7ab63]
-
-/-- A USDC message authorized by a signature naming `h` as the signer. -/
-def UsdcSignedAs (h : Adr) (e : Sevm) : Prop :=
-  Sevm.selector e ∈ usdcSignedSelectors ∧ (Sevm.dataWord e 4).toAdr = h
-
 /-- **Nobody holds a key for the pool's address or for address 4.** -/
 structure NoKeyHolder (w : State) (settled : List Exec.Frame) (noAuthority : Prop) : Prop where
   /-- DAI's `Approval` never names the pool as owner; a `permit` naming it would log that. -/
   daiNoApproval : ∀ F ∈ coinFrames dai (fun _ => True) settled, ¬ CurveCoins.Dai.LogsApprovalAs dai pool F
   /-- No signature recovers to the pool for USDC's signed entries. -/
-  usdcNoSignature : ∀ F ∈ coinFrames usdc (fun _ => True) settled, ¬ UsdcSignedAs pool F.sevm
+  usdcNoSignature : ∀ F ∈ Usdc.usdcFrames usdc settled, ¬ Usdc.SignedAs pool F.sevm
   /-- The pool's allowance rows are empty when it is created: before its code exists only its key could
   set one. A universal over spenders, checkable for any finite set, not one RPC read. -/
   rowsAtCut : ∀ k g, wordsAt (coinAt k) w (allowanceEntry pool g k) = 0
@@ -122,15 +110,10 @@ structure NoKeyHolder (w : State) (settled : List Exec.Frame) (noAuthority : Pro
 
 /-! ## Hashes -/
 
-/-- The sites USDC's three versions can write. -/
-def usdcSites : List WriteSite.Site :=
-  WriteSite.wsRoot Usdc.ImplV2Ws.implWsAnn ++ WriteSite.wsRoot Usdc.ImplV2_1Ws.implWsAnn ++
-    WriteSite.wsRoot Usdc.ImplWs.implWsAnn
-
 /-- **The pool's entries in each coin are collision-free over that coin's retained frames (HASH-T).** -/
 structure CoinKeysHold (settled : List Exec.Frame) : Prop where
   dai : CoinKeysFresh (WriteSite.wsRoot DaiWs.implWsAnn) 2 3 pool (coinFrames dai (fun _ => True) settled)
-  usdc : CoinKeysFresh usdcSites 9 10 pool (coinFrames usdc (fun _ => True) settled)
+  usdc : Usdc.UsdcKeysFreshInit usdc pool (Usdc.usdcFrames usdc settled)
   usdt : CurveCoins.Usdt.UsdtKeysFresh pool (coinFrames usdt (fun _ => True) settled)
 
 /-- **The history's hashes do not collide on what the proofs compare.** -/
@@ -148,6 +131,8 @@ structure Assumes (d : Deployment) {future : BlockChain}
     (h : MainnetHistory d.minter.post future) : Prop where
   /-- DAI and USDT are their deployed bytes, and address 4 holds no code. -/
   code : StartingCode d.c3.post.state
+  /-- USDC is behind its proxy's code at the pool's creation. -/
+  usdcCode : d.poolCut.afterBenv.state.getCode usdc = Lift.Usdc.Proxy.code
   /-- Tether's owner's powers are restrained. -/
   tether : TetherRestrained (d.sincePool h).settledFrames
   /-- Circle's powers are restrained. -/

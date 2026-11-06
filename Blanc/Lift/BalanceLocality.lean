@@ -484,7 +484,7 @@ derived without history from the coin's deployment. `noSignature` reads the fram
 is what the holder sends the coin. -/
 structure PoolAuthorityEmpty (signedAs : Adr → Sevm → Prop) (allowSlotOf : Adr → Adr → B256)
     (OwnSel : B256 → Prop) (h : Adr) (a : StorWords) (frames : List Exec.Frame) : Prop where
-  rowsAtCut : ∀ g, a (allowSlotOf h g) = 0
+  rowsAtCut : ∀ g, CallerOf frames g → a (allowSlotOf h g) = 0
   noSignature : ∀ F ∈ frames, ¬ signedAs h F.sevm
   ownCalls : ∀ F ∈ frames, F.sevm.caller = h → OwnSel (Blanc.Sevm.selector F.sevm)
 
