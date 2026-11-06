@@ -23,9 +23,10 @@ theorem recipient_reach_bounded {Q : Sevm → Devm → Ninst → Devm → Prop}
     {S : List B256} {M : Mem} {G : Nat} {K : List SFunc} {T : Conf}
     (run : ObservedReach Q observe ImplV2.cert.prog sevm
       ⟨St b (value :: amount :: recipient.toB256 :: owner.toB256 :: S) M G, ImplV2.t_40ba_c74, K⟩ T)
+    (credit : (b.getStorVal sevm.currentTarget (mapSlot recipient.toB256 9)).toNat ≤ value.toNat)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
     BoundedObservedSource Q observe sevm owner recipient T := by
-  exact OldTransferBodyReach.recipient_reach_bounded erase run hT cont
+  exact OldTransferBodyReach.recipient_reach_bounded erase run credit hT cont
 
 theorem owner_reach_bounded {Q : Sevm → Devm → Ninst → Devm → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
@@ -68,7 +69,7 @@ theorem recipient_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
       ⟨St b (value :: amount :: recipient.toB256 :: owner.toB256 :: S) M G, ImplV2.t_40ba_c74, K⟩ T)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
     ObservedSource Q observe sevm owner recipient T := by
-  exact (recipient_reach_bounded erase run hT cont).forget
+  exact OldTransferBodyReach.recipient_reach_source erase run hT cont
 
 /-- Compatibility projection of the stronger actual-store evidence. -/
 theorem body_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}

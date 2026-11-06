@@ -30,11 +30,11 @@ theorem body_bounded_source_or_return {version : ModernVersion} (old : version �
   · have atStore : AtSstore target := by rw [same] at hT; exact hT
     have source := OldTransferBodyReach.body_reach_bounded old erase inside atStore
       (fun _ member => by cases member)
-    rcases source with ⟨⟨value, rest, stack, bound⟩, shape, hash⟩ | ⟨stack, shape, hash⟩
+    rcases source with ⟨⟨value, rest, stack, bound⟩, shape, hash⟩ | ⟨⟨stack, shape, hash⟩, credit⟩
     · rw [same]
       exact .inl (.inl ⟨⟨value, rest, stack, bound⟩, shape, hash.below (continuation :: K)⟩)
     · rw [same]
-      exact .inl (.inr ⟨stack, shape, hash.below (continuation :: K)⟩)
+      exact .inl (.inr ⟨⟨stack, shape, hash.below (continuation :: K)⟩, credit⟩)
   · exact .inr returned
 
 def subFreeEntries : ModernVersion → List Nat
