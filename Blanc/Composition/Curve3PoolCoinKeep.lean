@@ -87,7 +87,7 @@ theorem exchange_keeps_of_children {s : Curve3Pool.State} (exc : Exec 0 sevm b (
     simpa only [exCoin, coinSlot, toB256_toNat] using hcoinPre ⟨_, hj⟩
   obtain ⟨-, -, -, hi3, hj3, x0, x1, x2, -, Lp, cp, cq, D, y, amp, hL, hcpm, hpt, -, -, -, -,
     hpull, -, -, -, -, -, -, -, -, -, -, -, -, -, -, -, hqt, -⟩ :=
-    xa_exchange hcode hfork hlen hcd hsel rfl ha hci hcj hpc hid
+    xa_exchange hcode hfork.histFork hlen hcd hsel rfl ha hci hcj hpc hid.toH
       (fun c hc hk => (keeps c hc hk).1) (fun c hc hk => (keeps c hc hk).2)
       (XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas))
   have coin : ∀ c ∈ Exec.childFrames exc, ExCoinChild sevm b c := by
