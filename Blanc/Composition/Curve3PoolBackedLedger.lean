@@ -74,7 +74,8 @@ structure Ledger (B : CoinBook) (pool : Adr) (frames : List Exec.Frame) (a b : S
   seam : ∀ xs F ys, B.cf frames = xs ++ F :: ys → B.Rd xs (B.V (wordsAt B.T F.pre.state)) ≤
     B.held F (B.V (wordsAt B.T F.pre.state))
   /-- Leaving a frame: the frame's reading is at most the position's. -/
-  leave : ∀ xs F ys m, B.cf frames = xs ++ F :: ys → B.held F m ≤ B.Rd (xs ++ [F]) m
+  leave : ∀ xs F ys, B.cf frames = xs ++ F :: ys →
+    B.held F (B.V (wordsAt B.T F.post.state)) ≤ B.Rd (xs ++ [F]) (B.V (wordsAt B.T F.post.state))
   /-- A frame the pool did not call takes nothing out by its message. -/
   third : ∀ F ∈ B.cf frames, F.sevm.caller ≠ pool → B.debit F.sevm = 0
 
@@ -98,7 +99,7 @@ theorem Ledger.run (L : Ledger B pool frames a b) :
       exact List.mem_append_right _ List.mem_cons_self
     have hs := L.seam xs F _ split'
     have hl := L.loc.law F mem
-    have hv := L.leave xs F (zs ++ ys) (B.V (wordsAt B.T F.post.state)) split'
+    have hv := L.leave xs F (zs ++ ys) split'
     have ih := L.run zs (xs ++ [F]) ys (m := B.V (wordsAt B.T F.post.state)) (m' := m')
       (by rw [split]; simp only [List.append_assoc, List.cons_append, List.nil_append]) rest
     have e : xs ++ [F] ++ zs = xs ++ F :: zs := by simp only [List.append_assoc, List.cons_append, List.nil_append]

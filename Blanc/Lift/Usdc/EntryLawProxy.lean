@@ -154,6 +154,10 @@ structure EntryChild (sevm : Sevm) (pre post : Devm) (C : ByteArray) (G : Exec.F
   postStor : Devm.getStor post sevm.currentTarget = Devm.getStor G.post sevm.currentTarget
   wf : Mem.Wf G.pre.memory
   logs : ∀ l ∈ G.post.logs, l ∈ post.logs
+  /-- The proxy answers what its implementation answered. -/
+  output : post.output = G.post.output
+  /-- The implementation's frame starts with nothing on its stack or in its memory. -/
+  fresh : G.pre.stack = [] ∧ G.pre.memory = Mem.empty
 
 theorem EntryChild.env {sevm : Sevm} {pre post : Devm} {C : ByteArray} {G : Exec.Frame}
     (h : EntryChild sevm pre post C G) : Env.root G.sevm = Env.root sevm := by
@@ -194,7 +198,7 @@ theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre
     ⟨-, b', g, S, M, G, d1, hb', step, tail⟩ | hadm
   swap
   · exact (notAdmin (by rw [adminOf_eq]; exact hadm)).elim
-  obtain ⟨⟨w, st, hst, hw⟩, -, hstate⟩ := dl_tail_halted (fun h => StepIn.toRun h) tail
+  obtain ⟨⟨w, st, hst, hw⟩, hout, hstate⟩ := dl_tail_halted (fun h => StepIn.toRun h) tail
   have tailLogs := dl_tail_logs (fun h => StepIn.toRun h) tail
   generalize hword : pre.getStorVal sevm.currentTarget implSlot = word at *
   obtain ⟨xl, filled, pc, steprun⟩ := step
@@ -248,7 +252,7 @@ theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre
       rw [hstat]
       exact hsg
     subst hrsm
-    rcases Resume.call_run_inv hcreate hsgf hresume.symm with ⟨xr, rfl, hxe, -, hstS, -⟩ | ⟨s0, hs0⟩
+    rcases Resume.call_run_inv hcreate hsgf hresume.symm with ⟨xr, rfl, hxe, -, hstS, hrd⟩ | ⟨s0, hs0⟩
     swap
     · rw [hs0] at hst
       simp only [List.cons.injEq] at hst
@@ -269,7 +273,7 @@ theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre
       have mem := roots _ List.mem_cons_self
       subst hR
       exact Exec.rawFrameRoots_codePreserve run a ne _ mem
-    refine ⟨Exec.Frame.ofRun child committed, ⟨rfl, ?_, ?_, ?_, ?_, ?_, ?_, rootCode, ?_, ?_, ?_, ?_⟩⟩
+    refine ⟨Exec.Frame.ofRun child committed, ⟨rfl, ?_, ?_, ?_, ?_, ?_, ?_, rootCode, ?_, ?_, ?_, ?_, ?_, ⟨rfl, rfl⟩⟩⟩
     · show f.inner.code = _
       rw [hK, codeSame]
     · exact hT
@@ -293,5 +297,16 @@ theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre
     · intro l hl
       rw [tailLogs]
       exact Resume.call_run_logs hcreate hsgf hxe hresume.symm l hl
+    · show post.output = xr.output
+      have hprov : ReturnDataBound.OutputProvenance _ xr := ReturnDataBound.exec_output child (by
+        change f.inner.benv.stat.rules.stateGas = none
+        exact hsgf)
+      have hlen : xr.output.length < 2 ^ 256 := by
+        rcases hprov with h | h
+        · rw [← h]
+          show ([] : Bytes).length < 2 ^ 256
+          decide
+        · exact h
+      rw [hout, hrd, B256.toNat_toB256_of_lt hlen, sliceD_zero_length]
 
 end Blanc.Lift.Usdc

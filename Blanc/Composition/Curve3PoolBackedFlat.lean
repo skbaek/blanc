@@ -297,7 +297,7 @@ theorem ledger_flat {T : Adr} {Good : Exec.Frame → Prop} {held : StorWords →
       at_ := fun split noOpaque => viewChain_id (L.at_ split noOpaque)
       law := L.law }
   seam := fun _ _ _ _ => Nat.le_refl _
-  leave := fun _ _ _ _ _ => Nat.le_refl _
+  leave := fun _ _ _ _ => Nat.le_refl _
   third := third
 
 /-- A pool frame's child at a coin runs the coin's bytes. -/

@@ -75,18 +75,31 @@ structure StartingCode (w : State) : Prop where
 /-! ## The operators -/
 
 /-- **Tether's owner's powers over the pool's USDT entry**, restrained, over a history's retained frames. -/
-structure TetherRestrained (settled : List Exec.Frame) : Prop where
+structure TetherRestrained (w : State) (settled : List Exec.Frame) : Prop where
   /-- The owner never destroys the pool's USDT. -/
   noConfiscation : ∀ F ∈ coinFrames usdt (fun _ => True) settled, ¬ CurveCoins.Usdt.Confiscates pool F.sevm
+  /-- USDT is not redirected when the pool is created. -/
+  notRedirected : Usdt.flag20 ((w.getStor usdt).get 10) = 0
   /-- The owner never redirects USDT through `deprecate`. -/
-  notDeprecated : ∀ F ∈ coinFrames usdt (fun _ => True) settled, CurveCoins.Usdt.NotDeprecated usdt F
+  noDeprecate : ∀ F ∈ coinFrames usdt (fun _ => True) settled, Blanc.Sevm.selector F.sevm ≠ 0x0753c30c
+
+/-- **USDC moves to V2_2 once, with the pool's whole word below the flag until then.** V2_2 reads that word's low 255 bits,
+the earlier versions the whole word. -/
+structure UsdcMovesOnce (w : State) (settled : List Exec.Frame) : Prop where
+  /-- Once a frame reading USDC's ledger runs V2_2, every later one does. -/
+  onward : ∀ before F after, settled = before ++ F :: after → F.sevm.currentTarget = usdc → Usdc.ChainObs usdc F →
+    Usdc.V22At usdc F → ∀ G ∈ after, G.sevm.currentTarget = usdc → Usdc.ChainObs usdc G → Usdc.V22At usdc G
+  /-- The pool's whole word is below the flag when it is created, and after every frame running the earlier versions. -/
+  below : ((w.getStor usdc).get (Usdc.balSlot pool)).toNat < 2 ^ 255 ∧
+    ∀ F ∈ coinFrames usdc (Usdc.ChainObs usdc) settled, ¬ Usdc.V22At usdc F →
+      ((F.post.getStor usdc).get (Usdc.balSlot pool)).toNat < 2 ^ 255
 
 /-- **Circle's powers over the pool's USDC entry**, restrained, over a history's retained frames. -/
-structure CircleRestrained (settled : List Exec.Frame) : Prop where
+structure CircleRestrained (w : State) (settled : List Exec.Frame) : Prop where
   /-- The proxy admin only upgrades USDC to one of the three versions, and V2_2 finds its library. -/
   usdcCertified : Usdc.CertifiedSettled usdc settled
-  /-- The pool's whole word is below `2^255` where USDC moves to V2_2, which reads that bit. -/
-  belowFlag : Usdc.BelowFlagAt usdc pool (coinFrames usdc (Usdc.EntryObs usdc) settled)
+  /-- USDC moves to V2_2 once, with the pool's whole word below the bit that version reads as a flag. -/
+  movesOnce : UsdcMovesOnce w settled
 
 /-! ## Signatures -/
 
@@ -134,9 +147,9 @@ structure Assumes (d : Deployment) {future : BlockChain}
   /-- USDC is behind its proxy's code at the pool's creation. -/
   usdcCode : d.poolCut.afterBenv.state.getCode usdc = Lift.Usdc.Proxy.code
   /-- Tether's owner's powers are restrained. -/
-  tether : TetherRestrained (d.sincePool h).settledFrames
+  tether : TetherRestrained d.poolCut.afterBenv.state (d.sincePool h).settledFrames
   /-- Circle's powers are restrained. -/
-  circle : CircleRestrained (d.sincePool h).settledFrames
+  circle : CircleRestrained d.poolCut.afterBenv.state (d.sincePool h).settledFrames
   /-- Nobody holds a key for the pool's address or for address 4. -/
   keys : NoKeyHolder d.poolCut.afterBenv.state (d.sincePool h).settledFrames
     ((d.sinceC3Block h).PragueNoAuthorityAt 4)
