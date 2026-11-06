@@ -87,7 +87,7 @@ theorem e83_mem {a ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM : FpM
   cases e
   exact FpM.scratch hM _ _
 
-theorem e96_mem {a ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM : FpM fp n M)
+theorem e96_mem {a ret : B256} (fork : HistFork sevm.benvStat.fork) (hM : FpM fp n M)
     (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_41da_c96 (.returned D)) :
     FpM fp n D.memory := by
   have h := run.cut
@@ -130,7 +130,7 @@ theorem e93_mem {x y z ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM :
   ibranch h c2
   repeat istep h
   icall h hc 96 t_41da_c96
-  have m1 := e96_mem fork hM hc
+  have m1 := e96_mem fork.histFork hM hc
   obtain ⟨b1, M1, G1, e, -⟩ := e96_inv fork.histFork hc
   cases e
   clear hc
@@ -138,7 +138,7 @@ theorem e93_mem {x y z ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM :
   ibranch h c3
   repeat istep h
   icall h hc 96 t_41da_c96
-  have m2 := e96_mem fork m1 hc
+  have m2 := e96_mem fork.histFork m1 hc
   obtain ⟨b2, M2, G2, e, -⟩ := e96_inv fork.histFork hc
   cases e
   clear hc
@@ -155,7 +155,7 @@ theorem e93_mem {x y z ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM :
   clear hc
   repeat istep h
   icall h hc 96 t_41da_c96
-  have m5 := e96_mem fork m4 hc
+  have m5 := e96_mem fork.histFork m4 hc
   obtain ⟨b5, M5, G5, e, -⟩ := e96_inv fork.histFork hc
   cases e
   clear hc
@@ -249,7 +249,7 @@ theorem frame_transfer_output {post : Devm} (fork : CoveredFork sevm.benvStat.fo
     rfl
 
 /-- **Entry 46, `balanceOf(a)`'s body** (`_balanceOf`, entry 96), keeping the free-pointer image. -/
-theorem e46_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e46_inv {a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (hM : FpM fp n M)
     (run : SFunc.Run cert.prog sevm (St b (a :: ret :: S) M G) t_2adf_c46 o) :
     ∃ b' M' G', o = .returned (St b' ((Nat.toB256 (2 ^ 255 - 1) &&&
@@ -259,17 +259,17 @@ theorem e46_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.f
   repeat istep h
   rcases ric_call (g := t_41da_c96) rfl h with ⟨_, ⟨D1, hc, h⟩ | ⟨D1, hc, _⟩⟩
   · have m1 := e96_mem fork hM hc
-    obtain ⟨b', M', G', e, -⟩ := e96_inv fork.histFork hc
+    obtain ⟨b', M', G', e, -⟩ := e96_inv fork hc
     cases e
     clear hc
     repeat istep h
     obtain ⟨_, e⟩ := ric_ret h
     cases e
     exact ⟨_, _, _, rfl, m1⟩
-  · obtain ⟨_, _, _, e, _⟩ := e96_inv fork.histFork hc
+  · obtain ⟨_, _, _, e, _⟩ := e96_inv fork hc
     cases e
 
-theorem frame_balanceOf_output {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_balanceOf_output {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Sevm.selector sevm = 0x70a08231)
     (run : SFunc.Run cert.prog sevm (St b [] Mem.empty G) t_0000_c0 (.halted post)) :
     post.output = (Nat.toB256 (2 ^ 255 - 1) &&&
@@ -312,7 +312,7 @@ theorem impl_balanceOf_output {pre post : Devm} (run : Exec 0 sevm pre (.ok post
   rw [show Impl.cert.prog[0]? = some Impl.t_0000_c0 from rfl] at hf
   cases hf
   rw [St.self stack mem] at r
-  exact frame_balanceOf_output fork sel r
+  exact frame_balanceOf_output fork.histFork sel r
 
 /-- **The implementation's `transfer` answer**: a successful fresh implementation frame whose
 selector is `transfer(address,uint256)` returns the word `1`. -/

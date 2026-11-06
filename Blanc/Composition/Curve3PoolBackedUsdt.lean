@@ -4,8 +4,8 @@ import Blanc.Composition.Curve3PoolBackedDai
 # The pool's books of USDT are covered
 
 USDT's debit is its `transfer`'s amount and its credit is nothing: the pool measures what comes in by asking. So its
-walk reads `balanceOf`, which forwards when the flag is set; `UsdtNotForwarding` keeps it from forwarding at any reader,
-from the flag clear at the cut and no `deprecate` frame.
+walk reads `balanceOf`, which forwards when the flag is set; `TetherRestrained` keeps it from forwarding at any reader,
+by the flag clear at the cut and no `deprecate` frame.
 -/
 
 namespace Blanc.Composition.Curve3PoolBacked
@@ -18,14 +18,7 @@ open Blanc.Lift.CurveCoins.Usdt (NotDeprecated usdtDebit)
 
 variable {d : Deployment} {future : BlockChain} {h : MainnetHistory d.minter.post future}
 
-/-- **Tether's owner does not deprecate USDT**: the flag is clear at the cut and no settled frame is `deprecate`. Local
-form of the proposed public premise. -/
-structure UsdtNotForwarding (w : Jaune.State) (settled : List Exec.Frame) : Prop where
-  clear : Usdt.flag20 ((w.getStor usdt).get 10) = 0
-  none : ∀ F ∈ coinFrames usdt (fun _ => True) settled, Blanc.Sevm.selector F.sevm ≠ 0x0753c30c
-
-theorem usdt_start_code (A : Assumes d h) : d.poolCut.afterBenv.state.getCode usdt = Lift.Usdt.code :=
-  cutCode_of_cert usdtInstalledCert d.toPool d.pool.trace d.poolCut A.code.usdtCode
+theorem usdt_start_code (A : Assumes d h) : d.poolCut.afterBenv.state.getCode usdt = Lift.Usdt.code := A.usdtStart
 
 /-- A settled non-static frame at USDT encloses no frame. -/
 theorem usdt_below (A : Assumes d h) {G : Exec.Frame} (member : G ∈ (d.sincePool h).settledFrames)
@@ -33,7 +26,7 @@ theorem usdt_below (A : Assumes d h) {G : Exec.Frame} (member : G ∈ (d.sincePo
     Exec.descendantFrames G.run = [] :=
   CurveCoins.Usdt.descendants_nil
     (CurveCoins.Usdt.settled_codeFrame BodyStageCapabilities.historical (d.sincePool h) (usdt_start_code A) member target)
-    target (A.tether.notDeprecated G (mem_coinFrames.mpr ⟨member, target, mutable, trivial⟩))
+    target (A.notDeprecated G (mem_coinFrames.mpr ⟨member, target, mutable, trivial⟩))
 
 /-- **USDT's locality over the history from the pool's creation.** -/
 theorem usdt_local (A : Assumes d h) :
@@ -41,7 +34,7 @@ theorem usdt_local (A : Assumes d h) :
       (fun σ => (σ (Lift.Usdt.balSlot pool)).toNat) (usdtDebit pool) (fun _ => 0)
       (wordsAt usdt d.poolCut.afterBenv.state) (wordsAt usdt future.state) (d.sincePool h).settledFrames := by
   refine CurveCoins.Usdt.usdt_entry_local BodyStageCapabilities.historical (d.sincePool h) (usdt_start_code A)
-    (NoKeyHolder.usdtAuthority A.keys fun F hF caller => ?_) A.tether.notDeprecated A.tether.noConfiscation
+    (NoKeyHolder.usdtAuthority A.keys fun F hF caller => ?_) A.notDeprecated A.tether.noConfiscation
     A.hashes.coinKeys.usdt
   obtain ⟨member, target, mutable, -⟩ := mem_coinFrames.mp hF
   refine pool_ownCalls_history A (T := usdt) (by decide) member target mutable caller fun G hG child mg te => ?_
@@ -56,25 +49,23 @@ def usdtBook : CoinBook :=
     (usdtDebit pool) (fun _ => 0)
 
 /-- **The flag is clear at every position.** -/
-theorem usdt_flag_clear (A : Assumes d h)
-    (N : UsdtNotForwarding d.poolCut.afterBenv.state (d.sincePool h).settledFrames) {before : List Exec.Frame}
+theorem usdt_flag_clear (A : Assumes d h) {before : List Exec.Frame}
     (sub : ∀ F ∈ before, F ∈ (d.sincePool h).settledFrames) {m : StorWords}
     (chain : FrameChain usdt (CodeFrame usdt HistFork Lift.Usdt.code) (wordsAt usdt d.poolCut.afterBenv.state)
       (coinFrames usdt (fun _ => True) before) m) : Usdt.flag20 (m 10) = 0 := by
   refine (chain.fold (held := fun _ => 0) (credit := fun _ => 0) (debit := fun _ => 0)
-    (I := fun w => Usdt.flag20 (w 10) = 0) (fun G hG good flag => ⟨?_, Nat.le_refl _⟩) N.clear).1
+    (I := fun w => Usdt.flag20 (w 10) = 0) (fun G hG good flag => ⟨?_, Nat.le_refl _⟩) A.tether.notRedirected).1
   obtain ⟨member, target, mutable, -⟩ := mem_coinFrames.mp hG
   have whole : G ∈ coinFrames usdt (fun _ => True) (d.sincePool h).settledFrames :=
     mem_coinFrames.mpr ⟨sub G member, target, mutable, trivial⟩
   have keep := CurveCoins.Usdt.frame_flag_keep whole A.hashes.coinKeys.usdt good target
-    (A.tether.notDeprecated G whole) (N.none G whole)
+    (A.notDeprecated G whole) (A.tether.noDeprecate G whole)
   change Usdt.flag20 ((G.post.getStor usdt).get 10) = 0
   rw [keep]
   exact flag
 
 /-- **USDT's `CoinWalk`.** -/
-theorem usdtWalk (A : Assumes d h)
-    (N : UsdtNotForwarding d.poolCut.afterBenv.state (d.sincePool h).settledFrames) :
+theorem usdtWalk (A : Assumes d h) :
     CoinWalk usdtBook pool 2 (d.sincePool h).settledFrames (d.sincePool h).settledRoots
       (wordsAt usdt d.poolCut.afterBenv.state) (wordsAt usdt future.state)
       Curve3Pool.Creation.coinsN Curve3Pool.Creation.tokenN :=
@@ -101,12 +92,11 @@ theorem usdtWalk (A : Assumes d h)
       exact ite_eq_right fun c => absurd (c.2.symm.trans sel) sel_ne)
     (fun ne => absurd rfl ne)
     (fun H c hc member tc hd _ sub chain =>
-      H.usdt_answer hc (CurveCoins.settled_wf _ member) tc hd (usdt_flag_clear A N sub chain))
+      H.usdt_answer hc (CurveCoins.settled_wf _ member) tc hd (usdt_flag_clear A sub chain))
 
 /-- **The pool's books of USDT are at most what USDT's storage says it holds.** -/
-theorem usdt_backed (A : Assumes d h)
-    (N : UsdtNotForwarding d.poolCut.afterBenv.state (d.sincePool h).settledFrames) :
+theorem usdt_backed (A : Assumes d h) :
     recorded future.state 2 ≤ coinHeld future.state pool 2 :=
-  (A.coin_walk_whole (usdtWalk A N)).1
+  (A.coin_walk_whole (usdtWalk A)).1
 
 end Blanc.Composition.Curve3PoolBacked

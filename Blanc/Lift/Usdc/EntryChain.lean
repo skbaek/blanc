@@ -17,8 +17,6 @@ build on the names:
 * `V22At`, `heldAt`: a frame reads the holder's entry by the code its implementation word finds at its
   own entry, not through the view: the whole word under V2 and V2_1, the low 255 bits under V2_2;
 * `UsdcCertified`: the proxy admin's power, restrained at one state;
-* `BelowFlagAt`: the seam where the reading changes. `bridged_of_belowFlag` is what `ViewChain.segment`
-  takes;
 * `InitializerKeeps`: the named power still open as a field.
 -/
 
@@ -55,13 +53,6 @@ def UsdcCertified (d : Devm) (T : Adr) : Prop :=
     (d.getCode (d.getStorVal T implSlot).toAdr = Impl.code → d.getCode usdcLib = Lib.code) ∧
     ∀ f : Fork, ¬ (Fork.ruleSet f).isPrecomp (d.getStorVal T implSlot).toAdr
 
-/-- **The seam where the reading changes**: the first frame reading bits, after one reading words, finds
-the entry below the flag. One storage read at the upgrade to V2_2 for a reader. -/
-def BelowFlagAt (T h : Adr) (frames : List Exec.Frame) : Prop :=
-  ∀ (before : List Exec.Frame) (F G : Exec.Frame) (after : List Exec.Frame),
-    frames = before ++ F :: G :: after → ¬ V22At T F → V22At T G →
-    ((G.pre.state.getStor T).get (balSlot h)).toNat < 2 ^ 255
-
 /-- The four initializers. -/
 def usdcInitializers : List B256 := [0x3357162b, 0xd608ea64, 0x2fc81e09, 0x430239b4]
 
@@ -90,25 +81,5 @@ theorem ledgerView_bal {w : StorWords} {a : Adr} (hi : balSlot a ≠ implSlot) (
   rintro (e | e)
   · exact (hi e).elim
   · exact (ha e).elim
-
-/-- **The seam's bridge**: `BelowFlagAt` is what telescoping across versions needs. -/
-theorem bridged_of_belowFlag (hi : balSlot h ≠ implSlot) (ha : balSlot h ≠ adminSlot) :
-    ∀ {frames : List Exec.Frame}, BelowFlagAt T h frames →
-      Bridged T ledgerView (heldAt T h) frames
-  | [], _ => trivial
-  | [_], _ => trivial
-  | F :: G :: rest, below => by
-    refine ⟨?_, bridged_of_belowFlag hi ha fun before A B after split =>
-      below (F :: before) A B after (by rw [split]; rfl)⟩
-    unfold heldAt
-    rw [ledgerView_bal hi ha]
-    change _ ≤ _
-    by_cases hF : V22At T F <;> by_cases hG : V22At T G
-    · rw [ite_eq_left hF, ite_eq_left hG]
-    · rw [ite_eq_left hF, ite_eq_right fun c => (hG c).elim]
-      exact bits_le_word _
-    · rw [ite_eq_right fun c => (hF c).elim, ite_eq_left hG]
-      exact Nat.le_of_eq (bits_eq_of_lt (below [] F G rest rfl hF hG)).symm
-    · rw [ite_eq_right fun c => (hF c).elim, ite_eq_right fun c => (hG c).elim]
 
 end Blanc.Lift.Usdc

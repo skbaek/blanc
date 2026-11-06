@@ -295,7 +295,7 @@ theorem e46_inv {v t ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fo
   unorm h
   ibranch h c7
   repeat ustep h
-  ucall h hc 75 t_3e26_c75
+  fcall h hc 75 t_3e26_c75
   obtain ⟨-, G1, e⟩ := e75_inv fork hc
   cases e
   clear hc c1 c2 c3 c4 c5 c6 c7
@@ -303,14 +303,14 @@ theorem e46_inv {v t ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fo
   repeat ustep h
   unorm h
   umemw h wf
-  ucall h hc 75 t_3e26_c75
+  fcall h hc 75 t_3e26_c75
   obtain ⟨d, G2, e⟩ := e75_inv fork hc
   cases e
   clear hc
   repeat ustep h
   unorm h
   umemw h wf
-  ucall h hc 76 t_3d4c_c76
+  fcall h hc 76 t_3d4c_c76
   obtain ⟨-, M1, G3, e, wf1⟩ := e76_inv fork wf hc
   cases e
   clear hc

@@ -10,7 +10,7 @@ import Blanc.Lift.CurveCoins.PremisesOfLogs
 Each of `SignedAs`'s nine selectors, at a committed frame of each version, either has no route through the dispatcher, so
 reverts, or logs: the three moves' forms log `AuthorizationUsed` with `from`, and `permit`'s forms and the three
 `*AllowanceWithAuthorization` log `Approval` with the owner. `SignedLogged` collects both; `usdc_signed_logged` lifts it to the
-proxy frame; `usdc_noSignature_of_receipts` turns it to what a reader's two log filters say. What a signature recovers is not
+proxy frame; `usdc_noSignature_chain` turns it to what a reader's two log filters say. What a signature recovers is not
 read.
 
 | selector | V2 | V2_1 | V2_2 |
@@ -153,39 +153,22 @@ def AuthorizationUsedLog (T h : Adr) (l : Log) : Prop :=
 
 variable {T h : Adr} {cfg : ChainConfig} {start : Benv} {future : BlockChain}
 
-/-- **USDC's `noSignature` from no `AuthorizationUsed(h, _)` and no `Approval(h, _)` receipt log**: no settled proxy frame
-at `T` with a non-admin caller is a message claiming `h`'s signature. The proxy admin's power is `certified`; receipts do not
-speak for system stages, hence `sysNe`. -/
-theorem usdc_noSignature_of_receipts (trace : MidHistoryTraceIn HistFork cfg start future)
-    (capabilities : BodyStageCapabilities HistFork) (installed : start.state.getCode T = Proxy.code)
-    (certified : CertifiedSettled T trace.settledFrames)
-    (auth : trace.NoLogInReceipts (AuthorizationUsedLog T h))
-    (approval : trace.NoLogInReceipts (CurveCoins.ApprovalLog T h))
-    (sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ T) :
-    ∀ F ∈ coinFrames T (EntryObs T) trace.settledFrames, ¬ SignedAs h F.sevm := by
-  intro F hF signed
-  obtain ⟨member, target, stat, obs⟩ := mem_coinFrames.mp hF
-  have notRescue : Blanc.Sevm.selector F.sevm ≠ rescueSelector := fun e => by
-    have := signed.1
-    rw [e] at this
-    exact absurd this (by decide)
-  obtain ⟨pc, code, fork, has⟩ := (usdc_viewChain_certified trace capabilities installed certified).1.good F
-    (mem_coinFrames.mpr ⟨member, target, stat, obs, notRescue⟩)
-  rcases usdc_signed_logged pc code fork target has obs.2 (certified F member target obs.1 obs.2)
-    (settled_data_bound trace capabilities F member) signed with ⟨l, m, a, t⟩ | ⟨l, m, a, t⟩
-  · exact trace.no_log_at HistFork.stateGas_none _ auth sysNe F member target l m ⟨a.trans target, t⟩
-  · exact trace.no_log_at HistFork.stateGas_none _ approval sysNe F member target l m ⟨a.trans target, t⟩
-
-/-- The same, at the chain's links. -/
+/-- **USDC's `noSignature` from no frame logging `AuthorizationUsed(h, _)` or `Approval(h, _)`**: no link of the chain is a
+message claiming `h`'s signature. The proxy admin's power is `certified`. A reader checks both by a log filter;
+`MidHistoryTraceIn.no_log_at` is the link from receipts. -/
 theorem usdc_noSignature_chain (trace : MidHistoryTraceIn HistFork cfg start future)
     (capabilities : BodyStageCapabilities HistFork) (installed : start.state.getCode T = Proxy.code)
     (certified : CertifiedSettled T trace.settledFrames)
-    (auth : trace.NoLogInReceipts (AuthorizationUsedLog T h))
-    (approval : trace.NoLogInReceipts (CurveCoins.ApprovalLog T h))
-    (sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ T) :
-    ∀ F ∈ coinFrames T (ChainObs T) trace.settledFrames, ¬ SignedAs h F.sevm := fun F hF => by
+    (auth : ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, ∀ l ∈ F.post.logs, ¬ AuthorizationUsedLog T h l)
+    (approval : ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, ¬ CurveCoins.FrameLogsApproval T h F) :
+    ∀ F ∈ coinFrames T (ChainObs T) trace.settledFrames, ¬ SignedAs h F.sevm := by
+  intro F hF signed
   obtain ⟨member, target, stat, obs⟩ := mem_coinFrames.mp hF
-  exact usdc_noSignature_of_receipts trace capabilities installed certified auth approval sysNe F
-    (mem_coinFrames.mpr ⟨member, target, stat, obs.1⟩)
+  have whole : F ∈ coinFrames T (fun _ => True) trace.settledFrames := mem_coinFrames.mpr ⟨member, target, stat, trivial⟩
+  obtain ⟨pc, code, fork, has⟩ := (usdc_viewChain_certified trace capabilities installed certified).1.good F hF
+  rcases usdc_signed_logged pc code fork target has obs.1.2 (certified F member target obs.1.1 obs.1.2)
+    (settled_data_bound trace capabilities F member) signed with ⟨l, m, a, t⟩ | ⟨l, m, a, t⟩
+  · exact auth F whole l m ⟨a.trans target, t⟩
+  · exact approval F whole ⟨l, m, a.trans target, t⟩
 
 end Blanc.Lift.Usdc

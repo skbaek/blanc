@@ -298,7 +298,7 @@ theorem Assumes.add_replies (A : Assumes d h) {f : Exec.Frame} (member : f ∈ (
   have hF : c ∈ coinFrames usdt (fun _ => True) (d.sincePool h).settledFrames :=
     mem_coinFrames.mpr ⟨inPool, ht, hcs, trivial⟩
   exact CurveCoins.Usdt.frame_flag_keep hF A.hashes.coinKeys.usdt (H.usdt_good hc ht) ht
-    (A.tether.notDeprecated c hF) (by rcases sel with s | s | s <;> rw [s] <;> decide)
+    (A.notDeprecated c hF) (by rcases sel with s | s | s <;> rw [s] <;> decide)
 
 end Assumes
 

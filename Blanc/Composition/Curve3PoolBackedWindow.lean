@@ -101,15 +101,14 @@ theorem dai_window (m : Moment d) (A : Assumes d m.through) : recorded m.world 0
     fun _ _ => trivial))
 
 /-- **USDT's books at a transaction boundary.** -/
-theorem usdt_window (m : Moment d) (A : Assumes d m.through)
-    (N : UsdtNotForwarding d.poolCut.afterBenv.state (d.sincePool m.through).settledFrames) :
+theorem usdt_window (m : Moment d) (A : Assumes d m.through) :
     recorded m.world 2 ≤ coinHeld m.world pool 2 := by
   have code : m.world.getCode usdt = Lift.Usdt.code :=
     cutCode_of_cert usdtInstalledCert (d.sinceC3Block m.history) m.block m.cut A.code.usdtCode
-  refine m.coin_window A (usdtWalk A N) (viewChain_id ((CurveCoins.Usdt.usdt_chain BodyStageCapabilities.historical
+  refine m.coin_window A (usdtWalk A) (viewChain_id ((CurveCoins.Usdt.usdt_chain BodyStageCapabilities.historical
     (MidHistoryTraceIn.tail m.block m.cut) code).1 fun F hF => ?_))
   obtain ⟨member, target, mutable, -⟩ := mem_coinFrames.mp hF
-  refine A.tether.notDeprecated F (mem_coinFrames.mpr ⟨?_, target, mutable, trivial⟩)
+  refine A.notDeprecated F (mem_coinFrames.mpr ⟨?_, target, mutable, trivial⟩)
   rw [m.settled_split]
   exact List.mem_append_right _ member
 

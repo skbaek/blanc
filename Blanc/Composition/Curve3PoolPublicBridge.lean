@@ -139,19 +139,24 @@ theorem NoKeyHolder.daiAuthority {cfg : ChainConfig} {start : Benv} {future : Bl
   ownCalls := own
 
 /-- **`NoKeyHolder` gives `usdc_entryLocalAt`'s `PoolAuthorityEmpty`.** -/
-theorem NoKeyHolder.usdcAuthority {settled : List Exec.Frame} {w : Jaune.State} {noAuthority : Prop}
-    (keys : NoKeyHolder w settled noAuthority)
-    (own : ∀ F ∈ Usdc.usdcFrames usdc settled, F.sevm.caller = pool →
+theorem NoKeyHolder.usdcAuthority {cfg : ChainConfig} {start : Benv} {future : BlockChain} {noAuthority : Prop}
+    (trace : MidHistoryTraceIn HistFork cfg start future)
+    (capabilities : BodyStageCapabilities HistFork)
+    (keys : NoKeyHolder start.state trace.settledFrames noAuthority)
+    (installed : start.state.getCode usdc = Usdc.Proxy.code)
+    (certified : Usdc.CertifiedSettled usdc trace.settledFrames)
+    (own : ∀ F ∈ Usdc.usdcFrames usdc trace.settledFrames, F.sevm.caller = pool →
       CurveCoins.PoolCoinSel (Sevm.selector F.sevm)) :
     PoolAuthorityEmpty Usdc.SignedAs Usdc.allowSlot CurveCoins.PoolCoinSel pool
-      (Usdc.ledgerView (wordsAt usdc w)) (Usdc.usdcFrames usdc settled) where
+      (Usdc.ledgerView (wordsAt usdc start.state)) (Usdc.usdcFrames usdc trace.settledFrames) where
   rowsAtCut := fun g _ => by
     have := keys.rowsAtCut 1 g
     unfold Usdc.ledgerView
     split
     · rfl
     · exact this
-  noSignature := keys.usdcNoSignature
+  noSignature := Usdc.usdc_noSignature_chain trace capabilities installed certified keys.usdcNoAuthorizationUsed
+    keys.usdcNoApproval
   ownCalls := own
 
 /-- **`NoKeyHolder` gives `usdt_entry_local`'s `PoolAuthorityEmpty`**: USDT has no signed writer. -/
