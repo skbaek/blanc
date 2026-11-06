@@ -1,6 +1,7 @@
 import Blanc.Composition.Curve3PoolBackedEnv
 import Blanc.Lift.CurveCoins.BalanceAnswers
 import Blanc.Composition.Curve3PoolPublicBridge
+import Blanc.Lift.CurveCoins.PremisesOfLogs
 
 /-!
 # The walk over a coin whose whole storage chains and whose reading never changes
@@ -20,6 +21,11 @@ open Blanc.Composition.Curve3PoolCoinKeep
 open Blanc.Lift.Curve3Pool (PoolInvocation PoolRun PoolEntries poolFrameObs poolSubtreeFrames V3 adrOf answerWord
   balanceOfData transferSel transferFromSel)
 open Blanc.Lift.CurveCoins (PoolCoinSel)
+
+/-- A settled frame's memory starts well formed. -/
+theorem frame_wf {cfg : ChainConfig} {start : Benv} {future : BlockChain} (trace : MidHistoryTraceIn HistFork cfg start future)
+    {F : Exec.Frame} (member : F ∈ trace.settledFrames) : Mem.Wf F.pre.memory :=
+  CurveCoins.settled_wf trace member
 
 /-! ## The messages of the pool's calls -/
 
@@ -366,7 +372,7 @@ theorem flat_walk (A : Assumes d h) {k : Fin 3} {T : Adr} {Good : Exec.Frame →
       obtain ⟨rel, -⟩ := child_spawned exc hc'
       rcases rel with ce | te
       · exact ce.trans target
-      · exact absurd (te.symm.trans target |>.symm.trans tc |>.symm) hPool
+      · exact absurd (tc.symm.trans (te.trans target)) hPool
   reply := by
     intro pre rest L₁ L₂ P c split kidsEq at' mutable tc hd hlen
     have Pmem : P ∈ (d.sincePool h).settledFrames := by
@@ -447,6 +453,34 @@ theorem pool_ownCalls_history (A : Assumes d h) {T : Adr} (hTok : T ≠ c3) {F :
       · exact (below G Gmem child mutableG te.symm).elim
     · rw [static mutableG] at mutable
       cases mutable
+
+/-- **The walk, over the whole history from the pool's creation.** At the end the books are at most what the position
+reads, and across each step moving nothing out, the coin's answers cover the books at the frame's entry. -/
+theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.coin_walk_whole (A : Assumes d h) {B : CoinBook} {k : Fin 3}
+    {a b : StorWords}
+    (W : CoinWalk B pool k (d.sincePool h).settledFrames (d.sincePool h).settledRoots a b Curve3Pool.Creation.coinsN
+      Curve3Pool.Creation.tokenN) :
+    recorded future.state k ≤ B.Rd (B.cf (d.sincePool h).settledFrames) b ∧
+      ∃ invs : List PoolInvocation, (∀ i ∈ invs, i.Authentic pool) ∧
+        invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = Curve3Pool.committedPoolFramesMid pool (d.sincePool h) ∧
+        ∃ s, PoolRun (Curve3Pool.Creation.poolInitState Curve3Pool.Creation.deployTime.toNat) invs s ∧
+        RepliesCovered B.T pool k (Curve3Pool.Creation.poolInitState Curve3Pool.Creation.deployTime.toNat) invs := by
+  obtain ⟨invs, obs, auth, entries, s, run, hc⟩ := A.replay
+  have zero : (Curve3Pool.Creation.poolInitState Curve3Pool.Creation.deployTime.toNat).balances.get k = 0 := by
+    match k with
+    | 0 | 1 | 2 => rfl
+  have start : B.Covered a [] ((Curve3Pool.Creation.poolInitState Curve3Pool.Creation.deployTime.toNat).balances.get k) :=
+    ⟨a, rfl, by rw [zero]; exact Nat.zero_le _⟩
+  obtain ⟨⟨m, hm, hr⟩, replies⟩ := coin_walk W invs (pre := []) (fs := (d.sincePool h).settledFrames) (post := []) run
+    entries auth obs (by simp only [List.nil_append, List.append_nil]) (TargetClosed.nil pool)
+    (by
+      rw [List.nil_append]
+      exact Curve3PoolSupply.targetClosed_of_forest W.forest) rfl rfl start
+  rw [List.nil_append] at hm hr
+  obtain rfl := chain_det hm W.ledger.loc.chain
+  refine ⟨?_, invs, auth, obs, s, run, replies⟩
+  rw [recorded_of_abstracts hc.abs]
+  exact hr
 
 end Replay
 
