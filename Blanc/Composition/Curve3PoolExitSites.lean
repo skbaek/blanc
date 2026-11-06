@@ -28,16 +28,16 @@ structure CoinSite (s : Sevm) (b : Devm) (x : Adr) : Prop where
 variable {s : Sevm} {b : Devm} {S : List B256} {M : Mem} {t ii oi : B256} {V : B256}
 
 /-- The child's frame at a site, from the site's facts. -/
-theorem CoinSite.child (h : CoinSite s b t.toAdr) :
-    (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)).benvStat.rules.gas.storageClearRefund = 4800 ∧
-    Clean (initDevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)) ∧
-    (∀ k, (⟨(initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)).currentTarget, k⟩ : Adr × B256) ∉
-      (initDevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)).accessedStorageKeys) ∧
-    (getOrigAcct (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
-        (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)).currentTarget).stor =
-      Devm.getStor (initDevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
-        (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)).currentTarget :=
-  ⟨CoveredFork.rules_storageClearRefund h.fork, site_clean_of s _ S M 0 t ii 0x44 oi 0x20 (parent_clean _ S M 0 t ii 0x44 oi 0x20
+theorem CoinSite.child {is : B256} (h : CoinSite s b t.toAdr) :
+    (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20)).benvStat.rules.gas.storageClearRefund = 4800 ∧
+    Clean (initDevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20)) ∧
+    (∀ k, (⟨(initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20)).currentTarget, k⟩ : Adr × B256) ∉
+      (initDevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20)).accessedStorageKeys) ∧
+    (getOrigAcct (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20))
+        (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20)).currentTarget).stor =
+      Devm.getStor (initDevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20))
+        (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20)).currentTarget :=
+  ⟨CoveredFork.rules_storageClearRefund h.fork, site_clean_of s _ S M 0 t ii is oi 0x20 (parent_clean _ S M 0 t ii is oi 0x20
     ⟨h.clean.created, h.clean.del, h.clean.error⟩), h.cold, h.orig⟩
 
 /-- The child's calldata words, from the site's memory. -/
