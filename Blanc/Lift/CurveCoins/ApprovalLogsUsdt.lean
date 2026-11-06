@@ -8,7 +8,8 @@ Laws a reader's `eth_getLogs` check rests on, per frame of the certified code:
 
 * `frame_rows_raised_logs`: a frame, not deprecated, that raises a tracked allowance row from empty logs `Approval`;
 * `confiscates_logs`, `confiscates_listed`: `destroyBlackFunds` on `h` logs `DestroyedBlackFunds(h, _)` and finds `h` listed;
-* `deprecate_logs`, `addBlackList_logs`: those powers log.
+* `deprecate_logs`, `addBlackList_logs`: those powers log;
+* `frame_flag_keep`: only `deprecate` writes slot 10.
 
 The three owner events are `LOG1` with the address in data, not a topic, so a reader filters by topic and reads the data.
 `Mem.Wf F.pre.memory` is the same premise as `frame_balanceOf_answer`'s: an entered frame's memory is empty.
@@ -506,5 +507,33 @@ theorem frame_rows_raised_logs {F : Exec.Frame} (hF : F ∈ frames) (good : Code
     exact noLog (approve_logs good target live hsel hc)
   · exact absurd sel List.not_mem_nil
   · exact notTop sel
+
+/-! ## `deprecated`: only `deprecate` writes slot 10 -/
+
+/-- The certificate's sites at slot 10 are `deprecate`'s. -/
+theorem flagSites_ok :
+    (wsRoot UsdtWs.implWsAnn).all (fun s => s.slot != .const 10 || hasSel selTerm [0x0753c30c] s) = true := by
+  decide +kernel
+
+/-- **A frame, not deprecated, on any other selector than `deprecate` keeps slot 10.** `apart` is hash freshness: no
+other site's key is 10. With `deprecate_logs` and the receipt link, no `Deprecate` log from a state with the flag clear
+keeps it clear across every frame. -/
+theorem frame_flag_keep {F : Exec.Frame} (good : CodeFrame T HistFork code F) (target : F.sevm.currentTarget = T)
+    (live : NotDeprecated T F)
+    (apart : ∀ s ∈ wsRoot UsdtWs.implWsAnn, s.slot.Den (Env.root F.sevm) 10 → s.slot = .const 10)
+    (other : Blanc.Sevm.selector F.sevm ≠ 0x0753c30c) :
+    (F.post.getStor T).get 10 = (F.pre.getStor T).get 10 := by
+  have C := certFrame good target live
+  refine frame_cellInv F C.stateGas C.hasCode _ (Inv := fun v => v = (F.pre.getStor T).get 10) rfl ?_
+  intro m member w found _ key _
+  obtain ⟨site, inRoot, den, guards, -⟩ := successfulSstore_site cert_check usdt_wsCert C.pc C.code C.stateGas
+    (C.chain member found) found
+  rw [key] at den
+  have constant := apart site inRoot den
+  have row := List.all_eq_true.mp flagSites_ok site inRoot
+  simp only [constant, bne_self_eq_false, Bool.false_or] at row
+  have hsel := hasSel_sound row rfl guards
+  rw [selTerm_eval] at hsel
+  exact absurd (List.mem_singleton.mp hsel) other
 
 end Blanc.Lift.CurveCoins.Usdt
