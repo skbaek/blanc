@@ -106,7 +106,7 @@ theorem exchange_live_floor {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i 
       rw [hci] at hb
       exact ⟨hb.1, hb.2.1, hb.2.2.1, hb.2.2.2, hsub h2⟩)
     hpull' hmx hax hA hres hy1 hy2 hmf hsf hmo hmin hma hmap hbi hbj1 hbj2 hW''c hpush'
-    hR hG256 (fun D' h hg => ⟨D', rfl, h, hg⟩)
+    hR hG256 (fun D' h hg _ _ _ => ⟨D', rfl, h, hg⟩)
   obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the safety theorem on that execution
   obtain ⟨hkp, hidk⟩ := hkeep D exc

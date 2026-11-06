@@ -8,7 +8,7 @@ import Blanc.TransactionForward
 `exitGasUsed` and `swapGasUsed`, each intrinsic gas plus the frame's, less the capped refund, each coin's
 cost its own short definition. The shape comes from `rlExactCost_eq` and `exExactCost` at a transaction's
 entry, where every slot starts cold and every original value is current. The literals are **measured**, by
-running the real runtimes on the execution specs' Prague interpreter; no theorem confirms them yet.
+running the real runtimes on the execution specs' Prague interpreter; `ExitFrame.cold` and `SwapFrame.cold` prove them.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -31,9 +31,12 @@ own write: USDT's fee path and the recipient's first credit. -/
 def paymentGas (w : Jaune.State) (E : Jaune.Adr) (k : Fin 3) (v : Nat) : Nat :=
   startsEntry (rawHeld w E k) (netOf w k v) + if k = 2 then usdtFeeGas w v false else 0
 
-/-- `remove_liquidity`'s cost for one coin, beyond the frame's fixed cost. -/
+/-- `remove_liquidity`'s cost for one coin, beyond the frame's fixed cost: two debits, `E`'s credit unless the fee took
+it all, and USDT's arithmetic on a nonzero amount. -/
 def exitCoinGas (w : Jaune.State) (E : Jaune.Adr) (a : Nat) (k : Fin 3) : Nat :=
-  if share w a k = 0 then 0 else (if k = 2 then 8466 else 8400) + paymentGas w E k (share w a k)
+  if share w a k = 0 then 0
+  else (if k = 2 then 5666 else 5600) + (if netOf w k (share w a k) = 0 then 0 else 2800) +
+    paymentGas w E k (share w a k)
 
 /-- `remove_liquidity`'s frame at a transaction's entry: the fixed cost, the burn's two writes, the coins. -/
 def exitFrameGas (w : Jaune.State) (E : Jaune.Adr) (a : Nat) : Nat :=
@@ -69,9 +72,9 @@ def callRoom : Nat := 2201
 
 /-- The fixed cost of `exchange` with coin `i` pulled, at a transaction's entry. -/
 def pullBase : Fin 3 → Nat
-  | 0 => 100969
-  | 1 => 115000
-  | 2 => 114434
+  | 0 => 92569
+  | 1 => 106600
+  | 2 => 106034
 
 /-- What paying out coin `j` costs beyond paying out DAI. -/
 def pushBase : Fin 3 → Nat
@@ -86,14 +89,16 @@ def allowanceGas (unlimited : Bool) : Fin 3 → Nat
   | 1 => 0
   | 2 => if unlimited then 0 else 3194
 
-/-- The pull of `dx` of coin `i` from `E` to the pool. -/
+/-- The pull of `dx` of coin `i` from `E` to the pool: the two words it credits, the pool's coin entry and its books,
+write nothing when USDT's fee takes it all. -/
 def pullGas (w : Jaune.State) (i : Fin 3) (dx : Nat) (unlimited : Bool) : Nat :=
-  pullBase i + allowanceGas unlimited i +
-    startsEntry (rawHeld w pool i) (netOf w i dx) + if i = 2 then usdtFeeGas w dx true else 0
+  pullBase i + allowanceGas unlimited i + (if netOf w i dx = 0 then 0 else 5600) +
+    startsEntry (rawHeld w pool i) (netOf w i dx) + startsEntry (recorded w i) (netOf w i dx) +
+    if i = 2 then usdtFeeGas w dx true else 0
 
-/-- The push of `dy` of coin `j` to `E`. -/
+/-- The push of `dy` of coin `j` to `E`: `E`'s credit writes nothing when USDT's fee takes it all. -/
 def pushGas (w : Jaune.State) (E : Jaune.Adr) (j : Fin 3) (dy : Nat) : Nat :=
-  pushBase j + paymentGas w E j dy
+  pushBase j + (if netOf w j dy = 0 then 0 else 2800) + paymentGas w E j dy
 
 /-- What reading `_A()` costs beyond the plain case, while a ramp runs at timestamp `t`. -/
 def rampReadGas (w : Jaune.State) (t : Nat) : Nat :=

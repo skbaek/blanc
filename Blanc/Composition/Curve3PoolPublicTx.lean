@@ -70,11 +70,9 @@ structure GasRoom (benv : Benv) (bout : BlockOutput) (tx : Tx) (need : Nat) : Pr
 /-- The contracts the call touches. -/
 def parties (w : State) : List Adr := [pool, c3, dai, usdc, usdt, usdcImplOf w]
 
-/-- The block's fee recipient is apart from the parties, so none starts warm; its account is safe. -/
-structure CoinbaseApart (benv : Benv) (E : Adr) : Prop where
-  apart : benv.stat.coinbase ≠ E ∧ benv.stat.coinbase ∉ parties benv.state
-  safe : State.Protected benv.state benv.stat.coinbase ∨
-    benv.state.getStor benv.stat.coinbase = .empty
+/-- The block's fee recipient is apart from the parties, so none starts warm. -/
+def CoinbaseApart (benv : Benv) (E : Adr) : Prop :=
+  benv.stat.coinbase ≠ E ∧ benv.stat.coinbase ∉ parties benv.state
 
 /-- **`tx`, signed by `E`, is admissible at `benv` with `need` gas.** -/
 structure TxAdmitted (benv : Benv) (bout : BlockOutput) (tx : Tx) (E : Adr) (need : Nat) : Prop where
@@ -106,18 +104,21 @@ def UsdtOpen (w : State) (a : Adr) : Prop :=
 def CreditFits (w : State) (a : Adr) (k : Fin 3) (v : Nat) : Prop :=
   word w (coinAt k) (coinEntry a k) + v < 2 ^ 255
 
-/-- USDT's fee arithmetic fits a word and its owner's credit fits, on an amount `v`. -/
+/-- USDT's fee arithmetic fits a word, its owner's credit fits, and the fee is at most the amount, on an amount `v`. -/
 def UsdtFeeFits (w : State) (v : Nat) : Prop :=
-  v * word w usdt 3 < 2 ^ 256 ∧ CreditFits w (Usdt.ownerOf (w.getStor usdt)) 2 (usdtFee w v)
+  v * word w usdt 3 < 2 ^ 256 ∧ CreditFits w (Usdt.ownerOf (w.getStor usdt)) 2 (usdtFee w v) ∧ usdtFee w v ≤ v
 
 /-- **No named liveness power is in force against the pool or `E`.** -/
 structure CoinsOpen (w : State) (E : Adr) : Prop where
   /-- USDC runs V2_2, as it has since well before `CoveredFork`'s first block. -/
   usdcV22 : UsdcPacked w
+  /-- V2_2's code is at the address `usdcV22` names: one read. -/
+  usdcImplCode : w.getCode Usdc.usdcImpl = Usdc.Impl.code
   usdtOpen : UsdtOpen w pool
   usdtLive : Usdt.flag20 ((w.getStor usdt).get 10) = 0
   usdcOpen : UsdcOpen w
   usdcParties : UsdcUnlisted w pool ∧ UsdcUnlisted w E
-  ownerApart : E ≠ Usdt.ownerOf (w.getStor usdt)
+  /-- The pool is not USDC's proxy admin, whose calls the proxy refuses to forward: Circle's power. -/
+  usdcAdmin : pool ≠ ((w.getStor usdc).get Usdc.adminSlot).toAdr
 
 end Blanc.Composition.Curve3PoolPublic

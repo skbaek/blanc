@@ -413,6 +413,18 @@ theorem rx_ex_store_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : 
   · rw [hMI2, hMI1]; rfl
 
 
+/-- `transferFrom`'s call site over `M`: its calldata and the memory's size. -/
+structure ExPullWin (sevm : Sevm) (M : Mem) : Prop where
+  read : ((exPullI2 M sevm).read 0x600 0x64).1 = transferFromSel ++ sevm.caller.toB256.toBytes ++
+    sevm.currentTarget.toB256.toBytes ++ (exDx sevm).toBytes
+  size : (exPullI2 M sevm).size = 0x680
+
+/-- `transfer`'s call site over `M`: its calldata and the memory's size. -/
+structure ExPushWin (sevm : Sevm) (M : Mem) (dyOut : B256) : Prop where
+  read : ((M.write 0xc0 (Bytes.toB256 [0]).toBytes).read 0xb60 0x44).1 =
+    transferSel ++ sevm.caller.toB256.toBytes ++ dyOut.toBytes
+  size : (M.write 0xc0 (Bytes.toB256 [0]).toBytes).size = 0xbc0
+
 theorem rx_ex_pull_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G Rf U K Db : Nat} {Q : Outcome → Prop}
     {debit : Devm → List B256 → Mem → Nat} {next : Devm → List B256 → Mem → Devm}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {B X : Nat → B256} {D C : B256}
@@ -441,10 +453,11 @@ theorem rx_ex_pull_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G Rf U K Db : Nat
       ExactE debit next bI [] (exPullI2 M sevm) (G - (575 + c0)) d →
       d.gasLeft = g + rawTailCost (min d.returnData.length 32) →
       Devm.EqModGas b' (rawTailBaseNext sevm d [] d.memory exPullSite) →
-      M' = vyRawMem d.memory 0x6a0 0x460 (min d.returnData.length 32) →
+      M' = vyRawMem d.memory 0x6a0 0x460 (min d.returnData.length 32) → ExPullWin sevm M →
       SFunc.RunEx cert.prog sevm (St b' [] M' g) t_2666_c12 Q) :
     SFunc.RunEx cert.prog sevm (St b [] M G) t_2517_c11 Q := by
   have hc0 : c0 ≤ 31 := by omega
+  obtain ⟨M₀, hM₀⟩ : ∃ M₀, M₀ = M := ⟨M, rfl⟩
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 565 + c0 + 10 := ⟨G - 575 - c0, by omega⟩
   wrun 4
   refine rxe_mstoreW (o := 0x4c0) (c := c0) hR hW hsz rfl
@@ -498,6 +511,9 @@ theorem rx_ex_pull_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G Rf U K Db : Nat
       sevm.currentTarget.toB256.toBytes ++ (exDx sevm).toBytes := by
     rw [hR.read]
     exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
+  have hWin : ExPullWin sevm M₀ := by
+    have e : M = exPullI2 M₀ sevm := by rw [hMI2, hMI1, hM₀]; rfl
+    exact ⟨by rw [← e]; exact hin, by rw [← e]; exact hsz⟩
   have hDbM : debit bI [] M = Db := by
     rw [hMI2, hMI1]; exact hDb bI1 bI hcan1 (by rw [hMI1] at hcan2; exact hcan2)
   obtain ⟨-, d, hrun, hgas, hnext, hpost, hok, hrdlt, hstor, hWd, hidd⟩ :=
@@ -555,7 +571,7 @@ theorem rx_ex_pull_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G Rf U K Db : Nat
       rw [Mem.size_write_of_le (by rw [B256.length_toBytes, hsz5]; decide), hsz5]
     rw [(hR5.write hW5 _ _).read, Mem.size_write_of_le (by rw [h1, List.length_sliceD]; omega), h1]
   refine k b' _ _ G2 (hLd.sha hsha) hR6 hW6 hsz6 (hF3.mono fun o v hv ho => by wauto)
-    bI1 bI d hcan1 ?_ ?_ hG2 hcanT rfl
+    bI1 bI d hcan1 ?_ ?_ hG2 hcanT rfl (hM₀ ▸ hWin)
   · rw [hMI1] at hcan2; exact hcan2
   · rw [hMI2, hMI1] at hE
     rw [show g1 + 565 + c0 + 10 - (575 + c0) = g1 by omega]; exact hE
@@ -583,7 +599,11 @@ theorem rx_ex_push_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G U K Rf R c : Na
       sstoreCost sevm b' (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0]) = c)
     (hsentry : gCallStipend < R + c) (hGb : G + 2000 < 2 ^ 256)
     (k : ∀ D : Devm, ExLive sevm W' D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
-      D.gasLeft = R → Q (.halted D)) :
+      D.gasLeft = R →
+      (∃ d b' l S' M' G', Devm.EqModGas d (next (afterSload sevm b (coinsBase + Sevm.dataWord sevm (Bytes.toB256 [36]))) []
+          (M.write 0xc0 (Bytes.toB256 [0]).toBytes)) ∧ Devm.EqModGas b' (rawTailBaseNext sevm d [] d.memory exPushSite) ∧
+        D = St (afterSstore sevm (b'.addLog l) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])) S' M' G') →
+      ExPushWin sevm M dyOut → Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [Bytes.toB256 [32] + (Bytes.toB256 [0] + Bytes.toB256 [4] +
       Bytes.toB256 [32] + Bytes.toB256 [32]), Bytes.toB256 [10, 160]] M G) t_2b49_c1174 Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 106 := ⟨G - 106, by omega⟩
@@ -612,6 +632,10 @@ theorem rx_ex_push_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G U K Rf R c : Na
       dyOut.toBytes := by
     rw [hR.read, Bytes.sliceD_writeAt_after _ _ _ _ _ (by simp only [B256.length_toBytes]; omega)]
     exact Region.slice hdata.right (by simp only [List.length_append, B256.length_toBytes]; rfl)
+  have hWin : ExPushWin sevm M dyOut := by
+    constructor
+    · rw [hMc]; exact hin
+    · rw [hMc]; exact hsz
   have hGM : debit b2 [] Mc = debit (afterSload sevm b (coinsBase + Sevm.dataWord sevm (Bytes.toB256 [36]))) []
       (M.write 0xc0 (Bytes.toB256 [0]).toBytes) := by rw [hb2, hMc]
   obtain ⟨-, d, hrun, hgas, hnext, hpost, hok, hrdlt, hstor, hWd, hidd⟩ :=
@@ -703,6 +727,7 @@ theorem rx_ex_push_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G U K Rf R c : Na
       (Bytes.toB256 [0]) = sstoreCost sevm x (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0]) :=
     fun _ _ => rfl
   rw [hlog] at hx_g9
-  exact ⟨_, .last rfl, k _ (hL.st _ _ _) (by simp only [St.gasLeft]; omega)⟩
+  subst hb9
+  exact ⟨_, .last rfl, k _ (hL.st _ _ _) (by simp only [St.gasLeft]; omega) ⟨d, b', _, _, _, _, hnext', hcanT, rfl⟩ hWin⟩
 
 end Blanc.Lift.Curve3Pool

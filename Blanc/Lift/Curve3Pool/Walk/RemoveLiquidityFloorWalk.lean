@@ -225,6 +225,11 @@ theorem rx_rl_s3F {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M 
       (by rw [hM1] at hE; exact hE) (by omega) hcanT hM7
     rwa [hn] at this
 
+/-- `burnFrom`'s call site over the loop's final memory `M`: its calldata and the memory's size. -/
+structure RLBurnWin (sevm : Sevm) (M : Mem) : Prop where
+  read : ((rlBurnMem sevm M).read 0x61c 0x44).1 = burnFromSel ++ sevm.caller.toB256.toBytes ++ (rlAmt sevm).toBytes
+  size : (rlBurnMem sevm M).size = 0x660
+
 /-- **After the loop, at the burn's floor and the lock's sentry**: `rx_rl_postE` admitted by `MutableFloorProfile`,
 the gas after the burn named: `R + 3138 + c`, with `c` the lock's charge. -/
 theorem rx_rl_postF {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem}
@@ -243,11 +248,16 @@ theorem rx_rl_postF {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
     (hGx : Gx = R + 3138 + c + debit (afterSload sevm b tokenSlot) [] (rlBurnMem sevm M))
     (hGb : Gx < 2 ^ 256)
     (hQ : ∀ D, D.gasLeft = R → (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
-      Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) → Q (.halted D)) :
+      Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) →
+      (∃ d l, Devm.EqModGas d (next (afterSload sevm b tokenSlot) [] (rlBurnMem sevm M)) ∧
+        ∃ S' M' G', D = St (afterSstore sevm (d.addLog l) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])) S' M' G') →
+      RLBurnWin sevm M →
+      Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [3, 0x2a0] M (Gx + rlPostCost sevm b)) t_2f7b_c15 Q := by
   unfold rlPostCost
   rw [show Gx + (67 + sloadCost sevm b tokenSlot) = Gx + 2 + sloadCost sevm b tokenSlot + 3 + 3 +
     3 + 7 + 3 + 3 + 3 + 6 + 3 + 2 + 9 + 3 + 3 + 3 + 3 + 3 + 2 + 2 + 1 by omega, ← tokenSlot_lit]
+  obtain ⟨M0, hM0⟩ : ∃ M0, M0 = M := ⟨M, rfl⟩
   wrun 8
   refine rxe_mstoreL (o := 0x600) (c := 9) hR hW hsz rfl (by decide) ?_; intro M hM1 hR hW hsz
   wrun 2
@@ -268,10 +278,16 @@ theorem rx_rl_postF {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
     rw [hR.read, burn_input]
   have hGxM : Gx = R + 3138 + c + debit (afterSload sevm b tokenSlot) [] M := by
     rw [hM3, hM2, hM1]; exact hGx
+  have hBurnWin : RLBurnWin sevm M0 := by
+    have hsz0 : M.size = 0x660 := by rw [hsz]; decide
+    subst hM0
+    subst hM3 hM2 hM1
+    exact ⟨hin, hsz0⟩
   obtain ⟨-, d, hrun, hpost0⟩ := hp.sound (afterSload sevm b tokenSlot) [] M Gx
     ⟨hWc.sload _ _ hWb, by omega, hGb, hin, by decide⟩
   obtain ⟨hgas, hnext, hpost, hrd32, hrdlt, -, -, -⟩ := hpost0
-  have hcd := hc d (by rw [hM3, hM2, hM1] at hnext; exact hnext)
+  rw [hM3, hM2, hM1] at hnext
+  have hcd := hc d hnext
   xr (.next hrun ·)
   obtain ⟨hmem, -⟩ := hpost.settled (by decide)
   rw [show (0x61c : B256).toNat = 0x61c by decide, show (0x44 : B256).toNat = 0x44 by decide,
@@ -352,7 +368,7 @@ theorem rx_rl_postF {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
       fun _ => rfl
     rw [hG3R, ← hcd]
     exact congrArg (R + ·) (e _).symm) (by rw [hG3R]; exact hsentry) ?_
-  refine ⟨_, .last rfl, hQ _ rfl ⟨_, _, _, (afterSstore_logs _ _ _ _).trans rfl, ?_⟩⟩
+  refine ⟨_, .last rfl, hQ _ rfl ⟨_, _, _, (afterSstore_logs _ _ _ _).trans rfl, ?_⟩ ⟨d, _, hnext, _, _, _, rfl⟩ (hM0 ▸ hBurnWin)⟩
   rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide),
     show (Bytes.toB256 [0x06, 0xc0]).toNat + 0xc0 = 0x780 by decide]
   exact (congrArg Bytes.toB256 (WordAt.write_self _ _ _)).trans (B256.toB256_toBytes _)
@@ -398,6 +414,12 @@ theorem rlIterCost_ge (sevm : Sevm) (pre : Devm) (T : B256) (P : RLExactCalls) (
   unfold rlIterCost
   omega
 
+/-- A `transfer`'s call site in the canonical schedule: its calldata and the memory's size `s`. -/
+structure RLPushWin (sevm : Sevm) (pre : Devm) (T : B256) (i : Nat) (M : Mem) (s : Nat) : Prop where
+  read : ((rlPushMem sevm pre T i M).read 0x520 0x44).1 =
+    transferSel ++ sevm.caller.toB256.toBytes ++ (rlV sevm pre T i).toBytes
+  size : (rlPushMem sevm pre T i M).size = s
+
 /-- The call and its tail of one iteration, from the payload's end. -/
 theorem rx_rl_iterTailF {sevm : Sevm} {pre b2 n : Devm} {G : Nat} {Q : Outcome → Prop}
     {M M2 : Mem} {img2 : Bytes} {s i : Nat} {T : B256} {P : RLExactCalls} {a : Nat → B256}
@@ -421,12 +443,19 @@ theorem rx_rl_iterTailF {sevm : Sevm} {pre b2 n : Devm} {G : Nat} {Q : Outcome �
       (∀ x, (b'.getStor sevm.currentTarget).get x = (b2.getStor sevm.currentTarget).get x) →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 → LoopImg img' (i + 1) T a →
       Devm.EqModGas b' (rlIterBase sevm pre T P i n M) → M' = rlIterMem sevm pre T P i n M →
+      RLPushWin sevm pre T i M s →
       SFunc.RunEx cert.prog sevm (St b' [3, 0x2a0] M' G) (rlNext i) Q) (x y : B256) :
     SFunc.RunEx cert.prog sevm (St b2 (x :: y :: [3, 0x2a0]) M2
       (G + 45 + rawTailCost (rlReplyLen sevm pre T P i n M) + rlPushDebit sevm pre T P i n M +
         rlS3Cost sevm b2 i)) t_2ea7_c0 Q := by
   have hpb : Devm.EqModGas (afterSload sevm b2 (coinsBase + Nat.toB256 i))
       (rlPushBase sevm pre T i n M) := hq.afterSload sevm _
+  have hWin : RLPushWin sevm pre T i M s := by
+    constructor
+    · rw [← hM2', (hR2.write hW2 0xc0 _).read]
+      exact Region.slice (Region.write_other hdata.right (by simp only [B256.length_toBytes]; omega))
+        (by simp only [List.length_append, B256.length_toBytes]; rfl)
+    · rw [← hM2', Mem.size_write_of_le (by rw [B256.length_toBytes, hsz2]; rcases hs with rfl | rfl <;> decide), hsz2]
   obtain ⟨hdeb, hnext⟩ := hp.congr [3, 0x2a0] (rlPushMem sevm pre T i M) hpb
   refine rx_rl_s3F hfork hi hdepth hid2 hWc hWb2 hW'c hR2 hW2 hsz2 hs hL2 hdata hC2 hp (by decide)
     (by rw [hM2', hdeb]; unfold rlPushDebit; omega) (by omega) ?_ x y
@@ -441,7 +470,7 @@ theorem rx_rl_iterTailF {sevm : Sevm} {pre b2 n : Devm} {G : Nat} {Q : Outcome �
     unfold rlPushDebit at *
     omega
   subst hGG
-  refine k b' M' img' hWb' hid' hst' hR' hW' hsz' hL' ?_ ?_
+  refine k b' M' img' hWb' hid' hst' hR' hW' hsz' hL' ?_ ?_ hWin
   · refine hcanT.trans ?_
     unfold rlIterBase
     rw [hdN.memory]
@@ -475,6 +504,7 @@ theorem rx_rl_iterAF {sevm : Sevm} {pre b n : Devm} {G : Nat} {Q : Outcome → P
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 →
       LoopImg img' (i + 1) T (Function.update a i (rlV sevm pre T i)) →
       Devm.EqModGas b' (rlIterBase sevm pre T P i n M) → M' = rlIterMem sevm pre T P i n M →
+      RLPushWin sevm pre T i M 0x580 →
       SFunc.RunEx cert.prog sevm (St b' [3, 0x2a0] M' G) (rlNext i) Q) :
     SFunc.RunEx cert.prog sevm
       (St b [3, 0x2a0] M (G + rlIterCost sevm pre T P i n M
@@ -522,8 +552,8 @@ theorem rx_rl_iterAF {sevm : Sevm} {pre b n : Devm} {G : Nat} {Q : Outcome → P
     rw [hM2, hM1]; rfl
   refine rx_rl_iterTailF hfork hi hdepth hid2 hWc hWb2 hW'c hq hC2 hR2 hW2 hsz2 (Or.inl rfl) hL2 hdata
     hM2' hp hG (by omega) ?_ x y
-  intro b' M' img' hWb' hid' hst' hR' hW' hsz' hL' hcan hM'
-  exact k b' M' img' hWb' hid' (fun x => (hst' x).trans (hst2 x)) hR' hW' hsz' hL' hcan hM'
+  intro b' M' img' hWb' hid' hst' hR' hW' hsz' hL' hcan hM' hwin
+  exact k b' M' img' hWb' hid' (fun x => (hst' x).trans (hst2 x)) hR' hW' hsz' hL' hcan hM' hwin
 
 /-- **One iteration at the floor** (variant B), as `rx_rl_iterB_exact`. -/
 theorem rx_rl_iterBF {sevm : Sevm} {pre b n : Devm} {G : Nat} {Q : Outcome → Prop}
@@ -552,6 +582,7 @@ theorem rx_rl_iterBF {sevm : Sevm} {pre b n : Devm} {G : Nat} {Q : Outcome → P
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x5e0 →
       LoopImg img' (i + 1) T (Function.update a i (rlV sevm pre T i)) →
       Devm.EqModGas b' (rlIterBase sevm pre T P i n M) → M' = rlIterMem sevm pre T P i n M →
+      RLPushWin sevm pre T i M 0x5e0 →
       SFunc.RunEx cert.prog sevm (St b' [3, 0x2a0] M' G) (rlNext i) Q) :
     SFunc.RunEx cert.prog sevm
       (St b [3, 0x2a0] M (G + rlIterCost sevm pre T P i n M
@@ -599,8 +630,15 @@ theorem rx_rl_iterBF {sevm : Sevm} {pre b n : Devm} {G : Nat} {Q : Outcome → P
     rw [hM2, hM1]; rfl
   refine rx_rl_iterTailF hfork hi hdepth hid2 hWc hWb2 hW'c hq hC2 hR2 hW2 hsz2 (Or.inr rfl) hL2 hdata
     hM2' hp hG (by omega) ?_ x y
-  intro b' M' img' hWb' hid' hst' hR' hW' hsz' hL' hcan hM'
-  exact k b' M' img' hWb' hid' (fun x => (hst' x).trans (hst2 x)) hR' hW' hsz' hL' hcan hM'
+  intro b' M' img' hWb' hid' hst' hR' hW' hsz' hL' hcan hM' hwin
+  exact k b' M' img' hWb' hid' (fun x => (hst' x).trans (hst2 x)) hR' hW' hsz' hL' hcan hM' hwin
+
+/-- The four memory-reading call sites of the canonical schedule: calldata and memory size. -/
+structure RLWindows (sevm : Sevm) (pre : Devm) (T : B256) (P : RLExactCalls) : Prop where
+  push0 : RLPushWin sevm pre T 0 (rlHeadMem0 sevm pre T P) 0x580
+  push1 : RLPushWin sevm pre T 1 (rlHeadMem1 sevm pre T P) 0x5e0
+  push2 : RLPushWin sevm pre T 2 (rlHeadMem2 sevm pre T P) 0x5e0
+  burn : RLBurnWin sevm (rlHeadMem3 sevm pre T P)
 
 /-- **`remove_liquidity`, the whole frame forward, at the true minimum.** As `rx_rl_frame_exact`, with the calls at
 their floors, for every residual gas `R ≥ 2201`: the frame runs from `R + rlExactCost` to `STOP` with exactly `R`
@@ -623,8 +661,11 @@ theorem rx_rl_frame_floor {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop}
     {R : Nat} (hR : 2201 ≤ R) (hGb : R + rlExactCost sevm pre T P < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St pre [] Mem.empty (R + rlExactCost sevm pre T P)) t_0000_c0
       (fun o => ∃ D, o = .halted D ∧ D.gasLeft = R ∧
-        ∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
-          Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) := by
+        (∃ d l, Devm.EqModGas d (P.burnNext (rlBurnBase sevm pre T P) []
+            (rlBurnMem sevm (rlHeadMem3 sevm pre T P))) ∧
+          ∃ S' M' G', D = St (afterSstore sevm (d.addLog l) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])) S' M' G') ∧
+        (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
+          Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) ∧ RLWindows sevm pre T P) := by
   obtain ⟨hsup, hsupLe, hpush, hburn⟩ := hP
   have e0 : rlIter0Cost sevm pre T P = rlIterCost sevm pre T P 0 (rlHead0 sevm pre P)
       (rlHeadMem0 sevm pre T P) (rlS1CostA sevm (rlHead0 sevm pre P) 0 (rlB sevm pre 0) T + 532) :=
@@ -693,7 +734,7 @@ theorem rx_rl_frame_floor {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop}
     hL1 (hs1 _ (by decide)) (hmulw 0 (by decide)) hT0 (hminw 0 (by decide)) (hlew 0 (by decide))
     (hs1 _ (by decide)) (hpush 0 (by decide)) (by omega)
     (by omega) ?_
-  intro b2 M2 img2 hWb2 hid2 hst2 hR2 hW2 hsz2 hL2 hn1 hM2
+  intro b2 M2 img2 hWb2 hid2 hst2 hR2 hW2 hsz2 hL2 hn1 hM2 hwin0
   rw [show rlNext 0 = t_2cdb_c46 by unfold rlNext; rfl]
   have hM2' : M2 = rlHeadMem1 sevm pre T P := hM2
   subst hM2'
@@ -709,7 +750,7 @@ theorem rx_rl_frame_floor {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop}
     hL2 (hs2 _ (by decide) (by decide)) (hmulw 1 (by decide)) hT0 (hminw 1 (by decide))
     (hlew 1 (by decide)) (hs2 _ (by decide) (by decide)) (hpush 1 (by decide)) (by omega)
     (by omega) ?_
-  intro b3 M3 img3 hWb3 hid3 hst3 hR3 hW3 hsz3 hL3 hn2 hM3
+  intro b3 M3 img3 hWb3 hid3 hst3 hR3 hW3 hsz3 hL3 hn2 hM3 hwin1
   rw [show rlNext 1 = t_2cdb_c46 by unfold rlNext; rfl]
   have hM3' : M3 = rlHeadMem2 sevm pre T P := hM3
   subst hM3'
@@ -726,7 +767,7 @@ theorem rx_rl_frame_floor {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop}
     (hminw 2 (by decide)) (hlew 2 (by decide)) (hs3 _ (by decide) (by decide) (by decide))
     (hpush 2 (by decide)) (by omega)
     (by omega) ?_
-  intro b4 M4 img4 hWb4 hid4 hst4 hR4 hW4 hsz4 hL4 hn3 hM4
+  intro b4 M4 img4 hWb4 hid4 hst4 hR4 hW4 hsz4 hL4 hn3 hM4 hwin2
   rw [show rlNext 2 = t_2f7b_c15 by unfold rlNext; rfl]
   have hM4' : M4 = rlHeadMem3 sevm pre T P := hM4
   subst hM4'
@@ -750,7 +791,7 @@ theorem rx_rl_frame_floor {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop}
     (by omega) (rl_lock_sentry sevm _ _ _ hR)
     (fun d hd => (hd.trans hnext).sstoreCost_congr sevm _ _)
     (by rw [hdeb]; rfl) (by omega) ?_
-  intro D hD hlogs
-  exact ⟨D, rfl, hD, hlogs⟩
+  intro D hD hlogs ⟨d, l, hd, hDe⟩ hBw
+  exact ⟨D, rfl, hD, ⟨d, l, hd.trans hnext, hDe⟩, hlogs, hwin0, hwin1, hwin2, hBw⟩
 
 end Blanc.Lift.Curve3Pool

@@ -39,21 +39,24 @@ local notation "stor₀" => Devm.getStor b sevm.currentTarget
 def totalSupplyBodyCost (s : Sevm) (b : Devm) : Nat :=
   34 + sloadCost s b vySupplySlot
 
-/-- `totalSupply()`: a body run at the specified closed cost, before all residual gas. -/
-theorem live_totalSupply_cost (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
+/-- `totalSupply()`: a body run at the specified closed cost, its post named. -/
+theorem live_totalSupply_post (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
     (hr : rawTotalSupply sevm stor₀ = some r) :
     ∀ G, gCallStipend < G → ∃ post,
       SFunc.RunExact prog sevm (entrySt sevm b (G + totalSupplyBodyCost sevm b))
-        t_0240_c0 (.halted post) ∧ post.gasLeft = G ∧ Lands sevm b post r := by
+        t_0240_c0 (.halted post) ∧ post.gasLeft = G ∧ Lands sevm b post r ∧
+      post = ((St (afterSload sevm b vySupplySlot) []
+        ((vyMem Mem.empty (Sevm.dataWord sevm 0)).write 0 (b.getStorVal sevm.currentTarget vySupplySlot).toBytes)
+        G).memRead 0 32).2.withOutput (b.getStorVal sevm.currentTarget vySupplySlot).toBytes := by
   unfold rawTotalSupply at hr
   split_ifs at hr with hv
   cases hr
   intro G _
   unfold totalSupplyBodyCost
   have hsz := vyMem_empty_size (Sevm.dataWord sevm 0)
-  obtain ⟨post, hrun, hg, hl⟩ := word_tail (b := b) hfork (vyMem_wf Mem.wf_empty _)
+  obtain ⟨post, hrun, hg, hl, he⟩ := word_tail (b := b) hfork (vyMem_wf Mem.wf_empty _)
     (vyMem_reads Mem.wf_empty Mem.reads_empty _) (by rw [hsz]; omega) (by rw [hsz]) vySupplySlot G
-  refine ⟨post, ?_, hg, hl⟩
+  refine ⟨post, ?_, hg, hl, he⟩
   unfold entrySt t_0240_c0
   rw [show G + (34 + sloadCost sevm b vySupplySlot) =
     G + 3 + 3 + 3 + 3 + sloadCost sevm b vySupplySlot + 3 + 1 + 10 + 3 + 3 + 2 by omega]
@@ -68,6 +71,15 @@ theorem live_totalSupply_cost (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   refine rx_dest ?_
   refine rx_push (w := vySupplySlot) rfl (by simp only [List.length_nil, Nat.ofNat_pos]) ?_
   exact hrun
+
+/-- `totalSupply()`: a body run at the specified closed cost, before all residual gas. -/
+theorem live_totalSupply_cost (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
+    (hr : rawTotalSupply sevm stor₀ = some r) :
+    ∀ G, gCallStipend < G → ∃ post,
+      SFunc.RunExact prog sevm (entrySt sevm b (G + totalSupplyBodyCost sevm b))
+        t_0240_c0 (.halted post) ∧ post.gasLeft = G ∧ Lands sevm b post r := fun G hG => by
+  obtain ⟨post, h1, h2, h3, -⟩ := live_totalSupply_post hfork hr G hG
+  exact ⟨post, h1, h2, h3⟩
 
 /-- `totalSupply()` costs at most `34 + 2100`: 34 gas and the `SLOAD` of slot 5. -/
 theorem live_totalSupply_le (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
