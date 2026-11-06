@@ -14,7 +14,7 @@ open Jaune Blanc Blanc.Lift
 open Blanc.Lift.Curve3Pool (V3 rates feeDen precision)
 open Blanc.StableSwapNewton (getYChk chkAdd chkDiv chkMul chkSub)
 
-/-- The pro-rata share of coin `k` for burning `a` of 3Crv. -/
+/-- The pro-rata share of coin `k` for burning `a` of 3Crv, rounded down. -/
 def share (w : State) (a : Nat) (k : Fin 3) : Nat := recorded w k * a / supply w
 
 /-- **Burning `a` pays each coin's share and moves every ledger by exactly that.** -/
@@ -41,7 +41,8 @@ def swapQuote (w : State) (t : Nat) (i j : Fin 3) (dx : Nat) : Option (Nat × Na
 def swapOut (w : State) (t : Nat) (i j : Fin 3) (dx : Nat) : Option Nat :=
   (swapQuote w t i j dx).map fun q => q.1 * precision / rates.get j
 
-/-- What the curve quotes for a swap, `dy`: `swapOut` when its arithmetic fits. -/
+/-- What the curve quotes for a swap, `dy`: `swapOut` when its arithmetic fits, and `0` when it
+reverts, which `SwapRequest.moved` excludes. -/
 def quote (w : State) (t : Nat) (i j : Fin 3) (dx : Nat) : Nat := (swapOut w t i j dx).getD 0
 
 /-- The admin's cut of a swap's fee, in coin `j`'s own units. -/

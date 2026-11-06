@@ -432,7 +432,7 @@ theorem add_core (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (ad
     | 0 => simp only [coinAt, parties, List.mem_cons, true_or, or_true]
     | 1 => simp only [coinAt, parties, List.mem_cons, true_or, or_true]
     | 2 => simp only [coinAt, parties, List.mem_cons, true_or, or_true])
-  obtain ⟨hLive, ⟨hheld, hcr, hfees, hsrc⟩, hall, ⟨amp, hamp, hout⟩, ⟨hmin, hpos⟩, hfit, hap⟩ := req
+  obtain ⟨hLive, ⟨hheld, hcr, hfees, hsrc⟩, hall, ⟨amp, hamp, hout⟩, ⟨⟨hmin, hpos⟩, hfit⟩, hap⟩ := req
   have hN : ∀ k, am.get k < 2 ^ 256 := fun k => Nat.lt_of_le_of_lt (hheld k) coinHeld_lt
   have hmm : minMint < 2 ^ 256 := by have := hfit.1; omega
   obtain ⟨hamW, hargs, harg3⟩ := add_args (msg := msg) hdata hN hmm

@@ -42,7 +42,7 @@ def usdtGateSlots : List B256 :=
     mapSlot pool.toB256 (Bytes.toB256 [6]), Bytes.toB256 [0]]
 
 /-- **`E`'s coin entries miss what moving a coin reads and writes beside them.** Each comparison fails only by a Keccak
-collision, or in the case its field names. -/
+collision, or in the identity case the one the field's own docstring names. -/
 structure CoinsApart (w : State) (E : Adr) : Prop where
   /-- `E`'s entry in each coin is not the pool's: `E` is not the pool. -/
   poolEntry : ∀ k, coinEntry E k ≠ coinEntry pool k
@@ -62,11 +62,17 @@ structure ExitApart (w : State) (E : Adr) : Prop extends CoinsApart w E where
 
 /-- `E` holds the shares it burns, the minimums are met, and the contract's arithmetic fits. -/
 structure ExitRequest (w : State) (E : Adr) (a : Nat) (mins : V3) : Prop where
+  /-- `E` holds the `a` shares burned, within a positive supply. -/
   holds : a ≤ shares w E ∧ a ≤ supply w ∧ 0 < supply w
+  /-- Each minimum is at most the share paid. -/
   mins : ∀ k, mins.get k ≤ share w a k
+  /-- Each recorded balance times `a` fits a word. -/
   mulFits : ∀ k, recorded w k * a < 2 ^ 256
+  /-- Each coin's credit of its share to `E` fits. -/
   creditFits : ∀ k, CreditFits w E k (netOf w k (share w a k))
+  /-- USDT's fee on its share fits. -/
   feeFits : UsdtFeeFits w (share w a 2)
+  /-- The withdrawal's entries miss each other. -/
   apart : ExitApart w E
 
 /-- **The withdrawal is processed, uses exactly `exitGasUsed`, and pays out.** -/
@@ -79,9 +85,9 @@ def ExitWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
 def exitLimit (w : State) (data : Bytes) (E : Adr) (a : Nat) : Nat :=
   callIntrinsic data + exitFrameGas w E a + callRoom
 
-/-- **A holder can leave.** At any moment of mainnet after the minter assignment, a holder's admissible
-`remove_liquidity` transaction, with no named power in force against it, is processed at exact gas and
-pays each coin's share. -/
+/-- **A holder can leave.** At any Prague-or-later moment with USDC on V2_2, right after a transaction,
+a holder's admissible `remove_liquidity` transaction, with no named power in force against it, is
+processed at exact gas and pays each coin's share. -/
 def lp_exit : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
     ∀ (tx : Tx) (E : Adr) (a : Nat) (mins : V3),
@@ -146,7 +152,8 @@ structure SwapFits (w : State) (E : Adr) (i j : Fin 3) (dx dy : Nat) : Prop wher
   creditFits : CreditFits w pool i (netOf w i dx) ∧ CreditFits w E j (netOf w j dy)
   /-- USDT's fee fits on the amount pulled and on the amount paid. -/
   feeFits : UsdtFeeFits w dx ∧ UsdtFeeFits w dy
-  /-- The pool's scaled balance of the coin paid out is below `2^190`, so the admin's cut fits a word. -/
+  /-- The pool's scaled balance of the coin paid out is below `2^190`, so the payout's and the admin
+  cut's multiplications fit a word, even when the admin fee is zero. -/
   booksFit : scaled w j < 2 ^ 190
 
 /-- `E` can pull `dx`, the coins differ, the minimum is met, and the contract's arithmetic fits. -/
@@ -175,9 +182,9 @@ def SwapWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
     swapAdmin benv.state benv.stat.time.toNat i j dx = some admin ∧
     SwapPaid benv.state st E i j dx dy admin
 
-/-- **A swap works.** At any moment of mainnet after the minter assignment, an admissible `exchange`
-transaction, with no named power in force against it, is processed at exact gas and pays what the
-curve quotes. -/
+/-- **A swap works.** At any Prague-or-later moment with USDC on V2_2, right after a transaction, an
+admissible `exchange` transaction, with no named power in force against it, is processed at exact gas
+and pays what the curve quotes. -/
 def swap : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
     ∀ (tx : Tx) (E : Adr) (i j : Fin 3) (dx minDy spent : Nat),
@@ -207,9 +214,14 @@ def virtual_price_falls : Prop := VirtualPriceFalls
 /-- A message enters the pool as a transaction's entry would: nothing warm but the sender's side, and
 the original values current, in a world agreeing with `w` on the parties. -/
 structure MsgEntry (msg : Msg) (w : State) (E : Adr) : Prop where
+  /-- The message calls the pool's code as `E`. -/
   named : msg.currentTarget = pool ∧ msg.caller = E ∧ msg.code = w.getCode pool
+  /-- The message carries no value, is not static, has at least two call levels left since Jaune's
+  depth counts down from 1024, and runs under a covered fork. -/
   plain : msg.value = 0 ∧ msg.isStatic = false ∧ 2 ≤ msg.depth ∧ CoveredFork msg.benv.stat.fork
+  /-- No storage key is warm, and no party past the first is. -/
   cold : msg.accessedStorageKeys.isEmpty ∧ ∀ a ∈ (parties w).tail, a ∉ msg.accessedAddresses
+  /-- The message's state and original state agree with `w` on the parties. -/
   world : ∀ a ∈ parties w, msg.benv.state.get a = w.get a ∧ msg.benv.stat.origState.get a = w.get a
   /-- Address 4, the identity precompile, is warm with the code it has in `w`. -/
   identity : (4 : Adr) ∈ msg.accessedAddresses ∧ msg.benv.state.getCode 4 = w.getCode 4
@@ -223,8 +235,11 @@ def MsgDoes (msg : Msg) (room cost refund : Nat) (effect : State → Prop) : Pro
 
 /-- The message enters as a transaction would, with this calldata, and no named power is in force. -/
 structure Asked (msg : Msg) (w : State) (E : Adr) (data : Bytes) : Prop where
+  /-- The message enters as a transaction's entry would. -/
   entry : MsgEntry msg w E
+  /-- The message carries this calldata. -/
   data : msg.data = data
+  /-- No named liveness power is in force against the pool or `E`. -/
   coinsOpen : CoinsOpen w E
   /-- The sender is not the zero address, which a transaction's recovered signer never is. -/
   nonzero : E ≠ 0
@@ -322,17 +337,28 @@ structure AddApart (w : State) (E : Adr) : Prop extends SwapApart w E where
   /-- `E`'s 3Crv entry is not 3Crv's supply word. -/
   c3 : Curve3Crv.vyBalSlot E ≠ Curve3Crv.vySupplySlot
 
-/-- `E` can add `am` at timestamp `t`, and the contract computes `minted` and `stored`. -/
-structure AddRequest (w : State) (E : Adr) (t : Nat) (am : V3) (minMint minted : Nat) (stored : V3) :
-    Prop where
-  live : PoolLive w
-  amounts : AmountsFit w E pool am
-  allowed : ∀ k, am.get k ≤ allowanceOf w E k
-  outcome : ∃ amp, ampAt w t = some amp ∧
-    addOutcome w amp (v3Of fun k => recorded w k + netOf w k (am.get k)) = some (minted, stored)
+/-- The minimum is met and the mint fits a word. -/
+structure MintOk (w : State) (E : Adr) (am : V3) (minMint minted : Nat) : Prop where
+  /-- The mint meets the minimum, and on an empty supply each amount is positive. -/
   minimum : minMint ≤ minted ∧ (supply w = 0 → ∀ k, 0 < am.get k)
   /-- The supply and `E`'s 3Crv each take the mint within a word. -/
   mintFits : supply w + minted < 2 ^ 256 ∧ shares w E + minted < 2 ^ 256
+
+/-- `E` can add `am` at timestamp `t`, and the contract computes `minted` and `stored`. -/
+structure AddRequest (w : State) (E : Adr) (t : Nat) (am : V3) (minMint minted : Nat) (stored : V3) :
+    Prop where
+  /-- The pool's owner has not killed it. -/
+  live : PoolLive w
+  /-- `E` can move each amount and every credit fits. -/
+  amounts : AmountsFit w E pool am
+  /-- `E` has allowed the pool each amount. -/
+  allowed : ∀ k, am.get k ≤ allowanceOf w E k
+  /-- The contract computes this mint and these stored balances at this timestamp. -/
+  outcome : ∃ amp, ampAt w t = some amp ∧
+    addOutcome w amp (v3Of fun k => recorded w k + netOf w k (am.get k)) = some (minted, stored)
+  /-- The minimum is met and the mint fits a word. -/
+  mint : MintOk w E am minMint minted
+  /-- The deposit's entries miss each other. -/
   apart : AddApart w E
 
 /-- `add_liquidity`'s message, at the fallback cost. -/
@@ -346,6 +372,7 @@ def add_liquidity_message : Prop :=
 /-- The pool's books cover `am` at timestamp `t`, `E` holds the `burned` shares the contract computes, and its arithmetic fits. -/
 structure ImbalanceRequest (w : State) (E : Adr) (t : Nat) (am : V3) (maxBurn burned : Nat)
     (stored : V3) : Prop where
+  /-- The pool's owner has not killed it. -/
   live : PoolLive w
   /-- The books cover `am`; the contract's checked subtraction reverts on anything more. -/
   books : ∀ k, am.get k ≤ recorded w k
@@ -356,6 +383,7 @@ structure ImbalanceRequest (w : State) (E : Adr) (t : Nat) (am : V3) (maxBurn bu
     imbalanceOutcome w amp (v3Of fun k => recorded w k - am.get k) = some (burned, stored)
   /-- The burn is positive and allowed; `maxBurn` is the calldata's word. -/
   limits : 1 < burned ∧ burned ≤ maxBurn ∧ maxBurn < 2 ^ 256 ∧ burned ≤ shares w E ∧ burned ≤ supply w
+  /-- The withdrawal's entries miss each other. -/
   apart : ExitApart w E
 
 /-- `remove_liquidity_imbalance`'s message, at the fallback cost. -/
@@ -369,9 +397,12 @@ def imbalance_message : Prop :=
 /-- `remove_liquidity_one_coin`'s effect: `E` burns `a` for `dy` of coin `i`, and the books lose `dy`
 and the admin's share of the fee. -/
 structure OneCoinPaid (w w' : State) (E : Adr) (a : Nat) (i : Fin 3) (dy admin : Nat) : Prop where
+  /-- The supply and `E`'s 3Crv fall by `a`. -/
   burned : supply w' + a = supply w ∧ shares w' E + a = shares w E
+  /-- The pool's balance of coin `i` falls by `dy`, which `E` receives net of the fee. -/
   coins : coinHeld w' pool i + dy = coinHeld w pool i ∧
     coinHeld w' E i = coinHeld w E i + netOf w i dy
+  /-- The books of coin `i` lose `dy` and the admin's share. -/
   books : recorded w' i + dy + admin = recorded w i
 
 /-- The balances the second `get_y_D` runs at: each scaled balance less the fee on its move to the level `D1`. -/
@@ -399,10 +430,15 @@ def oneCoinCalldata (a : Nat) (i : Fin 3) (minDy : Nat) : Bytes :=
 
 /-- `E` holds what it burns, and the contract computes `dy` and `admin`, which fit. -/
 structure OneCoinRequest (w : State) (E : Adr) (t a : Nat) (i : Fin 3) (minDy dy admin : Nat) : Prop where
+  /-- The pool's owner has not killed it. -/
   live : PoolLive w
+  /-- The contract computes this payout and admin cut at this timestamp. -/
   outcome : ∃ amp, ampAt w t = some amp ∧ oneCoinOutcome w amp a i = some (dy, admin)
+  /-- The payout meets the minimum and `E` holds the shares burned. -/
   limits : minDy ≤ dy ∧ a ≤ shares w E ∧ a ≤ supply w
+  /-- The coin's credit to `E` fits, as does USDT's fee on the payout. -/
   fits : CreditFits w E i (netOf w i dy) ∧ UsdtFeeFits w dy
+  /-- The withdrawal's entries miss each other. -/
   apart : ExitApart w E
 
 /-- `remove_liquidity_one_coin`'s message, at the fallback cost. -/

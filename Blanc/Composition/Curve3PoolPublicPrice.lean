@@ -98,11 +98,17 @@ def VirtualPriceBound (calls : List Exec.Frame) : Prop :=
 
 /-- A message asks the pool for `get_virtual_price()` at `w`, statically, with 10,000,000 gas. -/
 structure AsksPrice (m : Msg) (w : State) : Prop where
+  /-- The message calls the pool. -/
   target : m.currentTarget = pool
+  /-- The message runs at this world. -/
   state : m.benv.state = w
+  /-- The message runs the pool's code. -/
   code : m.code = w.getCode pool
+  /-- The message carries 10,000,000 gas. -/
   gas : m.gas = 10000000
+  /-- The message is static. -/
   static : m.isStatic = true
+  /-- The message asks for `get_virtual_price()`. -/
   data : m.data = abiSelectorBytes Curve3Pool.selGetVirtualPrice
 
 /-- `get_virtual_price()` at `w`, asked in the environment of `env`, returns `p`. -/
@@ -112,20 +118,31 @@ def ReturnsPrice (env : BenvStat) (w : State) (p : Nat) : Prop :=
 
 /-- An environment at the pool's creation block: its fork, its number, its timestamp. -/
 structure AtPoolBlock (env : BenvStat) : Prop where
+  /-- The fork is Muir Glacier. -/
   fork : env.fork = .muirGlacier
+  /-- The block number is the pool's creation block. -/
   number : env.number = 10809473
+  /-- The timestamp is the pool's creation time. -/
   time : env.time = Curve3Pool.Creation.deployTime
 
 /-- A message to the pool at `w`, with 10,000,000 gas at the pool's creation block and `w` as its
 original state, commits and ends in `post`. -/
 structure CallCommits (m : Msg) (w : State) (post : Devm) : Prop where
+  /-- The message calls the pool. -/
   target : m.currentTarget = pool
+  /-- The message runs at this world. -/
   state : m.benv.state = w
+  /-- The message's original state is this world. -/
   orig : m.benv.stat.origState = w
+  /-- The message runs the pool's code. -/
   code : m.code = w.getCode pool
+  /-- The message carries 10,000,000 gas. -/
   gas : m.gas = 10000000
+  /-- The environment is the pool's creation block. -/
   block : AtPoolBlock m.benv.stat
+  /-- The message runs to this result. -/
   ran : exec (initEvm m) = .ok post
+  /-- The message ends without error. -/
   ok : post.error = none
 
 /-- The pool is its deployed bytes, with the storage its creation leaves. -/

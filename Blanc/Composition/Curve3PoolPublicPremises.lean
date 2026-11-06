@@ -69,8 +69,11 @@ end Deployment
 /-- **The code the pool relies on, right after 3Crv's creation block**: one `eth_getCode` each. USDC's
 is read at the pool's creation (`CircleRestrained.usdcCode`), since from there Circle's powers are restrained. -/
 structure StartingCode (w : State) : Prop where
+  /-- DAI is its deployed bytes. -/
   daiCode : w.getCode dai = Lift.Dai.code
+  /-- USDT is its deployed bytes. -/
   usdtCode : w.getCode usdt = Lift.Usdt.code
+  /-- Address 4 holds no code. -/
   idEmpty : w.getCode 4 = ByteArray.empty
 
 /-! ## The operators -/
@@ -131,8 +134,11 @@ structure NoKeyHolder (w : State) (settled : List Exec.Frame) (noAuthority : Pro
 
 /-- **The pool's entries in each coin are collision-free over that coin's retained frames (HASH-T).** -/
 structure CoinKeysHold (settled : List Exec.Frame) : Prop where
+  /-- The pool's DAI entry is collision-free over DAI's retained frames. -/
   dai : CoinKeysFresh (WriteSite.wsRoot DaiWs.implWsAnn) 2 3 pool (coinFrames dai (fun _ => True) settled)
+  /-- The pool's USDC entry is collision-free over USDC's retained frames. -/
   usdc : Usdc.UsdcKeysFreshInit usdc pool (Usdc.usdcFrames usdc settled)
+  /-- The pool's USDT entry is collision-free over USDT's retained frames. -/
   usdt : CurveCoins.Usdt.UsdtKeysFresh pool (coinFrames usdt (fun _ => True) settled)
 
 /-- **The history's hashes do not collide on what the proofs compare.** -/

@@ -33,7 +33,9 @@ local notation "poolAdr" => Lift.Curve3Pool.Creation.poolAddress
 
 /-- A retained `HistFork` mainnet block from `pre` that is the recorded block `r`. -/
 structure AnchoredBlock (pre : BlockChain) (r : BlockRecord) where
+  /-- The chain after the block. -/
   post : BlockChain
+  /-- The block's configured trace from the chain before to the chain after. -/
   trace : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post
   /-- The block has the recorded hash, under HASH-B. -/
   bound : HashBound trace r
@@ -41,13 +43,21 @@ structure AnchoredBlock (pre : BlockChain) (r : BlockRecord) where
 /-- **The anchored deployment.** 3Crv's creation block, the pool's and the minter assignment's, each
 by its hash, in one mainnet history. -/
 structure AnchoredDeployment where
+  /-- The chain before 3Crv's creation block. -/
   c3Pre : BlockChain
+  /-- 3Crv's creation block, by its hash. -/
   c3 : AnchoredBlock c3Pre Lift.Curve3Crv.Creation.Block.record
+  /-- The chain before the pool's creation block. -/
   poolPre : BlockChain
+  /-- The mainnet history from 3Crv's creation to the chain before the pool's creation. -/
   toPool : ConfiguredHistoryTraceIn HistFork mainnetChainConfig c3.post poolPre
+  /-- The pool's creation block, by its hash. -/
   pool : AnchoredBlock poolPre Lift.Curve3Pool.Creation.Block.record
+  /-- The chain before the minter assignment's block. -/
   minterPre : BlockChain
+  /-- The mainnet history from the pool's creation to the chain before the minter assignment. -/
   toMinter : ConfiguredHistoryTraceIn HistFork mainnetChainConfig pool.post minterPre
+  /-- The minter assignment's block, by its hash. -/
   minter : AnchoredBlock minterPre Lift.Curve3Crv.Creation.BlockMinter.record
 
 namespace AnchoredDeployment

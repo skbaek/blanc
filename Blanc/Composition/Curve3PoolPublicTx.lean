@@ -18,11 +18,17 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 
 /-- **A point of mainnet after the minter assignment**: right after transaction `i` of `block`. -/
 structure Moment (d : Deployment) where
+  /-- The chain before the block. -/
   pre : BlockChain
+  /-- The chain after the block. -/
   post : BlockChain
+  /-- The mainnet history from the minter assignment to the chain before the block. -/
   history : MainnetHistory d.minter.post pre
+  /-- The block's trace from the chain before to the chain after. -/
   block : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post
+  /-- The index of the transaction just run. -/
   i : Nat
+  /-- The block's transactions split at the transaction just run. -/
   cut : block.bodyTrace.transactions.TxSplit i
 
 namespace Moment
@@ -48,23 +54,35 @@ end Moment
 
 /-- A signed type-2 direct call to `pool`, with no value and no access list, at these fees. -/
 structure TxForm (benv : Benv) (tx : Tx) (prio maxFee : Nat) : Prop where
+  /-- The transaction is a type-2 call to the pool on this chain, with these fees and no access list. -/
   type : tx.type = .two benv.stat.chainId prio maxFee (some pool) []
+  /-- The transaction carries no value. -/
   value : tx.value = 0
+  /-- The priority fee is at most the max fee. -/
   tip : prio ≤ maxFee
+  /-- The block's base fee is at most the max fee. -/
   base : benv.stat.baseFeePerGas ≤ maxFee
 
 /-- `E` signed `tx`, is ready to send it, and can pay for its gas. -/
 structure SignerReady (benv : Benv) (tx : Tx) (E : Adr) (maxFee : Nat) : Prop where
+  /-- The chain id recovers the transaction's signer as `E`. -/
   signed : recoverSender benv.stat.chainId tx = .ok E
+  /-- The transaction's nonce is `E`'s, and not the largest word. -/
   nonce : (benv.state.get E).nonce = tx.nonce ∧ tx.nonce ≠ UInt64.max
+  /-- `E` holds no code. -/
   noCode : (benv.state.getCode E).size = 0
+  /-- `E`'s balance covers the gas at the max fee. -/
   funds : tx.gas * maxFee ≤ (benv.state.get E).bal.toNat
+  /-- `E` is neither the zero address nor a precompile. -/
   named : E ≠ 0 ∧ benv.stat.rules.isPrecomp E = false
 
 /-- The transaction's gas limit covers `need` and fits the protocol's cap and the block's room. -/
 structure GasRoom (benv : Benv) (bout : BlockOutput) (tx : Tx) (need : Nat) : Prop where
+  /-- The gas limit covers what the call needs. -/
   enough : need ≤ tx.gas
+  /-- The gas limit fits the protocol's cap. -/
   cap : tx.gas ≤ 16777216
+  /-- The gas limit fits the block's remaining gas. -/
   block : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed
 
 /-- The contracts the call touches. -/
@@ -76,9 +94,13 @@ def CoinbaseApart (benv : Benv) (E : Adr) : Prop :=
 
 /-- **`tx`, signed by `E`, is admissible at `benv` with `need` gas.** -/
 structure TxAdmitted (benv : Benv) (bout : BlockOutput) (tx : Tx) (E : Adr) (need : Nat) : Prop where
+  /-- The block's fork is one these theorems cover (Prague onward). -/
   fork : CoveredFork benv.stat.fork
+  /-- Some fees make the transaction a signed type-2 call `E` can pay for. -/
   form : ∃ prio maxFee, TxForm benv tx prio maxFee ∧ SignerReady benv tx E maxFee
+  /-- The gas limit covers what the call needs within the cap and the block's room. -/
   room : GasRoom benv bout tx need
+  /-- The block's fee recipient is apart from the parties. -/
   block : CoinbaseApart benv E
 
 /-! ## The liveness powers -/
