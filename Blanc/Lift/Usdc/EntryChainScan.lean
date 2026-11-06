@@ -10,10 +10,9 @@ logs. The implementation word starts on a listed version and every retained `Upg
 log, and they are in no conclusion either.
 
 Listed, not proved, here: the code at the named address at each root entry while the word names it (`ScanLive`);
-that certified codes write apart from the implementation slot (`KnownImplSlotApart`, which
-`knownImplSlotApart_of_actualKeys` obtains from the finite key populations); and the deletion exclusion
-`OutputNotDeleted`, which `usdc_outputNotDeleted` obtains from the conclusion: the two are not yet one
-induction.
+and that certified codes write apart from the implementation slot (`KnownImplSlotApart`, which
+`knownImplSlotApart_of_actualKeys` obtains from the finite key populations). The deletion exclusion is no premise:
+`scan_certified` carries the word and `NoDel` through the same induction, each root reading the word at its entry.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -204,24 +203,57 @@ end Root
 
 /-! ## Along a mid history -/
 
-/-- **The scan is a complete check**: on a mid history in which `T` is not deleted, the word listed at the start and
-the logs scanned, the settled proxy frames are certified. -/
-theorem certifiedSettled_of_scan {cfg : ChainConfig} {checkpoint future' : BlockChain}
-    (history : ConfiguredHistoryTraceIn HistFork cfg checkpoint future')
-    (capabilities : BodyStageCapabilities HistFork)
-    {start : Benv} {future : BlockChain} (trace : MidHistoryTraceIn HistFork cfg start future)
-    (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
-    (installed : start.state.getCode T = Proxy.code) (notDeleted : trace.OutputNotDeleted T)
-    {Vs : List UsdcDeployedEntry} (list : VersionList Vs)
-    (initial : NamedVersion Vs ((start.state.getStor T).get implSlot))
-    (live : ∀ R ∈ trace.settledRoots, ScanLive T Vs R)
-    (scan : ∀ R ∈ trace.settledRoots, ScanRoot T Vs R)
-    (apart : KnownImplSlotApart T history.rawNodes) :
+section Mid
+
+variable {cfg : ChainConfig} {checkpoint future' : BlockChain}
+  (history : ConfiguredHistoryTraceIn HistFork cfg checkpoint future')
+  (capabilities : BodyStageCapabilities HistFork)
+  {start : Benv} {future : BlockChain} (trace : MidHistoryTraceIn HistFork cfg start future)
+  (rootsIn : ∀ R ∈ trace.settledRoots, R ∈ history.settledRoots)
+  {Vs : List UsdcDeployedEntry} (list : VersionList Vs)
+  (live : ∀ R ∈ trace.settledRoots, ScanLive T Vs R)
+  (scan : ∀ R ∈ trace.settledRoots, ScanRoot T Vs R)
+  (apart : KnownImplSlotApart T history.rawNodes)
+
+include rootsIn apart in
+/-- The slot exclusion at the retained nodes of one settled root. -/
+theorem scan_apartAt {R : Exec.Frame} (here : R ∈ trace.settledRoots) :
+    KnownImplSlotApart T (Exec.retainedNodes R.run) := fun m hm =>
+  apart m (history.rawNodes_of_mem_rawFrames _
+    (history.mem_rawFrames_of_mem_settledRoots R (rootsIn R here)) m
+    ((Exec.retainedNodes_sublist_rawNodes R.run).subset hm))
+
+include capabilities rootsIn list live scan apart in
+/-- **The scan alone excludes `T`'s deletion, keeps its code, and leaves the word listed.** One induction, in which
+each root reads the word at its own entry, finds its frames certified, and so neither deletes `T` nor leaves the
+list. -/
+theorem scan_outputNotDeleted (installed : start.state.getCode T = Proxy.code)
+    (initial : NamedVersion Vs ((start.state.getStor T).get implSlot)) :
+    trace.OutputNotDeleted T ∧ future.state.getCode T = Proxy.code ∧
+      NamedVersion Vs ((future.state.getStor T).get implSlot) := by
+  refine Blanc.Lift.MidHistoryTraceIn.outputNotDeleted_of_cell trace capabilities (sem := entrySem) rfl installed
+    proxy_toList_ne_nil proxy_not_delegation implSlot (NamedVersion Vs) (fun R here ready named => ?_) initial
+  have proxy : R.pre.getCode T = Proxy.code := bytes_eq_of_image ready.2.1.1
+  have apartR := scan_apartAt history trace rootsIn apart here
+  have bal : ∀ {fork}, HistFork fork → fork.ruleSet.bal = none := fun h => h.bal_none
+  refine ⟨root_noDel ready fun G hG _ _ _ => ?_,
+    scan_post history capabilities bal list (rootsIn R here) proxy named (live R here) (scan R here) apartR⟩
+  exact scan_frames history capabilities bal list (rootsIn R here) proxy named (live R here) (scan R here)
+    apartR G hG
+
+include capabilities rootsIn list live scan apart in
+/-- **The scan is a complete check**: with the word listed at the start and the logs scanned, the settled proxy
+frames are certified. Nothing is asked about deletion. -/
+theorem certifiedSettled_of_scan (installed : start.state.getCode T = Proxy.code)
+    (initial : NamedVersion Vs ((start.state.getStor T).get implSlot)) :
     CertifiedSettled T trace.settledFrames := by
+  have notDeleted := (scan_outputNotDeleted history capabilities trace rootsIn list live scan apart
+    installed initial).1
   have ready := Blanc.Lift.MidHistoryTraceIn.rootsReady trace capabilities (sem := entrySem)
     (C := Proxy.code) rfl installed proxy_toList_ne_nil proxy_not_delegation notDeleted
   have chain := Blanc.Lift.MidHistoryTraceIn.rootChain trace (fun _ h => HistFork.stateGas_none h)
     installed proxy_toList_ne_nil proxy_not_delegation notDeleted
+  have bal : ∀ {fork}, HistFork fork → fork.ruleSet.bal = none := fun h => h.bal_none
   have roots : ∀ (roots : List Exec.Frame) {a b : StorWords}, RootChain T a roots b →
       (∀ R ∈ roots, R ∈ trace.settledRoots) → NamedVersion Vs (a implSlot) →
       ∀ R ∈ roots, NamedVersion Vs ((R.pre.getStor T).get implSlot) := by
@@ -232,26 +264,20 @@ theorem certifiedSettled_of_scan {cfg : ChainConfig} {checkpoint future' : Block
       intro a b link inRoots named Q member
       obtain ⟨rfl, tail⟩ := link
       have here := inRoots R List.mem_cons_self
-      obtain ⟨-, at_, -, -, -⟩ := ready R here
-      have proxy : R.pre.getCode T = Proxy.code := bytes_eq_of_image at_.1
-      have apartR : KnownImplSlotApart T (Exec.retainedNodes R.run) := fun m hm =>
-        apart m (history.rawNodes_of_mem_rawFrames _
-          (history.mem_rawFrames_of_mem_settledRoots R (rootsIn R here)) m
-          ((Exec.retainedNodes_sublist_rawNodes R.run).subset hm))
+      have proxy : R.pre.getCode T = Proxy.code := bytes_eq_of_image (ready R here).2.1.1
       rcases List.mem_cons.mp member with rfl | later
       · exact named
       · exact ih tail (fun G hG => inRoots G (List.mem_cons_of_mem _ hG))
-          (scan_post history capabilities (fun h => h.bal_none) list (rootsIn R here) proxy named
-            (live R here) (scan R here) apartR) Q later
+          (scan_post history capabilities bal list (rootsIn R here) proxy named
+            (live R here) (scan R here) (scan_apartAt history trace rootsIn apart here)) Q later
   intro G member target _ _
   rw [trace.settledFrames_eq] at member
   obtain ⟨R, here, frame⟩ := List.mem_flatMap.mp member
-  obtain ⟨-, at_, -, -, -⟩ := ready R here
-  have proxy : R.pre.getCode T = Proxy.code := bytes_eq_of_image at_.1
-  exact scan_frames history capabilities (fun h => h.bal_none) list (rootsIn R here) proxy
+  have proxy : R.pre.getCode T = Proxy.code := bytes_eq_of_image (ready R here).2.1.1
+  exact scan_frames history capabilities bal list (rootsIn R here) proxy
     (roots _ chain (fun _ h => h) initial R here) (live R here) (scan R here)
-    (fun m hm => apart m (history.rawNodes_of_mem_rawFrames _
-      (history.mem_rawFrames_of_mem_settledRoots R (rootsIn R here)) m
-      ((Exec.retainedNodes_sublist_rawNodes R.run).subset hm))) G frame
+    (scan_apartAt history trace rootsIn apart here) G frame
+
+end Mid
 
 end Blanc.Lift.Usdc
