@@ -536,15 +536,6 @@ theorem usdt_entry_local (capabilities : BodyStageCapabilities HistFork)
         (authority.ownCalls F hF) (noConfiscation F hF) keys rows
       exact ⟨r, by simpa only [Nat.add_zero] using e⟩)
 
-/-- `notDeprecated` from the statement over raw frames: a settled frame is a raw one. -/
-theorem notDeprecated_of_raw (trace : MidHistoryTraceIn HistFork cfg start future)
-    (raw : ∀ R ∈ trace.rawFrames, R.sevm.currentTarget = T → flag20 ((Devm.getStor R.devm T).get 10) = 0) :
-    ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, NotDeprecated T F := by
-  intro F hF
-  have e := raw (Blanc.Exec.Frame.rootDeriv F) (trace.mem_rawFrames_of_mem_settledFrames F (mem_coinFrames.mp hF).1)
-    (mem_coinFrames.mp hF).2.1
-  exact e
-
 /-- A third party's frame does not lower the entry. -/
 theorem usdt_third_party {a b : StorWords} {settled : List Exec.Frame} {Good : Exec.Frame → Prop}
     (L : EntryLocal T (fun _ => True) Good (fun σ => (σ (balSlot h)).toNat) (usdtDebit h) (fun _ => 0) a b settled)
