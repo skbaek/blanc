@@ -5,7 +5,7 @@ import Blanc.Composition.Curve3PoolRemoveMessage
 
 `imbalance_accepts`: the model accepts what `ImbalanceRequest` states. `imbalance_frame`: the frame's run at the named cost
 `rliExactCost`, read from `rx_rli_frame_exact`'s end: the coin chain `rmChain` carries each coin's ledger, 3Crv's world its
-burn, the frame's storage the books, the cost at most `2087054` (`rli_cost_le`). `imbalance_message_bounded` closes the message at a
+burn, the frame's storage the books, the cost at most `1839017` (`rli_cost_le`). `imbalance_message_bounded` closes the message at a
 bounded cost, and `imbalance_message_holds` the statement.
 -/
 
@@ -356,7 +356,7 @@ theorem rliPushD_le (sevm : Sevm) (pre : Devm) (i : Nat) (b : Devm) (S : List B2
 /-- **The frame's run at a small cost and a refund fixed before the residual gas.** -/
 theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (imbalanceCalldata am maxBurn))
     (req : ImbalanceRequest w E msg.benv.stat.time.toNat am maxBurn burned stored) :
-    ∃ cost refund, cost ≤ 2087054 ∧ ∀ R, 380232 ≤ R → R + cost < 2 ^ 256 →
+    ∃ cost refund, cost ≤ 1839017 ∧ ∀ R, 380232 ≤ R → R + cost < 2 ^ 256 →
       ∃ post, exec (initEvm (msg.withGas (R + cost))) = .ok post ∧ post.error = none ∧ post.gasLeft = R ∧
         post.refundCounter.toNat = refund ∧ ImbalancePaid w post.state E am burned stored := by
   have ht : msg.currentTarget = pool := e.entry.named.1
@@ -536,7 +536,7 @@ theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg 
 theorem imbalance_message_bounded (d : Deployment) (m : Moment d) (A : Assumes d m.through) (msg : Msg) (E : Adr) (am : V3)
     (maxBurn burned : Nat) (stored : V3) (ask : Asked msg m.world E (imbalanceCalldata am maxBurn))
     (req : ImbalanceRequest m.world E msg.benv.stat.time.toNat am maxBurn burned stored) :
-    ∃ cost refund, cost < 30000000 ∧ MsgDoes msg liquidityRoom cost refund (fun st => ImbalancePaid m.world st E am burned stored) := by
+    ∃ cost refund, cost ≤ 16777216 ∧ MsgDoes msg liquidityRoom cost refund (fun st => ImbalancePaid m.world st E am burned stored) := by
   obtain ⟨cost, refund, hc, h⟩ := imbalance_frame (m.facts A) (m.marked A) ask req
   refine ⟨cost, refund, by omega, fun R hR hG => h R ?_ hG⟩
   have hR' : 800000 ≤ R := hR

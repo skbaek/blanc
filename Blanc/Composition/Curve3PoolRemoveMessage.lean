@@ -222,24 +222,47 @@ open Blanc.Composition.Curve3PoolCalleeLive (acc ext acc_le ext_le callMsg0 call
 open Blanc.Lift.AccumulatedWalk (sloadCost_le_lit sstoreCost_le_lit)
 open Blanc.Composition.Curve3PoolCalleeExactProfiles (mutDebit mutBodyCost)
 
-theorem costGetDMem_le (x : V3) (amp : Nat) : costGetDMem x amp ≤ 6676 + (505 + (59 + 157 + 255 * 2000)) := by
-  have := costGetD_le x.v0 x.v1 x.v2 amp
+/-- `get_D` at its largest pass charge, `1676`, for every pass. -/
+theorem costGetD_sharp (x0 x1 x2 amp : Nat) : costGetD x0 x1 x2 amp ≤ 505 + (157 + 255 * 1676) := by
+  have key : ∀ (b : Nat → Option Nat) (D : Nat), fuelCost b (fun new prev => decide (closeEnough 1 new prev)) gdStepC gdStopC gdCapC 255 D ≤ 255 * 1676 :=
+    fun _ D => fuelCost_le (fun a b => by unfold gdStepC; split <;> omega) (fun a b => by unfold gdStopC; split <;> omega)
+      (fun a b => by unfold gdCapC; split <;> omega) 255 D
+  unfold costGetD
+  split
+  · split
+    · omega
+    · split
+      · refine Nat.add_le_add_left (Nat.add_le_add_left (key _ _) _) _
+      · omega
+  · omega
+
+theorem costGetDMem_le (x : V3) (amp : Nat) : costGetDMem x amp ≤ 6676 + (505 + (157 + 255 * 1676)) := by
+  have := costGetD_sharp x.v0 x.v1 x.v2 amp
   unfold costGetDMem
+  omega
+
+/-- `get_y_D`'s loop at its largest pass charge, `588`, for every pass. -/
+theorem ydPostCost_sharp (c s D ann : Nat) : ydPostCost c s D ann ≤ 363 + 255 * 588 := by
+  unfold ydPostCost
+  have := fuelCost_le (body := bodyYChk (c * D / (ann * 3)) (s + D / ann) D) (close := fun new prev => decide (closeEnough 1 new prev))
+    (c1 := ydStepC) (c2 := ydStopC) (c3 := ydCapC) (K := 588)
+    (fun a b => by unfold ydStepC; split <;> omega) (fun a b => by unfold ydStopC; split <;> omega)
+    (fun a b => by unfold ydCapC; split <;> omega) 255 D
   omega
 
 theorem ydCoin_le (i j : Nat) : ydCoinCost i j ≤ 417 := by
   unfold ydCoinCost
   split <;> omega
 
-theorem yd2_le (i x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom2 i x2 D ann cs ≤ 417 + (363 + 255 * 600) := by
+theorem yd2_le (i x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom2 i x2 D ann cs ≤ 417 + (363 + 255 * 588) := by
   unfold ydCostFrom2
   have h := ydCoin_le i 2
   split
-  · have := ydPostCost_le ‹Nat × Nat›.1 ‹Nat × Nat›.2 D ann
+  · have := ydPostCost_sharp ‹Nat × Nat›.1 ‹Nat × Nat›.2 D ann
     omega
   · omega
 
-theorem yd1_le (i x1 x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom1 i x1 x2 D ann cs ≤ 417 + (417 + (363 + 255 * 600)) := by
+theorem yd1_le (i x1 x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom1 i x1 x2 D ann cs ≤ 417 + (417 + (363 + 255 * 588)) := by
   unfold ydCostFrom1
   have h := ydCoin_le i 1
   split
@@ -247,7 +270,7 @@ theorem yd1_le (i x1 x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom1 i x1 x2 D a
     omega
   · omega
 
-theorem yd0_le (i x0 x1 x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom0 i x0 x1 x2 D ann cs ≤ 417 + (417 + (417 + (363 + 255 * 600))) := by
+theorem yd0_le (i x0 x1 x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom0 i x0 x1 x2 D ann cs ≤ 417 + (417 + (417 + (363 + 255 * 588))) := by
   unfold ydCostFrom0
   have h := ydCoin_le i 0
   split
@@ -255,7 +278,7 @@ theorem yd0_le (i x0 x1 x2 D ann : Nat) (cs : Nat × Nat) : ydCostFrom0 i x0 x1 
     omega
   · omega
 
-theorem costGetYD_le (amp i x0 x1 x2 D : Nat) : costGetYD amp i x0 x1 x2 D ≤ 233 + (417 + (417 + (417 + (363 + 255 * 600)))) := by
+theorem costGetYD_le (amp i x0 x1 x2 D : Nat) : costGetYD amp i x0 x1 x2 D ≤ 233 + (417 + (417 + (417 + (363 + 255 * 588)))) := by
   unfold costGetYD
   split
   · have := yd0_le i x0 x1 x2 D ‹Nat› (D, 0)
@@ -328,7 +351,7 @@ theorem rliFeeLoopCost_le (P : RLIExactCalls) :
     (sstoreCost_le_lit _ _ _ _)
 
 theorem rliBurnCost_le {KB : Nat} (hb : ∀ b S M, P.burnDebit b S M ≤ KB) :
-    rliBurnCost s p P T w ≤ 6358 + (6676 + (505 + (59 + 157 + 255 * 2000))) + 2100 + 2 + KB + 70 :=
+    rliBurnCost s p P T w ≤ 6358 + (6676 + (505 + (157 + 255 * 1676))) + 2100 + 2 + KB + 70 :=
   Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _)
     (costGetDMem_le _ _)) (sloadCost_le_lit _ _ _)) (Nat.le_refl _)) (hb _ _ _)) (Nat.le_refl _)
 
@@ -361,7 +384,7 @@ its largest, every Newton loop at its fuel. -/
 theorem rli_cost_le (hs : ∀ b S M, P.supplyDebit b S M ≤ 5336)
     (hb : ∀ b S M, P.burnDebit b S M ≤ 2600 + 416 + (2107 + 3 * 2100 + 2 * 22100 + 360))
     (hp : ∀ k b S M, P.pushDebit k b S M ≤ 2600 + 416 + 97756) :
-    rliExactCost s p P T w ≤ 2087054 := by
+    rliExactCost s p P T w ≤ 1839017 := by
   unfold rliExactCost
   refine Nat.le_trans (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add
     (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _) (rliPreCost1_le _ _)) (hs _ _ _)) (rliPreCost2_le _ _))
@@ -394,11 +417,11 @@ theorem oc_cost_le (p : Devm) (T : B256) (amp : Nat) (x0 x1 x2 D0 y r0 r1 r2 y2 
     (hs : ∀ b S M, P.supplyDebit b S M ≤ 5336)
     (hb : ∀ b S M, P.burnDebit b S M ≤ 2600 + 416 + (2107 + 3 * 2100 + 2 * 22100 + 360))
     (hp : ∀ b S M, P.pushDebit b S M ≤ 2600 + 416 + 97756) :
-    ocExactCost s p T P amp x0 x1 x2 D0 y r0 r1 r2 y2 ≤ 1108057 := by
+    ocExactCost s p T P amp x0 x1 x2 D0 y r0 r1 r2 y2 ≤ 1019258 := by
   rw [ocExactCost_eq p T P amp x0 x1 x2 D0 y r0 r1 r2 y2 hi3]
   refine Nat.le_trans (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add
     (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.le_refl _) (aGas_le _ _))
-    (xpGas_le _ _)) (costGetD_le _ _ _ _)) (costGetYD_le _ _ _ _ _ _)) (costGetYD_le _ _ _ _ _ _))
+    (xpGas_le _ _)) (costGetD_sharp _ _ _ _)) (costGetYD_le _ _ _ _ _ _)) (costGetYD_le _ _ _ _ _ _))
     (Nat.sub_le_sub_right (ocPreCost_le _ _) 233)) (Nat.add_le_add (sloadCost_le_lit _ _ _) (sloadCost_le_lit _ _ _)))
     (hs _ _ _)) (Nat.sub_le_sub_right (ocP1Cost_le _ _ _ _ _) 494)) (hb _ _ _))
     (Nat.sub_le_sub_right (ocP2Cost_le _ hp _ _ _) 2265)) (by decide)

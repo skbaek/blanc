@@ -5,7 +5,7 @@ import Blanc.Composition.Curve3PoolSwapRequest
 # `one_coin_message`
 
 `oneCoin_accepts`: the model's `remove_liquidity_one_coin` from `oneCoinOutcome`, whose checks are the contract's. `one_coin_run`:
-the frame's run from the moment's facts, with the chain's cost at most `1108057` (`oc_cost_le`) and its refund fixed before the residual
+the frame's run from the moment's facts, with the chain's cost at most `1019258` (`oc_cost_le`) and its refund fixed before the residual
 gas. `one_coin_message_bounded` closes the message at a bounded cost, and `one_coin_message_holds` the statement.
 -/
 
@@ -265,7 +265,7 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
     (mf : MomentFacts w) (mk : ExitMarked w) (hfee : word w pool Curve3Pool.feeSlot ≤ feeDen)
     (hadm : word w pool Curve3Pool.adminFeeSlot ≤ feeDen) (ask : Asked msg w E (oneCoinCalldata a i minDy))
     (req : OneCoinRequest w E msg.benv.stat.time.toNat a i minDy dy admin) :
-    ∃ cost refund, cost ≤ 1108057 ∧ MsgDoes msg liquidityRoom cost refund (fun st => OneCoinPaid w st E a i dy admin) := by
+    ∃ cost refund, cost ≤ 1019258 ∧ MsgDoes msg liquidityRoom cost refund (fun st => OneCoinPaid w st E a i dy admin) := by
   have ht : msg.currentTarget = pool := ask.entry.named.1
   have hcaller : msg.caller = E := ask.entry.named.2.1
   have hopen := ask.coinsOpen
@@ -419,7 +419,7 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
 theorem one_coin_message_bounded (d : Deployment) (m : Moment d) (A : Assumes d m.through) (msg : Msg) (E : Adr) (a minDy dy admin : Nat)
     (i : Fin 3) (ask : Asked msg m.world E (oneCoinCalldata a i minDy))
     (req : OneCoinRequest m.world E msg.benv.stat.time.toNat a i minDy dy admin) :
-    ∃ cost refund, cost < 30000000 ∧ MsgDoes msg liquidityRoom cost refund (fun st => OneCoinPaid m.world st E a i dy admin) := by
+    ∃ cost refund, cost ≤ 16777216 ∧ MsgDoes msg liquidityRoom cost refund (fun st => OneCoinPaid m.world st E a i dy admin) := by
   have fees := m.feesWithin A
   obtain ⟨cost, refund, hc, h⟩ := one_coin_run (m.facts A) (m.marked A) fees.1 fees.2 ask req
   exact ⟨cost, refund, by omega, h⟩
