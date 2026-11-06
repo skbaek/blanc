@@ -3,6 +3,7 @@ import Blanc.Lift.InvWalkDispatch
 import Blanc.Lift.AccumulatedWalk
 import Blanc.Lift.CodeSizeWalk
 import Blanc.Lift.MutableCallPost
+import Blanc.Lift.MemGlue
 
 /-!
 # Inversion walks of old-solc frames
@@ -142,6 +143,53 @@ theorem div_bexp_zero (x : B256) :
   exact Nat.div_one _
 
 theorem lit0 : Bytes.toB256 [0] = 0 := by decide
+
+theorem Mem.Wf.read_snd {μ : Mem} (h : Mem.Wf μ) (i n : Nat) : Mem.Wf (μ.read i n).2 :=
+  Nat.le_trans h (memExtSize_ge _ _ _)
+
+/-- Mem well-formedness of a walk's memory term. -/
+macro "uwf" : tactic => `(tactic|
+  repeat (first
+    | with_reducible apply Mem.Wf.write
+    | with_reducible apply Mem.Wf.read_snd
+    | with_reducible assumption))
+
+/-- A second hash that rewrites only the key word of a scratch image, optimized solc's reuse. -/
+theorem keccak_rehash {μ : Mem} (wf : Mem.Wf μ) (k1 b k2 : B256) :
+    ((((((μ.write (Bytes.toB256 [0]).toNat k1.toBytes).write (Bytes.toB256 [32]).toNat
+      b.toBytes).read (Bytes.toB256 [0]).toNat (Bytes.toB256 [64]).toNat).2.write
+        (Bytes.toB256 [0]).toNat k2.toBytes).read (Bytes.toB256 [0]).toNat
+          (Bytes.toB256 [64]).toNat).1).keccak = mapSlot k2 b := by
+  unfold mapSlot
+  apply congrArg
+  rw [show (Bytes.toB256 [0]).toNat = 0 by decide, show (Bytes.toB256 [32]).toNat = 32 by decide,
+    show (Bytes.toB256 [64]).toNat = 64 by decide]
+  have w1 : Mem.Wf (μ.write 0 k1.toBytes) := wf.write _ _
+  have w2 : Mem.Wf ((μ.write 0 k1.toBytes).write 32 b.toBytes) := w1.write _ _
+  have w3 := Mem.Wf.read_snd w2 0 64
+  rw [Mem.read_split64 _ (s := 0) (t := 32) rfl,
+    Mem.read_write_word_of_wf w3 0 k2,
+    Mem.read_write_word_disjoint w3 0 k2 (Or.inl (le_refl _))]
+  apply congrArg
+  have hx : (((μ.write 0 k1.toBytes).write 32 b.toBytes).read 0 64).2 =
+      ((μ.write 0 k1.toBytes).write 32 b.toBytes).extend 0 64 := rfl
+  rw [hx, Mem.extend_read_fst]
+  exact Mem.read_write_word_of_wf w1 32 b
+
+open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
+/-- `umem`, carrying the memory's well-formedness `wf`. -/
+elab "umemw " h:ident wf:ident : tactic => withMainContext do
+  let d ← getLocalDeclFromUserName h.getId
+  let ty ← instantiateMVars d.type
+  let some st := ty.find? (fun x => x.isAppOfArity ``Blanc.Lift.St 4)
+    | throwError "umemw: no walk state"
+  let ms ← Term.exprToSyntax (st.getArg! 2)
+  let mn := mkIdent (← mkFreshUserName `M)
+  let wn := mkIdent (← mkFreshUserName `wfn)
+  evalTactic (← `(tactic| (have $wn:ident : Mem.Wf $ms := by uwf)))
+  evalTactic (← `(tactic| clear $wf:ident))
+  evalTactic (← `(tactic| generalize $ms = $mn:ident at $h:ident $wn:ident))
+  evalTactic (← `(tactic| rename_i $wf:ident))
 
 /-- A successful `STOP` halt keeps the base's storage. -/
 theorem ric_stop_keeps {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b post : Devm}
