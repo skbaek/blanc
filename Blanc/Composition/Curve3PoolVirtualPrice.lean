@@ -293,7 +293,7 @@ theorem Assumes.add_replies (A : Assumes d h) {f : Exec.Frame} (member : f ∈ (
     settledFrames_children (d.sinceMinter h) member hc
   obtain ⟨sevm, b, post, exc, cm, rfl, H⟩ :=
     pool_at A.midFacts A.framesHold member target hs hcode hpc hck hq
-  refine H.add_replies cm target hlen hsel (fun c hc => CurveCoins.settled_wf _ (kids c hc)) ?_ henv hpos hw hw'
+  refine H.add_replies cm target hlen hsel (fun c hc => Blanc.Lift.settled_wf _ (kids c hc)) ?_ henv hpos hw hw'
   intro c hc ht hcs sel
   have inPool := sinceMinter_settled_sub c (kids c hc)
   have hF : c ∈ coinFrames usdt (fun _ => True) (d.sincePool h).settledFrames :=

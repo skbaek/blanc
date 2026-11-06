@@ -8,7 +8,7 @@ import Blanc.Lift.ForeignKeep
 pool sends, in its own module. Nothing here names a coin.
 -/
 
-namespace Blanc.Lift.CurveCoins
+namespace Blanc.Lift
 
 open Jaune Blanc Blanc.Lift
 
@@ -27,4 +27,4 @@ theorem frameKeeps_of_noExec (c : Exec.Frame) (hpc : c.pc = 0)
   subst hpc
   exact frameKeepsForeign_of_noExec _ hsg (h run rfl rfl)
 
-end Blanc.Lift.CurveCoins
+end Blanc.Lift

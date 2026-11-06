@@ -1165,9 +1165,6 @@ import Blanc.Composition.Curve3PoolUsdcV2Coin
 import Blanc.Composition.Curve3PoolUsdcV2_1Coin
 import Blanc.Composition.Curve3PoolUsdtCoinExchange
 import Blanc.Composition.Curve3PoolVirtualPriceFalls
-import Blanc.Lift.Curve3Crv.HistShareBound
-import Blanc.Lift.Curve3Pool.U3HistoryMid
-import Blanc.Lift.Curve3Pool.U3ParamWitnesses
 import Blanc.Lift.CurveCoins.ApprovalLogsUsdcV1
 import Blanc.Lift.CurveCoins.UsdcV2_1
 import Blanc.Lift.CurveCoins.UsdcV2_2
