@@ -1060,6 +1060,89 @@ theorem ExitFrame.cold (f : ExitFrame msg w E a T) (hE : E ≠ 0) (win : RLWindo
     · exact (hStP usdc (by decide)).trans ((hToBN usdc (by decide) (by decide)).trans (sU.trans st.usdcS))
     · exact (hStP usdt (by decide)).trans ((hToBN usdt (by decide) (by decide)).trans (sT.trans st.usdtS))
 
+/-! ## The chain's cost is small, whatever it is -/
+
+theorem rawTail_le : ∀ n, n < 33 → rawTailCost n ≤ 1000 := by decide
+
+theorem replyLen_lt {s : Sevm} {pre : Devm} {T : B256} {P : RLExactCalls} {i : Nat} {n : Devm} {m : Mem} :
+    rlReplyLen s pre T P i n m < 33 := by
+  unfold rlReplyLen
+  omega
+
+theorem mem_read_len (μ : Mem) (i n : Nat) : (μ.read i n).1.length = n := by
+  show (Array.sliceD _ _ _ _).length = n
+  rw [Array.sliceD_eq_map, List.length_map, List.length_range]
+
+theorem proxy_xferG_le {e : Sevm} {d : Devm} (h : e.data.length ≤ 100) : Blanc.Composition.UsdcLive.xferG e d ≤ 73300 :=
+  Blanc.Composition.UsdcLive.proxyG_le h (Blanc.Composition.UsdcLive.implXferG_le _ _)
+
+theorem dai_xferG_le (e : Sevm) (d : Devm) : Blanc.Lift.Dai.xferG e d ≤ 56500 := by
+  have := Blanc.Lift.Dai.xferW_le e d
+  rwa [Blanc.Lift.Dai.xferW_eq] at this
+
+theorem usdt_xferG_le (e : Sevm) (d : Devm) : Blanc.Lift.Usdt.xferG e d ≤ 97756 := by
+  have := Blanc.Lift.Usdt.xferW_le e d
+  rwa [Blanc.Lift.Usdt.xferW_eq] at this
+
+theorem exit_debit_bound (b : Devm) (S : List B256) (M : Mem) (i : Nat) :
+    exitPushD 𝐬 (𝐩.getStor 𝐬.currentTarget) i b S M ≤ 200000 := by
+  unfold exitPushD
+  have ha : ∀ t : B256, acc (b.withGasLeft 0) t ≤ 2600 := fun _ => acc_le
+  have he : ext (b.withGasLeft 0) S M 0x520 0x44 0x5c0 0x20 ≤ 416 := ext_le (by decide) (by decide)
+  split
+  · unfold coinDebit
+    have := dai_xferG_le (initSevm (callMsg0 𝐬 (b.withGasLeft 0) S M 0 (Curve3Pool.coinAt (𝐩.getStor 𝐬.currentTarget) 0) 0x520 0x44 0x5c0 0x20))
+      (initDevm (callMsg0 𝐬 (b.withGasLeft 0) S M 0 (Curve3Pool.coinAt (𝐩.getStor 𝐬.currentTarget) 0) 0x520 0x44 0x5c0 0x20))
+    have h1 := ha (Curve3Pool.coinAt (𝐩.getStor 𝐬.currentTarget) 0)
+    omega
+  · split
+    · unfold coinDebit
+      have := proxy_xferG_le (e := initSevm (callMsg0 𝐬 (b.withGasLeft 0) S M 0 (Curve3Pool.coinAt (𝐩.getStor 𝐬.currentTarget) 1) 0x520 0x44 0x5c0 0x20))
+        (d := initDevm (callMsg0 𝐬 (b.withGasLeft 0) S M 0 (Curve3Pool.coinAt (𝐩.getStor 𝐬.currentTarget) 1) 0x520 0x44 0x5c0 0x20))
+        (by rw [callMsg0_data, mem_read_len]; decide)
+      have h1 := ha (Curve3Pool.coinAt (𝐩.getStor 𝐬.currentTarget) 1)
+      omega
+    · unfold coinDebit
+      have := usdt_xferG_le (initSevm (callMsg0 𝐬 (b.withGasLeft 0) S M 0 (Curve3Pool.coinAt (𝐩.getStor 𝐬.currentTarget) 2) 0x520 0x44 0x5c0 0x20))
+        (initDevm (callMsg0 𝐬 (b.withGasLeft 0) S M 0 (Curve3Pool.coinAt (𝐩.getStor 𝐬.currentTarget) 2) 0x520 0x44 0x5c0 0x20))
+      have h1 := ha (Curve3Pool.coinAt (𝐩.getStor 𝐬.currentTarget) 2)
+      omega
+
+/-- `rlExactCost` from bounds on the calls' debits. -/
+theorem rl_cost_lt {e : Sevm} {d : Devm} {U : B256} {P : RLExactCalls} (hsd : ∀ b S M, P.supplyDebit b S M ≤ 5336)
+    (hd : ∀ i b S M, P.pushDebit i b S M ≤ 200000) (hbd : ∀ b S M, P.burnDebit b S M ≤ 60000) :
+    rlExactCost e d U P < 2 ^ 200 := by
+  rw [rlExactCost_eq]
+  have hs : ∀ b k, sloadCost e b k ≤ 2100 := sloadCost_le_lit e
+  have ht : ∀ b k v, sstoreCost e b k v ≤ 22100 := sstoreCost_le_lit e
+  have hrt : ∀ i n m, rawTailCost (rlReplyLen e d U P i n m) ≤ 1000 := fun _ _ _ => rawTail_le _ replyLen_lt
+  have hE : rlEdgeStorageCost e d U P ≤ 2100 + 22100 + 2100 + 2100 + 22100 :=
+    Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (hs _ _) (ht _ _ _)) (hs _ _)) (hs _ _)) (ht _ _ _)
+  have hI : ∀ i n m, rlIterStorageCost e d U i n m ≤ 2100 + 2100 + 22100 + 2100 := fun _ _ _ =>
+    Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (hs _ _) (hs _ _)) (ht _ _ _)) (hs _ _)
+  have hD : rlDebits e d U P ≤ 5336 + 200000 + 200000 + 200000 + 60000 :=
+    Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (Nat.add_le_add (hsd _ _ _) (hd _ _ _ _)) (hd _ _ _ _)) (hd _ _ _ _)) (hbd _ _ _)
+  have hR : rlRawTails e d U P ≤ 1000 + 1000 + 1000 :=
+    Nat.add_le_add (Nat.add_le_add (hrt _ _ _) (hrt _ _ _)) (hrt _ _ _)
+  have i0 := hI 0 (rlHead0 e d P) (rlHeadMem0 e d U P)
+  have i1 := hI 1 (rlHead1 e d U P) (rlHeadMem1 e d U P)
+  have i2 := hI 2 (rlHead2 e d U P) (rlHeadMem2 e d U P)
+  have : 7384 + (2100 + 22100 + 2100 + 2100 + 22100) + (2100 + 2100 + 22100 + 2100) + (2100 + 2100 + 22100 + 2100) + (2100 + 2100 + 22100 + 2100) +
+      (5336 + 200000 + 200000 + 200000 + 60000) + (1000 + 1000 + 1000) < 2 ^ 200 := by decide
+  omega
+
+/-- **The chain's cost fits a word**, whatever the frame's entry. -/
+theorem exit_cost_lt : rlExactCost 𝐬 𝐩 T (exitCalls msg) < 2 ^ 200 := by
+  refine rl_cost_lt (fun b S M => supplyDebit_le (by decide) (by decide) b S M) (fun i b S M => exit_debit_bound b S M i) (fun b S M => ?_)
+  rw [exit_burnDebit]
+  unfold mutDebit mutBodyCost
+  have h1 : acc (b.withGasLeft 0) (tokW 𝐬 𝐩) ≤ 2600 := acc_le
+  have h2 : ext (b.withGasLeft 0) S M 0x61c 0x44 0x6a0 0x20 ≤ 416 := ext_le (by decide) (by decide)
+  have h3 := burnBodyCost_le (initSevm (callMsg0 𝐬 (b.withGasLeft 0) S M 0 (tokW 𝐬 𝐩) 0x61c 0x44 0x6a0 0x20))
+    (initDevm (callMsg0 𝐬 (b.withGasLeft 0) S M 0 (tokW 𝐬 𝐩) 0x61c 0x44 0x6a0 0x20))
+  have h4 : Curve3Crv.dispatchGas 8 = 360 := rfl
+  omega
+
 end Chain
 
 end Blanc.Composition.Curve3PoolPublic
