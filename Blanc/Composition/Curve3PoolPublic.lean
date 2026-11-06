@@ -49,7 +49,7 @@ def ExitWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
 
 /-- The gas limit an exit needs: what it spends before its refund, and `callRoom`. -/
 def exitLimit (w : State) (data : Bytes) (E : Adr) (a : Nat) : Nat :=
-  exitGasUsed w data E a + exitRefund w E a + callRoom
+  callIntrinsic data + exitFrameGas w E a + callRoom
 
 /-- **A holder can leave.** At any moment of mainnet after the minter assignment, a holder's admissible
 `remove_liquidity` transaction, with no named power in force against it, is processed at exact gas and
@@ -77,16 +77,23 @@ def SwapInputs (w : State) (t : Nat) (i : Fin 3) (dx amp D x : Nat) : Prop :=
   ampAt w t = some amp ∧ invariant w amp = some D ∧
     x = scaled w i + netOf w i dx * rates.get i / precision
 
-/-- **The gas an `exchange` transaction uses**, when its loops converge in checked arithmetic. -/
-noncomputable def swapGasUsed (w : State) (data : Bytes) (E : Adr) (t : Nat) (i j : Fin 3) (dx : Nat) :
+/-- **What an `exchange` transaction spends before its refund**, when its loops converge in checked
+arithmetic. -/
+noncomputable def swapSpent (w : State) (data : Bytes) (E : Adr) (t : Nat) (i j : Fin 3) (dx : Nat) :
     Option Nat := do
   let amp ← ampAt w t
   let D ← invariant w amp
   let x ← chkAdd (scaled w i) (← chkDiv (← chkMul (netOf w i dx) (rates.get i)) precision)
   let dy ← swapOut w t i j dx
-  let allow := allowanceOf w E i
-  some (afterRefund (callIntrinsic data + swapFrameGas w E t amp i j dx dy x D (allow = 2 ^ 256 - 1))
-    (swapRefund w E i j dx dy allow))
+  some (callIntrinsic data +
+    swapFrameGas w E t amp i j dx dy x D (allowanceOf w E i = 2 ^ 256 - 1))
+
+/-- **The gas an `exchange` transaction uses**: what it spends, less its capped refund. -/
+noncomputable def swapGasUsed (w : State) (data : Bytes) (E : Adr) (t : Nat) (i j : Fin 3) (dx : Nat) :
+    Option Nat := do
+  let spent ← swapSpent w data E t i j dx
+  let dy ← swapOut w t i j dx
+  some (afterRefund spent (swapRefund w E i j dx dy (allowanceOf w E i)))
 
 /-- `E` can pull `dx`, the coins differ, the minimum is met, and the contract's arithmetic fits. -/
 structure SwapRequest (w : State) (E : Adr) (t : Nat) (i j : Fin 3) (dx dy minDy : Nat) : Prop where
@@ -108,19 +115,15 @@ def SwapWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
     swapAdmin benv.state benv.stat.time.toNat i j dx = some admin ∧
     SwapPaid benv.state st E i j dx dy admin
 
-/-- The gas limit a swap using `gas` needs: what it spends before its refund, and `callRoom`. -/
-def swapLimit (w : State) (E : Adr) (i j : Fin 3) (dx dy gas : Nat) : Nat :=
-  gas + swapRefund w E i j dx dy (allowanceOf w E i) + callRoom
-
 /-- **A swap works.** At any moment of mainnet after the minter assignment, an admissible `exchange`
 transaction, with no named power in force against it, is processed at exact gas and pays what the
 curve quotes. -/
 def swap : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
-    ∀ (tx : Tx) (E : Adr) (i j : Fin 3) (dx dy minDy gas : Nat),
+    ∀ (tx : Tx) (E : Adr) (i j : Fin 3) (dx dy minDy spent : Nat),
       tx.data = swapCalldata i j dx minDy →
-      swapGasUsed m.world tx.data E m.benv.stat.time.toNat i j dx = some gas →
-      TxAdmitted m.benv m.bout tx E (swapLimit m.world E i j dx dy gas) → CoinsOpen m.world E →
+      swapSpent m.world tx.data E m.benv.stat.time.toNat i j dx = some spent →
+      TxAdmitted m.benv m.bout tx E (spent + callRoom) → CoinsOpen m.world E →
       SwapRequest m.world E m.benv.stat.time.toNat i j dx dy minDy →
       SwapWorks m.benv m.bout tx m.nextIndex E i j dx dy
 
