@@ -7,8 +7,8 @@ import Blanc.Lift.StaticGasMessage
 
 Each headline is a `Prop` quantifying over its premises. This module only states them. `pool_backed_holds` and
 `virtual_price_bound_holds` are in `Curve3PoolBacked`, `lp_exit_holds` and `lp_exit_message_holds` in `Curve3PoolExitMain`,
-`swap_holds` and `swap_message_holds` in `Curve3PoolSwapMain`, `virtual_price_falls` in `Curve3PoolVirtualPriceFalls`.
-`add_liquidity_message`, `imbalance_message` and `one_coin_message` are stated and not yet proved.
+`swap_holds` and `swap_message_holds` in `Curve3PoolSwapMain`, `virtual_price_falls` in `Curve3PoolVirtualPriceFalls`,
+`add_liquidity_message_holds` in `Curve3PoolAddMain`. `imbalance_message` and `one_coin_message` are stated and not yet proved.
 
 * `pool_backed`: the pool's books are covered by what each coin's storage says it holds.
 * `lp_exit`: a holder's `remove_liquidity` transaction is processed, at exact gas, and pays out.
@@ -300,11 +300,11 @@ structure AddApart (w : State) (E : Adr) : Prop extends SwapApart w E where
 /-- The books a deposit of `am` reaches, before fees. -/
 def afterDeposit (w : State) (am : V3) : V3 := v3Of fun k => recorded w k + netOf w k (am.get k)
 
-/-- On a positive supply the mint's checked arithmetic passes: `D0` is positive, `D2` is at least `D0`,
-and `supply * (D2 - D0)` fits a word. -/
+/-- On a positive supply the mint's checked arithmetic passes: `D2` is at least `D0`, and
+`supply * (D2 - D0)` fits a word. -/
 def MintInRange (w : State) (amp : Nat) (new : V3) : Prop :=
   supply w ≠ 0 → ∀ r D0 D2, feeRun w amp new = some r → invariant w amp = some D0 → getDMem r.2 amp = some D2 →
-    0 < D0 ∧ D0 ≤ D2 ∧ supply w * (D2 - D0) < 2 ^ 256
+    D0 ≤ D2 ∧ supply w * (D2 - D0) < 2 ^ 256
 
 /-- `E` can add `am` at timestamp `t`, and the contract computes `minted` and `stored`. -/
 structure AddRequest (w : State) (E : Adr) (t : Nat) (am : V3) (minMint minted : Nat) (stored : V3) :

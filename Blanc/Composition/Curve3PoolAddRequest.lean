@@ -121,6 +121,13 @@ theorem getDMem_pos {b : V3} {amp v : Nat} (h0 : 0 < b.v0) (h : getDMem b amp = 
   show 0 < Curve3Pool.precMul.get 0 * b.v0
   exact Nat.mul_pos (precMul_pos 0) h0
 
+/-- The fee loop divides by `D0`. -/
+theorem feeLoop_pos {fee af D0 D1 : Nat} {old new : V3} {r : V3 × V3 × V3} (h : feeLoop fee af D0 D1 old new = some r) : 0 < D0 := by
+  unfold feeLoop Curve3Pool.feeAt at h
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+  obtain ⟨_, ⟨_, _, _, hi, _⟩, _⟩ := h
+  exact Nat.pos_of_ne_zero (Blanc.StableSwapNewton.chkDiv_some hi).2
+
 /-- The adjusted fee, within its limit. -/
 theorem feeAdj_of {s : Curve3Pool.State} (h : s.fee ≤ feeDen) : feeAdj s = some (s.fee * 3 / 8) := by
   have hd : feeDen = 10000000000 := rfl
@@ -176,7 +183,7 @@ theorem add_accepts (hab : Curve3Pool.Abstracts (w.getStor pool) s) (hk : s.isKi
     · cases hgate
     rename_i hgt
     obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hgate)
-    obtain ⟨hD0pos, hD02, hmul⟩ := hr hT r D0 D2 hrun hinv hD2
+    obtain ⟨hD02, hmul⟩ := hr hT r D0 D2 hrun hinv hD2
     have hrun0 := hrun
     unfold feeRun at hrun0
     simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at hrun0
@@ -184,6 +191,7 @@ theorem add_accepts (hab : Curve3Pool.Abstracts (w.getStor pool) s) (hk : s.isKi
     have eD : D0 = D0' := Option.some.inj (hinv.symm.trans hinv')
     subst eD
     obtain rfl := Option.some.inj hr3
+    have hD0pos : 0 < D0 := feeLoop_pos hloop
     have ef : f = s.fee * 3 / 8 := by
       rw [(Blanc.StableSwapNewton.chkDiv_some hf).1, Blanc.StableSwapNewton.chkMul_some hm, hsf]
     rw [ef, hsa, hbk] at hloop
