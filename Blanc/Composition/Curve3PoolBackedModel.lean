@@ -60,24 +60,28 @@ theorem pulled_pullCalls (c : Nat) (am : V3) (k : Fin 3) :
   | 0 | 1 | 2 =>
     unfold pullCalls
     by_cases h0 : am.get 0 > 0 <;> by_cases h1 : am.get 1 > 0 <;> by_cases h2 : am.get 2 > 0 <;>
-      simp [List.filterMap_cons, h0, h1, h2, pulled]
+      simp only [
+        Fin.isValue, gt_iff_lt, h0, ↓reduceIte, Option.some.injEq, List.filterMap_cons_some, h1, h2, List.filterMap_nil, pulled, one_ne_zero, Fin.reduceEq, add_zero, List.filterMap_cons_none, zero_ne_one, zero_add]
 
 theorem pushed_pullCalls (c : Nat) (am : V3) (k : Fin 3) : pushed k (pullCalls c am) = 0 := by
   unfold pullCalls
   by_cases h0 : am.get 0 > 0 <;> by_cases h1 : am.get 1 > 0 <;> by_cases h2 : am.get 2 > 0 <;>
-    simp [List.filterMap_cons, h0, h1, h2, pushed]
+    simp only [
+      gt_iff_lt, Fin.isValue, h0, ↓reduceIte, Option.some.injEq, List.filterMap_cons_some, h1, h2, List.filterMap_nil, pushed, List.filterMap_cons_none]
 
 theorem pushed_pushCalls (c : Nat) (am : V3) (k : Fin 3) : pushed k (pushCalls c am) = am.get k := by
   match k with
   | 0 | 1 | 2 =>
     unfold pushCalls
     by_cases h0 : am.get 0 ≠ 0 <;> by_cases h1 : am.get 1 ≠ 0 <;> by_cases h2 : am.get 2 ≠ 0 <;>
-      simp_all [List.filterMap_cons, pushed]
+      simp_all only [
+        Fin.isValue, ne_eq, ite_not, ↓reduceIte, Option.some.injEq, List.filterMap_cons_some, List.filterMap_nil, pushed, one_ne_zero, Fin.reduceEq, add_zero, Decidable.not_not, List.filterMap_cons_none, zero_ne_one, zero_add]
 
 theorem pulled_pushCalls (c : Nat) (am : V3) (k : Fin 3) : pulled k (pushCalls c am) = 0 := by
   unfold pushCalls
   by_cases h0 : am.get 0 ≠ 0 <;> by_cases h1 : am.get 1 ≠ 0 <;> by_cases h2 : am.get 2 ≠ 0 <;>
-    simp [List.filterMap_cons, h0, h1, h2, pulled]
+    simp only [
+      ne_eq, ite_not, Fin.isValue, h0, ↓reduceIte, Option.some.injEq, List.filterMap_cons_some, h1, h2, List.filterMap_nil, pulled, ite_eq_left_iff, reduceCtorEq, imp_self, List.filterMap_cons_none]
 
 /-- The stored balance never exceeds the new one. -/
 theorem feeAt_stored_le {fee adm D0 D1 : Nat} {old new : V3} {i : Fin 3} {f st af : Nat}
@@ -297,7 +301,8 @@ theorem flow_removeLiquidity {s : State} {e : Env} {a : Nat} {mins : V3} {o : Ou
   have eq : pushed k [ExtCall.push 0 e.caller vals.v0, ExtCall.push 1 e.caller vals.v1,
       ExtCall.push 2 e.caller vals.v2, ExtCall.burn e.caller a] = vals.get k := by
     match k with
-    | 0 | 1 | 2 => simp [pushed, V3.get]
+    | 0 | 1 | 2 => simp only [
+      pushed, Fin.isValue, ↓reduceIte, one_ne_zero, Fin.reduceEq, add_zero, V3.get, Fin.coe_ofNat_eq_mod, Nat.zero_mod, zero_ne_one, zero_add, Nat.one_mod, Nat.mod_succ, OfNat.ofNat_ne_zero, OfNat.ofNat_ne_one]
   refine .plain ?_ (by rw [ep]; exact Nat.two_pow_pos _) (fun _ => ep)
   dsimp only
   rw [ep, eq, hE]
