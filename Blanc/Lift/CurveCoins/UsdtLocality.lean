@@ -529,7 +529,7 @@ theorem usdt_entry_local (capabilities : BodyStageCapabilities HistFork)
     EntryLocal T (fun _ => True) (CodeFrame T HistFork code) (fun σ => (σ (balSlot h)).toNat) (usdtDebit h)
       (fun _ => 0) (wordsAt T start.state) (wordsAt T future.state) trace.settledFrames :=
   entryLocal_of_frames (I := RowsEmpty h (coinFrames T (fun _ => True) trace.settledFrames))
-    (usdt_chain capabilities trace installed) notDeprecated (fun g _ => authority.rowsAtCut g)
+    (usdt_chain capabilities trace installed) notDeprecated authority.rowsAtCut
     (fun F hF good rows => by
       have target := (mem_coinFrames.mp hF).2.1
       obtain ⟨r, e⟩ := frame_law hF good target (notDeprecated F hF)

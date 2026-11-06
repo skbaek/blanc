@@ -234,7 +234,7 @@ theorem usdc_entryLocalAt (installed : start.state.getCode T = Proxy.code)
       (authority.noSignature F hF) rows
   refine ⟨viewChain.1, viewChain.2, fun F hF => ?_⟩
   have rows := viewChain.1.inv_all (I := RowsView h (usdcFrames T trace.settledFrames))
-    (fun G hG good r => (law G hG good r).1) (fun g _ => authority.rowsAtCut g) F hF
+    (fun G hG good r => (law G hG good r).1) authority.rowsAtCut F hF
   exact (law F hF (viewChain.1.good F hF) rows).2
 
 end Trace

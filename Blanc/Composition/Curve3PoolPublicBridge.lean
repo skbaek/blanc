@@ -134,7 +134,7 @@ theorem NoKeyHolder.daiAuthority {cfg : ChainConfig} {start : Benv} {future : Bl
       CurveCoins.PoolCoinSel (Sevm.selector F.sevm)) :
     PoolAuthorityEmpty CurveCoins.Dai.SignedAs Dai.allowSlot CurveCoins.PoolCoinSel pool
       (wordsAt dai start.state) (coinFrames dai (fun _ => True) trace.settledFrames) where
-  rowsAtCut := keys.rowsAtCut 0
+  rowsAtCut := fun g _ => keys.rowsAtCut 0 g
   noSignature := CurveCoins.Dai.dai_noSignature_of_logs trace installed keys.daiNoApproval
   ownCalls := own
 
@@ -145,7 +145,7 @@ theorem NoKeyHolder.usdtAuthority {settled : List Exec.Frame} {w : Jaune.State} 
       CurveCoins.PoolCoinSel (Sevm.selector F.sevm)) :
     PoolAuthorityEmpty CurveCoins.Usdt.NoSigned Usdt.allowSlot CurveCoins.PoolCoinSel pool
       (wordsAt usdt w) (coinFrames usdt (fun _ => True) settled) where
-  rowsAtCut := keys.rowsAtCut 2
+  rowsAtCut := fun g _ => keys.rowsAtCut 2 g
   noSignature := fun _ _ h => h
   ownCalls := own
 

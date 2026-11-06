@@ -558,7 +558,7 @@ theorem dai_entry_local {cfg : ChainConfig} {start : Benv} {future : BlockChain}
       trace.settledFrames := by
   have chain := dai_chain trace installed
   refine entryLocal_of_frames (I := RowsEmpty h (coinFrames T (fun _ => True) trace.settledFrames)) chain
-    (fun _ _ => trivial) (fun g _ => authority.rowsAtCut g) ?_
+    (fun _ _ => trivial) authority.rowsAtCut ?_
   intro F hF good rows
   obtain ⟨-, target, -, -⟩ := mem_coinFrames.mp hF
   have C := CertFrame.of_staticOnly cert_check staticOnly HistFork.stateGas_none good target
