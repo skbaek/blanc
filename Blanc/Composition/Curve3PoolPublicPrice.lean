@@ -52,14 +52,13 @@ inductive PoolOp
 
 /-- The entry a frame's calldata selects. -/
 def opOf (e : Sevm) : PoolOp :=
-  let s := Sevm.selector e
   if e.data.length < 4 then .other
-  else if s = Curve3Pool.selRemoveLiquidity then .removeLiquidity
-  else if s = Curve3Pool.selDonateAdminFees then .donateAdminFees
-  else if s = Curve3Pool.selAddLiquidity then .addLiquidity (Curve3Pool.argV3 e 0)
-  else if s = Curve3Pool.selRemoveLiquidityImbalance then .imbalance (Curve3Pool.argV3 e 0)
-  else if s = Curve3Pool.selExchange then .exchange (Curve3Pool.arg e 0) (Curve3Pool.arg e 1)
-  else if s = Curve3Pool.selRemoveLiquidityOneCoin then .oneCoin (Curve3Pool.arg e 0) (Curve3Pool.arg e 1)
+  else if Sevm.selector e = Curve3Pool.selRemoveLiquidity then .removeLiquidity
+  else if Sevm.selector e = Curve3Pool.selDonateAdminFees then .donateAdminFees
+  else if Sevm.selector e = Curve3Pool.selAddLiquidity then .addLiquidity (Curve3Pool.argV3 e 0)
+  else if Sevm.selector e = Curve3Pool.selRemoveLiquidityImbalance then .imbalance (Curve3Pool.argV3 e 0)
+  else if Sevm.selector e = Curve3Pool.selExchange then .exchange (Curve3Pool.arg e 0) (Curve3Pool.arg e 1)
+  else if Sevm.selector e = Curve3Pool.selRemoveLiquidityOneCoin then .oneCoin (Curve3Pool.arg e 0) (Curve3Pool.arg e 1)
   else .other
 
 /-- **The rounding `D` may lose across a call**, per operation, with `w`, `w'` the states around it. -/
@@ -112,6 +111,7 @@ structure Installed (w : State) : Prop where
   poolCode : w.getCode pool = Curve3Pool.code
   c3Code : w.getCode c3 = Curve3Crv.code
   coins : StartingCode w
+  usdcCode : w.getCode usdc = Lift.Usdc.Proxy.code
   usdcCertified : UsdcCertified w
 
 /-- A message to the pool at `w` commits and ends in `post`. -/

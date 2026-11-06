@@ -62,14 +62,8 @@ def swapCalldata (i j : Fin 3) (dx minDy : Nat) : Bytes :=
   abiSelectorBytes Curve3Pool.selExchange ++ Curve3Pool.word i ++ Curve3Pool.word j ++
     Curve3Pool.word dx ++ Curve3Pool.word minDy
 
-/-- The word `a`'s allowance to the pool sits at, in coin `k`. -/
-def allowanceEntry (a : Adr) : Fin 3 → B256
-  | 0 => Dai.allowSlot a pool
-  | 1 => Usdc.allowSlot a pool
-  | 2 => Usdt.allowSlot a pool
-
 /-- `E`'s allowance to the pool in coin `k`. -/
-def allowanceOf (w : State) (E : Adr) (k : Fin 3) : Nat := word w (coinAt k) (allowanceEntry E k)
+def allowanceOf (w : State) (E : Adr) (k : Fin 3) : Nat := word w (coinAt k) (allowanceEntry E pool k)
 
 /-- `exchange`'s inputs to its Newton loops at timestamp `t`: `_A()`, the invariant, and the new balance. -/
 def SwapInputs (w : State) (t : Nat) (i : Fin 3) (dx amp D x : Nat) : Prop :=
