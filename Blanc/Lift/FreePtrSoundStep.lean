@@ -445,7 +445,6 @@ theorem fstep_sound_noStateGas {ν : Nat → B256} {σ σ' : FSt} {n : Ninst} {a
           exact fun _ h => nomatch h
         · obtain ⟨o, ho'⟩ := opFacts_out_head hne ho
           exact opFacts_sound hf hr hS hst run (htop o ho')
-            (fun _ => Nat.le_of_lt pot.size_lt)
       · unfold rdsEff
         split
         · rename_i hh hrds

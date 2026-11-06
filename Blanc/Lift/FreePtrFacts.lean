@@ -413,12 +413,12 @@ private theorem run_eq_top_any {sevm : Sevm} {d d' : Devm} (run : Ninst.Run sevm
 
 /-- **The facts `opFacts` attaches to the fresh result `r` hold once `r` names the concrete
 result** `w` (the top word after the step): the input symbols `kv` name the words `S` on top
-of the stack, and `r` is not among them.  `MSIZE` attaches no fact, so `_hms` is unused. -/
+of the stack, and `r` is not among them. -/
 theorem opFacts_sound {ν : Nat → B256} {fs : List Fact} {kv : List Nat} {S rest : List B256}
     {n : Ninst} {r : Nat} {w : B256} {sevm : Sevm} {d d' : Devm}
     (hf : AllHold ν fs) (hr : r ∉ kv) (hS : List.Forall₂ (fun s w => ν s = w) kv S)
     (hstack : d.stack = S ++ rest) (run : Ninst.Run sevm d n d')
-    (htop : d'.stack.head? = some w) (_hms : n = .reg .msize → d.memory.size ≤ memCap) :
+    (htop : d'.stack.head? = some w) :
     AllHold (Function.update ν r w) (opFacts fs n kv r) := by
   have upd : ∀ s ∈ kv, Function.update ν r w s = ν s := fun s hs =>
     Function.update_of_ne (by rintro rfl; exact hr hs) _ _

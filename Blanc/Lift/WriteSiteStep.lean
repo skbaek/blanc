@@ -17,8 +17,7 @@ are in `Blanc/Lift/WriteSiteJoin.lean`.  Consumers never unfold `wstep` (`wstep_
 Two semantic remarks.  `memBelow` keeps the words ending below a write's lower bound; memory is
 indexed by naturals, so a window starting at or above that bound never reaches below it, whether
 or not it crosses `2 ^ 256` (`memBelow_holds`, `Mem.WritesAt.agreeBelow`): no gas argument is
-needed.  `MSIZE` attaches no fact (`opFacts`), so F3a's memory premise is discharged vacuously.
-Contract-neutral.
+needed.  `MSIZE` attaches no fact (`opFacts`).  Contract-neutral.
 -/
 
 namespace Blanc.Lift.WriteSite
@@ -1002,7 +1001,6 @@ theorem wstep_sound_noStateGas {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} 
       · obtain ⟨q, rfl, hq⟩ := opFacts_pushesTop hne
         obtain ⟨rs, hrs⟩ := htop q rfl hq
         exact FreePtr.opFacts_sound h.facts hr h.kv hS run (by rw [hrs]; rfl)
-          (fun he => by cases he; exact absurd hq (by decide))
   · -- provenance
     intro p hp
     rcases List.mem_append.mp hp with hp | hp
