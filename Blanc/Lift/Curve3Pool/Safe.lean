@@ -184,26 +184,4 @@ theorem pool_frame_refines_at (cs : V3) (tok : Nat) :
   · rw [tokenAdr_eq habs, hq.2]
     exact htk
 
-/-! ## The entry condition at fixed parties, over the historical forks -/
-
-/-- The per-child premises and readiness at fixed parties under the frame's actual rules. -/
-def poolEntryAtH (cs : V3) (tok : Nat) (sevm : Sevm) (pre : Devm) : Prop :=
-  Exec.FreshEntry sevm pre ∧ sevm.data.length < 2 ^ 256 ∧ pre.gasMeasure < 2 ^ 256 ∧
-    IdReadyH sevm pre ∧ (∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp (adrOf (cs.get k))) ∧
-    ¬ sevm.benvStat.rules.isPrecomp (adrOf tok) ∧ Exec.derivEntry PoolChildrenKeep sevm pre
-
-/-- **The frame refinement at fixed parties, over the historical forks.** -/
-theorem pool_frame_refines_atH (cs : V3) (tok : Nat) :
-    PoolFrameRefinesInH (PoolParties cs tok) (poolEntryAtH cs tok) := by
-  intro sevm pre post s exc hcode hfork hentry _ hpc _ hck hq
-  obtain ⟨⟨hstack, hmem⟩, hcd, hgas, hid, hcs, htk, hkids⟩ := hentry
-  obtain ⟨hkeep, hkeepT, hcode4⟩ := hkids _ exc
-  have habs : Abstracts (entryStor ⟨0, sevm, pre, .ok post, exc⟩) s := hck.abs
-  refine pool_frame_refines_envH exc hcode hfork hcd hstack hmem hgas hpc hck
-    ⟨hkeep, hkeepT, hcode4, hid, fun k => ?_, ?_⟩
-  · rw [coinAdr_eq habs k, hq.1]
-    exact hcs k
-  · rw [tokenAdr_eq habs, hq.2]
-    exact htk
-
 end Blanc.Lift.Curve3Pool

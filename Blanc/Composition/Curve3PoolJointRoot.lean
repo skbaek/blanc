@@ -18,8 +18,8 @@ the joint checkpoint are theorems.
 Besides the blocks, these facts about the history are fields:
 
 * `fresh`: 3Crv's HASH-T (R4's own premise, over the same frames);
-* `callbacks`: every child of a pool frame keeps the pool's storage and every coin child keeps 3Crv's
-  (`PoolMidEnv.callbacks`, the coin frames' obligation);
+* `callbacks`: at each pool frame the replay refines, every child keeps the pool's storage and every coin
+  child keeps 3Crv's (`PoolKeepAt`, the coin frames' obligation);
 * `idEmpty`: the identity precompile's account holds no code just after 3Crv's creation block;
 * `idNoFrame`: no CREATE frame of the history lands at the identity precompile's address.
 
@@ -90,8 +90,8 @@ structure JointDeployment where
         (((toPool.step poolBlock).append toMinter).step minterBlock)))
   callbacks : (((MidHistoryTraceIn.tail poolBlock
       (poolBlock.bodyTrace.txSplitOfSlot poolSlot poolDecoded)).append toMinter).step
-      minterBlock).FrameAdmitted pool (Exec.derivEntry fun D =>
-        Lift.Curve3Pool.PoolCallsKeep D ∧ Lift.Curve3Pool.PoolCoinCallsKeepToken D)
+      minterBlock).FrameAdmitted pool (Lift.Curve3Pool.PoolKeepAt Lift.Curve3Pool.Creation.coinsN
+        Lift.Curve3Pool.Creation.tokenN)
   idEmpty : c3Completed.state.getCode 4 = ByteArray.empty
   idNoFrame : ∀ root ∈ (((toPool.step poolBlock).append toMinter).step minterBlock).rawFrames,
     root.sevm.codeAddress = none → root.sevm.currentTarget ≠ 4

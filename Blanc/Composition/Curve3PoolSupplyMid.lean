@@ -157,8 +157,19 @@ theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint fu
       whole := ⟨Z, runZ⟩
       parties := fun f member =>
         partiesTok _ (trace.mem_rawFrames_of_mem_settledFrames f member)
-      keepToken := fun f member target => (derivEntry_frame (ready f member).1
-        (callbacks _ (trace.mem_rawFrames_of_mem_settledFrames f member) target)).2 }
+      keepToken := fun f member target mutable st ck hcs hts => by
+        have keep : Curve3Pool.PoolKeepAt ps₀.coins ps₀.token f.sevm f.pre :=
+          callbacks _ (trace.mem_rawFrames_of_mem_settledFrames f member) target
+        have ready0 := (ready f member).1
+        obtain ⟨pc, sevm, pre, out, run, committed⟩ := f
+        dsimp only at ready0 target mutable keep ck ⊢
+        subst ready0
+        cases out with
+        | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
+        | ok post =>
+          exact (keep post run st mutable (Option.isNone_iff_eq_none.mp (by simpa only [Execution.commits] using committed))
+            (by rw [show sevm.currentTarget = pool from target]; exact ck)
+            ⟨hcs, hts.trans joint.tokenIs.symm⟩).2 }
   obtain ⟨code, invs, obs, auth, entries, s, run, fold, hc, hcoins, htoken⟩ :=
     Curve3Pool.pool_mid_history trace poolInstalled joint.poolCk env
   obtain ⟨Y, runY, minY, supY, steps⟩ := supply_whole W run entries auth obs joint.tokenIs
