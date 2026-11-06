@@ -1,7 +1,6 @@
 import Blanc.Lift.Dai.Jumps
 import Blanc.Lift.Dai.Check
-import Blanc.Lift.WalkCost
-import Blanc.StorageRefund
+import Blanc.Lift.CoinFrame
 import Blanc.CodeDelegation
 import Blanc.Lift.DaiFrames
 
@@ -237,9 +236,6 @@ def limBase (sevm : Sevm) (b : Devm) (v r c : B256) : Devm :=
 /-- The word `transfer` returns before `RETURN`. -/
 abbrev okWord : B256 := B256.eqCheck (B256.eqCheck (B256.eqCheck (B256.eqCheck (Bytes.toB256 [1]) 0) 0) 0) 0
 
-/-- A frame's selector word as the dispatcher reads it. -/
-abbrev selW (sevm : Sevm) : B256 := Sevm.dataWord sevm (Bytes.toB256 [0]) >>> (Bytes.toB256 [224]).toNat
-
 /-- The prologue's image. -/
 abbrev mem0 : Mem := Mem.empty.write 64 (Bytes.toB256 [128]).toBytes
 
@@ -247,13 +243,6 @@ abbrev mem0 : Mem := Mem.empty.write 64 (Bytes.toB256 [128]).toBytes
 def retAt (B : Devm) (S : List B256) (M : Mem) (w : B256) (G : Nat) : Devm :=
   ((St B S M G).memRead (Bytes.toB256 [128]).toNat
     (Bytes.toB256 [32] + Bytes.toB256 [128] - Bytes.toB256 [128]).toNat).2.withOutput w.toBytes
-
-/-- The guards a frame's prologue and wrapper make, with `n` argument words. -/
-structure Guards (sevm : Sevm) (sel n : B256) : Prop where
-  value : sevm.value = 0
-  short : (Nat.toB256 sevm.data.length <? Bytes.toB256 [4]) = 0
-  args : ((Nat.toB256 sevm.data.length - Bytes.toB256 [4]) <? n) = 0
-  sel : selW sevm = sel
 
 /-- `transfer`'s arguments as its wrapper decodes them. -/
 abbrev xTo (sevm : Sevm) : B256 := m20 &&& Sevm.dataWord sevm (Bytes.toB256 [4])
@@ -415,40 +404,17 @@ theorem ak_allow (r : B256) (sp : Adr) : ak r sp.toB256 = allowSlot r.toAdr sp :
   unfold ak allowSlot
   simp only [ff20_and_word, toAdr_toB256, lit3]
 
-/-- **`B` keeps what a coin frame must**: every code, every other account's storage, the error
-flag, the created accounts. -/
-structure Keeps (sevm : Sevm) (pre B : Devm) : Prop where
-  code : ∀ a, B.getCode a = pre.getCode a
-  other : ∀ a, a ≠ sevm.currentTarget → Devm.getStor B a = Devm.getStor pre a
-  error : B.error = pre.error
-  created : B.createdAccounts = pre.createdAccounts
-
-namespace Keeps
-
-variable {sevm : Sevm} {pre B : Devm}
-
-theorem refl (sevm : Sevm) (pre : Devm) : Keeps sevm pre pre := ⟨fun _ => rfl, fun _ _ => rfl, rfl, rfl⟩
-
-theorem sload (h : Keeps sevm pre B) (k : B256) : Keeps sevm pre (afterSload sevm B k) :=
-  ⟨fun a => (afterSload_getCode sevm B k a).trans (h.code a),
-   fun a ha => (afterSload_getStor sevm B k a).trans (h.other a ha),
-   (afterSload_error sevm B k).trans h.error, (afterSload_createdAccounts sevm B k).trans h.created⟩
-
-theorem sstore (h : Keeps sevm pre B) (k v : B256) : Keeps sevm pre (afterSstore sevm B k v) :=
-  ⟨fun a => (afterSstore_getCode sevm B k v a).trans (h.code a),
-   fun a ha => (afterSstore_getStor_ne sevm B k v a (Ne.symm ha)).trans (h.other a ha),
-   (afterSstore_error sevm B k v).trans h.error, (afterSstore_createdAccounts sevm B k v).trans h.created⟩
-
-theorem log (h : Keeps sevm pre B) (l : Log) : Keeps sevm pre (B.addLog l) :=
-  ⟨h.code, h.other, h.error, h.created⟩
-
-theorem mv (h : Keeps sevm pre B) (v t r : B256) : Keeps sevm pre (mvBase sevm B v t r) :=
+theorem _root_.Blanc.Lift.AccumulatedWalk.Keeps.mv {sevm : Sevm} {pre B : Devm} (h : Keeps sevm pre B) (v t r : B256) :
+    Keeps sevm pre (mvBase sevm B v t r) :=
   (((((h.sload _).sstore _ _).sload _).sstore _ _).log _)
 
-theorem lim (h : Keeps sevm pre B) (v r c : B256) : Keeps sevm pre (limBase sevm B v r c) :=
+theorem _root_.Blanc.Lift.AccumulatedWalk.Keeps.lim {sevm : Sevm} {pre B : Devm} (h : Keeps sevm pre B) (v r c : B256) :
+    Keeps sevm pre (limBase sevm B v r c) :=
   ((((((h.sload _).sload _).sload _).sload _).sstore _ _))
 
-end Keeps
+theorem _root_.Blanc.Lift.AccumulatedWalk.Keeps.retAt {sevm : Sevm} {pre B : Devm} (h : Keeps sevm pre B) (S : List B256) (M : Mem)
+    (w : B256) (G : Nat) : Keeps sevm pre (retAt B S M w G) :=
+  ⟨h.code, h.other, h.error, h.created⟩
 
 /-- **`mvBase` is the move on the ledger.** -/
 theorem mvBase_getStor (sevm : Sevm) (b : Devm) (v t r : B256) :
@@ -464,18 +430,6 @@ theorem limBase_getStor (sevm : Sevm) (b : Devm) (v r : B256) (sp : Adr) :
         ((Devm.getStor b sevm.currentTarget).get (allowSlot r.toAdr sp) - v) := by
   unfold limBase
   simp only [afterSstore_getStor_self, afterSload_getStor, gsv, ak_allow]
-
-/-- A first store to a slot still at its snapshot value does not lower the refund counter. -/
-theorem sstore_ge {s : Sevm} {d : Devm} {k v : B256} {σ : Stor}
-    (hcr : s.currentTarget ∉ d.createdAccounts) (hor : (getOrigAcct s s.currentTarget).stor = σ)
-    (hcur : (Devm.getStor d s.currentTarget).get k = σ.get k) :
-    d.refundCounter ≤ (afterSstore s d k v).refundCounter :=
-  afterSstore_refundCounter_ge_of_original_eq_current s d k v (by
-    unfold Devm.getOrigStorVal
-    rw [ite_eq_right hcr]
-    unfold Jaune.getOrigStorVal
-    rw [hor]
-    exact hcur.symm)
 
 /-- A move's two stores, first to their slots, do not lower the refund counter. -/
 theorem mvBase_refund {sevm : Sevm} {b : Devm} {v t r : B256} {σ : Stor}
@@ -518,30 +472,17 @@ theorem limBase_refund {sevm : Sevm} {b : Devm} {v r c : B256} {σ : Stor}
   simp only [afterSload_refundCounter]
   exact le_refl _
 
-/-- **What a successful frame leaves**: the run, its charge `used`, the reply `w`, the ledger `σ'`,
-and the rest of the world kept (the refund counter not lowered when `R` holds). -/
-structure FrameLands (sevm : Sevm) (pre post : Devm) (used : Nat) (w : B256) (σ' : Stor) (R : Prop) :
-    Prop where
-  run : SProg.RunExact cert.prog sevm pre post
-  gas : post.gasLeft = pre.gasLeft - used
-  out : post.output = w.toBytes
-  keeps : Keeps sevm pre post
-  stor : Devm.getStor post sevm.currentTarget = σ'
-  refund : R → pre.refundCounter ≤ post.refundCounter
-
 /-- A frame run to `retAt` lands. -/
-theorem frameLands_of {sevm : Sevm} {pre B : Devm} {S : List B256} {M : Mem} {w w' : B256} {c K : Nat}
+theorem frameLands_retAt {sevm : Sevm} {pre B : Devm} {S : List B256} {M : Mem} {w w' : B256} {c K : Nat}
     {σ' : Stor} {R : Prop}
     (hrun : ∀ G, 2300 ≤ G → SFunc.RunExact cert.prog sevm (St pre [] Mem.empty (G + c)) t_0000_c0
       (.halted (retAt B S M w G)))
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hc : c ≤ K) (hgas : K + 2300 ≤ pre.gasLeft)
     (hk : Keeps sevm pre B) (hst : Devm.getStor B sevm.currentTarget = σ') (hw : w = w')
     (hr : R → pre.refundCounter ≤ B.refundCounter) :
-    FrameLands sevm pre (retAt B S M w (pre.gasLeft - c)) c w' σ' R := by
-  subst hw
-  refine ⟨⟨_, rfl, ?_⟩, rfl, rfl, ⟨hk.code, hk.other, hk.error, hk.created⟩, hst, hr⟩
-  have h := hrun (pre.gasLeft - c) (by omega)
-  rwa [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
+    FrameLands cert.prog sevm pre (retAt B S M w (pre.gasLeft - c)) c w' σ' R :=
+  frameLands_of rfl hrun hs hm hc hgas (fun _ => rfl) (fun _ => hw ▸ rfl) (fun G => hk.retAt S M w G)
+    (fun _ => hst) (fun r _ => hr r)
 
 /-- **`transfer` fits**: the source covers the move and the credit does not wrap. -/
 def MoveFits (σ : Stor) (src dst : Adr) (v : B256) : Prop :=
@@ -563,11 +504,11 @@ theorem xfer_lands {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
     (g : Guards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 58800 ≤ pre.gasLeft)
     (hfits : MoveFits (Devm.getStor pre sevm.currentTarget) sevm.caller dst v) :
-    ∃ post used, used ≤ 56500 ∧ FrameLands sevm pre post used 1
+    ∃ post used, used ≤ 56500 ∧ FrameLands cert.prog sevm pre post used 1
       (moveStor (Devm.getStor pre sevm.currentTarget) sevm.caller dst v)
       ((getOrigAcct sevm sevm.currentTarget).stor = Devm.getStor pre sevm.currentTarget ∧
         sevm.currentTarget ∉ pre.createdAccounts ∧ balSlot sevm.caller ≠ balSlot dst) := by
-  refine ⟨_, _, xferW_le sevm pre, frameLands_of (K := 56500)
+  refine ⟨_, _, xferW_le sevm pre, frameLands_retAt (K := 56500)
     ((xferW sevm pre).2 fork static g ?_ ?_) hs hm (xferW_le sevm pre) (by omega) ?_ ?_ okWord_eq ?_⟩
   · rw [hv, kn_bal]; exact hfits.1
   · rw [hv, hdst, kn_bal, kn_bal]; exact hfits.2
@@ -583,10 +524,6 @@ theorem xfer_lands {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
     · rw [afterSload_getStor]
     · rw [hdst, ky_bal, ky_bal, toAdr_toB256, toAdr_toB256]; exact hne
 
-theorem eqCheck_one {x y : B256} (h : x = y) : B256.eqCheck x y = 1 := by
-  subst h
-  simp only [B256.eqCheck, ↓reduceIte]
-
 /-- The masked caller word against a masked address word. -/
 theorem masked_ne {a c : Adr} (h : a ≠ c) : (m20 &&& a.toB256) ≠ (m20 &&& c.toB256) := by
   rw [ff20_and_word, ff20_and_word, toAdr_toB256, toAdr_toB256]
@@ -601,9 +538,9 @@ theorem pull_lands_of {sevm : Sevm} {pre B : Devm} {Mr : Mem} {cc : Nat} {σ' : 
     (hcc : cc ≤ 87000) (hs : pre.stack = []) (hm : pre.memory = Mem.empty)
     (hgas : 90300 ≤ pre.gasLeft) (hk : Keeps sevm pre B)
     (hst : Devm.getStor B sevm.currentTarget = σ') (hr : R → pre.refundCounter ≤ B.refundCounter) :
-    ∃ post used, used ≤ 88000 ∧ FrameLands sevm pre post used 1 σ' R := by
+    ∃ post used, used ≤ 88000 ∧ FrameLands cert.prog sevm pre post used 1 σ' R := by
   have hle := pullFrameW_le sevm pre B Mr cc
-  exact ⟨_, _, by omega, frameLands_of (K := 88000) ((pullFrameW sevm pre B Mr cc).2 fork g hMr hc) hs hm
+  exact ⟨_, _, by omega, frameLands_retAt (K := 88000) ((pullFrameW sevm pre B Mr cc).2 fork g hMr hc) hs hm
     (by omega) (by omega) hk hst okWord_eq hr⟩
 
 /-- **`transferFrom(src, dst, v)` from a frame entry, forward**, whichever allowance branch it takes. -/
@@ -613,7 +550,7 @@ theorem pull_lands {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
     (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 90300 ≤ pre.gasLeft)
     (hfits : PullFits (Devm.getStor pre sevm.currentTarget) src sevm.caller dst v) :
-    ∃ post used, used ≤ 88000 ∧ FrameLands sevm pre post used 1
+    ∃ post used, used ≤ 88000 ∧ FrameLands cert.prog sevm pre post used 1
       (moveStor (spendStor (Devm.getStor pre sevm.currentTarget) src sevm.caller v) src dst v)
       ((getOrigAcct sevm sevm.currentTarget).stor = Devm.getStor pre sevm.currentTarget ∧
         sevm.currentTarget ∉ pre.createdAccounts ∧
@@ -705,9 +642,9 @@ theorem bal_lands {sevm : Sevm} {pre : Devm} {a : Adr}
     (fork : CoveredFork sevm.benvStat.fork) (g : Guards sevm 0x70a08231 (Bytes.toB256 [32]))
     (hholder : bHolder sevm = a.toB256)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 5300 ≤ pre.gasLeft) :
-    ∃ post used, used ≤ 3000 ∧ FrameLands sevm pre post used
+    ∃ post used, used ≤ 3000 ∧ FrameLands cert.prog sevm pre post used
       ((Devm.getStor pre sevm.currentTarget).get (balSlot a)) (Devm.getStor pre sevm.currentTarget) True := by
-  refine ⟨_, _, balW_le sevm pre, frameLands_of (K := 3000)
+  refine ⟨_, _, balW_le sevm pre, frameLands_retAt (K := 3000)
     (fun G _ => (balW sevm pre).2 fork g G) hs hm (balW_le sevm pre) (by omega)
     ((Keeps.refl sevm pre).sload _) ?_ ?_ ?_⟩
   · rw [afterSload_getStor]
@@ -718,21 +655,5 @@ theorem bal_lands {sevm : Sevm} {pre : Devm} {a : Adr}
 
 theorem dai_undelegated : getDelegatedCodeAddress code = none :=
   getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel)
-
-/-- The wrapper's argument-size guard, from the calldata's length. -/
-theorem args_of_le {n : Nat} {w : B256} (h : w.toNat + 4 ≤ n) (hn : n < 2 ^ 256) :
-    B256.ltCheck (Nat.toB256 n - Bytes.toB256 [4]) w = 0 := by
-  have h4 : (Bytes.toB256 [4]).toNat = 4 := by decide
-  have le : Bytes.toB256 [4] ≤ Nat.toB256 n := by
-    apply B256.not_lt.mp
-    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hn, h4]
-    omega
-  apply B256.ltCheck_eq_zero_of_toNat_le
-  rw [B256.toNat_sub_eq_of_le _ _ le, B256.toNat_toB256_of_lt hn, h4]
-  omega
-
-theorem guards_of {e : Sevm} {sel w : B256} (hv : e.value = 0) (hsel : Blanc.Sevm.selector e = sel)
-    (hlen : w.toNat + 4 ≤ e.data.length) (hn : e.data.length < 2 ^ 256) : Guards e sel w :=
-  ⟨hv, short_of_len (by omega) hn, args_of_le hlen hn, (shr_selector_word e).trans hsel⟩
 
 end Blanc.Lift.Dai

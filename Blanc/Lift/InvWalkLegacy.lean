@@ -4,6 +4,7 @@ import Blanc.Lift.AccumulatedWalk
 import Blanc.Lift.CodeSizeWalk
 import Blanc.Lift.MutableCallPost
 import Blanc.Lift.MemGlue
+import Blanc.Lift.WalkCutKit
 
 /-!
 # Inversion walks of old-solc frames
@@ -91,30 +92,18 @@ theorem shr_selector_word (sevm : Sevm) :
 
 theorem zero_of_iszero3 {a : B256} (h : B256.eqCheck (B256.eqCheck (B256.eqCheck a 0) 0) 0 ≠ 0) :
     a = 0 := by
-  by_cases h0 : a = 0
-  · exact h0
-  · exfalso
-    apply h
-    simp only [B256.eqCheck, h0, ↓reduceIte]
-    decide
+  simpa only [B256.eqCheck_ne_zero_iff, B256.eqCheck_eq_zero_iff, not_not] using h
 
 theorem eq_of_iszero2 {x y : B256} (h : B256.eqCheck (B256.eqCheck x y) 0 = 0) : x = y := by
-  by_contra hne
-  simp only [B256.eqCheck, hne, ↓reduceIte] at h
-  exact absurd h (by decide)
+  simpa only [B256.eqCheck_ne_zero_iff, B256.eqCheck_eq_zero_iff, not_not] using h
 
 theorem ne_of_iszero3 {x y : B256}
     (h : B256.eqCheck (B256.eqCheck (B256.eqCheck x y) 0) 0 = 0) : x ≠ y := by
-  rintro rfl
-  simp only [B256.eqCheck, ↓reduceIte] at h
-  exact absurd h (by decide)
+  simpa only [B256.eqCheck_ne_zero_iff, B256.eqCheck_eq_zero_iff, not_not] using h
 
 theorem eq_of_iszero3 {x y : B256}
     (h : B256.eqCheck (B256.eqCheck (B256.eqCheck x y) 0) 0 ≠ 0) : x = y := by
-  by_contra hne
-  apply h
-  simp only [B256.eqCheck, hne, ↓reduceIte]
-  decide
+  simpa only [B256.eqCheck_ne_zero_iff, B256.eqCheck_eq_zero_iff, not_not] using h
 
 theorem eq_zero_of_iszero_lit {y : B256}
     (c : B256.eqCheck (B256.eqCheck y (Bytes.toB256 [0])) 0 = 0) : y = 0 := by
@@ -208,11 +197,8 @@ theorem ric_stop_keeps {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b post : 
     {S : List B256} {M : Mem} {G : Nat}
     (run : SFunc.RunCut fs sevm C (St b S M G) (.last .stop) (.done (.halted post))) :
     Devm.getStor post = Devm.getStor b := by
-  cases run with
-  | last hl =>
-    simp only [Linst.Run, Linst.run, Except.ok.injEq] at hl
-    subst hl
-    rfl
+  cases ric_stop run
+  rfl
 
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- Generalize the memory of the walk state of cut run `h`: a storage walk reads only the words its

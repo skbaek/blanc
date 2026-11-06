@@ -1,5 +1,5 @@
 import Blanc.Lift.DaiForward
-import Blanc.Composition.Curve3Pool3CrvCoinExactTransport
+import Blanc.Composition.Curve3PoolCoinChild
 
 /-!
 # The pool's coin premises, discharged by DAI's deployed bytes
@@ -8,70 +8,16 @@ import Blanc.Composition.Curve3Pool3CrvCoinExactTransport
 child of the pool's call site is DAI's actual run (`DaiForward`, lifted by `lift_exact`), so the
 coin's replies and ledger are its code's, not premises. The world invariants are any the pool's
 caller picks, closed under what the clean child leaves (`CoinLeaves`).
-
-`mutCallOkAt_of_childWith` is `mutCallOkAt_of_child` at any forwarded-gas floor and charge and any
-reply test: USDT's empty reply and its higher worst case go through it.
 -/
 
 namespace Blanc.Composition.Curve3PoolDai
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Curve3Pool Blanc.Composition.Curve3PoolCalleeLive
+open Blanc.Lift.AccumulatedWalk (FrameLands guards_of)
 open Blanc.Composition.Curve3Pool3CrvInstance (CoinLeaves prec_false rawCallOk_one getCode_of_state
   getStor_of_state transferSel_abi transferFromSel_abi balanceOfSel_abi)
-open Blanc.Lift.Dai (MoveFits PullFits moveStor spendStor balSlot allowSlot FrameLands)
-
-section Shapes
-
-variable {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {data : Bytes} {U : Nat} {ii is oi : B256}
-
-/-- **A value-`0` `CALL` premise from a clean child, at any floor and reply test**: if at every
-call-site world the child of the site's message, given at least `F`, halts cleanly within `Cb` gas
-with a reply passing `ok`, keeping the caller's storage and the code at the identity precompile, and
-leaving a world in `W'`, the premise holds with `U` covering the floor and the charge. -/
-theorem mutCallOkAt_of_childWith {ok : Bytes → Prop} (F Cb : Nat)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
-    (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hF : F + F / 63 + 3100 ≤ U)
-    (hCb : Cb + 3016 ≤ U)
-    (hii : ii.toNat + is.toNat ≤ 4096) (hoi : oi.toNat + (0x20 : B256).toNat ≤ 4096)
-    (hchild : ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b →
-      (M.read ii.toNat is.toNat).1 = data → F ≤ fwd b S M G t ii is oi 0x20 →
-      getDelegatedCodeAddress (b.getCode t.toAdr) = none ∧
-      ∃ cpost, exec (initEvm (callMsg0 sevm b S M G t ii is oi 0x20)) = .ok cpost ∧
-        cpost.error = none ∧ fwd b S M G t ii is oi 0x20 ≤ cpost.gasLeft + Cb ∧
-        cpost.gasLeft ≤ fwd b S M G t ii is oi 0x20 ∧ ok cpost.output ∧ cpost.output.length < 2 ^ 256 ∧
-        Devm.getStor cpost sevm.currentTarget = Devm.getStor b sevm.currentTarget ∧
-        cpost.getCode 4 = b.getCode 4 ∧
-        W' (callChildPost (parent b S M G t ii is oi 0x20) cpost oi.toNat (0x20 : B256).toNat)) :
-    MutCallOkAt sevm W W' t data ok U ii is oi := by
-  intro b S M G hWb hUG hG hin hS
-  have he := ext_le (b := b) (S := S) (M := M) hii hoi
-  have ha := acc_le (b := b) (t := t)
-  have hcharge : acc b t + ext b S M ii is oi 0x20 ≤ G := by omega
-  have hfwd : F ≤ fwd b S M G t ii is oi 0x20 := by
-    unfold fwd except64th
-    omega
-  obtain ⟨hdel, cpost, hexec, herr, hg1, hg2, hok, hlen, hstor, hcode4, hW'⟩ :=
-    hchild b S M G hWb hin hfwd
-  have hrun := call0_cross hfork hdepth hprec hdel hS hG hcharge hexec herr
-  have hc := fwd_charge hcharge
-  have hgas : (callChildPost (parent b S M G t ii is oi 0x20) cpost oi.toNat
-      (0x20 : B256).toNat).gasLeft =
-      G - (fwd b S M G t ii is oi 0x20 + acc b t + ext b S M ii is oi 0x20) + cpost.gasLeft := rfl
-  refine ⟨_, hrun, ?_, ?_, ?_, ?_, ?_, hstor, hW', fun hid => ⟨?_, ?_, hid.pre, hid.fork⟩⟩
-  · obtain ⟨flag, hpost⟩ := ri_call_post hfork (Ninst.Run.of_runCompiled hrun)
-    have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
-      (callChildPost_stack' _ _ _ _))).1
-    subst hflag
-    exact hpost
-  · rw [callChildPost_returnData']; exact hok
-  · rw [callChildPost_returnData']; exact hlen
-  · rw [hgas]; omega
-  · rw [hgas]; omega
-  · show getDelegatedCodeAddress (cpost.getCode 4) = none
-    rw [hcode4]; exact hid.nodeleg
-  · exact callChildPost_mem_warm _ _ _ _ 4 (parent_mem_warm b S M G t ii is oi 0x20 4 hid.warm)
-
-end Shapes
+open Blanc.Composition.Curve3PoolCoinChild
+open Blanc.Lift.Dai (MoveFits PullFits moveStor spendStor balSlot allowSlot)
 
 /-! ## DAI's calls as messages -/
 
@@ -84,7 +30,7 @@ theorem xfer_msg {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code
     (hgas : 58800 ≤ (initDevm msg).gasLeft)
     (hfits : MoveFits (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) (initSevm msg).caller dst v) :
     ∃ post used, exec (initEvm msg) = .ok post ∧ used ≤ 56500 ∧
-      FrameLands (initSevm msg) (initDevm msg) post used 1
+      FrameLands Dai.cert.prog (initSevm msg) (initDevm msg) post used 1
         (moveStor (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) (initSevm msg).caller dst v)
         ((getOrigAcct (initSevm msg) (initSevm msg).currentTarget).stor =
             Devm.getStor (initDevm msg) (initSevm msg).currentTarget ∧
@@ -97,7 +43,7 @@ theorem xfer_msg {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code
     (guards_of hval hsel (by rw [hl]; decide) (by rw [hl]; decide))
     (by unfold xTo; rw [lit4, w4, ff20_and_word, toAdr_toB256])
     (by unfold xVal; rw [lit36, w36]) rfl rfl hgas hfits
-  exact ⟨post, used, (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact cert_check jumps_ok hcode fork L.run),
+  exact ⟨post, used, (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact Dai.cert_check Dai.jumps_ok hcode fork L.run),
     hu, L⟩
 
 theorem pull_msg {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Dai.code)
@@ -109,7 +55,7 @@ theorem pull_msg {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).
     (hfits : PullFits (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) src (initSevm msg).caller
       dst v) :
     ∃ post used, exec (initEvm msg) = .ok post ∧ used ≤ 88000 ∧
-      FrameLands (initSevm msg) (initDevm msg) post used 1
+      FrameLands Dai.cert.prog (initSevm msg) (initDevm msg) post used 1
         (moveStor (spendStor (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) src
           (initSevm msg).caller v) src dst v)
         ((getOrigAcct (initSevm msg) (initSevm msg).currentTarget).stor =
@@ -129,7 +75,7 @@ theorem pull_msg {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).
     (by unfold pSrc; rw [lit4, w4, ff20_and_word, toAdr_toB256])
     (by unfold pTo; rw [lit36, w36, ff20_and_word, toAdr_toB256])
     (by unfold pVal; rw [lit36, show Bytes.toB256 [32] + (36 : B256) = 68 by decide, w68]) rfl rfl hgas hfits
-  exact ⟨post, used, (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact cert_check jumps_ok hcode fork L.run),
+  exact ⟨post, used, (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact Dai.cert_check Dai.jumps_ok hcode fork L.run),
     hu, L⟩
 
 theorem bal_msg {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Dai.code)
@@ -137,7 +83,7 @@ theorem bal_msg {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Dai.code)
     (hd : (initSevm msg).data = abiSelectorBytes 0x70a08231 ++ a.toB256.toBytes)
     (hgas : 5300 ≤ (initDevm msg).gasLeft) :
     ∃ post used, exec (initEvm msg) = .ok post ∧ used ≤ 3000 ∧
-      FrameLands (initSevm msg) (initDevm msg) post used
+      FrameLands Dai.cert.prog (initSevm msg) (initDevm msg) post used
         ((Devm.getStor (initDevm msg) (initSevm msg).currentTarget).get (balSlot a))
         (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) True := by
   have hsel : Blanc.Sevm.selector (initSevm msg) = 0x70a08231 :=
@@ -149,7 +95,7 @@ theorem bal_msg {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Dai.code)
     (guards_of hval hsel (by rw [hl]; decide) (by rw [hl]; decide))
     (by unfold bHolder; rw [lit4, Blanc.Lift.Curve3Pool.cc_dataWord_oneWord hd, ff20_and_word, toAdr_toB256])
     rfl rfl hgas
-  exact ⟨post, used, (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact cert_check jumps_ok hcode fork L.run),
+  exact ⟨post, used, (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact Dai.cert_check Dai.jumps_ok hcode fork L.run),
     hu, L⟩
 
 /-! ## The coin premises -/
@@ -157,24 +103,6 @@ theorem bal_msg {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Dai.code)
 section Premises
 
 variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : B256}
-
-/-- What a clean DAI child's post leaves, seen from the parent's resumed state. -/
-theorem leaves_of_lands {b : Devm} {S : List B256} {M : Mem} {G : Nat} {is : B256}
-    {cpost : Devm} {used : Nat} {w : B256} {σ' : Stor} {R R' : Prop}
-    (L : FrameLands (initSevm (callMsg0 sevm b S M G t ii is oi 0x20))
-      (initDevm (callMsg0 sevm b S M G t ii is oi 0x20)) cpost used w σ' R') (hR : R → R') :
-    CoinLeaves t.toAdr σ' R b
-      (callChildPost (parent b S M G t ii is oi 0x20) cpost oi.toNat (0x20 : B256).toNat) := by
-  have hst := callChildPost_state' (parent b S M G t ii is oi 0x20) cpost oi.toNat (0x20 : B256).toNat
-  refine ⟨fun a => ?_, fun a ha => ?_, ?_, rfl, L.keeps.created, fun r => ?_⟩
-  · rw [getCode_of_state hst]; exact L.keeps.code a
-  · rw [getStor_of_state hst]; exact L.keeps.other a ha
-  · rw [getStor_of_state hst]; exact L.stor
-  · have h0 : (0 : Int) ≤ cpost.refundCounter := L.refund (hR r)
-    have : (callChildPost (parent b S M G t ii is oi 0x20) cpost oi.toNat
-        (0x20 : B256).toNat).refundCounter = b.refundCounter + cpost.refundCounter := rfl
-    rw [this]
-    omega
 
 /-- **The pool's `transfer(msg.sender, amt)` into DAI succeeds**, at any window inside the first
 4 KiB and `U ≥ 63000`, wherever the transfer fits the coin's ledger. -/
