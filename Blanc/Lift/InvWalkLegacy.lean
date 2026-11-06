@@ -3,6 +3,7 @@ import Blanc.Lift.InvWalkDispatch
 import Blanc.Lift.AccumulatedWalk
 import Blanc.Lift.CodeSizeWalk
 import Blanc.Lift.MutableCallPost
+import Blanc.Lift.HistStaticCall
 import Blanc.Lift.MemGlue
 import Blanc.Lift.WalkCutKit
 
@@ -46,20 +47,20 @@ theorem ric_log1_keep {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm} 
 result flag over `S`. -/
 theorem ric_call_step {fs : List SFunc} {sevm : Sevm} {C : List Nat} {b : Devm}
     {g c v ii is oi os : B256} {S : List B256} {M : Mem} {G : Nat} {f : SFunc} {r : Seg}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : HistFork sevm.benvStat.fork)
     (run : SFunc.RunCut fs sevm C (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G)
       (.next (.exec .call) f) r) :
     ∃ d flag M' G', Ninst.Run sevm (St b (g :: c :: v :: ii :: is :: oi :: os :: S) M G) (.exec .call) d ∧
       SFunc.RunCut fs sevm C (St d (flag :: S) M' G') f r := by
   obtain ⟨d, hd, h⟩ := ric_next run
-  obtain ⟨flag, hp⟩ := ri_call_post hfork hd
+  obtain ⟨flag, hp⟩ := ri_call_postH hfork.stateGas_none hd
   refine ⟨d, flag, d.memory, d.gasLeft, hd, ?_⟩
   rwa [St.self hp.stack rfl] at h
 
-/-- An `EXTCODESIZE` step. -/
+/-- An `EXTCODESIZE` step, over the frame's actual access schedule. -/
 macro "ucodesize " h:ident : tactic => `(tactic|
   (have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
-   obtain ⟨_, e⟩ := ri_extcodesize ‹CoveredFork _› hd
+   obtain ⟨_, e⟩ := ri_extcodesizeH (HistFork.bal_none ‹HistFork _›) hd
    subst e; clear hd))
 
 /-- A `GAS` step. -/

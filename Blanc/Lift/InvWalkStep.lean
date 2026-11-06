@@ -3,6 +3,8 @@ import Blanc.Lift.WalkSteps
 import Blanc.AddressSlotProofs
 import Blanc.ForwardStorageAccess
 import Blanc.Lift.MapSlot
+import Blanc.Lift.HistAccessWalk
+import Blanc.HistoricalFork
 
 /-!
 # A one-lemma inversion step, and the inversion helpers of solc walks
@@ -115,11 +117,67 @@ theorem ri_stepX_nonstorage {sevm : Sevm} {b b' d : Devm} {S S' : List B256}
     ∃ G', d = St b' S' M' G' :=
   ri_stepX_of_storageFork (fun storage => (storage.elim notSload notSstore).elim) h hs
 
+/-- `stepX` under the frame's actual access schedule and refund regime: `SLOAD` and `SSTORE` take
+their historical successors `afterSloadH` and `afterSstoreH`, every other instruction is `stepX`'s. -/
+def stepXH (sevm : Sevm) : Ninst → Devm → List B256 → Mem → Option (Devm × List B256 × Mem)
+  | .reg .sload, b, k :: S, M =>
+      some (afterSloadH sevm b k, b.getStorVal sevm.currentTarget k :: S, M)
+  | .reg .sstore, b, k :: v :: S, M => some (afterSstoreH sevm b k v, S, M)
+  | n, b, S, M => stepX sevm n b S M
+
+/-- The historical step inversion: from a `HistFork` premise, so Byzantium through BPO2. -/
+theorem ri_stepXH {sevm : Sevm} {b b' d : Devm} {S S' : List B256} {M M' : Mem} {G : Nat}
+    {n : Ninst} (fork : HistFork sevm.benvStat.fork)
+    (h : Ninst.Run sevm (St b S M G) n d) (hs : stepXH sevm n b S M = some (b', S', M')) :
+    ∃ G', d = St b' S' M' G' := by
+  by_cases hl : n = .reg .sload
+  · subst hl
+    rcases S with _ | ⟨k, S⟩
+    · exact absurd hs (by simp only [stepXH, stepX, reduceCtorEq, not_false_eq_true])
+    · simp only [stepXH, Option.some.injEq, Prod.mk.injEq] at hs
+      obtain ⟨rfl, rfl, rfl⟩ := hs
+      exact ri_sloadH fork.bal_none h
+  by_cases hw : n = .reg .sstore
+  · subst hw
+    rcases S with _ | ⟨k, _ | ⟨v, S⟩⟩
+    · exact absurd hs (by simp only [stepXH, stepX, reduceCtorEq, not_false_eq_true])
+    · exact absurd hs (by simp only [stepXH, stepX, reduceCtorEq, not_false_eq_true])
+    · simp only [stepXH, Option.some.injEq, Prod.mk.injEq] at hs
+      obtain ⟨rfl, rfl, rfl⟩ := hs
+      exact ri_sstoreH fork.stateGas_none fork.bal_none h
+  · have e : stepXH sevm n b S M = stepX sevm n b S M := by
+      unfold stepXH
+      split
+      · exact absurd rfl hl
+      · exact absurd rfl hw
+      · rfl
+    exact ri_stepX_nonstorage hl hw h (e.symm.trans hs)
+
+open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
+/-- Succeeds exactly when the local context holds a hypothesis headed by `Blanc.CoveredFork`
+(`covered`) or by `Blanc.HistFork`: `istep` picks its fork lemma by it, because a failed
+`‹CoveredFork _›` inside a term is logged, not thrown, so `first` would not fall through. -/
+elab "fork_hyp_in_ctx " which:ident : tactic => withMainContext do
+  let head := if which.getId.eraseMacroScopes == `covered then ``Blanc.CoveredFork else ``Blanc.HistFork
+  let found := (← getLCtx).decls.foldl (init := false) fun found decl? =>
+    found || match decl? with
+      | some decl => decl.type.getAppFn.isConstOf head
+      | none => false
+  unless found do throwError "no {which.getId} fork hypothesis in context"
+
+/-- One straight-line step of a cut run, over the covered forks or, from a `HistFork` hypothesis,
+over every historical fork (`SLOAD`/`SSTORE` then leave `afterSloadH`/`afterSstoreH`). -/
 macro "istep " h:ident : tactic => `(tactic|
   first
   | (have h' := ric_dest $h; clear $h; obtain ⟨_, $h:ident⟩ := h')
-  | (have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
+  | (fork_hyp_in_ctx covered
+     have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
      obtain ⟨_, e⟩ := ri_stepX ‹CoveredFork _› hd rfl
+     try dsimp only [List.set, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at e
+     subst e; clear hd)
+  | (fork_hyp_in_ctx hist
+     have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
+     obtain ⟨_, e⟩ := ri_stepXH ‹HistFork _› hd rfl
      try dsimp only [List.set, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at e
      subst e; clear hd))
 
