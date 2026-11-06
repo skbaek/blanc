@@ -12,7 +12,7 @@ the word `get_virtual_price()` returns falls across one call at fixed amplificat
 namespace Blanc.Composition.Curve3PoolPublic
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
-open Blanc.Lift.Curve3Pool (V3 Call feeLoop getDMem xpOf adminFeeSlot feeSlot yGap oneGap)
+open Blanc.Lift.Curve3Pool (V3 feeLoop getDMem xpOf adminFeeSlot feeSlot yGap oneGap)
 open Blanc.StableSwapNewton (chkMul chkDiv floorRoot)
 
 /-- A liquidity call's imbalance fees applied to `new`, with `w` the state before it: the balances it
@@ -40,24 +40,46 @@ def creditedIn (w w' : State) (am : V3) (k : Fin 3) : Nat :=
 /-- `V3` from a function on the three coins. -/
 def v3Of (g : Fin 3 → Nat) : V3 := ⟨g 0, g 1, g 2⟩
 
+/-- The entries the bound treats apart, each with the arguments its allowance reads. -/
+inductive PoolOp
+  | removeLiquidity
+  | donateAdminFees
+  | addLiquidity (am : V3)
+  | imbalance (am : V3)
+  | exchange (i j : Nat)
+  | oneCoin (a i : Nat)
+  | other
+
+/-- The entry a frame's calldata selects. -/
+def opOf (e : Sevm) : PoolOp :=
+  let s := Sevm.selector e
+  if e.data.length < 4 then .other
+  else if s = Curve3Pool.selRemoveLiquidity then .removeLiquidity
+  else if s = Curve3Pool.selDonateAdminFees then .donateAdminFees
+  else if s = Curve3Pool.selAddLiquidity then .addLiquidity (Curve3Pool.argV3 e 0)
+  else if s = Curve3Pool.selRemoveLiquidityImbalance then .imbalance (Curve3Pool.argV3 e 0)
+  else if s = Curve3Pool.selExchange then .exchange (Curve3Pool.arg e 0) (Curve3Pool.arg e 1)
+  else if s = Curve3Pool.selRemoveLiquidityOneCoin then .oneCoin (Curve3Pool.arg e 0) (Curve3Pool.arg e 1)
+  else .other
+
 /-- **The rounding `D` may lose across a call**, per operation, with `w`, `w'` the states around it. -/
-def allowance (w w' : State) (amp D : Nat) : Call → Nat
+def allowance (w w' : State) (amp D : Nat) : PoolOp → Nat
   | .donateAdminFees => overshoot (scaled w) amp D
-  | .addLiquidity am _ => feeGap w amp (v3Of fun k => recorded w k + creditedIn w w' am k)
-  | .removeLiquidityImbalance am _ => feeGap w amp (v3Of fun k => recorded w k - am.get k)
-  | .exchange i j _ _ => yGap (scaled w) (Fin.ofNat 3 i) (Fin.ofNat 3 j)
+  | .addLiquidity am => feeGap w amp (v3Of fun k => recorded w k + creditedIn w w' am k)
+  | .imbalance am => feeGap w amp (v3Of fun k => recorded w k - am.get k)
+  | .exchange i j => yGap (scaled w) (Fin.ofNat 3 i) (Fin.ofNat 3 j)
       (scaled w' (Fin.ofNat 3 i)) D (amp * 3)
-  | .removeLiquidityOneCoin a i _ =>
+  | .oneCoin a i =>
       oneGap (scaled w) (Fin.ofNat 3 i) (D - a * D / supply w) (amp * 3)
   | _ => 0
 
 /-- **The price per share `D/T` falls across the call only by its allowance.** `remove_liquidity`
 keeps its own shape: its error scales with the new supply, not the old. -/
-def Within (w w' : State) (c : Call) (amp D D' : Nat) : Prop :=
-  match c with
-  | .removeLiquidity .. =>
+def Within (w w' : State) (op : PoolOp) (amp D D' : Nat) : Prop :=
+  match op with
+  | .removeLiquidity =>
       D * supply w' ≤ (D' + 1) * supply w + overshoot (scaled w) amp D * supply w'
-  | _ => D * supply w' ≤ (D' + allowance w w' amp D c) * supply w
+  | _ => D * supply w' ≤ (D' + allowance w w' amp D op) * supply w
 
 /-- The committed non-static calls to the pool of a history, nested ones included. -/
 noncomputable def poolCalls {start : Benv} {future : BlockChain}
@@ -69,7 +91,7 @@ def VirtualPriceBound (calls : List Exec.Frame) : Prop :=
   ∀ f ∈ calls, ∀ amp D D', ampAt f.pre.state f.sevm.benvStat.time.toNat = some amp →
     0 < supply f.pre.state → invariant f.pre.state amp = some D →
     invariant f.post.state amp = some D' →
-    Within f.pre.state f.post.state (Curve3Pool.decodeCall f.sevm) amp D D'
+    Within f.pre.state f.post.state (opOf f.sevm) amp D D'
 
 /-! ## The fall -/
 
