@@ -214,19 +214,17 @@ theorem version_ne_proxy {C : ByteArray} (h : CurveCoins.UsdcVersion C) : C ≠ 
   · exact proxy_ne_v2_1
   · exact proxy_ne_impl.symm
 
-/-- **What an entry frame's chain link asks**: the implementation word is certified at its entry, its
-calldata fits a word, and a `rescueERC20` frame has no observed committed descendant (the rescuer's power). -/
+/-- **What an entry frame's chain link asks**: the implementation word is certified at its entry, and its calldata
+fits a word (`settled_data_bound`). -/
 def EntryAllowed (T : Adr) (F : Exec.Frame) : Prop :=
-  UsdcCertified F.pre T ∧ F.sevm.data.length < 2 ^ 256 ∧
-    (Blanc.Sevm.selector F.sevm = rescueSelector →
-      (Exec.descendantFrames F.run).flatMap (coinObs T (EntryObs T)) = [])
+  UsdcCertified F.pre T ∧ F.sevm.data.length < 2 ^ 256
 
-/-- **An allowed entry frame has no observed committed descendant.** -/
-theorem entryQuiet (T : Adr) : EntryQuiet T (EntryAllowed T) := by
-  intro sevm pre post run committed codeEq fork target _ notAdmin allowed
-  obtain ⟨certified, size, rescue⟩ := allowed
-  by_cases sel : Blanc.Sevm.selector sevm = rescueSelector
-  · exact rescue sel
+/-- **An allowed entry frame off `rescueERC20` has no observed committed descendant.** -/
+theorem entryQuiet {T : Adr} {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
+    (codeEq : sevm.code = Proxy.code) (fork : HistFork sevm.benvStat.fork) (target : sevm.currentTarget = T)
+    (notAdmin : sevm.caller ≠ adminOf pre.state T) (sel : Blanc.Sevm.selector sevm ≠ rescueSelector)
+    (certified : UsdcCertified pre T) (size : sevm.data.length < 2 ^ 256) :
+    (Exec.descendantFrames run).flatMap (coinObs T (EntryObs T)) = [] := by
   have hsg : sevm.benvStat.rules.stateGas = none := fork.stateGas_none
   have bal : sevm.benvStat.rules.bal = none := fork.bal_none
   refine List.flatMap_eq_nil_iff.mpr ?_

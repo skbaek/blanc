@@ -7,18 +7,9 @@ import Blanc.Lift.CursorSourceRunReturn
 import Blanc.ExecutionWholeFrameAccountingIn
 
 /-!
-# USDC's entry frames carry the ledger view
+# What the proxy's frames keep, on historical forks
 
-`entryTarget`: the target handler of `Exec.coreAccountingIn` at the proxy, over the historical forks.
-
-* a static proxy frame observes nothing and keeps the proxy's storage;
-* a frame whose caller is not the admin word observes itself and, when it is allowed, nothing below it
-  (`EntryQuiet`, proved per version);
-* a frame whose caller is the admin word observes only what is below it. It writes only the proxy's two
-  slots, and its only external instruction is `upgradeToAndCall`'s `CALL` to the proxy, so the model
-  replay over its child carries the view.
-
-No `CoveredFork`: upgrade and rescue frames ran on historical forks.
+The pieces `EntryTarget` assembles. No `CoveredFork`: upgrade and rescue frames ran on historical forks.
 -/
 
 namespace Blanc.Lift
@@ -156,8 +147,10 @@ abbrev EntryGood (T : Adr) : Exec.Frame → Prop := CodeFrame T HistFork Proxy.c
 
 variable {T : Adr} {Allowed : Exec.Frame → Prop}
 
-local notation "Ca" => viewCarrier T ledgerView (EntryGood T) Allowed
-local notation "Ob" => viewObservation T ledgerView (EntryObs T) (EntryGood T) Allowed
+/-- **A rescue frame is no chain link**: its re-entrant frames are. -/
+def entryKeep (F : Exec.Frame) : Bool := decide (Blanc.Sevm.selector F.sevm ≠ rescueSelector)
+
+local notation "Ca" => viewCarrier T ledgerView (EntryGood T) Allowed entryKeep
 
 theorem ledgerView_congr {w w' : StorWords} (h : ∀ k, k ≠ implSlot → k ≠ adminSlot → w k = w' k) :
     ledgerView w = ledgerView w' := by
@@ -248,125 +241,5 @@ theorem proxy_cell_of_noExec {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm 
   rcases proxy_store_slots run codeEq hsg bal chain decoded stack with e | e
   · exact (hi (key.symm.trans e)).elim
   · exact (ha (key.symm.trans e)).elim
-
-/-- An entry frame's allowance: what it takes for it to have no observed committed descendant. -/
-def EntryQuiet (T : Adr) (Allowed : Exec.Frame → Prop) : Prop :=
-  ∀ {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
-    (committed : Execution.commits (.ok post) = true),
-    sevm.code = Proxy.code → HistFork sevm.benvStat.fork → sevm.currentTarget = T →
-    sevm.isStatic = false → sevm.caller ≠ adminOf pre.state T →
-    Allowed (Exec.Frame.ofRun run committed) →
-    (Exec.descendantFrames run).flatMap (coinObs T (EntryObs T)) = []
-
-/-- **The target handler at the proxy.** -/
-theorem entryTarget (quiet : EntryQuiet T Allowed) {sevm : Sevm} {pre post : Devm}
-    (hrun : entrySem.Run sevm pre post) (target : sevm.currentTarget = T)
-    (deeper : ForallDeeperAtSem sevm.depth T entrySem
-      (fun pc s d e _ => Exec.CoreAccountingIn HistFork T entrySem (fun _ _ => True) Ca Ob pc s d e)) :
-    Exec.CoreAccountingIn HistFork T entrySem (fun _ _ => True) Ca Ob 0 sevm pre (.ok post) := by
-  intro run committed fork installed _
-  have codeEq : sevm.code = Proxy.code := hrun
-  have hsg : sevm.benvStat.rules.stateGas = none := fork.stateGas_none
-  have bal : sevm.benvStat.rules.bal = none := fork.bal_none
-  have rootNonempty : (pre.getCode T).toList ≠ [] := fun empty =>
-    entrySem.ne_nil (installed.1.symm.trans (congrArg some empty)) rfl
-  have frames : Exec.committedFrames run = Exec.Frame.ofRun run committed ::
-      Exec.descendantFrames run := by
-    simp only [Exec.committedFrames, dite_eq_left committed]
-  by_cases hs : sevm.isStatic = true
-  · have hobs : (Exec.committedFrames run).flatMap (coinObs T (EntryObs T)) = [] :=
-      List.flatMap_eq_nil_iff.mpr fun D member =>
-        ite_eq_right fun h => by
-          rw [Exec.committedFrames_isStatic run hs D member] at h
-          cases h.2.1
-    refine ⟨fun _ => hobs, fun _ => ⟨[], fun _ => ?_, hobs.symm⟩⟩
-    have hview := Exec.getStor_committedPost_eq_of_static_protected_noStateGas run hs committed
-      hsg T (State.Protected.of_code_ne_nil rootNonempty)
-    exact congrArg ledgerView (funext fun k => congrArg (fun stor => stor.get k) hview)
-  have hs' : sevm.isStatic = false := by simpa only [Bool.not_eq_true] using hs
-  refine ⟨fun h => absurd h hs, fun bound => ?_⟩
-  by_cases admin : sevm.caller = adminOf pre.state T
-  · -- the admin word's frame observes only what is below it
-    have rootObs : coinObs T (EntryObs T) (Exec.Frame.ofRun run committed) = [] :=
-      ite_eq_right fun h => (h.2.2.2 admin).elim
-    have hlist : (Exec.committedFrames run).flatMap (coinObs T (EntryObs T)) =
-        (Exec.descendantFrames run).flatMap (coinObs T (EntryObs T)) := by
-      rw [frames, List.flatMap_cons, rootObs, List.nil_append]
-    have callOnly : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
-        ∀ x, Ninst.At N.sevm.code N.pc (.exec x) → x = .call := by
-      intro N chain x hat
-      obtain ⟨g, K, ⟨-, hd⟩ | ⟨rfl, -⟩⟩ := proxy_nodeH run codeEq hsg bal chain hat
-      · refine (hd.1 ?_).elim
-        rw [admin, target]
-        rfl
-      · rfl
-    have c3 : (∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
-        ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) →
-        (Ca).Replay ((Ca).frameEntry sevm pre.state) [] ((Ca).ofState post.state) := fun none _ =>
-      ledgerView_congr fun k hi ha =>
-        proxy_cell_of_noExec run committed codeEq hsg bal rootNonempty none hi ha
-    have c12 : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
-        ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
-          (Ca).Replay ((Ca).frameEntry sevm pre.state) [] ((Ca).ofState N.devm.state) ∧
-          ∀ N', Exec.Deriv.ParentStep N' N →
-            (Ca).Replay ((Ca).ofState N'.devm.state) [] ((Ca).ofState post.state) ∧
-            ∀ M, Exec.Deriv.ParentPrefix N' M → ∀ y, ¬ Ninst.At M.sevm.code M.pc (.exec y) :=
-      fun N chain x hat =>
-        ⟨fun _ => ledgerView_congr fun k hi ha =>
-            proxy_cell_to_exec run codeEq target hsg bal rootNonempty hi ha chain (.refl _) ⟨x, hat⟩,
-          fun N' edge =>
-            ⟨fun _ => congrArg (fun w => ledgerView (wordsAt T w))
-                (proxy_tailH run codeEq hsg chain hat N' edge).1,
-              (proxy_tailH run codeEq hsg chain hat N' edge).2⟩⟩
-    obtain ⟨steps, replay, observed⟩ := Exec.CoreAccounting.modelFrameNoStateGas
-      (C := Ca) (V := Ob) (ca := T) (fun _ _ => rfl) entry_ofStateGet viewCarrier_append run hsg rootNonempty bound
-      (fun {nodePc nodeSevm nodePre out frame rsm nextPc cevm raw inter} step enter child resume next chain childCommitted childBound => by
-        have sevmEq : nodeSevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
-        obtain ⟨x, instruction, spawn, _⟩ := Evm.step_spawn_inv step
-        have isCall := callOnly _ chain x instruction
-        subst isCall
-        have nodeCode : nodePre.getCode T = pre.getCode T :=
-          (Blanc.Exec.Deriv.ParentPrefix.balSum_le_getCode chain).2 T rootNonempty
-        have nodeImage : some (nodePre.getCode T).toList = entrySem.image := by
-          rw [nodeCode]; exact installed.1
-        have childFork : HistFork cevm.sta.benvStat.fork :=
-          Blanc.LockExclusion.Evm.step_spawn_child_forkIn step enter (by rw [sevmEq]; exact fork)
-        have childDepth : cevm.sta.depth < sevm.depth := by
-          rw [Frame.enter_run_depth enter, ← sevmEq]
-          exact Step.spawn_depth_lt step
-        obtain ⟨pcZero, getCode, -⟩ := Blanc.Evm.step_spawn_child step enter
-        have childAt : entrySem.At T cevm.pc cevm.sta cevm.dyna := by
-          refine ⟨by rw [getCode T]; exact nodeImage, fun childTarget => ⟨?_, pcZero⟩⟩
-          obtain ⟨benv, -, hcevm⟩ := Frame.enter_run_inv enter
-          subst hcevm
-          have frameTarget : frame.inner.currentTarget = T := childTarget
-          have code := Xinst.step_call_spawn_code spawn (by
-            rw [frameTarget]
-            exact entrySem.not_delegation nodeImage)
-          change some frame.inner.code.toList = _
-          rw [code, frameTarget]
-          exact nodeImage
-        exact (deeper _ _ _ _ child childDepth childAt child childCommitted childFork childAt
-          (fun _ _ _ => trivial)).2 childBound)
-      [] c3 c12
-    refine ⟨steps, replay, ?_⟩
-    change steps = (Exec.committedFrames run).flatMap (coinObs T (EntryObs T))
-    rw [hlist]
-    exact observed
-  · -- an entry frame observes itself
-    have rootObs : coinObs T (EntryObs T) (Exec.Frame.ofRun run committed) =
-        [Exec.Frame.ofRun run committed] := ite_eq_left ⟨target, hs', hrun, admin⟩
-    refine ⟨(Exec.committedFrames run).flatMap (coinObs T (EntryObs T)), fun all => ?_, rfl⟩
-    have hlist : (Exec.committedFrames run).flatMap (coinObs T (EntryObs T)) =
-        Exec.Frame.ofRun run committed ::
-          (Exec.descendantFrames run).flatMap (coinObs T (EntryObs T)) := by
-      rw [frames, List.flatMap_cons, rootObs]
-      rfl
-    have all' : ∀ G ∈ (Exec.committedFrames run).flatMap (coinObs T (EntryObs T)), Allowed G := all
-    change ViewChain T ledgerView (EntryGood T) (ledgerView (wordsAt T pre.state))
-      ((Exec.committedFrames run).flatMap (coinObs T (EntryObs T))) (ledgerView (wordsAt T post.state))
-    rw [hlist] at all' ⊢
-    rw [quiet run committed hrun fork target hs' admin (all' _ List.mem_cons_self)]
-    exact ⟨⟨rfl, hrun, fork, rootNonempty⟩, rfl, rfl⟩
 
 end Blanc.Lift.Usdc

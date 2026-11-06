@@ -22,15 +22,6 @@ open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 
 variable {T : Adr}
 
-/-- **Every settled frame of a mid history has calldata shorter than a word**: a root's from its transaction or
-system message, a descendant's from memory by a size that is a stack word. -/
-theorem settled_data_bound {cfg : ChainConfig} {start : Benv} {future : BlockChain}
-    (trace : MidHistoryTraceIn HistFork cfg start future)
-    (capabilities : BodyStageCapabilities HistFork) :
-    ∀ G ∈ trace.settledFrames, G.sevm.data.length < 2 ^ 256 := fun G member =>
-  trace.calldata_bound capabilities (fun _ hf => hf.dataNonZero_ge) _
-    (trace.mem_rawFrames_of_mem_settledFrames G member)
-
 /-- The library's entry, beside the listed versions. -/
 def libEntry : UsdcDeployedEntry := ⟨usdcLib, Lib.code, default, []⟩
 

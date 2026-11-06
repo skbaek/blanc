@@ -19,7 +19,7 @@ build on the names:
 * `UsdcCertified`: the proxy admin's power, restrained at one state;
 * `BelowFlagAt`: the seam where the reading changes. `bridged_of_belowFlag` is what `ViewChain.segment`
   takes;
-* `InitializerKeeps`, `RescueQuiet`: the named powers still open as fields.
+* `InitializerKeeps`: the named power still open as a field.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -71,13 +71,6 @@ def InitializerKeeps (T h : Adr) (settled : List Exec.Frame) : Prop :=
   ∀ F ∈ settled, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
     Blanc.Sevm.selector F.sevm ∈ usdcInitializers →
     heldAt T h F (ledgerView (wordsAt T F.pre.state)) ≤ heldAt T h F (ledgerView (wordsAt T F.post.state))
-
-/-- **The rescuer's call does not re-enter USDC** (the rescuer's power, open until the rescue frame's
-model replay removes it). -/
-def RescueQuiet (T : Adr) (settled : List Exec.Frame) : Prop :=
-  ∀ F ∈ settled, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
-    Blanc.Sevm.selector F.sevm = rescueSelector →
-    (Exec.descendantFrames F.run).flatMap (coinObs T (EntryObs T)) = []
 
 variable {T h : Adr}
 
