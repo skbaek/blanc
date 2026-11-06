@@ -220,7 +220,8 @@ theorem swap_back {i j : Fin 3} {D O A F : B256} {dy c0 amp v nw : Nat} {B X : N
         (exStoreI2 (exBackDyMem s M (lockedStor w) X D v) s F ((lockedStor w).get adminFeeSlot) O)
         (swapPushN s ((lockedStor w).get (coinsBase + Nat.toB256 j.val)) j) D' →
       Mv (Tn ++ pool :: coinT j) (rn + ((4800 * empties (rawHeld w pool j) dy : Nat) : Int) + 19900) p D' ∧
-        D'.getStor pool = swapStored w i j D O A ∧ D'.getStor (coinAt j) = paidStor w E j dy := by
+        D'.getStor pool = swapStored w i j D O A ∧ D'.getStor (coinAt j) = paidStor w E j dy ∧
+        ∀ x, x ≠ pool → x ∉ coinT j → D'.getStor x = n.getStor x := by
   have f := g.stand
   have hg : s.benvStat.rules.gas.storageClearRefund = 4800 := CoveredFork.rules_storageClearRefund f.fork
   have ht := f.target
@@ -390,7 +391,8 @@ theorem swap_back {i j : Fin 3} {D O A F : B256} {dy c0 amp v nw : Nat} {B X : N
     have hcl := hLog.clean cb
     have aL : At s.currentTarget (kC :: kJ :: kI :: Bytes.toB256 [3] :: Bytes.toB256 [0x02] :: K1) σ2 (b'.addLog l) := ⟨ab.keys, ab.stor⟩
     have hR := lock_restore (s := s) (b := b'.addLog l) hg (by rw [hcl.orig, hO0]; exact g.lock) (by rw [aL.val]; exact vLock)
-    refine ⟨?_, ?_, ?_⟩
+    have mFromN := ((((((((((mA.trans m2).trans m3).trans m4).trans m5).trans mId).trans m6).trans m7).trans hTail).congr hb').trans hLog).trans hR
+    refine ⟨?_, ?_, ?_, ?_⟩
     · have hm := (mb.trans hLog).trans hR
       refine Mv.st (Mv.cast hm (fun a ha => ?_) (by simp only [Int.add_zero])) S' M' G'
       rw [ht] at ha
@@ -411,6 +413,17 @@ theorem swap_back {i j : Fin 3} {D O A F : B256} {dy c0 amp v nw : Nat} {B X : N
       rw [St_getStor, afterSstore_getStor_ne _ _ _ _ _ hne, Devm.addLog_getStor, hb.getStor_eq,
         (hTail.same (coinAt j) List.not_mem_nil).stor]
       exact st
+    · intro x hxp hxc
+      rw [St_getStor]
+      refine (mFromN.same x ?_).stor
+      rw [ht]
+      intro hm
+      have hm' : x = pool ∨ x ∈ coinT j ∨ x = pool := by
+        simpa only [List.mem_append, List.mem_singleton, List.not_mem_nil, or_false, false_or, or_assoc, or_self] using hm
+      rcases hm' with h | h | h
+      · exact hxp h
+      · exact hxc h
+      · exact hxp h
 
 end Head
 
