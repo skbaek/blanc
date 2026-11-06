@@ -1,4 +1,5 @@
 import Blanc.Composition.Curve3PoolDaiCoin
+import Blanc.Composition.Curve3PoolCoinKeep
 import Blanc.Composition.Curve3PoolUsdc22Coin
 import Blanc.Lift.Curve3Pool.ExchangeLive
 
@@ -7,8 +8,8 @@ import Blanc.Lift.Curve3Pool.ExchangeLive
 
 `exchange_dai_usdc22_live`: an `exchange` frame pulling DAI and pushing USDC over FiatTokenV2_2, with
 `CoinPullOkAt` and `CoinPushOkAt` discharged by those coins' certified runtimes at the single gas
-window `U = 95000`. The keep premise stays, because USDC's frames can `CALL` out in
-`rescueERC20`, so no selector-free `ChildKeepsAt` holds for it.
+window `U = 95000`, and the keep premise by the three coins' bytes (`PoolCoinWorld`): what remains of it
+is the operators' `usdcImpl` and `usdtLive`, and that the three coins are neither the pool nor `4`.
 -/
 
 namespace Blanc.Composition.Curve3PoolCoinExchange
@@ -31,9 +32,15 @@ theorem exchange_dai_usdc22_live {sevm : Sevm} {pre : Devm} {s : Curve3Pool.Stat
     (hcoin : ∀ k : Fin 3,
       ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
     (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
-    (hkeep : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
-      PoolCallsKeep ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ ∧
-        ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4)
+    {dai usdc usdt : Adr} (hpool : pre.getCode sevm.currentTarget = code)
+    (hworld : ∀ post (exc : Exec 0 sevm (St pre [] Mem.empty G) (.ok post)),
+      Curve3PoolCoinKeep.PoolCoinWorld exc dai usdc usdt)
+    (hparties : ∀ k : Fin 3,
+      (((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr = dai ∨
+        ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr = usdc ∨
+        ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr = usdt) ∧
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr ≠ sevm.currentTarget ∧
+      ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr ≠ 4)
     (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWb : W pre) (hfee : i ≠ feeIndex)
     (hW''c : WClosed sevm W'')
     (hi1 : ((pre.getStor sevm.currentTarget).get (coinSlot i)).toAdr ≠ sevm.currentTarget)
@@ -70,7 +77,18 @@ theorem exchange_dai_usdc22_live {sevm : Sevm} {pre : Devm} {s : Curve3Pool.Stat
       RawEffect ⟨0, sevm, St pre [] Mem.empty G, .ok post, exc⟩ post (exEnv sevm i j bp bq) o ∧
         Checkpoint (post.getStor sevm.currentTarget) o.state ∧ W'' post :=
   exchange_live (U := 95000) hcode hfork hstatic (by omega) hlen hcd hsel hi hj hck hstep hcoin hpc hid
-    hkeep hWc hW'c hWb (fun h => absurd h hfee)
+    (fun post exc => (Curve3PoolCoinKeep.exchange_keeps_of_children exc hcode hfork.histFork hlen hcd hsel
+      (St_getStor pre [] Mem.empty G sevm.currentTarget ▸ hck.abs) hcoin
+      (by rw [St_getCode]; exact hpool)
+      ⟨(St_getCode pre [] Mem.empty G 4) ▸ hid.toH.nodeleg, hid.toH.warm, hid.toH.pre, hid.toH.stateGas⟩
+      rfl rfl hGm fun k => ⟨by
+        have e : Curve3Pool3CrvInstance.exCoin sevm (St pre [] Mem.empty G) k =
+            ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr := by
+          simp only [Curve3Pool3CrvInstance.exCoin, St_getStor]
+        obtain ⟨h | h | h, -⟩ := hparties k <;> rw [e, h]
+        · exact (hworld post exc).dai_keeps hcode hfork.histFork
+        · exact (hworld post exc).usdc_keeps hcode hfork.histFork
+        · exact (hworld post exc).usdt_keeps hcode hfork.histFork, (hparties k).2.1, (hparties k).2.2⟩).2) hWc hW'c hWb (fun h => absurd h hfee)
     (Blanc.Composition.Curve3PoolDai.dai_coinPullOkAt hfork hstatic (by omega) (hcoin i) hi1 (le_refl _)
       (by decide) (by decide) hWdai hWdai')
     hW''c

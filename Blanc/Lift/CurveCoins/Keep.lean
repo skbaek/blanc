@@ -1,4 +1,5 @@
 import Blanc.Lift.ForeignKeep
+import Blanc.Lift.CurveCoins.Sel
 import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.InvWalkLegacy
 import Blanc.Lift.Usdc.ImplV2.Check
@@ -27,9 +28,6 @@ Nothing here assumes a storage value but that one flag, and no fit premise. The 
 namespace Blanc.Lift.CurveCoins
 
 open Jaune Blanc Blanc.Lift
-
-/-- The selectors the pool sends a coin: `transfer`, `transferFrom`, `balanceOf`. -/
-def PoolCoinSel (s : B256) : Prop := s = 0xa9059cbb ∨ s = 0x23b872dd ∨ s = 0x70a08231
 
 /-- Chain nodes of a frame decode no external instruction. -/
 abbrev ChainNoExec {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 sevm pre out) : Prop :=
