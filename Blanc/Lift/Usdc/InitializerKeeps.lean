@@ -8,21 +8,22 @@ import Blanc.Lift.Usdc.V22InitializerReach
 
 `initializerKeeps` discharges `InitializerKeeps` over a mid history. No flag of the contract is read:
 an initializer's stores are classified by the prefix walks, whatever the frame's outcome and whatever
-`initialized` and `_initializedVersion` hold, and a holder's entry lies apart from all of them.
+`initialized` and `_initializedVersion` hold.
 
 * `StrApart`, `EntryApart`: closed arithmetic on the entry's word. A string's payload stays within
   `2 ^ 251` words of its hash whatever its stored header says, so an entry outside those intervals
   misses every payload and clearing store. `entryApart_pool` (`InitializerKeepsPool`) computes this
   for the pool's entry;
-* `init_write_ne`: `initialize` and `initializeV2`, all three versions;
-* `init2_write_ne`: `initializeV2_1` and `initializeV2_2`, given `recipient` and `migration`;
+* `init_write_ne`: `initialize` and `initializeV2`, all three versions, miss the entry;
+* `init2_word`, `init2_bits`: `initializeV2_1` and `initializeV2_2` do land on a holder named in the
+  calldata, and the entry's reading does not fall: a recipient's credit, and a listed account's balance
+  bits under the blacklist flag;
 * `init_children`: below a proxy frame on these selectors runs one level of implementation frames;
-* `frame_init_keep`: the committed frame keeps the entry's word.
+* `frame_init_keep`, `frame_init_mono`: the committed frame keeps the entry's word on the first two
+  selectors, and doesn't lower its reading on the last two.
 
-Two calldata facts stay as premises, `RecipientsApart` and `MigrationsApart`: the recipient's credit and
-the listed account's blacklist bit are the stores that do land on a holder named in the calldata. Each
-is a reader's check against the upgrade's calldata; the walks that would give their value bounds (a
-credit never falls, the bits survive `_blacklist`) are not written.
+One premise is left, `MigrationsApart`, of the hash class: `initializeV2_2` writes `0` at each listed
+account's `keccak(a ‖ 3)`, so a collision with the entry there would lower it.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -178,90 +179,91 @@ theorem selV2T_root (sevm : Sevm) :
     selV2T.eval (WriteSite.Env.root sevm) = Blanc.Sevm.selector sevm :=
   (selV2T_root_selWord sevm).trans (selWord_eq_selector sevm)
 
-/-- **What the migration names**: the rows `initializeV2_2` writes for its account list. A collision
-of `keccak(account ‖ 3)` is of the hash class; `account = holder` at base `9` is what the migration's
-calldata is read for. -/
+/-- **The migration's old-blacklist rows miss the entry**: `initializeV2_2` writes `0` at `keccak(a ‖ 3)`
+for each listed account `a`. A statement of the hash class: no value bound removes it. -/
 def MigrationApart (k : B256) (sevm : Sevm) : Prop :=
   ∀ j < min (InitReachV2_2.arrLen sevm).toNat (2 ^ 32),
-    k ≠ mapSlot (InitReachV2_2.acctAt sevm (InitReachV2_2.arrPtr sevm) j) 3 ∧
-      k ≠ mapSlot (InitReachV2_2.acctAt sevm (InitReachV2_2.arrPtr sevm) j &&& InitReachV2_2.addrMask) 9
+    k ≠ mapSlot (InitReachV2_2.acctAt sevm (InitReachV2_2.arrPtr sevm) j) 3
 
-theorem self_mask (T : Adr) : T.toB256 &&& InitReachV2_2.addrMask = T.toB256 := by
-  rw [B256.and_comm]
-  exact ff20_and_adr T
-
-/-- A store of `initializeV2_2`'s range misses the entry. -/
-theorem InitRange22.key_ne {T : Adr} {k : B256} (a : EntryApart T k) {sevm : Sevm}
-    (target : sevm.currentTarget = T) (apart : MigrationApart k sevm) {C : Conf}
-    (range : InitReachV2_2.InitRange22 sevm C) {key v : B256} {S : List B256}
-    (stack : C.d.stack = key :: v :: S) : key ≠ k := by
-  have bound : min (InitReachV2_2.strLen sevm) (2 ^ 32) ≤ 2 ^ 160 :=
-    (Nat.min_le_right _ _).trans (by decide)
-  rintro rfl
-  rcases range _ _ _ stack with keys | ⟨-, c⟩
-  · rcases keys with e | ⟨j, hj, e⟩ | ⟨j, hj, e | e⟩ | e | e | e
-    · exact not_low a (by decide) e
-    · exact a.symbol.not_payload (hj.trans (payload_bound bound)) e
-    · exact (apart j hj).1 e
-    · exact (apart j hj).2 e
-    · rw [target, self_mask] at e
-      exact a.self9 e
-    · rw [target] at e
-      exact a.self3 e
-    · exact not_low a (by decide) e
-  · exact a.symbol.not_clear (payload_bound bound) c
-
-/-- **A store under `initializeV2_1` or `initializeV2_2` misses the entry**, given the recipient and
-the migration's accounts are apart from it. -/
-theorem init2_write_ne {T : Adr} {k : B256} (a : EntryApart T k) {G N : Exec.Deriv} (hpc : G.pc = 0)
-    (hsg : G.sevm.benvStat.rules.stateGas = none) (fresh : Exec.FreshEntry G.sevm G.devm)
-    (gas : G.devm.gasMeasure < 2 ^ 256) (version : CurveCoins.UsdcVersion G.sevm.code)
-    (target : G.sevm.currentTarget = T)
+/-- **Under V2_1's code a store on these selectors doesn't lower the entry's word.** V2 has no such
+selector, nor V2_1 `initializeV2_2`. -/
+theorem init2_word {T : Adr} {k : B256} (a : EntryApart T k) {G N : Exec.Deriv} (hpc : G.pc = 0)
+    (hsg : G.sevm.benvStat.rules.stateGas = none) (version : CurveCoins.UsdcVersion G.sevm.code)
+    (notV22 : G.sevm.code ≠ Impl.code) (target : G.sevm.currentTarget = T)
     (sel : Blanc.Sevm.selector G.sevm = 0x2fc81e09 ∨ Blanc.Sevm.selector G.sevm = 0x430239b4)
-    (recipient : Blanc.Sevm.selector G.sevm = 0x2fc81e09 →
-      k ≠ mapSlot (Sevm.dataWord G.sevm 4).toAdr.toB256 9)
-    (migration : Blanc.Sevm.selector G.sevm = 0x430239b4 → MigrationApart k G.sevm)
     (chain : Exec.Deriv.ParentPrefix G N) {w : Exec.StorageWrite}
-    (found : Exec.Deriv.successfulSstore? N = some w) : w.key ≠ k := by
-  have r18 : w.key = 18 → w.key ≠ k := fun e c => not_low a (x := 18) (by decide) (c.symm.trans e)
-  have self9 : w.key = mapSlot G.sevm.currentTarget.toB256 9 → w.key ≠ k := fun e c =>
-    a.self9 (by rw [← target]; exact c.symm.trans e)
-  have self3 : w.key = mapSlot G.sevm.currentTarget.toB256 3 → w.key ≠ k := fun e c =>
-    a.self3 (by rw [← target]; exact c.symm.trans e)
+    (found : Exec.Deriv.successfulSstore? N = some w) (key : w.key = k) :
+    (N.devm.getStorVal T k).toNat ≤ w.value.toNat := by
   rcases version with code | code | code
-  · obtain ⟨site, inRoot, -, guards, -⟩ := WriteSite.successfulSstore_site ImplV2.cert_check
+  · exfalso
+    obtain ⟨site, inRoot, -, guards, -⟩ := WriteSite.successfulSstore_site ImplV2.cert_check
       implV2_wsCert hpc code hsg chain found
     have mem := WriteSite.hasSel_sound (List.all_eq_true.mp v2_sites site inRoot) rfl guards
     rw [selV2T_root] at mem
     rcases sel with hs | hs <;> rw [hs] at mem <;> exact absurd mem (by decide)
   · rcases sel with hs | hs
-    · rcases V21InitializerReach.successfulSstore_all_source hpc code hsg chain hs found with
-        e | ⟨-, -, e, -⟩ | ⟨-, e, -⟩ | ⟨-, e, -⟩
-      · exact r18 e
-      · exact self9 e
-      · exact fun c => recipient hs (c.symm.trans e)
-      · exact self3 e
-    · obtain ⟨site, inRoot, -, guards, -⟩ := WriteSite.successfulSstore_site ImplV2_1.cert_check
+    · have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+      rcases V21InitializerReach.successfulSstore_all_source hpc code hsg chain hs found with
+        e | ⟨-, -, e, -⟩ | ⟨-, bound, e, -⟩ | ⟨-, e, -⟩
+      · exact absurd (key.symm.trans e) (not_low a (by decide))
+      · exact absurd (key.symm.trans e) (by rw [target]; exact a.self9)
+      · rw [same, target, key] at bound
+        exact bound
+      · exact absurd (key.symm.trans e) (by rw [target]; exact a.self3)
+    · exfalso
+      obtain ⟨site, inRoot, -, guards, -⟩ := WriteSite.successfulSstore_site ImplV2_1.cert_check
         implV2_1_wsCert hpc code hsg chain found
       have mem := WriteSite.hasSel_sound (List.all_eq_true.mp v2_1_sites site inRoot) rfl guards
       rw [selV2T_root, hs] at mem
       exact absurd mem (by decide)
-  · rcases sel with hs | hs
-    · rcases V22InitializerReach.successfulSstore_source hpc code hsg chain hs found with
-        e | ⟨-, e, -⟩ | ⟨-, e, -⟩ | ⟨-, e, -⟩
-      · exact r18 e
-      · exact self9 e
-      · exact fun c => recipient hs (c.symm.trans e)
-      · exact self9 e
-    · obtain ⟨hat, rest, hstack⟩ := successfulSstore?_decoded found
-      obtain ⟨stack, memory⟩ := fresh
-      have eraseP : ∀ {s d n d'}, FreePtr.PotStep (StepIn G) s d n d' → Ninst.Run s d n d' :=
-        fun h => StepIn.toRun h.1
-      obtain ⟨C, run, hT, e⟩ := Reach.sstoreNode_pot Impl.cert_check hpc code hsg stack memory
-        gas chain hat
-      exact InitRange22.key_ne a target (migration hs)
-        (InitReachV2_2.initV2_2_reach_range eraseP ((selWord_eq_selector _).trans hs) run hT)
-        (e ▸ hstack)
+  · exact absurd code notV22
+
+/-- **Under V2_2's code a store on these selectors doesn't lower the entry's balance bits**, given the
+migration's old-blacklist rows miss the entry. -/
+theorem init2_bits {T : Adr} {k : B256} (a : EntryApart T k) {G N : Exec.Deriv} (hpc : G.pc = 0)
+    (hsg : G.sevm.benvStat.rules.stateGas = none) (empty : G.devm.stack = [])
+    (code : G.sevm.code = Impl.code) (target : G.sevm.currentTarget = T)
+    (sel : Blanc.Sevm.selector G.sevm = 0x2fc81e09 ∨ Blanc.Sevm.selector G.sevm = 0x430239b4)
+    (migration : Blanc.Sevm.selector G.sevm = 0x430239b4 → MigrationApart k G.sevm)
+    (chain : Exec.Deriv.ParentPrefix G N) {w : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? N = some w) (key : w.key = k) :
+    balanceBits (N.devm.getStorVal T k) ≤ balanceBits w.value := by
+  have same := Exec.Deriv.ParentPrefix.sevm_eq chain
+  rcases sel with hs | hs
+  · rcases V22InitializerReach.successfulSstore_credit hpc code hsg chain hs found with
+      e | ⟨-, e, -⟩ | ⟨-, bound, e, -⟩ | ⟨-, e, -⟩
+    · exact absurd (key.symm.trans e) (not_low a (by decide))
+    · exact absurd (key.symm.trans e) (by rw [target]; exact a.self9)
+    · rw [same, target, key] at bound
+      exact bound
+    · exact absurd (key.symm.trans e) (by rw [target]; exact a.self9)
+  · obtain ⟨decoded, rest, stack⟩ := Exec.Deriv.successfulSstore?_decoded found
+    obtain ⟨κ, reach, ok⟩ :=
+      observed_reach_of_parentPrefix_noStateGas Impl.cert_check hpc code hsg chain
+    obtain ⟨g, tree, -⟩ := ok.tree_of_sstore decoded
+    have atStore : AtSstore (κ.conf N.devm) := ⟨g, tree⟩
+    change ObservedReach (StepIn G) (Cursor.RawEdgeAt Impl.code Impl.cert G N)
+      Impl.cert.prog G.sevm ⟨G.devm, Impl.t_0000_c0, []⟩ (κ.conf N.devm) at reach
+    rw [St.self empty rfl] at reach
+    have bound : min (InitReachV2_2.strLen G.sevm) (2 ^ 32) ≤ 2 ^ 160 :=
+      (Nat.min_le_right _ _).trans (by decide)
+    rcases InitReachV2_2.initV2_2_bits (fun h => StepIn.toRun h)
+        ((selWord_eq_selector _).trans hs) hsg reach atStore with
+      ⟨key', v, S, stack', alt⟩ | other
+    · have e := (List.cons.inj ((show N.devm.stack = _ from stack').symm.trans stack)).1
+      rw [e, key] at alt
+      exfalso
+      rcases alt with fixed | ⟨j, hj, payload⟩ | ⟨-, clear⟩
+      · exact not_low a (x := 5) (by decide) fixed
+      · exact a.symbol.not_payload (hj.trans (payload_bound bound)) payload
+      · exact a.symbol.not_clear (payload_bound bound) clear
+    · rcases other w.key w.value rest stack with e | ⟨j, hj, e⟩ | e | kept
+      · exact absurd (key.symm.trans e) (not_low a (by decide))
+      · exact absurd (key.symm.trans e) (migration hs j hj)
+      · exact absurd (key.symm.trans e) (by rw [target]; exact a.self3)
+      · change balanceBits w.value = balanceBits (N.devm.getStorVal _ w.key) at kept
+        rw [target, key] at kept
+        exact kept.ge
 
 /-! ## No frame below an initializer -/
 
@@ -306,9 +308,10 @@ theorem init_noExec {C : ByteArray} (hC : CurveCoins.UsdcVersion C) {sevm : Sevm
     rcases sel with s | s | s | s <;> rw [s] at h <;> repeat rdispE h t CurveCoins.v22Free_execFree
 
 /-- What a raw frame below a proxy frame on an initializer is. -/
-structure InitChild (T : Adr) (data : Bytes) (D : Exec.Deriv) : Prop where
+structure InitChild (T : Adr) (data : Bytes) (impl : ByteArray) (D : Exec.Deriv) : Prop where
   pc : D.pc = 0
   version : CurveCoins.UsdcVersion D.sevm.code
+  code : D.sevm.code = impl
   target : D.sevm.currentTarget = T
   sameData : D.sevm.data = data
   stateGas : D.sevm.benvStat.rules.stateGas = none
@@ -321,7 +324,8 @@ theorem init_children {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0
     (bal : sevm.benvStat.rules.bal = none) (hsize : sevm.data.length < 2 ^ 256)
     (hI : CurveCoins.UsdcImplAt pre sevm.currentTarget)
     (sel : Blanc.Sevm.selector sevm ∈ usdcInitializers) :
-    ∀ D ∈ Exec.rawFrameDescendants run, InitChild sevm.currentTarget sevm.data D := by
+    ∀ D ∈ Exec.rawFrameDescendants run, InitChild sevm.currentTarget sevm.data
+      (pre.getCode (pre.getStorVal sevm.currentTarget implSlot).toAdr) D := by
   refine Exec.rawFrameDescendants_of_chain (root := ⟨0, sevm, pre, out, run⟩) ?_ run (.refl _)
   intro nodePc nextPc nodeSevm nodePre nodeOut raw frame rsm cevm nrun chain step enter child D hD
   obtain ⟨x, hat, hx, -⟩ := Evm.step_spawn_inv step
@@ -369,7 +373,8 @@ theorem init_children {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0
       simpa only [Blanc.Sevm.selector, Sevm.dataWord, e] using sel))
   simp only [Exec.rawFrameRoots, hnil, List.mem_singleton] at hD
   subst hD
-  exact ⟨rfl, by show CurveCoins.UsdcVersion frame.inner.code; rw [hcC, hslotCode]; exact hI, target, hdata, childSg⟩
+  exact ⟨rfl, by show CurveCoins.UsdcVersion frame.inner.code; rw [hcC, hslotCode]; exact hI,
+    by show frame.inner.code = _; rw [hcC, hslotCode], target, hdata, childSg⟩
 
 /-- Selector and migration read only the calldata. -/
 theorem MigrationApart.of_data {k : B256} {s s' : Sevm} (e : s'.data = s.data)
@@ -377,67 +382,103 @@ theorem MigrationApart.of_data {k : B256} {s s' : Sevm} (e : s'.data = s.data)
   simpa only [MigrationApart, InitReachV2_2.arrLen, InitReachV2_2.arrPtr, InitReachV2_2.acctAt,
     Sevm.dataWord, e] using h
 
-/-- **A committed proxy frame on an initializer keeps the entry**, word for word. -/
-theorem frame_init_keep {T : Adr} {k : B256} (a : EntryApart T k) (F : Exec.Frame) (hpc : F.pc = 0)
-    (hcode : F.sevm.code = Proxy.code) (hsg : F.sevm.benvStat.rules.stateGas = none)
+/-- **What a committed proxy frame on an initializer does to the entry**: the proxy's own stores miss it,
+so only the stores of the implementation frames below it count. -/
+theorem frame_init_cell {T : Adr} {k : B256} {Inv : B256 → Prop} (a : EntryApart T k) (F : Exec.Frame)
+    (hpc : F.pc = 0) (hcode : F.sevm.code = Proxy.code) (hsg : F.sevm.benvStat.rules.stateGas = none)
     (bal : F.sevm.benvStat.rules.bal = none) (hsize : F.sevm.data.length < 2 ^ 256)
     (gas : F.pre.gasMeasure < 2 ^ 256) (target : F.sevm.currentTarget = T)
     (hne : (F.pre.getCode T).toList ≠ []) (hI : CurveCoins.UsdcImplAt F.pre T)
     (sel : Blanc.Sevm.selector F.sevm ∈ usdcInitializers)
-    (recipient : Blanc.Sevm.selector F.sevm = 0x2fc81e09 →
-      k ≠ mapSlot (Sevm.dataWord F.sevm 4).toAdr.toB256 9)
-    (migration : Blanc.Sevm.selector F.sevm = 0x430239b4 → MigrationApart k F.sevm) :
-    (F.post.getStor T).get k = (F.pre.getStor T).get k := by
-  refine frame_cellInv F hsg hne k (Inv := fun v => v = (F.pre.getStor T).get k) rfl ?_
-  intro m member w found _ key _
-  exfalso
+    (init : Inv ((F.pre.getStor T).get k))
+    (child : ∀ G N : Exec.Deriv, InitChild T F.sevm.data (F.pre.getCode (F.pre.getStorVal T implSlot).toAdr) G →
+      Exec.FreshEntry G.sevm G.devm → G.devm.gasMeasure < 2 ^ 256 → Exec.Deriv.ParentPrefix G N →
+      ∀ w : Exec.StorageWrite, Exec.Deriv.successfulSstore? N = some w → w.key = k →
+        Inv ((N.devm.getStor T).get k) → Inv w.value) :
+    Inv ((F.post.getStor T).get k) := by
+  refine frame_cellInv F hsg hne k init ?_
+  intro m member w found _ key held
   obtain ⟨cpc, sevm, pre, out, run, committed⟩ := F
-  dsimp only at hpc hcode hsg bal hsize gas target hne hI sel recipient migration member
+  dsimp only at hpc hcode hsg bal hsize gas target hne hI sel init child member
   subst hpc
   subst target
   obtain ⟨r, hr, chain⟩ := (Exec.mem_rawNodes_iff_rawFrameRoot_parentPrefix run m).mp member
   have rootCase := hr
   simp only [Exec.rawFrameRoots, List.mem_cons] at hr
   rcases hr with rfl | hr
-  · obtain ⟨hat, rest, stack⟩ := successfulSstore?_decoded found
+  · exfalso
+    obtain ⟨hat, rest, stack⟩ := successfulSstore?_decoded found
     rcases Proxy.proxy_sstoreNodeH run hcode hsg bal chain hat with ⟨rest', hs⟩ | ⟨rest', hs, -, -⟩
     · rw [stack] at hs
       exact a.admin (key.symm.trans (List.cons.inj hs).1)
     · rw [stack] at hs
       exact a.impl (key.symm.trans (List.cons.inj hs).1)
-  · obtain ⟨cp, version, tgt, data, sg⟩ := init_children run hcode hsg bal hsize hI sel r hr
-    have fresh : Exec.FreshEntry r.sevm r.devm :=
-      Exec.rawFrameDescendants_entered enteredCondition_fresh run r hr
-    have rgas : r.devm.gasMeasure < 2 ^ 256 :=
-      (Exec.rawFrameRoots_gasMeasure_le run r rootCase).trans_lt gas
-    have same : Blanc.Sevm.selector r.sevm = Blanc.Sevm.selector sevm := by
-      simp only [Blanc.Sevm.selector, Sevm.dataWord, data]
-    have word : Sevm.dataWord r.sevm 4 = Sevm.dataWord sevm 4 := by
-      simp only [Sevm.dataWord, data]
-    rcases mem_inits.mp sel with s | s | s | s
-    · exact init_write_ne a cp sg fresh rgas version (.inl (same.trans s)) chain found key
-    · exact init_write_ne a cp sg fresh rgas version (.inr (same.trans s)) chain found key
-    · exact init2_write_ne a cp sg fresh rgas version tgt (.inl (same.trans s))
-        (fun _ => by rw [word]; exact recipient s)
-        (fun hs => absurd (s.symm.trans (same.symm.trans hs)) (by decide)) chain found key
-    · exact init2_write_ne a cp sg fresh rgas version tgt (.inr (same.trans s))
-        (fun hs => absurd (s.symm.trans (same.symm.trans hs)) (by decide))
-        (fun _ => (migration s).of_data data) chain found key
+  · exact child r m (init_children run hcode hsg bal hsize hI sel r hr)
+      (Exec.rawFrameDescendants_entered enteredCondition_fresh run r hr)
+      ((Exec.rawFrameRoots_gasMeasure_le run r rootCase).trans_lt gas) chain w found key held
+
+/-- **On `initialize` and `initializeV2` a committed proxy frame keeps the entry**, word for word. -/
+theorem frame_init_keep {T : Adr} {k : B256} (a : EntryApart T k) (F : Exec.Frame) (hpc : F.pc = 0)
+    (hcode : F.sevm.code = Proxy.code) (hsg : F.sevm.benvStat.rules.stateGas = none)
+    (bal : F.sevm.benvStat.rules.bal = none) (hsize : F.sevm.data.length < 2 ^ 256)
+    (gas : F.pre.gasMeasure < 2 ^ 256) (target : F.sevm.currentTarget = T)
+    (hne : (F.pre.getCode T).toList ≠ []) (hI : CurveCoins.UsdcImplAt F.pre T)
+    (sel : Blanc.Sevm.selector F.sevm = 0x3357162b ∨ Blanc.Sevm.selector F.sevm = 0xd608ea64) :
+    (F.post.getStor T).get k = (F.pre.getStor T).get k := by
+  have member : Blanc.Sevm.selector F.sevm ∈ usdcInitializers :=
+    mem_inits.mpr (sel.elim .inl (.inr ∘ .inl))
+  refine frame_init_cell (Inv := fun v => v = (F.pre.getStor T).get k) a F hpc hcode hsg bal hsize gas
+    target hne hI member rfl ?_
+  intro G N child fresh rgas chain w found key _
+  have same : Blanc.Sevm.selector G.sevm = Blanc.Sevm.selector F.sevm := by
+    simp only [Blanc.Sevm.selector, Sevm.dataWord, child.sameData]
+  exact absurd key (init_write_ne a child.pc child.stateGas fresh rgas child.version
+    (same ▸ sel) chain found)
+
+/-- **On `initializeV2_1` and `initializeV2_2` a committed proxy frame doesn't lower the entry's
+reading**, by the code the implementation word finds: its bits under V2_2, its word before. -/
+theorem frame_init_mono {T : Adr} {k : B256} (a : EntryApart T k) (F : Exec.Frame) (hpc : F.pc = 0)
+    (hcode : F.sevm.code = Proxy.code) (hsg : F.sevm.benvStat.rules.stateGas = none)
+    (bal : F.sevm.benvStat.rules.bal = none) (hsize : F.sevm.data.length < 2 ^ 256)
+    (gas : F.pre.gasMeasure < 2 ^ 256) (target : F.sevm.currentTarget = T)
+    (hne : (F.pre.getCode T).toList ≠ []) (hI : CurveCoins.UsdcImplAt F.pre T)
+    (sel : Blanc.Sevm.selector F.sevm = 0x2fc81e09 ∨ Blanc.Sevm.selector F.sevm = 0x430239b4)
+    (migration : Blanc.Sevm.selector F.sevm = 0x430239b4 → MigrationApart k F.sevm) :
+    (F.pre.getCode (F.pre.getStorVal T implSlot).toAdr = Impl.code →
+      balanceBits ((F.pre.getStor T).get k) ≤ balanceBits ((F.post.getStor T).get k)) ∧
+    (F.pre.getCode (F.pre.getStorVal T implSlot).toAdr ≠ Impl.code →
+      ((F.pre.getStor T).get k).toNat ≤ ((F.post.getStor T).get k).toNat) := by
+  have member : Blanc.Sevm.selector F.sevm ∈ usdcInitializers :=
+    mem_inits.mpr (sel.elim (.inr ∘ .inr ∘ .inl) (.inr ∘ .inr ∘ .inr))
+  have same : ∀ G : Exec.Deriv, G.sevm.data = F.sevm.data →
+      Blanc.Sevm.selector G.sevm = Blanc.Sevm.selector F.sevm := fun G e => by
+    simp only [Blanc.Sevm.selector, Sevm.dataWord, e]
+  constructor
+  · intro isV22
+    refine frame_init_cell (Inv := fun v => balanceBits ((F.pre.getStor T).get k) ≤ balanceBits v) a F
+      hpc hcode hsg bal hsize gas target hne hI member le_rfl ?_
+    intro G N child fresh _ chain w found key held
+    exact held.trans (init2_bits a child.pc child.stateGas fresh.1 (child.code.trans isV22) child.target
+      (same G child.sameData ▸ sel)
+      (fun hs => (migration ((same G child.sameData).symm.trans hs)).of_data child.sameData) chain found key)
+  · intro notV22
+    refine frame_init_cell (Inv := fun v => ((F.pre.getStor T).get k).toNat ≤ v.toNat) a F
+      hpc hcode hsg bal hsize gas target hne hI member le_rfl ?_
+    intro G N child _ _ chain w found key held
+    exact held.trans (init2_word a child.pc child.stateGas child.version
+      (fun e => notV22 (child.code.symm.trans e)) child.target (same G child.sameData ▸ sel) chain found key)
 
 /-! ## The field -/
 
-/-- `initializeV2_1` names no recipient at the holder's entry (a calldata fact per frame). -/
-def RecipientsApart (T h : Adr) (settled : List Exec.Frame) : Prop :=
-  ∀ F ∈ settled, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
-    Blanc.Sevm.selector F.sevm = 0x2fc81e09 → balSlot h ≠ mapSlot (Sevm.dataWord F.sevm 4).toAdr.toB256 9
-
-/-- `initializeV2_2`'s account list is apart from the holder's entry (a calldata fact per frame). -/
+/-- `initializeV2_2`'s old-blacklist rows are apart from the holder's entry, per frame: of the hash class,
+as `CoinKeysFresh` is. -/
 def MigrationsApart (T h : Adr) (settled : List Exec.Frame) : Prop :=
   ∀ F ∈ settled, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
     Blanc.Sevm.selector F.sevm = 0x430239b4 → MigrationApart (balSlot h) F.sevm
 
 /-- **`InitializerKeeps`, over a mid history.** No flag of USDC is read. `hasCode` and `certified` are
-what the chain's frames carry; `certified` is the proxy admin's power. -/
+what the chain's frames carry; `certified` is the proxy admin's power; `migrations` is a hash-class fact
+over the migration's account list. -/
 theorem initializerKeeps {cfg : ChainConfig} {start : Benv} {future : BlockChain} {T h : Adr}
     (trace : MidHistoryTraceIn HistFork cfg start future)
     (capabilities : BodyStageCapabilities HistFork) (a : EntryApart T (balSlot h))
@@ -445,7 +486,6 @@ theorem initializerKeeps {cfg : ChainConfig} {start : Benv} {future : BlockChain
       (F.pre.getCode T).toList ≠ [])
     (certified : ∀ F ∈ trace.settledFrames, F.sevm.currentTarget = T → EntryObs T F →
       CurveCoins.UsdcImplAt F.pre T)
-    (recipients : RecipientsApart T h trace.settledFrames)
     (migrations : MigrationsApart T h trace.settledFrames) :
     InitializerKeeps T h trace.settledFrames := by
   intro F member target nonstatic obs sel
@@ -456,15 +496,29 @@ theorem initializerKeeps {cfg : ChainConfig} {start : Benv} {future : BlockChain
     have := block.gas_bound capabilities _ inBlock
     change F.pre.gasMeasure < _ at this
     omega
-  have keep := frame_init_keep a F pc obs.1 fork.stateGas_none fork.bal_none
-    (trace.calldata_bound capabilities (fun _ hf => hf.dataNonZero_ge) _ raw) gas target
-    (hasCode F member target obs) (certified F member target obs) sel
-    (recipients F member target nonstatic obs) (migrations F member target nonstatic obs)
+  have hsize := trace.calldata_bound capabilities (fun _ hf => hf.dataNonZero_ge) _ raw
+  have code := hasCode F member target obs
+  have impl := certified F member target obs
   have words : ∀ w : State, ledgerView (wordsAt T w) (balSlot h) = (w.getStor T).get (balSlot h) :=
     fun w => ledgerView_bal a.impl a.admin
   unfold heldAt
   simp only [words]
-  have keep' : (F.post.state.getStor T).get (balSlot h) = (F.pre.state.getStor T).get (balSlot h) := keep
-  rw [keep']
+  rcases mem_inits.mp sel with s | s | s | s
+  · have keep := frame_init_keep a F pc obs.1 fork.stateGas_none fork.bal_none hsize gas target code impl
+      (.inl s)
+    have keep' : (F.post.state.getStor T).get (balSlot h) = (F.pre.state.getStor T).get (balSlot h) := keep
+    rw [keep']
+  · have keep := frame_init_keep a F pc obs.1 fork.stateGas_none fork.bal_none hsize gas target code impl
+      (.inr s)
+    have keep' : (F.post.state.getStor T).get (balSlot h) = (F.pre.state.getStor T).get (balSlot h) := keep
+    rw [keep']
+  all_goals
+    obtain ⟨bits, word⟩ := frame_init_mono a F pc obs.1 fork.stateGas_none fork.bal_none hsize gas target
+      code impl (by first | exact .inl s | exact .inr s) (migrations F member target nonstatic obs)
+    by_cases hv : V22At T F
+    · rw [if_pos hv, if_pos hv]
+      exact bits hv
+    · rw [if_neg hv, if_neg hv]
+      exact word hv
 
 end Blanc.Lift.Usdc

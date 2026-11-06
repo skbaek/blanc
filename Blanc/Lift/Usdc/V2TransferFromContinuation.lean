@@ -101,7 +101,7 @@ theorem entry_credit_or_nonInc {Q : Sevm → Devm → Ninst → Devm → Prop}
         ((Sevm.dataWord sevm 36).toAdr.toB256.toBytes ++ (9 : B256).toBytes) (fun _ => True)) := by
   rcases entry_source erase hsg selected run hT with ⟨value, rest, stack, bound, _⟩ | source
   · exact .inl ⟨_, value, rest, stack, bound⟩
-  · rcases source with ⟨⟨value, rest, stack, bound⟩, _, _⟩ | recipient
+  · rcases source with ⟨⟨value, rest, stack, bound⟩, _, _⟩ | ⟨recipient, _⟩
     · exact .inl ⟨_, value, rest, stack, bound⟩
     · exact .inr recipient
 
@@ -157,7 +157,7 @@ theorem successfulSstore_source {root node : Exec.Deriv}
       hash.actual
     exact .inr (.inl ⟨location, bound, keyEq,
       _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩)
-  obtain ⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩ := recipient
+  obtain ⟨⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩, _⟩ := recipient
   have location := ok.pc_eq_of_prefix_singleton V2TransferReach.recipientLine tail shape
     (suffix := []) (by simp only [List.append_nil]) (by decide) V2TransferReach.recipientPattern_occurrences
   obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=

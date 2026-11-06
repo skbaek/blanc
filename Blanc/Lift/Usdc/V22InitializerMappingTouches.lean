@@ -232,7 +232,7 @@ theorem inheritedInitializer_store_source (version : ModernVersion) (nonV2 : ver
   | v2 => exact (nonV2 rfl).elim
   | v2_1 =>
     rcases V21InitializerReach.successfulSstore_all_source pc code hsg chain selected found with
-      fixed | ⟨location, _, key, hash⟩ | ⟨location, key, hash⟩ | ⟨location, key, hash⟩
+      fixed | ⟨location, _, key, hash⟩ | ⟨location, _, key, hash⟩ | ⟨location, key, hash⟩
     · exact .inl fixed
     · exact .inr ⟨.owner, by rw [location]; rfl, key, hash⟩
     · exact .inr ⟨.recipient, by rw [location]; rfl, key, hash⟩

@@ -21,7 +21,7 @@ theorem recipient_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
     ObservedSource Q observe sevm owner recipient T := by
   rw [OldTransferBodyReach.recipient_v21] at run
-  exact (OldTransferBodyReach.recipient_reach_bounded erase run hT cont).forget
+  exact OldTransferBodyReach.recipient_reach_source erase run hT cont
 
 /-- The first balance writer observes only its own hash before the store. -/
 theorem owner_reach_observed {Q : Sevm → Devm → Ninst → Devm → Prop}

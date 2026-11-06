@@ -178,7 +178,9 @@ theorem successfulSstore_all_source {root node : Exec.Deriv}
       write.key = mapSlot root.sevm.currentTarget.toB256 9 ∧
       ∃ hashPc, KeccakBefore root node
         (root.sevm.currentTarget.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
-    (node.pc = 0x3d11 ∧ write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 9 ∧
+    (node.pc = 0x3d11 ∧
+      (node.devm.getStorVal node.sevm.currentTarget write.key).toNat ≤ write.value.toNat ∧
+      write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 9 ∧
       ∃ hashPc, KeccakBefore root node
         ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
     (node.pc = 0x15c0 ∧ write.key = mapSlot root.sevm.currentTarget.toB256 3 ∧
@@ -196,7 +198,7 @@ theorem successfulSstore_all_source {root node : Exec.Deriv}
   rcases entry_source (fun h => StepIn.toRun h) hsg selected walk target with
     source | afterSource
   · rcases source with ⟨⟨value, other, keyStack, bound⟩, ⟨tail, shape⟩, hash⟩ |
-        ⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩
+        ⟨⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩, credit⟩
     · have same := List.cons.inj (stack.symm.trans keyStack)
       have valueEq := (List.cons.inj same.2).1
       rw [← same.1, ← valueEq] at bound
@@ -213,7 +215,10 @@ theorem successfulSstore_all_source {root node : Exec.Deriv}
         V2_1TransferReach.recipientPattern_occurrences
       obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
         hash.actual
-      exact .inr (.inr (.inl ⟨location, (List.cons.inj (stack.symm.trans keyStack)).1,
+      have keyEq := (List.cons.inj (stack.symm.trans keyStack)).1
+      have bound := credit _ rest (by rw [← keyEq]; exact stack)
+      rw [← keyEq, ← Exec.Deriv.ParentPrefix.sevm_eq chain] at bound
+      exact .inr (.inr (.inl ⟨location, bound, keyEq,
         _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩))
   · rcases afterSource with ⟨other, keyStack⟩ | ⟨⟨other, keyStack⟩, ⟨tail, shape⟩, hash⟩
     · exact .inl (List.cons.inj (stack.symm.trans keyStack)).1
@@ -241,9 +246,10 @@ theorem successfulSstore_source {root node : Exec.Deriv}
       ∃ hashPc, KeccakBefore root node
         (root.sevm.currentTarget.toB256.toBytes ++ (3 : B256).toBytes) hashPc) := by
   rcases successfulSstore_all_source pc code hsg chain selected found with
-    fixed | ⟨_, bound, _, _⟩ | source
+    fixed | ⟨_, bound, _, _⟩ | ⟨location, _, key, hash⟩ | source
   · exact .inl fixed
   · exact .inr (.inl bound)
-  · exact .inr (.inr source)
+  · exact .inr (.inr (.inl ⟨location, key, hash⟩))
+  · exact .inr (.inr (.inr source))
 
 end Blanc.Lift.Usdc.V21InitializerReach
