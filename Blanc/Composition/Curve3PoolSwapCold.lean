@@ -3,7 +3,7 @@ import Blanc.Composition.Curve3PoolSwapBack
 /-!
 # `exchange`'s pull in the canonical chain
 
-`front_nofee`: DAI's or USDC's pull from the fee test. `front_fee`: USDT's, between the pool's two reads of its balance.
+`front_nofee`: DAI's or USDC's pull from the fee check. `front_fee`: USDT's, between the pool's two reads of its balance.
 Each ends at the base and memory `swap_back` starts from.
 -/
 
@@ -43,7 +43,7 @@ theorem mv_pullIn (s : Sevm) (n : Devm) (M : Mem) : Mv ([] ++ []) (0 + 0) n (exP
   unfold exPullN2 exPullN1
   exact (mv_identity ..).trans (mv_identity ..)
 
-/-- **DAI's or USDC's pull from the fee test.** -/
+/-- **DAI's or USDC's pull from the fee check.** -/
 theorem front_nofee (f : CoinStand s p w E) (hap : SwapApart w E) {i : Fin 3} (hi : i ≠ 2) {n : Devm} {M : Mem} {t : B256} {dx : Nat}
     (hdx : exDx s = Nat.toB256 dx) (htx : t.toAdr = coinAt i) (win : ExPullWin s M)
     (mv : Mv [pool] 0 p n) {K : List B256} {σ : Stor} (hA : At s.currentTarget K σ n)
@@ -84,7 +84,7 @@ theorem front_nofee (f : CoinStand s p w E) (hap : SwapApart w E) {i : Fin 3} (h
   · rw [(hTail.same (coinAt i) List.not_mem_nil).stor]
     exact st
 
-/-- **USDT's pull from the fee test**, between the pool's two reads of its balance. -/
+/-- **USDT's pull from the fee check**, between the pool's two reads of its balance. -/
 theorem front_fee (f : CoinStand s p w E) (hap : SwapApart w E) {n : Devm} {M : Mem} {t B1 : B256} {dx : Nat}
     (hdx : exDx s = Nat.toB256 dx) (htx : t.toAdr = coinAt 2) (mv : Mv [pool] 0 p n) {K : List B256} {σ : Stor} (hA : At s.currentTarget K σ n)
     (w1 : ExBalWin s M 0x3c0)

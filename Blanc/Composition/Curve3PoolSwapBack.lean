@@ -3,7 +3,7 @@ import Blanc.Composition.Curve3PoolSwapPay
 /-!
 # `exchange`'s canonical chain from a cold start: the prefix, and everything after the pull
 
-`swap_head`: the lock, the kill flag, the books and `coins[i]`, up to the fee test. `swap_back`: `_A`, `get_y`, the stores,
+`swap_head`: the lock, the kill flag, the books and `coins[i]`, up to the fee check. `swap_back`: `_A`, `get_y`, the stores,
 the push, the event and the lock's release, from the base the pull leaves.
 -/
 
@@ -16,7 +16,7 @@ open Blanc.Composition.Curve3Pool3CrvLiteralWitness (swapPullD swapPullN swapPus
 /-- The pool's storage while the lock is held. -/
 noncomputable abbrev lockedStor (w : Jaune.State) : Stor := (w.getStor pool).set lockW (Bytes.toB256 [1])
 
-/-- The pool's warm keys at the fee test. -/
+/-- The pool's warm keys at the fee check. -/
 def headK (i : Nat) : List B256 :=
   (coinsBase + Nat.toB256 i) :: (balancesBase + Bytes.toB256 [2]) :: (balancesBase + Bytes.toB256 [1]) :: balancesBase ::
     Bytes.toB256 [15] :: lockW :: lockW :: []
