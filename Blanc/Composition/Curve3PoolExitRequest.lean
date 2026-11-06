@@ -56,6 +56,30 @@ theorem exit_selector (h : e.data = exitCalldata a mins) : Sevm.selector e = Cur
   rw [h]
   simp only [exitCalldata, List.append_assoc]
 
+/-- `exitCalldata`'s four words. -/
+theorem exit_words (h : e.data = exitCalldata a mins) :
+    Sevm.dataWord e 4 = Nat.toB256 a ∧ Sevm.dataWord e 36 = Nat.toB256 mins.v0 ∧
+      Sevm.dataWord e 68 = Nat.toB256 mins.v1 ∧ Sevm.dataWord e 100 = Nat.toB256 mins.v2 := by
+  have l4 := abiSelectorBytes_length Curve3Pool.selRemoveLiquidity
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · refine Curve3PoolSupply.dataWord_eq_of_append (pre := abiSelectorBytes Curve3Pool.selRemoveLiquidity)
+      (rest := Curve3Pool.word mins.v0 ++ Curve3Pool.word mins.v1 ++ Curve3Pool.word mins.v2) ?_ (by rw [l4]; rfl)
+    rw [h]; simp only [exitCalldata, Curve3Pool.word, List.append_assoc]
+  · refine Curve3PoolSupply.dataWord_eq_of_append (pre := abiSelectorBytes Curve3Pool.selRemoveLiquidity ++ Curve3Pool.word a)
+      (rest := Curve3Pool.word mins.v1 ++ Curve3Pool.word mins.v2) ?_
+      (by simp only [Curve3Pool.word, List.length_append, B256.length_toBytes, l4]; rfl)
+    rw [h]; simp only [exitCalldata, Curve3Pool.word, List.append_assoc]
+  · refine Curve3PoolSupply.dataWord_eq_of_append
+      (pre := abiSelectorBytes Curve3Pool.selRemoveLiquidity ++ Curve3Pool.word a ++ Curve3Pool.word mins.v0)
+      (rest := Curve3Pool.word mins.v2) ?_
+      (by simp only [Curve3Pool.word, List.length_append, B256.length_toBytes, l4]; rfl)
+    rw [h]; simp only [exitCalldata, Curve3Pool.word, List.append_assoc]
+  · refine Curve3PoolSupply.dataWord_eq_of_append
+      (pre := abiSelectorBytes Curve3Pool.selRemoveLiquidity ++ Curve3Pool.word a ++ Curve3Pool.word mins.v0 ++
+        Curve3Pool.word mins.v1) (rest := []) ?_
+      (by simp only [Curve3Pool.word, List.length_append, B256.length_toBytes, l4]; rfl)
+    rw [h]; simp only [exitCalldata, Curve3Pool.word, List.append_assoc, List.append_nil]
+
 end Args
 
 end Blanc.Composition.Curve3PoolPublic
