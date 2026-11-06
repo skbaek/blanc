@@ -1,6 +1,7 @@
 import Blanc.ExecutionParentLogAttribution
 import Blanc.ExecutionIndexedReceipts
 import Blanc.ExecutionMidHistoryIn
+import Blanc.ExecutionHistoryInSystemEnvironment
 
 /-!
 # A settled frame's log reaches its block's receipts
@@ -8,7 +9,9 @@ import Blanc.ExecutionMidHistoryIn
 A reader sees receipts; a frame law speaks of a settled frame's `post.logs`. This is the link: every log in the endpoint
 of a settled frame of a block's transaction stage is in a successful receipt of that block. So a log filter that finds
 nothing over the block's receipts rules the log out of every such frame. System stages have no receipts, so their
-frames are not covered.
+frames are not covered by the receipts; `MidHistoryTraceIn.no_log_at` covers them at an account no system frame targets,
+and `MidHistoryTraceIn.system_ne` gives that from `MidHistoryTraceIn.SystemConfined` for an account outside the four
+system addresses.
 -/
 
 namespace Blanc.ExecutionTrace
@@ -106,5 +109,103 @@ theorem MidHistoryTraceIn.no_log_of_receipts {F : Fork → Prop} {cfg : ChainCon
     rcases List.mem_append.mp member with early | late
     · exact ih receipts.1 frame early
     · exact block.no_log_of_receipts (hsg block.forkIn) property receipts.2 frame late
+
+/-! ## System stages -/
+
+/-- The system-message frames of a mid history: its remainder's request stage, then each later block's system stages. -/
+def MidHistoryTraceIn.systemRawFrames {F : Fork → Prop} {cfg : ChainConfig} :
+    {start : Benv} → {future : BlockChain} → MidHistoryTraceIn F cfg start future → List Exec.Deriv
+  | _, _, .tail block _ => block.bodyTrace.requests.rawFrames
+  | _, _, .step prior block => prior.systemRawFrames ++ block.systemRawFrames
+
+/-- A settled frame of a block is a transaction stage's, or a system stage's root. -/
+theorem ConfiguredBlockTraceIn.settled_tx_or_system {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) {frame : Exec.Frame} (member : frame ∈ block.settledFrames) :
+    frame ∈ block.bodyTrace.transactions.settledFrames ∨
+      Blanc.Exec.Frame.rootDeriv (frame := frame) ∈ block.systemRawFrames := by
+  simp only [ConfiguredBlockTraceIn.settledFrames, StagedBodyTrace.settledFrames, List.mem_append] at member
+  simp only [ConfiguredBlockTraceIn.systemRawFrames, StagedBodyTrace.systemRawFrames, List.mem_append]
+  rcases member with ((beacon | history) | tx) | requests
+  · exact .inr (.inl (.inl (block.bodyTrace.beacon.mem_rawFrames_of_mem_settledFrames frame beacon)))
+  · exact .inr (.inl (.inr (block.bodyTrace.history.mem_rawFrames_of_mem_settledFrames frame history)))
+  · exact .inl tx
+  · exact .inr (.inr (block.bodyTrace.requests.mem_rawFrames_of_mem_settledFrames frame requests))
+
+/-- A settled frame of a mid history is a transaction stage's, or a system stage's root. -/
+theorem MidHistoryTraceIn.settled_tx_or_system {F : Fork → Prop} {cfg : ChainConfig} {start : Benv}
+    {future : BlockChain} (trace : MidHistoryTraceIn F cfg start future) {frame : Exec.Frame}
+    (member : frame ∈ trace.settledFrames) :
+    frame ∈ trace.txFrames ∨ Blanc.Exec.Frame.rootDeriv (frame := frame) ∈ trace.systemRawFrames := by
+  induction trace with
+  | tail block cut =>
+    rcases List.mem_append.mp member with tx | requests
+    · exact .inl tx
+    · exact .inr (block.bodyTrace.requests.mem_rawFrames_of_mem_settledFrames frame requests)
+  | step prior block ih =>
+    rcases List.mem_append.mp member with early | late
+    · rcases ih early with tx | system
+      · exact .inl (List.mem_append_left _ tx)
+      · exact .inr (List.mem_append_left _ system)
+    · rcases block.settled_tx_or_system late with tx | system
+      · exact .inl (List.mem_append_right _ tx)
+      · exact .inr (List.mem_append_right _ system)
+
+/-- **Zero matching logs in a mid history's receipts means none in a settled frame at an account no system frame
+targets.** -/
+theorem MidHistoryTraceIn.no_log_at {F : Fork → Prop} {cfg : ChainConfig}
+    (hsg : ∀ {fork}, F fork → fork.ruleSet.stateGas = none) (property : Log → Prop)
+    {start : Benv} {future : BlockChain} (trace : MidHistoryTraceIn F cfg start future)
+    (receipts : trace.NoLogInReceipts property) {T : Adr}
+    (sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ T) :
+    ∀ frame ∈ trace.settledFrames, frame.sevm.currentTarget = T → ∀ entry ∈ frame.post.logs, ¬ property entry := by
+  intro frame member target
+  rcases trace.settled_tx_or_system member with tx | system
+  · exact trace.no_log_of_receipts hsg property receipts frame tx
+  · exact absurd target (sysNe _ system)
+
+/-- The facts that confine a block's system stages to the system addresses: the canonical code at the block's opening,
+no authorization recovering to a system address, and no CREATE frame landing on one. All three are empty before Cancun,
+and the authorization clause before Prague. -/
+def ConfiguredBlockTraceIn.SystemConfined {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) : Prop :=
+  block.SystemCodeAtOpening ∧ (∀ p ∈ systemContracts, block.PragueNoAuthorityAt p.1) ∧ block.InstalledNoFrame
+
+/-- `SystemConfined` at every block a mid history touches. -/
+def MidHistoryTraceIn.SystemConfined {F : Fork → Prop} {cfg : ChainConfig} :
+    {start : Benv} → {future : BlockChain} → MidHistoryTraceIn F cfg start future → Prop
+  | _, _, .tail block _ => block.SystemConfined
+  | _, _, .step prior block => prior.SystemConfined ∧ block.SystemConfined
+
+/-- What a fork installs is at a system address. -/
+theorem mem_systemTargets_of_installedAt {f : Fork} {a : Adr} (h : a ∈ (installedAt f).map Prod.fst) :
+    a ∈ systemTargets := by
+  have all : ∀ f, ((installedAt f).map Prod.fst).all (fun a => a ∈ systemTargets) = true := by
+    intro f
+    cases f <;> decide +kernel
+  exact of_decide_eq_true (List.all_eq_true.mp (all f) a h)
+
+/-- A confined block's system frames miss an account outside the system addresses. -/
+theorem ConfiguredBlockTraceIn.system_ne {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
+    (block : ConfiguredBlockTraceIn F cfg pre post) (hHist : HistFork block.fork) (confined : block.SystemConfined)
+    {T : Adr} (notSystem : T ∉ systemTargets) :
+    ∀ root ∈ block.systemRawFrames, root.sevm.currentTarget ≠ T := fun root member eq =>
+  notSystem (eq ▸ mem_systemTargets_of_installedAt
+    (block.systemFrames_target_of_installedAt hHist confined.1 confined.2.1 confined.2.2 root member))
+
+/-- **No system frame of a confined mid history targets an account outside the system addresses.** -/
+theorem MidHistoryTraceIn.system_ne {F : Fork → Prop} {cfg : ChainConfig} (hHist : ∀ f, F f → HistFork f)
+    {start : Benv} {future : BlockChain} (trace : MidHistoryTraceIn F cfg start future)
+    (confined : trace.SystemConfined) {T : Adr} (notSystem : T ∉ systemTargets) :
+    ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ T := by
+  induction trace with
+  | tail block cut =>
+    intro root member
+    refine block.system_ne (hHist _ block.forkIn) confined notSystem root ?_
+    exact List.mem_append_right _ member
+  | step prior block ih =>
+    intro root member
+    rcases List.mem_append.mp member with early | late
+    · exact ih confined.1 root early
+    · exact block.system_ne (hHist _ block.forkIn) confined.2 notSystem root late
 
 end Blanc.ExecutionTrace

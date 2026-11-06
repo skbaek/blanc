@@ -9,7 +9,7 @@ Laws a reader's `eth_getLogs` check rests on, per frame of the certified code:
 * `frame_rows_raised_logs`: a frame, not deprecated, that raises a tracked allowance row from empty logs `Approval`;
 * `confiscates_logs`, `confiscates_listed`: `destroyBlackFunds` on `h` logs `DestroyedBlackFunds(h, _)` and finds `h` listed;
 * `deprecate_logs`, `addBlackList_logs`: those powers log;
-* `frame_flag_keep`: only `deprecate` writes slot 10.
+* `frame_flag_keep`: only `deprecate` writes slot 10, under `UsdtKeysFresh`.
 
 The three owner events are `LOG1` with the address in data, not a topic, so a reader filters by topic and reads the data.
 `Mem.Wf F.pre.memory` is the same premise as `frame_balanceOf_answer`'s: an entered frame's memory is empty.
@@ -515,21 +515,110 @@ theorem flagSites_ok :
     (wsRoot UsdtWs.implWsAnn).all (fun s => s.slot != .const 10 || hasSel selTerm [0x0753c30c] s) = true := by
   decide +kernel
 
-/-- **A frame, not deprecated, on any other selector than `deprecate` keeps slot 10.** `apart` is hash freshness: no
-other site's key is 10. With `deprecate_logs` and the receipt link, no `Deprecate` log from a state with the flag clear
-keeps it clear across every frame. -/
-theorem frame_flag_keep {F : Exec.Frame} (good : CodeFrame T HistFork code F) (target : F.sevm.currentTarget = T)
-    (live : NotDeprecated T F)
-    (apart : ∀ s ∈ wsRoot UsdtWs.implWsAnn, s.slot.Den (Env.root F.sevm) 10 → s.slot = .const 10)
+/-- A site whose slot the certificate cannot name is on a `top` selector, which frame laws cover. -/
+theorem unknownSites_ok :
+    (wsRoot UsdtWs.implWsAnn).all (fun s => s.slot.known || hasSel selTerm topSelectors s) = true := by
+  decide +kernel
+
+/-- A term whose key says its shape: a constant, an entry or a row. -/
+def keyShaped : Term → Bool
+  | .const _ => true
+  | .kecc _ (.const _) => true
+  | .kecc _ (.kecc _ (.const _)) => true
+  | _ => false
+
+/-- A raw key from a key-shaped term comes from that constant. -/
+theorem const_of_raw_key {ε : Env} {t : Term} {x : B256} (shape : keyShaped t = true) (key : termKey ε t = .raw x) :
+    t = .const x := by
+  match t, shape, key with
+  | .const c, _, key =>
+    cases key
+    rfl
+  | .kecc _ (.const _), _, key => cases key
+  | .kecc _ (.kecc _ (.const _)), _, key => cases key
+
+/-- Every named slot of the certificate is key-shaped. -/
+theorem knownSites_shaped :
+    (wsRoot UsdtWs.implWsAnn).all (fun s => !s.slot.known || keyShaped s.slot) = true := by
+  decide +kernel
+
+/-- **A frame, not deprecated, on any other selector than `deprecate` keeps slot 10.** The hash premise is the
+`CoinKey.raw 10` of `UsdtKeysFresh`: no site's key, no entry and no row lands on the word. `top` sites name no key, so
+their four selectors go through their frame laws. -/
+theorem frame_flag_keep {F : Exec.Frame} (hF : F ∈ frames) (keys : UsdtKeysFresh h frames)
+    (good : CodeFrame T HistFork code F) (target : F.sevm.currentTarget = T) (live : NotDeprecated T F)
     (other : Blanc.Sevm.selector F.sevm ≠ 0x0753c30c) :
     (F.post.getStor T).get 10 = (F.pre.getStor T).get 10 := by
+  have run := codeFrame_run good
+  have fork : HistFork F.sevm.benvStat.fork := good.2.2.1
   have C := certFrame good target live
+  have hdep : flag20 ((Devm.getStor (St F.pre F.pre.stack F.pre.memory F.pre.gasLeft) F.sevm.currentTarget).get 10) = 0 := by
+    simp only [St_getStor, target]
+    exact live
+  have ko : CoinKey.map 2 (ownerOf (Devm.getStor F.pre T)).toB256 ∈ KeyList h frames := by
+    have m := owner_mem (h := h) hF
+    unfold ownerKey at m
+    rwa [target] at m
+  have oneFlag : (1 : B256) ≠ 10 := by decide
+  by_cases s1 : Blanc.Sevm.selector F.sevm = 0xa9059cbb
+  · obtain ⟨-, -, -, st⟩ := frame_transfer fork s1 hdep run
+    simp only [St_getStor, target] at st
+    have K := transferKeys (h := h) hF s1
+    rw [st]
+    exact moveStor_get_ne (bal_ne_zero keys K.caller) (bal_ne_zero keys K.dst) (bal_ne_flag keys K.caller)
+      (bal_ne_flag keys K.dst) (bal_ne_flag keys ko)
+  by_cases s2 : Blanc.Sevm.selector F.sevm = 0x23b872dd
+  · obtain ⟨-, -, -, -, st⟩ := frame_transferFrom fork s2 hdep run
+    simp only [St_getStor, target] at st
+    have K := fromKeys (h := h) hF s2
+    have row0 : allowSlot (Sevm.dataWord F.sevm 4).toAdr F.sevm.caller ≠ 0 := fun eq => by
+      have := keys.2 _ K.row _ (zero_mem (h := h) (frames := frames)) eq
+      cases this
+    have rowFlag : allowSlot (Sevm.dataWord F.sevm 4).toAdr F.sevm.caller ≠ 10 := fun eq => by
+      have := keys.2 _ K.row _ (flag_mem (h := h) (frames := frames)) eq
+      cases this
+    have ownerSpend : ownerOf (spendStor (Devm.getStor F.pre T) (Sevm.dataWord F.sevm 4).toAdr F.sevm.caller
+        (Sevm.dataWord F.sevm 68)) = ownerOf (Devm.getStor F.pre T) := by
+      unfold spendStor
+      split
+      · rfl
+      · exact ownerOf_set row0
+    rw [st, moveStor_get_ne (bal_ne_zero keys K.src) (bal_ne_zero keys K.dst) (bal_ne_flag keys K.src)
+      (bal_ne_flag keys K.dst) (by rw [ownerSpend]; exact bal_ne_flag keys ko)]
+    exact spendStor_get_ne rowFlag
+  by_cases s3 : Blanc.Sevm.selector F.sevm = 0xcc872b66
+  · obtain ⟨-, st⟩ := frame_issue fork s3 run
+    simp only [target] at st
+    rw [st]
+    exact issueStor_get_ne oneFlag (bal_ne_flag keys ko)
+  by_cases s4 : Blanc.Sevm.selector F.sevm = 0xdb006a75
+  · obtain ⟨-, st⟩ := frame_redeem fork s4 run
+    simp only [target] at st
+    rw [st]
+    exact redeemStor_get_ne oneFlag (bal_ne_flag keys ko)
+  have notTop : Blanc.Sevm.selector F.sevm ∉ topSelectors := by
+    simp only [topSelectors, List.mem_cons, List.not_mem_nil, or_false, not_or]
+    exact ⟨s1, s2, s3, s4⟩
   refine frame_cellInv F C.stateGas C.hasCode _ (Inv := fun v => v = (F.pre.getStor T).get 10) rfl ?_
   intro m member w found _ key _
   obtain ⟨site, inRoot, den, guards, -⟩ := successfulSstore_site cert_check usdt_wsCert C.pc C.code C.stateGas
     (C.chain member found) found
   rw [key] at den
-  have constant := apart site inRoot den
+  have known : site.slot.known = true := by
+    rcases Bool.or_eq_true _ _ ▸ List.all_eq_true.mp unknownSites_ok site inRoot with known | top
+    · exact known
+    · have hsel := hasSel_sound top rfl guards
+      rw [selTerm_eval] at hsel
+      exact absurd hsel notTop
+  have named := List.mem_append_right (topKeys frames)
+    (CoinKeysFresh.site_mem (balBase := 2) (allowBase := 5) (h := h) (sites := wsRoot UsdtWs.implWsAnn) hF inRoot guards known)
+  have same := keys.2 _ named _ (flag_mem (h := h) (frames := frames)) (by
+    rw [termKey_slot]
+    exact (den known).symm)
+  have shape : keyShaped site.slot = true := by
+    have row := List.all_eq_true.mp knownSites_shaped site inRoot
+    simpa only [known, Bool.not_true, Bool.false_or] using row
+  have constant : site.slot = .const 10 := const_of_raw_key shape same
   have row := List.all_eq_true.mp flagSites_ok site inRoot
   simp only [constant, bne_self_eq_false, Bool.false_or] at row
   have hsel := hasSel_sound row rfl guards
