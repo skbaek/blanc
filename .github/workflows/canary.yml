@@ -87,6 +87,20 @@ jobs:
           sh elan-init.sh -y --default-toolchain "$(cat lean-toolchain)"
           echo "$HOME/.elan/bin" >> "$GITHUB_PATH"
 
+      # The kernel-Keccak creation modules (Usdc.Impl{V2,V2_1,V2_2}Creation.SigningHash)
+      # peak near 9 GiB each and become ready together, and other modules reach
+      # 5-7 GiB, on a runner with 16 GiB of memory. Runs from 2026-11-03 on died at
+      # the same build position with "The runner has received a shutdown signal"
+      # and exit 143, before any cache save, so every later run was cold too. Swap
+      # lets a coincidence of heavy modules run slowly instead of killing the job.
+      - name: Add swap for coinciding heavy modules
+        run: |
+          sudo fallocate -l 32G /mnt/blanc-swap
+          sudo chmod 600 /mnt/blanc-swap
+          sudo mkswap /mnt/blanc-swap
+          sudo swapon /mnt/blanc-swap
+          free -h
+          df -h / /mnt
       - name: Build blanc against jaune HEAD
         run: |
           lake update jaune          # re-resolve the manifest to the re-pinned HEAD
