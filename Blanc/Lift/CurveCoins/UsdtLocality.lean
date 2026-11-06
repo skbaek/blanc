@@ -1,4 +1,4 @@
-import Blanc.Lift.BalanceLocality
+import Blanc.Lift.CoinKeys
 import Blanc.Lift.CurveCoins.Usdt
 import Blanc.Lift.CurveCoins.Sel
 import Blanc.Lift.CurveCoins.UsdtQuiet
@@ -53,8 +53,6 @@ def selTerm : Term :=
 theorem selTerm_eval (e : Sevm) : selTerm.eval (Env.root e) = Blanc.Sevm.selector e := by
   rw [← legacy_selector_word e, B256.and_comm, show (Bytes.toB256 [0x00] : B256) = 0 by decide]
   rfl
-
-theorem cd_eval (e : Sevm) (i : B256) : (Term.cd (.const i)).eval (Env.root e) = Sevm.dataWord e i := rfl
 
 /-- The selectors with a `top` balance site, which frame laws cover: `transfer`, `transferFrom`, `issue`, `redeem`. -/
 def topSelectors : List B256 := [0xa9059cbb, 0x23b872dd, 0xcc872b66, 0xdb006a75]
@@ -131,39 +129,28 @@ theorem owner_mem {F : Exec.Frame} (hF : F ∈ frames) : ownerKey F ∈ KeyList 
   List.mem_append_left _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ (List.mem_map.mpr ⟨F, hF, rfl⟩)))
 
 theorem held_mem : CoinKey.map 2 h.toB256 ∈ KeyList h frames :=
-  List.mem_append_right _ (CoinKeysFresh.held_mem (sites := wsRoot UsdtWs.implWsAnn) (frames := frames))
+  Blanc.Lift.held_mem
 
 theorem row_mem {F : Exec.Frame} (hF : F ∈ frames) :
     CoinKey.row 5 h.toB256 F.sevm.caller.toB256 ∈ KeyList h frames :=
-  List.mem_append_right _ (CoinKeysFresh.row_mem (sites := wsRoot UsdtWs.implWsAnn) hF)
+  frame_row_mem hF
 
 /-- A site of the frame's selector names its key. -/
 theorem site_mem {F : Exec.Frame} (hF : F ∈ frames) {slot : Term} {sel : B256} {ni : Bool}
     (hs : (⟨slot, [(selTerm, sel)], ni⟩ : Site) ∈ wsRoot UsdtWs.implWsAnn) (hk : slot.known = true)
     (hsel : Blanc.Sevm.selector F.sevm = sel) : termKey (Env.root F.sevm) slot ∈ KeyList h frames :=
-  List.mem_append_right _ (CoinKeysFresh.site_mem (sites := wsRoot UsdtWs.implWsAnn) hF hs (by
-    intro g hg known
-    simp only [List.mem_singleton] at hg
-    subst hg
-    exact hsel.symm.trans (selTerm_eval _).symm) hk)
+  site_key_mem selTerm_eval hF hs hk hsel
 
 theorem map_key_mem {F : Exec.Frame} (hF : F ∈ frames) {key : Term} {sel : B256} {ni : Bool}
     (hs : (⟨.kecc (.op2 .and key addrMaskT) (.const 2), [(selTerm, sel)], ni⟩ : Site) ∈ wsRoot UsdtWs.implWsAnn)
     (hk : key.known = true) (hsel : Blanc.Sevm.selector F.sevm = sel) :
-    CoinKey.map 2 (key.eval (Env.root F.sevm)).toAdr.toB256 ∈ KeyList h frames := by
-  have := site_mem (h := h) hF hs (by simp only [Term.known, hk, Bool.and_self, addrMaskT]) hsel
-  simpa only [termKey, addrMaskT_eval] using this
-
-theorem caller_eval (e : Sevm) : (Term.caller.eval (Env.root e)).toAdr.toB256 = e.caller.toB256 := by
-  change (e.caller.toB256).toAdr.toB256 = _
-  rw [toAdr_toB256]
+    CoinKey.map 2 (key.eval (Env.root F.sevm)).toAdr.toB256 ∈ KeyList h frames :=
+  Blanc.Lift.map_key_mem selTerm_eval hF hs hk hsel
 
 /-- A balance slot of a listed key equal to the holder's is the holder's. -/
 theorem bal_eq (keys : UsdtKeysFresh h frames) {a : Adr} (mem : CoinKey.map 2 a.toB256 ∈ KeyList h frames)
-    (eq : balSlot a = balSlot h) : a = h := by
-  have := keys.2 _ mem _ (held_mem (h := h) (frames := frames)) eq
-  injection this with _ e
-  exact Adr.toB256_inj e
+    (eq : balSlot a = balSlot h) : a = h :=
+  map_inj keys mem (held_mem (h := h) (frames := frames)) eq
 
 /-- The owner word's slot is no listed balance slot. -/
 theorem bal_ne_zero (keys : UsdtKeysFresh h frames) {a : Adr} (mem : CoinKey.map 2 a.toB256 ∈ KeyList h frames) :
@@ -197,18 +184,8 @@ end Keys
 
 /-- A good frame's run through the certificate. -/
 theorem codeFrame_run {T : Adr} {F : Exec.Frame} (good : CodeFrame T HistFork code F) :
-    SFunc.Run cert.prog F.sevm (St F.pre F.pre.stack F.pre.memory F.pre.gasLeft) t_0000_c0 (.halted F.post) := by
-  obtain ⟨pc, sevm, pre, out, run, committed⟩ := F
-  obtain ⟨hpc, hcode, fork, -⟩ := good
-  dsimp only at hpc hcode fork
-  subst hpc
-  cases out with
-  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
-  | ok post =>
-    obtain ⟨f, hf0, hrun⟩ := lift_sound_noStateGas cert_check hcode fork.stateGas_none run
-    obtain rfl : f = t_0000_c0 := Option.some.inj (hf0.symm.trans rfl)
-    rw [St.self' pre] at hrun
-    exact hrun
+    SFunc.Run cert.prog F.sevm (St F.pre F.pre.stack F.pre.memory F.pre.gasLeft) t_0000_c0 (.halted F.post) :=
+  run_of_frame cert_check rfl good.1 good.2.1 good.2.2.1.stateGas_none
 
 /-- A good frame, not deprecated, is a `CertFrame`: it has no descendant, static or not. -/
 theorem certFrame {T : Adr} {G : Exec.Frame} (good : CodeFrame T HistFork code G)
