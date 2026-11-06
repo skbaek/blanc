@@ -47,6 +47,10 @@ def ExitWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
     bout'.cumulativeGasUsed = bout.cumulativeGasUsed + exitGasUsed benv.state tx.data E a ∧
     ExitPaid benv.state st E a
 
+/-- The gas limit an exit needs: what it spends before its refund, and `callRoom`. -/
+def exitLimit (w : State) (data : Bytes) (E : Adr) (a : Nat) : Nat :=
+  exitGasUsed w data E a + exitRefund w E a + callRoom
+
 /-- **A holder can leave.** At any moment of mainnet after the minter assignment, a holder's admissible
 `remove_liquidity` transaction, with no named power in force against it, is processed at exact gas and
 pays each coin's share. -/
@@ -54,7 +58,7 @@ def lp_exit : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
     ∀ (tx : Tx) (E : Adr) (a : Nat) (mins : V3),
       tx.data = exitCalldata a mins →
-      TxAdmitted m.benv m.bout tx E (exitGasUsed m.world tx.data E a + exitRefund m.world E a + callRoom) →
+      TxAdmitted m.benv m.bout tx E (exitLimit m.world tx.data E a) →
       CoinsOpen m.world E → ExitRequest m.world E a mins →
       ExitWorks m.benv m.bout tx m.nextIndex E a
 
@@ -104,6 +108,10 @@ def SwapWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
     swapAdmin benv.state benv.stat.time.toNat i j dx = some admin ∧
     SwapPaid benv.state st E i j dx dy admin
 
+/-- The gas limit a swap using `gas` needs: what it spends before its refund, and `callRoom`. -/
+def swapLimit (w : State) (E : Adr) (i j : Fin 3) (dx dy gas : Nat) : Nat :=
+  gas + swapRefund w E i j dx dy (allowanceOf w E i) + callRoom
+
 /-- **A swap works.** At any moment of mainnet after the minter assignment, an admissible `exchange`
 transaction, with no named power in force against it, is processed at exact gas and pays what the
 curve quotes. -/
@@ -112,9 +120,7 @@ def swap : Prop :=
     ∀ (tx : Tx) (E : Adr) (i j : Fin 3) (dx dy minDy gas : Nat),
       tx.data = swapCalldata i j dx minDy →
       swapGasUsed m.world tx.data E m.benv.stat.time.toNat i j dx = some gas →
-      TxAdmitted m.benv m.bout tx E
-        (gas + swapRefund m.world E i j dx dy (allowanceOf m.world E i) + callRoom) →
-      CoinsOpen m.world E →
+      TxAdmitted m.benv m.bout tx E (swapLimit m.world E i j dx dy gas) → CoinsOpen m.world E →
       SwapRequest m.world E m.benv.stat.time.toNat i j dx dy minDy →
       SwapWorks m.benv m.bout tx m.nextIndex E i j dx dy
 
