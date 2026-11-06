@@ -153,16 +153,30 @@ theorem ri_stepXH {sevm : Sevm} {b b' d : Devm} {S S' : List B256} {M M' : Mem} 
       · rfl
     exact ri_stepX_nonstorage hl hw h (e.symm.trans hs)
 
+open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
+/-- Succeeds exactly when the local context holds a hypothesis headed by `Blanc.CoveredFork`
+(`covered`) or by `Blanc.HistFork`: `istep` picks its fork lemma by it, because a failed
+`‹CoveredFork _›` inside a term is logged, not thrown, so `first` would not fall through. -/
+elab "fork_hyp_in_ctx " which:ident : tactic => withMainContext do
+  let head := if which.getId.eraseMacroScopes == `covered then ``Blanc.CoveredFork else ``Blanc.HistFork
+  let found := (← getLCtx).decls.foldl (init := false) fun found decl? =>
+    found || match decl? with
+      | some decl => decl.type.getAppFn.isConstOf head
+      | none => false
+  unless found do throwError "no {which.getId} fork hypothesis in context"
+
 /-- One straight-line step of a cut run, over the covered forks or, from a `HistFork` hypothesis,
 over every historical fork (`SLOAD`/`SSTORE` then leave `afterSloadH`/`afterSstoreH`). -/
 macro "istep " h:ident : tactic => `(tactic|
   first
   | (have h' := ric_dest $h; clear $h; obtain ⟨_, $h:ident⟩ := h')
-  | (have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
+  | (fork_hyp_in_ctx covered
+     have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
      obtain ⟨_, e⟩ := ri_stepX ‹CoveredFork _› hd rfl
      try dsimp only [List.set, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at e
      subst e; clear hd)
-  | (have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
+  | (fork_hyp_in_ctx hist
+     have h' := ric_next $h; clear $h; obtain ⟨_, hd, $h:ident⟩ := h'
      obtain ⟨_, e⟩ := ri_stepXH ‹HistFork _› hd rfl
      try dsimp only [List.set, Fin.isValue, Fin.val_zero, Fin.val_one, Fin.val_two] at e
      subst e; clear hd))
