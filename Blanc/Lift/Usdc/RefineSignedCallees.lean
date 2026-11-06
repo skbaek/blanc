@@ -86,7 +86,7 @@ variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 
 /-- **Entry 110, `_requireUnusedAuthorization(a, n)`**: reads the authorization-state word of
 `(a, n)` and requires its low byte clear. -/
-theorem e110_inv {n a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e110_inv {n a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (n :: a :: ret :: S) M G) t_524e_c110 o) :
     boolBit ((Devm.getStor b sevm.currentTarget).get (authSlot a.toAdr n)) = false ∧
       ∃ b' M' G', o = .returned (St b' S M' G') ∧ Devm.getStor b' = Devm.getStor b := by
@@ -98,11 +98,11 @@ theorem e110_inv {n a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSta
   obtain ⟨_, e⟩ := ric_ret h
   cases e
   rw [keccak_scratch, keccak_scratch, word_ff20, lit16, gsv] at c
-  exact ⟨boolBit_false_of_check c, _, _, _, rfl, funext fun x => afterSload_getStor _ _ _ x⟩
+  exact ⟨boolBit_false_of_check c, _, _, _, rfl, funext fun x => afterSloadH_getStor _ _ _ x⟩
 
 /-- **Entry 112, `_requireValidAuthorization(a, n, validAfter, validBefore)`**: the time window,
 then entry 110. -/
-theorem e112_inv {vb va n a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e112_inv {vb va n a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (vb :: va :: n :: a :: ret :: S) M G) t_4dc8_c112 o) :
     va < sevm.benvStat.time ∧ sevm.benvStat.time < vb ∧
       boolBit ((Devm.getStor b sevm.currentTarget).get (authSlot a.toAdr n)) = false ∧
@@ -134,7 +134,7 @@ theorem e112_inv {vb va n a ret : B256} {o : Outcome} (fork : CoveredFork sevm.b
   exact ⟨B256.lt_of_gtCheck_ne_zero c1, B256.lt_of_ltCheck_ne_zero c2, c3, _, _, _, rfl, s1⟩
 
 /-- **Entry 113, `_markAuthorizationAsUsed(a, n)`**: the authorization-state write at `0x5060`. -/
-theorem e113_inv {n a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.fork)
+theorem e113_inv {n a ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.Run cert.prog sevm (St b (n :: a :: ret :: S) M G) t_5006_c113 o) :
     ∃ b' M' G', o = .returned (St b' S M' G') ∧ Devm.getStor b' sevm.currentTarget =
       (Devm.getStor b sevm.currentTarget).set (authSlot a.toAdr n)
@@ -149,14 +149,14 @@ theorem e113_inv {n a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvSta
   rw [Devm.addLog_getStor] at sB
   refine ⟨B, MB, GB, eo, ?_⟩
   rw [sB]
-  rw [afterSstore_getStor_self, keccak_scratch, keccak_scratch, word_ff20, lit16, afterSload_getStor,
+  rw [afterSstoreH_getStor_self, keccak_scratch, keccak_scratch, word_ff20, lit16, afterSloadH_getStor,
     gsv]
   rfl
 
 /-- **The tail of `_cancelAuthorization`** after its signature check (`t_4ac3_c89`): the
 authorization-state write at `0x4b1d`, for any cut and any continuation. -/
 theorem k89_cancel_inv {sig n a ret : B256} {C : List Nat} {r : Seg}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : HistFork sevm.benvStat.fork)
     (run : SFunc.RunCut cert.prog sevm C (St b (sig :: n :: a :: ret :: S) M G) t_4ac3_c89 r) :
     ∃ b' M' G', r = .done (.returned (St b' S M' G')) ∧ Devm.getStor b' sevm.currentTarget =
       (Devm.getStor b sevm.currentTarget).set (authSlot a.toAdr n)
@@ -169,7 +169,7 @@ theorem k89_cancel_inv {sig n a ret : B256} {C : List Nat} {r : Seg}
   subst e
   refine ⟨_, _, _, rfl, ?_⟩
   rw [Devm.addLog_getStor]
-  rw [afterSstore_getStor_self, keccak_scratch, keccak_scratch, word_ff20, lit16, afterSload_getStor,
+  rw [afterSstoreH_getStor_self, keccak_scratch, keccak_scratch, word_ff20, lit16, afterSloadH_getStor,
     gsv]
   rfl
 

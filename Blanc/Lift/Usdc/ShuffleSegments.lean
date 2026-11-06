@@ -1,4 +1,5 @@
 import Blanc.Lift.ShuffleSkip
+import Blanc.HistoricalFork
 import Blanc.Lift.CallSiteChildren
 import Blanc.Lift.Usdc.Impl.Cert
 
@@ -41,14 +42,14 @@ from the return of `_requireValidAuthorization` (entry 112) to the call of `_req
 (entry 111).** -/
 theorem ric_seg_e90 {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 : B256} {R : List B256}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: R) M G)
         (t_4b55_c90) r) :
     ∃ b' u0 M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x4e88 :: x0 :: u0 :: x6 :: Nat.toB256 0x467d
         :: x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: R) M' G') (.callNext 111 t_467d_c90) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3, x4, x5, x6]) fork.stateGas_none
     (fun _ hk => absurd hk List.not_mem_nil) seg_e90_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -65,14 +66,14 @@ theorem seg_e95_check : shuffle cert.prog cert.entries [] (.callNext 111 t_467d_
 return of entry 112 to the call of entry 111.** -/
 theorem ric_seg_e95 {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 : B256} {R : List B256}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: R) M G)
         (t_45eb_c95) r) :
     ∃ b' u0 M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x4e88 :: x0 :: u0 :: x6 :: Nat.toB256 0x467d
         :: x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: R) M' G') (.callNext 111 t_467d_c95) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3, x4, x5, x6]) fork.stateGas_none
     (fun _ hk => absurd hk List.not_mem_nil) seg_e95_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -89,13 +90,13 @@ theorem seg_e89_check : shuffle cert.prog cert.entries [] (.callNext 111 t_4ac3_
 return of `abi.encodePacked(r, s, v)` (entry 110) to the call of entry 111.** -/
 theorem ric_seg_e89 {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 : B256} {R : List B256}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: R) M G) (t_4a49_c89) r) :
     ∃ b' u0 M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x4e88 :: x0 :: u0 :: x2 :: Nat.toB256 0x4ac3
         :: x0 :: x1 :: x2 :: R) M' G') (.callNext 111 t_4ac3_c89) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2]) fork.stateGas_none
     (fun _ hk => absurd hk List.not_mem_nil) seg_e89_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -129,7 +130,7 @@ theorem ric_seg_e8digest_noStateGas {sevm : Sevm} {C : List Nat} {r : Seg}
 /-- Covered-fork compatibility projection of the permit digest shuffle step. -/
 theorem ric_seg_e8digest {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 : B256} {R : List
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 : B256} {R : List
         B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
@@ -137,7 +138,7 @@ theorem ric_seg_e8digest {sevm : Sevm} {C : List Nat} {r : Seg}
     ∃ b' u0 M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x508b :: u0 :: x5 :: x6 :: x7 :: x8 :: x9 ::
         x10 :: x11 :: R) M' G') (.callNext 79 t_47d3_c8) r := by
-  exact ric_seg_e8digest_noStateGas hP fork.rules_stateGas_none run
+  exact ric_seg_e8digest_noStateGas hP fork.stateGas_none run
 
 /-- The shuffle check of entry 8: the ABI encoding of the signature check's calldata, from the
 return of entry 79 to the head of the signature-bytes copy loop. -/
@@ -152,7 +153,7 @@ theorem seg_e8encode_check : shuffle cert.prog cert.entries [] (t_4848_c8) 0x484
 entry 79 to the head of the signature-bytes copy loop.** -/
 theorem ric_seg_e8encode {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 : B256} {R : List B256}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: R) M G)
         (t_47d3_c8) r) :
@@ -161,7 +162,7 @@ theorem ric_seg_e8encode {sevm : Sevm} {C : List Nat} {r : Seg}
         :: u7 :: x2 :: x0 :: x6 :: Nat.toB256 0x6ccea652 :: Nat.toB256
         0x800c32eaa2a6c93cf4cb51794450ed77fbfbb172 :: x0 :: x2 :: x3 :: x4 :: x5 :: x6 :: R) M' G')
         (t_4848_c8) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3, x4, x5, x6]) fork.stateGas_none
     (fun _ hk => absurd hk List.not_mem_nil) seg_e8encode_check rfl run
   carried_out hY h
   exact ⟨b', _, _, _, _, _, _, _, _, M', G', hs, h⟩
@@ -180,7 +181,7 @@ theorem seg_e8exit_check : shuffle cert.prog cert.entries [9] (SFunc.lineDrop 3 
 to the `DELEGATECALL`.** -/
 theorem ric_seg_e8exit {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) (hC : 9 ∉ C) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) (hC : 9 ∉ C) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12
         x13 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
@@ -188,8 +189,8 @@ theorem ric_seg_e8exit {sevm : Sevm} {C : List Nat} {r : Seg}
     ∃ b' u0 u1 u2 u3 u4 M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (u0 :: x13 :: u1 :: u2 :: u3 :: Nat.toB256 0x20 :: u4 ::
         x12 :: x13 :: R) M' G') (SFunc.lineDrop 3 t_48ac_c9) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9,
-      x10, x11, x12, x13]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9,
+      x10, x11, x12, x13]) fork.stateGas_none
     (fun k hk => by rw [List.mem_singleton] at hk; subst hk; exact hC) seg_e8exit_check rfl run
   carried_out hY h
   exact ⟨b', _, _, _, _, _, M', G', hs, h⟩
@@ -206,7 +207,7 @@ theorem seg_e80exit_check : shuffle cert.prog cert.entries [9] (SFunc.lineDrop 3
 iterations.** -/
 theorem ric_seg_e80exit {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) (hC : 9 ∉ C) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) (hC : 9 ∉ C) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 x10 x11 x12
         x13 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
@@ -214,8 +215,8 @@ theorem ric_seg_e80exit {sevm : Sevm} {C : List Nat} {r : Seg}
     ∃ b' u0 u1 u2 u3 u4 M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (u0 :: x13 :: u1 :: u2 :: u3 :: Nat.toB256 0x20 :: u4 ::
         x12 :: x13 :: R) M' G') (SFunc.lineDrop 3 t_48ac_c9) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9,
-      x10, x11, x12, x13]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9,
+      x10, x11, x12, x13]) fork.stateGas_none
     (fun k hk => by rw [List.mem_singleton] at hk; subst hk; exact hC) seg_e80exit_check rfl run
   carried_out hY h
   exact ⟨b', _, _, _, _, _, M', G', hs, h⟩
@@ -234,15 +235,15 @@ return-size check and the signature-validity check (each failing arm reverts), t
 `_approve` (entry 81).** -/
 theorem ric_seg_e9call {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 : B256} {R : List B256}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 x9 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
         :: x9 :: R) M G) (SFunc.lineDrop 4 t_48ac_c9) r) :
     ∃ b' M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x3e18 :: x7 :: x8 :: x9 :: Nat.toB256 0x494e
         :: x4 :: x5 :: x6 :: x7 :: x8 :: x9 :: R) M' G') (.callNext 81 t_494e_c9) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9])
-      fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8, x9])
+      fork.stateGas_none
     (fun _ hk => absurd hk List.not_mem_nil) seg_e9call_check rfl run
   carried_out hY h
   exact ⟨b', M', G', hs, h⟩

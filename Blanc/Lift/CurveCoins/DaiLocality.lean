@@ -1,4 +1,4 @@
-import Blanc.Lift.BalanceLocality
+import Blanc.Lift.CoinKeys
 import Blanc.Lift.CurveCoins.Dai
 import Blanc.Lift.CurveCoins.Sel
 import Blanc.Lift.CurveCoins.DaiPermit
@@ -57,8 +57,6 @@ theorem selTerm_eval (e : Sevm) : selTerm.eval (Env.root e) = Blanc.Sevm.selecto
   have shift : (0xe0 : B256).toNat = 224 := by decide
   change Sevm.dataWord e 0 >>> (0xe0 : B256).toNat = Sevm.dataWord e 0 >>> 224
   rw [shift]
-
-theorem cd_eval (e : Sevm) (i : B256) : (Term.cd (.const i)).eval (Env.root e) = Sevm.dataWord e i := rfl
 
 theorem staticOnly : ∀ f ∈ cert.prog, f.execsSatisfy Xinst.isStaticcall = true := by
   have all : cert.prog.all (fun f => f.execsSatisfy Xinst.isStaticcall) = true := by
@@ -224,14 +222,8 @@ noncomputable abbrev keyList (h : Adr) (frames : List Exec.Frame) : List CoinKey
 theorem map_key_mem {F : Exec.Frame} (hF : F ∈ frames) {key : Term} {sel : B256} {ni : Bool}
     (hs : (⟨.kecc (.op2 .and key addrMaskT) (.const 2), [(selTerm, sel)], ni⟩ : Site) ∈ wsRoot DaiWs.implWsAnn)
     (hk : key.known = true) (hsel : Blanc.Sevm.selector F.sevm = sel) :
-    CoinKey.map 2 (key.eval (Env.root F.sevm)).toAdr.toB256 ∈ keyList h frames := by
-  have := CoinKeysFresh.site_mem (sites := wsRoot DaiWs.implWsAnn) (balBase := 2) (allowBase := 3) (h := h)
-    hF hs (by
-      intro g hg known
-      simp only [List.mem_singleton] at hg
-      subst hg
-      exact hsel.symm.trans (selTerm_eval _).symm) (by simp only [Term.known, hk, Bool.and_self, addrMaskT])
-  simpa only [termKey, addrMaskT_eval] using this
+    CoinKey.map 2 (key.eval (Env.root F.sevm)).toAdr.toB256 ∈ keyList h frames :=
+  Blanc.Lift.map_key_mem (extra := []) selTerm_eval hF hs hk hsel
 
 /-- A row site of the frame's selector names its key. -/
 theorem row_key_mem {F : Exec.Frame} (hF : F ∈ frames) {o k : Term} {sel : B256} {ni : Bool}
@@ -239,22 +231,13 @@ theorem row_key_mem {F : Exec.Frame} (hF : F ∈ frames) {o k : Term} {sel : B25
       Site) ∈ wsRoot DaiWs.implWsAnn)
     (ho : o.known = true) (hk : k.known = true) (hsel : Blanc.Sevm.selector F.sevm = sel) :
     CoinKey.row 3 (o.eval (Env.root F.sevm)).toAdr.toB256 (k.eval (Env.root F.sevm)).toAdr.toB256 ∈
-      keyList h frames := by
-  have := CoinKeysFresh.site_mem (sites := wsRoot DaiWs.implWsAnn) (balBase := 2) (allowBase := 3) (h := h)
-    hF hs (by
-      intro g hg known
-      simp only [List.mem_singleton] at hg
-      subst hg
-      exact hsel.symm.trans (selTerm_eval _).symm) (by simp only [Term.known, ho, hk, Bool.and_self, addrMaskT])
-  simpa only [termKey, addrMaskT_eval] using this
+      keyList h frames :=
+  Blanc.Lift.row_key_mem (extra := []) selTerm_eval hF hs ho hk hsel
 
 /-- A named balance slot equal to the holder's is the holder's. -/
 theorem bal_eq (keys : CoinKeysFresh (wsRoot DaiWs.implWsAnn) 2 3 h frames) {a : Adr}
-    (mem : CoinKey.map 2 a.toB256 ∈ keyList h frames) (eq : balSlot a = balSlot h) : a = h := by
-  have := keys.2 _ mem _ (CoinKeysFresh.held_mem (sites := wsRoot DaiWs.implWsAnn) (frames := frames)
-    (balBase := 2) (allowBase := 3) (h := h)) eq
-  injection this with _ e
-  exact Adr.toB256_inj e
+    (mem : CoinKey.map 2 a.toB256 ∈ keyList h frames) (eq : balSlot a = balSlot h) : a = h :=
+  map_inj keys mem (Blanc.Lift.held_mem (extra := [])) eq
 
 /-- A named row is apart from the holder's entry. -/
 theorem allow_ne (keys : CoinKeysFresh (wsRoot DaiWs.implWsAnn) 2 3 h frames) {o s : Adr}
@@ -280,18 +263,8 @@ end Keys
 
 /-- A good frame's run through the certificate. -/
 theorem codeFrame_run {T : Adr} {F : Exec.Frame} (good : CodeFrame T HistFork code F) :
-    ∃ S M G, SFunc.Run cert.prog F.sevm (St F.pre S M G) t_0000_c0 (.halted F.post) := by
-  obtain ⟨pc, sevm, pre, out, run, committed⟩ := F
-  obtain ⟨hpc, hcode, fork, -⟩ := good
-  dsimp only at hpc hcode fork
-  subst hpc
-  cases out with
-  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
-  | ok post =>
-    obtain ⟨f, hf0, hrun⟩ := lift_sound_noStateGas cert_check hcode fork.stateGas_none run
-    obtain rfl : f = t_0000_c0 := Option.some.inj (hf0.symm.trans rfl)
-    rw [St.self' pre] at hrun
-    exact ⟨_, _, _, hrun⟩
+    ∃ S M G, SFunc.Run cert.prog F.sevm (St F.pre S M G) t_0000_c0 (.halted F.post) :=
+  ⟨_, _, _, run_of_frame cert_check rfl good.1 good.2.1 good.2.2.1.stateGas_none⟩
 
 section Frame
 

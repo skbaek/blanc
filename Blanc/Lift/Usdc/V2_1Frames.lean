@@ -97,7 +97,8 @@ theorem e73_inv {v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.
           (balSlot t.toAdr)).toNat < 2 ^ 256 ∧
       ∃ b' M' G', o = .returned (St b' S M' G') ∧ Mem.Wf M' ∧
         Devm.getStor b' sevm.currentTarget =
-          moveStor (Devm.getStor b sevm.currentTarget) r.toAdr t.toAdr v := by
+          moveStor (Devm.getStor b sevm.currentTarget) r.toAdr t.toAdr v ∧
+        ∀ l ∈ b.logs, l ∈ b'.logs := by
   have h := run.cut
   clear run
   repeat ustep h
@@ -137,11 +138,15 @@ theorem e73_inv {v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.
   obtain ⟨_, e⟩ := ric_ret h
   clear h
   refine ⟨toNat_le_of_gtCheck_eq_zero (eq_zero_of_iszero_ne_zero c3), c5, _, _, _,
-    Seg.done.inj e, ?_, ?_⟩
+    Seg.done.inj e, ?_, ?_, ?_⟩
   · uwf
   · simp only [Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor, keccak_scratch,
       ff20_and_word, word_ff20, toAdr_toB256, lit9, gsv]
     rfl
+  · intro l hl
+    refine List.mem_append_left _ ?_
+    change l ∈ Devm.logs _
+    simpa only [afterSstoreH_logs, afterSloadH_logs] using hl
 
 /-- `paused`, the byte at offset 20 of slot 1. -/
 def pausedByte (σ : Stor) : B256 :=
@@ -178,7 +183,7 @@ theorem e30_inv {v t ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.fo
   ibranch h c3
   repeat ustep h
   ucall h hc 73 t_3b21_c73
-  obtain ⟨d1, d2, B, MB, GB, e, wfb, sB⟩ := e73_inv fork (by uwf) hc
+  obtain ⟨d1, d2, B, MB, GB, e, wfb, sB, -⟩ := e73_inv fork (by uwf) hc
   cases e
   clear hc
   simp only [toAdr_toB256, afterSloadH_getStor] at d1 d2 sB
@@ -267,7 +272,7 @@ theorem e58_inv {v t r ret : B256} {o : Outcome} (fork : HistFork sevm.benvStat.
   umemw h wf
   repeat ustep h
   ucall h hc 73 t_3b21_c73
-  obtain ⟨d1, d2, B, MB, GB, e, wfb, sB⟩ := e73_inv fork (by uwf) hc
+  obtain ⟨d1, d2, B, MB, GB, e, wfb, sB, -⟩ := e73_inv fork (by uwf) hc
   cases e
   clear hc wf
   simp (config := { failIfUnchanged := false }) only [afterSloadH_getStor] at d1 d2 sB

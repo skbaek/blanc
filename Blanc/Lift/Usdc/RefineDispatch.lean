@@ -141,10 +141,10 @@ theorem decodeCall_sel {e : Sevm} {c : Call} (h : decodeCall e = some c) :
 
 /-- A successful implementation frame starts at entry `0` of the certificate, in the cut form. -/
 theorem impl_run_cut {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
-    (code : sevm.code = Impl.code) (fork : CoveredFork sevm.benvStat.fork) :
+    (code : sevm.code = Impl.code) (fork : HistFork sevm.benvStat.fork) :
     SFunc.RunCut implProg sevm [] (St pre pre.stack pre.memory pre.gasLeft) Impl.t_0000_c0
       (.done (.halted post)) := by
-  obtain ⟨f, hf, frun⟩ := lift_sound Impl.cert_check code fork run
+  obtain ⟨f, hf, frun⟩ := lift_sound_noStateGas Impl.cert_check code fork.stateGas_none run
   rw [show Impl.cert.prog = implProg from rfl, prog_zero] at hf
   cases hf
   rw [← St.self rfl rfl]
@@ -155,7 +155,7 @@ leaves the persistent state as it found it. -/
 theorem impl_view_state {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
     (code : sevm.code = Impl.code) (fork : CoveredFork sevm.benvStat.fork)
     (dec : decodeCall sevm = some .view) : post.state = pre.state := by
-  obtain ⟨-, -, M, G, drun⟩ := impl_preamble_cut (impl_run_cut run code fork)
+  obtain ⟨-, -, M, G, drun⟩ := impl_preamble_cut (impl_run_cut run code fork.histFork)
   have routes := List.all_eq_true.mp view_routes _ ((decodeCall_sel dec).1 rfl)
   split at routes
   · rename_i p hw
@@ -234,7 +234,7 @@ theorem impl_body {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok po
     {w g : SFunc} (sel : Blanc.Sevm.selector sevm = σ) (route : dispTree.selWalk σ = .inl (σ, j))
     (hw : implProg[j]? = some w) (hc : w.toCall k = true) (hg : implProg[k]? = some g) :
     ∃ d o, d.state = pre.state ∧ SFunc.Run implProg sevm d g o := by
-  obtain ⟨-, -, M, G, drun⟩ := impl_preamble_cut (impl_run_cut run code fork)
+  obtain ⟨-, -, M, G, drun⟩ := impl_preamble_cut (impl_run_cut run code fork.histFork)
   rw [sel] at drun
   obtain ⟨-, w', G', hw', wrun⟩ := SFunc.RunCut.selWalk_inl route drun
   rw [hw] at hw'
@@ -371,7 +371,7 @@ one of the dispatcher's 55, and its calldata holds that row's static head. -/
 theorem impl_decodes {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
     (code : sevm.code = Impl.code) (fork : CoveredFork sevm.benvStat.fork) :
     ∃ c, decodeCall sevm = some c := by
-  obtain ⟨value, long, M, G, drun⟩ := impl_preamble_cut (impl_run_cut run code fork)
+  obtain ⟨value, long, M, G, drun⟩ := impl_preamble_cut (impl_run_cut run code fork.histFork)
   rcases hw : dispTree.selWalk (Blanc.Sevm.selector sevm) with ⟨c, j⟩ | t
   · obtain ⟨hσ, g, G', hg, grun⟩ := SFunc.RunCut.selWalk_inl hw drun
     have table := List.all_eq_true.mp decode_table _ (SFunc.selWalk_mem_pairs hw)
