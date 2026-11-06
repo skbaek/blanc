@@ -194,7 +194,7 @@ theorem Assumes.coinsHold (A : Assumes d h) {s : Benv} {f : BlockChain}
   daiCode := daiCode
   usdtCode := usdtCode
   usdcCode := fun F m => A.circle.proxyStays F (sub F m)
-  usdcImpl := fun F m t _ => (A.circle.usdcCertified F (sub F m) t).1
+  usdcImpl := fun F m t _ _ => A.circle.usdcCertified F (sub F m) t
   usdtLive := fun F m t st => A.tether.notDeprecated F (mem_coinFrames.mpr ⟨sub F m, t, st, trivial⟩)
 
 theorem coin0_eq : Curve3Pool.adrOf (Curve3Pool.Creation.coinsN.get 0) = dai := by decide +kernel
