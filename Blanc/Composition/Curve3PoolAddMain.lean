@@ -1,4 +1,4 @@
-import Blanc.Composition.Curve3PoolAddCoins
+import Blanc.Composition.Curve3PoolAddCost
 
 /-!
 # `add_liquidity_message`
@@ -409,7 +409,7 @@ theorem add_pullAdd {s : Curve3Pool.State} {env : Env} {T : Nat} (hb : books w =
 /-- **The message under the moment's facts.** -/
 theorem add_core (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (addCalldata am minMint))
     (req : AddRequest w E msg.benv.stat.time.toNat am minMint minted stored) (hfee : word w pool Curve3Pool.feeSlot ≤ feeDen) :
-    MsgDoesAtNamedCost msg (fun st => AddPaid w st E am minted stored) := by
+    ∃ cost refund, cost ≤ addCostBound ∧ MsgDoes msg liquidityRoom cost refund (fun st => AddPaid w st E am minted stored) := by
   obtain ⟨s, hck0, hck, hco, hto, hC, hcode, hid⟩ := asked_facts mf mk e
   have ht : msg.currentTarget = pool := e.entry.named.1
   have hTt : (initSevm msg).currentTarget = pool := ht
@@ -569,7 +569,7 @@ theorem add_core (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (ad
     subst hme
     have hse : stored = alNewW (initSevm msg) ((initDevm msg).getStor (initSevm msg).currentTarget) B1 B2 := by rw [ho] at hobal; exact hobal.symm
     refine ⟨Curve3Pool.alExactCost0 (initSevm msg) (initDevm msg) (addCalls (initSevm msg) (initDevm msg)) ampW B1 B2 xb mint,
-      (alRefund0 (initSevm msg) (initDevm msg) (addCalls (initSevm msg) (initDevm msg)) ampW B1 B2 xb mint).toNat, fun R hR hG => ?_⟩
+      (alRefund0 (initSevm msg) (initDevm msg) (addCalls (initSevm msg) (initDevm msg)) ampW B1 B2 xb mint).toNat, al_cost0_le (addCalls_debits _ _) _ _ _ _ _, fun R hR hG => ?_⟩
     obtain ⟨post, hx, herr, hg, hrfp, hWp, hst⟩ := add_run0 (msg := msg) (s := s) (U := 129555) _ hcode hfork hstatic hdep0 hl4 hcdl hsel hid hWc hWb hck.abs hck.unlocked hval hkillW hampW hmf
       hPrem add_skip (t0 rfl) sub a0 a1 a2 hxb hD1 hlt0 hslip hadd0 (hfront0 _) (hroom R hR) hG
     exact ⟨post, hx, herr, hg, by rw [hrfp], hfin post _ _ _ hse hWp hst⟩
@@ -591,16 +591,24 @@ theorem add_core (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (ad
       (Curve3Pool.V3.ext_get fun k => by rw [← Curve3Pool.ex_w3_nat]; exact Curve3Pool.ex_bal_nat hck.abs k).symm
     have hnz := Curve3Pool.al_amounts_nz (sevm := initSevm msg) (pre := initDevm msg) hbal hxa hD0' hxb hD1 hlt
     refine ⟨Curve3Pool.alExactCost1 (initSevm msg) (initDevm msg) (addCalls (initSevm msg) (initDevm msg)) ampW T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2,
-      (alRefund1 (initSevm msg) (initDevm msg) (addCalls (initSevm msg) (initDevm msg)) ampW T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2).toNat, fun R hR hG => ?_⟩
+      (alRefund1 (initSevm msg) (initDevm msg) (addCalls (initSevm msg) (initDevm msg)) ampW T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2).toNat, al_cost1_le (addCalls_debits _ _) _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _, fun R hR hG => ?_⟩
     obtain ⟨post, hx', herr, hg, hrfp, hWp, hst⟩ := add_run1 (msg := msg) (s := s) (U := 129555) _ hcode hfork hstatic hdep0 hl4 hcdl hsel hid hWc hWb hck.abs hck.unlocked hval hkillW hampW hmf
       hP1 add_skip hT0 hnz sub a0 a1 a2 hxa hD0' hxb hD1 hlt' i0 i1 i2 hxc hD2' hge hmul hD00 hslip hadd (hfront0 _) (hroom R hR) hG
     exact ⟨post, hx', herr, hg, by rw [hrfp], hfin post _ _ _ hse hWp hst⟩
 
 end Core
 
+/-- **`add_liquidity_message`, with its named cost bounded**: at most `addCostBound`, below EIP-7825's per-transaction cap. -/
+theorem add_liquidity_message_bounded {d : Deployment} (m : Moment d) (A : Assumes d m.through) {msg : Msg} {E : Adr} {am : V3} {minMint minted : Nat} {stored : V3}
+    (ask : Asked msg m.world E (addCalldata am minMint))
+    (req : AddRequest m.world E msg.benv.stat.time.toNat am minMint minted stored) :
+    ∃ cost refund, cost ≤ addCostBound ∧ MsgDoes msg liquidityRoom cost refund (fun st => AddPaid m.world st E am minted stored) :=
+  add_core (m.facts A) (m.marked A) ask req (m.feesWithin A).1
+
 /-- **`add_liquidity_message`.** -/
 theorem add_liquidity_message_holds : add_liquidity_message := by
   intro d m A msg E am minMint minted stored ask req
-  exact add_core (m.facts A) (m.marked A) ask req (m.feesWithin A).1
+  obtain ⟨cost, refund, -, h⟩ := add_liquidity_message_bounded m A ask req
+  exact ⟨cost, refund, h⟩
 
 end Blanc.Composition.Curve3PoolPublic
