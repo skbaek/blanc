@@ -6,7 +6,8 @@ import Blanc.Composition.Curve3PoolSwapRequest
 # `swap`: the run, the message and the transaction
 
 `swap_floor_run`: the frame's run at any residual `R ≥ 2201`, from the model's words and the coins' fits, ending as
-`ExFrameEnd` says.
+`ExFrameEnd` says. `swap_model`: `exchange_accepts` as the frame's words. `swap_core`: the message under the moment's facts.
+`swap_holds` and `swap_message_holds` close the two statements.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -317,6 +318,7 @@ structure SwapModel (e0 : Sevm) (σ : Stor) (s0 : Curve3Pool.State) (w : Jaune.S
       exAdm (exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
         (σ.get feeSlot))
         (σ.get adminFeeSlot) (exRate (exJ e0).toNat)
+  sub : exI e0 = 2 → ¬ B2 < B1
   xN : ∀ k : Fin 3, (exW3 x0 x1 x2 k.val).toNat = scaled w k
   Dn : (exCred e0 B1 B2).toNat = netOf w i dx
   xvN : (exW3 x0 x1 x2 (exI e0).toNat + exCred e0 B1 B2 * exRate (exI e0).toNat / exR0).toNat = scaled w i + netOf w i dx * rates.get i / precision
@@ -381,11 +383,11 @@ theorem swap_model {e0 : Sevm} {σ : Stor} {w : Jaune.State} {s0 : Curve3Pool.St
   rw [hjN] at r2 r3
   exact ⟨x0, x1, x2, v, admin, hi3, hj3, hadm,
     { hX := hX, hmx := hmx, hax := hax, hA := hA', hres := hres, hy1 := hy1, hy2 := hy2, hmf := hmf, hsf := hsf, hmo := hmo, hmin := hmin', hma := hma, hmap := hmap,
-      hbi := hbi', hbj1 := hbj1, hbj2 := hbj2, xN := xN, Dn := Dn, xvN := xvN, On := r2, An := r3, room := g.room }⟩
+      hbi := hbi', hbj1 := hbj1, hbj2 := hbj2, sub := hsub, xN := xN, Dn := Dn, xvN := xvN, On := r2, An := r3, room := g.room }⟩
 
 /-! ## The debits -/
 
-theorem swap_debit_bounds (e d : _) (i j : Fin 3) (hx : True) :
+theorem swap_debit_bounds (e : Sevm) (d : Devm) (i j : Fin 3) :
     (∀ b S M, (swapCalls e d i j).balD1 b S M ≤ 200000) ∧ (∀ b S M, (swapCalls e d i j).balD2 b S M ≤ 200000) ∧
       (∀ b S M, (swapCalls e d i j).pullD b S M ≤ 200000) ∧ (∀ b S M, (swapCalls e d i j).pushD b S M ≤ 200000) := by
   have hb1 : ∀ b S M, (swapCalls e d i j).balD1 b S M ≤ 8047 := fun b S M => Blanc.Composition.Curve3PoolUsdt.usdt_balDebit_le (by decide) (by decide) b S M
@@ -446,5 +448,463 @@ theorem swap_debit_bounds (e d : _) (i j : Fin 3) (hx : True) :
       rw [← hc]
       have := usdt_xferG_le (initSevm c) (initDevm c)
       omega
+
+/-! ## The message -/
+
+theorem pullIn_other {e0 : Sevm} {i j : Fin 3} {bp bq : Option Nat} (hi : i ≠ feeIndex) (dx : Nat) : pullIn (exEnv e0 i j bp bq) i dx = some dx := by
+  unfold pullIn
+  rw [ite_eq_right hi]
+  simp only [exEnv, decide_true, req]
+  rfl
+
+theorem pullIn_two {e0 : Sevm} {j : Fin 3} {a b : Nat} (dx : Nat) : pullIn (exEnv e0 2 j (some a) (some b)) 2 dx = Blanc.StableSwapNewton.chkSub b a := by
+  unfold pullIn
+  rw [ite_eq_left (by decide : (2 : Fin 3) = feeIndex)]
+  simp only [exEnv, decide_true, req, ↓reduceIte, Option.bind_eq_bind, Option.bind_some]
+
+theorem swapOut_lt {w : Jaune.State} {t : Nat} {i j : Fin 3} {dx dy : Nat} (hq : swapOut w t i j dx = some dy) (hfit : scaled w j < 2 ^ 190) : dy < 2 ^ 190 := by
+  obtain ⟨-, -, -, d1, d, -, f, -, -, -, -, -, hd, d2, -, hd2, -, -, hout, -⟩ := swapOut_parts hq
+  obtain ⟨ed, -⟩ := Blanc.StableSwapNewton.chkSub_some hd
+  obtain ⟨ed2, -⟩ := Blanc.StableSwapNewton.chkSub_some hd2
+  rw [hout, div_rate]
+  have := Nat.div_le_self (d2 - f) (Curve3Pool.precMul.get j)
+  omega
+
+theorem held_le_word (w : Jaune.State) (a : Adr) (k : Fin 3) : coinHeld w a k ≤ word w (coinAt k) (coinEntry a k) := by
+  unfold coinHeld
+  split
+  · rename_i h
+    obtain ⟨rfl, -⟩ := h
+    exact Nat.mod_le _ _
+  · exact Nat.le_refl _
+
+theorem getY_ann {amp x v : Nat} {i j : Fin 3} {xp : Fin 3 → Nat} (h : getYChk amp i j x xp = some v) : Blanc.StableSwapNewton.chkMul amp 3 = some (amp * 3) := by
+  unfold getYChk at h
+  split at h
+  · cases h
+  · simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
+    obtain ⟨-, -, ann, hann, -⟩ := h
+    rw [hann, Blanc.StableSwapNewton.chkMul_some hann]
+
+/-- The parties' storage at an asked message's entry, and its coin stand. -/
+theorem asked_stand {msg : Msg} {w : Jaune.State} {E : Adr} {data : Bytes} (e : Asked msg w E data) (hap : CoinsApart w E) (F : Nat) :
+    CoinStand {initSevm msg with gas := F} (initDevm msg) w E := by
+  have hopen := e.coinsOpen
+  have hI : usdcImplOf w = Usdc.usdcImpl := by
+    unfold usdcImplOf
+    rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
+  exact
+    { fork := e.entry.plain.2.2.2
+      target := e.entry.named.1
+      caller := e.entry.named.2.1
+      keysCold := fun k hk => by
+        have h0 : (initDevm msg).accessedStorageKeys.isEmpty = true := e.entry.cold.1
+        exact absurd (Std.HashSet.isEmpty_eq_false_iff_exists_mem.2 ⟨k, hk⟩) (by simpa only [Bool.not_eq_false] using h0)
+      clean := ⟨e.entry.fresh.1, e.entry.fresh.2, rfl⟩
+      stor := fun x hx => by
+        have hm : x ∈ parties w := by
+          rcases hx with rfl | rfl | rfl | rfl | rfl <;> simp only [parties, List.mem_cons, true_or, or_true]
+        have h := e.entry.world x hm
+        exact ⟨congrArg Acct.stor h.1, congrArg Acct.stor h.2⟩
+      warm := fun x hx => by
+        refine e.entry.cold.2 x ?_
+        simp only [parties, List.tail_cons, List.mem_cons, List.not_mem_nil, or_false, hI]
+        exact hx
+      apart := hap
+      open' := hopen }
+
+/-- The chain's standing at any static gas. -/
+theorem swap_chain_of {msg : Msg} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx dy admin amp v DD : Nat} {x0 x1 x2 B1 B2 F0 O A0 : B256} {s : Curve3Pool.State} {data : Bytes} {hi3 hj3}
+    (e : Asked msg w E data) (hck0 : Checkpoint (w.getStor pool) s) (hco : ∀ k, coinOf (initSevm msg) (initDevm msg) k = coinAt k)
+    (hap : SwapApart w E) (hij : i ≠ j) (hiw : exI (initSevm msg) = Nat.toB256 i.val) (hjw : exJ (initSevm msg) = Nat.toB256 j.val) (hdxw : exDx (initSevm msg) = Nat.toB256 dx)
+    (hE0 : E ≠ 0) (hinv : invariant w amp = some DD)
+    (M : SwapModel (initSevm msg) ((initDevm msg).getStor (initSevm msg).currentTarget) s w i j dx dy admin x0 x1 x2 B1 B2 amp v hi3 hj3)
+    (hσ : (initDevm msg).getStor (initSevm msg).currentTarget = w.getStor pool)
+    (hO : O = exDyOut (exW3 x0 x1 x2 (exJ (initSevm msg)).toNat) (Nat.toB256 v) ((w.getStor pool).get feeSlot) (exRate (exJ (initSevm msg)).toNat))
+    (hF0 : F0 = exDyFee (exW3 x0 x1 x2 (exJ (initSevm msg)).toNat) (Nat.toB256 v) ((w.getStor pool).get feeSlot))
+    (hA0 : A0 = exAdm F0 ((w.getStor pool).get adminFeeSlot) (exRate (exJ (initSevm msg)).toNat))
+    (hOn : O.toNat = dy) (hAn : A0.toNat = admin)
+    (hle : dx ≤ coinHeld w E i) (hal : dx ≤ allowanceOf w E i) (hcrP : CreditFits w pool i (netOf w i dx)) (hcrE : CreditFits w E j (netOf w j dy))
+    (hfeeI : UsdtFeeFits w dx) (hfeeJ : UsdtFeeFits w dy) (hdx0 : 0 < dx) (hdy0 : 0 < dy) (hbi : recorded w i + netOf w i dx < 2 ^ 256) (hcov : recorded w j ≤ coinHeld w pool j) :
+    ∀ F, SwapChain {initSevm msg with gas := F} (initDevm msg) w E i j dx dy admin x0 x1 x2 B1 B2 F0 O A0 amp v
+      (scaled w i + netOf w i dx * rates.get i / precision) DD := by
+  have hiN : i.val = (exI (initSevm msg)).toNat := by rw [hiw, B256.toNat_toB256_of_lt (by have := i.isLt; omega)]
+  have hjN : j.val = (exJ (initSevm msg)).toNat := by rw [hjw, B256.toNat_toB256_of_lt (by have := j.isLt; omega)]
+  have hOw : O = Nat.toB256 dy := by rw [← hOn, toB256_toNat]
+  have hL : ∀ k, k ≠ lockW → (lockedStor w).get k = (w.getStor pool).get k := fun k hk => Stor.get_set_ne _ (Ne.symm hk) _
+  have hrec : ∀ k : Fin 3, ((lockedStor w).get (balancesBase + Nat.toB256 k.val)).toNat = recorded w k := fun k => by
+    rw [hL _ (bal_ne_lockW k)]; rfl
+  have hroom := M.room
+  have hCoin : ∀ k : Fin 3, ((lockedStor w).get (coinsBase + Nat.toB256 k.val)).toAdr = coinAt k := fun k => by
+    rw [← chain_coin k, ← hco k]
+    show _ = (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot k)).toAdr
+    rw [hσ]
+  have hxK : ∀ k : Fin 3, (exW3 x0 x1 x2 k.val).toNat = scaled w k := M.xN
+  have hVs : (V3.mk (scaled w 0) (scaled w 1) (scaled w 2)).get = scaled w := by
+    funext k
+    match k with
+    | 0 => rfl
+    | 1 => rfl
+    | 2 => rfl
+  have hDk : Blanc.StableSwapNewton.getDChk (V3.mk (scaled w 0) (scaled w 1) (scaled w 2)).get amp 1 = some DD := by
+    unfold invariant Curve3Pool.getDMem at hinv
+    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at hinv
+    obtain ⟨xp, hxp, hd⟩ := hinv
+    have hxg : xp.get = scaled w := Curve3Pool.xpChk_some hxp
+    rw [hVs, ← hxg]
+    exact hd
+  have hAnn := getY_ann M.hres
+  intro F
+  exact
+    { back :=
+        { stand := asked_stand e hap.toCoinsApart F
+          static := e.entry.plain.2.1
+          iw := hiw
+          jw := hjw
+          differ := hij
+          named := hE0
+          coinJ := hCoin j
+          lock := hck0.unlocked
+          credit := by
+            have h := M.Dn
+            rw [hrec i]
+            show (exCred (initSevm msg) B1 B2).toNat + _ < _
+            rw [h]
+            omega
+          below := by rw [hrec j, hOn, hAn]; omega
+          out := hOw
+          pays := ⟨by omega, hcrE, fun _ => hfeeJ⟩ }
+      apart := hap
+      coinI := hCoin i
+      dxw := hdxw
+      hF := hF0.symm
+      hO := hO.symm
+      hA := hA0.symm
+      Dn := M.Dn
+      On := hOn
+      An := hAn
+      holds := ⟨hle, hal⟩
+      creditP := hcrP
+      feeI := fun _ => hfeeI
+      moved := ⟨hdx0, hdy0⟩
+      hY := fun b => by
+        have e0 : (exW3 x0 x1 x2 0).toNat = scaled w 0 := hxK 0
+        have e1 : (exW3 x0 x1 x2 1).toNat = scaled w 1 := hxK 1
+        have e2 : (exW3 x0 x1 x2 2).toNat = scaled w 2 := hxK 2
+        have eI : (exI {initSevm msg with gas := F}).toNat = i.val := hiN.symm
+        have eJ : (exJ {initSevm msg with gas := F}).toNat = j.val := hjN.symm
+        unfold costGetY newtonGas
+        rw [e0, e1, e2, hDk, hAnn, eI, eJ]
+        have hxe : (exXw {initSevm msg with gas := F} (exW3 x0 x1 x2) (exCred {initSevm msg with gas := F} B1 B2)).toNat = scaled w i + netOf w i dx * rates.get i / precision := M.xvN
+        rw [hxe] }
+
+/-- The fee coin's two reads around the pull, and what the model credits. -/
+theorem swap_B {msg : Msg} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx : Nat} {B1 B2 : B256}
+    (hB1 : B1 = swapB1 (initSevm msg) (initDevm msg) i) (hB2 : B2 = swapB2 (initSevm msg) (initDevm msg) i)
+    (hcoi : coinOf (initSevm msg) (initDevm msg) i = coinAt i) (hcoinS : (initDevm msg).getStor (coinAt i) = w.getStor (coinAt i))
+    (hTt : (initSevm msg).currentTarget = pool) (hTc : (initSevm msg).caller = E) (hdxw : exDx (initSevm msg) = Nat.toB256 dx)
+    (hopen : CoinsOpen w E) (hap : SwapApart w E) (hdxN : dx < 2 ^ 256) (hfeeI : UsdtFeeFits w dx) (hcrP : CreditFits w pool i (netOf w i dx)) :
+    (i = 2 → B1.toNat = word w usdt (Usdt.balSlot pool) ∧ B2.toNat = word w usdt (Usdt.balSlot pool) + netOf w i dx ∧
+      Usdt.NotDeprecated (pulledK i ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) i)) (initSevm msg).caller (initSevm msg).currentTarget (exDx (initSevm msg)))) ∧
+    pullIn (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2)) i dx = some (netOf w i dx) := by
+  have hBw : i = 2 → B1.toNat = word w usdt (Usdt.balSlot pool) ∧ B2.toNat = word w usdt (Usdt.balSlot pool) + netOf w i dx ∧
+      Usdt.NotDeprecated (pulledK i ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) i)) (initSevm msg).caller (initSevm msg).currentTarget (exDx (initSevm msg))) := by
+    intro h2
+    subst h2
+    have hP := usdt_pulled_get (w := w) (E := E) (v := dx) hap hdxN hfeeI.2.2 hfeeI.1 hcrP
+    have hEn : (initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) 2) = w.getStor usdt := by rw [hcoi]; exact hcoinS
+    refine ⟨?_, ?_, ?_⟩
+    · rw [hB1]
+      show (((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) 2)).get (Usdt.balSlot (initSevm msg).currentTarget)).toNat = _
+      rw [hEn, hTt]
+      rfl
+    · rw [hB2]
+      show (((pulledK 2 ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) 2)) (initSevm msg).caller (initSevm msg).currentTarget (exDx (initSevm msg))).get (Usdt.balSlot (initSevm msg).currentTarget))).toNat = _
+      rw [hEn, hTt, hTc, hdxw]
+      exact hP.1
+    · rw [hEn, hTt, hTc, hdxw]
+      show Usdt.flag20 _ = 0
+      rw [hP.2]
+      exact hopen.usdtLive
+  have hnet : pullIn (exEnv (initSevm msg) i j (exBalOpt i B1) (exBalOpt i B2)) i dx = some (netOf w i dx) := by
+    by_cases hi2 : i = 2
+    · subst hi2
+      obtain ⟨b1, b2, -⟩ := hBw rfl
+      have e1 : exBalOpt 2 B1 = some B1.toNat := ite_eq_left (by decide)
+      have e2 : exBalOpt 2 B2 = some B2.toNat := ite_eq_left (by decide)
+      rw [e1, e2, pullIn_two, b1, b2]
+      unfold Blanc.StableSwapNewton.chkSub
+      rw [ite_eq_left (by omega)]
+      congr 1
+      omega
+    · have hne : i ≠ feeIndex := hi2
+      have hn : netOf w i dx = dx := by unfold netOf; rw [ite_eq_right hi2]
+      rw [pullIn_other hne, hn]
+  exact ⟨hBw, hnet⟩
+
+theorem books_credit_lt {w : Jaune.State} {i : Fin 3} {n : Nat} (hc : recorded w i ≤ coinHeld w pool i) (hcr : CreditFits w pool i n) :
+    recorded w i + n < 2 ^ 256 := by
+  have h1 := held_le_word w pool i
+  have h2 : word w (coinAt i) (coinEntry pool i) + n < 2 ^ 255 := hcr
+  omega
+
+theorem dy_le_held {w : Jaune.State} {j : Fin 3} {dy admin : Nat} (h : dy + admin + 1 ≤ recorded w j) (hc : recorded w j ≤ coinHeld w pool j) : dy ≤ coinHeld w pool j := by
+  omega
+
+theorem swapCalls_static (e : Sevm) (F : Nat) {d : Devm} {i j : Fin 3} : swapCalls {e with gas := F} d i j = swapCalls e d i j := rfl
+
+/-- `SwapChain.eval` with the calls and the cost at no particular static gas. -/
+theorem SwapChain.evalAt {e : Sevm} {F : Nat} {d : Devm} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx dy admin amp v xv DD : Nat} {x0 x1 x2 B1 B2 F0 O A0 : B256} {D' : Devm}
+    (c : SwapChain {e with gas := F} d w E i j dx dy admin x0 x1 x2 B1 B2 F0 O A0 amp v xv DD)
+    (he : ExFrameEnd {e with gas := F} d (swapCalls e d i j) x0 x1 x2 B1 B2 v D') :
+    exExactCost e d (swapCalls e d i j) x0 x1 x2 B1 B2 amp v =
+        swapFrameGas w E e.benvStat.time.toNat amp i j dx dy xv DD (decide (allowanceOf w E i = 2 ^ 256 - 1)) ∧
+      ∃ T r, Mv T r d D' ∧ r = ((swapRefund w E i j dx dy (allowanceOf w E i) : Nat) : Int) ∧ SwapPaid w D'.state E i j dx dy admin := by
+  have h := c.eval (D' := D') (by rw [swapCalls_static]; exact he)
+  rw [swapCalls_static, exExactCost_withStaticGas] at h
+  exact h
+
+/-- **The run at any residual, from the chain's standing.** -/
+theorem swap_finish {msg : Msg} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx dy admin amp v xv DD : Nat} {x0 x1 x2 B1 B2 F0 O A0 : B256} {data : Bytes}
+    (e : Asked msg w E data)
+    (hChain : ∀ F, SwapChain {initSevm msg with gas := F} (initDevm msg) w E i j dx dy admin x0 x1 x2 B1 B2 F0 O A0 amp v xv DD)
+    (hrun : ∀ {R : Nat}, 2201 ≤ R → R + exExactCost (initSevm msg) (initDevm msg) (swapCalls (initSevm msg) (initDevm msg) i j) x0 x1 x2 B1 B2 amp v < 2 ^ 256 →
+      ∃ post, exec (initEvm (msg.withGas (R + exExactCost (initSevm msg) (initDevm msg) (swapCalls (initSevm msg) (initDevm msg) i j) x0 x1 x2 B1 B2 amp v))) = .ok post ∧ post.gasLeft = R ∧
+        ExFrameEnd {initSevm msg with gas := R + exExactCost (initSevm msg) (initDevm msg) (swapCalls (initSevm msg) (initDevm msg) i j) x0 x1 x2 B1 B2 amp v} (initDevm msg) (swapCalls (initSevm msg) (initDevm msg) i j) x0 x1 x2 B1 B2 v post)
+    (hlt : exExactCost (initSevm msg) (initDevm msg) (swapCalls (initSevm msg) (initDevm msg) i j) x0 x1 x2 B1 B2 amp v < 2 ^ 200) :
+    ∀ R, callRoom ≤ R →
+      R + swapFrameGas w E msg.benv.stat.time.toNat amp i j dx dy xv DD (decide (allowanceOf w E i = 2 ^ 256 - 1)) < 2 ^ 256 →
+      ∃ post, exec (initEvm (msg.withGas (R + swapFrameGas w E msg.benv.stat.time.toNat amp i j dx dy xv DD
+          (decide (allowanceOf w E i = 2 ^ 256 - 1))))) = .ok post ∧ post.error = none ∧ post.gasLeft = R ∧
+        post.refundCounter = ((swapRefund w E i j dx dy (allowanceOf w E i) : Nat) : Int) ∧ post.accountsToDelete.toList = [] ∧
+        SwapPaid w post.state E i j dx dy admin := by
+  obtain ⟨post0, -, -, hend0⟩ := hrun (R := 2201) (Nat.le_refl _) (Nat.lt_trans (Nat.add_lt_add_left hlt 2201) (by decide))
+  have hcost := ((hChain _).evalAt hend0).1
+  have hcost' : exExactCost (initSevm msg) (initDevm msg) (swapCalls (initSevm msg) (initDevm msg) i j) x0 x1 x2 B1 B2 amp v =
+      swapFrameGas w E msg.benv.stat.time.toNat amp i j dx dy xv DD (decide (allowanceOf w E i = 2 ^ 256 - 1)) := hcost
+  intro R hR hG
+  rw [← hcost'] at hG ⊢
+  obtain ⟨post, hex, hg, hend⟩ := hrun (R := R) hR hG
+  obtain ⟨-, T, r, mv, hr, paid⟩ := (hChain _).evalAt hend
+  have hc0 : Clean (initDevm msg) := ⟨e.entry.fresh.1, e.entry.fresh.2, rfl⟩
+  have hcp := mv.clean hc0
+  refine ⟨post, hex, hcp.error, hg, ?_, List.eq_nil_iff_forall_not_mem.2 fun x h => hcp.del x (Std.HashSet.mem_toList.1 h), paid⟩
+  rw [mv.refund, hr]
+  exact Int.zero_add _
+
+/-- **The message under the moment's facts.** -/
+theorem swap_core {msg : Msg} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx dy minDy amp DD : Nat}
+    (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (swapCalldata i j dx minDy)) (req : SwapRequest w E i j dx dy minDy)
+    (hfee : word w pool feeSlot ≤ feeDen) (haf : word w pool adminFeeSlot ≤ feeDen)
+    (hdyq : dy = quote w msg.benv.stat.time.toNat i j dx) (hA : ampAt w msg.benv.stat.time.toNat = some amp) (hinv : invariant w amp = some DD) :
+    ∃ admin, swapAdmin w msg.benv.stat.time.toNat i j dx = some admin ∧ ∀ R, callRoom ≤ R →
+      R + swapFrameGas w E msg.benv.stat.time.toNat amp i j dx dy (scaled w i + netOf w i dx * rates.get i / precision) DD (decide (allowanceOf w E i = 2 ^ 256 - 1)) < 2 ^ 256 →
+      ∃ post, exec (initEvm (msg.withGas (R + swapFrameGas w E msg.benv.stat.time.toNat amp i j dx dy (scaled w i + netOf w i dx * rates.get i / precision) DD
+          (decide (allowanceOf w E i = 2 ^ 256 - 1))))) = .ok post ∧ post.error = none ∧ post.gasLeft = R ∧
+        post.refundCounter = ((swapRefund w E i j dx dy (allowanceOf w E i) : Nat) : Int) ∧ post.accountsToDelete.toList = [] ∧
+        SwapPaid w post.state E i j dx dy admin := by
+  obtain ⟨s, hck0, hck, hco, hto, hC, hcode, hid⟩ := asked_facts mf mk e
+  have ht : msg.currentTarget = pool := e.entry.named.1
+  have hcaller : msg.caller = E := e.entry.named.2.1
+  have hopen := e.coinsOpen
+  have hfork : CoveredFork (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
+  have hdata : (initSevm msg).data = swapCalldata i j dx minDy := e.data
+  have hstor : ∀ x ∈ parties w, (initDevm msg).getStor x = w.getStor x := fun x hx => congrArg Acct.stor (e.entry.world x hx).1
+  have hσ : (initDevm msg).getStor (initSevm msg).currentTarget = w.getStor pool := by
+    show (initDevm msg).getStor msg.currentTarget = _
+    rw [ht]
+    exact hstor pool List.mem_cons_self
+  have hcoinS : ∀ k : Fin 3, (initDevm msg).getStor (coinAt k) = w.getStor (coinAt k) := fun k => hstor _ (by
+    match k with
+    | 0 => simp only [coinAt, parties, List.mem_cons, true_or, or_true]
+    | 1 => simp only [coinAt, parties, List.mem_cons, true_or, or_true]
+    | 2 => simp only [coinAt, parties, List.mem_cons, true_or, or_true])
+  obtain ⟨w4, w36, w68, w100⟩ := swap_words hdata
+  have hiw : exI (initSevm msg) = Nat.toB256 i.val := w4
+  have hjw : exJ (initSevm msg) = Nat.toB256 j.val := w36
+  have hdxw : exDx (initSevm msg) = Nat.toB256 dx := w68
+  have hmdw : exMinDy (initSevm msg) = Nat.toB256 minDy := w100
+  obtain ⟨hLive, hij, ⟨hdx0, hmin, hdy0⟩, ⟨hle, hal⟩, hPF, ⟨hcrP, hcrE⟩, ⟨hfeeI, hfeeJ⟩, hfit, hap⟩ := req
+  have hdxN : dx < 2 ^ 256 := Nat.lt_of_le_of_lt hle coinHeld_lt
+  have hq : swapOut w msg.benv.stat.time.toNat i j dx = some dy := by
+    unfold quote at hdyq
+    cases h : swapOut w msg.benv.stat.time.toNat i j dx with
+    | none => rw [h] at hdyq; simp only [Option.getD_none] at hdyq; omega
+    | some q => rw [h] at hdyq; simp only [Option.getD_some] at hdyq; rw [hdyq]
+  have hkill : s.isKilled = false := by
+    have h0 : (w.getStor pool).get isKilledSlot = 0 := B256.toNat_inj _ _ hLive
+    have h1 := hck0.abs.isKilled
+    rw [h0] at h1
+    cases hs : s.isKilled with
+    | false => rfl
+    | true => rw [hs] at h1; exact absurd h1 (by decide)
+  have hbi : recorded w i + netOf w i dx < 2 ^ 256 := books_credit_lt (mk.covered i) hcrP
+  have hdy190 := swapOut_lt hq hfit
+  have hmdN : minDy < 2 ^ 256 := Nat.lt_of_le_of_lt hmin (Nat.lt_trans hdy190 (by decide))
+  obtain ⟨B1, hB1⟩ : ∃ B1, B1 = swapB1 (initSevm msg) (initDevm msg) i := ⟨_, rfl⟩
+  obtain ⟨B2, hB2⟩ : ∃ B2, B2 = swapB2 (initSevm msg) (initDevm msg) i := ⟨_, rfl⟩
+  have hTt : (initSevm msg).currentTarget = pool := ht
+  have hTc : (initSevm msg).caller = E := hcaller
+  have hcoi := hco i
+  obtain ⟨hBw, hnet⟩ := swap_B hB1 hB2 hcoi (hcoinS i) hTt hTc hdxw hopen hap hdxN hfeeI hcrP
+  have hE0 : E ≠ 0 := e.nonzero
+  obtain ⟨x0, x1, x2, v, admin, hi3, hj3, hadm, M⟩ := swap_model (e0 := initSevm msg) (σ := (initDevm msg).getStor (initSevm msg).currentTarget) (s0 := s) (B1 := B1) (B2 := B2)
+    hσ hck.abs hkill hij hiw hjw hdxw hmdw hdxN hmdN hnet hinv hA hfee haf hq hmin hfit hbi
+  have hiN : i.val = (exI (initSevm msg)).toNat := by rw [hiw, B256.toNat_toB256_of_lt (by have := i.isLt; omega)]
+  have hjN : j.val = (exJ (initSevm msg)).toNat := by rw [hjw, B256.toNat_toB256_of_lt (by have := j.isLt; omega)]
+  have hdyN : dy < 2 ^ 256 := Nat.lt_trans hdy190 (by decide)
+  obtain ⟨O, hO⟩ : ∃ O, O = exDyOut (exW3 x0 x1 x2 (exJ (initSevm msg)).toNat) (Nat.toB256 v) ((w.getStor pool).get feeSlot) (exRate (exJ (initSevm msg)).toNat) := ⟨_, rfl⟩
+  obtain ⟨F0, hF0⟩ : ∃ F0, F0 = exDyFee (exW3 x0 x1 x2 (exJ (initSevm msg)).toNat) (Nat.toB256 v) ((w.getStor pool).get feeSlot) := ⟨_, rfl⟩
+  obtain ⟨A0, hA0⟩ : ∃ A0, A0 = exAdm F0 ((w.getStor pool).get adminFeeSlot) (exRate (exJ (initSevm msg)).toNat) := ⟨_, rfl⟩
+  have hOn : O.toNat = dy := by have := M.On; rw [hσ] at this; rw [hO]; exact this
+  have hAn : A0.toNat = admin := by have := M.An; rw [hσ, ← hF0] at this; rw [hA0]; exact this
+  have hOw : O = Nat.toB256 dy := by rw [← hOn, toB256_toNat]
+  have hChain := swap_chain_of (B1 := B1) (B2 := B2) e hck0 hco hap hij hiw hjw hdxw hE0 hinv M hσ hO hF0 hA0 hOn hAn hle hal hcrP hcrE hfeeI hfeeJ hdx0 hdy0 hbi (mk.covered j)
+  have hbounds := swap_debit_bounds (initSevm msg) (initDevm msg) i j
+  have hlt : exExactCost (initSevm msg) (initDevm msg) (swapCalls (initSevm msg) (initDevm msg) i j) x0 x1 x2 B1 B2 amp v < 2 ^ 200 :=
+    ex_cost_lt (K := 200000) (by decide) hbounds.1 hbounds.2.1 hbounds.2.2.1 hbounds.2.2.2
+  have hlen : (initSevm msg).data.length = 132 := by rw [hdata]; exact swapCalldata_length
+  have hsel := swap_selector hdata
+  have hdep : 2 ≤ (initSevm msg).depth := e.entry.plain.2.2.1
+  have hstatic : (initSevm msg).isStatic = false := e.entry.plain.2.1
+  have hval : (initSevm msg).value = 0 := e.entry.plain.1
+  have hkillW : ((initDevm msg).getStor (initSevm msg).currentTarget).get isKilledSlot = 0 := by
+    rw [hσ]; exact B256.toNat_inj _ _ hLive
+  have hpf : PullFitsK i ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) i)) (initSevm msg).caller (initSevm msg).currentTarget (exDx (initSevm msg)) := by
+    rw [hcoi, hcoinS, hTt, hTc, hdxw]
+    exact pull_fits hopen hE0 hap hPF i hdxN hle hal hcrP (fun _ => hfeeI)
+  have hqf : PushFitsK j ((initDevm msg).getStor (coinOf (initSevm msg) (initDevm msg) j)) (initSevm msg).currentTarget (initSevm msg).caller
+      (exDyOut (exW3 x0 x1 x2 (exJ (initSevm msg)).toNat) (Nat.toB256 v) (((initDevm msg).getStor (initSevm msg).currentTarget).get feeSlot) (exRate (exJ (initSevm msg)).toNat)) := by
+    rw [hco j, hcoinS, hσ, ← hO, hOw, hTt, hTc]
+    exact push_fits hopen hE0 hap.toCoinsApart j hdyN (dy_le_held M.room (mk.covered j)) hcrE (fun _ => hfeeJ)
+  have hrun : ∀ {R : Nat}, 2201 ≤ R → R + exExactCost (initSevm msg) (initDevm msg) (swapCalls (initSevm msg) (initDevm msg) i j) x0 x1 x2 B1 B2 amp v < 2 ^ 256 → _ :=
+    fun {R} hR hG => swap_floor_run (msg := msg) (s0 := s) (i := i) (j := j) (amp := amp) (v := v) (x0 := x0) (x1 := x1) (x2 := x2) (R := R) hcode hfork hstatic hdep (by rw [hlen]; decide) (by rw [hlen]; decide) hsel hid hC hij hiN hjN hck.abs hck.unlocked hval hkillW hi3 hj3 M.hX
+      (by rw [← hB1, ← hB2]; exact M.sub) hpf hqf (fun h => (hBw h).2.2)
+      (by rw [← hB1, ← hB2]; exact M.hmx) (by rw [← hB1, ← hB2]; exact M.hax) M.hA (by rw [← hB1, ← hB2]; exact M.hres) M.hy1 M.hy2 M.hmf M.hsf M.hmo M.hmin M.hma M.hmap
+      (by rw [← hB1, ← hB2]; exact M.hbi) M.hbj1 M.hbj2 hR (by rw [← hB1, ← hB2]; exact hG)
+  subst hB1 hB2
+  exact ⟨admin, hadm, swap_finish e hChain hrun hlt⟩
+
+/-- **`swap_message`.** -/
+theorem swap_message_holds : swap_message := by
+  intro d m A msg E i j dx minDy admin amp D x t ask ht req hin hadm R hR hG
+  subst ht
+  obtain ⟨hA, hD, rfl⟩ := hin
+  have fees := m.feesWithin A
+  obtain ⟨admin', h1, h2⟩ := swap_core (m.facts A) (m.marked A) ask req fees.1 fees.2 rfl hA hD
+  obtain rfl : admin' = admin := Option.some.inj (h1.symm.trans hadm)
+  obtain ⟨post, hx, herr, hg, hrf, -, hpaid⟩ := h2 R hR hG
+  exact ⟨post, hx, herr, hg, by rw [hrf, Int.toNat_natCast], hpaid⟩
+
+/-! ## The transaction -/
+
+/-- The observers read only the four contracts. -/
+theorem SwapPaid.congr {w w₁ w₂ : Jaune.State} {E : Adr} {i j : Fin 3} {dx dy admin : Nat} (h : SwapPaid w w₁ E i j dx dy admin)
+    (hs : ∀ x, x = pool ∨ x = c3 ∨ x = dai ∨ x = usdc ∨ x = usdt → w₂.getStor x = w₁.getStor x) :
+    SwapPaid w w₂ E i j dx dy admin := by
+  have hp := hs pool (by simp only [true_or])
+  have hd := hs dai (by simp only [true_or, or_true])
+  have hu := hs usdc (by simp only [true_or, or_true])
+  have ht := hs usdt (by simp only [or_true])
+  have hcoin : ∀ x k, coinHeld w₂ x k = coinHeld w₁ x k := by
+    intro x k
+    unfold coinHeld UsdcPacked word
+    rw [hu]
+    match k with
+    | 0 => simp only [coinAt, hd]
+    | 1 => simp only [coinAt, hu]
+    | 2 => simp only [coinAt, ht]
+  have hrec : ∀ k, recorded w₂ k = recorded w₁ k := fun k => by
+    unfold recorded word
+    rw [hp]
+  refine ⟨?_, ?_, ?_, ?_⟩
+  · rw [hrec]; exact h.booksIn
+  · rw [hrec]; exact h.booksOut
+  · rw [hcoin, hcoin]; exact h.coinsIn
+  · rw [hcoin, hcoin]; exact h.coinsOut
+
+theorem swapFrameGas_ge (w : Jaune.State) (E : Adr) (t amp : Nat) (i j : Fin 3) (dx dy x D : Nat) (u : Bool) : 50000 ≤ swapFrameGas w E t amp i j dx dy x D u := by
+  have hb : 50000 ≤ pullBase i := by
+    match i with
+    | 0 => decide
+    | 1 => decide
+    | 2 => decide
+  unfold swapFrameGas pullGas
+  omega
+
+/-- What an admissible `exchange`'s spend comes to. -/
+theorem swapSpent_parts {w : Jaune.State} {data : Bytes} {E : Adr} {t : Nat} {i j : Fin 3} {dx spent : Nat}
+    (h : swapSpent w data E t i j dx = some spent) :
+    ∃ amp D, ampAt w t = some amp ∧ invariant w amp = some D ∧ ∃ dy, swapOut w t i j dx = some dy ∧
+      spent = callIntrinsic data + swapFrameGas w E t amp i j dx dy (scaled w i + netOf w i dx * rates.get i / precision) D (decide (allowanceOf w E i = 2 ^ 256 - 1)) := by
+  unfold swapSpent at h
+  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff, Option.some.injEq] at h
+  obtain ⟨amp, hamp, D, hD, a, ha, b, hb, x, hx, dy, hdy, rfl⟩ := h
+  refine ⟨amp, D, hamp, hD, dy, hdy, ?_⟩
+  have e1 := Blanc.StableSwapNewton.chkMul_some ha
+  have e2 := (Blanc.StableSwapNewton.chkDiv_some hb).1
+  have e3 := Blanc.StableSwapNewton.chkAdd_some hx
+  rw [e3, e2, e1]
+
+/-- **`swap`.** -/
+theorem swap_holds : swap := by
+  intro d m A tx E i j dx minDy spent hdata hspent adm hopen req
+  obtain ⟨prio, maxFee, form, ready⟩ := adm.form
+  have mf := m.facts A
+  have mk := m.marked A
+  have fees := m.feesWithin A
+  have hw : m.benv.state = m.world := rfl
+  have hstatFork := adm.fork
+  obtain ⟨amp, D, hA, hD, dy, hq, hsp⟩ := swapSpent_parts hspent
+  have hdyq : quote m.world m.benv.stat.time.toNat i j dx = dy := by
+    unfold quote
+    rw [hq]
+    rfl
+  rw [hdyq] at req ⊢
+  obtain ⟨-, -, -, -, -, -, f, -, -, -, -, -, -, d2, p2, -, -, -, -, hadm⟩ := swapOut_parts hq
+  obtain ⟨F, hF⟩ : ∃ F, F = swapFrameGas m.world E m.benv.stat.time.toNat amp i j dx dy (scaled m.world i + netOf m.world i dx * rates.get i / precision) D (decide (allowanceOf m.world E i = 2 ^ 256 - 1)) := ⟨_, rfl⟩
+  rw [← hF] at hsp
+  obtain ⟨admin, hadmE⟩ : ∃ admin, admin = f * word m.world pool adminFeeSlot / feeDen * precision / rates.get j := ⟨_, rfl⟩
+  rw [← hadmE] at hadm
+  have hroom : GasRoom m.benv m.bout tx (callIntrinsic tx.data + F + callRoom) := by
+    have := adm.room
+    rw [hsp] at this
+    exact this
+  obtain ⟨debit, post, bout', hqq, process, cum⟩ := tx_of_frame (r := swapRefund m.world E i j dx dy (allowanceOf m.world E i)) (F := F) (index := m.nextIndex)
+    (Q := fun _ p => p.accountsToDelete.toList = [] ∧ SwapPaid m.world p.state E i j dx dy admin)
+    adm.fork form ready hroom
+    (by rw [hdata]; exact swapCalldata_length)
+    (by rw [hF]; exact swapFrameGas_ge ..)
+    (by rw [hw, mf.poolCode]; exact getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel))
+    (by
+      have h := (parties_not_precomp hstatFork.histFork).1
+      show (Fork.ruleSet m.benv.stat.fork).isPrecomp pool = false
+      exact Blanc.Composition.Curve3Pool3CrvHeadlines.precomp_false h)
+    (by
+      intro debit msg after hd hp he
+      obtain ⟨M, hmM, haM, ce0, hFd, htime⟩ := tx_asked mf mk form ready adm hopen hd hp he
+      subst hmM
+      subst haM
+      have ce : Asked msg m.world E (swapCalldata i j dx minDy) := by rw [← hdata]; exact ce0
+      obtain ⟨admin', h1, h2⟩ := swap_core mf mk ce req fees.1 fees.2 (by rw [htime]; exact hdyq.symm) (by rw [htime]; exact hA) hD
+      rw [htime] at h1 h2
+      obtain rfl : admin' = admin := Option.some.inj (h1.symm.trans hadm)
+      have hneed := hroom.enough
+      have hcap := hroom.cap
+      have hR : callRoom = 2201 := rfl
+      have hsum : tx.gas - (callIntrinsic tx.data + F) + F = msg.gas := by
+        rw [hFd]; omega
+      rw [← hF] at h2
+      obtain ⟨post, hx, herr, hg, hrf, hdel, hpaid⟩ := h2 (tx.gas - (callIntrinsic tx.data + F)) (by omega) (by rw [hsum, hFd]; omega)
+      rw [hsum] at hx
+      exact ⟨post, hx, herr, hg, hrf, hdel, hpaid⟩)
+  obtain ⟨hdel, hpaid⟩ := hqq
+  refine ⟨_, bout', afterRefund (callIntrinsic tx.data + F) (swapRefund m.world E i j dx dy (allowanceOf m.world E i)), admin, process, ?_, cum, hadm, ?_⟩
+  · show swapGasUsed m.world tx.data E m.benv.stat.time.toNat i j dx = _
+    unfold swapGasUsed
+    rw [hspent, hq, hsp]
+    rfl
+  · rw [hdel]
+    exact hpaid.congr (tx_end_stor mf mk form ready adm post)
 
 end Blanc.Composition.Curve3PoolPublic

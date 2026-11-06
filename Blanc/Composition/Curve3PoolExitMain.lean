@@ -456,6 +456,14 @@ theorem ExitPaid.congr {w w₁ w₂ : State} {E : Adr} {a : Nat} (h : ExitPaid w
   · rw [hcoin]; exact h.coins k
   · rw [hcoin]; exact h.paid k
 
+/-- What a moment gives a message beyond `MomentFacts`. -/
+theorem Moment.marked {d : Deployment} (m : Moment d) (A : Assumes d m.through) : ExitMarked m.world :=
+  { covered := m.backed A
+    usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
+      A.circle.usdcCertified
+    minter := m.minter A
+    id4 := m.id4 A }
+
 /-- `E` is none of the five contracts, by its empty code. -/
 theorem tx_noE {w : State} {tx : Tx} {E : Adr} {benv : Benv} {maxFee : Nat} (hw : benv.state = w) (mf : MomentFacts w) (mk : ExitMarked w) (ready : SignerReady benv tx E maxFee) :
     ∀ x, x = pool ∨ x = c3 ∨ x = dai ∨ x = usdc ∨ x = usdt → E ≠ x := by
@@ -478,7 +486,7 @@ theorem tx_asked {d : Deployment} {m : Moment d} {tx : Tx} {E : Adr} {prio maxFe
       (transactionTenv m.benv.beginTransaction tx index E (min prio (maxFee - m.benv.stat.baseFeePerGas) + m.benv.stat.baseFeePerGas)
         (callIntrinsic tx.data) []) tx = .ok msg)
     (he : msg.benvAfterTransfer = .ok after) :
-    ∃ M, msg = M ∧ after = M.benv ∧ Asked M m.world E tx.data ∧ M.gas = tx.gas - callIntrinsic tx.data := by
+    ∃ M, msg = M ∧ after = M.benv ∧ Asked M m.world E tx.data ∧ M.gas = tx.gas - callIntrinsic tx.data ∧ M.benv.stat.time = m.benv.stat.time := by
   have hw : m.benv.state = m.world := rfl
   have hE0 : E ≠ 0 := ready.named.1
   have hrec : tx.type.receiver? = some pool := by rw [form.type]; rfl
@@ -541,7 +549,7 @@ theorem tx_asked {d : Deployment} {m : Moment d} {tx : Tx} {E : Adr} {prio maxFe
       · exact hpn.2.2.2.2.2.2.2 h
     · exact hEp x (List.mem_of_mem_tail hx) h.symm
     · rcases hx' with rfl | rfl | rfl | rfl | rfl <;> exact absurd h (by decide +kernel)
-  refine ⟨M, hM.symm, by rw [hM], ?_, by rw [hM]; rfl⟩
+  refine ⟨M, hM.symm, by rw [hM], ?_, by rw [hM]; rfl, by rw [hM]; rfl⟩
   exact
     { entry :=
         { named := ⟨by rw [hM]; rfl, by rw [hM]; rfl, by
@@ -589,12 +597,7 @@ theorem lp_exit_holds : lp_exit := by
   intro d m A tx E a mins hdata adm hopen req
   obtain ⟨prio, maxFee, form, ready⟩ := adm.form
   have mf := m.facts A
-  have mk : ExitMarked m.world :=
-    { covered := m.backed A
-      usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
-        A.circle.usdcCertified
-      minter := m.minter A
-      id4 := m.id4 A }
+  have mk := m.marked A
   have hw : m.benv.state = m.world := rfl
   have hstatFork := adm.fork
   obtain ⟨debit, post, bout', hq, process, cum⟩ := tx_of_frame (r := exitRefund m.world E a) (index := m.nextIndex)
@@ -609,7 +612,7 @@ theorem lp_exit_holds : lp_exit := by
       exact Blanc.Composition.Curve3Pool3CrvHeadlines.precomp_false h)
     (by
       intro debit msg after hd hp he
-      obtain ⟨M, hmM, haM, ce0, hFd⟩ := tx_asked mf mk form ready adm hopen hd hp he
+      obtain ⟨M, hmM, haM, ce0, hFd, -⟩ := tx_asked mf mk form ready adm hopen hd hp he
       subst hmM
       subst haM
       have ce : ColdEntry msg m.world E (exitCalldata a mins) := by rw [← hdata]; exact ce0
@@ -632,12 +635,7 @@ theorem lp_exit_holds : lp_exit := by
 /-- **`lp_exit`'s message.** -/
 theorem lp_exit_message_holds : lp_exit_message := by
   intro d m A msg E a mins ask req R hR hG
-  have mk : ExitMarked m.world :=
-    { covered := m.backed A
-      usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
-        A.circle.usdcCertified
-      minter := m.minter A
-      id4 := m.id4 A }
+  have mk := m.marked A
   obtain ⟨post, hx, herr, hg, hrf, -, hpaid⟩ := exit_message (m.facts A) mk ask req R hR hG
   exact ⟨post, hx, herr, hg, by rw [hrf, Int.toNat_natCast], hpaid⟩
 
