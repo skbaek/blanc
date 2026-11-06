@@ -111,7 +111,7 @@ theorem removeLiquidityImbalance_live {sevm : Sevm} {pre : Devm} {s : State} {o 
   have hkill : (pre.getStor sevm.currentTarget).get isKilledSlot = 0 := by
     rw [hck.abs.isKilled, hk]; rfl
   -- the forward run
-  obtain ⟨r, hr, D, rfl, hLD⟩ := rx_rli_frame (pre := pre) (s := s)
+  obtain ⟨r, hr, D, rfl, hLD⟩ := rx_rli_frame (pre := pre) (s := s) (G := G)
     (Q := fun r => ∃ D', r = .halted D' ∧ ExLive sevm (W 4) D' _)
     hfork hstatic hdepth hlen hcd hsel hid hWc hWb hck.abs hck.unlocked hval
     hkill hA hsup hT0 hmf hX0 hD0 hu0 hu1 hu2 hX1 hD1 h0 h1 h2 hX2 hD2
