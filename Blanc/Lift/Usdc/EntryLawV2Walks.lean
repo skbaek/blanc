@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.V2Frames
 import Blanc.Lift.HistStaticCall
+import Blanc.Lift.Usdc.AuthLog
 
 /-!
 # FiatTokenV2: the frames of `mint` and `transferWithAuthorization`, inverted
@@ -8,22 +9,6 @@ import Blanc.Lift.HistStaticCall
 and the signature recovery (the `STATICCALL` to `ecrecover`; what it answers is not read), the authorization flag, then
 `_transfer`. Anyone can send the signed one, so a credit by it needs this walk, not a premise.
 -/
-
-namespace Blanc.Lift.Usdc
-
-open Jaune in
-/-- A state holding the `AuthorizationUsed` log of the frame's own coin, with its authorizer. -/
-def AuthLogged (sevm : Jaune.Sevm) (d : Jaune.Devm) (a : Jaune.Adr) : Prop :=
-  ∃ l ∈ d.logs, l.address = sevm.currentTarget ∧
-    l.topics.take 2 = [0x98de503528ee59b575ef0c0a2576a82497bfc029a5685b209e9ec333479b10a5, a.toB256]
-
-open Jaune in
-theorem AuthLogged.mono {sevm : Jaune.Sevm} {d d' : Jaune.Devm} {a : Jaune.Adr} (h : AuthLogged sevm d a)
-    (keep : ∀ l ∈ d.logs, l ∈ d'.logs) : AuthLogged sevm d' a := by
-  obtain ⟨l, m, r⟩ := h
-  exact ⟨l, keep l m, r⟩
-
-end Blanc.Lift.Usdc
 
 namespace Blanc.Lift.Usdc.ImplV2
 

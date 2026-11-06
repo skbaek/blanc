@@ -173,10 +173,10 @@ theorem auth_of_frame {F : Exec.Frame} (pc : F.pc = 0) (hcode : F.sevm.code = Im
   | ok post =>
     simp only [v22Auths, List.mem_cons, List.not_mem_nil, or_false] at sel
     rcases sel with s | s | s | s
-    · exact frame_twa_vrs run hcode fork lib s
-    · exact (frame_rwa_vrs run hcode fork lib s).2
-    · exact frame_twa_bytes run hcode fork lib s
-    · exact (frame_rwa_bytes run hcode fork lib s).2
+    · exact (frame_twa_vrs run hcode fork lib s).1
+    · exact (frame_rwa_vrs run hcode fork lib s).2.1
+    · exact (frame_twa_bytes run hcode fork lib s).1
+    · exact (frame_rwa_bytes run hcode fork lib s).2.1
 
 /-! ## One frame -/
 
