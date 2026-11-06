@@ -84,11 +84,61 @@ theorem Xinst.step_delegatecall_enter_getStor {sevm : Sevm} {pre : Devm} {frame 
   rcases Frame.enter_run_inv enter with ⟨benv, transfer, rfl⟩
   exact (benvAfterTransfer_ok_getStor transfer owner (Or.inr messageFacts.2)).trans messageFacts.1
 
+/-- A committed call's resumption keeps the child's logs. -/
+theorem Resume.call_run_logs {parent : Devm} {oi os : Nat} {f : Frame} {x d : Devm}
+    (hf : f.isCreate = false) (hsg : f.inner.benv.stat.rules.stateGas = none) (hx : x.error = none)
+    (h : Resume.run (.call parent oi os) (f.settle (.ok x)) = .ok d) : ∀ l ∈ x.logs, l ∈ d.logs := by
+  unfold Frame.settle Frame.settleMsg at h
+  rw [hsg, hf] at h
+  simp only [executeCode.handleErrorWith, executeCode.handleError, processMessage.settle, Bool.false_eq_true, ↓reduceIte,
+    bind, Except.bind, hx, Option.isSome_none, Resume.run, liftToExecution] at h
+  have hy : (Devm.recordTouch f.inner.benv.stat.rules true f.inner.currentTarget x).error = none := by
+    rw [Devm.recordTouch_error]
+    exact hx
+  simp only [hy, Option.isSome_none, Bool.false_eq_true, ↓reduceIte] at h
+  rcases hp : (incorporateChildOnSuccess parent (Devm.recordTouch f.inner.benv.stat.rules true f.inner.currentTarget x)
+      (Devm.recordTouch f.inner.benv.stat.rules true f.inner.currentTarget x).output).push 1 with _ | d' <;> rw [hp] at h
+  · cases h
+  · injection h with h
+    subst h
+    intro l hl
+    change l ∈ d'.logs
+    rw [← (Devm.push_of_push hp).logs]
+    refine List.mem_append_right _ ?_
+    unfold Devm.recordTouch
+    split <;> exact hl
+
 end Blanc
 
 namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc.Proxy Blanc.Lift.WriteSite
+
+/-- `_delegate`'s tail keeps the logs of its resumed state. -/
+theorem dl_tail_logs {P : Sevm → Devm → Ninst → Devm → Prop} (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {d1 post : Devm} (run : SFunc.RunP P prog sevm d1 dlTail (.halted post)) : post.logs = d1.logs := by
+  rw [St.self' d1] at run
+  unfold dlTail at run
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_returndatasize (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨-, _, rfl⟩ := ri_returndatacopy (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨w, hw, _, rfl⟩ := ri_dup_any (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_eq (hP s)
+  obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+  rcases rpw_branch run with ⟨-, _, run⟩ | ⟨-, _, run⟩
+  · unfold t_069f_c23 at run
+    obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_returndatasize (hP s)
+    obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+    cases run with
+    | last hl => exact (ri_return hl).2.2
+  · unfold t_06a3_c23 at run
+    obtain ⟨_, run⟩ := rpw_dest run
+    obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_returndatasize (hP s)
+    obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
+    exact (rpw_revert run).elim
 
 /-- What a proxy frame's committed implementation child shares with it. -/
 structure EntryChild (sevm : Sevm) (pre post : Devm) (C : ByteArray) (G : Exec.Frame) : Prop where
@@ -103,11 +153,31 @@ structure EntryChild (sevm : Sevm) (pre post : Devm) (C : ByteArray) (G : Exec.F
   preStor : Devm.getStor G.pre sevm.currentTarget = Devm.getStor pre sevm.currentTarget
   postStor : Devm.getStor post sevm.currentTarget = Devm.getStor G.post sevm.currentTarget
   wf : Mem.Wf G.pre.memory
+  logs : ∀ l ∈ G.post.logs, l ∈ post.logs
+  /-- The proxy answers what its implementation answered. -/
+  output : post.output = G.post.output
+  /-- The implementation's frame starts with nothing on its stack or in its memory. -/
+  fresh : G.pre.stack = [] ∧ G.pre.memory = Mem.empty
 
 theorem EntryChild.env {sevm : Sevm} {pre post : Devm} {C : ByteArray} {G : Exec.Frame}
     (h : EntryChild sevm pre post C G) : Env.root G.sevm = Env.root sevm := by
   unfold Env.root
   rw [h.caller, h.target, h.data]
+
+/-- **A committed proxy frame off the five admin selectors has a caller other than the admin word**: the fallback
+reverts for the admin. -/
+theorem proxy_notAdmin {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
+    (codeEq : sevm.code = Proxy.code) (hsg : sevm.benvStat.rules.stateGas = none)
+    (bal : sevm.benvStat.rules.bal = none) (sel : Blanc.Sevm.selector sevm ∉ adminSelectors) :
+    sevm.caller ≠ adminOf pre.state sevm.currentTarget := by
+  obtain ⟨f0, hf0, hrun⟩ := lift_sound_in_noStateGas cert_check codeEq hsg run
+  obtain rfl : f0 = t_0000_c0 := Option.some.inj (hf0.symm.trans rfl)
+  generalize hR : (⟨0, sevm, pre, .ok post, run⟩ : Exec.Deriv) = R at hrun
+  rw [St.self' pre] at hrun
+  rcases proxy_haltH_sel (P := StepIn R) (fun h => StepIn.toRun h) bal hrun with step | hadm
+  · rw [adminOf_eq]
+    exact step.1
+  · exact (sel hadm.2).elim
 
 /-- **A committed non-admin proxy frame is its implementation's frame.** -/
 theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
@@ -128,7 +198,8 @@ theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre
     ⟨-, b', g, S, M, G, d1, hb', step, tail⟩ | hadm
   swap
   · exact (notAdmin (by rw [adminOf_eq]; exact hadm)).elim
-  obtain ⟨⟨w, st, hst, hw⟩, -, hstate⟩ := dl_tail_halted (fun h => StepIn.toRun h) tail
+  obtain ⟨⟨w, st, hst, hw⟩, hout, hstate⟩ := dl_tail_halted (fun h => StepIn.toRun h) tail
+  have tailLogs := dl_tail_logs (fun h => StepIn.toRun h) tail
   generalize hword : pre.getStorVal sevm.currentTarget implSlot = word at *
   obtain ⟨xl, filled, pc, steprun⟩ := step
   have xrun : Xinst.Run sevm (St b' (g :: word :: 0 :: sevm.data.length.toB256 :: 0 :: 0 :: S)
@@ -181,7 +252,7 @@ theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre
       rw [hstat]
       exact hsg
     subst hrsm
-    rcases Resume.call_run_inv hcreate hsgf hresume.symm with ⟨xr, rfl, hxe, -, hstS, -⟩ | ⟨s0, hs0⟩
+    rcases Resume.call_run_inv hcreate hsgf hresume.symm with ⟨xr, rfl, hxe, -, hstS, hrd⟩ | ⟨s0, hs0⟩
     swap
     · rw [hs0] at hst
       simp only [List.cons.injEq] at hst
@@ -202,7 +273,7 @@ theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre
       have mem := roots _ List.mem_cons_self
       subst hR
       exact Exec.rawFrameRoots_codePreserve run a ne _ mem
-    refine ⟨Exec.Frame.ofRun child committed, ⟨rfl, ?_, ?_, ?_, ?_, ?_, ?_, rootCode, ?_, ?_, ?_⟩⟩
+    refine ⟨Exec.Frame.ofRun child committed, ⟨rfl, ?_, ?_, ?_, ?_, ?_, ?_, rootCode, ?_, ?_, ?_, ?_, ?_, ⟨rfl, rfl⟩⟩⟩
     · show f.inner.code = _
       rw [hK, codeSame]
     · exact hT
@@ -223,5 +294,19 @@ theorem proxy_entry_child {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre
     · show Devm.getStor post sevm.currentTarget = Devm.getStor xr sevm.currentTarget
       simp only [Devm.getStor, Devm.getAcct, hstate, hstS]
     · exact Nat.le_refl _
+    · intro l hl
+      rw [tailLogs]
+      exact Resume.call_run_logs hcreate hsgf hxe hresume.symm l hl
+    · show post.output = xr.output
+      have hprov : ReturnDataBound.OutputProvenance _ xr := ReturnDataBound.exec_output child (by
+        change f.inner.benv.stat.rules.stateGas = none
+        exact hsgf)
+      have hlen : xr.output.length < 2 ^ 256 := by
+        rcases hprov with h | h
+        · rw [← h]
+          show ([] : Bytes).length < 2 ^ 256
+          decide
+        · exact h
+      rw [hout, hrd, B256.toNat_toB256_of_lt hlen, sliceD_zero_length]
 
 end Blanc.Lift.Usdc

@@ -96,11 +96,13 @@ def VirtualPriceBound (calls : List Exec.Frame) : Prop :=
 
 /-! ## The fall -/
 
-/-- A message asks the pool for `get_virtual_price()` at `w`, statically. -/
+/-- A message asks the pool for `get_virtual_price()` at `w`, statically, with 10,000,000 gas. -/
 structure AsksPrice (m : Msg) (w : State) : Prop where
   target : m.currentTarget = pool
   state : m.benv.state = w
   code : m.code = w.getCode pool
+  gas : m.gas = 10000000
+  static : m.isStatic = true
   data : m.data = abiSelectorBytes Curve3Pool.selGetVirtualPrice
 
 /-- `get_virtual_price()` at `w`, asked in the environment of `env`, returns `p`. -/
@@ -108,45 +110,64 @@ def ReturnsPrice (env : BenvStat) (w : State) (p : Nat) : Prop :=
   ∃ m post, AsksPrice m w ∧ m.benv.stat = env ∧ exec (initEvm m) = .ok post ∧ post.error = none ∧
     Curve3Pool.answerWord post.output = p
 
-/-- A message to the pool at `w`, under a fork the history covers, commits and ends in `post`. -/
+/-- An environment at the pool's creation block: its fork, its number, its timestamp. -/
+structure AtPoolBlock (env : BenvStat) : Prop where
+  fork : env.fork = .muirGlacier
+  number : env.number = 10809473
+  time : env.time = Curve3Pool.Creation.deployTime
+
+/-- A message to the pool at `w`, with 10,000,000 gas at the pool's creation block and `w` as its
+original state, commits and ends in `post`. -/
 structure CallCommits (m : Msg) (w : State) (post : Devm) : Prop where
   target : m.currentTarget = pool
   state : m.benv.state = w
+  orig : m.benv.stat.origState = w
   code : m.code = w.getCode pool
-  fork : HistFork m.benv.stat.fork
+  gas : m.gas = 10000000
+  block : AtPoolBlock m.benv.stat
   ran : exec (initEvm m) = .ok post
   ok : post.error = none
 
-/-- `poolDeployTime`: the pool's creation block's timestamp, which sets its kill deadline. -/
-def poolDeployTime : B256 := 1599414978
-
-/-- 3Crv's words after its recorded creation and the minter assignment. -/
-def c3DeployedWords (x : B256) : B256 :=
-  if x = Curve3Crv.vyMinterSlot then pool.toB256
-  else (Curve3Crv.Creation.deployedStor Curve3Crv.Creation.deployer.toB256).get x
-
 /-- **The world the recorded creations and the minter assignment leave**: the contracts' storage exactly,
-each coin its deployed bytes, and the pool holding none of any coin. Who else holds coins is free. -/
+each coin its deployed bytes, USDC's proxy over `FiatTokenV2`, and the pool holding none of any coin. Who
+else holds coins is free. -/
 structure AtDeployment (w : State) : Prop where
   poolCode : w.getCode pool = Curve3Pool.code
-  poolWords : wordsAt pool w = (Curve3Pool.Creation.deployedStor poolDeployTime).get
+  poolStor : w.getStor pool = Curve3Pool.Creation.deployedStor Curve3Pool.Creation.deployTime
   c3Code : w.getCode c3 = Curve3Crv.code
-  c3Words : wordsAt c3 w = c3DeployedWords
+  c3Stor : w.getStor c3 = (Curve3Crv.Creation.deployedStor Curve3Crv.Creation.deployer.toB256).set
+    Curve3Crv.vyMinterSlot pool.toB256
   coins : StartingCode w
   usdcCode : w.getCode usdc = Lift.Usdc.Proxy.code
-  usdcVersion : CurveCoins.UsdcVersion (w.getCode (usdcImplOf w))
+  usdcV2 : w.getCode (usdcImplOf w) = Lift.Usdc.ImplV2.code
   empty : ∀ k, word w (coinAt k) (coinEntry pool k) = 0
 
 /-- The message is a call of `add_liquidity`. -/
 def IsDeposit (m : Msg) : Prop := ∃ rest, m.data = abiSelectorBytes Curve3Pool.selAddLiquidity ++ rest
 
+/-- The pool's four amplification words, which are all `ampAt` reads. -/
+def rampWords (w : State) : List Nat :=
+  [Curve3Pool.initialASlot, Curve3Pool.futureASlot, Curve3Pool.initialATimeSlot,
+    Curve3Pool.futureATimeSlot].map (word w pool)
+
+/-- **Unchanged amplification words give the same `A` at every timestamp.** -/
+theorem ampAt_eq_of_rampWords {w w' : State} (h : rampWords w = rampWords w') (t : Nat) :
+    ampAt w t = ampAt w' t := by
+  simp only [rampWords, List.map_cons, List.map_nil, List.cons.injEq, and_true] at h
+  obtain ⟨h0, h1, h2, h3⟩ := h
+  simp only [ampAt, h0, h1, h2, h3]
+
 /-- **The word `get_virtual_price()` returns falls across one call at fixed amplification**, from the
-world the recorded deployment leaves plus one first deposit. A claim about the bytes: the deposit is a path
-the chain could have taken, not one it took. -/
+world the recorded deployment leaves plus one first deposit.
+
+Every call runs under Muir Glacier at the pool's creation block number and timestamp, as a message call
+with 10,000,000 gas, not a validated transaction. The deposit is a path the chain could have taken, not
+one it took, and the depositor's coin balances and allowances are a choice of the witness. This is a
+claim about the deployed bytes: it makes no claim about any chain state. -/
 def VirtualPriceFalls : Prop :=
   ∃ (w : State) (dep m : Msg) (mid post : Devm) (p p' : Nat),
     AtDeployment w ∧ IsDeposit dep ∧ CallCommits dep w mid ∧ CallCommits m mid.state post ∧
-    ampAt mid.state m.benv.stat.time.toNat = ampAt post.state m.benv.stat.time.toNat ∧
+    rampWords mid.state = rampWords post.state ∧
     ReturnsPrice m.benv.stat mid.state p ∧ ReturnsPrice m.benv.stat post.state p' ∧ p' < p
 
 end Blanc.Composition.Curve3PoolPublic

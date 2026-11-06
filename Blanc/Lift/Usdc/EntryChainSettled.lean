@@ -1,6 +1,7 @@
 import Blanc.Lift.Usdc.EntryChainRoots
 import Blanc.Lift.Usdc.ProxySafeFrames
 import Blanc.ExecutionRetainedDeletionSafety
+import Blanc.Lift.ChildFrameCode
 
 /-!
 # USDC's certification read at settled frames only
@@ -129,14 +130,73 @@ theorem child_context {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0
     rw [childTarget, nodeCode] at code
     exact proxyResult (frameCode.symm.trans code)
 
+/-- **A child at `T` running the proxy's code, of a parent at `T`, was called, not delegated to**: a frame at `T` delegates
+only to a version or the library. So its caller is `T`. -/
+theorem child_proxy_caller {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 sevm pre out)
+    (fork : HistFork sevm.benvStat.fork) (proxyCode : pre.state.getCode T = Proxy.code)
+    (context : ContextAt T sevm pre) (parent : sevm.currentTarget = T)
+    (certified : sevm.code = Proxy.code → sevm.caller ≠ adminOf pre.state T → UsdcCertified pre T)
+    {N : Exec.Deriv} (chain : Exec.Deriv.ParentPrefix ⟨0, sevm, pre, out, run⟩ N)
+    {f : Frame} {rsm : Resume} {pc' : Nat} {cevm : Evm}
+    (step : Evm.step ⟨N.pc, N.sevm, N.devm⟩ = .spawn f rsm pc') (enter : f.enter = .run cevm)
+    (childCode : cevm.sta.code = Proxy.code) : cevm.sta.caller = T := by
+  have hsg := fork.stateGas_none
+  have sevmEq : N.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
+  obtain ⟨x, hat, spawn, -⟩ := Evm.step_spawn_inv step
+  have frameCode : cevm.sta.code = f.inner.code := Frame.enter_run_code enter
+  have called : x = .call ∨ x = .staticcall → cevm.sta.caller = T := fun d => by
+    rw [Frame.enter_run_caller enter]
+    rcases d with rfl | rfl
+    · rw [Xinst.step_call_spawn_caller spawn, sevmEq, parent]
+    · rw [Xinst.step_staticcall_spawn_caller spawn, sevmEq, parent]
+  obtain ⟨codes, libClause⟩ := context parent
+  rcases codes with hc | version | hc
+  · obtain ⟨g, K, ⟨rfl, delegated⟩ | ⟨rfl, -⟩⟩ := Proxy.proxy_nodeH run hc hsg fork.bal_none chain hat
+    · have notAdmin : sevm.caller ≠ adminOf pre.state T := by
+        rw [← parent]
+        exact delegated.1
+      have cert := certified hc notAdmin
+      obtain ⟨_, b, gas, S, M, G, tail, state, tree, input⟩ := delegated
+      change N.devm = _ at input
+      have nodeState : N.devm.state = pre.state := by rw [input]; exact state
+      have nodeGetCode : ∀ a, N.devm.getCode a = pre.getCode a := fun a => by
+        simp only [Devm.getCode, Devm.getAcct, nodeState]
+      have version : CurveCoins.UsdcVersion (pre.getCode (pre.getStorVal T implSlot).toAdr) := cert.1
+      have shape := step_delegatecall_spawn_shapeH (sevmEq ▸ hsg) spawn (by rw [input]; rfl)
+        (by rw [nodeGetCode, parent]; exact version_undelegated version)
+      have code : f.inner.code = pre.getCode (pre.getStorVal T implSlot).toAdr := by
+        rw [shape.2.2.2.2.2, nodeGetCode, parent]
+      rw [frameCode, code] at childCode
+      exact (version_ne_proxy version childCode).elim
+    · exact called (.inl rfl)
+  · rcases version with hc | hc | hc
+    · obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix_noStateGas ImplV2.cert_check
+        (F := ⟨0, sevm, pre, out, run⟩) rfl hc hsg chain
+      exact called (direct_of_kind (ok.execsSatisfy (Cursor.execsSatisfy_of_reachable v2_kinds reach) hat))
+    · obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix_noStateGas ImplV2_1.cert_check
+        (F := ⟨0, sevm, pre, out, run⟩) rfl hc hsg chain
+      exact called (direct_of_kind (ok.execsSatisfy (Cursor.execsSatisfy_of_reachable v2_1_kinds reach) hat))
+    · obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix_noStateGas certL_check
+        (F := ⟨0, sevm, pre, out, run⟩) rfl hc hsg chain
+      have kind := ok.execsSatisfy (Cursor.execsSatisfy_of_reachable impl_kinds reach) hat
+      cases x with
+      | call => exact called (.inl rfl)
+      | delegatecall =>
+          have lib := impl_delegate_lib run hc hsg (libClause hc) chain hat spawn
+          rw [frameCode, lib] at childCode
+          exact (lib_ne_proxy childCode).elim
+      | _ => simp only [implKinds, reduceCtorEq, beq_iff_eq, Bool.or_eq_true, or_self] at kind
+  · obtain ⟨κ, reach, ok⟩ := cursor_of_parentPrefix_noStateGas Lib.cert_check
+      (F := ⟨0, sevm, pre, out, run⟩) rfl hc hsg chain
+    exact called (.inr (isStaticcall_eq (ok.execsSatisfy (Cursor.execsSatisfy_of_reachable lib_staticOnly reach) hat)))
+
 /-- **Every committed frame at `T` runs one of USDC's codes.** -/
 theorem committed_context (n : Nat) : ∀ {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec 0 sevm pre out), sevm.depth < n → HistFork sevm.benvStat.fork →
     pre.state.getCode T = Proxy.code → ContextAt T sevm pre →
     CertifiedSettled T (Exec.committedFrames run) →
-    ∀ G ∈ Exec.committedFrames run, G.pc = 0 ∧ G.sevm.benvStat.rules.stateGas = none ∧
-      (G.sevm.currentTarget = T →
-        G.sevm.code = Proxy.code ∨ CurveCoins.UsdcVersion G.sevm.code ∨ G.sevm.code = Lib.code) := by
+    ∀ G ∈ Exec.committedFrames run, G.pc = 0 ∧ G.sevm.benvStat.rules.stateGas = none ∧ ContextAt T G.sevm G.pre ∧
+      HistFork G.sevm.benvStat.fork := by
   induction n with
   | zero => exact fun _ h => absurd h (Nat.not_lt_zero _)
   | succ n ih =>
@@ -146,11 +206,9 @@ theorem committed_context (n : Nat) : ∀ {sevm : Sevm} {pre : Devm} {out : Exec
     · rename_i committed
       have rootFacts : (Exec.Frame.ofRun run committed).pc = 0 ∧
           (Exec.Frame.ofRun run committed).sevm.benvStat.rules.stateGas = none ∧
-          ((Exec.Frame.ofRun run committed).sevm.currentTarget = T →
-            (Exec.Frame.ofRun run committed).sevm.code = Proxy.code ∨
-              CurveCoins.UsdcVersion (Exec.Frame.ofRun run committed).sevm.code ∨
-                (Exec.Frame.ofRun run committed).sevm.code = Lib.code) :=
-        ⟨rfl, fork.stateGas_none, fun t => (context t).1⟩
+          ContextAt T (Exec.Frame.ofRun run committed).sevm (Exec.Frame.ofRun run committed).pre ∧
+          HistFork (Exec.Frame.ofRun run committed).sevm.benvStat.fork :=
+        ⟨rfl, fork.stateGas_none, context, fork⟩
       have rootMember : Exec.Frame.ofRun run committed ∈ Exec.committedFrames run := by
         simp only [Exec.committedFrames, dite_eq_left committed]
         exact List.mem_cons_self
@@ -160,9 +218,8 @@ theorem committed_context (n : Nat) : ∀ {sevm : Sevm} {pre : Devm} {out : Exec
       rcases List.mem_cons.mp member with rfl | below
       · exact rootFacts
       · refine Exec.descendantFrames_of_spawns (root := ⟨0, sevm, pre, out, run⟩)
-          (Q := fun G => G.pc = 0 ∧ G.sevm.benvStat.rules.stateGas = none ∧
-            (G.sevm.currentTarget = T →
-              G.sevm.code = Proxy.code ∨ CurveCoins.UsdcVersion G.sevm.code ∨ G.sevm.code = Lib.code))
+          (Q := fun G => G.pc = 0 ∧ G.sevm.benvStat.rules.stateGas = none ∧ ContextAt T G.sevm G.pre ∧
+            HistFork G.sevm.benvStat.fork)
           ?_ run (.refl _) (fun _ h => h) (fun _ h => h) G below
         intro N f rsm pc' cevm raw child h chain step enter _ into
         have sevmEq : N.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
@@ -214,10 +271,10 @@ theorem root_noDel {R : Exec.Frame} (ready : RootReady HistFork T entrySem (fun 
       ¬ Linst.At N.sevm.code N.pc .selfdestruct := by
     intro N retained target
     obtain ⟨frame, member, chain⟩ := (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix run N).mp retained
-    obtain ⟨framePc, frameSg, classify⟩ := frames frame member
+    obtain ⟨framePc, frameSg, classify, -⟩ := frames frame member
     have same : N.sevm = frame.sevm := Exec.Deriv.ParentPrefix.sevm_eq chain
     have family : UsdcContextCode N.sevm.code := by
-      rcases classify (by rw [← same]; exact target) with c | v | c
+      rcases (classify (by rw [← same]; exact target)).1 with c | v | c
       · rw [same]; exact .inl c
       · rw [same]
         rcases v with c | c | c
@@ -266,6 +323,48 @@ theorem settled_data_bound {cfg : ChainConfig} {start : Benv} {future : BlockCha
     ∀ G ∈ trace.settledFrames, G.sevm.data.length < 2 ^ 256 := fun G member =>
   trace.calldata_bound capabilities (fun _ hf => hf.dataNonZero_ge) _
     (trace.mem_rawFrames_of_mem_settledFrames G member)
+
+/-- **A settled frame running the proxy's code, child of a settled frame at `T`, has caller `T`.** -/
+theorem settled_child_caller {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (trace : MidHistoryTraceIn HistFork cfg start future)
+    (capabilities : BodyStageCapabilities HistFork)
+    (installed : start.state.getCode T = Proxy.code)
+    (certified : CertifiedSettled T trace.settledFrames) {G F : Exec.Frame} (member : G ∈ trace.settledFrames)
+    (parent : G.sevm.currentTarget = T) (child : F ∈ Exec.childFrames G.run) (code : F.sevm.code = Proxy.code) :
+    F.sevm.caller = T := by
+  have memberR := member
+  rw [trace.settledFrames_eq] at memberR
+  obtain ⟨R, here, frame⟩ := List.mem_flatMap.mp memberR
+  have ready := Blanc.Lift.MidHistoryTraceIn.rootsReady trace capabilities (sem := entrySem) (C := Proxy.code) rfl
+    installed proxy_toList_ne_nil proxy_not_delegation
+    (usdc_outputNotDeleted trace capabilities installed certified).1 R here
+  obtain ⟨fork, at_, -, -, pcZero⟩ := ready
+  have sub : ∀ g ∈ Exec.committedFrames R.run, g ∈ trace.settledFrames := fun g hg => by
+    rw [trace.settledFrames_eq]
+    exact List.mem_flatMap.mpr ⟨R, here, hg⟩
+  rcases R with ⟨pc, sevm, pre, out, run, committed⟩
+  dsimp only at fork at_ pcZero frame sub
+  subst pcZero
+  have proxyCode : pre.state.getCode T = Proxy.code := bytes_eq_of_image at_.1
+  have context : ContextAt T sevm pre := fun t => by
+    have hc : sevm.code = Proxy.code := bytes_eq_of_image (at_.2 t).1
+    exact ⟨.inl hc, fun hi => (proxy_ne_impl (hc.symm.trans hi)).elim⟩
+  have rootCert : CertifiedSettled T (Exec.committedFrames run) := fun g hg => certified g (sub g hg)
+  obtain ⟨gpc, -, gctx, gfork⟩ := committed_context (sevm.depth + 1) run (Nat.lt_succ_self _) fork proxyCode context rootCert G
+    frame
+  have gcode : G.pre.state.getCode T = Proxy.code := by
+    have retained := (Exec.mem_retainedNodes_iff_committedFrame_parentPrefix run (Exec.Frame.rootDeriv G)).mpr
+      ⟨G, frame, .refl _⟩
+    exact Exec.rawNodes_getCode run proxyCode proxy_toList_ne_nil _
+      ((Exec.retainedNodes_sublist_rawNodes run).subset retained)
+  obtain ⟨gp, gsevm, gpre, gout, grun, gcommitted⟩ := G
+  dsimp only at gpc gctx gfork gcode parent child
+  subst gpc
+  obtain ⟨N, f, rsm, pc', cevm, pp, hstep, henter, hsevm, -⟩ := Exec.childFrames_spawnedAt_entry grun (.refl _) F child
+  have := child_proxy_caller grun gfork gcode gctx parent (fun c a => certified _ member parent c a) pp hstep henter
+    (by rw [← hsevm]; exact code)
+  rw [← hsevm] at this
+  exact this
 
 /-- **The chain's links**: the entry frames off `rescueERC20`. A rescue frame's re-entrant frames are links
 themselves, and the view runs through them. -/

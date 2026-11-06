@@ -86,14 +86,14 @@ theorem descendants_nil {A : Exec.Frame} (good : CodeFrame T HistFork code A) (t
   rw [raw] at this
   exact absurd this List.not_mem_nil
 
-/-- **The flag stays clear along the settled frames at `T`** when no frame among them logs `Deprecate`. By position: a
-frame's prefix is live by induction, so nothing in it encloses the frame, so the chain reaches its entry; a live frame on
-`deprecate` logs, and on any other selector keeps the word. -/
-theorem notDeprecated_of_frames (capabilities : BodyStageCapabilities HistFork)
+/-- **The flag stays clear along the settled frames at `T`** when no frame among them is on `deprecate`. By position: a
+frame's prefix is live by induction, so nothing in it encloses the frame, so the chain reaches its entry; a live frame
+off `deprecate` keeps the word. -/
+theorem notDeprecated_of_selectors (capabilities : BodyStageCapabilities HistFork)
     (trace : MidHistoryTraceIn HistFork cfg start future) (installed : start.state.getCode T = code)
     (clear : flag20 ((start.state.getStor T).get 10) = 0)
     (keys : UsdtKeysFresh h (coinFrames T (fun _ => True) trace.settledFrames))
-    (noLog : ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, ∀ l ∈ F.post.logs, ¬ DeprecateLog T l) :
+    (off : ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, Blanc.Sevm.selector F.sevm ≠ 0x0753c30c) :
     ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, NotDeprecated T F := by
   have main : ∀ (n : Nat) (before : List Exec.Frame) (f : Exec.Frame) (after : List Exec.Frame),
       trace.settledFrames = before ++ f :: after → before.length = n → f.sevm.currentTarget = T →
@@ -133,20 +133,30 @@ theorem notDeprecated_of_frames (capabilities : BodyStageCapabilities HistFork)
         refine ⟨?_, Nat.le_refl _⟩
         have whole := inCoin G hG
         have target := (mem_coinFrames.mp hG).2.1
-        have settled := (mem_coinFrames.mp whole).1
-        by_cases sel : Blanc.Sevm.selector G.sevm = 0x0753c30c
-        · obtain ⟨l, mem, logged⟩ := deprecate_logs good target (settled_wf trace settled) sel
-          exact absurd logged (noLog G whole l mem)
-        · have keep := frame_flag_keep whole keys good target (all G hG) sel
-          change flag20 ((G.post.getStor T).get 10) = 0
-          rw [keep]
-          exact flag
+        have keep := frame_flag_keep whole keys good target (all G hG) (off G whole)
+        change flag20 ((G.post.getStor T).get 10) = 0
+        rw [keep]
+        exact flag
       exact (chain.fold (held := fun _ => 0) (credit := fun _ => 0) (debit := fun _ => 0)
         (I := fun w => flag20 (w 10) = 0) law clear).1
   intro F hF
   obtain ⟨member, ht, hs, -⟩ := mem_coinFrames.mp hF
   obtain ⟨b, m, split⟩ := List.append_of_mem member
   exact main _ b F m split rfl ht hs
+
+/-- **The flag stays clear along the settled frames at `T`** when no frame among them logs `Deprecate`: a frame on
+`deprecate` logs it. -/
+theorem notDeprecated_of_frames (capabilities : BodyStageCapabilities HistFork)
+    (trace : MidHistoryTraceIn HistFork cfg start future) (installed : start.state.getCode T = code)
+    (clear : flag20 ((start.state.getStor T).get 10) = 0)
+    (keys : UsdtKeysFresh h (coinFrames T (fun _ => True) trace.settledFrames))
+    (noLog : ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, ∀ l ∈ F.post.logs, ¬ DeprecateLog T l) :
+    ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, NotDeprecated T F := by
+  refine notDeprecated_of_selectors capabilities trace installed clear keys fun F hF sel => ?_
+  obtain ⟨member, target, -, -⟩ := mem_coinFrames.mp hF
+  obtain ⟨l, mem, logged⟩ := deprecate_logs (settled_codeFrame capabilities trace installed member target) target
+    (settled_wf trace member) sel
+  exact noLog F hF l mem logged
 
 /-- **`notDeprecated` from a clear flag and no `Deprecate` receipt log.** -/
 theorem notDeprecated_of_receipts (capabilities : BodyStageCapabilities HistFork)

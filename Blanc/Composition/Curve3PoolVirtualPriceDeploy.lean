@@ -1,5 +1,6 @@
 import Blanc.Composition.Curve3PoolPublicBridge
 import Blanc.Composition.Curve3Pool3CrvU3Mid
+import Blanc.Lift.CurveCoins.PremisesOfLogs
 
 /-!
 # `Assumes` gives the deployment's facts and the history's environment
@@ -185,6 +186,16 @@ theorem sinceMinter_raw_sub :
 
 /-! ## The coins -/
 
+/-- USDT's code at the pool's creation. -/
+theorem Assumes.usdtStart (A : Assumes d h) : d.poolCut.afterBenv.state.getCode usdt = Lift.Usdt.code :=
+  cutCode_of_cert usdtInstalledCert d.toPool d.pool.trace d.poolCut A.code.usdtCode
+
+/-- **USDT is not redirected at any frame**: the flag is clear at the pool's creation and no frame is on `deprecate`. -/
+theorem Assumes.notDeprecated (A : Assumes d h) :
+    ∀ F ∈ coinFrames usdt (fun _ => True) (d.sincePool h).settledFrames, CurveCoins.Usdt.NotDeprecated usdt F :=
+  CurveCoins.Usdt.notDeprecated_of_selectors BodyStageCapabilities.historical (d.sincePool h) A.usdtStart
+    A.tether.notRedirected A.hashes.coinKeys.usdt A.tether.noDeprecate
+
 /-- `Assumes` gives `CoinsHold` over any part of the history from the pool's creation, given the two codes at its start. -/
 theorem Assumes.coinsHold (A : Assumes d h) {s : Benv} {f : BlockChain}
     (trace : MidHistoryTraceIn HistFork mainnetChainConfig s f)
@@ -193,9 +204,10 @@ theorem Assumes.coinsHold (A : Assumes d h) {s : Benv} {f : BlockChain}
     CoinsHold trace dai usdc usdt where
   daiCode := daiCode
   usdtCode := usdtCode
-  usdcCode := fun F m => A.circle.proxyStays F (sub F m)
-  usdcImpl := fun F m t _ => (A.circle.usdcCertified F (sub F m) t).1
-  usdtLive := fun F m t st => A.tether.notDeprecated F (mem_coinFrames.mpr ⟨sub F m, t, st, trivial⟩)
+  usdcCode := fun F m => Usdc.usdc_settledCode (d.sincePool h) BodyStageCapabilities.historical A.usdcCode
+    A.circle.usdcCertified F (sub F m)
+  usdcImpl := fun F m t c a => A.circle.usdcCertified F (sub F m) t c a
+  usdtLive := fun F m t st => A.notDeprecated F (mem_coinFrames.mpr ⟨sub F m, t, st, trivial⟩)
 
 theorem coin0_eq : Curve3Pool.adrOf (Curve3Pool.Creation.coinsN.get 0) = dai := by decide +kernel
 theorem coin1_eq : Curve3Pool.adrOf (Curve3Pool.Creation.coinsN.get 1) = usdc := by decide +kernel
