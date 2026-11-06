@@ -6,7 +6,7 @@ import Blanc.Composition.Curve3PoolSwapRequest
 
 `oneCoin_accepts`: the model's `remove_liquidity_one_coin` from `oneCoinOutcome`, whose checks are the contract's. `one_coin_run`:
 the frame's run from the moment's facts, with the chain's cost at most `1019258` (`oc_cost_le`) and its refund fixed before the residual
-gas. `one_coin_message_bounded` closes the message at a bounded cost, and `one_coin_message_holds` the statement.
+gas. `one_coin_message_holds` is the statement.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -415,17 +415,10 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
   rw [← hF]
   exact ⟨D, Lift.exec_withGas_of_frame exD, herr, hDg, hrf, hpaid⟩
 
-/-- **`one_coin_message` at a bounded cost.** -/
-theorem one_coin_message_bounded (d : Deployment) (m : Moment d) (A : Assumes d m.through) (msg : Msg) (E : Adr) (a minDy dy admin : Nat)
-    (i : Fin 3) (ask : Asked msg m.world E (oneCoinCalldata a i minDy))
-    (req : OneCoinRequest m.world E msg.benv.stat.time.toNat a i minDy dy admin) :
-    ∃ cost refund, cost ≤ 16777216 ∧ MsgDoes msg liquidityRoom cost refund (fun st => OneCoinPaid m.world st E a i dy admin) := by
+/-- **`one_coin_message`.** -/
+theorem one_coin_message_holds : one_coin_message := fun d m A msg E a minDy dy admin i ask req => by
   have fees := m.feesWithin A
   obtain ⟨cost, refund, hc, h⟩ := one_coin_run (m.facts A) (m.marked A) fees.1 fees.2 ask req
-  exact ⟨cost, refund, by omega, h⟩
-
-/-- **`one_coin_message`.** -/
-theorem one_coin_message_holds : one_coin_message := fun d m A msg E a minDy dy admin i ask req =>
-  (one_coin_message_bounded d m A msg E a minDy dy admin i ask req).imp fun _ ⟨r, _, h⟩ => ⟨r, h⟩
+  exact ⟨cost, refund, Nat.le_trans hc (by decide), h⟩
 
 end Blanc.Composition.Curve3PoolPublic

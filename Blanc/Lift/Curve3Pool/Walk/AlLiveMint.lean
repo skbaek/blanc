@@ -157,7 +157,8 @@ theorem rx_al_tailE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} 
         Bytes.toB256 (data.sliceD 0xa0 32 0) = f2) →
       (∃ (g3 : Nat) (d : Devm), E (afterSload sevm b tokenSlot) S (alMintMem sevm M mint) g3 d ∧
         G = g3 + (150 + sloadCost sevm b tokenSlot) ∧
-        d.gasLeft = D.gasLeft + (3416 + sstoreCost sevm d lockSlot 0)) → Q (.halted D)) :
+        d.gasLeft = D.gasLeft + (3416 + sstoreCost sevm d lockSlot 0) ∧
+        D.refundCounter = (afterSstore sevm d lockSlot 0).refundCounter) → Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b S M G) (alTail a1 a2 a3 a4) Q := by
   obtain ⟨g1, rfl⟩ : ∃ g, G = g + 200 := ⟨G - 200, by omega⟩
   unfold alTail
@@ -268,8 +269,9 @@ theorem rx_al_tailE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} 
     rw [hMq7, hMq6, hMq5, hMq4, hMq3, hMq2, hMq1]; rfl
   have hX : ∃ (g3' : Nat) (d' : Devm), E (afterSload sevm b tokenSlot) S (alMintMem sevm Mq1 mint) g3' d' ∧
       g1 + 200 = g3' + (150 + sloadCost sevm b tokenSlot) ∧
-      d'.gasLeft = g2 + (3416 + sstoreCost sevm d' lockSlot 0) := by
-    refine ⟨g3, d, ?_, ?_, ?_⟩
+      d'.gasLeft = g2 + (3416 + sstoreCost sevm d' lockSlot 0) ∧
+      b2.refundCounter = (afterSstore sevm d' lockSlot 0).refundCounter := by
+    refine ⟨g3, d, ?_, ?_, ?_, ?_⟩
     · rw [show tokenSlot = Bytes.toB256 [5] by decide, ← hbT, ← eM]; exact hE
     · rw [show tokenSlot = Bytes.toB256 [5] by decide]; omega
     · have e : sstoreCost sevm d lockSlot 0 = sstoreCost sevm (d.addLog
@@ -279,6 +281,7 @@ theorem rx_al_tailE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} 
             (Bytes.toB256 [1, 0]).toNat).1 }) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0]) :=
         (sstoreCost_addLog ..).symm
       omega
+    · rw [hb2]; rfl
   refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_⟩ hX⟩
   all_goals rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide)]
   · rw [show (Bytes.toB256 [0x0d, 0x20]).toNat + 0x60 = 0xd80 by decide]

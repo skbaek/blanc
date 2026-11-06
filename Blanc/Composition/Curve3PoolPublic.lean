@@ -7,9 +7,9 @@ import Blanc.Lift.StaticGasMessage
 
 Each headline is a `Prop` quantifying over its premises. This module only states them. `pool_backed_holds` and
 `virtual_price_bound_holds` are in `Curve3PoolBacked`, `lp_exit_holds` and `lp_exit_message_holds` in `Curve3PoolExitMain`,
-`swap_holds` and `swap_message_holds` in `Curve3PoolSwapMain`, `virtual_price_falls` in `Curve3PoolVirtualPriceFalls`.
-`imbalance_message_holds` is in `Curve3PoolImbalanceMain`, `one_coin_message_holds` in `Curve3PoolOneCoinMain`.
-`add_liquidity_message` is stated and not yet proved.
+`swap_holds` and `swap_message_holds` in `Curve3PoolSwapMain`, `virtual_price_falls` in `Curve3PoolVirtualPriceFalls`,
+`add_liquidity_message_holds` in `Curve3PoolAddMain`, `imbalance_message_holds` in `Curve3PoolImbalanceMain`,
+`one_coin_message_holds` in `Curve3PoolOneCoinMain`.
 
 * `pool_backed`: the pool's books are covered by what each coin's storage says it holds.
 * `lp_exit`: a holder's `remove_liquidity` transaction is processed, at exact gas, and pays out.
@@ -240,10 +240,13 @@ def swap_message : Prop :=
 /-- The room above the frame that the fallback entries' proofs require. -/
 def liquidityRoom : Nat := 800000
 
-/-- The fallback for the three entries whose closed cost is not derived here: a named cost, fixed before
-the residual gas. Listed under O4 if it stays. -/
+/-- At most this much gas: above each of the three fallback entries' proved worst case, well inside a transaction. -/
+def namedCostCap : Nat := 2500000
+
+/-- The fallback for the three entries whose closed cost is not derived here: one cost and refund, fixed before the
+residual gas and at most `namedCostCap`. -/
 def MsgDoesAtNamedCost (msg : Msg) (effect : State → Prop) : Prop :=
-  ∃ cost refund, MsgDoes msg liquidityRoom cost refund effect
+  ∃ cost refund, cost ≤ namedCostCap ∧ MsgDoes msg liquidityRoom cost refund effect
 
 /-- `add_liquidity`'s outcome from `new` balances: the shares minted and the balances stored. -/
 def addOutcome (w : State) (amp : Nat) (new : V3) : Option (Nat × V3) :=
@@ -251,7 +254,9 @@ def addOutcome (w : State) (amp : Nat) (new : V3) : Option (Nat × V3) :=
     let r ← feeRun w amp new
     let D0 ← invariant w amp
     let D2 ← getDMem r.2 amp
-    if (getDMem new amp).getD 0 ≤ D0 then none else some ((supply w * (D2 - D0)) / D0, r.1)
+    if (getDMem new amp).getD 0 ≤ D0 then none else do
+      let m ← chkDiv (← chkMul (supply w) (← chkSub D2 D0)) D0
+      some (m, r.1)
 
 /-- `remove_liquidity_imbalance`'s outcome from `new` balances: the shares burned and the balances stored. -/
 def imbalanceOutcome (w : State) (amp : Nat) (new : V3) : Option (Nat × V3) := do
@@ -293,6 +298,11 @@ def imbalanceCalldata (am : V3) (maxBurn : Nat) : Bytes :=
   abiSelectorBytes Curve3Pool.selRemoveLiquidityImbalance ++ Curve3Pool.word am.v0 ++
     Curve3Pool.word am.v1 ++ Curve3Pool.word am.v2 ++ Curve3Pool.word maxBurn
 
+/-- **The deposit's entries miss each other**: the swap's, and `E`'s 3Crv entry against the supply word. -/
+structure AddApart (w : State) (E : Adr) : Prop extends SwapApart w E where
+  /-- `E`'s 3Crv entry is not 3Crv's supply word. -/
+  c3 : Curve3Crv.vyBalSlot E ≠ Curve3Crv.vySupplySlot
+
 /-- `E` can add `am` at timestamp `t`, and the contract computes `minted` and `stored`. -/
 structure AddRequest (w : State) (E : Adr) (t : Nat) (am : V3) (minMint minted : Nat) (stored : V3) :
     Prop where
@@ -302,7 +312,9 @@ structure AddRequest (w : State) (E : Adr) (t : Nat) (am : V3) (minMint minted :
   outcome : ∃ amp, ampAt w t = some amp ∧
     addOutcome w amp (v3Of fun k => recorded w k + netOf w k (am.get k)) = some (minted, stored)
   minimum : minMint ≤ minted ∧ (supply w = 0 → ∀ k, 0 < am.get k)
-  mintFits : supply w + minted < 2 ^ 256
+  /-- The supply and `E`'s 3Crv each take the mint within a word. -/
+  mintFits : supply w + minted < 2 ^ 256 ∧ shares w E + minted < 2 ^ 256
+  apart : AddApart w E
 
 /-- `add_liquidity`'s message, at the fallback cost. -/
 def add_liquidity_message : Prop :=

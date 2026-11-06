@@ -36,6 +36,36 @@ def alExactCost (sevm : Sevm) (pre : Devm) (P : ALExactCalls) (amp : Nat) (T B1 
   if T = 0 then alExactCost0 sevm pre P amp B1 B2 xb v1
   else alExactCost1 sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2
 
+/-- A deposit that raises `D` moves some amount. -/
+theorem al_amounts_nz {sevm : Sevm} {pre : Devm} {s : State} {B1 B2 : B256} {amp v0 v1 : Nat} {xa xb : V3}
+    (hbal : s.balances = ⟨(balAt (pre.getStor sevm.currentTarget) 0).toNat,
+      (balAt (pre.getStor sevm.currentTarget) 1).toNat,
+      (balAt (pre.getStor sevm.currentTarget) 2).toNat⟩)
+    (hxa : xpChk ⟨(balAt (pre.getStor sevm.currentTarget) 0).toNat,
+      (balAt (pre.getStor sevm.currentTarget) 1).toNat,
+      (balAt (pre.getStor sevm.currentTarget) 2).toNat⟩ = some xa)
+    (hD0 : getDChk xa.get amp 1 = some v0)
+    (hxb : xpChk (alNewW sevm (pre.getStor sevm.currentTarget) B1 B2) = some xb)
+    (hD1 : getDChk xb.get amp 1 = some v1) (hlt : v0 < v1) :
+    ¬ (alAmt sevm 0 = 0 ∧ alAmt sevm 1 = 0 ∧ alAmt sevm 2 = 0) := by
+  rintro ⟨z0, z1, z2⟩
+  have hsame : alNewW sevm (pre.getStor sevm.currentTarget) B1 B2 = s.balances := by
+    obtain ⟨n0, n1, n2⟩ := al_liveNew_eq sevm (pre.getStor sevm.currentTarget) B1 B2
+    have c0 : alCrK sevm B1 B2 0 = 0 := z0
+    have c1 : alCrK sevm B1 B2 1 = 0 := z1
+    have c2 : alCrK sevm B1 B2 2 = 0 := by
+      show (if alAmt sevm 2 = 0 then alAmt sevm 2 else B2 - B1) = 0
+      rw [ite_eq_left_of_eq_true _ _ (eq_true z2), z2]
+    rw [hbal]
+    show (⟨(alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 0).toNat,
+      (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 1).toNat,
+      (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 2).toNat⟩ : V3) = _
+    rw [n0, n1, n2, c0, c1, c2, B256.add_zero, B256.add_zero, B256.add_zero]
+  rw [hsame, hbal, hxa] at hxb
+  obtain rfl := Option.some.inj hxb
+  obtain rfl := Option.some.inj (hD0.symm.trans hD1)
+  exact Nat.lt_irrefl _ hlt
+
 /-- **Exact-gas liveness of `add_liquidity`** (see the module note). -/
 theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T B1 B2 : B256}
     {W : Nat → Devm → Prop} {U : Nat} (P : ALExactCalls)
@@ -140,9 +170,9 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
         R + alExactCost0 sevm pre P amp B1 B2 xb mint + pre.mach.stateGas.spilled +
           pre.mach.stateGas.committedSpill := rfl
       omega
-    obtain ⟨r, hr, -, D, rfl, hDg⟩ := rx_al_frame0_exact P hfork hstatic hdepth hlen hcd hsel hid
+    obtain ⟨r, hr, -, D, rfl, hDg, -⟩ := rx_al_frame0_exact (m := 6000) P hfork hstatic hdepth hlen hcd hsel hid
       hWc hWb hck.abs hck.unlocked hval hkill hamp hmf hP hskip' (t0 rfl) sub a0 a1 a2 hxb hD1 hlt1
-      hslip hadd hR hG256
+      hslip hadd hR (by omega) hG256
     obtain ⟨exD⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
     obtain ⟨post, exc, e, he, hstep', hraw, hckp⟩ := addLiquidity_live
       (G := R + alExactCost0 sevm pre P amp B1 B2 xb mint) hcode hfork hstatic hdepth hlen hcd hsel
@@ -161,24 +191,7 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
       rw [ho, alMintAmt_eq]; exact toB256_toNat _
     have hP1 := hP
     rw [hma] at hP1
-    have hnz : ¬ (alAmt sevm 0 = 0 ∧ alAmt sevm 1 = 0 ∧ alAmt sevm 2 = 0) := by
-      rintro ⟨z0, z1, z2⟩
-      have hsame : alNewW sevm (pre.getStor sevm.currentTarget) B1 B2 = s.balances := by
-        obtain ⟨n0, n1, n2⟩ := al_liveNew_eq sevm (pre.getStor sevm.currentTarget) B1 B2
-        have c0 : alCrK sevm B1 B2 0 = 0 := z0
-        have c1 : alCrK sevm B1 B2 1 = 0 := z1
-        have c2 : alCrK sevm B1 B2 2 = 0 := by
-          show (if alAmt sevm 2 = 0 then alAmt sevm 2 else B2 - B1) = 0
-          rw [ite_eq_left_of_eq_true _ _ (eq_true z2), z2]
-        rw [hbal]
-        show (⟨(alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 0).toNat,
-          (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 1).toNat,
-          (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2 2).toNat⟩ : V3) = _
-        rw [n0, n1, n2, c0, c1, c2, B256.add_zero, B256.add_zero, B256.add_zero]
-      rw [hsame, hbal, hxa] at hxb
-      obtain rfl := Option.some.inj hxb
-      obtain rfl := Option.some.inj (hD0'.symm.trans hD1)
-      exact Nat.lt_irrefl _ hlt
+    have hnz := al_amounts_nz (hbal.trans rfl) hxa hD0' hxb hD1 hlt
     refine ⟨amp, D0, v1, v2, xa, xb, xc, f0, f1, f2, s0, s1, s2, x0, x1, x2, hamp, hxb, hD1,
       fun _ => ⟨hxa, hD0', i0, i1, i2, hxc, hD2'⟩, fun R hR hRc hGm hkeep => ?_⟩
     have hc : alExactCost sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 =
@@ -192,9 +205,9 @@ theorem addLiquidity_live_exact {sevm : Sevm} {pre : Devm} {s : State} {o : Out}
         R + alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 +
           pre.mach.stateGas.spilled + pre.mach.stateGas.committedSpill := rfl
       omega
-    obtain ⟨r, hr, -, D, rfl, hDg⟩ := rx_al_frame1_exact P hfork hstatic hdepth hlen hcd hsel hid
+    obtain ⟨r, hr, -, D, rfl, hDg, -⟩ := rx_al_frame1_exact (m := 6000) P hfork hstatic hdepth hlen hcd hsel hid
       hWc hWb hck.abs hck.unlocked hval hkill hamp hmf hP1 hskip' hT0 hnz sub a0 a1 a2 hxa hD0' hxb
-      hD1 hlt' i0 i1 i2 hxc hD2' hge hmul hD00 hslip hadd hR hG256
+      hD1 hlt' i0 i1 i2 hxc hD2' hge hmul hD00 hslip hadd hR (by omega) hG256
     obtain ⟨exD⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
     obtain ⟨post, exc, e, he, hstep', hraw, hckp⟩ := addLiquidity_live
       (G := R + alExactCost1 sevm pre P amp T B1 B2 xa xb xc D0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)

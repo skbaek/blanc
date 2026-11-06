@@ -5,8 +5,7 @@ import Blanc.Composition.Curve3PoolRemoveMessage
 
 `imbalance_accepts`: the model accepts what `ImbalanceRequest` states. `imbalance_frame`: the frame's run at the named cost
 `rliExactCost`, read from `rx_rli_frame_exact`'s end: the coin chain `rmChain` carries each coin's ledger, 3Crv's world its
-burn, the frame's storage the books, the cost at most `1839017` (`rli_cost_le`). `imbalance_message_bounded` closes the message at a
-bounded cost, and `imbalance_message_holds` the statement.
+burn, the frame's storage the books, the cost at most `1839017` (`rli_cost_le`). `imbalance_message_holds` is the statement.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -532,19 +531,12 @@ theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg 
       unfold rliPaid
       rw [hco j, hcs j, hamt j, hw, hcall]
 
-/-- **`imbalance_message` at a bounded cost.** -/
-theorem imbalance_message_bounded (d : Deployment) (m : Moment d) (A : Assumes d m.through) (msg : Msg) (E : Adr) (am : V3)
-    (maxBurn burned : Nat) (stored : V3) (ask : Asked msg m.world E (imbalanceCalldata am maxBurn))
-    (req : ImbalanceRequest m.world E msg.benv.stat.time.toNat am maxBurn burned stored) :
-    ∃ cost refund, cost ≤ 16777216 ∧ MsgDoes msg liquidityRoom cost refund (fun st => ImbalancePaid m.world st E am burned stored) := by
+/-- **`imbalance_message`.** -/
+theorem imbalance_message_holds : imbalance_message := fun d m A msg E am maxBurn burned stored ask req => by
   obtain ⟨cost, refund, hc, h⟩ := imbalance_frame (m.facts A) (m.marked A) ask req
-  refine ⟨cost, refund, by omega, fun R hR hG => h R ?_ hG⟩
+  refine ⟨cost, refund, Nat.le_trans hc (by decide), fun R hR hG => h R ?_ hG⟩
   have hR' : 800000 ≤ R := hR
   omega
-
-/-- **`imbalance_message`.** -/
-theorem imbalance_message_holds : imbalance_message := fun d m A msg E am maxBurn burned stored ask req =>
-  (imbalance_message_bounded d m A msg E am maxBurn burned stored ask req).imp fun _ ⟨r, _, h⟩ => ⟨r, h⟩
 
 end Frame
 
