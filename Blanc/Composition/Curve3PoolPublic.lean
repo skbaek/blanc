@@ -8,8 +8,8 @@ import Blanc.Lift.StaticGasMessage
 Each headline is a `Prop` quantifying over its premises. This module only states them. `pool_backed_holds` and
 `virtual_price_bound_holds` are in `Curve3PoolBacked`, `lp_exit_holds` and `lp_exit_message_holds` in `Curve3PoolExitMain`,
 `swap_holds` and `swap_message_holds` in `Curve3PoolSwapMain`, `virtual_price_falls` in `Curve3PoolVirtualPriceFalls`.
-`imbalance_message_holds` is in `Curve3PoolImbalanceMain`.
-`add_liquidity_message` and `one_coin_message` are stated and not yet proved.
+`imbalance_message_holds` is in `Curve3PoolImbalanceMain`, `one_coin_message_holds` in `Curve3PoolOneCoinMain`.
+`add_liquidity_message` is stated and not yet proved.
 
 * `pool_backed`: the pool's books are covered by what each coin's storage says it holds.
 * `lp_exit`: a holder's `remove_liquidity` transaction is processed, at exact gas, and pays out.

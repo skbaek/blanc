@@ -1552,6 +1552,7 @@ COMPOSITION = {
     "Composition.Curve3PoolSwapCold": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolSwapEval": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolSwapFits": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
+    "Composition.Curve3PoolOneCoinMain": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolSwapMain": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolSwapPay": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),
     "Composition.Curve3PoolSwapRequest": ('curve-3pool', 'curve-3crv', 'dai', 'usdc', 'usdt'),

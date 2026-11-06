@@ -157,9 +157,9 @@ theorem oneCoin_accepts {w : Jaune.State} {s : Curve3Pool.State} {e : Env} {amp 
   have hmul : chkMul c s.adminFee = some p := by rw [e_adm]; exact h13
   have hadd : chkAdd dy admin = some (dy + admin) := by
     unfold chkAdd wordSize
-    rw [if_pos (by omega)]
+    exact ite_eq_left (by omega)
   have hsub : chkSub (s.balances.get i) (dy + admin) = some (recorded w i - (dy + admin)) := by
-    rw [e_rec]; unfold chkSub; rw [if_pos htake]
+    rw [e_rec]; unfold chkSub; exact ite_eq_left htake
   simp only [Option.bind_eq_bind, hk, ↓reduceIte, hcw, Option.bind_some, hmul, h14, hadd, hsub, hb, hp, hmin, ge_iff_le]
 
 
@@ -207,18 +207,17 @@ end Error
 
 /-- The chain's end has the entry's error. -/
 theorem ocEnd_error (sevm : Sevm) (pre : Devm) (T tk : B256) (i : Fin 3) (amp : Nat) (x0 x1 x2 D0 y r0 r1 r2 y2 : B256) :
-    (ocEnd sevm pre (ocC3Calls sevm pre (pushDAt sevm tk 0x540 0x5e0 i) (pushNAt sevm tk 0x540 0x5e0 i)) T amp x0 x1 x2 D0 y r0 r1 r2 y2).error =
+    (ocEnd sevm pre (ocC3Calls sevm pre (pushDk sevm tk 0x540 0x5e0 i) (pushNk sevm tk 0x540 0x5e0 i)) T amp x0 x1 x2 D0 y r0 r1 r2 y2).error =
       pre.error := by
-  have hpush : ∀ b S M, (pushNAt sevm tk 0x540 0x5e0 i b S M).error = b.error := fun b S M => by
+  have hpush : ∀ b S M, (pushNk sevm tk 0x540 0x5e0 i b S M).error = b.error := fun b S M => by
     match i with
     | 0 => rfl
     | 1 => rfl
     | 2 => rfl
-  have hburn : ∀ b S M, ((ocC3Calls sevm pre (pushDAt sevm tk 0x540 0x5e0 i) (pushNAt sevm tk 0x540 0x5e0 i)).burnNext b S M).error = b.error := fun _ _ _ => rfl
-  have hsup : ∀ b S M, ((ocC3Calls sevm pre (pushDAt sevm tk 0x540 0x5e0 i) (pushNAt sevm tk 0x540 0x5e0 i)).supplyNext b S M).error = b.error := fun _ _ _ => rfl
-  simp only [ocEnd, rawTailBaseNext_error, ocPushNext, ocPushIn, afterSload_error, ocPushI2, ocPushI1, identityCallNext_error, ocBurnNext,
-    ocBurnIn, ocBurnBase_error, ocCwBase, xpBase_error, ocSupNext, ocSupBase, cwSupBase_error, aBase_error, ocPreBase_error]
-  simp only [show ∀ b S M, (ocC3Calls sevm pre (pushDAt sevm tk 0x540 0x5e0 i) (pushNAt sevm tk 0x540 0x5e0 i)).pushNext b S M = pushNAt sevm tk 0x540 0x5e0 i b S M from fun _ _ _ => rfl,
+  have hburn : ∀ b S M, ((ocC3Calls sevm pre (pushDk sevm tk 0x540 0x5e0 i) (pushNk sevm tk 0x540 0x5e0 i)).burnNext b S M).error = b.error := fun _ _ _ => rfl
+  have hsup : ∀ b S M, ((ocC3Calls sevm pre (pushDk sevm tk 0x540 0x5e0 i) (pushNk sevm tk 0x540 0x5e0 i)).supplyNext b S M).error = b.error := fun _ _ _ => rfl
+  simp only [ocEnd, rawTailBaseNext_error, ocPushNext, ocPushIn, ocPushI2, ocPushI1, ocBurnNext, ocBurnIn, ocCwBase, ocSupNext, ocSupBase]
+  simp only [show ∀ b S M, (ocC3Calls sevm pre (pushDk sevm tk 0x540 0x5e0 i) (pushNk sevm tk 0x540 0x5e0 i)).pushNext b S M = pushNk sevm tk 0x540 0x5e0 i b S M from fun _ _ _ => rfl,
     hpush, afterSload_error, identityCallNext_error, hburn, ocBurnBase_error, xpBase_error, hsup, cwSupBase_error, aBase_error, ocPreBase_error]
 
 /-- The books after the store and the lock's release. -/
@@ -251,13 +250,13 @@ theorem oc_premises {sevm : Sevm} {pre : Devm} {T : B256} {i : Fin 3} {v : B256}
     OCExactPremises sevm pre T v (C3With c3 (Devm.getStor pre c3) (ocV sevm pre i v 0))
       (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)) (ocV sevm pre i v 0))
       (C3With c3 (burnStor (Devm.getStor pre c3) sevm.caller.toB256 (ocAmt sevm)) (ocV sevm pre i v 1)) 104744
-      (ocC3Calls sevm pre (pushDAt sevm ((pre.getStor sevm.currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
-        (pushNAt sevm ((pre.getStor sevm.currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) := by
+      (ocC3Calls sevm pre (pushDk sevm ((pre.getStor sevm.currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
+        (pushNk sevm ((pre.getStor sevm.currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) := by
   have htc : coinOf sevm pre i ≠ c3 := by rw [← hto]; exact hC.tok i
   refine ocExactPremises_c3crv (V := ocV sevm pre i v) hto hne hfork hstatic (by omega) htok (by decide) hT hburn
     (fun _ _ hb hs hc => pin_keep hb (hs _ htc) hc) ?_
   rw [← hci]
-  refine coin_push_profile i hfork hstatic hdepth hC (le_refl _) (by decide) (by decide) hq (fun b hb => hb.2)
+  refine pushK_profile i hfork hstatic hdepth hC (by decide) (by decide) hq (fun b hb => hb.2)
     (fun b d R hb hl => ⟨c3At_keep' hb.1 (hl.other _ (Ne.symm htc)) hl.code, fun a => (hl.code a).trans (hb.2.1 a), hl.stor⟩)
 
 /-- **`remove_liquidity_one_coin`'s message under the moment's facts.** -/
@@ -356,23 +355,23 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
   have hlen : (initSevm msg).data.length = 100 := by rw [hdata]; exact oneCoinCalldata_length
   have hroom : 131000 + 3 * 104744 ≤ liquidityRoom := by decide
   refine ⟨ocExactCost (initSevm msg) (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg)
-      (pushDAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
-      (pushNAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) amp' x0 x1 x2 D0 y r0 r1 r2 y2,
+      (pushDk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
+      (pushNk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) amp' x0 x1 x2 D0 y r0 r1 r2 y2,
     (afterSstore (initSevm msg) (ocEnd (initSevm msg) (initDevm msg) (ocC3Calls (initSevm msg) (initDevm msg)
-      (pushDAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
-      (pushNAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) T amp' x0 x1 x2 D0 y r0 r1 r2 y2)
+      (pushDk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
+      (pushNk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) T amp' x0 x1 x2 D0 y r0 r1 r2 y2)
       (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])).refundCounter.toNat, fun R hR hG => ?_⟩
   obtain ⟨F, hF⟩ : ∃ F, F = R + ocExactCost (initSevm msg) (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg)
-      (pushDAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
-      (pushNAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) amp' x0 x1 x2 D0 y r0 r1 r2 y2 := ⟨_, rfl⟩
+      (pushDk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
+      (pushNk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) amp' x0 x1 x2 D0 y r0 r1 r2 y2 := ⟨_, rfl⟩
   have hcost := ocExactCost_withStaticGas (initSevm msg) F (initDevm msg) T (ocC3Calls (initSevm msg) (initDevm msg)
-      (pushDAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
-      (pushNAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) amp' x0 x1 x2 D0 y r0 r1 r2 y2
+      (pushDk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
+      (pushNk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) amp' x0 x1 x2 D0 y r0 r1 r2 y2
   obtain ⟨r, hr, D, rfl, hDg, herr, hrf, hpaid⟩ := rx_oc_frame_exact (sevm := {initSevm msg with gas := F}) (pre := initDevm msg) (s := s)
     (Q := fun r => ∃ D, r = .halted D ∧ D.gasLeft = R ∧ D.error = none ∧
       D.refundCounter.toNat = (afterSstore (initSevm msg) (ocEnd (initSevm msg) (initDevm msg) (ocC3Calls (initSevm msg) (initDevm msg)
-        (pushDAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
-        (pushNAt (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) T amp' x0 x1 x2 D0 y r0 r1 r2 y2)
+        (pushDk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)
+        (pushNk (initSevm msg) (((initDevm msg).getStor (initSevm msg).currentTarget).get (coinSlot i)) 0x540 0x5e0 i)) T amp' x0 x1 x2 D0 y r0 r1 r2 y2)
         (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])).refundCounter.toNat ∧ OneCoinPaid w D.state E a i dy admin)
     _ hfork hstatic (by have := hdepth; show (initSevm msg).depth ≠ 0; omega) (show 4 ≤ (initSevm msg).data.length by omega) (show (initSevm msg).data.length < 2 ^ 256 by rw [hlen]; decide) (oneCoin_selector hdata)
     (hid.withStaticGas F) ((c3With_wClosed hne hV0).withStaticGas F) ((c3With_wClosed hne hV0).withStaticGas F) ⟨⟨hc3, rfl⟩, fun _ => rfl, rfl⟩
@@ -389,17 +388,14 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
         rw [hd.error, ocEnd_error]
         rfl
       · rw [hDeq]
-        have e1 : (afterSstore (initSevm msg) (d.addLog l) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])).refundCounter =
-            (afterSstore (initSevm msg) d (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])).refundCounter := rfl
-        rw [← (hd.afterSstore (initSevm msg) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])).refundCounter_eq]
-        exact congrArg Int.toNat e1
+        exact congrArg Int.toNat (afterSstore_refund_congr (initSevm msg) hd l _ _)
       · have hb1 := hL.w.1.2
         have hb2 := hL.w.2.2
         have htg : (initSevm msg).currentTarget = pool := ht
         have hcl : (initSevm msg).caller = E := hcaller
         rw [show Devm.getStor (initDevm msg) c3 = w.getStor c3 from sC, hcl, eA] at hb1
         rw [hco i, sK i, htg, hcl, hvw] at hb2
-        refine ⟨burn_paid hap hsh hsu hb1, coin_paid hopen hap.toCoinsApart i hdlt hheld req.fits.1 (fun _ => req.fits.2) hb2, ?_⟩
+        refine ⟨burn_paid hap hsh hsu hb1, pushed_held hopen hap.toCoinsApart i hb2 hdlt hheld req.fits.1 (fun _ => req.fits.2), ?_⟩
         have hS : (D'.getStor msg.currentTarget).get (balancesBase + ocI (initSevm msg)) =
             ocBal ((initDevm msg).getStor msg.currentTarget) (ocI (initSevm msg)) (cwDy (ocI (initSevm msg)) r0 r1 r2 y2)
               ((pickWord3 (ocI (initSevm msg)).toNat x0 x1 x2 - y) / pickWord3 (ocI (initSevm msg)).toNat cwP1 cwPm cwPm -

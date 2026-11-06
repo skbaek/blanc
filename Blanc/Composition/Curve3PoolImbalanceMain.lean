@@ -143,15 +143,15 @@ def rmChain (k : Nat) (b : Devm) : Prop :=
 
 /-- The transfers' debits, by coin. -/
 noncomputable def rliPushD (i : Nat) : Devm → List B256 → Mem → Nat :=
-  if i = 0 then pushDAt sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 0)) 0xaa0 0xb40 0
-  else if i = 1 then pushDAt sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 1)) 0xaa0 0xb40 1
-  else pushDAt sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 2)) 0xaa0 0xb40 2
+  if i = 0 then pushDk sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 0)) 0xaa0 0xb40 0
+  else if i = 1 then pushDk sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 1)) 0xaa0 0xb40 1
+  else pushDk sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 2)) 0xaa0 0xb40 2
 
 /-- The transfers' successors, by coin. -/
 noncomputable def rliPushN (i : Nat) : Devm → List B256 → Mem → Devm :=
-  if i = 0 then pushNAt sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 0)) 0xaa0 0xb40 0
-  else if i = 1 then pushNAt sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 1)) 0xaa0 0xb40 1
-  else pushNAt sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 2)) 0xaa0 0xb40 2
+  if i = 0 then pushNk sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 0)) 0xaa0 0xb40 0
+  else if i = 1 then pushNk sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 1)) 0xaa0 0xb40 1
+  else pushNk sevm ((pre.getStor sevm.currentTarget).get (Curve3Pool.coinSlot 2)) 0xaa0 0xb40 2
 
 variable {sevm pre}
 
@@ -198,11 +198,11 @@ theorem rmChain_push {c3 : Adr} {σ : Stor} (hfork : CoveredFork sevm.benvStat.f
         unfold rliPaid
         rw [ite_eq_right (by rw [hK]; exact ha), hK]
   rcases (by omega : k = 0 ∨ k = 1 ∨ k = 2) with rfl | rfl | rfl
-  · exact coin_push_profile 0 hfork hstatic hdepth hC (by decide) (by decide) (by decide) (hfit 0 ha) (fun b hb => hb.2.1 0 (Nat.le_refl _))
+  · exact pushK_profile 0 hfork hstatic hdepth hC (by decide) (by decide) (hfit 0 ha) (fun b hb => hb.2.1 0 (Nat.le_refl _))
       (fun b d R hb hl => hlv 0 rfl b d R hb hl)
-  · exact coin_push_profile 1 hfork hstatic hdepth hC (by decide) (by decide) (by decide) (hfit 1 ha) (fun b hb => hb.2.1 1 (Nat.le_refl _))
+  · exact pushK_profile 1 hfork hstatic hdepth hC (by decide) (by decide) (hfit 1 ha) (fun b hb => hb.2.1 1 (Nat.le_refl _))
       (fun b d R hb hl => hlv 1 rfl b d R hb hl)
-  · exact coin_push_profile 2 hfork hstatic hdepth hC (by decide) (by decide) (by decide) (hfit 2 ha) (fun b hb => hb.2.1 2 (Nat.le_refl _))
+  · exact pushK_profile 2 hfork hstatic hdepth hC (by decide) (by decide) (hfit 2 ha) (fun b hb => hb.2.1 2 (Nat.le_refl _))
       (fun b d R hb hl => hlv 2 rfl b d R hb hl)
 
 end Chain
@@ -236,7 +236,7 @@ theorem imbalance_paid (ho : CoinsOpen w E) (hap : ExitApart w E) (hbk : PoolBac
       exact ⟨rfl, rfl⟩
     · have hk := hcoin k
       rw [ite_eq_right hz] at hk
-      exact coin_paid ho hap.toCoinsApart k hlt (Nat.le_trans (hbooks k) (hbk k)) (hcr k) (fun e => by rw [e]; exact hfee) hk
+      exact pushed_held ho hap.toCoinsApart k hk hlt (Nat.le_trans (hbooks k) (hbk k)) (hcr k) (fun e => by rw [e]; exact hfee)
 
 end Paid
 
