@@ -456,6 +456,134 @@ theorem ExitPaid.congr {w w₁ w₂ : State} {E : Adr} {a : Nat} (h : ExitPaid w
   · rw [hcoin]; exact h.coins k
   · rw [hcoin]; exact h.paid k
 
+/-- `E` is none of the five contracts, by its empty code. -/
+theorem tx_noE {w : State} {tx : Tx} {E : Adr} {benv : Benv} {maxFee : Nat} (hw : benv.state = w) (mf : MomentFacts w) (mk : ExitMarked w) (ready : SignerReady benv tx E maxFee) :
+    ∀ x, x = pool ∨ x = c3 ∨ x = dai ∨ x = usdc ∨ x = usdt → E ≠ x := by
+  intro x hx hEx
+  have hz := ready.noCode
+  rw [hEx, hw] at hz
+  rcases hx with rfl | rfl | rfl | rfl | rfl
+  · rw [mf.poolCode] at hz; exact absurd hz (by decide +kernel)
+  · rw [mf.c3Code] at hz; exact absurd hz (by decide +kernel)
+  · rw [mf.daiCode] at hz; exact absurd hz (by decide +kernel)
+  · rw [mk.usdcProxy] at hz; exact absurd hz (by decide +kernel)
+  · rw [mf.usdtCode] at hz; exact absurd hz (by decide +kernel)
+
+/-- **A direct call's message is an asked message**, whatever its calldata. -/
+theorem tx_asked {d : Deployment} {m : Moment d} {tx : Tx} {E : Adr} {prio maxFee need : Nat} {debit : State} {msg : Msg} {after : Benv} {index : Nat}
+    (mf : MomentFacts m.world) (mk : ExitMarked m.world) (form : TxForm m.benv tx prio maxFee) (ready : SignerReady m.benv tx E maxFee)
+    (adm : TxAdmitted m.benv m.bout tx E need) (hopen : CoinsOpen m.world E)
+    (hd : (m.benv.state.incrNonce E).subBal E (tx.gas * (min prio (maxFee - m.benv.stat.baseFeePerGas) + m.benv.stat.baseFeePerGas)).toB256 = some debit)
+    (hp : prepareMessage { m.benv.beginTransaction with state := debit }
+      (transactionTenv m.benv.beginTransaction tx index E (min prio (maxFee - m.benv.stat.baseFeePerGas) + m.benv.stat.baseFeePerGas)
+        (callIntrinsic tx.data) []) tx = .ok msg)
+    (he : msg.benvAfterTransfer = .ok after) :
+    ∃ M, msg = M ∧ after = M.benv ∧ Asked M m.world E tx.data ∧ M.gas = tx.gas - callIntrinsic tx.data := by
+  have hw : m.benv.state = m.world := rfl
+  have hE0 : E ≠ 0 := ready.named.1
+  have hrec : tx.type.receiver? = some pool := by rw [form.type]; rfl
+  have hnoE := tx_noE hw mf mk ready
+  have hstatFork := adm.fork
+  have hpn := parties_not_precomp hstatFork.histFork
+  obtain ⟨hm, ha⟩ := tx_message (index := index) hrec form.value hp he
+  subst hm
+  subst ha
+  obtain ⟨-, hdeb⟩ := State.of_subBal hd
+  have hget : ∀ x, E ≠ x → debit.get x = m.world.get x := by
+    intro x hx
+    have hin : (m.benv.state.incrNonce E).get x = m.benv.state.get x := by
+      unfold State.incrNonce
+      exact State.setAccount_get_ne _ hx _
+    rw [hdeb, State.setBal_get_ne hx, hin]
+    rfl
+  have hI : usdcImplOf m.world = Usdc.usdcImpl := by
+    unfold usdcImplOf
+    rw [show (m.world.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
+  have hEp : ∀ x ∈ parties m.world, E ≠ x := by
+    intro x hx
+    simp only [parties, List.mem_cons, List.not_mem_nil, or_false] at hx
+    rcases hx with rfl | rfl | rfl | rfl | rfl | rfl
+    · exact hnoE _ (by simp only [true_or])
+    · exact hnoE _ (by simp only [true_or, or_true])
+    · exact hnoE _ (by simp only [true_or, or_true])
+    · exact hnoE _ (by simp only [true_or, or_true])
+    · exact hnoE _ (by simp only [or_true])
+    · intro hEx
+      have hz := ready.noCode
+      rw [hEx, hw, hI, hopen.usdcImplCode] at hz
+      exact absurd hz (by decide +kernel)
+  have hE4 : E ≠ 4 := by
+    intro h4
+    have h1 := ready.named.2
+    rw [h4] at h1
+    have h2 : m.benv.stat.rules.isPrecomp 4 := hpn.2.2.1
+    rw [h1] at h2
+    exact absurd h2 (by decide)
+  have hl : tx.accessList = [] := by simp only [Tx.accessList, TxType.accessList, form.type]
+  obtain ⟨M, hM⟩ : ∃ M, M = (callMessage { m.benv.beginTransaction with state := debit }
+      (transactionTenv m.benv.beginTransaction tx index E
+        (min prio (maxFee - m.benv.stat.baseFeePerGas) + m.benv.stat.baseFeePerGas)
+        (callIntrinsic tx.data) []) tx pool) := ⟨_, rfl⟩
+  have hTail : ∀ x ∈ (parties m.world).tail, x ∉ M.accessedAddresses := by
+    intro x hx hmem
+    have hx' : x = c3 ∨ x = dai ∨ x = usdc ∨ x = usdt ∨ x = Usdc.usdcImpl := by
+      simpa only [parties, List.tail_cons, List.mem_cons, List.not_mem_nil, or_false, hI] using hx
+    rw [hM] at hmem
+    rcases tx_addr_mem form.type hmem with h | h | h | h
+    · apply adm.block.2
+      rw [← h]
+      exact List.mem_of_mem_tail hx
+    · rcases hx' with rfl | rfl | rfl | rfl | rfl
+      · exact hpn.2.2.2.1 h
+      · exact hpn.2.2.2.2.1 h
+      · exact hpn.2.2.2.2.2.1 h
+      · exact hpn.2.2.2.2.2.2.1 h
+      · exact hpn.2.2.2.2.2.2.2 h
+    · exact hEp x (List.mem_of_mem_tail hx) h.symm
+    · rcases hx' with rfl | rfl | rfl | rfl | rfl <;> exact absurd h (by decide +kernel)
+  refine ⟨M, hM.symm, by rw [hM], ?_, by rw [hM]; rfl⟩
+  exact
+    { entry :=
+        { named := ⟨by rw [hM]; rfl, by rw [hM]; rfl, by
+            rw [hM]
+            exact congrArg Acct.code (hget pool (hEp pool List.mem_cons_self))⟩
+          plain := ⟨by rw [hM]; show tx.value.toB256 = 0; rw [form.value]; decide, by rw [hM]; rfl,
+            by rw [hM]; show (2 : Nat) ≤ 1024; decide, by rw [hM]; exact adm.fork⟩
+          cold := ⟨by
+              rw [hM]
+              show (Std.HashSet.ofList ((tx.accessList.map _).flatten)).isEmpty = true
+              rw [hl]
+              rfl, hTail⟩
+          world := fun x hx => ⟨by rw [hM]; exact hget x (hEp x hx), by rw [hM]; rfl⟩
+          identity := ⟨by
+              rw [hM]
+              exact tx_addr_precomp (Curve3Pool.pool_four_mem_precompilesH hstatFork.histFork),
+            by rw [hM]; exact congrArg Acct.code (hget 4 hE4)⟩
+          fresh := ⟨fun x => by
+              rw [hM]
+              exact m.block.txSplit_notCreated m.cut x, fun x => by rw [hM]; exact Std.HashSet.not_mem_emptyWithCapacity⟩ }
+      data := by rw [hM]; rfl
+      coinsOpen := hopen
+      nonzero := hE0 }
+
+/-- The sender's refund and the fee recipient's tip leave the five contracts' storage. -/
+theorem tx_end_stor {d : Deployment} {m : Moment d} {tx : Tx} {E : Adr} {prio maxFee need : Nat}
+    (mf : MomentFacts m.world) (mk : ExitMarked m.world) (form : TxForm m.benv tx prio maxFee) (ready : SignerReady m.benv tx E maxFee)
+    (adm : TxAdmitted m.benv m.bout tx E need) (post : Devm) {a b : B256} :
+    ∀ x, x = pool ∨ x = c3 ∨ x = dai ∨ x = usdc ∨ x = usdt →
+      (([] : List Adr).foldl destroyAccount (((post.state.addBal E a).addBal m.benv.stat.coinbase b))).getStor x = post.state.getStor x := by
+  intro x hx
+  have hEx := tx_noE (rfl : m.benv.state = m.world) mf mk ready x hx
+  have hCx : m.benv.stat.coinbase ≠ x := by
+    intro hc
+    apply adm.block.2
+    rw [hc]
+    show x ∈ parties m.benv.state
+    rcases hx with rfl | rfl | rfl | rfl | rfl <;> simp only [parties, List.mem_cons, true_or, or_true]
+  show ((_ : State).get x).stor = (post.state.get x).stor
+  simp only [List.foldl_nil, State.addBal]
+  rw [State.setBal_get_ne hCx, State.setBal_get_ne hEx]
+
 /-- **`lp_exit`.** -/
 theorem lp_exit_holds : lp_exit := by
   intro d m A tx E a mins hdata adm hopen req
@@ -468,20 +596,7 @@ theorem lp_exit_holds : lp_exit := by
       minter := m.minter A
       id4 := m.id4 A }
   have hw : m.benv.state = m.world := rfl
-  have hE0 : E ≠ 0 := ready.named.1
-  have hrec : tx.type.receiver? = some pool := by rw [form.type]; rfl
-  have hnoE : ∀ x, x = pool ∨ x = c3 ∨ x = dai ∨ x = usdc ∨ x = usdt → E ≠ x := by
-    intro x hx hEx
-    have hz := ready.noCode
-    rw [hEx, hw] at hz
-    rcases hx with rfl | rfl | rfl | rfl | rfl
-    · rw [mf.poolCode] at hz; exact absurd hz (by decide +kernel)
-    · rw [mf.c3Code] at hz; exact absurd hz (by decide +kernel)
-    · rw [mf.daiCode] at hz; exact absurd hz (by decide +kernel)
-    · rw [mk.usdcProxy] at hz; exact absurd hz (by decide +kernel)
-    · rw [mf.usdtCode] at hz; exact absurd hz (by decide +kernel)
   have hstatFork := adm.fork
-  have hpn := parties_not_precomp hstatFork.histFork
   obtain ⟨debit, post, bout', hq, process, cum⟩ := tx_of_frame (r := exitRefund m.world E a) (index := m.nextIndex)
     (Q := fun _ p => p.accountsToDelete.toList = [] ∧ ExitPaid m.world p.state E a)
     adm.fork form ready adm.room
@@ -489,118 +604,30 @@ theorem lp_exit_holds : lp_exit := by
     (by unfold exitFrameGas; omega)
     (by rw [hw, mf.poolCode]; exact getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel))
     (by
-      have h := hpn.1
+      have h := (parties_not_precomp hstatFork.histFork).1
       show (Fork.ruleSet m.benv.stat.fork).isPrecomp pool = false
       exact Blanc.Composition.Curve3Pool3CrvHeadlines.precomp_false h)
     (by
       intro debit msg after hd hp he
-      obtain ⟨hm, ha⟩ := tx_message (index := m.nextIndex) hrec form.value hp he
-      subst hm
-      subst ha
-      obtain ⟨-, hdeb⟩ := State.of_subBal hd
-      have hget : ∀ x, E ≠ x → debit.get x = m.world.get x := by
-        intro x hx
-        have hin : (m.benv.state.incrNonce E).get x = m.benv.state.get x := by
-          unfold State.incrNonce
-          exact State.setAccount_get_ne _ hx _
-        rw [hdeb, State.setBal_get_ne hx, hin]
-        rfl
-      have hI : usdcImplOf m.world = Usdc.usdcImpl := by
-        unfold usdcImplOf
-        rw [show (m.world.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
-      have hEp : ∀ x ∈ parties m.world, E ≠ x := by
-        intro x hx
-        simp only [parties, List.mem_cons, List.not_mem_nil, or_false] at hx
-        rcases hx with rfl | rfl | rfl | rfl | rfl | rfl
-        · exact hnoE _ (by simp only [true_or])
-        · exact hnoE _ (by simp only [true_or, or_true])
-        · exact hnoE _ (by simp only [true_or, or_true])
-        · exact hnoE _ (by simp only [true_or, or_true])
-        · exact hnoE _ (by simp only [or_true])
-        · intro hEx
-          have hz := ready.noCode
-          rw [hEx, hw, hI, hopen.usdcImplCode] at hz
-          exact absurd hz (by decide +kernel)
-      have hE4 : E ≠ 4 := by
-        intro h4
-        have h1 := ready.named.2
-        rw [h4] at h1
-        have h2 : m.benv.stat.rules.isPrecomp 4 := hpn.2.2.1
-        rw [h1] at h2
-        exact absurd h2 (by decide)
-      have hl : tx.accessList = [] := by simp only [Tx.accessList, TxType.accessList, form.type]
-      obtain ⟨M, hM⟩ : ∃ M, M = (callMessage { m.benv.beginTransaction with state := debit }
-          (transactionTenv m.benv.beginTransaction tx m.nextIndex E
-            (min prio (maxFee - m.benv.stat.baseFeePerGas) + m.benv.stat.baseFeePerGas)
-            (callIntrinsic tx.data) []) tx pool) := ⟨_, rfl⟩
-      have hTail : ∀ x ∈ (parties m.world).tail, x ∉ M.accessedAddresses := by
-        intro x hx hmem
-        have hx' : x = c3 ∨ x = dai ∨ x = usdc ∨ x = usdt ∨ x = Usdc.usdcImpl := by
-          simpa only [parties, List.tail_cons, List.mem_cons, List.not_mem_nil, or_false, hI] using hx
-        rw [hM] at hmem
-        rcases tx_addr_mem form.type hmem with h | h | h | h
-        · apply adm.block.2
-          rw [← h]
-          exact List.mem_of_mem_tail hx
-        · rcases hx' with rfl | rfl | rfl | rfl | rfl
-          · exact hpn.2.2.2.1 h
-          · exact hpn.2.2.2.2.1 h
-          · exact hpn.2.2.2.2.2.1 h
-          · exact hpn.2.2.2.2.2.2.1 h
-          · exact hpn.2.2.2.2.2.2.2 h
-        · exact hEp x (List.mem_of_mem_tail hx) h.symm
-        · rcases hx' with rfl | rfl | rfl | rfl | rfl <;> exact absurd h (by decide +kernel)
-      have ce : ColdEntry M m.world E (exitCalldata a mins) :=
-        { entry :=
-            { named := ⟨by rw [hM]; rfl, by rw [hM]; rfl, by
-                rw [hM]
-                exact congrArg Acct.code (hget pool (hEp pool List.mem_cons_self))⟩
-              plain := ⟨by rw [hM]; show tx.value.toB256 = 0; rw [form.value]; decide, by rw [hM]; rfl,
-                by rw [hM]; show (2 : Nat) ≤ 1024; decide, by rw [hM]; exact adm.fork⟩
-              cold := ⟨by
-                  rw [hM]
-                  show (Std.HashSet.ofList ((tx.accessList.map _).flatten)).isEmpty = true
-                  rw [hl]
-                  rfl, hTail⟩
-              world := fun x hx => ⟨by rw [hM]; exact hget x (hEp x hx), by rw [hM]; rfl⟩
-              identity := ⟨by
-                  rw [hM]
-                  exact tx_addr_precomp (Curve3Pool.pool_four_mem_precompilesH hstatFork.histFork),
-                by rw [hM]; exact congrArg Acct.code (hget 4 hE4)⟩
-              fresh := ⟨fun x => by
-                  rw [hM]
-                  exact m.block.txSplit_notCreated m.cut x, fun x => by rw [hM]; exact Std.HashSet.not_mem_emptyWithCapacity⟩ }
-          data := by rw [hM]; exact hdata
-          coinsOpen := hopen
-          nonzero := hE0 }
-      have hFd : M.gas = tx.gas - callIntrinsic tx.data := by rw [hM]; rfl
+      obtain ⟨M, hmM, haM, ce0, hFd⟩ := tx_asked mf mk form ready adm hopen hd hp he
+      subst hmM
+      subst haM
+      have ce : ColdEntry msg m.world E (exitCalldata a mins) := by rw [← hdata]; exact ce0
       have hneed := adm.room.enough
       have hlim : exitLimit m.world tx.data E a = callIntrinsic tx.data + exitFrameGas m.world E a + callRoom := rfl
       rw [hlim] at hneed
-      have hsum : tx.gas - (callIntrinsic tx.data + exitFrameGas m.world E a) + exitFrameGas m.world E a = M.gas := by
+      have hsum : tx.gas - (callIntrinsic tx.data + exitFrameGas m.world E a) + exitFrameGas m.world E a = msg.gas := by
         rw [hFd]; omega
       have hcap := adm.room.cap
       obtain ⟨post, hx, herr, hg, hrf, hdel, hpaid⟩ := exit_message mf mk ce req
         (tx.gas - (callIntrinsic tx.data + exitFrameGas m.world E a)) (by omega) (by rw [hsum, hFd]; omega)
       rw [hsum] at hx
-      refine ⟨post, ?_, herr, hg, hrf, hdel, hpaid⟩
-      rw [hM] at hx
-      exact hx)
+      exact ⟨post, hx, herr, hg, hrf, hdel, hpaid⟩)
   refine ⟨_, bout', process, cum, ?_⟩
   obtain ⟨hdel, hpaid⟩ := hq
   rw [hdel]
   refine hpaid.congr ?_
-  intro x hx
-  have hEx := hnoE x hx
-  have hCx : m.benv.stat.coinbase ≠ x := by
-    intro hc
-    apply adm.block.2
-    rw [hc]
-    show x ∈ parties m.benv.state
-    rcases hx with rfl | rfl | rfl | rfl | rfl <;> simp only [parties, List.mem_cons, true_or, or_true]
-  show ((_ : State).get x).stor = (post.state.get x).stor
-  simp only [List.foldl_nil, State.addBal]
-  rw [State.setBal_get_ne hCx, State.setBal_get_ne hEx]
+  exact tx_end_stor mf mk form ready adm post
 
 /-- **`lp_exit`'s message.** -/
 theorem lp_exit_message_holds : lp_exit_message := by

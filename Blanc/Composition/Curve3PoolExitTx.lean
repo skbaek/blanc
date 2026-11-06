@@ -5,7 +5,7 @@ import Blanc.Composition.Curve3PoolPublicGas
 
 `tx_of_frame`: `TxForm`, `SignerReady` and `GasRoom` make `processTransaction` run the message, and a message that
 commits having spent exactly `F`, with refund `r`, uses `afterRefund (callIntrinsic data + F) r`. The refund's cap is
-Jaune's; the calldata floor never binds, on `132` bytes of calldata and a frame of at least `100000`.
+Jaune's; the calldata floor never binds, on `132` bytes of calldata and a frame of at least `50000`.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -73,7 +73,7 @@ theorem tx_addr_precomp {benv : Benv} {tx : Tx} {index : Nat} {E : Adr} {price i
 theorem tx_of_frame {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E : Adr} {prio maxFee F r : Nat}
     {Q : State → Devm → Prop} (hfork : CoveredFork benv.stat.fork) (form : TxForm benv tx prio maxFee)
     (ready : SignerReady benv tx E maxFee) (room : GasRoom benv bout tx (callIntrinsic tx.data + F + callRoom))
-    (hlen : tx.data.length = 132) (hF : 100000 ≤ F)
+    (hlen : tx.data.length = 132) (hF : 50000 ≤ F)
     (hnodeleg : getDelegatedCodeAddress (benv.state.getCode pool) = none)
     (hprec : benv.stat.rules.isPrecomp pool = false)
     (hrun : ∀ (debit : State) (msg : Msg) (after : Benv),

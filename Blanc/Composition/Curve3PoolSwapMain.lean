@@ -254,4 +254,197 @@ theorem usdt_pulled_get {w : Jaune.State} {E : Adr} {v : Nat} (hap : SwapApart w
       rw [Stor.get_set_ne _ hO10]
       exact h10c
 
+/-! ## The model's words -/
+
+/-- The words the model's `exchange` comes to, and what they read back as. -/
+structure SwapModel (e0 : Sevm) (σ : Stor) (s0 : Curve3Pool.State) (w : Jaune.State) (i j : Fin 3) (dx dy admin : Nat) (x0 x1 x2 B1 B2 : B256)
+    (amp v : Nat) (hi3 : (exI e0).toNat < 3) (hj3 : (exJ e0).toNat < 3) : Prop where
+  hX : xpChk ⟨(balAt σ 0).toNat, (balAt σ 1).toNat, (balAt σ 2).toNat⟩ = some ⟨x0.toNat, x1.toNat, x2.toNat⟩
+  hmx : exCred e0 B1 B2 * exRate (exI e0).toNat / exCred e0 B1 B2 =
+      exRate (exI e0).toNat ∨ exCred e0 B1 B2 = 0
+  hax : ¬ exW3 x0 x1 x2 (exI e0).toNat + exCred e0 B1 B2 * exRate (exI e0).toNat / exR0 <
+      exW3 x0 x1 x2 (exI e0).toNat
+  hA : aChk s0 e0.benvStat.time.toNat = some amp
+  hres : getYChk amp ⟨(exI e0).toNat, hi3⟩ ⟨(exJ e0).toNat, hj3⟩
+      (exW3 x0 x1 x2 (exI e0).toNat + exCred e0 B1 B2 * exRate (exI e0).toNat / exR0).toNat
+      (V3.mk x0.toNat x1.toNat x2.toNat).get = some v
+  hy1 : ¬ exW3 x0 x1 x2 (exJ e0).toNat < Nat.toB256 v
+  hy2 : ¬ exW3 x0 x1 x2 (exJ e0).toNat - Nat.toB256 v < Bytes.toB256 [1]
+  hmf : exDy0 (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v) *
+        σ.get feeSlot /
+        exDy0 (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v) =
+        σ.get feeSlot ∨
+      exDy0 (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v) = 0
+  hsf : ¬ exDy0 (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v) <
+      exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+        (σ.get feeSlot)
+  hmo : (exDy0 (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v) -
+        exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+          (σ.get feeSlot)) * exR0 /
+        (exDy0 (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v) -
+          exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+            (σ.get feeSlot)) = exR0 ∨
+      exDy0 (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v) -
+        exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+          (σ.get feeSlot) = 0
+  hmin : ¬ exDyOut (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+      (σ.get feeSlot) (exRate (exJ e0).toNat) < exMinDy e0
+  hma : exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+        (σ.get feeSlot) *
+        σ.get adminFeeSlot /
+        exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+          (σ.get feeSlot) =
+        σ.get adminFeeSlot ∨
+      exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+        (σ.get feeSlot) = 0
+  hmap : exAdm0 (exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+        (σ.get feeSlot))
+        (σ.get adminFeeSlot) * exR0 /
+        exAdm0 (exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+          (σ.get feeSlot))
+          (σ.get adminFeeSlot) = exR0 ∨
+      exAdm0 (exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+        (σ.get feeSlot))
+        (σ.get adminFeeSlot) = 0
+  hbi : ¬ exBal σ ⟨(exI e0).toNat, hi3⟩ + exCred e0 B1 B2 <
+      exBal σ ⟨(exI e0).toNat, hi3⟩
+  hbj1 : ¬ exBal σ ⟨(exJ e0).toNat, hj3⟩ <
+      exDyOut (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+        (σ.get feeSlot) (exRate (exJ e0).toNat)
+  hbj2 : ¬ exBal σ ⟨(exJ e0).toNat, hj3⟩ -
+        exDyOut (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+          (σ.get feeSlot) (exRate (exJ e0).toNat) <
+      exAdm (exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v)
+        (σ.get feeSlot))
+        (σ.get adminFeeSlot) (exRate (exJ e0).toNat)
+  xN : ∀ k : Fin 3, (exW3 x0 x1 x2 k.val).toNat = scaled w k
+  Dn : (exCred e0 B1 B2).toNat = netOf w i dx
+  xvN : (exW3 x0 x1 x2 (exI e0).toNat + exCred e0 B1 B2 * exRate (exI e0).toNat / exR0).toNat = scaled w i + netOf w i dx * rates.get i / precision
+  On : (exDyOut (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v) (σ.get feeSlot) (exRate (exJ e0).toNat)).toNat = dy
+  An : (exAdm (exDyFee (exW3 x0 x1 x2 (exJ e0).toNat) (Nat.toB256 v) (σ.get feeSlot)) (σ.get adminFeeSlot) (exRate (exJ e0).toNat)).toNat = admin
+  room : dy + admin + 1 ≤ recorded w j
+
+/-- **The model's `exchange` as the frame's words.** -/
+theorem swap_model {e0 : Sevm} {σ : Stor} {w : Jaune.State} {s0 : Curve3Pool.State} {i j : Fin 3} {dx dy minDy amp DD : Nat} {B1 B2 : B256}
+    (hS : σ = w.getStor pool) (hab : Abstracts σ s0) (hk : s0.isKilled = false) (hij : i ≠ j)
+    (hiw : exI e0 = Nat.toB256 i.val) (hjw : exJ e0 = Nat.toB256 j.val) (hdxw : exDx e0 = Nat.toB256 dx) (hmdw : exMinDy e0 = Nat.toB256 minDy)
+    (hdxN : dx < 2 ^ 256) (hmdN : minDy < 2 ^ 256)
+    (hnet : pullIn (exEnv e0 i j (exBalOpt i B1) (exBalOpt i B2)) i dx = some (netOf w i dx))
+    (hinv : invariant w amp = some DD) (hA : ampAt w e0.benvStat.time.toNat = some amp)
+    (hfee : word w pool feeSlot ≤ feeDen) (haf : word w pool adminFeeSlot ≤ feeDen)
+    (hq : swapOut w e0.benvStat.time.toNat i j dx = some dy) (hmin : minDy ≤ dy) (hfit : scaled w j < 2 ^ 190)
+    (hbi : recorded w i + netOf w i dx < 2 ^ 256) :
+    ∃ x0 x1 x2 v admin hi3 hj3, swapAdmin w e0.benvStat.time.toNat i j dx = some admin ∧
+      SwapModel e0 σ s0 w i j dx dy admin x0 x1 x2 B1 B2 amp v hi3 hj3 := by
+  subst hS
+  obtain ⟨o, admin, y, d2, f, hex, hamt, hadm, hy, g⟩ := exchange_accepts (e := exEnv e0 i j (exBalOpt i B1) (exBalOpt i B2)) (minDy := minDy) hab hk hij hnet hinv hA hfee haf hq hmin hfit hbi (by
+    simp only [exEnv, decide_true])
+  have hiN : i.val = (exI e0).toNat := by rw [hiw, B256.toNat_toB256_of_lt (by have := i.isLt; omega)]
+  have hjN : j.val = (exJ e0).toNat := by rw [hjw, B256.toNat_toB256_of_lt (by have := j.isLt; omega)]
+  have hex' : exchange s0 (exEnv e0 i j (exBalOpt i B1) (exBalOpt i B2)) i j (exDx e0).toNat (exMinDy e0).toNat = some o := by
+    rw [hdxw, hmdw, B256.toNat_toB256_of_lt hdxN, B256.toNat_toB256_of_lt hmdN]
+    exact hex
+  obtain ⟨x0, x1, x2, amp', v, hi3, hj3, -, hX, hsub, hmx, hax, hA', hres, hy1, hy2, hmf, hsf, hmo, hmin', hma, hmap, hbi', hbj1, hbj2, hpa, -, -, hpl, -⟩ :=
+    ex_words hab hiN hjN hex'
+  obtain rfl : amp = amp' := Option.some.inj ((by rw [← ampAt_of_abstracts hab]; exact hA : aChk s0 e0.benvStat.time.toNat = some amp).symm.trans hA')
+  have hxg : (V3.mk x0.toNat x1.toNat x2.toNat).get = scaled w := Curve3Pool.xpChk_some (b := books w) hX
+  have xN : ∀ k : Fin 3, (exW3 x0 x1 x2 k.val).toNat = scaled w k := fun k => by
+    rw [ex_w3_nat, hxg]
+  have Dn : (exCred e0 B1 B2).toNat = netOf w i dx := by
+    rw [hdxw, B256.toNat_toB256_of_lt hdxN, hnet] at hpl
+    exact (Option.some.inj hpl).symm
+  obtain ⟨ampq, xq, yq, d1q, dq, pq, fq, hamq, hxq, hpq, hyq, -, -, -⟩ := swapOut_parts hq
+  have hmL : netOf w i dx * rates.get i < 2 ^ 256 := Blanc.StableSwapNewton.chkMul_some_lt hxq
+  have hxe : xq = netOf w i dx * rates.get i := Blanc.StableSwapNewton.chkMul_some hxq
+  have hpe : pq = netOf w i dx * rates.get i / precision := by rw [(Blanc.StableSwapNewton.chkDiv_some hpq).1, hxe]
+  have haL : scaled w i + netOf w i dx * rates.get i / precision < 2 ^ 256 := by
+    have := Blanc.StableSwapNewton.chkAdd_some_lt hyq
+    rw [hpe] at this
+    exact this
+  have hxIn : (exW3 x0 x1 x2 (exI e0).toNat).toNat = scaled w i := by rw [← hiN]; exact xN i
+  have hMn : (exCred e0 B1 B2 * exRate (exI e0).toNat / exR0).toNat = netOf w i dx * rates.get i / precision := by
+    rw [← hiN, Lift.rlOut_toNat (by rw [Dn, ex_rate_nat]; exact hmL) (by decide), Dn, ex_rate_nat]
+    rfl
+  have xvN : (exW3 x0 x1 x2 (exI e0).toNat + exCred e0 B1 B2 * exRate (exI e0).toNat / exR0).toNat =
+      scaled w i + netOf w i dx * rates.get i / precision := by
+    rw [toNat_add_of (by rw [hxIn, hMn]; exact haL), hxIn, hMn]
+  have hres' : getYChk amp i j (scaled w i + netOf w i dx * rates.get i / precision) (scaled w) = some v := by
+    have e1 : (⟨(exI e0).toNat, hi3⟩ : Fin 3) = i := Fin.ext hiN.symm
+    have e2 : (⟨(exJ e0).toNat, hj3⟩ : Fin 3) = j := Fin.ext hjN.symm
+    rw [e1, e2, xvN, hxg] at hres
+    exact hres
+  obtain rfl : v = y := Option.some.inj (hres'.symm.trans hy)
+  have hgot := g.got
+  have hvN : (Nat.toB256 v).toNat = v := B256.toNat_toB256_of_lt (by omega)
+  have hd190 : d2 < 2 ^ 190 := by omega
+  obtain ⟨-, r2, r3⟩ := swap_word_reads (xj := exW3 x0 x1 x2 j.val) (fee := (w.getStor pool).get feeSlot) (af := (w.getStor pool).get adminFeeSlot) g (xN j) hvN rfl rfl hd190 hfee haf
+  rw [hjN] at r2 r3
+  exact ⟨x0, x1, x2, v, admin, hi3, hj3, hadm,
+    { hX := hX, hmx := hmx, hax := hax, hA := hA', hres := hres, hy1 := hy1, hy2 := hy2, hmf := hmf, hsf := hsf, hmo := hmo, hmin := hmin', hma := hma, hmap := hmap,
+      hbi := hbi', hbj1 := hbj1, hbj2 := hbj2, xN := xN, Dn := Dn, xvN := xvN, On := r2, An := r3, room := g.room }⟩
+
+/-! ## The debits -/
+
+theorem swap_debit_bounds (e d : _) (i j : Fin 3) (hx : True) :
+    (∀ b S M, (swapCalls e d i j).balD1 b S M ≤ 200000) ∧ (∀ b S M, (swapCalls e d i j).balD2 b S M ≤ 200000) ∧
+      (∀ b S M, (swapCalls e d i j).pullD b S M ≤ 200000) ∧ (∀ b S M, (swapCalls e d i j).pushD b S M ≤ 200000) := by
+  have hb1 : ∀ b S M, (swapCalls e d i j).balD1 b S M ≤ 8047 := fun b S M => Blanc.Composition.Curve3PoolUsdt.usdt_balDebit_le (by decide) (by decide) b S M
+  have hb2 : ∀ b S M, (swapCalls e d i j).balD2 b S M ≤ 8047 := fun b S M => Blanc.Composition.Curve3PoolUsdt.usdt_balDebit_le (by decide) (by decide) b S M
+  refine ⟨fun b S M => Nat.le_trans (hb1 b S M) (by decide), fun b S M => Nat.le_trans (hb2 b S M) (by decide), fun b S M => ?_, fun b S M => ?_⟩
+  · show Blanc.Composition.Curve3Pool3CrvLiteralWitness.swapPullD e _ i b S M ≤ _
+    obtain ⟨t, ht⟩ : ∃ t, t = (d.getStor e.currentTarget).get (coinSlot i) := ⟨_, rfl⟩
+    rw [← ht]
+    have ha : Blanc.Composition.Curve3PoolCalleeLive.acc (b.withGasLeft 0) t ≤ 2600 := Blanc.Composition.Curve3PoolCalleeLive.acc_le
+    have he : Blanc.Composition.Curve3PoolCalleeLive.ext (b.withGasLeft 0) S M 0x600 0x64 0x6c0 0x20 ≤ 416 := Blanc.Composition.Curve3PoolCalleeLive.ext_le (by decide) (by decide)
+    obtain ⟨c, hc⟩ : ∃ c, c = Blanc.Composition.Curve3PoolCalleeLive.callMsg0 e (b.withGasLeft 0) S M 0 t 0x600 0x64 0x6c0 0x20 := ⟨_, rfl⟩
+    match i with
+    | 0 =>
+      show Blanc.Composition.Curve3PoolCoinExactKit.coinDebit Dai.pullG e t 0x600 0x64 0x6c0 b S M ≤ _
+      unfold Blanc.Composition.Curve3PoolCoinExactKit.coinDebit
+      rw [← hc]
+      have := Dai.pullG_le (initSevm c) (initDevm c)
+      omega
+    | 1 =>
+      show Blanc.Composition.Curve3PoolCoinExactKit.coinDebit Blanc.Composition.UsdcLive.pullG e t 0x600 0x64 0x6c0 b S M ≤ _
+      unfold Blanc.Composition.Curve3PoolCoinExactKit.coinDebit
+      rw [← hc]
+      have hl : (initSevm c).data.length ≤ 100 := by rw [hc, Blanc.Composition.Curve3PoolCalleeLive.callMsg0_data, mem_read_len]; decide
+      have := Blanc.Composition.UsdcLive.proxyG_le (w := 1) (impl := Blanc.Composition.UsdcLive.implPullG) (Cu := 102000) (s' := initSevm c) (p := initDevm c) hl (by
+        have h := Blanc.Composition.UsdcLive.pullW_le (sevm := initSevm (Blanc.Composition.UsdcLive.dMsg (initSevm c) (initDevm c) 0)) (b := initDevm (Blanc.Composition.UsdcLive.dMsg (initSevm c) (initDevm c) 0))
+        rwa [Blanc.Composition.UsdcLive.pullW_eq] at h)
+      show _ + _ + Blanc.Composition.UsdcLive.proxyG 1 Blanc.Composition.UsdcLive.implPullG (initSevm c) (initDevm c) ≤ _
+      omega
+    | 2 =>
+      show Blanc.Composition.Curve3PoolCoinExactKit.coinDebit Usdt.pullG e t 0x600 0x64 0x6c0 b S M ≤ _
+      unfold Blanc.Composition.Curve3PoolCoinExactKit.coinDebit
+      rw [← hc]
+      have h := Usdt.pullW_le (sevm := initSevm c) (b := initDevm c)
+      rw [Usdt.pullW_eq] at h
+      omega
+  · show Blanc.Composition.Curve3Pool3CrvLiteralWitness.swapPushD e _ j b S M ≤ _
+    obtain ⟨t, ht⟩ : ∃ t, t = (d.getStor e.currentTarget).get (coinSlot j) := ⟨_, rfl⟩
+    rw [← ht]
+    have ha : Blanc.Composition.Curve3PoolCalleeLive.acc (b.withGasLeft 0) t ≤ 2600 := Blanc.Composition.Curve3PoolCalleeLive.acc_le
+    have he : Blanc.Composition.Curve3PoolCalleeLive.ext (b.withGasLeft 0) S M 0xb60 0x44 0xc00 0x20 ≤ 416 := Blanc.Composition.Curve3PoolCalleeLive.ext_le (by decide) (by decide)
+    obtain ⟨c, hc⟩ : ∃ c, c = Blanc.Composition.Curve3PoolCalleeLive.callMsg0 e (b.withGasLeft 0) S M 0 t 0xb60 0x44 0xc00 0x20 := ⟨_, rfl⟩
+    match j with
+    | 0 =>
+      show Blanc.Composition.Curve3PoolCoinExactKit.coinDebit Dai.xferG e t 0xb60 0x44 0xc00 b S M ≤ _
+      unfold Blanc.Composition.Curve3PoolCoinExactKit.coinDebit
+      rw [← hc]
+      have := dai_xferG_le (initSevm c) (initDevm c)
+      omega
+    | 1 =>
+      show Blanc.Composition.Curve3PoolCoinExactKit.coinDebit Blanc.Composition.UsdcLive.xferG e t 0xb60 0x44 0xc00 b S M ≤ _
+      unfold Blanc.Composition.Curve3PoolCoinExactKit.coinDebit
+      rw [← hc]
+      have := proxy_xferG_le (e := initSevm c) (d := initDevm c) (by rw [hc, Blanc.Composition.Curve3PoolCalleeLive.callMsg0_data, mem_read_len]; decide)
+      omega
+    | 2 =>
+      show Blanc.Composition.Curve3PoolCoinExactKit.coinDebit Usdt.xferG e t 0xb60 0x44 0xc00 b S M ≤ _
+      unfold Blanc.Composition.Curve3PoolCoinExactKit.coinDebit
+      rw [← hc]
+      have := usdt_xferG_le (initSevm c) (initDevm c)
+      omega
+
 end Blanc.Composition.Curve3PoolPublic

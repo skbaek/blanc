@@ -353,4 +353,15 @@ theorem SwapChain.eval_t {j : Fin 3} {dx dy admin : Nat} (c : SwapChain s p w E 
     push_cast
     omega
 
+/-- **The canonical chain's cost, refund and effect at a cold entry.** -/
+theorem SwapChain.eval (c : SwapChain s p w E i j dx dy admin x0 x1 x2 B1 B2 F O A amp v xv DD) {D' : Devm}
+    (he : ExFrameEnd s p (swapCalls s p i j) x0 x1 x2 B1 B2 v D') :
+    exExactCost s p (swapCalls s p i j) x0 x1 x2 B1 B2 amp v =
+        swapFrameGas w E s.benvStat.time.toNat amp i j dx dy xv DD (decide (allowanceOf w E i = 2 ^ 256 - 1)) ∧
+      ∃ T r, Mv T r p D' ∧ r = ((swapRefund w E i j dx dy (allowanceOf w E i) : Nat) : Int) ∧ SwapPaid w D'.state E i j dx dy admin := by
+  by_cases hi : i = 2
+  · subst hi
+    exact c.eval_t he
+  · exact c.eval_a hi he
+
 end Blanc.Composition.Curve3PoolPublic
