@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Safe
 import Blanc.ExecutionHistoryInFrameEnv
+import Blanc.ExecutionHistoryInPreCancun
 
 /-!
 # Curve 3pool: the committed history over historical forks, from trace-level premises
@@ -39,7 +40,7 @@ structure PoolMidEnv {cfg : ChainConfig} {checkpoint future : BlockChain} {start
     (∀ k : Fin 3, ¬ root.sevm.benvStat.rules.isPrecomp (adrOf (cs.get k))) ∧
       ¬ root.sevm.benvStat.rules.isPrecomp (adrOf tok)
   idEmpty : checkpoint.state.getCode 4 = ByteArray.empty
-  idNoAuthority : full.NoAuthorityAt 4
+  idNoAuthority : full.PragueNoAuthorityAt 4
   idNoFrame : ∀ root ∈ full.rawFrames, root.sevm.codeAddress = none →
     root.sevm.currentTarget ≠ 4
   sysNe : ∀ root ∈ full.systemRawFrames, root.sevm.currentTarget ≠ pool
@@ -53,7 +54,7 @@ theorem pool_mid_trace_admitted {pool : Adr} {cfg : ChainConfig} {checkpoint fut
     trace.FrameAdmitted pool (poolEntryAtH cs tok) := by
   have capabilities := BodyStageCapabilities.historical
   have callbacks := (trace.frameAdmitted_iff_rawFrames pool _).1 env.callbacks
-  have ready := full.precompileReadyH capabilities (fun _ hf => pool_four_mem_precompilesH hf)
+  have ready := full.precompileReadyPragueH capabilities (fun _ hf => pool_four_mem_precompilesH hf)
     env.idEmpty env.idNoAuthority env.idNoFrame
   have keep4 := full.childFrames_codeAt_keep capabilities env.idNoFrame
   apply (trace.frameAdmitted_iff_rawFrames pool _).2

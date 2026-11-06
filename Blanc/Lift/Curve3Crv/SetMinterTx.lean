@@ -106,7 +106,7 @@ theorem minter_of_setMinter {ctx : Blanc.Curve3Crv.Ctx} {m : B256} {s : Blanc.Cu
 theorem root_of_success {benv : Benv} {bout : BlockOutput} {state : State}
     {bout' : BlockOutput} {index : Nat} (trace : TransactionTrace benv bout tx index state bout')
     (hfork : benv.stat.fork = .muirGlacier) (success : trace.messageOut.error = none) :
-    ∃ frame ∈ trace.settledFrames,
+    ∃ frame, trace.settledFrames = frame :: Exec.descendantFrames frame.run ∧
       frame.sevm.currentTarget = tokenAddress ∧ frame.sevm.data = callData := by
   have hrules : trace.msg.benv.stat.rules = muirGlacierRules := by
     rw [prepareMessage_benv trace.prepared]
@@ -139,12 +139,10 @@ theorem root_of_success {benv : Benv} {bout : BlockOutput} {state : State}
   obtain ⟨root, roots, -, hsevm, -⟩ := trace.message.exists_root_of_clean_call
     (by rw [hrules]; rfl) htarget success hdelegation hdirect henter
   refine ⟨root, ?_, ?_, ?_⟩
-  · change root ∈ trace.message.settledFrames
+  · change trace.message.settledFrames = _
     rw [trace.message.settledFrames_eq, roots]
     simp only [rootFrames, List.flatMap_cons, List.flatMap_nil, List.append_nil]
-    unfold Exec.committedFrames
-    rw [dite_eq_left_of_eq_true (eq_true root.committed)]
-    exact List.mem_cons_self ..
+    exact Exec.Frame.committedFrames_self root
   · rw [hsevm]; exact hcurrent
   · rw [hsevm]; exact hdata
 
