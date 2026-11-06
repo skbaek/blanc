@@ -39,21 +39,19 @@ theorem mvPost_keeps (h : Keeps sevm pre b) (v f t r : B256) : Keeps sevm pre (m
   · exact (Keeps_mvCredited h _ _ _ _).log _
   · exact (Keeps_ownLogged (Keeps_mvCredited h _ _ _ _) _ _).log _
 
-theorem addLog_output' (d : Devm) (l : Log) : (d.addLog l).output = d.output := rfl
-
 theorem mvCredited_output (sevm : Sevm) (b : Devm) (v a t r : B256) : (mvCredited sevm b v a t r).output = b.output := by
   unfold mvCredited mvDebited
   simp only [afterSstore_output, afterSload_output]
 
 theorem ownLogged_output (sevm : Sevm) (b : Devm) (f r : B256) : (ownLogged sevm b f r).output = b.output := by
   unfold ownLogged ownCredited ownRead
-  simp only [addLog_output', afterSstore_output, afterSload_output]
+  simp only [Devm.addLog_output, afterSstore_output, afterSload_output]
 
 theorem mvPost_output (sevm : Sevm) (b : Devm) (v f t r : B256) : (mvPost sevm b v f t r).output = b.output := by
   unfold mvPost
   split
-  · rw [addLog_output', mvCredited_output]
-  · rw [addLog_output', ownLogged_output, mvCredited_output]
+  · rw [Devm.addLog_output, mvCredited_output]
+  · rw [Devm.addLog_output, ownLogged_output, mvCredited_output]
 
 theorem feeBase_output (sevm : Sevm) (b : Devm) (v : B256) : (feeBase sevm b v).output = b.output := by
   unfold feeBase

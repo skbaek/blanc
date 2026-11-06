@@ -1248,7 +1248,6 @@ SHARED += [
     "ExecutionMidHistoryInOwnCode",
     "ExecutionMidHistoryInRootCallers",
     "ExecutionMidWindowIn",
-    "ExecutionModelFrameNoStateGas",
     "ExecutionReceiptLogLink",
     "ExecutionWholeFrameAccountingIn",
     "TransactionItemTransport",

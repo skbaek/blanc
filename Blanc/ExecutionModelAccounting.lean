@@ -174,11 +174,11 @@ theorem Exec.descendantFrames_flatMap_runOk {O : Type} (f : Exec.Frame → List 
       settles]
     simp only [settles, Bool.false_eq_true, ↓reduceIte, List.nil_append]
 
-/-- **The storage across a spawning step**, by words: a settled child hands its committed storage back to
+/-- **The storage across a spawning step**, by words, without state gas: a settled child hands its committed storage back to
 the parent, and a child that does not settle leaves the parent's storage as it was. -/
-theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame : Jaune.Frame}
+theorem Exec.spawn_seam_noStateGas {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame : Jaune.Frame}
     {resume : Resume} {cevm : Evm} {raw : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : sevm.benvStat.rules.stateGas = none)
     (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
     (enter : frame.enter = .run cevm) (child : Exec cevm.pc cevm.sta cevm.dyna raw)
     (hresume : resume.run (frame.settle raw) = .ok inter) :
@@ -188,10 +188,12 @@ theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame :
     (Frame.settlementCommits frame raw ≠ true →
       ∀ a k, (Devm.getStor inter a).get k = (Devm.getStor pre a).get k) := by
   obtain ⟨x, -, spawn, -⟩ := Evm.step_spawn_inv step
-  have childFork := Evm.step_spawn_child_fork step enter hfork
+  have childFork : cevm.sta.benvStat.rules.stateGas = none := by
+    rw [Evm.step_spawn_child_benvStat step enter]
+    exact hfork
   refine ⟨?_, fun discarded a k => ?_⟩
   · intro committed settles a k
-    rcases Xinst.step_shapeCovered sevm pre x hfork with
+    rcases Xinst.step_shapeNoStateGas sevm pre x hfork with
       ⟨execution, shape, -⟩ |
       ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
       ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
@@ -228,7 +230,7 @@ theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame :
         change ((d.state.incrNonce sevm.currentTarget).get newAddress).nonce + 1 ≠ 0
         rw [preparedZero]
         decide
-      have retainedNonce := Exec.nonce_ne_zero_committedPost child committed childFork newAddress seed
+      have retainedNonce := Exec.nonce_ne_zero_committedPost_noStateGas child committed childFork newAddress seed
       cases settledEq : (Frame.ofCreate msg).settle raw with
       | error error =>
           rw [settledEq] at hresume
@@ -275,7 +277,21 @@ theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame :
             (((Execution.committedPost raw committed).state.get a).stor).get k
           rw [resumedState, stateEq]
   · exact congrArg (fun stor => stor.get k)
-      (congrFun (Evm.step_spawn_rollback_getStor hfork step enter hresume discarded) a)
+      (congrFun (Evm.step_spawn_rollback_getStor_noStateGas hfork step enter hresume discarded) a)
+
+/-- Covered-fork compatibility projection. -/
+theorem Exec.spawn_seam {pc pc' : Nat} {sevm : Sevm} {pre inter : Devm} {frame : Jaune.Frame}
+    {resume : Resume} {cevm : Evm} {raw : Execution}
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc')
+    (enter : frame.enter = .run cevm) (child : Exec cevm.pc cevm.sta cevm.dyna raw)
+    (hresume : resume.run (frame.settle raw) = .ok inter) :
+    (∀ h : Execution.commits raw = true, Frame.settlementCommits frame raw = true →
+      ∀ a k, (Devm.getStor inter a).get k =
+        (Devm.getStor (Execution.committedPost raw h) a).get k) ∧
+    (Frame.settlementCommits frame raw ≠ true →
+      ∀ a k, (Devm.getStor inter a).get k = (Devm.getStor pre a).get k) :=
+  Exec.spawn_seam_noStateGas hfork.rules_stateGas_none step enter child hresume
 
 
 
@@ -404,13 +420,13 @@ theorem staticFrame
 instruction, and otherwise to the boundary of every node that decodes one, after which only silent
 steps follow and no external instruction, then `own`, the settled child's replay and the silent steps
 take `a` to the post boundary, observing `own` and then the frame's committed descendants. -/
-theorem modelFrame
+theorem modelFrameNoStateGas
     (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
     (ofStateGet : ∀ {s s' : State},
       (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
     (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
     {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
-    (fork : CoveredFork sevm.benvStat.fork)
+    (hsg : sevm.benvStat.rules.stateGas = none)
     (rootNonempty : (pre.getCode ca).toList ≠ []) (bound : sum pre.state.bal < 2 ^ 256)
     (children : ChildReplays C V run) {a : C.Snap} (own : List C.Step)
     (c3 : (∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
@@ -483,24 +499,24 @@ theorem modelFrame
         rw [V.obs_append, V.obs_nil, List.append_nil]
     | runOk step enter child resume next =>
         rename_i frame rsm pc' cevm raw inter
-        have nodeFork : CoveredFork vsevm.benvStat.fork := by
+        have nodeFork : vsevm.benvStat.rules.stateGas = none := by
           rw [show vsevm = sevm from Blanc.Exec.Deriv.ParentPrefix.sevm_eq hpV]
-          exact fork
+          exact hsg
         have nodeCodeNe : vd.getCode ca ≠ .empty := fun empty =>
           nodeNonempty (by rw [empty]; simp only [ByteArray.toList_empty])
         obtain ⟨hc1, hc2⟩ := c12 _ hpV x hx
         obtain ⟨hrep2, hnoexec⟩ := hc2 _ (Exec.Deriv.ParentStep.runOk step enter child resume next)
         have hdf : Exec.descendantFrames next = [] :=
           Exec.descendantFrames_eq_nil_of_noExec next fun M hM y => hnoexec M hM y
-        obtain ⟨seamA, seamB⟩ := Exec.spawn_seam nodeFork step enter child resume
+        obtain ⟨seamA, seamB⟩ := Exec.spawn_seam_noStateGas nodeFork step enter child resume
         have hentry : Devm.getStor cevm.dyna ca = Devm.getStor vd ca :=
-          Evm.step_spawn_enter_getStor nodeFork step enter ca
+          Evm.step_spawn_enter_getStor_protected_noStateGas nodeFork step enter ca
             (State.Protected.of_code_ne_nil nodeNonempty)
         rw [dEq, Exec.descendantFrames_flatMap_runOk, hdf, List.flatMap_nil, List.append_nil]
         by_cases settles : Frame.settlementCommits frame raw = true
         · have hcommit := Frame.raw_commits_of_settlementCommits settles
           have bound' : sum cevm.dyna.state.bal < 2 ^ 256 := by
-            obtain ⟨-, childBal⟩ := Evm.step_spawn_child_world nodeFork step enter nodeCodeNe
+            obtain ⟨-, childBal⟩ := Evm.step_spawn_child_world_noStateGas nodeFork step enter nodeCodeNe
             exact Nat.lt_of_le_of_lt
               (childBal.trans (Blanc.Exec.Deriv.ParentPrefix.balSum_le_getCode hpV).1) bound
           obtain ⟨csteps, creplay, cobs⟩ := children step enter child resume next hpV hcommit bound'
@@ -521,6 +537,30 @@ theorem modelFrame
           have hf : Frame.settlementCommits frame raw = false := by simpa only [Bool.not_eq_true] using
             settles
           simp only [hf, Bool.false_eq_true, ↓reduceIte, List.append_nil]
+
+/-- Covered-fork compatibility projection. -/
+theorem modelFrame
+    (entryOfState : ∀ (sevm : Sevm) (state : State), C.frameEntry sevm state = C.ofState state)
+    (ofStateGet : ∀ {s s' : State},
+      (∀ k, (s.getStor ca).get k = (s'.getStor ca).get k) → C.ofState s = C.ofState s')
+    (append : ∀ {a b c xs ys}, C.Replay a xs b → C.Replay b ys c → C.Replay a (xs ++ ys) c)
+    {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
+    (fork : CoveredFork sevm.benvStat.fork)
+    (rootNonempty : (pre.getCode ca).toList ≠ []) (bound : sum pre.state.bal < 2 ^ 256)
+    (children : ChildReplays C V run) {a : C.Snap} (own : List C.Step)
+    (c3 : (∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
+        ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) →
+      C.Replay a own (C.ofState post.state))
+    (c12 : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
+      ∀ x, Ninst.At N.sevm.code N.pc (.exec x) →
+        C.Replay a own (C.ofState N.devm.state) ∧
+        ∀ N', Exec.Deriv.ParentStep N' N →
+          C.Replay (C.ofState N'.devm.state) [] (C.ofState post.state) ∧
+          ∀ M, Exec.Deriv.ParentPrefix N' M →
+            ∀ y, ¬ Ninst.At M.sevm.code M.pc (.exec y)) :
+    ∃ steps, C.Replay a steps (C.ofState post.state) ∧
+      V.obs steps = V.obs own ++ (Exec.descendantFrames run).flatMap V.frameObs :=
+  modelFrameNoStateGas entryOfState ofStateGet append run fork.rules_stateGas_none rootNonempty bound children own c3 c12
 
 /-- **The target handler for a model replay.**  A successful target frame satisfies `CoreAccounting` for
 a carrier whose boundary reads the target's storage only through its words (`ofStateGet`; the entry
