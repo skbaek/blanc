@@ -66,7 +66,7 @@ noncomputable def sinceMinter : MidHistoryTraceIn HistFork mainnetChainConfig d.
 end Deployment
 
 /-- **The code the pool relies on, right after 3Crv's creation block**: one `eth_getCode` each. USDC's
-stays with Circle's powers, because its proxy delegates. -/
+is read at the pool's creation (`Assumes.usdcCode`), since from there Circle's powers are restrained. -/
 structure StartingCode (w : State) : Prop where
   daiCode : w.getCode dai = Lift.Dai.code
   usdtCode : w.getCode usdt = Lift.Usdt.code
@@ -83,8 +83,6 @@ structure TetherRestrained (settled : List Exec.Frame) : Prop where
 
 /-- **Circle's powers over the pool's USDC entry**, restrained, over a history's retained frames. -/
 structure CircleRestrained (settled : List Exec.Frame) : Prop where
-  /-- USDC stays behind its proxy's code. -/
-  proxyStays : ∀ f ∈ settled, f.pre.getCode usdc = Lift.Usdc.Proxy.code
   /-- The proxy admin only upgrades USDC to one of the three versions, and V2_2 finds its library. -/
   usdcCertified : Usdc.CertifiedSettled usdc settled
   /-- The pool's whole word is below `2^255` where USDC moves to V2_2, which reads that bit. -/
@@ -133,6 +131,8 @@ structure Assumes (d : Deployment) {future : BlockChain}
     (h : MainnetHistory d.minter.post future) : Prop where
   /-- DAI and USDT are their deployed bytes, and address 4 holds no code. -/
   code : StartingCode d.c3.post.state
+  /-- USDC is behind its proxy's code at the pool's creation. -/
+  usdcCode : d.poolCut.afterBenv.state.getCode usdc = Lift.Usdc.Proxy.code
   /-- Tether's owner's powers are restrained. -/
   tether : TetherRestrained (d.sincePool h).settledFrames
   /-- Circle's powers are restrained. -/
