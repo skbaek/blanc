@@ -2,6 +2,7 @@ import Blanc.Lift.Dai.Jumps
 import Blanc.Lift.Dai.Check
 import Blanc.Lift.WalkCost
 import Blanc.StorageRefund
+import Blanc.CodeDelegation
 import Blanc.Lift.DaiFrames
 
 /-!
@@ -16,8 +17,6 @@ namespace Blanc.Lift.Dai
 open Jaune Blanc Blanc.Lift
 open Blanc.Lift.AccumulatedWalk
 
-set_option pp.deepTerms false
-set_option pp.deepTerms.threshold 3
 
 /-- **Entry 36, `sub(x, y)`**, forward. -/
 @[irreducible] noncomputable def e36W (sevm : Sevm) (b : Devm) (y x ret : B256) (S : List B256) (M : Mem) :
@@ -716,5 +715,24 @@ theorem bal_lands {sevm : Sevm} {pre : Devm} {a : Adr}
     rw [hholder, lit2]
     rfl
   · exact fun _ => le_of_eq afterSload_refundCounter.symm
+
+theorem dai_undelegated : getDelegatedCodeAddress code = none :=
+  getDelegatedCodeAddress_eq_none_of_size_ne (by decide +kernel)
+
+/-- The wrapper's argument-size guard, from the calldata's length. -/
+theorem args_of_le {n : Nat} {w : B256} (h : w.toNat + 4 ≤ n) (hn : n < 2 ^ 256) :
+    B256.ltCheck (Nat.toB256 n - Bytes.toB256 [4]) w = 0 := by
+  have h4 : (Bytes.toB256 [4]).toNat = 4 := by decide
+  have le : Bytes.toB256 [4] ≤ Nat.toB256 n := by
+    apply B256.not_lt.mp
+    rw [B256.lt_iff_toNat_lt_toNat, B256.toNat_toB256_of_lt hn, h4]
+    omega
+  apply B256.ltCheck_eq_zero_of_toNat_le
+  rw [B256.toNat_sub_eq_of_le _ _ le, B256.toNat_toB256_of_lt hn, h4]
+  omega
+
+theorem guards_of {e : Sevm} {sel w : B256} (hv : e.value = 0) (hsel : Blanc.Sevm.selector e = sel)
+    (hlen : w.toNat + 4 ≤ e.data.length) (hn : e.data.length < 2 ^ 256) : Guards e sel w :=
+  ⟨hv, short_of_len (by omega) hn, args_of_le hlen hn, (shr_selector_word e).trans hsel⟩
 
 end Blanc.Lift.Dai
