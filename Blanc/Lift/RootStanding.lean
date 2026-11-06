@@ -418,6 +418,43 @@ theorem stagedBody_live {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List
   · exact txRoots R here
   · exact requestRoots R here
 
+/-- **A body's stages keep `wa` live up to right after any transaction.** -/
+theorem stagedBody_cut_live {benv : Benv} {txs : List (Bytes ⊕ Tx)} {ommers : List Header} {wds : List Withdrawal} {state : State}
+    {bout : BlockOutput} (trace : StagedBodyTrace benv txs ommers wds state bout) {i : Nat}
+    (cut : trace.transactions.TxSplit i) (image : sem.image = some C.toList)
+    (hsg : benv.stat.rules.stateGas = none) (ne : C.toList ≠ []) (del : ¬ isValidDelegation C)
+    (notCreated : ∀ a, a ∉ benv.createdAccounts) (hF : F benv.stat.fork)
+    (bound : sum benv.state.bal + wdsum wds < 2 ^ 256) (law : ∀ R ∈ trace.settledRoots, Step R)
+    (stays : WitnessStays F W) (h : Live benv.state) : Live cut.afterBenv.state := by
+  have beaconLe : sum trace.beaconState.bal ≤ sum benv.state.bal := trace.beacon.sum_le_noStateGas hsg
+  have historyLe : sum trace.historyState.bal ≤ sum trace.beaconState.bal :=
+    trace.history.sum_le_noStateGas (by simpa only [Benv.withState] using hsg)
+  obtain ⟨beaconLive, -⟩ := beacon_live trace.beacon image hsg ne del (notCreated wa) hF (by omega)
+    (fun R member => law R (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_left _ member)))) h
+  obtain ⟨historyLive, -⟩ := history_live trace.history image hsg ne del (notCreated wa) hF
+    (by change sum trace.beaconState.bal < _; omega)
+    (fun R member => law R (List.mem_append_left _ (List.mem_append_left _ (List.mem_append_right _ member))))
+    beaconLive
+  have lawTx : ∀ R ∈ trace.transactions.settledRoots, Step R :=
+    fun R member => law R (List.mem_append_left _ (List.mem_append_right _ member))
+  have txSg : ((benv.withState trace.beaconState).withState trace.historyState).stat.rules.stateGas = none := by
+    simpa only [Benv.withState] using hsg
+  obtain ⟨-, beforeLive, -⟩ := applyTransactions_live cut.before image txSg ne del notCreated hF
+    (by change sum trace.historyState.bal < _; omega)
+    (fun R member => lawTx R (by
+      rw [cut.settledRoots_eq]
+      exact List.mem_append_left _ (List.mem_append_left _ member))) stays historyLive
+  have cutSum := cut.before.sum_le_noStateGas txSg
+  have historyEq : sum ((benv.withState trace.beaconState).withState trace.historyState).state.bal =
+      sum trace.historyState.bal := rfl
+  rw [historyEq] at cutSum
+  obtain ⟨-, live, -⟩ := transaction_live cut.head image (by rw [cut.before.stat_eq]; exact txSg) ne del
+    (fun a => by rw [cut.before.createdAccounts_eq]; exact notCreated a) (by rw [cut.before.stat_eq]; exact hF)
+    (by omega) (fun R member => lawTx R (by
+      rw [cut.settledRoots_eq]
+      exact List.mem_append_left _ (List.mem_append_right _ member))) stays beforeLive
+  exact live
+
 end Levels
 
 /-- **The state-level sibling of `outputNotDeleted_of_cell`.** From a start where `wa` holds `C` and its cell's word has

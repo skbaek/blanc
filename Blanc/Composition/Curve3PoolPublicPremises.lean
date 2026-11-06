@@ -14,6 +14,7 @@ import Blanc.ExecutionHistoryInFrameEnv
 import Blanc.Lift.CurveCoins.DaiLocality
 import Blanc.Lift.CurveCoins.UsdtLocality
 import Blanc.Lift.Usdc.EntryJoin
+import Blanc.Lift.Usdc.SignedLogs
 
 /-!
 # The Curve 3pool's public statements: what they assume
@@ -113,8 +114,11 @@ def allowanceEntry (o s : Adr) : Fin 3 → B256
 structure NoKeyHolder (w : State) (settled : List Exec.Frame) (noAuthority : Prop) : Prop where
   /-- DAI's `Approval` never names the pool as owner; a `permit` naming it would log that. -/
   daiNoApproval : ∀ F ∈ coinFrames dai (fun _ => True) settled, ¬ CurveCoins.Dai.LogsApprovalAs dai pool F
-  /-- No signature recovers to the pool for USDC's signed entries. -/
-  usdcNoSignature : ∀ F ∈ Usdc.usdcFrames usdc settled, ¬ Usdc.SignedAs pool F.sevm
+  /-- USDC's `AuthorizationUsed` never names the pool; a signed move from it would log that. -/
+  usdcNoAuthorizationUsed : ∀ F ∈ coinFrames usdc (fun _ => True) settled, ∀ l ∈ F.post.logs,
+    ¬ Usdc.AuthorizationUsedLog usdc pool l
+  /-- USDC's `Approval` never names the pool as owner; a `permit` naming it would log that. -/
+  usdcNoApproval : ∀ F ∈ coinFrames usdc (fun _ => True) settled, ¬ CurveCoins.FrameLogsApproval usdc pool F
   /-- The pool's allowance rows are empty when it is created: before its code exists only its key could
   set one. A universal over spenders, checkable for any finite set, not one RPC read. -/
   rowsAtCut : ∀ k g, wordsAt (coinAt k) w (allowanceEntry pool g k) = 0

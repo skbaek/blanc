@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.EntryChainRoots
 import Blanc.Lift.Usdc.EntryChainSettled
+import Blanc.Lift.RootStanding
 
 /-!
 # USDC's view at a frame below a rescue or an admin's upgrade
@@ -492,5 +493,24 @@ theorem noLink_above {cfg : ChainConfig} {start : Benv} {future : BlockChain}
       cases s
     · exact notLib c
     · exact notVersion v
+
+/-- **The proxy's code stands right after any transaction of a certified history's last block.** A delegating proxy has no
+`InstalledCert`; each root keeps it out of the deletion set by `root_noDel`, so its code stays through the stages. -/
+theorem usdc_code_at_cut {cfg : ChainConfig} {start : Benv} {pre post : BlockChain}
+    (history : MidHistoryTraceIn HistFork cfg start pre) (block : ConfiguredBlockTraceIn HistFork cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) (capabilities : BodyStageCapabilities HistFork)
+    (installed : start.state.getCode T = Proxy.code)
+    (certified : CertifiedSettled T (history.step block).settledFrames) :
+    cut.afterBenv.state.getCode T = Proxy.code := by
+  have prior := (usdc_outputNotDeleted history capabilities installed
+    fun F m => certified F (List.mem_append_left _ m)).2
+  refine (stagedBody_cut_live (F := HistFork) (wa := T) (sem := entrySem) (C := Proxy.code) (k := 0)
+    (W := fun _ l => l = []) block.bodyTrace cut rfl (capabilities.stateGas_none block.forkIn) proxy_toList_ne_nil
+    proxy_not_delegation (fun _ => AdrSet.not_mem_empty) block.forkIn block.withdrawalsBound
+    (fun R member ready _ _ _ => ⟨root_noDel ready fun G hG => certified G ?_, [], rfl,
+      fun _ hp => absurd hp List.not_mem_nil⟩)
+    (fun _ _ _ e _ _ hp => by subst e; cases hp) ⟨prior, [], rfl, fun _ hp => absurd hp List.not_mem_nil⟩).1
+  rw [(history.step block).settledFrames_eq]
+  exact List.mem_flatMap.mpr ⟨R, List.mem_append_right _ member, hG⟩
 
 end Blanc.Lift.Usdc

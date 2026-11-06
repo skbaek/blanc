@@ -264,6 +264,15 @@ theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.poolFrames (A : Assume
       exact absurd (hq.1.trans hT.symm) (H.no_nested f hd hq.2)
     · cases hobs
 
+/-- The pool originates no settled root of the history. -/
+theorem _root_.Blanc.Composition.Curve3PoolPublic.Assumes.rootsNe (A : Assumes d h) :
+    ∀ R ∈ (d.sincePool h).settledRoots, R.sevm.caller ≠ pool := by
+  have capabilities := BodyStageCapabilities.historical
+  exact (d.sincePool h).settledRoots_caller_ne_of_stateInv
+      (Curve3Pool.poolSpec_preservesAdmittedH pool (Curve3Pool.poolEntryAtH Curve3Pool.Creation.coinsN Curve3Pool.Creation.tokenN))
+      capabilities (Curve3Pool.pool_mid_trace_admitted A.midFactsPool) ((d.sincePool h).rewardCreditsFunded capabilities)
+      (c := Curve3Pool.poolSpec) ⟨A.poolStart.1, trivial, trivial⟩ Curve3Pool.pool_runtimeSafety rfl (by decide)
+
 /-! ## The walk for a coin with one reading -/
 
 /-- A settled frame's committed child, over `sincePool`. -/
@@ -336,12 +345,7 @@ theorem flat_walk (A : Assumes d h) {k : Fin 3} {T : Adr} {Good : Exec.Frame →
       Curve3Pool.Creation.coinsN Curve3Pool.Creation.tokenN where
   ledger := ledger_flat L third
   forest := (d.sincePool h).settledFrames_eq
-  roots := by
-    have capabilities := BodyStageCapabilities.historical
-    exact (d.sincePool h).settledRoots_caller_ne_of_stateInv
-      (Curve3Pool.poolSpec_preservesAdmittedH pool (Curve3Pool.poolEntryAtH Curve3Pool.Creation.coinsN Curve3Pool.Creation.tokenN))
-      capabilities (Curve3Pool.pool_mid_trace_admitted A.midFactsPool) ((d.sincePool h).rewardCreditsFunded capabilities)
-      (c := Curve3Pool.poolSpec) ⟨A.poolStart.1, trivial, trivial⟩ Curve3Pool.pool_runtimeSafety rfl (by decide)
+  roots := A.rootsNe
   targetNe := hPool
   coinAt := hT
   coinOther := hOther
@@ -428,14 +432,8 @@ theorem pool_ownCalls_history (A : Assumes d h) {T : Adr} (hTok : T ≠ c3) {F :
     PoolCoinSel (Blanc.Sevm.selector F.sevm) := by
   obtain ⟨b₀, a₀, split⟩ := List.append_of_mem member
   have forest := (d.sincePool h).settledFrames_eq
-  have rootsNe : ∀ R ∈ (d.sincePool h).settledRoots, R.sevm.caller ≠ pool := by
-    have capabilities := BodyStageCapabilities.historical
-    exact (d.sincePool h).settledRoots_caller_ne_of_stateInv
-      (Curve3Pool.poolSpec_preservesAdmittedH pool (Curve3Pool.poolEntryAtH Curve3Pool.Creation.coinsN Curve3Pool.Creation.tokenN))
-      capabilities (Curve3Pool.pool_mid_trace_admitted A.midFactsPool) ((d.sincePool h).rewardCreditsFunded capabilities)
-      (c := Curve3Pool.poolSpec) ⟨A.poolStart.1, trivial, trivial⟩ Curve3Pool.pool_runtimeSafety rfl (by decide)
   rcases (rootFrames_forest (forest.symm.trans split)).2 with root | ⟨b₁, G, b₂, hb, child, ⟨relation, static⟩, -⟩
-  · exact absurd caller (rootsNe F root)
+  · exact absurd caller (A.rootsNe F root)
   · have Gmem : G ∈ (d.sincePool h).settledFrames := by
       rw [split, hb]
       exact List.mem_append_left _ (List.mem_append_right _ List.mem_cons_self)
