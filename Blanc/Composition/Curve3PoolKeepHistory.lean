@@ -59,6 +59,19 @@ theorem usdc_child_notAdmin (c : Exec.Frame) (pc0 : c.pc = 0) (code : c.sevm.cod
     refine Usdc.proxy_notAdmin run code hsg bal fun hin => ?_
     rcases sel with h | h | h <;> rw [h] at hin <;> exact absurd hin (by decide)
 
+/-- **A pool frame's child at USDC, on the pool's selectors, finds a certified word.** -/
+theorem usdcImpl_child {sevm : Sevm} {b post : Devm} {usdc : Adr} {settled : List Exec.Frame}
+    (hcode : sevm.code = Curve3Pool.code) (hfork : HistFork sevm.benvStat.fork) (run : Exec 0 sevm b (.ok post))
+    (cusdc : b.getCode usdc = Usdc.Proxy.code) (certified : Usdc.CertifiedSettled usdc settled) {c : Exec.Frame}
+    (hc : c ∈ Exec.childFrames run) (member : c ∈ settled) (ht : c.sevm.currentTarget = usdc)
+    (sel : PoolCoinSel (Blanc.Sevm.selector c.sevm)) : UsdcImplAt c.pre usdc := by
+  obtain ⟨pc0, stat, -, -, ccode⟩ := poolChild_facts hcode hfork.stateGas_none run c hc
+  have code : c.sevm.code = Usdc.Proxy.code := by
+    rw [ccode usdc (by rw [cusdc]; exact Usdc.proxy_toList_ne_nil)
+      (by rw [cusdc]; exact Usdc.proxy_not_delegation) ht, cusdc]
+  exact (certified c member ht code (ht ▸ usdc_child_notAdmin c pc0 code
+    (by rw [stat]; exact hfork.stateGas_none) (by rw [stat]; exact hfork.bal_none) sel)).1
+
 /-- What the proof reads at each settled frame of the history. -/
 structure FramesHold (trace : MidHistoryTraceIn HistFork cfg start future) (dai usdc usdt tok : Adr) : Prop where
   code : ∀ f ∈ trace.settledFrames, f.pre.getCode dai = Dai.code ∧ f.pre.getCode usdc = Usdc.Proxy.code ∧
@@ -111,13 +124,7 @@ theorem pool_keepAt_of_frames {checkpoint : BlockChain} {pool dai usdc usdt tok 
         usdcCode := cusdc
         usdtCode := cusdt
         tokCode := ctok
-        usdcImpl := fun c hc ht _ sel => by
-          obtain ⟨pc0, stat, -, -, ccode⟩ := poolChild_facts hcode hfork.stateGas_none run c hc
-          have code : c.sevm.code = Usdc.Proxy.code := by
-            rw [ccode usdc (by rw [cusdc]; exact Usdc.proxy_toList_ne_nil)
-              (by rw [cusdc]; exact Usdc.proxy_not_delegation) ht, cusdc]
-          exact (frames.usdcImpl c (kids c hc) ht code (ht ▸ usdc_child_notAdmin c pc0 code
-            (by rw [stat]; exact hfork.stateGas_none) (by rw [stat]; exact hfork.bal_none) sel)).1
+        usdcImpl := fun c hc ht _ sel => usdcImpl_child hcode hfork run cusdc frames.usdcImpl hc (kids c hc) ht sel
         usdtLive := fun c hc ht hs => frames.usdtLive c (kids c hc) ht hs }
     exact pool_keeps_of_world hcode hfork hcd hstack hmem hgas hstatic hpc hck hid
       (by rw [htw]; exact htk) (fun k => by rw [hcw k]; exact hcs k) w hp

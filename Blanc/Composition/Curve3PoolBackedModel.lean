@@ -397,6 +397,72 @@ theorem flow_keep {s : State} {e : Env} {o : Out} {k : Fin 3} (hb : o.state.bala
     rw [hc]
     rfl
 
+theorem pull_mem_pullCalls {c src a : Nat} {am : V3} {j : Fin 3} (h : ExtCall.pull j src a ∈ pullCalls c am) : src = c := by
+  unfold pullCalls at h
+  obtain ⟨k, -, hk⟩ := List.mem_filterMap.mp h
+  split at hk
+  · cases Option.some.inj hk
+    rfl
+  · cases hk
+
+theorem pull_not_mem_pushCalls {c src a : Nat} {am : V3} {j : Fin 3} : ExtCall.pull j src a ∉ pushCalls c am := by
+  intro h
+  unfold pushCalls at h
+  obtain ⟨k, -, hk⟩ := List.mem_filterMap.mp h
+  split at hk
+  · cases Option.some.inj hk
+  · cases hk
+
+/-- **Every pull a step makes is from its caller.** -/
+theorem step_pull_src {s : State} {e : Env} {c : Call} {o : Out} (h : step s e c = some o) {j : Fin 3} {src a : Nat}
+    (mem : ExtCall.pull j src a ∈ o.calls) : src = e.caller := by
+  have hb := pool_step_body h
+  cases c with
+  | addLiquidity am m =>
+    obtain ⟨_, _, _, _, _, _, _, hc⟩ := add_shape hb
+    rw [hc, List.mem_append] at mem
+    rcases mem with mem | mem
+    · exact pull_mem_pullCalls mem
+    · simp only [List.mem_singleton, reduceCtorEq] at mem
+  | exchange i' j' dx m =>
+    simp only [body, Option.bind_eq_bind] at hb
+    obtain ⟨_, -, hb⟩ := bind_some hb
+    obtain ⟨_, -, hb⟩ := bind_some hb
+    unfold exchange at hb
+    repeat obtain ⟨_, -, hb⟩ := bind_some hb
+    cases Option.some.inj hb
+    simp only [List.mem_cons, List.not_mem_nil, or_false, ExtCall.pull.injEq, reduceCtorEq] at mem
+    exact mem.2.1
+  | removeLiquidity a' m =>
+    replace hb : removeLiquidity s e a' m = some o := hb
+    unfold removeLiquidity at hb
+    repeat obtain ⟨_, -, hb⟩ := bind_some hb
+    cases Option.some.inj hb
+    simp only [List.mem_cons, List.not_mem_nil, or_false, reduceCtorEq] at mem
+  | removeLiquidityImbalance am m =>
+    replace hb : removeLiquidityImbalance s e am m = some o := hb
+    unfold removeLiquidityImbalance at hb
+    repeat obtain ⟨_, -, hb⟩ := bind_some hb
+    cases Option.some.inj hb
+    simp only [List.mem_cons, reduceCtorEq, false_or] at mem
+    exact absurd mem pull_not_mem_pushCalls
+  | removeLiquidityOneCoin a' i' m =>
+    simp only [body, Option.bind_eq_bind] at hb
+    obtain ⟨_, -, hb⟩ := bind_some hb
+    unfold removeLiquidityOneCoin at hb
+    repeat obtain ⟨_, -, hb⟩ := bind_some hb
+    cases Option.some.inj hb
+    simp only [List.mem_cons, List.not_mem_nil, or_false, reduceCtorEq] at mem
+  | withdrawAdminFees =>
+    replace hb : withdrawAdminFees s e = some o := hb
+    unfold withdrawAdminFees at hb
+    repeat obtain ⟨_, -, hb⟩ := bind_some hb
+    cases Option.some.inj hb
+    exact absurd mem pull_not_mem_pushCalls
+  | _ =>
+    rw [step_calls_nil rfl h] at mem
+    exact absurd mem List.not_mem_nil
+
 /-- **How an accepted step moves the books of each coin.** -/
 theorem step_flow {s : State} {e : Env} {c : Call} {o : Out} (h : step s e c = some o) (k : Fin 3) : Flow s e o k := by
   have hb := pool_step_body h
