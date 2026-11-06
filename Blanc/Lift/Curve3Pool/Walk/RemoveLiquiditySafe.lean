@@ -78,10 +78,8 @@ theorem RLPush.nat {sevm : Sevm} {B C T : B256} {i : Nat} {c : Exec.Frame}
   · rw [← hv]; exact toNat_le_of_not_lt h.min
   · rw [← hv]; exact toNat_le_of_not_lt h.le
 
-/-- **Safety of `remove_liquidity`, either keep form.** The model's step and the raw effect of a
-successful frame, with the keep premises given per child: either every child keeps the pool's
-storage and address 4's code (`RlKeep`), or every child at neither the pool nor `4` does
-(`RlKeepC`) and the coins and 3Crv are neither. -/
+/-- **Safety of `remove_liquidity`, under the conditional keep.** The model's step and the raw effect of a
+successful frame, with the keep premises given per child the walk can name (`KeepSel`). -/
 theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
     (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
@@ -94,12 +92,7 @@ theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
     (hcoin : ∀ k : Fin 3,
       ¬ sevm.benvStat.rules.isPrecomp ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
     (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
-    (hK : ((∀ k : Fin 3,
-        ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr ≠ sevm.currentTarget ∧
-        ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr ≠ 4) ∧
-      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr ≠ sevm.currentTarget ∧
-      ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr ≠ 4 ∧
-      RlKeepC sevm (Exec.childFrames exc)) ∨ RlKeep sevm (Exec.childFrames exc)) :
+    (hK : KeepSel sevm (pre.getStor sevm.currentTarget) (Exec.childFrames exc)) :
     ∃ T o, step s (rlEnv sevm T) (decodeCall sevm) = some o ∧
       RawEffect ⟨0, sevm, pre, .ok post, exc⟩ post (rlEnv sevm T) o := by
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
@@ -107,7 +100,7 @@ theorem removeLiquidity_rawT_of {sevm : Sevm} {pre post : Devm} {s : State}
   obtain ⟨hlock, hval, c0, c1, c2, c3, c4, hL, h0t, h0d, h0s, h0l, h0g, hp0, hp1, hp2, hTa, h4t,
     h4d, h4v, h4s, h4l, hstorF, hlogsF, houtF⟩ :=
     xa_removeLiquidity hcode hfork hlen hcd hsel htok (fun i hi => hcoin ⟨i, hi⟩) hpc hid
-      (hK.imp (fun k => ⟨fun i hi => k.1 ⟨i, hi⟩, k.2⟩) id) hx
+      hK hx
   replace hL : children ⟨0, sevm, pre, .ok post, exc⟩ = [c0, c1, c2, c3, c4] := hL
   have hdec : decodeCall sevm = .removeLiquidity (arg sevm 0) (argV3 sevm 1) :=
     decodeCall_at (k := 7) rfl hsel hlen

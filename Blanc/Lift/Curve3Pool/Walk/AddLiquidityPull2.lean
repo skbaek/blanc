@@ -176,7 +176,7 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hv : WordAt img 0x4e0 v)
     (hC : WordAt img 0x500 C) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
     (hidk : ∀ c ∈ L, c.sevm.currentTarget = C.toAdr →
-      c.post.getCode 4 = c.pre.getCode 4)
+      CurveCoins.PoolCoinSel (Sevm.selector c.sevm) → c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x1272 (St b [3, 0x4c0] M G) L) :
     (i ≠ 2 ∧ ∃ M' G', Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       XAt sevm post 0x12d6 (St b [3, 0x4c0] M' G') L) ∨
@@ -219,7 +219,8 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     · exact absurd hpre hcoin
     clear hk
     have h4 : d1.getCode 4 = b.getCode 4 := by
-      rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self) htgt, hcpre]
+      rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self) htgt
+        (poolCoinSel_balanceOfData (a := sevm.currentTarget) (by rw [hdata, al_balanceOf_input2])), hcpre]
     xa 5
     xji 0x12ad 0x12b1 hw2
     · xdead
@@ -273,7 +274,7 @@ theorem xa_al_pl5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
         WordAt img' o w) ∧
       WordAt img' 0x4e0 (Bytes.toB256 (c.post.output.take 32) - v) ∧
       XAt sevm post 0x12d6 (St d [3, 0x4c0] M' G') L') :=
-  xa_al_pl5C hcode hfork hi hR hW hA hctr hv hC hcoin (fun c hc _ => hidk c hc) h
+  xa_al_pl5C hcode hfork hi hR hW hA hctr hv hC hcoin (fun c hc _ _ => hidk c hc) h
 
 theorem al_off {i : Nat} (hi : i < 3) (hb : Nat) (hbl : hb < 2 ^ 16) (hl : B256)
     (hlv : hl.toNat = hb) :

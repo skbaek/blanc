@@ -79,14 +79,12 @@ theorem xa_rli_iter {b0 : Devm} {σ : Stor} {k : Nat}
 
 /-- **One transfer iteration under the conditional keep** (`0x3769` → `0x38f7`) for coin `k`:
 the same conclusion as `xa_rli_iter` when only the children at neither the pool nor `4` are
-known to keep the pool (`RlKeepC`, which every frame at depth `1` satisfies), given that coin
+known to keep the pool on a coin selector (`KeepCoin`, which every frame at depth `1` satisfies), given that coin
 `k` is neither. -/
 theorem xa_rli_iterC {b0 : Devm} {σ : Stor} {k : Nat}
     (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hB : ExBase sevm b0 b σ) (hpc : b0.getCode sevm.currentTarget ≠ .empty)
-    (hcoinne : (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ sevm.currentTarget ∧
-      (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ 4)
-    (hK : RlKeepC sevm L) (hdepth : 0 < sevm.depth)
+    (hK : KeepCoin sevm (σ.get (coinsBase + Nat.toB256 k)) L) (hdepth : 0 < sevm.depth)
     (hcoin : rliAmt sevm k ≠ 0 →
       ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + Nat.toB256 k)).toAdr)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hI : RliImg img X D1 T f0 f1 f2)
@@ -118,8 +116,7 @@ theorem xa_rli_iterC {b0 : Devm} {σ : Stor} {k : Nat}
     clear hw
     obtain ⟨bq, c, L1, d, img1, G1, hbq, rfl, hcq, hkp, hR1, hW1, hrd, h⟩ :=
       xa_rli_push hcode hfork hR hW hctr hB.id hdepth (hB.stor _) (hcoin hne) h
-    have hkc := hK c List.mem_cons_self (by rw [hcq.target]; exact hcoinne.1)
-      (by rw [hcq.target]; exact hcoinne.2)
+    have hkc := hK c List.mem_cons_self hcq.target (CurveCoins.poolCoinSel_transfer hcq.data)
     have hBq := (hB.rel hbq).child hcq hpc hkc.1 hkc.2
     obtain ⟨hok, b6, M6, img6, G7, hb6, hR6, hW6, hk6, h⟩ := xa_rli_tail hcode hBq.id hR1 hW1 hrd h
     refine ⟨[c], L1, b6, M6, img6, G7, rfl, hBq.rel hb6, ?_, .inr ⟨hne, c, rfl, hcq.target,

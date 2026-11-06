@@ -1,5 +1,5 @@
 import Blanc.Lift.HistIdentityCall
-import Blanc.Lift.Curve3Pool.Walk.Kit
+import Blanc.Lift.Curve3Pool.Walk.KeepSel
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
@@ -26,7 +26,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     (hcd : sevm.data.length < 2 ^ 256)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
-    (hSK : RlKeepAt sevm ((b.getStor sevm.currentTarget).get tokenSlot) L ∨ RlKeep sevm L)
+    (hSK : KeepTok sevm ((b.getStor sevm.currentTarget).get tokenSlot) L)
     (h : XAt sevm post 0x2c68 (St b [] M G) L) :
     (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b1 : Devm) (M1 : Mem) (G1 : Nat) (img1 : Bytes),
@@ -83,12 +83,8 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     hcpost⟩
   · exact absurd hpre htok
   have h4 : d1.getCode 4 = b.getCode 4 := by
-    rcases hSK with hSK | hSK
-    · rw [hcpost, (hSK.2.2 c (by rw [hL]; exact List.mem_cons_self) (by rw [htgt]; exact hSK.1)
-        (by rw [htgt]; exact hSK.2.1)).2, hcpre, afterSloadH_getCode, afterSstoreH_getCode,
-        afterSloadH_getCode]
-    · rw [hcpost, (hSK c (by rw [hL]; exact List.mem_cons_self)).2, hcpre, afterSloadH_getCode,
-        afterSstoreH_getCode, afterSloadH_getCode]
+    rw [hcpost, (hSK c (by rw [hL]; exact List.mem_cons_self) htgt).2, hcpre, afterSloadH_getCode,
+      afterSstoreH_getCode, afterSloadH_getCode]
   clear hk
   xa 5
   xji 0x2cb2 0x2cb6 hw2

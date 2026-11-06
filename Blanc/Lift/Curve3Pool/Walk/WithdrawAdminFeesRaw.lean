@@ -29,7 +29,7 @@ theorem wdx_push {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem} {
     (k : Fin 3) (feesW coin : B256) (hdepth : 0 < sevm.depth) (hid : IdReadyH sevm d)
     (hpc : d.getCode sevm.currentTarget ≠ .empty)
     (hcoinW : (d.getStor sevm.currentTarget).get (coinSlot k) = coin)
-    (hcoin : ¬ sevm.benvStat.rules.isPrecomp coin.toAdr) (hK : RlKeep sevm L)
+    (hcoin : ¬ sevm.benvStat.rules.isPrecomp coin.toAdr) (hK : KeepCoin sevm coin L)
     (hctrR : Region img 0x140 (Nat.toB256 ↑k).toBytes) (hcoinR : Region img 0x160 coin.toBytes)
     (hfeesR : Region img 0x180 feesW.toBytes) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (h : XAt sevm post 0x4dfc
@@ -102,7 +102,7 @@ the excess transfer when there is one. -/
 theorem wdx_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem} {img : Bytes}
     {G : Nat} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (k : Fin 3) (hid : IdReadyH sevm d) (hpc : d.getCode sevm.currentTarget ≠ .empty)
-    (hkeep : RlKeep sevm L)
+    (hkeep : KeepCoin sevm ((d.getStor sevm.currentTarget).get (coinSlot k)) L)
     (hctrR : Region img 0x140 (Nat.toB256 ↑k).toBytes) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hcoinK : ¬ sevm.benvStat.rules.isPrecomp
       (((d.getStor sevm.currentTarget).get (coinSlot k)).toAdr))
@@ -131,7 +131,7 @@ theorem wdx_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem} {
     obtain ⟨p, L2, d2, M2, img2, G2, rfl, hpt, hpd, hpv, hps, hpok, hs2, hl2, ho2, hc2, hid2,
       hctr2, hR2, hW2, h⟩ :=
       wdx_push hcode hfork k _ ((d.getStor sevm.currentTarget).get (coinSlot k)) hdepth hid1
-        hpc1 (by rw [hst1]) hcoinK hkeep.tail hctr1 hcoin1 hfees1 hR1 hW1 h
+        hpc1 (by rw [hst1]) hcoinK (fun c' hc' => hkeep c' (List.mem_cons_of_mem _ hc')) hctr1 hcoin1 hfees1 hR1 hW1 h
     refine ⟨c, [p], L2, d2, M2, img2, G2, rfl,
       ⟨htgt, hdata, hstat, hlen, hclogs, hle, hne, hpt, hpd, hpv, hps, hpok⟩,
       fun x => by rw [hs2, hst1], ?_, by rw [ho2, ho1], by rw [hc2, hcd1], hid2, hctr2, hR2,
@@ -146,7 +146,7 @@ theorem WdKids.congr {sevm : Sevm} {σ σ' : Stor} {k : Fin 3} {c : Exec.Frame}
     by rw [← he, ← he]; exact h7⟩
 
 theorem wdx_keep_drop {sevm : Sevm} {c : Exec.Frame} {Lp L : List Exec.Frame}
-    (h : RlKeep sevm (c :: (Lp ++ L))) : RlKeep sevm L :=
+    {σ : Stor} (h : KeepSel sevm σ (c :: (Lp ++ L))) : KeepSel sevm σ L :=
   fun c' hc' => h c' (List.mem_cons_of_mem _ (List.mem_append_right _ hc'))
 
 /-- **The `withdraw_admin_fees` frame**: from the frame's start, past the dispatcher and the
@@ -158,7 +158,7 @@ theorem xa_withdraw {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selWithdrawAdminFees)
     (hid : IdReadyH sevm b) (hpc : b.getCode sevm.currentTarget ≠ .empty)
-    (hkeep : RlKeep sevm L)
+    (hkeep : KeepSel sevm (b.getStor sevm.currentTarget) L)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       (((b.getStor sevm.currentTarget).get (coinSlot k)).toAdr))
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
@@ -181,7 +181,8 @@ theorem xa_withdraw {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     rw [afterSloadH_getCode]; exact hpc
   -- iteration 0
   obtain ⟨c0, Lp0, L1, d1, M1, img1, G6, rfl, hk0, hs1, hl1, ho1, hc1, hid1, hctr1, hR1, hW1, h⟩ :=
-    wdx_iter hcode hfork 0 (hid.afterSloadH _) hpc0 hkeep hctr5 hR5 hW5
+    wdx_iter hcode hfork 0 (hid.afterSloadH _) hpc0
+      (fun c hc ht hs => hkeep.coin (i := 0) (by decide) c hc (by rw [ht, hs0]; rfl) hs) hctr5 hR5 hW5
       (by rw [hs0]; exact hcoin 0) h
   have hkeep1 := wdx_keep_drop hkeep
   rcases wdx_tail hcode 0 (by omega) hctr1 hR1 hW1 h with backArm | exitArm
@@ -194,7 +195,8 @@ theorem xa_withdraw {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   have hpc1 : d1.getCode sevm.currentTarget ≠ .empty := by rw [hc1]; exact hpc0
   -- iteration 1
   obtain ⟨c1, Lp1, L2, d2, M2, img2, G8, rfl, hk1, hs2, hl2, ho2, hc2, hid2, hctr2, hR2, hW2, h⟩ :=
-    wdx_iter hcode hfork 1 hid1 hpc1 hkeep1 hctr7 hR7 hW7 (by rw [hs1']; exact hcoin 1) h
+    wdx_iter hcode hfork 1 hid1 hpc1
+      (fun c hc ht hs => hkeep1.coin (i := 1) (by decide) c hc (by rw [ht, hs1']; rfl) hs) hctr7 hR7 hW7 (by rw [hs1']; exact hcoin 1) h
   have hkeep2 := wdx_keep_drop hkeep1
   rcases wdx_tail hcode 1 (by omega) hctr2 hR2 hW2 h with backArm | exitArm
   swap
@@ -206,7 +208,8 @@ theorem xa_withdraw {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   have hpc2 : d2.getCode sevm.currentTarget ≠ .empty := by rw [hc2]; exact hpc1
   -- iteration 2
   obtain ⟨c2, Lp2, L3, d3, M3, img3, G10, rfl, hk2, hs3, hl3, ho3, -, -, hctr3, hR3, hW3, h⟩ :=
-    wdx_iter hcode hfork 2 hid2 hpc2 hkeep2 hctr9 hR9 hW9 (by rw [hs2']; exact hcoin 2) h
+    wdx_iter hcode hfork 2 hid2 hpc2
+      (fun c hc ht hs => hkeep2.coin (i := 2) (by decide) c hc (by rw [ht, hs2']; rfl) hs) hctr9 hR9 hW9 (by rw [hs2']; exact hcoin 2) h
   rcases wdx_tail hcode 2 (by omega) hctr3 hR3 hW3 h with backArm | exitArm
   · obtain ⟨hback, _⟩ := backArm
     omega
@@ -362,7 +365,7 @@ theorem withdrawAdminFees_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hx : XAt sevm post 0 (St pre [] Mem.empty pre.gasLeft) (Exec.childFrames exc) :=
     XAt.of_eq (St.self hstack hmem) (XAt.of_exec exc hgas)
   obtain ⟨hval, hown, c0, c1, c2, Lp0, Lp1, Lp2, hL, hk0, hk1, hk2, hstorF, hlogsF, houtF⟩ :=
-    xa_withdraw hcode hfork hlen hcd hsel hid hpc (RlKeep.of_pool hkeep hidk) hcoin hx
+    xa_withdraw hcode hfork hlen hcd hsel hid hpc (.of_keep (RlKeep.of_pool hkeep hidk)) hcoin hx
   have hdec : decodeCall sevm = .withdrawAdminFees := decodeCall_at (k := 20) rfl hsel hlen
   have hchildren : children ⟨0, sevm, pre, .ok post, exc⟩ =
       c0 :: (Lp0 ++ c1 :: (Lp1 ++ c2 :: Lp2)) := hL

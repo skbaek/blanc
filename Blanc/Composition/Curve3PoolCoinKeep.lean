@@ -17,9 +17,8 @@ What the deployed coins give a pool frame's keep premises, over the historical f
 * `exchange_keeps_of_children`: every committed child of an `exchange` frame is at a coin on such a selector,
   and keeps the pool's storage and the code at `4`. The walk exposes each child's target and calldata before
   it needs that child's keep (`ExCoinSel`);
-* `poolCoinCallsKeepToken_of_sel`: coin children on those selectors keep the token, when it holds code.
 
-Only `exchange` is walked here. The other entries' keep is not discharged by this module.
+Only `exchange` is walked here; `Curve3PoolKeepAt.lean` covers every entry.
 -/
 
 namespace Blanc.Composition.Curve3PoolCoinKeep
@@ -184,16 +183,5 @@ theorem exchange_keeps_of_children {s : Curve3Pool.State} (exc : Exec 0 sevm b (
       subst hc
       exact ⟨exCoinChild_of hj3 hqt, poolCoinSel_transfer hqd⟩
   exact ⟨coin, fun c hc => (keeps c hc (coin c hc)).1, fun c hc => (keeps c hc (coin c hc)).2⟩
-
-/-- **Every coin child keeps the token**, for a frame all of whose children at coins are on the pool's
-selectors, when the token holds code at the frame's entry. -/
-theorem poolCoinCallsKeepToken_of_sel (exc : Exec 0 sevm b (.ok post))
-    (hcoins : ∀ k, ChildKeepsSel exc (coinAdr ⟨0, sevm, b, .ok post, exc⟩ k))
-    (hsel : ∀ c ∈ Exec.childFrames exc, (∃ k, c.sevm.currentTarget = coinAdr ⟨0, sevm, b, .ok post, exc⟩ k) →
-      PoolCoinSel (Blanc.Sevm.selector c.sevm))
-    (htok : (b.getCode (tokenAdr ⟨0, sevm, b, .ok post, exc⟩)).toList ≠ []) :
-    PoolCoinCallsKeepToken ⟨0, sevm, b, .ok post, exc⟩ := by
-  rintro c hc ⟨k, hk⟩ hct x
-  exact (hcoins k c hc hk (hsel c hc ⟨k, hk⟩) _ (fun e => hct (hk.trans e))).1 htok x
 
 end Blanc.Composition.Curve3PoolCoinKeep

@@ -35,7 +35,7 @@ abbrev ocBal (σ : Stor) (iw dy fee : B256) : B256 :=
   σ.get (balancesBase + iw) - (dy + fee * σ.get adminFeeSlot / ocDen)
 
 /-- **`xa_oneCoin2` under the conditional keep**: the same conclusion when only the children at
-neither the pool nor `4` are known to keep the pool (`RlKeepC`, which every frame at depth `1`
+the walk can name are known to keep the pool (`KeepSel`, which every frame at depth `1`
 satisfies), given that 3Crv and coin `i` are neither. -/
 theorem xa_oneCoin2C (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
     (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
@@ -46,10 +46,7 @@ theorem xa_oneCoin2C (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : S
     (hcoin : (exJ sevm).toNat < 3 →
       ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + exJ sevm)).toAdr)
     (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
-    (htokne : (σ.get tokenSlot).toAdr ≠ sevm.currentTarget ∧ (σ.get tokenSlot).toAdr ≠ 4)
-    (hcoinne : (σ.get (coinsBase + exJ sevm)).toAdr ≠ sevm.currentTarget ∧
-      (σ.get (coinsBase + exJ sevm)).toAdr ≠ 4)
-    (hK : RlKeepC sevm L)
+    (hK : KeepSel sevm σ L)
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
     σ.get lockSlot = 0 ∧ sevm.value = 0 ∧ σ.get isKilledSlot = 0 ∧
     ∃ (cs cb cp : Exec.Frame) (hi : (exJ sevm).toNat < 3) (dy fee : B256),
@@ -83,9 +80,8 @@ theorem xa_oneCoin2C (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : S
     hc1, hid1, h, hV, hfirst, hsec⟩ := xa_oc_a2 hc hcode hfork ha htok h
   refine ⟨hlock, hval, hkill, ?_⟩
   have hB1 : ExBase sevm b b1 ((b.getStor sevm.currentTarget).set lockSlot 1) :=
-    ⟨hs1, hc1 _ hpc, ho1, hid1 hid (hK cs List.mem_cons_self (by rw [hsw.target]; exact htokne.1)
-      (by rw [hsw.target]; exact htokne.2)).2⟩
-  have hK1 : RlKeepC sevm L1 := hK.tail
+    ⟨hs1, hc1 _ hpc, ho1, hid1 hid (hK.tok cs List.mem_cons_self hsw.target).2⟩
+  have hK1 : KeepSel sevm (b.getStor sevm.currentTarget) L1 := hK.tail
   clear hK
   obtain ⟨hmin, hmf, hadd, hsub, b2, M2, G2, hB2, hl2, h, hV⟩ := xa_oc_b hcode hfork hB1 hV h
   have hiN : balancesBase + exJ sevm = balancesBase + Nat.toB256 (exJ sevm).toNat := by
@@ -107,8 +103,7 @@ theorem xa_oneCoin2C (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : S
   -- the burn
   obtain ⟨cb, L2, d3, M3, img3, G3, rfl, hcb, hlen3, hdepth, hR3, hW3, hv3, h⟩ :=
     xa_oc_burn hcode hfork hV htw htok h
-  have hkb := hK1 cb List.mem_cons_self (by rw [hcb.target]; exact htokne.1)
-    (by rw [hcb.target]; exact htokne.2)
+  have hkb := hK1.tok cb List.mem_cons_self hcb.target
   have hB3 := hB2.child hcb hpc hkb.1 hkb.2
   have hcw : (d3.getStor sevm.currentTarget).get (coinsBase + exJ sevm) =
       (b.getStor sevm.currentTarget).get (coinsBase + exJ sevm) := by
@@ -117,8 +112,8 @@ theorem xa_oneCoin2C (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : S
   -- the push and its `raw_call` test
   obtain ⟨bq, cp, L3, dq, img9, G9, hbq, rfl, hcp, hv9, hR9, hW9, hrd9, h⟩ :=
     xa_oc_push hcode hfork hR3 hW3 hv3 hB3.id hdepth hcw (hcoin hi) h
-  have hkp := hK1 cp (by simp only [List.mem_cons, true_or, or_true])
-    (by rw [hcp.target]; exact hcoinne.1) (by rw [hcp.target]; exact hcoinne.2)
+  have hkp := hK1.coin hi cp (by simp only [List.mem_cons, true_or, or_true])
+    (by rw [hcp.target, ← hcJ]) (CurveCoins.poolCoinSel_transfer hcp.data)
   have hBq := (hB3.rel hbq).child hcp hpc hkp.1 hkp.2
   obtain ⟨hok2, b10, M10, img10, G10, hb10, hR10, hW10, hk10, h⟩ :=
     xa_oc_tail hcode hBq.id hR9 hW9 hrd9 h
