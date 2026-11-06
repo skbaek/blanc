@@ -91,7 +91,7 @@ theorem child_context {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0
         have code : f.inner.code = pre.getCode (pre.getStorVal T implSlot).toAdr := by
           rw [shape.2.2.2.2.2, nodeGetCode, parent]
         refine ⟨.inr (.inl (by rw [frameCode, code]; exact version)), fun hi => ?_⟩
-        have := cert.2 (code.symm.trans (frameCode.symm.trans hi))
+        have := cert.2.1 (code.symm.trans (frameCode.symm.trans hi))
         change cevm.dyna.getCode usdcLib = _
         rw [getCode, nodeGetCode]
         exact this
@@ -252,10 +252,75 @@ theorem usdc_viewSettled_certified {cfg : ChainConfig} {start : Benv} {future : 
     (capabilities : BodyStageCapabilities HistFork)
     (installed : start.state.getCode T = Proxy.code)
     (certified : CertifiedSettled T trace.settledFrames) :
-    ViewSettled T ledgerView (EntryObs T) (EntryGood T) (EntryAllowed T)
+    ViewSettled T ledgerView (EntryObs T) (EntryGood T) (EntryAllowed T) entryKeep
       (ledgerView (wordsAt T start.state)) (ledgerView (wordsAt T future.state))
       trace.settledFrames :=
   usdc_viewSettled trace capabilities installed
     (usdc_outputNotDeleted trace capabilities installed certified).1
+
+/-- **Every settled frame of a mid history has calldata shorter than a word**: a root's from its transaction or
+system message, a descendant's from memory by a size that is a stack word. -/
+theorem settled_data_bound {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (trace : MidHistoryTraceIn HistFork cfg start future)
+    (capabilities : BodyStageCapabilities HistFork) :
+    ∀ G ∈ trace.settledFrames, G.sevm.data.length < 2 ^ 256 := fun G member =>
+  trace.calldata_bound capabilities (fun _ hf => hf.dataNonZero_ge) _
+    (trace.mem_rawFrames_of_mem_settledFrames G member)
+
+/-- **The chain's links**: the entry frames off `rescueERC20`. A rescue frame's re-entrant frames are links
+themselves, and the view runs through them. -/
+def ChainObs (T : Adr) (F : Exec.Frame) : Prop :=
+  EntryObs T F ∧ Blanc.Sevm.selector F.sevm ≠ rescueSelector
+
+/-- The marker's filter of the entry frames is the chain's links. -/
+theorem filter_coinFrames (T : Adr) : ∀ fs : List Exec.Frame,
+    (coinFrames T (EntryObs T) fs).filter entryKeep = coinFrames T (ChainObs T) fs
+  | [] => rfl
+  | F :: fs => by
+    have rest := filter_coinFrames T fs
+    unfold coinFrames at rest ⊢
+    rw [List.flatMap_cons, List.flatMap_cons, List.filter_append, rest]
+    congr 1
+    unfold coinObs
+    by_cases h : F.sevm.currentTarget = T ∧ F.sevm.isStatic = false ∧ EntryObs T F
+    · rw [if_pos h]
+      by_cases sel : Blanc.Sevm.selector F.sevm = rescueSelector
+      · have marked : ¬ entryKeep F = true := fun keep => of_decide_eq_true keep sel
+        rw [List.filter_cons_of_neg marked, if_neg (fun c => c.2.2.2 sel)]
+        rfl
+      · have kept : entryKeep F = true := decide_eq_true sel
+        rw [List.filter_cons_of_pos kept, if_pos ⟨h.1, h.2.1, h.2.2, sel⟩]
+        rfl
+    · rw [if_neg h, if_neg (fun c => h ⟨c.1, c.2.1, c.2.2.1⟩)]
+      rfl
+
+/-- **USDC's chain from certification at the settled frames, with nothing else asked of a frame**: the ledger view
+runs through the entry frames off `rescueERC20`, to the end and to any settled frame no earlier non-static frame at
+`T` encloses. Uncertified frames, reverted upgrades and the rescuer's call are no premise. -/
+theorem usdc_viewChain_certified {cfg : ChainConfig} {start : Benv} {future : BlockChain}
+    (trace : MidHistoryTraceIn HistFork cfg start future)
+    (capabilities : BodyStageCapabilities HistFork)
+    (installed : start.state.getCode T = Proxy.code)
+    (certified : CertifiedSettled T trace.settledFrames) :
+    ViewChain T ledgerView (EntryGood T) (ledgerView (wordsAt T start.state))
+      (coinFrames T (ChainObs T) trace.settledFrames) (ledgerView (wordsAt T future.state)) ∧
+    ∀ {before : List Exec.Frame} {f : Exec.Frame} {after : List Exec.Frame},
+      trace.settledFrames = before ++ f :: after →
+      Exec.NoOpaqueAbove (fun A => A.sevm.currentTarget = T ∧ A.sevm.isStatic = false) before f →
+      ViewChain T ledgerView (EntryGood T) (ledgerView (wordsAt T start.state))
+        (coinFrames T (ChainObs T) before) (ledgerView (wordsAt T f.pre.state)) := by
+  have allowed : ∀ {fs : List Exec.Frame}, (∀ F ∈ fs, F ∈ trace.settledFrames) →
+      ∀ F ∈ coinFrames T (EntryObs T) fs, EntryAllowed T F := fun sub F member => by
+    obtain ⟨inFs, target, -, obs⟩ := mem_coinFrames.mp member
+    exact ⟨certified F (sub F inFs) target obs.1 obs.2,
+      settled_data_bound trace capabilities F (sub F inFs)⟩
+  have settled := usdc_viewSettled_certified trace capabilities installed certified
+  refine ⟨?_, fun {before f after} split noOpaque => ?_⟩
+  · rw [← filter_coinFrames]
+    exact settled.1 (allowed fun _ h => h)
+  · rw [← filter_coinFrames]
+    exact settled.2 split noOpaque (allowed fun F h => by
+      rw [split]
+      exact List.mem_append_left _ h)
 
 end Blanc.Lift.Usdc

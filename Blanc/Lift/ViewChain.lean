@@ -61,14 +61,15 @@ theorem inv_all {I : StorWords → Prop} :
 
 end ViewChain
 
-/-- **The view carrier** at `T`. -/
-noncomputable def viewCarrier (T : Adr) (V : StorWords → StorWords) (Good Allowed : Exec.Frame → Prop) :
-    ReplayCarrier T where
+/-- **The view carrier** at `T`. A step `Keep` marks out still has to be allowed, so that its replay can be vacuous,
+but it is no link of the chain. -/
+noncomputable def viewCarrier (T : Adr) (V : StorWords → StorWords) (Good Allowed : Exec.Frame → Prop)
+    (Keep : Exec.Frame → Bool) : ReplayCarrier T where
   readsStorage := true
   Snap := StorWords
   Step := Exec.Frame
   Tag := Unit
-  Replay a xs b := (∀ F ∈ xs, Allowed F) → ViewChain T V Good a xs b
+  Replay a xs b := (∀ F ∈ xs, Allowed F) → ViewChain T V Good a (xs.filter Keep) b
   ofState w := V (wordsAt T w)
   frameEntry _ w := V (wordsAt T w)
   nil := fun _ _ => rfl
@@ -82,8 +83,8 @@ noncomputable def viewCarrier (T : Adr) (V : StorWords → StorWords) (Good Allo
       (fun h1 _ => Or.inl (caller_ne h1))))
 
 /-- The view carrier's observation: the frames themselves. -/
-noncomputable def viewObservation (T : Adr) (V : StorWords → StorWords) (Obs Good Allowed : Exec.Frame → Prop) :
-    ReplayObservation (viewCarrier T V Good Allowed) where
+noncomputable def viewObservation (T : Adr) (V : StorWords → StorWords) (Obs Good Allowed : Exec.Frame → Prop)
+    (Keep : Exec.Frame → Bool) : ReplayObservation (viewCarrier T V Good Allowed Keep) where
   O := Exec.Frame
   obs := id
   obs_nil := rfl
@@ -94,21 +95,25 @@ noncomputable def viewObservation (T : Adr) (V : StorWords → StorWords) (Obs G
     exact ⟨[], fun _ => congrArg V (congrArg Stor.get storage), rfl⟩
 
 theorem viewCarrier_append {T : Adr} {V : StorWords → StorWords} {Good Allowed : Exec.Frame → Prop}
-    {a b c : StorWords} {xs ys : List Exec.Frame} (hx : (viewCarrier T V Good Allowed).Replay a xs b)
-    (hy : (viewCarrier T V Good Allowed).Replay b ys c) :
-    (viewCarrier T V Good Allowed).Replay a (xs ++ ys) c := fun all =>
-  (hx fun F h => all F (List.mem_append_left _ h)).append
+    {Keep : Exec.Frame → Bool} {a b c : StorWords} {xs ys : List Exec.Frame}
+    (hx : (viewCarrier T V Good Allowed Keep).Replay a xs b)
+    (hy : (viewCarrier T V Good Allowed Keep).Replay b ys c) :
+    (viewCarrier T V Good Allowed Keep).Replay a (xs ++ ys) c := fun all => by
+  change ViewChain T V Good a ((xs ++ ys).filter Keep) c
+  rw [List.filter_append]
+  exact (hx fun F h => all F (List.mem_append_left _ h)).append
     (hy fun F h => all F (List.mem_append_right _ h))
 
 /-- What `mid_viewChain` concludes. -/
-def ViewSettled (T : Adr) (V : StorWords → StorWords) (Obs Good Allowed : Exec.Frame → Prop) (a b : StorWords)
-    (frames : List Exec.Frame) : Prop :=
-  ((∀ F ∈ coinFrames T Obs frames, Allowed F) → ViewChain T V Good a (coinFrames T Obs frames) b) ∧
+def ViewSettled (T : Adr) (V : StorWords → StorWords) (Obs Good Allowed : Exec.Frame → Prop)
+    (Keep : Exec.Frame → Bool) (a b : StorWords) (frames : List Exec.Frame) : Prop :=
+  ((∀ F ∈ coinFrames T Obs frames, Allowed F) →
+    ViewChain T V Good a ((coinFrames T Obs frames).filter Keep) b) ∧
     ∀ {before : List Exec.Frame} {f : Exec.Frame} {after : List Exec.Frame},
       frames = before ++ f :: after →
       Exec.NoOpaqueAbove (fun A => A.sevm.currentTarget = T ∧ A.sevm.isStatic = false) before f →
       (∀ F ∈ coinFrames T Obs before, Allowed F) →
-      ViewChain T V Good a (coinFrames T Obs before) (V (wordsAt T f.pre.state))
+      ViewChain T V Good a ((coinFrames T Obs before).filter Keep) (V (wordsAt T f.pre.state))
 
 /-- What a settled root needs for its own accounting. -/
 def RootReady (F : Fork → Prop) (T : Adr) (sem : CodeSem) (entry : Sevm → Devm → Prop)
@@ -119,10 +124,10 @@ def RootReady (F : Fork → Prop) (T : Adr) (sem : CodeSem) (entry : Sevm → De
 section Mid
 
 variable {F : Fork → Prop} {T : Adr} {sem : CodeSem} {entry : Sevm → Devm → Prop}
-  {V : StorWords → StorWords} {Obs Good Allowed : Exec.Frame → Prop}
+  {V : StorWords → StorWords} {Obs Good Allowed : Exec.Frame → Prop} {Keep : Exec.Frame → Bool}
 
-local notation "Ca" => viewCarrier T V Good Allowed
-local notation "Ob" => viewObservation T V Obs Good Allowed
+local notation "Ca" => viewCarrier T V Good Allowed Keep
+local notation "Ob" => viewObservation T V Obs Good Allowed Keep
 
 /-- **Settled roots whose accounting holds carry the view's chain.** -/
 theorem viewSettled_of_roots
@@ -137,7 +142,7 @@ theorem viewSettled_of_roots
           steps = before.flatMap (coinObs T Obs)) :
     ∀ {a b : StorWords} {roots : List Exec.Frame}, RootChain T a roots b →
       (∀ R ∈ roots, RootReady F T sem entry R) →
-      ViewSettled T V Obs Good Allowed (V a) (V b) (roots.flatMap fun R => Exec.committedFrames R.run) := by
+      ViewSettled T V Obs Good Allowed Keep (V a) (V b) (roots.flatMap fun R => Exec.committedFrames R.run) := by
   intro a b roots
   induction roots generalizing a with
   | nil =>
@@ -155,6 +160,7 @@ theorem viewSettled_of_roots
     rw [List.flatMap_cons]
     refine ⟨fun all => ?_, fun {before f after} split noOpaque all => ?_⟩
     · rw [coinFrames_append] at all ⊢
+      rw [List.filter_append]
       exact (replay fun G hG => all G (List.mem_append_left _ hG)).append
         (later.1 fun G hG => all G (List.mem_append_right _ hG))
     · rcases List.split_append_cons split with ⟨m, hx, -⟩ | ⟨n, hb, hy⟩
@@ -162,6 +168,7 @@ theorem viewSettled_of_roots
         exact r all
       · subst hb
         rw [coinFrames_append] at all ⊢
+        rw [List.filter_append]
         exact (replay fun G hG => all G (List.mem_append_left _ hG)).append
           (later.2 hy (Exec.NoOpaqueAbove.drop noOpaque)
             fun G hG => all G (List.mem_append_right _ hG))

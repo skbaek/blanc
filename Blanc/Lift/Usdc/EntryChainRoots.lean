@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.EntryQuiet
+import Blanc.Lift.Usdc.EntryTarget
 import Blanc.Lift.RootReady
 import Blanc.ExecutionAccountingPositionalHistory
 
@@ -15,18 +15,12 @@ namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace Blanc.ExecutionAccountingReplay
 
-theorem proxy_toList_ne_nil : Proxy.code.toList ≠ [] :=
-  entrySem.ne_nil (l := Proxy.code.toList) rfl
-
-theorem proxy_not_delegation : ¬ isValidDelegation Proxy.code :=
-  entrySem.not_delegation (code := Proxy.code) rfl
-
 section
 
 variable {T : Adr}
 
-local notation "Ca" => viewCarrier T ledgerView (EntryGood T) (EntryAllowed T)
-local notation "Ob" => viewObservation T ledgerView (EntryObs T) (EntryGood T) (EntryAllowed T)
+local notation "Ca" => viewCarrier T ledgerView (EntryGood T) (EntryAllowed T) entryKeep
+local notation "Ob" => viewObservation T ledgerView (EntryObs T) (EntryGood T) (EntryAllowed T) entryKeep
 
 /-- Whole-frame accounting of every derivation at the proxy. -/
 theorem entry_core : Exec.Fa (Exec.WknSem T entrySem
@@ -34,7 +28,7 @@ theorem entry_core : Exec.Fa (Exec.WknSem T entrySem
   Exec.coreAccountingIn HistFork T entrySem (fun _ _ => True) Ca Ob viewCarrier_append
     (fun _ _ => ()) (fun _ _ _ => rfl)
     (fun f hf => ite_eq_right fun h => hf h.1) HistFork.stateGas_none
-    (fun hrun target deeper => entryTarget (entryQuiet T) hrun target deeper)
+    (fun hrun target deeper => entryTarget hrun target deeper)
 
 /-- Positional accounting of every derivation at the proxy. -/
 theorem entry_positional : Exec.Fa (Exec.WknSem T entrySem
@@ -50,7 +44,7 @@ theorem usdc_viewSettled {cfg : ChainConfig} {start : Benv} {future : BlockChain
     (trace : MidHistoryTraceIn HistFork cfg start future)
     (capabilities : BodyStageCapabilities HistFork)
     (installed : start.state.getCode T = Proxy.code) (notDeleted : trace.OutputNotDeleted T) :
-    ViewSettled T ledgerView (EntryObs T) (EntryGood T) (EntryAllowed T)
+    ViewSettled T ledgerView (EntryObs T) (EntryGood T) (EntryAllowed T) entryKeep
       (ledgerView (wordsAt T start.state)) (ledgerView (wordsAt T future.state))
       trace.settledFrames := by
   rw [trace.settledFrames_eq]
