@@ -161,7 +161,6 @@ def opFacts (fs : List Fact) (n : Ninst) (xs : List Nat) (r : Nat) : List Fact :
   | .reg .gt, x :: y :: _ => [.ltr r y x, .bnd r 0 1]
   | .reg .iszero, x :: _ => [.isz r x, .bnd r 0 1]
   | .reg .eq, _ => [.bnd r 0 1]
-  | .reg .msize, _ => [.bnd r 0 memCap]
   | _, _ => []
 
 /-- The bound a touched window `[a, a + len)` gives after the step (memory potential, F2):

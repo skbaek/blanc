@@ -207,7 +207,7 @@ LEAN_REG: Dict[int, str] = {
     0x43: ".reg .number",
     0x46: ".reg .chainid", 0x47: ".reg .selfbalance", 0x50: ".reg .pop",
     0x51: ".reg .mload", 0x52: ".reg .mstore", 0x53: ".reg .mstore8",
-    0x54: ".reg .sload", 0x55: ".reg .sstore", 0x5a: ".reg .gas",
+    0x54: ".reg .sload", 0x55: ".reg .sstore", 0x59: ".reg .msize", 0x5a: ".reg .gas",
     0x5c: ".reg .tload", 0x5d: ".reg .tstore",
     0xa0: ".reg (.log 0)", 0xa1: ".reg (.log 1)", 0xa2: ".reg (.log 2)",
     0xa3: ".reg (.log 3)", 0xa4: ".reg (.log 4)",

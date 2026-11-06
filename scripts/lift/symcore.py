@@ -216,8 +216,6 @@ def op_facts(fs, kind, xs, r) -> Set[Tuple]:
         return {('isz', r, x), ('bnd', r, 0, 1)}
     if name == 'eq':
         return {('bnd', r, 0, 1)}
-    if name == 'msize':
-        return {('bnd', r, 0, MEMCAP)}
     return set()
 
 

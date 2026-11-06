@@ -78,7 +78,7 @@ DAI = {
     "mint(address,uint256)": {CD4: O("ward")},
     "burn(address,uint256)": {CD4: A()},
     "push(address,uint256)": {CALLER: H(), RAW_CALLER: H(), CD4: R()},
-    "pull(address,uint256)": {CD4: A(), CALLER: R(), RAW_CALLER: R()},
+    "pull(address,uint256)": {CD4: A(), CALLER: H(), RAW_CALLER: H()},
     "move(address,address,uint256)": {CD4: A(), CD24: R()},
 }
 USDT = {

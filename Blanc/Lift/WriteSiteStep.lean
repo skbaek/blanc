@@ -17,8 +17,8 @@ are in `Blanc/Lift/WriteSiteJoin.lean`.  Consumers never unfold `wstep` (`wstep_
 Two semantic remarks.  `memBelow` keeps the words ending below a write's lower bound; memory is
 indexed by naturals, so a window starting at or above that bound never reaches below it, whether
 or not it crosses `2 ^ 256` (`memBelow_holds`, `Mem.WritesAt.agreeBelow`): no gas argument is
-needed.  `MSIZE` has no stack transfer (`ninstTransfer` rejects it), so `wstep` never accepts it
-and F3a's `opFacts` memory premise is discharged vacuously.  Contract-neutral.
+needed.  `MSIZE` attaches no fact (`opFacts`), so F3a's memory premise is discharged vacuously.
+Contract-neutral.
 -/
 
 namespace Blanc.Lift.WriteSite
@@ -532,12 +532,11 @@ theorem pushesTop_head {r : Rinst} {p out : Pattern} (hr : pushesTop r = true)
 
 theorem opFacts_pushesTop {fs : List Fact} {kv : List Nat} {n : Ninst} {r : Nat}
     (hne : FreePtr.opFacts fs n kv r ≠ []) :
-    ∃ q, n = .reg q ∧ (pushesTop q = true ∨ q = .msize) := by
+    ∃ q, n = .reg q ∧ pushesTop q = true := by
   cases n with
   | reg q =>
     refine ⟨q, rfl, ?_⟩
-    cases q <;> first | exact .inl rfl | exact .inr rfl |
-      exact (hne (by simp only [FreePtr.opFacts])).elim
+    cases q <;> first | rfl | exact (hne (by simp only [FreePtr.opFacts])).elim
   | _ => exact (hne (by simp only [FreePtr.opFacts])).elim
 
 theorem provEff_pushesTop {σ : WSt} {n : Ninst} (hk : (provEff σ n).known = true) :
@@ -1001,11 +1000,9 @@ theorem wstep_sound_noStateGas {R : WRet} {n : Ninst} {σ σ' : WSt} {ε : Env} 
     · by_cases hne : FreePtr.opFacts σ.facts n σ.kv σ.fresh = []
       · rw [hne]; intro f hf; cases hf
       · obtain ⟨q, rfl, hq⟩ := opFacts_pushesTop hne
-        rcases hq with hq | rfl
-        · obtain ⟨rs, hrs⟩ := htop q rfl hq
-          exact FreePtr.opFacts_sound h.facts hr h.kv hS run (by rw [hrs]; rfl)
-            (fun he => by cases he; exact absurd hq (by decide))
-        · simp only [ninstTransfer, liftRegularTransfer, regularTransfer, reduceCtorEq] at ho
+        obtain ⟨rs, hrs⟩ := htop q rfl hq
+        exact FreePtr.opFacts_sound h.facts hr h.kv hS run (by rw [hrs]; rfl)
+          (fun he => by cases he; exact absurd hq (by decide))
   · -- provenance
     intro p hp
     rcases List.mem_append.mp hp with hp | hp
