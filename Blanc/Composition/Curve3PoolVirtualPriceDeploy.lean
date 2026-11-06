@@ -195,7 +195,7 @@ theorem Assumes.coinsHold (A : Assumes d h) {s : Benv} {f : BlockChain}
   usdtCode := usdtCode
   usdcCode := fun F m => Usdc.usdc_settledCode (d.sincePool h) BodyStageCapabilities.historical A.usdcCode
     A.circle.usdcCertified F (sub F m)
-  usdcImpl := fun F m t _ => (A.circle.usdcCertified F (sub F m) t).1
+  usdcImpl := fun F m t c a => A.circle.usdcCertified F (sub F m) t c a
   usdtLive := fun F m t st => A.tether.notDeprecated F (mem_coinFrames.mpr ⟨sub F m, t, st, trivial⟩)
 
 theorem coin0_eq : Curve3Pool.adrOf (Curve3Pool.Creation.coinsN.get 0) = dai := by decide +kernel

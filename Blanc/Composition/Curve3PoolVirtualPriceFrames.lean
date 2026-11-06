@@ -101,7 +101,7 @@ theorem pool_at (facts : PoolMidFacts full trace pool Curve3Pool.Creation.coinsN
             usdcCode := cusdc
             usdtCode := cusdt
             tokCode := ctok
-            usdcImpl := fun c hc ht hs => frames.usdcImpl c (kids c hc) ht hs
+            usdcImpl := fun c hc ht _ sel => usdcImpl_child hcode hfork run cusdc frames.usdcImpl hc (kids c hc) ht sel
             usdtLive := fun c hc ht hs => frames.usdtLive c (kids c hc) ht hs }
         parties :=
           { coin := fun k => by rw [hcw k]; exact words.coin k
@@ -226,30 +226,25 @@ theorem PoolAt.children (H : PoolAt exc s) :
     H.parties
 
 /-- A child's roots from certified code with no frame below it. -/
-private theorem roots_of_noExec {c : Exec.Frame} (hpc : c.pc = 0) (P : Adr) (hne : c.sevm.currentTarget ≠ P)
+private theorem roots_of_noExec {c : Exec.Frame} (hpc : c.pc = 0)
     (h : ∀ {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec 0 sevm pre out),
       c.sevm = sevm → c.pre = pre → ChainNoExec run) :
-    ∀ r ∈ Exec.rawFrameRoots c.run, r.sevm.isStatic = false → r.sevm.currentTarget ≠ P := by
+    ∀ r ∈ Exec.rawFrameRoots c.run, r.sevm.currentTarget = c.sevm.currentTarget := by
   obtain ⟨cpc, sevm, pre, out, run, committed⟩ := c
-  dsimp only at hpc hne h
+  dsimp only at hpc h
   subst hpc
-  intro r hr _
+  intro r hr
   simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants_eq_nil_of_noExec run (h run rfl rfl),
     List.mem_singleton] at hr
   rw [hr]
-  exact hne
 
-/-- **No non-static frame at the pool below a `PoolAt` frame.** -/
-theorem PoolAt.no_nested (H : PoolAt exc s) :
-    ∀ f ∈ Exec.descendantFrames exc, f.sevm.isStatic = false → f.sevm.currentTarget ≠ sevm.currentTarget := by
-  intro f hf
-  rw [descendantFrames_eq_children] at hf
-  obtain ⟨c, hc, hf⟩ := List.mem_flatMap.mp hf
+/-- **Below a child of a `PoolAt` frame, every non-static frame is at that child's target.** -/
+theorem PoolAt.roots_at (H : PoolAt exc s) {c : Exec.Frame} (hc : c ∈ Exec.childFrames exc) :
+    ∀ r ∈ Exec.rawFrameRoots c.run, r.sevm.isStatic = false → r.sevm.currentTarget = c.sevm.currentTarget := by
   have hsg := H.fork.stateGas_none
   obtain ⟨pc0, stat, hsize, -, ccode⟩ := poolChild_facts H.code hsg exc c hc
   have hsgC : c.sevm.benvStat.rules.stateGas = none := by rw [stat]; exact hsg
   have hbalC : c.sevm.benvStat.rules.bal = none := by rw [stat]; exact H.fork.bal_none
-  refine committed_apart c ?_ f hf
   cases hs : c.sevm.isStatic with
   | true =>
     intro r hr hrs
@@ -275,36 +270,57 @@ theorem PoolAt.no_nested (H : PoolAt exc s) :
         intro r hr hrs
         simp only [Exec.rawFrameRoots, List.mem_cons] at hr
         rcases hr with rfl | hr
-        · rw [htok]
-          exact H.parties.tokNe.1
+        · rfl
         · rw [(hd r hr).1] at hrs
           cases hrs
       · have ht' : c.sevm.currentTarget = ((b.getStor sevm.currentTarget).get (coinSlot ⟨i, hi⟩)).toAdr := ht
-        have hP : c.sevm.currentTarget ≠ sevm.currentTarget := by
-          rw [ht']
-          exact (H.parties.coinNe ⟨i, hi⟩).1
         have codeAt : ∀ {t : Adr} {C : ByteArray}, c.sevm.currentTarget = t → b.getCode t = C →
             C.toList ≠ [] → ¬ isValidDelegation C → c.sevm.code = C := by
           intro t C e hb hn hd
           rw [ccode t (by rw [hb]; exact hn) (by rw [hb]; exact hd) e, hb]
         rcases H.parties.coin ⟨i, hi⟩ with e | e | e
         · have hC := codeAt (ht'.trans e) H.world.daiCode (by decide +kernel) (by decide +kernel)
-          exact roots_of_noExec pc0 _ hP fun run se _ =>
-            dai_noExec run (se ▸ hC) (se ▸ hsgC) (se ▸ sel)
+          exact fun r hr _ => roots_of_noExec pc0 (fun run se _ =>
+            dai_noExec run (se ▸ hC) (se ▸ hsgC) (se ▸ sel)) r hr
         · have hC := codeAt (ht'.trans e) H.world.usdcCode (by decide +kernel) (by decide +kernel)
           have hI : UsdcImplAt c.pre c.sevm.currentTarget := by
             rw [ht'.trans e]
-            exact H.world.usdcImpl c hc (ht'.trans e) hs
+            exact H.world.usdcImpl c hc (ht'.trans e) hs sel
           intro r hr _
-          rw [usdc_roots c pc0 hC hsgC hbalC hsize hI sel r hr]
-          exact hP
+          exact usdc_roots c pc0 hC hsgC hbalC hsize hI sel r hr
         · have hC := codeAt (ht'.trans e) H.world.usdtCode (by decide +kernel) (by decide +kernel)
           have hdep : Usdt.flag20 ((Devm.getStor c.pre c.sevm.currentTarget).get 10) = 0 := by
             rw [ht'.trans e]
             exact H.world.usdtLive c hc (ht'.trans e) hs
-          exact roots_of_noExec pc0 _ hP fun run se pe =>
+          exact fun r hr _ => roots_of_noExec pc0 (fun run se pe =>
             usdt_noExec run (se ▸ hC) (se ▸ hsgC) (se ▸ hbalC)
-              (by subst se; subst pe; exact hdep) (se ▸ sel)
+              (by subst se; subst pe; exact hdep) (se ▸ sel)) r hr
+    · rw [hall c hc] at hs
+      cases hs
+
+/-- **No non-static frame at the pool below a `PoolAt` frame.** -/
+theorem PoolAt.no_nested (H : PoolAt exc s) :
+    ∀ f ∈ Exec.descendantFrames exc, f.sevm.isStatic = false → f.sevm.currentTarget ≠ sevm.currentTarget := by
+  intro f hf
+  rw [descendantFrames_eq_children] at hf
+  obtain ⟨c, hc, hf⟩ := List.mem_flatMap.mp hf
+  refine committed_apart c (fun r hr hrs => ?_) f hf
+  rw [H.roots_at hc r hr hrs]
+  cases hs : c.sevm.isStatic with
+  | true =>
+    obtain ⟨-, stat, -, -, -⟩ := poolChild_facts H.code H.fork.stateGas_none exc c hc
+    obtain ⟨cpc, csevm, cpre, cout, crun, ccommitted⟩ := c
+    have := Exec.static_rawFrameRoots_noStateGas crun (by rw [stat]; exact H.fork.stateGas_none) hs
+      (poolChild_codeAddress H.fork.stateGas_none _ hc hs) r hr
+    rw [this.1] at hrs
+    cases hrs
+  | false =>
+    rcases H.children with hall | hall
+    · rcases hall c hc with ht | ⟨⟨i, hi, ht⟩, -⟩
+      · rw [ht]
+        exact (by rw [H.parties.token]; exact H.parties.tokNe.1)
+      · exact (show c.sevm.currentTarget = ((b.getStor sevm.currentTarget).get (coinSlot ⟨i, hi⟩)).toAdr from ht) ▸
+          (H.parties.coinNe ⟨i, hi⟩).1
     · rw [hall c hc] at hs
       cases hs
 

@@ -1,5 +1,6 @@
 import Blanc.Lift.Usdc.ProxyReachH
 import Blanc.Lift.Usdc.ProxyHalt
+import Blanc.Lift.InvWalkLegacy
 
 /-!
 # The successful runs of the proxy certificate on historical forks
@@ -14,6 +15,20 @@ is of `ProxyReach`.
 namespace Blanc.Lift.Usdc.Proxy
 
 open Jaune Blanc Blanc.Lift
+
+/-- The proxy's five admin selectors: `upgradeTo`, `upgradeToAndCall`, `implementation`, `changeAdmin`, `admin`. -/
+def adminSelectors : List B256 := [0x3659cfe6, 0x4f1ef286, 0x5c60da1b, 0x8f283970, 0xf851a440]
+
+/-- The dispatcher's comparison that hits an admin selector names it. -/
+theorem admin_of_hit {sevm : Sevm} {c : B256}
+    (hit : B256.eqCheck c (Bytes.toB256 [255, 255, 255, 255] &&&
+      Sevm.dataWord sevm (Bytes.toB256 [0]) /
+        Bytes.toB256 [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]) ≠ 0)
+    (hc : c ∈ adminSelectors) :
+    Blanc.Sevm.selector sevm ∈ adminSelectors := by
+  rw [legacy_selector_word] at hit
+  rw [← B256.eq_of_eqCheck_ne_zero hit]
+  exact hc
 
 section Halt
 
@@ -466,10 +481,12 @@ theorem sel37_haltH (bal : sevm.benvStat.rules.bal = none) {b : Devm} {x : B256}
     · exact .inl ((fb_haltedH hP bal rfl fb).of_state hb)
 
 
-/-- **The successful runs of the proxy certificate.** -/
-theorem proxy_haltH (bal : sevm.benvStat.rules.bal = none) {b : Devm} {post : Devm}
+/-- **The successful runs of the proxy certificate, by selector**: only the five admin selectors have an arm for the
+admin word; any other selector reaches the fallback, which reverts for the admin. -/
+theorem proxy_haltH_sel (bal : sevm.benvStat.rules.bal = none) {b : Devm} {post : Devm}
     (run : SFunc.RunP P prog sevm (St b S M G) t_0000_c0 (.halted post)) :
-    DelegateStep P sevm b post ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr := by
+    DelegateStep P sevm b post ∨ (sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr ∧
+      Blanc.Sevm.selector sevm ∈ adminSelectors) := by
   unfold t_0000_c0 at run
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
   obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -495,7 +512,7 @@ theorem proxy_haltH (bal : sevm.benvStat.rules.bal = none) {b : Devm} {post : De
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_0077_c33 := Option.some.inj (hg.symm.trans rfl)
-      exact sel33_haltH hP bal run
+      exact (sel33_haltH hP bal run).imp_right fun c => ⟨c, admin_of_hit h (by decide)⟩
     unfold t_0041_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -504,16 +521,16 @@ theorem proxy_haltH (bal : sevm.benvStat.rules.bal = none) {b : Devm} {post : De
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_00ba_c34 := Option.some.inj (hg.symm.trans rfl)
-      exact sel34_haltH hP bal run
+      exact (sel34_haltH hP bal run).imp_right fun c => ⟨c, admin_of_hit h (by decide)⟩
     unfold t_004c_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_eq (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
-    rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨-, g, _, hg, run⟩
+    rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_0108_c35 := Option.some.inj (hg.symm.trans rfl)
-      exact sel35_haltH hP bal run
+      exact (sel35_haltH hP bal run).imp_right fun c => ⟨c, admin_of_hit h (by decide)⟩
     unfold t_0057_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -522,16 +539,16 @@ theorem proxy_haltH (bal : sevm.benvStat.rules.bal = none) {b : Devm} {post : De
     rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_015f_c36 := Option.some.inj (hg.symm.trans rfl)
-      exact sel36_haltH hP bal run
+      exact (sel36_haltH hP bal run).imp_right fun c => ⟨c, admin_of_hit h (by decide)⟩
     unfold t_0062_c0 at run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_dup rfl (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_eq (hP s)
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
-    rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨-, g, _, hg, run⟩
+    rcases rpw_branchTo run with ⟨-, _, run⟩ | ⟨h, g, _, hg, run⟩
     swap
     · obtain rfl : g = t_01a2_c37 := Option.some.inj (hg.symm.trans rfl)
-      exact sel37_haltH hP bal run
+      exact (sel37_haltH hP bal run).imp_right fun c => ⟨c, admin_of_hit h (by decide)⟩
     unfold t_006d_c0 at run
     obtain ⟨_, run⟩ := rpw_dest run
     obtain ⟨_, s, run⟩ := rpw_next run; obtain ⟨_, rfl⟩ := ri_push (hP s)
@@ -546,6 +563,12 @@ theorem proxy_haltH (bal : sevm.benvStat.rules.bal = none) {b : Devm} {post : De
   obtain ⟨g, _, hg, run⟩ := rpw_jump run
   obtain rfl : g = fbTree 24 := Option.some.inj (hg.symm.trans rfl)
   exact .inl (fb_haltedH hP bal rfl run)
+
+/-- **The successful runs of the proxy certificate.** -/
+theorem proxy_haltH (bal : sevm.benvStat.rules.bal = none) {b : Devm} {post : Devm}
+    (run : SFunc.RunP P prog sevm (St b S M G) t_0000_c0 (.halted post)) :
+    DelegateStep P sevm b post ∨ sevm.caller = (b.getStorVal sevm.currentTarget adminSlot).toAdr :=
+  (proxy_haltH_sel hP bal run).imp_right (·.1)
 
 end Halt
 
