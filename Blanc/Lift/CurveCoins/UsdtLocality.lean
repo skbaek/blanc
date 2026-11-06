@@ -2,7 +2,6 @@ import Blanc.Lift.BalanceLocality
 import Blanc.Lift.CurveCoins.Usdt
 import Blanc.Lift.CurveCoins.Sel
 import Blanc.Lift.CurveCoins.UsdtQuiet
-import Blanc.Lift.LinearRuntimeSafety
 import Blanc.Lift.UsdtOwnerFrames
 
 /-!
@@ -88,11 +87,7 @@ theorem code_ne : code.size ≠ 0 := by decide +kernel
 theorem code_notDelegated : code.size ≠ eoaDelegatedCodeLength := by decide +kernel
 
 theorem runtimeSafety : InstalledRuntimeSafety code :=
-  InstalledRuntimeSafety.of_linearCheck (by decide +kernel) (by decide +kernel)
-    (fun h => code_notDelegated h.1)
-    (fun h => code_ne (by
-      show code.data.size = 0
-      rw [← Array.length_toList, ← ByteArray.toList_eq_toList_data, h, List.length_nil]))
+  runtimeSafety_of_sizes (by decide +kernel) (by decide +kernel) code_ne code_notDelegated
 
 /-! ## The hash premise -/
 
@@ -368,12 +363,6 @@ theorem from_law {F : Exec.Frame} (hF : F ∈ frames) (keys : UsdtKeysFresh h fr
     · have := moveStor_ge ok (k := balSlot h) (fun e => hs (bal_eq keys ks e.symm))
       rwa [keep] at this
 
-theorem not_poolSel {s : B256} (hs : s ≠ 0xa9059cbb ∧ s ≠ 0x23b872dd ∧ s ≠ 0x70a08231) : ¬ PoolCoinSel s := by
-  rintro (p | p | p)
-  · exact hs.1 p
-  · exact hs.2.1 p
-  · exact hs.2.2 p
-
 /-- The owner as caller of `issue` or `redeem`, not the holder: its entry and the supply word miss the holder's cells. -/
 theorem owner_apart {F : Exec.Frame} (hF : F ∈ frames) (keys : UsdtKeysFresh h frames)
     (target : F.sevm.currentTarget = T) {σ : Stor} (hσ : σ = Devm.getStor F.pre T)
@@ -448,10 +437,10 @@ theorem frame_law {F : Exec.Frame} (hF : F ∈ frames) (good : CodeFrame T HistF
     all_goals
       have ps := own hc
       rw [s] at ps
-      exact not_poolSel (by decide) ps
+      rcases ps with p | p | p <;> exact absurd p (by decide)
   by_cases s3 : Blanc.Sevm.selector F.sevm = 0xcc872b66
   · obtain ⟨o, st⟩ := frame_issue fork s3 run
-    simp only [St_getStor, target] at o st
+    simp only [target] at o st
     obtain ⟨a1, a2⟩ := owner_apart hF keys target rfl o (other (.inl s3))
     rw [st]
     refine ⟨?_, ?_⟩
@@ -462,7 +451,7 @@ theorem frame_law {F : Exec.Frame} (hF : F ∈ frames) (good : CodeFrame T HistF
       omega
   by_cases s4 : Blanc.Sevm.selector F.sevm = 0xdb006a75
   · obtain ⟨o, st⟩ := frame_redeem fork s4 run
-    simp only [St_getStor, target] at o st
+    simp only [target] at o st
     obtain ⟨a1, a2⟩ := owner_apart hF keys target rfl o (other (.inr s4))
     rw [st]
     refine ⟨?_, ?_⟩
@@ -488,7 +477,7 @@ theorem frame_law {F : Exec.Frame} (hF : F ∈ frames) (good : CodeFrame T HistF
         exact caller
       have ps := own hc
       rw [hsel] at ps
-      exact not_poolSel (by decide) ps
+      rcases ps with p | p | p <;> exact absurd p (by decide)
     · exact absurd sel List.not_mem_nil
     · exact notTop sel
   · by_cases s5 : Blanc.Sevm.selector F.sevm = 0xf3bdc228
@@ -510,9 +499,9 @@ theorem frame_balanceOf_answer {F : Exec.Frame} (good : CodeFrame T HistFork cod
     (sel : Blanc.Sevm.selector F.sevm = 0x70a08231) :
     F.post.output = (wordsAt T F.pre.state (balSlot (Sevm.dataWord F.sevm 4).toAdr)).toBytes := by
   have e := frame_balanceOf_output good.2.2.1 wf sel (by
-    simp only [St_getStor, target]
+    simp only [target]
     exact live) (codeFrame_run good)
-  simp only [St_getStor, target] at e
+  simp only [target] at e
   exact e
 
 end Frame
