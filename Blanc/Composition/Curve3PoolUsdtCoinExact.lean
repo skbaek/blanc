@@ -1,6 +1,6 @@
 import Blanc.Lift.UsdtExact
 import Blanc.Composition.Curve3PoolUsdtCoin
-import Blanc.Composition.Curve3PoolCoinExactKit
+import Blanc.Composition.Curve3PoolCoinFloorKit
 
 /-!
 # USDT's exact profiles at the pool's call sites
@@ -123,6 +123,25 @@ theorem bal_msgE {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Usdt.code)
   have hE := (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact Usdt.cert_check Usdt.jumps_ok hcode fork hrun)
   exact ⟨hle, hE, lands_exact hexec hE (balP_gasLeft _ _ _) hu hle (by omega) L⟩
 
+/-- `transfer` as a message, at the store sentry above its cost. -/
+theorem xfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Usdt.code)
+    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (hval : (initSevm msg).value = 0)
+    (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
+    (hgas : xferG (initSevm msg) (initDevm msg) + 2300 ≤ (initDevm msg).gasLeft)
+    (hdep : NotDeprecated (Devm.getStor (initDevm msg) (initSevm msg).currentTarget))
+    (hfits : XferFits (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) (initSevm msg).caller dst v) :
+    exec (initEvm msg) = .ok (xferPost (initSevm msg) (initDevm msg)
+      ((initDevm msg).gasLeft - xferG (initSevm msg) (initDevm msg))) := by
+  have hsel : Blanc.Sevm.selector (initSevm msg) = 0xa9059cbb :=
+    selector_eq_of_data_eq_abiSelectorBytes_append (by decide) (by rw [hd, List.append_assoc])
+  obtain ⟨w4, w36, hl⟩ := Blanc.Lift.dataWord_twoWords hd
+  exact (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact Usdt.cert_check Usdt.jumps_ok hcode fork
+    (xfer_runF (dst := dst) (v := v) (pre := initDevm msg) fork static
+      (lguards_of hval hsel (by rw [hl]; decide) (by rw [hl]; decide) (by rw [hl]; decide))
+      (by unfold xTo; rw [lit4, w4, ff20_and_word, toAdr_toB256])
+      (by unfold xVal; rw [lit36, w36]) rfl rfl hgas hdep hfits))
+
 section Premises
 
 variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : B256}
@@ -218,6 +237,34 @@ theorem usdt_coinBalExact {B : B256} (hfork : CoveredFork sevm.benvStat.fork)
     · subst ha; exact L.stor
     · exact L.keeps.other a ha
   · rw [getCode_of_state hst]; exact L.keeps.code a
+
+/-- **`transfer`'s exact profile at its floor.** -/
+theorem usdt_coinPushFloor {K : Nat} (hK : 2300 + (K + 97756) / 64 + 1 ≤ K)
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
+    (hne : t.toAdr ≠ sevm.currentTarget) (hU : 104744 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
+    (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
+    (hW : ∀ b, W b → b.getCode t.toAdr = Usdt.code ∧ NotDeprecated (b.getStor t.toAdr) ∧
+      XferFits (b.getStor t.toAdr) sevm.currentTarget sevm.caller amt)
+    (hW' : ∀ b d, W b → CoinLeaves t.toAdr
+        (moveStor (b.getStor t.toAdr) sevm.currentTarget sevm.caller amt (feeOf (b.getStor t.toAdr) amt))
+      ((getOrigAcct sevm t.toAdr).stor = b.getStor t.toAdr ∧ t.toAdr ∉ b.createdAccounts ∧
+        MoveApart (b.getStor t.toAdr) sevm.currentTarget sevm.caller amt (feeOf (b.getStor t.toAdr) amt)) b d → W' d) :
+    MutableFloorProfile sevm W W' t (transferSel ++ sevm.caller.toB256.toBytes ++ amt.toBytes) RawCallOk U K ii
+      0x44 oi (coinDebit xferG sevm t ii 0x44 oi) (coinNext (fun s p => xferPost s p 0) sevm t ii 0x44 oi) := by
+  refine coinMutFloor 2300 K 97756 xferG (fun s p => xferPost s p 0) xferG_reframe hfork hdepth (by rw [prec_false hprec]) hK hUw hs
+    (usdt_coinPushExact hfork hstatic hdepth hprec hne hU hii hoi hW hW')
+    (fun b S M _ _ => by
+      have h := xferW_le (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+        (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+      rwa [xferW_eq] at h) ?_
+  intro b S M G hWb _ hin hfwd
+  obtain ⟨hc, hdep, hfits⟩ := hW b hWb
+  exact ⟨by rw [hc]; exact usdt_undelegated, _, xfer_execF (msg := callMsg0 sevm b S M G t ii 0x44 oi 0x20)
+    (dst := sevm.caller) (v := amt) hc hfork (by rw [callMsg0_isStatic]; exact hstatic) rfl
+    (by rw [callMsg0_data, hin, transferSel_abi]) hfwd hdep hfits, xferPost_gasLeft _ _ _,
+    xferPost_canon (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
+      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)) _ _⟩
 
 end Premises
 

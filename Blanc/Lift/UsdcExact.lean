@@ -250,6 +250,19 @@ theorem xfer_runE {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
   rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
   exact ⟨hle, _, rfl, h⟩
 
+/-- **`transfer`'s run at the store sentry above its cost.** -/
+theorem xfer_runF {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (g : Guards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
+    (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : implXferG sevm pre + 2300 ≤ pre.gasLeft)
+    (hf : MoveFits (Devm.getStor pre sevm.currentTarget) sevm.caller dst v) :
+    SProg.RunExact Impl.cert.prog sevm pre (implXferPost sevm pre (pre.gasLeft - implXferG sevm pre)) := by
+  have hrun := (implXferW sevm pre).2 fork static (xferFacts_of g hdst hv hf)
+  rw [implXferW_eq] at hrun
+  have h := hrun (pre.gasLeft - implXferG sevm pre) (by omega)
+  rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
+  exact ⟨_, rfl, h⟩
+
 /-- **`transferFrom`'s run at its exact cost**, under `pull_lands`' premises. -/
 theorem pull_runE {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
     (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)

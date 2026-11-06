@@ -251,6 +251,20 @@ theorem xfer_landsE {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
     · rw [afterSload_getStor]
     · rw [hdst, ky_bal, ky_bal, toAdr_toB256, toAdr_toB256]; exact hne
 
+/-- **`transfer`'s run at the store sentry above its cost.** -/
+theorem xfer_runF {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (g : Guards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
+    (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : xferG sevm pre + 2300 ≤ pre.gasLeft)
+    (hfits : MoveFits (Devm.getStor pre sevm.currentTarget) sevm.caller dst v) :
+    SProg.RunExact cert.prog sevm pre (xferPost sevm pre (pre.gasLeft - xferG sevm pre)) := by
+  have hrun := (xferW sevm pre).2 fork static g (by rw [hv, kn_bal]; exact hfits.1)
+    (by rw [hv, hdst, kn_bal, kn_bal]; exact hfits.2)
+  rw [xferW_eq] at hrun
+  have h := hrun (pre.gasLeft - xferG sevm pre) (by omega)
+  rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
+  exact ⟨_, rfl, h⟩
+
 /-- **`balanceOf(a)`, exactly**: `bal_lands` with its charge and post named. -/
 theorem bal_landsE {sevm : Sevm} {pre : Devm} {a : Adr}
     (fork : CoveredFork sevm.benvStat.fork) (g : Guards sevm 0x70a08231 (Bytes.toB256 [32]))

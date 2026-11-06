@@ -17,7 +17,7 @@ open Jaune Blanc Blanc.Lift
 open Blanc.Lift.Curve3Pool
 open Blanc.Composition.Curve3PoolCalleeLive
 
-private theorem supply_body_certificate :
+theorem supply_body_certificate :
     Curve3Crv.t_0240_c0.gasFree = true ∧ Curve3Crv.t_0240_c0.refs = [] := by
   decide
 
@@ -25,7 +25,7 @@ private theorem mint_body_certificate :
     Curve3Crv.t_056e_c0.gasFree = true ∧ Curve3Crv.t_056e_c0.refs = [] := by
   decide
 
-private theorem burn_body_certificate :
+theorem burn_body_certificate :
     Curve3Crv.t_0644_c0.gasFree = true ∧ Curve3Crv.t_0644_c0.refs = [] := by
   decide
 
@@ -62,7 +62,7 @@ theorem bodyCanon_spec {s : Sevm} {b : Devm} {f : SFunc} {c : Nat}
 
 /-- A message entering 3Crv's code whose body runs exactly halts cleanly as that body's post,
 keeping the code everywhere. -/
-private theorem c3crv_msg_exact {msg : Msg} {k : Nat} {f : SFunc} {R : Nat} {post : Devm}
+theorem c3crv_msg_exact {msg : Msg} {k : Nat} {f : SFunc} {R : Nat} {post : Devm}
     (hcode : (initSevm msg).code = Curve3Crv.code)
     (hfork : CoveredFork (initSevm msg).benvStat.fork)
     (hca : (initSevm msg).codeAddress ≠ none)
@@ -392,7 +392,7 @@ private theorem mintBodyCost_le (s : Sevm) (b : Devm) :
   have hss : gasStorageSet = 20000 := rfl
   omega
 
-private theorem burnBodyCost_le (s : Sevm) (b : Devm) :
+theorem burnBodyCost_le (s : Sevm) (b : Devm) :
     burnBodyCost s b ≤ 2107 + 3 * 2100 + 2 * 22100 := by
   let d := Sevm.argWord s 0
   let v := Sevm.argWord s 1
