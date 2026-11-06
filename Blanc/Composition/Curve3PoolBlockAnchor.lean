@@ -82,11 +82,13 @@ structure Facts : Prop where
       ((MidHistoryTraceIn.tail d.c3.trace
         (d.c3.trace.bodyTrace.txSplitOfSlot d.c3Recorded.slot rfl)).append
         (((d.toPool.step d.pool.trace).append d.toMinter).step d.minter.trace)))
-  /-- Every child of a pool frame keeps the pool's storage; every coin child keeps 3Crv's. -/
-  callbacks : (((MidHistoryTraceIn.tail d.pool.trace
+  /-- The coins are their deployed bytes and the operators' two powers are restrained. -/
+  coins : Curve3PoolCoinKeep.CoinsHold (((MidHistoryTraceIn.tail d.pool.trace
       (d.pool.trace.bodyTrace.txSplitOfSlot d.poolRecorded.slot rfl)).append d.toMinter).step
-      d.minter.trace).FrameAdmitted poolAdr (Exec.derivEntry fun D =>
-        Lift.Curve3Pool.PoolCallsKeep D ∧ Lift.Curve3Pool.PoolCoinCallsKeepToken D)
+      d.minter.trace)
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 0))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 1))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 2))
   /-- The identity precompile's account holds no code just after 3Crv's creation block. -/
   idEmpty : d.c3.post.state.getCode 4 = ByteArray.empty
   /-- No CREATE frame of the history lands at the identity precompile's address. -/
@@ -133,7 +135,7 @@ noncomputable def toJoint (facts : d.Facts) : JointDeployment where
   minterLookup := d.minterRecorded.lookup
   minterSucceeded := d.minterRecorded.succeeded
   fresh := facts.fresh
-  callbacks := facts.callbacks
+  coins := facts.coins
   idEmpty := facts.idEmpty
   idNoFrame := facts.idNoFrame
 
