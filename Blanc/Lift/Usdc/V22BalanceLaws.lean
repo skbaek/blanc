@@ -50,7 +50,7 @@ theorem move_bits_source {σ : Stor} {a d : Adr} {v : Nat} (hne : balSlot a ≠ 
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {post : Devm}
 
 /-- **A `transfer` frame lowers no balance bits but its caller's.** -/
-theorem frame_transfer_bits_ge (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_transfer_bits_ge (fork : HistFork sevm.benvStat.fork)
     (sel : Sevm.selector sevm = 0xa9059cbb)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) {k : B256}
     (hk : k ≠ balSlot sevm.caller) :
@@ -62,7 +62,7 @@ theorem frame_transfer_bits_ge (fork : CoveredFork sevm.benvStat.fork)
 
 /-- **A `transferFrom` frame lowers no balance bits but its source's** (the allowance slot, apart
 from every balance slot by the consumer's premise, is written too). -/
-theorem frame_transferFrom_bits_ge (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_transferFrom_bits_ge (fork : HistFork sevm.benvStat.fork)
     (sel : Sevm.selector sevm = 0x23b872dd)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) {k : B256}
     (hk : k ≠ balSlot (Sevm.dataWord sevm 4).toAdr)
