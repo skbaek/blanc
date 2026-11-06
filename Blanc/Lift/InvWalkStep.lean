@@ -4,6 +4,7 @@ import Blanc.AddressSlotProofs
 import Blanc.ForwardStorageAccess
 import Blanc.Lift.MapSlot
 import Blanc.Lift.HistAccessWalk
+import Blanc.HistoricalFork
 
 /-!
 # A one-lemma inversion step, and the inversion helpers of solc walks
