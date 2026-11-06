@@ -432,7 +432,7 @@ theorem add_core (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (ad
     | 0 => simp only [coinAt, parties, List.mem_cons, true_or, or_true]
     | 1 => simp only [coinAt, parties, List.mem_cons, true_or, or_true]
     | 2 => simp only [coinAt, parties, List.mem_cons, true_or, or_true])
-  obtain ⟨hLive, ⟨hheld, hcr, hfees, hsrc⟩, hall, ⟨amp, hamp, hout, hrange⟩, ⟨hmin, hpos⟩, hfit, hap⟩ := req
+  obtain ⟨hLive, ⟨hheld, hcr, hfees, hsrc⟩, hall, ⟨amp, hamp, hout⟩, ⟨hmin, hpos⟩, hfit, hap⟩ := req
   have hN : ∀ k, am.get k < 2 ^ 256 := fun k => Nat.lt_of_le_of_lt (hheld k) coinHeld_lt
   have hmm : minMint < 2 ^ 256 := by have := hfit.1; omega
   obtain ⟨hamW, hargs, harg3⟩ := add_args (msg := msg) hdata hN hmm
@@ -513,7 +513,7 @@ theorem add_core (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (ad
       exact Blanc.Lift.Curve3Pool.alEnvW_pullIn01 hk2 _
   have hpull := add_pullAdd (am := am) (T := supply w) hbk hpi hpos hcredit
   obtain ⟨o, hal, hobal, homint⟩ := add_accepts (e := env) (minMint := minMint) hck0.abs hkill hfee
-    (by rw [henv, ← ampAt_of_abstracts hck0.abs]; exact hamp) (by rw [henv, ← hTn]; rfl) (by rw [henv]; rfl) hpull hout hrange hmin hfit.1
+    (by rw [henv, ← ampAt_of_abstracts hck0.abs]; exact hamp) (by rw [henv, ← hTn]; rfl) (by rw [henv]; rfl) hpull hout hmin hfit.1
     (fun h => hpos h 0)
   have hal' : Curve3Pool.addLiquidity s (alEnvW (initSevm msg) T.toNat B1.toNat B2.toNat) (argV3 (initSevm msg) 0) (Curve3Pool.arg (initSevm msg) 3) = some o := by
     rw [hargs, harg3, ← henv]; exact hal

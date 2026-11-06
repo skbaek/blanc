@@ -23,7 +23,7 @@ namespace Blanc.Composition.Curve3PoolPublic
 
 open Jaune Blanc Blanc.Lift
 open Blanc.Lift.Curve3Pool (V3 rates precision feeDen getDMem)
-open Blanc.StableSwapNewton (chkAdd chkDiv chkMul getYDChk)
+open Blanc.StableSwapNewton (chkAdd chkDiv chkMul chkSub getYDChk)
 
 /-! ## `lp_exit` -/
 
@@ -250,7 +250,9 @@ def addOutcome (w : State) (amp : Nat) (new : V3) : Option (Nat × V3) :=
     let r ← feeRun w amp new
     let D0 ← invariant w amp
     let D2 ← getDMem r.2 amp
-    if (getDMem new amp).getD 0 ≤ D0 then none else some ((supply w * (D2 - D0)) / D0, r.1)
+    if (getDMem new amp).getD 0 ≤ D0 then none else do
+      let m ← chkDiv (← chkMul (supply w) (← chkSub D2 D0)) D0
+      some (m, r.1)
 
 /-- `remove_liquidity_imbalance`'s outcome from `new` balances: the shares burned and the balances stored. -/
 def imbalanceOutcome (w : State) (amp : Nat) (new : V3) : Option (Nat × V3) := do
@@ -297,23 +299,14 @@ structure AddApart (w : State) (E : Adr) : Prop extends SwapApart w E where
   /-- `E`'s 3Crv entry is not 3Crv's supply word. -/
   c3 : Curve3Crv.vyBalSlot E ≠ Curve3Crv.vySupplySlot
 
-/-- The books a deposit of `am` reaches, before fees. -/
-def afterDeposit (w : State) (am : V3) : V3 := v3Of fun k => recorded w k + netOf w k (am.get k)
-
-/-- On a positive supply the mint's checked arithmetic passes: `D2` is at least `D0`, and
-`supply * (D2 - D0)` fits a word. -/
-def MintInRange (w : State) (amp : Nat) (new : V3) : Prop :=
-  supply w ≠ 0 → ∀ r D0 D2, feeRun w amp new = some r → invariant w amp = some D0 → getDMem r.2 amp = some D2 →
-    D0 ≤ D2 ∧ supply w * (D2 - D0) < 2 ^ 256
-
 /-- `E` can add `am` at timestamp `t`, and the contract computes `minted` and `stored`. -/
 structure AddRequest (w : State) (E : Adr) (t : Nat) (am : V3) (minMint minted : Nat) (stored : V3) :
     Prop where
   live : PoolLive w
   amounts : AmountsFit w E pool am
   allowed : ∀ k, am.get k ≤ allowanceOf w E k
-  outcome : ∃ amp, ampAt w t = some amp ∧ addOutcome w amp (afterDeposit w am) = some (minted, stored) ∧
-    MintInRange w amp (afterDeposit w am)
+  outcome : ∃ amp, ampAt w t = some amp ∧
+    addOutcome w amp (v3Of fun k => recorded w k + netOf w k (am.get k)) = some (minted, stored)
   minimum : minMint ≤ minted ∧ (supply w = 0 → ∀ k, 0 < am.get k)
   /-- The supply and `E`'s 3Crv each take the mint within a word. -/
   mintFits : supply w + minted < 2 ^ 256 ∧ shares w E + minted < 2 ^ 256

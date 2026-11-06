@@ -4,7 +4,7 @@ import Blanc.Composition.Curve3PoolSwapMain
 # `AddRequest` is what the model's `add_liquidity` asks
 
 `getDChk_pos`: the Newton loop's `D` is positive when the balances' sum is. `add_accepts`: the model accepts a deposit
-`addOutcome` computes and whose mint's arithmetic is in range. `add_words`: `addCalldata`'s decoded words.
+`addOutcome` computes. `add_words`: `addCalldata`'s decoded words.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -106,6 +106,9 @@ theorem getDChk_pos {x : Fin 3 → Nat} {amp tol v : Nat} (hx : 0 < x 0) (h : ge
 
 /-! ## The model -/
 
+/-- The books a deposit of `am` reaches, before fees. -/
+abbrev afterDeposit (w : State) (am : V3) : V3 := v3Of fun k => recorded w k + netOf w k (am.get k)
+
 theorem v3_ofFnM_v3Of {f : Fin 3 → Option Nat} {g : Fin 3 → Nat} (h : ∀ k, f k = some (g k)) :
     V3.ofFnM f = some (v3Of g) := by
   simp only [V3.ofFnM, h, Option.bind_eq_bind, Option.bind_some]
@@ -120,13 +123,6 @@ theorem getDMem_pos {b : V3} {amp v : Nat} (h0 : 0 < b.v0) (h : getDMem b amp = 
   rw [Curve3Pool.xpChk_some hxp]
   show 0 < Curve3Pool.precMul.get 0 * b.v0
   exact Nat.mul_pos (precMul_pos 0) h0
-
-/-- The fee loop divides by `D0`. -/
-theorem feeLoop_pos {fee af D0 D1 : Nat} {old new : V3} {r : V3 × V3 × V3} (h : feeLoop fee af D0 D1 old new = some r) : 0 < D0 := by
-  unfold feeLoop Curve3Pool.feeAt at h
-  simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at h
-  obtain ⟨_, ⟨_, _, _, hi, _⟩, _⟩ := h
-  exact Nat.pos_of_ne_zero (Blanc.StableSwapNewton.chkDiv_some hi).2
 
 /-- The adjusted fee, within its limit. -/
 theorem feeAdj_of {s : Curve3Pool.State} (h : s.fee ≤ feeDen) : feeAdj s = some (s.fee * 3 / 8) := by
@@ -143,7 +139,7 @@ variable {w : State} {s : Curve3Pool.State} {e : Env} {am : V3} {minMint minted 
 theorem add_accepts (hab : Curve3Pool.Abstracts (w.getStor pool) s) (hk : s.isKilled = false) (hfee : word w pool Curve3Pool.feeSlot ≤ feeDen)
     (hA : aChk s e.time = some amp) (hsup : e.supply = some (supply w)) (hok : e.mintOk = true)
     (hpull : ∀ k, pullAdd e (supply w) s.balances am k = some (recorded w k + netOf w k (am.get k)))
-    (hout : addOutcome w amp (afterDeposit w am) = some (minted, stored)) (hr : MintInRange w amp (afterDeposit w am))
+    (hout : addOutcome w amp (afterDeposit w am) = some (minted, stored))
     (hmin : minMint ≤ minted) (hfit : supply w + minted < 2 ^ 256) (hpos : supply w = 0 → 0 < am.get 0) :
     ∃ o, addLiquidity s e am minMint = some o ∧ o.state.balances = stored ∧ alMintAmt o = minted := by
   have hsf : word w pool Curve3Pool.feeSlot = s.fee := hab.fee
@@ -173,7 +169,7 @@ theorem add_accepts (hab : Curve3Pool.Abstracts (w.getStor pool) s) (hk : s.isKi
     rw [hT] at hnew haddT
     unfold addLiquidity
     simp only [hreqk, hfa, hA, hsup, hT, hnew, hD1, hreqd, hreqmin, hreqm, haddT, Option.bind_eq_bind, Option.bind_some, gt_iff_lt, Nat.lt_irrefl,
-      ↓reduceIte, Option.pure_def]
+      ↓reduceIte]
   · have hout1 := hout
     unfold addOutcome at hout1
     rw [if_neg hT] at hout1
@@ -182,16 +178,16 @@ theorem add_accepts (hab : Curve3Pool.Abstracts (w.getStor pool) s) (hk : s.isKi
     split at hgate
     · cases hgate
     rename_i hgt
-    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hgate)
-    obtain ⟨hD02, hmul⟩ := hr hT r D0 D2 hrun hinv hD2
+    simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at hgate
+    obtain ⟨x, hsb, y, hmu, m, hdv, hp⟩ := hgate
+    obtain ⟨rfl, rfl⟩ := Prod.mk.inj (Option.some.inj hp)
     have hrun0 := hrun
     unfold feeRun at hrun0
     simp only [Option.bind_eq_bind, Option.bind_eq_some_iff] at hrun0
-    obtain ⟨D0', hinv', D1, hD1, m, hm, f, hf, r3, hloop, hr3⟩ := hrun0
+    obtain ⟨D0', hinv', D1, hD1, pf, hm, f, hf, r3, hloop, hr3⟩ := hrun0
     have eD : D0 = D0' := Option.some.inj (hinv.symm.trans hinv')
     subst eD
     obtain rfl := Option.some.inj hr3
-    have hD0pos : 0 < D0 := feeLoop_pos hloop
     have ef : f = s.fee * 3 / 8 := by
       rw [(Blanc.StableSwapNewton.chkDiv_some hf).1, Blanc.StableSwapNewton.chkMul_some hm, hsf]
     rw [ef, hsa, hbk] at hloop
@@ -201,17 +197,14 @@ theorem add_accepts (hab : Curve3Pool.Abstracts (w.getStor pool) s) (hk : s.isKi
       omega
     have hinv2 : getDMem s.balances amp = some D0 := by rw [← hbk]; exact hinv
     have hreqd : Curve3Pool.req (D1 > D0) = some () := ite_eq_left hlt
-    have hsb : chkSub D2 D0 = some (D2 - D0) := ite_eq_left hD02
-    have hmu : chkMul (supply w) (D2 - D0) = some (supply w * (D2 - D0)) := ite_eq_left hmul
-    have hdv : chkDiv (supply w * (D2 - D0)) D0 = some (supply w * (D2 - D0) / D0) := ite_eq_right (by omega)
     obtain ⟨fe, st, af⟩ := r3
-    refine ⟨⟨{ s with balances := st }, none, [.addLiquidity e.caller am fe D1 (supply w + supply w * (D2 - D0) / D0)],
-      Curve3Pool.pullCalls e.caller am ++ [.mint e.caller (supply w * (D2 - D0) / D0)]⟩, ?_, rfl, alMintAmt_eq⟩
+    refine ⟨⟨{ s with balances := st }, none, [.addLiquidity e.caller am fe D1 (supply w + m)],
+      Curve3Pool.pullCalls e.caller am ++ [.mint e.caller m]⟩, ?_, rfl, alMintAmt_eq⟩
     have hTp : 0 < supply w := Nat.pos_of_ne_zero hT
     dsimp only at hD2 haddT hreqmin ⊢
     unfold addLiquidity
     simp only [hreqk, hfa, hA, hsup, hTp, hT, hinv2, hnew, hD1, hreqd, hloop, hD2, hsb, hmu, hdv, hreqmin, hreqm, haddT, Option.bind_eq_bind, Option.bind_some,
-      gt_iff_lt, ↓reduceIte, Option.pure_def]
+      gt_iff_lt, ↓reduceIte]
 
 /-! ## The calldata -/
 
