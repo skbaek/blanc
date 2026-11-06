@@ -6091,7 +6091,9 @@ external instruction after it), plus `SpawnKinds`.
 `Exec.CoreAccounting.spawnReplayTarget` composes `own` with the settled
 children's replays using the ladder's lower-depth hypothesis and
 `Exec.spawn_seam` (the storage across a spawning step, from
-`Xinst.storageReplay_some_of_body`); `ExecutionAccountingReplay.modelLadder`
+`Xinst.storageReplay_some_of_body`); `Exec.CoreAccounting.modelFrame` and `Exec.spawn_seam`
+are the `CoveredFork` projections of `modelFrameNoStateGas` and `Exec.spawn_seam_noStateGas`,
+which assume only `stateGas = none`; `ExecutionAccountingReplay.modelLadder`
 turns it into an `AccountingLadderAdmitted`. `Exec.Deriv.FirstExec` and
 `Exec.Deriv.exists_firstExec_or_none` split a chain at its first external instruction.
 
@@ -6118,8 +6120,7 @@ invariant `Exec.PositionalAccountingIn F` is proved for every admitted derivatio
 `F` without state gas by `Exec.positionalAccountingIn` (`Exec.PositionalAccounting` and
 `Exec.positionalAccounting` are the `CoveredFork` instances); the producer is
 `wholeFramePositionalLadder` (`Opaque` = non-static target frames). Generic helpers live there:
-`Blanc.List.split_append_cons`, `Exec.descendantFrames_getStor_of_static_noStateGas` and
-`Exec.spawn_seam_noStateGas`.
+`Blanc.List.split_append_cons` and `Exec.descendantFrames_getStor_of_static_noStateGas`.
 [`Blanc/ExecutionAccountingPositionalHistory.lean`](../Blanc/ExecutionAccountingPositionalHistory.lean)
 lifts the root law through **the frame carrier** `framesCarrier` (a step is a settled frame; a replay
 carries the full replay beside the positional claim `PositionalAt`), so the ordinary history rungs do
@@ -6199,7 +6200,6 @@ use: `Blanc/Lift/Usdc/HistoryReplayFrames.lean`.
 - [`Blanc/Lift/BalanceLocality.lean`](../Blanc/Lift/BalanceLocality.lean): `EntryLocal`, `CertFrame`, `chain_of_static`, `CoinKey`: locality of one holder's balance entry for a certified code.
 - [`Blanc/Lift/CoinKeys.lean`](../Blanc/Lift/CoinKeys.lean): `CoinKeysFreshWith`, `site_key_mem`, `map_inj`: the keys a coin's frames name, parametric in the site list.
 - [`Blanc/ExecutionWholeFrameAccountingIn.lean`](../Blanc/ExecutionWholeFrameAccountingIn.lean): `WholeFrameReplayIn`, `wholeFrameTargetIn`, `wholeFrameLadderIn`: the whole-frame handler over a selected fork domain.
-- [`Blanc/ExecutionModelFrameNoStateGas.lean`](../Blanc/ExecutionModelFrameNoStateGas.lean): `modelFrameNoStateGas`: the model replay with `stateGas = none` in place of `CoveredFork`.
 - [`Blanc/ExecutionMidWindowIn.lean`](../Blanc/ExecutionMidWindowIn.lean): `settledThroughCut`, `blockThroughCutIn`, `midWindowIn`: observed replay of a window that ends right after a transaction.
 - [`Blanc/ExecutionMidHistoryInOwnCode.lean`](../Blanc/ExecutionMidHistoryInOwnCode.lean): `MidHistoryTraceIn.settled_ownCodeIn`, `rawFrames_closed`: own code at a mid history's settled frames.
 - [`Blanc/ExecutionReceiptLogLink.lean`](../Blanc/ExecutionReceiptLogLink.lean): `log_mem_receipt_of_settledFrame`, `MidHistoryTraceIn.no_log_at`, `SystemConfined`: a settled frame's log reaches its block's receipts, so a filter that finds nothing rules it out.

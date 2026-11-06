@@ -2,7 +2,7 @@ import Blanc.Lift.Usdc.EntryChain
 import Blanc.Lift.Usdc.HistoryFamilyProxy
 import Blanc.Lift.Usdc.ProxySstoreH
 import Blanc.Lift.Usdc.ProxyReachH
-import Blanc.ExecutionModelFrameNoStateGas
+import Blanc.ExecutionModelAccounting
 import Blanc.Lift.CursorSourceRunReturn
 import Blanc.ExecutionWholeFrameAccountingIn
 

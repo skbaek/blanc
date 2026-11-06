@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-590 shared modules, 563 with a module summary.
+589 shared modules, 562 with a module summary.
 
 ## `Blanc/`
 
@@ -141,7 +141,6 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ExecutionMidHistoryInRootCallers.lean`](../Blanc/ExecutionMidHistoryInRootCallers.lean) | **An installed contract originates no root of a mid history.** `ConfiguredHistoryTrace.settledRoots_caller_ne_of_code` over a mid history on a fork domain `F` without state gas: a contract whose state invariant holds at the mid history's start is the checked sender of no … | [T2c](COMMON_API.md#t2c-i-need-that-ledger-replay-on-every-wrapper-up-to-a-whole-configured-history) |
 | [`ExecutionMidWindowIn.lean`](../Blanc/ExecutionMidWindowIn.lean) | **Observed replay of a selected-domain window that ends right after a transaction.** `MidHistoryTraceIn` starts right after a transaction and ends at a block boundary. | [T2c](COMMON_API.md#t2c-i-need-that-ledger-replay-on-every-wrapper-up-to-a-whole-configured-history) |
 | [`ExecutionModelAccounting.lean`](../Blanc/ExecutionModelAccounting.lean) | **A model replay of a target frame's own steps and its re-entered children.** `Blanc/ExecutionEntryAccounting.lean` carries a storage invariant through a target frame that spawns children that may re-enter the contract; its replay only says "invariant in, invariant out". | [T2c](COMMON_API.md#t2c-i-need-that-ledger-replay-on-every-wrapper-up-to-a-whole-configured-history) |
-| [`ExecutionModelFrameNoStateGas.lean`](../Blanc/ExecutionModelFrameNoStateGas.lean) | **The model replay without state gas.** `Exec.CoreAccounting.modelFrame` with `stateGas = none` in place of `CoveredFork`, its only use of the fork. | [T2c](COMMON_API.md#t2c-i-need-that-ledger-replay-on-every-wrapper-up-to-a-whole-configured-history) |
 | [`ExecutionNoDelHistory.lean`](../Blanc/ExecutionNoDelHistory.lean) | **Protected-account code survival and no-deletion across configured histories.** The `…_of_runtimeSafety` family consumes the certificate-produced `InstalledRuntimeSafety` bundle, allowing CREATE2-capable runtimes. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionNoDelProducer.lean`](../Blanc/ExecutionNoDelProducer.lean) | **Producing raw terminal safety from an installed checked runtime.** `Exec.inv_noDel_of_raw_terminal_safe` (`Blanc/ExecutionDeletionSafety.lean`) needs decoded SELFDESTRUCT exclusion at every reached raw node whose storage context is the protected account `wa`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionNoDelSafeHistory.lean`](../Blanc/ExecutionNoDelSafeHistory.lean) | **Safe-parametric no-deletion and code survival across configured In-histories.** `Blanc/ExecutionNoDelTransaction.lean` and `Blanc/ExecutionNoDelHistory.lean` prove no-deletion and code survival from an installed checked runtime (`InstalledCert C`: certificate check … | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
