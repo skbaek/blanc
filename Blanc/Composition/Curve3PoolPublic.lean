@@ -35,7 +35,7 @@ def PoolLive (w : State) : Prop := word w pool Curve3Pool.isKilledSlot = 0
 
 /-- `E` holds the shares it burns, the minimums are met, and the contract's arithmetic fits. -/
 structure ExitRequest (w : State) (E : Adr) (a : Nat) (mins : V3) : Prop where
-  holds : a ≤ shares w E ∧ 0 < supply w
+  holds : a ≤ shares w E ∧ a ≤ supply w ∧ 0 < supply w
   mins : ∀ k, mins.get k ≤ share w a k
   mulFits : ∀ k, recorded w k * a < 2 ^ 256
   creditFits : ∀ k, CreditFits w E k (netOf w k (share w a k))
@@ -51,17 +51,12 @@ def ExitWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
 def exitLimit (w : State) (data : Bytes) (E : Adr) (a : Nat) : Nat :=
   callIntrinsic data + exitFrameGas w E a + callRoom
 
-/-- `E`'s 3Crv word collides with no other word the history touches (HASH-T, one more key). -/
-def HolderApart (d : Deployment) {future : BlockChain} (h : MainnetHistory d.minter.post future)
-    (E : Adr) : Prop :=
-  Curve3Crv.FreshKeys (fun _ => False) (.bal E :: Curve3Crv.midTouchedKeysIn c3 (d.sinceCreation h))
-
 /-- **A holder can leave.** At any moment of mainnet after the minter assignment, a holder's admissible
 `remove_liquidity` transaction, with no named power in force against it, is processed at exact gas and
 pays each coin's share. -/
 def lp_exit : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
-    ∀ (tx : Tx) (E : Adr) (a : Nat) (mins : V3), HolderApart d m.through E →
+    ∀ (tx : Tx) (E : Adr) (a : Nat) (mins : V3),
       tx.data = exitCalldata a mins →
       TxAdmitted m.benv m.bout tx E (exitLimit m.world tx.data E a) →
       CoinsOpen m.world E → ExitRequest m.world E a mins →
@@ -170,8 +165,7 @@ structure Asked (msg : Msg) (w : State) (E : Adr) (data : Bytes) : Prop where
 /-- `lp_exit`'s message: the same effect at the same frame cost and refund. -/
 def lp_exit_message : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
-    ∀ (msg : Msg) (E : Adr) (a : Nat) (mins : V3), HolderApart d m.through E →
-      Asked msg m.world E (exitCalldata a mins) →
+    ∀ (msg : Msg) (E : Adr) (a : Nat) (mins : V3), Asked msg m.world E (exitCalldata a mins) →
       ExitRequest m.world E a mins →
       MsgDoes msg callRoom (exitFrameGas m.world E a) (exitRefund m.world E a)
         (fun st => ExitPaid m.world st E a)

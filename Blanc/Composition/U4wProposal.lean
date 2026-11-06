@@ -1,6 +1,5 @@
 import Blanc.Composition.Curve3PoolPublic
 import Blanc.Composition.Curve3PoolPublicBridge
-import Blanc.Lift.Curve3Crv.HistShareBound
 import Blanc.Lift.CurveCoins.PoolFreshAtCreation
 
 /-! Compile check of the lemmas the proposed statement edits rely on. Not for commit. -/
@@ -46,17 +45,5 @@ theorem swapOut_of_admin {w : State} {t : Nat} {i j : Fin 3} {dx admin : Nat}
   | none =>
     rw [hq] at h
     cases h
-
-/-- `a ≤ supply`: `a ≤ shares` and the bound. -/
-theorem shares_le_supply {d : Deployment} (m : Moment d) (facts : AnchoredDeployment.Facts d) {E : Adr}
-    (apart : HolderApart d m.through E) : shares m.world E ≤ supply m.world := by
-  obtain ⟨hcode, -, hinv⟩ := (Deployment.toJoint d facts).c3Created
-  exact Curve3Crv.share_le_supply_window
-    ((MidHistoryTraceIn.tail d.c3.trace d.c3Cut).append (d.sinceC3Block m.history)) m.block m.cut
-    (by
-      change some (d.c3Cut.afterBenv.state.getCode c3).toList = _
-      rw [show (d.c3Cut.afterBenv.state.getCode c3).toList = _ from hcode]
-      rfl)
-    hinv apart
 
 end Blanc.Composition.Curve3PoolPublic
