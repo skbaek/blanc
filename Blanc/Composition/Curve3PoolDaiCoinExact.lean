@@ -119,6 +119,31 @@ theorem xfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).co
 
 theorem xferPost_gasLeft' (s : Sevm) (b : Devm) (R : Nat) : (xferPost s b R).gasLeft = R := rfl
 
+/-- `transferFrom` as a message, at the store sentry above its cost. -/
+theorem pull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Dai.code)
+    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (hval : (initSevm msg).value = 0)
+    (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++
+      v.toBytes)
+    (hgas : pullG (initSevm msg) (initDevm msg) + 2300 ≤ (initDevm msg).gasLeft)
+    (hfits : PullFits (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) src (initSevm msg).caller
+      dst v) :
+    exec (initEvm msg) = .ok (pullPost (initSevm msg) (initDevm msg)
+      ((initDevm msg).gasLeft - pullG (initSevm msg) (initDevm msg))) := by
+  have hsel : Blanc.Sevm.selector (initSevm msg) = 0x23b872dd :=
+    selector_eq_of_data_eq_abiSelectorBytes_append (by decide)
+      (by rw [hd, List.append_assoc, List.append_assoc])
+  obtain ⟨w4, w36, w68⟩ := Blanc.Lift.Curve3Pool.cc_dataWord_threeWords hd
+  have hl : (initSevm msg).data.length = 100 := by
+    rw [hd]
+    simp only [List.length_append, B256.length_toBytes, abiSelectorBytes_length]
+  obtain ⟨-, L⟩ := pull_landsF (src := src) (dst := dst) (v := v) (pre := initDevm msg) fork static
+    (guards_of hval hsel (by rw [hl]; decide) (by rw [hl]; decide))
+    (by unfold pSrc; rw [lit4, w4, ff20_and_word, toAdr_toB256])
+    (by unfold pTo; rw [lit36, w36, ff20_and_word, toAdr_toB256])
+    (by unfold pVal; rw [lit36, show Bytes.toB256 [32] + (36 : B256) = 68 by decide, w68]) rfl rfl hgas hfits
+  exact (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact Dai.cert_check Dai.jumps_ok hcode fork L.run)
+
 section Premises
 
 variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : B256}
@@ -240,6 +265,36 @@ theorem dai_coinPushFloor {K : Nat} (hK : 2300 + (K + 56500) / 64 + 1 ≤ K)
     (by rw [callMsg0_data, hin, transferSel_abi]) hfwd hfits, xferPost_gasLeft' _ _ _,
     xferPost_canon (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
       (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)) _ _⟩
+
+/-- **`transferFrom`'s exact profile at its floor.** -/
+theorem dai_coinPullFloor {K : Nat} (hK : 2300 + (K + 88000) / 64 + 1 ≤ K)
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
+    (hne : t.toAdr ≠ sevm.currentTarget) (hU : 95000 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
+    (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
+    (hW : ∀ b, W b → b.getCode t.toAdr = Dai.code ∧
+      PullFits (b.getStor t.toAdr) sevm.caller sevm.currentTarget sevm.currentTarget amt)
+    (hW' : ∀ b d, W b → CoinLeaves t.toAdr
+        (moveStor (spendStor (b.getStor t.toAdr) sevm.caller sevm.currentTarget amt)
+          sevm.caller sevm.currentTarget amt)
+      ((getOrigAcct sevm t.toAdr).stor = b.getStor t.toAdr ∧ t.toAdr ∉ b.createdAccounts ∧
+        allowSlot sevm.caller sevm.currentTarget ≠ balSlot sevm.caller ∧
+        allowSlot sevm.caller sevm.currentTarget ≠ balSlot sevm.currentTarget ∧
+        balSlot sevm.caller ≠ balSlot sevm.currentTarget) b d → W' d) :
+    MutableFloorProfile sevm W W' t
+      (transferFromSel ++ sevm.caller.toB256.toBytes ++ sevm.currentTarget.toB256.toBytes ++ amt.toBytes)
+      RawCallOk U K ii 0x64 oi (coinDebit pullG sevm t ii 0x64 oi)
+      (coinNext (fun s p => pullPost s p 0) sevm t ii 0x64 oi) := by
+  refine coinMutFloor 2300 K 88000 pullG (fun s p => pullPost s p 0) pullG_reframe hfork hdepth (by rw [prec_false hprec]) hK hUw hs
+    (dai_coinPullExact hfork hstatic hdepth hprec hne hU hii hoi hW hW')
+    (fun b S M _ _ => pullG_le _ _) ?_
+  intro b S M G hWb _ hin hfwd
+  obtain ⟨hc, hfits⟩ := hW b hWb
+  exact ⟨by rw [hc]; exact dai_undelegated, _, pull_execF (msg := callMsg0 sevm b S M G t ii 0x64 oi 0x20)
+    (src := sevm.caller) (dst := sevm.currentTarget) (v := amt) hc hfork
+    (by rw [callMsg0_isStatic]; exact hstatic) rfl (by rw [callMsg0_data, hin, transferFromSel_abi]) hfwd hfits,
+    rfl, pullPost_canon (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20))
+      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20)) _ _⟩
 
 end Premises
 

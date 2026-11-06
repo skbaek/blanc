@@ -433,6 +433,159 @@ theorem pull_landsE {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
           exact Stor.get_set_ne _ ha2 _
         · rw [ysrc, ydst]; exact hne
 
+/-- A `transferFrom` frame around an entry-34 arm, its charge named. -/
+theorem pull_landsF_of {sevm : Sevm} {pre B : Devm} {Mr : Mem} {cc : Nat} {σ' : Stor} {R : Prop}
+    (fork : CoveredFork sevm.benvStat.fork) (g : Guards sevm 0x23b872dd (Bytes.toB256 [96]))
+    (hMr : FpM (Bytes.toB256 [128]) 160 Mr)
+    (hc : ∀ X, 2300 ≤ X → SFunc.RunExact cert.prog sevm
+      (St pre (pVal sevm :: pTo sevm :: pSrc sevm :: Bytes.toB256 [2, 186] :: [selW sevm]) mem0 (X + cc))
+      t_0a25_c34 (.returned (St B (Bytes.toB256 [1] :: [selW sevm]) Mr X)))
+    (hs : pre.stack = []) (hm : pre.memory = Mem.empty)
+    (hgas : 434 + cc + 2300 ≤ pre.gasLeft) (hk : Keeps sevm pre B)
+    (hst : Devm.getStor B sevm.currentTarget = σ') (hr : R → pre.refundCounter ≤ B.refundCounter) :
+    FrameLands cert.prog sevm pre
+      (retAt B [selW sevm] (Mr.write 128 okWord.toBytes) okWord (pre.gasLeft - (434 + cc))) (434 + cc) 1 σ' R := by
+  have hrun := (pullFrameW sevm pre B Mr cc).2 fork g hMr hc
+  rw [pullFrameW_eq] at hrun
+  exact frameLands_retAt (K := 434 + cc) hrun hs hm (le_refl _) hgas hk hst okWord_eq hr
+
+/-- `transferFrom`'s closed cost is at most `88000`, on every arm. -/
+theorem pullG_le (s : Sevm) (b : Devm) : pullG s b ≤ 88000 := by
+  have h1 := e34SelfW_le s b (pVal s) (pTo s) (pSrc s) (Bytes.toB256 [2, 186]) [selW s] mem0
+  have h2 := e34MaxW_le s b (pVal s) (pTo s) (pSrc s) (Bytes.toB256 [2, 186]) [selW s] mem0
+  have h3 := e34LimW_le s b (pVal s) (pTo s) (pSrc s) (Bytes.toB256 [2, 186]) [selW s] mem0
+  rw [e34SelfW_eq] at h1
+  rw [e34MaxW_eq] at h2
+  rw [e34LimW_eq] at h3
+  unfold pullG
+  split_ifs <;> omega
+
+/-- **`transferFrom(src, dst, v)` at the store sentry above its cost.** -/
+theorem pull_landsF {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (g : Guards sevm 0x23b872dd (Bytes.toB256 [96])) (hsrc : pSrc sevm = src.toB256)
+    (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
+    (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : pullG sevm pre + 2300 ≤ pre.gasLeft)
+    (hfits : PullFits (Devm.getStor pre sevm.currentTarget) src sevm.caller dst v) :
+    pullG sevm pre ≤ 88000 ∧ FrameLands cert.prog sevm pre (pullPost sevm pre (pre.gasLeft - pullG sevm pre))
+      (pullG sevm pre) 1
+      (moveStor (spendStor (Devm.getStor pre sevm.currentTarget) src sevm.caller v) src dst v)
+      (PullR sevm pre src dst) := by
+  obtain ⟨h0, hl, h1, h2⟩ := hfits
+  have ksrc : kn (pSrc sevm) = balSlot src := by rw [hsrc, kn_bal]
+  have kdst : kn (pTo sevm) = balSlot dst := by rw [hdst, kn_bal]
+  have ysrc : ky (pSrc sevm) = balSlot src := by rw [hsrc, ky_bal, toAdr_toB256]
+  have ydst : ky (pTo sevm) = balSlot dst := by rw [hdst, ky_bal, toAdr_toB256]
+  have asrc : an (pSrc sevm) sevm.caller = allowSlot src sevm.caller := by rw [hsrc, an_allow]
+  have tsrc : (pSrc sevm).toAdr = src := by rw [hsrc, toAdr_toB256]
+  have tdst : (pTo sevm).toAdr = dst := by rw [hdst, toAdr_toB256]
+  by_cases hself : src = sevm.caller
+  · have hsp : spendStor (Devm.getStor pre sevm.currentTarget) src sevm.caller v =
+        Devm.getStor pre sevm.currentTarget := by
+      unfold spendStor; rw [ite_eq_right (fun hh => hh.1 hself)]
+    rw [hsp] at h1 h2 ⊢
+    have pS : pSelf sevm := by unfold pSelf; rw [tsrc]; exact hself
+    have hle := e34SelfW_le sevm pre (pVal sevm) (pTo sevm) (pSrc sevm) (Bytes.toB256 [2, 186]) [selW sevm] mem0
+    rw [e34SelfW_eq] at hle
+    have e1 : pullG sevm pre = 434 + e34SelfG sevm pre (pVal sevm) (pTo sevm) (pSrc sevm) := by
+      unfold pullG; rw [ite_eq_left pS]
+    have e2 : pullB sevm pre = mvBase sevm (afterSload sevm pre (ky (pSrc sevm))) (pVal sevm) (pTo sevm) (pSrc sevm) := by
+      unfold pullB; rw [ite_eq_left pS]
+    have e3 : pullM sevm pre = mvMem (scr mem0 (m20 &&& (m20 &&& pSrc sevm)) (Bytes.toB256 [2])) (pVal sevm) (pTo sevm) (pSrc sevm) := by
+      unfold pullM; rw [ite_eq_left pS]
+    refine ⟨by rw [e1]; omega, ?_⟩
+    unfold pullPost
+    rw [e1, e2, e3]
+    refine pull_landsF_of fork g (by xfp) (fun X hX => ?_) hs hm (by rw [← e1]; exact hgas)
+      ((Keeps.sload (Keeps.refl sevm pre) _).mv _ _ _) ?_ ?_
+    · have h := (e34SelfW sevm pre (pVal sevm) (pTo sevm) (pSrc sevm) (Bytes.toB256 [2, 186]) [selW sevm] mem0).2
+        fork static (FpM.init _) (by xroom) (by rw [hsrc, hself]; exact eqCheck_one rfl)
+        (by rw [hv, ksrc]; exact h1) (by rw [hv, ksrc, kdst]; exact h2) X hX
+      rwa [e34SelfW_eq] at h
+    · rw [mvBase_getStor, afterSload_getStor, hv, tsrc, tdst]
+    · rintro ⟨hor, hcr, -, -, hne⟩
+      refine le_trans (le_of_eq afterSload_refundCounter.symm)
+        (mvBase_refund (σ := Devm.getStor pre sevm.currentTarget)
+          (by rw [afterSload_createdAccounts]; exact hcr) hor ?_ ?_ ?_)
+      · rw [afterSload_getStor]
+      · rw [afterSload_getStor]
+      · rw [ysrc, ydst]; exact hne
+  · have hF : B256.eqCheck (m20 &&& pSrc sevm) (m20 &&& sevm.caller.toB256) = 0 := by
+      rw [hsrc]; exact eqCheck_ne (masked_ne hself)
+    have pS : ¬ pSelf sevm := by unfold pSelf; rw [tsrc]; exact hself
+    by_cases hmax : (Devm.getStor pre sevm.currentTarget).get (allowSlot src sevm.caller) = maxUint
+    · have hsp : spendStor (Devm.getStor pre sevm.currentTarget) src sevm.caller v =
+          Devm.getStor pre sevm.currentTarget := by
+        unfold spendStor; rw [ite_eq_right (fun hh => hh.2 hmax)]
+      rw [hsp] at h1 h2 ⊢
+      have pM : pMax sevm pre := by unfold pMax; rw [tsrc]; exact hmax
+      have hle := e34MaxW_le sevm pre (pVal sevm) (pTo sevm) (pSrc sevm) (Bytes.toB256 [2, 186]) [selW sevm] mem0
+      rw [e34MaxW_eq] at hle
+      have e1 : pullG sevm pre = 434 + e34MaxG sevm pre (pVal sevm) (pTo sevm) (pSrc sevm) := by
+        unfold pullG; rw [ite_eq_right pS, ite_eq_left pM]
+      have e2 : pullB sevm pre = mvBase sevm (afterSload sevm (afterSload sevm pre (ky (pSrc sevm)))
+          (ak (pSrc sevm) sevm.caller.toB256)) (pVal sevm) (pTo sevm) (pSrc sevm) := by
+        unfold pullB; rw [ite_eq_right pS, ite_eq_left pM]
+      have e3 : pullM sevm pre = mvMem (am (scr mem0 (m20 &&& (m20 &&& pSrc sevm)) (Bytes.toB256 [2])) (pSrc sevm)
+          sevm.caller.toB256) (pVal sevm) (pTo sevm) (pSrc sevm) := by
+        unfold pullM; rw [ite_eq_right pS, ite_eq_left pM]
+      refine ⟨by rw [e1]; omega, ?_⟩
+      unfold pullPost
+      rw [e1, e2, e3]
+      refine pull_landsF_of fork g (by xfp) (fun X hX => ?_) hs hm (by rw [← e1]; exact hgas)
+        ((((Keeps.refl sevm pre).sload _).sload _).mv _ _ _) ?_ ?_
+      · have h := (e34MaxW sevm pre (pVal sevm) (pTo sevm) (pSrc sevm) (Bytes.toB256 [2, 186]) [selW sevm] mem0).2
+          fork static (FpM.init _) (by xroom) hF (by rw [asrc]; exact eqCheck_one hmax)
+          (by rw [hv, ksrc]; exact h1) (by rw [hv, ksrc, kdst]; exact h2) X hX
+        rwa [e34MaxW_eq] at h
+      · rw [mvBase_getStor, afterSload_getStor, afterSload_getStor, hv, tsrc, tdst]
+      · rintro ⟨hor, hcr, -, -, hne⟩
+        refine le_trans (le_of_eq (afterSload_refundCounter.symm.trans afterSload_refundCounter.symm))
+          (mvBase_refund (σ := Devm.getStor pre sevm.currentTarget)
+            (by rw [afterSload_createdAccounts, afterSload_createdAccounts]; exact hcr) hor ?_ ?_ ?_)
+        · rw [afterSload_getStor, afterSload_getStor]
+        · rw [afterSload_getStor, afterSload_getStor]
+        · rw [ysrc, ydst]; exact hne
+    · have hsp : spendStor (Devm.getStor pre sevm.currentTarget) src sevm.caller v =
+          (Devm.getStor pre sevm.currentTarget).set (allowSlot src sevm.caller)
+            ((Devm.getStor pre sevm.currentTarget).get (allowSlot src sevm.caller) - v) := by
+        unfold spendStor; rw [ite_eq_left ⟨hself, hmax⟩]
+      rw [hsp] at h1 h2 ⊢
+      have pM : ¬ pMax sevm pre := by unfold pMax; rw [tsrc]; exact hmax
+      have hle := e34LimW_le sevm pre (pVal sevm) (pTo sevm) (pSrc sevm) (Bytes.toB256 [2, 186]) [selW sevm] mem0
+      rw [e34LimW_eq] at hle
+      have e1 : pullG sevm pre = 434 + e34LimG sevm pre (pVal sevm) (pTo sevm) (pSrc sevm) := by
+        unfold pullG; rw [ite_eq_right pS, ite_eq_right pM]
+      have e2 : pullB sevm pre = mvBase sevm (limBase sevm pre (pVal sevm) (pSrc sevm) sevm.caller.toB256)
+          (pVal sevm) (pTo sevm) (pSrc sevm) := by
+        unfold pullB; rw [ite_eq_right pS, ite_eq_right pM]
+      have e3 : pullM sevm pre = mvMem (am (am (am (am (scr mem0 (m20 &&& (m20 &&& pSrc sevm)) (Bytes.toB256 [2]))
+          (pSrc sevm) sevm.caller.toB256) (pSrc sevm) sevm.caller.toB256) (pSrc sevm) sevm.caller.toB256)
+          (pSrc sevm) sevm.caller.toB256) (pVal sevm) (pTo sevm) (pSrc sevm) := by
+        unfold pullM; rw [ite_eq_right pS, ite_eq_right pM]
+      refine ⟨by rw [e1]; omega, ?_⟩
+      unfold pullPost
+      rw [e1, e2, e3]
+      refine pull_landsF_of fork g (by xfp) (fun X hX => ?_) hs hm (by rw [← e1]; exact hgas)
+        ((Keeps.refl sevm pre).lim _ _ _ |>.mv _ _ _) ?_ ?_
+      · have h := (e34LimW sevm pre (pVal sevm) (pTo sevm) (pSrc sevm) (Bytes.toB256 [2, 186]) [selW sevm] mem0).2
+          fork static (FpM.init _) (by xroom) hF (by rw [asrc]; exact eqCheck_ne hmax)
+          (by rw [hv, asrc]; exact hl hself hmax) (by rw [hv, ksrc]; exact h0)
+          (by unfold spent; rw [hv, asrc, ksrc]; exact h1)
+          (by unfold spent; rw [hv, asrc, ksrc, kdst]; exact h2) X hX
+        rwa [e34LimW_eq] at h
+      · rw [mvBase_getStor, limBase_getStor, hv, hsrc, toAdr_toB256, tdst]
+      · rintro ⟨hor, hcr, ha1, ha2, hne⟩
+        refine le_trans (limBase_refund (v := pVal sevm) (r := pSrc sevm) (c := sevm.caller.toB256) hcr hor ?_)
+          (mvBase_refund (σ := Devm.getStor pre sevm.currentTarget)
+            (by unfold limBase; simpa only [afterSstore_createdAccounts, afterSload_createdAccounts] using hcr) hor ?_ ?_ ?_)
+        · rfl
+        · rw [limBase_getStor, ysrc, hsrc, toAdr_toB256]
+          exact Stor.get_set_ne _ ha1 _
+        · rw [limBase_getStor, ydst, hsrc, toAdr_toB256]
+          exact Stor.get_set_ne _ ha2 _
+        · rw [ysrc, ydst]; exact hne
+
 /-! ## The costs where the transaction form needs them -/
 
 section Cold

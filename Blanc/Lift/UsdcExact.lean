@@ -281,6 +281,27 @@ theorem pull_runE {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
   rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
   exact ⟨hle, _, rfl, h⟩
 
+/-- **`transferFrom`'s run at the store sentry above its cost.** -/
+theorem pull_runF {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (g : Guards sevm 0x23b872dd (Bytes.toB256 [96])) (hsrc : pFrom sevm = src.toB256)
+    (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
+    (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : implPullG sevm pre + 2300 ≤ pre.gasLeft)
+    (hf : PullFits (Devm.getStor pre sevm.currentTarget) src sevm.caller dst v) :
+    SProg.RunExact Impl.cert.prog sevm pre (implPullPost sevm pre (pre.gasLeft - implPullG sevm pre)) := by
+  have ok : E68Ok sevm pre (pVal sevm) (pTo sevm) (pFrom sevm) := by
+    rw [hv]; exact e68Ok_of hsrc hdst hf
+  have hrun := (pullW sevm pre).2 fork static g ok
+  rw [pullW_eq] at hrun
+  have h := hrun (pre.gasLeft - implPullG sevm pre) (by omega)
+  rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
+  exact ⟨_, rfl, h⟩
+
+/-- **`transfer`'s frame is at most `65000`**: its eight reads and two writes, at their worst. -/
+theorem implXferG_le (s : Sevm) (b : Devm) : implXferG s b ≤ 65000 := by
+  unfold implXferG e37G e93G e99G
+  xcost []
+
 /-- **`balanceOf`'s run at its exact cost.** -/
 theorem bal_runE {sevm : Sevm} {pre : Devm}
     (fork : CoveredFork sevm.benvStat.fork) (g : Guards sevm 0x70a08231 (Bytes.toB256 [32]))

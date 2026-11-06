@@ -440,6 +440,39 @@ theorem bal_runE {sevm : Sevm} {pre : Devm}
   rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
   exact ⟨hle, _, rfl, h⟩
 
+/-- **`transferFrom`'s run at the store sentry above its cost.** -/
+theorem pull_runF {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
+    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (g : LGuards sevm 0x23b872dd (Bytes.toB256 [96])) (hsrc : pSrc sevm = src.toB256)
+    (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
+    (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : pullG sevm pre + 2300 ≤ pre.gasLeft)
+    (hdep : NotDeprecated (Devm.getStor pre sevm.currentTarget))
+    (hfits : PullFits (Devm.getStor pre sevm.currentTarget) src sevm.caller dst v) :
+    SProg.RunExact cert.prog sevm pre (pullP sevm pre (pre.gasLeft - pullG sevm pre)) := by
+  obtain ⟨hp, hl, pm⟩ := hfits
+  have hsrc' : (pSrc sevm).toAdr = src := by rw [hsrc, toAdr_toB256]
+  have hdst' : (pTo sevm).toAdr = dst := by rw [hdst, toAdr_toB256]
+  have hrun := (pullW sevm pre).2 fork static g (gateW_of hp (by rw [hsrc']; exact hl) hdep)
+    (by rw [hv, hsrc', hdst']; exact pm)
+  rw [pullW_eq] at hrun
+  have h := hrun (pre.gasLeft - pullG sevm pre) (by omega)
+  rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
+  exact ⟨_, rfl, h⟩
+
+/-- **`balanceOf`'s run above its cost.** -/
+theorem bal_runF {sevm : Sevm} {pre : Devm}
+    (fork : CoveredFork sevm.benvStat.fork) (g : LGuards sevm 0x70a08231 (Bytes.toB256 [32]))
+    (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : balG sevm pre ≤ pre.gasLeft)
+    (hdep : NotDeprecated (Devm.getStor pre sevm.currentTarget)) :
+    SProg.RunExact cert.prog sevm pre (balP sevm pre (pre.gasLeft - balG sevm pre)) := by
+  have hdW : (Bytes.toB256 [255] &&& pre.getStorVal sevm.currentTarget (Bytes.toB256 [10]) /
+      B256.bexp (Bytes.toB256 [1, 0]) (Bytes.toB256 [20])) = 0 := by rw [gsv, lit10]; exact hdep
+  have hrun := (balW sevm pre).2 fork g hdW
+  rw [balW_eq] at hrun
+  have h := hrun (pre.gasLeft - balG sevm pre)
+  rw [pre_eq_St hs hm (Nat.sub_add_cancel hgas)] at h
+  exact ⟨_, rfl, h⟩
+
 /-! ## The costs where the transaction form needs them -/
 
 section Cold

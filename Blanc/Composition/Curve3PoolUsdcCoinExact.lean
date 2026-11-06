@@ -318,6 +318,29 @@ theorem implXfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg
       (by unfold xTo; rw [Blanc.Composition.Curve3PoolUsdc22.lit4', w4, word_ff20, toAdr_toB256])
       (by unfold xVal; rw [Blanc.Composition.Curve3PoolUsdc22.lit36', w36]) rfl rfl hF hf))
 
+/-- V2_2's `transferFrom` as a message, at the store sentry above its cost. -/
+theorem implPull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Impl.code)
+    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (hval : (initSevm msg).value = 0)
+    (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++ v.toBytes)
+    (hF : implPullG (initSevm msg) (initDevm msg) + 2300 ≤ (initDevm msg).gasLeft)
+    (hf : PullFits (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) src (initSevm msg).caller dst v) :
+    exec (initEvm msg) = .ok (implPullPost (initSevm msg) (initDevm msg)
+      ((initDevm msg).gasLeft - implPullG (initSevm msg) (initDevm msg))) := by
+  have hsel : Blanc.Sevm.selector (initSevm msg) = 0x23b872dd :=
+    selector_eq_of_data_eq_abiSelectorBytes_append (by decide)
+      (by rw [hd, List.append_assoc, List.append_assoc])
+  obtain ⟨w4, w36, w68⟩ := Blanc.Lift.Curve3Pool.cc_dataWord_threeWords hd
+  have hl : (initSevm msg).data.length = 100 := by
+    rw [hd]
+    simp only [List.length_append, B256.length_toBytes, abiSelectorBytes_length]
+  exact (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact Impl.cert_check Impl.jumps_ok hcode fork
+    (pull_runF (src := src) (dst := dst) (v := v) (pre := initDevm msg) fork static
+      (guards_of hval hsel (by rw [hl]; decide) (by rw [hl]; decide))
+      (by unfold pFrom; rw [Blanc.Composition.Curve3PoolUsdc22.lit4', w4, ff20_and_word, toAdr_toB256])
+      (by unfold pTo; rw [Blanc.Composition.Curve3PoolUsdc22.lit4', show (4 : B256) + Bytes.toB256 [32] = 36 by decide, w36, ff20_and_word, toAdr_toB256])
+      (by unfold pVal; rw [show Bytes.toB256 [64] + Bytes.toB256 [4] = 68 by decide, w68]) rfl rfl hF hf))
+
 /-- V2_2's `transferFrom` as a message, exactly. -/
 theorem implPull_msgE {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Impl.code)
     (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
@@ -465,7 +488,7 @@ theorem proxyXfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm ms
     (static : (initSevm msg).isStatic = false) (hval : (initSevm msg).value = 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) Impl.code)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
-    (hgas : xferG (initSevm msg) (initDevm msg) + 3500 ≤ (initDevm msg).gasLeft) (hG : (initDevm msg).gasLeft < 2 ^ 256)
+    (hgas : xferG (initSevm msg) (initDevm msg) + 3370 ≤ (initDevm msg).gasLeft) (hG : (initDevm msg).gasLeft < 2 ^ 256)
     (hfits : MoveFits (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) (initSevm msg).caller dst v) :
     exec (initEvm msg) = .ok (xferProxyPost (initSevm msg) (initDevm msg)
       ((initDevm msg).gasLeft - xferG (initSevm msg) (initDevm msg))) := by
@@ -475,14 +498,45 @@ theorem proxyXfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm ms
   refine proxy_execF (s := 0xa9059cbb) (w := 1) (impl := implXferG)
     (C := fun Y => implXferPost (initSevm (dMsg (initSevm msg) (initDevm msg) Y)) (initDevm (dMsg (initSevm msg) (initDevm msg) Y))
       (dFwd (initSevm msg) (initDevm msg) Y - implXferG (initSevm (dMsg (initSevm msg) (initDevm msg) Y)) (initDevm (dMsg (initSevm msg) (initDevm msg) Y))))
-    3500 72000 (by decide) implXferG_reframe hcode fork hdepth hr (by omega) (by omega) hsel
-    (by decide) (by decide) (by decide) (by decide) (by decide)
-    (by have h := implXferW_le (initSevm (dMsg (initSevm msg) (initDevm msg) 0)) (initDevm (dMsg (initSevm msg) (initDevm msg) 0))
-        rwa [implXferW_eq] at h) hgas hG (fun Y hF => ?_)
+    3370 65000 (by decide) implXferG_reframe hcode fork hdepth hr (by omega) (by omega) hsel
+    (by decide) (by decide) (by decide) (by decide) (by decide) (implXferG_le _ _) hgas hG (fun Y hF => ?_)
   exact ⟨implXfer_execF (msg := dMsg (initSevm msg) (initDevm msg) Y) (dst := dst) (v := v)
       (child_code hr) fork (child_static.trans static) hval
       (by rw [dMsg_data _ _ _ (by omega)]; exact hd) hF (by rw [dMsg_getStor]; exact hfits),
     implXferPost_error _ _ _, (implXferPost_output _ _ _).trans (by decide), rfl⟩
+
+/-- **`transferFrom` through the proxy, at its floor.** -/
+theorem proxyPull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Proxy.code)
+    (fork : CoveredFork (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
+    (static : (initSevm msg).isStatic = false) (hval : (initSevm msg).value = 0)
+    (hr : ProxyReady (initSevm msg) (initDevm msg) Impl.code)
+    (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++ v.toBytes)
+    (hgas : pullG (initSevm msg) (initDevm msg) + 4000 ≤ (initDevm msg).gasLeft) (hG : (initDevm msg).gasLeft < 2 ^ 256)
+    (hfits : PullFits (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) src (initSevm msg).caller dst v) :
+    exec (initEvm msg) = .ok (pullProxyPost (initSevm msg) (initDevm msg)
+      ((initDevm msg).gasLeft - pullG (initSevm msg) (initDevm msg))) := by
+  have hsel : Blanc.Sevm.selector (initSevm msg) = 0x23b872dd :=
+    selector_eq_of_data_eq_abiSelectorBytes_append (by decide)
+      (by rw [hd, List.append_assoc, List.append_assoc])
+  have hl : (initSevm msg).data.length = 100 := by
+    rw [hd]
+    simp only [List.length_append, B256.length_toBytes, abiSelectorBytes_length]
+  refine proxy_execF (s := 0x23b872dd) (w := 1) (impl := implPullG)
+    (C := fun Y => implPullPost (initSevm (dMsg (initSevm msg) (initDevm msg) Y)) (initDevm (dMsg (initSevm msg) (initDevm msg) Y))
+      (dFwd (initSevm msg) (initDevm msg) Y - implPullG (initSevm (dMsg (initSevm msg) (initDevm msg) Y)) (initDevm (dMsg (initSevm msg) (initDevm msg) Y))))
+    4000 102000 (by decide) implPullG_reframe hcode fork hdepth hr (by omega) (by omega) hsel
+    (by decide) (by decide) (by decide) (by decide) (by decide)
+    (by have h := pullW_le (initSevm (dMsg (initSevm msg) (initDevm msg) 0)) (initDevm (dMsg (initSevm msg) (initDevm msg) 0))
+        rwa [pullW_eq] at h) hgas hG (fun Y hF => ?_)
+  have hE : (implPullPost (initSevm (dMsg (initSevm msg) (initDevm msg) Y)) (initDevm (dMsg (initSevm msg) (initDevm msg) Y))
+      (dFwd (initSevm msg) (initDevm msg) Y - implPullG (initSevm (dMsg (initSevm msg) (initDevm msg) Y)) (initDevm (dMsg (initSevm msg) (initDevm msg) Y)))).output = (1 : B256).toBytes := by
+    show (okW).toBytes = _
+    rw [okW_eq]
+  have hX := implPull_execF (msg := dMsg (initSevm msg) (initDevm msg) Y) (src := src) (dst := dst) (v := v)
+      (child_code hr) fork (child_static.trans static) hval
+      (by rw [dMsg_data _ _ _ (by omega)]; exact hd) hF (by rw [dMsg_getStor]; exact hfits)
+  obtain ⟨run⟩ := (exec_iff_exec_eq 0 _ _ _).mpr hX
+  exact ⟨hX, (Exec.ok_error_eq run fork.rules_stateGas_none).trans rfl, hE, rfl⟩
 
 /-! ## The pool's exact coin profiles -/
 
@@ -560,7 +614,7 @@ theorem usdc22_coinPullExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic :
   · rw [L.out]; decide +kernel
 
 /-- **`transfer`'s exact profile through the proxy, at its floor.** -/
-theorem usdc22_coinPushFloor {K : Nat} (hK : 3500 + (K + 80300) / 64 + 1 ≤ K)
+theorem usdc22_coinPushFloor {K : Nat} (hK : 3370 + (K + 73300) / 64 + 1 ≤ K)
     (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 89000 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
@@ -574,15 +628,11 @@ theorem usdc22_coinPushFloor {K : Nat} (hK : 3500 + (K + 80300) / 64 + 1 ≤ K)
     MutableFloorProfile sevm W W' t (transferSel ++ sevm.caller.toB256.toBytes ++ amt.toBytes) RawCallOk U K ii
       0x44 oi (coinDebit xferG sevm t ii 0x44 oi)
       (coinNext (proxyCanon 1 (fun s p => implXferPost s p 0)) sevm t ii 0x44 oi) := by
-  refine coinMutFloor 3500 K 80300 xferG (proxyCanon 1 (fun s p => implXferPost s p 0))
+  refine coinMutFloor 3370 K 73300 xferG (proxyCanon 1 (fun s p => implXferPost s p 0))
     (fun s p G' => proxyG_reframe s p G' 1 implXferG) hfork (by omega) (by rw [prec_false hprec]) hK hUw hs
     (usdc22_coinPushExact hfork hstatic hdepth hprec hne hU hii hoi hW hW') (fun b S M _ hin => ?_) ?_
   · refine proxyG_le (by rw [callMsg0_data, hin]; simp only [List.length_append, B256.length_toBytes, transferSel_abi, abiSelectorBytes_length]; omega) ?_
-    have h := implXferW_le (initSevm (dMsg (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
-      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)) 0))
-      (initDevm (dMsg (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
-      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)) 0))
-    rwa [implXferW_eq] at h
+    exact implXferG_le _ _
   intro b S M G hWb hG hin hfwd
   obtain ⟨hc, hp, hfits⟩ := hW b hWb
   have hgl : fwd b S M G t ii 0x44 oi 0x20 < 2 ^ 256 := by
@@ -593,6 +643,45 @@ theorem usdc22_coinPushFloor {K : Nat} (hK : 3500 + (K + 80300) / 64 + 1 ≤ K)
     (by rw [callMsg0_data, hin, transferSel_abi]) hfwd hgl hfits, rfl,
     xferProxyPost_canon (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
       (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)) _ _⟩
+
+/-- **`transferFrom`'s exact profile through the proxy, at its floor.** -/
+theorem usdc22_coinPullFloor {K : Nat} (hK : 4000 + (K + 110300) / 64 + 1 ≤ K)
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
+    (hne : t.toAdr ≠ sevm.currentTarget) (hU : 120000 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
+    (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
+    (hW : ∀ b, W b → b.getCode t.toAdr = Proxy.code ∧ ProxyAt sevm b t.toAdr Impl.code ∧
+      PullFits (b.getStor t.toAdr) sevm.caller sevm.currentTarget sevm.currentTarget amt)
+    (hW' : ∀ b d, W b → CoinLeaves t.toAdr
+        (pullStor (b.getStor t.toAdr) sevm.caller sevm.currentTarget sevm.currentTarget amt)
+      ((getOrigAcct sevm t.toAdr).stor = b.getStor t.toAdr ∧ t.toAdr ∉ b.createdAccounts ∧
+        allowSlot sevm.caller sevm.currentTarget ≠ balSlot sevm.caller ∧
+        allowSlot sevm.caller sevm.currentTarget ≠ balSlot sevm.currentTarget ∧
+        balSlot sevm.caller ≠ balSlot sevm.currentTarget) b d → W' d) :
+    MutableFloorProfile sevm W W' t
+      (transferFromSel ++ sevm.caller.toB256.toBytes ++ sevm.currentTarget.toB256.toBytes ++ amt.toBytes)
+      RawCallOk U K ii 0x64 oi (coinDebit pullG sevm t ii 0x64 oi)
+      (coinNext (proxyCanon 1 (fun s p => implPullPost s p 0)) sevm t ii 0x64 oi) := by
+  refine coinMutFloor 4000 K 110300 pullG (proxyCanon 1 (fun s p => implPullPost s p 0))
+    (fun s p G' => proxyG_reframe s p G' 1 implPullG) hfork (by omega) (by rw [prec_false hprec]) hK hUw hs
+    (usdc22_coinPullExact hfork hstatic hdepth hprec hne hU hii hoi hW hW') (fun b S M _ hin => ?_) ?_
+  · refine proxyG_le (by rw [callMsg0_data, hin]; simp only [List.length_append, B256.length_toBytes, transferFromSel_abi, abiSelectorBytes_length]; omega) ?_
+    have h := pullW_le (initSevm (dMsg (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20))
+      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20)) 0))
+      (initDevm (dMsg (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20))
+      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20)) 0))
+    rw [pullW_eq] at h
+    omega
+  intro b S M G hWb hG hin hfwd
+  obtain ⟨hc, hp, hfits⟩ := hW b hWb
+  have hgl : fwd b S M G t ii 0x64 oi 0x20 < 2 ^ 256 := by
+    unfold fwd except64th; omega
+  exact ⟨by rw [hc]; exact proxy_undelegated, _, proxyPull_execF (msg := callMsg0 sevm b S M G t ii 0x64 oi 0x20)
+    (src := sevm.caller) (dst := sevm.currentTarget) (v := amt) hc hfork (by show sevm.depth - 1 ≠ 0; omega)
+    (by rw [callMsg0_isStatic]; exact hstatic) rfl ⟨hp.undel, hp.code, hp.prec, hp.admin⟩
+    (by rw [callMsg0_data, hin, transferFromSel_abi]) hfwd hgl hfits, rfl,
+    pullProxyPost_canon (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20))
+      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20)) _ _⟩
 
 end Premises
 

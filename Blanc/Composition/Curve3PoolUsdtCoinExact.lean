@@ -142,6 +142,40 @@ theorem xfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).co
       (by unfold xTo; rw [lit4, w4, ff20_and_word, toAdr_toB256])
       (by unfold xVal; rw [lit36, w36]) rfl rfl hgas hdep hfits))
 
+/-- `transferFrom` as a message, at the store sentry above its cost. -/
+theorem pull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Usdt.code)
+    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (hval : (initSevm msg).value = 0)
+    (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++
+      v.toBytes)
+    (hgas : pullG (initSevm msg) (initDevm msg) + 2300 ≤ (initDevm msg).gasLeft)
+    (hdep : NotDeprecated (Devm.getStor (initDevm msg) (initSevm msg).currentTarget))
+    (hfits : PullFits (Devm.getStor (initDevm msg) (initSevm msg).currentTarget) src (initSevm msg).caller
+      dst v) :
+    exec (initEvm msg) = .ok (pullP (initSevm msg) (initDevm msg)
+      ((initDevm msg).gasLeft - pullG (initSevm msg) (initDevm msg))) := by
+  obtain ⟨g, hs1, hs2, hs3⟩ := pull_facts hval hd
+  exact (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact Usdt.cert_check Usdt.jumps_ok hcode fork
+    (pull_runF (src := src) (dst := dst) (v := v) (pre := initDevm msg) fork static g hs1 hs2 hs3
+      rfl rfl hgas hdep hfits))
+
+/-- `balanceOf` as a message, above its cost. -/
+theorem bal_execF {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Usdt.code)
+    (fork : CoveredFork (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
+    (hd : (initSevm msg).data = abiSelectorBytes 0x70a08231 ++ a.toB256.toBytes)
+    (hgas : balG (initSevm msg) (initDevm msg) ≤ (initDevm msg).gasLeft)
+    (hdep : NotDeprecated (Devm.getStor (initDevm msg) (initSevm msg).currentTarget)) :
+    exec (initEvm msg) = .ok (balP (initSevm msg) (initDevm msg)
+      ((initDevm msg).gasLeft - balG (initSevm msg) (initDevm msg))) := by
+  have hsel : Blanc.Sevm.selector (initSevm msg) = 0x70a08231 :=
+    selector_eq_of_data_eq_abiSelectorBytes_append (by decide) hd
+  have hl : (initSevm msg).data.length = 36 := by
+    rw [hd]
+    simp only [List.length_append, B256.length_toBytes, abiSelectorBytes_length]
+  exact (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact Usdt.cert_check Usdt.jumps_ok hcode fork
+    (bal_runF (pre := initDevm msg) fork
+      (lguards_of hval hsel (by rw [hl]; decide) (by rw [hl]; decide) (by rw [hl]; decide)) rfl rfl hgas hdep))
+
 section Premises
 
 variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : B256}
@@ -265,6 +299,76 @@ theorem usdt_coinPushFloor {K : Nat} (hK : 2300 + (K + 97756) / 64 + 1 ≤ K)
     (by rw [callMsg0_data, hin, transferSel_abi]) hfwd hdep hfits, xferPost_gasLeft _ _ _,
     xferPost_canon (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20))
       (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20)) _ _⟩
+
+/-- **`transferFrom`'s exact profile at its floor.** -/
+theorem usdt_coinPullFloor {K : Nat} (hK : 2300 + (K + 122180) / 64 + 1 ≤ K)
+    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
+    (hne : t.toAdr ≠ sevm.currentTarget) (hU : 129555 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
+    (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
+    (hW : ∀ b, W b → b.getCode t.toAdr = Usdt.code ∧ NotDeprecated (b.getStor t.toAdr) ∧
+      PullFits (b.getStor t.toAdr) sevm.caller sevm.currentTarget sevm.currentTarget amt)
+    (hW' : ∀ b d, W b → CoinLeaves t.toAdr
+        (moveStor (spendStor (b.getStor t.toAdr) sevm.caller sevm.currentTarget amt)
+          sevm.caller sevm.currentTarget amt (feeOf (b.getStor t.toAdr) amt))
+      ((getOrigAcct sevm t.toAdr).stor = b.getStor t.toAdr ∧ t.toAdr ∉ b.createdAccounts ∧
+        PullApart (b.getStor t.toAdr) sevm.caller sevm.currentTarget sevm.currentTarget amt
+          (feeOf (b.getStor t.toAdr) amt)) b d → W' d) :
+    MutableFloorProfile sevm W W' t
+      (transferFromSel ++ sevm.caller.toB256.toBytes ++ sevm.currentTarget.toB256.toBytes ++ amt.toBytes)
+      RawCallOk U K ii 0x64 oi (coinDebit pullG sevm t ii 0x64 oi)
+      (coinNext (fun s p => pullP s p 0) sevm t ii 0x64 oi) := by
+  refine coinMutFloor 2300 K 122180 pullG (fun s p => pullP s p 0) pullG_reframe hfork hdepth (by rw [prec_false hprec]) hK hUw hs
+    (usdt_coinPullExact hfork hstatic hdepth hprec hne hU hii hoi hW hW')
+    (fun b S M _ _ => by
+      have h := pullW_le (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20))
+        (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20))
+      rwa [pullW_eq] at h) ?_
+  intro b S M G hWb _ hin hfwd
+  obtain ⟨hc, hdep, hfits⟩ := hW b hWb
+  exact ⟨by rw [hc]; exact usdt_undelegated, _, pull_execF (msg := callMsg0 sevm b S M G t ii 0x64 oi 0x20)
+    (src := sevm.caller) (dst := sevm.currentTarget) (v := amt) hc hfork
+    (by rw [callMsg0_isStatic]; exact hstatic) rfl (by rw [callMsg0_data, hin, transferFromSel_abi]) hfwd hdep hfits,
+    pullP_gasLeft _ _ _, pullP_canon (initSevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20))
+      (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20)) _ _⟩
+
+/-- **`balanceOf`'s exact profile at its floor.** -/
+theorem usdt_coinBalFloor {B : B256} {K : Nat} (hK : (K + 5031) / 64 + 1 ≤ K) (hfork : CoveredFork sevm.benvStat.fork)
+    (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hU : 70000 ≤ U)
+    (hUw : U < 2 ^ 256) (hs : GasStable W')
+    (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
+    (hW : ∀ b, W b → b.getCode t.toAdr = Usdt.code ∧ NotDeprecated (b.getStor t.toAdr) ∧
+      (b.getStor t.toAdr).get (balSlot sevm.currentTarget) = B)
+    (hW' : ∀ b d, W b → (∀ a, Devm.getStor d a = Devm.getStor b a) →
+      (∀ a, d.getCode a = b.getCode a) → W' d) :
+    StaticWordFloorProfile sevm W W' t (balanceOfData sevm.currentTarget) B U K ii 0x24 oi
+      (coinStaticDebit balG sevm t ii 0x24 oi) (coinStaticNext (fun s p => balP s p 0) sevm t ii 0x24 oi) := by
+  refine coinStaticFloor 0 K 5031 balG (fun s p => balP s p 0) balG_reframe hfork hdepth (by rw [prec_false hprec])
+    (by omega) hUw hs (usdt_coinBalExact hfork hdepth hprec hU hii hoi hW hW')
+    (fun b S M _ _ => by
+      have h := balW_le (initSevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 0x24 oi 0x20))
+        (initDevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 0x24 oi 0x20))
+      rwa [balW_eq] at h) ?_
+  intro b S M G hWb _ hin hfwd
+  obtain ⟨hc, hdep, -⟩ := hW b hWb
+  exact ⟨by rw [hc]; exact usdt_undelegated, _, bal_execF (msg := staticMsg sevm b S M G t ii 0x24 oi 0x20)
+    (a := sevm.currentTarget) hc hfork rfl
+    (by rw [staticMsg_data, hin]; unfold balanceOfData; rw [balanceOfSel_abi]) hfwd hdep,
+    balP_gasLeft _ _ _, balP_canon (initSevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 0x24 oi 0x20))
+      (initDevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 0x24 oi 0x20)) _ _⟩
+
+/-- The balance read's debit, in the frame's memory. -/
+theorem usdt_balDebit_le (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096) (b : Devm) (S : List B256) (M : Mem) :
+    coinStaticDebit balG sevm t ii 0x24 oi b S M ≤ 8047 := by
+  have he := ext_le (b := b.withGasLeft 0) (S := S) (M := M) (ii := ii) (is := 0x24) (oi := oi) (os := 0x20)
+    (by rw [show (0x24 : B256).toNat = 0x24 from rfl]; exact hii)
+    (by rw [show (0x20 : B256).toNat = 0x20 from rfl]; exact hoi)
+  have ha := acc_le (b := b.withGasLeft 0) (t := t)
+  have h := balW_le (initSevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 0x24 oi 0x20))
+    (initDevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 0x24 oi 0x20))
+  rw [balW_eq] at h
+  unfold coinStaticDebit
+  omega
 
 end Premises
 
