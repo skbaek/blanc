@@ -14,12 +14,12 @@ build on the names:
 * `EntryObs`: the chain's frames, the non-admin proxy frames. The admin word's frames write only
   the proxy's slots, so they are unobserved, and the frame an `upgradeToAndCall` calls below itself
   observes itself;
-* `V22At`, `heldAt`: a frame reads the holder's entry by the implementation word at its own entry, not
-  through the view: the whole word under V2 and V2_1, the low 255 bits under V2_2;
+* `V22At`, `heldAt`: a frame reads the holder's entry by the code its implementation word finds at its
+  own entry, not through the view: the whole word under V2 and V2_1, the low 255 bits under V2_2;
 * `UsdcCertified`: the proxy admin's power, restrained at one state;
 * `BelowFlagAt`: the seam where the reading changes. `bridged_of_belowFlag` is what `ViewChain.segment`
   takes;
-* `InitializerKeeps`, `RescueQuiet`: the named powers still open as fields.
+* `InitializerKeeps`: the named power still open as a field.
 -/
 
 namespace Blanc.Lift.Usdc
@@ -35,22 +35,25 @@ entry. -/
 def EntryObs (T : Adr) (F : Exec.Frame) : Prop :=
   F.sevm.code = Proxy.code ∧ F.sevm.caller ≠ adminOf F.pre.state T
 
-/-- The implementation word at the frame's entry names FiatTokenV2_2. -/
+/-- The implementation word at the frame's entry finds FiatTokenV2_2's code: the reading follows the
+code the frame runs, not the address that holds it. -/
 def V22At (T : Adr) (F : Exec.Frame) : Prop :=
-  (F.pre.state.getStor T).get implSlot = usdcImpl.toB256
+  F.pre.getCode ((F.pre.state.getStor T).get implSlot).toAdr = Impl.code
 
 open Classical in
-/-- **How a frame reads `h`'s entry in a view**, by the implementation word at its own entry: the low
-255 bits under V2_2, the whole word before it. -/
+/-- **How a frame reads `h`'s entry in a view**, by the code its implementation word finds at its own
+entry: the low 255 bits under V2_2, the whole word before it. -/
 noncomputable def heldAt (T h : Adr) (F : Exec.Frame) (w : StorWords) : Nat :=
   if V22At T F then balanceBits (w (balSlot h)) else (w (balSlot h)).toNat
 
-/-- **The implementation word names one of the three versions, and V2_2 finds its library** (the proxy
-admin's power, at one state). The library is deployed after the pool's cut, so this is not a fact of
-the start state. -/
+/-- **The implementation word names one of the three versions, V2_2 finds its library, and the word names no
+precompile on any fork** (the proxy admin's power, at one state). The library is deployed after the pool's cut, so
+this is not a fact of the start state. A delegate to a precompile runs it and not the code at the address, so
+`UsdcImplAt` alone does not say what the frame runs. -/
 def UsdcCertified (d : Devm) (T : Adr) : Prop :=
   CurveCoins.UsdcImplAt d T ∧
-    (d.getCode (d.getStorVal T implSlot).toAdr = Impl.code → d.getCode usdcLib = Lib.code)
+    (d.getCode (d.getStorVal T implSlot).toAdr = Impl.code → d.getCode usdcLib = Lib.code) ∧
+    ∀ f : Fork, ¬ (Fork.ruleSet f).isPrecomp (d.getStorVal T implSlot).toAdr
 
 /-- **The seam where the reading changes**: the first frame reading bits, after one reading words, finds
 the entry below the flag. One storage read at the upgrade to V2_2 for a reader. -/
@@ -68,13 +71,6 @@ def InitializerKeeps (T h : Adr) (settled : List Exec.Frame) : Prop :=
   ∀ F ∈ settled, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
     Blanc.Sevm.selector F.sevm ∈ usdcInitializers →
     heldAt T h F (ledgerView (wordsAt T F.pre.state)) ≤ heldAt T h F (ledgerView (wordsAt T F.post.state))
-
-/-- **The rescuer's call does not re-enter USDC** (the rescuer's power, open until the rescue frame's
-model replay removes it). -/
-def RescueQuiet (T : Adr) (settled : List Exec.Frame) : Prop :=
-  ∀ F ∈ settled, F.sevm.currentTarget = T → F.sevm.isStatic = false → EntryObs T F →
-    Blanc.Sevm.selector F.sevm = rescueSelector →
-    (Exec.descendantFrames F.run).flatMap (coinObs T (EntryObs T)) = []
 
 variable {T h : Adr}
 

@@ -38,20 +38,23 @@ open Jaune Blanc
 
 /-! ## Quiet code -/
 
+/-- A successful frame running `code` from pc `0` on a fork of `R` keeps its storage owner's storage. -/
+def QuietCodeOn (R : Fork → Prop) (code : ByteArray) : Prop :=
+  ∀ {sevm : Sevm} {pre post : Devm}, Exec 0 sevm pre (.ok post) → sevm.code = code →
+    R sevm.benvStat.fork →
+      Devm.getStor post sevm.currentTarget = Devm.getStor pre sevm.currentTarget
+
 /-- **Quiet code**: a successful frame running `code` from pc `0` on a covered fork keeps its
 storage owner's storage.  (The shape of a library-quietness fact, with no contract named.) -/
-def QuietCode (code : ByteArray) : Prop :=
-  ∀ {sevm : Sevm} {pre post : Devm}, Exec 0 sevm pre (.ok post) → sevm.code = code →
-    CoveredFork sevm.benvStat.fork →
-      Devm.getStor post sevm.currentTarget = Devm.getStor pre sevm.currentTarget
+abbrev QuietCode (code : ByteArray) : Prop := QuietCodeOn CoveredFork code
 
 /-- **A call message running quiet code keeps its owner's storage.**  With no value transfer, a
 message whose code is quiet settles to a world whose storage owner's storage is the message's:
 a committed child is quiet, a rolled-back or childless one restores or keeps the entry world. -/
-theorem ProcessMessage.getStor_of_quietCode {code : ByteArray} (hq : QuietCode code)
+theorem ProcessMessage.getStor_of_quietCode {R : Fork → Prop} {code : ByteArray} (hq : QuietCodeOn R code)
     {msg : Msg} {xl : Xlot} {child : Devm} (filled : xl.Filled)
     (process : ProcessMessage msg xl (.ok child)) (noTransfer : msg.shouldTransferValue = false)
-    (hcode : msg.code = code) (fork : CoveredFork msg.benv.stat.fork) :
+    (hcode : msg.code = code) (fork : R msg.benv.stat.fork) :
     child.state.getStor msg.currentTarget = msg.benv.state.getStor msg.currentTarget := by
   have safe : msg.shouldTransferValue = false ∨ msg.value = 0 ∨
       (msg.caller = msg.currentTarget ∧ State.Protected msg.benv.state msg.caller) := .inl noTransfer
@@ -66,7 +69,7 @@ theorem ProcessMessage.getStor_of_quietCode {code : ByteArray} (hq : QuietCode c
       obtain ⟨enter, settledEq⟩ := RunFrame.some_inv process
       by_cases settles : Frame.settlementCommits (Frame.ofCall msg) raw = true
       · have committed := Frame.raw_commits_of_settlementCommits settles
-        have cfork : CoveredFork cevm.sta.benvStat.fork := by
+        have cfork : R cevm.sta.benvStat.fork := by
           rw [Frame.enter_run_benvStat enter]; exact fork
         obtain ⟨cpc, csevm, cdevm⟩ := cevm
         have postState : child.state = (Execution.committedPost raw committed).state :=
@@ -221,7 +224,7 @@ theorem FrameSat.enter (hc : Cert.check code c = true) (hfs : c.framesSat P = tr
 and passes `framesSat` at its frame, a run of a certificate passing `Cert.framesSat P` is a run
 whose every step is a `FramedStep P`. -/
 theorem SFunc.RunP.framed (hc : Cert.check code c = true) (hfs : c.framesSat P = true)
-    {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork) {d : Devm} {f : SFunc} {o : Outcome}
+    {sevm : Sevm} (hsg : sevm.benvStat.rules.stateGas = none) {d : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.Run c.prog sevm d f o) :
     ∀ {m pc : Nat} {a : List AVal} {ρ : B256} {R : List B256},
       FrameSat code c P m pc a ρ R d f → SFunc.RunP (FramedStep P) c.prog sevm d f o := by
@@ -305,7 +308,7 @@ theorem SFunc.RunP.framed (hc : Cert.check code c = true) (hfs : c.framesSat P =
     | some a' =>
       simp only [habs] at hrest
       simp only [SFunc.framesSat, habs, Bool.and_eq_true] at hsat
-      obtain ⟨X', hst', hfr'⟩ := Cursor.absNinst_run_stack hfork habs hst hfr hrun
+      obtain ⟨X', hst', hfr'⟩ := Cursor.absNinst_run_stack_noStateGas hsg habs hst hfr hrun
       exact .next ⟨hrun, fun _ _ => ⟨ρ, a, X, R, hst, hfr, hsat.1⟩⟩ (ih ⟨⟨hrest, X', hst', hfr'⟩, hsat.2⟩)
   | @dest _ _ f _ burn _ ih =>
     intro m pc a ρ R ⟨⟨hcheck, X, hst, hfr⟩, hsat⟩
@@ -353,7 +356,7 @@ theorem SFunc.RunP.framed (hc : Cert.check code c = true) (hfs : c.framesSat P =
           simp only [hi] at hmatch
           obtain ⟨sf, sr, hX0, hsf, _⟩ := frameMatches_callCompat (r := 0) hmatch hfr0
           have hst0' : d1.stack = sf ++ (sr ++ R) := by rw [hst0, hX0, List.append_assoc]
-          obtain ⟨hm, -⟩ := calleeRun.stack_below id hc hfork
+          obtain ⟨hm, -⟩ := calleeRun.stack_below_noStateGas id hc hsg
             ⟨hentry, sf, hst0', hsf⟩ rfl
           exact (ret_not_mem_of_findIdx_none hi _ hm rfl).elim
         | some i =>
@@ -369,7 +372,7 @@ theorem SFunc.RunP.framed (hc : Cert.check code c = true) (hfs : c.framesSat P =
               obtain ⟨hcall, hcont⟩ := hmatch
               obtain ⟨sf, sr, hX0, hsf, hsr⟩ := frameMatches_callCompat hcall hfr0
               have hst0' : d1.stack = sf ++ (sr ++ R) := by rw [hst0, hX0, List.append_assoc]
-              obtain ⟨-, Y, hY, hlen⟩ := calleeRun.stack_below id hc hfork
+              obtain ⟨-, Y, hY, hlen⟩ := calleeRun.stack_below_noStateGas id hc hsg
                 ⟨hentry, sf, hst0', hsf⟩ rfl
               refine .callRet t lookup pop (ihRun ⟨⟨hentry, sf, hst0', hsf⟩, hsatE⟩)
                 (ihTail (m := m) (pc := r.toNat) (ρ := ρ) ⟨⟨?_, Y ++ sr, by rw [hY, List.append_assoc], ?_⟩, hsat⟩)
@@ -472,13 +475,12 @@ theorem FramedStep.qdKeep {P : Ninst → List AVal → Bool} (hq : QuietCode cod
         exact ⟨g, s, by rw [h1]⟩
     exact ⟨Ninst.delegatecall_getStor_of_quiet hq hfork hs hcode undelegated step.1, codeKeep⟩
 
-/-- **The quiet-delegate frame theorem.**  A framed run of a `quietDelegate` tree whose gotos and
-calls stay in a `QuietDelegateSet`, every `DELEGATECALL` of which names the word `aw` holding
-nonempty undelegated quiet code, keeps the storage owner's storage and `aw`'s code. -/
-theorem SFunc.RunP.qdKeep {P : Ninst → List AVal → Bool} (hq : QuietCode code)
-    (hP : ∀ a, P (.exec .delegatecall) a = true → a[1]? = some (.const aw))
-    (undelegated : getDelegatedCodeAddress code = none) (nonempty : code.toList ≠ [])
-    (hfork : CoveredFork sevm.benvStat.fork) {fs : List SFunc} {S : List Nat}
+/-- **The quiet-delegate frame theorem**, from what one step keeps. -/
+theorem SFunc.RunP.qdKeepOf {P : Ninst → List AVal → Bool} (nonempty : code.toList ≠ [])
+    (hstep : ∀ {d d' : Devm} {n : Ninst}, (n.quiet || n == .exec .delegatecall) = true → FramedStep P sevm d n d' →
+      d.getCode aw.toAdr = code → QDKeep aw sevm d d')
+    (hpc : ∀ {d d' : Devm}, Ninst.Run sevm d (.reg .pc) d' → Devm.getStor d' = Devm.getStor d)
+    {fs : List SFunc} {S : List Nat}
     (hS : QuietDelegateSet fs S = true) {d : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunP (FramedStep P) fs sevm d f o) :
     f.quietDelegate = true → f.refs.all (· ∈ S) = true → d.getCode aw.toAdr = code →
@@ -520,7 +522,7 @@ theorem SFunc.RunP.qdKeep {P : Ninst → List AVal → Bool} (hq : QuietCode cod
   | next step _ ih =>
     intro hf hr hc
     simp only [SFunc.quietDelegate, Bool.and_eq_true] at hf
-    have h := FramedStep.qdKeep hq hP undelegated nonempty hfork hf.1 step hc
+    have h := hstep hf.1 step hc
     exact (ih hf.2 hr (keepCode h hc)).trans h
   | dest burn _ ih =>
     intro hf hr hc
@@ -549,9 +551,23 @@ theorem SFunc.RunP.qdKeep {P : Ninst → List AVal → Bool} (hq : QuietCode cod
     simp only [SFunc.quietDelegate] at hf
     simp only [SFunc.refs] at hr
     have h : QDKeep aw sevm _ _ :=
-      ⟨congrFun (Ninst.world_of_quiet (n := .reg .pc) hfork rfl hrun.1).1 _,
+      ⟨congrFun (hpc hrun.1) _,
         Ninst.Run.getCode_eq hrun.1 (by rw [hc]; exact nonempty)⟩
     exact (ih hf hr (keepCode h hc)).trans h
+
+/-- **The quiet-delegate frame theorem.**  A framed run of a `quietDelegate` tree whose gotos and
+calls stay in a `QuietDelegateSet`, every `DELEGATECALL` of which names the word `aw` holding
+nonempty undelegated quiet code, keeps the storage owner's storage and `aw`'s code. -/
+theorem SFunc.RunP.qdKeep {P : Ninst → List AVal → Bool} (hq : QuietCode code)
+    (hP : ∀ a, P (.exec .delegatecall) a = true → a[1]? = some (.const aw))
+    (undelegated : getDelegatedCodeAddress code = none) (nonempty : code.toList ≠ [])
+    (hfork : CoveredFork sevm.benvStat.fork) {fs : List SFunc} {S : List Nat}
+    (hS : QuietDelegateSet fs S = true) {d : Devm} {f : SFunc} {o : Outcome}
+    (run : SFunc.RunP (FramedStep P) fs sevm d f o) :
+    f.quietDelegate = true → f.refs.all (· ∈ S) = true → d.getCode aw.toAdr = code →
+      QDKeep aw sevm d (Outcome.devm o) :=
+  SFunc.RunP.qdKeepOf nonempty (fun hn step hc => FramedStep.qdKeep hq hP undelegated nonempty hfork hn step hc)
+    (fun r => (Ninst.world_of_quiet (n := .reg .pc) hfork rfl r).1) hS run
 
 end QuietDelegate
 
@@ -581,7 +597,7 @@ theorem ric_call_quietDelegate {code : ByteArray} {c : Cert} {P : Ninst → List
     simpa only [Bool.and_eq_true] using h
   have keep : ∀ {G' : Nat} {o : Outcome}, SFunc.Run c.prog sevm (St b S M G') g o →
       QDKeep aw sevm b (Outcome.devm o) := fun callee =>
-    (callee.framed hc hfs hfork (FrameSat.enter hc hfs he hg rfl
+    (callee.framed hc hfs hfork.rules_stateGas_none (FrameSat.enter hc hfs he hg rfl
       (by rw [St.stack, List.take_append_drop]) hframe)).qdKeep hq hP undelegated nonempty hfork
       hS hgS.1 hgS.2 hcode
   obtain ⟨G', h⟩ := ric_call hg run

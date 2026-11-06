@@ -15,7 +15,7 @@ open Jaune Blanc Blanc.Lift
 variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {r : Seg}
 
 /-- `pause`'s body (entry 42): its guards and its storage effect. -/
-theorem pause_body (hfork : CoveredFork sevm.benvStat.fork) {t  : B256} {D : Devm}
+theorem pause_body (hfork : HistFork sevm.benvStat.fork) {t  : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (t :: S) M G) t_2b3c_c42 (.returned D)) :
     ∃ b' M' G', D = St b' (S) M' G' ∧
        sevm.caller.toB256 =? (ff20 &&& (b.getStor sevm.currentTarget).get (Bytes.toB256 [1])) ≠ 0 ∧
@@ -23,25 +23,25 @@ theorem pause_body (hfork : CoveredFork sevm.benvStat.fork) {t  : B256} {D : Dev
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_2b3c_c42 at run
   winv 2
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 5
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h1, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_2bac_c42 at run
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 5
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   winv 7
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
   refine ⟨_, _, _, rfl, ?_⟩
-  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor] at *
+  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor] at *
   exact ⟨h1, trivial⟩
 
 /-- `unpause`'s body (entry 59): its guards and its storage effect. -/
-theorem unpause_body (hfork : CoveredFork sevm.benvStat.fork) {t  : B256} {D : Devm}
+theorem unpause_body (hfork : HistFork sevm.benvStat.fork) {t  : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (t :: S) M G) t_1e02_c59 (.returned D)) :
     ∃ b' M' G', D = St b' (S) M' G' ∧
        sevm.caller.toB256 =? (ff20 &&& (b.getStor sevm.currentTarget).get (Bytes.toB256 [1])) ≠ 0 ∧
@@ -49,25 +49,25 @@ theorem unpause_body (hfork : CoveredFork sevm.benvStat.fork) {t  : B256} {D : D
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_1e02_c59 at run
   winv 2
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 5
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h1, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_1e72_c59 at run
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   winv 7
   obtain ⟨_, hr⟩ := ric_ret run
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
   refine ⟨_, _, _, rfl, ?_⟩
-  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor] at *
+  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor] at *
   exact ⟨h1, trivial⟩
 
 /-- `updatePauser`'s body (entry 51): its guards and its storage effect. -/
-theorem updatePauser_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
+theorem updatePauser_body (hfork : HistFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (x0 :: t :: S) M G) t_28b9_c51 (.returned D)) :
     ∃ b' M' G', D = St b' (S) M' G' ∧
        sevm.caller.toB256 =? (ff20 &&& (b.getStor sevm.currentTarget).get (Bytes.toB256 [0])) ≠ 0 ∧
@@ -76,7 +76,7 @@ theorem updatePauser_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256}
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_28b9_c51 at run
   winv 2
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 5
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h1, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
@@ -86,9 +86,9 @@ theorem updatePauser_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256}
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_29ab_c51 at run
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 13
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   winv 9
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_log2_post s; clear s
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_pop s; clear s
@@ -96,11 +96,11 @@ theorem updatePauser_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256}
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
   refine ⟨_, _, _, rfl, ?_⟩
-  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor] at *
+  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor] at *
   exact ⟨h1, h2, trivial⟩
 
 /-- `updateMasterMinter`'s body (entry 31): its guards and its storage effect. -/
-theorem updateMasterMinter_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
+theorem updateMasterMinter_body (hfork : HistFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (x0 :: t :: S) M G) t_3109_c31 (.returned D)) :
     ∃ b' M' G', D = St b' (S) M' G' ∧
        sevm.caller.toB256 =? (ff20 &&& (b.getStor sevm.currentTarget).get (Bytes.toB256 [0])) ≠ 0 ∧
@@ -109,7 +109,7 @@ theorem updateMasterMinter_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 :
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_3109_c31 at run
   winv 2
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 5
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h1, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
@@ -119,9 +119,9 @@ theorem updateMasterMinter_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 :
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_31fb_c31 at run
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 13
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   winv 9
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_log2_post s; clear s
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_pop s; clear s
@@ -129,11 +129,11 @@ theorem updateMasterMinter_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 :
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
   refine ⟨_, _, _, rfl, ?_⟩
-  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor] at *
+  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor] at *
   exact ⟨h1, h2, trivial⟩
 
 /-- `updateBlacklister`'s body (entry 33): its guards and its storage effect. -/
-theorem updateBlacklister_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
+theorem updateBlacklister_body (hfork : HistFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (x0 :: t :: S) M G) t_329b_c33 (.returned D)) :
     ∃ b' M' G', D = St b' (S) M' G' ∧
        sevm.caller.toB256 =? (ff20 &&& (b.getStor sevm.currentTarget).get (Bytes.toB256 [0])) ≠ 0 ∧
@@ -142,7 +142,7 @@ theorem updateBlacklister_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : 
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_329b_c33 at run
   winv 2
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 5
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h1, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
@@ -152,9 +152,9 @@ theorem updateBlacklister_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : 
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_338d_c33 at run
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 13
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   winv 9
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_log2_post s; clear s
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_pop s; clear s
@@ -162,11 +162,11 @@ theorem updateBlacklister_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : 
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
   refine ⟨_, _, _, rfl, ?_⟩
-  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor] at *
+  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor] at *
   exact ⟨h1, h2, trivial⟩
 
 /-- `updateRescuer`'s body (entry 69): its guards and its storage effect. -/
-theorem updateRescuer_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
+theorem updateRescuer_body (hfork : HistFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (x0 :: t :: S) M G) t_16f2_c69 (.returned D)) :
     ∃ b' M' G', D = St b' (S) M' G' ∧
        sevm.caller.toB256 =? (ff20 &&& (b.getStor sevm.currentTarget).get (Bytes.toB256 [0])) ≠ 0 ∧
@@ -175,7 +175,7 @@ theorem updateRescuer_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_16f2_c69 at run
   winv 2
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 5
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h1, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
@@ -185,9 +185,9 @@ theorem updateRescuer_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_17e4_c69 at run
   winv 3
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 10
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstore hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sstoreH hfork.stateGas_none hfork.bal_none s; clear s
   winv 6
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_log2_post s; clear s
   replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_pop s; clear s
@@ -195,11 +195,11 @@ theorem updateRescuer_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
   refine ⟨_, _, _, rfl, ?_⟩
-  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor] at *
+  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor] at *
   exact ⟨h1, h2, trivial⟩
 
 /-- `transferOwnership`'s body (entry 16): its guards and its storage effect. -/
-theorem transferOwnership_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
+theorem transferOwnership_body (hfork : HistFork sevm.benvStat.fork) {t x0 : B256} {D : Devm}
     (run : SFunc.Run cert.prog sevm (St b (x0 :: t :: S) M G) t_3bfd_c16 (.returned D)) :
     ∃ b' M' G', D = St b' (S) M' G' ∧
        sevm.caller.toB256 =? (ff20 &&& (b.getStor sevm.currentTarget).get (Bytes.toB256 [0])) ≠ 0 ∧
@@ -208,7 +208,7 @@ theorem transferOwnership_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : 
   replace run := SFunc.runP_iff_runCutP_nil.mp run
   unfold t_3bfd_c16 at run
   winv 2
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 5
   replace run := ric_branch run; rcases run with ⟨-, _, run⟩ | ⟨h1, _, run⟩
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
@@ -218,7 +218,7 @@ theorem transferOwnership_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : 
   · exact (SFunc.RunCutP.false_of_noOk run rfl).elim
   unfold t_3cef_c16 at run
   winv 2
-  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sload hfork s; clear s
+  replace run := ric_next run; obtain ⟨_, s, run⟩ := run; obtain ⟨_, rfl⟩ := ri_sloadH hfork.bal_none s; clear s
   winv 31
   replace run := ric_callRet (E := [85]) (g := t_422f_c85) (by decide) (by decide) rfl run; obtain ⟨_, D, callee, run⟩ := run
   obtain ⟨_, rfl⟩ := setOwner_ret hfork callee
@@ -228,7 +228,7 @@ theorem transferOwnership_body (hfork : CoveredFork sevm.benvStat.fork) {t x0 : 
   obtain rfl := Outcome.returned.inj (Seg.done.inj hr)
   -- RET
   refine ⟨_, _, _, rfl, ?_⟩
-  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstore_getStor_self, afterSload_getStor] at *
+  simp only [getStorVal_eq, Devm.addLog_getStor, afterSstoreH_getStor_self, afterSloadH_getStor] at *
   exact ⟨h1, h2, trivial⟩
 
 end Blanc.Lift.Usdc.Impl

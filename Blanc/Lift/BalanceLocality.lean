@@ -147,10 +147,12 @@ theorem staticOnly_quiet {code : ByteArray} {c : Cert} (checked : Cert.check cod
   rw [obs.2.1] at hs
   cases hs
 
-/-- A successful store in a frame whose descendants are all static is on the frame's own chain. -/
-theorem write_onChain {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+/-- A successful store in a frame each of whose descendants is static or never stores is on the
+frame's own chain. -/
+theorem write_onChain_of {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out)
-    (static : ∀ D ∈ Exec.rawFrameDescendants run, D.sevm.isStatic = true)
+    (quiet : ∀ D ∈ Exec.rawFrameDescendants run, D.sevm.isStatic = true ∨
+      ∀ m, Exec.Deriv.ParentPrefix D m → ∀ w, Exec.Deriv.successfulSstore? m = some w → False)
     {m : Exec.Deriv} (member : m ∈ Exec.rawNodes run) {w : Exec.StorageWrite}
     (found : Exec.Deriv.successfulSstore? m = some w) :
     Exec.Deriv.ParentPrefix ⟨pc, sevm, pre, out, run⟩ m := by
@@ -159,19 +161,29 @@ theorem write_onChain {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
   rcases hr with rfl | hr
   · exact same
   · exfalso
-    have hstatic := static r hr
-    obtain ⟨write, hw⟩ := Exec.Deriv.successfulSstore?_sound_raw
-      (G := ⟨pc, sevm, pre, out, run⟩) member found
-    have hnode : write.occurrence.node = m :=
-      (congrArg Exec.StorageWrite.node hw).trans (successfulSstore?_node_owner found).1
-    have hs := Exec.Deriv.ParentPrefix.sevm_eq same
-    have storeRun : Ninst.Run write.occurrence.node.sevm write.occurrence.node.devm (.reg .sstore)
-        write.stepPost := by
-      refine ⟨write.occurrence.slot, write.occurrence.filled, write.occurrence.node.pc, ?_⟩
-      simpa only [write.instruction_eq, write.stepSuccess] using write.occurrence.stepRun
-    have nonstatic := of_run_sstore_not_static storeRun
-    rw [hnode, hs, hstatic] at nonstatic
-    exact Bool.noConfusion nonstatic
+    rcases quiet r hr with hstatic | none
+    · obtain ⟨write, hw⟩ := Exec.Deriv.successfulSstore?_sound_raw
+        (G := ⟨pc, sevm, pre, out, run⟩) member found
+      have hnode : write.occurrence.node = m :=
+        (congrArg Exec.StorageWrite.node hw).trans (successfulSstore?_node_owner found).1
+      have hs := Exec.Deriv.ParentPrefix.sevm_eq same
+      have storeRun : Ninst.Run write.occurrence.node.sevm write.occurrence.node.devm (.reg .sstore)
+          write.stepPost := by
+        refine ⟨write.occurrence.slot, write.occurrence.filled, write.occurrence.node.pc, ?_⟩
+        simpa only [write.instruction_eq, write.stepSuccess] using write.occurrence.stepRun
+      have nonstatic := of_run_sstore_not_static storeRun
+      rw [hnode, hs, hstatic] at nonstatic
+      exact Bool.noConfusion nonstatic
+    · exact none m same w found
+
+/-- A successful store in a frame whose descendants are all static is on the frame's own chain. -/
+theorem write_onChain {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out)
+    (static : ∀ D ∈ Exec.rawFrameDescendants run, D.sevm.isStatic = true)
+    {m : Exec.Deriv} (member : m ∈ Exec.rawNodes run) {w : Exec.StorageWrite}
+    (found : Exec.Deriv.successfulSstore? m = some w) :
+    Exec.Deriv.ParentPrefix ⟨pc, sevm, pre, out, run⟩ m :=
+  write_onChain_of run (fun D hD => .inl (static D hD)) member found
 
 /-- `InstalledRuntimeSafety.of_linearCheck` with the code's emptiness and delegation read off its size. -/
 theorem runtimeSafety_of_sizes {C : ByteArray} (kinds : callKindsCheck C = true)
@@ -232,15 +244,16 @@ structure CertFrame (F : Exec.Frame) (code : ByteArray) (T : Adr) : Prop where
   stateGas : F.sevm.benvStat.rules.stateGas = none
   target : F.sevm.currentTarget = T
   hasCode : (F.pre.getCode T).toList ≠ []
-  /-- Its descendants, committed or not, are static. -/
-  static : ∀ D ∈ Exec.rawFrameDescendants F.run, D.sevm.isStatic = true
+  /-- Its writes lie on its own chain, so its environment is its root's. -/
+  chain : ∀ {m : Exec.Deriv}, m ∈ Exec.rawNodes F.run → ∀ {w : Exec.StorageWrite},
+    Exec.Deriv.successfulSstore? m = some w → Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv F) m
 
-/-- A node's frame environment is its root's: the chain of a `CertFrame`. -/
-theorem CertFrame.chain {F : Exec.Frame} {code : ByteArray} {T : Adr} (h : CertFrame F code T)
+/-- A frame whose descendants, committed or not, are static has its writes on its chain. -/
+theorem chain_of_static {F : Exec.Frame} (static : ∀ D ∈ Exec.rawFrameDescendants F.run, D.sevm.isStatic = true)
     {m : Exec.Deriv} (member : m ∈ Exec.rawNodes F.run) {w : Exec.StorageWrite}
     (found : Exec.Deriv.successfulSstore? m = some w) :
     Exec.Deriv.ParentPrefix (Blanc.Exec.Frame.rootDeriv F) m :=
-  write_onChain F.run h.static member found
+  write_onChain F.run static member found
 
 /-- **A holder's tracked rows stay zero across a frame the row table does not name.** -/
 theorem frame_rows_zero {F : Exec.Frame} {code : ByteArray} {T : Adr} (h : CertFrame F code T)
@@ -276,8 +289,8 @@ theorem CertFrame.of_staticOnly {F : Fork → Prop} {code : ByteArray} {c : Cert
   obtain ⟨gpc, sevm, pre, out, run, committed⟩ := G
   dsimp only at pc hcode hsg target hasCode
   subst pc
-  exact ⟨rfl, hcode, hsg, target, hasCode, Exec.staticOnly_rawFrameDescendants_isStatic checked only
-    (root := ⟨0, sevm, pre, out, run⟩) rfl hcode hsg run (.refl _)⟩
+  exact ⟨rfl, hcode, hsg, target, hasCode, chain_of_static (Exec.staticOnly_rawFrameDescendants_isStatic checked only
+    (root := ⟨0, sevm, pre, out, run⟩) rfl hcode hsg run (.refl _))⟩
 
 /-- **A frame under a selector with no mapping site keeps an entry apart from its known sites.**
 `R` lists the selectors of the mapping's sites at base `b` (`hrows`, decided per code); `sep` says the

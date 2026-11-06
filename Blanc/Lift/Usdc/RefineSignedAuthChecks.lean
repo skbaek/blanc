@@ -1,6 +1,6 @@
 import Blanc.Lift.Usdc.ShuffleSegments
 import Blanc.Lift.ReachPreExec
-import Blanc.Lift.Usdc.SignedSkip
+import Blanc.Lift.Usdc.SignedSkipH
 import Blanc.Lift.InvWalkStep
 
 /-!
@@ -66,7 +66,7 @@ theorem seg_e87_check : shuffle cert.prog cert.entries [] (.callNext 90 t_2d6f_c
 v)`, to the call of entry 90.** -/
 theorem ric_seg_e87 {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 : B256} {R : List B256}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
         :: R) M G) t_4c3f_c87 r) :
@@ -74,7 +74,7 @@ theorem ric_seg_e87 {sevm : Sevm} {C : List Nat} {r : Seg}
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x4b49 :: u0 :: x3 :: x4 :: x5 :: x6 :: x7
         :: x8 :: Nat.toB256 0x2d6f :: x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: R) M' G')
         (.callNext 90 t_2d6f_c87) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8]) fork.stateGas_none
     (fun _ hk => absurd hk List.not_mem_nil) seg_e87_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -89,7 +89,7 @@ theorem seg_e84_check : shuffle cert.prog cert.entries [] (.callNext 95 t_2d6f_c
 v)`, to the call of entry 95.** -/
 theorem ric_seg_e84 {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 : B256} {R : List B256}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 x3 x4 x5 x6 x7 x8 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8
         :: R) M G) t_4c83_c84 r) :
@@ -97,7 +97,7 @@ theorem ric_seg_e84 {sevm : Sevm} {C : List Nat} {r : Seg}
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x4571 :: u0 :: x3 :: x4 :: x5 :: x6 :: x7
         :: x8 :: Nat.toB256 0x2d6f :: x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: R) M' G')
         (.callNext 95 t_2d6f_c84) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3, x4, x5, x6, x7, x8]) fork.stateGas_none
     (fun _ hk => absurd hk List.not_mem_nil) seg_e84_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -110,13 +110,13 @@ theorem seg_w138_check : shuffle cert.prog cert.entries [] (.callNext 30 t_0489_
 to the call of the body (entry 30).** -/
 theorem ric_seg_w138 {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 : B256} {R : List B256}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 x3 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: R) M G) t_0f01_c138 r) :
     ∃ b' u0 M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x3549 :: u0 :: R) M' G')
         (.callNext 30 t_0489_c138) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3]) fork.stateGas_none
     (fun _ hk => absurd hk List.not_mem_nil) seg_w138_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -129,13 +129,13 @@ theorem seg_w151_check : shuffle cert.prog cert.entries [] (.callNext 43 t_0489_
 to the call of the body (entry 43).** -/
 theorem ric_seg_w151 {sevm : Sevm} {C : List Nat} {r : Seg}
     {P : Sevm → Devm → Ninst → Devm → Prop}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 x3 : B256} {R : List B256}
+    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') (fork : HistFork sevm.benvStat.fork) {x0 x1 x2 x3 : B256} {R : List B256}
     {b : Devm} {M : Mem} {G : Nat}
     (run : SFunc.RunCutP P cert.prog sevm C (St b (x0 :: x1 :: x2 :: x3 :: R) M G) t_0ad4_c151 r) :
     ∃ b' u0 M' G', b'.state = b.state ∧
       SFunc.RunCutP P cert.prog sevm C (St b' (Nat.toB256 0x2c16 :: u0 :: R) M' G')
         (.callNext 43 t_0489_c151) r := by
-  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle hP (X := [x0, x1, x2, x3]) fork
+  obtain ⟨b', Y, M', G', hs, hY, h⟩ := ric_shuffle_noStateGas hP (X := [x0, x1, x2, x3]) fork.stateGas_none
     (fun _ hk => absurd hk List.not_mem_nil) seg_w151_check rfl run
   carried_out hY h
   exact ⟨b', _, M', G', hs, h⟩
@@ -146,7 +146,7 @@ theorem ric_seg_w151 {sevm : Sevm} {C : List Nat} {r : Seg}
 frame), keeping the proxy's storage and the library's code, and drops its four frame words. -/
 theorem skip_sigRet {sevm : Sevm} {C : List Nat} {b : Devm}
     {dd x0 x1 x2 x3 : B256} {S : List B256} {M : Mem} {G : Nat} {f : SFunc} {r : Seg}
-    (hfork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (hfork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.RunCut Impl.cert.prog sevm C (St b (dd :: x0 :: x1 :: x2 :: x3 :: S) M G)
       (.callNext 111 f) r) :
     ∃ b' M' G', Devm.getStor b' sevm.currentTarget = Devm.getStor b sevm.currentTarget ∧
@@ -174,10 +174,11 @@ theorem skip_sigRet {sevm : Sevm} {C : List Nat} {b : Devm}
     (fun hh => SFunc.RunP.not_halted_entry auth_noHalt (by decide : 111 ∈ authCallees) rfl hh rfl)
     run
   rw [← certL_prog] at callee cont
-  have keep := (callee.framed certL_check certL_framesSat hfork (FrameSat.enter certL_check
-    certL_framesSat he hg rfl (by rw [St.stack, List.take_append_drop]) hframe)).qdKeep
-    lib_quietCode implP_delegatecall lib_undelegated lib_nonempty hfork hS hgS.1 hgS.2 hcode'
-  obtain ⟨Y, hY, hlen⟩ := callee.entry_stack_below id certL_check hfork he hg
+  have keep := (callee.framed certL_check certL_framesSat hfork.stateGas_none (FrameSat.enter certL_check
+    certL_framesSat he hg rfl (by rw [St.stack, List.take_append_drop]) hframe)).qdKeepOf lib_nonempty
+    (fun hn step hc => libStep_qdKeep hfork.stateGas_none hfork hn step hc)
+    (fun r => (Ninst.world_of_quietH (n := .reg .pc) hfork.stateGas_none rfl r).1) hS hgS.1 hgS.2 hcode'
+  obtain ⟨Y, hY, hlen⟩ := callee.entry_stack_below_noStateGas id certL_check hfork.stateGas_none he hg
     (List.take_append_drop _ _).symm hframe
   rw [St.stack] at hY
   obtain rfl : Y = [] := List.eq_nil_of_length_eq_zero hlen

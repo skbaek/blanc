@@ -9,6 +9,35 @@ open Jaune Blanc Blanc.Lift
 
 /-- Isolate the actual balance callee while preserving the caller's continuation
 and both observed path segments. The balance sources retain their own hashes. -/
+theorem body_credit_or_return {Q : Sevm → Devm → Ninst → Devm → Prop}
+    {observe : Conf → Conf → Prop}
+    (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
+    {sevm : Sevm} {owner recipient : Adr} {b : Devm} {amount : B256}
+    {S : List B256} {M : Mem} {G : Nat} {continuation : SFunc} {K : List SFunc} {T : Conf}
+    (run : ObservedReach Q observe Impl.cert.prog sevm
+      ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G,
+        Impl.t_3f98_c93, continuation :: K⟩ T)
+    (hT : AtSstore T) :
+    V22TransferReach.CreditSource Q observe sevm owner recipient T ∨
+      ∃ returned, SFunc.RunP Q Impl.cert.prog sevm
+        (St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G)
+        Impl.t_3f98_c93 (.returned returned) ∧
+        ObservedReach Q observe Impl.cert.prog sevm
+          ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G,
+            Impl.t_3f98_c93, continuation :: K⟩ ⟨returned, continuation, K⟩ ∧
+        ObservedReach Q observe Impl.cert.prog sevm ⟨returned, continuation, K⟩ T := by
+  rcases ObservedReach.split run (S := []) rfl with
+    ⟨target, inside, same⟩ | returned
+  · have atStore : AtSstore target := by rw [same] at hT; exact hT
+    have source := V22TransferReach.body_reach_credit erase inside atStore
+      (fun _ member => by cases member)
+    rcases source with ⟨stack, shape, hash⟩ | ⟨⟨stack, shape, hash⟩, credit⟩
+    · rw [same]
+      exact .inl (.inl ⟨stack, shape, hash.below (continuation :: K)⟩)
+    · rw [same]
+      exact .inl (.inr ⟨⟨stack, shape, hash.below (continuation :: K)⟩, credit⟩)
+  · exact .inr returned
+
 theorem body_source_or_return {Q : Sevm → Devm → Ninst → Devm → Prop}
     {observe : Conf → Conf → Prop}
     (erase : ∀ {s d n d'}, Q s d n d' → Ninst.Run s d n d')
@@ -26,16 +55,8 @@ theorem body_source_or_return {Q : Sevm → Devm → Ninst → Devm → Prop}
           ⟨St b (amount :: recipient.toB256 :: owner.toB256 :: S) M G,
             Impl.t_3f98_c93, continuation :: K⟩ ⟨returned, continuation, K⟩ ∧
         ObservedReach Q observe Impl.cert.prog sevm ⟨returned, continuation, K⟩ T := by
-  rcases ObservedReach.split run (S := []) rfl with
-    ⟨target, inside, same⟩ | returned
-  · have atStore : AtSstore target := by rw [same] at hT; exact hT
-    have source := V22TransferReach.body_reach_observed erase inside atStore
-      (fun _ member => by cases member)
-    rcases source with ⟨stack, shape, hash⟩ | ⟨stack, shape, hash⟩
-    · rw [same]
-      exact .inl (.inl ⟨stack, shape, hash.below (continuation :: K)⟩)
-    · rw [same]
-      exact .inl (.inr ⟨stack, shape, hash.below (continuation :: K)⟩)
+  rcases body_credit_or_return erase run hT with source | returned
+  · exact .inl source.forget
   · exact .inr returned
 
 /-- The original subtraction must return before the selected store, preserving

@@ -104,7 +104,7 @@ theorem body_source {Q : Sevm → Devm → Ninst → Devm → Prop}
     (run : ObservedReach Q observe Impl.cert.prog sevm
       ⟨St b (recipient.toB256 :: tag :: S) M G, Impl.t_1853_c64, K⟩ T)
     (hT : AtSstore T) (cont : ∀ f ∈ K, f.sstoreFreeIn [] = true) :
-    V22TransferReach.ObservedSource Q observe sevm sevm.currentTarget recipient T ∨
+    V22TransferReach.CreditSource Q observe sevm sevm.currentTarget recipient T ∨
       (∃ rest, T.d.stack = 18 :: rest) ∨ BlacklistSource Q observe sevm T := by
   unfold Impl.t_1853_c64 at run
   orsd
@@ -131,7 +131,7 @@ theorem body_source {Q : Sevm → Devm → Ninst → Devm → Prop}
   obtain ⟨g, _, hg, run⟩ := ObservedReach.rs_callIn run hT
   rw [show Impl.cert.prog[93]? = some Impl.t_3f98_c93 from rfl] at hg
   cases hg
-  rcases V22TransferFromCallee.body_source_or_return erase run hT with
+  rcases V22TransferFromCallee.body_credit_or_return erase run hT with
     source | ⟨returned, callee, _, later⟩
   · exact .inl source
   obtain ⟨Y, stack, length⟩ := callee.entry_stack_below_noStateGas erase Impl.cert_check hsg
@@ -164,7 +164,7 @@ theorem entry_source {Q : Sevm → Devm → Ninst → Devm → Prop}
     (run : ObservedReach Q observe Impl.cert.prog sevm
       ⟨St b S M G, Impl.t_0000_c0, []⟩ T)
     (hT : AtSstore T) :
-    V22TransferReach.ObservedSource Q observe sevm sevm.currentTarget
+    V22TransferReach.CreditSource Q observe sevm sevm.currentTarget
       (Sevm.dataWord sevm 4).toAdr T ∨ (∃ rest, T.d.stack = 18 :: rest) ∨ BlacklistSource Q observe sevm T := by
   unfold Impl.t_0000_c0 at run
   iterate 7 orsx
@@ -209,7 +209,7 @@ theorem entry_source {Q : Sevm → Devm → Ninst → Devm → Prop}
 
 /-- Every original successful store is the version word or has its actual
 transfer return tag or blacklist flag, exact key and earlier successful hash. -/
-theorem successfulSstore_source {root node : Exec.Deriv}
+theorem successfulSstore_credit {root node : Exec.Deriv}
     (pc : root.pc = 0) (code : root.sevm.code = Impl.code)
     (hsg : root.sevm.benvStat.rules.stateGas = none)
     (chain : Exec.Deriv.ParentPrefix root node)
@@ -220,6 +220,8 @@ theorem successfulSstore_source {root node : Exec.Deriv}
       ∃ hashPc, KeccakBefore root node
         (root.sevm.currentTarget.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
     (node.devm.stack[2]? = some 0x40f9 ∧
+      balanceBits (node.devm.getStorVal node.sevm.currentTarget write.key) ≤
+        balanceBits write.value ∧
       write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 9 ∧
       ∃ hashPc, KeccakBefore root node
         ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
@@ -237,7 +239,7 @@ theorem successfulSstore_source {root node : Exec.Deriv}
   rw [St.self' root.devm] at walk
   rcases entry_source (fun h => StepIn.toRun h) hsg selected walk target with
     source | fixed | blacklist
-  · rcases source with ⟨⟨value, other, keyStack⟩, _, hash⟩ | ⟨⟨value, other, keyStack⟩, _, hash⟩
+  · rcases source with ⟨⟨value, other, keyStack⟩, _, hash⟩ | ⟨⟨⟨value, other, keyStack⟩, _, hash⟩, credit⟩
     · obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
         hash.actual
       exact .inr (.inl ⟨by change node.devm.stack = _ at keyStack; rw [keyStack]; rfl,
@@ -245,8 +247,11 @@ theorem successfulSstore_source {root node : Exec.Deriv}
         _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩)
     · obtain ⟨occ, next, here, instruction, result, before, edge, after, _, _, hashStack, read⟩ :=
         hash.actual
-      exact .inr (.inr (.inl ⟨by change node.devm.stack = _ at keyStack; rw [keyStack]; rfl,
-        (List.cons.inj (stack.symm.trans keyStack)).1,
+      have same := List.cons.inj (stack.symm.trans keyStack)
+      have bound := credit write.value rest (by rw [← same.1]; exact stack)
+      rw [← same.1, ← Exec.Deriv.ParentPrefix.sevm_eq chain] at bound
+      exact .inr (.inr (.inl ⟨by change node.devm.stack = _ at keyStack; rw [keyStack]; rfl, bound,
+        same.1,
         _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩))
   · obtain ⟨other, keyStack⟩ := fixed
     exact .inl (List.cons.inj (stack.symm.trans keyStack)).1
@@ -257,5 +262,31 @@ theorem successfulSstore_source {root node : Exec.Deriv}
       (List.cons.inj (stack.symm.trans keyStack)).1,
       _, occ, next, rfl, instruction, result, before, edge, after, hashStack, read⟩))
 
+
+/-- Every original successful store is the version word or has its actual
+transfer return tag or blacklist flag, exact key and earlier successful hash. -/
+theorem successfulSstore_source {root node : Exec.Deriv}
+    (pc : root.pc = 0) (code : root.sevm.code = Impl.code)
+    (hsg : root.sevm.benvStat.rules.stateGas = none)
+    (chain : Exec.Deriv.ParentPrefix root node)
+    (selected : Blanc.Sevm.selector root.sevm = 0x2fc81e09)
+    {write : Exec.StorageWrite} (found : Exec.Deriv.successfulSstore? node = some write) :
+    write.key = 18 ∨
+    (node.devm.stack[2]? = some 0x40e8 ∧ write.key = mapSlot root.sevm.currentTarget.toB256 9 ∧
+      ∃ hashPc, KeccakBefore root node
+        (root.sevm.currentTarget.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
+    (node.devm.stack[2]? = some 0x40f9 ∧
+      write.key = mapSlot (Sevm.dataWord root.sevm 4).toAdr.toB256 9 ∧
+      ∃ hashPc, KeccakBefore root node
+        ((Sevm.dataWord root.sevm 4).toAdr.toB256.toBytes ++ (9 : B256).toBytes) hashPc) ∨
+    (node.devm.stack[2]? = some 1 ∧ write.key = mapSlot root.sevm.currentTarget.toB256 9 ∧
+      ∃ hashPc, KeccakBefore root node
+        (root.sevm.currentTarget.toB256.toBytes ++ (9 : B256).toBytes) hashPc) := by
+  rcases successfulSstore_credit pc code hsg chain selected found with
+    fixed | owner | ⟨tag, _, key, hash⟩ | blacklist
+  · exact .inl fixed
+  · exact .inr (.inl owner)
+  · exact .inr (.inr (.inl ⟨tag, key, hash⟩))
+  · exact .inr (.inr (.inr blacklist))
 
 end Blanc.Lift.Usdc.V22InitializerReach

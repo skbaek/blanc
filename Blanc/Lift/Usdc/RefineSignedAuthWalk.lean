@@ -40,7 +40,7 @@ def AuthPost (sevm : Sevm) (σ : Stor) (fr dst : Adr) (val va vb n : B256) (σ' 
 /-- **Entry 90, `_transferWithAuthorization(from, to, value, validAfter, validBefore, nonce,
 signature)`.** -/
 theorem e90_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: ret :: S) M G)
       t_4b49_c90 o) :
     ∃ b' M' G', o = .returned (St b' S M' G') ∧
@@ -65,7 +65,7 @@ theorem e90_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   clear hc
   repeat istep h
   icallA h hc 93 t_3f98_c93
-  obtain ⟨c1, c2, c3, c4, c5, c6, b5, M5, G5, e, s5⟩ := e93_inv fork.histFork hc
+  obtain ⟨c1, c2, c3, c4, c5, c6, b5, M5, G5, e, s5⟩ := e93_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -85,7 +85,7 @@ theorem e90_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
 /-- **Entry 95, `_receiveWithAuthorization(from, to, value, validAfter, validBefore, nonce,
 signature)`.** -/
 theorem e95_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: ret :: S) M G)
       t_4571_c95 o) :
     sevm.caller = x5.toAdr ∧ ∃ b' M' G', o = .returned (St b' S M' G') ∧
@@ -112,7 +112,7 @@ theorem e95_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   clear hc
   repeat istep h
   icallA h hc 93 t_3f98_c93
-  obtain ⟨c1, c2, c3, c4, c5, c6, b5, M5, G5, e, s5⟩ := e93_inv fork.histFork hc
+  obtain ⟨c1, c2, c3, c4, c5, c6, b5, M5, G5, e, s5⟩ := e93_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -134,7 +134,7 @@ theorem e95_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
 /-- **Entry 87, `transferWithAuthorization(from, to, value, validAfter, validBefore, nonce, v, r,
 s)`'s adapter**: `abi.encodePacked(r, s, v)`, then entry 90. -/
 theorem e87_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm
       (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: ret :: S) M G) t_4c3f_c87 o) :
     ∃ b' M' G', o = .returned (St b' S M' G') ∧
@@ -156,7 +156,7 @@ theorem e87_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
 /-- **Entry 84, `receiveWithAuthorization(from, to, value, validAfter, validBefore, nonce, v, r,
 s)`'s adapter**: `abi.encodePacked(r, s, v)`, then entry 95. -/
 theorem e84_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm
       (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: ret :: S) M G) t_4c83_c84 o) :
     sevm.caller = x7.toAdr ∧ ∃ b' M' G', o = .returned (St b' S M' G') ∧
@@ -178,7 +178,7 @@ theorem e84_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
 /-- **Entry 20, the body of `transferWithAuthorization(…, v, r, s)`**: `whenNotPaused`,
 `notBlacklisted(from)`, `notBlacklisted(to)`, then entry 87. -/
 theorem e20_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm
       (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: ret :: S) M G) t_3889_c20 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
@@ -194,7 +194,7 @@ theorem e20_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st1 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork.histFork hc
+  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -202,7 +202,7 @@ theorem e20_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st2 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork.histFork hc
+  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -210,7 +210,7 @@ theorem e20_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 87 t_4c3f_c87
   obtain ⟨b3, M3, G3, e, post⟩ := e87_inv fork
-    ((getCode_eq_of_state_eq (st2.trans st1) _).trans ((afterSload_getCode _ _ _ _).trans hcode)) hc
+    ((getCode_eq_of_state_eq (st2.trans st1) _).trans ((afterSloadH_getCode _ _ _ _).trans hcode)) hc
   cases e
   clear hc
   repeat istep h
@@ -222,16 +222,16 @@ theorem e20_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   have f1 := frozen_false_of_check c2
   have f2 := frozen_false_of_check c3
   rw [gsv, lit1] at p
-  rw [gsv, afterSload_getStor] at f1
-  rw [gsv, congrFun s1, afterSload_getStor] at f2
+  rw [gsv, afterSloadH_getStor] at f1
+  rw [gsv, congrFun s1, afterSloadH_getStor] at f2
   change AuthPost sevm (Devm.getStor b2 sevm.currentTarget) _ _ _ _ _ _ _ at post
-  rw [congrFun s2, congrFun s1, afterSload_getStor] at post
+  rw [congrFun s2, congrFun s1, afterSloadH_getStor] at post
   exact ⟨p, f1, f2, B, MB, GB, eo, by rw [congrFun sB]; exact post⟩
 
 /-- **Entry 15, the body of `receiveWithAuthorization(…, v, r, s)`**: `whenNotPaused`,
 `notBlacklisted(from)`, `notBlacklisted(to)`, then entry 84. -/
 theorem e15_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm
       (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: x7 :: x8 :: ret :: S) M G) t_3aa2_c15 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
@@ -247,7 +247,7 @@ theorem e15_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st1 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork.histFork hc
+  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -255,7 +255,7 @@ theorem e15_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st2 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork.histFork hc
+  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -263,7 +263,7 @@ theorem e15_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 84 t_4c83_c84
   obtain ⟨cl, b3, M3, G3, e, post⟩ := e84_inv fork
-    ((getCode_eq_of_state_eq (st2.trans st1) _).trans ((afterSload_getCode _ _ _ _).trans hcode)) hc
+    ((getCode_eq_of_state_eq (st2.trans st1) _).trans ((afterSloadH_getCode _ _ _ _).trans hcode)) hc
   cases e
   clear hc
   repeat istep h
@@ -275,16 +275,16 @@ theorem e15_inv {x0 x1 x2 x3 x4 x5 x6 x7 x8 ret : B256} {o : Outcome}
   have f1 := frozen_false_of_check c2
   have f2 := frozen_false_of_check c3
   rw [gsv, lit1] at p
-  rw [gsv, afterSload_getStor] at f1
-  rw [gsv, congrFun s1, afterSload_getStor] at f2
+  rw [gsv, afterSloadH_getStor] at f1
+  rw [gsv, congrFun s1, afterSloadH_getStor] at f2
   change AuthPost sevm (Devm.getStor b2 sevm.currentTarget) _ _ _ _ _ _ _ at post
-  rw [congrFun s2, congrFun s1, afterSload_getStor] at post
+  rw [congrFun s2, congrFun s1, afterSloadH_getStor] at post
   exact ⟨p, f1, f2, cl, B, MB, GB, eo, by rw [congrFun sB]; exact post⟩
 
 /-- **Entry 30, the body of `transferWithAuthorization(…, signature)`**: `whenNotPaused`,
 `notBlacklisted(from)`, `notBlacklisted(to)`, then entry 90. -/
 theorem e30_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm
       (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: ret :: S) M G) t_3549_c30 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
@@ -300,7 +300,7 @@ theorem e30_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st1 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork.histFork hc
+  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -308,7 +308,7 @@ theorem e30_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st2 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork.histFork hc
+  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -316,7 +316,7 @@ theorem e30_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 90 t_4b49_c90
   obtain ⟨b3, M3, G3, e, post⟩ := e90_inv fork
-    ((getCode_eq_of_state_eq (st2.trans st1) _).trans ((afterSload_getCode _ _ _ _).trans hcode)) hc
+    ((getCode_eq_of_state_eq (st2.trans st1) _).trans ((afterSloadH_getCode _ _ _ _).trans hcode)) hc
   cases e
   clear hc
   repeat istep h
@@ -328,16 +328,16 @@ theorem e30_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   have f1 := frozen_false_of_check c2
   have f2 := frozen_false_of_check c3
   rw [gsv, lit1] at p
-  rw [gsv, afterSload_getStor] at f1
-  rw [gsv, congrFun s1, afterSload_getStor] at f2
+  rw [gsv, afterSloadH_getStor] at f1
+  rw [gsv, congrFun s1, afterSloadH_getStor] at f2
   change AuthPost sevm (Devm.getStor b2 sevm.currentTarget) _ _ _ _ _ _ _ at post
-  rw [congrFun s2, congrFun s1, afterSload_getStor] at post
+  rw [congrFun s2, congrFun s1, afterSloadH_getStor] at post
   exact ⟨p, f1, f2, B, MB, GB, eo, by rw [congrFun sB]; exact post⟩
 
 /-- **Entry 43, the body of `receiveWithAuthorization(…, signature)`**: `whenNotPaused`,
 `notBlacklisted(from)`, `notBlacklisted(to)`, then entry 95. -/
 theorem e43_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : b.getCode usdcLib = Lib.code)
     (run : SFunc.Run cert.prog sevm
       (St b (x0 :: x1 :: x2 :: x3 :: x4 :: x5 :: x6 :: ret :: S) M G) t_2c16_c43 o) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
@@ -353,7 +353,7 @@ theorem e43_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st1 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork.histFork hc
+  obtain ⟨b1, M1, G1, e, s1⟩ := e83_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -361,7 +361,7 @@ theorem e43_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 83 t_3f6a_c83
   have st2 := SFunc.Run.state_of_silent auth_silent (by decide) (by decide) hc
-  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork.histFork hc
+  obtain ⟨b2, M2, G2, e, s2⟩ := e83_inv fork hc
   cases e
   clear hc
   repeat istep h
@@ -369,7 +369,7 @@ theorem e43_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   repeat istep h
   icallA h hc 95 t_4571_c95
   obtain ⟨cl, b3, M3, G3, e, post⟩ := e95_inv fork
-    ((getCode_eq_of_state_eq (st2.trans st1) _).trans ((afterSload_getCode _ _ _ _).trans hcode)) hc
+    ((getCode_eq_of_state_eq (st2.trans st1) _).trans ((afterSloadH_getCode _ _ _ _).trans hcode)) hc
   cases e
   clear hc
   repeat istep h
@@ -381,10 +381,10 @@ theorem e43_inv {x0 x1 x2 x3 x4 x5 x6 ret : B256} {o : Outcome}
   have f1 := frozen_false_of_check c2
   have f2 := frozen_false_of_check c3
   rw [gsv, lit1] at p
-  rw [gsv, afterSload_getStor] at f1
-  rw [gsv, congrFun s1, afterSload_getStor] at f2
+  rw [gsv, afterSloadH_getStor] at f1
+  rw [gsv, congrFun s1, afterSloadH_getStor] at f2
   change AuthPost sevm (Devm.getStor b2 sevm.currentTarget) _ _ _ _ _ _ _ at post
-  rw [congrFun s2, congrFun s1, afterSload_getStor] at post
+  rw [congrFun s2, congrFun s1, afterSloadH_getStor] at post
   exact ⟨p, f1, f2, cl, B, MB, GB, eo, by rw [congrFun sB]; exact post⟩
 
 /-- A `STOP` halt keeps the base's storage. -/
