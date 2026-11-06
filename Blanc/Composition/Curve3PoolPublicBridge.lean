@@ -64,24 +64,6 @@ theorem invariant_of_abstracts (h : Abstracts (w.getStor pool) s) (amp : Nat) :
 
 end Observers
 
-section Decode
-
-/-- `opOf` reads the dispatcher's `exchange`: the same words `decodeCall` gives its arguments. -/
-theorem opOf_exchange {e : Sevm} (hlen : 4 ≤ e.data.length)
-    (hs : Sevm.selector e = Curve3Pool.selExchange) :
-    Curve3Pool.decodeCall e = .exchange (Curve3Pool.arg e 0) (Curve3Pool.arg e 1)
-        (Curve3Pool.arg e 2) (Curve3Pool.arg e 3) ∧
-      opOf e = .exchange (Curve3Pool.arg e 0) (Curve3Pool.arg e 1) := by
-  have hn : ¬ e.data.length < 4 := by omega
-  refine ⟨Curve3Pool.decodeCall_at (k := 6) (by decide +kernel) hs hlen, ?_⟩
-  have h1 : Curve3Pool.selExchange ≠ Curve3Pool.selRemoveLiquidity := by decide +kernel
-  have h2 : Curve3Pool.selExchange ≠ Curve3Pool.selDonateAdminFees := by decide +kernel
-  have h3 : Curve3Pool.selExchange ≠ Curve3Pool.selAddLiquidity := by decide +kernel
-  have h4 : Curve3Pool.selExchange ≠ Curve3Pool.selRemoveLiquidityImbalance := by decide +kernel
-  simp only [opOf, hn, hs, h1, h2, h3, h4, ↓reduceIte]
-
-end Decode
-
 section Within
 
 variable {w w' : Jaune.State} {s : Curve3Pool.State} {e : Env} {o : Out} {amp D D' : Nat}
