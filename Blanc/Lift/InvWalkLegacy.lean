@@ -33,12 +33,22 @@ macro "ubranchTo " h:ident c:ident : tactic => `(tactic|
   (have h' := ric_branchTo List.not_mem_nil rfl $h; clear $h
    rcases h' with ⟨$c, _, $h⟩ | ⟨$c, _, $h⟩))
 
-/-- One comparison of a linear dispatcher on a known selector. -/
-macro "udisp " h:ident : tactic => `(tactic|
-  (have h' := ric_cmp_eq List.not_mem_nil rfl $h; clear $h; obtain ⟨_, $h:ident⟩ := h'
-   first
-   | (rw [if_pos (by decide)] at $h:ident)
-   | (rw [if_neg (by decide)] at $h:ident)))
+/-- One comparison of a linear or binary-search dispatcher on a known selector. -/
+macro "udisp " h:ident : tactic => `(tactic| first
+  | (have h' := ric_cmp_gt $h; clear $h; obtain ⟨_, $h:ident⟩ := h'
+     first
+     | (rw [if_pos (by decide)] at $h:ident)
+     | (rw [if_neg (by decide)] at $h:ident))
+  | (have h' := ric_cmp_eq List.not_mem_nil rfl $h; clear $h; obtain ⟨_, $h:ident⟩ := h'
+     first
+     | (rw [if_pos (by decide)] at $h:ident)
+     | (rw [if_neg (by decide)] at $h:ident))
+  | (have h' := ric_dest $h; clear $h; obtain ⟨_, $h:ident⟩ := h'))
+
+/-- solc 0.5's selector extraction. -/
+theorem shr_selector_word (sevm : Sevm) :
+    Sevm.dataWord sevm (Bytes.toB256 [0]) >>> (Bytes.toB256 [0xe0]).toNat = Blanc.Sevm.selector sevm :=
+  rfl
 
 theorem zero_of_iszero3 {a : B256} (h : B256.eqCheck (B256.eqCheck (B256.eqCheck a 0) 0) 0 ≠ 0) :
     a = 0 := by
@@ -48,6 +58,19 @@ theorem zero_of_iszero3 {a : B256} (h : B256.eqCheck (B256.eqCheck (B256.eqCheck
     apply h
     simp only [B256.eqCheck, h0, ↓reduceIte]
     decide
+
+theorem ne_of_iszero3 {x y : B256}
+    (h : B256.eqCheck (B256.eqCheck (B256.eqCheck x y) 0) 0 = 0) : x ≠ y := by
+  rintro rfl
+  simp only [B256.eqCheck, ↓reduceIte] at h
+  exact absurd h (by decide)
+
+theorem eq_of_iszero3 {x y : B256}
+    (h : B256.eqCheck (B256.eqCheck (B256.eqCheck x y) 0) 0 ≠ 0) : x = y := by
+  by_contra hne
+  apply h
+  simp only [B256.eqCheck, hne, ↓reduceIte]
+  decide
 
 theorem eq_zero_of_iszero_lit {y : B256}
     (c : B256.eqCheck (B256.eqCheck y (Bytes.toB256 [0])) 0 = 0) : y = 0 := by
