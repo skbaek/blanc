@@ -7,7 +7,7 @@ import Blanc.ExecutionAccountingMidHistoryIn
 two recorded transactions also has to stop in the middle of a block: at `cut.afterBenv` of the last
 block, through its opening stages, the transactions before position `i` and transaction `i` itself.
 
-* `ConfiguredBlockTraceIn.settledThroughCut`, `rawThroughCut` — the frames of that block prefix;
+* `ConfiguredBlockTraceIn.settledThroughCut` — the settled frames of that block prefix;
 * `AccountingLadderAdmittedIn.blockThroughCutIn` — the block prefix's replay from the block's start;
 * `AccountingLadderAdmittedIn.midWindowIn` — a mid history followed by such a prefix.
 
@@ -29,12 +29,6 @@ def ConfiguredBlockTraceIn.settledThroughCut (block : ConfiguredBlockTraceIn F c
   block.bodyTrace.beacon.settledFrames ++ block.bodyTrace.history.settledFrames ++
     cut.before.settledFrames ++ cut.head.settledFrames
 
-/-- The raw frames of a block through transaction `i`, that transaction included. -/
-def ConfiguredBlockTraceIn.rawThroughCut (block : ConfiguredBlockTraceIn F cfg pre post)
-    {i : Nat} (cut : block.bodyTrace.transactions.TxSplit i) : List Exec.Deriv :=
-  block.bodyTrace.beacon.rawFrames ++ block.bodyTrace.history.rawFrames ++
-    cut.before.rawFrames ++ cut.head.rawFrames
-
 /-- A block's settled frames are the prefix through the cut, then the remainder. -/
 theorem ConfiguredBlockTraceIn.settledFrames_throughCut
     (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
@@ -42,13 +36,6 @@ theorem ConfiguredBlockTraceIn.settledFrames_throughCut
     block.settledFrames =
       block.settledThroughCut cut ++ (MidHistoryTraceIn.tail block cut).settledFrames :=
   block.settledFrames_txSplit cut
-
-/-- A block's raw frames are the prefix through the cut, then the remainder. -/
-theorem ConfiguredBlockTraceIn.rawFrames_throughCut
-    (block : ConfiguredBlockTraceIn F cfg pre post) {i : Nat}
-    (cut : block.bodyTrace.transactions.TxSplit i) :
-    block.rawFrames = block.rawThroughCut cut ++ (MidHistoryTraceIn.tail block cut).rawFrames :=
-  block.rawFrames_txSplit cut
 
 end ExecutionTrace
 
