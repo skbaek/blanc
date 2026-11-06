@@ -75,7 +75,7 @@ theorem daiWalk (A : Assumes d h) :
       have word4 : Sevm.dataWord c.sevm 4 = pool.toB256 :=
         Curve3PoolSupply.dataWord_eq_of_append (pre := Curve3Pool.balanceOfSel) (rest := [])
           (by rw [hd, List.append_nil]; rfl) (by decide)
-      have out := CurveCoins.Dai.frame_balanceOf_answer good tc (CurveCoins.settled_wf _ member) sel
+      have out := CurveCoins.Dai.frame_balanceOf_answer good tc (Blanc.Lift.settled_wf _ member) sel
       rw [word4, toAdr_toB256] at out
       rw [answerWord, out, List.take_of_length_le (by rw [B256.length_toBytes]), B256.toB256_toBytes])
 

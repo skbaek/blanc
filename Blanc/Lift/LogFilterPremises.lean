@@ -10,12 +10,12 @@ owner `h` matches, and `settled_wf` is the memory fact every log law over a sett
 its own premises. Nothing here names a coin.
 -/
 
-namespace Blanc.Lift.CurveCoins
+namespace Blanc.Lift
 
 open Jaune Blanc Blanc.Lift Blanc.ExecutionTrace
 
 /-- What a reader's filter for `Approval` at `T` matches, with owner `h`. -/
-def ApprovalLog (T h : Adr) (l : Log) : Prop := l.address = T ∧ l.topics.take 2 = [approvalTopic, h.toB256]
+def ApprovalLog (T h : Adr) (l : Log) : Prop := l.address = T ∧ l.topics.take 2 = [CurveCoins.approvalTopic, h.toB256]
 
 variable {T h : Adr} {cfg : ChainConfig} {start : Benv} {future : BlockChain}
 
@@ -27,4 +27,4 @@ theorem settled_wf (trace : MidHistoryTraceIn HistFork cfg start future) {F : Ex
   rw [fresh]
   exact Mem.wf_empty
 
-end Blanc.Lift.CurveCoins
+end Blanc.Lift

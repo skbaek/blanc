@@ -92,7 +92,7 @@ theorem usdtWalk (A : Assumes d h) :
       exact ite_eq_right fun c => absurd (c.2.symm.trans sel) sel_ne)
     (fun ne => absurd rfl ne)
     (fun H c hc member tc hd _ sub chain =>
-      H.usdt_answer hc (CurveCoins.settled_wf _ member) tc hd (usdt_flag_clear A sub chain))
+      H.usdt_answer hc (Blanc.Lift.settled_wf _ member) tc hd (usdt_flag_clear A sub chain))
 
 /-- **The pool's books of USDT are at most what USDT's storage says it holds.** -/
 theorem usdt_backed (A : Assumes d h) :

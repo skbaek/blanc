@@ -298,7 +298,7 @@ theorem mem_inits {σ : B256} : σ ∈ usdcInitializers ↔
 theorem init_noExec {C : ByteArray} (hC : CurveCoins.UsdcVersion C) {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec 0 sevm pre out) (hcode : sevm.code = C)
     (hsg : sevm.benvStat.rules.stateGas = none)
-    (sel : Blanc.Sevm.selector sevm ∈ usdcInitializers) : CurveCoins.ChainNoExec run := by
+    (sel : Blanc.Sevm.selector sevm ∈ usdcInitializers) : ChainNoExec run := by
   rw [mem_inits] at sel
   rcases hC with rfl | rfl | rfl
   · refine noExec_of_reach ImplV2.cert_check rfl rfl run hcode hsg fun T h t => ?_
