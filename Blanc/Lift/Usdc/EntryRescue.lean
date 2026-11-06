@@ -97,16 +97,9 @@ theorem rescue_word {sevm : Sevm} (hsel : Blanc.Sevm.selector sevm = 0xb2118a8d)
   rw [show Bytes.toB256 [0x00] = 0 from by decide, show (Bytes.toB256 [0xe0]).toNat = 224 from by decide]
   exact hsel.trans (by decide)
 
-namespace ImplV2
-
-def rescuePre : List Nat := [26, 73, 87, 92, 95, 114, 4, 94, 96, 7, 97, 98]
-def rescueSilent : List Nat := [4, 94, 96, 7, 97, 98]
-
-theorem rescuePre_ok : PreSet cert.prog Impl.rescueEx rescuePre rescueSilent = true := by decide +kernel
-theorem rescueSilent_ok : SilentSet cert.prog rescueSilent = true := by decide +kernel
-
-theorem rescueWrapper_pre : t_0b07_c114.preIn Impl.rescueEx rescuePre rescueSilent = true := by decide +kernel
-
+set_option hygiene false in
+/-- A version's reach under `rescueERC20`, from its own trees and region. -/
+macro "rescueReachDecl" : command => `(command|
 theorem reach_rescue {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
     (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {T : Conf}
     (hsel : Blanc.Sevm.selector sevm = 0xb2118a8d)
@@ -120,16 +113,33 @@ theorem reach_rescue {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sev
   obtain ⟨_, run⟩ := rr_cmp_eq hP rfl run hT
   rw [ite_eq_right (by decide)] at run
   exact Reach.firstExec hP rescuePre_ok rescueSilent_ok run hT rfl
-    (.inl ⟨rescueWrapper_pre, fun _ h => nomatch h⟩)
+    (.inl ⟨rescueWrapper_pre, fun _ h => nomatch h⟩))
 
-
+set_option hygiene false in
+/-- A version's frame under `rescueERC20` without its call, from its own trees and region. -/
+macro "rescueEndDecl" : command => `(command|
 theorem rescue_end {P : Adr} {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
     (codeEq : sevm.code = code) (hsg : sevm.benvStat.rules.stateGas = none)
     (hsel : Blanc.Sevm.selector sevm = 0xb2118a8d) (prot : State.Protected pre.state P)
     (none : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
       ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) :
     post.state.getStor P = pre.state.getStor P := by
-  rescueEndWalk
+  rescueEndWalk)
+
+namespace ImplV2
+
+def rescuePre : List Nat := [26, 73, 87, 92, 95, 114, 4, 94, 96, 7, 97, 98]
+def rescueSilent : List Nat := [4, 94, 96, 7, 97, 98]
+
+theorem rescuePre_ok : PreSet cert.prog Impl.rescueEx rescuePre rescueSilent = true := by decide +kernel
+theorem rescueSilent_ok : SilentSet cert.prog rescueSilent = true := by decide +kernel
+
+theorem rescueWrapper_pre : t_0b07_c114.preIn Impl.rescueEx rescuePre rescueSilent = true := by decide +kernel
+
+rescueReachDecl
+
+
+rescueEndDecl
 
 end ImplV2
 
@@ -143,41 +153,16 @@ theorem rescueSilent_ok : SilentSet cert.prog rescueSilent = true := by decide +
 
 theorem rescueWrapper_pre : t_0ab8_c107.preIn Impl.rescueEx rescuePre rescueSilent = true := by decide +kernel
 
-theorem reach_rescue {P : Sevm → Devm → Ninst → Devm → Prop} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    (hP : ∀ {s d n d'}, P s d n d' → Ninst.Run s d n d') {T : Conf}
-    (hsel : Blanc.Sevm.selector sevm = 0xb2118a8d)
-    (run : Reach P cert.prog sevm ⟨St b S M G, t_0000_c0, []⟩ T) (hT : AtExec T) :
-    T.d.state = b.state ∧ T.f.preIn Impl.rescueEx rescuePre rescueSilent = true ∧
-      ∀ s ∈ T.K, s.silentIn rescueSilent = true := by
-  have hw := rescue_word hsel
-  unfold t_0000_c0 at run
-  rescueOpening hP run hT hw
-  rescueLadder hP run hT
-  obtain ⟨_, run⟩ := rr_cmp_eq hP rfl run hT
-  rw [ite_eq_right (by decide)] at run
-  exact Reach.firstExec hP rescuePre_ok rescueSilent_ok run hT rfl
-    (.inl ⟨rescueWrapper_pre, fun _ h => nomatch h⟩)
+rescueReachDecl
 
 
-theorem rescue_end {P : Adr} {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
-    (codeEq : sevm.code = code) (hsg : sevm.benvStat.rules.stateGas = none)
-    (hsel : Blanc.Sevm.selector sevm = 0xb2118a8d) (prot : State.Protected pre.state P)
-    (none : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
-      ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) :
-    post.state.getStor P = pre.state.getStor P := by
-  rescueEndWalk
+rescueEndDecl
 
 end ImplV2_1
 
 namespace Impl
 
-theorem rescue_end {P : Adr} {sevm : Sevm} {pre post : Devm} (run : Exec 0 sevm pre (.ok post))
-    (codeEq : sevm.code = code) (hsg : sevm.benvStat.rules.stateGas = none)
-    (hsel : Blanc.Sevm.selector sevm = 0xb2118a8d) (prot : State.Protected pre.state P)
-    (none : ∀ N, Exec.Deriv.ParentPrefix ⟨0, sevm, pre, .ok post, run⟩ N →
-      ∀ x, ¬ Ninst.At N.sevm.code N.pc (.exec x)) :
-    post.state.getStor P = pre.state.getStor P := by
-  rescueEndWalk
+rescueEndDecl
 
 end Impl
 
