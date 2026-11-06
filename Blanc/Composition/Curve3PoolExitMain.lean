@@ -78,15 +78,15 @@ theorem asked_facts {data : Bytes} (mf : MomentFacts w) (mk : ExitMarked w) (e :
     rw [ht, sP]; exact htn
   have hKI : (initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKI = Usdc.usdcImpl.toB256 := by
     rw [getStorVal_eq_getStor, sU]
-    exact hopen.usdcV22
+    exact hopen.usdcV22.1
   have himplC : (initDevm msg).getCode ((initDevm msg).getStorVal usdc Blanc.Composition.UsdcLive.pKI).toAdr =
       Usdc.Impl.code := by
     rw [hKI, toAdr_toB256]
     have hI : usdcImplOf w = Usdc.usdcImpl := by
       unfold usdcImplOf
-      rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
+      rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22.1, toAdr_toB256]
     rw [← hI, cI, hI]
-    exact hopen.usdcImplCode
+    exact hopen.usdcV22.2
   have hC : RealCoins (initSevm msg) (initDevm msg) :=
     { dai := by rw [hco 0]; show (initDevm msg).getCode dai = _; rw [cD]; exact mf.daiCode
       usdc := by rw [hco 1]; show (initDevm msg).getCode usdc = _; rw [cU]; exact mk.usdcProxy
@@ -283,7 +283,7 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg
       warm := fun x hx => by
         have hI : usdcImplOf w = Usdc.usdcImpl := by
           unfold usdcImplOf
-          rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
+          rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22.1, toAdr_toB256]
         refine e.entry.cold.2 x ?_
         simp only [parties, List.tail_cons, List.mem_cons, List.not_mem_nil, or_false, hI]
         exact hx
@@ -507,7 +507,7 @@ theorem tx_asked {d : Deployment} {m : Moment d} {tx : Tx} {E : Adr} {prio maxFe
     rfl
   have hI : usdcImplOf m.world = Usdc.usdcImpl := by
     unfold usdcImplOf
-    rw [show (m.world.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
+    rw [show (m.world.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22.1, toAdr_toB256]
   have hEp : ∀ x ∈ parties m.world, E ≠ x := by
     intro x hx
     simp only [parties, List.mem_cons, List.not_mem_nil, or_false] at hx
@@ -519,7 +519,7 @@ theorem tx_asked {d : Deployment} {m : Moment d} {tx : Tx} {E : Adr} {prio maxFe
     · exact hnoE _ (by simp only [or_true])
     · intro hEx
       have hz := ready.noCode
-      rw [hEx, hw, hI, hopen.usdcImplCode] at hz
+      rw [hEx, hw, hI, hopen.usdcV22.2] at hz
       exact absurd hz (by decide +kernel)
   have hE4 : E ≠ 4 := by
     intro h4

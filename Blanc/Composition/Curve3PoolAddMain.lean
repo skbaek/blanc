@@ -52,7 +52,7 @@ theorem add_pulled_eq (ho : CoinsOpen w E) (hap : SwapApart w E) (i : Fin 3) (hv
     have hPf := unfrozen_lt ho.usdcParties.1
     have hEf := unfrozen_lt ho.usdcParties.2
     have hle' : v ≤ ((w.getStor usdc).get (Usdc.balSlot E)).toNat := by
-      rw [held_one ho.usdcV22, bits_of hEf] at hle; exact hle
+      rw [held_one ho.usdcV22.1, bits_of hEf] at hle; exact hle
     have hc' : ((w.getStor usdc).get (Usdc.balSlot pool)).toNat + v < 2 ^ 255 := hcr
     have hal' : v ≤ ((w.getStor usdc).get (Usdc.allowSlot E pool)).toNat := hal
     show UsdcLive.pullStor (w.getStor usdc) E pool pool (Nat.toB256 v) = _

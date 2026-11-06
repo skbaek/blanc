@@ -117,13 +117,13 @@ theorem CoinStand.pay (f : CoinStand s p w E) (j : Fin 3) {b : Devm} {S : List B
     obtain ⟨hsite, hst⟩ := f.site (x := usdc) htx (Or.inr (Or.inr (Or.inr (Or.inl rfl)))) mv hT0
     have htx' : t.toAdr = usdc := htx
     have hheld : coinHeld w pool 1 = Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pool)) := by
-      unfold coinHeld; rw [ite_eq_left ⟨rfl, f.open'.usdcV22⟩]
+      unfold coinHeld; rw [ite_eq_left ⟨rfl, f.open'.usdcV22.1⟩]
     rw [hheld] at hle
     have hbw : Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pool)) ≤ word w usdc (Usdc.balSlot pool) := Nat.mod_le _ _
     have hc' : word w usdc (Usdc.balSlot E) + v < 2 ^ 255 := hcr
     have hpKI : UsdcLive.pKI = Usdc.implSlot := by decide +kernel
     have hI : ((w.getStor usdc).get UsdcLive.pKI).toAdr = Usdc.usdcImpl := by
-      rw [hpKI, show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from f.open'.usdcV22, toAdr_toB256]
+      rw [hpKI, show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from f.open'.usdcV22.1, toAdr_toB256]
     have hE1 : ∀ x ∈ [Bytes.toB256 [1], Usdc.adminSlot, Usdc.implSlot], Usdc.balSlot E ≠ x := fun x hx e => f.apart.usdcE (by
       show Usdc.balSlot E ∈ _
       rw [e]; exact hx)
@@ -232,7 +232,7 @@ noncomputable def pulledStor (w : Jaune.State) (E : Adr) (i : Fin 3) (v : Nat) :
       (Usdc.allowSlot E pool) ((w.getStor usdc).get (Usdc.allowSlot E pool) - Nat.toB256 v)
 
 theorem usdc_impl_word (f : CoinStand s p w E) : ((w.getStor usdc).get UsdcLive.pKI).toAdr = Usdc.usdcImpl := by
-  rw [show UsdcLive.pKI = Usdc.implSlot by decide +kernel, show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from f.open'.usdcV22, toAdr_toB256]
+  rw [show UsdcLive.pKI = Usdc.implSlot by decide +kernel, show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from f.open'.usdcV22.1, toAdr_toB256]
 
 /-- **DAI's or USDC's `transferFrom` at `exchange`'s pull.** -/
 theorem CoinStand.pullA (f : CoinStand s p w E) (hap : SwapApart w E) (i : Fin 3) (hi : i ≠ 2) {b : Devm} {S : List B256} {M : Mem} {t : B256} {Tb : List Adr} {r : Int} {v : Nat}
@@ -277,7 +277,7 @@ theorem CoinStand.pullA (f : CoinStand s p w E) (hap : SwapApart w E) (i : Fin 3
     obtain ⟨hsite, hst⟩ := f.site (x := usdc) htx (Or.inr (Or.inr (Or.inr (Or.inl rfl)))) mv hT0
     have htx' : t.toAdr = usdc := htx
     have hheld : coinHeld w E 1 = Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot E)) := by
-      unfold coinHeld; rw [ite_eq_left ⟨rfl, f.open'.usdcV22⟩]
+      unfold coinHeld; rw [ite_eq_left ⟨rfl, f.open'.usdcV22.1⟩]
     rw [hheld] at hle
     have hbw : Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot E)) ≤ word w usdc (Usdc.balSlot E) := Nat.mod_le _ _
     have hc' : word w usdc (Usdc.balSlot pool) + v < 2 ^ 255 := hcr

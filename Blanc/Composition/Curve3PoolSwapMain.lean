@@ -492,7 +492,7 @@ theorem asked_stand {msg : Msg} {w : Jaune.State} {E : Adr} {data : Bytes} (e : 
   have hopen := e.coinsOpen
   have hI : usdcImplOf w = Usdc.usdcImpl := by
     unfold usdcImplOf
-    rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22, toAdr_toB256]
+    rw [show (w.getStor usdc).get Usdc.implSlot = Usdc.usdcImpl.toB256 from hopen.usdcV22.1, toAdr_toB256]
   exact
     { fork := e.entry.plain.2.2.2
       target := e.entry.named.1

@@ -50,7 +50,7 @@ theorem push_fits (ho : CoinsOpen w E) (hE : E ≠ 0) (hap : CoinsApart w E) (j 
   | 1 =>
     show UsdcLive.MoveFits (w.getStor usdc) pool E (Nat.toB256 v)
     have hh : coinHeld w pool 1 = Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pool)) := by
-      unfold coinHeld; rw [ite_eq_left ⟨rfl, ho.usdcV22⟩]
+      unfold coinHeld; rw [ite_eq_left ⟨rfl, ho.usdcV22.1⟩]
     have hpe : Usdc.balSlot pool ≠ Usdc.balSlot E := Ne.symm (hap.poolEntry 1)
     have hd : (Usdc.debitStor (w.getStor usdc) pool (Nat.toB256 v).toNat).get (Usdc.balSlot E) = (w.getStor usdc).get (Usdc.balSlot E) := by
       unfold Usdc.debitStor
@@ -124,7 +124,7 @@ theorem pull_fits (ho : CoinsOpen w E) (hE : E ≠ 0) (hap : SwapApart w E) (hop
   | 1 =>
     show UsdcLive.PullFits (w.getStor usdc) E pool pool (Nat.toB256 v)
     have hh : coinHeld w E 1 = Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot E)) := by
-      unfold coinHeld; rw [ite_eq_left ⟨rfl, ho.usdcV22⟩]
+      unfold coinHeld; rw [ite_eq_left ⟨rfl, ho.usdcV22.1⟩]
     have hEe : Usdc.balSlot E ≠ Usdc.balSlot pool := hap.poolEntry 1
     have hd : (Usdc.debitStor (w.getStor usdc) E (Nat.toB256 v).toNat).get (Usdc.balSlot pool) = (w.getStor usdc).get (Usdc.balSlot pool) := by
       unfold Usdc.debitStor

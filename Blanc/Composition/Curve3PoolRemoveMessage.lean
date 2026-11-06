@@ -118,7 +118,7 @@ theorem pushed_eq_paid (ho : CoinsOpen w E) (hap : CoinsApart w E) (j : Fin 3) (
     have hP := hfz ho.usdcParties.1
     have hE := hfz ho.usdcParties.2
     have hh : coinHeld w pool 1 = Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pool)) := by
-      unfold coinHeld; rw [ite_eq_left ⟨rfl, ho.usdcV22⟩]
+      unfold coinHeld; rw [ite_eq_left ⟨rfl, ho.usdcV22.1⟩]
     rw [hh, hbits hP] at hle
     have hcr' : ((w.getStor usdc).get (Usdc.balSlot E)).toNat + v < 2 ^ 255 := hcr
     show Usdc.creditStor (Usdc.debitStor (w.getStor usdc) pool (Nat.toB256 v).toNat) E (Nat.toB256 v).toNat = _

@@ -54,7 +54,7 @@ theorem usdc_fits (ho : CoinsOpen w E) (hE : E ≠ 0) (hc : recorded w 1 ≤ coi
     (hle : a ≤ supply w) (hap : ExitApart w E) (hcr : CreditFits w E 1 (share w a 1)) :
     Blanc.Composition.UsdcLive.MoveFits (w.getStor usdc) pool E (Nat.toB256 (share w a 1)) := by
   have hh : coinHeld w pool 1 = Lift.Usdc.balanceBits ((w.getStor usdc).get (Lift.Usdc.balSlot pool)) := by
-    unfold coinHeld; rw [ite_eq_left ⟨rfl, ho.usdcV22⟩]
+    unfold coinHeld; rw [ite_eq_left ⟨rfl, ho.usdcV22.1⟩]
   have hs := share_word hT hle 1
   have hb := share_le hT hle 1
   have hne : Lift.Usdc.balSlot pool ≠ Lift.Usdc.balSlot E := Ne.symm (hap.poolEntry 1)

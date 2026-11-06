@@ -110,12 +110,14 @@ def UsdtFeeFits (w : State) (v : Nat) : Prop :=
 
 /-- **No named liveness power is in force against the pool or `E`.** -/
 structure CoinsOpen (w : State) (E : Adr) : Prop where
-  /-- USDC runs V2_2, as it has since well before `CoveredFork`'s first block. -/
-  usdcV22 : UsdcPacked w
-  /-- V2_2's code is at the address `usdcV22` names: one read. -/
-  usdcImplCode : w.getCode Usdc.usdcImpl = Usdc.Impl.code
+  /-- USDC runs V2_2, as it has since well before `CoveredFork`'s first block: its implementation word names V2_2's
+  address, and V2_2's code is there. -/
+  usdcV22 : UsdcPacked w ∧ w.getCode Usdc.usdcImpl = Usdc.Impl.code
+  /-- USDT is not paused and has not blacklisted the pool. -/
   usdtOpen : UsdtOpen w pool
+  /-- USDC is not paused. -/
   usdcOpen : UsdcOpen w
+  /-- USDC has blacklisted neither the pool nor `E`. -/
   usdcParties : UsdcUnlisted w pool ∧ UsdcUnlisted w E
   /-- The pool is not USDC's proxy admin, whose calls the proxy refuses to forward: Circle's power. -/
   usdcAdmin : pool ≠ ((w.getStor usdc).get Usdc.adminSlot).toAdr

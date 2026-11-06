@@ -121,13 +121,13 @@ theorem paid_held (ho : CoinsOpen w E) (hap : CoinsApart w E) (j : Fin 3) (h : w
     have hPk : UsdcPacked w' := by
       show (w'.getStor usdc).get Usdc.implSlot = _
       rw [hd, Stor.get_set_ne _ hEi, Stor.get_set_ne _ hPi]
-      exact ho.usdcV22
+      exact ho.usdcV22.1
     have hPf := unfrozen_lt ho.usdcParties.1
     have hEf := unfrozen_lt ho.usdcParties.2
-    rw [held_one ho.usdcV22, bits_of hPf] at hle
+    rw [held_one ho.usdcV22.1, bits_of hPf] at hle
     have hc' : ((w.getStor usdc).get (Usdc.balSlot E)).toNat + v < 2 ^ 255 := hcr
     have hn : netOf w 1 v = v := rfl
-    rw [held_one hPk, held_one hPk, held_one ho.usdcV22, held_one ho.usdcV22, bits_of hPf, bits_of hEf, hn, hd, Stor.get_set_self,
+    rw [held_one hPk, held_one hPk, held_one ho.usdcV22.1, held_one ho.usdcV22.1, bits_of hPf, bits_of hEf, hn, hd, Stor.get_set_self,
       Stor.get_set_ne _ hEp, Stor.get_set_self]
     have hs1 : ((w.getStor usdc).get (Usdc.balSlot pool) - Nat.toB256 v).toNat = ((w.getStor usdc).get (Usdc.balSlot pool)).toNat - v := by
       rw [sub_nat (by rw [hs]; exact hle), hs]
@@ -221,13 +221,13 @@ theorem pulled_held (ho : CoinsOpen w E) (hap : SwapApart w E) (i : Fin 3) (h : 
     have hPk : UsdcPacked w' := by
       show (w'.getStor usdc).get Usdc.implSlot = _
       rw [hd, Stor.get_set_ne _ hAi, Stor.get_set_ne _ hPi, Stor.get_set_ne _ hEi]
-      exact ho.usdcV22
+      exact ho.usdcV22.1
     have hPf := unfrozen_lt ho.usdcParties.1
     have hEf := unfrozen_lt ho.usdcParties.2
-    rw [held_one ho.usdcV22, bits_of hEf] at hle
+    rw [held_one ho.usdcV22.1, bits_of hEf] at hle
     have hc' : ((w.getStor usdc).get (Usdc.balSlot pool)).toNat + v < 2 ^ 255 := hcr
     have hn : netOf w 1 v = v := rfl
-    rw [held_one hPk, held_one hPk, held_one ho.usdcV22, held_one ho.usdcV22, bits_of hPf, bits_of hEf, hn, hd,
+    rw [held_one hPk, held_one hPk, held_one ho.usdcV22.1, held_one ho.usdcV22.1, bits_of hPf, bits_of hEf, hn, hd,
       Stor.get_set_ne _ a2', Stor.get_set_self, Stor.get_set_ne _ a1', Stor.get_set_ne _ (Ne.symm hEp), Stor.get_set_self]
     have hs1 : ((w.getStor usdc).get (Usdc.balSlot E) - Nat.toB256 v).toNat = ((w.getStor usdc).get (Usdc.balSlot E)).toNat - v := by
       rw [sub_nat (by rw [hs]; exact hle), hs]

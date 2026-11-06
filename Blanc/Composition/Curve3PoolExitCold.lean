@@ -344,13 +344,13 @@ theorem ExitFrame.pushUsdc (f : ExitFrame msg w E a T) {n : Devm} {m : Mem} {sz 
   have hs0 := (f.shareFacts 1).2.2
   have hb0 := f.backed 1
   have hheld : coinHeld w pool 1 = balanceBits ((w.getStor usdc).get (balSlot pool)) := by
-    unfold coinHeld; rw [ite_eq_left ⟨rfl, f.open'.usdcV22⟩]
+    unfold coinHeld; rw [ite_eq_left ⟨rfl, f.open'.usdcV22.1⟩]
   have hbw : balanceBits ((w.getStor usdc).get (balSlot pool)) ≤ word w usdc (balSlot pool) := Nat.mod_le _ _
   have hsw := share_word (w := w) f.holds.2.2 f.holds.2.1 1
   have hcr : word w usdc (balSlot E) + share w a 1 < 2 ^ 255 := f.fits 1
   have hpKI : pKI = implSlot := by decide +kernel
   have hI : ((w.getStor usdc).get pKI).toAdr = usdcImpl := by
-    rw [hpKI, show (w.getStor usdc).get implSlot = usdcImpl.toB256 from f.open'.usdcV22, toAdr_toB256]
+    rw [hpKI, show (w.getStor usdc).get implSlot = usdcImpl.toB256 from f.open'.usdcV22.1, toAdr_toB256]
   have hE1 : ∀ x ∈ [Bytes.toB256 [1], adminSlot, implSlot], balSlot E ≠ x := fun x hx e => f.apart.usdcE (by
     show balSlot E ∈ _
     rw [e]; exact hx)
@@ -744,7 +744,7 @@ theorem exit_paid (f : ExitFrame msg w E a T)
   have hPacked' : UsdcPacked w' := by
     show (w'.getStor usdc).get Usdc.implSlot = _
     rw [hu, Stor.get_set_ne _ hEi, Stor.get_set_ne _ hPi]
-    exact f.open'.usdcV22
+    exact f.open'.usdcV22.1
   have hbits : ∀ {x : B256}, x.toNat < 2 ^ 255 → Usdc.balanceBits x = x.toNat := fun h => Nat.mod_eq_of_lt h
   have hfro : ∀ {x : B256}, Usdc.frozenBit x = false → x.toNat < 2 ^ 255 := fun h => by
     unfold Usdc.frozenBit at h
@@ -787,7 +787,7 @@ theorem exit_paid (f : ExitFrame msg w E a T)
     have := hbk 0; have := hsle 0; rw [hheld0] at *; omega
   have hb1 : share w a 1 ≤ ((w.getStor usdc).get (Usdc.balSlot pool)).toNat := by
     have h1 := hbk 1; have h2 := hsle 1
-    rw [hheld1 w pool f.open'.usdcV22, hbits hPfr] at h1
+    rw [hheld1 w pool f.open'.usdcV22.1, hbits hPfr] at h1
     omega
   have hb2 : share w a 2 ≤ word w usdt (Usdt.balSlot pool) := by
     have := hbk 2; have := hsle 2; rw [hheld2] at *; omega
@@ -821,7 +821,7 @@ theorem exit_paid (f : ExitFrame msg w E a T)
       show word w dai (Dai.balSlot pool) - _ + _ = _
       omega
     | 1 =>
-      rw [hheld1 w' pool hPacked', hheld1 w pool f.open'.usdcV22, hbits hPfr, hu, Stor.get_set_ne _ (show Usdc.balSlot E ≠ Usdc.balSlot pool from f.apart.poolEntry 1), Stor.get_set_self]
+      rw [hheld1 w' pool hPacked', hheld1 w pool f.open'.usdcV22.1, hbits hPfr, hu, Stor.get_set_ne _ (show Usdc.balSlot E ≠ Usdc.balSlot pool from f.apart.poolEntry 1), Stor.get_set_self]
       have hs' : ((w.getStor usdc).get (Usdc.balSlot pool) - Nat.toB256 (share w a 1)).toNat =
           ((w.getStor usdc).get (Usdc.balSlot pool)).toNat - share w a 1 := by
         rw [subN (by rw [hsl]; exact hb1), hsl]
@@ -840,7 +840,7 @@ theorem exit_paid (f : ExitFrame msg w E a T)
       rw [hd, Stor.get_set_self, toNat_add_of (by rw [hsl]; show word w dai (Dai.balSlot E) + _ < _; omega), hsl]
       rfl
     | 1 =>
-      rw [hheld1 w' E hPacked', hheld1 w E f.open'.usdcV22, hbits hEfr, hu, Stor.get_set_self]
+      rw [hheld1 w' E hPacked', hheld1 w E f.open'.usdcV22.1, hbits hEfr, hu, Stor.get_set_self]
       have hs' : ((w.getStor usdc).get (Usdc.balSlot E) + Nat.toB256 (share w a 1)).toNat =
           ((w.getStor usdc).get (Usdc.balSlot E)).toNat + share w a 1 := by
         rw [toNat_add_of (by rw [hsl]; omega), hsl]
