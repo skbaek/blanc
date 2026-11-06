@@ -38,6 +38,37 @@ theorem tx_message {benv : Benv} {tx : Tx} {index : Nat} {E : Adr} {price intrin
   rw [Msg.benvAfterTransfer_of_value_zero (by simp only [callMessage, hv]; rfl)] at hentry
   exact (Except.ok.inj hentry).symm
 
+/-- What a direct call's message starts warm. -/
+theorem tx_addr_mem {benv : Benv} {tx : Tx} {index : Nat} {E : Adr} {price intrinsic : Nat} {debit : State}
+    {chainId : UInt64} {prio maxFee : Nat} {x : Adr} (htype : tx.type = .two chainId prio maxFee (some pool) [])
+    (h : x ∈ (callMessage { benv.beginTransaction with state := debit }
+      (transactionTenv benv.beginTransaction tx index E price intrinsic []) tx pool).accessedAddresses) :
+    x = benv.stat.coinbase ∨ x ∈ benv.stat.rules.precompiles ∨ x = E ∨ x = pool := by
+  have hl : tx.accessList = [] := by simp only [Tx.accessList, TxType.accessList, htype]
+  have h' := Std.HashSet.mem_insertMany_list.1 h
+  rcases h' with h1 | h1
+  · left
+    have h2 : x ∈ (if benv.stat.rules.txr.warmCoinbase = true then Std.HashSet.ofList [benv.stat.coinbase]
+        else (Std.HashSet.ofList [] : AdrSet)) := by
+      have this := h1
+      simp only [callMessage, transactionTenv, Benv.beginTransaction, hl, List.map_nil] at this
+      exact this
+    split at h2
+    · exact List.mem_singleton.1 (List.contains_iff_mem.1 (Std.HashSet.mem_ofList.1 h2))
+    · exact absurd (List.contains_iff_mem.1 (Std.HashSet.mem_ofList.1 h2)) List.not_mem_nil
+  · right
+    have h2 : x ∈ benv.stat.rules.precompiles ++ [E, pool] := by
+      have := List.contains_iff_mem.1 h1
+      exact this
+    simpa only [List.mem_append, List.mem_cons, List.not_mem_nil, or_false] using h2
+
+/-- A precompile starts warm in a direct call's message. -/
+theorem tx_addr_precomp {benv : Benv} {tx : Tx} {index : Nat} {E : Adr} {price intrinsic : Nat} {debit : State}
+    {x : Adr} (hx : x ∈ benv.stat.rules.precompiles) :
+    x ∈ (callMessage { benv.beginTransaction with state := debit }
+      (transactionTenv benv.beginTransaction tx index E price intrinsic []) tx pool).accessedAddresses :=
+  Std.HashSet.mem_insertMany_list.2 (.inr (List.contains_iff_mem.2 (List.mem_append_left _ hx)))
+
 /-- **A direct call to the pool, from the outcome of its message.** -/
 theorem tx_of_frame {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E : Adr} {prio maxFee F r : Nat}
     {Q : State → Devm → Prop} (hfork : CoveredFork benv.stat.fork) (form : TxForm benv tx prio maxFee)

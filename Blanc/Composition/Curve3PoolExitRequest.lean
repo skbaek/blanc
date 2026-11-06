@@ -45,9 +45,11 @@ section Args
 
 variable {e : Sevm} {a : Nat} {mins : V3}
 
-theorem exit_length (h : e.data = exitCalldata a mins) : e.data.length = 132 := by
-  rw [h]
+theorem exitCalldata_length : (exitCalldata a mins).length = 132 := by
   simp only [exitCalldata, Curve3Pool.word, List.length_append, B256.length_toBytes, abiSelectorBytes_length]
+
+theorem exit_length (h : e.data = exitCalldata a mins) : e.data.length = 132 := by
+  rw [h]; exact exitCalldata_length
 
 /-- `exitCalldata`'s selector. -/
 theorem exit_selector (h : e.data = exitCalldata a mins) : Sevm.selector e = Curve3Pool.selRemoveLiquidity := by
