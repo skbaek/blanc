@@ -73,11 +73,15 @@ theorem rx_oc_p2_exact {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q : O
     (hR0 : 30000 + U ≤ R) (hGb : R + ocP2Cost sevm P n M dy + 2000 < 2 ^ 256)
     (k : ∀ D : Devm, ExLive sevm W' D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
-        Bytes.toB256 (data.sliceD 0x20 32 0) = dy) → D.gasLeft = R → Q (.halted D)) :
+        Bytes.toB256 (data.sliceD 0x20 32 0) = dy) → D.gasLeft = R →
+      (∃ d l S' M' G', Devm.EqModGas d (rawTailBaseNext sevm (ocPushNext sevm P n M dy) []
+          (ocPushNext sevm P n M dy).memory ocPushSite) ∧
+        D = St (afterSstore sevm (d.addLog l) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])) S' M' G') →
+      Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [] M (R + ocP2Cost sevm P n M dy)) t_45c9_c0 Q := by
   refine rx_oc_p2E hfork hstatic hdepth hL hW'c hi3 hR hW hsz hdy (MutableCallProfile.okE hpush)
     (by unfold ocP2Cost; omega) (by omega) ?_
-  intro D hLD hlog bI1 bI2 d b' hc1 hc2 hE hcT hgd
+  intro D hLD hlog bI1 bI2 d b' hc1 hc2 hE hcT hgd hD
   have hN1 : Devm.EqModGas bI1 (ocPushI1 sevm n M) :=
     hc1.trans (identityCallNext_congr sevm _ _ _ _ _ _ hn)
   have hN2 : Devm.EqModGas bI2 (ocPushI2 sevm n M dy) :=
@@ -98,13 +102,24 @@ theorem rx_oc_p2_exact {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q : O
     exact rawTailBaseNext_congr sevm _ _ ocPushSite hdN
   have e7 := Devm.EqModGas.sstoreCost_congr sevm (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])
     htail
-  refine k D hLD hlog ?_
+  obtain ⟨l, S', M', G', hD⟩ := hD
+  refine k D hLD hlog ?_ ⟨b', l, S', M', G', htail, hD⟩
   rw [e6] at hgd
   unfold ocP2Cost at hEg hGb
   rw [e4] at hEg
   rw [e5] at hEg
   omega
 
+
+/-- The base the lock's release runs at: the raw-call test's canonical successor, after the push. -/
+abbrev ocEnd (sevm : Sevm) (pre : Devm) (P : OCExactCalls) (T : B256) (amp : Nat)
+    (x0 x1 x2 D0 y r0 r1 r2 y2 : B256) : Devm :=
+  rawTailBaseNext sevm
+    (ocPushNext sevm P (ocBurnNext sevm pre P T amp x0 x1 x2 D0 y r0 r1 r2 y2)
+      (ocBurnNext sevm pre P T amp x0 x1 x2 D0 y r0 r1 r2 y2).memory (ocDy sevm r0 r1 r2 y2)) []
+    (ocPushNext sevm P (ocBurnNext sevm pre P T amp x0 x1 x2 D0 y r0 r1 r2 y2)
+      (ocBurnNext sevm pre P T amp x0 x1 x2 D0 y r0 r1 r2 y2).memory (ocDy sevm r0 r1 r2 y2)).memory
+    ocPushSite
 
 section Frame
 
@@ -158,7 +173,7 @@ theorem rx_oc_frame_exact (P : OCExactCalls) (hfork : CoveredFork sevm.benvStat.
         (pre.getStor sevm.currentTarget).get adminFeeSlot / ocDen)
     (hW''c : WClosed sevm W'')
     {R : Nat} (hR : 131000 + 3 * U ≤ R)
-    (hGb : R + ocExactCost sevm pre T P amp x0 x1 x2 D0 y r0 r1 r2 y2 + 2000 < 2 ^ 256)
+    (hGb : R + ocExactCost sevm pre T P amp x0 x1 x2 D0 y r0 r1 r2 y2 < 2 ^ 256)
     (k : ∀ D' : Devm, ExLive sevm W'' D'
       ((((pre.getStor sevm.currentTarget).set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1])).set
         (balancesBase + ocI sevm) (ocBal ((pre.getStor sevm.currentTarget).set
@@ -168,10 +183,21 @@ theorem rx_oc_frame_exact (P : OCExactCalls) (hfork : CoveredFork sevm.benvStat.
         (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       (∃ L ts data, D'.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x20 32 0) = cwDy (ocI sevm) r0 r1 r2 y2) →
-      D'.gasLeft = R → Q (.halted D')) :
+      D'.gasLeft = R →
+      (∃ d l S' M' G', Devm.EqModGas d (ocEnd sevm pre P T amp x0 x1 x2 D0 y r0 r1 r2 y2) ∧
+        D' = St (afterSstore sevm (d.addLog l) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])) S' M' G') →
+      Q (.halted D')) :
     SFunc.RunEx cert.prog sevm
       (St pre [] Mem.empty (R + ocExactCost sevm pre T P amp x0 x1 x2 D0 y r0 r1 r2 y2))
       t_0000_c0 Q := by
+  have hP2 : ocP2Cost sevm P (ocBurnNext sevm pre P T amp x0 x1 x2 D0 y r0 r1 r2 y2)
+      (ocBurnNext sevm pre P T amp x0 x1 x2 D0 y r0 r1 r2 y2).memory (ocDy sevm r0 r1 r2 y2) + 2000 + R <
+      2 ^ 256 := by
+    have hp2 : 2265 ≤ ocP2Cost sevm P (ocBurnNext sevm pre P T amp x0 x1 x2 D0 y r0 r1 r2 y2)
+        (ocBurnNext sevm pre P T amp x0 x1 x2 D0 y r0 r1 r2 y2).memory (ocDy sevm r0 r1 r2 y2) := by
+      unfold ocP2Cost; omega
+    have e := ocExactCost_eq (sevm := sevm) pre T P amp x0 x1 x2 D0 y r0 r1 r2 y2 hi3
+    omega
   obtain ⟨hsup, hburn, hpush⟩ := hP
   set σ := pre.getStor sevm.currentTarget with hσ
   set σ1 := σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [1]) with hσ1
