@@ -1,5 +1,5 @@
 import Blanc.Lift.Usdc.TransferLiveImpl
-import Blanc.Lift.CoinFrame
+import Blanc.Lift.WalkFpMove
 import Blanc.Lift.Usdc.RefineAdminBits
 
 /-!
@@ -96,14 +96,6 @@ abbrev pVal (sevm : Sevm) : B256 := Sevm.dataWord sevm (Bytes.toB256 [64] + Byte
 /-- The prologue's image. -/
 abbrev mem0 : Mem := Mem.empty.write 64 (Bytes.toB256 [128]).toBytes
 
-/-- The word a mutating entry returns. -/
-abbrev okW : B256 := B256.eqCheck (B256.eqCheck (Bytes.toB256 [1]) 0) 0
-
-/-- The halting state of a frame returning the word `w` at `0x80` from base `B` and image `M`. -/
-def retI (B : Devm) (S : List B256) (M : Mem) (w : B256) (G : Nat) : Devm :=
-  ((St B S M G).memRead (Bytes.toB256 [128]).toNat
-    (Bytes.toB256 [32] + (Bytes.toB256 [128] - Bytes.toB256 [128])).toNat).2.withOutput w.toBytes
-
 /-- The base `transferFrom` halts from. -/
 abbrev pullBase (sevm : Sevm) (b : Devm) : Devm := e68Post sevm b (pVal sevm) (pTo sevm) (pFrom sevm)
 
@@ -117,7 +109,7 @@ abbrev pullMem (sevm : Sevm) : Mem :=
       Guards sevm 0x23b872dd (Bytes.toB256 [96]) → E68Ok sevm b (pVal sevm) (pTo sevm) (pFrom sevm) →
       ∀ G, 2300 ≤ G →
       SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + c)) t_0000_c0
-        (.halted (retI (pullBase sevm b) [selW sevm] (pullMem sevm) okW G))} :=
+        (.halted (retV (Bytes.toB256 [128]) (pullBase sevm b) [selW sevm] (pullMem sevm) okW G))} :=
   ⟨_, fun fork static facts ok G hG => by
     obtain ⟨value, short, args, sel⟩ := facts
     xrun
@@ -155,7 +147,7 @@ abbrev bAns (sevm : Sevm) (b : Devm) : B256 :=
 @[irreducible] noncomputable def balW (sevm : Sevm) (b : Devm) :
     {c : Nat // CoveredFork sevm.benvStat.fork → Guards sevm 0x70a08231 (Bytes.toB256 [32]) → ∀ G,
       SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + c)) t_0000_c0
-        (.halted (retI (afterSload sevm b (ky (bHolder sevm))) [selW sevm]
+        (.halted (retV (Bytes.toB256 [128]) (afterSload sevm b (ky (bHolder sevm))) [selW sevm]
           ((sc9 mem0 (m20 &&& bHolder sevm)).write 128 (bAns sevm b).toBytes) (bAns sevm b) G))} :=
   ⟨_, fun fork facts G => by
     obtain ⟨value, short, args, sel⟩ := facts
@@ -245,22 +237,6 @@ theorem _root_.Blanc.Lift.AccumulatedWalk.Keeps.e93 {sevm : Sevm} {pre B : Devm}
   unfold e93Post e93Debited
   exact ((((((((h.sload _).sload _).sload _).sstore _ _).sload _).sload _).sstore _ _).log _)
 
-theorem _root_.Blanc.Lift.AccumulatedWalk.Keeps.retI {sevm : Sevm} {pre B : Devm} (h : Keeps sevm pre B) (S : List B256) (M : Mem)
-    (w : B256) (G : Nat) : Keeps sevm pre (retI B S M w G) :=
-  ⟨h.code, h.other, h.error, h.created⟩
-
-/-- A frame run to `retI` lands. -/
-theorem frameLands_retI {sevm : Sevm} {pre B : Devm} {S : List B256} {M : Mem} {w w' : B256} {c K : Nat}
-    {σ' : Stor} {R : Prop}
-    (hrun : ∀ G, 2300 ≤ G → SFunc.RunExact cert.prog sevm (St pre [] Mem.empty (G + c)) t_0000_c0
-      (.halted (retI B S M w G)))
-    (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hc : c ≤ K) (hgas : K + 2300 ≤ pre.gasLeft)
-    (hk : Keeps sevm pre B) (hst : Devm.getStor B sevm.currentTarget = σ') (hw : w = w')
-    (hr : R → pre.refundCounter ≤ B.refundCounter) :
-    FrameLands cert.prog sevm pre (retI B S M w (pre.gasLeft - c)) c w' σ' R :=
-  frameLands_of rfl hrun hs hm hc hgas (fun _ => rfl) (fun _ => hw ▸ rfl) (fun G => hk.retI S M w G)
-    (fun _ => hst) (fun r _ => hr r)
-
 /-- `_transfer`'s storage, word by word. -/
 abbrev mvWords (σ : Stor) (a d : Adr) (x : B256) : Stor :=
   (σ.set (balSlot a) ((l255 &&& σ.get (balSlot a)) - x)).set (balSlot d)
@@ -328,8 +304,6 @@ theorem debit_words {σ : Stor} {a : Adr} {x : B256} (hle : x.toNat ≤ balanceB
   rw [sub_word (by rw [l255_and_toNat]; exact hle), l255_and_toNat]
   rfl
 
-theorem okW_eq : okW = 1 := by decide
-
 /-- `transfer`'s facts from the guards and a fitting move. -/
 theorem xferFacts_of {sevm : Sevm} {b : Devm} {dst : Adr} {v : B256}
     (g : Guards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
@@ -385,7 +359,7 @@ theorem xfer_lands {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
         sevm.currentTarget ∉ pre.createdAccounts ∧ balSlot sevm.caller ≠ balSlot dst) := by
   have facts := xferFacts_of g hdst hv hf
   have ta : (xTo sevm).toAdr = dst := by rw [hdst, toAdr_toB256]
-  refine ⟨_, _, implXferW_le sevm pre, frameLands_retI (K := 72000)
+  refine ⟨_, _, implXferW_le sevm pre, frameLands_retV rfl (K := 72000)
     (B := e93Post sevm (e37Pre sevm pre (xTo sevm)) (xVal sevm) (xTo sevm) sevm.caller.toB256)
     (S := [selW sevm]) (M := implXferMem sevm) (w := okW)
     (fun G hG => (implXferW sevm pre).2 fork static facts G (by omega)) hs hm (implXferW_le sevm pre) (by omega)
@@ -471,7 +445,7 @@ theorem pull_lands {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
     rw [hv]; exact e68Ok_of hsrc hdst hf
   have tz : (pFrom sevm).toAdr = src := by rw [hsrc, toAdr_toB256]
   have ty : (pTo sevm).toAdr = dst := by rw [hdst, toAdr_toB256]
-  refine ⟨_, _, pullW_le sevm pre, frameLands_retI (K := 102000)
+  refine ⟨_, _, pullW_le sevm pre, frameLands_retV rfl (K := 102000)
     (fun G hG => (pullW sevm pre).2 fork static g ok G hG) hs hm (pullW_le sevm pre) (by omega)
     ?_ ?_ okW_eq ?_⟩
   · exact (Keeps.refl sevm pre).e68 _ _ _
@@ -506,7 +480,7 @@ theorem bal_lands {sevm : Sevm} {pre : Devm} {a : Adr}
     ∃ post used, used ≤ 3500 ∧ FrameLands cert.prog sevm pre post used
       (Nat.toB256 (balanceBits ((Devm.getStor pre sevm.currentTarget).get (balSlot a))))
       (Devm.getStor pre sevm.currentTarget) True := by
-  refine ⟨_, _, balW_le sevm pre, frameLands_retI (K := 3500)
+  refine ⟨_, _, balW_le sevm pre, frameLands_retV rfl (K := 3500)
     (fun G _ => (balW sevm pre).2 fork g G) hs hm (balW_le sevm pre) (by omega)
     ((Keeps.refl sevm pre).sload _) ?_ ?_ ?_⟩
   · rw [afterSload_getStor]

@@ -1,4 +1,5 @@
 import Blanc.Lift.WalkCost
+import Blanc.Lift.CoinFrame
 
 /-!
 # Forward walks past a moving free-memory pointer
@@ -80,5 +81,30 @@ theorem rx_returnAt {M1 : Mem} {v i sz : B256} {i0 n0 : Nat} (hM1 : M = M1.write
   · rw [hi, hsz]; exact hM0.readback i0 v
 
 end Steps
+
+/-- The word a solc mutating entry returns on success, as its wrapper leaves it. -/
+abbrev okW : B256 := B256.eqCheck (B256.eqCheck (Bytes.toB256 [1]) 0) 0
+
+theorem okW_eq : okW = 1 := by decide
+
+/-- The halting state of a frame returning the word `w` at the pointer `F`. -/
+def retV (F : B256) (B : Devm) (S : List B256) (M : Mem) (w : B256) (G : Nat) : Devm :=
+  ((St B S M G).memRead F.toNat (Bytes.toB256 [32] + (F - F)).toNat).2.withOutput w.toBytes
+
+theorem Keeps.retV {sevm : Sevm} {pre B : Devm} (h : Keeps sevm pre B) (F : B256) (S : List B256) (M : Mem)
+    (w : B256) (G : Nat) : Keeps sevm pre (AccumulatedWalk.retV F B S M w G) :=
+  ⟨h.code, h.other, h.error, h.created⟩
+
+/-- A frame run to `retV` lands. -/
+theorem frameLands_retV {prog : List SFunc} {f : SFunc} {sevm : Sevm} {pre B : Devm} {F : B256} {S : List B256}
+    {M : Mem} {w w' : B256} {c K : Nat} {σ' : Stor} {R : Prop} (hf : prog[0]? = some f)
+    (hrun : ∀ G, 2300 ≤ G → SFunc.RunExact prog sevm (St pre [] Mem.empty (G + c)) f
+      (.halted (retV F B S M w G)))
+    (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hc : c ≤ K) (hgas : K + 2300 ≤ pre.gasLeft)
+    (hk : Keeps sevm pre B) (hst : Devm.getStor B sevm.currentTarget = σ') (hw : w = w')
+    (hr : R → pre.refundCounter ≤ B.refundCounter) :
+    FrameLands prog sevm pre (retV F B S M w (pre.gasLeft - c)) c w' σ' R :=
+  frameLands_of hf hrun hs hm hc hgas (fun _ => rfl) (fun _ => hw ▸ rfl) (fun G => hk.retV F S M w G)
+    (fun _ => hst) (fun r _ => hr r)
 
 end Blanc.Lift.AccumulatedWalk

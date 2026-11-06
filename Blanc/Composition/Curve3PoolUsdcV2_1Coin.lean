@@ -12,7 +12,7 @@ pool's coin premises (`usdcV2_1_coinPushOkAt` and siblings fix the numbers).
 namespace Blanc.Composition.Curve3PoolUsdcV2_1
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.Usdc Blanc.Lift.Curve3Pool
-open ImplV2_1 (xTo xVal pFrom pTo pVal bHolder)
+open ImplV2 (xTo xVal pFrom pTo pVal bHolder)
 open Blanc.Composition.UsdcLive (XferLaw PullLaw BalLaw ProxyAt usdc_coinPushOkAt usdc_coinPullOkAt usdc_coinBalOkAt)
 open Blanc.Lift.AccumulatedWalk (FrameLands guards_of)
 
@@ -20,8 +20,8 @@ theorem litA : Bytes.toB256 [4] = 4 := by decide
 theorem litB : Bytes.toB256 [32] + Bytes.toB256 [4] = 36 := by decide
 
 /-- **FiatTokenV2_1's `transfer` law.** -/
-theorem xferLaw : XferLaw ImplV2_1.code ImplV2_1.cert.prog 70300 68000 ImplV2_1.MoveFits ImplV2_1.moveStor
-    (fun a d => ImplV2_1.balSlot a ≠ ImplV2_1.balSlot d) := by
+theorem xferLaw : XferLaw ImplV2_1.code ImplV2_1.cert.prog 70300 68000 ImplV2.MoveFits ImplV2.moveStor
+    (fun a d => ImplV2.balSlot a ≠ ImplV2.balSlot d) := by
   intro msg dst v hcode fork static hval hd hF hfits
   have hsel : Blanc.Sevm.selector (initSevm msg) = 0xa9059cbb :=
     selector_eq_of_data_eq_abiSelectorBytes_append (by decide) (by rw [hd, List.append_assoc])
@@ -34,9 +34,9 @@ theorem xferLaw : XferLaw ImplV2_1.code ImplV2_1.cert.prog 70300 68000 ImplV2_1.
   exact ⟨C, u, (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact ImplV2_1.cert_check ImplV2_1.jumps_ok hcode fork L.run), hu, L⟩
 
 /-- **FiatTokenV2_1's `transferFrom` law.** -/
-theorem pullLaw : PullLaw ImplV2_1.code ImplV2_1.cert.prog 98300 96000 ImplV2_1.PullFits ImplV2_1.fromStor
-    (fun s sp d => ImplV2_1.allowSlot s sp ≠ ImplV2_1.balSlot s ∧ ImplV2_1.allowSlot s sp ≠ ImplV2_1.balSlot d ∧
-      ImplV2_1.balSlot s ≠ ImplV2_1.balSlot d) := by
+theorem pullLaw : PullLaw ImplV2_1.code ImplV2_1.cert.prog 98300 96000 ImplV2.PullFits ImplV2.fromStor
+    (fun s sp d => ImplV2.allowSlot s sp ≠ ImplV2.balSlot s ∧ ImplV2.allowSlot s sp ≠ ImplV2.balSlot d ∧
+      ImplV2.balSlot s ≠ ImplV2.balSlot d) := by
   intro msg src dst v hcode fork static hval hd hF hfits
   have hsel : Blanc.Sevm.selector (initSevm msg) = 0x23b872dd :=
     selector_eq_of_data_eq_abiSelectorBytes_append (by decide)
@@ -54,7 +54,7 @@ theorem pullLaw : PullLaw ImplV2_1.code ImplV2_1.cert.prog 98300 96000 ImplV2_1.
   exact ⟨C, u, (exec_iff_exec_eq 0 _ _ (.ok _)).mp (lift_exact ImplV2_1.cert_check ImplV2_1.jumps_ok hcode fork L.run), hu, L⟩
 
 /-- **FiatTokenV2_1's `balanceOf` law**: the answer is the entry. -/
-theorem balLaw : BalLaw ImplV2_1.code ImplV2_1.cert.prog 5300 3000 (fun σ a => σ.get (ImplV2_1.balSlot a)) := by
+theorem balLaw : BalLaw ImplV2_1.code ImplV2_1.cert.prog 5300 3000 (fun σ a => σ.get (ImplV2.balSlot a)) := by
   intro msg a hcode fork hval hd hF
   have hsel : Blanc.Sevm.selector (initSevm msg) = 0x70a08231 :=
     selector_eq_of_data_eq_abiSelectorBytes_append (by decide) hd
@@ -80,10 +80,10 @@ theorem usdcV2_1_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic 
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 85000 ≤ U)
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Proxy.code ∧ ProxyAt sevm b t.toAdr ImplV2_1.code ∧
-      ImplV2_1.MoveFits (b.getStor t.toAdr) sevm.currentTarget sevm.caller amt)
-    (hW' : ∀ b d, W b → CoinLeaves t.toAdr (ImplV2_1.moveStor (b.getStor t.toAdr) sevm.currentTarget sevm.caller amt)
+      ImplV2.MoveFits (b.getStor t.toAdr) sevm.currentTarget sevm.caller amt)
+    (hW' : ∀ b d, W b → CoinLeaves t.toAdr (ImplV2.moveStor (b.getStor t.toAdr) sevm.currentTarget sevm.caller amt)
       ((getOrigAcct sevm t.toAdr).stor = b.getStor t.toAdr ∧ t.toAdr ∉ b.createdAccounts ∧
-        ImplV2_1.balSlot sevm.currentTarget ≠ ImplV2_1.balSlot sevm.caller) b d → W' d) :
+        ImplV2.balSlot sevm.currentTarget ≠ ImplV2.balSlot sevm.caller) b d → W' d) :
     CoinPushOkAt sevm W W' t amt U ii oi :=
   usdc_coinPushOkAt @xferLaw (by omega) hfork hstatic hdepth hprec hne (by omega) hii hoi hW hW'
 
@@ -94,13 +94,13 @@ theorem usdcV2_1_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic 
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 113000 ≤ U)
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Proxy.code ∧ ProxyAt sevm b t.toAdr ImplV2_1.code ∧
-      ImplV2_1.PullFits (b.getStor t.toAdr) sevm.caller sevm.currentTarget sevm.currentTarget amt)
+      ImplV2.PullFits (b.getStor t.toAdr) sevm.caller sevm.currentTarget sevm.currentTarget amt)
     (hW' : ∀ b d, W b → CoinLeaves t.toAdr
-        (ImplV2_1.fromStor (b.getStor t.toAdr) sevm.caller sevm.currentTarget sevm.currentTarget amt)
+        (ImplV2.fromStor (b.getStor t.toAdr) sevm.caller sevm.currentTarget sevm.currentTarget amt)
       ((getOrigAcct sevm t.toAdr).stor = b.getStor t.toAdr ∧ t.toAdr ∉ b.createdAccounts ∧
-        ImplV2_1.allowSlot sevm.caller sevm.currentTarget ≠ ImplV2_1.balSlot sevm.caller ∧
-        ImplV2_1.allowSlot sevm.caller sevm.currentTarget ≠ ImplV2_1.balSlot sevm.currentTarget ∧
-        ImplV2_1.balSlot sevm.caller ≠ ImplV2_1.balSlot sevm.currentTarget) b d → W' d) :
+        ImplV2.allowSlot sevm.caller sevm.currentTarget ≠ ImplV2.balSlot sevm.caller ∧
+        ImplV2.allowSlot sevm.caller sevm.currentTarget ≠ ImplV2.balSlot sevm.currentTarget ∧
+        ImplV2.balSlot sevm.caller ≠ ImplV2.balSlot sevm.currentTarget) b d → W' d) :
     CoinPullOkAt sevm W W' t amt U ii oi :=
   usdc_coinPullOkAt @pullLaw (by omega) hfork hstatic hdepth hprec hne (by omega) hii hoi hW hW'
 
@@ -109,7 +109,7 @@ theorem usdcV2_1_coinBalOkAt {B : B256} (hfork : CoveredFork sevm.benvStat.fork)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Proxy.code ∧ ProxyAt sevm b t.toAdr ImplV2_1.code ∧
-      (b.getStor t.toAdr).get (ImplV2_1.balSlot sevm.currentTarget) = B)
+      (b.getStor t.toAdr).get (ImplV2.balSlot sevm.currentTarget) = B)
     (hW' : ∀ b d, W b → (∀ a, Devm.getStor d a = Devm.getStor b a) →
       (∀ a, d.getCode a = b.getCode a) → W' d) :
     CoinBalOkAt sevm W W' t B U ii oi :=
