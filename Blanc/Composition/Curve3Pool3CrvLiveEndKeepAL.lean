@@ -35,14 +35,14 @@ theorem alw_keep (post : Devm)
     -, -, -, -, -, -, hk0, hk1, hk2, -, -, -, -, -, -, hst', -, -, hcd', -, hR, hW, hA, hm, w900,
     h⟩ :=
     xa_al_frontC (P := fun a => a ≠ (cSevm alDataW).currentTarget ∧ a ≠ 4) checkedM rfl
-      (cSevm_fork _) al_lenW.1 al_lenW.2 al_selW (wPre_checkpoint _).abs (wPre_c3Entry _).prec
-      (fun i hi => (wPre_coins _).prec ⟨i, hi⟩) (wPre_poolCode _) (wPre_id _) ⟨htt, ht4⟩
+      (cSevm_fork _).histFork al_lenW.1 al_lenW.2 al_selW (wPre_checkpoint _).abs (wPre_c3Entry _).prec
+      (fun i hi => (wPre_coins _).prec ⟨i, hi⟩) (wPre_poolCode _) (wPre_id _).toH ⟨htt, ht4⟩
       (fun i hi => hct i hi) (fun c hc hp => hKC c hc hp.1 hp.2) hx
   have htokB : ∀ k : Nat, k < 3 → balancesBase + Nat.toB256 k ≠ tokenSlot := fun k hk => by
     rcases three_cases hk with rfl | rfl | rfl <;> decide
   obtain ⟨-, -, -, -, -, -, -, -, cm, rfl, -, -, -, -, hmt, -⟩ :=
     xa_al_backC (P := fun a => a ≠ (cSevm alDataW).currentTarget ∧ a ≠ 4) checkedM rfl
-      (cSevm_fork _) hR hW hA hm w900 hst'
+      (cSevm_fork _).histFork hR hW hA hm w900 hst'
       (by rw [Stor.get_set_ne _ lock_ne_token]; exact (wPre_c3Entry _).prec) htokB
       (by rw [hcd']; exact wPre_poolCode _)
       (by rw [Stor.get_set_ne _ lock_ne_token]; exact ⟨htt, ht4⟩)

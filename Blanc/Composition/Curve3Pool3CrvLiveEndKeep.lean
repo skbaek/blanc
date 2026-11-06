@@ -62,8 +62,8 @@ theorem rlw_keep (post : Devm)
   obtain ⟨hct, htt, ht4⟩ := poolStor_targets
   rw [← hst] at hct htt ht4
   obtain ⟨-, -, c0, c1, c2, c3, c4, hL, h0t, -, -, -, -, hp1, hp2, hp3, -, h4t, -⟩ :=
-    xa_removeLiquidity rfl (cSevm_fork _) rlw_len.1 rlw_len.2 rlw_sel (wPre_c3Entry _).prec
-      (fun i hi => (wPre_coins _).prec ⟨i, hi⟩) (wPre_poolCode _) (wPre_id _)
+    xa_removeLiquidity rfl (cSevm_fork _).histFork rlw_len.1 rlw_len.2 rlw_sel (wPre_c3Entry _).prec
+      (fun i hi => (wPre_coins _).prec ⟨i, hi⟩) (wPre_poolCode _) (wPre_id _).toH
       (.inl ⟨hct, htt, ht4, hKC⟩) hx
   have hall : ∀ c ∈ Exec.childFrames exc,
       c.sevm.currentTarget ≠ (cSevm rlwData).currentTarget ∧ c.sevm.currentTarget ≠ 4 := by
@@ -97,11 +97,11 @@ theorem ocw_keep (post : Devm)
   rw [← hst] at htk hcn
   have hck := wPre_checkpoint ocwData
   obtain ⟨-, -, -, cs, cb, cp, -, -, -, hL, hsw, -, -, -, -, -, hbt, -, -, -, -, hpt, -⟩ :=
-    xa_oneCoin2C checkedM rfl (cSevm_fork _) ocw_len.1 ocw_len.2 ocw_sel rfl hck.abs
+    xa_oneCoin2C checkedM rfl (cSevm_fork _).histFork ocw_len.1 ocw_len.2 ocw_sel rfl hck.abs
       (wPre_c3Entry _).prec (fun hi => by
         have := (wPre_coins ocwData).prec ⟨_, hi⟩
         simpa only [coinOf, coinSlot, toB256_toNat] using this)
-      (wPre_poolCode _) (wPre_id _) htk hcn hKC hx
+      (wPre_poolCode _) (wPre_id _).toH htk hcn hKC hx
   have hall : ∀ c ∈ Exec.childFrames exc,
       c.sevm.currentTarget ≠ (cSevm ocwData).currentTarget ∧ c.sevm.currentTarget ≠ 4 := by
     intro c hc

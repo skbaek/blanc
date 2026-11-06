@@ -31,9 +31,9 @@ theorem rliw_keep (post : Devm)
   obtain ⟨-, -, -, cs, cb, L0, L1, L2, A, D0, D1, D2, f0, f1, f2, hL, hsw, hT0, hm3, hA,
     hD0, hu0, hu1, hu2, hD1, h0, h1, h2, hD2, hD02, hmT, hbn, hb1, hslip, hTX, hbt, hbd, hbv,
     hbs, hblen, hP0, hP1, hP2, hstor, hlogs, hout⟩ :=
-    xa_rliC checkedM rfl (cSevm_fork _) rli_lenW.1 rli_lenW.2 rli_selW rfl
+    xa_rliC checkedM rfl (cSevm_fork _).histFork rli_lenW.1 rli_lenW.2 rli_selW rfl
       (wPre_checkpoint rliDataW).abs (wPre_c3Entry _).prec
-      (fun k hk => (wPre_coins _).prec ⟨k, hk⟩) (wPre_poolCode _) (wPre_id _) ⟨htt, ht4⟩
+      (fun k hk => (wPre_coins _).prec ⟨k, hk⟩) (wPre_poolCode _) (wPre_id _).toH ⟨htt, ht4⟩
       hct hKC hx
   have hall : ∀ c ∈ Exec.childFrames exc,
       c.sevm.currentTarget ≠ (cSevm rliDataW).currentTarget ∧ c.sevm.currentTarget ≠ 4 := by
