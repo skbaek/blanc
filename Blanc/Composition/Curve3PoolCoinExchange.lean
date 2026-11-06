@@ -74,7 +74,7 @@ theorem exchange_dai_usdc22_live {sevm : Sevm} {pre : Devm} {s : Curve3Pool.Stat
     (Blanc.Composition.Curve3PoolDai.dai_coinPullOkAt hfork hstatic (by omega) (hcoin i) hi1 (le_refl _)
       (by decide) (by decide) hWdai hWdai')
     hW''c
-    (Blanc.Composition.Curve3PoolUsdc22.usdc22_coinPushOkAt hfork hstatic hdepth (hcoin j) hj1 (by decide)
+    (Blanc.Composition.Curve3PoolUsdc22.usdc22_coinPushOkAt hfork hstatic hdepth (hcoin j) hj1 (by omega)
       (by decide) (by decide) hWusdc hWusdc')
     hG hGm
 
