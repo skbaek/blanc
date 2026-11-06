@@ -41,6 +41,9 @@ def swapQuote (w : State) (t : Nat) (i j : Fin 3) (dx : Nat) : Option (Nat × Na
 def swapOut (w : State) (t : Nat) (i j : Fin 3) (dx : Nat) : Option Nat :=
   (swapQuote w t i j dx).map fun q => q.1 * precision / rates.get j
 
+/-- What the curve quotes for a swap, `dy`: `swapOut` when its arithmetic fits. -/
+def quote (w : State) (t : Nat) (i j : Fin 3) (dx : Nat) : Nat := (swapOut w t i j dx).getD 0
+
 /-- The admin's cut of a swap's fee, in coin `j`'s own units. -/
 def swapAdmin (w : State) (t : Nat) (i j : Fin 3) (dx : Nat) : Option Nat :=
   (swapQuote w t i j dx).map fun q =>

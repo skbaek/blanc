@@ -56,8 +56,6 @@ theorem receipt_bytes : receiptTrieValue slotReceipt = r076 := by
 /-- **Slot 76.** The record holds 3Crv's creation, and its receipt succeeded. -/
 theorem slot : record.Slot 76 Blanc.Lift.Curve3Crv.Creation.HistoricalTx.tx slotReceipt where
   legacy := ⟨_, _, rfl⟩
-  rCanonical := by decide +kernel
-  sCanonical := by decide +kernel
   txSmall := by
     rw [txTrieValue_of_legacy rfl, Blanc.Lift.Curve3Crv.Creation.HistoricalTx.tx_encoded, ← slot_bytes]
     decide +kernel
@@ -72,13 +70,11 @@ theorem slot : record.Slot 76 Blanc.Lift.Curve3Crv.Creation.HistoricalTx.tx slot
     decide +kernel
   succeeded := rfl
 
-/-- **Block 10,809,467 bound.** A retained block with this hash, under HASH-B and in the wire
-decoder's form, is block 10,809,467 at time 1599414946, and slot 76 holds 3Crv's creation, whose receipt
-succeeded. -/
+/-- **Block 10,809,467 bound.** A retained block with this hash, under HASH-B, is block 10,809,467 at time
+1599414946, and slot 76 holds the RLP item of 3Crv's creation, whose receipt succeeded. -/
 theorem recorded {F : Fork → Prop} {cfg : ChainConfig} {pre post : BlockChain}
-    {b : ConfiguredBlockTraceIn F cfg pre post} (bound : HashBound b record)
-    (wire : b.block.RlpCanonical) :
+    {b : ConfiguredBlockTraceIn F cfg pre post} (bound : HashBound b record) :
     Recorded b 10809467 1599414946 76 Blanc.Lift.Curve3Crv.Creation.HistoricalTx.tx slotReceipt :=
-  bound.recorded record_checked wire slot
+  bound.recorded record_checked slot
 
 end Blanc.Lift.Curve3Crv.Creation.Block

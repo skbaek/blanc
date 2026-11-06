@@ -202,8 +202,6 @@ theorem receipt_bytes : receiptTrieValue slotReceipt = {rv} := by
 /-- **Slot {t.slot}.** The record holds {t.what}, and its receipt succeeded. -/
 theorem slot : record.Slot {t.slot} {t.tx_name} slotReceipt where
   legacy := ⟨_, _, rfl⟩
-  rCanonical := by decide +kernel
-  sCanonical := by decide +kernel
   txSmall := by
     rw [txTrieValue_of_legacy rfl, {t.tx_name.rsplit('.', 1)[0]}.tx_encoded, ← slot_bytes]
     decide +kernel
@@ -218,14 +216,12 @@ theorem slot : record.Slot {t.slot} {t.tx_name} slotReceipt where
     decide +kernel
   succeeded := rfl
 
-/-- **Block {t.number:,} bound.** A retained block with this hash, under HASH-B and in the wire
-decoder's form, is block {t.number:,} at time {qty(d['block']['timestamp'])}, and slot {t.slot} holds {t.what}, whose receipt
-succeeded. -/
+/-- **Block {t.number:,} bound.** A retained block with this hash, under HASH-B, is block {t.number:,} at time
+{qty(d['block']['timestamp'])}, and slot {t.slot} holds the RLP item of {t.what}, whose receipt succeeded. -/
 theorem recorded {{F : Fork → Prop}} {{cfg : ChainConfig}} {{pre post : BlockChain}}
-    {{b : ConfiguredBlockTraceIn F cfg pre post}} (bound : HashBound b record)
-    (wire : b.block.RlpCanonical) :
+    {{b : ConfiguredBlockTraceIn F cfg pre post}} (bound : HashBound b record) :
     Recorded b {t.number} {qty(d['block']['timestamp'])} {t.slot} {t.tx_name} slotReceipt :=
-  bound.recorded record_checked wire slot
+  bound.recorded record_checked slot
 
 end {t.namespace}
 """

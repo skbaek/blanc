@@ -1,5 +1,6 @@
 import Blanc.Composition.Curve3PoolPublicObservers
 import Blanc.Composition.Curve3PoolBlockAnchor
+import Blanc.ExecutionHistoryInSystemConfined
 import Blanc.Lift.Dai.Cert
 import Blanc.Lift.Usdt.Cert
 import Blanc.Lift.Usdc.Proxy.Cert
@@ -40,10 +41,10 @@ namespace Deployment
 variable (d : Deployment) {future : BlockChain} (h : MainnetHistory d.minter.post future)
 
 /-- 3Crv's creation block, cut at the creation transaction. -/
-noncomputable def c3Cut := d.c3.trace.bodyTrace.txSplitOfSlot d.c3Recorded.slot rfl
+noncomputable def c3Cut := d.c3.trace.bodyTrace.txSplitOfItem d.c3Recorded.slot
 
 /-- The minter assignment's block, cut at that transaction. -/
-noncomputable def minterCut := d.minter.trace.bodyTrace.txSplitOfSlot d.minterRecorded.slot rfl
+noncomputable def minterCut := d.minter.trace.bodyTrace.txSplitOfItem d.minterRecorded.slot
 
 /-- Mainnet from the end of 3Crv's creation block to `future`. -/
 noncomputable def sinceC3Block : MainnetHistory d.c3.post future :=
@@ -54,7 +55,7 @@ noncomputable def sinceCreation : MidHistoryTraceIn HistFork mainnetChainConfig 
   (MidHistoryTraceIn.tail d.c3.trace d.c3Cut).append (d.sinceC3Block h)
 
 /-- The pool's creation block, cut at the creation transaction. -/
-noncomputable def poolCut := d.pool.trace.bodyTrace.txSplitOfSlot d.poolRecorded.slot rfl
+noncomputable def poolCut := d.pool.trace.bodyTrace.txSplitOfItem d.poolRecorded.slot
 
 /-- Mainnet from right after the pool's creation to `future`. -/
 noncomputable def sincePool : MidHistoryTraceIn HistFork mainnetChainConfig d.poolCut.afterBenv future :=
@@ -160,7 +161,7 @@ structure Assumes (d : Deployment) {future : BlockChain}
     ((d.sinceC3Block h).PragueNoAuthorityAt 4)
   /-- The history's hashes do not collide. -/
   hashes : HashesFresh d h
-  /-- No system contract's frame runs at the pool. -/
-  sysAvoidsPool : ∀ r ∈ (d.sinceC3Block h).systemRawFrames, r.sevm.currentTarget ≠ pool
+  /-- Each system contract has its code when its fork activates it, and nobody holds its key. -/
+  system : h.SystemConfined
 
 end Blanc.Composition.Curve3PoolPublic

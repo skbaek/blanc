@@ -82,7 +82,6 @@ structure TxAdmitted (benv : Benv) (bout : BlockOutput) (tx : Tx) (E : Adr) (nee
   form : ∃ prio maxFee, TxForm benv tx prio maxFee ∧ SignerReady benv tx E maxFee
   room : GasRoom benv bout tx need
   block : CoinbaseApart benv E
-  poolOld : pool ∉ benv.createdAccounts
 
 /-! ## The liveness powers -/
 

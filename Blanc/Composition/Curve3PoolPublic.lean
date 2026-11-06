@@ -35,7 +35,7 @@ def PoolLive (w : State) : Prop := word w pool Curve3Pool.isKilledSlot = 0
 
 /-- `E` holds the shares it burns, the minimums are met, and the contract's arithmetic fits. -/
 structure ExitRequest (w : State) (E : Adr) (a : Nat) (mins : V3) : Prop where
-  holds : a ≤ shares w E ∧ a ≤ supply w ∧ 0 < supply w
+  holds : a ≤ shares w E ∧ 0 < supply w
   mins : ∀ k, mins.get k ≤ share w a k
   mulFits : ∀ k, recorded w k * a < 2 ^ 256
   creditFits : ∀ k, CreditFits w E k (netOf w k (share w a k))
@@ -51,12 +51,17 @@ def ExitWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
 def exitLimit (w : State) (data : Bytes) (E : Adr) (a : Nat) : Nat :=
   callIntrinsic data + exitFrameGas w E a + callRoom
 
+/-- `E`'s 3Crv word collides with no other word the history touches (HASH-T, one more key). -/
+def HolderApart (d : Deployment) {future : BlockChain} (h : MainnetHistory d.minter.post future)
+    (E : Adr) : Prop :=
+  Curve3Crv.FreshKeys (fun _ => False) (.bal E :: Curve3Crv.midTouchedKeysIn c3 (d.sinceCreation h))
+
 /-- **A holder can leave.** At any moment of mainnet after the minter assignment, a holder's admissible
 `remove_liquidity` transaction, with no named power in force against it, is processed at exact gas and
 pays each coin's share. -/
 def lp_exit : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
-    ∀ (tx : Tx) (E : Adr) (a : Nat) (mins : V3),
+    ∀ (tx : Tx) (E : Adr) (a : Nat) (mins : V3), HolderApart d m.through E →
       tx.data = exitCalldata a mins →
       TxAdmitted m.benv m.bout tx E (exitLimit m.world tx.data E a) →
       CoinsOpen m.world E → ExitRequest m.world E a mins →
@@ -96,7 +101,7 @@ noncomputable def swapGasUsed (w : State) (data : Bytes) (E : Adr) (t : Nat) (i 
   some (afterRefund spent (swapRefund w E i j dx dy (allowanceOf w E i)))
 
 /-- `E` can pull `dx`, the coins differ, the minimum is met, and the contract's arithmetic fits. -/
-structure SwapRequest (w : State) (E : Adr) (t : Nat) (i j : Fin 3) (dx dy minDy : Nat) : Prop where
+structure SwapRequest (w : State) (E : Adr) (i j : Fin 3) (dx dy minDy : Nat) : Prop where
   live : PoolLive w
   apart : i ≠ j
   moved : 0 < dx ∧ minDy ≤ dy ∧ 0 < dy
@@ -104,7 +109,6 @@ structure SwapRequest (w : State) (E : Adr) (t : Nat) (i j : Fin 3) (dx dy minDy
   pullFrom : UsdtOpen w E
   creditFits : CreditFits w pool i (netOf w i dx) ∧ CreditFits w E j (netOf w j dy)
   feeFits : UsdtFeeFits w dx ∧ UsdtFeeFits w dy
-  quoted : swapOut w t i j dx = some dy
 
 /-- **The swap is processed, uses exactly `swapGasUsed`, and pays out.** -/
 def SwapWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Adr) (i j : Fin 3)
@@ -120,12 +124,12 @@ transaction, with no named power in force against it, is processed at exact gas 
 curve quotes. -/
 def swap : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
-    ∀ (tx : Tx) (E : Adr) (i j : Fin 3) (dx dy minDy spent : Nat),
+    ∀ (tx : Tx) (E : Adr) (i j : Fin 3) (dx minDy spent : Nat),
       tx.data = swapCalldata i j dx minDy →
       swapSpent m.world tx.data E m.benv.stat.time.toNat i j dx = some spent →
       TxAdmitted m.benv m.bout tx E (spent + callRoom) → CoinsOpen m.world E →
-      SwapRequest m.world E m.benv.stat.time.toNat i j dx dy minDy →
-      SwapWorks m.benv m.bout tx m.nextIndex E i j dx dy
+      SwapRequest m.world E i j dx (quote m.world m.benv.stat.time.toNat i j dx) minDy →
+      SwapWorks m.benv m.bout tx m.nextIndex E i j dx (quote m.world m.benv.stat.time.toNat i j dx)
 
 /-! ## `pool_backed`, `virtual_price_bound`, `virtual_price_falls` -/
 
@@ -166,7 +170,8 @@ structure Asked (msg : Msg) (w : State) (E : Adr) (data : Bytes) : Prop where
 /-- `lp_exit`'s message: the same effect at the same frame cost and refund. -/
 def lp_exit_message : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
-    ∀ (msg : Msg) (E : Adr) (a : Nat) (mins : V3), Asked msg m.world E (exitCalldata a mins) →
+    ∀ (msg : Msg) (E : Adr) (a : Nat) (mins : V3), HolderApart d m.through E →
+      Asked msg m.world E (exitCalldata a mins) →
       ExitRequest m.world E a mins →
       MsgDoes msg callRoom (exitFrameGas m.world E a) (exitRefund m.world E a)
         (fun st => ExitPaid m.world st E a)
@@ -178,13 +183,13 @@ noncomputable def swapCost (w : State) (E : Adr) (t amp : Nat) (i j : Fin 3) (dx
 /-- `exchange`'s message: the same effect at the same frame cost and refund. -/
 def swap_message : Prop :=
   ∀ (d : Deployment) (m : Moment d), Assumes d m.through →
-    ∀ (msg : Msg) (E : Adr) (i j : Fin 3) (dx dy minDy admin amp D x t : Nat),
+    ∀ (msg : Msg) (E : Adr) (i j : Fin 3) (dx minDy admin amp D x t : Nat),
       Asked msg m.world E (swapCalldata i j dx minDy) → t = msg.benv.stat.time.toNat →
-      SwapRequest m.world E t i j dx dy minDy → SwapInputs m.world t i dx amp D x →
+      SwapRequest m.world E i j dx (quote m.world t i j dx) minDy → SwapInputs m.world t i dx amp D x →
       swapAdmin m.world t i j dx = some admin →
-      MsgDoes msg callRoom (swapCost m.world E t amp i j dx dy x D)
-        (swapRefund m.world E i j dx dy (allowanceOf m.world E i))
-        (fun st => SwapPaid m.world st E i j dx dy admin)
+      MsgDoes msg callRoom (swapCost m.world E t amp i j dx (quote m.world t i j dx) x D)
+        (swapRefund m.world E i j dx (quote m.world t i j dx) (allowanceOf m.world E i))
+        (fun st => SwapPaid m.world st E i j dx (quote m.world t i j dx) admin)
 
 /-- The room above the frame that the fallback entries' proofs require. -/
 def liquidityRoom : Nat := 800000

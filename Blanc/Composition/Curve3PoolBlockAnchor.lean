@@ -2,6 +2,7 @@ import Blanc.Composition.Curve3PoolJointRoot
 import Blanc.Lift.Curve3Crv.Creation.Block.Slot
 import Blanc.Lift.Curve3Crv.Creation.BlockMinter.Slot
 import Blanc.Lift.Curve3Pool.Creation.Block.Slot
+import Blanc.ExecutionHistoryInSystemConfined
 
 /-!
 # The joint deployment anchored at three block hashes
@@ -17,11 +18,7 @@ and that each pair of entry lists produces that header's roots.
 | `AnchoredBlock.bound.hash` | the block's hash, three times | A: the only fetched fact about the blocks |
 | `AnchoredBlock.bound` HASH-B | no collision on the two values each binding compares | finite, trace-local |
 | `AnchoredBlock.trace`, `toPool`, `toMinter` | configured `HistFork` traces | C |
-| `AnchoredBlock.wire` | the retained block is in Jaune's wire decoder's form | C |
 | `Facts` | `JointDeployment`'s four remaining facts about the history | as there |
-
-`wire` is here because `JointDeployment` asks for the exact `Tx` at each slot, and the roots fix a
-slot only up to leading zero bytes of its signature scalars.
 
 `AnchoredDeployment.toJoint` gives `JointDeployment`, so every theorem from it holds from the hashes.
 -/
@@ -40,8 +37,6 @@ structure AnchoredBlock (pre : BlockChain) (r : BlockRecord) where
   trace : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post
   /-- The block has the recorded hash, under HASH-B. -/
   bound : HashBound trace r
-  /-- The retained block is in the wire decoder's form. -/
-  wire : trace.block.RlpCanonical
 
 /-- **The anchored deployment.** 3Crv's creation block, the pool's and the minter assignment's, each
 by its hash, in one mainnet history. -/
@@ -62,17 +57,17 @@ variable (d : AnchoredDeployment)
 /-- 3Crv's creation block, as recorded. -/
 theorem c3Recorded : Recorded d.c3.trace 10809467 1599414946 76
     Lift.Curve3Crv.Creation.HistoricalTx.tx Lift.Curve3Crv.Creation.Block.slotReceipt :=
-  Lift.Curve3Crv.Creation.Block.recorded d.c3.bound d.c3.wire
+  Lift.Curve3Crv.Creation.Block.recorded d.c3.bound
 
 /-- The pool's creation block, as recorded. -/
 theorem poolRecorded : Recorded d.pool.trace 10809473 1599414978 53
     Lift.Curve3Pool.Creation.HistoricalTx.tx Lift.Curve3Pool.Creation.Block.slotReceipt :=
-  Lift.Curve3Pool.Creation.Block.recorded d.pool.bound d.pool.wire
+  Lift.Curve3Pool.Creation.Block.recorded d.pool.bound
 
 /-- The minter assignment's block, as recorded. -/
 theorem minterRecorded : Recorded d.minter.trace 10809482 1599415164 135
     Lift.Curve3Crv.SetMinter.tx Lift.Curve3Crv.Creation.BlockMinter.slotReceipt :=
-  Lift.Curve3Crv.Creation.BlockMinter.recorded d.minter.bound d.minter.wire
+  Lift.Curve3Crv.Creation.BlockMinter.recorded d.minter.bound
 
 /-- `JointDeployment`'s facts about the history, which no block hash decides. -/
 structure Facts : Prop where
@@ -80,11 +75,11 @@ structure Facts : Prop where
   fresh : Lift.Curve3Crv.FreshKeys (fun _ => False)
     (Lift.Curve3Crv.midTouchedKeysIn c3Adr
       ((MidHistoryTraceIn.tail d.c3.trace
-        (d.c3.trace.bodyTrace.txSplitOfSlot d.c3Recorded.slot rfl)).append
+        (d.c3.trace.bodyTrace.txSplitOfItem d.c3Recorded.slot)).append
         (((d.toPool.step d.pool.trace).append d.toMinter).step d.minter.trace)))
   /-- The coins are their deployed bytes and the operators' two powers are restrained. -/
   coins : Curve3PoolCoinKeep.CoinsHold (((MidHistoryTraceIn.tail d.pool.trace
-      (d.pool.trace.bodyTrace.txSplitOfSlot d.poolRecorded.slot rfl)).append d.toMinter).step
+      (d.pool.trace.bodyTrace.txSplitOfItem d.poolRecorded.slot)).append d.toMinter).step
       d.minter.trace)
     (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 0))
     (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 1))
@@ -104,9 +99,7 @@ noncomputable def toJoint (facts : d.Facts) : JointDeployment where
   c3Block := d.c3.trace
   c3Number := d.c3Recorded.number
   c3Time := d.c3Recorded.time
-  c3Entry := .inr _
   c3Slot := d.c3Recorded.slot
-  c3Decoded := rfl
   c3Receipt := _
   c3Lookup := d.c3Recorded.lookup
   c3Succeeded := d.c3Recorded.succeeded
@@ -116,9 +109,7 @@ noncomputable def toJoint (facts : d.Facts) : JointDeployment where
   poolBlock := d.pool.trace
   poolNumber := d.poolRecorded.number
   poolTime := d.poolRecorded.time
-  poolEntry := .inr _
   poolSlot := d.poolRecorded.slot
-  poolDecoded := rfl
   poolReceipt := _
   poolLookup := d.poolRecorded.lookup
   poolSucceeded := d.poolRecorded.succeeded
@@ -128,9 +119,7 @@ noncomputable def toJoint (facts : d.Facts) : JointDeployment where
   minterBlock := d.minter.trace
   minterNumber := d.minterRecorded.number
   minterTime := d.minterRecorded.time
-  minterEntry := .inr _
   minterSlot := d.minterRecorded.slot
-  minterDecoded := rfl
   minterReceipt := _
   minterLookup := d.minterRecorded.lookup
   minterSucceeded := d.minterRecorded.succeeded
@@ -138,6 +127,57 @@ noncomputable def toJoint (facts : d.Facts) : JointDeployment where
   coins := facts.coins
   idEmpty := facts.idEmpty
   idNoFrame := facts.idNoFrame
+
+/-! ## System stages -/
+
+/-- The whole history after 3Crv's creation block, to the end of the minter block. -/
+noncomputable def toMinterEnd (d : AnchoredDeployment) :
+    ConfiguredHistoryTraceIn HistFork mainnetChainConfig d.c3.post d.minter.post :=
+  ((d.toPool.step d.pool.trace).append d.toMinter).step d.minter.trace
+
+/-- Everything up to the minter assignment is before Cancun. -/
+theorem forks (d : AnchoredDeployment) : d.toMinterEnd.ForksSatisfy PreCancun := by
+  have last : d.minter.post.blocks.getLast? = some d.minter.trace.block :=
+    (congrArg (fun chain : BlockChain => chain.blocks.getLast?) d.minter.trace.postEq).trans
+      (appendBlock_getLast? _ _)
+  exact d.toMinterEnd.forksPreCancun_of_mainnet_tip last
+    (by rw [d.minterRecorded.time]; decide)
+
+/-- The pool is outside the system addresses. -/
+theorem pool_not_system : poolAdr ∉ systemTargets := by decide +kernel
+
+/-- **No system frame from 3Crv's creation block on targets an account outside the system addresses**,
+from the confinement of the history after the minter assignment; before it there is no system frame.
+For the pool (`pool_not_system`) and the coins (`Lift.CurveCoins.coins_not_system`), this one premise
+gives what each asked separately. -/
+theorem system_ne (d : AnchoredDeployment) {future : BlockChain}
+    {h : ConfiguredHistoryTraceIn HistFork mainnetChainConfig d.minter.post future}
+    (confined : h.SystemConfined) {T : Adr} (notSystem : T ∉ systemTargets) :
+    ∀ r ∈ (d.toMinterEnd.append h).systemRawFrames, r.sevm.currentTarget ≠ T := by
+  rw [ConfiguredHistoryTraceIn.systemRawFrames_append,
+    d.toMinterEnd.systemRawFrames_nil_of_preCancun d.forks, List.nil_append]
+  exact confined.system_ne notSystem
+
+/-- **The mid history from just after the pool's creation is confined**, the form the coins' receipt
+laws take through `MidHistoryTraceIn.system_ne`. -/
+theorem sincePool_confined (d : AnchoredDeployment) {future : BlockChain}
+    {h : ConfiguredHistoryTraceIn HistFork mainnetChainConfig d.minter.post future}
+    (confined : h.SystemConfined) :
+    ((MidHistoryTraceIn.tail d.pool.trace
+      (d.pool.trace.bodyTrace.txSplitOfItem d.poolRecorded.slot)).append
+        ((d.toMinter.step d.minter.trace).append h)).SystemConfined := by
+  have forks := d.forks
+  have poolForks := ((ConfiguredHistoryTraceIn.ForksSatisfy_append _ _ _).mp forks.1)
+  have rest : (d.toMinter.step d.minter.trace).ForksSatisfy PreCancun := ⟨poolForks.2, forks.2⟩
+  refine MidHistoryTraceIn.systemConfined_append
+    (.tail d.pool.trace (d.pool.trace.bodyTrace.txSplitOfItem d.poolRecorded.slot))
+    (d.pool.trace.systemConfined_of_preCancun poolForks.1.2) _ ?_ ?_
+  · exact (ConfiguredHistoryTraceIn.SystemCodeAtOpenings_append _ _).mpr
+      ⟨ConfiguredHistoryTraceIn.systemCodeAtOpenings_of_preCancun _ rest, confined.openings⟩
+  · intro p hp
+    exact (ConfiguredHistoryTraceIn.PragueNoAuthorityAt_append _ _ _).mpr
+      ⟨ConfiguredHistoryTraceIn.pragueNoAuthorityAt_of_prePrague _
+        (rest.mono fun _ hf => hf.toPrePrague) _, confined.noAuthority p hp⟩
 
 /-- **The joint deployment root, from three block hashes.** `joint_root` at the anchored deployment:
 no block's number, time, slot or receipt is an input. -/

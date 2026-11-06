@@ -6,6 +6,8 @@ import Blanc.Lift.Curve3Crv.HistWindow
 import Blanc.Lift.Curve3Crv.SetMinterTx
 import Blanc.ExecutionHistoryInAppend
 import Blanc.Composition.Curve3PoolKeepHistory
+import Blanc.Lift.CurveCoins.PoolFreshAtCreation
+import Blanc.TransactionItemTransport
 
 /-!
 # The joint deployment root of the Curve 3pool and 3Crv
@@ -13,8 +15,9 @@ import Blanc.Composition.Curve3PoolKeepHistory
 `JointDeployment` is one retained `HistFork` mainnet history from 3Crv's actual creation
 transaction (block 10,809,467, slot 76) through the pool's (block 10,809,473, slot 53) and the
 minter assignment (block 10,809,482, slot 135), each with its successful receipt, running to the end
-of the minter block. It takes no contract fact: code, nonce, sender, funds, deployed storage and
-the joint checkpoint are theorems.
+of the minter block. Each slot is named by its RLP item (`HoldsItem`), which is what a block's roots fix.
+It takes no contract fact: code, nonce, sender, funds, deployed storage and the joint checkpoint are
+theorems.
 
 Besides the blocks, these facts about the history are fields:
 
@@ -50,9 +53,7 @@ structure JointDeployment where
   c3Block : ConfiguredBlockTraceIn HistFork mainnetChainConfig c3Pre c3Completed
   c3Number : c3Block.block.header.number = 10809467
   c3Time : c3Block.block.header.timestamp = 1599414946
-  c3Entry : Bytes ⊕ Tx
-  c3Slot : c3Block.block.txs[76]? = some c3Entry
-  c3Decoded : decodeTx c3Block.fork.ruleSet c3Entry = .ok Lift.Curve3Crv.Creation.HistoricalTx.tx
+  c3Slot : HoldsItem c3Block.block.txs 76 Lift.Curve3Crv.Creation.HistoricalTx.tx
   c3Receipt : Fin 5 × Receipt
   c3Lookup : c3Block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (76 : Nat).toBytes)]? =
     some c3Receipt
@@ -63,10 +64,7 @@ structure JointDeployment where
   poolBlock : ConfiguredBlockTraceIn HistFork mainnetChainConfig poolPre poolCompleted
   poolNumber : poolBlock.block.header.number = 10809473
   poolTime : poolBlock.block.header.timestamp = 1599414978
-  poolEntry : Bytes ⊕ Tx
-  poolSlot : poolBlock.block.txs[53]? = some poolEntry
-  poolDecoded : decodeTx poolBlock.fork.ruleSet poolEntry =
-    .ok Lift.Curve3Pool.Creation.HistoricalTx.tx
+  poolSlot : HoldsItem poolBlock.block.txs 53 Lift.Curve3Pool.Creation.HistoricalTx.tx
   poolReceipt : Fin 5 × Receipt
   poolLookup : poolBlock.blockOutput.receiptsTrie[BLT.toBytes (.bytes (53 : Nat).toBytes)]? =
     some poolReceipt
@@ -77,20 +75,17 @@ structure JointDeployment where
   minterBlock : ConfiguredBlockTraceIn HistFork mainnetChainConfig minterPre minterCompleted
   minterNumber : minterBlock.block.header.number = 10809482
   minterTime : minterBlock.block.header.timestamp = 1599415164
-  minterEntry : Bytes ⊕ Tx
-  minterSlot : minterBlock.block.txs[135]? = some minterEntry
-  minterDecoded : decodeTx minterBlock.fork.ruleSet minterEntry =
-    .ok Lift.Curve3Crv.SetMinter.tx
+  minterSlot : HoldsItem minterBlock.block.txs 135 Lift.Curve3Crv.SetMinter.tx
   minterReceipt : Fin 5 × Receipt
   minterLookup : minterBlock.blockOutput.receiptsTrie[BLT.toBytes (.bytes (135 : Nat).toBytes)]? =
     some minterReceipt
   minterSucceeded : minterReceipt.2.succeeded = true
   fresh : Lift.Curve3Crv.FreshKeys (fun _ => False)
     (Lift.Curve3Crv.midTouchedKeysIn c3Adr
-      ((MidHistoryTraceIn.tail c3Block (c3Block.bodyTrace.txSplitOfSlot c3Slot c3Decoded)).append
+      ((MidHistoryTraceIn.tail c3Block (c3Block.bodyTrace.txSplitOfItem c3Slot)).append
         (((toPool.step poolBlock).append toMinter).step minterBlock)))
   coins : Curve3PoolCoinKeep.CoinsHold (((MidHistoryTraceIn.tail poolBlock
-      (poolBlock.bodyTrace.txSplitOfSlot poolSlot poolDecoded)).append toMinter).step minterBlock)
+      (poolBlock.bodyTrace.txSplitOfItem poolSlot)).append toMinter).step minterBlock)
     (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 0))
     (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 1))
     (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 2))
@@ -107,29 +102,22 @@ noncomputable def history :
     ConfiguredHistoryTraceIn HistFork mainnetChainConfig j.c3Completed j.minterCompleted :=
   ((j.toPool.step j.poolBlock).append j.toMinter).step j.minterBlock
 
-/-- 3Crv's deployment record over the whole history (R4). -/
-noncomputable def c3 : Lift.Curve3Crv.C3crvDeploymentTo j.minterCompleted where
-  pre := j.c3Pre
-  completed := j.c3Completed
-  block := j.c3Block
-  number := j.c3Number
-  time := j.c3Time
-  entry := j.c3Entry
-  slot := j.c3Slot
-  decoded := j.c3Decoded
-  receipt := j.c3Receipt
-  lookup := j.c3Lookup
-  succeeded := j.c3Succeeded
-  history := j.history
-  fresh := j.fresh
+/-- 3Crv's creation cut. -/
+noncomputable def c3Cut : j.c3Block.bodyTrace.transactions.TxSplit 76 :=
+  j.c3Block.bodyTrace.txSplitOfItem j.c3Slot
+
+/-- The rest of 3Crv's creation block followed by the whole history. -/
+noncomputable def c3Trace :
+    MidHistoryTraceIn HistFork mainnetChainConfig j.c3Cut.afterBenv j.minterCompleted :=
+  (MidHistoryTraceIn.tail j.c3Block j.c3Cut).append j.history
 
 /-- The pool's creation cut. -/
 noncomputable def poolCut : j.poolBlock.bodyTrace.transactions.TxSplit 53 :=
-  j.poolBlock.bodyTrace.txSplitOfSlot j.poolSlot j.poolDecoded
+  j.poolBlock.bodyTrace.txSplitOfItem j.poolSlot
 
 /-- The minter assignment's cut. -/
 noncomputable def minterCut : j.minterBlock.bodyTrace.transactions.TxSplit 135 :=
-  j.minterBlock.bodyTrace.txSplitOfSlot j.minterSlot j.minterDecoded
+  j.minterBlock.bodyTrace.txSplitOfItem j.minterSlot
 
 /-- From just after the pool's creation to the block before the minter block. -/
 noncomputable def poolMid :
@@ -143,8 +131,8 @@ noncomputable def span :
 
 /-- From just after 3Crv's creation to the block before the minter block. -/
 noncomputable def c3Mid :
-    MidHistoryTraceIn HistFork mainnetChainConfig j.c3.cut.afterBenv j.minterPre :=
-  (MidHistoryTraceIn.tail j.c3Block j.c3.cut).append ((j.toPool.step j.poolBlock).append j.toMinter)
+    MidHistoryTraceIn HistFork mainnetChainConfig j.c3Cut.afterBenv j.minterPre :=
+  (MidHistoryTraceIn.tail j.c3Block j.c3Cut).append ((j.toPool.step j.poolBlock).append j.toMinter)
 
 /-- The world right after the minter assignment. -/
 noncomputable def cutState : Jaune.State := j.minterCut.afterBenv.state
@@ -160,6 +148,102 @@ noncomputable def c3Invocations : List Lift.Curve3Crv.WriterInvocation :=
 /-- The 3Crv keys tracked at the cut: those its committed invocations touch. -/
 noncomputable def c3Keys : Lift.Curve3Crv.Key → Prop :=
   Lift.Curve3Crv.Key.extend (fun _ => False) (Lift.Curve3Crv.invocationKeys j.c3Invocations)
+
+end JointDeployment
+
+/-! ## The three recorded transactions, at their items -/
+
+/-- A Muir-fork environment has no state gas and no block access list. -/
+theorem muir_lanes {e : Benv} (hfork : e.stat.fork = .muirGlacier) :
+    e.stat.rules.stateGas = none ∧ e.stat.rules.bal = none := by
+  have rules : e.stat.rules = muirGlacierRules := by
+    change Fork.ruleSet e.stat.fork = muirGlacierRules
+    rw [hfork]
+    rfl
+  rw [rules]
+  exact ⟨rfl, rfl⟩
+
+/-- The pool's creation transaction, on a retained trace that succeeded: the runtime and the deployed
+storage after it, and no code and nonce 0 at the pool's address before it. -/
+theorem pool_created_of_head {benv : Benv} {bout bout' : BlockOutput} {state : Jaune.State} {index : Nat}
+    (head : TransactionTrace benv bout Lift.Curve3Pool.Creation.HistoricalTx.tx index state bout')
+    (hfork : benv.stat.fork = .muirGlacier) (hbasefee : benv.stat.baseFeePerGas = 0)
+    (htime : benv.stat.time = Lift.Curve3Pool.Creation.deployTime)
+    (success : head.messageOut.error = none) :
+    (state.getCode pool).toList = Lift.Curve3Pool.code.toList ∧
+      state.getStor pool = Lift.Curve3Pool.Creation.deployedStor Lift.Curve3Pool.Creation.deployTime := by
+  open Lift.Curve3Pool.Creation.HistoricalTx in
+  obtain ⟨-, -, nonce, senderCode, funds, room⟩ := actual_prechecks head hfork hbasefee
+  have fresh := actual_fresh_of_success head hfork hbasefee success
+  obtain ⟨post, bout'', transaction, -, -, code, storage⟩ :=
+    settle_muir_actual_creation benv bout index hfork hbasefee htime nonce senderCode funds room fresh
+  have same := Prod.mk.inj (Except.ok.inj (transaction.symm.trans head.result))
+  rw [← same.1]
+  exact ⟨code, storage⟩
+
+namespace JointDeployment
+
+variable (j : JointDeployment)
+
+/-- The block's receipt lookup at the cut's own index, for a cut at the slot `i`. -/
+theorem lookup_at {F : Fork → Prop} {pre post : BlockChain}
+    {block : ConfiguredBlockTraceIn F mainnetChainConfig pre post} {i : Nat}
+    {cut : block.bodyTrace.transactions.TxSplit i} {receipt : Fin 5 × Receipt}
+    (index : cut.index = i)
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes i.toBytes)]? = some receipt) :
+    block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? = some receipt := by
+  rw [index]
+  exact lookup
+
+/-- **3Crv right after its creation:** its runtime, its deployed storage, and its invariant there. -/
+theorem c3Created :
+    (j.c3Cut.afterBenv.state.getCode c3Adr).toList = Lift.Curve3Crv.code.toList ∧
+      j.c3Cut.afterBenv.state.getStor c3Adr =
+        Lift.Curve3Crv.Creation.deployedStor Lift.Curve3Crv.Creation.deployer.toB256 ∧
+      Lift.Curve3Crv.VyInv (j.c3Cut.afterBenv.state.getStor c3Adr)
+        (Lift.Curve3Crv.Creation.curveDeployedState Lift.Curve3Crv.Creation.deployer)
+        (fun _ => False) := by
+  obtain ⟨forkEq, forkAtCut, baseFee⟩ :=
+    Lift.Curve3Crv.Creation.HistoricalTx.block_muir j.c3Block j.c3Number j.c3Time j.c3Cut
+  obtain ⟨hsg, hbal⟩ := muir_lanes forkAtCut
+  obtain ⟨index, _, head, -, sameOut⟩ :=
+    j.c3Block.bodyTrace.exists_item_head j.c3Cut j.c3Slot (tx := Lift.Curve3Crv.Creation.HistoricalTx.tx)
+      rfl hsg hbal
+  have success := j.c3Block.txSplit_error_eq_none_of_receipt j.c3Cut (by rw [forkEq]; rfl)
+    (lookup_at index j.c3Lookup) j.c3Succeeded
+  obtain ⟨hcode, hstor, -, -⟩ := Lift.Curve3Crv.Creation.HistoricalTx.actual_settled_cut_of_tx_eq head rfl
+    forkAtCut baseFee (by rw [sameOut]; exact success)
+  have hstor' : j.c3Cut.afterBenv.state.getStor c3Adr =
+      Lift.Curve3Crv.Creation.deployedStor Lift.Curve3Crv.Creation.deployer.toB256 := hstor
+  exact ⟨hcode, hstor', by
+    rw [hstor']
+    exact Lift.Curve3Crv.Creation.deployedStor_vyInv _ Lift.Curve3Crv.Creation.deployer_balSlot⟩
+
+/-- The pool's cut holds its creation's retained trace, which succeeded. -/
+theorem pool_head : j.poolCut.benv.stat.fork = .muirGlacier ∧ j.poolCut.benv.stat.baseFeePerGas = 0 ∧
+    j.poolCut.benv.stat.time = Lift.Curve3Pool.Creation.deployTime ∧
+    ∃ (bout'' : BlockOutput) (head : TransactionTrace j.poolCut.benv j.poolCut.bout
+        Lift.Curve3Pool.Creation.HistoricalTx.tx j.poolCut.index j.poolCut.txState bout''),
+      head.messageOut.error = none := by
+  obtain ⟨forkEq, forkAtCut, baseFee, time⟩ := j.poolBlock.txSplit_muir (by
+    rw [j.poolNumber, j.poolTime]; decide +kernel) j.poolCut
+  obtain ⟨hsg, hbal⟩ := muir_lanes forkAtCut
+  obtain ⟨index, _, head, -, sameOut⟩ :=
+    j.poolBlock.bodyTrace.exists_item_head j.poolCut j.poolSlot
+      (tx := Lift.Curve3Pool.Creation.HistoricalTx.tx) rfl hsg hbal
+  have success := j.poolBlock.txSplit_error_eq_none_of_receipt j.poolCut (by rw [forkEq]; rfl)
+    (lookup_at index j.poolLookup) j.poolSucceeded
+  refine ⟨forkAtCut, baseFee, ?_, _, head, by rw [sameOut]; exact success⟩
+  rw [time, j.poolTime]
+  rfl
+
+/-- **Nonce 0 and no code at the pool's address just before its creation.** What backs the check that
+the pool's allowance rows are empty at creation: before its code exists only its key could set one. -/
+theorem pool_fresh_before_creation :
+    j.poolCut.benv.state.getNonce pool = 0 ∧ (j.poolCut.benv.state.getCode pool).isEmpty = true := by
+  obtain ⟨hfork, hbasefee, -, _, head, success⟩ := j.pool_head
+  exact Lift.CurveCoins.fresh_of_no_collision
+    (Lift.Curve3Pool.Creation.HistoricalTx.actual_fresh_of_success head hfork hbasefee success)
 
 end JointDeployment
 
@@ -216,13 +300,13 @@ theorem JointDeployment.poolFacts (j : JointDeployment) :
 /-- 3Crv's runtime is at every raw frame of the span: certified bytes installed by its creation. -/
 theorem JointDeployment.c3Code (j : JointDeployment) :
     ∀ R ∈ j.span.rawFrames, R.devm.getCode c3Adr = Lift.Curve3Crv.code := by
-  obtain ⟨hcode, -, -⟩ := j.c3.created
+  obtain ⟨hcode, -, -⟩ := j.c3Created
   intro R member
-  have memberC3 : R ∈ j.c3.trace.rawFrames := by
-    change R ∈ ((MidHistoryTraceIn.tail j.c3Block j.c3.cut).append j.history).rawFrames
+  have memberC3 : R ∈ j.c3Trace.rawFrames := by
+    change R ∈ ((MidHistoryTraceIn.tail j.c3Block j.c3Cut).append j.history).rawFrames
     rw [MidHistoryTraceIn.append_rawFrames]
     exact List.mem_append_right _ (j.poolFacts.subset member)
-  exact Curve3PoolCoinKeep.midCode_of_cert Lift.Curve3Crv.c3crvInstalledCert j.c3.trace
+  exact Curve3PoolCoinKeep.midCode_of_cert Lift.Curve3Crv.c3crvInstalledCert j.c3Trace
     (Lift.Curve3Crv.code_of_image (by rw [hcode]; rfl)) R memberC3
 
 /-- **The pool's history environment over the span.** -/
@@ -282,34 +366,26 @@ theorem c3_minter (j : JointDeployment) {s : Blanc.Curve3Crv.State}
       (Lift.Curve3Crv.Creation.curveDeployedState Lift.Curve3Crv.Creation.deployer)
       j.c3Invocations s) :
     s.minter = pool := by
-  obtain ⟨index, sameTx⟩ :=
-    j.minterBlock.bodyTrace.txSplitOfSlot_spec j.minterSlot j.minterDecoded
-  have lookup : j.minterBlock.blockOutput.receiptsTrie[BLT.toBytes
-      (.bytes j.minterCut.index.toBytes)]? = some j.minterReceipt := by
-    change j.minterBlock.blockOutput.receiptsTrie[BLT.toBytes
-      (.bytes (j.minterBlock.bodyTrace.txSplitOfSlot j.minterSlot
-        j.minterDecoded).index.toBytes)]? = _
-    rw [index]
-    exact j.minterLookup
   obtain ⟨forkEq, hfork, -, -⟩ := j.minterBlock.txSplit_muir (by
     rw [j.minterNumber, j.minterTime]; decide +kernel) j.minterCut
+  obtain ⟨hsg, hbal⟩ := muir_lanes hfork
+  obtain ⟨index, _, head, sameFrames, sameOut⟩ :=
+    j.minterBlock.bodyTrace.exists_item_head j.minterCut j.minterSlot
+      (tx := Lift.Curve3Crv.SetMinter.tx) rfl hsg hbal
   have success := j.minterBlock.txSplit_error_eq_none_of_receipt j.minterCut
-    (by rw [forkEq]; rfl) lookup j.minterSucceeded
-  have sameTx' : j.minterCut.tx = Lift.Curve3Crv.SetMinter.tx := sameTx
+    (by rw [forkEq]; rfl) (JointDeployment.lookup_at index j.minterLookup) j.minterSucceeded
   have root : ∃ frame, j.minterCut.head.settledFrames = frame :: Exec.descendantFrames frame.run ∧
       frame.sevm.currentTarget = c3Adr ∧ frame.sevm.data = Lift.Curve3Crv.SetMinter.callData := by
-    generalize j.minterCut = cut at sameTx' hfork success ⊢
-    obtain ⟨_, tx', _, _, _, _, _, _, head, _, _, _⟩ := cut
-    subst sameTx'
-    exact Lift.Curve3Crv.SetMinter.root_of_success head hfork success
+    rw [← sameFrames]
+    exact Lift.Curve3Crv.SetMinter.root_of_success head hfork (by rw [sameOut]; exact success)
   obtain ⟨frame, heads, target, data⟩ := root
-  obtain ⟨hcode, -, hinv⟩ := j.c3.created
-  have installed : some (j.c3.cut.afterBenv.state.getCode c3Adr).toList =
+  obtain ⟨hcode, -, hinv⟩ := j.c3Created
+  have installed : some (j.c3Cut.afterBenv.state.getCode c3Adr).toList =
       Lift.Curve3Crv.c3crvSem.image := by
     rw [hcode]
     rfl
-  have ready := Lift.Curve3Crv.c3crv_mid_readyH j.c3.trace installed hinv j.fresh
-  have inTrace : ∀ f ∈ j.minterCut.head.settledFrames, f ∈ j.c3.trace.settledFrames := by
+  have ready := Lift.Curve3Crv.c3crv_mid_readyH j.c3Trace installed hinv j.fresh
+  have inTrace : ∀ f ∈ j.minterCut.head.settledFrames, f ∈ j.c3Trace.settledFrames := by
     intro f member
     change f ∈ j.c3Mid.settledFrames ++ j.minterBlock.settledFrames
     rw [j.minterBlock.settledFrames_throughCut j.minterCut]
@@ -363,15 +439,8 @@ theorem joint_root_replay (j : JointDeployment) :
         j.c3Invocations cs ∧
       JointCheckpoint pool c3Adr ps cs j.c3Keys j.cutState := by
   -- the pool
-  obtain ⟨index, sameTx⟩ := j.poolBlock.bodyTrace.txSplitOfSlot_spec j.poolSlot j.poolDecoded
-  have lookup : j.poolBlock.blockOutput.receiptsTrie[BLT.toBytes
-      (.bytes j.poolCut.index.toBytes)]? = some j.poolReceipt := by
-    change j.poolBlock.blockOutput.receiptsTrie[BLT.toBytes
-      (.bytes (j.poolBlock.bodyTrace.txSplitOfSlot j.poolSlot j.poolDecoded).index.toBytes)]? = _
-    rw [index]
-    exact j.poolLookup
-  obtain ⟨hcode, hstor⟩ := Lift.Curve3Pool.Creation.HistoricalTx.actual_block_cut j.poolBlock
-    j.poolNumber j.poolTime j.poolCut sameTx lookup j.poolSucceeded
+  obtain ⟨hfork, hbasefee, htime, _, head, success⟩ := j.pool_head
+  obtain ⟨hcode, hstor⟩ := pool_created_of_head head hfork hbasefee htime success
   have poolInstalled : some (j.poolCut.afterBenv.state.getCode pool).toList =
       Lift.Curve3Pool.poolSem.image := by
     change some (j.poolCut.txState.getCode pool).toList = _
@@ -386,8 +455,8 @@ theorem joint_root_replay (j : JointDeployment) :
     Lift.Curve3Pool.pool_window_history j.poolMid j.minterBlock j.minterCut poolInstalled poolInitial
       j.poolEnv
   -- 3Crv
-  obtain ⟨c3Hcode, -, hinv⟩ := j.c3.created
-  have c3Installed : some (j.c3.cut.afterBenv.state.getCode c3Adr).toList =
+  obtain ⟨c3Hcode, -, hinv⟩ := j.c3Created
+  have c3Installed : some (j.c3Cut.afterBenv.state.getCode c3Adr).toList =
       Lift.Curve3Crv.c3crvSem.image := by
     rw [c3Hcode]
     rfl
