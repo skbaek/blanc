@@ -243,7 +243,10 @@ theorem rx_rl_postF {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
     (hGx : Gx = R + 3138 + c + debit (afterSload sevm b tokenSlot) [] (rlBurnMem sevm M))
     (hGb : Gx < 2 ^ 256)
     (hQ : ∀ D, D.gasLeft = R → (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
-      Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) → Q (.halted D)) :
+      Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) →
+      (∃ d l, Devm.EqModGas d (next (afterSload sevm b tokenSlot) [] (rlBurnMem sevm M)) ∧
+        ∃ S' M' G', D = St (afterSstore sevm (d.addLog l) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])) S' M' G') →
+      Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b [3, 0x2a0] M (Gx + rlPostCost sevm b)) t_2f7b_c15 Q := by
   unfold rlPostCost
   rw [show Gx + (67 + sloadCost sevm b tokenSlot) = Gx + 2 + sloadCost sevm b tokenSlot + 3 + 3 +
@@ -271,7 +274,8 @@ theorem rx_rl_postF {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
   obtain ⟨-, d, hrun, hpost0⟩ := hp.sound (afterSload sevm b tokenSlot) [] M Gx
     ⟨hWc.sload _ _ hWb, by omega, hGb, hin, by decide⟩
   obtain ⟨hgas, hnext, hpost, hrd32, hrdlt, -, -, -⟩ := hpost0
-  have hcd := hc d (by rw [hM3, hM2, hM1] at hnext; exact hnext)
+  rw [hM3, hM2, hM1] at hnext
+  have hcd := hc d hnext
   xr (.next hrun ·)
   obtain ⟨hmem, -⟩ := hpost.settled (by decide)
   rw [show (0x61c : B256).toNat = 0x61c by decide, show (0x44 : B256).toNat = 0x44 by decide,
@@ -352,7 +356,7 @@ theorem rx_rl_postF {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {
       fun _ => rfl
     rw [hG3R, ← hcd]
     exact congrArg (R + ·) (e _).symm) (by rw [hG3R]; exact hsentry) ?_
-  refine ⟨_, .last rfl, hQ _ rfl ⟨_, _, _, (afterSstore_logs _ _ _ _).trans rfl, ?_⟩⟩
+  refine ⟨_, .last rfl, hQ _ rfl ⟨_, _, _, (afterSstore_logs _ _ _ _).trans rfl, ?_⟩ ⟨d, _, hnext, _, _, _, rfl⟩⟩
   rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide),
     show (Bytes.toB256 [0x06, 0xc0]).toNat + 0xc0 = 0x780 by decide]
   exact (congrArg Bytes.toB256 (WordAt.write_self _ _ _)).trans (B256.toB256_toBytes _)
@@ -623,6 +627,9 @@ theorem rx_rl_frame_floor {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop}
     {R : Nat} (hR : 2201 ≤ R) (hGb : R + rlExactCost sevm pre T P < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St pre [] Mem.empty (R + rlExactCost sevm pre T P)) t_0000_c0
       (fun o => ∃ D, o = .halted D ∧ D.gasLeft = R ∧
+        (∃ d l, Devm.EqModGas d (P.burnNext (rlBurnBase sevm pre T P) []
+            (rlBurnMem sevm (rlHeadMem3 sevm pre T P))) ∧
+          ∃ S' M' G', D = St (afterSstore sevm (d.addLog l) (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [0])) S' M' G') ∧
         ∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
           Bytes.toB256 (data.sliceD 0xc0 32 0) = T - rlAmt sevm) := by
   obtain ⟨hsup, hsupLe, hpush, hburn⟩ := hP
@@ -750,7 +757,7 @@ theorem rx_rl_frame_floor {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop}
     (by omega) (rl_lock_sentry sevm _ _ _ hR)
     (fun d hd => (hd.trans hnext).sstoreCost_congr sevm _ _)
     (by rw [hdeb]; rfl) (by omega) ?_
-  intro D hD hlogs
-  exact ⟨D, rfl, hD, hlogs⟩
+  intro D hD hlogs ⟨d, l, hd, hDe⟩
+  exact ⟨D, rfl, hD, ⟨d, l, hd.trans hnext, hDe⟩, hlogs⟩
 
 end Blanc.Lift.Curve3Pool
