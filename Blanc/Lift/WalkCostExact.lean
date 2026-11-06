@@ -154,8 +154,14 @@ elab "xsum? " "[" ls:term,* "]" : tactic => withMainContext do
   let (atoms, hyps) ← sumAtoms lemmas lhs (#[], #[])
   let m ← hyps.mapM fun (i, y, _) => do return (i, ← sumLit y)
   logInfo m!"literal {← sumLit lhs}; atoms {atoms.size}; lemma literals {m}"
-  for a in atoms do
-    logInfo m!"atom {a.getAppFn}"
+  let pp1 (a : Expr) : MetaM Format :=
+    withOptions (fun o => (o.setBool `pp.deepTerms false).setBool `pp.proofs false) (ppExpr a)
+  if let some (_, _, rhs) := tgt.eq? then
+    let (ra, _) ← sumAtoms lemmas rhs (#[], #[])
+    for a in atoms do
+      unless ← ra.anyM (fun x => sumSame x a) do logInfo m!"only left: {← pp1 a}"
+    for a in ra do
+      unless ← atoms.anyM (fun x => sumSame x a) do logInfo m!"only right: {← pp1 a}"
 
 section Charges
 

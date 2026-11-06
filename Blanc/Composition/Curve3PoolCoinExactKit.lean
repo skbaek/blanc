@@ -1,6 +1,7 @@
 import Blanc.Composition.Curve3PoolCoinChild
 import Blanc.Lift.Curve3Pool.ExactLivePremises
 import Blanc.Lift.CallProfileTransport
+import Blanc.Lift.UsdtForwardSteps
 
 /-!
 # A coin child's exact profile at the pool's call sites
@@ -48,6 +49,34 @@ def coinStaticNext : Devm :=
     oi.toNat (0x20 : B256).toNat
 
 end Mutable
+
+/-- **A bounded law and an exact run from one entry land together**: `exec` is a function, so one post, and
+the charges agree because both are below the gas given. -/
+theorem law_exact {e : Evm} {post P : Devm} {used c gas K : Nat} (hexec : exec e = .ok post) (hE : exec e = .ok P)
+    (hP : P.gasLeft = gas - c) (hu : used ≤ K) (hc : c ≤ K) (hK : K ≤ gas) (hg : post.gasLeft = gas - used) :
+    post = P ∧ used = c := by
+  have h := hexec.symm.trans hE
+  have hpost : post = P := by injection h
+  subst hpost
+  exact ⟨rfl, by omega⟩
+
+/-- `law_exact` on what a stopping frame leaves. -/
+theorem stop_exact {prog : List SFunc} {s : Sevm} {pre : Devm} {σ : Stor} {R : Prop} {e : Evm} {post P : Devm}
+    {used c K : Nat} (hexec : exec e = .ok post) (hE : exec e = .ok P) (hP : P.gasLeft = pre.gasLeft - c)
+    (hu : used ≤ K) (hc : c ≤ K) (hK : K ≤ pre.gasLeft)
+    (L : Blanc.Lift.AccumulatedWalk.StopLands prog s pre post used σ R) :
+    Blanc.Lift.AccumulatedWalk.StopLands prog s pre P c σ R := by
+  obtain ⟨rfl, rfl⟩ := law_exact hexec hE hP hu hc hK L.gas
+  exact L
+
+/-- `law_exact` on what a replying frame leaves. -/
+theorem lands_exact {prog : List SFunc} {s : Sevm} {pre : Devm} {w : B256} {σ : Stor} {R : Prop} {e : Evm} {post P : Devm}
+    {used c K : Nat} (hexec : exec e = .ok post) (hE : exec e = .ok P) (hP : P.gasLeft = pre.gasLeft - c)
+    (hu : used ≤ K) (hc : c ≤ K) (hK : K ≤ pre.gasLeft)
+    (L : Blanc.Lift.AccumulatedWalk.FrameLands prog s pre post used w σ R) :
+    Blanc.Lift.AccumulatedWalk.FrameLands prog s pre P c w σ R := by
+  obtain ⟨rfl, rfl⟩ := law_exact hexec hE hP hu hc hK L.gas
+  exact L
 
 variable {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {data : Bytes} {U : Nat} {ii is oi : B256}
 
