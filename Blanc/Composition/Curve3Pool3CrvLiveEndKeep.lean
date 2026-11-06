@@ -14,7 +14,7 @@ import Blanc.Lift.Curve3Pool.Bridge
   (`Exec.childFrames_keeps_of_depth_one`).  Generic over the entry.
 * `rlw_keep`, `ocw_keep`: the per-execution keep premise of `removeLiquidity_live` /
   `removeLiquidityOneCoin_live` at the concrete entries.  The walk under the conditional keep
-  (`xa_removeLiquidity`'s `RlKeepC` branch, `xa_oneCoin2C`) names every child's target — 3Crv
+  (`xa_removeLiquidity`, `xa_oneCoin2C`, each at `KeepSel.of_keepC`) names every child's target — 3Crv
   or a coin, neither the pool nor `4` — so `RlKeepC` gives every child's keep.
 * `rl_frame_live`, `oc_frame_live`: the end-to-end instances with no hypothesis.
 -/
@@ -64,7 +64,7 @@ theorem rlw_keep (post : Devm)
   obtain ⟨-, -, c0, c1, c2, c3, c4, hL, h0t, -, -, -, -, hp1, hp2, hp3, -, h4t, -⟩ :=
     xa_removeLiquidity rfl (cSevm_fork _).histFork rlw_len.1 rlw_len.2 rlw_sel (wPre_c3Entry _).prec
       (fun i hi => (wPre_coins _).prec ⟨i, hi⟩) (wPre_poolCode _) (wPre_id _).toH
-      (.inl ⟨hct, htt, ht4, hKC⟩) hx
+      (.of_keepC hKC hct ⟨htt, ht4⟩) hx
   have hall : ∀ c ∈ Exec.childFrames exc,
       c.sevm.currentTarget ≠ (cSevm rlwData).currentTarget ∧ c.sevm.currentTarget ≠ 4 := by
     intro c hc
@@ -89,19 +89,20 @@ theorem ocw_keep (post : Devm)
     (XAt.of_exec exc (wPre_gas' ocwData))
   have hst : (St (St (wPre ocwData) [] Mem.empty 878400) [] Mem.empty 878400).getStor
       (cSevm ocwData).currentTarget = poolStor := cState_stor_pool
+  obtain ⟨hct, htt, ht4⟩ := poolStor_targets
   have htk : (poolStor.get tokenSlot).toAdr ≠ poolAddr ∧ (poolStor.get tokenSlot).toAdr ≠ 4 :=
-    ⟨poolStor_targets.2.1, poolStor_targets.2.2⟩
+    ⟨htt, ht4⟩
   have hcn : (poolStor.get (coinsBase + exJ (cSevm ocwData))).toAdr ≠ poolAddr ∧
       (poolStor.get (coinsBase + exJ (cSevm ocwData))).toAdr ≠ 4 := by
     decide +kernel
-  rw [← hst] at htk hcn
+  rw [← hst] at htk hcn hct htt ht4
   have hck := wPre_checkpoint ocwData
   obtain ⟨-, -, -, cs, cb, cp, -, -, -, hL, hsw, -, -, -, -, -, hbt, -, -, -, -, hpt, -⟩ :=
     xa_oneCoin2C checkedM rfl (cSevm_fork _).histFork ocw_len.1 ocw_len.2 ocw_sel rfl hck.abs
       (wPre_c3Entry _).prec (fun hi => by
         have := (wPre_coins ocwData).prec ⟨_, hi⟩
         simpa only [coinOf, coinSlot, toB256_toNat] using this)
-      (wPre_poolCode _) (wPre_id _).toH htk hcn hKC hx
+      (wPre_poolCode _) (wPre_id _).toH (.of_keepC hKC hct ⟨htt, ht4⟩) hx
   have hall : ∀ c ∈ Exec.childFrames exc,
       c.sevm.currentTarget ≠ (cSevm ocwData).currentTarget ∧ c.sevm.currentTarget ≠ 4 := by
     intro c hc

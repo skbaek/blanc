@@ -33,8 +33,7 @@ theorem rliw_keep (post : Devm)
     hbs, hblen, hP0, hP1, hP2, hstor, hlogs, hout⟩ :=
     xa_rliC checkedM rfl (cSevm_fork _).histFork rli_lenW.1 rli_lenW.2 rli_selW rfl
       (wPre_checkpoint rliDataW).abs (wPre_c3Entry _).prec
-      (fun k hk => (wPre_coins _).prec ⟨k, hk⟩) (wPre_poolCode _) (wPre_id _).toH ⟨htt, ht4⟩
-      hct hKC hx
+      (fun k hk => (wPre_coins _).prec ⟨k, hk⟩) (wPre_poolCode _) (wPre_id _).toH (.of_keepC hKC hct ⟨htt, ht4⟩) hx
   have hall : ∀ c ∈ Exec.childFrames exc,
       c.sevm.currentTarget ≠ (cSevm rliDataW).currentTarget ∧ c.sevm.currentTarget ≠ 4 := by
     intro c hc

@@ -271,7 +271,7 @@ theorem usdc_frameKeeps (c : Exec.Frame) (hpc : c.pc = 0) (hcode : c.sevm.code =
   simp only [Exec.rawFrameRoots, List.mem_cons] at hr
   rcases hr with rfl | hr
   · rfl
-  refine Exec.rawFrameDescendants_at (root := ⟨0, sevm, pre, out, run⟩) ?_ run (.refl _) r hr
+  refine Exec.rawFrameDescendants_of_chain (Q := fun D => D.sevm.currentTarget = _) (root := ⟨0, sevm, pre, out, run⟩) ?_ run (.refl _) r hr
   intro nodePc nextPc nodeSevm nodePre nodeOut raw frame rsm cevm nrun chain step enter child D hD
   obtain ⟨x, hat, hx, -⟩ := Evm.step_spawn_inv step
   have env : nodeSevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
