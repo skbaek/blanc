@@ -118,7 +118,7 @@ theorem dai_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
     CoinPushOkAt sevm W W' t amt U ii oi := by
   refine mutCallOkAt_of_childWith 58800 56500 hfork hdepth (by rw [prec_false hprec]) (by omega) (by omega)
     (by rw [show (0x44 : B256).toNat = 0x44 from rfl]; exact hii) hoi ?_
-  intro b S M G hWb hin hfwd
+  intro b S M G hWb _ hin hfwd
   obtain ⟨hc, hfits⟩ := hW b hWb
   refine ⟨by rw [hc]; exact dai_undelegated, ?_⟩
   obtain ⟨cpost, used, hexec, hu, L⟩ := xfer_msg (msg := callMsg0 sevm b S M G t ii 0x44 oi 0x20)
@@ -149,7 +149,7 @@ theorem dai_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
     CoinPullOkAt sevm W W' t amt U ii oi := by
   refine mutCallOkAt_of_childWith 90300 88000 hfork hdepth (by rw [prec_false hprec]) (by omega) (by omega)
     (by rw [show (0x64 : B256).toNat = 0x64 from rfl]; exact hii) hoi ?_
-  intro b S M G hWb hin hfwd
+  intro b S M G hWb _ hin hfwd
   obtain ⟨hc, hfits⟩ := hW b hWb
   refine ⟨by rw [hc]; exact dai_undelegated, ?_⟩
   obtain ⟨cpost, used, hexec, hu, L⟩ := pull_msg (msg := callMsg0 sevm b S M G t ii 0x64 oi 0x20)
