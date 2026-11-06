@@ -1,6 +1,7 @@
 import Blanc.ExecutionTrieBinding
 import Blanc.HeaderBinding
 import Blanc.TrieKernel
+import Blanc.TransactionItemTransport
 
 /-!
 # A configured block bound to a recorded block by its hash
@@ -20,10 +21,9 @@ reduction of `trie` to Keccak is proved.
 From these, the block's number and time, its body slot and its receipt are theorems
 (`HashBound.fields`, `HashBound.slot`, `HashBound.receipt`).
 
-`HashBound.slot` needs `Block.RlpCanonical`: `Tx.toBLT` trims leading zero bytes of the signature
-scalars, so the two trie roots fix a body slot's `Tx` only up to those bytes. A block Jaune's wire
-decoder produced has none (`Jaune`'s `rlpToBlock` results are `RlpCanonical`), so that premise says
-the retained block is in the decoder's form, and it reads no chain data.
+`Tx.toBLT` trims leading zero bytes of the signature scalars, so the roots fix a body slot only up to
+those bytes: `HashBound.slot` gives `HoldsItem`, the slot's RLP item, which is all execution reads
+(`StagedBodyTrace.exists_item_head`).
 -/
 
 namespace Blanc.BlockHashBinding
@@ -53,40 +53,11 @@ def indexKey (i : Nat) : Bytes := BLT.toBytes (.bytes i.toBytes)
 structure BlockRecord.Slot (r : BlockRecord) (i : Nat) (tx : Tx) (receipt : Fin 5 × Receipt) :
     Prop where
   legacy : ∃ gasPrice receiver, tx.type = .zero gasPrice receiver
-  rCanonical : Bytes.CanonicalScalar 32 tx.r
-  sCanonical : Bytes.CanonicalScalar 32 tx.s
   txSmall : (txTrieValue tx).length < 2 ^ 64
   txEntry : ((indexKey i).toNibbles, txTrieValue tx) ∈ r.txEntries
   receiptSmall : (receiptTrieValue receipt).length < 2 ^ 64
   receiptEntry : ((indexKey i).toNibbles, receiptTrieValue receipt) ∈ r.receiptEntries
   succeeded : receipt.2.succeeded = true
-
-/-- A canonical scalar has no leading zero byte to trim. -/
-theorem trimZero_of_canonicalScalar {n : Nat} {xs : Bytes} (h : Bytes.CanonicalScalar n xs) :
-    trimZero xs = xs := by
-  have head := (Bytes.canonicalScalar_iff.mp h).2
-  cases xs with
-  | nil => rfl
-  | cons x xs =>
-    have ne : x ≠ 0 := fun e => head (by rw [e]; rfl)
-    simp only [trimZero, List.dropWhile_cons, ne, decide_false, Bool.false_eq_true, ↓reduceIte]
-
-/-- Two legacy transactions with one RLP item and canonical signature scalars are equal. -/
-theorem legacy_eq_of_toBLT_eq {tx tx' : Tx} {gasPrice gasPrice' : Nat}
-    {receiver receiver' : Option Adr}
-    (type : tx.type = .zero gasPrice receiver) (type' : tx'.type = .zero gasPrice' receiver')
-    (hr : Bytes.CanonicalScalar 32 tx.r) (hs : Bytes.CanonicalScalar 32 tx.s)
-    (hr' : Bytes.CanonicalScalar 32 tx'.r) (hs' : Bytes.CanonicalScalar 32 tx'.s)
-    (same : tx.toBLT = tx'.toBLT) : tx = tx' := by
-  obtain ⟨nonce, price, gas, rcv, value, data, v, -, -⟩ := legacy_fields_of_toBLT_eq type type' same
-  obtain ⟨n, g, va, d, w, r, s, ty⟩ := tx
-  obtain ⟨n', g', va', d', w', r', s', ty'⟩ := tx'
-  dsimp only at type type' hr hs hr' hs' nonce price gas rcv value data v
-  subst type type' price rcv nonce gas value data v
-  simp only [Tx.toBLT, BLT.list.injEq, BLT.bytes.injEq, List.cons.injEq, and_true, true_and,
-    trimZero_of_canonicalScalar hr, trimZero_of_canonicalScalar hs,
-    trimZero_of_canonicalScalar hr', trimZero_of_canonicalScalar hs'] at same
-  rw [same.1, same.2]
 
 section Bound
 
@@ -129,22 +100,16 @@ theorem receiptEntries_eq (bound : HashBound b r) (checked : r.Checked) :
   bound.receiptsSep.pair_eq <| b.receiptRoot_eq_trie.symm.trans <|
     (bound.fields checked).receiptRoot.trans checked.receiptRoot.symm
 
-/-- **The body slot.** A bound block in the wire decoder's form holds exactly the recorded
-transaction at the recorded index. -/
-theorem slot (bound : HashBound b r) (checked : r.Checked) (wire : b.block.RlpCanonical)
-    {i : Nat} {tx : Tx} {receipt : Fin 5 × Receipt} (slot : r.Slot i tx receipt) :
-    b.block.txs[i]? = some (.inr tx) := by
+/-- **The body slot.** A bound block holds the recorded transaction's RLP item at the recorded
+index. -/
+theorem slot (bound : HashBound b r) (checked : r.Checked) {i : Nat} {tx : Tx}
+    {receipt : Fin 5 × Receipt} (slot : r.Slot i tx receipt) : HoldsItem b.block.txs i tx := by
   obtain ⟨price₀, rcv₀, type₀⟩ := slot.legacy
   have entry : ((BLT.toBytes (.bytes i.toBytes)).toNibbles, txTrieValue tx) ∈
       transactionsEntries b.blockOutput := by
     rw [bound.txEntries_eq checked]
     exact slot.txEntry
-  obtain ⟨tx', price, rcv, atSlot, type, same⟩ :=
-    b.legacy_slot_of_transactionsEntries type₀ slot.txSmall entry
-  have wf := wire.2.2.2 _ (List.mem_of_getElem? atSlot)
-  have eq := legacy_eq_of_toBLT_eq type type₀ wf.1.2.2.2.1 wf.1.2.2.2.2.1 slot.rCanonical
-    slot.sCanonical same
-  rw [atSlot, eq]
+  exact b.legacy_slot_of_transactionsEntries type₀ slot.txSmall entry
 
 /-- **The receipt.** A bound block's output holds exactly the recorded receipt at the recorded
 index. -/
@@ -157,24 +122,25 @@ theorem receipt (bound : HashBound b r) (checked : r.Checked) {i : Nat} {tx : Tx
 
 end HashBound
 
-/-- Block `b` is mainnet block `n` at time `t`; its slot `i` holds `tx`, whose receipt succeeded. -/
+/-- Block `b` is mainnet block `n` at time `t`; its slot `i` holds `tx`'s RLP item, whose receipt
+succeeded. -/
 structure Recorded (b : ConfiguredBlockTraceIn F cfg pre post) (n t i : Nat) (tx : Tx)
     (receipt : Fin 5 × Receipt) : Prop where
   number : b.block.header.number = n
   time : b.block.header.timestamp = t
-  slot : b.block.txs[i]? = some (.inr tx)
+  slot : HoldsItem b.block.txs i tx
   lookup : b.blockOutput.receiptsTrie[BLT.toBytes (.bytes i.toBytes)]? = some receipt
   succeeded : receipt.2.succeeded = true
 
 /-- **A hash-bound block is recorded:** its number, its time, its slot and its receipt's success
-follow from the hash, HASH-B, and the block being in the wire decoder's form. -/
+follow from the hash and HASH-B. -/
 theorem HashBound.recorded {b : ConfiguredBlockTraceIn F cfg pre post} {r : BlockRecord}
-    (bound : HashBound b r) (checked : r.Checked) (wire : b.block.RlpCanonical)
+    (bound : HashBound b r) (checked : r.Checked)
     {i : Nat} {tx : Tx} {receipt : Fin 5 × Receipt} (slot : r.Slot i tx receipt) :
     Recorded b r.header.number r.header.timestamp i tx receipt where
   number := (bound.fields checked).number
   time := (bound.fields checked).timestamp
-  slot := bound.slot checked wire slot
+  slot := bound.slot checked slot
   lookup := bound.receipt checked slot
   succeeded := slot.succeeded
 

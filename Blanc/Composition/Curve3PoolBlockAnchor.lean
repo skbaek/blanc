@@ -17,11 +17,7 @@ and that each pair of entry lists produces that header's roots.
 | `AnchoredBlock.bound.hash` | the block's hash, three times | A: the only fetched fact about the blocks |
 | `AnchoredBlock.bound` HASH-B | no collision on the two values each binding compares | finite, trace-local |
 | `AnchoredBlock.trace`, `toPool`, `toMinter` | configured `HistFork` traces | C |
-| `AnchoredBlock.wire` | the retained block is in Jaune's wire decoder's form | C |
 | `Facts` | `JointDeployment`'s four remaining facts about the history | as there |
-
-`wire` is here because `JointDeployment` asks for the exact `Tx` at each slot, and the roots fix a
-slot only up to leading zero bytes of its signature scalars.
 
 `AnchoredDeployment.toJoint` gives `JointDeployment`, so every theorem from it holds from the hashes.
 -/
@@ -40,8 +36,6 @@ structure AnchoredBlock (pre : BlockChain) (r : BlockRecord) where
   trace : ConfiguredBlockTraceIn HistFork mainnetChainConfig pre post
   /-- The block has the recorded hash, under HASH-B. -/
   bound : HashBound trace r
-  /-- The retained block is in the wire decoder's form. -/
-  wire : trace.block.RlpCanonical
 
 /-- **The anchored deployment.** 3Crv's creation block, the pool's and the minter assignment's, each
 by its hash, in one mainnet history. -/
@@ -62,17 +56,17 @@ variable (d : AnchoredDeployment)
 /-- 3Crv's creation block, as recorded. -/
 theorem c3Recorded : Recorded d.c3.trace 10809467 1599414946 76
     Lift.Curve3Crv.Creation.HistoricalTx.tx Lift.Curve3Crv.Creation.Block.slotReceipt :=
-  Lift.Curve3Crv.Creation.Block.recorded d.c3.bound d.c3.wire
+  Lift.Curve3Crv.Creation.Block.recorded d.c3.bound
 
 /-- The pool's creation block, as recorded. -/
 theorem poolRecorded : Recorded d.pool.trace 10809473 1599414978 53
     Lift.Curve3Pool.Creation.HistoricalTx.tx Lift.Curve3Pool.Creation.Block.slotReceipt :=
-  Lift.Curve3Pool.Creation.Block.recorded d.pool.bound d.pool.wire
+  Lift.Curve3Pool.Creation.Block.recorded d.pool.bound
 
 /-- The minter assignment's block, as recorded. -/
 theorem minterRecorded : Recorded d.minter.trace 10809482 1599415164 135
     Lift.Curve3Crv.SetMinter.tx Lift.Curve3Crv.Creation.BlockMinter.slotReceipt :=
-  Lift.Curve3Crv.Creation.BlockMinter.recorded d.minter.bound d.minter.wire
+  Lift.Curve3Crv.Creation.BlockMinter.recorded d.minter.bound
 
 /-- `JointDeployment`'s facts about the history, which no block hash decides. -/
 structure Facts : Prop where
@@ -80,11 +74,11 @@ structure Facts : Prop where
   fresh : Lift.Curve3Crv.FreshKeys (fun _ => False)
     (Lift.Curve3Crv.midTouchedKeysIn c3Adr
       ((MidHistoryTraceIn.tail d.c3.trace
-        (d.c3.trace.bodyTrace.txSplitOfSlot d.c3Recorded.slot rfl)).append
+        (d.c3.trace.bodyTrace.txSplitOfItem d.c3Recorded.slot)).append
         (((d.toPool.step d.pool.trace).append d.toMinter).step d.minter.trace)))
   /-- The coins are their deployed bytes and the operators' two powers are restrained. -/
   coins : Curve3PoolCoinKeep.CoinsHold (((MidHistoryTraceIn.tail d.pool.trace
-      (d.pool.trace.bodyTrace.txSplitOfSlot d.poolRecorded.slot rfl)).append d.toMinter).step
+      (d.pool.trace.bodyTrace.txSplitOfItem d.poolRecorded.slot)).append d.toMinter).step
       d.minter.trace)
     (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 0))
     (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 1))
@@ -104,9 +98,7 @@ noncomputable def toJoint (facts : d.Facts) : JointDeployment where
   c3Block := d.c3.trace
   c3Number := d.c3Recorded.number
   c3Time := d.c3Recorded.time
-  c3Entry := .inr _
   c3Slot := d.c3Recorded.slot
-  c3Decoded := rfl
   c3Receipt := _
   c3Lookup := d.c3Recorded.lookup
   c3Succeeded := d.c3Recorded.succeeded
@@ -116,9 +108,7 @@ noncomputable def toJoint (facts : d.Facts) : JointDeployment where
   poolBlock := d.pool.trace
   poolNumber := d.poolRecorded.number
   poolTime := d.poolRecorded.time
-  poolEntry := .inr _
   poolSlot := d.poolRecorded.slot
-  poolDecoded := rfl
   poolReceipt := _
   poolLookup := d.poolRecorded.lookup
   poolSucceeded := d.poolRecorded.succeeded
@@ -128,9 +118,7 @@ noncomputable def toJoint (facts : d.Facts) : JointDeployment where
   minterBlock := d.minter.trace
   minterNumber := d.minterRecorded.number
   minterTime := d.minterRecorded.time
-  minterEntry := .inr _
   minterSlot := d.minterRecorded.slot
-  minterDecoded := rfl
   minterReceipt := _
   minterLookup := d.minterRecorded.lookup
   minterSucceeded := d.minterRecorded.succeeded
