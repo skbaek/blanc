@@ -244,7 +244,7 @@ theorem xfer_runE {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
     implXferG sevm pre ≤ 72000 ∧
       SProg.RunExact Impl.cert.prog sevm pre (implXferPost sevm pre (pre.gasLeft - implXferG sevm pre)) := by
   have hle := implXferW_le sevm pre
-  have hrun := (implXferW sevm pre).2 fork static (xferFacts_of g hdst hv hf)
+  have hrun := (implXferW sevm pre).2 fork static (xferFacts_of_guards g hdst hv hf)
   rw [implXferW_eq] at hle hrun
   have h := hrun (pre.gasLeft - implXferG sevm pre) (by omega)
   rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h
@@ -257,7 +257,7 @@ theorem xfer_runF {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : implXferG sevm pre + 2300 ≤ pre.gasLeft)
     (hf : MoveFits (Devm.getStor pre sevm.currentTarget) sevm.caller dst v) :
     SProg.RunExact Impl.cert.prog sevm pre (implXferPost sevm pre (pre.gasLeft - implXferG sevm pre)) := by
-  have hrun := (implXferW sevm pre).2 fork static (xferFacts_of g hdst hv hf)
+  have hrun := (implXferW sevm pre).2 fork static (xferFacts_of_guards g hdst hv hf)
   rw [implXferW_eq] at hrun
   have h := hrun (pre.gasLeft - implXferG sevm pre) (by omega)
   rw [pre_eq_St hs hm (Nat.sub_add_cancel (by omega))] at h

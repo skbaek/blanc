@@ -305,7 +305,7 @@ theorem debit_words {σ : Stor} {a : Adr} {x : B256} (hle : x.toNat ≤ balanceB
   rfl
 
 /-- `transfer`'s facts from the guards and a fitting move. -/
-theorem xferFacts_of {sevm : Sevm} {b : Devm} {dst : Adr} {v : B256}
+theorem xferFacts_of_guards {sevm : Sevm} {b : Devm} {dst : Adr} {v : B256}
     (g : Guards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
     (hf : MoveFits (Devm.getStor b sevm.currentTarget) sevm.caller dst v) : XferFacts sevm b := by
   obtain ⟨p, f1, f2, s0, d0, le, f3, rm⟩ := hf
@@ -357,7 +357,7 @@ theorem xfer_lands {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
       (creditStor (debitStor (Devm.getStor pre sevm.currentTarget) sevm.caller v.toNat) dst v.toNat)
       ((getOrigAcct sevm sevm.currentTarget).stor = Devm.getStor pre sevm.currentTarget ∧
         sevm.currentTarget ∉ pre.createdAccounts ∧ balSlot sevm.caller ≠ balSlot dst) := by
-  have facts := xferFacts_of g hdst hv hf
+  have facts := xferFacts_of_guards g hdst hv hf
   have ta : (xTo sevm).toAdr = dst := by rw [hdst, toAdr_toB256]
   refine ⟨_, _, implXferW_le sevm pre, frameLands_retV rfl (K := 72000)
     (B := e93Post sevm (e37Pre sevm pre (xTo sevm)) (xVal sevm) (xTo sevm) sevm.caller.toB256)

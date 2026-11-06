@@ -8,7 +8,7 @@ import Blanc.Lift.InvWalkLegacy
 `proxy_lands`: under the proxy's fallback facts, a clean implementation child run with reply `w` and
 ledger `σ'` makes the proxy frame's `FrameLands`, whichever implementation is behind the slot. The
 charge is the proxy's own plus the child's, at the frame's actual gas, so no charge need be free of
-the message's gas field. `proxyFacts_of` gives the fallback facts from the selector and the caller.
+the message's gas field. `proxyFacts_of_sel` gives the fallback facts from the selector and the caller.
 -/
 
 namespace Blanc.Composition.UsdcLive
@@ -152,7 +152,7 @@ theorem proxy_lands {sevm : Sevm} {pre C : Devm} {u : Nat} {s w : B256} {σ' : S
     omega
 
 /-- The proxy's fallback facts for a selector that is no admin entry, from a caller that is no admin. -/
-theorem proxyFacts_of {sevm : Sevm} {b : Devm} {s : B256} (hshort : 4 ≤ sevm.data.length)
+theorem proxyFacts_of_sel {sevm : Sevm} {b : Devm} {s : B256} (hshort : 4 ≤ sevm.data.length)
     (hcd : sevm.data.length < 2 ^ 256) (hsel : Blanc.Sevm.selector sevm = s)
     (n1 : B256.eqCheck (Bytes.toB256 [54, 89, 207, 230]) s = 0)
     (n2 : B256.eqCheck (Bytes.toB256 [79, 30, 242, 134]) s = 0)

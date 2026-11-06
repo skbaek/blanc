@@ -119,7 +119,7 @@ theorem proxy_execE {msg : Msg} {I : ByteArray} {s w : B256} (F Cu : Nat) (hCu :
       (C (frameYAt (initSevm msg) (initDevm msg) s)) w) := by
   have hlt : (initSevm msg).data.length < 2 ^ 256 := by omega
   have pf : ProxyFacts (initSevm msg) (initDevm msg) s :=
-    proxyFacts_of hshort hlt hsel n1 n2 n3 n4 n5 hr.admin
+    proxyFacts_of_sel hshort hlt hsel n1 n2 n3 n4 n5 hr.admin
   have hs : (initDevm msg).stack = [] := rfl
   have hm : (initDevm msg).memory = Mem.empty := rfl
   have c0 := proxyPreW_le (initSevm msg) (initDevm msg) s hlen
@@ -218,7 +218,7 @@ theorem proxy_execF {msg : Msg} {I : ByteArray} {s w : B256} (X0 Cu : Nat) (hX0 
       (C (frameYAt (initSevm msg) (initDevm msg) s)) w) := by
   have hlt : (initSevm msg).data.length < 2 ^ 256 := by omega
   have pf : ProxyFacts (initSevm msg) (initDevm msg) s :=
-    proxyFacts_of hshort hlt hsel n1 n2 n3 n4 n5 hr.admin
+    proxyFacts_of_sel hshort hlt hsel n1 n2 n3 n4 n5 hr.admin
   have hs : (initDevm msg).stack = [] := rfl
   have hm : (initDevm msg).memory = Mem.empty := rfl
   have hsame : impl (initSevm (dMsg (initSevm msg) (initDevm msg) (frameYAt (initSevm msg) (initDevm msg) s)))

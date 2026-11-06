@@ -61,7 +61,7 @@ theorem proxy_msg {msg : Msg} {I : ByteArray} {s w : B256} {σ' : Stor} {R R' : 
       FrameLands Proxy.cert.prog (initSevm msg) (initDevm msg) post used w σ' R := by
   have hlt : (initSevm msg).data.length < 2 ^ 256 := by omega
   have pf : ProxyFacts (initSevm msg) (initDevm msg) s :=
-    proxyFacts_of hshort hlt hsel n1 n2 n3 n4 n5 hr.admin
+    proxyFacts_of_sel hshort hlt hsel n1 n2 n3 n4 n5 hr.admin
   have hs : (initDevm msg).stack = [] := rfl
   have hm : (initDevm msg).memory = Mem.empty := rfl
   have c0 := proxyPreW_le (initSevm msg) (initDevm msg) s hlen
