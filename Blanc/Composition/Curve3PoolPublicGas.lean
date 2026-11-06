@@ -8,7 +8,7 @@ import Blanc.TransactionForward
 `exitGasUsed` and `swapGasUsed`, each intrinsic gas plus the frame's, less the capped refund, each coin's
 cost its own short definition. The shape comes from `rlExactCost_eq` and `exExactCost` at a transaction's
 entry, where every slot starts cold and every original value is current. The literals are **measured**, by
-running the real runtimes on the execution specs' Prague interpreter; for `remove_liquidity` `exit_cold` proves them.
+running the real runtimes on the execution specs' Prague interpreter; `ExitFrame.cold` and `SwapFrame.cold` prove them.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -72,9 +72,9 @@ def callRoom : Nat := 2201
 
 /-- The fixed cost of `exchange` with coin `i` pulled, at a transaction's entry. -/
 def pullBase : Fin 3 → Nat
-  | 0 => 100969
-  | 1 => 115000
-  | 2 => 114434
+  | 0 => 92569
+  | 1 => 106600
+  | 2 => 106034
 
 /-- What paying out coin `j` costs beyond paying out DAI. -/
 def pushBase : Fin 3 → Nat
@@ -89,14 +89,16 @@ def allowanceGas (unlimited : Bool) : Fin 3 → Nat
   | 1 => 0
   | 2 => if unlimited then 0 else 3194
 
-/-- The pull of `dx` of coin `i` from `E` to the pool. -/
+/-- The pull of `dx` of coin `i` from `E` to the pool: the two words it credits, the pool's coin entry and its books,
+write nothing when USDT's fee takes it all. -/
 def pullGas (w : Jaune.State) (i : Fin 3) (dx : Nat) (unlimited : Bool) : Nat :=
-  pullBase i + allowanceGas unlimited i +
-    startsEntry (rawHeld w pool i) (netOf w i dx) + if i = 2 then usdtFeeGas w dx true else 0
+  pullBase i + allowanceGas unlimited i + (if netOf w i dx = 0 then 0 else 5600) +
+    startsEntry (rawHeld w pool i) (netOf w i dx) + startsEntry (recorded w i) (netOf w i dx) +
+    if i = 2 then usdtFeeGas w dx true else 0
 
-/-- The push of `dy` of coin `j` to `E`. -/
+/-- The push of `dy` of coin `j` to `E`: `E`'s credit writes nothing when USDT's fee takes it all. -/
 def pushGas (w : Jaune.State) (E : Jaune.Adr) (j : Fin 3) (dy : Nat) : Nat :=
-  pushBase j + paymentGas w E j dy
+  pushBase j + (if netOf w j dy = 0 then 0 else 2800) + paymentGas w E j dy
 
 /-- What reading `_A()` costs beyond the plain case, while a ramp runs at timestamp `t`. -/
 def rampReadGas (w : Jaune.State) (t : Nat) : Nat :=

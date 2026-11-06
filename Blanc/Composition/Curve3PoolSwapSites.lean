@@ -144,7 +144,8 @@ theorem usdt_bal_warm_site {σ : Stor} (hst : b.getStor t.toAdr = σ)
     (h10 : (⟨t.toAdr, Bytes.toB256 [10]⟩ : Adr × B256) ∈ b.accessedStorageKeys)
     (hk : (⟨t.toAdr, balSlot s.currentTarget⟩ : Adr × B256) ∈ b.accessedStorageKeys) :
     coinStaticDebit balG s t ii 0x24 oi b S M = acc (b.withGasLeft 0) t + ext (b.withGasLeft 0) S M ii 0x24 oi 0x20 + 1031 ∧
-      Mv (t.toAdr :: [t.toAdr]) 0 b (coinStaticNext (fun s p => balP s p 0) s t ii 0x24 oi b S M) := by
+      Mv (t.toAdr :: [t.toAdr]) 0 b (coinStaticNext (fun s p => balP s p 0) s t ii 0x24 oi b S M) ∧
+      Devm.getStor (coinStaticNext (fun s p => balP s p 0) s t ii 0x24 oi b S M) t.toAdr = σ := by
   obtain ⟨c, hc⟩ : ∃ c, c = staticMsg s (b.withGasLeft 0) S M 0 t ii 0x24 oi 0x20 := ⟨_, rfl⟩
   have ct : (initSevm c).currentTarget = t.toAdr := by rw [hc]; rfl
   have hdata : (initSevm c).data = abiSelectorBytes 0x70a08231 ++ s.currentTarget.toB256.toBytes := by
@@ -155,9 +156,9 @@ theorem usdt_bal_warm_site {σ : Stor} (hst : b.getStor t.toAdr = σ)
   have hhold : ky (bHolder (initSevm c)) = balSlot s.currentTarget := by
     unfold bHolder
     rw [lit4, Blanc.Lift.Curve3Pool.cc_dataWord_oneWord hdata, ff20_and_word, toAdr_toB256, ky_bal, toAdr_toB256]
-  obtain ⟨cc, cm, -⟩ := usdt_bal_warm (s := initSevm c) (b := initDevm c) (σ := σ)
+  obtain ⟨cc, cm, -, ckS⟩ := usdt_bal_warm (s := initSevm c) (b := initDevm c) (σ := σ)
     (by rw [ct, hc]; exact hst) (by rw [ct, hc]; exact h10) (by rw [hhold, ct, hc]; exact hk)
-  rw [ct] at cm
+  rw [ct] at cm ckS
   have hNext : coinStaticNext (fun s p => balP s p 0) s t ii 0x24 oi b S M = callChildPost (parent (b.withGasLeft 0) S M 0 t ii 0x24 oi 0x20)
       (balP (initSevm c) (initDevm c) 0) oi.toNat (0x20 : B256).toNat := by
     rw [hc]; rfl
@@ -169,7 +170,7 @@ theorem usdt_bal_warm_site {σ : Stor} (hst : b.getStor t.toAdr = σ)
     split at hm'
     · exact Std.HashSet.not_mem_emptyWithCapacity hm'
     · exact hclp.del a hm'
-  refine ⟨by unfold coinStaticDebit; rw [← hc, cc], ?_⟩
+  refine ⟨by unfold coinStaticDebit; rw [← hc, cc], ?_, by rw [hNext]; exact ckS⟩
   rw [hNext]
   refine mv_callChild (T := t.toAdr :: [t.toAdr]) _ _ (fun a ha => parent_same _ _ _ 0 t ii 0x24 oi 0x20 (fun e => ha (e ▸ List.mem_cons_self))) rfl
     (fun h => parent_clean _ _ _ 0 t ii 0x24 oi 0x20 ⟨h.created, h.del, h.error⟩) (fun a ha => ?_) (cm.refund.trans (Int.zero_add _)) (fun hp => cm.clean (hcp hp))

@@ -174,13 +174,16 @@ theorem usdt_bal_child {K : List B256} {σ : Stor} (hA : At s.currentTarget K σ
 theorem usdt_bal_warm {σ : Stor} (hst : b.getStor s.currentTarget = σ)
     (h10 : (⟨s.currentTarget, Bytes.toB256 [10]⟩ : Adr × B256) ∈ b.accessedStorageKeys)
     (hk : (⟨s.currentTarget, ky (bHolder s)⟩ : Adr × B256) ∈ b.accessedStorageKeys) :
-    balG s b = 1031 ∧ Mv [s.currentTarget] 0 b (balP s b 0) ∧ (balP s b 0).output = (σ.get (ky (bHolder s))).toBytes := by
-  refine ⟨balG_warm h10 hk, ?_, ?_⟩
+    balG s b = 1031 ∧ Mv [s.currentTarget] 0 b (balP s b 0) ∧ (balP s b 0).output = (σ.get (ky (bHolder s))).toBytes ∧
+      (balP s b 0).getStor s.currentTarget = σ := by
+  refine ⟨balG_warm h10 hk, ?_, ?_, ?_⟩
   · exact (((mv_afterSload s b _).trans (mv_afterSload s _ _)).halted _ _ _ _ _ _).one (fun a ha => by
       simpa only [List.append_nil, List.mem_append, List.mem_singleton, or_self] using ha) (by simp only [Int.zero_add])
   · show (bAns s b).toBytes = _
     unfold bAns
     rw [getStorVal_afterSload, getStorVal_eq, hst]
+  · show (afterSload s (afterSload s b _) _).getStor s.currentTarget = _
+    rw [afterSload_getStor, afterSload_getStor, hst]
 
 /-- The move's end from a state where the source's slot is cold, the destination's warm and slot `0` warm. -/
 theorem mv_tail {K : List B256} {σ : Stor} {a : Devm} {v f t r kr kt : B256} (hkr : ky r = kr) (hkt : ky t = kt)
