@@ -2,6 +2,7 @@ import Blanc.Composition.Curve3PoolJointRoot
 import Blanc.Lift.Curve3Crv.Creation.Block.Slot
 import Blanc.Lift.Curve3Crv.Creation.BlockMinter.Slot
 import Blanc.Lift.Curve3Pool.Creation.Block.Slot
+import Blanc.ExecutionHistoryInSystemConfined
 
 /-!
 # The joint deployment anchored at three block hashes
@@ -126,6 +127,57 @@ noncomputable def toJoint (facts : d.Facts) : JointDeployment where
   coins := facts.coins
   idEmpty := facts.idEmpty
   idNoFrame := facts.idNoFrame
+
+/-! ## System stages -/
+
+/-- The whole history after 3Crv's creation block, to the end of the minter block. -/
+noncomputable def toMinterEnd (d : AnchoredDeployment) :
+    ConfiguredHistoryTraceIn HistFork mainnetChainConfig d.c3.post d.minter.post :=
+  ((d.toPool.step d.pool.trace).append d.toMinter).step d.minter.trace
+
+/-- Everything up to the minter assignment is before Cancun. -/
+theorem forks (d : AnchoredDeployment) : d.toMinterEnd.ForksSatisfy PreCancun := by
+  have last : d.minter.post.blocks.getLast? = some d.minter.trace.block :=
+    (congrArg (fun chain : BlockChain => chain.blocks.getLast?) d.minter.trace.postEq).trans
+      (appendBlock_getLast? _ _)
+  exact d.toMinterEnd.forksPreCancun_of_mainnet_tip last
+    (by rw [d.minterRecorded.time]; decide)
+
+/-- The pool is outside the system addresses. -/
+theorem pool_not_system : poolAdr ∉ systemTargets := by decide +kernel
+
+/-- **No system frame from 3Crv's creation block on targets an account outside the system addresses**,
+from the confinement of the history after the minter assignment; before it there is no system frame.
+For the pool (`pool_not_system`) and the coins (`Lift.CurveCoins.coins_not_system`), this one premise
+gives what each asked separately. -/
+theorem system_ne (d : AnchoredDeployment) {future : BlockChain}
+    {h : ConfiguredHistoryTraceIn HistFork mainnetChainConfig d.minter.post future}
+    (confined : h.SystemConfined) {T : Adr} (notSystem : T ∉ systemTargets) :
+    ∀ r ∈ (d.toMinterEnd.append h).systemRawFrames, r.sevm.currentTarget ≠ T := by
+  rw [ConfiguredHistoryTraceIn.systemRawFrames_append,
+    d.toMinterEnd.systemRawFrames_nil_of_preCancun d.forks, List.nil_append]
+  exact confined.system_ne notSystem
+
+/-- **The mid history from just after the pool's creation is confined**, the form the coins' receipt
+laws take through `MidHistoryTraceIn.system_ne`. -/
+theorem sincePool_confined (d : AnchoredDeployment) {future : BlockChain}
+    {h : ConfiguredHistoryTraceIn HistFork mainnetChainConfig d.minter.post future}
+    (confined : h.SystemConfined) :
+    ((MidHistoryTraceIn.tail d.pool.trace
+      (d.pool.trace.bodyTrace.txSplitOfItem d.poolRecorded.slot)).append
+        ((d.toMinter.step d.minter.trace).append h)).SystemConfined := by
+  have forks := d.forks
+  have poolForks := ((ConfiguredHistoryTraceIn.ForksSatisfy_append _ _ _).mp forks.1)
+  have rest : (d.toMinter.step d.minter.trace).ForksSatisfy PreCancun := ⟨poolForks.2, forks.2⟩
+  refine MidHistoryTraceIn.systemConfined_append
+    (.tail d.pool.trace (d.pool.trace.bodyTrace.txSplitOfItem d.poolRecorded.slot))
+    (d.pool.trace.systemConfined_of_preCancun poolForks.1.2) _ ?_ ?_
+  · exact (ConfiguredHistoryTraceIn.SystemCodeAtOpenings_append _ _).mpr
+      ⟨ConfiguredHistoryTraceIn.systemCodeAtOpenings_of_preCancun _ rest, confined.openings⟩
+  · intro p hp
+    exact (ConfiguredHistoryTraceIn.PragueNoAuthorityAt_append _ _ _).mpr
+      ⟨ConfiguredHistoryTraceIn.pragueNoAuthorityAt_of_prePrague _
+        (rest.mono fun _ hf => hf.toPrePrague) _, confined.noAuthority p hp⟩
 
 /-- **The joint deployment root, from three block hashes.** `joint_root` at the anchored deployment:
 no block's number, time, slot or receipt is an input. -/

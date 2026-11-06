@@ -5684,7 +5684,11 @@ consumer needs canonical interpreter ingress as one conjunct:
   `ConfiguredHistoryTrace.system_ne_of_size` (under the canonical system code and the trace-local
   system exclusions, no system frame targets a contract whose installed code differs in size from
   every canonical system code). Worked use: the Curve 3pool history
-  (curve-3pool-stableswap-v1).
+  (curve-3pool-stableswap-v1). Over a selected-domain (`In`) history that may start before Cancun,
+  `ConfiguredHistoryTraceIn.SystemConfined` of `Blanc/ExecutionHistoryInSystemConfined.lean` asks only
+  each system contract's code at the first block whose fork installs it (`SystemCodeAtEntries`) and the
+  authorizations: every opening follows (`SystemConfined.openings`), and `SystemConfined.system_ne`
+  excludes any account outside the system addresses.
 - To discharge the same per-frame gas/entry premises over a selected-domain
   (`In`) carrier instead of a modern one: with `BodyStageCapabilities F`,
   `ConfiguredHistoryTraceIn.rootEntryIn` (`root.pc = 0 ∧ F root.sevm.benvStat.fork`),
