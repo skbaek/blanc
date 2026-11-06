@@ -4,6 +4,7 @@ import Blanc.Lift.Usdc.EntryQuiet
 import Blanc.Lift.Usdc.EntryLawProxy
 import Blanc.Lift.Usdc.EntryLawV2Walks
 import Blanc.Lift.Usdc.AllowLocality
+import Blanc.Lift.Usdc.ImplWs
 
 /-!
 # USDC's entry laws: what the word-reading versions share
@@ -35,6 +36,132 @@ theorem selV2T_eval : SelEval selV2T := fun e => by
   have shift : (0xe0 : B256).toNat = 224 := by decide
   change Sevm.dataWord e 0 >>> (0xe0 : B256).toNat = Sevm.dataWord e 0 >>> 224
   rw [shift]
+
+/-- The certified sites of the three versions. -/
+abbrev usdcSites : List Site := wsRoot ImplV2Ws.implWsAnn ++ wsRoot ImplV2_1Ws.implWsAnn ++ wsRoot ImplWs.implWsAnn
+
+/-- **Hash freshness at USDC** (HASH-T): `CoinKeysFresh` over the three versions' sites, and the proxy's two slots. -/
+def UsdcKeysFresh (h : Adr) (frames : List Exec.Frame) : Prop :=
+  CoinKeysFreshWith [.raw implSlot, .raw adminSlot] usdcSites 9 10 h frames
+
+section UsdcKeys
+
+variable {h : Adr} {frames : List Exec.Frame}
+
+theorem UsdcKeysFresh.v2 (keys : UsdcKeysFresh h frames) :
+    CoinKeysFresh (wsRoot ImplV2Ws.implWsAnn) 9 10 h frames :=
+  CoinKeysFreshWith.restrict keys fun _ hs => List.mem_append_left _ (List.mem_append_left _ hs)
+
+theorem UsdcKeysFresh.v2_1 (keys : UsdcKeysFresh h frames) :
+    CoinKeysFresh (wsRoot ImplV2_1Ws.implWsAnn) 9 10 h frames :=
+  CoinKeysFreshWith.restrict keys fun _ hs => List.mem_append_left _ (List.mem_append_right _ hs)
+
+theorem UsdcKeysFresh.v2_2 (keys : UsdcKeysFresh h frames) :
+    CoinKeysFresh (wsRoot ImplWs.implWsAnn) 9 10 h frames :=
+  CoinKeysFreshWith.restrict keys fun _ hs => List.mem_append_right _ hs
+
+theorem UsdcKeysFresh.bal_ne_impl (keys : UsdcKeysFresh h frames) : balSlot h ≠ implSlot :=
+  map_ne_raw keys (held_mem) (List.mem_append_left _ List.mem_cons_self)
+
+theorem UsdcKeysFresh.bal_ne_admin (keys : UsdcKeysFresh h frames) : balSlot h ≠ adminSlot :=
+  map_ne_raw keys (held_mem) (List.mem_append_left _ (List.mem_cons_of_mem _ List.mem_cons_self))
+
+theorem UsdcKeysFresh.row_ne_impl (keys : UsdcKeysFresh h frames) {g : Adr} (hg : CallerOf frames g) :
+    allowSlot h g ≠ implSlot := by
+  obtain ⟨G, hG, rfl⟩ := hg
+  exact fun e => raw_ne_row keys (List.mem_append_left _ List.mem_cons_self) (frame_row_mem hG) e.symm
+
+theorem UsdcKeysFresh.row_ne_admin (keys : UsdcKeysFresh h frames) {g : Adr} (hg : CallerOf frames g) :
+    allowSlot h g ≠ adminSlot := by
+  obtain ⟨G, hG, rfl⟩ := hg
+  exact fun e => raw_ne_row keys (List.mem_append_left _ (List.mem_cons_of_mem _ List.mem_cons_self))
+    (frame_row_mem hG) e.symm
+
+end UsdcKeys
+
+/-- The rows as the chain reads them. -/
+def RowsView (h : Adr) (frames : List Exec.Frame) (w : StorWords) : Prop :=
+  ∀ g, CallerOf frames g → w (allowSlot h g) = 0
+
+theorem rowsView_iff {h : Adr} {frames : List Exec.Frame} (keys : UsdcKeysFresh h frames) (T : Adr) (d : State) :
+    RowsView h frames (ledgerView (wordsAt T d)) ↔ RowsEmpty h frames (d.getStor T) := by
+  refine forall_congr' fun g => forall_congr' fun hg => ?_
+  have e : ledgerView (wordsAt T d) (allowSlot h g) = (d.getStor T).get (allowSlot h g) := by
+    unfold ledgerView
+    exact ite_eq_right fun c => c.elim (fun x => (keys.row_ne_impl hg x).elim) fun x => (keys.row_ne_admin hg x).elim
+  rw [e]
+
+/-- A frame not reading bits reads the word, through the view. -/
+theorem heldAt_word {T h : Adr} {F : Exec.Frame} (notV22 : ¬ V22At T F) (hi : balSlot h ≠ implSlot)
+    (ha : balSlot h ≠ adminSlot) (w : StorWords) :
+    heldAt T h F (ledgerView w) = (w (balSlot h)).toNat := by
+  unfold heldAt
+  rw [ite_eq_right fun c => (notV22 c).elim, ledgerView_bal hi ha]
+
+/-- What a proxy frame's implementation child reads of its message. -/
+structure SameMessage (F G : Exec.Frame) : Prop where
+  caller : G.sevm.caller = F.sevm.caller
+  data : G.sevm.data = F.sevm.data
+
+theorem SameMessage.sel {F G : Exec.Frame} (h : SameMessage F G) :
+    Blanc.Sevm.selector G.sevm = Blanc.Sevm.selector F.sevm := by
+  unfold Blanc.Sevm.selector Sevm.dataWord
+  rw [h.data]
+
+theorem SameMessage.word {F G : Exec.Frame} (h : SameMessage F G) (i : B256) :
+    Sevm.dataWord G.sevm i = Sevm.dataWord F.sevm i := by
+  unfold Sevm.dataWord
+  rw [h.data]
+
+theorem SameMessage.credit {F G : Exec.Frame} (s : SameMessage F G) (h : Adr) :
+    ownCredit h G.sevm = ownCredit h F.sevm := by
+  unfold ownCredit
+  rw [s.caller, s.sel, s.word, s.word, s.word]
+
+theorem SameMessage.debit {F G : Exec.Frame} (s : SameMessage F G) (h : Adr) :
+    ownDebit h G.sevm = ownDebit h F.sevm := by
+  unfold ownDebit
+  rw [s.caller, s.sel, s.word, s.word, s.word]
+
+/-- **A word-reading version's implementation law is its proxy frame's.** -/
+theorem proxy_law {T h : Adr} {frames : List Exec.Frame} {F : Exec.Frame} {C : ByteArray} (pc : F.pc = 0)
+    (code : F.sevm.code = Proxy.code) (fork : HistFork F.sevm.benvStat.fork) (target : F.sevm.currentTarget = T)
+    (hasCode : (F.pre.getCode T).toList ≠ []) (notAdmin : F.sevm.caller ≠ adminOf F.pre.state T)
+    (version : F.pre.getCode (F.pre.getStorVal T implSlot).toAdr = C) (notDelegation : ¬ isValidDelegation C)
+    (notPrecompile : ¬ F.sevm.benvStat.rules.isPrecomp (F.pre.getStorVal T implSlot).toAdr)
+    (hsize : F.sevm.data.length < 2 ^ 256)
+    (law : ∀ G : Exec.Frame, G.pc = 0 → G.sevm.code = C → HistFork G.sevm.benvStat.fork →
+      G.sevm.currentTarget = T → (G.pre.getCode T).toList ≠ [] → Env.root G.sevm = Env.root F.sevm →
+      SameMessage F G → Mem.Wf G.pre.memory →
+      RowsEmpty h frames (Devm.getStor G.pre T) →
+      RowsEmpty h frames (Devm.getStor G.post T) ∧
+        ((Devm.getStor G.pre T).get (balSlot h)).toNat + ownCredit h G.sevm ≤
+          ((Devm.getStor G.post T).get (balSlot h)).toNat + ownDebit h G.sevm)
+    (rows : RowsEmpty h frames (Devm.getStor F.pre T)) :
+    RowsEmpty h frames (Devm.getStor F.post T) ∧
+      ((Devm.getStor F.pre T).get (balSlot h)).toNat + ownCredit h F.sevm ≤
+        ((Devm.getStor F.post T).get (balSlot h)).toNat + ownDebit h F.sevm := by
+  obtain ⟨fpc, sevm, pre, out, run, committed⟩ := F
+  dsimp only at pc code fork target hasCode notAdmin version notPrecompile hsize law rows ⊢
+  subst pc
+  subst target
+  cases out with
+  | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
+  | ok post =>
+    subst version
+    obtain ⟨G, child⟩ := proxy_entry_child run code fork.stateGas_none fork.bal_none hasCode notAdmin notDelegation
+      notPrecompile hsize
+    have same : SameMessage ⟨0, sevm, pre, .ok post, run, committed⟩ G := ⟨child.caller, child.data⟩
+    have forkG : HistFork G.sevm.benvStat.fork := by rw [child.stat]; exact fork
+    have rowsG : RowsEmpty h frames (Devm.getStor G.pre sevm.currentTarget) := by
+      rw [child.preStor]
+      exact rows
+    have result := law G child.pc child.code forkG child.target (by
+      have e := child.codeLib sevm.currentTarget hasCode
+      rw [e]
+      exact hasCode) child.env same child.wf rowsG
+    rw [same.credit, same.debit, child.preStor, ← child.postStor] at result
+    exact result
 
 section Ledger
 

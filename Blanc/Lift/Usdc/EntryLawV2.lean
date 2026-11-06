@@ -115,21 +115,6 @@ theorem flag_eval (e : Sevm) :
   rw [addrMaskT_eval]
   rfl
 
-/-- What a proxy frame's implementation child reads of its message. -/
-structure SameMessage (F G : Exec.Frame) : Prop where
-  caller : G.sevm.caller = F.sevm.caller
-  data : G.sevm.data = F.sevm.data
-
-theorem SameMessage.sel {F G : Exec.Frame} (h : SameMessage F G) :
-    Blanc.Sevm.selector G.sevm = Blanc.Sevm.selector F.sevm := by
-  unfold Blanc.Sevm.selector Sevm.dataWord
-  rw [h.data]
-
-theorem SameMessage.word {F G : Exec.Frame} (h : SameMessage F G) (i : B256) :
-    Sevm.dataWord G.sevm i = Sevm.dataWord F.sevm i := by
-  unfold Sevm.dataWord
-  rw [h.data]
-
 /-- The rows. -/
 theorem rows_after (hF : F ∈ frames) (C : CertFrame G code G.sevm.currentTarget)
     (env : Env.root G.sevm = Env.root F.sevm) (same : SameMessage F G)
@@ -270,6 +255,33 @@ theorem frame_law (hF : F ∈ frames) (pc : G.pc = 0) (hcode : G.sevm.code = cod
         rw [env] at hg ⊢
         exact slot_ne_of_keys keys hF hs hg hk none)
     exact le_of_eq (congrArg B256.toNat keep.symm)
+
+/-- **FiatTokenV2's law at a proxy frame**, as the chain's `heldAt` reads it. -/
+theorem entry_law (hF : F ∈ frames) (pc : F.pc = 0) (hcode : F.sevm.code = Proxy.code)
+    (fork : HistFork F.sevm.benvStat.fork) (target : F.sevm.currentTarget = T)
+    (hasCode : (F.pre.getCode T).toList ≠ []) (notAdmin : F.sevm.caller ≠ adminOf F.pre.state T)
+    (version : F.pre.getCode (F.pre.getStorVal T implSlot).toAdr = code)
+    (notPrecompile : ¬ F.sevm.benvStat.rules.isPrecomp (F.pre.getStorVal T implSlot).toAdr)
+    (hsize : F.sevm.data.length < 2 ^ 256)
+    (notRescue : Blanc.Sevm.selector F.sevm ≠ rescueSelector)
+    (notInit : Blanc.Sevm.selector F.sevm ∉ [(0x3357162b : B256), 0xd608ea64])
+    (own : F.sevm.caller = h → CurveCoins.PoolCoinSel (Blanc.Sevm.selector F.sevm))
+    (unsigned : ¬ SignedAs h F.sevm) (keys : UsdcKeysFresh h frames)
+    (rows : RowsView h frames (ledgerView (wordsAt T F.pre.state))) :
+    RowsView h frames (ledgerView (wordsAt T F.post.state)) ∧
+      heldAt T h F (ledgerView (wordsAt T F.pre.state)) + ownCredit h F.sevm ≤
+        heldAt T h F (ledgerView (wordsAt T F.post.state)) + ownDebit h F.sevm := by
+  have notV22 : ¬ V22At T F := fun c => by
+    have e : F.pre.getCode (F.pre.getStorVal T implSlot).toAdr = Impl.code := c
+    rw [version] at e
+    exact absurd e (by decide +kernel)
+  rw [heldAt_word notV22 keys.bal_ne_impl keys.bal_ne_admin, heldAt_word notV22 keys.bal_ne_impl keys.bal_ne_admin,
+    rowsView_iff keys]
+  rw [rowsView_iff keys] at rows
+  exact proxy_law pc hcode fork target hasCode notAdmin version (by decide +kernel) notPrecompile hsize
+    (fun G gpc gcode gfork gtarget ghas env same wf grows =>
+      frame_law hF gpc gcode gfork gtarget ghas env same wf notRescue notInit own
+        unsigned keys.v2 grows) rows
 
 end Frame
 

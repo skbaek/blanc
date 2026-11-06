@@ -298,13 +298,8 @@ theorem frame_twa {post : Devm} (fork : HistFork sevm.benvStat.fork) (wf : Mem.W
   repeat ustep h
   cases ric_stop h
   clear h
-  simp only [lit4, lit36, show Bytes.toB256 [4] + Bytes.toB256 [64] = 68 by decide,
-    show Bytes.toB256 [4] + Bytes.toB256 [32] = 36 by decide,
-    show Bytes.toB256 [32] + Bytes.toB256 [4] = 36 by decide,
-    show Bytes.toB256 [64] + Bytes.toB256 [4] = 68 by decide,
-    show Bytes.toB256 [160] + Bytes.toB256 [4] = 164 by decide,
-    show Bytes.toB256 [4] + Bytes.toB256 [160] = 164 by decide,
-    ff20_and_word, word_ff20, toAdr_toB256] at d1 d2 st
+  simp only [show Bytes.toB256 [64] + Bytes.toB256 [4] = 68 by decide, show Bytes.toB256 [32] + Bytes.toB256 [4] = 36 by decide,
+    show Bytes.toB256 [160] + Bytes.toB256 [4] = 164 by decide, lit4, ff20_and_word, word_ff20, toAdr_toB256] at d1 d2 st
   exact ⟨x, d1, d2, st⟩
 
 /-- The minter's allowance (`minterAllowed`, slot 13). -/
