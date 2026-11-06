@@ -30,9 +30,12 @@ def exitCalldata (a : Nat) (mins : V3) : Bytes :=
   abiSelectorBytes Curve3Pool.selRemoveLiquidity ++ Curve3Pool.word a ++
     Curve3Pool.word mins.v0 ++ Curve3Pool.word mins.v1 ++ Curve3Pool.word mins.v2
 
+/-- The pool's owner has not killed it. `remove_liquidity` alone does not ask this. -/
+def PoolLive (w : State) : Prop := word w pool Curve3Pool.isKilledSlot = 0
+
 /-- `E` holds the shares it burns, the minimums are met, and the contract's arithmetic fits. -/
 structure ExitRequest (w : State) (E : Adr) (a : Nat) (mins : V3) : Prop where
-  holds : a ≤ shares w E ∧ 0 < supply w
+  holds : a ≤ shares w E ∧ a ≤ supply w ∧ 0 < supply w
   mins : ∀ k, mins.get k ≤ share w a k
   mulFits : ∀ k, recorded w k * a < 2 ^ 256
   creditFits : ∀ k, CreditFits w E k (netOf w k (share w a k))
@@ -83,6 +86,7 @@ noncomputable def swapGasUsed (w : State) (data : Bytes) (E : Adr) (t : Nat) (i 
 
 /-- `E` can pull `dx`, the coins differ, the minimum is met, and the contract's arithmetic fits. -/
 structure SwapRequest (w : State) (E : Adr) (t : Nat) (i j : Fin 3) (dx dy minDy : Nat) : Prop where
+  live : PoolLive w
   apart : i ≠ j
   moved : 0 < dx ∧ minDy ≤ dy ∧ 0 < dy
   holds : dx ≤ coinHeld w E i ∧ dx ≤ allowanceOf w E i
@@ -189,7 +193,7 @@ def addOutcome (w : State) (amp : Nat) (new : V3) : Option (Nat × V3) :=
     let r ← feeRun w amp new
     let D0 ← invariant w amp
     let D2 ← getDMem r.2 amp
-    some ((supply w * (D2 - D0)) / D0, r.1)
+    if (getDMem new amp).getD 0 ≤ D0 then none else some ((supply w * (D2 - D0)) / D0, r.1)
 
 /-- `remove_liquidity_imbalance`'s outcome from `new` balances: the shares burned and the balances stored. -/
 def imbalanceOutcome (w : State) (amp : Nat) (new : V3) : Option (Nat × V3) := do
@@ -234,11 +238,12 @@ def imbalanceCalldata (am : V3) (maxBurn : Nat) : Bytes :=
 /-- `E` can add `am` at timestamp `t`, and the contract computes `minted` and `stored`. -/
 structure AddRequest (w : State) (E : Adr) (t : Nat) (am : V3) (minMint minted : Nat) (stored : V3) :
     Prop where
+  live : PoolLive w
   amounts : AmountsFit w E pool am
   allowed : ∀ k, am.get k ≤ allowanceOf w E k
   outcome : ∃ amp, ampAt w t = some amp ∧
     addOutcome w amp (v3Of fun k => recorded w k + netOf w k (am.get k)) = some (minted, stored)
-  minimum : minMint ≤ minted
+  minimum : minMint ≤ minted ∧ (supply w = 0 → ∀ k, 0 < am.get k)
   mintFits : supply w + minted < 2 ^ 256
 
 /-- `add_liquidity`'s message, at the fallback cost. -/
@@ -252,10 +257,11 @@ def add_liquidity_message : Prop :=
 /-- The pool can pay `am` at timestamp `t`, and `E` holds the `burned` shares the contract computes. -/
 structure ImbalanceRequest (w : State) (E : Adr) (t : Nat) (am : V3) (maxBurn burned : Nat)
     (stored : V3) : Prop where
+  live : PoolLive w
   amounts : AmountsFit w pool E am
   outcome : ∃ amp, ampAt w t = some amp ∧
     imbalanceOutcome w amp (v3Of fun k => recorded w k - am.get k) = some (burned, stored)
-  limits : burned ≤ maxBurn ∧ burned ≤ shares w E
+  limits : 1 < burned ∧ burned ≤ maxBurn ∧ burned ≤ shares w E ∧ burned ≤ supply w
 
 /-- `remove_liquidity_imbalance`'s message, at the fallback cost. -/
 def imbalance_message : Prop :=
@@ -296,8 +302,9 @@ def oneCoinCalldata (a : Nat) (i : Fin 3) (minDy : Nat) : Bytes :=
 
 /-- `E` holds what it burns, and the contract computes `dy` and `admin`, which fit. -/
 structure OneCoinRequest (w : State) (E : Adr) (t a : Nat) (i : Fin 3) (minDy dy admin : Nat) : Prop where
+  live : PoolLive w
   outcome : ∃ amp, ampAt w t = some amp ∧ oneCoinOutcome w amp a i = some (dy, admin)
-  limits : minDy ≤ dy ∧ a ≤ shares w E
+  limits : minDy ≤ dy ∧ a ≤ shares w E ∧ a ≤ supply w
   fits : CreditFits w E i (netOf w i dy) ∧ UsdtFeeFits w dy
 
 /-- `remove_liquidity_one_coin`'s message, at the fallback cost. -/
