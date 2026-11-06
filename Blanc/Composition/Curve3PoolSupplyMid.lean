@@ -122,10 +122,8 @@ def Mid3CrvHistory {cfg : ChainConfig} {start : Benv} {future : BlockChain} (poo
             supplyAt c3 i.frame.pre.state + callsMinted o.calls ∧
           SupplyObserved c3 i
 
-/-- **The pool and 3Crv over one historical mid history.** From a joint checkpoint at the mid
-history's start with both runtimes installed, under the pool's `PoolMidEnv`, 3Crv's collision premise
-(`FreshKeys`, its HASH-T) and `pool ≠ systemAddress`, `Mid3CrvHistory` holds. -/
-theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+/-- **The walk's environment over one historical mid history.** -/
+theorem mid_walkEnv {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     {start : Benv} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Key → Prop}
     {full : ConfiguredHistoryTraceIn HistFork cfg checkpoint future}
     (trace : MidHistoryTraceIn HistFork cfg start future)
@@ -135,7 +133,8 @@ theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint fu
     (fresh : FreshKeys K₀ (midTouchedKeysIn c3 trace))
     (env : Curve3Pool.PoolMidEnv full trace pool ps₀.coins ps₀.token)
     (notSystem : pool ≠ systemAddress) :
-    Mid3CrvHistory pool c3 trace ps₀ cs₀ K₀ := by
+    WalkEnv trace.settledFrames trace.settledRoots (start.state.getStor c3) pool c3 ps₀.coins cs₀ K₀
+      (Key.extend K₀ (midTouchedKeysIn c3 trace)) := by
   let U := Key.extend K₀ (midTouchedKeysIn c3 trace)
   have topology : VyInv (start.state.getStor c3) cs₀ U := joint.c3.extend fresh
   have ready := c3crv_mid_readyH trace c3Installed joint.c3 fresh
@@ -162,8 +161,7 @@ theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint fu
         ¬ root.sevm.benvStat.rules.isPrecomp (Curve3Pool.adrOf c3.toNat) := by
     rw [← joint.tokenIs]
     exact env.parties
-  have W : WalkEnv trace.settledFrames trace.settledRoots (start.state.getStor c3) pool c3
-      ps₀.coins cs₀ K₀ U :=
+  exact
     { injective := topology.inj
       apartU := topology.apart
       forest := trace.settledFrames_eq
@@ -184,6 +182,23 @@ theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint fu
           exact fun h => poolNe (by rw [h, ByteArray.toList_eq_toList_data]; rfl)
         exact (keep st (ownF.2.2.2.2 target) hne mutable (by rw [target]; exact ck)
           ⟨hcs, hts.trans joint.tokenIs.symm⟩).2 }
+
+/-- **The pool and 3Crv over one historical mid history.** From a joint checkpoint at the mid
+history's start with both runtimes installed, under the pool's `PoolMidEnv`, 3Crv's collision premise
+(`FreshKeys`, its HASH-T) and `pool ≠ systemAddress`, `Mid3CrvHistory` holds. -/
+theorem pool_3crv_mid_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+    {start : Benv} {ps₀ : Curve3Pool.State} {cs₀ : Blanc.Curve3Crv.State} {K₀ : Key → Prop}
+    {full : ConfiguredHistoryTraceIn HistFork cfg checkpoint future}
+    (trace : MidHistoryTraceIn HistFork cfg start future)
+    (poolInstalled : some (start.state.getCode pool).toList = Curve3Pool.poolSem.image)
+    (c3Installed : some (start.state.getCode c3).toList = c3crvSem.image)
+    (joint : JointCheckpoint pool c3 ps₀ cs₀ K₀ start.state)
+    (fresh : FreshKeys K₀ (midTouchedKeysIn c3 trace))
+    (env : Curve3Pool.PoolMidEnv full trace pool ps₀.coins ps₀.token)
+    (notSystem : pool ≠ systemAddress) :
+    Mid3CrvHistory pool c3 trace ps₀ cs₀ K₀ := by
+  have W := mid_walkEnv trace poolInstalled c3Installed joint fresh env notSystem
+  have ready := c3crv_mid_readyH trace c3Installed joint.c3 fresh
   obtain ⟨code, invs, obs, auth, entries, s, run, fold, hc, hcoins, htoken⟩ :=
     Curve3Pool.pool_mid_history trace poolInstalled joint.poolCk env
   obtain ⟨Y, runY, minY, supY, steps⟩ := supply_whole W run entries auth obs joint.tokenIs

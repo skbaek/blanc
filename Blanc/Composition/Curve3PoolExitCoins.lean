@@ -533,9 +533,6 @@ theorem impl_child (hg : s.benvStat.rules.gas.storageClearRefund = 4800) (hc : C
   have hzne : kz ≠ Bytes.toB256 [1] := fun e => h1z e.symm
   have hyne : ky1 ≠ Bytes.toB256 [1] := fun e => h1y e.symm
   have hzy : ky1 ≠ kz := fun e => hne e.symm
-  have hzw : ∀ T : List Adr, T = [s.currentTarget] ++ [s.currentTarget] ++ [s.currentTarget] ++ ([s.currentTarget] ++ [s.currentTarget]) → ∀ a ∈ T, a = s.currentTarget := by
-    rintro T rfl a ha
-    simpa only [List.mem_append, List.mem_singleton, or_self] using ha
   obtain ⟨l, hl⟩ := hPost
   refine ⟨?_, ?_, ?_⟩
   · have e : implXferG s b = 358 + (367 + sloadCost s b (Bytes.toB256 [1]) + sloadCost s (afterSload s b (Bytes.toB256 [1])) kz +

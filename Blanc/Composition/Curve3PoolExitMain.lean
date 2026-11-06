@@ -4,8 +4,9 @@ import Blanc.Composition.Curve3PoolBacked
 /-!
 # `lp_exit`: the message and the transaction
 
-`exit_message`: the frame's run from the moment's facts, its cost and effect from `ExitFrame.cold`. `lp_exit_of_marked` is
-the transaction, under `ExitMarked`: what the proof takes and does not yet prove.
+`exit_message`: the frame's run from the moment's facts, its cost and effect from `ExitFrame.cold`. `Moment.id4` and
+`Moment.minter`: address 4 and 3Crv's minter at the cut. `lp_exit_of_implCode` is the transaction; the one hypothesis beyond
+the statement's is V2_2's code at the address `CoinsOpen.usdcV22` names.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -294,6 +295,112 @@ end Message
 
 /-! ## The transaction -/
 
+/-! ## Address 4 at the cut -/
+
+/-- **A transaction cut of a block keeps an empty address empty.** -/
+theorem cut_code_empty {cfg : ChainConfig} {pre post : BlockChain} (block : ConfiguredBlockTraceIn HistFork cfg pre post) {i : Nat}
+    (cut : block.bodyTrace.transactions.TxSplit i) {a : Adr}
+    (hdis : block.fork.ruleSet.delegationEnabled = false ∨
+      ∀ p ∈ block.bodyTrace.decodedTxs.putIndex, ∀ auth ∈ p.2.auths, ∀ authority,
+        recoverAuthority auth = .ok authority → authority ≠ a)
+    (avoid : ∀ root ∈ block.rawFrames, root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a)
+    (hempty : pre.state.getCode a = ByteArray.empty) :
+    cut.afterBenv.state.getCode a = ByteArray.empty := by
+  have hsg := BodyStageCapabilities.historical.stateGas_none block.forkIn
+  have avoidBeacon : ∀ root ∈ block.bodyTrace.beacon.rawFrames, root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a :=
+    fun root member => avoid root (by
+      simp only [ConfiguredBlockTraceIn.rawFrames, StagedBodyTrace.rawFrames, List.mem_append]
+      exact Or.inl (Or.inl (Or.inl member)))
+  have avoidHistory : ∀ root ∈ block.bodyTrace.history.rawFrames, root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a :=
+    fun root member => avoid root (by
+      simp only [ConfiguredBlockTraceIn.rawFrames, StagedBodyTrace.rawFrames, List.mem_append]
+      exact Or.inl (Or.inl (Or.inr member)))
+  have avoidTx : ∀ root ∈ block.bodyTrace.transactions.rawFrames, root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a :=
+    fun root member => avoid root (by
+      simp only [ConfiguredBlockTraceIn.rawFrames, StagedBodyTrace.rawFrames, List.mem_append]
+      exact Or.inl (Or.inr member))
+  obtain ⟨hbeacon, -⟩ := block.bodyTrace.beacon.codeAt_empty_noStateGas hsg hempty avoidBeacon
+  obtain ⟨hhistory, -⟩ := block.bodyTrace.history.codeAt_empty_noStateGas hsg hbeacon avoidHistory
+  obtain ⟨-, hb⟩ := cut.before.codeAt_empty_noStateGas hsg
+    (by
+      rcases hdis with h | h
+      · exact Or.inl h
+      · exact Or.inr fun p hp => h p (List.mem_of_mem_take hp))
+    (fun root member => avoidTx root (by rw [cut.rawFrames_eq]; simp only [List.mem_append]; exact Or.inl (Or.inl member)))
+    hhistory
+  have hst := cut.before.stat_eq
+  have hmem : (cut.index, cut.tx) ∈ block.bodyTrace.decodedTxs.putIndex :=
+    List.mem_of_mem_drop (by rw [cut.at_eq]; exact List.mem_cons_self)
+  obtain ⟨-, hh⟩ := cut.head.codeAt_empty_noStateGas (by rw [hst]; exact hsg)
+    (by
+      rcases hdis with h | h
+      · exact Or.inl (by rw [hst]; exact h)
+      · exact Or.inr (h _ hmem))
+    (fun root member => avoidTx root (by rw [cut.rawFrames_eq]; simp only [List.mem_append]; exact Or.inl (Or.inr member)))
+    hb
+  exact hh
+
+/-- **Address 4 holds no code at a moment of mainnet.** -/
+theorem Moment.id4 {d : Deployment} (m : Moment d) (A : Assumes d m.through) : m.world.getCode 4 = ByteArray.empty := by
+  have hauth : (d.sinceC3Block m.through).PragueNoAuthorityAt 4 := A.keys.idNoAuthority
+  have hfr := A.hashes.noCreateAt4
+  have hE : (d.sinceC3Block m.through) = (d.sinceC3Block m.history).step m.block := rfl
+  rw [hE] at hauth hfr
+  obtain ⟨-, hpre⟩ := (d.sinceC3Block m.history).codeAt_empty_pragueNoAuthority BodyStageCapabilities.historical hauth.1
+    (fun root member => hfr root (by
+      simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
+      exact Or.inl member)) A.code.idEmpty
+  refine cut_code_empty m.block m.cut ?_ (fun root member => hfr root (by
+      simp only [ConfiguredHistoryTraceIn.rawFrames, List.mem_append]
+      exact Or.inr member)) hpre
+  by_cases hp : PrePrague m.block.fork
+  · exact Or.inl (m.block.forkIn.delegationDisabled_of_prePrague hp)
+  · exact Or.inr (hauth.2 hp)
+
+/-! ## 3Crv's minter at the cut -/
+
+/-- **The pool stays 3Crv's minter at a moment of mainnet.** -/
+theorem Moment.minter {d : Deployment} (m : Moment d) (A : Assumes d m.through) :
+    (m.world.getStor c3).get Curve3Crv.vyMinterSlot = pool.toB256 := by
+  obtain ⟨hpool, hc3, invs₀, ps, cs, -, -, -, run₀, -, -, joint⟩ :=
+    Curve3PoolJointRoot.joint_root_replay (Deployment.toJoint d A.facts)
+  obtain ⟨hcoins, htoken⟩ := run₀.coins_token
+  have envAt : Curve3Pool.PoolMidEnv (d.sinceC3Block m.through) ((d.sinceMinter m.history).step m.block)
+      pool ps.coins ps.token := by
+    rw [hcoins, htoken]
+    exact A.env
+  obtain ⟨-, invs, obs, auth, entries, s, run, -, -, h1, h2⟩ :=
+    Curve3Pool.pool_window_history (d.sinceMinter m.history) m.block m.cut hpool joint.poolCk envAt
+  have W := Blanc.Composition.Curve3PoolSupply.mid_walkEnv ((d.sinceMinter m.history).step m.block) hpool hc3 joint A.fresh envAt (by decide)
+  have split : ((d.sinceMinter m.history).step m.block).settledFrames =
+      [] ++ ((d.sinceMinter m.history).settledFrames ++ m.block.settledThroughCut m.cut) ++
+        (MidHistoryTraceIn.tail m.block m.cut).settledFrames := by
+    change (d.sinceMinter m.history).settledFrames ++ m.block.settledFrames = _
+    rw [ConfiguredBlockTraceIn.settledFrames_throughCut m.block m.cut]
+    simp only [List.nil_append, List.append_assoc]
+  have closed : TargetClosed pool ((d.sinceMinter m.history).settledFrames ++ m.block.settledThroughCut m.cut) := by
+    unfold ConfiguredBlockTraceIn.settledThroughCut
+    have piece : ∀ {fs roots : List Exec.Frame}, fs = roots.flatMap (fun R => Exec.committedFrames R.run) →
+        TargetClosed pool fs := fun h => Curve3PoolSupply.targetClosed_of_forest h
+    exact (piece (d.sinceMinter m.history).settledFrames_eq).append
+      (((((piece m.block.bodyTrace.beacon.settledFrames_eq).append (piece m.block.bodyTrace.history.settledFrames_eq)).append
+        (piece m.cut.before.settledFrames_eq)).append (piece m.cut.head.settledFrames_eq)))
+  obtain ⟨Y, hY, hYm, -⟩ := Curve3PoolSupply.supply_walk W invs (pre := []) run entries auth obs split (TargetClosed.nil pool)
+    (by rw [List.nil_append]; exact closed) rfl joint.tokenIs rfl joint.minterIs
+  obtain ⟨-, s', runS, inv⟩ := Curve3Crv.c3crv_window_framesHist (d.sinceMinter m.history) m.block m.cut hc3 joint.c3 A.fresh
+  have hview := Curve3PoolSupply.viewObs_eq_committed (ca := Curve3Crv.Creation.tokenAddress)
+    (frames := (d.sinceMinter m.history).settledFrames ++ m.block.settledThroughCut m.cut) (fun f hf => W.ready f (by
+    rw [split]
+    simp only [List.nil_append, List.mem_append]
+    exact Or.inl (List.mem_append.1 hf)))
+  rw [List.nil_append] at hY
+  rw [hview] at hY
+  have hs : Y = s' := Option.some.inj (hY.symm.trans runS.runInvocations_eq)
+  subst hs
+  have := inv.minter
+  rw [hYm] at this
+  exact this
+
 /-- The observers read only the five contracts. -/
 theorem ExitPaid.congr {w w₁ w₂ : State} {E : Adr} {a : Nat} (h : ExitPaid w w₁ E a)
     (hs : ∀ x, x = pool ∨ x = c3 ∨ x = dai ∨ x = usdc ∨ x = usdt → w₂.getStor x = w₁.getStor x) :
@@ -321,14 +428,13 @@ theorem ExitPaid.congr {w w₁ w₂ : State} {E : Adr} {a : Nat} (h : ExitPaid w
   · rw [hcoin]; exact h.coins k
   · rw [hcoin]; exact h.paid k
 
-/-- **`lp_exit` under the marked hypotheses.** The rest of the proof is complete: the wrapper, the moment, the coins'
-premises and the model's acceptance. -/
-theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.through) {tx : Tx} {E : Adr} {a : Nat}
+/-- **`lp_exit`, given V2_2's code at the address `CoinsOpen.usdcV22` names**: one `eth_getCode` at the moment, the only
+hypothesis beyond the statement's. -/
+theorem lp_exit_of_implCode {d : Deployment} (m : Moment d) (A : Assumes d m.through) {tx : Tx} {E : Adr} {a : Nat}
     {mins : Curve3Pool.V3} (hdata : tx.data = exitCalldata a mins)
     (adm : TxAdmitted m.benv m.bout tx E (exitLimit m.world tx.data E a)) (hopen : CoinsOpen m.world E)
     (req : ExitRequest m.world E a mins)
-    (implCode : m.world.getCode (usdcImplOf m.world) = Usdc.Impl.code)
-    (minter : (m.world.getStor c3).get Curve3Crv.vyMinterSlot = pool.toB256) (id4 : m.world.getCode 4 = ByteArray.empty) :
+    (implCode : m.world.getCode (usdcImplOf m.world) = Usdc.Impl.code) :
     ExitWorks m.benv m.bout tx m.nextIndex E a := by
   obtain ⟨prio, maxFee, form, ready⟩ := adm.form
   have mf := m.facts A
@@ -337,8 +443,8 @@ theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.throu
       usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
         A.circle.usdcCertified
       usdcCode := implCode
-      minter := minter
-      id4 := id4 }
+      minter := m.minter A
+      id4 := m.id4 A }
   have hw : m.benv.state = m.world := rfl
   have hE0 : E ≠ 0 := ready.named.1
   have hrec : tx.type.receiver? = some pool := by rw [form.type]; rfl
@@ -472,5 +578,21 @@ theorem lp_exit_of_marked {d : Deployment} (m : Moment d) (A : Assumes d m.throu
   show ((_ : State).get x).stor = (post.state.get x).stor
   simp only [List.foldl_nil, State.addBal]
   rw [State.setBal_get_ne hCx, State.setBal_get_ne hEx]
+
+/-- **`lp_exit`'s message**, given the same read. -/
+theorem lp_exit_message_of_implCode {d : Deployment} (m : Moment d) (A : Assumes d m.through) {msg : Msg} {E : Adr} {a : Nat}
+    {mins : Curve3Pool.V3} (ask : Asked msg m.world E (exitCalldata a mins)) (req : ExitRequest m.world E a mins) (hE : E ≠ 0)
+    (implCode : m.world.getCode (usdcImplOf m.world) = Usdc.Impl.code) :
+    MsgDoes msg callRoom (exitFrameGas m.world E a) (exitRefund m.world E a) (fun st => ExitPaid m.world st E a) := by
+  intro R hR hG
+  have mk : ExitMarked m.world :=
+    { covered := m.backed A
+      usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.usdcCode
+        A.circle.usdcCertified
+      usdcCode := implCode
+      minter := m.minter A
+      id4 := m.id4 A }
+  obtain ⟨post, hx, herr, hg, hrf, -, hpaid⟩ := exit_message (m.facts A) mk ask hE req R hR hG
+  exact ⟨post, hx, herr, hg, by rw [hrf, Int.toNat_natCast], hpaid⟩
 
 end Blanc.Composition.Curve3PoolPublic

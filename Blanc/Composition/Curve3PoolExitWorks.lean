@@ -4,12 +4,11 @@ import Blanc.Composition.Curve3PoolExitMoment
 import Blanc.Composition.Curve3Pool3CrvCoinExactFloor
 
 /-!
-# `lp_exit`, from a moment of mainnet, under marked hypotheses
+# `lp_exit`: the frame's run
 
 `exit_run`: at a `ColdEntry`, the frame commits with exactly the requested residual gas, ending at the canonical
-final state. **Marked, not proved here:** `ExitMarked` (coverage, USDC at the moment, the hash class of the new `E`, the
-fee's bound, the minter and address 4 at the cut) and `ExitCold` (the canonical chain's cost, refund and effect).
-`lp_exit_of_marked` is the theorem those give.
+final state, its call sites' calldata and memory sizes named. `ExitCold` states the canonical chain's cost, refund and
+effect, which `Curve3PoolExitCold` proves.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
@@ -157,7 +156,7 @@ theorem exit_run {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : B2
   exact rl_msg_end (exitCalls msg) hcode hfork hstatic hdep0 hlen hcd hsel hck hstep hid hWc
     ⟨⟨hc3.code, rfl⟩, pinsFrom_entry 0⟩ hP hR hG
 
-/-! ## The message, from the moment's facts -/
+/-! ## What the message stands on -/
 
 /-- What a moment gives the message beyond `MomentFacts`. -/
 structure ExitMarked (w : State) : Prop where
@@ -165,11 +164,11 @@ structure ExitMarked (w : State) : Prop where
   covered : PoolBacked w
   /-- USDC's proxy at its address. -/
   usdcProxy : w.getCode usdc = Usdc.Proxy.code
-  /-- MARKED, for the statement: V2_2's code at the address `CoinsOpen.usdcV22` names. One `eth_getCode`. -/
+  /-- V2_2's code at the address `CoinsOpen.usdcV22` names: not derived; one `eth_getCode`. -/
   usdcCode : w.getCode (usdcImplOf w) = Usdc.Impl.code
-  /-- MARKED, provable: 3Crv's minter at the cut (`supply_walk` over the window). -/
+  /-- 3Crv's minter at the cut (`Moment.minter`). -/
   minter : (w.getStor c3).get Curve3Crv.vyMinterSlot = pool.toB256
-  /-- MARKED, provable: address 4's code at the cut (`codeAt_empty` over the window). -/
+  /-- Address 4's code at the cut (`Moment.id4`). -/
   id4 : w.getCode 4 = ByteArray.empty
 
 /-- A message as a transaction's entry prepares it. -/
@@ -182,7 +181,7 @@ theorem parties_not_precomp {f : Fork} (h : HistFork f) :
   revert h
   cases f <;> decide +kernel
 
-/-- **The cost, refund and effect of the canonical chain at a cold entry.** MARKED: the evaluation still to prove. -/
+/-- **The cost, refund and effect of the canonical chain at a cold entry.** -/
 structure ExitCold (msg : Msg) (w : State) (E : Adr) (a : Nat) (T : B256) : Prop where
   cost : rlExactCost (initSevm msg) (initDevm msg) T (exitCalls msg) = exitFrameGas w E a
   last : ∀ d l S M G, Devm.EqModGas d (exitAfterBurn msg T) →
