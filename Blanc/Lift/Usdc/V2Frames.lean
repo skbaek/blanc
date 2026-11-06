@@ -389,18 +389,4 @@ theorem frame_balanceOf {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   rw [ric_return_getStor h]
   exact funext fun x => afterSload_getStor _ _ _ x
 
-/-- **The move does not lower any slot but its source's entry**, and a `transferFrom` adds only
-the allowance slot. -/
-theorem moveStor_ge {σ : Stor} {src dst : Adr} {v k : B256}
-    (hnof : v.toNat + ((σ.set (balSlot src) (σ.get (balSlot src) - v)).get (balSlot dst)).toNat < 2 ^ 256)
-    (hk : k ≠ balSlot src) :
-    (σ.get k).toNat ≤ ((moveStor σ src dst v).get k).toNat := by
-  unfold moveStor
-  by_cases hkd : k = balSlot dst
-  · subst hkd
-    rw [Stor.get_set_self, Stor.get_set_ne _ (Ne.symm hk)] at *
-    rw [B256.toNat_add_eq_of_nof _ _ hnof]
-    omega
-  · rw [Stor.get_set_ne _ (Ne.symm hkd), Stor.get_set_ne _ (Ne.symm hk)]
-
 end Blanc.Lift.Usdc.ImplV2

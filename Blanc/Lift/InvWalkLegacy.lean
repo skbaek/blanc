@@ -144,6 +144,18 @@ theorem div_bexp_zero (x : B256) :
 
 theorem lit0 : Bytes.toB256 [0] = 0 := by decide
 
+/-- **A debit-then-credit lowers no slot but the debited one**: the shape of optimized solc's
+balance move, read through the consumer's slot apartness. -/
+theorem move_slots_ge {σ : Stor} {ks kd k w v : B256}
+    (hnof : v.toNat + ((σ.set ks w).get kd).toNat < 2 ^ 256) (hk : k ≠ ks) :
+    (σ.get k).toNat ≤ (((σ.set ks w).set kd (v + (σ.set ks w).get kd)).get k).toNat := by
+  by_cases hkd : k = kd
+  · subst hkd
+    rw [Stor.get_set_self, Stor.get_set_ne _ (Ne.symm hk)] at *
+    rw [B256.toNat_add_eq_of_nof _ _ hnof]
+    omega
+  · rw [Stor.get_set_ne _ (Ne.symm hkd), Stor.get_set_ne _ (Ne.symm hk)]
+
 theorem Mem.Wf.read_snd {μ : Mem} (h : Mem.Wf μ) (i n : Nat) : Mem.Wf (μ.read i n).2 :=
   Nat.le_trans h (memExtSize_ge _ _ _)
 

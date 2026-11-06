@@ -450,7 +450,6 @@ def flag20 (w : B256) : B256 :=
 /-- `isBlackListed[a]`, the low byte of the mapping entry at slot 6. -/
 def listedByte (σ : Stor) (a : Adr) : B256 := Bytes.toB256 [255] &&& σ.get (mapSlot a.toB256 6)
 
-theorem lit6 : Bytes.toB256 [6] = 6 := by decide
 theorem lit10 : Bytes.toB256 [10] = 10 := by decide
 
 /-- **Entry 39, `TetherToken.transfer(t, v)`, not deprecated**. -/
@@ -581,7 +580,6 @@ theorem e33_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.f
   have sB' := funext fun x => (congrFun sB x).trans (afterSload_getStor _ _ _ x)
   exact ⟨_, _, _, rfl, sB'⟩
 
-theorem lit4w : Bytes.toB256 [4] = 4 := by decide
 theorem lit36 : Bytes.toB256 [32] + Bytes.toB256 [4] = 36 := by decide
 
 /-- **The `balanceOf(a)` frame of TetherToken, not deprecated**: it keeps the storage. -/
@@ -637,7 +635,7 @@ theorem frame_transfer {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   have sp := ric_stop_keeps h
   clear h
   simp only [lit36] at d3 sB
-  simp only [ff20_and_word, toAdr_toB256, lit4w] at d3 sB
+  simp only [ff20_and_word, toAdr_toB256, lit4] at d3 sB
   exact ⟨d1, d2, d3, by rw [sp, sB]⟩
 
 /-- **The `transferFrom(r, to, v)` frame of TetherToken, not deprecated.** -/
@@ -675,7 +673,7 @@ theorem frame_transferFrom {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   have sp := ric_stop_keeps h
   clear h
   simp only [lit36, show Bytes.toB256 [32] + 36 = 68 by decide] at d0 d2 d3 sB
-  simp only [ff20_and_word, toAdr_toB256, lit4w] at d0 d2 d3 sB
+  simp only [ff20_and_word, toAdr_toB256, lit4] at d0 d2 d3 sB
   exact ⟨d1, d2, d0, d3, by rw [sp, sB]⟩
 
 /-! ## The owner's own writes: `issue` and `redeem` -/
@@ -811,7 +809,7 @@ theorem frame_issue {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   repeat ustep h
   have sp := ric_stop_keeps h
   clear h
-  simp only [lit4w] at sB
+  simp only [lit4] at sB
   exact ⟨d1, by rw [sp, sB]⟩
 
 /-- **The `redeem(a)` frame**: the caller is the owner; the entry debited is the owner's. -/
@@ -838,7 +836,7 @@ theorem frame_redeem {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   repeat ustep h
   have sp := ric_stop_keeps h
   clear h
-  simp only [lit4w] at sB
+  simp only [lit4] at sB
   exact ⟨d1, by rw [sp, sB]⟩
 
 /-! ## The deprecation route
