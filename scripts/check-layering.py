@@ -1403,6 +1403,7 @@ CONTRACTS["curve-3pool"].extend([
     "Lift.Curve3Pool.RemoveLiquidityFloorFrame",
     "Lift.Curve3Pool.RuntimeSafety",
     "Lift.Curve3Pool.StepCallFree",
+    "Lift.Curve3Pool.U3ParamWitnesses",
     "Lift.Curve3Pool.VirtualPriceFallsRun",
     "Lift.Curve3Pool.Walk.ChildrenSel",
     "Lift.Curve3Pool.Walk.ExchangeFloorCores",
