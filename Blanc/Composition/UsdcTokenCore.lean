@@ -107,7 +107,7 @@ theorem e99_mem {x y ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM : F
   repeat istep h
   rcases ric_call (g := t_3f6a_c83) rfl h with ⟨_, ⟨D1, hc, h⟩ | ⟨D1, hc, _⟩⟩
   · have m1 := e83_mem fork hM hc
-    obtain ⟨b', M', G', e, -⟩ := e83_inv fork hc
+    obtain ⟨b', M', G', e, -⟩ := e83_inv fork.histFork hc
     cases e
     clear hc
     repeat istep h
@@ -116,7 +116,7 @@ theorem e99_mem {x y ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM : F
     obtain ⟨_, e⟩ := ric_ret h
     cases e
     exact FpM.scratch m1 _ _
-  · obtain ⟨_, _, _, e, _⟩ := e83_inv fork hc
+  · obtain ⟨_, _, _, e, _⟩ := e83_inv fork.histFork hc
     cases e
 
 theorem e93_mem {x y z ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM : FpM fp80 96 M)
@@ -131,7 +131,7 @@ theorem e93_mem {x y z ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM :
   repeat istep h
   icall h hc 96 t_41da_c96
   have m1 := e96_mem fork hM hc
-  obtain ⟨b1, M1, G1, e, -⟩ := e96_inv fork hc
+  obtain ⟨b1, M1, G1, e, -⟩ := e96_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -139,35 +139,35 @@ theorem e93_mem {x y z ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM :
   repeat istep h
   icall h hc 96 t_41da_c96
   have m2 := e96_mem fork m1 hc
-  obtain ⟨b2, M2, G2, e, -⟩ := e96_inv fork hc
+  obtain ⟨b2, M2, G2, e, -⟩ := e96_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
   icall h hc 100 t_4163_c100
-  obtain ⟨-, G3, e⟩ := e100_inv fork hc
+  obtain ⟨-, G3, e⟩ := e100_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
   icall h hc 99 t_4430_c99
   have m4 := e99_mem fork m2 hc
-  obtain ⟨-, -, b4, M4, G4, e, -⟩ := e99_inv fork hc
+  obtain ⟨-, -, b4, M4, G4, e, -⟩ := e99_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
   icall h hc 96 t_41da_c96
   have m5 := e96_mem fork m4 hc
-  obtain ⟨b5, M5, G5, e, -⟩ := e96_inv fork hc
+  obtain ⟨b5, M5, G5, e, -⟩ := e96_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
   icall h hc 98 t_43b5_c98
-  obtain ⟨-, G6, e⟩ := e98_inv fork hc
+  obtain ⟨-, G6, e⟩ := e98_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
   icall h hc 99 t_4430_c99
   have m7 := e99_mem fork m5 hc
-  obtain ⟨-, -, b7, M7, G7, e, -⟩ := e99_inv fork hc
+  obtain ⟨-, -, b7, M7, G7, e, -⟩ := e99_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -194,7 +194,7 @@ theorem e37_mem {x y ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM : F
   repeat istep h
   icall h hc 83 t_3f6a_c83
   have m1 := e83_mem fork hM hc
-  obtain ⟨b1, M1, G1, e, -⟩ := e83_inv fork hc
+  obtain ⟨b1, M1, G1, e, -⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -202,7 +202,7 @@ theorem e37_mem {x y ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM : F
   repeat istep h
   icall h hc 83 t_3f6a_c83
   have m2 := e83_mem fork m1 hc
-  obtain ⟨b2, M2, G2, e, -⟩ := e83_inv fork hc
+  obtain ⟨b2, M2, G2, e, -⟩ := e83_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -210,7 +210,7 @@ theorem e37_mem {x y ret : B256} (fork : CoveredFork sevm.benvStat.fork) (hM : F
   repeat istep h
   icall h hc 93 t_3f98_c93
   have m3 := e93_mem fork m2 hc
-  obtain ⟨-, -, -, -, -, -, b3, M3, G3, e, -⟩ := e93_inv fork hc
+  obtain ⟨-, -, -, -, -, -, b3, M3, G3, e, -⟩ := e93_inv fork.histFork hc
   cases e
   clear hc
   repeat istep h
@@ -238,7 +238,7 @@ theorem frame_transfer_output {post : Devm} (fork : CoveredFork sevm.benvStat.fo
   have m0 : FpM fp80 96 (Mem.empty.write (Bytes.toB256 [64]).toNat (Bytes.toB256 [128]).toBytes) := by
     rw [n64]; exact FpM.init _
   have m1 := e37_mem fork m0 hc
-  obtain ⟨-, -, -, -, -, -, -, -, b1, M1, G1, e, -⟩ := e37_inv fork hc
+  obtain ⟨-, -, -, -, -, -, -, -, b1, M1, G1, e, -⟩ := e37_inv fork.histFork hc
   cases e
   clear hc m0
   change FpM _ 160 M1 at m1
@@ -259,14 +259,14 @@ theorem e46_inv {a ret : B256} {o : Outcome} (fork : CoveredFork sevm.benvStat.f
   repeat istep h
   rcases ric_call (g := t_41da_c96) rfl h with ⟨_, ⟨D1, hc, h⟩ | ⟨D1, hc, _⟩⟩
   · have m1 := e96_mem fork hM hc
-    obtain ⟨b', M', G', e, -⟩ := e96_inv fork hc
+    obtain ⟨b', M', G', e, -⟩ := e96_inv fork.histFork hc
     cases e
     clear hc
     repeat istep h
     obtain ⟨_, e⟩ := ric_ret h
     cases e
     exact ⟨_, _, _, rfl, m1⟩
-  · obtain ⟨_, _, _, e, _⟩ := e96_inv fork hc
+  · obtain ⟨_, _, _, e, _⟩ := e96_inv fork.histFork hc
     cases e
 
 theorem frame_balanceOf_output {post : Devm} (fork : CoveredFork sevm.benvStat.fork)

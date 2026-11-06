@@ -138,7 +138,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
   cases c <;> simp only [famTransfer] at fam
   · rename_i dst v
     obtain ⟨sel, rfl, rfl⟩ := decode_transfer dec
-    obtain ⟨p0, fdst, c0, d0, hv, fc, fd, hb, sp⟩ := frame_transfer fork sel hrun
+    obtain ⟨p0, fdst, c0, d0, hv, fc, fd, hb, sp⟩ := frame_transfer fork.histFork sel hrun
     have hs : Devm.getStor pre = pre.state.getStor := rfl
     rw [hs] at p0 fdst hv fc fd hb
     clear hrun stepEq
@@ -173,7 +173,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       exact (sup.set kc _).set kd _
   · rename_i src dst v
     obtain ⟨sel, rfl, rfl, rfl⟩ := decode_transferFrom dec
-    obtain ⟨p0, fcl, fs, fdst, a1, s0, d0, hv, fd, hb, a2, sp⟩ := frame_transferFrom fork sel hrun
+    obtain ⟨p0, fcl, fs, fdst, a1, s0, d0, hv, fd, hb, a2, sp⟩ := frame_transferFrom fork.histFork sel hrun
     have hs : Devm.getStor pre = pre.state.getStor := rfl
     rw [hs] at p0 fcl fs fdst a1 hv fd hb a2 sp
     clear hrun stepEq
@@ -222,7 +222,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       exact ((sup.set ks _).set kd _).set ka _
   · rename_i sx v
     obtain ⟨sel, rfl, rfl⟩ := decode_approve dec
-    obtain ⟨p0, c0, s0, sp⟩ := frame_approve fork sel hrun
+    obtain ⟨p0, c0, s0, sp⟩ := frame_approve fork.histFork sel hrun
     have hs : Devm.getStor pre = pre.state.getStor := rfl
     rw [hs] at p0 sp
     clear hrun stepEq
@@ -243,7 +243,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       exact sup.set ka _
   · rename_i sx v
     obtain ⟨sel, rfl, rfl⟩ := decode_increaseAllowance dec
-    obtain ⟨p0, c0, s0, a1, sp⟩ := frame_increaseAllowance fork sel hrun
+    obtain ⟨p0, c0, s0, a1, sp⟩ := frame_increaseAllowance fork.histFork sel hrun
     have hs : Devm.getStor pre = pre.state.getStor := rfl
     rw [hs] at p0 a1 sp
     clear hrun stepEq
@@ -265,7 +265,7 @@ theorem implStepLaw_famTransfer : ImplStepLaw famTransfer := by
       exact sup.set ka _
   · rename_i sx v
     obtain ⟨sel, rfl, rfl⟩ := decode_decreaseAllowance dec
-    obtain ⟨p0, c0, s0, a1, sp⟩ := frame_decreaseAllowance fork sel hrun
+    obtain ⟨p0, c0, s0, a1, sp⟩ := frame_decreaseAllowance fork.histFork sel hrun
     have hs : Devm.getStor pre = pre.state.getStor := rfl
     rw [hs] at p0 a1 sp
     clear hrun stepEq
