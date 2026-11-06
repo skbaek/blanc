@@ -102,22 +102,6 @@ theorem keeps_of_children_sel (w : PoolWorld exc dai usdc usdt tok)
     exact ((w.coin_keeps hp hcode hfork k) c hc hk' sel tok (fun e => hct (hk'.trans e))).1
       (by rw [w.tokCode]; exact c3crv_code_ne) x
 
-/-- A child of a pool frame that is static has a code address. -/
-theorem poolChild_codeAddress (hsg : sevm.benvStat.rules.stateGas = none) :
-    ∀ c ∈ Exec.childFrames exc, c.sevm.isStatic = true → c.sevm.codeAddress ≠ none := by
-  intro c hc hs
-  obtain ⟨N, f, rsm, pc', cevm, pp, hstep, henter, hsevm, -⟩ :=
-    Exec.childFrames_spawnedAt_entry exc (.refl _) c hc
-  have hNs : N.sevm = sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq pp
-  obtain ⟨x, -, hxs, -⟩ := Evm.step_spawn_inv hstep
-  have hst : f.inner.isStatic = true := by
-    rw [← Frame.enter_run_isStatic henter, ← hsevm]
-    exact hs
-  have hca := Xinst.step_spawn_codeAddress_of_static_noStateGas (by rw [hNs]; exact hsg) hxs hst
-  obtain ⟨_, _, hcev⟩ := Frame.enter_run_inv henter
-  rw [hsevm, hcev]
-  exact hca
-
 /-- The two keep premises, when every child is static. -/
 theorem keeps_of_children_static (hfork : HistFork sevm.benvStat.fork)
     (hcode : sevm.code = Curve3Pool.code)
