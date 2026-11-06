@@ -1,6 +1,6 @@
 import Blanc.Lift.CoinKeys
 import Blanc.Lift.CurveCoins.Usdt
-import Blanc.Lift.CurveCoins.Sel
+import Blanc.Lift.PoolCoinSel
 import Blanc.Lift.CurveCoins.UsdtQuiet
 import Blanc.Lift.UsdtOwnerFrames
 

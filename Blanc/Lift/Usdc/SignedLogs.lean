@@ -2,7 +2,7 @@ import Blanc.Lift.Usdc.EntryLawV22
 import Blanc.Lift.Usdc.EntryChainSettled
 import Blanc.Lift.CurveCoins.ApprovalLogsUsdcV2
 import Blanc.Lift.CurveCoins.ApprovalLogsUsdcV2_1
-import Blanc.Lift.CurveCoins.PremisesOfLogs
+import Blanc.Lift.LogFilterPremises
 
 /-!
 # USDC's `noSignature` from receipt logs

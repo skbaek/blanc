@@ -17,7 +17,7 @@ moves only through the frame's settled children:
 Nothing here names a contract.
 -/
 
-namespace Blanc.Composition.Curve3PoolVirtualPrice
+namespace Blanc.Lift
 
 open Jaune Blanc
 
@@ -163,4 +163,4 @@ theorem cell_after {a : Adr} (key : B256) {pc : Nat} {sevm : Sevm} {pre : Devm} 
     · rw [dite_eq_right settles, List.nil_append] at split
       exact nextIh committed hsg hne nextNe xs c ys split keeps
 
-end Blanc.Composition.Curve3PoolVirtualPrice
+end Blanc.Lift

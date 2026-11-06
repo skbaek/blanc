@@ -1,7 +1,7 @@
 import Blanc.Composition.Curve3PoolBackedUsdt
 import Blanc.Composition.UsdcTokenCore
 import Blanc.Lift.Usdc.EntryPositional
-import Blanc.Lift.Usdc.InitializerKeepsPool
+import Blanc.Composition.Curve3PoolUsdcEntryApart
 import Blanc.Lift.Usdc.V2Answer
 import Blanc.Lift.Usdc.V2_1Answer
 

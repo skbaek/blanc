@@ -3,8 +3,8 @@ import Blanc.CommonCore
 /-! A code semantics that records only which bytes a frame runs.
 
 `CodeSem.ofBytes c` is the code image `some c.toList` whose run relation says the frame runs `c`,
-as `factorySem` and `pairSem` are built.  Its two side conditions are size facts, decided once
-per runtime.  The three USDC runtimes (`proxySem`, `implSem`, `libSem`) are its instances. -/
+for any runtime.  Its two side conditions are size facts, decided once per runtime.  The name stays
+under `Lift.Usdc` because the claim-hash manifest pins it there; the definition names no contract. -/
 
 namespace Blanc.Lift.Usdc
 

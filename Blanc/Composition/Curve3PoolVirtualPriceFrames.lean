@@ -1,4 +1,4 @@
-import Blanc.Composition.Curve3PoolVirtualPriceCell
+import Blanc.Lift.ChildCell
 import Blanc.Composition.Curve3PoolVirtualPriceDeploy
 import Blanc.Composition.Curve3PoolSupplyFrames
 import Blanc.Lift.CurveCoins.ApprovalLogsUsdt

@@ -7,7 +7,8 @@ An untrusted evaluation, in Lean's interpreter, of the run the kernel then check
 call, prints a boundary every `chunkSteps` steps and at every frame edge, and writes the data, chunk
 and composition modules `Curve3PoolVirtualPriceFallsData`, `Curve3PoolVirtualPriceFallsFactsN` and
 `Curve3PoolVirtualPriceFallsChain`.  Nothing it prints is trusted: a wrong boundary fails its chunk's kernel
-check.  To regenerate, build a scratch module whose only command is `#eval genAll "<directory>"`.
+check.  So it stays out of the library, the import root and the axiom walk.  To regenerate, build
+the library, then run this file under `lake env lean` with `#eval genAll "<directory>"` appended.
 -/
 
 namespace Blanc.Composition.Curve3PoolVirtualPriceFalls.Gen

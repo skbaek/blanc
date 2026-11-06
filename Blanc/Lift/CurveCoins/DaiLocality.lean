@@ -1,6 +1,6 @@
 import Blanc.Lift.CoinKeys
 import Blanc.Lift.CurveCoins.Dai
-import Blanc.Lift.CurveCoins.Sel
+import Blanc.Lift.PoolCoinSel
 import Blanc.Lift.CurveCoins.DaiPermit
 import Blanc.Lift.DaiFrames
 import Blanc.Lift.LinearRuntimeSafety

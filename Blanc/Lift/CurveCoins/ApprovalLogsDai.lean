@@ -1,4 +1,4 @@
-import Blanc.Lift.CurveCoins.ApprovalLog
+import Blanc.Lift.ApprovalLog
 import Blanc.Lift.CurveCoins.DaiLocality
 
 /-!

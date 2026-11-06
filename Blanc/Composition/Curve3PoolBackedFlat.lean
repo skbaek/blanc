@@ -1,7 +1,8 @@
 import Blanc.Composition.Curve3PoolBackedEnv
 import Blanc.Lift.CurveCoins.BalanceAnswers
 import Blanc.Composition.Curve3PoolPublicBridge
-import Blanc.Lift.CurveCoins.PremisesOfLogs
+import Blanc.Lift.CurveCoins.DaiPremises
+import Blanc.Lift.CurveCoins.UsdtPremises
 
 /-!
 # The walk over a coin whose whole storage chains and whose reading never changes

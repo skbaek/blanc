@@ -906,7 +906,7 @@ import Blanc.Lift.Token.Signed
 import Blanc.Lift.Token.SignedControl
 import Blanc.Lift.Token.TransferLiveBudget
 import Blanc.Lift.Usdc.Book
-import Blanc.Lift.Usdc.CodeImage
+import Blanc.Lift.CodeImage
 import Blanc.Lift.Usdc.Constants
 import Blanc.Lift.Usdc.Decode
 import Blanc.Lift.Usdc.Families
@@ -1158,3 +1158,17 @@ import Blanc.Lift.Usdc.HistoryAnchorObservationData
 import Blanc.Lift.Usdc.ImplFp
 import Blanc.Lift.Usdc.ImplV1Lifetime
 import Blanc.TrieKernel
+import Blanc.Composition.Curve3Pool3CrvCoinExactFloor
+import Blanc.Composition.Curve3PoolBacked
+import Blanc.Composition.Curve3PoolCoinExchange
+import Blanc.Composition.Curve3PoolUsdcV2Coin
+import Blanc.Composition.Curve3PoolUsdcV2_1Coin
+import Blanc.Composition.Curve3PoolUsdtCoinExchange
+import Blanc.Composition.Curve3PoolVirtualPriceFalls
+import Blanc.Lift.Curve3Crv.HistShareBound
+import Blanc.Lift.Curve3Pool.U3HistoryMid
+import Blanc.Lift.Curve3Pool.U3ParamWitnesses
+import Blanc.Lift.CurveCoins.ApprovalLogsUsdcV1
+import Blanc.Lift.CurveCoins.UsdcV2_1
+import Blanc.Lift.CurveCoins.UsdcV2_2
+import Blanc.Lift.Usdc.VersionStands

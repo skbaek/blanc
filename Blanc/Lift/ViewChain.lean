@@ -177,14 +177,6 @@ end Mid
 
 /-! ## Locality through a view, with a `held` that may read the frame -/
 
-/-- Consecutive frames agree on what they read at their seam. -/
-def Bridged (T : Adr) (V : StorWords → StorWords) (held : Exec.Frame → StorWords → Nat) :
-    List Exec.Frame → Prop
-  | [] => True
-  | [_] => True
-  | F :: G :: rest => held F (V (wordsAt T G.pre.state)) ≤ held G (V (wordsAt T G.pre.state)) ∧
-      Bridged T V held (G :: rest)
-
 /-- **Locality of `held` at `T`, through the view `V`.** `held F` is how the frame `F` reads the view: a
 token whose storage layout changes with its code reads it by the code `F` runs. -/
 structure EntryLocalAt (T : Adr) (V : StorWords → StorWords) (Obs Good : Exec.Frame → Prop)
@@ -201,32 +193,5 @@ structure EntryLocalAt (T : Adr) (V : StorWords → StorWords) (Obs Good : Exec.
   law : ∀ F ∈ coinFrames T Obs settled,
     held F (V (wordsAt T F.pre.state)) + credit F.sevm ≤
       held F (V (wordsAt T F.post.state)) + debit F.sevm
-
-/-- **Telescoping across changes of reading**: over a chained, bridged run of frames, the first frame's
-reading at the start and the last frame's reading at the end differ by the frames' amounts. -/
-theorem ViewChain.segment {T : Adr} {V : StorWords → StorWords} {Good : Exec.Frame → Prop}
-    {held : Exec.Frame → StorWords → Nat} {debit credit : Exec.Frame → Nat} :
-    ∀ (fs : List Exec.Frame) (F : Exec.Frame) {a b : StorWords}, ViewChain T V Good a (F :: fs) b →
-      (∀ G ∈ F :: fs, held G (V (wordsAt T G.pre.state)) + credit G ≤
-        held G (V (wordsAt T G.post.state)) + debit G) →
-      Bridged T V held (F :: fs) →
-      held F a + ((F :: fs).map credit).sum ≤ held (fs.getLastD F) b + ((F :: fs).map debit).sum
-  | [], F, _, _, h, law, _ => by
-    obtain ⟨-, rfl, rfl⟩ := h
-    have := law F List.mem_cons_self
-    simp only [List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero, List.getLastD_nil]
-    exact this
-  | G :: fs, F, _, _, h, law, bridged => by
-    obtain ⟨-, rfl, rest⟩ := h
-    have here := law F List.mem_cons_self
-    have next := ViewChain.segment fs G rest (fun H hH => law H (List.mem_cons_of_mem _ hH)) bridged.2
-    have atSeam : V (wordsAt T G.pre.state) = V (wordsAt T F.post.state) := rest.2.1
-    have bridge := bridged.1
-    rw [atSeam] at bridge
-    simp only [List.map_cons, List.sum_cons] at next ⊢
-    have last : (G :: fs).getLastD F = fs.getLastD G := by
-      cases fs <;> rfl
-    rw [last]
-    omega
 
 end Blanc.Lift

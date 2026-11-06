@@ -1,6 +1,7 @@
 import Blanc.Composition.Curve3PoolPublicBridge
 import Blanc.Composition.Curve3Pool3CrvU3Mid
-import Blanc.Lift.CurveCoins.PremisesOfLogs
+import Blanc.Lift.CurveCoins.DaiPremises
+import Blanc.Lift.CurveCoins.UsdtPremises
 
 /-!
 # `Assumes` gives the deployment's facts and the history's environment

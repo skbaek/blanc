@@ -1,4 +1,4 @@
-import Blanc.Lift.CurveCoins.ApprovalLog
+import Blanc.Lift.ApprovalLog
 import Blanc.Lift.Usdc.V2_1Frames
 import Blanc.Lift.Usdc.V2_1TransferWithAuthorizationReach
 

@@ -1,5 +1,7 @@
 import Blanc.Composition.Curve3Pool3CrvExRoot
-import Blanc.Lift.CurveCoins.Keep
+import Blanc.Lift.CurveCoins.KeepDai
+import Blanc.Lift.CurveCoins.KeepUsdc
+import Blanc.Lift.CurveCoins.KeepUsdt
 import Blanc.ExecutionDirectCode
 import Blanc.Lift.TargetLogEvents
 import Blanc.Lift.Curve3Pool.FrameEnv

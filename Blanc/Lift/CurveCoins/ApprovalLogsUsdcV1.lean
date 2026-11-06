@@ -1,4 +1,4 @@
-import Blanc.Lift.CurveCoins.ApprovalLog
+import Blanc.Lift.ApprovalLog
 import Blanc.Lift.Usdc.V1ApproveRetainedLog
 import Blanc.Lift.Usdc.AllowLocality
 import Blanc.Lift.Usdc.InitRowsHistory

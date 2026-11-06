@@ -1,7 +1,8 @@
 import Blanc.Composition.Curve3PoolVirtualPriceFrames
 import Blanc.Composition.Curve3PoolVirtualPriceModel
 import Blanc.Composition.Curve3PoolPublic
-import Blanc.Lift.CurveCoins.PremisesOfLogs
+import Blanc.Lift.CurveCoins.DaiPremises
+import Blanc.Lift.CurveCoins.UsdtPremises
 
 /-!
 # `virtual_price_bound`

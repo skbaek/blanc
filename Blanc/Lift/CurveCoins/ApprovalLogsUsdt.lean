@@ -1,5 +1,5 @@
 import Blanc.Lift.CurveCoins.UsdtLocality
-import Blanc.Lift.CurveCoins.ApprovalLog
+import Blanc.Lift.ApprovalLog
 
 /-!
 # USDT: `Approval` from `approve`, and the logs of the owner's powers

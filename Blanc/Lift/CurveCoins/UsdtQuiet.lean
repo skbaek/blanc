@@ -1,4 +1,4 @@
-import Blanc.Lift.CurveCoins.Keep
+import Blanc.Lift.CurveCoins.KeepUsdt
 
 /-!
 # A TetherToken frame, not deprecated, enters no frame

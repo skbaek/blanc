@@ -1,6 +1,6 @@
 import Blanc.Lift.ReachKinds
 import Blanc.Lift.Usdc.EntryChainProof
-import Blanc.Lift.CurveCoins.Keep
+import Blanc.Lift.CurveCoins.KeepUsdc
 import Blanc.Lift.Usdc.ImplSpawns
 import Blanc.Lift.Usdc.LibSpawns
 

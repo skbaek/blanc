@@ -1,4 +1,4 @@
-import Blanc.Lift.CurveCoins.ApprovalLog
+import Blanc.Lift.ApprovalLog
 
 /-!
 # The logs a reader of `noSignature` filters on

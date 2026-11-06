@@ -1,6 +1,6 @@
 import Blanc.Lift.ViewChain
 import Blanc.Lift.BalanceLocality
-import Blanc.Lift.CurveCoins.Keep
+import Blanc.Lift.CurveCoins.KeepUsdc
 import Blanc.Lift.Usdc.RefineShape
 
 /-!

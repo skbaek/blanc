@@ -1,4 +1,4 @@
-import Blanc.Lift.CurveCoins.Sel
+import Blanc.Lift.PoolCoinSel
 import Blanc.Lift.Curve3Pool.Walk.Kit
 
 /-!

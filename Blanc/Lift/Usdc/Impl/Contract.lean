@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.CodeImage
+import Blanc.Lift.CodeImage
 import Blanc.Lift.Usdc.Impl.Cert
 
 /-! The certified code semantics of the 23,464-byte `FiatTokenV2_2` implementation runtime at `usdcImpl`.

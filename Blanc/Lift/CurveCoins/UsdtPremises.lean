@@ -1,20 +1,16 @@
-import Blanc.ExecutionReceiptLogLink
-import Blanc.ExecutionMidHistoryInOwnCode
-import Blanc.Lift.CurveCoins.ApprovalLogsDai
+import Blanc.Lift.LogFilterPremises
 import Blanc.Lift.CurveCoins.ApprovalLogsUsdt
 
 /-!
-# The coins' premises, from logs and state reads
+# USDT's premises, from logs and state reads
 
-A reader's facts are logs and state reads at named blocks. These theorems turn them into the premises of the coins'
-locality laws, over a mid history:
+These theorems turn logs and state reads at named blocks into the premises of USDT's locality laws, over a mid history:
 
 * `notDeprecated_of_receipts`: the flag clear at the start and no `Deprecate` log in the receipts give `NotDeprecated` at
   every settled frame at USDT;
 * `noConfiscation_of_receipts`: no `DestroyedBlackFunds` naming the holder gives `¬ Confiscates`;
-* `dai_noSignature_of_receipts`: no `Approval` naming the holder as owner gives DAI's `noSignature`;
-* `dai_rows_of_logs`, `usdt_rows_of_logs`: over a history from a state with the holder's tracked rows empty, no `Approval`
-  naming it keeps them empty.
+* `usdt_rows_of_logs`: over a history from a state with the holder's tracked rows empty, no `Approval` naming it keeps them
+  empty.
 
 Receipts do not speak for system stages, so each receipt form takes `sysNe`. `MidHistoryTraceIn.system_ne` gives it from
 `SystemConfined` for a coin outside the four system addresses.
@@ -31,18 +27,7 @@ def DeprecateLog (T : Adr) (l : Log) : Prop := l.address = T ∧ l.topics = [Usd
 def DestroyedLog (T h : Adr) (l : Log) : Prop :=
   l.address = T ∧ l.topics = [Usdt.destroyedTopic] ∧ l.data.take 32 = h.toB256.toBytes
 
-/-- What a reader's filter for `Approval` at `T` matches, with owner `h`. -/
-def ApprovalLog (T h : Adr) (l : Log) : Prop := l.address = T ∧ l.topics.take 2 = [approvalTopic, h.toB256]
-
 variable {T h : Adr} {cfg : ChainConfig} {start : Benv} {future : BlockChain}
-
-/-- **A settled frame's memory starts well formed**: an entered frame's memory is empty. -/
-theorem settled_wf (trace : MidHistoryTraceIn HistFork cfg start future) {F : Exec.Frame}
-    (member : F ∈ trace.settledFrames) : Mem.Wf F.pre.memory := by
-  have fresh := (trace.rawFrames_entered enteredCondition_fresh _ (trace.mem_rawFrames_of_mem_settledFrames F member)).2
-  change F.pre.memory = Mem.empty at fresh
-  rw [fresh]
-  exact Mem.wf_empty
 
 namespace Usdt
 
@@ -200,36 +185,5 @@ theorem usdt_rows_of_logs (capabilities : BodyStageCapabilities HistFork)
   exact noLog F hF l mem ⟨addr, topics⟩
 
 end Usdt
-
-namespace Dai
-
-open Blanc.Lift.Dai Blanc.Lift.CurveCoins.Dai
-
-/-- **DAI's `noSignature` from no `Approval(h, _)` receipt log.** -/
-theorem dai_noSignature_of_receipts (trace : MidHistoryTraceIn HistFork cfg start future)
-    (installed : start.state.getCode T = code) (receipts : trace.NoLogInReceipts (ApprovalLog T h))
-    (sysNe : ∀ root ∈ trace.systemRawFrames, root.sevm.currentTarget ≠ T) :
-    ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, ¬ SignedAs h F.sevm :=
-  dai_noSignature_of_logs trace installed fun F hF ⟨l, mem, addr, topics⟩ =>
-    trace.no_log_at HistFork.stateGas_none _ receipts sysNe F (mem_coinFrames.mp hF).1 (mem_coinFrames.mp hF).2.1 l mem
-      ⟨addr, topics⟩
-
-/-- **The holder's tracked rows, across a history from a state with them empty**, when no frame logs `Approval` naming
-it. `frames` as in `Usdt.usdt_rows_of_logs`. -/
-theorem dai_rows_of_logs (trace : MidHistoryTraceIn HistFork cfg start future)
-    (installed : start.state.getCode T = code)
-    {frames : List Exec.Frame} (sub : coinFrames T (fun _ => True) trace.settledFrames ⊆ frames)
-    (keys : CoinKeysFresh (wsRoot DaiWs.implWsAnn) 2 3 h frames) (rows : RowsEmpty h frames (wordsAt T start.state))
-    (noLog : ∀ F ∈ coinFrames T (fun _ => True) trace.settledFrames, ∀ l ∈ F.post.logs, ¬ ApprovalLog T h l) :
-    RowsEmpty h frames (wordsAt T future.state) := by
-  refine ((dai_chain trace installed).1 (fun _ _ => trivial) |>.fold (held := fun _ => 0) (credit := fun _ => 0)
-    (debit := fun _ => 0) (I := RowsEmpty h frames) (fun F hF good empty => ⟨?_, Nat.le_refl _⟩) rows).1
-  refine Classical.byContradiction fun raised => ?_
-  have target := (mem_coinFrames.mp hF).2.1
-  obtain ⟨l, mem, addr, topics⟩ := frame_rows_raised_logs (sub hF) good target
-    (CertFrame.of_staticOnly cert_check staticOnly HistFork.stateGas_none good target) keys empty raised
-  exact noLog F hF l mem ⟨addr, topics⟩
-
-end Dai
 
 end Blanc.Lift.CurveCoins

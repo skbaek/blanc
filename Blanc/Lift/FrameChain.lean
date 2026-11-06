@@ -3,7 +3,7 @@ import Blanc.ExecutionMidHistoryInFacts
 import Blanc.ExecutionWholeFrameAccountingIn
 import Blanc.ExecutionAccountingMidHistoryIn
 import Blanc.StorageOnlySpec
-import Blanc.Lift.Usdc.CodeImage
+import Blanc.Lift.CodeImage
 
 /-!
 # An account's storage moves frame by frame
