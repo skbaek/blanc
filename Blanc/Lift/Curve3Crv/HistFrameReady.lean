@@ -6,7 +6,7 @@ import Blanc.ExecutionWholeFrameAccountingIn
 /-!
 # 3Crv at every settled frame of a historical mid history
 
-`FrameReadyH ca U f`: a settled frame starts at pc `0` on a historical fork with 3Crv's code installed,
+`FrameReady ca U f`: a settled frame starts at pc `0` on a fork without state gas with 3Crv's code installed,
 is admitted by 3Crv's entry condition below it, and its world balance total is a word. A frame-observing
 accounting ladder over 3Crv's spec (`readyLadderH`) proves it of every settled frame of a mid history
 (`c3crv_mid_readyH`); no separate own-code or balance walk over the trace is needed, because the root
@@ -79,13 +79,14 @@ theorem descendantFrames_balSum_leH {a : Adr} :
         · simp only [List.not_mem_nil] at here
       · exact Nat.le_trans (nextIh hsg (by rw [keep]; exact code) D later) hb
 
-/-- A settled frame's side conditions for 3Crv's accounting descent at the frame, over historical
-forks. -/
-def FrameReadyH (ca : Adr) (U : Key → Prop) (f : Exec.Frame) : Prop :=
-  f.pc = 0 ∧ HistFork f.sevm.benvStat.fork ∧ c3crvSem.At ca 0 f.sevm f.pre ∧
+/-- A settled frame's side conditions for 3Crv's accounting descent at the frame. They name no fork
+domain: every descent below a ready frame needs only `rules.stateGas = none`, so the same predicate
+serves the configured and the historical histories. -/
+def FrameReady (ca : Adr) (U : Key → Prop) (f : Exec.Frame) : Prop :=
+  f.pc = 0 ∧ f.sevm.benvStat.rules.stateGas = none ∧ c3crvSem.At ca 0 f.sevm f.pre ∧
     Exec.FrameAdmitted ca (carriedFrameEntry U) f.run ∧ sum f.pre.state.bal < 2 ^ 256
 
-/-- The ladder observing every settled frame with `FrameReadyH`. -/
+/-- The ladder observing every settled frame with `FrameReady`. -/
 def readyLadderH (ca : Adr) (U : Key → Prop)
     (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
     (apart : ∀ k, U k → k.slot ∉ vyFixedSlots) :
@@ -94,7 +95,7 @@ def readyLadderH (ca : Adr) (U : Key → Prop)
     { Snap := Unit
       Step := Exec.Frame
       Tag := Unit
-      Replay := fun _ steps _ => ∀ f ∈ steps, FrameReadyH ca U f
+      Replay := fun _ steps _ => ∀ f ∈ steps, FrameReady ca U f
       ofState := fun _ => ()
       frameEntry := fun _ _ => ()
       nil := fun _ f member => (List.not_mem_nil member).elim
@@ -143,9 +144,9 @@ def readyLadderH (ca : Adr) (U : Key → Prop)
       Exec.rawFrameRoots_trans (Exec.mem_rawFrameRoots_of_mem_committedFrames run f member) hr
     rw [Exec.committedFrames, dite_eq_left committed] at member
     rcases List.mem_cons.mp member with rfl | deeper
-    · exact ⟨rfl, fork, installed, hadm, entryBound⟩
+    · exact ⟨rfl, hsg, installed, hadm, entryBound⟩
     · obtain ⟨hc, hpcF, hf, -, hown⟩ := below f deeper
-      exact ⟨hpcF, hf, ⟨by rw [hc]; rfl, fun target => ⟨by rw [hown target]; rfl, rfl⟩⟩, hadm,
+      exact ⟨hpcF, hf.stateGas_none, ⟨by rw [hc]; rfl, fun target => ⟨by rw [hown target]; rfl, rfl⟩⟩, hadm,
         Nat.lt_of_le_of_lt (descendantFrames_balSum_leH run hsg codeNe f deeper) entryBound⟩
 
 /-- 3Crv's entry condition holds at every raw frame of a mid history, over its touched keys. -/
@@ -168,7 +169,7 @@ theorem c3crv_mid_readyH {ca : Adr} {cfg : ChainConfig} {start : Benv} {future :
     (invariant : VyInv (start.state.getStor ca) initial initialKeys)
     (fresh : FreshKeys initialKeys (midTouchedKeysIn ca trace)) :
     ∀ f ∈ trace.settledFrames,
-      FrameReadyH ca (Key.extend initialKeys (midTouchedKeysIn ca trace)) f := by
+      FrameReady ca (Key.extend initialKeys (midTouchedKeysIn ca trace)) f := by
   let U := Key.extend initialKeys (midTouchedKeysIn ca trace)
   have topology : VyInv (start.state.getStor ca) initial U := invariant.extend fresh
   have capabilities := BodyStageCapabilities.historical
@@ -185,16 +186,17 @@ theorem c3crv_mid_readyH {ca : Adr} {cfg : ChainConfig} {start : Benv} {future :
 
 /-- **Every descendant of a settled 3Crv frame is static.** -/
 theorem c3crv_descendants_staticH {ca : Adr} {U : Key → Prop} {A : Exec.Frame}
-    (ready : FrameReadyH ca U A) (target : A.sevm.currentTarget = ca) :
+    (ready : FrameReady ca U A) (target : A.sevm.currentTarget = ca) :
     ∀ D ∈ Exec.descendantFrames A.run, D.sevm.isStatic = true := by
   obtain ⟨hpc, fork, at_, -, -⟩ := ready
   have hcode : A.sevm.code = code := code_of_image (at_.2 target).1
-  have none := Exec.staticOnly_descendantFrames_flatMap_eq_nilIn (F := HistFork) ca c3crvSem
+  have none := Exec.staticOnly_descendantFrames_flatMap_eq_nilIn
+    (F := fun f => (Fork.ruleSet f).stateGas = none) ca c3crvSem
     (fun _ _ => True) (fun D : Exec.Frame => if D.sevm.isStatic = true then ([] : List Unit) else [()])
     (Blanc.Exec.Frame.rootDeriv A) target at_.1 fork
     (fun chain instruction =>
       parentPrefix_exec_staticcall_of_cert_noStateGas cert_check cert_onlyStaticcall
-        (root := Blanc.Exec.Frame.rootDeriv A) hpc hcode fork.stateGas_none chain instruction)
+        (root := Blanc.Exec.Frame.rootDeriv A) hpc hcode fork chain instruction)
     (fun run _ _ _ _ _ static => List.flatMap_eq_nil_iff.mpr fun D member => by
       rw [if_pos (Blanc.Exec.committedFrames_isStatic run static D member)])
     A.run (.refl _) (fun _ _ _ => trivial)
@@ -206,7 +208,7 @@ theorem c3crv_descendants_staticH {ca : Adr} {U : Key → Prop} {A : Exec.Frame}
 
 /-- **A static frame runs no 3Crv writer.** -/
 theorem committedFrameInvocations_nil_of_static {ca : Adr} {U : Key → Prop} {f : Exec.Frame}
-    (ready : FrameReadyH ca U f) (static : f.sevm.isStatic = true) :
+    (ready : FrameReady ca U f) (static : f.sevm.isStatic = true) :
     committedFrameInvocations ca f = [] := by
   unfold committedFrameInvocations
   split
@@ -221,7 +223,7 @@ theorem committedFrameInvocations_nil_of_static {ca : Adr} {U : Key → Prop} {f
     cases out with
     | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
-      have := c3crv_writer_nonstaticH hcode fork.stateGas_none hcd hstack hmem run sel.2
+      have := c3crv_writer_nonstaticH hcode fork hcd hstack hmem run sel.2
       rw [static] at this
       cases this
   · rfl
