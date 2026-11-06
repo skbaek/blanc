@@ -210,7 +210,7 @@ theorem notMem_afterSload (hne : k' ≠ k)
   · exact h
   · intro hm
     rcases Std.HashSet.mem_insert.mp hm with e | e
-    · have : (⟨s.currentTarget, k'⟩ : Adr × B256) = ⟨s.currentTarget, k⟩ := by simpa using e
+    · have : (⟨s.currentTarget, k'⟩ : Adr × B256) = ⟨s.currentTarget, k⟩ := by simpa only [beq_iff_eq] using e
       exact hne (Prod.mk.inj this).2
     · exact h e
 
@@ -338,7 +338,7 @@ theorem notMem_afterSstore {k k' v : B256} (hne : k' ≠ k)
   · rw [ite_eq_right hk]
     intro hm
     rcases Std.HashSet.mem_insert.mp hm with e | e
-    · have : (⟨s.currentTarget, k'⟩ : Adr × B256) = ⟨s.currentTarget, k⟩ := by simpa using e
+    · have : (⟨s.currentTarget, k'⟩ : Adr × B256) = ⟨s.currentTarget, k⟩ := by simpa only [beq_iff_eq] using e
       exact hne (Prod.mk.inj this).2
     · exact h e
 
