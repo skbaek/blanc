@@ -52,8 +52,8 @@ noncomputable def exitSubmitted (blocks : List KeptBlock) : List Exit.Record :=
   ChainLink.History.submitted Exit.contract blocks
 
 /-- The fees the history's kept frames at an address paid, summed. -/
-noncomputable def feesPaidAt (blocks : List KeptBlock) (a : Adr) : Nat :=
-  ((keptAt blocks a).map fun f => f.sevm.value.toNat).sum
+abbrev feesPaidAt (blocks : List KeptBlock) (a : Adr) : Nat :=
+  ChainLink.History.paid a blocks
 
 /-- The request bytes a history's blocks carry for one request type. -/
 noncomputable def deliveredOf (ty : UInt8) (blocks : List KeptBlock) : Bytes :=
@@ -130,17 +130,5 @@ structure DeployedStart (start : BlockChain) : Prop where
 structure SystemCodeAbsent (start : BlockChain) : Prop where
   /-- No code at the system address, so drain outputs reach the request list. -/
   code : start.state.getCode systemAddress = ByteArray.empty
-
-/-- All four request contracts' code at a start. -/
-structure FourCodes (start : BlockChain) : Prop where
-  /-- EIP-7002's code is installed. -/
-  w7002 : start.state.getCode withdrawalRequestPredeployAddress = Blanc.withdrawalRequestCode
-  /-- EIP-7251's code is installed. -/
-  w7251 : start.state.getCode consolidationRequestPredeployAddress =
-    Blanc.consolidationRequestCode
-  /-- The deposit code is installed. -/
-  dep : runsBuilderCode start.state depositAddr Deposit.code
-  /-- The exit code is installed. -/
-  ext : runsBuilderCode start.state exitAddr Exit.code
 
 end Blanc.Composition.BuilderRequestPublic

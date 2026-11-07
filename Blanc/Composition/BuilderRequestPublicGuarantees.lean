@@ -76,7 +76,8 @@ block's request pass over `amsterdamRules.requests` succeeds. -/
 -- confirmed at compile time.
 def next_pass_cannot_fail : Prop :=
   ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
-    CodesKept cfg start blocks stop → FourCodes start →
+    CodesKept cfg start blocks stop →
+      BuilderRequestCodesKept.CodesAt start.state →
     ∀ (benv : Benv) (idx : Nat) (acc : List Bytes) (bal : BalBuilder),
       benv.state = stop.state → benv.stat.fork = .amsterdam →
       benv.stat.rules.requests = amsterdamRules.requests →
@@ -221,10 +222,8 @@ theorem chain_cannot_halt_bridge : chain_cannot_halt := by
 /-- The next pass cannot fail, from code persistence and the fold. -/
 theorem next_pass_bridge : next_pass_cannot_fail := by
   intro cfg start stop blocks hcodes hfour benv idx acc bal hstate hfork hrules
-  have codes : BuilderRequestCodesKept.CodesAt start.state :=
-    ⟨hfour.w7002, hfour.w7251, hcodes.deposit, hcodes.exit⟩
   obtain ⟨o1, o2, o3, o4, bal', c1, c2, c3, c4, run, -⟩ :=
-    BuilderRequestCodesKept.next_pass_succeeds hcodes.linked codes hstate hfork
+    BuilderRequestCodesKept.next_pass_succeeds hcodes.linked hfour hstate hfork
       idx acc bal
   exact ⟨_, run⟩
 
