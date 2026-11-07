@@ -85,7 +85,7 @@ def ExitWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
 def exitLimit (w : State) (data : Bytes) (E : Adr) (a : Nat) : Nat :=
   callIntrinsic data + exitFrameGas w E a + callRoom
 
-/-- **A holder can leave.** From Shanghai on, with USDC on V2_2, right after a transaction,
+/-- **A holder can leave.** From Shanghai through BPO2, with USDC on V2_2, right after a transaction,
 a holder's admissible `remove_liquidity` transaction, with no named power in force against it, is
 processed at exact gas and pays each coin's share. -/
 def lp_exit : Prop :=
@@ -182,7 +182,7 @@ def SwapWorks (benv : Benv) (bout : BlockOutput) (tx : Tx) (index : Nat) (E : Ad
     swapAdmin benv.state benv.stat.time.toNat i j dx = some admin ∧
     SwapPaid benv.state st E i j dx dy admin
 
-/-- **A swap works.** From Shanghai on, with USDC on V2_2, right after a transaction, an
+/-- **A swap works.** From Shanghai through BPO2, with USDC on V2_2, right after a transaction, an
 admissible `exchange` transaction, with no named power in force against it, is processed at exact gas
 and pays what the curve quotes. -/
 def swap : Prop :=
@@ -217,7 +217,7 @@ structure MsgEntry (msg : Msg) (w : State) (E : Adr) : Prop where
   /-- The message calls the pool's code as `E`. -/
   named : msg.currentTarget = pool ∧ msg.caller = E ∧ msg.code = w.getCode pool
   /-- The message carries no value, is not static, has at least two call levels left since Jaune's
-  depth counts down from 1024, and runs under Shanghai or later. -/
+  depth counts down from 1024, and runs from Shanghai through BPO2. -/
   plain : msg.value = 0 ∧ msg.isStatic = false ∧ 2 ≤ msg.depth ∧ ShanghaiOnwards msg.benv.stat.fork
   /-- No storage key is warm, and no party but the pool is. -/
   cold : msg.accessedStorageKeys.isEmpty ∧ ∀ a ∈ (parties w).tail, a ∉ msg.accessedAddresses

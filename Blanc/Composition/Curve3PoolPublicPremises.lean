@@ -87,7 +87,7 @@ structure TetherRestrained (w : State) (settled : List Exec.Frame) : Prop where
   /-- The owner never redirects USDT through `deprecate`. -/
   noDeprecate : ∀ F ∈ coinFrames usdt (fun _ => True) settled, Blanc.Sevm.selector F.sevm ≠ 0x0753c30c
 
-/-- **USDC moves to V2_2 once, with the pool's whole word below the flag when V2_2 first reads it.** V2_2 reads that word's
+/-- **Once a frame reading USDC runs V2_2, USDC stays on it, with the pool's whole word below the flag when V2_2 first reads it.** V2_2 reads that word's
 low 255 bits, the earlier versions the whole word. -/
 structure UsdcMovesOnce (tip : State) (settled : List Exec.Frame) : Prop where
   /-- Once a frame reading USDC's ledger runs V2_2, every later one does. -/
@@ -107,7 +107,7 @@ structure CircleRestrained (w tip : State) (settled : List Exec.Frame) : Prop wh
   usdcCode : w.getCode usdc = Lift.Usdc.Proxy.code
   /-- The proxy admin only upgrades USDC to one of the three versions, and V2_2 finds its library. -/
   usdcCertified : Usdc.CertifiedSettled usdc settled
-  /-- USDC moves to V2_2 once, with the pool's whole word below the flag when V2_2 first reads it. -/
+  /-- Once a frame reading USDC runs V2_2, USDC stays on it, with the pool's whole word below the flag when V2_2 first reads it. -/
   movesOnce : UsdcMovesOnce tip settled
 
 /-! ## Signatures -/
