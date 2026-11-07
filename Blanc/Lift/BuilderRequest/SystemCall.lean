@@ -241,6 +241,12 @@ end Envelope
 
 end SysPath
 
+/-- The call's regular gas stays within `B`: it ends with at most the 30,000,000 it started with, so the
+subtraction is exact, and spends at most `B` of them. State gas is excluded: it draws on the reservoir of
+16 × `storageSet` and never touches `gasLeft`. -/
+def RegularGasWithin (gasLeft B : Nat) : Prop :=
+  gasLeft ≤ systemTransactionGas ∧ systemTransactionGas - gasLeft ≤ B
+
 /-- The exact post state of a builder system call on empty calldata: pointers, excess and count
 updated as the bytes define, nothing else. -/
 def sysState (p : SysShape) (σ : State) (a : Adr) : State :=
@@ -308,7 +314,8 @@ theorem not_delegated_of_size {code : ByteArray} (h : code.size ≠ eoaDelegated
   intro hd
   exact absurd hd.1 h
 
-/-- **The checked system call with its exact post state and a gas bound**, from any storage. -/
+/-- **The checked system call with its exact post state and a regular-gas bound**, from any storage.
+State gas is excluded; see `RegularGasWithin`. -/
 theorem system_call_spec (m : SysMemory k) {B : Nat} {benv : Benv} {target : Adr}
     (hfork : benv.stat.fork = .amsterdam) (installed : benv.state.getCode target = k.code)
     (hnonempty : k.code.isEmpty = false) (hsize : k.code.size ≠ eoaDelegatedCodeLength)
@@ -317,7 +324,7 @@ theorem system_call_spec (m : SysMemory k) {B : Nat} {benv : Benv} {target : Adr
     processCheckedSystemTransaction benv target [] =
       .ok (sysState k.shape benv.state target,
         systemCallOutputA (systemCallMsg benv target k.code []) (callPost k benv target)) ∧
-    systemTransactionGas - (callPost k benv target).gasLeft ≤ B := by
+    RegularGasWithin (callPost k benv target).gasLeft B := by
   have hle := frameCost_le m (initSevm (systemCallMsg benv target k.code []))
     (systemCallBase (systemCallMsg benv target k.code []))
   have hcall := system_call m hfork installed hnonempty (not_delegated_of_size hsize) hprecomp
@@ -326,13 +333,14 @@ theorem system_call_spec (m : SysMemory k) {B : Nat} {benv : Benv} {target : Adr
     framePost_state _ _ _
   rw [hstate] at hcall
   refine ⟨hcall, ?_⟩
-  show systemTransactionGas - (systemTransactionGas - k.frameCost _ _) ≤ B
+  show systemTransactionGas - k.frameCost _ _ ≤ systemTransactionGas ∧
+    systemTransactionGas - (systemTransactionGas - k.frameCost _ _) ≤ B
   omega
 
 end SysPath
 
-/-- A deployed runtime's facts for its system call: its address, its stated gas bound, and that the
-bound holds and leaves the stipend free of the 30,000,000 gas. -/
+/-- A deployed runtime's facts for its system call: its address, its stated regular-gas bound, and that
+the bound holds and leaves the stipend free of the 30,000,000 gas. -/
 structure SysCall (k : SysPath) where
   memory : SysMemory k
   target : Adr
@@ -343,13 +351,14 @@ structure SysCall (k : SysPath) where
   bound_le : k.frameBound memory.alloc ≤ bound
   room : bound + gCallStipend < systemTransactionGas
 
-/-- **A builder system call under Amsterdam with its exact post state**, from any storage. -/
+/-- **A builder system call under Amsterdam with its exact post state and a regular-gas bound**, from any
+storage. State gas is excluded; see `RegularGasWithin`. -/
 theorem SysCall.spec {k : SysPath} (c : SysCall k) {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode c.target = k.code) :
     processCheckedSystemTransaction benv c.target [] =
       .ok (sysState k.shape benv.state c.target,
         systemCallOutputA (systemCallMsg benv c.target k.code []) (SysPath.callPost k benv c.target)) ∧
-    systemTransactionGas - (SysPath.callPost k benv c.target).gasLeft ≤ c.bound :=
+    RegularGasWithin (SysPath.callPost k benv c.target).gasLeft c.bound :=
   SysPath.system_call_spec c.memory hfork installed c.nonempty c.size_ne c.not_precompile c.bound_le
     c.room
 
