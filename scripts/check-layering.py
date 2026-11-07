@@ -1444,6 +1444,25 @@ CONTRACTS["curve-3crv"].extend([
     "Lift.Curve3Crv.SetMinterTx",
 ])
 
+# EIP-8282 builder request contracts (deposit and exit): the lifted runtimes and init codes, their
+# registered certificates, and the deployment through the shared CREATE2 factory walk. One family
+# for the two contracts; it never imports another contract family, and the generic factory and
+# runtime-install steps it uses are the shared modules registered just below.
+SHARED += ["Lift.Create2Factory.Cert", "Lift.Create2Factory.Check", "Lift.Create2Factory.Code",
+           "Lift.Create2Factory.Jumps", "Lift.Create2Factory.Walk", "Lift.RuntimeInstall"]
+CONTRACTS["builder-request"] = [
+    "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
+    "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
+    "Lift.BuilderRequest.Deposit.Creation.Input", "Lift.BuilderRequest.Deposit.Creation.Cert",
+    "Lift.BuilderRequest.Deposit.Creation.Check", "Lift.BuilderRequest.Deposit.Creation.Address",
+    "Lift.BuilderRequest.Deposit.Creation.Deploy",
+    "Lift.BuilderRequest.Exit.Code", "Lift.BuilderRequest.Exit.Cert",
+    "Lift.BuilderRequest.Exit.Check", "Lift.BuilderRequest.Exit.Jumps",
+    "Lift.BuilderRequest.Exit.Creation.Input", "Lift.BuilderRequest.Exit.Creation.Cert",
+    "Lift.BuilderRequest.Exit.Creation.Check", "Lift.BuilderRequest.Exit.Creation.Address",
+    "Lift.BuilderRequest.Exit.Creation.Deploy",
+]
+
 # Explicit semantic ownership, not the union of existing imports. Abstract token
 # interfaces do not add WETH9/USDC to PairToken/PairTwoToken; concrete instances
 # do. Single-family token adapters and Curve replay adapters stay narrow. The

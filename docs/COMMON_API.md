@@ -8751,6 +8751,28 @@ every shared module with its own summary and the branches that cite it.
   retaining the historical target touch. Code admissibility, deposit gas, size,
   value transfer and the run remain explicit obligations.
 
+  For a contract deployed through the deterministic CREATE2 factory
+  (`0x4e59b448...956c`, 69 bytes), use
+  [`Blanc/Lift/Create2Factory/Walk.lean`](../Blanc/Lift/Create2Factory/Walk.lean):
+  `factory_install` takes a `FactoryMessage` (factory code at its address, zero value,
+  non-static, calldata a salt then the init code) on a covered fork and a consumer's checked
+  child creation, and returns the child's code, storage and nonce one at the address computed by
+  `create2NewAddress`, under the actual collision check's premises; `factory_message` is the
+  same with the child's outcome left abstract. The factory's certificate, checked lift, lifted
+  code and jump table are
+  [`Blanc/Lift/Create2Factory/Cert.lean`](../Blanc/Lift/Create2Factory/Cert.lean),
+  [`Blanc/Lift/Create2Factory/Check.lean`](../Blanc/Lift/Create2Factory/Check.lean),
+  [`Blanc/Lift/Create2Factory/Code.lean`](../Blanc/Lift/Create2Factory/Code.lean) and
+  [`Blanc/Lift/Create2Factory/Jumps.lean`](../Blanc/Lift/Create2Factory/Jumps.lean). For a `geas`-style constructor that
+  ends `PUSH0; CODECOPY; PUSH0; RETURN` over a creation input that is a prefix and a
+  registered runtime, use
+  [`Blanc/Lift/RuntimeInstall.lean`](../Blanc/Lift/RuntimeInstall.lean):
+  `creation_runtime_window` reads the runtime window, `push0RuntimeReturn_runExact` is the
+  terminal walk from empty memory (the PUSH0 twin of `solcRuntimeReturn_runExact`), and
+  `install_of_run` turns a checked constructor run into the settled account with the
+  runtime installed, no code or storage outcome assumed. The EIP-8282 builder contracts
+  are the worked consumers (`Blanc/Lift/BuilderRequest/{Deposit,Exit}/Creation/Deploy.lean`).
+
   For Solidity's terminal code-window sequence, use `solcRuntimeReturn` and
   `solcRuntimeReturn_runExact` from `Lift/Deploy.lean`. The common forward
   theorem accepts nonempty PUSH encodings for the length and offset, a nonzero
