@@ -16,7 +16,7 @@ length and the continuation trees differ, so a generated tree is an instance of 
 `rfl`.
 
 These are statements about the code's walk, over any storage. Nothing here says which storage is
-reachable, and nothing here is stated for Amsterdam.
+reachable. The inverses are for covered forks; the forward walk takes an `SloadLane`.
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -165,12 +165,37 @@ theorem inhibitor_inv {dest : PushWord} {active revert : SFunc}
     exact (by decide : (1 : B256) ≠ 0) flag
   · exact False.elim (run.false_of_noOk noOk)
 
-/-- The guard, forward, off the inhibitor. -/
-theorem inhibitor_exact {dest : PushWord} {active revert : SFunc}
-    (fork : CoveredFork sevm.benvStat.fork)
+/-- What the fee path's forward walk needs of a fork's `SLOAD`: the successor base, that it reads the same
+storage, and the step. `coveredLane` is the covered forks' instance. -/
+structure SloadLane (sevm : Sevm) where
+  /-- The base after a read of a key. -/
+  after : Devm → B256 → Devm
+  push0 : sevm.benvStat.rules.op.push0 = true
+  read : ∀ b k a k', (after b k).getStorVal a k' = b.getStorVal a k'
+  run : ∀ {fs : List SFunc} {f : SFunc} {o : Outcome} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {k : B256}, S.length < 1024 →
+    SFunc.RunExact fs sevm (St (after b k) (b.getStorVal sevm.currentTarget k :: S) M G) f o →
+    SFunc.RunExact fs sevm (St b (k :: S) M (G + sloadCost sevm b k)) (.next (.reg .sload) f) o
+
+/-- The covered forks' `SLOAD`. -/
+def coveredLane (fork : CoveredFork sevm.benvStat.fork) : SloadLane sevm where
+  after := afterSload sevm
+  push0 := fork.rules_push0
+  read := afterSload_getStorVal sevm
+  run := fun hroom k => rx_sload_sel fork hroom k
+
+/-- The fee path's base after its two reads, on a lane. -/
+def SloadLane.feeBase (l : SloadLane sevm) (b : Devm) : Devm := l.after (l.after b 0) 1
+
+/-- The exact charge of `feePathTree`, on a lane. -/
+def SloadLane.feePathGas (l : SloadLane sevm) (b : Devm) (iterations : Nat) : Nat :=
+  feePathFixedGas + feeLoopGas iterations + sloadCost sevm b 0 + sloadCost sevm (l.after b 0) 1
+
+/-- The guard, forward, off the inhibitor, on a lane. -/
+theorem SloadLane.inhibitor_exact (l : SloadLane sevm) {dest : PushWord} {active revert : SFunc}
     (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
     (tail : SFunc.RunExact fs sevm
-      (St (afterSload sevm b 0) [b.getStorVal sevm.currentTarget 0] M G) active o) :
+      (St (l.after b 0) [b.getStorVal sevm.currentTarget 0] M G) active o) :
     SFunc.RunExact fs sevm (St b [] M (G + 22 + sloadCost sevm b 0 + 2))
       (inhibitorTree dest active revert) o := by
   have hgas : G + 22 + sloadCost sevm b 0 + 2 =
@@ -178,14 +203,24 @@ theorem inhibitor_exact {dest : PushWord} {active revert : SFunc}
     omega
   rw [hgas]
   unfold inhibitorTree
-  refine rx_push0 (h_push0 := fork.rules_push0) (by change 0 < 1024; decide) ?_
-  refine rx_sload_sel fork (by change 0 < 1024; decide) ?_
+  refine rx_push0 (h_push0 := l.push0) (by change 0 < 1024; decide) ?_
+  refine l.run (by change 0 < 1024; decide) ?_
   refine rx_dup1 (by change 1 < 1024; decide) ?_
   refine rx_push inhibitor_push (by change 2 < 1024; decide) ?_
   refine rx_eq (v := 0) ?_ (by change 1 < 1024; decide) ?_
   · simp only [B256.eqCheck, ite_eq_right (Ne.symm off)]
   · refine rx_push rfl (by change 2 < 1024; decide) ?_
     exact rx_branch_zero tail
+
+/-- The guard, forward, off the inhibitor. -/
+theorem inhibitor_exact {dest : PushWord} {active revert : SFunc}
+    (fork : CoveredFork sevm.benvStat.fork)
+    (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
+    (tail : SFunc.RunExact fs sevm
+      (St (afterSload sevm b 0) [b.getStorVal sevm.currentTarget 0] M G) active o) :
+    SFunc.RunExact fs sevm (St b [] M (G + 22 + sloadCost sevm b 0 + 2))
+      (inhibitorTree dest active revert) o :=
+  (coveredLane fork).inhibitor_exact off tail
 
 /-- The excess read leaves the target-adjusted excess at the window. -/
 theorem excess_inv {target over under : PushWord} {window : Nat} {fall : SFunc}
@@ -221,12 +256,11 @@ theorem excess_inv {target over under : PushWord} {window : Nat} {fall : SFunc}
     rw [excess]
     exact ⟨_, run.uncut⟩
 
-/-- The excess read, forward, at its exact charge. -/
-theorem excess_exact {target over under : PushWord} {window : Nat} {fall : SFunc}
-    (fork : CoveredFork sevm.benvStat.fork) (entry : fs[window]? = some fall)
-    {slot0 : B256}
+/-- The excess read, forward, at its exact charge, on a lane. -/
+theorem SloadLane.excess_exact (l : SloadLane sevm) {target over under : PushWord} {window : Nat}
+    {fall : SFunc} (entry : fs[window]? = some fall) {slot0 : B256}
     (tail : SFunc.RunExact fs sevm
-      (St (afterSload sevm b 1)
+      (St (l.after b 1)
         [targetExcess target.word slot0 (b.getStorVal sevm.currentTarget 1)] M G) fall o) :
     SFunc.RunExact fs sevm (St b [slot0] M (G + 35 + sloadCost sevm b 1 + 3))
       (excessTree target over under window fall) o := by
@@ -236,7 +270,7 @@ theorem excess_exact {target over under : PushWord} {window : Nat} {fall : SFunc
   rw [hgas]
   unfold excessTree
   refine rx_push (w := (1 : B256)) rfl (by change 1 < 1024; decide) ?_
-  refine rx_sload_sel fork (by change 1 < 1024; decide) ?_
+  refine l.run (by change 1 < 1024; decide) ?_
   generalize hcount : b.getStorVal sevm.currentTarget 1 = count at tail ⊢
   refine rx_push rfl (by change 2 < 1024; decide) ?_
   refine rx_dup2 (by change 3 < 1024; decide) ?_
@@ -248,7 +282,7 @@ theorem excess_exact {target over under : PushWord} {window : Nat} {fall : SFunc
     rw [flag]
     refine rx_branch_succ (by decide : (1 : B256) ≠ 0) ?_
     have tail' : SFunc.RunExact fs sevm
-        (St (afterSload sevm b 1) [(count - target.word) + slot0] M G) fall o := by
+        (St (l.after b 1) [(count - target.word) + slot0] M G) fall o := by
       simpa only [targetExcess, ite_eq_left isOver] using tail
     have hgas' : G + 13 = G + 3 + 3 + 3 + 3 + 1 := by simp only [Nat.add_assoc]
     rw [hgas']
@@ -261,13 +295,24 @@ theorem excess_exact {target over under : PushWord} {window : Nat} {fall : SFunc
       simp only [B256.gtCheck, ite_eq_right isOver]
     rw [flag]
     refine rx_branch_zero ?_
-    have tail' : SFunc.RunExact fs sevm (St (afterSload sevm b 1) [slot0] M G) fall o := by
+    have tail' : SFunc.RunExact fs sevm (St (l.after b 1) [slot0] M G) fall o := by
       simpa only [targetExcess, ite_eq_right isOver] using tail
     have hgas' : G + 13 = G + 8 + 3 + 2 := by simp only [Nat.add_assoc]
     rw [hgas']
     refine rx_pop ?_
     refine rx_push rfl (by change 1 < 1024; decide) ?_
     exact rx_jump entry tail'
+
+/-- The excess read, forward, at its exact charge. -/
+theorem excess_exact {target over under : PushWord} {window : Nat} {fall : SFunc}
+    (fork : CoveredFork sevm.benvStat.fork) (entry : fs[window]? = some fall)
+    {slot0 : B256}
+    (tail : SFunc.RunExact fs sevm
+      (St (afterSload sevm b 1)
+        [targetExcess target.word slot0 (b.getStorVal sevm.currentTarget 1)] M G) fall o) :
+    SFunc.RunExact fs sevm (St b [slot0] M (G + 35 + sloadCost sevm b 1 + 3))
+      (excessTree target over under window fall) o :=
+  (coveredLane fork).excess_exact entry tail
 
 /-- A successful run of the user path passes the guard, runs the word fee recurrence on the stored
 excess, and reaches the branch the calldata length selects with the quotient on the stack. -/
@@ -296,6 +341,48 @@ theorem feePath_inv {revert getter submission : SFunc}
   obtain ⟨_, _, run⟩ := RequestFee.loop_inv loop wordRun run
   exact RequestFee.postloop_inv rfl run
 
+/-- The user path, forward, on a lane: the selected continuation transports back at the exact charge. -/
+theorem SloadLane.feePath_exact (l : SloadLane sevm) {revert getter submission : SFunc}
+    {iterations : Nat} {finalOutput : B256}
+    (window : fs[p.window]? = some (windowOf p getter submission))
+    (loop : fs[p.loopEntry]? =
+      some (loopTree p.post p.loop p.loopEntry (postloopTree p.len p.submit getter submission)))
+    (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
+    (wordRun : WordFakeExponential.Run (storedExcess p.target.word sevm b) 17 1 17 0
+      iterations finalOutput)
+    (tail : SFunc.RunExact fs sevm (St (l.feeBase b) [finalOutput / (17 : B256)] M G)
+      (selected sevm p.len.word getter submission) o) :
+    SFunc.RunExact fs sevm (St b [] M (G + l.feePathGas b iterations))
+      (feePathTree p revert getter submission) o := by
+  have read0 : (l.after b 0).getStorVal sevm.currentTarget 1 =
+      b.getStorVal sevm.currentTarget 1 := l.read b 0 _ 1
+  have hloop := fun finalCounter => (RequestFee.postloop_exact (len := p.len) (dest := p.submit)
+    (w := p.len.word) (numerator := storedExcess p.target.word sevm b) (denominator := 17)
+    (accumulator := 0) (output := finalOutput) (counter := finalCounter) (fs := fs) rfl
+    (getter := getter) (submission := submission) tail)
+  have hlooped := RequestFee.loop_exact loop l.push0 wordRun hloop
+  have hinit := RequestFee.init_exact l.push0 hlooped
+  have hwindow : SFunc.RunExact fs sevm
+      (St (l.feeBase b) [storedExcess p.target.word sevm b] M
+        (G + 45 + feeLoopGas iterations + 19 + 3 + 3 + 1)) (windowOf p getter submission) o := by
+    unfold windowOf windowTree
+    refine rx_dest ?_
+    refine rx_push (w := (17 : B256)) rfl (by change 1 < 1024; decide) ?_
+    refine rx_swap1 ?_
+    exact hinit
+  have hexcess := l.excess_exact (b := l.after b 0) (target := p.target) (over := p.over)
+    (under := p.under) (slot0 := b.getStorVal sevm.currentTarget 0) window (by
+      rw [read0]
+      exact hwindow)
+  have hguard := l.inhibitor_exact (dest := p.revert) (revert := revert) off hexcess
+  have hgas : G + l.feePathGas b iterations =
+      G + 45 + feeLoopGas iterations + 19 + 3 + 3 + 1 + 35 + sloadCost sevm (l.after b 0) 1 + 3
+        + 22 + sloadCost sevm b 0 + 2 := by
+    simp only [SloadLane.feePathGas, feePathFixedGas]
+    omega
+  rw [hgas]
+  exact hguard
+
 /-- The user path, forward: the selected continuation transports back at the exact charge. -/
 theorem feePath_exact {revert getter submission : SFunc} {iterations : Nat} {finalOutput : B256}
     (fork : CoveredFork sevm.benvStat.fork)
@@ -308,35 +395,8 @@ theorem feePath_exact {revert getter submission : SFunc} {iterations : Nat} {fin
     (tail : SFunc.RunExact fs sevm (St (feeBase sevm b) [finalOutput / (17 : B256)] M G)
       (selected sevm p.len.word getter submission) o) :
     SFunc.RunExact fs sevm (St b [] M (G + feePathGas sevm b iterations))
-      (feePathTree p revert getter submission) o := by
-  have read0 : (afterSload sevm b 0).getStorVal sevm.currentTarget 1 =
-      b.getStorVal sevm.currentTarget 1 := afterSload_getStorVal sevm b 0 _ 1
-  have hloop := fun finalCounter => (RequestFee.postloop_exact (len := p.len) (dest := p.submit)
-    (w := p.len.word) (numerator := storedExcess p.target.word sevm b) (denominator := 17)
-    (accumulator := 0) (output := finalOutput) (counter := finalCounter) (fs := fs) rfl
-    (getter := getter) (submission := submission) tail)
-  have hlooped := RequestFee.loop_exact loop fork.rules_push0 wordRun hloop
-  have hinit := RequestFee.init_exact fork.rules_push0 hlooped
-  have hwindow : SFunc.RunExact fs sevm
-      (St (feeBase sevm b) [storedExcess p.target.word sevm b] M
-        (G + 45 + feeLoopGas iterations + 19 + 3 + 3 + 1)) (windowOf p getter submission) o := by
-    unfold windowOf windowTree
-    refine rx_dest ?_
-    refine rx_push (w := (17 : B256)) rfl (by change 1 < 1024; decide) ?_
-    refine rx_swap1 ?_
-    exact hinit
-  have hexcess := excess_exact (b := afterSload sevm b 0) (target := p.target) (over := p.over)
-    (under := p.under) (slot0 := b.getStorVal sevm.currentTarget 0) fork window (by
-      rw [read0]
-      exact hwindow)
-  have hguard := inhibitor_exact (dest := p.revert) (revert := revert) fork off hexcess
-  have hgas : G + feePathGas sevm b iterations =
-      G + 45 + feeLoopGas iterations + 19 + 3 + 3 + 1 + 35 + sloadCost sevm (afterSload sevm b 0) 1 + 3
-        + 22 + sloadCost sevm b 0 + 2 := by
-    simp only [feePathGas, feePathFixedGas]
-    omega
-  rw [hgas]
-  exact hguard
+      (feePathTree p revert getter submission) o :=
+  SloadLane.feePath_exact p (coveredLane fork) window loop off wordRun tail
 
 /-- A builder runtime's user path: a checked certificate whose root is caller dispatch into
 `feePathTree`, whose empty-calldata arm is the shared getter. -/
