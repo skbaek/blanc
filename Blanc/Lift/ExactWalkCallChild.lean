@@ -30,7 +30,7 @@ def callChildMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (value : B256) (callee dad
     msg.withBenv (((msg.benv.withState stmid).clearStorageWritesIfEmpty msg.caller).addBal
       callee value)
 
-/-- At a covered fork (no self-destruct refund) a `CALL` child inherits no pending
+/-- At a fork from Shanghai on (no self-destruct refund) a `CALL` child inherits no pending
 deletions, so its entry machine's deletion set is empty. -/
 theorem callChildMsg_initDevm_accountsToDelete_isEmpty {sevm : Sevm} {p : Devm} {mcs : Nat}
     {value : B256} {callee dadr : Adr} {ii is : Nat} {code : ByteArray} {dp : Bool}

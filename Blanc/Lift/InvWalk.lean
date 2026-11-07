@@ -273,7 +273,7 @@ variable {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
 -- SEGMENT: riSstore
 /-- `SSTORE`, inverted: the successor is the selected `afterSstore` over the base.
 
-Proof sketch.  Unfold `Rinst.run .sstore` as `of_run_sstore` does (covered fork:
+Proof sketch.  Unfold `Rinst.run .sstore` as `of_run_sstore` does (a fork from Shanghai on:
 `rules.stateGas = none`); the two pops, the access-set insertion (if cold), the refund update
 and `setStorVal` are exactly `afterSstore`'s pieces (`ForwardCall.lean`), and the charge and
 sentry only move gas.  Compare the pieces field by field (`Devm.ext`, `Meta.ext`). -/

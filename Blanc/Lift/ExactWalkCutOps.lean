@@ -61,7 +61,7 @@ structure ShaCallPost (b b' : Devm) (rd : Bytes) : Prop where
   refund : b'.refundCounter = b.refundCounter
 
 /-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`) a frame's
-world carries: address 2 undelegated and warm, a precompile of the fork, a covered fork.  The
+world carries: address 2 undelegated and warm, a precompile of the fork, a fork from Shanghai on.  The
 frame's nonzero depth is a separate premise of the liveness steps. -/
 structure ShaReady (sevm : Sevm) (b : Devm) : Prop where
   nodeleg : getDelegatedCodeAddress (b.getCode 2) = none

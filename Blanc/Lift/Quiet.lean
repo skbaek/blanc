@@ -351,7 +351,7 @@ lemma Ninst.exchange_logs {imm : UInt8} {sevm : Sevm} {pre post : Devm}
 handed to the generic call or create, which does not fix the log list.  `Xinst.ShapeLogs`
 is the same covered-fork decomposition with the log list in place of the frame. -/
 
-/-- On a covered fork an executable step either finishes with an execution that keeps the
+/-- On a fork from Shanghai on an executable step either finishes with an execution that keeps the
 log list, or hands a machine with the entry log list to a generic call, or (only when
 `creates` holds) to a generic create. -/
 def Xinst.ShapeLogs (sevm : Sevm) (devm : Devm) (creates : Prop) (s : XStep) : Prop :=
@@ -726,7 +726,7 @@ lemma Xinst.step_shapeLogs_noStateGas (sevm : Sevm) (devm : Devm) (x : Xinst)
         refine ShapeLogs.bindE h6 (LogsWalk.chargeGas _ d6) fun d8 h8 => ?_
         exact ShapeLogs.call h8
 
-/-- **Every executable instruction on a covered fork has a log-list shape.** -/
+/-- **Every executable instruction on a fork from Shanghai on has a log-list shape.** -/
 lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
     (hfork : ShanghaiOnwards sevm.benvStat.fork) :
     Xinst.ShapeLogs sevm devm (x = .create ∨ x = .create2) (Xinst.step sevm devm x) :=
@@ -855,7 +855,7 @@ theorem GenericCreate.not_ok_of_static {sevm : Sevm} {d post : Devm} {endowment 
   repeat' split at run
   all_goals simp_all only [XStep.Run, XStep.ofExcept, ExceptT.stM_eq, reduceCtorEq, and_false, ite_eq_left_iff, not_le, imp_false, not_lt, Bool.not_true, Bool.false_eq_true, ↓reduceIte, Except.error.injEq]
 
-/-- **A successful executable instruction keeps the log list** on a covered fork, given
+/-- **A successful executable instruction keeps the log list** on a fork from Shanghai on, given
 that its interpreted child, if any, keeps its entry log list.  A create is excluded by a
 static frame; the call family needs nothing more. -/
 theorem Xinst.logs_of_ok {sevm : Sevm} {pre post : Devm} {x : Xinst} {xl : Xlot}
@@ -890,7 +890,7 @@ theorem Rinst.log_not_ok_of_static {pc : Nat} {sevm : Sevm} {pre post : Devm} {n
   simp only [assertDynamic, Except.assert, hs, Bool.not_true, Bool.false_eq_true, ↓reduceIte,
     reduceCtorEq] at hassert
 
-/-- `SELFDESTRUCT` cannot succeed in a static frame of a covered fork. -/
+/-- `SELFDESTRUCT` cannot succeed in a static frame of a fork from Shanghai on. -/
 theorem Linst.selfdestruct_not_ok_of_static {sevm : Sevm} {pre post : Devm}
     (hfork : ShanghaiOnwards sevm.benvStat.fork) (hs : sevm.isStatic = true)
     (run : Linst.Run sevm pre .selfdestruct (.ok post)) : False := by
@@ -945,7 +945,7 @@ theorem Jinst.logs_of_ok {evm : Evm} {j : Jinst} {pc : Nat} {post : Devm}
     cases run₁
     exact (Devm.burn_of_chargeGas h1).logs.symm
 
-/-- One successful same-frame driver step of a static frame on a covered fork keeps the
+/-- One successful same-frame driver step of a static frame on a fork from Shanghai on keeps the
 log list. -/
 private theorem staticStep_cont_logs
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
@@ -1001,7 +1001,7 @@ private theorem staticStep_cont_logs
                 exact (Rinst.log_not_ok_of_static static rrun).elim
               · exact Rinst.logs_of_ok (fun n h => hlog ⟨n, h⟩) rrun
 
-/-- A successfully halted node of a static frame on a covered fork keeps the log list. -/
+/-- A successfully halted node of a static frame on a fork from Shanghai on keeps the log list. -/
 private theorem staticHalt_logs
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
@@ -1043,7 +1043,7 @@ private theorem Execution.committedPost_logs_of_ok {out : Execution} {pre : Devm
   | ok post => exact h post rfl
 
 /-- **Static execution keeps the log list.**  A successful execution (`.ok post`, committing
-or not) of a static frame on a covered fork ends with exactly its entry log list: `LOG`
+or not) of a static frame on a fork from Shanghai on ends with exactly its entry log list: `LOG`
 cannot complete in a static frame, every other step keeps the list, and every child is
 static and merges its (empty) log list only on success. -/
 theorem Exec.logs_eq_of_static_ok
@@ -1082,7 +1082,7 @@ theorem Exec.logs_eq_of_static_ok
             (childIH childStatic childFork) childCommitted))
 
 /-- **Static execution keeps the log list**, committed form: a committing execution of a
-static frame on a covered fork ends with exactly its entry log list
+static frame on a fork from Shanghai on ends with exactly its entry log list
 (`Exec.logs_eq_of_static_ok`). -/
 theorem Exec.logs_committedPost_eq_of_static
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}

@@ -15,7 +15,7 @@ open Jaune
 
 variable {sevm : Sevm}
 
-/-- On a covered fork the historical readiness is the modern one. -/
+/-- On a fork from Shanghai on the historical readiness is the modern one. -/
 theorem IdReadyH.toCovered {b : Devm} (h : IdReadyH sevm b) (fork : ShanghaiOnwards sevm.benvStat.fork) :
     IdReady sevm b :=
   ⟨h.nodeleg, h.warm, h.pre, fork⟩

@@ -1449,7 +1449,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
         exact Ninst.exec_of_stepRun (xl := .none) h_at trivial hstepPc ⟨exc⟩)
     run
 
-/-- Modern compatibility wrapper: covered forks discharge `stateGas = none`. -/
+/-- Modern compatibility wrapper: forks from Shanghai on discharge `stateGas = none`. -/
 theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b)
     (hj : Cert.JumpsOkM code c ms b) {sevm : Sevm}

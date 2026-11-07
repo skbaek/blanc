@@ -21,7 +21,7 @@ theorem Ninst.staticcall_inv_getStor_exact_noStateGas
     Devm.getStor pre = Devm.getStor post :=
   Ninst.staticcall_getStor_eq_noStateGas hstateGas run
 
-/-- Every successful STATICCALL leaves every raw storage map equal on a covered fork. -/
+/-- Every successful STATICCALL leaves every raw storage map equal on a fork from Shanghai on. -/
 theorem Ninst.staticcall_inv_getStor_exact
     {sevm : Sevm} {pre post : Devm}
     (hfork : ShanghaiOnwards sevm.benvStat.fork)
