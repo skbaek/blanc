@@ -20,14 +20,14 @@ aliases a metadata slot: the count in slot 1 is bumped, six calldata words go to
 `4 + 6 * tail` up, and the tail in slot 3 is bumped. Slot 0 and slot 2 are not written. -/
 def submittedStorage (sevm : Sevm) (s : Stor) : Stor :=
   let tail := s.get 3
-  let key := recordKey tail
+  let key := submissionKey tail
   ((((((((s.set 1 (1 + s.get 1)).set key (Sevm.dataWord sevm 0)).set (1 + key)
     (Sevm.dataWord sevm 32)).set (1 + (1 + key)) (Sevm.dataWord sevm 64)).set (1 + (1 + (1 + key)))
     (Sevm.dataWord sevm 96)).set (1 + (1 + (1 + (1 + key)))) (Sevm.dataWord sevm 128)).set
     (1 + (1 + (1 + (1 + (1 + key))))) (Sevm.dataWord sevm 160)).set 3 (1 + tail))
 
 /-- The record the code writes at tail `n` is the queue's record `n`, at width 6. -/
-theorem recordKey_queueSlot (n : Nat) : recordKey n.toB256 = queueSlot 6 n 0 :=
+theorem recordKey_queueSlot (n : Nat) : submissionKey n.toB256 = queueSlot 6 n 0 :=
   record_key 6 n
 
 /-- What a successful submission does, for the fee recurrence's iteration count and final output. -/
@@ -106,7 +106,7 @@ private theorem wordStore_getBal (s : Devm) (key off : B256) (a : Adr) :
 private theorem recordsWritten_getStor (s : Devm) :
     (recordsWritten sevm s).getStor sevm.currentTarget =
       let tail := tailWord sevm s
-      let key := recordKey tail
+      let key := submissionKey tail
       (((((((s.getStor sevm.currentTarget).set 1 (1 + countWord sevm s)).set key
         (Sevm.dataWord sevm 0)).set (1 + key) (Sevm.dataWord sevm 32)).set (1 + (1 + key))
         (Sevm.dataWord sevm 64)).set (1 + (1 + (1 + key))) (Sevm.dataWord sevm 96)).set

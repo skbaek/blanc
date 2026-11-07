@@ -155,7 +155,7 @@ def tailWord (sevm : Sevm) (b : Devm) : B256 := (countStore sevm b).getStorVal s
 def tailRead (sevm : Sevm) (b : Devm) : Devm := afterSload sevm (countStore sevm b) 3
 
 /-- The record's first storage key. -/
-def recordKey (tail : B256) : B256 := 4 + 6 * tail
+def submissionKey (tail : B256) : B256 := 4 + 6 * tail
 
 /-- Store the calldata word at byte `off` under `key`. -/
 def wordStore (sevm : Sevm) (b : Devm) (key off : B256) : Devm :=
@@ -179,7 +179,7 @@ def submissionMemory (sevm : Sevm) (M : Mem) : Mem := ((copyMemory sevm M).read 
 
 /-- The state after all six words. -/
 def recordsWritten (sevm : Sevm) (b : Devm) : Devm :=
-  recordStore sevm (tailRead sevm b) (recordKey (tailWord sevm b))
+  recordStore sevm (tailRead sevm b) (submissionKey (tailWord sevm b))
 
 /-- The state after the log. -/
 def logged (sevm : Sevm) (b : Devm) (M : Mem) : Devm :=
@@ -222,7 +222,7 @@ def logGas (sevm : Sevm) (M : Mem) : Nat :=
 def bodyGas (sevm : Sevm) (b : Devm) (M : Mem) : Nat :=
   136 + sloadCost sevm b 1 + sstoreCost sevm (afterSload sevm b 1) 1 (1 + countWord sevm b) +
     sloadCost sevm (countStore sevm b) 3 +
-    recordWritesGas sevm (tailRead sevm b) (recordKey (tailWord sevm b)) +
+    recordWritesGas sevm (tailRead sevm b) (submissionKey (tailWord sevm b)) +
     copyGas M + logGas sevm M + sstoreCost sevm (logged sevm b M) 3 (1 + tailWord sevm b)
 
 private theorem word_inv {p : Bytes} {le : p.length ≤ 32} {off key tail : B256} {f : SFunc}
@@ -295,7 +295,7 @@ theorem body_inv (fork : CoveredFork sevm.benvStat.fork)
   obtain ⟨_, rfl⟩ := ri_val (w := tailWord sevm b) rfl (ri_sload fork h)
   winv 5
   change SFunc.RunCut _ _ _
-    (St (tailRead sevm b) [recordKey (tailWord sevm b), tailWord sevm b] M _) _ _ at run
+    (St (tailRead sevm b) [submissionKey (tailWord sevm b), tailWord sevm b] M _) _ _ at run
   obtain ⟨_, run⟩ := word_inv rfl fork run
   obtain ⟨_, run⟩ := word_inv rfl fork run
   obtain ⟨_, run⟩ := word_inv rfl fork run
@@ -466,13 +466,13 @@ theorem body_exact (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isSta
     SFunc.RunExact prog sevm (St b [] M (G + bodyGas sevm b M)) t_00cd_c1
       (.halted (submissionPost sevm b M G)) := by
   have suffix := suffix_exact (b := b) (M := M) fork dynamic slack
-  have words := words_exact (b := tailRead sevm b) (key := recordKey (tailWord sevm b))
+  have words := words_exact (b := tailRead sevm b) (key := submissionKey (tailWord sevm b))
     fork dynamic (by omega) suffix
   rw [body_split]
   have hgas : G + bodyGas sevm b M =
       G + sstoreCost sevm (logged sevm b M) 3 (1 + tailWord sevm b) + 3 + 3 + 3 +
           logGas sevm M + 2 + 3 + copyGas M + 2 + 2 + 3
-        + 83 + recordWritesGas sevm (tailRead sevm b) (recordKey (tailWord sevm b))
+        + 83 + recordWritesGas sevm (tailRead sevm b) (submissionKey (tailWord sevm b))
         + 3 + 3 + 5 + 3 + 3 + sloadCost sevm (countStore sevm b) 3 + 3
         + sstoreCost sevm (afterSload sevm b 1) 1 (1 + countWord sevm b) + 3 + 3 + 3
         + sloadCost sevm b 1 + 3 := by
