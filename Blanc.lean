@@ -1227,6 +1227,15 @@ import Blanc.Lift.BuilderRequest.Transaction
 import Blanc.Lift.BuilderRequest.Deposit.Transaction
 import Blanc.Lift.BuilderRequest.Exit.Transaction
 import Blanc.Lift.BuilderRequest.TransactionWitness
+import Blanc.Lift.BuilderRequest.FeeDomain
+import Blanc.Lift.BuilderRequest.FeeRead
+import Blanc.Lift.BuilderRequest.FeeDomainWitness
+import Blanc.Lift.BuilderRequest.Deposit.FeeDomain
+import Blanc.Lift.BuilderRequest.Exit.FeeDomain
+import Blanc.Lift.BuilderRequest.Static
+import Blanc.Lift.BuilderRequest.Deposit.Static
+import Blanc.Lift.BuilderRequest.Exit.Static
+import Blanc.RequestFeeWordBound
 import Blanc.Lift.BalEffect
 import Blanc.Lift.AmsterdamAccess
 import Blanc.Lift.RequestSystem.Access
