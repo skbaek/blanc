@@ -56,10 +56,10 @@ theorem history_chain (h : KeptHistory cfg start blocks stop) (installed : start
     (fresh : start.state.getStor address = deployedStorage)
     (noSystemCode : start.state.getCode systemAddress = ByteArray.empty)
     (senders : History.NoSender systemAddress blocks) (authorities : History.NoAuthority systemAddress blocks)
-    (creates : History.NoCreate systemAddress blocks) (data : History.DataWords blocks) :
+    (creates : History.NoCreate systemAddress blocks) :
     ∃ frames : List Frame, Chain deployedStorage frames (stop.state.getStor address) ∧
       Corresponds contract frames (History.kept address blocks) ∧ systemOutput frames = delivered 4 blocks := by
-  have := ChainLink.history_chain linked h installed noSystemCode senders authorities creates data
+  have := ChainLink.history_chain linked h installed noSystemCode senders authorities creates
   rw [show start.state.getStor contract.address = deployedStorage from fresh] at this
   exact this
 
@@ -70,9 +70,9 @@ theorem history_delivers (h : KeptHistory cfg start blocks stop) (installed : st
     (fresh : start.state.getStor address = deployedStorage)
     (noSystemCode : start.state.getCode systemAddress = ByteArray.empty)
     (senders : History.NoSender systemAddress blocks) (authorities : History.NoAuthority systemAddress blocks)
-    (creates : History.NoCreate systemAddress blocks) (data : History.DataWords blocks)
+    (creates : History.NoCreate systemAddress blocks)
     (few : (submitted blocks).length ≤ 2 ^ 64) : DeliversInOrder blocks := by
-  obtain ⟨frames, chain, corr, out⟩ := history_chain h installed fresh noSystemCode senders authorities creates data
+  obtain ⟨frames, chain, corr, out⟩ := history_chain h installed fresh noSystemCode senders authorities creates
   have hsub : Delivery.submissions frames = submitted blocks := corr.submissions
   obtain ⟨-, -, output⟩ := delivery chain (by rw [hsub]; omega)
   rw [hsub, out] at output

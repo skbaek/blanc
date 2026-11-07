@@ -106,9 +106,6 @@ def NoAuthority (S : Adr) (blocks : List KeptBlock) : Prop := ∀ b ∈ blocks, 
 /-- No frame the history keeps creates at `S`. -/
 def NoCreate (S : Adr) (blocks : List KeptBlock) : Prop := ∀ b ∈ blocks, NoCreateAt S b.run.roots
 
-/-- Every transaction's calldata in the history is word-sized. -/
-def DataWords (blocks : List KeptBlock) : Prop := ∀ b ∈ blocks, DataFits b.run.senders
-
 end History
 
 /-- What a request step at `a` returns, and nothing for a step elsewhere. -/
@@ -618,7 +615,7 @@ one, and the sequence's output is the blocks' requests of type `ty`. So `Chain.d
 theorem history_chain (L : Linked c ty) (h : KeptHistory cfg start blocks stop)
     (code : start.state.getCode c.address = c.code) (empty : start.state.getCode systemAddress = ByteArray.empty)
     (senders : History.NoSender systemAddress blocks) (authorities : History.NoAuthority systemAddress blocks)
-    (creates : History.NoCreate systemAddress blocks) (data : History.DataWords blocks) :
+    (creates : History.NoCreate systemAddress blocks) :
     ∃ frames, Chain (start.state.getStor c.address) frames (stop.state.getStor c.address) ∧
       Corresponds c frames (History.kept c.address blocks) ∧ systemOutput frames = delivered ty blocks := by
   have hc : (start.state.getCode c.address).toList ≠ [] := by rw [code]; exact L.runnable.1
@@ -626,7 +623,7 @@ theorem history_chain (L : Linked c ty) (h : KeptHistory cfg start blocks stop)
   obtain ⟨outside, others, -⟩ := h.caller_ne (a := c.address) empty L.placed.beacon L.placed.history senders authorities
     creates
   obtain ⟨frames, corr, out⟩ := Mapped.ofHistory (ty := ty) L h code outside others
-    (h.entry_in code L.runnable.1 L.runnable.2 data)
+    (h.entry_in code L.runnable.1 L.runnable.2)
   exact ⟨frames, corr.chain (h.chain hc hd).1, corr, out⟩
 
 /-- A prefix of a list has the prefix of its bytes. -/
@@ -642,14 +639,14 @@ theorem history_delivery (L : Linked c ty) (h : KeptHistory cfg start blocks sto
     (rep : Holds c (start.state.getStor c.address) st)
     (empty : start.state.getCode systemAddress = ByteArray.empty)
     (senders : History.NoSender systemAddress blocks) (authorities : History.NoAuthority systemAddress blocks)
-    (creates : History.NoCreate systemAddress blocks) (data : History.DataWords blocks)
+    (creates : History.NoCreate systemAddress blocks)
     (slots : queueBase c.width (st.tail + (History.submitted c blocks).length) ≤ 2 ^ 256)
     (count : st.count + (History.submitted c blocks).length < 2 ^ 256) :
     delivered ty blocks <+: (st.queue ++ History.submitted c blocks).flatMap c.out ∧
       ∃ k, ∃ st' : QueueState c.Record, Holds c (stop.state.getStor c.address) st' ∧
         st'.queue = (st.queue ++ History.submitted c blocks).drop k ∧
         delivered ty blocks = ((st.queue ++ History.submitted c blocks).take k).flatMap c.out := by
-  obtain ⟨frames, chain, corr, out⟩ := history_chain L h code empty senders authorities creates data
+  obtain ⟨frames, chain, corr, out⟩ := history_chain L h code empty senders authorities creates
   have hsub : Delivery.submissions frames = History.submitted c blocks := corr.submissions
   have d := chain.delivered rep (by rw [hsub]; exact slots) (by rw [hsub]; exact count)
   have queue := d.queue

@@ -3,6 +3,7 @@ import Blanc.ExecutionKeptFacts
 import Blanc.ExecutionKeptTop
 import Blanc.ExecutionHistory
 import Blanc.ExecutionInCellProvenance
+import Blanc.LadderReached
 
 /-!
 # Kept frames along a transaction, a body and a history
@@ -33,15 +34,17 @@ structure KeptRules (r : ForkRules) : Prop where
   selfdestruct : r.settle.selfdestructOnlyCreated = true
   noSweep : r.settle.touchedSweep = false
   noRewards : r.pow = none
+  /-- A byte of calldata costs at least four gas, zero or not. -/
+  dataCost : 4 ≤ r.txr.dataNonZero
 
 /-- The forks these levels speak about: the covered ones and Amsterdam. -/
 def KeptFork (f : Fork) : Prop := CoveredFork f ∨ f = .amsterdam
 
 theorem KeptFork.rules {f : Fork} (h : KeptFork f) : KeptRules f.ruleSet := by
   rcases h with covered | rfl
-  · exact covered.cases (motive := fun f => KeptRules f.ruleSet) ⟨rfl, rfl, rfl⟩ ⟨rfl, rfl, rfl⟩ ⟨rfl, rfl, rfl⟩
-      ⟨rfl, rfl, rfl⟩
-  · exact ⟨rfl, rfl, rfl⟩
+  · exact covered.cases (motive := fun f => KeptRules f.ruleSet) ⟨rfl, rfl, rfl, by decide⟩ ⟨rfl, rfl, rfl, by decide⟩
+      ⟨rfl, rfl, rfl, by decide⟩ ⟨rfl, rfl, rfl, by decide⟩
+  · exact ⟨rfl, rfl, rfl, by decide⟩
 
 /-! ## What a root keeps -/
 
@@ -743,6 +746,90 @@ theorem TransactionRoots.entry_at {benv : Benv} {bout : BlockOutput} {tx : Tx} {
   · rw [same]; exact data
   · rw [same]; decide
 
+/-! ## The calldata a transaction can have -/
+
+/-- Four gas per byte is at most the calldata cost, when a nonzero byte costs at least four. -/
+private theorem length_mul4_le_dataCost {n : Nat} (hn : 4 ≤ n) (l : Bytes) :
+    l.length * 4 ≤ l.foldl (fun acc x => acc + (if x = 0 then standardCallDataTokenCost else n)) 0 := by
+  have aux : ∀ (d : Nat) (l : Bytes), l.length * 4 + d ≤
+      l.foldl (fun acc x => acc + (if x = 0 then standardCallDataTokenCost else n)) d := by
+    intro d l
+    induction l generalizing d with
+    | nil => exact Nat.le_of_eq (by simp only [List.length_nil, Nat.zero_mul, Nat.zero_add, List.foldl_nil])
+    | cons x xs ih =>
+        have h := ih (d + if x = 0 then standardCallDataTokenCost else n)
+        have step : 4 ≤ if x = 0 then standardCallDataTokenCost else n := by
+          split
+          · exact Nat.le_refl _
+          · exact hn
+        simp only [List.length_cons, List.foldl_cons]
+        omega
+  exact aux 0 l
+
+/-- On either lane the intrinsic cost holds the calldata cost, so four gas per byte. -/
+theorem length_mul4_le_intrinsic {rules : ForkRules} (hn : 4 ≤ rules.txr.dataNonZero) (tx : Tx) (sender : Adr) :
+    tx.data.length * 4 ≤ (calculateIntrinsicCost rules tx sender).1 := by
+  have h := length_mul4_le_dataCost hn tx.data
+  simp only [calculateIntrinsicCost]
+  omega
+
+/-- On either lane, a validated transaction's gas covers its intrinsic cost. -/
+theorem validated_intrinsic_le_gas_lanes {rules : ForkRules} {tx : Tx} {sender : Adr} {p : Nat × Nat}
+    (h : validateTransaction rules tx sender = .ok p) : (calculateIntrinsicCost rules tx sender).1 ≤ tx.gas := by
+  cases hsg : rules.stateGas with
+  | none => exact validated_intrinsic_le_gas hsg h
+  | some state =>
+      simp only [validateTransaction, hsg] at h
+      by_cases hn : tx.nonce = UInt64.max
+      · rw [if_pos hn] at h
+        obtain ⟨_, hcontra, -⟩ := Except.bind_eq_ok h
+        cases hcontra
+      rw [if_neg hn] at h
+      obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+      obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+      obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+      obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+      obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+      obtain ⟨_, -, h⟩ := Except.bind_eq_ok h
+      by_cases hc : (calculateIntrinsicCost rules tx sender).1 > tx.gas
+      · rw [if_pos hc] at h
+        obtain ⟨_, hcontra, -⟩ := Except.bind_eq_ok h
+        cases hcontra
+      · exact Nat.le_of_not_gt hc
+
+/-- On either lane, a checked transaction's gas fits in the block gas limit. -/
+theorem checked_gas_le_blockGasLimit {benv : Benv} {bout : BlockOutput} {tx : Tx} {q : Adr × Nat × List B256 × Nat}
+    (h : checkTransaction benv bout tx = .ok q) : tx.gas ≤ benv.stat.blockGasLimit := by
+  cases hsg : benv.stat.rules.stateGas with
+  | none => exact tx_gas_le_blockGasLimit_of_checked hsg h
+  | some state =>
+      simp only [checkTransaction] at h
+      obtain ⟨_, hlim, -⟩ := Except.bind_eq_ok h
+      rw [Except.mapError_eq_ok_iff] at hlim
+      simp only [checkTransactionGasLimits, hsg] at hlim
+      by_cases hc : tx.gas > benv.stat.blockGasLimit - bout.blockStateGasUsed
+      · split at hlim
+        · cases hlim
+        · cases hlim
+      · omega
+
+/-- **A transaction's calldata is word-sized**, from what `processTransaction` checked: four gas per byte, gas within
+the block's limit, the limit below `2 ^ 63`. -/
+theorem TransactionRoots.data_fits {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {state : State}
+    {bout' : BlockOutput} {sender : Adr} {rs : List Root} (h : TransactionRoots benv bout tx index state bout' sender
+        rs)
+    (rules : KeptRules benv.stat.rules) (limit : benv.stat.blockGasLimit < 2 ^ 63) : tx.data.length < 2 ^ 256 := by
+  obtain ⟨-, msg, -, -, hmsg, -⟩ := h
+  unfold transactionMessage at hmsg
+  obtain ⟨validationSender, _, hmsg⟩ := Except.bind_eq_ok hmsg
+  obtain ⟨_, hvalid, hmsg⟩ := Except.bind_eq_ok hmsg
+  obtain ⟨_, hchecked, -⟩ := Except.bind_eq_ok hmsg
+  have hv := validated_intrinsic_le_gas_lanes (Except.mapError_eq_ok_iff.mp hvalid)
+  have hg : tx.gas ≤ benv.stat.blockGasLimit := checked_gas_le_blockGasLimit hchecked
+  have hd := length_mul4_le_intrinsic (rules := benv.beginTransaction.stat.rules) rules.dataCost tx validationSender
+  have big : (2 : Nat) ^ 63 < 2 ^ 256 := by decide
+  omega
+
 /-! ## The transaction list -/
 
 /-- No listed transaction was sent by `S`. -/
@@ -881,6 +968,17 @@ theorem entry_in (h : TransactionsRoots txis benv bout final finalOut txs rs) (r
       · have hc : (_ : State).getCode a = _ := (head.chain rules (by rw [code]; exact nonempty)
           (by rw [code]; exact nondelegating) created).2
         exact ih rules (hc.trans code) created (fun p hp => data p (List.mem_cons_of_mem _ hp)) f hf
+
+/-- **The calldata of every listed transaction is word-sized**, under a header's gas limit. -/
+theorem data_fits (h : TransactionsRoots txis benv bout final finalOut txs rs) (rules : KeptRules benv.stat.rules)
+    (limit : benv.stat.blockGasLimit < 2 ^ 63) : DataFits txs := by
+  induction h with
+  | nil benv bout => exact fun _ hp => absurd hp List.not_mem_nil
+  | cons head tail ih =>
+      intro p hp
+      rcases List.mem_cons.mp hp with rfl | hp
+      · exact head.data_fits rules limit
+      · exact ih rules limit p hp
 
 end TransactionsRoots
 
@@ -1681,6 +1779,12 @@ theorem request_routing (h : BodyRoots benv txs ommers wds state bout run) :
   obtain ⟨st, out, pass, -, -⟩ := h.stages
   exact pass.root_routing
 
+/-- **A body's calldata is word-sized**, under its header's gas limit. -/
+theorem data_fits (h : BodyRoots benv txs ommers wds state bout run) (rules : KeptRules benv.stat.rules)
+    (limit : benv.stat.blockGasLimit < 2 ^ 63) : DataFits run.senders := by
+  obtain ⟨decoded, -, roots⟩ := h.transactions
+  exact roots.data_fits rules limit
+
 end BodyRoots
 
 /-! ## The history -/
@@ -1720,6 +1824,85 @@ inductive KeptReach (cfg : ChainConfig) (start : BlockChain) : BlockChain → Pr
       (∀ fork, cfg.forkAt block.header.number block.header.timestamp = .ok fork → KeptFork fork) →
       KeptReach cfg start post
 
+/-- **A configured reach is a kept reach, from a timestamp on.** Every block a chain accepts is strictly later than the
+tip it extends, so a schedule that selects only kept forks at or after `T` is enough, from a chain whose tip is at or
+past `T`. Mainnet's schedule, for instance, selects historical forks only before Prague. -/
+theorem KeptReach.of_reachUsing {cfg : ChainConfig} {start post : BlockChain} (h : BlockChain.ReachUsing cfg start post)
+    (T : Nat) (kept : ∀ number timestamp f, T ≤ timestamp → cfg.forkAt number timestamp = .ok f → KeptFork f)
+    (floor : ∃ parent, start.blocks.getLast? = some parent ∧ T ≤ parent.header.timestamp) : KeptReach cfg start post := by
+  induction h with
+  | refl => exact .refl
+  | step prior _ transition ih =>
+      refine .step ih transition fun fork hf => kept _ _ fork ?_ hf
+      obtain ⟨_, _, _, ⟨parent, hlast, hlt⟩, _⟩ := stateTransitionUsing_reachedStep transition
+      obtain ⟨tip, htip, hfloor⟩ := prior.tip_floor floor
+      rw [htip] at hlast
+      cases hlast
+      exact Nat.le_of_lt (Nat.lt_of_le_of_lt hfloor hlt)
+
+/-- **A schedule of kept forks only**: every configured reach is a kept reach. -/
+theorem KeptReach.of_schedule {cfg : ChainConfig} {start post : BlockChain} (h : BlockChain.ReachUsing cfg start post)
+    (kept : ∀ a ∈ cfg.activations, KeptFork a.fork) : KeptReach cfg start post := by
+  induction h with
+  | refl => exact .refl
+  | step _ _ transition ih =>
+      refine .step ih transition fun fork hf => ?_
+      obtain ⟨a, ha, rfl⟩ := List.mem_map.mp (ChainConfig.forkAt_mem hf)
+      exact kept a ha
+
+/-- From Prague on, mainnet's schedule selects only kept forks. It names no Amsterdam activation yet. -/
+theorem KeptReach.of_mainnet {start post : BlockChain} (h : BlockChain.ReachUsing mainnetChainConfig start post)
+    (floor : ∃ parent, start.blocks.getLast? = some parent ∧ mainnetPragueTimestamp ≤ parent.header.timestamp) :
+    KeptReach mainnetChainConfig start post :=
+  .of_reachUsing h mainnetPragueTimestamp (fun n t f ht hf => .inl (mainnetChainConfig_covered n t f ht hf)) floor
+
+/-- A chain of one fork from genesis on, at Amsterdam: Amsterdam alone is a kept schedule. -/
+theorem KeptReach.of_amsterdamOnly {chainId : UInt64} {start post : BlockChain}
+    (h : BlockChain.ReachUsing (ChainConfig.single chainId .amsterdam) start post) :
+    KeptReach (ChainConfig.single chainId .amsterdam) start post := by
+  refine .of_schedule h fun a ha => ?_
+  simp only [ChainConfig.single, List.mem_singleton] at ha
+  subst ha
+  exact .inr rfl
+
+/-- A timestamp activation of Amsterdam on top of BPO2, the schedule of Jaune's `BPO2ToAmsterdamAtTime` fixtures. -/
+theorem KeptReach.of_bpo2ToAmsterdam {chainId : UInt64} {T : Nat} {start post : BlockChain}
+    (h : BlockChain.ReachUsing (ForkTransition.chainConfig chainId ⟨.bpo2, .amsterdam, .byTimestamp T⟩) start post) :
+    KeptReach (ForkTransition.chainConfig chainId ⟨.bpo2, .amsterdam, .byTimestamp T⟩) start post := by
+  refine .of_schedule h fun a ha => ?_
+  rcases List.mem_cons.mp ha with same | ha
+  · rw [same]
+    exact .inl (show CoveredFork .bpo2 by decide)
+  · rw [List.mem_singleton.mp ha]
+    exact .inr rfl
+
+/-- Each kept fork commits to requests. -/
+theorem KeptFork.requestsHash {f : Fork} (h : KeptFork f) : f.ruleSet.header.requestsHash = true := by
+  rcases h with covered | rfl
+  · exact covered.cases (motive := fun f => f.ruleSet.header.requestsHash = true) rfl rfl rfl rfl
+  · rfl
+
+/-- The last of the block's output checks: the requests hash it computed is the header's. -/
+theorem stateTransitionChecks_requestsHash {bout : BlockOutput} {header : Header}
+    {transactionsRoot blockStateRoot receiptRoot withdrawalsRoot : B256} {blockLogsBloom : Bytes}
+    {requestsHash : Option B256}
+    (h : stateTransitionChecks bout header transactionsRoot blockStateRoot receiptRoot blockLogsBloom withdrawalsRoot
+      requestsHash = .ok ()) : requestsHash = header.requestsHash := by
+  have pass : ∀ {c : Prop} [Decidable c] {α ε : Type} {e : ε} {k : Unit → Except ε α} {r : Except ε α} {x : α},
+      (if c then Except.bind (.error e) k else r) = .ok x → r = .ok x := by
+    intro c _ α ε e k r x hx
+    by_cases hc : c
+    · rw [if_pos hc] at hx
+      cases hx
+    · rw [if_neg hc] at hx
+      exact hx
+  unfold stateTransitionChecks at h
+  dsimp only at h
+  have h := pass (pass (pass (pass (pass (pass (pass h))))))
+  by_contra hne
+  rw [if_pos hne] at h
+  cases h
+
 /-- **Every successful transition at a kept fork has its roots.** -/
 theorem exists_keptStep {cfg : ChainConfig} {pre post : BlockChain} {block : Block}
     (h : stateTransitionUsing cfg pre block = .ok post)
@@ -1746,6 +1929,32 @@ variable {cfg : ChainConfig} {b : KeptBlock} {post : BlockChain}
 private theorem rules (h : KeptStep cfg b post) : KeptRules b.benv.stat.rules := h.kept.rules
 
 private theorem not_created (a : Adr) (b : KeptBlock) : a ∉ b.benv.createdAccounts := AdrSet.not_mem_empty
+
+/-- **The header commits to the requests the body output.** A kept step's transition compared them: the header's hash is
+`computeRequestsHash` of exactly the block's request bytes. -/
+theorem requests_hash (h : KeptStep cfg b post) :
+    b.block.header.requestsHash = some (computeRequestsHash b.output.requests) := by
+  obtain ⟨fork, hFork, hScheduled⟩ := stateTransitionUsing_scheduled_ok h.transition
+  obtain rfl : fork = b.fork := Except.ok.inj (hFork.symm.trans h.forkAt)
+  have hCore := stateTransitionScheduledE_eq_ok_iff.mp hScheduled
+  unfold stateTransitionCoreE at hCore
+  obtain ⟨_, _, hCore⟩ := Except.bind_eq_ok hCore
+  obtain ⟨_, _, hCore⟩ := Except.bind_eq_ok hCore
+  obtain ⟨⟨bodyState, blockOutput⟩, hBody, hCore⟩ := Except.bind_eq_ok hCore
+  have hBodyEq := Except.mapError_eq_ok_iff.mp hBody
+  change applyBody b.benv b.block.txs b.block.ommers b.block.wds = _ at hBodyEq
+  rw [h.body.applied] at hBodyEq
+  obtain ⟨-, rfl⟩ := Prod.mk.inj (Except.ok.inj hBodyEq)
+  dsimp only at hCore
+  obtain ⟨checked, hChecks, _⟩ := Except.bind_eq_ok hCore
+  cases checked
+  have same := stateTransitionChecks_requestsHash (Except.mapError_eq_ok_iff.mp hChecks)
+  rw [← same, h.kept.requestsHash]
+  rfl
+
+/-- **A kept step's calldata is word-sized**: the transition validated the header's gas limit. -/
+theorem data_fits (h : KeptStep cfg b post) : DataFits b.run.senders :=
+  h.body.data_fits h.rules (ExecutionTrace.header_gasLimit_lt_of_transition h.transition)
 
 end KeptStep
 
@@ -1801,20 +2010,19 @@ theorem caller_ne (h : KeptHistory cfg start blocks post) {a S : Adr} (empty : s
 /-- **Entry facts over a history.** Every frame kept at `a`, where `a` holds nondelegating code `C`, runs `C` from its
 start on fresh machine state, under its block's environment with its message's opening state. -/
 theorem entry_in (h : KeptHistory cfg start blocks post) {a : Adr} {C : ByteArray} (code : start.state.getCode a = C)
-    (nonempty : C.toList ≠ []) (nondelegating : ¬ isValidDelegation C) (data : ∀ b ∈ blocks, DataFits b.run.senders) :
+    (nonempty : C.toList ≠ []) (nondelegating : ¬ isValidDelegation C) :
     ∀ b ∈ blocks, ∀ f ∈ b.keptAt a, Exec.Frame.EntryIn a C b.benv.stat f := by
   have hc : (start.state.getCode a).toList ≠ [] := by rw [code]; exact nonempty
   have hd : ¬ isValidDelegation (start.state.getCode a) := by rw [code]; exact nondelegating
   induction h with
   | refl => exact fun _ hb => absurd hb List.not_mem_nil
   | @step blocks b post prior step ih =>
-      have below := ih (fun x hx => data x (List.mem_append_left _ hx))
       intro x hx
       rcases List.mem_append.mp hx with hx | hx
-      · exact below x hx
+      · exact ih x hx
       · rw [List.mem_singleton.mp hx]
         exact step.body.entry_in step.rules ((chain prior hc hd).2.trans code) nonempty nondelegating
-          (KeptStep.not_created a b) (data b (List.mem_append_right _ List.mem_cons_self))
+          (KeptStep.not_created a b) step.data_fits
 
 /-- Every kept block is a step of the history, so its output and its stages can be read back. -/
 theorem mem_step (h : KeptHistory cfg start blocks post) :
