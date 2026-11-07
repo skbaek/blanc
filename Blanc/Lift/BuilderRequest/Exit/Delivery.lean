@@ -146,6 +146,32 @@ abbrev contract : Contract where
   system_law := system_law
   latch_law := latch_law
 
+/-- A submission leaves a record's slots alone when the record is past the tail. -/
+theorem submittedStorage_keeps : contract.KeepsPastTail := by
+  intro sevm s n i j ht hlt hj hb
+  have hj3 : j < 3 := hj
+  have hb3 : queueBase 3 i + 3 ≤ 2 ^ 256 := hb
+  have hn : queueBase 3 n + 3 ≤ 2 ^ 256 := by
+    have := queueBase_mono 3 (Nat.le_of_lt hlt)
+    omega
+  have key : submissionKey (s.get 3) = queueSlot 3 n 0 := by
+    rw [ht]
+    exact record_key 3 n
+  have step : ∀ j', (1 : B256) + queueSlot 3 n j' = queueSlot 3 n (j' + 1) := fun j' => by
+    rw [show (1 : B256) = Nat.toB256 1 by decide]
+    exact record_key_add 3 n j' 1
+  have hpast := queueSlot_past_bookkeeping (w := 3) (i := i) (j := j) (by omega)
+  have hmeta : ∀ m : B256, m.toNat < 4 → m ≠ queueSlot 3 i j := fun m hm e => by
+    rw [e] at hm
+    omega
+  have hrec : ∀ j', j' < 3 → queueSlot 3 n j' ≠ queueSlot 3 i j := fun j' hj' =>
+    queueSlot_ne_of_lt hlt hj' hn hb3 hj3
+  show (submittedStorage sevm s).get _ = _
+  simp only [submittedStorage, key, step, Nat.zero_add, Nat.reduceAdd]
+  rw [Stor.get_set_ne _ (hmeta 3 (by decide)), Stor.get_set_ne _ (hrec 2 (by decide)),
+    Stor.get_set_ne _ (hrec 1 (by decide)), Stor.get_set_ne _ (hrec 0 (by decide)),
+    Stor.get_set_ne _ (hmeta 1 (by decide))]
+
 /-- A frame at the exit contract. -/
 abbrev Frame := Delivery.Frame contract
 
@@ -202,6 +228,19 @@ theorem delivery {frames : List Frame} {t : Stor} (chain : Chain deployedStorage
   have h := chain.delivered deployed_represents (by show 4 + _ * (0 + _) ≤ _; rw [Nat.zero_add]; exact range)
     (by show 0 + _ < _; omega)
   exact ⟨h.represents, h.queue, h.output⟩
+
+/-- **Slot reuse after a full drain, at the exit contract.** Over any given chain from the deployed storage, a system
+call finding at most 16 records returns them all and puts the pointers at 0. It clears no record word
+(`Frame.system_keeps`). The later frames' storage then represents their own queue, and the later calls return exactly
+their own submissions' bytes, each 68, with no bytes from an old record: `reuse_witness` compiles this over nonzero
+stale words. -/
+theorem slot_reuse {xs ys : List Frame} {f : Frame} {latch : Bool} {t : Stor}
+    (chain : Chain deployedStorage (xs ++ f :: ys) t) (call : f.event = .system latch)
+    (empties : (queueAfter deployedQueue xs).queue.length ≤ 16)
+    (range : 4 + 3 * (submissions (xs ++ f :: ys)).length ≤ 2 ^ 256) :
+    SlotReuse deployedQueue xs f ys t :=
+  chain.slot_reuse deployed_represents (by show 4 + _ * (0 + _) ≤ _; rw [Nat.zero_add]; exact range)
+    (by show 0 + _ < _; omega) call empties
 
 /-- **The first frame is a system call.** The deployed storage holds the inhibitor, so no user frame can run on
 it: the sequence starts with a system call, or is empty. Nothing is assumed about this; it follows from the frame

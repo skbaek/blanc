@@ -143,6 +143,48 @@ theorem request_phase {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
   obtain ⟨bal', run⟩ := fold_of_calls idx acc bal c1 c2 c3 c4
   exact ⟨out1, out2, out3, out4, bal', c1, c2, c3, c4, run, by rw [amsterdam_rules hfork]⟩
 
+/-- **The block's request pass under Amsterdam, given that deposit-log parsing succeeded.** Jaune's
+`processGeneralPurposeRequestsAt` is `parseDepositRequests` over the block's receipts, then the fold. Parsing is a
+premise about the logs of the validator deposit contract, which is not one of these four contracts: it is not proved
+here, and it fails on a malformed deposit log. Given it, and the fork and the four code installations, with no storage,
+gas or queue premise, each of the four checked calls returns at the state the previous one left, and the pass returns
+the last state. The request list extends the incoming one by the deposit entry when the parsed bytes are non-empty,
+ahead of everything the fold appends, then by the type-prefixed non-empty outputs in rule order. Nothing else in the
+block output changes but the access list. -/
+theorem request_pass {benv : Benv} {bout : BlockOutput} {depositRequests : Bytes}
+    (hfork : benv.stat.fork = .amsterdam)
+    (h7002 : benv.state.getCode withdrawalRequestPredeployAddress = withdrawalRequestCode)
+    (h7251 : benv.state.getCode consolidationRequestPredeployAddress = consolidationRequestCode)
+    (hdeposit : benv.state.getCode BuilderRequest.Deposit.Creation.address = BuilderRequest.Deposit.code)
+    (hexit : benv.state.getCode BuilderRequest.Exit.Creation.address = BuilderRequest.Exit.code)
+    (parsed : parseDepositRequests bout = .ok depositRequests) (idx : Nat) :
+    let σ1 := afterWithdrawals benv.state
+    let σ2 := afterConsolidations σ1
+    let σ3 := afterDeposits σ2
+    let σ4 := afterExits σ3
+    ∃ (out1 out2 out3 out4 : MsgCallOutput) (bal' : BalBuilder),
+      processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] = .ok (σ1, out1) ∧
+      processCheckedSystemTransaction (benv.withState σ1) consolidationRequestPredeployAddress [] =
+        .ok (σ2, out2) ∧
+      processCheckedSystemTransaction (benv.withState σ2) BuilderRequest.Deposit.Creation.address [] =
+        .ok (σ3, out3) ∧
+      processCheckedSystemTransaction (benv.withState σ3) BuilderRequest.Exit.Creation.address [] =
+        .ok (σ4, out4) ∧
+      processGeneralPurposeRequestsAt idx benv bout =
+        .ok (σ4, { bout with
+          requests := bout.requests ++ optionalRequestEntry 0 depositRequests ++
+            optionalRequestEntry 1 out1.returnData ++ optionalRequestEntry 2 out2.returnData ++
+            optionalRequestEntry 3 out3.returnData ++ optionalRequestEntry 4 out4.returnData
+          bal := bal' }) := by
+  intro σ1 σ2 σ3 σ4
+  obtain ⟨out1, out2, out3, out4, bal', c1, c2, c3, c4, run, hrules⟩ := request_phase hfork h7002 h7251
+    hdeposit hexit idx (bout.requests ++ optionalRequestEntry 0 depositRequests) bout.bal
+  refine ⟨out1, out2, out3, out4, bal', c1, c2, c3, c4, ?_⟩
+  unfold processGeneralPurposeRequestsAt
+  rw [parsed]
+  simp only [bind, Except.bind, depositRequestType, append_optionalRequestEntry, hrules]
+  rw [run]
+
 /-- All four contracts can be installed together in any `State`, so the four installation premises of
 `request_phase` are satisfiable. This is about a `State` only: no `Benv` with `stat.fork = .amsterdam` is
 constructed here. A `Benv.withState` takes the installed state into any environment and leaves its `stat`

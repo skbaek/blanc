@@ -73,39 +73,8 @@ theorem exists_system (s : Stor) : ∃ f : Frame, f.before = s ∧ f.event = .sy
 theorem exists_submissions (rs : List Record) (hrs : ∀ r ∈ rs, r.source ≠ systemAddress) {s : Stor}
     {st : QueueState Record} (rep : Holds contract s st) (hne : st.excess ≠ 2 ^ 256 - 1)
     (slots : queueBase 3 (st.tail + rs.length) ≤ 2 ^ 256) (count : st.count + rs.length < 2 ^ 256) :
-    ∃ (frames : List Frame) (t : Stor), Chain s frames t ∧ events frames = rs.map .submission := by
-  induction rs generalizing s st with
-  | nil => exact ⟨[], s, .nil s, rfl⟩
-  | cons r rs ih =>
-    have off : s.get 0 ≠ B256.max := fun h => by
-      have h0 : s.get 0 = st.excess.toB256 := rep.excess
-      have := congrArg B256.toNat (h0.symm.trans h)
-      rw [B256.toNat_toB256_of_lt rep.excess_lt, max_toNat] at this
-      exact hne this
-    obtain ⟨f, hb, he⟩ := exists_submission r (hrs r List.mem_cons_self) off
-    subst hb
-    have hlen : (r :: rs).length = rs.length + 1 := rfl
-    rw [hlen] at slots count
-    obtain ⟨hrep, -⟩ := f.step_holds rep
-      (by rw [he]; exact (queueBase_mono 3 (by show st.tail + 1 ≤ _; omega)).trans slots)
-      (by rw [he]; show st.count + 1 < _; omega)
-    rw [he] at hrep
-    obtain ⟨frames, t, chain, hev⟩ := ih (fun x hx => hrs x (List.mem_cons_of_mem _ hx)) hrep hne
-      ((queueBase_mono 3 (by show st.tail + 1 + _ ≤ _; omega)).trans slots)
-      (by show st.count + 1 + _ < _; omega)
-    exact ⟨f :: frames, t, .cons rfl chain, by simp only [events, List.map_cons, he]; exact congrArg _ hev⟩
-
-theorem submitted_map (rs : List Record) : submitted (rs.map Event.submission) = rs := by
-  induction rs with
-  | nil => rfl
-  | cons r rs ih =>
-    show r :: submitted (rs.map Event.submission) = _
-    rw [ih]
-
-theorem noSystem_map (rs : List Record) : NoSystem (rs.map Event.submission) := by
-  intro e he latch heq
-  obtain ⟨r, -, rfl⟩ := List.mem_map.mp he
-  cases heq
+    ∃ (frames : List Frame) (t : Stor), Chain s frames t ∧ events frames = rs.map .submission :=
+  Frame.exists_submissions rs (fun r hr _ off => exists_submission r (hrs r hr) off) rep hne slots count
 
 /-- **The sequence's premises can be met, with a partial drain.** For any 17 records with sources other than the
 system address there is a chain of real frames from the deployed storage: the unlocking call, those 17 submissions,
@@ -214,5 +183,70 @@ theorem witnessRecords_ok :
   obtain ⟨i, -, rfl⟩ := List.mem_map.mp hr
   show (1 : Adr) ≠ systemAddress
   decide
+
+/-- The first old record of the reuse witness. -/
+def reuseOld0 : Record := ⟨1, List.replicate 48 0xaa, by rw [List.length_replicate]⟩
+
+/-- The second old record of the reuse witness. -/
+def reuseOld1 : Record := ⟨2, List.replicate 48 0xbb, by rw [List.length_replicate]⟩
+
+/-- The new record of the reuse witness: another source and other calldata. -/
+def reuseNew : Record := ⟨3, List.replicate 48 0xcc, by rw [List.length_replicate]⟩
+
+/-- The witness's words: the old are nonzero, and the new differs from the old it replaces. -/
+theorem words_differ : ∀ j, j < 3 →
+    reuseOld0.word j ≠ 0 ∧ reuseNew.word j ≠ reuseOld0.word j ∧ reuseOld1.word j ≠ 0 := by
+  decide +kernel
+
+/-- **Slot reuse has a model, over stale words.** Real frames from the deployed storage: the unlocking call, two
+submissions, then `f`, a call returning both. It leaves the pointers at 0 and all six record words in storage,
+each nonzero. One submission with other calldata then replaces record 0's three words, each differing from the old,
+and `g` returns exactly the new record's 68 bytes, while record 1's old words are still in storage. -/
+theorem reuse_witness :
+    ∃ (xs ys : List Frame) (f g : Frame) (t : Stor),
+      Chain deployedStorage (xs ++ f :: ys) t ∧ g.before = t ∧ f.event = .system false ∧ g.event = .system false ∧
+      submissions xs = [reuseOld0, reuseOld1] ∧ submissions ys = [reuseNew] ∧
+      f.output = reuseOld0.out ++ reuseOld1.out ∧ g.output = reuseNew.out ∧ g.output.length = 68 ∧
+      f.after.get 2 = 0 ∧ f.after.get 3 = 0 ∧
+      (∀ j, j < 3 →
+        f.after.get (queueSlot 3 0 j) = reuseOld0.word j ∧ reuseOld0.word j ≠ 0 ∧
+        t.get (queueSlot 3 0 j) = reuseNew.word j ∧ reuseNew.word j ≠ reuseOld0.word j ∧
+        f.after.get (queueSlot 3 1 j) = reuseOld1.word j ∧ reuseOld1.word j ≠ 0 ∧
+        t.get (queueSlot 3 1 j) = reuseOld1.word j) := by
+  obtain ⟨f0, hb0, he0⟩ := exists_system deployedStorage
+  have rep0 : Holds contract f0.before deployedQueue := by
+    rw [hb0]
+    exact deployed_represents
+  have hstep0 := (f0.step_holds rep0 (by rw [he0]; decide) (by rw [he0]; decide)).1
+  rw [he0] at hstep0
+  have hx1 : (step 16 2 deployedQueue (Event.system false)).excess = 0 := by
+    show (drainedState 16 2 deployedQueue).excess = 0
+    rw [drainedState_excess, show deployedQueue.excess = 2 ^ 256 - 1 from rfl, inhibitor_toB256,
+      excessNext_inhibitor]
+    rfl
+  have each : ∀ r ∈ [reuseOld0, reuseOld1] ++ [reuseNew], ∀ s : Stor, s.get 0 ≠ B256.max →
+      ∃ f : Frame, f.before = s ∧ f.event = .submission r := fun r hr s off =>
+    exists_submission r (by revert r; decide) off
+  obtain ⟨xs, ys, f, g, t, chain, hg, hf, heg, h1, h2, o1, o2, p2, p3, stale, over, kept⟩ :=
+    Frame.exists_reuse submittedStorage_keeps [reuseOld0, reuseOld1] [reuseNew] each exists_system hstep0 rfl rfl rfl
+      (by rw [hx1]; decide) (by decide) (by decide) (by decide) (by decide)
+  have out1 : f.output = reuseOld0.out ++ reuseOld1.out := by
+    rw [o1]
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+  have out2 : g.output = reuseNew.out := by
+    rw [o2]
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+  refine ⟨f0 :: xs, ys, f, g, t, .cons hb0 chain, hg, hf, heg, ?_, h2, out1, out2, ?_, p2, p3, fun j hj => ?_⟩
+  · show submitted (f0.event :: events xs) = _
+    rw [he0]
+    exact h1
+  · rw [out2]
+    decide
+  · have hs0 := stale 0 (by decide) j hj
+    have hs1 := stale 1 (by decide) j hj
+    have ho := over 0 (by decide) j hj
+    have hk := kept 1 (by decide) j (by decide) hj
+    have hw := words_differ j hj
+    exact ⟨hs0, hw.1, ho, hw.2.1, hs1, hw.2.2, hk⟩
 
 end Blanc.Lift.BuilderRequest.Exit

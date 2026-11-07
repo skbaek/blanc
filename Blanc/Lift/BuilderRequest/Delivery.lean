@@ -1185,4 +1185,353 @@ theorem holdingDevm_getStorVal (a : Adr) (code : ByteArray) (s : Stor) (k : B256
   show ((holding a code s).getStor a).get k = _
   rw [holding_getStor]
 
+/-! ## Slot reuse after a full drain -/
+
+/-- A system call that finds at most a cap's worth of records empties the queue and puts the count and both pointers
+at 0. -/
+theorem step_full_drain (cap : Nat) (target : B256) (st : QueueState Record) (latch : Bool)
+    (h : st.queue.length ≤ cap) :
+    (step cap target st (.system latch)).head = 0 ∧ (step cap target st (.system latch)).tail = 0 ∧
+      (step cap target st (.system latch)).count = 0 ∧ (step cap target st (.system latch)).queue = [] := by
+  cases latch <;> simp only [step, latched, drainedState, ite_eq_left h, and_self]
+
+theorem replay_noSystem_head (cap : Nat) (target : B256) (st : QueueState Record) {es : List (Event Record)}
+    (h : NoSystem es) : (replay cap target st es).head = st.head := by
+  induction es generalizing st with
+  | nil => rfl
+  | cons e es ih =>
+    have tail : NoSystem es := fun x hx => h x (List.mem_cons_of_mem _ hx)
+    have hc := ih (step cap target st e) tail
+    cases e with
+    | submission r => exact hc
+    | feeRead => exact hc
+    | system latch => exact absurd rfl (h _ List.mem_cons_self latch)
+
+/-- A record's slot is past the four bookkeeping slots. -/
+theorem queueSlot_past_bookkeeping {w i j : Nat} (h : queueBase w i + j < 2 ^ 256) :
+    4 ≤ (queueSlot w i j).toNat := by
+  simp only [queueSlot]
+  rw [B256.toNat_toB256_of_lt h]
+  simp only [queueBase]
+  omega
+
+/-- **A system call leaves every slot past the bookkeeping as it found it**, so a drain does not clear a record's
+words: they stay in storage, stale, until a submission overwrites them. -/
+theorem Frame.system_keeps (f : Frame c) {latch : Bool} (call : f.event = .system latch) {k : B256}
+    (hk : 4 ≤ k.toNat) : f.after.get k = f.before.get k := by
+  have h0 : (0 : B256) ≠ k := fun e => by rw [← e] at hk; exact absurd hk (by decide)
+  have h1 : (1 : B256) ≠ k := fun e => by rw [← e] at hk; exact absurd hk (by decide)
+  have h2 : (2 : B256) ≠ k := fun e => by rw [← e] at hk; exact absurd hk (by decide)
+  have h3 : (3 : B256) ≠ k := fun e => by rw [← e] at hk; exact absurd hk (by decide)
+  rw [f.after_eq]
+  cases f with
+  | submission sevm pre post l i o rules target caller law => cases call
+  | feeRead sevm pre post l i o rules target caller law => cases call
+  | system benv data post out fork installed length run =>
+    simp only [Frame.effect]
+    split <;> simp only [drainStor, latchStor] <;> split <;>
+      simp only [Stor.get_set_ite, ite_eq_right h0, ite_eq_right h1, ite_eq_right h2, ite_eq_right h3]
+
+/-- What a system call that empties the queue leaves for the frames after it. -/
+structure SlotReuse (st : QueueState c.Record) (xs : List (Frame c)) (f : Frame c) (ys : List (Frame c)) (t : Stor) :
+    Prop where
+  /-- The call returns every record it found. -/
+  drained : f.output = (queueAfter st xs).queue.flatMap c.out
+  /-- The head pointer is back at 0. -/
+  head : (queueAfter st (xs ++ [f])).head = 0
+  /-- The tail pointer is back at 0, so the next submission writes record 0's slots, stale or not. -/
+  tail : (queueAfter st (xs ++ [f])).tail = 0
+  /-- Nothing is queued. -/
+  queue : (queueAfter st (xs ++ [f])).queue = []
+  /-- Storage after the later frames represents the queue from there on. -/
+  represents : Holds c t (queueAfter (queueAfter st (xs ++ [f])) ys)
+  /-- What the later frames left queued is exactly their own submissions not yet delivered. -/
+  remaining : (queueAfter (queueAfter st (xs ++ [f])) ys).queue =
+    (submissions ys).drop (deliveredRecords (queueAfter st (xs ++ [f])) ys)
+  /-- What the later calls return is exactly their own submissions' bytes, with nothing of an old record. -/
+  output : systemOutput ys =
+    ((submissions ys).take (deliveredRecords (queueAfter st (xs ++ [f])) ys)).flatMap c.out
+  /-- With no call among them, the later submissions' words are at the slots counted from 0, over whatever was there. -/
+  overwrites : NoSystem (events ys) → ∀ i (hi : i < (submissions ys).length) j, j < c.width →
+    t.get (queueSlot c.width i j) = c.words (submissions ys)[i] j
+  /-- With no call among them, the next call returns the oldest of those submissions and no other bytes. -/
+  next_call : NoSystem (events ys) → ∀ (g : Frame c) (latch : Bool), g.before = t → g.event = .system latch →
+    g.output = ((submissions ys).take c.cap).flatMap c.out
+
+/-- **Slot reuse after a full drain.** A system call finding at most a cap's worth of records returns them all and
+resets the pointers. The call clears no record word (`Frame.system_keeps`), yet from then on delivery is exact in the
+later frames' submissions alone: nothing stale comes back, however many old words remain. -/
+theorem Chain.slot_reuse {s t : Stor} {xs ys : List (Frame c)} {f : Frame c} {latch : Bool}
+    (chain : Chain s (xs ++ f :: ys) t) {st : QueueState c.Record} (rep : Holds c s st)
+    (slots : queueBase c.width (st.tail + (submissions (xs ++ f :: ys)).length) ≤ 2 ^ 256)
+    (count : st.count + (submissions (xs ++ f :: ys)).length < 2 ^ 256)
+    (call : f.event = .system latch) (empties : (queueAfter st xs).queue.length ≤ c.cap) :
+    SlotReuse st xs f ys t := by
+  have hsub : submissions (xs ++ f :: ys) = submissions xs ++ submissions ys := by
+    rw [submissions_append]
+    show _ ++ submitted (f.event :: events ys) = _
+    rw [call]
+    rfl
+  have hsub1 : submissions (xs ++ [f]) = submissions xs := by
+    rw [submissions_append]
+    show _ ++ submitted [f.event] = _
+    rw [call]
+    exact List.append_nil _
+  rw [hsub, List.length_append] at slots count
+  have hafter : queueAfter st (xs ++ [f]) = step c.cap c.target (queueAfter st xs) (.system latch) := by
+    simp only [queueAfter, events, List.map_append, replay_append, List.map_cons, List.map_nil, call]
+    rfl
+  obtain ⟨hh, ht, hc, hq⟩ := step_full_drain c.cap c.target (queueAfter st xs) latch empties
+  rw [← hafter] at hh ht hc hq
+  obtain ⟨m, c1, c2⟩ := Chain.append_split (xs := xs ++ [f]) (ys := ys)
+    (by rw [List.append_assoc]; exact chain)
+  have d1 := c1.delivered rep (by rw [hsub1]; exact (queueBase_mono _ (by omega)).trans slots)
+    (by rw [hsub1]; omega)
+  have d2 := c2.delivered d1.represents (by rw [ht]; exact (queueBase_mono _ (by omega)).trans slots)
+    (by rw [hc]; omega)
+  have hrem := d2.queue
+  have hout := d2.output
+  rw [hq, List.nil_append] at hrem hout
+  have nosys : NoSystem (events ys) → (queueAfter (queueAfter st (xs ++ [f])) ys).queue = submissions ys := fun none => by
+    show (replay _ _ _ _).queue = _
+    rw [replay_noSystem_queue _ _ _ none, hq]
+    rfl
+  refine ⟨?_, hh, ht, hq, d2.represents, hrem, hout, fun none i hi j hj => ?_, fun none g l hb he => ?_⟩
+  · obtain ⟨m', c3, c4⟩ := chain.append_split
+    cases c4 with
+    | cons starts _ =>
+      subst starts
+      have d3 := c3.delivered rep ((queueBase_mono _ (by omega)).trans slots) (by omega)
+      rw [f.output_eq d3.represents, call, chunk, List.take_of_length_le empties]
+  · have hi' : i < (queueAfter (queueAfter st (xs ++ [f])) ys).queue.length := by
+      rw [nosys none]
+      exact hi
+    have hlive := d2.represents.live i hi' j hj
+    have hhead : (queueAfter (queueAfter st (xs ++ [f])) ys).head = 0 :=
+      (replay_noSystem_head _ _ _ none).trans hh
+    simp only [hhead, Nat.zero_add, nosys none] at hlive
+    exact hlive
+  · rw [g.output_eq (st := queueAfter (queueAfter st (xs ++ [f])) ys) (by rw [hb]; exact d2.represents), he, chunk,
+      nosys none]
+
+/-- Real submission frames for a list of records, chained from any represented queue off the inhibitor, given that
+each has a frame on any storage off it. -/
+theorem Frame.exists_submissions (rs : List c.Record)
+    (each : ∀ r ∈ rs, ∀ s : Stor, s.get 0 ≠ B256.max → ∃ f : Frame c, f.before = s ∧ f.event = .submission r)
+    {s : Stor} {st : QueueState c.Record} (rep : Holds c s st) (hne : st.excess ≠ 2 ^ 256 - 1)
+    (slots : queueBase c.width (st.tail + rs.length) ≤ 2 ^ 256) (count : st.count + rs.length < 2 ^ 256) :
+    ∃ (frames : List (Frame c)) (t : Stor), Chain s frames t ∧ events frames = rs.map .submission := by
+  induction rs generalizing s st with
+  | nil => exact ⟨[], s, .nil s, rfl⟩
+  | cons r rs ih =>
+    have off : s.get 0 ≠ B256.max := fun h => by
+      have h0 : s.get 0 = st.excess.toB256 := rep.excess
+      have := congrArg B256.toNat (h0.symm.trans h)
+      rw [B256.toNat_toB256_of_lt rep.excess_lt, max_toNat] at this
+      exact hne this
+    obtain ⟨f, hb, he⟩ := each r List.mem_cons_self s off
+    subst hb
+    have hlen : (r :: rs).length = rs.length + 1 := rfl
+    rw [hlen] at slots count
+    obtain ⟨hrep, -⟩ := f.step_holds rep
+      (by rw [he]; exact (queueBase_mono _ (by show st.tail + 1 ≤ _; omega)).trans slots)
+      (by rw [he]; show st.count + 1 < _; omega)
+    rw [he] at hrep
+    obtain ⟨frames, t, chain, hev⟩ := ih (fun x hx => each x (List.mem_cons_of_mem _ hx)) hrep hne
+      ((queueBase_mono _ (by show st.tail + 1 + _ ≤ _; omega)).trans slots)
+      (by show st.count + 1 + _ < _; omega)
+    exact ⟨f :: frames, t, .cons rfl chain, by simp only [events, List.map_cons, he]; exact congrArg _ hev⟩
+
+theorem submitted_map (rs : List Record) : submitted (rs.map Event.submission) = rs := by
+  induction rs with
+  | nil => rfl
+  | cons r rs ih =>
+    show r :: submitted (rs.map Event.submission) = _
+    rw [ih]
+
+theorem noSystem_map (rs : List Record) : NoSystem (rs.map Event.submission) := by
+  intro e he latch heq
+  obtain ⟨r, -, rfl⟩ := List.mem_map.mp he
+  cases heq
+
+/-- **The first write to a slot in a transaction, regular gas.** It does not depend on whether the slot held zero. -/
+theorem sstoreCostA_first_write (state : StateGasRules) (sevm : Sevm) (d : Devm) (key value : B256)
+    (same : d.getOrigStorVal sevm sevm.currentTarget key = d.getStorVal sevm.currentTarget key)
+    (moved : d.getStorVal sevm.currentTarget key ≠ value) :
+    sstoreCostA state sevm d key value =
+      (if isColdA sevm d key then gasColdSload else gasWarmAccess) + state.storageWrite := by
+  have h := And.intro same moved
+  simp only [sstoreCostA, sstoreAmsterdamGasCost, decide_eq_true_eq, ite_eq_left h]
+
+/-- **The first write over a stale word, state gas.** A slot nonzero when the transaction began charges none. -/
+theorem sstoreChargeA_stale (state : StateGasRules) (sevm : Sevm) (d : Devm) (key value : B256)
+    (stale : d.getOrigStorVal sevm sevm.currentTarget key ≠ 0) : sstoreChargeA state sevm d key value = 0 := by
+  simp only [sstoreChargeA, sstoreAmsterdamStateGas]
+  exact ite_eq_right fun h => stale h.2.2
+
+/-- **The first write over zero, state gas.** A slot zero when the transaction began, and still, charges
+`storageSet` for a nonzero word. So a reused slot is that much cheaper than a fresh one, and a submission's
+`storageSet` total depends on what earlier records left behind. -/
+theorem sstoreChargeA_fresh (state : StateGasRules) (sevm : Sevm) (d : Devm) (key value : B256)
+    (orig : d.getOrigStorVal sevm sevm.currentTarget key = 0)
+    (cur : d.getStorVal sevm.currentTarget key = 0) (nz : value ≠ 0) :
+    sstoreChargeA state sevm d key value = state.storageSet := by
+  simp only [sstoreChargeA, sstoreAmsterdamStateGas, orig, cur]
+  exact ite_eq_left ⟨trivial, nz.symm, trivial⟩
+
+/-- A contract's submission leaves a record's slots alone when the record is past the tail. -/
+def Contract.KeepsPastTail (c : Contract) : Prop :=
+  ∀ (sevm : Sevm) (s : Stor) (n i j : Nat), s.get 3 = n.toB256 → n < i → j < c.width →
+    queueBase c.width i + c.width ≤ 2 ^ 256 →
+    (c.submitStor sevm s).get (queueSlot c.width i j) = s.get (queueSlot c.width i j)
+
+/-- Submissions and fee reads leave a record's slots alone when the record is past where they end. -/
+theorem Chain.keeps_past_tail (keeps : c.KeepsPastTail) {s t : Stor} {frames : List (Frame c)}
+    (chain : Chain s frames t) {st : QueueState c.Record} (rep : Holds c s st) (none : NoSystem (events frames))
+    {i j : Nat} (hi : st.tail + (submissions frames).length ≤ i) (hj : j < c.width)
+    (hb : queueBase c.width i + c.width ≤ 2 ^ 256) (count : st.count + (submissions frames).length < 2 ^ 256) :
+    t.get (queueSlot c.width i j) = s.get (queueSlot c.width i j) := by
+  induction chain generalizing st with
+  | nil s => rfl
+  | @cons s f rest t starts tail ih =>
+    subst starts
+    have hs : (submissions (f :: rest)).length =
+        (submitted [f.event]).length + (submissions rest).length := submitted_cons_length _ _
+    rw [hs] at hi count
+    have huser : ∀ latch, f.event ≠ .system latch := fun latch => none _ List.mem_cons_self latch
+    have hslots : queueBase c.width (st.tail + (submitted [f.event]).length) ≤ 2 ^ 256 := by
+      have := queueBase_mono c.width (show st.tail + (submitted [f.event]).length ≤ i by omega)
+      omega
+    have hstep := (f.step_holds rep hslots (by omega)).1
+    have ht := step_tail_le c.cap c.target st f.event
+    have hc := step_count_le c.cap c.target st f.event
+    have rest' := ih hstep (fun x hx => none x (List.mem_cons_of_mem _ hx)) (by omega) (by omega)
+    rw [rest', f.after_eq]
+    cases f with
+    | submission sevm pre post l i' o rules target caller law =>
+      have hlt : st.tail < i := by
+        have : (submitted [Event.submission (c.recordOf sevm (c.length law))]).length = 1 := rfl
+        simp only [Frame.event] at hi
+        omega
+      exact keeps sevm _ st.tail i j rep.tail hlt hj hb
+    | feeRead sevm pre post l i' o rules target caller law => rfl
+    | system benv data post out fork installed length run => exact absurd rfl (huser _)
+
+/-- **A full drain, then new submissions over the stale slots, then a call.** Given real frames for each record and
+for an empty call, from a represented empty queue at the pointers' reset: the old records go in and a call returns
+them all, leaving their words in storage and the pointers at 0. Fewer new records go in, over those words. The next
+call returns exactly the new records' bytes, while the old words past the new tail are still in storage. -/
+theorem Frame.exists_reuse (keeps : c.KeepsPastTail) (old new : List c.Record)
+    (each : ∀ r ∈ old ++ new, ∀ s : Stor, s.get 0 ≠ B256.max → ∃ f : Frame c, f.before = s ∧ f.event = .submission r)
+    (sys : ∀ s : Stor, ∃ f : Frame c, f.before = s ∧ f.event = .system false)
+    {s : Stor} {st : QueueState c.Record} (rep : Holds c s st) (hq : st.queue = []) (ht : st.tail = 0)
+    (hcount : st.count = 0) (hne : st.excess ≠ 2 ^ 256 - 1) (hold : old.length ≤ c.cap)
+    (hnew : new.length < old.length) (slots : queueBase c.width (old.length + new.length) ≤ 2 ^ 256)
+    (count : old.length + new.length < 2 ^ 256) :
+    ∃ (xs ys : List (Frame c)) (f g : Frame c) (t : Stor),
+      Chain s (xs ++ f :: ys) t ∧ g.before = t ∧ f.event = .system false ∧ g.event = .system false ∧
+      submissions xs = old ∧ submissions ys = new ∧
+      f.output = old.flatMap c.out ∧ g.output = new.flatMap c.out ∧
+      f.after.get 2 = 0 ∧ f.after.get 3 = 0 ∧
+      (∀ i (hi : i < old.length) j, j < c.width → f.after.get (queueSlot c.width i j) = c.words old[i] j) ∧
+      (∀ i (hi : i < new.length) j, j < c.width → t.get (queueSlot c.width i j) = c.words new[i] j) ∧
+      (∀ i (hi : i < old.length) j, new.length ≤ i → j < c.width →
+        t.get (queueSlot c.width i j) = c.words old[i] j) := by
+  obtain ⟨xs, m, c1, ev1⟩ := Frame.exists_submissions old (fun r hr => each r (List.mem_append_left _ hr)) rep hne
+    (by rw [ht, Nat.zero_add]; exact (queueBase_mono _ (by omega)).trans slots) (by omega)
+  have hsub1 : submissions xs = old := by
+    show submitted (events xs) = _
+    rw [ev1, submitted_map]
+  have hslots1 : queueBase c.width old.length ≤ 2 ^ 256 := (queueBase_mono _ (by omega)).trans slots
+  have d1 := c1.delivered rep (by rw [hsub1, ht, Nat.zero_add]; exact hslots1) (by rw [hsub1]; omega)
+  have hq1 : (queueAfter st xs).queue = old := by
+    show (replay _ _ _ (events xs)).queue = _
+    rw [ev1, replay_noSystem_queue _ _ _ (noSystem_map old), hq, submitted_map]
+    rfl
+  obtain ⟨f, hbf, hef⟩ := sys m
+  subst hbf
+  have hlen : (queueAfter st xs).queue.length ≤ c.cap := by rw [hq1]; exact hold
+  have hhead : (queueAfter st xs).head = 0 := by
+    have hcoh0 := rep.coherent
+    rw [hq, ht] at hcoh0
+    have h0 : st.head = 0 := by
+      simp only [List.length_nil] at hcoh0
+      omega
+    show (replay _ _ _ (events xs)).head = _
+    rw [ev1, replay_noSystem_head _ _ _ (noSystem_map old), h0]
+  have htail : (queueAfter st xs).tail = old.length := by
+    have hcoh := d1.represents.coherent
+    rw [hq1, hhead, Nat.zero_add] at hcoh
+    exact hcoh.symm
+  have hstep := f.step_holds d1.represents
+    (by rw [hef]; show queueBase _ (_ + 0) ≤ _; rw [Nat.add_zero, htail]; exact hslots1)
+    (by rw [hef]; show _ + 0 < _; exact Nat.add_zero _ ▸ d1.represents.count_lt)
+  obtain ⟨hh, ht2, hc2, hq2⟩ := step_full_drain c.cap c.target (queueAfter st xs) false hlen
+  rw [hef] at hstep
+  have hne2 : (step c.cap c.target (queueAfter st xs) (.system false)).excess ≠ 2 ^ 256 - 1 := by
+    show (drainedState _ _ _).excess ≠ _
+    rw [drainedState_excess]
+    intro e
+    apply excessNext_ne_max c.target_ne (queueAfter st xs).excess.toB256 (queueAfter st xs).count.toB256
+    apply B256.toNat_inj
+    rw [e, max_toNat]
+  obtain ⟨ys, t, c2, ev2⟩ := Frame.exists_submissions new (fun r hr => each r (List.mem_append_right _ hr))
+    hstep.1 hne2 (by rw [ht2, Nat.zero_add]; exact (queueBase_mono _ (by omega)).trans slots) (by rw [hc2]; omega)
+  have hsub2 : submissions ys = new := by
+    show submitted (events ys) = _
+    rw [ev2, submitted_map]
+  obtain ⟨g, hbg, heg⟩ := sys t
+  have whole : Chain s (xs ++ f :: ys) t := c1.append (.cons rfl c2)
+  have hsubAll : (submissions (xs ++ f :: ys)).length = old.length + new.length := by
+    rw [submissions_append, hsub1, List.length_append]
+    show _ + (submitted (f.event :: events ys)).length = _
+    rw [hef]
+    show _ + (submissions ys).length = _
+    rw [hsub2]
+  have reuse := whole.slot_reuse rep (by rw [hsubAll, ht, Nat.zero_add]; exact slots)
+    (by rw [hsubAll, hcount, Nat.zero_add]; exact count) hef hlen
+  have none : NoSystem (events ys) := by
+    rw [ev2]
+    exact noSystem_map new
+  have stale : ∀ i (hi : i < old.length) j, j < c.width →
+      f.after.get (queueSlot c.width i j) = c.words old[i] j := fun i hi j hj => by
+    have hb : queueBase c.width i + c.width ≤ 2 ^ 256 := by
+      have := queueBase_mono c.width (Nat.succ_le_of_lt hi)
+      rw [Nat.succ_eq_add_one, queueBase_succ] at this
+      omega
+    rw [f.system_keeps hef (queueSlot_past_bookkeeping (by omega))]
+    have hi' : i < (queueAfter st xs).queue.length := by
+      rw [hq1]
+      exact hi
+    have hlive := d1.represents.live i hi' j hj
+    simp only [hhead, Nat.zero_add, hq1] at hlive
+    exact hlive
+  have hafter : queueAfter st (xs ++ [f]) = step c.cap c.target (queueAfter st xs) (.system false) := by
+    simp only [queueAfter, events, List.map_append, replay_append, List.map_cons, List.map_nil, hef]
+    rfl
+  have hrep2 : Holds c f.after (queueAfter st (xs ++ [f])) := by
+    rw [hafter]
+    exact hstep.1
+  refine ⟨xs, ys, f, g, t, whole, hbg, hef, heg, hsub1, hsub2, ?_, ?_, ?_, ?_, stale, ?_, ?_⟩
+  · rw [reuse.drained, hq1]
+  · rw [reuse.next_call none g false hbg heg, hsub2, List.take_of_length_le (by omega)]
+  · have := hrep2.head
+    rw [reuse.head] at this
+    exact this
+  · have := hrep2.tail
+    rw [reuse.tail] at this
+    exact this
+  · intro i hi j hj
+    have := reuse.overwrites none i (by rw [hsub2]; exact hi) j hj
+    simp only [hsub2] at this
+    exact this
+  · intro i hi j hle hj
+    have hb : queueBase c.width i + c.width ≤ 2 ^ 256 := by
+      have := queueBase_mono c.width (show i + 1 ≤ old.length + new.length by omega)
+      rw [queueBase_succ] at this
+      omega
+    rw [c2.keeps_past_tail keeps hrep2 none (by rw [reuse.tail, hsub2]; omega) hj hb
+      (by rw [hsub2, hafter, hc2]; omega)]
+    exact stale i hi j hj
+
 end Blanc.Lift.BuilderRequest.Delivery

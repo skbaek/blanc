@@ -1,4 +1,5 @@
 import Blanc.Lift.BuilderRequest.Deposit.Delivery
+import Blanc.Lift.BuilderRequest.Deposit.SubmissionAmsterdam
 
 /-!
 # The deposit sequence's premises can be met
@@ -143,5 +144,99 @@ theorem prefork_witness (n k : Nat) (range : 4 + 6 * n ≤ 2 ^ 256) :
     show (submitted (f.event :: events rest)).length = _
     rw [hs, hone, List.length_cons, Nat.add_comm]
     exact congrArg (· + 1) ih'
+
+/-- An Amsterdam submission's machine: 184 copies of one byte and the highest value. -/
+def reuseSevm (x : UInt8) : Sevm :=
+  { preForkSevm with
+    data := List.replicate 184 x
+    benvStat := { (default : BenvStat) with fork := .amsterdam } }
+
+/-- The record of `reuseSevm x`. -/
+def reuseRecord (x : UInt8) : Record := recordOf (reuseSevm x) (List.length_replicate ..)
+
+/-- From any storage off the inhibitor there is a real Amsterdam submission frame for `reuseRecord x`, given that its
+amount credits at least 1 ETH. -/
+theorem exists_reuse_submission (x : UInt8) (credited : 10 ^ 18 ≤ creditedWei (reuseSevm x)) {s : Stor}
+    (off : s.get 0 ≠ B256.max) : ∃ f : Frame, f.before = s ∧ f.event = .submission (reuseRecord x) := by
+  have hb := holdingDevm_getStorVal address code s
+  obtain ⟨i, o, run, -⟩ := WordFakeExponential.run_exists
+    (storedExcess 8 (reuseSevm x) (holdingDevm address code s)) 17 1 17 0
+  have hfork : (reuseSevm x).benvStat.fork = .amsterdam := rfl
+  have hlen : (reuseSevm x).data.length = 184 := List.length_replicate ..
+  have hcaller : (reuseSevm x).caller ≠ systemAddress := by
+    show (1 : Adr) ≠ systemAddress
+    decide
+  have admitted : Admitted (reuseSevm x) (o / (17 : B256)) := by
+    refine ⟨credited, ?_⟩
+    have hfee : (o / (17 : B256)).toNat ≤ o.toNat / 17 := by
+      rw [B256.toNat_div (by decide)]
+      exact Nat.le_refl _
+    have ho := B256.toNat_lt o
+    have hamount := amountGwei_lt (reuseSevm x)
+    show creditedWei (reuseSevm x) + _ ≤ B256.max.toNat
+    rw [max_toNat, creditedWei]
+    omega
+  obtain ⟨exec⟩ := exec_submission_exact_amsterdam (b := holdingDevm address code s) (M := .empty)
+    (G := gCallStipend + 1) (sevm := reuseSevm x) rfl hfork hcaller hlen rfl (by omega) (by
+      show (holdingDevm address code s).getStorVal address 0 ≠ _
+      rw [hb]
+      exact off) run admitted
+  have frame := exec_user_frame_amsterdam (sevm := reuseSevm x) (pre := St (holdingDevm address code s) [] .empty _)
+    rfl hfork rfl rfl Mem.wf_empty (by rw [hlen]; decide) hcaller exec
+  cases frame with
+  | submission i' o' law =>
+    exact ⟨.submission (reuseSevm x) _ _ _ i' o' (.amsterdam hfork) rfl hcaller law, holding_getStor address code s, rfl⟩
+  | feeRead i' o' empty law =>
+    rw [show (reuseSevm x).data = [] from empty] at hlen
+    cases hlen
+
+/-- The witness's words: the old are nonzero, and the new differs from the old it replaces. -/
+theorem words_differ : ∀ j, j < 6 →
+    (reuseRecord 0xaa).word j ≠ 0 ∧ (reuseRecord 0xcc).word j ≠ (reuseRecord 0xaa).word j ∧
+      (reuseRecord 0xbb).word j ≠ 0 := by
+  decide +kernel
+
+/-- **Slot reuse has a model, over stale words.** Real Amsterdam frames from the deployed storage: two submissions,
+then `f`, a call returning both. It leaves the pointers at 0 and all twelve record words in storage, each nonzero. One
+submission with other calldata then replaces record 0's six words, each differing from the old, and `g` returns exactly
+the new record's 184 bytes, while record 1's old words are still in storage. -/
+theorem reuse_witness :
+    ∃ (xs ys : List Frame) (f g : Frame) (t : Stor),
+      Chain Stor.empty (xs ++ f :: ys) t ∧ g.before = t ∧ f.event = .system false ∧ g.event = .system false ∧
+      submissions xs = [reuseRecord 0xaa, reuseRecord 0xbb] ∧ submissions ys = [reuseRecord 0xcc] ∧
+      f.output = (reuseRecord 0xaa).out ++ (reuseRecord 0xbb).out ∧ g.output = (reuseRecord 0xcc).out ∧
+      g.output.length = 184 ∧ f.after.get 2 = 0 ∧ f.after.get 3 = 0 ∧
+      (∀ j, j < 6 →
+        f.after.get (queueSlot 6 0 j) = (reuseRecord 0xaa).word j ∧ (reuseRecord 0xaa).word j ≠ 0 ∧
+        t.get (queueSlot 6 0 j) = (reuseRecord 0xcc).word j ∧ (reuseRecord 0xcc).word j ≠ (reuseRecord 0xaa).word j ∧
+        f.after.get (queueSlot 6 1 j) = (reuseRecord 0xbb).word j ∧ (reuseRecord 0xbb).word j ≠ 0 ∧
+        t.get (queueSlot 6 1 j) = (reuseRecord 0xbb).word j) := by
+  have cred : ∀ x ∈ [(0xaa : UInt8), 0xbb, 0xcc], 10 ^ 18 ≤ creditedWei (reuseSevm x) := by decide +kernel
+  have each : ∀ r ∈ [reuseRecord 0xaa, reuseRecord 0xbb] ++ [reuseRecord 0xcc], ∀ s : Stor, s.get 0 ≠ B256.max →
+      ∃ f : Frame, f.before = s ∧ f.event = .submission r := by
+    intro r hr s off
+    simp only [List.cons_append, List.nil_append, List.mem_cons, List.not_mem_nil, or_false] at hr
+    rcases hr with rfl | rfl | rfl
+    · exact exists_reuse_submission _ (cred _ (by decide)) off
+    · exact exists_reuse_submission _ (cred _ (by decide)) off
+    · exact exists_reuse_submission _ (cred _ (by decide)) off
+  obtain ⟨xs, ys, f, g, t, chain, hg, hf, heg, h1, h2, o1, o2, p2, p3, stale, over, kept⟩ :=
+    Frame.exists_reuse submittedStorage_keeps [reuseRecord 0xaa, reuseRecord 0xbb] [reuseRecord 0xcc] each exists_system
+      deployed_represents rfl rfl rfl (by decide) (by decide) (by decide) (by decide) (by decide)
+  have out1 : f.output = (reuseRecord 0xaa).out ++ (reuseRecord 0xbb).out := by
+    rw [o1]
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+  have out2 : g.output = (reuseRecord 0xcc).out := by
+    rw [o2]
+    simp only [List.flatMap_cons, List.flatMap_nil, List.append_nil]
+  refine ⟨xs, ys, f, g, t, chain, hg, hf, heg, h1, h2, out1, out2, ?_, p2, p3, fun j hj => ?_⟩
+  · rw [out2]
+    decide +kernel
+  · have hs0 := stale 0 (by decide) j hj
+    have hs1 := stale 1 (by decide) j hj
+    have ho := over 0 (by decide) j hj
+    have hk := kept 1 (by decide) j (by decide) hj
+    have hw := words_differ j hj
+    exact ⟨hs0, hw.1, ho, hw.2.1, hs1, hw.2.2, hk⟩
 
 end Blanc.Lift.BuilderRequest.Deposit
