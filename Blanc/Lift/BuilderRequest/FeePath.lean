@@ -225,9 +225,6 @@ def feePathTree (revert getter submission : SFunc) : SFunc :=
   inhibitorTree p.revert
     (excessTree p.target p.over p.under p.window (windowOf p getter submission)) revert
 
-/-- The exact charge of `feePathTree`, under covered forks. -/
-def feePathGas (sevm : Sevm) (b : Devm) (iterations : Nat) : Nat := (coveredSteps sevm).feePathGas b iterations
-
 variable {fs : List SFunc} {sevm : Sevm} {l : StorageSteps sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
 
 /-- A successful dispatch reaches the arm the caller selects, on the same stack and memory. -/

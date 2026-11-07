@@ -128,8 +128,6 @@ end StorageSteps
 
 theorem addLog_output (w : Devm) (l : Log) : (w.addLog l).output = w.output := rfl
 
-theorem addLog_state (w : Devm) (l : Log) : (w.addLog l).state = w.state := rfl
-
 namespace UserPath
 
 variable {k : UserPath} {sevm : Sevm} {l : StorageSteps sevm} {pre post : Devm}
