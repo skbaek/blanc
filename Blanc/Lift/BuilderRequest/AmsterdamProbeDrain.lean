@@ -428,4 +428,85 @@ theorem drainBody_exact {sevm : Sevm} {base : Devm} {M : Mem} {gas : Nat} {i c h
   simp only [dGas, dAt]
   omega
 
+/-! ## The bounded loop -/
+
+theorem drainLoop_tree_eq : t_0133_c7 = t_0133_c2 := rfl
+theorem drainBody_tree_eq : t_013b_c7 = t_013b_c2 := rfl
+theorem drainPost_tree_eq : t_01d7_c7 = t_01d7_c2 := rfl
+
+/-- `JUMPDEST DUP2 DUP2 EQ PUSH2 JUMPI`, either way. -/
+theorem drainHeader_exact {sevm : Sevm} {b : Devm} {M : Mem} {gas : Nat} {i c h t : B256}
+    {oc : Outcome}
+    (next : SFunc.RunExact cert.prog sevm (St b [i, c, h, t] M gas)
+      (if i = c then t_01d7_c7 else t_013b_c7) oc) :
+    SFunc.RunExact cert.prog sevm (St b [i, c, h, t] M (gas + 23)) t_0133_c7 oc := by
+  have e : gas + 23 = gas + 10 + 3 + 3 + 3 + 3 + 1 := by omega
+  rw [e]
+  unfold t_0133_c7
+  refine rx_dest ?_
+  refine rx_dup2 (by rroom) ?_
+  refine rx_dup2 (by rroom) ?_
+  refine rx_eq rfl (by rroom) ?_
+  refine rx_push rfl (by rroom) ?_
+  by_cases same : i = c
+  · simp only [B256.eqCheck, ite_eq_left same] at next ⊢
+    exact rx_branch_succ (by decide : (1 : B256) ≠ 0) next
+  · simp only [B256.eqCheck, ite_eq_right same] at next ⊢
+    exact rx_branch_zero next
+
+/-- What the loop leaves: the base, the memory and the selected charges. -/
+structure DrainPost where
+  base : Devm
+  memory : Mem
+  charges : Nat
+
+/-- The actual sequence of body effects. -/
+def drainFold (sevm : Sevm) (h : B256) (index : Nat) : Nat → Devm → Mem → DrainPost
+  | 0, b, M => ⟨b, M, 0⟩
+  | n + 1, b, M =>
+    let post := drainFold sevm h (index + 1) n (dB6 sevm b h index.toB256)
+      (dM14 sevm b h index.toB256 M)
+    ⟨post.base, post.memory, dGas sevm b h index.toB256 M + 23 + post.charges⟩
+
+/-- **The deposit builder's bounded loop under Amsterdam**, by induction on the remaining count,
+from any storage and any memory, ending in the bookkeeping tree. -/
+theorem drainLoop_exact_from {sevm : Sevm} {h t c : B256}
+    (hfork : sevm.benvStat.fork = .amsterdam) (cap : c.toNat ≤ 64)
+    (remaining : Nat) {index : Nat} {b : Devm} {M : Mem} {gas : Nat} {oc : Outcome}
+    (bound : index + remaining = c.toNat)
+    (next : SFunc.RunExact cert.prog sevm
+      (St (drainFold sevm h index remaining b M).base [c, c, h, t]
+        (drainFold sevm h index remaining b M).memory gas) t_01d7_c2 oc) :
+    SFunc.RunExact cert.prog sevm (St b [index.toB256, c, h, t] M
+      (gas + (drainFold sevm h index remaining b M).charges + 23)) t_0133_c7 oc := by
+  induction remaining generalizing index b M with
+  | zero =>
+    have same : index.toB256 = c := by
+      rw [show index = c.toNat by omega, toB256_toNat]
+    simp only [drainFold] at next ⊢
+    apply drainHeader_exact
+    rw [ite_eq_left same, same]
+    exact next
+  | succ remaining ih =>
+    have different : index.toB256 ≠ c := by
+      intro eq
+      have eqNat := congrArg B256.toNat eq
+      rw [B256.toNat_toB256_of_lt (by omega)] at eqNat
+      omega
+    simp only [drainFold] at next ⊢
+    have suffix := ih (index := index + 1) (by omega) next
+    rw [← one_add_toB256 (by omega)] at suffix
+    rw [show Bytes.toB256 [0x01] = (1 : B256) by decide] at suffix
+    have body := drainBody_exact hfork suffix
+    have header := drainHeader_exact (i := index.toB256) (c := c) (h := h) (t := t) (b := b) (M := M)
+      (by simpa only [ite_eq_right different, drainBody_tree_eq] using body)
+    have gasEq : gas + (dGas sevm b h index.toB256 M + 23 +
+        (drainFold sevm h (index + 1) remaining (dB6 sevm b h index.toB256)
+          (dM14 sevm b h index.toB256 M)).charges) + 23 =
+        gas + (drainFold sevm h (index + 1) remaining (dB6 sevm b h index.toB256)
+          (dM14 sevm b h index.toB256 M)).charges + 23 + dGas sevm b h index.toB256 M + 23 := by
+      omega
+    rw [gasEq]
+    exact header
+
 end Blanc.Lift.BuilderRequest.AmsterdamProbe

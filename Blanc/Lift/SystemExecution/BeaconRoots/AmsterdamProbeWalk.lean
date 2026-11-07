@@ -126,19 +126,8 @@ theorem root_runA {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
   refine rx_push rfl (by decide) ?_
   exact rx_branch_succ (by decide) hbody
 
-/-- The Beacon runtime has no call-family instruction at any byte position. -/
-theorem beacon_noExec : NoExecCode beaconRootsCode := by
-  have hall : (List.range beaconRootsCode.size).all (fun pc =>
-      match beaconRootsCode.getInst pc with
-      | some (.next (.exec _)) => false
-      | _ => true) = true := by decide +kernel
-  intro pc x hat
-  have hat' : beaconRootsCode.getInst pc = some (.next (.exec x)) := hat
-  have hlt : pc < beaconRootsCode.size := by
-    by_contra hge
-    simp only [ByteArray.getInst, hge, dite_false, Option.some.injEq, reduceCtorEq] at hat'
-  have := List.all_eq_true.mp hall pc (List.mem_range.mpr hlt)
-  simp only [hat', Bool.false_eq_true] at this
+/-- The Beacon certificate has no call-family node. -/
+theorem beacon_progNoExec : ProgNoExec prog := progNoExec_of_all (by decide +kernel)
 
 /-- The gas left when the frame halts. -/
 def postGasA (sevm : Sevm) (b : Devm) : Nat :=
@@ -169,7 +158,7 @@ theorem system_execA {sevm : Sevm} {b : Devm}
       + 10 + 3 + 3 + 3 + 2 = systemTransactionGas := by unfold postGasA; omega
   rw [hG] at hrun
   have hexec : Nonempty (Exec 0 sevm (St b [] .empty systemTransactionGas) (.ok (postA sevm b))) :=
-    lift_exact_lane cert_check jumps_ok hcode (hcode ▸ beacon_noExec) ⟨t_0000_c0, prog_root, hrun⟩
+    lift_exact_lane cert_check jumps_ok hcode beacon_progNoExec ⟨t_0000_c0, prog_root, hrun⟩
   exact (exec_iff_exec_eq _ _ _ _).mp hexec
 
 /-- **`system_exec` under Amsterdam, on the message `systemMsg` as it stands.** The body of `systemMsg`
