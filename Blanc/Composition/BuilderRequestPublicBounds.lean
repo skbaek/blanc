@@ -25,23 +25,23 @@ namespace Blanc.Composition.BuilderRequestPublic
 open Jaune Blanc Blanc.Lift Blanc.Lift.BuilderRequest
 
 /-- **Griefing bound, history form: the fee budget bounds the load.** Under a
-fee budget below the wrap, with at most 2892 submissions, at the end of every
-kept history from deployed storage, the potential of the end load is at most
-the natural-fee budget the submissions paid, so a fee budget bounds the load
-and the queue length under any order of submissions and system calls. The exit
-half also asks that the exit queue be live at the end. -/
+fee budget below the wrap, at the end of every kept history from deployed
+storage, the potential of the end load is at most the natural-fee budget the
+submissions paid. The 2892 fee-window bound is derived inside from the wrap:
+at every prefix the potential gives load at most 2892, which bounds each kept
+quote's numerator. The exit half keeps a word-range count and asks that the
+exit queue be live at the end. -/
 def load_bounded_by_fees : Prop :=
   (∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
     CodesKept cfg start blocks stop → DeployedStart start → HistoryClean blocks →
     SystemCodeAbsent start → feesPaidAt blocks depositAddr ≤ 2 ^ 256 →
     depositFeeSum blocks < Backlog.cost 8 0 2893 →
-    (depositSubmitted blocks).length ≤ 2892 →
     Backlog.cost 8 0 (storedLoad stop.state depositAddr) ≤ depositFeeSum blocks) ∧
   (∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
     CodesKept cfg start blocks stop → DeployedStart start → HistoryClean blocks →
     SystemCodeAbsent start → feesPaidAt blocks exitAddr ≤ 2 ^ 256 →
     exitFeeSum blocks < Backlog.cost 2 0 2893 →
-    (exitSubmitted blocks).length ≤ 2892 → ¬ inhibited stop.state exitAddr →
+    (exitSubmitted blocks).length ≤ 2 ^ 64 → ¬ inhibited stop.state exitAddr →
     Backlog.cost 2 0 (storedLoad stop.state exitAddr) ≤ exitFeeSum blocks)
 
 /-- **Burst instances: the whole ether supply caps the backlog.** With
@@ -272,89 +272,74 @@ section FeeOnlyReads
 
 open Delivery
 
-/-- A matched head quotes its kept frame's natural fee, from the chain quote law. -/
-theorem match_head_eq {c : Contract} {s₀ : Stor} {t : Stor} {st₀ : QueueState c.Record}
-    {pre : List (Delivery.Frame c)} {g : Delivery.Frame c} {suf : List (Delivery.Frame c)}
-    {preK : List Exec.Frame} {f : Exec.Frame} {sufK : List Exec.Frame}
-    (chain : Chain s₀ (pre ++ g :: suf) t)
-    (corr : ChainLink.Corresponds c (pre ++ g :: suf) (preK ++ f :: sufK))
-    (rep₀ : Holds c s₀ st₀)
-    (slotsPre : queueBase c.width (st₀.tail + (preK.filterMap (ChainLink.submittedBy c)).length) ≤ 2 ^ 256)
-    (countPre : st₀.count + (preK.filterMap (ChainLink.submittedBy c)).length < 2 ^ 256)
-    (hload₀ : load st₀ = 0)
-    (fewPre : (preK.filterMap (ChainLink.submittedBy c)).length ≤ 2892)
-    (hlen : preK.length = pre.length) :
-    ∃ _ : ChainLink.Matches c g f, ∀ q, g.quotedFee = some q →
-      q.toNat = ChainLink.naturalFee c f := by
-  obtain ⟨gs, hs, hsplit, left, right⟩ :=
-    ChainLink.Corresponds.split_append (xs := preK) corr
-  have hboth := List.append_inj hsplit.symm (left.length_eq.trans hlen)
-  have hgs : gs = pre := hboth.1
-  subst hgs
-  have hhs : hs = g :: suf := hboth.2
-  subst hhs
-  cases right with
-  | cons m _ =>
-      refine ⟨m, fun q hq => ?_⟩
-      obtain ⟨g', m', hL⟩ :=
-        ChainLink.kept_quote (c := c) chain corr rep₀ slotsPre countPre hload₀ fewPre
-      have hev' : g'.event = ChainLink.keptEvent c f := m'.event
-      have hev : g.event = ChainLink.keptEvent c f := m.event
-      cases g with
-      | submission sevm pre post l i o rules target caller law =>
-          have hq0 : (Delivery.Frame.submission sevm pre post l i o rules target caller law).quotedFee =
-              some (o / (17 : B256)) := rfl
-          have hqo : o / (17 : B256) = q := Option.some.inj (hq0.symm.trans hq)
-          have hq' : ∃ q', g'.quotedFee = some q' := by
-            cases g' with
-            | submission _ _ _ _ _ o' _ _ _ _ => exact ⟨_, rfl⟩
-            | feeRead _ _ _ _ _ o' _ _ _ _ => exact ⟨_, rfl⟩
-            | system _ _ _ _ _ _ _ _ =>
-                rw [← m'.event] at hev
-                cases hev
-          obtain ⟨q', hq'⟩ := hq'
-          have hqq := hL q' hq'
-          have hsame : q = q' := by
-            have h2 := Delivery.Frame.same_storage_quote (c := c) _ _
-              (m.before.trans m'.before.symm) hq0 hq'
-            exact hqo.symm.trans h2
-          rw [hsame]
-          exact hqq
-      | feeRead sevm pre post l i o rules target caller law =>
-          have hq0 : (Delivery.Frame.feeRead sevm pre post l i o rules target caller law).quotedFee =
-              some (o / (17 : B256)) := rfl
-          have hqo : o / (17 : B256) = q := Option.some.inj (hq0.symm.trans hq)
-          have hq' : ∃ q', g'.quotedFee = some q' := by
-            cases g' with
-            | submission _ _ _ _ _ o' _ _ _ _ => exact ⟨_, rfl⟩
-            | feeRead _ _ _ _ _ o' _ _ _ _ => exact ⟨_, rfl⟩
-            | system _ _ _ _ _ _ _ _ =>
-                rw [← m'.event] at hev
-                cases hev
-          obtain ⟨q', hq'⟩ := hq'
-          have hqq := hL q' hq'
-          have hsame : q = q' := by
-            have h2 := Delivery.Frame.same_storage_quote (c := c) _ _
-              (m.before.trans m'.before.symm) hq0 hq'
-            exact hqo.symm.trans h2
-          rw [hsame]
-          exact hqq
-      | system _ _ _ _ _ _ _ _ =>
-          cases hq
+/-- A matched head quotes its kept frame's natural fee, from its frame law. -/
+theorem match_head_eq {c : Contract} {g : Delivery.Frame c} {f : Exec.Frame}
+    (m : ChainLink.Matches c g f) {st : QueueState c.Record}
+    (rep : Holds c g.before st)
+    (he : st.excess + (st.count - c.target.toNat) ≤ 2892) :
+    ∀ q, g.quotedFee = some q → q.toNat = ChainLink.naturalFee c f := by
+  intro q hq
+  cases g with
+  | submission sevm pre post l i o rules target caller law =>
+      have hqn := Delivery.Frame.quote_natural _ rep hq he
+      have e0 : ChainLink.excessAt c.address f = st.excess := by
+        have h0 : (Devm.getStor f.pre c.address).get 0 = st.excess.toB256 := by
+          rw [← m.before]
+          exact rep.excess
+        unfold ChainLink.excessAt
+        rw [h0, B256.toNat_toB256_of_lt rep.excess_lt]
+      have e1 : ChainLink.countAt c.address f = st.count := by
+        have h1 : (Devm.getStor f.pre c.address).get 1 = st.count.toB256 := by
+          rw [← m.before]
+          exact rep.count
+        unfold ChainLink.countAt
+        rw [h1, B256.toNat_toB256_of_lt rep.count_lt]
+      unfold ChainLink.naturalFee
+      rw [e0, e1]
+      exact hqn
+  | feeRead sevm pre post l i o rules target caller law =>
+      have hqn := Delivery.Frame.quote_natural _ rep hq he
+      have e0 : ChainLink.excessAt c.address f = st.excess := by
+        have h0 : (Devm.getStor f.pre c.address).get 0 = st.excess.toB256 := by
+          rw [← m.before]
+          exact rep.excess
+        unfold ChainLink.excessAt
+        rw [h0, B256.toNat_toB256_of_lt rep.excess_lt]
+      have e1 : ChainLink.countAt c.address f = st.count := by
+        have h1 : (Devm.getStor f.pre c.address).get 1 = st.count.toB256 := by
+          rw [← m.before]
+          exact rep.count
+        unfold ChainLink.countAt
+        rw [h1, B256.toNat_toB256_of_lt rep.count_lt]
+      unfold ChainLink.naturalFee
+      rw [e0, e1]
+      exact hqn
+  | system _ _ _ _ _ _ _ _ =>
+      cases hq
 
-/-- Fees over frames are bounded by the natural fees over matching kept frames. -/
+/-- Fees over frames are bounded by the natural fees over matching kept frames,
+with the quote window derived from the wrap at every prefix. -/
 theorem fees_le_aux {c : Contract} {s₀ : Stor} {t : Stor} {st₀ : QueueState c.Record}
     {full : List (Delivery.Frame c)} {fullK : List Exec.Frame}
+    {TLOAD NBIG : Nat}
     (chain₀ : Chain s₀ full t) (corr₀ : ChainLink.Corresponds c full fullK)
     (rep₀ : Holds c s₀ st₀)
-    (slots₀ : queueBase c.width (st₀.tail + (fullK.filterMap (ChainLink.submittedBy c)).length) ≤ 2 ^ 256)
-    (count₀ : st₀.count + (fullK.filterMap (ChainLink.submittedBy c)).length < 2 ^ 256)
-    (hload₀ : load st₀ = 0)
-    (fewN : (fullK.filterMap (ChainLink.submittedBy c)).length ≤ 2892)
+    (hsubFull : (Delivery.submissions full).length ≤ NBIG)
+    (hslotsBig : queueBase c.width (st₀.tail + NBIG) ≤ 2 ^ 256)
+    (hcountBig : st₀.count + NBIG < 2 ^ 256)
+    (pot : ∀ (pre : List (Delivery.Frame c)) (mid : Stor) (suf : List (Delivery.Frame c)),
+      full = pre ++ suf → Chain s₀ pre mid →
+      (Delivery.submissions pre).length ≤ NBIG →
+      LoadBound.fees pre < Backlog.cost TLOAD 0 (2892 + 1) →
+      Backlog.cost TLOAD 0 (load (queueAfter st₀ pre)) ≤ LoadBound.fees pre)
+    (hwrap : List.sum (List.map (ChainLink.naturalFee c) (List.filter
+      (fun f => decide (f.sevm.data.length = c.payload)) fullK)) < Backlog.cost TLOAD 0 (2892 + 1))
     (pre : List (Delivery.Frame c)) (preK : List Exec.Frame)
     {frames : List (Delivery.Frame c)} {kept : List Exec.Frame}
     (hfr : full = pre ++ frames) (hke : fullK = preK ++ kept)
-    (hlen : preK.length = pre.length) :
+    (hlen : preK.length = pre.length)
+    (hinv : LoadBound.fees pre ≤ List.sum (List.map (ChainLink.naturalFee c) (List.filter
+      (fun f => decide (f.sevm.data.length = c.payload)) preK))) :
     LoadBound.fees frames ≤ List.sum (List.map (ChainLink.naturalFee c) (List.filter
       (fun f => decide (f.sevm.data.length = c.payload)) kept)) := by
   induction frames generalizing pre preK kept hke hlen with
@@ -373,21 +358,14 @@ theorem fees_le_aux {c : Contract} {s₀ : Stor} {t : Stor} {st₀ : QueueState 
       have corr' : ChainLink.Corresponds c (pre ++ g :: gs) (preK ++ f :: fs) := by
         rw [← hfr, ← hke]
         exact corr₀
-      have hflag : ((preK ++ f :: fs).filterMap (ChainLink.submittedBy c)).length =
-          (preK.filterMap (ChainLink.submittedBy c)).length +
-            ((f :: fs).filterMap (ChainLink.submittedBy c)).length := by
-        simp only [List.filterMap_append, List.length_append]
-      have hpre : (preK.filterMap (ChainLink.submittedBy c)).length ≤ 2892 := by
-        have hfull : ((preK ++ f :: fs).filterMap (ChainLink.submittedBy c)).length ≤ 2892 := hke ▸ fewN
+      have hsubPre : (Delivery.submissions pre).length ≤ NBIG := by
+        have happ : (Delivery.submissions full).length =
+            (Delivery.submissions pre).length + (Delivery.submissions (g :: gs)).length := by
+          rw [hfr, Delivery.submissions_append, List.length_append]
         omega
-      have slotsPre : queueBase c.width
-          (st₀.tail + (preK.filterMap (ChainLink.submittedBy c)).length) ≤ 2 ^ 256 := by
-        have hfull : ((preK ++ f :: fs).filterMap (ChainLink.submittedBy c)).length =
-            (fullK.filterMap (ChainLink.submittedBy c)).length := by rw [hke]
-        exact (queueBase_mono _ (by omega)).trans (hfull ▸ slots₀)
-      have countPre : st₀.count + (preK.filterMap (ChainLink.submittedBy c)).length < 2 ^ 256 := by
-        have hfull : ((preK ++ f :: fs).filterMap (ChainLink.submittedBy c)).length =
-            (fullK.filterMap (ChainLink.submittedBy c)).length := by rw [hke]
+      have slotsPre : queueBase c.width (st₀.tail + (Delivery.submissions pre).length) ≤ 2 ^ 256 :=
+        (queueBase_mono _ (by omega)).trans hslotsBig
+      have countPre : st₀.count + (Delivery.submissions pre).length < 2 ^ 256 := by
         omega
       have hfr' : full = (pre ++ [g]) ++ gs := by
         rw [hfr, List.append_assoc, List.cons_append, List.nil_append]
@@ -395,9 +373,16 @@ theorem fees_le_aux {c : Contract} {s₀ : Stor} {t : Stor} {st₀ : QueueState 
         rw [hke, List.append_assoc, List.cons_append, List.nil_append]
       have hlen' : (preK ++ [f]).length = (pre ++ [g]).length := by
         simp only [List.length_append, List.length_cons, List.length_nil, hlen]
-      have htail : LoadBound.fees gs ≤ List.sum (List.map (ChainLink.naturalFee c) (List.filter
-          (fun f => decide (f.sevm.data.length = c.payload)) fs)) :=
-        ih _ _ hfr' hke' hlen'
+      have e1 : LoadBound.fees (pre ++ [g]) = LoadBound.fees pre + LoadBound.feePaid g := by
+        simp only [LoadBound.fees, List.map_append, List.sum_append, List.map_cons,
+          List.sum_cons, List.map_nil, List.sum_nil, Nat.add_zero]
+      have e2 : List.sum (List.map (ChainLink.naturalFee c) (List.filter
+          (fun f => decide (f.sevm.data.length = c.payload)) (preK ++ [f]))) =
+          List.sum (List.map (ChainLink.naturalFee c) (List.filter
+          (fun f => decide (f.sevm.data.length = c.payload)) preK)) +
+          List.sum (List.map (ChainLink.naturalFee c) (List.filter
+          (fun f => decide (f.sevm.data.length = c.payload)) [f])) := by
+        simp only [List.filter_append, List.map_append, List.sum_append]
       have hmono : List.sum (List.map (ChainLink.naturalFee c) (List.filter
           (fun f => decide (f.sevm.data.length = c.payload)) fs)) ≤
           List.sum (List.map (ChainLink.naturalFee c) (List.filter
@@ -410,100 +395,190 @@ theorem fees_le_aux {c : Contract} {s₀ : Stor} {t : Stor} {st₀ : QueueState 
         · have hneg : ¬ decide (f.sevm.data.length = c.payload) = true :=
             fun h => hmem (of_decide_eq_true h)
           rw [List.filter_cons, ite_eq_right hneg]
-      have chain' : Chain s₀ (pre ++ g :: gs) t := by
+      have chainS : Chain s₀ (pre ++ g :: gs) t := by
         rw [← hfr]
         exact chain₀
-      cases g with
-      | submission sevm preSt post l i o rules target caller law =>
-          obtain ⟨m, hlaw⟩ :=
-            match_head_eq chain' corr' rep₀ slotsPre countPre hload₀ hpre hlen
-          have hq : (Delivery.Frame.submission sevm preSt post l i o rules target caller law).quotedFee =
-              some (o / (17 : B256)) := rfl
-          have hfee : LoadBound.feePaid
-              (Delivery.Frame.submission sevm preSt post l i o rules target caller law) =
-              (o / (17 : B256)).toNat := rfl
-          have hmem : f.sevm.data.length = c.payload := by
-            by_contra hne
-            by_cases hsys : f.sevm.caller = systemAddress
-            · have hev := m.event
-              rw [ChainLink.keptEvent_system hne hsys] at hev
-              cases hev
-            · have hev := m.event
-              rw [ChainLink.keptEvent_user hne hsys] at hev
-              cases hev
-          have hdec : decide (f.sevm.data.length = c.payload) = true :=
-            Eq.mpr decide_eq_true_eq hmem
-          have hsum : List.sum (List.map (ChainLink.naturalFee c) (List.filter
-              (fun f => decide (f.sevm.data.length = c.payload)) (f :: fs))) =
-              ChainLink.naturalFee c f + List.sum (List.map (ChainLink.naturalFee c) (List.filter
-              (fun f => decide (f.sevm.data.length = c.payload)) fs)) := by
-            rw [List.filter_cons, ite_eq_left hdec, List.map_cons, List.sum_cons]
-          have hfees : LoadBound.fees
-              ((Delivery.Frame.submission sevm preSt post l i o rules target caller law) :: gs) =
-              LoadBound.feePaid
-                (Delivery.Frame.submission sevm preSt post l i o rules target caller law) +
-              LoadBound.fees gs := LoadBound.fees_cons _ _
-          rw [hfees, hfee, hsum]
-          have hqnat := hlaw _ hq
-          omega
-      | feeRead sevm preSt post l i o rules target caller law =>
-          have h0 : LoadBound.feePaid
-              (Delivery.Frame.feeRead sevm preSt post l i o rules target caller law) = 0 := rfl
-          have hfees : LoadBound.fees
-              ((Delivery.Frame.feeRead sevm preSt post l i o rules target caller law) :: gs) =
-              LoadBound.feePaid
-                (Delivery.Frame.feeRead sevm preSt post l i o rules target caller law) +
-              LoadBound.fees gs := LoadBound.fees_cons _ _
-          rw [hfees, h0, Nat.zero_add]
-          exact Nat.le_trans htail hmono
-      | system benv data post out fork installed length run =>
-          have h0 : LoadBound.feePaid
-              (Delivery.Frame.system benv data post out fork installed length run) = 0 := rfl
-          have hfees : LoadBound.fees
-              ((Delivery.Frame.system benv data post out fork installed length run) :: gs) =
-              LoadBound.feePaid
-                (Delivery.Frame.system benv data post out fork installed length run) +
-              LoadBound.fees gs := LoadBound.fees_cons _ _
-          rw [hfees, h0, Nat.zero_add]
-          exact Nat.le_trans htail hmono
+      obtain ⟨mid, h1, h2⟩ := chainS.append_split
+      have hrepPre := (h1.holds rep₀ slotsPre countPre).1
+      cases h2 with
+      | cons starts tail =>
+          have hrepHead : Holds c g.before (queueAfter st₀ pre) := by
+            rw [starts]
+            exact hrepPre
+          have hfsplit : List.sum (List.map (ChainLink.naturalFee c) (List.filter
+              (fun f => decide (f.sevm.data.length = c.payload)) fullK)) =
+              List.sum (List.map (ChainLink.naturalFee c) (List.filter
+              (fun f => decide (f.sevm.data.length = c.payload)) preK)) +
+              List.sum (List.map (ChainLink.naturalFee c) (List.filter
+              (fun f => decide (f.sevm.data.length = c.payload)) (f :: fs))) := by
+            rw [hke]
+            simp only [List.filter_append, List.map_append, List.sum_append]
+          have hlePre : LoadBound.fees pre ≤ List.sum (List.map (ChainLink.naturalFee c) (List.filter
+              (fun f => decide (f.sevm.data.length = c.payload)) fullK)) :=
+            le_trans hinv (by rw [hfsplit]; exact Nat.le_add_right _ _)
+          have hwrapPre : LoadBound.fees pre < Backlog.cost TLOAD 0 (2892 + 1) :=
+            Nat.lt_of_le_of_lt hlePre hwrap
+          have hpotPre := pot pre mid (g :: gs) hfr h1 hsubPre hwrapPre
+          have hloadPre : load (queueAfter st₀ pre) ≤ 2892 :=
+            LoadBound.load_le_of_budget (T := 2892) hpotPre hlePre hwrap
+          cases g with
+          | submission sevm preSt post l i o rules target caller law =>
+              have huser : ∀ latch, (Delivery.Frame.submission sevm preSt post l i o rules target caller law).event ≠
+                  .system latch := by
+                intro latch he
+                cases he
+              have hnis := Chain.user_not_inhibited chainS rep₀ slotsPre countPre huser
+              have hnePre : (queueAfter st₀ pre).excess ≠ 2 ^ 256 - 1 := by
+                intro hmax
+                have htrue :=
+                  (excess_inhibitor c.target_ne c.cap st₀ (Delivery.events pre)).mp hmax
+                rw [hnis] at htrue
+                cases htrue
+              have hePos : (queueAfter st₀ pre).excess +
+                  ((queueAfter st₀ pre).count - c.target.toNat) ≤ 2892 := by
+                have hle : load (queueAfter st₀ pre) =
+                    (queueAfter st₀ pre).excess + (queueAfter st₀ pre).count := by
+                  unfold load
+                  rw [ite_eq_right hnePre]
+                omega
+              obtain ⟨gs', hs', hsplit, left, right⟩ :=
+                ChainLink.Corresponds.split_append (xs := preK) corr'
+              have hboth := List.append_inj hsplit.symm (left.length_eq.trans hlen)
+              have hgs : gs' = pre := hboth.1
+              subst hgs
+              have hhs : hs' = (Delivery.Frame.submission sevm preSt post l i o rules target caller law) ::
+                  gs := hboth.2
+              subst hhs
+              cases right with
+              | cons m _ =>
+                  have hq : (Delivery.Frame.submission sevm preSt post l i o rules target caller law).quotedFee =
+                      some (o / (17 : B256)) := rfl
+                  have hfee : LoadBound.feePaid
+                      (Delivery.Frame.submission sevm preSt post l i o rules target caller law) =
+                      (o / (17 : B256)).toNat := rfl
+                  have hqnat := match_head_eq m hrepHead hePos _ hq
+                  have hmem : f.sevm.data.length = c.payload := by
+                    by_contra hne
+                    by_cases hsys : f.sevm.caller = systemAddress
+                    · have hev := m.event
+                      rw [ChainLink.keptEvent_system hne hsys] at hev
+                      cases hev
+                    · have hev := m.event
+                      rw [ChainLink.keptEvent_user hne hsys] at hev
+                      cases hev
+                  have hdec : decide (f.sevm.data.length = c.payload) = true :=
+                    Eq.mpr decide_eq_true_eq hmem
+                  have ef : List.sum (List.map (ChainLink.naturalFee c) (List.filter
+                      (fun f => decide (f.sevm.data.length = c.payload)) [f])) =
+                      ChainLink.naturalFee c f := by
+                    rw [List.filter_cons, ite_eq_left hdec, List.map_cons,
+                      List.filter_nil, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+                  have hinv' : LoadBound.fees (gs' ++
+                      [Delivery.Frame.submission sevm preSt post l i o rules target caller law]) ≤
+                      List.sum (List.map (ChainLink.naturalFee c) (List.filter
+                      (fun f => decide (f.sevm.data.length = c.payload)) (preK ++ [f]))) := by
+                    rw [e1, e2, hfee, ef]
+                    omega
+                  have htail : LoadBound.fees gs ≤ List.sum (List.map (ChainLink.naturalFee c) (List.filter
+                      (fun f => decide (f.sevm.data.length = c.payload)) fs)) :=
+                    ih _ _ hfr' hke' hlen' hinv'
+                  have hsum : List.sum (List.map (ChainLink.naturalFee c) (List.filter
+                      (fun f => decide (f.sevm.data.length = c.payload)) (f :: fs))) =
+                      ChainLink.naturalFee c f + List.sum (List.map (ChainLink.naturalFee c) (List.filter
+                      (fun f => decide (f.sevm.data.length = c.payload)) fs)) := by
+                    rw [List.filter_cons, ite_eq_left hdec, List.map_cons, List.sum_cons]
+                  have hfees : LoadBound.fees
+                      ((Delivery.Frame.submission sevm preSt post l i o rules target caller law) :: gs) =
+                      LoadBound.feePaid
+                        (Delivery.Frame.submission sevm preSt post l i o rules target caller law) +
+                      LoadBound.fees gs := LoadBound.fees_cons _ _
+                  rw [hfees, hfee, hsum]
+                  omega
+          | feeRead sevm preSt post l i o rules target caller law =>
+              have h0 : LoadBound.feePaid
+                  (Delivery.Frame.feeRead sevm preSt post l i o rules target caller law) = 0 := rfl
+              have hinv' : LoadBound.fees (pre ++
+                  [Delivery.Frame.feeRead sevm preSt post l i o rules target caller law]) ≤
+                  List.sum (List.map (ChainLink.naturalFee c) (List.filter
+                  (fun f => decide (f.sevm.data.length = c.payload)) (preK ++ [f]))) := by
+                rw [e1, e2, h0, Nat.add_zero]
+                exact Nat.le_trans hinv (Nat.le_add_right _ _)
+              have htail : LoadBound.fees gs ≤ List.sum (List.map (ChainLink.naturalFee c) (List.filter
+                  (fun f => decide (f.sevm.data.length = c.payload)) fs)) :=
+                ih _ _ hfr' hke' hlen' hinv'
+              have hfees : LoadBound.fees
+                  ((Delivery.Frame.feeRead sevm preSt post l i o rules target caller law) :: gs) =
+                  LoadBound.feePaid
+                    (Delivery.Frame.feeRead sevm preSt post l i o rules target caller law) +
+                  LoadBound.fees gs := LoadBound.fees_cons _ _
+              rw [hfees, h0, Nat.zero_add]
+              exact Nat.le_trans htail hmono
+          | system benv data post out fork installed length run =>
+              have h0 : LoadBound.feePaid
+                  (Delivery.Frame.system benv data post out fork installed length run) = 0 := rfl
+              have hinv' : LoadBound.fees (pre ++
+                  [Delivery.Frame.system benv data post out fork installed length run]) ≤
+                  List.sum (List.map (ChainLink.naturalFee c) (List.filter
+                  (fun f => decide (f.sevm.data.length = c.payload)) (preK ++ [f]))) := by
+                rw [e1, e2, h0, Nat.add_zero]
+                exact Nat.le_trans hinv (Nat.le_add_right _ _)
+              have htail : LoadBound.fees gs ≤ List.sum (List.map (ChainLink.naturalFee c) (List.filter
+                  (fun f => decide (f.sevm.data.length = c.payload)) fs)) :=
+                ih _ _ hfr' hke' hlen' hinv'
+              have hfees : LoadBound.fees
+                  ((Delivery.Frame.system benv data post out fork installed length run) :: gs) =
+                  LoadBound.feePaid
+                    (Delivery.Frame.system benv data post out fork installed length run) +
+                  LoadBound.fees gs := LoadBound.fees_cons _ _
+              rw [hfees, h0, Nat.zero_add]
+              exact Nat.le_trans htail hmono
 
 /-! ## Bridges -/
 
 /-- The load bound, from the potential induction over a history. -/
 theorem load_bound_bridge : load_bounded_by_fees := by
-  have h2 : (2 : Nat) ^ 256 ≥ 4 + 6 * 2892 := by decide
   refine ⟨?_, ?_⟩
-  · intro cfg start stop blocks hcodes hdep hclean hsys hbudD hwrapD hfewD
+  · intro cfg start stop blocks hcodes hdep hclean hsys hbudD hwrapD
     obtain ⟨frames, chain, corr, -⟩ := Deposit.history_chain hcodes.linked hcodes.deposit
       hdep.depStor hsys.code hclean.senders hclean.authorities hclean.creates
-    have hfew : ((ChainLink.History.kept Deposit.contract.address blocks).filterMap
-        (ChainLink.submittedBy Deposit.contract)).length ≤ 2892 := hfewD
+    have hfloorD : (Delivery.submissions frames).length * 10 ^ 18 ≤ 2 ^ 256 := by
+      have h := (Deposit.ether_le_paid frames).trans (corr.value_le.trans hbudD)
+      simpa only [Deposit.oneEther] using h
     have htail0 : Deposit.deployedQueue.tail = 0 := rfl
     have hcount0 : Deposit.deployedQueue.count = 0 := rfl
     have hwidth : Deposit.contract.width = 6 := rfl
-    have hrangeF : 4 + 6 * ((ChainLink.History.kept Deposit.contract.address blocks).filterMap
-        (ChainLink.submittedBy Deposit.contract)).length ≤ 2 ^ 256 := by omega
+    have hrange : 4 + 6 * (Delivery.submissions frames).length ≤ 2 ^ 256 := by omega
     have hslots : queueBase Deposit.contract.width (Deposit.deployedQueue.tail +
-        ((ChainLink.History.kept Deposit.contract.address blocks).filterMap
-        (ChainLink.submittedBy Deposit.contract)).length) ≤ 2 ^ 256 := by
+        (Delivery.submissions frames).length) ≤ 2 ^ 256 := by
       rw [htail0, Nat.zero_add, hwidth]
-      simpa only [queueBase] using hrangeF
+      simpa only [queueBase] using hrange
     have hcount : Deposit.deployedQueue.count +
-        ((ChainLink.History.kept Deposit.contract.address blocks).filterMap
-        (ChainLink.submittedBy Deposit.contract)).length < 2 ^ 256 := by
+        (Delivery.submissions frames).length < 2 ^ 256 := by
       rw [hcount0, Nat.zero_add]
       omega
-    have hload0 : load Deposit.deployedQueue = 0 := by decide
+    have potD : ∀ (pre : List (Delivery.Frame Deposit.contract)) (mid : Stor)
+        (suf : List (Delivery.Frame Deposit.contract)), frames = pre ++ suf →
+        Chain Stor.empty pre mid →
+        (Delivery.submissions pre).length ≤ (Delivery.submissions frames).length →
+        LoadBound.fees pre < Backlog.cost 8 0 2893 →
+        Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue pre)) ≤
+          LoadBound.fees pre := by
+      intro pre mid suf hfull h1 hs hw
+      have hpaid : Deposit.paid pre ≤ 2 ^ 256 := by
+        have happ : Deposit.paid frames = Deposit.paid pre + Deposit.paid suf := by
+          rw [hfull]
+          simp only [Deposit.paid, List.map_append, List.sum_append]
+        have hle : Deposit.paid frames ≤ 2 ^ 256 := corr.value_le.trans hbudD
+        have h1le : Deposit.paid pre ≤ Deposit.paid pre + Deposit.paid suf :=
+          Nat.le_add_right _ _
+        rw [← happ] at h1le
+        exact h1le.trans hle
+      have hrangePre : 4 + 6 * (Delivery.submissions pre).length ≤ 2 ^ 256 :=
+        Deposit.range_of_budget hpaid
+      exact LoadBound.deposit_potential h1 hrangePre hw
     have hfees : LoadBound.fees frames ≤ depositFeeSum blocks :=
       fees_le_aux (c := Deposit.contract) chain corr Deposit.deployed_represents
-        hslots hcount hload0 hfew [] [] rfl rfl rfl
-    have hsub : Delivery.submissions frames =
-        (ChainLink.History.kept Deposit.contract.address blocks).filterMap
-          (ChainLink.submittedBy Deposit.contract) := corr.submissions
-    have hN : (Delivery.submissions frames).length ≤ 2892 := by
-      rw [hsub]
-      exact hfew
-    have hrange : 4 + 6 * (Delivery.submissions frames).length ≤ 2 ^ 256 := by omega
+        (Nat.le_refl _) hslots hcount potD hwrapD [] [] rfl rfl rfl (Nat.zero_le _)
     have hwrap : LoadBound.fees frames < Backlog.cost 8 0 2893 :=
       Nat.lt_of_le_of_lt hfees hwrapD
     have hpot := LoadBound.deposit_potential chain hrange hwrap
@@ -532,37 +607,41 @@ theorem load_bound_bridge : load_bounded_by_fees := by
       rw [hexcess, hcountS, load, ite_eq_right hne]
     rw [← hload]
     exact hpot.trans hfees
-  · intro cfg start stop blocks hcodes hdep hclean hsys hbudE hwrapE hfewE hlive
+  · intro cfg start stop blocks hcodes hdep hclean hsys hbudE hwrapE hsubE hlive
     obtain ⟨frames, chain, corr, -⟩ := Exit.history_chain hcodes.linked hcodes.exit
       hdep.exitStor hsys.code hclean.senders hclean.authorities hclean.creates
-    have hfew : ((ChainLink.History.kept Exit.contract.address blocks).filterMap
-        (ChainLink.submittedBy Exit.contract)).length ≤ 2892 := hfewE
-    have htail0 : Exit.deployedQueue.tail = 0 := rfl
-    have hcount0 : Exit.deployedQueue.count = 0 := rfl
-    have hwidth : Exit.contract.width = 3 := rfl
-    have hrangeF : 4 + 3 * ((ChainLink.History.kept Exit.contract.address blocks).filterMap
-        (ChainLink.submittedBy Exit.contract)).length ≤ 2 ^ 256 := by omega
-    have hslots : queueBase Exit.contract.width (Exit.deployedQueue.tail +
-        ((ChainLink.History.kept Exit.contract.address blocks).filterMap
-        (ChainLink.submittedBy Exit.contract)).length) ≤ 2 ^ 256 := by
-      rw [htail0, Nat.zero_add, hwidth]
-      simpa only [queueBase] using hrangeF
-    have hcount : Exit.deployedQueue.count +
-        ((ChainLink.History.kept Exit.contract.address blocks).filterMap
-        (ChainLink.submittedBy Exit.contract)).length < 2 ^ 256 := by
-      rw [hcount0, Nat.zero_add]
-      omega
-    have hload0 : load Exit.deployedQueue = 0 := by decide
-    have hfees : LoadBound.fees frames ≤ exitFeeSum blocks :=
-      fees_le_aux (c := Exit.contract) chain corr Exit.deployed_represents
-        hslots hcount hload0 hfew [] [] rfl rfl rfl
     have hsub : Delivery.submissions frames =
         (ChainLink.History.kept Exit.contract.address blocks).filterMap
           (ChainLink.submittedBy Exit.contract) := corr.submissions
-    have hN : (Delivery.submissions frames).length ≤ 2892 := by
+    have h64 : (Delivery.submissions frames).length ≤ 2 ^ 64 := by
       rw [hsub]
-      exact hfew
+      exact hsubE
+    have h2e : (2 : Nat) ^ 256 ≥ 4 + 3 * 2 ^ 64 := by decide
+    have htail0 : Exit.deployedQueue.tail = 0 := rfl
+    have hcount0 : Exit.deployedQueue.count = 0 := rfl
+    have hwidth : Exit.contract.width = 3 := rfl
     have hrange : 4 + 3 * (Delivery.submissions frames).length ≤ 2 ^ 256 := by omega
+    have hslots : queueBase Exit.contract.width (Exit.deployedQueue.tail +
+        (Delivery.submissions frames).length) ≤ 2 ^ 256 := by
+      rw [htail0, Nat.zero_add, hwidth]
+      simpa only [queueBase] using hrange
+    have hcount : Exit.deployedQueue.count +
+        (Delivery.submissions frames).length < 2 ^ 256 := by
+      rw [hcount0, Nat.zero_add]
+      omega
+    have potE : ∀ (pre : List (Delivery.Frame Exit.contract)) (mid : Stor)
+        (suf : List (Delivery.Frame Exit.contract)), frames = pre ++ suf →
+        Chain Exit.deployedStorage pre mid →
+        (Delivery.submissions pre).length ≤ (Delivery.submissions frames).length →
+        LoadBound.fees pre < Backlog.cost 2 0 2893 →
+        Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue pre)) ≤
+          LoadBound.fees pre := by
+      intro pre mid suf hfull h1 hs hw
+      have hrangePre : 4 + 3 * (Delivery.submissions pre).length ≤ 2 ^ 256 := by omega
+      exact LoadBound.exit_potential h1 hrangePre hw
+    have hfees : LoadBound.fees frames ≤ exitFeeSum blocks :=
+      fees_le_aux (c := Exit.contract) chain corr Exit.deployed_represents
+        (Nat.le_refl _) hslots hcount potE hwrapE [] [] rfl rfl rfl (Nat.zero_le _)
     have hwrap : LoadBound.fees frames < Backlog.cost 2 0 2893 :=
       Nat.lt_of_le_of_lt hfees hwrapE
     have hpot := LoadBound.exit_potential chain hrange hwrap
