@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-616 shared modules, 589 with a module summary.
+617 shared modules, 590 with a module summary.
 
 ## `Blanc/`
 
@@ -257,6 +257,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ProofRecipeTactic.lean`](../Blanc/ProofRecipeTactic.lean) | leaf-only access to generated proof-recipe advice. | exempt: the need-first registry's own machinery |
 | [`ProofRecipesGenerated.lean`](../Blanc/ProofRecipesGenerated.lean) | goal-shape recipe data for Blanc tactics. | exempt: generated artifact |
 | [`RequestFeeWord.lean`](../Blanc/RequestFeeWord.lean) | **Word against natural request fee, at fraction 17.** The system request contracts run the word recurrence at factor 1 and fraction 17 over an excess word, and quote its quotient. | [S9](COMMON_API.md#s9-i-need-the-integer-exponential-recurrence-or-a-finite-loop-witness) |
+| [`RequestFeeWordBound.lean`](../Blanc/RequestFeeWordBound.lean) | **How long the request contracts' fee loop runs.** At factor 1 and fraction 17, the word recurrence on an excess at most 2892 takes at most 462 iterations, and takes exactly 462 at 2892, so the bound is tight. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`RequestFeeWordDomain.lean`](../Blanc/RequestFeeWordDomain.lean) | **Where the request contracts' word fee is the natural fee.** At factor 1 and fraction 17, the quotient of the word recurrence equals `fake_exponential(1, excess, 17)` at every excess up to 2892, and not at 2893, where the first product passes the word. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`RequestsOutput.lean`](../Blanc/RequestsOutput.lean) | Exact request-output composition for retained request-system traces. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`RevertPayload.lean`](../Blanc/RevertPayload.lean) | ABI encoding | [E4](COMMON_API.md#e4-i-need-a-common-terminal-walk) |

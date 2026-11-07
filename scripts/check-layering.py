@@ -1497,6 +1497,8 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.FeeDomain", "Lift.BuilderRequest.FeeRead", "Lift.BuilderRequest.FeeDomainWitness",
     "Lift.BuilderRequest.Deposit.FeeDomain", "Lift.BuilderRequest.Exit.FeeDomain",
     "Lift.BuilderRequest.Static", "Lift.BuilderRequest.Deposit.Static", "Lift.BuilderRequest.Exit.Static",
+    "Lift.BuilderRequest.Flood", "Lift.BuilderRequest.Exit.Flood", "Lift.BuilderRequest.Surplus",
+    "Lift.BuilderRequest.Deposit.Properties", "Lift.BuilderRequest.Exit.Properties",
 ]
 
 # Explicit semantic ownership, not the union of existing imports. Abstract token

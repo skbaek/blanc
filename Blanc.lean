@@ -1235,6 +1235,11 @@ import Blanc.Lift.BuilderRequest.Exit.FeeDomain
 import Blanc.Lift.BuilderRequest.Static
 import Blanc.Lift.BuilderRequest.Deposit.Static
 import Blanc.Lift.BuilderRequest.Exit.Static
+import Blanc.Lift.BuilderRequest.Flood
+import Blanc.Lift.BuilderRequest.Exit.Flood
+import Blanc.Lift.BuilderRequest.Surplus
+import Blanc.Lift.BuilderRequest.Deposit.Properties
+import Blanc.Lift.BuilderRequest.Exit.Properties
 import Blanc.RequestFeeWordBound
 import Blanc.Lift.BalEffect
 import Blanc.Lift.AmsterdamAccess

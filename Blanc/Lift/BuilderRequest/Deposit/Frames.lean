@@ -41,7 +41,7 @@ structure SubmissionEffects (sevm : Sevm) (pre post : Devm) : Prop where
   /-- No other account's storage changed. -/
   otherStorage : ∀ address, address ≠ sevm.currentTarget →
     post.getStor address = pre.getStor address
-  /-- No balance changed within the frame's code. -/
+  /-- No balance changed within the frame's code. The value moves before the frame, at message level: see `message_ok` and `transaction_ok`. -/
   balance : ∀ address, post.getBal address = pre.getBal address
   /-- One topicless log is appended, its data the calldata. -/
   logs : post.logs = pre.logs ++ [⟨sevm.currentTarget, [], sevm.data⟩]
