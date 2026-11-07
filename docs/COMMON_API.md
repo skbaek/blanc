@@ -8677,7 +8677,10 @@ read the return window and one request-phase step. A record body's segments (`se
 excess arm (no latch; the inhibitor counts as zero) is `plainShape` in
 `Blanc/Lift/RequestSystem/PlainExcess.lean`; the EIP-8282 arm is `latchShape` in
 `Blanc/Lift/BuilderRequest/SystemPath.lean`, family-local, and its nonempty-calldata side, on
-`SysPath.frame_prefix` and `SysPath.prefix_le`, is `Blanc/Lift/BuilderRequest/Latch.lean`. Worked consumers:
+`SysPath.frame_prefix` and `SysPath.prefix_le`, is `Blanc/Lift/BuilderRequest/Latch.lean`. The builder family's
+statements over a given list of frames (`Contract`, `Frame`, `Chain`, the queue model `step`/`replay`/`chunks`) are
+`Blanc/Lift/BuilderRequest/Delivery.lean`, family-local; word and natural request fee at fraction 17, through excess
+2892 and not at 2893, are `Blanc/RequestFeeWordDomain.lean`. Worked consumers:
 `Blanc/Lift/WithdrawalRequest/AmsterdamSystem.lean`,
 `Blanc/Lift/SystemExecution/ConsolidationRequest/AmsterdamSystem.lean`, and the phase at
 `Blanc/Composition/RequestPhaseAmsterdam.lean`.

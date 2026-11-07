@@ -210,10 +210,10 @@ theorem feeRead_quoted {sevm : Sevm} {pre post : Devm} {i iterations : Nat} {fin
 
 /-- **A submission at count `i ≤ 981` with slot 0 at zero pays at least the quote and 1 ETH**: the frame's
 value is what `PaysQuotes` asks of `paid i`. -/
-theorem submission_pays {sevm : Sevm} {pre post : Devm} {i iterations : Nat} {finalOutput : B256}
+theorem submission_pays {sevm : Sevm} {l : StorageSteps sevm} {pre post : Devm} {i iterations : Nat} {finalOutput : B256}
     (hi : i ≤ 981) (slot0 : pre.getStorVal sevm.currentTarget 0 = 0)
     (slot1 : pre.getStorVal sevm.currentTarget 1 = i.toB256)
-    (sub : Submitted sevm pre post iterations finalOutput) :
+    (sub : SubmittedOn l pre post iterations finalOutput) :
     quotedFee i + oneEther ≤ sevm.value.toNat := by
   have q := sub.quote
   rw [storedExcess, slot0, slot1] at q
