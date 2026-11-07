@@ -4584,6 +4584,15 @@ proves that the word quotient is at most the Nat quotient, without any
 no-wrap premise. It supports sufficient-payment liveness without requiring
 fee equality; it does not turn a successful word-fee guard into Nat payment.
 
+For the request contracts' quote at factor 1 and fraction 17, use
+[`Blanc/RequestFeeWord.lean`](../Blanc/RequestFeeWord.lean), which states those
+windows' results over the excess word alone, with no queue model.
+`RequestFeeWord.word_fee_le` bounds an executed word quotient by
+`fakeExp 1 excess.toNat 17` everywhere; `word_fee_eq_iff` is equality exactly on
+`NoWrapDomain`; `NoWrapDomain.word_result` identifies count and quotient;
+`natFeeExcessCeiling`, `NoWrapDomain.excess_lt`, `excess_lt_of_paid` and
+`word_fee_lt_of_large_excess` separate the two fees above the growth ceiling.
+
 ## M — bytes and memory
 
 For concrete RLP encoding and parsing, use
@@ -8598,6 +8607,20 @@ every shared module with its own summary and the branches that cite it.
   [`Blanc/Lift/PackedSha.lean`](../Blanc/Lift/PackedSha.lean), and the corollary
   over memory that already covers the destination (`copy_sha_covered`) in
   [`Blanc/Lift/PackedShaCovered.lean`](../Blanc/Lift/PackedShaCovered.lean).
+
+For the fee path of a system request contract (the shape EIP-7002, EIP-7251 and the EIP-8282
+builder runtimes share), instantiate
+[`Blanc/Lift/RequestFee/Window.lean`](../Blanc/Lift/RequestFee/Window.lean) rather than walking it:
+`loopTree`, `initTree` and `postloopTree` take the pushed targets, calldata length and continuations
+as parameters, so a generated tree is an instance by `rfl`. `init_inv`/`init_exact` set up from
+`[excess, 17]`, `loop_inv`/`loop_exact` follow a `WordFakeExponential.Run`, and
+`postloop_inv`/`postloop_exact` select the continuation by calldata length. For the getter,
+[`Blanc/Lift/RequestFee/Getter.lean`](../Blanc/Lift/RequestFee/Getter.lean) gives
+`guard_inv`/`guard_exact` over `guardTree` and `return_inv`/`return_exact` over `returnTree`, with
+the post state `feeGetterPost`. Exact walks take `PUSH0`'s activation as a hypothesis. The excess
+read, the inhibitor guard and the submission body are not here, since they differ by contract.
+The worked consumers are `Blanc/Lift/WithdrawalRequest/FeeLoop.lean` and
+`Blanc/Lift/BuilderRequest/Deposit/FeeWindow.lean`.
 
 #### C9.10. I need a Vyper 0.2 runtime's idioms
 

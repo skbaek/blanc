@@ -1,6 +1,6 @@
 import Blanc.Lift.WithdrawalRequest.FrameEffects
 import Blanc.Lift.WithdrawalRequest.UserGas
-import Blanc.FakeExponentialWordCorrespondence
+import Blanc.RequestFeeWord
 
 /-! Explicit sufficient no-wrap fee correspondence consumed by actual frame
 results and fresh liveness. No reachable or maximal-domain claim is made. -/
@@ -24,17 +24,8 @@ theorem NatFeeDomain.word_result {excess : B256} {iterations wordIterations : Na
     wordIterations = iterations ∧
       (wordOutput / (17 : B256)).toNat = Blanc.WithdrawalRequest.fee model ∧
       wordOutput / (17 : B256) = (Blanc.WithdrawalRequest.fee model).toB256 := by
-  obtain ⟨output, run, safe⟩ := domain
-  have imageRun : WordFakeExponential.Run excess.toNat.toB256 (17 : Nat).toB256 1
-      ((1 : Nat).toB256 * (17 : Nat).toB256) 0 wordIterations wordOutput := by
-    rw [toB256_toNat]
-    exact wordRun
-  have same := safe.fakeExp_eq (factor := 1) (by decide) imageRun
-  have feeEq : (wordOutput / (17 : B256)).toNat = Blanc.WithdrawalRequest.fee model := by
-    rw [Blanc.WithdrawalRequest.fee, excessEq]
-    exact same.2
-  refine ⟨same.1, feeEq, ?_⟩
-  rw [← feeEq, toB256_toNat]
+  rw [Blanc.WithdrawalRequest.fee, excessEq]
+  exact RequestFeeWord.NoWrapDomain.word_result domain wordRun
 
 /-- Actual successful submission admission uses the canonical Nat fee on the
 named sufficient domain. No queue representation is required. -/

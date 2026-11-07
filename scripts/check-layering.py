@@ -193,6 +193,7 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkO
            "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistAccessFacts", "Lift.HistEcrecover", "Lift.HistCreate", "Lift.HistAccessMeta", "Lift.HistAccessWalkFacts"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
+SHARED += ["RequestFeeWord", "Lift.RequestFee.Window", "Lift.RequestFee.Getter"]
 SHARED += ["Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckRange", "Lift.WitnessShadow"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
@@ -1455,7 +1456,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
     "Lift.BuilderRequest.Deposit.Creation.Input", "Lift.BuilderRequest.Deposit.Creation.Cert",
     "Lift.BuilderRequest.Deposit.Creation.Check", "Lift.BuilderRequest.Deposit.Creation.Address",
-    "Lift.BuilderRequest.Deposit.Creation.Deploy",
+    "Lift.BuilderRequest.Deposit.Creation.Deploy", "Lift.BuilderRequest.Deposit.FeeWindow",
     "Lift.BuilderRequest.Exit.Code", "Lift.BuilderRequest.Exit.Cert",
     "Lift.BuilderRequest.Exit.Check", "Lift.BuilderRequest.Exit.Jumps",
     "Lift.BuilderRequest.Exit.Creation.Input", "Lift.BuilderRequest.Exit.Creation.Cert",

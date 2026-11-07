@@ -2,6 +2,7 @@ import Blanc.Lift.WithdrawalRequest.Dispatch
 import Blanc.Lift.CreationOps
 import Blanc.Lift.PackedSha
 import Blanc.Lift.HistAccessWalk
+import Blanc.Lift.RequestFee.Window
 
 /-!
 The user path's slot-zero inhibitor guard and initialization of the fee loop.
@@ -27,7 +28,6 @@ def userSetupGas (sevm : Sevm) (b : Devm) : Nat :=
 
 private theorem denominator_push : Bytes.toB256 [0x11] = (17 : B256) := rfl
 private theorem zero_push : Bytes.toB256 [] = (0 : B256) := rfl
-private theorem one_push : Bytes.toB256 [0x01] = (1 : B256) := rfl
 private theorem inhibitor_push :
     Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
       0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
@@ -43,46 +43,15 @@ theorem revert_tail_no_run {sevm : Sevm} {d : Devm} {o : Outcome}
 private theorem init_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {excess : B256} {o : Outcome}
     (run : SFunc.Run prog sevm (St b [excess, 17] M G) t_0045_c0 o) :
-    ∃ G', SFunc.Run prog sevm (St b [0, 17, 1, excess, 17] M G') t_004d_c0 o := by
-  cases run with
-  | next hp k =>
-    obtain ⟨_, rfl⟩ := ri_push hp
-    rw [one_push] at k
-    cases k with
-    | next hd k =>
-      obtain ⟨_, rfl⟩ := ri_dup (w := 17) rfl hd
-      cases k with
-      | next hm k =>
-        obtain ⟨_, rfl⟩ := ri_mul hm
-        rw [show (17 : B256) * 1 = 17 from rfl] at k
-        cases k with
-        | next hp k =>
-          obtain ⟨_, rfl⟩ := ri_push hp
-          rw [one_push] at k
-          cases k with
-          | next hs k =>
-            obtain ⟨_, rfl⟩ := ri_swap (S' := [17, 1, excess, 17]) rfl hs
-            cases k with
-            | next hp k =>
-              obtain ⟨_, rfl⟩ := ri_push hp
-              rw [zero_push] at k
-              exact ⟨_, k⟩
+    ∃ G', SFunc.Run prog sevm (St b [0, 17, 1, excess, 17] M G') t_004d_c0 o :=
+  RequestFee.init_inv (header := t_004d_c0) run
 
 private theorem init_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {excess : B256} {o : Outcome}
     (hfork : CoveredFork sevm.benvStat.fork)
     (tail : SFunc.RunExact prog sevm (St b [0, 17, 1, excess, 17] M G) t_004d_c0 o) :
-    SFunc.RunExact prog sevm (St b [excess, 17] M (G + 19)) t_0045_c0 o := by
-  have hgas : G + 19 = G + 2 + 3 + 3 + 5 + 3 + 3 := by
-    simp only [Nat.add_assoc]
-  rw [hgas]
-  unfold t_0045_c0
-  refine rx_push one_push (by change 2 < 1024; decide) ?_
-  refine rx_dup3 (by change 3 < 1024; decide) ?_
-  refine rx_mul (v := 17) rfl (by change 2 < 1024; decide) ?_
-  refine rx_push one_push (by change 3 < 1024; decide) ?_
-  refine rx_swap1 ?_
-  exact rx_push0 (h_push0 := CoveredFork.rules_push0 hfork) (by change 4 < 1024; decide) tail
+    SFunc.RunExact prog sevm (St b [excess, 17] M (G + 19)) t_0045_c0 o :=
+  RequestFee.init_exact (header := t_004d_c0) hfork.rules_push0 tail
 
 /-- Success excludes the inhibitor under the selected historical SLOAD schedule. -/
 theorem user_setup_invH {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}

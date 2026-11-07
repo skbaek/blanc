@@ -1,5 +1,5 @@
 import Blanc.Lift.WithdrawalRequest.FeeLoop
-import Blanc.Lift.WalkInvKit
+import Blanc.Lift.RequestFee.Getter
 
 /-!
 Postloop word division and calldata/value guards. Raw CALLDATASIZE is a
@@ -11,12 +11,7 @@ namespace Blanc.Lift.WithdrawalRequest
 
 open Jaune
 
-/-- Header, four swaps, DIV, three POPs, CALLDATASIZE, two PUSHes, EQ, JUMPI. -/
-def postloopFixedGas : Nat :=
-  gJumpdest + 4 * gVerylow + gLow + 3 * gBase + gBase + 3 * gVerylow + gHigh
-
-/-- CALLDATASIZE/PUSH/JUMPI followed by CALLVALUE/PUSH/JUMPI. -/
-def getterGuardGas : Nat := 2 * (gBase + gVerylow + gHigh)
+export RequestFee (postloopFixedGas postloopFixedGas_eq getterGuardGas getterGuardGas_eq)
 
 /-- JUMPDEST/CALLVALUE/LT/PUSH/JUMPI. -/
 def submissionGuardGas : Nat := gJumpdest + gBase + 2 * gVerylow + gHigh
@@ -25,8 +20,6 @@ def submissionGuardGas : Nat := gJumpdest + gBase + 2 * gVerylow + gHigh
 def userFeeDispatchGas (sevm : Sevm) : Nat :=
   postloopFixedGas + if sevm.data.length.toB256 = 56 then submissionGuardGas else getterGuardGas
 
-theorem postloopFixedGas_eq : postloopFixedGas = 45 := rfl
-theorem getterGuardGas_eq : getterGuardGas = 30 := rfl
 theorem submissionGuardGas_eq : submissionGuardGas = 19 := rfl
 
 theorem userFeeDispatchGas_eq (sevm : Sevm) :
@@ -38,93 +31,36 @@ theorem userFeeDispatchGas_eq (sevm : Sevm) :
 private def feeBranch (sevm : Sevm) : SFunc :=
   if sevm.data.length.toB256 = 56 then t_0088_c0 else t_0078_c0
 
+private def lenWord : RequestFee.PushWord := ⟨0x38, [], by decide⟩
+private def submissionDest : RequestFee.PushWord := ⟨0x88, [], by decide⟩
+private def revertDest : RequestFee.PushWord := ⟨0x01, [0xf4], by decide⟩
+
 private theorem prefix_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {output accumulator counter numerator denominator : B256} {o : Outcome}
     (run : SFunc.Run prog sevm
       (St b [output, accumulator, counter, numerator, denominator] M G) t_0068_c0 o) :
-    ∃ G', SFunc.Run prog sevm (St b [output / denominator] M G') (feeBranch sevm) o := by
-  obtain ⟨_, run⟩ := ric_dest run.cut
-  winv 10
-  change SFunc.RunCut _ _ _ (St b [56, sevm.data.length.toB256, output / denominator] M _) _ _ at run
-  winv 2
-  rcases ric_branch run with ⟨flag, G', run⟩ | ⟨flag, G', run⟩
-  · have hlen : sevm.data.length.toB256 ≠ 56 := by
-      intro hlen
-      simp only [hlen, B256.eqCheck, ite_true] at flag
-      exact (by decide : (1 : B256) ≠ 0) flag
-    refine ⟨G', ?_⟩
-    simpa only [feeBranch, ite_eq_right hlen] using run.uncut
-  · have hlen : sevm.data.length.toB256 = 56 := by
-      by_cases hlen : (56 : B256) = sevm.data.length.toB256
-      · exact hlen.symm
-      · simp only [B256.eqCheck, ite_eq_right hlen] at flag
-        exact False.elim (flag rfl)
-    refine ⟨G', ?_⟩
-    simpa only [feeBranch, ite_eq_left hlen] using run.uncut
+    ∃ G', SFunc.Run prog sevm (St b [output / denominator] M G') (feeBranch sevm) o :=
+  RequestFee.postloop_inv (len := lenWord) (dest := submissionDest) rfl run
 
 private theorem prefix_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {output accumulator counter numerator denominator : B256} {o : Outcome}
     (tail : SFunc.RunExact prog sevm (St b [output / denominator] M G) (feeBranch sevm) o) :
     SFunc.RunExact prog sevm
-      (St b [output, accumulator, counter, numerator, denominator] M (G + 45)) t_0068_c0 o := by
-  have hgas : G + 45 = G + 10 + 3 + 3 + 3 + 2 + 2 + 2 + 2 + 3 + 5 + 3 + 3 + 3 + 1 := by
-    simp only [Nat.add_assoc]
-  rw [hgas]
-  unfold t_0068_c0
-  refine rx_dest ?_
-  refine rx_swap1 ?_
-  refine rx_swap (n := 3) rfl ?_
-  refine rx_swap1 ?_
-  refine rx_div rfl (by change 3 < 1024; decide) ?_
-  refine rx_swap3 ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_pop ?_
-  refine rx_calldatasize (by change 1 < 1024; decide) ?_
-  refine rx_push (w := (56 : B256)) rfl (by change 2 < 1024; decide) ?_
-  refine rx_eq rfl (by change 1 < 1024; decide) ?_
-  refine rx_push rfl (by change 2 < 1024; decide) ?_
-  by_cases hlen : sevm.data.length.toB256 = 56
-  · simp only [hlen, B256.eqCheck, ite_true]
-    apply rx_branch_succ (by decide : (1 : B256) ≠ 0)
-    simpa only [feeBranch, ite_eq_left hlen] using tail
-  · simp only [B256.eqCheck, ite_eq_right (Ne.symm hlen)]
-    apply rx_branch_zero
-    simpa only [feeBranch, ite_eq_right hlen] using tail
+      (St b [output, accumulator, counter, numerator, denominator] M (G + 45)) t_0068_c0 o :=
+  RequestFee.postloop_exact (len := lenWord) (dest := submissionDest) rfl tail
 
 private theorem getter_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {fee : B256} {o : Outcome}
     (run : SFunc.Run prog sevm (St b [fee] M G) t_0078_c0 o) :
     sevm.data.length.toB256 = 0 ∧ sevm.value = 0 ∧
-      ∃ G', SFunc.Run prog sevm (St b [fee] M G') t_0082_c0 o := by
-  have run := run.cut
-  winv 2
-  rcases ric_branch run with ⟨empty, _, run⟩ | ⟨_, _, run⟩
-  · obtain ⟨_, h, run⟩ := ric_next run
-    obtain ⟨_, rfl⟩ := ri_callvalue h
-    winv 1
-    rcases ric_branch run with ⟨zero, G', run⟩ | ⟨_, _, run⟩
-    · exact ⟨empty, zero, G', run.uncut⟩
-    · exact False.elim (revert_tail_no_run run.uncut)
-  · exact False.elim (revert_tail_no_run run.uncut)
+      ∃ G', SFunc.Run prog sevm (St b [fee] M G') t_0082_c0 o :=
+  RequestFee.guard_inv (dest := revertDest) (accept := t_0082_c0) (revert := t_01f4_c0) rfl run
 
 private theorem getter_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {fee : B256} {o : Outcome} (empty : sevm.data.length.toB256 = 0) (zero : sevm.value = 0)
     (tail : SFunc.RunExact prog sevm (St b [fee] M G) t_0082_c0 o) :
-    SFunc.RunExact prog sevm (St b [fee] M (G + 30)) t_0078_c0 o := by
-  have hgas : G + 30 = G + 10 + 3 + 2 + 10 + 3 + 2 := by
-    simp only [Nat.add_assoc]
-  rw [hgas]
-  unfold t_0078_c0
-  refine rx_calldatasize (by change 1 < 1024; decide) ?_
-  rw [empty]
-  refine rx_push rfl (by change 2 < 1024; decide) ?_
-  refine rx_branch_zero ?_
-  unfold t_007d_c0
-  refine rx_callvalue (by change 1 < 1024; decide) ?_
-  rw [zero]
-  refine rx_push rfl (by change 2 < 1024; decide) ?_
-  exact rx_branch_zero tail
+    SFunc.RunExact prog sevm (St b [fee] M (G + 30)) t_0078_c0 o :=
+  RequestFee.guard_exact (dest := revertDest) (revert := t_01f4_c0) empty zero tail
 
 private theorem submission_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {fee : B256} {o : Outcome}
