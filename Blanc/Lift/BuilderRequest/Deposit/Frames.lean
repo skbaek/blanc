@@ -69,21 +69,6 @@ inductive UserFrame (sevm : Sevm) (pre post : Devm) : Prop where
 
 variable {sevm : Sevm} {pre post b : Devm} {M : Mem} {G : Nat}
 
-private theorem read_feeBase (key : B256) (a : Adr) (s : Devm) :
-    (feeBase sevm s).getStorVal a key = s.getStorVal a key := by
-  rw [feeBase, afterSload_getStorVal, afterSload_getStorVal]
-
-private theorem countWord_feeBase (s : Devm) :
-    countWord sevm (feeBase sevm s) = s.getStorVal sevm.currentTarget 1 :=
-  read_feeBase 1 _ s
-
-private theorem tailWord_eq (s : Devm) :
-    tailWord sevm s = s.getStorVal sevm.currentTarget 3 := by
-  change (Devm.getStor (countStore sevm s) sevm.currentTarget).get 3 =
-    (Devm.getStor s sevm.currentTarget).get 3
-  rw [countStore, afterSstore_getStor_self, afterSload_getStor,
-    Stor.get_set_ne _ (by decide : (1 : B256) ≠ 3)]
-
 private theorem wordStore_getStor (s : Devm) (key off : B256) :
     (wordStore sevm s key off).getStor sevm.currentTarget =
       (s.getStor sevm.currentTarget).set key (Sevm.dataWord sevm off) :=
@@ -115,20 +100,6 @@ private theorem recordsWritten_getStor (s : Devm) :
   simp only [recordsWritten, recordStore, wordStore_getStor, tailRead, afterSload_getStor,
     countStore, afterSstore_getStor_self]
 
-private theorem stop_projections (B : Devm) (S : List B256) (M' : Mem) (G' : Nat) (a : Adr) :
-    (St B S M' G').getStor a = B.getStor a ∧ (St B S M' G').getBal a = B.getBal a ∧
-      (St B S M' G').logs = B.logs ∧ (St B S M' G').output = B.output :=
-  ⟨rfl, rfl, rfl, rfl⟩
-
-private theorem addLog_getBal (w : Devm) (l : Log) (a : Adr) :
-    (w.addLog l).getBal a = w.getBal a := rfl
-
-private theorem addLog_output (w : Devm) (l : Log) : (w.addLog l).output = w.output := rfl
-
-private theorem afterSload_getBal (w : Devm) (k : B256) (a : Adr) :
-    (afterSload sevm w k).getBal a = w.getBal a := by
-  simp only [Devm.getBal, afterSload_getAcct]
-
 /-- The log reads back exactly the 184 bytes the frame was called with. -/
 theorem submissionLog_eq (hlen : sevm.data.length = 184) (wf : Mem.Wf M) :
     submissionLog sevm M = ⟨sevm.currentTarget, [], sevm.data⟩ := by
@@ -144,7 +115,7 @@ theorem submissionLog_eq (hlen : sevm.data.length = 184) (wf : Mem.Wf M) :
     have whole := Bytes.sliceD_writeAt M.data.toList sevm.data 0
     rwa [hlen] at whole
   rw [written] at image
-  rw [submissionLog, image]
+  rw [submissionLog, windowLog, image]
 
 /-- The observable effects of `submissionPost`. -/
 theorem submissionPost_effects (hlen : sevm.data.length = 184) (wf : Mem.Wf M) (gas : Nat) :
@@ -158,7 +129,7 @@ theorem submissionPost_effects (hlen : sevm.data.length = 184) (wf : Mem.Wf M) (
     (submissionPost sevm (feeBase sevm b) M gas).output = b.output := by
   have facts := fun a => stop_projections (submissionBase sevm (feeBase sevm b) M) []
     (submissionMemory sevm M) gas a
-  have base := read_feeBase (sevm := sevm) (s := b)
+  have base := read_feeBase sevm (s := b)
   unfold submissionPost
   refine ⟨?_, ?_, ?_, ?_, ?_⟩
   · refine (facts _).1.trans ?_
@@ -191,19 +162,10 @@ theorem exec_user_frame (hcode : sevm.code = code) (fork : CoveredFork sevm.benv
     (stack : pre.stack = []) (aligned : pre.memory.size % 32 = 0) (wf : Mem.Wf pre.memory)
     (lengthBound : sevm.data.length < 2 ^ 256) (caller : sevm.caller ≠ systemAddress)
     (exec : Exec 0 sevm pre (.ok post)) : UserFrame sevm pre post := by
-  obtain ⟨_, run⟩ := UserPath.exec_user (k := userPath) hcode fork stack caller exec
-  obtain ⟨active, iterations, finalOutput, wordRun, G0, run⟩ :=
-    feePath_inv userPath.shape fork userPath.revert_noOk userPath.window userPath.loop run
-  by_cases hlen : sevm.data.length.toB256 = 184
-  · have literal : sevm.data.length = 184 := by
-      have values := congrArg B256.toNat hlen
-      rwa [B256.toNat_toB256_of_lt lengthBound] at values
-    have hword : sevm.data.length.toB256 = userPath.shape.len.word := hlen
-    have run' : SFunc.Run prog sevm (St (feeBase sevm pre) [finalOutput / (17 : B256)] pre.memory G0)
-        t_009f_c1 (.halted post) := by
-      rw [RequestFee.selected, ite_eq_left hword] at run
-      exact run
-    obtain ⟨admitted, _, run⟩ := guards_inv run'
+  rcases UserPath.exec_user_cases (k := userPath) hcode fork stack aligned wf lengthBound caller exec with
+    ⟨active, literal, iterations, finalOutput, wordRun, _, run⟩ | ⟨empty, iterations, finalOutput, read⟩
+  · have literal : sevm.data.length = 184 := literal
+    obtain ⟨admitted, _, run⟩ := guards_inv run
     obtain ⟨dynamic, gas, state⟩ := body_inv fork run
     have state := Outcome.halted.inj state
     subst state
@@ -211,20 +173,7 @@ theorem exec_user_frame (hcode : sevm.code = code) (fork : CoveredFork sevm.benv
       submissionPost_effects (b := pre) (M := pre.memory) literal wf gas
     exact .submission iterations finalOutput ⟨dynamic, literal, active, wordRun, admitted, storage,
       other, balance, logs, output, gas, rfl⟩
-  · have hword : sevm.data.length.toB256 ≠ userPath.shape.len.word := hlen
-    have run' : SFunc.Run userPath.cert.prog sevm
-        (St (feeBase sevm pre) [finalOutput / (17 : B256)] pre.memory G0)
-        userPath.getter (.halted post) := by
-      rw [RequestFee.selected, ite_eq_right hword] at run
-      exact run
-    obtain ⟨empty, _, _⟩ := RequestFee.guard_inv userPath.getterRevert_noOk run'
-    have literal : sevm.data = [] := by
-      have values := congrArg B256.toNat empty
-      rw [B256.toNat_toB256_of_lt lengthBound] at values
-      exact List.eq_nil_of_length_eq_zero values
-    obtain ⟨iterations', finalOutput', read⟩ := UserPath.exec_fee_read (k := userPath) hcode fork
-      stack aligned wf caller literal exec
-    exact .feeRead iterations' finalOutput' literal read
+  · exact .feeRead iterations finalOutput empty read
 
 /-- **Deposit fee read.** A successful empty-calldata execution at a non-system caller carries no
 value, changes no storage, balance or log, and returns the word recurrence's quotient on
@@ -277,14 +226,6 @@ theorem exec_fee_read_exact {iterations : Nat} {finalOutput : B256}
     Nonempty (Exec 0 sevm (St b [] M (G + UserPath.feeReadGas sevm b M iterations))
       (.ok (RequestFee.feeGetterPost (feeBase sevm b) M (finalOutput / (17 : B256)) G))) :=
   UserPath.exec_fee_read_exact (k := userPath) hcode fork aligned caller empty zero off wordRun
-
-/-- At excess 0 the fee recurrence takes one step and quotes 1 wei. -/
-theorem quote_zero_excess : WordFakeExponential.Run 0 17 1 17 0 1 17 := by
-  have next : WordFakeExponential.nextAccumulator 0 17 1 17 = 0 := by decide
-  have sum : (0 : B256) + 17 = 17 := by decide
-  refine .step (by decide) ?_
-  rw [next, sum]
-  exact .stop _ _
 
 /-- The `Admitted` premise can be met: all-ones calldata credits `(2^64 - 1) * 10^9` wei, and a
 value above that by the fee of 1 covers it. -/

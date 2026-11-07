@@ -1206,6 +1206,8 @@ import Blanc.Lift.BuilderRequest.Deposit.SystemCall
 import Blanc.Lift.BuilderRequest.Exit.System
 import Blanc.Lift.BuilderRequest.Exit.SystemCall
 import Blanc.Composition.RequestPhaseAmsterdam
+import Blanc.Lift.BuilderRequest.UserFrame
+import Blanc.Lift.BuilderRequest.Exit.Submission
 import Blanc.Lift.BuilderRequest.Exit.Frames
 import Blanc.Lift.BuilderRequest.Deposit.Creation.Deploy
 import Blanc.Lift.BuilderRequest.Exit.Jumps

@@ -1,4 +1,5 @@
 import Blanc.Lift.BuilderRequest.Deposit.FeeWindow
+import Blanc.Lift.BuilderRequest.UserFrame
 import Blanc.Lift.ExactWalkOps
 import Blanc.CommonProofs.MemImage
 
@@ -141,19 +142,6 @@ theorem guards_exact {fee : B256} (admitted : Admitted sevm fee)
   refine rx_push rfl (by change 1 < 1024; decide) ?_
   exact rx_branch_zero tail
 
-/-- The count word the path reads. -/
-def countWord (sevm : Sevm) (b : Devm) : B256 := b.getStorVal sevm.currentTarget 1
-
-/-- After the count bump. -/
-def countStore (sevm : Sevm) (b : Devm) : Devm :=
-  afterSstore sevm (afterSload sevm b 1) 1 (1 + countWord sevm b)
-
-/-- The tail word the path reads, after the count bump. -/
-def tailWord (sevm : Sevm) (b : Devm) : B256 := (countStore sevm b).getStorVal sevm.currentTarget 3
-
-/-- After reading the tail. -/
-def tailRead (sevm : Sevm) (b : Devm) : Devm := afterSload sevm (countStore sevm b) 3
-
 /-- The record's first storage key. -/
 def submissionKey (tail : B256) : B256 := 4 + 6 * tail
 
@@ -171,8 +159,7 @@ def recordStore (sevm : Sevm) (b : Devm) (key : B256) : Devm :=
 def copyMemory (sevm : Sevm) (M : Mem) : Mem := M.write 0 (sevm.data.sliceD 0 184 0)
 
 /-- The emitted log: topicless, its data the 184 bytes read back from memory. -/
-def submissionLog (sevm : Sevm) (M : Mem) : Log :=
-  ⟨sevm.currentTarget, [], ((copyMemory sevm M).read 0 184).1⟩
+def submissionLog (sevm : Sevm) (M : Mem) : Log := windowLog sevm (copyMemory sevm M) 184
 
 /-- Memory after the log's read. -/
 def submissionMemory (sevm : Sevm) (M : Mem) : Mem := ((copyMemory sevm M).read 0 184).2
@@ -213,10 +200,7 @@ def copyGas (M : Mem) : Nat :=
     (calculateMemoryGasCost (memExtSize M.size 0 184) - calculateMemoryGasCost M.size)
 
 /-- `LOG0` of the payload. -/
-def logGas (sevm : Sevm) (M : Mem) : Nat :=
-  gLog + gLogdata * 184 + gLogtopic * 0 +
-    (calculateMemoryGasCost (memExtSize (copyMemory sevm M).size 0 184) -
-      calculateMemoryGasCost (copyMemory sevm M).size)
+def logGas (sevm : Sevm) (M : Mem) : Nat := log0Gas (copyMemory sevm M) 184
 
 /-- The exact charge of the submission body. -/
 def bodyGas (sevm : Sevm) (b : Devm) (M : Mem) : Nat :=
@@ -238,43 +222,6 @@ private theorem word_inv {p : Bytes} {le : p.length ≤ 32} {off key tail : B256
   obtain ⟨_, rfl⟩ := ri_sstore fork h
   winv 2
   exact ⟨_, run⟩
-
-private theorem log_inv {tail : B256} (fork : CoveredFork sevm.benvStat.fork)
-    {le1 : [(0x01 : UInt8)].length ≤ 32} {le3 : [(0x03 : UInt8)].length ≤ 32}
-    (run : SFunc.RunCut prog sevm [] (St b [0, 184, tail] (copyMemory sevm M) G)
-      (.next (.reg (.log 0)) (.next (.push [0x01] le1) (.next (.reg .add)
-        (.next (.push [0x03] le3) (.next (.reg .sstore) (.last .stop)))))) (.done o)) :
-    ∃ G', o = .halted (St (afterSstore sevm (b.addLog (submissionLog sevm M)) 3 (1 + tail)) []
-      (submissionMemory sevm M) G') := by
-  obtain ⟨d, h, run⟩ := ric_next run
-  rcases of_run_reg h with ⟨pc, raw⟩
-  simp only [Rinst.run, Rinst.runCore] at raw
-  rw [show (St b [0, 184, tail] (copyMemory sevm M) G).popToNat =
-    .ok (0, St b [184, tail] (copyMemory sevm M) G) from rfl] at raw
-  simp only [Except.bind_ok] at raw
-  rw [show (St b [184, tail] (copyMemory sevm M) G).popToNat =
-    .ok (184, St b [tail] (copyMemory sevm M) G) from rfl] at raw
-  simp only [Except.bind_ok] at raw
-  rw [show (St b [tail] (copyMemory sevm M) G).popN ((0 : Fin 5) : Nat) =
-    .ok ([], St b [tail] (copyMemory sevm M) G) from rfl] at raw
-  simp only [Except.bind_ok] at raw
-  rcases Except.bind_eq_ok raw with ⟨s1, hcharge, rest⟩
-  rcases Except.bind_eq_ok rest with ⟨_, -, last⟩
-  cases last
-  have eqGas := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas hcharge)
-  have eqSt : s1 = St b [tail] (copyMemory sevm M) s1.gasLeft := eqGas
-  rw [eqSt] at run
-  simp only [St.memRead_fst, St.memRead_snd] at run
-  change SFunc.RunCut _ _ _ (St (b.addLog (submissionLog sevm M)) [tail]
-    (submissionMemory sevm M) s1.gasLeft) _ _ at run
-  winv 3
-  obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_sstore fork h
-  cases run with
-  | last terminal =>
-    change Except.ok _ = Except.ok _ at terminal
-    cases terminal
-    exact ⟨_, rfl⟩
 
 /-- A successful body run is non-static and ends in exactly `submissionPost`. -/
 theorem body_inv (fork : CoveredFork sevm.benvStat.fork)
@@ -309,9 +256,9 @@ theorem body_inv (fork : CoveredFork sevm.benvStat.fork)
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_calldatacopy h
   winv 2
-  change SFunc.RunCut _ _ _ (St (recordsWritten sevm b) [0, 184, tailWord sevm b]
-    (copyMemory sevm M) _) _ _ at run
-  obtain ⟨_, rfl⟩ := log_inv fork run
+  change SFunc.RunCut _ _ _ (St (recordsWritten sevm b) [0, Bytes.toB256 [0xb8], tailWord sevm b]
+    (copyMemory sevm M) _) logTail _ at run
+  obtain ⟨_, rfl⟩ := logTail_inv fork run
   exact ⟨dynamic, _, rfl⟩
 
 private theorem word_exact {x : UInt8} {xs : Bytes} {le : (x :: xs).length ≤ 32} {off key tail : B256}
@@ -348,40 +295,10 @@ private theorem word0_exact {key tail : B256} {f : SFunc}
   refine rx_push rfl (by change 2 < 1024; decide) ?_
   exact rx_add' rfl (by change 1 < 1024; decide) tail'
 
-private theorem log_exact {tail : B256} (fork : CoveredFork sevm.benvStat.fork)
-    (dynamic : sevm.isStatic = false) (slack : gCallStipend < G)
-    {le1 : [(0x01 : UInt8)].length ≤ 32} {le3 : [(0x03 : UInt8)].length ≤ 32} :
-    SFunc.RunExact prog sevm
-      (St b [0, 184, tail] (copyMemory sevm M)
-        (G + sstoreCost sevm (b.addLog (submissionLog sevm M)) 3 (1 + tail) + 3 + 3 + 3 +
-          logGas sevm M))
-      (.next (.reg (.log 0)) (.next (.push [0x01] le1) (.next (.reg .add)
-        (.next (.push [0x03] le3) (.next (.reg .sstore) (.last .stop))))))
-      (.halted (St (afterSstore sevm (b.addLog (submissionLog sevm M)) 3 (1 + tail)) []
-        (submissionMemory sevm M) G)) := by
-  have emitted : Ninst.RunCompiled sevm
-      (St b [0, 184, tail] (copyMemory sevm M)
-        (G + sstoreCost sevm (b.addLog (submissionLog sevm M)) 3 (1 + tail) + 3 + 3 + 3 +
-          logGas sevm M)) (.reg (.log 0))
-      (St (b.addLog (submissionLog sevm M)) [tail] (submissionMemory sevm M)
-        (G + sstoreCost sevm (b.addLog (submissionLog sevm M)) 3 (1 + tail) + 3 + 3 + 3)) :=
-    Ninst.runCompiled_log_of (n := 0) (i := 0) (sz := 184) (topics := []) (s := [tail])
-      rfl rfl dynamic (Devm.extCost_add_of_size rfl rfl) rfl rfl rfl
-  refine .next emitted ?_
-  refine rx_push rfl (by change 1 < 1024; decide) ?_
-  refine rx_add' rfl (by decide) ?_
-  refine rx_push rfl (by change 1 < 1024; decide) ?_
-  refine rx_sstore fork (by omega) dynamic ?_
-  exact .last rfl
-
-private def logTree : SFunc :=
-  (.next (.reg (.log 0)) (.next (.push [0x01] (by decide)) (.next (.reg .add)
-    (.next (.push [0x03] (by decide)) (.next (.reg .sstore) (.last .stop))))))
-
 private def memoryTree : SFunc :=
   (.next (.push [0xb8] (by decide)) (.next (.push [] (by decide)) (.next (.push [] (by decide))
     (.next (.reg .calldatacopy) (.next (.push [0xb8] (by decide)) (.next (.push [] (by decide))
-      logTree))))))
+      logTail))))))
 
 private def word5Tree : SFunc :=
   (.next (.push [0xa0] (by decide)) (.next (.reg .calldataload) (.next (.reg (.swap 0))
@@ -419,7 +336,7 @@ private theorem suffix_exact (fork : CoveredFork sevm.benvStat.fork)
   refine rx_calldatacopy (Devm.extCost_add_of_size rfl rfl) rfl ?_
   refine rx_push rfl (by change 1 < 1024; decide) ?_
   refine rx_push0 (h_push0 := fork.rules_push0) (by change 2 < 1024; decide) ?_
-  exact log_exact fork dynamic slack
+  exact logTail_exact (n := Bytes.toB256 [0xb8]) fork dynamic slack
 
 private theorem word5_exact {key tail : B256} {G' : Nat}
     (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
