@@ -533,7 +533,7 @@ theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg 
 
 /-- **`imbalance_message`.** -/
 theorem imbalance_message_holds : imbalance_message := fun d m A msg E am maxBurn burned stored ask req => by
-  obtain ⟨cost, refund, hc, h⟩ := imbalance_frame (m.facts A) (m.marked A) ask req
+  obtain ⟨cost, refund, hc, h⟩ := imbalance_frame (m.facts A) (m.marked A ask.coinsOpen.usdcParties.1) ask req
   refine ⟨cost, refund, Nat.le_trans hc (by decide), fun R hR hG => h R ?_ hG⟩
   have hR' : 800000 ≤ R := hR
   omega

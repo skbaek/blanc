@@ -457,8 +457,9 @@ theorem ExitPaid.congr {w w₁ w₂ : State} {E : Adr} {a : Nat} (h : ExitPaid w
   · rw [hcoin]; exact h.paid k
 
 /-- What a moment gives a message beyond `MomentFacts`. -/
-theorem Moment.marked {d : Deployment} (m : Moment d) (A : Assumes d m.through) : ExitMarked m.world :=
-  { covered := m.backed A
+theorem Moment.marked {d : Deployment} (m : Moment d) (A : Assumes d m.through) (unlisted : UsdcUnlisted m.world pool) :
+    ExitMarked m.world :=
+  { covered := m.backed A unlisted
     usdcProxy := Usdc.usdc_code_at_cut (d.sincePool m.history) m.block m.cut BodyStageCapabilities.historical A.circle.usdcCode
       A.circle.usdcCertified
     minter := m.minter A
@@ -598,7 +599,7 @@ theorem lp_exit_holds : lp_exit := by
   intro d m A tx E a mins hdata adm hopen req
   obtain ⟨prio, maxFee, form, ready⟩ := adm.form
   have mf := m.facts A
-  have mk := m.marked A
+  have mk := m.marked A hopen.usdcParties.1
   have hw : m.benv.state = m.world := rfl
   have hstatFork := adm.fork
   obtain ⟨debit, post, bout', hq, process, cum⟩ := tx_of_frame (r := exitRefund m.world E a) (index := m.nextIndex)
@@ -636,7 +637,7 @@ theorem lp_exit_holds : lp_exit := by
 /-- **`lp_exit`'s message.** -/
 theorem lp_exit_message_holds : lp_exit_message := by
   intro d m A msg E a mins ask req R hR hG
-  have mk := m.marked A
+  have mk := m.marked A ask.coinsOpen.usdcParties.1
   obtain ⟨post, hx, herr, hg, hrf, -, hpaid⟩ := exit_message (m.facts A) mk ask req R hR hG
   exact ⟨post, hx, herr, hg, by rw [hrf, Int.toNat_natCast], hpaid⟩
 

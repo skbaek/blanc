@@ -83,10 +83,6 @@ theorem held_one {u : Jaune.State} {a : Adr} (h : UsdcPacked u) : coinHeld u a 1
 
 theorem bits_of {x : B256} (h : x.toNat < 2 ^ 255) : Usdc.balanceBits x = x.toNat := Nat.mod_eq_of_lt h
 
-theorem unfrozen_lt {x : B256} (h : Usdc.frozenBit x = false) : x.toNat < 2 ^ 255 := by
-  unfold Usdc.frozenBit at h
-  simpa only [decide_eq_false_iff_not, not_le] using h
-
 theorem sub_nat {x V : B256} (h : V.toNat ≤ x.toNat) : (x - V).toNat = x.toNat - V.toNat :=
   B256.toNat_sub_eq_of_le _ _ (B256.le_iff_toNat_le_toNat.2 h)
 

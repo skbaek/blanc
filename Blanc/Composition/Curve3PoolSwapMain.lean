@@ -791,7 +791,7 @@ theorem swap_message_holds : swap_message := by
   subst ht
   obtain ⟨hA, hD, rfl⟩ := hin
   have fees := m.feesWithin A
-  obtain ⟨admin', h1, h2⟩ := swap_core (m.facts A) (m.marked A) ask req fees.1 fees.2 rfl hA hD
+  obtain ⟨admin', h1, h2⟩ := swap_core (m.facts A) (m.marked A ask.coinsOpen.usdcParties.1) ask req fees.1 fees.2 rfl hA hD
   obtain rfl : admin' = admin := Option.some.inj (h1.symm.trans hadm)
   obtain ⟨post, hx, herr, hg, hrf, -, hpaid⟩ := h2 R hR hG
   exact ⟨post, hx, herr, hg, by rw [hrf, Int.toNat_natCast], hpaid⟩
@@ -851,7 +851,7 @@ theorem swap_holds : swap := by
   intro d m A tx E i j dx minDy spent hdata hspent adm hopen req
   obtain ⟨prio, maxFee, form, ready⟩ := adm.form
   have mf := m.facts A
-  have mk := m.marked A
+  have mk := m.marked A hopen.usdcParties.1
   have fees := m.feesWithin A
   have hw : m.benv.state = m.world := rfl
   have hstatFork := adm.fork
