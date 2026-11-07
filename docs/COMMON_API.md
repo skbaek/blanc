@@ -8620,7 +8620,7 @@ as parameters, so a generated tree is an instance by `rfl`. `init_inv`/`init_exa
 the post state `feeGetterPost`. Exact walks take `PUSH0`'s activation as a hypothesis. The excess
 read, the inhibitor guard and the submission body are not here, since they differ by contract.
 The worked consumers are `Blanc/Lift/WithdrawalRequest/FeeLoop.lean` and
-`Blanc/Lift/BuilderRequest/Deposit/FeeWindow.lean`.
+`Blanc/Lift/BuilderRequest/FeePath.lean`.
 
 #### C9.10. I need a Vyper 0.2 runtime's idioms
 
