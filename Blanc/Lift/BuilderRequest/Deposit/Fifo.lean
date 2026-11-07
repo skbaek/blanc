@@ -18,6 +18,7 @@ transactions. **Build target:** Jaune pin `e8db2742`, built on `tests@v21.0.1`, 
 namespace Blanc.Lift.BuilderRequest.Deposit
 
 open Jaune
+open RequestSystem
 open Creation (address)
 
 /-- The amount's bytes as the code writes them, low byte first. -/
@@ -240,7 +241,7 @@ theorem recordBytes_eq {rd : B256 → B256} {h i : B256} (r : Record)
 /-- Queue keys at a represented head. -/
 theorem recordKey_slot (head i : Nat) : recordKey head.toB256 i.toB256 = queueSlot 6 (head + i) 0 := by
   unfold recordKey
-  rw [toB256_add_toB256, ← record_key, Nat.add_comm i head]
+  rw [Nat.toB256_add_toB256, ← record_key, Nat.add_comm i head]
   rfl
 
 /-- **The deposit builder's FIFO.** On storage representing a queue, the checked system call returns the
@@ -258,8 +259,8 @@ theorem system_call_fifo {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
   obtain ⟨hcall, hgas⟩ := sysCall.spec hfork installed
   replace hcall : processCheckedSystemTransaction benv address [] =
       .ok (sysState sysShape benv.state address, _) := hcall
-  refine ⟨_, _, hcall, hgas, ?_, represents_sysState sysShape (by decide) rep⟩
-  refine sysOutput.output_represented (out := Record.out) rep ?_
+  refine ⟨_, _, hcall, hgas, ?_, represents_sysState sysShape (by decide) rfl rep⟩
+  refine output_represented sysOutput (out := Record.out) rep ?_
   intro i hi hcap
   have hlive := rep.live i hi
   have key : ∀ (x : B256) (n : Nat), x = Nat.toB256 n → n < 6 →

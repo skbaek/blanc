@@ -4,7 +4,7 @@ import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.PackedSha
 import Blanc.Lift.ExactWalkSolc
 import Blanc.RequestFeeWord
-import Blanc.Lift.SystemCaller
+import Blanc.Lift.RequestSystem.Dispatch
 
 /-!
 # The EIP-8282 builder contracts' user fee path
@@ -23,6 +23,7 @@ namespace Blanc.Lift.BuilderRequest
 
 open Jaune
 open RequestFee (PushWord feeLoopGas initTree loopTree postloopTree selected)
+open RequestSystem (dispatchTree dispatchArm dispatchGas dispatch_exact system_push)
 
 /-- The excess the builder codes quote the fee from, read off the bytes: `slot0 + (count - target)`
 in words when `count > target`, else `slot0`. See `targetExcess_toNat` for its natural value. -/
@@ -51,12 +52,6 @@ def feeBase (sevm : Sevm) (b : Devm) : Devm := afterSload sevm (afterSload sevm 
 /-- `slot0 + max(0, count - target)` from the frame's own storage. -/
 def storedExcess (target : B256) (sevm : Sevm) (b : Devm) : B256 :=
   targetExcess target (b.getStorVal sevm.currentTarget 0) (b.getStorVal sevm.currentTarget 1)
-
-/-- `CALLER; PUSH20 SYSTEM; EQ; PUSH dest; JUMPI`. -/
-def dispatchTree (dest : PushWord) (user system : SFunc) : SFunc :=
-  (.next (.reg .caller) (.next (.push [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-    0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe] (by decide)) (.next (.reg .eq)
-  (.next (.push (dest.head :: dest.tail) dest.le) (.branch user system)))))
 
 /-- `PUSH0; SLOAD; DUP1; PUSH32 MAX; EQ; PUSH dest; JUMPI`: revert when slot 0 is the inhibitor. -/
 def inhibitorTree (dest : PushWord) (active revert : SFunc) : SFunc :=
@@ -123,19 +118,7 @@ def feePathGas (sevm : Sevm) (b : Devm) (iterations : Nat) : Nat :=
   feePathFixedGas + feeLoopGas iterations + sloadCost sevm b 0 +
     sloadCost sevm (afterSload sevm b 0) 1
 
-/-- The charge of `dispatchTree`. -/
-def dispatchGas : Nat := 21
-
 variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
-
-/-- The arm the caller selects. -/
-def dispatchArm (sevm : Sevm) (user system : SFunc) : SFunc :=
-  if sevm.caller = systemAddress then system else user
-
-private theorem system_push :
-    Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe] =
-      systemAddress.toB256 := rfl
 
 /-- A successful dispatch reaches the arm the caller selects, on the same stack and memory. -/
 theorem dispatch_inv {dest : PushWord} {user system : SFunc}
@@ -159,24 +142,6 @@ theorem dispatch_inv {dest : PushWord} {user system : SFunc}
       rw [ite_eq_right hc] at flag
       exact flag rfl
     exact ⟨G', by simpa only [dispatchArm, ite_eq_left hcaller] using run.uncut⟩
-
-/-- Dispatch, forward, at its exact charge. -/
-theorem dispatch_exact {dest : PushWord} {user system : SFunc}
-    (tail : SFunc.RunExact fs sevm (St b [] M G) (dispatchArm sevm user system) o) :
-    SFunc.RunExact fs sevm (St b [] M (G + dispatchGas)) (dispatchTree dest user system) o := by
-  have hgas : G + dispatchGas = G + 10 + 3 + 3 + 3 + 2 := by
-    simp only [dispatchGas, Nat.add_assoc]
-  rw [hgas]
-  unfold dispatchTree
-  refine rx_caller (by decide) ?_
-  refine rx_push system_push (by change 1 < 1024; decide) ?_
-  refine rx_eq (adr_eqCheck systemAddress sevm.caller) (by decide) ?_
-  refine rx_push rfl (by change 1 < 1024; decide) ?_
-  by_cases h : sevm.caller = systemAddress
-  · simp only [ite_eq_left h, dispatchArm] at tail ⊢
-    exact rx_branch_succ (by decide) tail
-  · simp only [ite_eq_right h, dispatchArm] at tail ⊢
-    exact rx_branch_zero tail
 
 /-- A run past the guard has slot 0 off the inhibitor. -/
 theorem inhibitor_inv {dest : PushWord} {active revert : SFunc}

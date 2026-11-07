@@ -13,6 +13,7 @@ storage is reachable, or about any history, and nothing here is stated for Amste
 namespace Blanc.Lift.BuilderRequest.Deposit
 
 open Jaune
+open RequestSystem (dispatchGas)
 
 /-- The storage a submission leaves, in the code's write order, so it stays exact when a record key
 aliases a metadata slot: the count in slot 1 is bumped, six calldata words go to the six keys from

@@ -1,4 +1,5 @@
 import Blanc.Lift.BuilderRequest.SystemPath
+import Blanc.Lift.RequestSystem.BodySegs
 import Blanc.Lift.BuilderRequest.Deposit.Jumps
 
 /-!
@@ -12,14 +13,10 @@ little-endian over the third word, three more words. Any storage, any memory.
 namespace Blanc.Lift.BuilderRequest.Deposit
 
 open Jaune
+open RequestSystem
 
 /-- The deposit runtime's pushed words. -/
-def sysShape : SysShape where
-  under := ⟨0x01, [0x31], by decide⟩
-  cap := ⟨0x40, [], by decide⟩
-  post := ⟨0x01, [0xd7], by decide⟩
-  emptied := ⟨0x01, [0xe9], by decide⟩
-  excess := ⟨0x01, [0xf4], by decide⟩
+def sysWords : LatchWords where
   latch := ⟨0x02, [0x42], by decide⟩
   noCarry := ⟨0x02, [0x30], by decide⟩
   carry := ⟨0x02, [0x38], by decide⟩
@@ -27,62 +24,16 @@ def sysShape : SysShape where
   target := ⟨0x08, [], by decide⟩
   len := ⟨0xb8, [], by decide⟩
 
-/-! ## Segments of the certified body -/
+/-- The deposit runtime's pushed words, as a system-path shape. -/
+def sysShape : SysShape :=
+  latchShape sysWords ⟨0x01, [0x31], by decide⟩ ⟨0x40, [], by decide⟩ ⟨0x01, [0xd7], by decide⟩
+    ⟨0x01, [0xe9], by decide⟩ ⟨0x01, [0xf4], by decide⟩
 
-/-- The expansion-inclusive charge of one memory write. -/
-def chg (M : Mem) (o : B256) (n : Nat) : Nat :=
-  gVerylow + (calculateMemoryGasCost (memExtSize M.size o.toNat n) - calculateMemoryGasCost M.size)
+/-! ## Segments of the certified body -/
 
 section seg
 
 variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {oc : Outcome} {M : Mem} {G : Nat}
-
-/-- `DUP2 PUSH1 k ADD SLOAD DUP2 MSTORE PUSH1 0x20 ADD`: read one record word, store it, advance. -/
-theorem seg_word {k : UInt8} {kv o key v : B256} {T : List B256} {le1 le2}
-    (hacc : sevm.benvStat.rules.access = .eip2929) (hk : Bytes.toB256 [k] = kv)
-    (hroom : T.length ≤ 1000) (hv : b.getStorVal sevm.currentTarget (kv + key) = v)
-    (next : SFunc.RunExact fs sevm
-      (St (afterSloadA sevm b (kv + key)) (((32 : B256) + o) :: key :: T)
-        (M.write o.toNat v.toBytes) G) f oc) :
-    SFunc.RunExact fs sevm
-      (St b (o :: key :: T) M (G + 18 + chg M o 32 + sloadCost sevm b (kv + key)))
-      (.next (.reg (.dup 1)) (.next (.push [k] le1) (.next (.reg .add) (.next (.reg .sload)
-        (.next (.reg (.dup 1)) (.next (.reg .mstore) (.next (.push [0x20] le2)
-          (.next (.reg .add) f)))))))) oc := by
-  have e : G + 18 + chg M o 32 + sloadCost sevm b (kv + key) =
-      G + 3 + 3 + chg M o 32 + 3 + sloadCost sevm b (kv + key) + 3 + 3 + 3 := by omega
-  rw [e]
-  apply rx_dup2 (by rroom)
-  apply rx_push hk (by rroom)
-  apply rx_add' rfl (by rroom)
-  apply rx_sloadV hacc (by rroom) hv
-  apply rx_dup2 (by rroom)
-  apply rx_mstore (Devm.extCost_add_of_size rfl rfl) rfl
-  apply rx_push (w := (32 : B256)) (by decide) (by rroom)
-  apply rx_add' rfl (by rroom)
-  exact next
-
-/-- `DUP2 SLOAD DUP2 MSTORE PUSH1 0x20 ADD`: the first word, at the key itself. -/
-theorem seg_word0 {o key v : B256} {T : List B256} {le2}
-    (hacc : sevm.benvStat.rules.access = .eip2929) (hroom : T.length ≤ 1000)
-    (hv : b.getStorVal sevm.currentTarget key = v)
-    (next : SFunc.RunExact fs sevm
-      (St (afterSloadA sevm b key) (((32 : B256) + o) :: key :: T)
-        (M.write o.toNat v.toBytes) G) f oc) :
-    SFunc.RunExact fs sevm
-      (St b (o :: key :: T) M (G + 12 + chg M o 32 + sloadCost sevm b key))
-      (.next (.reg (.dup 1)) (.next (.reg .sload) (.next (.reg (.dup 1)) (.next (.reg .mstore)
-        (.next (.push [0x20] le2) (.next (.reg .add) f)))))) oc := by
-  have e : G + 12 + chg M o 32 + sloadCost sevm b key =
-      G + 3 + 3 + chg M o 32 + 3 + sloadCost sevm b key + 3 := by omega
-  rw [e]
-  apply rx_dup2 (by rroom)
-  apply rx_sloadV hacc (by rroom) hv
-  apply rx_dup2 (by rroom)
-  apply rx_mstore (Devm.extCost_add_of_size rfl rfl) rfl
-  apply rx_push (w := (32 : B256)) (by decide) (by rroom)
-  apply rx_add' rfl (by rroom)
-  exact next
 
 /-- `DUP2 PUSH1 2 ADD SLOAD DUP1 DUP3 MSTORE PUSH1 0x40 SHR PUSH8 mask AND`: the packed word, stored
 whole, with its amount split out. -/
@@ -116,27 +67,6 @@ theorem seg_packed {o key mask v : B256} {T : List B256} {xs : Bytes} {x : UInt8
   apply rx_and rfl (by rroom)
   exact next
 
-/-- `DUP2 PUSH1 s SHR DUP2 PUSH1 n ADD MSTORE8`: one little-endian amount byte. -/
-theorem seg_byte {s n : UInt8} {sn : Nat} {nv p a : B256} {T : List B256} {le1 le2}
-    (hsh : sevm.benvStat.rules.op.shifts = true)
-    (hs : (Bytes.toB256 [s]).toNat = sn) (hn : Bytes.toB256 [n] = nv)
-    (hroom : T.length ≤ 1000)
-    (next : SFunc.RunExact fs sevm
-      (St b (p :: a :: T) (M.write (nv + p).toNat [(a >>> sn).2.2.toUInt8]) G) f oc) :
-    SFunc.RunExact fs sevm (St b (p :: a :: T) M (G + 18 + chg M (nv + p) 1))
-      (.next (.reg (.dup 1)) (.next (.push [s] le1) (.next (.reg .shr) (.next (.reg (.dup 1))
-        (.next (.push [n] le2) (.next (.reg .add) (.next (.reg .mstore8) f))))))) oc := by
-  have e : G + 18 + chg M (nv + p) 1 = G + chg M (nv + p) 1 + 3 + 3 + 3 + 3 + 3 + 3 := by omega
-  rw [e]
-  apply rx_dup2 (by rroom)
-  apply rx_push rfl (by rroom)
-  apply rx_shr (v := a >>> sn) (by rw [hs]) hsh (by rroom)
-  apply rx_dup2 (by rroom)
-  apply rx_push hn (by rroom)
-  apply rx_add' rfl (by rroom)
-  apply rx_mstore8 (Devm.extCost_add_of_size rfl rfl) rfl
-  exact next
-
 /-- `MSTORE8 PUSH1 0x20 ADD`: the amount's low byte, then the next word's offset. -/
 theorem seg_low {p a o key : B256} {T : List B256} {le}
     (hroom : T.length ≤ 1000)
@@ -151,27 +81,6 @@ theorem seg_low {p a o key : B256} {T : List B256} {le}
   apply rx_add' rfl (by rroom)
   exact next
 
-/-- `SWAP1 PUSH1 5 ADD SLOAD SWAP1 MSTORE`: the last word, which consumes the key. -/
-theorem seg_word5 {o key v : B256} {T : List B256} {le}
-    (hacc : sevm.benvStat.rules.access = .eip2929) (hroom : T.length ≤ 1000)
-    (hv : b.getStorVal sevm.currentTarget ((5 : B256) + key) = v)
-    (next : SFunc.RunExact fs sevm
-      (St (afterSloadA sevm b ((5 : B256) + key)) T (M.write o.toNat v.toBytes) G) f oc) :
-    SFunc.RunExact fs sevm
-      (St b (o :: key :: T) M (G + 12 + chg M o 32 + sloadCost sevm b ((5 : B256) + key)))
-      (.next (.reg (.swap 0)) (.next (.push [0x05] le) (.next (.reg .add) (.next (.reg .sload)
-        (.next (.reg (.swap 0)) (.next (.reg .mstore) f)))))) oc := by
-  have e : G + 12 + chg M o 32 + sloadCost sevm b ((5 : B256) + key) =
-      G + chg M o 32 + 3 + sloadCost sevm b ((5 : B256) + key) + 3 + 3 + 3 := by omega
-  rw [e]
-  apply rx_swap1
-  apply rx_push (w := (5 : B256)) (by decide) (by rroom)
-  apply rx_add' rfl (by rroom)
-  apply rx_sloadV hacc (by rroom) hv
-  apply rx_swap1
-  apply rx_mstore (Devm.extCost_add_of_size rfl rfl) rfl
-  exact next
-
 /-- `DUP2 PUSH1 0x10 ADD`: the amount's byte pointer. -/
 theorem seg_ptr {o a : B256} {T : List B256} {le}
     (hroom : T.length ≤ 1000)
@@ -183,28 +92,6 @@ theorem seg_ptr {o a : B256} {T : List B256} {le}
   apply rx_dup2 (by rroom)
   apply rx_push (w := (16 : B256)) (by decide) (by rroom)
   apply rx_add' rfl (by rroom)
-  exact next
-
-/-- The prefix: compute the record's key and memory offset. -/
-theorem seg_start {i c h t : B256} {le1 le2 le3}
-    (next : SFunc.RunExact fs sevm
-      (St b [(184 : B256) * i, (4 : B256) + (6 : B256) * (i + h), i, c, h, t] M G) f oc) :
-    SFunc.RunExact fs sevm (St b [i, c, h, t] M (G + 34))
-      (.next (.reg (.dup 2)) (.next (.reg (.dup 1)) (.next (.reg .add) (.next (.push [0x06] le1)
-        (.next (.reg .mul) (.next (.push [0x04] le2) (.next (.reg .add) (.next (.reg (.dup 1))
-          (.next (.push [0xb8] le3) (.next (.reg .mul) f)))))))))) oc := by
-  have e : G + 34 = G + 5 + 3 + 3 + 3 + 3 + 5 + 3 + 3 + 3 + 3 := by omega
-  rw [e]
-  apply rx_dup3 (by rroom)
-  apply rx_dup2 (by rroom)
-  apply rx_add' rfl (by rroom)
-  apply rx_push (w := (6 : B256)) (by decide) (by rroom)
-  apply rx_mul rfl (by rroom)
-  apply rx_push (w := (4 : B256)) (by decide) (by rroom)
-  apply rx_add' rfl (by rroom)
-  apply rx_dup2 (by rroom)
-  apply rx_push (w := (184 : B256)) (by decide) (by rroom)
-  apply rx_mul rfl (by rroom)
   exact next
 
 end seg
@@ -335,8 +222,8 @@ theorem body_run {sevm : Sevm} {b : Devm} {M : Mem} {gas : Nat} {i c h t : B256}
     apply rx_add' rfl (by rroom)
     apply rx_push rfl (by rroom)
     exact rx_jump entry7 next
-  have s5 := seg_word5 (M := m13 rd h i M) (b := r5 sevm b h i) (o := off5 i) (key := recordKey h i) (T := [i, c, h, t]) (v := rd (5 + recordKey h i))
-    (le := by decide) hacc (by rroom) (by simp only [r5, r4, r3, r2, r1, afterSloadA_getStorVal, hv]) s17
+  have s5 := seg_last (k := 0x05) (kv := 5) (M := m13 rd h i M) (b := r5 sevm b h i) (o := off5 i) (key := recordKey h i) (T := [i, c, h, t]) (v := rd (5 + recordKey h i))
+    (le := by decide) hacc (by decide) (by rroom) (by simp only [r5, r4, r3, r2, r1, afterSloadA_getStorVal, hv]) s17
   have s4 := seg_word (k := 0x04) (kv := 4) (M := m12 rd h i M) (b := r4 sevm b h i) (o := off4 i) (key := recordKey h i)
     (T := [i, c, h, t]) (v := rd (4 + recordKey h i)) (le1 := by decide) (le2 := by decide) hacc (by decide) (by rroom)
     (by simp only [r4, r3, r2, r1, afterSloadA_getStorVal, hv]) s5
@@ -378,8 +265,8 @@ theorem body_run {sevm : Sevm} {b : Devm} {M : Mem} {gas : Nat} {i c h t : B256}
     (by simp only [r1, afterSloadA_getStorVal, hv]) pk
   have w0 := seg_word0 (M := M) (b := b) (o := off0 i) (key := recordKey h i) (T := [i, c, h, t]) (v := rd (recordKey h i))
     (le2 := by decide) hacc (by rroom) (hv _) w1
-  have st := seg_start (i := i) (c := c) (h := h) (t := t) (le1 := by decide) (le2 := by decide)
-    (le3 := by decide) w0
+  have st := seg_start (w := 0x06) (wv := 6) (l := 0xb8) (lv := 184) (i := i) (c := c) (h := h) (t := t)
+    (le1 := by decide) (le2 := by decide) (le3 := by decide) (by decide) (by decide) w0
   have e : ∀ g, gas + 297 + readsGas sevm b (recordKeys h i) +
         MemoryStage.selectedGas (recordStage rd h i) M = g →
       SFunc.RunExact cert.prog sevm (St b [i, c, h, t] M g) t_013b_c2 oc →
@@ -411,10 +298,9 @@ def sysPath : SysPath where
   stage := recordStage
   stage_length := fun _ _ _ => rfl
   root := rfl
-  entry2 := rfl
-  entry3 := rfl
-  entry4 := rfl
-  entry5 := rfl
+  entry := rfl
+  excessEntry := rfl
+  excess_run := fun hacc hpush0 hdata next => excess_run sysWords hacc hpush0 hdata rfl rfl next
   body_run := fun hacc hsh next => body_run hacc hsh next
 
 end Blanc.Lift.BuilderRequest.Deposit

@@ -1,7 +1,7 @@
-import Blanc.Lift.BuilderRequest.SystemPath
+import Blanc.Lift.RequestSystem.Path
 
 /-!
-# The builder system call, under Amsterdam: gas and the envelope
+# A request contract's system call, under Amsterdam: gas and the envelope
 
 `SysPath.frameCost` is bounded against Jaune's `StateGasRules` record (`frameBound`), and the frame is
 taken through `processCheckedSystemTransaction` with its exact post state. `SysMemory` is what a runtime
@@ -11,7 +11,7 @@ The `Ready` base is discharged from the real prepared base: the reservoir is the
 (`systemMaxSstoresPerCall × storageSet`), of which the frame's four stores need at most four units.
 -/
 
-namespace Blanc.Lift.BuilderRequest
+namespace Blanc.Lift.RequestSystem
 
 open Jaune
 
@@ -153,16 +153,10 @@ theorem frameCost_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
       (afterSstoreA A sevm (k.excessRead sevm b) 0 (k.excessStored sevm b)) 1 0
     simp only [finalGas]
     omega
-  have hExcess : excessGas k.shape.target.word sevm (k.booked sevm b) ≤ 95 + 2 * gasColdSload := by
+  have hExcess : excessGas k.shape.fixed sevm (k.booked sevm b) ≤ 95 + 2 * gasColdSload := by
     have c1 := sloadCost_le sevm (k.booked sevm b) 0
     have c2 := sloadCost_le sevm (afterSloadA sevm (k.booked sevm b) 0) 1
-    have c3 : ∀ T e n : B256, excessFixed T e n ≤ 95 := by
-      intro T e n
-      simp only [excessFixed]
-      split
-      · decide
-      · split <;> decide
-    have c4 := c3 k.shape.target.word ((k.booked sevm b).getStorVal sevm.currentTarget 0)
+    have c4 := k.shape.fixed_le ((k.booked sevm b).getStorVal sevm.currentTarget 0)
       ((k.booked sevm b).getStorVal sevm.currentTarget 1)
     simp only [excessGas]
     omega
@@ -241,14 +235,34 @@ end Envelope
 
 end SysPath
 
-/-- The exact post state of a builder system call on empty calldata: pointers, excess and count
+/-- The exact post state of a request system call on empty calldata: pointers, excess and count
 updated as the bytes define, nothing else. -/
 def sysState (p : SysShape) (σ : State) (a : Adr) : State :=
   let rd : B256 → B256 := fun key => (σ.getStor a).get key
   let c := drainCount p.cap.word (rd 2) (rd 3)
   let σ1 := if rd 2 + c = rd 3 then (σ.setStorVal a 2 0).setStorVal a 3 0
     else σ.setStorVal a 2 (rd 2 + c)
-  (σ1.setStorVal a 0 (excessNext p.target.word (rd 0) (rd 1))).setStorVal a 1 0
+  (σ1.setStorVal a 0 (p.next (rd 0) (rd 1))).setStorVal a 1 0
+
+/-- A storage write leaves every account's code alone. -/
+theorem getCode_setStorVal (σ : State) (a : Adr) (key v : B256) (x : Adr) :
+    (σ.setStorVal a key v).getCode x = σ.getCode x := by
+  unfold State.getCode State.setStorVal
+  dsimp only
+  by_cases h : a = x
+  · subst h
+    split
+    · rw [State.get_setPresent_self]
+    · rw [State.get_set_self]
+  · split
+    · rw [State.get_setPresent_ne _ h]
+    · rw [State.get_set_ne _ h]
+
+/-- A request system call's post state changes no account's code, so a later call still sees its own. -/
+theorem sysState_getCode (p : SysShape) (σ : State) (a x : Adr) :
+    (sysState p σ a).getCode x = σ.getCode x := by
+  simp only [sysState]
+  split <;> simp only [getCode_setStorVal]
 
 namespace SysPath
 
@@ -294,7 +308,7 @@ theorem framePost_state (sevm : Sevm) (b : Devm) (G : Nat) :
   show (finalBase sevm (k.excessRead sevm b) (k.excessStored sevm b)).state = _
   simp only [finalBase, afterSstoreA_state, excessRead, afterSloadA_state, booked, bookBase_state,
     drain_state]
-  have e0 : k.excessStored sevm b = excessNext k.shape.target.word (rd sevm b 0) (rd sevm b 1) := by
+  have e0 : k.excessStored sevm b = k.shape.next (rd sevm b 0) (rd sevm b 1) := by
     simp only [excessStored]
     rw [booked_get (by decide) (by decide), booked_get (by decide) (by decide)]
   rw [e0]
@@ -343,7 +357,7 @@ structure SysCall (k : SysPath) where
   bound_le : k.frameBound memory.alloc ≤ bound
   room : bound + gCallStipend < systemTransactionGas
 
-/-- **A builder system call under Amsterdam with its exact post state**, from any storage. -/
+/-- **A request system call under Amsterdam with its exact post state**, from any storage. -/
 theorem SysCall.spec {k : SysPath} (c : SysCall k) {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode c.target = k.code) :
     processCheckedSystemTransaction benv c.target [] =
@@ -353,4 +367,4 @@ theorem SysCall.spec {k : SysPath} (c : SysCall k) {benv : Benv} (hfork : benv.s
   SysPath.system_call_spec c.memory hfork installed c.nonempty c.size_ne c.not_precompile c.bound_le
     c.room
 
-end Blanc.Lift.BuilderRequest
+end Blanc.Lift.RequestSystem

@@ -1,5 +1,5 @@
 import Blanc.Lift.BuilderRequest.Deposit.System
-import Blanc.Lift.BuilderRequest.SystemCall
+import Blanc.Lift.RequestSystem.Call
 import Blanc.Lift.BuilderRequest.Deposit.Creation.Address
 
 /-!
@@ -16,6 +16,7 @@ anything about a first Amsterdam block's transactions.
 namespace Blanc.Lift.BuilderRequest.Deposit
 
 open Jaune
+open RequestSystem
 open Creation (address)
 
 section offsets
@@ -123,5 +124,14 @@ theorem system_call_ok {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode address = code) : SystemCallOk benv :=
   let h := sysCall.spec hfork installed
   ⟨_, _, h.1, h.2⟩
+
+/-- `system_call_ok` with the call's exact post state. -/
+theorem system_call_state {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
+    (installed : benv.state.getCode address = code) :
+    ∃ out, processCheckedSystemTransaction benv address [] =
+        .ok (sysState sysShape benv.state address, out) ∧
+      systemTransactionGas - out.gasLeft ≤ 888000 :=
+  let h := sysCall.spec hfork installed
+  ⟨_, h.1, h.2⟩
 
 end Blanc.Lift.BuilderRequest.Deposit

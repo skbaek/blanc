@@ -432,7 +432,7 @@ SHARED += [
 SHARED += ['Lift.SystemExecution.BeaconRoots.Cert', 'Lift.SystemExecution.BeaconRoots.Check', 'Lift.SystemExecution.BeaconRoots.Jumps', 'Lift.SystemExecution.BeaconRoots.Prog', 'Lift.SystemExecution.BeaconRoots.SystemWalk', 'Lift.SystemExecution.HistoryStorage.Cert', 'Lift.SystemExecution.HistoryStorage.Check', 'Lift.SystemExecution.HistoryStorage.Jumps', 'Lift.SystemExecution.HistoryStorage.Prog', 'Lift.SystemExecution.HistoryStorage.SystemWalk', 'Lift.SystemExecution.ConsolidationRequest.Cert', 'Lift.SystemExecution.ConsolidationRequest.Check', 'Lift.SystemExecution.ConsolidationRequest.Jumps', 'Lift.SystemExecution.ConsolidationRequest.Prog', 'Lift.SystemExecution.ConsolidationRequest.SystemWalk']
 
 CONTRACTS = {
-    "withdrawal-request": ["Lift.WithdrawalRequest.Cert", "Lift.WithdrawalRequest.Check",
+    "withdrawal-request": ["Lift.WithdrawalRequest.AmsterdamSystem", "Lift.WithdrawalRequest.Cert", "Lift.WithdrawalRequest.Check",
                            "Lift.WithdrawalRequest.Jumps", "Lift.WithdrawalRequest.Model",
                            "Lift.WithdrawalRequest.Layout", "Lift.WithdrawalRequest.Prog",
                            "Lift.WithdrawalRequest.Dispatch", "Lift.WithdrawalRequest.SystemSetup",
@@ -1456,6 +1456,10 @@ SHARED += ["Lift.Create2Factory.Cert", "Lift.Create2Factory.Check", "Lift.Create
 SHARED += ["Lift.AmsterdamWalk", "Lift.SystemCallAmsterdam"]
 # The two pushed-word facts of a request contract's dispatch and inhibitor guard.
 SHARED += ["Lift.SystemCaller", "MemoryWindows"]
+# The system path all four Amsterdam request contracts share (blanc-eip8282-builder-requests-v1 O9).
+SHARED += ["Lift.RequestSystem.Dispatch", "Lift.RequestSystem.Path", "Lift.RequestSystem.Call",
+           "Lift.RequestSystem.Output", "Lift.RequestSystem.BodySegs",
+           "Lift.RequestSystem.PlainExcess", "Lift.SystemExecution.ConsolidationRequest.AmsterdamSystem"]
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
@@ -1464,8 +1468,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Creation.Deploy", "Lift.BuilderRequest.Deposit.FeeWindow",
     "Lift.BuilderRequest.Deposit.Submission", "Lift.BuilderRequest.Deposit.Frames",
     "Lift.BuilderRequest.FeePath", "Lift.BuilderRequest.QueueLayout",
-    "Lift.BuilderRequest.SystemPath", "Lift.BuilderRequest.SystemCall",
-    "Lift.BuilderRequest.SystemOutput",
+    "Lift.BuilderRequest.SystemPath", "Lift.BuilderRequest.SystemOutput",
     "Lift.BuilderRequest.Deposit.Fifo", "Lift.BuilderRequest.Exit.Fifo",
     "Lift.BuilderRequest.Deposit.System", "Lift.BuilderRequest.Deposit.SystemCall",
     "Lift.BuilderRequest.Exit.System", "Lift.BuilderRequest.Exit.SystemCall",
@@ -1488,6 +1491,7 @@ CONTRACTS["builder-request"] = [
 # Each entry is a nonempty tuple of distinct CONTRACTS keys. Adding a composition
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
+    "Composition.RequestPhaseAmsterdam": ('builder-request', 'withdrawal-request'),
     "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),
     "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request',),
     "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request',),

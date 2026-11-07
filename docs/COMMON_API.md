@@ -8652,9 +8652,22 @@ the post state `feeGetterPost`. Exact walks take `PUSH0`'s activation as a hypot
 read, the inhibitor guard and the submission body are not here, since they differ by contract.
 The worked consumers are `Blanc/Lift/WithdrawalRequest/FeeLoop.lean` and
 `Blanc/Lift/BuilderRequest/FeePath.lean`. The builder family's queue layout, generic over record
-width, is family-local at `Blanc/Lift/BuilderRequest/QueueLayout.lean`. Its system path under Amsterdam, a
-candidate shape for EIP-7002 and EIP-7251 under Amsterdam, is `SysPath` in
-`Blanc/Lift/BuilderRequest/SystemPath.lean`, also family-local.
+width, is family-local at `Blanc/Lift/BuilderRequest/QueueLayout.lean`.
+
+Under Amsterdam, all four request contracts' system paths are one instance family. `SysShape` and `SysPath`
+in `Blanc/Lift/RequestSystem/Path.lean` are a runtime's pushed words, excess arm and record body, with the
+whole frame from any storage (`frame_run`); its caller dispatch is `Blanc/Lift/RequestSystem/Dispatch.lean`.
+`SysCall.spec` in `Blanc/Lift/RequestSystem/Call.lean` takes it through the checked system call, with
+`sysState` as the exact post state and a gas bound against the rule record; `sysState_getCode` says no
+account's code moves. `SysOutput` and `runRequestContracts_step` in `Blanc/Lift/RequestSystem/Output.lean`
+read the return window and one request-phase step. A record body's segments (`seg_start`, `seg_source`,
+`seg_word`, `seg_last`, `seg_byte`) are `Blanc/Lift/RequestSystem/BodySegs.lean`. The EIP-7002 and EIP-7251
+excess arm (no latch; the inhibitor counts as zero) is `plainShape` in
+`Blanc/Lift/RequestSystem/PlainExcess.lean`; the EIP-8282 arm is `latchShape` in
+`Blanc/Lift/BuilderRequest/SystemPath.lean`, family-local. Worked consumers:
+`Blanc/Lift/WithdrawalRequest/AmsterdamSystem.lean`,
+`Blanc/Lift/SystemExecution/ConsolidationRequest/AmsterdamSystem.lean`, and the phase at
+`Blanc/Composition/RequestPhaseAmsterdam.lean`.
 
 #### C9.10. I need a Vyper 0.2 runtime's idioms
 
