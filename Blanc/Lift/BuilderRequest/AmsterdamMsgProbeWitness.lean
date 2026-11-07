@@ -1,6 +1,8 @@
 import Blanc.Lift.BuilderRequest.AmsterdamMsgProbeCall
 import Blanc.Lift.BuilderRequest.Deposit.Creation.Address
 import Blanc.ConcreteRun
+import Blanc.Lift.BuilderRequest.AmsterdamMsgProbeInhibited
+import Blanc.Lift.BuilderRequest.AmsterdamMsgProbeMutant
 
 /-!
 # Probe: `deposit_call_ok` at a closed message
@@ -154,5 +156,60 @@ theorem call_ok_logs :
     (initDevm okMsg).logs =
       [transferLog depositor Creation.address goodValue.toB256] :=
   initDevm_logs_transfer rfl rfl (by decide +kernel) (by decide +kernel)
+
+/-! ## Models of the failing statements -/
+
+def inhibitedStor : Stor := Stor.set .empty 0 B256.max
+
+def inhibitedState : State :=
+  Jaune.State.setPresent (Jaune.State.setPresent .empty depositor
+      { nonce := 1, bal := (2 ^ 100 : Nat).toB256, stor := .empty, code := .empty })
+    Creation.address { nonce := 1, bal := 0, stor := inhibitedStor, code := Deposit.code }
+
+def inhibitedMsg : Msg :=
+  { callMsg goodValue with
+    benv := { preBenv with
+      state := inhibitedState
+      stat := { preBenv.stat with origState := inhibitedState } } }
+
+abbrev inhS : Sevm := userSevm inhibitedMsg Deposit.code (afterOf inhibitedMsg)
+abbrev inhE : Devm := userEntry inhibitedMsg (afterOf inhibitedMsg)
+
+def inhG : Nat := 1000000 - (inhibitFixed + sloadCost inhS inhE 0)
+
+theorem inhG_eq : inhG = 1000000 - (inhibitFixed + sloadCost inhS inhE 0) := rfl
+
+attribute [local irreducible] inhG sloadCost
+
+/-- **`deposit_call_inhibited` has a model**, carrying 18.4 ETH of value. -/
+theorem inhibited_model :
+    let raw := (St (afterSloadA inhS inhE 0) [B256.max] .empty inhG).withOutput []
+    processMessageCall inhibitedMsg = .ok (inhibitedState, revertOutput inhibitedMsg raw) ∧
+      raw.logs = (initDevm inhibitedMsg).logs ∧
+      (revertOutput inhibitedMsg raw).logs = [] ∧
+      (revertOutput inhibitedMsg raw).error = some .revert ∧
+      (revertOutput inhibitedMsg raw).gasLeft = inhG ∧
+      (revertOutput inhibitedMsg raw).stateGasLeft = 800000 ∧
+      (revertOutput inhibitedMsg raw).stateGasUsed = 0 ∧
+      (revertOutput inhibitedMsg raw).returnData = [] := by
+  have hc := sloadCost_le inhS inhE 0
+  have hcold : gasColdSload = 2100 := rfl
+  have hfixed : inhibitFixed = 50 := rfl
+  have hgas : inhibitedMsg.gas = inhG + inhibitFixed + sloadCost inhS inhE 0 := by
+    show 1000000 = _
+    rw [inhG_eq]
+    omega
+  exact deposit_call_inhibited (M' := inhibitedMsg) (benv := afterOf inhibitedMsg) (G := inhG) rfl rfl
+    rfl (by kernel_rfl) (by kernel_rfl) (by decide +kernel) (by kernel_rfl) (by kernel_rfl)
+    (by decide +kernel) hgas (by kernel_rfl)
+
+def mutantBenv : Benv :=
+  { preBenv with
+    state := Jaune.State.setPresent .empty Creation.address
+      { nonce := 1, bal := 0, stor := Stor.set .empty 3 1, code := mutantCode } }
+
+/-- **`mutant_call_not_ok` has a model**: one record queued, the mutant at the deposit address. -/
+theorem mutant_model : ∀ r, processCheckedSystemTransaction mutantBenv Creation.address [] ≠ .ok r :=
+  mutant_call_not_ok rfl (by kernel_rfl) (by decide +kernel) (by kernel_rfl) (by kernel_rfl)
 
 end Blanc.Lift.BuilderRequest.AmsterdamMsgProbe.Witness
