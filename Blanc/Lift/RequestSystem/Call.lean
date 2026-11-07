@@ -18,16 +18,10 @@ open Jaune
 /-- Amsterdam's state-gas record. -/
 local notation "A" => amsterdamStateGasRules
 
-/-- A word sum without wrap. -/
-theorem add_toNat_of_lt {a x : B256} (h : a.toNat + x.toNat < 2 ^ 256) :
-    (a + x).toNat = a.toNat + x.toNat := by
-  rw [B256.toNat_add]
-  exact Nat.mod_eq_of_lt h
-
 /-- A literal plus a word of known value, without wrap. -/
 theorem lit_add_toNat {a x : B256} {n m : Nat} (ha : a.toNat = n) (hx : x.toNat = m)
     (h : n + m < 2 ^ 256) : (a + x).toNat = n + m := by
-  rw [add_toNat_of_lt (by omega), ha, hx]
+  rw [B256.toNat_add_eq_of_nof _ _ (by unfold B256.Nof; omega), ha, hx]
 
 /-- A word product by a small number without wrap. -/
 theorem mul_toB256_toNat_of_lt {a : B256} {n : Nat} (hn : n < 2 ^ 256) (h : a.toNat * n < 2 ^ 256) :
@@ -219,7 +213,7 @@ theorem system_call (m : SysMemory k) (hfork : benv.stat.fork = .amsterdam)
   rw [show systemTransactionGas - k.frameCost s b + k.frameCost s b = systemTransactionGas by omega,
     show St b [] .empty systemTransactionGas = b from systemCallBase_St] at run
   have hexec : Nonempty (Exec 0 s b (.ok (k.framePost s b (systemTransactionGas - k.frameCost s b)))) :=
-    lift_exact_lane k.check k.jumps rfl (Or.inr k.noExec) ⟨_, k.root, run⟩
+    lift_exact_noExec k.check k.jumps rfl k.noExec ⟨_, k.root, run⟩
   have hrun := (exec_iff_exec_eq _ _ _ _).mp hexec
   have rSetup : Ready s (setupBase s b) [2, 3, 0, 1] := (r.sload 3).sload 2
   have rDrain := k.fold_ready (h := SysPath.rd s b 2) 0 (k.count s b).toNat (M := .empty) rSetup
@@ -250,25 +244,11 @@ def sysState (p : SysShape) (σ : State) (a : Adr) : State :=
     else σ.setStorVal a 2 (rd 2 + c)
   (σ1.setStorVal a 0 (p.next (rd 0) (rd 1))).setStorVal a 1 0
 
-/-- A storage write leaves every account's code alone. -/
-theorem getCode_setStorVal (σ : State) (a : Adr) (key v : B256) (x : Adr) :
-    (σ.setStorVal a key v).getCode x = σ.getCode x := by
-  unfold State.getCode State.setStorVal
-  dsimp only
-  by_cases h : a = x
-  · subst h
-    split
-    · rw [State.get_setPresent_self]
-    · rw [State.get_set_self]
-  · split
-    · rw [State.get_setPresent_ne _ h]
-    · rw [State.get_set_ne _ h]
-
 /-- A request system call's post state changes no account's code, so a later call still sees its own. -/
 theorem sysState_getCode (p : SysShape) (σ : State) (a x : Adr) :
     (sysState p σ a).getCode x = σ.getCode x := by
   simp only [sysState]
-  split <;> simp only [getCode_setStorVal]
+  split <;> simp only [State.getCode_setStorVal]
 
 namespace SysPath
 

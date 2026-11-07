@@ -150,6 +150,15 @@ theorem State.get_setStorVal_self (w : State) (t : Adr) (k v : B256) :
   · rw [State.get_setPresent_self]
   · rw [State.get_set_self]
 
+/-- A storage write leaves every account's code alone. -/
+theorem State.getCode_setStorVal (w : State) (owner : Adr) (key value : B256) (a : Adr) :
+    (w.setStorVal owner key value).getCode a = w.getCode a := by
+  show ((w.setStorVal owner key value).get a).code = (w.get a).code
+  by_cases h : owner = a
+  · subst h
+    rw [State.get_setStorVal_self]
+  · rw [State.get_setStorVal_ne _ _ _ h]
+
 theorem State.getStor_setStorVal_self (w : State) (t : Adr) (k v : B256) :
     (w.setStorVal t k v).getStor t = (w.getStor t).set k v := by
   unfold State.setStorVal State.getStor

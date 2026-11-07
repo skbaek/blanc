@@ -67,10 +67,6 @@ theorem systemCallBase_refundCounter (msg : Msg) : (systemCallBase msg).refundCo
   simp only [systemCallBase, Devm.balReadAccount_refundCounter]
   rfl
 
-theorem systemCallBase_state (msg : Msg) : (systemCallBase msg).state = msg.benv.state := by
-  simp only [systemCallBase, Devm.balReadAccount_state]
-  rfl
-
 /-- The reservoir starts at the system grant, with no spill. -/
 theorem systemCallBase_stateGas (hfork : benv.stat.fork = .amsterdam) :
     (systemCallBase M).stateGas.spilled = 0 ∧

@@ -6,7 +6,7 @@ import Blanc.Lift.RequestSystem.Output
 import Blanc.RequestsOutput
 
 /-!
-# The Amsterdam request phase over all four contracts
+# The Amsterdam request-contract fold over all four contracts
 
 **Build target.** Jaune pin `e8db2742`, built on `tests@v21.0.1`, EELS `1562e2f`.
 
@@ -95,9 +95,13 @@ theorem fold_of_calls {benv : Benv} {σ1 σ2 σ3 σ4 : State} {out1 out2 out3 ou
   simp only [append_optionalRequestEntry]
   exact ⟨_, rfl⟩
 
-/-- **The Amsterdam request phase succeeds, from any storage.** The only premises are the fork and the four
-code installations: no storage, gas or queue premise. Each of the four checked system calls returns, at the
-state the previous one left, and the fold over `amsterdamRules.requests` returns the last state, with the
+/-- **The Amsterdam request-contract fold succeeds, from any storage.** The fold is `runRequestContracts`
+over the rule list a block uses (the last conjunct ties `benv.stat.rules.requests` to
+`amsterdamRules.requests`). It is the four system calls of Jaune's `processGeneralPurposeRequests`, and not
+all of that function: `processGeneralPurposeRequests` first runs `parseDepositRequests` on the block's
+receipts, and that step fails on a malformed deposit log. Nothing here says it succeeds. The only premises
+are the fork and the four code installations: no storage, gas or queue premise. Each of the four checked
+system calls returns, at the state the previous one left, and the fold returns the last state, with the
 incoming list extended by the type-prefixed non-empty outputs in rule order. -/
 theorem request_phase {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (h7002 : benv.state.getCode withdrawalRequestPredeployAddress = withdrawalRequestCode)
@@ -120,7 +124,8 @@ theorem request_phase {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
       runRequestContracts idx amsterdamRules.requests benv acc bal =
         .ok (σ4, acc ++ optionalRequestEntry 1 out1.returnData ++
           optionalRequestEntry 2 out2.returnData ++ optionalRequestEntry 3 out3.returnData ++
-          optionalRequestEntry 4 out4.returnData, bal') := by
+          optionalRequestEntry 4 out4.returnData, bal') ∧
+      benv.stat.rules.requests = amsterdamRules.requests := by
   intro σ1 σ2 σ3 σ4
   have k1 : ∀ x, σ1.getCode x = benv.state.getCode x := sysState_getCode _ _ _
   have k2 : ∀ x, σ2.getCode x = σ1.getCode x := sysState_getCode _ _ _
@@ -136,10 +141,12 @@ theorem request_phase {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
   obtain ⟨out3, c3⟩ := callDeposit hfork σ2 i3
   obtain ⟨out4, c4⟩ := callExit hfork σ3 i4
   obtain ⟨bal', run⟩ := fold_of_calls idx acc bal c1 c2 c3 c4
-  exact ⟨out1, out2, out3, out4, bal', c1, c2, c3, c4, run⟩
+  exact ⟨out1, out2, out3, out4, bal', c1, c2, c3, c4, run, by rw [amsterdam_rules hfork]⟩
 
-/-- All four contracts can be installed together, whatever the state was, so the premises of
-`request_phase` are satisfiable at every environment under Amsterdam. -/
+/-- All four contracts can be installed together in any `State`, so the four installation premises of
+`request_phase` are satisfiable. This is about a `State` only: no `Benv` with `stat.fork = .amsterdam` is
+constructed here. A `Benv.withState` takes the installed state into any environment and leaves its `stat`
+alone, but that step is not a theorem in this file. -/
 theorem installations_satisfiable (σ : State) :
     ∃ σ' : State, σ'.getCode withdrawalRequestPredeployAddress = withdrawalRequestCode ∧
       σ'.getCode consolidationRequestPredeployAddress = consolidationRequestCode ∧

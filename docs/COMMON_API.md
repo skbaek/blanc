@@ -3342,7 +3342,10 @@ unfolding a concrete state tower. Examples include:
 - For persistent storage setters, use Jaune's
   `State.setStorVal_get_self` / `State.setStorVal_get_ne`, which handle the
   existing-account `setPresent` branch, Blanc's `setStorVal_getStor_self`
-  projection, and Jaune's `Devm.setStorVal_getStorVal_self`.
+  projection, and Jaune's `Devm.setStorVal_getStorVal_self`. A `State`-level write leaves every
+  account's code alone by `State.getCode_setStorVal` in
+  [`Blanc/SystemCallForward.lean`](../Blanc/SystemCallForward.lean) (the `Devm` form is Jaune's
+  `Devm.setStorVal_getCode`).
 
 For equality of whole dynamic machines, `Devm.eq_of_proj` in
 [`Blanc/Compiled.lean`](../Blanc/Compiled.lean) requires all nineteen exact
@@ -6683,8 +6686,8 @@ EIP-2935 walks `Blanc/Lift/SystemExecution/BeaconRoots/SystemWalk.lean` and
 systemCallOutputA msg post)` for any target, from `benv.stat.fork = .amsterdam`, installed code that is
 no delegation and not at a precompile, and `exec ⟨0, initSevm msg, systemCallBase msg⟩ = .ok post` with no
 frame error and a non-negative refund counter. `systemCallBase_St` starts a walk there;
-`systemCallBase_stateGas`, `systemCallBase_error`, `systemCallBase_refundCounter`,
-`systemCallBase_state` and `systemCallBase_orig` read the base. The module holds this repository's only
+`systemCallBase_stateGas`, `systemCallBase_error`, `systemCallBase_refundCounter`
+and `systemCallBase_orig` read the base. The module holds this repository's only
 `open private` on Jaune's top-level path. Rule facts under Amsterdam, with `CoveredFork` left as it is,
 are `amsterdam_rules`, `amsterdam_stateGas`, `amsterdam_access`, `amsterdam_push0` and
 `amsterdam_shifts` in [`Blanc/HistoricalFork.lean`](../Blanc/HistoricalFork.lean).
@@ -8658,7 +8661,8 @@ Under Amsterdam, all four request contracts' system paths are one instance famil
 in `Blanc/Lift/RequestSystem/Path.lean` are a runtime's pushed words, excess arm and record body, with the
 whole frame from any storage (`frame_run`); its caller dispatch is `Blanc/Lift/RequestSystem/Dispatch.lean`.
 `SysCall.spec` in `Blanc/Lift/RequestSystem/Call.lean` takes it through the checked system call, with
-`sysState` as the exact post state and a gas bound against the rule record; `sysState_getCode` says no
+`sysState` as the exact post state and a regular-gas bound (`RegularGasWithin`: regular gas, state gas
+excluded); `sysState_getCode` says no
 account's code moves. `SysOutput` and `runRequestContracts_step` in `Blanc/Lift/RequestSystem/Output.lean`
 read the return window and one request-phase step. A record body's segments (`seg_start`, `seg_source`,
 `seg_word`, `seg_last`, `seg_byte`) are `Blanc/Lift/RequestSystem/BodySegs.lean`. The EIP-7002 and EIP-7251

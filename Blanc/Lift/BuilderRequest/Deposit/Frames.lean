@@ -27,7 +27,7 @@ def submittedStorage (sevm : Sevm) (s : Stor) : Stor :=
     (1 + (1 + (1 + (1 + (1 + key))))) (Sevm.dataWord sevm 160)).set 3 (1 + tail))
 
 /-- The record the code writes at tail `n` is the queue's record `n`, at width 6. -/
-theorem recordKey_queueSlot (n : Nat) : submissionKey n.toB256 = queueSlot 6 n 0 :=
+theorem submissionKey_queueSlot (n : Nat) : submissionKey n.toB256 = queueSlot 6 n 0 :=
   record_key 6 n
 
 /-- What a successful submission does, for the fee recurrence's iteration count and final output. -/

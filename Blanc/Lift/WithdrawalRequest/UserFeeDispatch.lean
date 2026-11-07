@@ -11,7 +11,7 @@ namespace Blanc.Lift.WithdrawalRequest
 
 open Jaune
 
-export RequestFee (postloopFixedGas postloopFixedGas_eq getterGuardGas getterGuardGas_eq)
+export RequestFee (postloopFixedGas getterGuardGas)
 
 /-- JUMPDEST/CALLVALUE/LT/PUSH/JUMPI. -/
 def submissionGuardGas : Nat := gJumpdest + gBase + 2 * gVerylow + gHigh
@@ -25,8 +25,8 @@ theorem submissionGuardGas_eq : submissionGuardGas = 19 := rfl
 theorem userFeeDispatchGas_eq (sevm : Sevm) :
     userFeeDispatchGas sevm = if sevm.data.length.toB256 = 56 then 64 else 75 := by
   by_cases h : sevm.data.length.toB256 = 56
-  · simp only [userFeeDispatchGas, postloopFixedGas_eq, submissionGuardGas_eq, ite_eq_left h]
-  · simp only [userFeeDispatchGas, postloopFixedGas_eq, getterGuardGas_eq, ite_eq_right h]
+  · simp only [userFeeDispatchGas, RequestFee.postloopFixedGas_eq, submissionGuardGas_eq, ite_eq_left h]
+  · simp only [userFeeDispatchGas, RequestFee.postloopFixedGas_eq, RequestFee.getterGuardGas_eq, ite_eq_right h]
 
 private def feeBranch (sevm : Sevm) : SFunc :=
   if sevm.data.length.toB256 = 56 then t_0088_c0 else t_0078_c0

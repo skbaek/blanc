@@ -10,7 +10,7 @@ namespace Blanc.Lift.WithdrawalRequest
 
 open Jaune
 
-export RequestFee (feeGetterMemory feeGetterPost feeGetterGas feeGetterGas_empty feeGetterPost_facts)
+export RequestFee (feeGetterMemory feeGetterPost feeGetterGas feeGetterPost_facts)
 
 /-- A successful getter leaves exactly the named RETURN state, including its error field. -/
 theorem fee_getter_inv {sevm : Sevm} {b post : Devm} {M : Mem} {fee : B256} {G : Nat}
@@ -35,7 +35,7 @@ theorem userFeeGetterGas_empty (sevm : Sevm) (b : Devm) (iterations : Nat) :
     userFeeGetterGas sevm b Mem.empty iterations = 180 + 87 * iterations + sloadCost sevm b 0 := by
   calc
     _ = (13 + 75 + 25 + 46 + 21) + (87 * iterations + sloadCost sevm b 0) := by
-      simp only [userFeeGetterGas, feeGetterGas_empty, feeLoopGas_eq,
+      simp only [userFeeGetterGas, RequestFee.feeGetterGas_empty, feeLoopGas_eq,
         userSetupGas, userSetupFixedGas_eq, dispatchGas_eq,
         Nat.add_assoc, Nat.add_comm, Nat.add_left_comm]
     _ = _ := by simp only [← Nat.add_assoc]
