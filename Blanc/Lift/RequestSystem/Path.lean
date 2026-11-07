@@ -512,6 +512,32 @@ def framePost (G : Nat) : Devm :=
 
 variable {sevm b}
 
+/-- The frame up to the excess update, on any calldata. -/
+theorem frame_prefix (hfork : sevm.benvStat.fork = .amsterdam) (hstatic : sevm.isStatic = false)
+    (hcaller : sevm.caller = systemAddress) (r : Ready sevm b [2, 3, 0, 1]) {G : Nat}
+    (hG : gCallStipend < G) {oc : Outcome}
+    (next : SFunc.RunExact k.cert.prog sevm
+      (St (k.booked sevm b) [k.count sevm b] (k.drain sevm b).memory G) k.shape.excessTree oc) :
+    SFunc.RunExact k.cert.prog sevm
+      (St b [] .empty (G + bookGas sevm (k.drain sevm b).base (rd sevm b 2) (k.count sevm b)
+          (rd sevm b 3) + (k.drain sevm b).charges + 23 + setupGas k.shape.cap.word sevm b +
+        dispatchGas))
+      (dispatchTree k.systemDest k.user (sysSetup k.shape k.body)) oc := by
+  have hsg := amsterdam_stateGas (s := sevm.benvStat) hfork
+  have hacc := amsterdam_access (s := sevm.benvStat) hfork
+  have hpush0 := amsterdam_push0 (s := sevm.benvStat) hfork
+  have hsh := amsterdam_shifts (s := sevm.benvStat) hfork
+  have rSetup : Ready sevm (setupBase sevm b) [2, 3, 0, 1] := (r.sload 3).sload 2
+  have rDrain := k.fold_ready (h := rd sevm b 2) 0 (k.count sevm b).toNat (M := .empty) rSetup
+  have s3 := book_run k.shape (q := (k.drain sevm b).base) (h := rd sevm b 2) (t := rd sevm b 3)
+    hsg hpush0 hstatic hG rDrain k.excessEntry next
+  have s4 := k.loop_run (h := rd sevm b 2) (t := rd sevm b 3) (c := k.count sevm b)
+    hacc hsh (k.count sevm b).toNat (index := 0) (b := setupBase sevm b) (M := .empty) (by omega) s3
+  have s5 := setup_run k.shape (b := b) (body := k.body) hacc hpush0 k.entry s4
+  exact dispatch_exact (dest := k.systemDest) (user := k.user)
+    (system := sysSetup k.shape k.body) (fs := k.cert.prog) (sevm := sevm) (b := b) (M := .empty)
+    (by rw [dispatchArm, ite_eq_left hcaller]; exact s5)
+
 /-- **The whole system frame**, from any storage, on empty calldata. -/
 theorem frame_run (hfork : sevm.benvStat.fork = .amsterdam) (hstatic : sevm.isStatic = false)
     (hcaller : sevm.caller = systemAddress) (hdata : sevm.data = [])
@@ -521,7 +547,6 @@ theorem frame_run (hfork : sevm.benvStat.fork = .amsterdam) (hstatic : sevm.isSt
   have hsg := amsterdam_stateGas (s := sevm.benvStat) hfork
   have hacc := amsterdam_access (s := sevm.benvStat) hfork
   have hpush0 := amsterdam_push0 (s := sevm.benvStat) hfork
-  have hsh := amsterdam_shifts (s := sevm.benvStat) hfork
   have rSetup : Ready sevm (setupBase sevm b) [2, 3, 0, 1] := (r.sload 3).sload 2
   have rDrain := k.fold_ready (h := rd sevm b 2) 0 (k.count sevm b).toNat (M := .empty) rSetup
   have rBooked := ready_book rDrain (rd sevm b 2) (k.count sevm b) (rd sevm b 3)
@@ -530,14 +555,7 @@ theorem frame_run (hfork : sevm.benvStat.fork = .amsterdam) (hstatic : sevm.isSt
     (e := k.excessStored sevm b) (c := k.count sevm b) (M := (k.drain sevm b).memory) hsg hpush0
     hstatic hG rRead (by decide)
   have s2 := k.excess_run (d := k.booked sevm b) (c := k.count sevm b) hacc hpush0 hdata s1
-  have s3 := book_run k.shape (q := (k.drain sevm b).base) (h := rd sevm b 2) (t := rd sevm b 3)
-    hsg hpush0 hstatic (by omega) rDrain k.excessEntry s2
-  have s4 := k.loop_run (h := rd sevm b 2) (t := rd sevm b 3) (c := k.count sevm b)
-    hacc hsh (k.count sevm b).toNat (index := 0) (b := setupBase sevm b) (M := .empty) (by omega) s3
-  have s5 := setup_run k.shape (b := b) (body := k.body) hacc hpush0 k.entry s4
-  have s6 := dispatch_exact (dest := k.systemDest) (user := k.user)
-    (system := sysSetup k.shape k.body) (fs := k.cert.prog) (sevm := sevm) (b := b) (M := .empty)
-    (by simpa only [dispatchArm, ite_eq_left hcaller] using s5)
+  have s3 := k.frame_prefix hfork hstatic hcaller r (by omega) s2
   have e : G + k.frameCost sevm b =
       G + chargedRetExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
         finalGas sevm (k.excessRead sevm b) (k.excessStored sevm b) +
@@ -547,7 +565,7 @@ theorem frame_run (hfork : sevm.benvStat.fork = .amsterdam) (hstatic : sevm.isSt
     simp only [frameCost]
     omega
   rw [e]
-  exact s6
+  exact s3
 
 end Frame
 

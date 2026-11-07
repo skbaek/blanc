@@ -8668,7 +8668,8 @@ read the return window and one request-phase step. A record body's segments (`se
 `seg_word`, `seg_last`, `seg_byte`) are `Blanc/Lift/RequestSystem/BodySegs.lean`. The EIP-7002 and EIP-7251
 excess arm (no latch; the inhibitor counts as zero) is `plainShape` in
 `Blanc/Lift/RequestSystem/PlainExcess.lean`; the EIP-8282 arm is `latchShape` in
-`Blanc/Lift/BuilderRequest/SystemPath.lean`, family-local. Worked consumers:
+`Blanc/Lift/BuilderRequest/SystemPath.lean`, family-local, and its nonempty-calldata side, on
+`SysPath.frame_prefix` and `SysPath.prefix_le`, is `Blanc/Lift/BuilderRequest/Latch.lean`. Worked consumers:
 `Blanc/Lift/WithdrawalRequest/AmsterdamSystem.lean`,
 `Blanc/Lift/SystemExecution/ConsolidationRequest/AmsterdamSystem.lean`, and the phase at
 `Blanc/Composition/RequestPhaseAmsterdam.lean`.

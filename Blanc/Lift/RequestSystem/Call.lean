@@ -116,11 +116,15 @@ theorem outLen_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
   have h0 : (0 : B256).toNat = 0 := rfl
   omega
 
-/-- **The rule-relative gas bound.** -/
-theorem frameCost_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
-    k.frameCost sevm b ≤ k.frameBound m.alloc := by
-  have hcap := k.count_le sevm b
-  obtain ⟨_, hfit, hcharges⟩ := fold_charges m (sevm := sevm) (h := SysPath.rd sevm b 2) 0
+/-- Everything of a frame's charge but the excess update and the final stores. -/
+theorem prefix_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
+    chargedRetExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
+        bookGas sevm (k.drain sevm b).base (rd sevm b 2) (k.count sevm b) (rd sevm b 3) +
+        (k.drain sevm b).charges + 23 + setupGas k.shape.cap.word sevm b + dispatchGas +
+        (113 + 2 * gasColdSload + 2 * (gasColdSload + amsterdamStateGasRules.storageWrite)) ≤
+      k.frameBound m.alloc := by
+  have hcap := count_le (k := k) sevm b
+  obtain ⟨_, hfit, hcharges⟩ := fold_charges m (sevm := sevm) (h := rd sevm b 2) 0
     (k.count sevm b).toNat (setupBase sevm b) .empty (by omega) rfl (Nat.zero_le _)
   have hMem : chargedRetExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
       calculateMemoryGasCost (k.drain sevm b).memory.size ≤ calculateMemoryGasCost m.alloc := by
@@ -140,6 +144,29 @@ theorem frameCost_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
     omega
   have hmul := Nat.mul_le_mul_right
     (23 + k.bodyFixed + k.slots * gasColdSload + gVerylow * k.writes) hcap
+  have hBook : bookGas sevm (k.drain sevm b).base (rd sevm b 2) (k.count sevm b)
+      (rd sevm b 3) ≤ 46 + 2 * (gasColdSload + amsterdamStateGasRules.storageWrite) := by
+    unfold bookGas
+    split
+    · have c1 := sstoreCostA_le A sevm (k.drain sevm b).base 2 0
+      have c2 := sstoreCostA_le A sevm (afterSstoreA A sevm (k.drain sevm b).base 2 0) 3 0
+      omega
+    · have c1 := sstoreCostA_le A sevm (k.drain sevm b).base 2 (rd sevm b 2 + k.count sevm b)
+      omega
+  have hSetup : setupGas k.shape.cap.word sevm b ≤ 46 + 2 * gasColdSload := by
+    have c1 := sloadCost_le sevm b 3
+    have c2 := sloadCost_le sevm (afterSloadA sevm b 3) 2
+    unfold setupGas
+    split <;> omega
+  have hDispatch : dispatchGas = 21 := rfl
+  simp only [frameBound]
+  simp only [drain] at hcharges hMem hBook ⊢
+  omega
+
+/-- **The rule-relative gas bound.** -/
+theorem frameCost_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
+    k.frameCost sevm b ≤ k.frameBound m.alloc := by
+  have hp := prefix_le m sevm b
   have hFinal : finalGas sevm (k.excessRead sevm b) (k.excessStored sevm b) ≤
       18 + 2 * (gasColdSload + amsterdamStateGasRules.storageWrite) := by
     have c1 := sstoreCostA_le A sevm (k.excessRead sevm b) 0 (k.excessStored sevm b)
@@ -154,34 +181,19 @@ theorem frameCost_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
       ((k.booked sevm b).getStorVal sevm.currentTarget 1)
     simp only [excessGas]
     omega
-  have hBook : bookGas sevm (k.drain sevm b).base (rd sevm b 2) (k.count sevm b) (rd sevm b 3) ≤
-      46 + 2 * (gasColdSload + amsterdamStateGasRules.storageWrite) := by
-    unfold bookGas
-    split
-    · have c1 := sstoreCostA_le A sevm (k.drain sevm b).base 2 0
-      have c2 := sstoreCostA_le A sevm (afterSstoreA A sevm (k.drain sevm b).base 2 0) 3 0
-      omega
-    · have c1 := sstoreCostA_le A sevm (k.drain sevm b).base 2 (rd sevm b 2 + k.count sevm b)
-      omega
-  have hSetup : setupGas k.shape.cap.word sevm b ≤ 46 + 2 * gasColdSload := by
-    have c1 := sloadCost_le sevm b 3
-    have c2 := sloadCost_le sevm (afterSloadA sevm b 3) 2
-    unfold setupGas
-    split <;> omega
-  have hDispatch : dispatchGas = 21 := rfl
-  simp only [frameCost, frameBound]
-  simp only [drain] at hcharges hMem hBook hFinal hExcess ⊢
+  simp only [frameCost]
   omega
 
 /-! ## The envelope -/
 
 section Envelope
 
-variable {benv : Benv} {target : Adr}
+variable {benv : Benv} {target : Adr} {data : Bytes}
 
 /-- The prepared base is ready for the frame's four stores, from the real grant. -/
 theorem ready_base (hfork : benv.stat.fork = .amsterdam) :
-    Ready (initSevm (systemCallMsg benv target k.code [])) (systemCallBase (systemCallMsg benv target k.code [])) [2, 3, 0, 1] where
+    Ready (initSevm (systemCallMsg benv target k.code data))
+      (systemCallBase (systemCallMsg benv target k.code data)) [2, 3, 0, 1] where
   error := systemCallBase_error _
   refund := by rw [systemCallBase_refundCounter]
   spill := (systemCallBase_stateGas hfork).1
@@ -207,7 +219,7 @@ theorem system_call (m : SysMemory k) (hfork : benv.stat.fork = .amsterdam)
   let s := initSevm (systemCallMsg benv target k.code [])
   let b := systemCallBase (systemCallMsg benv target k.code [])
   have hle := frameCost_le m s b
-  have r := ready_base (k := k) (target := target) hfork
+  have r := ready_base (k := k) (target := target) (data := []) hfork
   have hG : gCallStipend < systemTransactionGas - k.frameCost s b := by omega
   have run := k.frame_run (sevm := s) (b := b) hfork rfl rfl rfl r hG
   rw [show systemTransactionGas - k.frameCost s b + k.frameCost s b = systemTransactionGas by omega,
