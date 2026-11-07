@@ -128,9 +128,9 @@ theorem frameCost_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
   have hcap := k.count_le sevm b
   obtain ⟨_, hfit, hcharges⟩ := fold_charges m (sevm := sevm) (h := SysPath.rd sevm b 2) 0
     (k.count sevm b).toNat (setupBase sevm b) .empty (by omega) rfl (Nat.zero_le _)
-  have hMem : retExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
+  have hMem : chargedRetExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
       calculateMemoryGasCost (k.drain sevm b).memory.size ≤ calculateMemoryGasCost m.alloc := by
-    unfold retExt
+    unfold chargedRetExt
     have hexts : memExtSize (k.drain sevm b).memory.size (0 : B256).toNat (k.outLen sevm b).toNat ≤
         m.alloc := by
       have := MemoryStage.memExtsSize_le (windows := [((0 : B256).toNat, (k.outLen sevm b).toNat)])

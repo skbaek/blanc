@@ -331,11 +331,11 @@ theorem final_run {d : Devm} {e c : B256} {ks : List B256} {M : Mem} {G : Nat}
     (hstatic : sevm.isStatic = false) (hG : gCallStipend < G)
     (r : Ready sevm d ((0 : B256) :: (1 : B256) :: ks)) (h01 : (0 : B256) ∉ (1 : B256) :: ks) :
     SFunc.RunExact fs sevm
-      (St d [e, c] M (G + retExt M 0 (p.len.word * c) + finalGas sevm d e))
-      (sysFinal p) (.halted (retPost (finalBase sevm d e) [] M G 0 (p.len.word * c))) := by
+      (St d [e, c] M (G + chargedRetExt M 0 (p.len.word * c) + finalGas sevm d e))
+      (sysFinal p) (.halted (chargedRetPost (finalBase sevm d e) [] M G 0 (p.len.word * c))) := by
   have r1 := r.sstore h01 e
-  have hgas : G + retExt M 0 (p.len.word * c) + finalGas sevm d e =
-      G + retExt M 0 (p.len.word * c) + 2 + 5 + 3 +
+  have hgas : G + chargedRetExt M 0 (p.len.word * c) + finalGas sevm d e =
+      G + chargedRetExt M 0 (p.len.word * c) + 2 + 5 + 3 +
         sstoreCostA A sevm (afterSstoreA A sevm d 0 e) 1 0 + 3 + 2 +
         sstoreCostA A sevm d 0 e + 2 + 1 := by
     simp only [finalGas]
@@ -839,7 +839,7 @@ def outLen : B256 := k.shape.len.word * k.count sevm b
 
 /-- The frame's exact charge. -/
 def frameCost : Nat :=
-  retExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
+  chargedRetExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
     finalGas sevm (k.excessRead sevm b) (k.excessStored sevm b) +
     excessGas k.shape.target.word sevm (k.booked sevm b) +
     bookGas sevm (k.drain sevm b).base (rd sevm b 2) (k.count sevm b) (rd sevm b 3) +
@@ -847,7 +847,7 @@ def frameCost : Nat :=
 
 /-- The frame's post state at `G` of remaining gas. -/
 def framePost (G : Nat) : Devm :=
-  retPost (finalBase sevm (k.excessRead sevm b) (k.excessStored sevm b)) [] (k.drain sevm b).memory
+  chargedRetPost (finalBase sevm (k.excessRead sevm b) (k.excessStored sevm b)) [] (k.drain sevm b).memory
     G 0 (k.outLen sevm b)
 
 variable {sevm b}
@@ -880,7 +880,7 @@ theorem frame_run (hfork : sevm.benvStat.fork = .amsterdam) (hstatic : sevm.isSt
     (system := sysSetup k.shape k.body) (fs := k.cert.prog) (sevm := sevm) (b := b) (M := .empty)
     (by simpa only [dispatchArm, ite_eq_left hcaller] using s5)
   have e : G + k.frameCost sevm b =
-      G + retExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
+      G + chargedRetExt (k.drain sevm b).memory 0 (k.outLen sevm b) +
         finalGas sevm (k.excessRead sevm b) (k.excessStored sevm b) +
         excessGas k.shape.target.word sevm (k.booked sevm b) +
         bookGas sevm (k.drain sevm b).base (rd sevm b 2) (k.count sevm b) (rd sevm b 3) +

@@ -6685,6 +6685,8 @@ frame error and a non-negative refund counter. `systemCallBase_St` starts a walk
 `open private` on Jaune's top-level path. Rule facts under Amsterdam, with `CoveredFork` left as it is,
 are `amsterdam_rules`, `amsterdam_stateGas`, `amsterdam_access`, `amsterdam_push0` and
 `amsterdam_shifts` in [`Blanc/HistoricalFork.lean`](../Blanc/HistoricalFork.lean).
+A request contract's dispatch and inhibitor pushes: `adr_eqCheck` and `inhibitor_push` in
+[`Blanc/Lift/SystemCaller.lean`](../Blanc/Lift/SystemCaller.lean).
 
 The canonical system-operation support is owned by `Blanc/Lift/SystemExecution/`.
 For each walk above, the exact runtime certificate, checked lift, jump table, and
