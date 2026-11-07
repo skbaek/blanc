@@ -489,7 +489,7 @@ theorem exec_system_frame_exact {sevm : Sevm} {base : Devm} {memory : Mem} {gas 
     (dynamic : sevm.isStatic = false) (slack : gCallStipend < gas) :
     Nonempty (Exec 0 sevm (St base [] memory (gas + systemFrameGas sevm base memory))
       (.ok (systemFramePost sevm base memory gas))) := by
-  apply lift_exact cert_check jumps_ok (code.trans code_eq.symm) fork
+  apply lift_exact cert_check jumps_ok (code.trans code_eq.symm) fork.shanghaiOnwards
   exact ⟨t_0000_c0, prog_root, system_frame_exact fork caller dynamic slack⟩
 
 /-- The complete frame returns exactly the actual loop memory window. -/

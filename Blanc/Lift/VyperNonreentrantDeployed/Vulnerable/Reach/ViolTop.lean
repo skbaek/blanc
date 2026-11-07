@@ -861,7 +861,7 @@ theorem root_frame (hRm : RemoveFrame) : RootFrame := by
     rfl
   have hexecRoot : Nonempty (Exec (((rootEvm W).re g W).pc)
       (((rootEvm W).re g W).sta) (((rootEvm W).re g W).dyna) (.ok p)) := by
-    have hx := lift_exact AttackerR.cert_check hjumpsR hcodeR hg hrunExact
+    have hx := lift_exact AttackerR.cert_check hjumpsR hcodeR hg.shanghaiOnwards hrunExact
     rw [hpc0, hsta0, ← hc0devm]
     exact hx
   have hAcctB : AcctAgree ((Frame.ofCall (rootMsgK W)).inner.benv.state) (acsW W) :=

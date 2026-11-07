@@ -214,7 +214,7 @@ theorem system_exec {benv : Benv} (fork : CoveredFork benv.stat.fork) :
     exact hrun
   have hexec : Nonempty (Exec 0 sevm
       (St base [] .empty systemTransactionGas) (.ok (systemPost benv))) := by
-    apply lift_exact cert_check jumps_ok (system_seed benv).2.2.2.1 fork
+    apply lift_exact cert_check jumps_ok (system_seed benv).2.2.2.1 fork.shanghaiOnwards
     exact ⟨t_0000_c0, prog_root, hrun'⟩
   change Nonempty (Exec 0 sevm
     (St base [] .empty systemTransactionGas) (.ok (systemPost benv))) at hexec

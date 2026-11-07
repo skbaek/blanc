@@ -145,7 +145,7 @@ theorem frame4_child_at (hg : CoveredFork g) :
     (fun a => by rw [hia]; exact hpa a)
     (fun a k => by rw [hst, e31_state]; exact e3_world.1 a k)
     (by rw [hst, e31_state]; exact e3_world.2) hcr hsg (CoveredFork.rules_touchedSweep hg)
-    (fun hr => lift_exactM cert_checkM cert_jumpsOkM e4_code (hg : CoveredFork g) hr) fs1_zero
+    (fun hr => lift_exactM cert_checkM cert_jumpsOkM e4_code (hg : CoveredFork g).shanghaiOnwards hr) fs1_zero
     (by rw [Blanc.Lift.Witness.storTransfer_of_keeps (by exact keeps4)]; exact ⟨id, fun _ _ r => r⟩)
     ((r4_at hg).trans hrun) herr
   rw [hk, ha, hs, hc] at h

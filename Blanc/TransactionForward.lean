@@ -482,7 +482,7 @@ theorem processTransaction_call_value_of_exec_receipts
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E t : Adr}
     {chainId : UInt64} {maxPriorityFee maxFee intrinsicGas calldataFloorGas : Nat}
     {Q : State → Devm → Prop}
-    (hfork : CoveredFork benv.stat.fork)
+    (hfork : ShanghaiOnwards benv.stat.fork)
     (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) [])
     (hchain : chainId = benv.stat.chainId)
     (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
@@ -526,8 +526,8 @@ theorem processTransaction_call_value_of_exec_receipts
       bout'.receiptKeys = bout.receiptKeys ++ [BLT.toBytes (.bytes index.toBytes)] ∧
       bout'.receiptsTrie[BLT.toBytes (.bytes index.toBytes)]? =
         some (makeReceipt tx none bout'.cumulativeGasUsed post.logs) := by
-  have hsg : benv.stat.rules.stateGas = none := CoveredFork.rules_stateGas_none hfork
-  have hbalr : benv.stat.rules.bal = none := CoveredFork.rules_bal_none hfork
+  have hsg : benv.stat.rules.stateGas = none := ShanghaiOnwards.rules_stateGas_none hfork
+  have hbalr : benv.stat.rules.bal = none := ShanghaiOnwards.rules_bal_none hfork
   have hmax : B256.max.toNat = 2 ^ 256 - 1 := by decide +kernel
   have hlt256 := B256.toNat_lt (benv.state.get E).bal
   have hvalid : validateTransaction benv.stat.rules tx 0 = .ok (intrinsicGas, calldataFloorGas) := by
@@ -654,7 +654,7 @@ theorem processTransaction_call_value_of_exec
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E t : Adr}
     {chainId : UInt64} {maxPriorityFee maxFee intrinsicGas calldataFloorGas : Nat}
     {Q : State → Devm → Prop}
-    (hfork : CoveredFork benv.stat.fork)
+    (hfork : ShanghaiOnwards benv.stat.fork)
     (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) [])
     (hchain : chainId = benv.stat.chainId)
     (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
@@ -706,7 +706,7 @@ theorem processTransaction_call_of_exec
     {benv : Benv} {bout : BlockOutput} {tx : Tx} {index : Nat} {E t : Adr}
     {chainId : UInt64} {maxPriorityFee maxFee intrinsicGas calldataFloorGas : Nat}
     {Q : State → Devm → Prop}
-    (hfork : CoveredFork benv.stat.fork)
+    (hfork : ShanghaiOnwards benv.stat.fork)
     (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) [])
     (hvalue : tx.value = 0) (hchain : chainId = benv.stat.chainId)
     (hprio : maxPriorityFee ≤ maxFee) (hbase : benv.stat.baseFeePerGas ≤ maxFee)
@@ -860,9 +860,24 @@ theorem allocateEvmGas_bounds_of_intrinsic_le {rules : ForkRules} {txGas intrins
   simp only [allocateEvmGas, hsg]
   exact ⟨by omega, Nat.sub_le _ _, True.intro⟩
 
-/-- **The intrinsic cost of a plain type-2 call** (a receiver, no access list, no state-gas dimension):
-the transaction base cost plus four gas per calldata token, and the calldata floor of the tokens at the
-floor token cost over the base cost. -/
+/-- **The intrinsic cost of a plain type-2 call**, with or without the calldata floor (EIP-7623): the
+transaction base cost plus four gas per calldata token, and the floor of the tokens at the floor token
+cost over the base cost when the fork has one, zero otherwise. -/
+theorem calculateIntrinsicCost_two_call_any {rules : ForkRules} {tx : Tx} {sender : Adr}
+    {chainId : UInt64} {maxPriorityFee maxFee : Nat} {t : Adr}
+    (hsg : rules.stateGas = none)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) [])
+    (hnz : rules.txr.dataNonZero = 16) :
+    calculateIntrinsicCost rules tx sender =
+      (rules.gas.txBase + calldataTokens tx.data * standardCallDataTokenCost,
+        if rules.txr.calldataFloor then
+          calldataTokens tx.data * rules.gas.floorTokenCost + rules.gas.txBase
+        else 0) := by
+  unfold calculateIntrinsicCost calldataTokens
+  simp only [TxType.receiver?, htype, hsg, add_zero, Option.isNone_some, Bool.false_eq_true,
+    ↓reduceIte, List.map_nil, List.sum_nil, hnz, ite_self, dataCost_eq_tokens_mul]
+
+/-- `calculateIntrinsicCost_two_call_any` on a fork with the calldata floor. -/
 theorem calculateIntrinsicCost_two_call {rules : ForkRules} {tx : Tx} {sender : Adr}
     {chainId : UInt64} {maxPriorityFee maxFee : Nat} {t : Adr}
     (hsg : rules.stateGas = none)
@@ -871,9 +886,20 @@ theorem calculateIntrinsicCost_two_call {rules : ForkRules} {tx : Tx} {sender : 
     calculateIntrinsicCost rules tx sender =
       (rules.gas.txBase + calldataTokens tx.data * standardCallDataTokenCost,
         calldataTokens tx.data * rules.gas.floorTokenCost + rules.gas.txBase) := by
-  unfold calculateIntrinsicCost calldataTokens
-  simp only [TxType.receiver?, htype, hsg, add_zero, Option.isNone_some, Bool.false_eq_true,
-    ↓reduceIte, List.map_nil, List.sum_nil, hnz, hfloor, ite_self, dataCost_eq_tokens_mul]
+  rw [calculateIntrinsicCost_two_call_any hsg htype hnz, hfloor]
+  rfl
+
+/-- A plain type-2 call's calldata floor from Shanghai on: the floor of the tokens at ten gas over the
+base cost at most, and possibly zero. The intrinsic gas itself does not vary across the domain. -/
+theorem ShanghaiOnwards.calculateIntrinsicCost_two_call {s : BenvStat} {tx : Tx} {sender : Adr}
+    {chainId : UInt64} {maxPriorityFee maxFee : Nat} {t : Adr} (h : ShanghaiOnwards s.fork)
+    (htype : tx.type = .two chainId maxPriorityFee maxFee (some t) []) :
+    ∃ floor, floor ≤ calldataTokens tx.data * 10 + 21000 ∧
+      calculateIntrinsicCost s.rules tx sender =
+        (21000 + calldataTokens tx.data * standardCallDataTokenCost, floor) := by
+  rw [calculateIntrinsicCost_two_call_any h.rules_stateGas_none htype h.rules_dataNonZero,
+    h.rules_txBase, h.rules_floorTokenCost]
+  exact ⟨_, by split <;> omega, rfl⟩
 
 /-- **The per-transaction gas cap from Shanghai on**: no cap before Osaka, the EIP-7825 cap `2 ^ 24`
 from Osaka; a transaction whose gas is at most `2 ^ 24` passes on all of them. -/

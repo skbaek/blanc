@@ -49,6 +49,13 @@ theorem CoveredFork.shanghaiOnwards {f : Fork} : CoveredFork f → ShanghaiOnwar
 /-- A caller holding coverage passes it unchanged to a lemma widened to this domain. -/
 instance {f : Fork} : Coe (CoveredFork f) (ShanghaiOnwards f) := ⟨CoveredFork.shanghaiOnwards⟩
 
+/-- The frame's fork domain, from a local domain or coverage proof: what a walk tactic's premise
+position uses where `assumption` meets no coercion. -/
+macro "xfork" : tactic => `(tactic| first
+  | with_reducible assumption
+  | assumption
+  | exact CoveredFork.shanghaiOnwards (by assumption))
+
 /-- The domain embeds in the historical domain. -/
 theorem ShanghaiOnwards.histFork {f : Fork} : ShanghaiOnwards f → HistFork f := by
   cases f <;> decide

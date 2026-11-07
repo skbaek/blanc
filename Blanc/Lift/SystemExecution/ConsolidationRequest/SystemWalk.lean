@@ -597,7 +597,7 @@ theorem system_exec {benv : Benv} (fork : CoveredFork benv.stat.fork)
   have hexec : Nonempty (Exec 0 (systemSevm benv)
       (St (systemBase benv) [] .empty systemTransactionGas)
       (.ok (systemPost benv))) := by
-    apply lift_exact cert_check jumps_ok (hcode.trans code_eq.symm) fork
+    apply lift_exact cert_check jumps_ok (hcode.trans code_eq.symm) fork.shanghaiOnwards
     exact ⟨t_0000_c0, prog_root, hrun⟩
   have entry : St (systemBase benv) [] .empty systemTransactionGas =
       systemBase benv := by

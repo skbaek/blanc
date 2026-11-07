@@ -315,11 +315,6 @@ macro "xbr" : tactic => `(tactic| (first
   | (xnorm
      first | with_reducible assumption | (simp only [*]; done) | (simp only [*]; decide))))
 
-/-- The frame's fork domain, from a local domain or coverage proof. -/
-macro "xfork" : tactic => `(tactic| first
-  | with_reducible assumption
-  | exact CoveredFork.shanghaiOnwards (by with_reducible assumption))
-
 /-- The shift instructions are selected, from the frame's fork domain. -/
 macro "xshifts" : tactic => `(tactic| exact ShanghaiOnwards.rules_shifts (by xfork))
 

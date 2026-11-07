@@ -316,7 +316,7 @@ theorem remove_frame (hCb : CallbackFrame) : RemoveFrame := by
       (Boundary.cfgOfT bRm0 tS tA m w).devm post :=
     ⟨t_0000_c0, fsI_zero, sFull.2 _ hAgree runE⟩
   have hxExec : Nonempty (Exec 0 S (Boundary.cfgOfT bRm0 tS tA m w).devm (.ok post)) :=
-    lift_exactM cert_checkM cert_jumpsOkM rfl hg hrunE
+    lift_exactM cert_checkM cert_jumpsOkM rfl hg.shanghaiOnwards hrunE
   have hca : ChildAgree post keysRm adrsRm (storRm ++ tS) (acsRm ++ tA) := by
     have ha := childAgree_of_halt hrEnd hagEnd
     rw [hkeys, hadrs, hstor, hacs] at ha; exact ha

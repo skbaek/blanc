@@ -68,7 +68,7 @@ theorem txC_message_of_child_at (hg : CoveredFork g) (d1 : Devm)
       have hrunexact : SProg.RunExact fs2 (e0C.withFork g).sta e0C.dyna post :=
         ⟨Attacker2.t_0000_c0, fs2_zero, s.2 _ c0C_agree run⟩
       have hexec : Nonempty (Exec 0 (e0C.withFork g).sta e0C.dyna (.ok post)) :=
-        lift_exact Attacker2.cert_check Attacker2.cert_jumpsOk e0txC_code (hg : CoveredFork g)
+        lift_exact Attacker2.cert_check Attacker2.cert_jumpsOk e0txC_code (hg : CoveredFork g).shanghaiOnwards
           hrunexact
       have hexec' : Nonempty (Exec (e0C.withFork g).pc (e0C.withFork g).sta
           (e0C.withFork g).dyna (.ok post)) := by
