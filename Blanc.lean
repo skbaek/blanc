@@ -1215,3 +1215,8 @@ import Blanc.Lift.BuilderRequest.Deposit.SubmissionAmsterdam
 import Blanc.Lift.BuilderRequest.Deposit.Creation.Deploy
 import Blanc.Lift.BuilderRequest.Exit.Jumps
 import Blanc.Lift.BuilderRequest.Exit.Creation.Deploy
+import Blanc.Lift.BuilderRequest.Delivery
+import Blanc.Lift.BuilderRequest.Deposit.Delivery
+import Blanc.Lift.BuilderRequest.Deposit.DeliveryWitness
+import Blanc.Lift.BuilderRequest.Exit.Delivery
+import Blanc.Lift.BuilderRequest.Exit.DeliveryWitness

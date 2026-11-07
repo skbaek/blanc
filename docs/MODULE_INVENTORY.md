@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-609 shared modules, 582 with a module summary.
+610 shared modules, 583 with a module summary.
 
 ## `Blanc/`
 
@@ -257,6 +257,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ProofRecipeTactic.lean`](../Blanc/ProofRecipeTactic.lean) | leaf-only access to generated proof-recipe advice. | exempt: the need-first registry's own machinery |
 | [`ProofRecipesGenerated.lean`](../Blanc/ProofRecipesGenerated.lean) | goal-shape recipe data for Blanc tactics. | exempt: generated artifact |
 | [`RequestFeeWord.lean`](../Blanc/RequestFeeWord.lean) | **Word against natural request fee, at fraction 17.** The system request contracts run the word recurrence at factor 1 and fraction 17 over an excess word, and quote its quotient. | [S9](COMMON_API.md#s9-i-need-the-integer-exponential-recurrence-or-a-finite-loop-witness) |
+| [`RequestFeeWordDomain.lean`](../Blanc/RequestFeeWordDomain.lean) | **Where the request contracts' word fee is the natural fee.** At factor 1 and fraction 17, the quotient of the word recurrence equals `fake_exponential(1, excess, 17)` at every excess up to 2892, and not at 2893, where the first product passes the word. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`RequestsOutput.lean`](../Blanc/RequestsOutput.lean) | Exact request-output composition for retained request-system traces. | [E6](COMMON_API.md#e6-i-need-the-exact-successful-wrapper-trace-not-only-its-final-result) |
 | [`RevertPayload.lean`](../Blanc/RevertPayload.lean) | ABI encoding | [E4](COMMON_API.md#e4-i-need-a-common-terminal-walk) |
 | [`Reverts.lean`](../Blanc/Reverts.lean) | **The outcome-generalised relation.** `Func.RunCompiled fs sevm devm f devm'` says the walk of `f` reaches `devm'` successfully. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [E4](COMMON_API.md#e4-i-need-a-common-terminal-walk), [C1](COMMON_API.md#c1-i-need-source-to-compiled-execution) |
