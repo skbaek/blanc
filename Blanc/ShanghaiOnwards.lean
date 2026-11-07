@@ -19,7 +19,7 @@ namespace Blanc
 
 open Jaune
 
-/-- Forks at or after Shanghai, in activation order. -/
+/-- The forks from Shanghai through BPO2, in activation order; Amsterdam is outside. -/
 def ShanghaiOnwards (f : Fork) : Prop :=
   f ∈ [.shanghai, .cancun, .prague, .osaka, .bpo1, .bpo2]
 
