@@ -180,6 +180,29 @@ theorem output_represented {k : SysPath} {m : SysMemory k} (o : SysOutput k m)
 theorem excessNext_inhibitor (target count : B256) : excessNext target B256.max count = 0 := by
   simp only [excessNext, ite_true]
 
+/-- **The next excess is never the inhibitor**, for a nonzero target. The inhibitor case gives 0;
+otherwise the result is 0 or `(count + excess) - target`, a word difference with a positive subtrahend
+below the minuend. -/
+theorem excessNext_ne_max {target : B256} (ht : target ≠ 0) (excess count : B256) :
+    excessNext target excess count ≠ B256.max := by
+  have hzero : (0 : B256) ≠ B256.max := by decide
+  unfold excessNext
+  split
+  · exact hzero
+  · split
+    · rename_i hgt
+      intro h
+      have hlt := B256.lt_iff_toNat_lt_toNat.mp hgt
+      have hnat := congrArg B256.toNat h
+      rw [B256.toNat_sub, show B256.max.toNat = 2 ^ 256 - 1 by decide] at hnat
+      change (2 ^ 256 + (count + excess).toNat - target.toNat) % 2 ^ 256 = _ at hnat
+      have hpos : target.toNat ≠ 0 := fun h0 =>
+        ht (B256.toNat_inj _ _ (h0.trans (by decide)))
+      have hw := B256.toNat_lt (count + excess)
+      have ht' := B256.toNat_lt target
+      omega
+    · exact hzero
+
 /-- With no excess, the next excess is the count over the target, in naturals. -/
 theorem excessNext_zero (target : B256) {count : Nat} (hc : count < 2 ^ 256) :
     (excessNext target (0 : Nat).toB256 count.toB256).toNat = count - target.toNat := by

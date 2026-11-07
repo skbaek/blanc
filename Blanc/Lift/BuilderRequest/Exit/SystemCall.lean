@@ -67,10 +67,11 @@ def sysMemory : SysMemory sysPath where
 gas is separate: it draws on the reservoir. -/
 theorem frameBound_le : sysPath.frameBound sysMemory.alloc ≤ 161000 := by decide
 
-/-- The checked exit system call returns and uses at most 161,000 gas. -/
+/-- The checked exit system call returns and uses at most 161,000 regular gas of its 30,000,000. State gas is
+excluded: it draws on the reservoir of 16 × `storageSet`. -/
 def SystemCallOk (benv : Benv) : Prop :=
   ∃ post out, processCheckedSystemTransaction benv address [] = .ok (post, out) ∧
-    systemTransactionGas - out.gasLeft ≤ 161000
+    RegularGasWithin out.gasLeft 161000
 
 /-- The exit runtime's system call facts. -/
 def sysCall : SysCall sysPath where
@@ -84,8 +85,8 @@ def sysCall : SysCall sysPath where
   room := by decide
 
 /-- **The exit builder's system call succeeds, from any storage.** Under Amsterdam, with the canonical
-code installed, the checked system call returns and uses at most 161,000 of its 30,000,000 gas.
-There is no storage premise. -/
+code installed, the checked system call returns and uses at most 161,000 of its 30,000,000 regular gas.
+State gas is excluded: it draws on the reservoir of 16 × `storageSet`. There is no storage premise. -/
 theorem system_call_ok {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode address = code) : SystemCallOk benv :=
   let h := sysCall.spec hfork installed

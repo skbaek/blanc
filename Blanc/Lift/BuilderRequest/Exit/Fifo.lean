@@ -118,12 +118,13 @@ theorem recordKey_slot (head i : Nat) : recordKey head.toB256 i.toB256 = queueSl
 /-- **The exit builder's FIFO.** On storage representing a queue, the checked system call returns the
 oldest `min(length, 16)` records, and its post storage represents the queue without them. The pointers,
 count and excess are those of `drainedState`: head and tail reset when the queue empties, otherwise the
-head advances; the count clears; the excess is `excessNext`, which resets the inhibitor to zero. -/
+head advances; the count clears; the excess is `excessNext`, which resets the inhibitor to zero. It uses at
+most 161,000 regular gas, state gas excluded: state gas draws on the reservoir of 16 × `storageSet`. -/
 theorem system_call_fifo {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode address = code) {st : QueueState Record}
     (rep : Represents 3 Record.word (storOf benv.state address) st) :
     ∃ post out, processCheckedSystemTransaction benv address [] = .ok (post, out) ∧
-      systemTransactionGas - out.gasLeft ≤ 161000 ∧
+      RegularGasWithin out.gasLeft 161000 ∧
       out.returnData = (st.queue.take 16).flatMap Record.out ∧
       Represents 3 Record.word (storOf post address) (drainedState 16 2 st) := by
   obtain ⟨hcall, hgas⟩ := sysCall.spec hfork installed
@@ -149,12 +150,13 @@ theorem system_call_fifo {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
 
 /-- **The exit contract's activation step.** On the deployed storage (`Creation.factory_deploy`'s
 `Stor.empty.set 0 B256.max`), the checked system call succeeds, returns nothing, and moves slot 0 from
-the inhibitor to 0, leaving every slot 0. -/
+the inhibitor to 0, leaving every slot 0, within 161,000 regular gas, state gas excluded: state gas draws
+on the reservoir of 16 × `storageSet`. -/
 theorem activation_unlocks {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode address = code)
     (deployed : benv.state.getStor address = Stor.empty.set 0 B256.max) :
     ∃ post out, processCheckedSystemTransaction benv address [] = .ok (post, out) ∧
-      systemTransactionGas - out.gasLeft ≤ 161000 ∧
+      RegularGasWithin out.gasLeft 161000 ∧
       out.returnData = [] ∧ ∀ key, (post.getStor address).get key = 0 := by
   obtain ⟨hcall, hgas⟩ := sysCall.spec hfork installed
   replace hcall : processCheckedSystemTransaction benv address [] =
@@ -200,7 +202,8 @@ theorem activation_unlocks {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
           · rw [if_neg k2, hget, if_neg k0]
 
 /-- **The calldata latch is unreachable from the request phase.** One request-phase step at this contract
-is the call with `[]` calldata, whose post state is `sysState`, and slot 0 after it is `excessNext`. Change
+is the call with `[]` calldata, whose post state is `sysState`; slot 0 after it is `excessNext`, which is
+never the inhibitor, so a request-phase step never leaves slot 0 at `B256.max`, whatever it was before. Change
 the `[]` and this no longer follows: `runRequestContracts` passes exactly that argument. -/
 theorem request_step_no_latch {idx : Nat} {ty : UInt8} {rest : List (UInt8 × Adr)} {benv : Benv}
     {acc : List Bytes} {bal : BalBuilder} (hfork : benv.stat.fork = .amsterdam)
@@ -215,9 +218,11 @@ theorem request_step_no_latch {idx : Nat} {ty : UInt8} {rest : List (UInt8 × Ad
             | some _ => bal.incorporate idx benv.state (sysState sysShape benv.state address)
                 (address :: out.accountReads.toList) out.storageReads.toList out.storageWrites.toList) ∧
       ((sysState sysShape benv.state address).getStor address).get 0 =
-        excessNext 2 ((benv.state.getStor address).get 0) ((benv.state.getStor address).get 1) :=
+        excessNext 2 ((benv.state.getStor address).get 0) ((benv.state.getStor address).get 1) ∧
+      ((sysState sysShape benv.state address).getStor address).get 0 ≠ B256.max :=
   let h := (sysCall.spec hfork installed).1
-  ⟨_, h, runRequestContracts_step h, sysState_get_zero _ _ _⟩
+  ⟨_, h, runRequestContracts_step h, sysState_get_zero _ _ _,
+    (sysState_get_zero _ _ _).trans_ne (excessNext_ne_max (by decide) _ _)⟩
 
 /-! ## The statements can be met -/
 

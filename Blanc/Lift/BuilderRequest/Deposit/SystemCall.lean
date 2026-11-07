@@ -101,10 +101,11 @@ def sysMemory : SysMemory sysPath where
 gas is separate: it draws on the reservoir. -/
 theorem frameBound_le : sysPath.frameBound sysMemory.alloc ≤ 888000 := by decide
 
-/-- The checked deposit system call returns and uses at most 888,000 gas. -/
+/-- The checked deposit system call returns and uses at most 888,000 regular gas of its 30,000,000. State gas is
+excluded: it draws on the reservoir of 16 × `storageSet`. -/
 def SystemCallOk (benv : Benv) : Prop :=
   ∃ post out, processCheckedSystemTransaction benv address [] = .ok (post, out) ∧
-    systemTransactionGas - out.gasLeft ≤ 888000
+    RegularGasWithin out.gasLeft 888000
 
 /-- The deposit runtime's system call facts. -/
 def sysCall : SysCall sysPath where
@@ -118,8 +119,8 @@ def sysCall : SysCall sysPath where
   room := by decide
 
 /-- **The deposit builder's system call succeeds, from any storage.** Under Amsterdam, with the canonical
-code installed, the checked system call returns and uses at most 888,000 of its 30,000,000 gas.
-There is no storage premise. -/
+code installed, the checked system call returns and uses at most 888,000 of its 30,000,000 regular gas.
+State gas is excluded: it draws on the reservoir of 16 × `storageSet`. There is no storage premise. -/
 theorem system_call_ok {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode address = code) : SystemCallOk benv :=
   let h := sysCall.spec hfork installed
