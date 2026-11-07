@@ -102,7 +102,7 @@ structure Cut (g t : SFunc) (es : List Nat) (e : Nat) : Prop where
 variable {k} {s : Sevm} {b : Devm} {M : Mem} {G : Nat} {g t : SFunc} {es : List Nat} {e : Nat}
 
 /-- What a cut of the fee path gives, on a fork's steps: an arm walked up to the `REVERT` is a reverting execution from the frame's start, through the fee path. -/
-theorem exec_revert_of_cut_on {l : StorageSteps sevm} (v : l.Valid)
+theorem exec_revert_of_cut_on {l : StorageSteps s} (v : l.Valid)
     (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
     (cut : k.Cut g t es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
     (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
@@ -114,10 +114,14 @@ theorem exec_revert_of_cut_on {l : StorageSteps sevm} (v : l.Valid)
       (selected s k.shape.len.word g t) (.halted (St d (0 :: 0 :: S) M' G'))) :
     Nonempty (Exec 0 s (St b [] M (G + l.feePathGas b n + dispatchGas))
       (.error (.revert, (St d S M' G').withOutput []))) := by
+  have window : (k.cutProg g t)[k.shape.window]? = some (windowOf k.shape g t) := by rw [hw]; rfl
+  have loop : (k.cutProg g t)[k.shape.loopEntry]? =
+      some (loopTree k.shape.post k.shape.loop k.shape.loopEntry
+        (postloopTree k.shape.len k.shape.submit g t)) := by
+    conv_lhs => rw [hl]
+    rfl
   have path := feePath_exact (fs := k.cutProg g t) k.shape v (revert := .undefined)
-    (getter := g) (submission := t)
-    ((congrArg (fun i => (k.cutProg g t)[i]?) hw).trans rfl)
-    ((congrArg (fun i => (k.cutProg g t)[i]?) hl).trans rfl) off wordRun tail
+    (getter := g) (submission := t) window loop off wordRun tail
   have root : SFunc.RunExact (k.cutProg g t) s (St b [] M (G + l.feePathGas b n + dispatchGas))
       (k.cutRoot g t) (.halted (St d (0 :: 0 :: S) M' G')) :=
     dispatch_exact (by simpa only [dispatchArm, ite_eq_right caller] using path)
@@ -160,7 +164,7 @@ theorem feeBase_stateGas (s : Sevm) (b : Devm) : ((amsterdamSteps s).feeBase b).
   rw [afterSloadA_stateGas, afterSloadA_stateGas]
 
 /-- **Reverting through the fee path, on a fork's steps.** A contract's arm walked up to the `REVERT`, at a cost `X` of at most 100 regular gas, gives `FrameReverts`. -/
-theorem frameReverts_of_arm_on {l : StorageSteps sevm} (v : l.Valid)
+theorem frameReverts_of_arm_on {l : StorageSteps s} (v : l.Valid)
     (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
     (cut : k.Cut g t es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
     (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
@@ -210,7 +214,7 @@ def paidReadCut (k : UserPath) : SFunc :=
       (.branch .undefined rev0))) .undefined)))
 
 /-- **Calldata of neither form, on a fork's steps.** At a length that is neither the submission's nor zero, the frame executes `REVERT`. -/
-theorem frameReverts_badLength_on {l : StorageSteps sevm} (v : l.Valid)
+theorem frameReverts_badLength_on {l : StorageSteps s} (v : l.Valid)
     (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
     (cut : k.Cut (badLengthCut k) .undefined es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
     (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
@@ -241,7 +245,7 @@ theorem frameReverts_badLength (hw : k.shape.window = 1) (hl : k.shape.loopEntry
     (feeBase_stateGas s b) other nonzero
 
 /-- **A fee read carrying value, on a fork's steps.** Empty calldata and nonzero value: the frame executes `REVERT`. -/
-theorem frameReverts_paidRead_on {l : StorageSteps sevm} (v : l.Valid)
+theorem frameReverts_paidRead_on {l : StorageSteps s} (v : l.Valid)
     (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
     (cut : k.Cut (paidReadCut k) .undefined es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
     (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
