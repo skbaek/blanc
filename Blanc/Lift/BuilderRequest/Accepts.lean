@@ -6,25 +6,23 @@ import Blanc.Lift.BuilderRequest.Deposit.Delivery
 import Blanc.Lift.BuilderRequest.Exit.Delivery
 import Blanc.Lift.BuilderRequest.Delivery
 import Blanc.Lift.BuilderRequest.FeePath
+import Blanc.Lift.BuilderRequest.FeeRead
 import Blanc.Lift.BuilderRequest.SystemOutput
 import Blanc.RequestFeeWordDomain
-import Blanc.ExecutionKeptChain
-import Blanc.Composition.RequestPhaseAmsterdam
 
 /-!
-# What the builder contracts accept, the unlock quote, and the next pass
+# What the builder contracts accept, and the unlock quote
 
-Outcomes O33, O34 and O38 of `blanc-eip8282-builder-requests-v1` §19, under
-`fork = .amsterdam`. O31 and O32 belong to another run and are not stated here;
-there is no public layer in this file.
+Outcomes O33 and O34 of `blanc-eip8282-builder-requests-v1` §19, under
+`fork = .amsterdam`. O38 lives in `Blanc.Composition.BuilderRequestCodesKept`,
+since only it needs the request-phase fold.
 
 O33 states what each contract accepts, from the existing Submission and Revert
 laws: the forward direction is the Submission law applied verbatim, the reverse
 is the Revert law. O34 states that an inhibited system call resets the fee:
 the clearing step is storage-level (`drainStor` with `excessNext_inhibitor`), so
 no `Holds` premise is needed, and a fee read on the cleared storage quotes
-`fakeExp 1 0 17`. O38 states that the four codes persist along a kept history,
-so `request_phase` applies at the post state and the next request pass succeeds.
+`fakeExp 1 0 17`.
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -114,8 +112,9 @@ theorem exit_transfer_reverts {s : Sevm} {b : Devm} {n : Nat} {out : B256}
 
 /-! ## O34: the unlock resets the fee -/
 
-/-- **An inhibited deposit system call clears excess and count.** The post state
-is `drainStor`, whose slots 0 and 1 are 0 on the inhibitor. -/
+/-- **An inhibited SYSTEM-gated deposit call clears excess and count.** The post state
+is `drainStor`, whose slots 0 and 1 are 0 on the inhibitor; a finding about the EIP text's
+"permanently", reachable only on the system path, not an attack. -/
 theorem deposit_unlock_clears {benv : Benv} {post : State} {result : MsgCallOutput}
     (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode Deposit.Creation.address = Deposit.code)
@@ -124,14 +123,17 @@ theorem deposit_unlock_clears {benv : Benv} {post : State} {result : MsgCallOutp
       .ok (post, result)) :
     (post.getStor Deposit.Creation.address).get 0 = 0 ∧
       (post.getStor Deposit.Creation.address).get 1 = 0 := by
-  -- DRAFT: from `Deposit.contract.system_law` the post state is `sysState`; rewrite with
-  -- `Delivery.sysState_getStor` to `Delivery.drainStor`; slot 1 is the outer `set 1 0`,
-  -- slot 0 is `Deposit.contract.next_eq` with `Deposit.contract.target_eq` closed by
-  -- `SystemOutput.excessNext_inhibitor` at the inhibited slot 0.
-  sorry
+  obtain ⟨hpost, -⟩ := Deposit.system_law hfork installed run
+  have hn : Deposit.sysShape.next = excessNext Deposit.sysShape.target.word :=
+    Deposit.contract.next_eq
+  constructor
+  · rw [hpost, RequestSystem.sysState_get_zero, hn, inhibited]
+    exact excessNext_inhibitor _ _
+  · rw [hpost, RequestSystem.sysState_get, ite_eq_left (show (1 : B256) = 1 from rfl)]
 
-/-- **An inhibited exit system call clears excess and count.** The post state
-is `drainStor`, whose slots 0 and 1 are 0 on the inhibitor. -/
+/-- **An inhibited SYSTEM-gated exit call clears excess and count.** The post state
+is `drainStor`, whose slots 0 and 1 are 0 on the inhibitor; a finding about the EIP text's
+"permanently", reachable only on the system path, not an attack. -/
 theorem exit_unlock_clears {benv : Benv} {post : State} {result : MsgCallOutput}
     (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode Exit.Creation.address = Exit.code)
@@ -140,138 +142,75 @@ theorem exit_unlock_clears {benv : Benv} {post : State} {result : MsgCallOutput}
       .ok (post, result)) :
     (post.getStor Exit.Creation.address).get 0 = 0 ∧
       (post.getStor Exit.Creation.address).get 1 = 0 := by
-  -- DRAFT: as `deposit_unlock_clears`, with `Exit.contract` (`target_eq` is 2, `next_eq`
-  -- the same `excessNext` shape) and `Delivery.latchStor` not needed since data is empty.
-  sorry
+  obtain ⟨hpost, -⟩ := Exit.system_law hfork installed run
+  have hn : Exit.sysShape.next = excessNext Exit.sysShape.target.word :=
+    Exit.contract.next_eq
+  constructor
+  · rw [hpost, RequestSystem.sysState_get_zero, hn, inhibited]
+    exact excessNext_inhibitor _ _
+  · rw [hpost, RequestSystem.sysState_get, ite_eq_left (show (1 : B256) = 1 from rfl)]
+
+/-- The quote on cleared storage is `fakeExp 1 0 17`, from the cleared excess. -/
+private theorem quote_of_cleared {sevm : Sevm} {l : StorageSteps sevm} {pre post : Devm}
+    {target : B256} {iterations : Nat} {finalOutput : B256}
+    (read : UserPath.FeeReadOn l target pre post iterations finalOutput)
+    (hsum : (pre.getStorVal sevm.currentTarget 0).toNat +
+      ((pre.getStorVal sevm.currentTarget 1).toNat - target.toNat) < 2 ^ 256)
+    (hle : (pre.getStorVal sevm.currentTarget 0).toNat +
+      ((pre.getStorVal sevm.currentTarget 1).toNat - target.toNat) ≤ 2892)
+    (hclear : (pre.getStorVal sevm.currentTarget 0).toNat +
+      ((pre.getStorVal sevm.currentTarget 1).toNat - target.toNat) = 0) :
+    (finalOutput / (17 : B256)).toNat = fakeExp 1 0 17 := by
+  have hq := read.fee_eq_natural hsum hle
+  rw [hclear] at hq
+  exact hq
 
 /-- **After the deposit unlock the quote is `fakeExp 1 0 17`.** On cleared
-storage the quoted excess is 0, inside the no-wrap domain. -/
+storage the quoted excess is 0, inside the no-wrap domain; a SYSTEM-gated finding about
+the EIP text, whatever the backlog, not an attack. -/
 theorem deposit_unlock_quote {sevm : Sevm} {l : StorageSteps sevm} {pre post : Devm}
     {iterations : Nat} {finalOutput : B256}
     (read : UserPath.FeeReadOn l 8 pre post iterations finalOutput)
     (h0 : pre.getStorVal sevm.currentTarget 0 = 0)
     (h1 : pre.getStorVal sevm.currentTarget 1 = 0) :
     (finalOutput / (17 : B256)).toNat = fakeExp 1 0 17 := by
-  -- DRAFT: `read.quote` runs on `storedExcess 8 sevm pre`, which is
-  -- `FeePath.targetExcess 8 0 0 = 0` by `h0`, `h1` (`¬ (8 : B256) < 0`, then
-  -- `targetExcess_toNat`); close with `Blanc.RequestFeeWord.word_fee_eq_natural`
-  -- at `0 ≤ 2892`. `fakeExp 1 0 17 = 1` is left for the master (`by decide`).
-  sorry
+  have h8 : (8 : B256).toNat = 8 := by decide
+  have hsum : (pre.getStorVal sevm.currentTarget 0).toNat +
+      ((pre.getStorVal sevm.currentTarget 1).toNat - (8 : B256).toNat) < 2 ^ 256 := by
+    rw [h0, h1, h8]
+    decide
+  have hle : (pre.getStorVal sevm.currentTarget 0).toNat +
+      ((pre.getStorVal sevm.currentTarget 1).toNat - (8 : B256).toNat) ≤ 2892 := by
+    rw [h0, h1, h8]
+    decide
+  have hclear : (pre.getStorVal sevm.currentTarget 0).toNat +
+      ((pre.getStorVal sevm.currentTarget 1).toNat - (8 : B256).toNat) = 0 := by
+    rw [h0, h1, h8]
+    decide
+  exact quote_of_cleared read hsum hle hclear
 
 /-- **After the exit unlock the quote is `fakeExp 1 0 17`.** On cleared
-storage the quoted excess is 0, inside the no-wrap domain. -/
+storage the quoted excess is 0, inside the no-wrap domain; a SYSTEM-gated finding about
+the EIP text, whatever the backlog, not an attack. -/
 theorem exit_unlock_quote {sevm : Sevm} {l : StorageSteps sevm} {pre post : Devm}
     {iterations : Nat} {finalOutput : B256}
     (read : UserPath.FeeReadOn l 2 pre post iterations finalOutput)
     (h0 : pre.getStorVal sevm.currentTarget 0 = 0)
     (h1 : pre.getStorVal sevm.currentTarget 1 = 0) :
     (finalOutput / (17 : B256)).toNat = fakeExp 1 0 17 := by
-  -- DRAFT: as `deposit_unlock_quote`, with target `2` (`¬ (2 : B256) < 0`).
-  sorry
-
-/-! ## O38: the next pass cannot fail along a history -/
-
-/-- **The four codes persist along a kept history.** Each address keeps the
-code it started with, needing only nonempty code and no delegation. -/
-theorem codes_persist {cfg : ChainConfig} {start post : BlockChain}
-    {blocks : List KeptBlock} (h : Blanc.KeptHistory cfg start blocks post)
-    (h7002 : start.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode)
-    (h7251 : start.state.getCode consolidationRequestPredeployAddress =
-      Blanc.consolidationRequestCode)
-    (hdep : start.state.getCode Deposit.Creation.address = Deposit.code)
-    (hexit : start.state.getCode Exit.Creation.address = Exit.code)
-    (ne7002 : (start.state.getCode withdrawalRequestPredeployAddress).toList ≠ [])
-    (nd7002 : ¬ isValidDelegation (start.state.getCode withdrawalRequestPredeployAddress))
-    (ne7251 : (start.state.getCode consolidationRequestPredeployAddress).toList ≠ [])
-    (nd7251 : ¬ isValidDelegation (start.state.getCode consolidationRequestPredeployAddress))
-    (nedep : (start.state.getCode Deposit.Creation.address).toList ≠ [])
-    (nddep : ¬ isValidDelegation (start.state.getCode Deposit.Creation.address))
-    (neexit : (start.state.getCode Exit.Creation.address).toList ≠ [])
-    (ndexit : ¬ isValidDelegation (start.state.getCode Exit.Creation.address)) :
-    post.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode ∧
-    post.state.getCode consolidationRequestPredeployAddress =
-      Blanc.consolidationRequestCode ∧
-    post.state.getCode Deposit.Creation.address = Deposit.code ∧
-    post.state.getCode Exit.Creation.address = Exit.code := by
-  -- DRAFT: `Blanc.KeptHistory.chain` once per address gives
-  -- `post.state.getCode a = start.state.getCode a`; rewrite with the four `h*`.
-  -- The `ne*`/`nd*` for the builder contracts are `Deposit.linked.runnable` and
-  -- `Exit.linked.runnable` (`by decide +kernel`); the EIP-7002/7251 pair stays premises.
-  sorry
-
-/-- **The next request pass cannot fail.** At any Amsterdam `benv` over the
-post state, the four checked calls return and the fold over
-`amsterdamRules.requests` succeeds. -/
-theorem next_pass_succeeds {cfg : ChainConfig} {start post : BlockChain}
-    {blocks : List KeptBlock} (h : Blanc.KeptHistory cfg start blocks post)
-    (h7002 : start.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode)
-    (h7251 : start.state.getCode consolidationRequestPredeployAddress =
-      Blanc.consolidationRequestCode)
-    (hdep : start.state.getCode Deposit.Creation.address = Deposit.code)
-    (hexit : start.state.getCode Exit.Creation.address = Exit.code)
-    (ne7002 : (start.state.getCode withdrawalRequestPredeployAddress).toList ≠ [])
-    (nd7002 : ¬ isValidDelegation (start.state.getCode withdrawalRequestPredeployAddress))
-    (ne7251 : (start.state.getCode consolidationRequestPredeployAddress).toList ≠ [])
-    (nd7251 : ¬ isValidDelegation (start.state.getCode consolidationRequestPredeployAddress))
-    (nedep : (start.state.getCode Deposit.Creation.address).toList ≠ [])
-    (nddep : ¬ isValidDelegation (start.state.getCode Deposit.Creation.address))
-    (neexit : (start.state.getCode Exit.Creation.address).toList ≠ [])
-    (ndexit : ¬ isValidDelegation (start.state.getCode Exit.Creation.address))
-    {benv : Benv} (hstate : benv.state = post.state)
-    (hfork : benv.stat.fork = .amsterdam) (idx : Nat) (acc : List Bytes)
-    (bal : BalBuilder) :
-    ∃ (out1 out2 out3 out4 : MsgCallOutput) (bal' : BalBuilder),
-      processCheckedSystemTransaction benv withdrawalRequestPredeployAddress [] =
-        .ok (Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals benv.state,
-          out1) ∧
-      processCheckedSystemTransaction
-        (benv.withState
-          (Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals benv.state))
-        consolidationRequestPredeployAddress [] =
-        .ok (Blanc.Composition.RequestPhaseAmsterdam.afterConsolidations
-          (Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals benv.state),
-          out2) ∧
-      processCheckedSystemTransaction
-        (benv.withState
-          (Blanc.Composition.RequestPhaseAmsterdam.afterConsolidations
-            (Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals
-              benv.state)))
-        Deposit.Creation.address [] =
-        .ok (Blanc.Composition.RequestPhaseAmsterdam.afterDeposits
-          (Blanc.Composition.RequestPhaseAmsterdam.afterConsolidations
-            (Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals
-              benv.state)),
-          out3) ∧
-      processCheckedSystemTransaction
-        (benv.withState
-          (Blanc.Composition.RequestPhaseAmsterdam.afterDeposits
-            (Blanc.Composition.RequestPhaseAmsterdam.afterConsolidations
-              (Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals
-                benv.state))))
-        Exit.Creation.address [] =
-        .ok (Blanc.Composition.RequestPhaseAmsterdam.afterExits
-          (Blanc.Composition.RequestPhaseAmsterdam.afterDeposits
-            (Blanc.Composition.RequestPhaseAmsterdam.afterConsolidations
-              (Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals
-                benv.state))),
-          out4) ∧
-      runRequestContracts idx amsterdamRules.requests benv acc bal =
-        .ok (Blanc.Composition.RequestPhaseAmsterdam.afterExits
-          (Blanc.Composition.RequestPhaseAmsterdam.afterDeposits
-            (Blanc.Composition.RequestPhaseAmsterdam.afterConsolidations
-              (Blanc.Composition.RequestPhaseAmsterdam.afterWithdrawals
-                benv.state))),
-          acc ++ Blanc.ExecutionTrace.optionalRequestEntry 1 out1.returnData ++
-            Blanc.ExecutionTrace.optionalRequestEntry 2 out2.returnData ++
-            Blanc.ExecutionTrace.optionalRequestEntry 3 out3.returnData ++
-            Blanc.ExecutionTrace.optionalRequestEntry 4 out4.returnData,
-          bal') ∧
-      benv.stat.rules.requests = amsterdamRules.requests := by
-  -- DRAFT: subst `hstate`; get the four post-state installations from `codes_persist`;
-  -- then this is `Blanc.Composition.RequestPhaseAmsterdam.request_phase` at `benv`.
-  sorry
+  have h2 : (2 : B256).toNat = 2 := by decide
+  have hsum : (pre.getStorVal sevm.currentTarget 0).toNat +
+      ((pre.getStorVal sevm.currentTarget 1).toNat - (2 : B256).toNat) < 2 ^ 256 := by
+    rw [h0, h1, h2]
+    decide
+  have hle : (pre.getStorVal sevm.currentTarget 0).toNat +
+      ((pre.getStorVal sevm.currentTarget 1).toNat - (2 : B256).toNat) ≤ 2892 := by
+    rw [h0, h1, h2]
+    decide
+  have hclear : (pre.getStorVal sevm.currentTarget 0).toNat +
+      ((pre.getStorVal sevm.currentTarget 1).toNat - (2 : B256).toNat) = 0 := by
+    rw [h0, h1, h2]
+    decide
+  exact quote_of_cleared read hsum hle hclear
 
 end Blanc.Lift.BuilderRequest
