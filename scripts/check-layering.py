@@ -1453,7 +1453,7 @@ SHARED += ["Lift.Create2Factory.Cert", "Lift.Create2Factory.Check", "Lift.Create
            "Lift.Create2Factory.Jumps", "Lift.Create2Factory.Walk", "Lift.RuntimeInstall"]
 # Amsterdam walk-engine support (blanc-eip8282-builder-requests-v1 O6): the state-gas `SSTORE` and
 # `SLOAD` steps and the top-level system-call envelope, contract-neutral. `CoveredFork` is not widened.
-SHARED += ["Lift.AmsterdamWalk", "Lift.ExecCut", "Lift.SystemCallAmsterdam"]
+SHARED += ["Lift.AmsterdamWalk", "Lift.ExecCut", "Lift.TransactionAmsterdam", "Lift.SystemCallAmsterdam"]
 # The two pushed-word facts of a request contract's dispatch and inhibitor guard.
 SHARED += ["Lift.SystemCaller", "MemoryWindows"]
 # The system path all four Amsterdam request contracts share (blanc-eip8282-builder-requests-v1 O9).
@@ -1468,7 +1468,8 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Creation.Deploy", "Lift.BuilderRequest.Deposit.FeeWindow",
     "Lift.BuilderRequest.Deposit.Submission", "Lift.BuilderRequest.Deposit.Frames",
     "Lift.BuilderRequest.FeePath", "Lift.BuilderRequest.QueueLayout",
-    "Lift.BuilderRequest.Message", "Lift.BuilderRequest.Revert",
+    "Lift.BuilderRequest.Message", "Lift.BuilderRequest.Revert", "Lift.BuilderRequest.Transaction",
+    "Lift.BuilderRequest.Deposit.Transaction", "Lift.BuilderRequest.Exit.Transaction",
     "Lift.BuilderRequest.Deposit.Message", "Lift.BuilderRequest.Deposit.Revert",
     "Lift.BuilderRequest.Exit.Message", "Lift.BuilderRequest.Exit.Revert",
     "Lift.BuilderRequest.SystemPath", "Lift.BuilderRequest.SystemOutput",

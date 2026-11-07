@@ -22,7 +22,8 @@ namespace Blanc.Lift
 open Jaune
 
 open private preparedTopLevelMsg resolveTopLevelCallAmsterdam dispatchTopLevelAmsterdam
-  finishTopLevelAmsterdam runPreparedTopFrame msgCallOutputAmsterdam from Jaune.Transaction
+  finishTopLevelAmsterdam runPreparedTopFrame msgCallOutputAmsterdam checkTransactionGasLimit
+  checkTransactionPriorityFeeRelation checkTransactionBlobShape from Jaune.Transaction
 
 /-- The machine a top-level Amsterdam system call prepares: two read records on `initDevm`. -/
 def systemCallBase (msg : Msg) : Devm :=
@@ -351,6 +352,18 @@ theorem processMessageCall_halt {raw : Devm} {reason : ExceptionalHalt}
     processMessageCall M = .ok (M.benv.state, failedOutput M (haltedFrame reason raw)) :=
   processMessageCall_failed hfork hauth htarget installed hnonempty hdel hprecomp entry run rfl rfl
 
+/-- Under Amsterdam a value-moving call's entry log is the EIP-7708 transfer log. -/
+theorem initDevm_logs_transfer (hfork : M.benv.stat.fork = .amsterdam) (transfer : M.shouldTransferValue = true)
+    (distinct : M.caller ≠ M.currentTarget) (nonzero : M.value ≠ 0) :
+    (initDevm M).logs = [transferLog M.caller M.currentTarget M.value] := by
+  have hsg := amsterdam_stateGas hfork
+  show (match M.benv.stat.rules.stateGas with
+    | none => []
+    | some _ => if M.shouldTransferValue then (Devm.emitTransferLog _ _ _ _).logs else []) = _
+  rw [hsg]
+  simp only [transfer, ↓reduceIte, Devm.emitTransferLog, distinct, nonzero, or_self]
+  rfl
+
 /-- The settled meter of a revert: the reservoir at its baseline, the spill back in `gasLeft`. No log, no refund.
 Regular gas and state gas are the two distinct figures here. -/
 theorem failedOutput_revert (M : Msg) (raw : Devm) :
@@ -448,6 +461,60 @@ theorem processMessageCall_inv {post : State} {out : MsgCallOutput} (hfork : M.b
         rfl
 
 end User
+
+/-! ## Validation of a plain call transaction -/
+
+/-- **Validation of a type-2 call under Amsterdam, from its facts.** A receiver, no access list, priority fee at most the
+fee cap, a nonce below the maximum, its gas at most the 2^32 - 1 total cap, and its gas covering the intrinsic cost and the
+calldata floor, each of them within the 2^24 execution budget. -/
+theorem validateTransaction_amsterdam_two {rules : ForkRules} {tx : Tx} {sender t : Adr} {chainId : UInt64}
+    {prio maxFee i f : Nat} (hrules : rules = amsterdamRules)
+    (htype : tx.type = .two chainId prio maxFee (some t) [])
+    (hprio : prio ≤ maxFee) (hnonce : tx.nonce ≠ UInt64.max) (hcap : tx.gas ≤ 4294967295)
+    (hcost : calculateIntrinsicCost rules tx sender = (i, f)) (hi : i ≤ tx.gas) (hf : f ≤ tx.gas)
+    (himax : i ≤ 16777216) (hfmax : f ≤ 16777216) :
+    validateTransaction rules tx sender = .ok (i, f) := by
+  subst hrules
+  have hrec : tx.type.receiver? = some t := by rw [htype]; rfl
+  have hinit : checkInitcodeLimit amsterdamRules tx.type.receiver? tx.data.length = .ok () := by
+    rw [hrec]
+    rfl
+  have htotal : checkTransactionTotalGasCap amsterdamRules.tx tx.gas = .ok () := by
+    unfold checkTransactionTotalGasCap checkTransactionGasLimit
+    show (if tx.gas > 4294967295 then _ else _) = _
+    simp only [gt_iff_lt, Nat.not_lt.mpr hcap, ↓reduceIte]
+  have hrel : checkTransactionPriorityFeeRelation tx = .ok () := by
+    unfold checkTransactionPriorityFeeRelation
+    rw [htype]
+    simp only [Nat.not_lt.mpr hprio, ↓reduceIte]
+  have hshape : checkTransactionBlobShape amsterdamRules tx = .ok () := by
+    unfold checkTransactionBlobShape
+    rw [htype]
+  have hrecv : checkTransactionReceiver tx = .ok () := by
+    unfold checkTransactionReceiver Tx.isTypeThree
+    rw [htype]
+    rfl
+  have hauth : checkTransactionAuthorizationList tx = .ok () := by
+    unfold checkTransactionAuthorizationList
+    rw [htype]
+  unfold validateTransaction
+  show (do
+    if tx.nonce = UInt64.max then .error _
+    checkInitcodeLimit amsterdamRules tx.type.receiver? tx.data.length
+    checkTransactionTotalGasCap amsterdamRules.tx tx.gas
+    checkTransactionPriorityFeeRelation tx
+    checkTransactionBlobShape amsterdamRules tx
+    checkTransactionReceiver tx
+    checkTransactionAuthorizationList tx
+    let ⟨intrinsicGas, callDataFloorGasCost⟩ := calculateIntrinsicCost amsterdamRules tx sender
+    if intrinsicGas > tx.gas then .error _
+    if callDataFloorGasCost > tx.gas then .error _
+    if intrinsicGas > 16777216 then .error _
+    if callDataFloorGasCost > 16777216 then .error _
+    .ok (intrinsicGas, callDataFloorGasCost) : Except TxValidationError (Nat × Nat)) = _
+  rw [hinit, htotal, hrel, hshape, hrecv, hauth, hcost]
+  simp only [hnonce, gt_iff_lt, Nat.not_lt.mpr hi, Nat.not_lt.mpr hf, Nat.not_lt.mpr himax,
+    Nat.not_lt.mpr hfmax, ↓reduceIte, bind, Except.bind, pure, Except.pure]
 
 /-! ## The system-call envelope -/
 

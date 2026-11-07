@@ -1219,6 +1219,10 @@ import Blanc.Lift.BuilderRequest.Revert
 import Blanc.Lift.BuilderRequest.Deposit.Revert
 import Blanc.Lift.BuilderRequest.Exit.Revert
 import Blanc.Lift.ExecCut
+import Blanc.Lift.TransactionAmsterdam
+import Blanc.Lift.BuilderRequest.Transaction
+import Blanc.Lift.BuilderRequest.Deposit.Transaction
+import Blanc.Lift.BuilderRequest.Exit.Transaction
 import Blanc.Lift.BuilderRequest.Deposit.Creation.Deploy
 import Blanc.Lift.BuilderRequest.Exit.Jumps
 import Blanc.Lift.BuilderRequest.Exit.Creation.Deploy
