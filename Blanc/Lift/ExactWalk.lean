@@ -355,6 +355,34 @@ theorem rx_return {i sz : B256} {out : Bytes}
   exact Linst.run_return_eq_ok (out := out) rfl (by rw [hext]; exact Nat.zero_le _)
     (by rw [hext, Nat.sub_zero]; exact Prod.ext hout rfl)
 
+/-- The expansion charge of a return window. -/
+def retExt (M : Mem) (i sz : B256) : Nat :=
+  calculateMemoryGasCost (memExtSize M.size i.toNat sz.toNat) - calculateMemoryGasCost M.size
+
+/-- The halted frame of `RETURN`. -/
+def retPost (b : Devm) (S : List B256) (M : Mem) (G : Nat) (i sz : B256) : Devm :=
+  ((St b S M G).memRead i.toNat sz.toNat).2.withOutput (M.read i.toNat sz.toNat).1
+
+/-- `RETURN` of any window, with its expansion charged: `rx_return` without the no-expansion premise. -/
+theorem rx_return_charged {i sz : B256} :
+    SFunc.RunExact fs sevm (St b (i :: sz :: S) M (G + retExt M i sz)) (.last .return_)
+      (.halted (retPost b S M G i sz)) := by
+  have hext : (St b (i :: sz :: S) M (G + retExt M i sz)).extCost [⟨i.toNat, sz.toNat⟩] =
+      retExt M i sz := by
+    have := Devm.extCost_add_of_size (devm := b) (S := i :: sz :: S) (N := M)
+      (G := G + retExt M i sz) (i := i.toNat) (sz := sz.toNat) (a := 0) (e := retExt M i sz) rfl
+      (Nat.zero_add _)
+    rwa [Nat.zero_add] at this
+  refine .last ?_
+  show Linst.run sevm _ .return_ = _
+  refine Linst.run_return_eq_ok (out := (M.read i.toNat sz.toNat).1) rfl
+    (by rw [hext]; exact Nat.le_add_left _ _) ?_
+  rw [hext]
+  have hg : (St b (i :: sz :: S) M (G + retExt M i sz)).gasLeft - retExt M i sz = G :=
+    Nat.add_sub_cancel _ _
+  rw [hg]
+  rfl
+
 /-! ## The solc dispatcher -/
 
 /-- One solc dispatcher comparison that does not match: `DUP1 PUSH4 c EQ PUSH2 d JUMPI`. -/

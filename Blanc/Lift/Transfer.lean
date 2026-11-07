@@ -1005,9 +1005,11 @@ theorem run_balance_stack {sevm : Sevm} {s r : Devm} {x : B256} {xs : Stack}
       · simp only [hg, hl, ↓reduceIte, reduceCtorEq] at h
 
 /-- Success-only soundness: a successful run of an accepted instruction leaves
-a stack matching the transferred pattern. -/
-theorem ninstTransfer_run_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
-    {input output : Pattern} (hstateGas : sevm.benvStat.rules.stateGas = none)
+a stack matching the transferred pattern. The fork premise serves only the call family, so it is
+either the no-state-gas lane or this node's not being a call-family instruction. -/
+theorem ninstTransfer_run_lane {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
+    {input output : Pattern}
+    (hlane : sevm.benvStat.rules.stateGas = none ∨ ∀ x, n ≠ .exec x)
     (matched : Matches input devm.stack)
     (checked : ninstTransfer n input = some output)
     (run : Ninst.Run sevm devm n devm') :
@@ -1264,21 +1266,32 @@ theorem ninstTransfer_run_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Nins
           simpa only using hmatch
       | _ => cases checked
   | exec x =>
-      cases x with
-      | call =>
-          simp only [ninstTransfer] at checked
-          exact ninstTransfer_run_call_noStateGas hstateGas matched checked run
-      | staticcall =>
-          simp only [ninstTransfer] at checked
-          exact ninstTransfer_run_staticcall_noStateGas hstateGas matched checked run
-      | create2 =>
-          simp only [ninstTransfer] at checked
-          exact ninstTransfer_run_create2_noStateGas hstateGas matched checked run
-      | delegatecall =>
-          simp only [ninstTransfer] at checked
-          exact ninstTransfer_run_delegatecall_noStateGas hstateGas matched checked run
-      | _ => cases checked
+      rcases hlane with hstateGas | hne
+      · cases x with
+        | call =>
+            simp only [ninstTransfer] at checked
+            exact ninstTransfer_run_call_noStateGas hstateGas matched checked run
+        | staticcall =>
+            simp only [ninstTransfer] at checked
+            exact ninstTransfer_run_staticcall_noStateGas hstateGas matched checked run
+        | create2 =>
+            simp only [ninstTransfer] at checked
+            exact ninstTransfer_run_create2_noStateGas hstateGas matched checked run
+        | delegatecall =>
+            simp only [ninstTransfer] at checked
+            exact ninstTransfer_run_delegatecall_noStateGas hstateGas matched checked run
+        | _ => cases checked
+      · exact absurd rfl (hne x)
   | _ => cases checked
+
+/-- Success-only soundness in the no-state-gas lane. -/
+theorem ninstTransfer_run_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
+    {input output : Pattern} (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (matched : Matches input devm.stack)
+    (checked : ninstTransfer n input = some output)
+    (run : Ninst.Run sevm devm n devm') :
+    Matches output devm'.stack :=
+  ninstTransfer_run_lane (Or.inl hstateGas) matched checked run
 
 /-- Modern compatibility statement for success-only checked stack transfer. -/
 theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}

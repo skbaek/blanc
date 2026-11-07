@@ -50,6 +50,35 @@ theorem CoveredFork.histFork {f : Fork} : CoveredFork f → HistFork f := by
 /-- Amsterdam remains outside the historical extraction domain. -/
 theorem HistFork.not_amsterdam : ¬ HistFork .amsterdam := by decide
 
+/-! Rule facts under Amsterdam, stated beside `CoveredFork`'s and leaving it as it is: a walk that
+runs under Amsterdam takes `s.fork = .amsterdam` and reads the rule record through these. -/
+
+/-- `.amsterdam` resolves to `amsterdamRules` in the record the machine reads. -/
+theorem amsterdam_rules {s : BenvStat} (h : s.fork = .amsterdam) : s.rules = amsterdamRules := by
+  show Fork.ruleSet s.fork = _
+  rw [h]
+  rfl
+
+theorem amsterdam_stateGas {s : BenvStat} (h : s.fork = .amsterdam) :
+    s.rules.stateGas = some amsterdamStateGasRules := by
+  rw [amsterdam_rules h]
+  rfl
+
+theorem amsterdam_access {s : BenvStat} (h : s.fork = .amsterdam) :
+    s.rules.access = .eip2929 := by
+  rw [amsterdam_rules h]
+  rfl
+
+theorem amsterdam_push0 {s : BenvStat} (h : s.fork = .amsterdam) :
+    s.rules.op.push0 = true := by
+  rw [amsterdam_rules h]
+  rfl
+
+theorem amsterdam_shifts {s : BenvStat} (h : s.fork = .amsterdam) :
+    s.rules.op.shifts = true := by
+  rw [amsterdam_rules h]
+  rfl
+
 /-- Every successful mainnet selection belongs to the historical domain.
 Both schedule coordinates are retained; a lookup below its floor may fail. -/
 theorem mainnet_histFork {number timestamp : Nat} {f : Fork}

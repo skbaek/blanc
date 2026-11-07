@@ -1451,6 +1451,9 @@ CONTRACTS["curve-3crv"].extend([
 # runtime-install steps it uses are the shared modules registered just below.
 SHARED += ["Lift.Create2Factory.Cert", "Lift.Create2Factory.Check", "Lift.Create2Factory.Code",
            "Lift.Create2Factory.Jumps", "Lift.Create2Factory.Walk", "Lift.RuntimeInstall"]
+# Amsterdam walk-engine support (blanc-eip8282-builder-requests-v1 O6): the state-gas `SSTORE` and
+# `SLOAD` steps and the top-level system-call envelope, contract-neutral. `CoveredFork` is not widened.
+SHARED += ["Lift.AmsterdamWalk", "Lift.SystemCallAmsterdam"]
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",

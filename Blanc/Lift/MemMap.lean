@@ -584,8 +584,11 @@ theorem mem_of_lookup_eq_some {mem : MemMap} {o : Nat} {v : AVal}
       have h' : mem.lookup o = some v := by simpa only [List.lookup, hb] using h
       exact List.mem_cons_of_mem _ (ih h')
 
-theorem absMem_sound_noStateGas {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
-    {mem : MemMap} {ρ : B256} {S base : List B256} (hstateGas : sevm.benvStat.rules.stateGas = none)
+/-- The memory transfer's soundness. The fork premise serves only `STATICCALL`, so it is either the
+no-state-gas lane or this node's not being a call-family instruction. -/
+theorem absMem_sound_lane {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
+    {mem : MemMap} {ρ : B256} {S base : List B256}
+    (hlane : sevm.benvStat.rules.stateGas = none ∨ ∀ x, n ≠ .exec x)
     (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
     (hm : MemMatches ρ mem pre.memory) (run : Ninst.Run sevm pre n post) :
     MemMatches ρ (absMem n a mem) post.memory := by
@@ -606,13 +609,23 @@ theorem absMem_sound_noStateGas {sevm : Sevm} {pre post : Devm} {n : Ninst} {a :
   · rcases hframe with _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | ⟨_, _ | ⟨h4, _ | ⟨h5, _⟩⟩⟩⟩⟩⟩
     simp only [AVal.Matches] at h4 h5
     subst h4 h5
-    exact MemMatches.agree
-      (staticcall_run_memory_noStateGas hstateGas run (by simpa only [List.cons_append] using hstack)) hm
+    rcases hlane with hstateGas | hne
+    · exact MemMatches.agree
+        (staticcall_run_memory_noStateGas hstateGas run (by simpa only [List.cons_append] using hstack)) hm
+    · exact absurd rfl (hne _)
   · split
     · rename_i hk
       obtain ⟨hd, hsz⟩ := ninstMemKeeps_run hk run
       exact MemMatches.of_data_eq hd hsz hm
     · exact memMatches_nil _ _
+
+/-- The memory transfer's soundness in the no-state-gas lane. -/
+theorem absMem_sound_noStateGas {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
+    {mem : MemMap} {ρ : B256} {S base : List B256} (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (hm : MemMatches ρ mem pre.memory) (run : Ninst.Run sevm pre n post) :
+    MemMatches ρ (absMem n a mem) post.memory :=
+  absMem_sound_lane (Or.inl hstateGas) hframe hstack hm run
 
 /-- Preserve the existing modern memory-map statement. -/
 theorem absMem_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
@@ -640,9 +653,9 @@ theorem memTop_sound {sevm : Sevm} {pre post : Devm} {n : Ninst} {a : List AVal}
 /-- One checked instruction step keeps both invariants: the frame refined by a
 recorded `MLOAD` result still describes the stack, and the transferred map
 still describes memory. -/
-theorem step_mem_sound_noStateGas (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
+theorem step_mem_sound_lane (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
     {a a' : List AVal} {μ : MemMap} {ρ : B256} {S S' base : List B256}
-    (hstateGas : sevm.benvStat.rules.stateGas = none) (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (hlane : sevm.benvStat.rules.stateGas = none ∨ ∀ x, n ≠ .exec x) (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
     (hm : MemMatches ρ μ pre.memory) (run : Ninst.Run sevm pre n post)
     (hpost : post.stack = S' ++ base) (h' : FrameMatches ρ a' S') :
     FrameMatches ρ (if b then memFold (memTop n a μ) a' else a') S' ∧
@@ -650,7 +663,7 @@ theorem step_mem_sound_noStateGas (b : Bool) {sevm : Sevm} {pre post : Devm} {n 
   cases b with
   | false => exact ⟨h', memMatches_nil _ _⟩
   | true =>
-    refine ⟨?_, absMem_sound_noStateGas hstateGas hframe hstack hm run⟩
+    refine ⟨?_, absMem_sound_lane hlane hframe hstack hm run⟩
     simp only [ite_true]
     cases ht : memTop n a μ with
     | none => cases a' <;> exact h'
@@ -664,6 +677,16 @@ theorem step_mem_sound_noStateGas (b : Bool) {sevm : Sevm} {pre post : Devm} {n 
         simp only [List.cons_append, List.cons.injEq] at this
         rw [this.1]
         exact hv
+
+/-- `step_mem_sound_lane` in the no-state-gas lane. -/
+theorem step_mem_sound_noStateGas (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
+    {a a' : List AVal} {μ : MemMap} {ρ : B256} {S S' base : List B256}
+    (hstateGas : sevm.benvStat.rules.stateGas = none) (hframe : FrameMatches ρ a S) (hstack : pre.stack = S ++ base)
+    (hm : MemMatches ρ μ pre.memory) (run : Ninst.Run sevm pre n post)
+    (hpost : post.stack = S' ++ base) (h' : FrameMatches ρ a' S') :
+    FrameMatches ρ (if b then memFold (memTop n a μ) a' else a') S' ∧
+      MemMatches ρ (if b then absMem n a μ else []) post.memory :=
+  step_mem_sound_lane b (Or.inl hstateGas) hframe hstack hm run hpost h'
 
 /-- Preserve the existing modern memory-map statement. -/
 theorem step_mem_sound (b : Bool) {sevm : Sevm} {pre post : Devm} {n : Ninst}
