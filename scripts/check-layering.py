@@ -1522,6 +1522,10 @@ CONTRACTS["builder-request"] = [
 COMPOSITION = {
     "Composition.RequestPhaseAmsterdam": ('builder-request', 'withdrawal-request'),
     "Composition.BuilderRequestCodesKept": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestPublicObservers": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestPublicGuarantees": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestPublicFindings": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestPublicBounds": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseOrder": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseAmsterdamBal": ('builder-request', 'withdrawal-request'),
     "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),

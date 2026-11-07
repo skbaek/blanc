@@ -1265,3 +1265,7 @@ import Blanc.Lift.BuilderRequest.Accepts
 import Blanc.Lift.BuilderRequest.RevertCovered
 import Blanc.Lift.BuilderRequest.Progress
 import Blanc.Composition.BuilderRequestCodesKept
+import Blanc.Composition.BuilderRequestPublicObservers
+import Blanc.Composition.BuilderRequestPublicGuarantees
+import Blanc.Composition.BuilderRequestPublicFindings
+import Blanc.Composition.BuilderRequestPublicBounds
