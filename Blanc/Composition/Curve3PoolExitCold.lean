@@ -130,7 +130,7 @@ open Blanc.Composition.Curve3Pool3CrvInstance (coinOf tokOf)
 
 /-- What the canonical chain's evaluation stands on, at a message's entry. -/
 structure ExitFrame (msg : Msg) (w : Jaune.State) (E : Adr) (a : Nat) (T : B256) : Prop where
-  fork : CoveredFork (initSevm msg).benvStat.fork
+  fork : ShanghaiOnwards (initSevm msg).benvStat.fork
   static : (initSevm msg).isStatic = false
   target : (initSevm msg).currentTarget = pool
   caller : (initSevm msg).caller = E
@@ -178,7 +178,7 @@ theorem stage_supply (f : ExitFrame msg w E a T) :
   have hx : (initSevm msg).currentTarget = pool ∨ (initSevm msg).currentTarget = c3 ∨ (initSevm msg).currentTarget = dai ∨
       (initSevm msg).currentTarget = usdc ∨ (initSevm msg).currentTarget = usdt := Or.inl f.target
   obtain ⟨hcost, a1, m1⟩ := rlPrologue_view hA0 f.clean ((f.stor _ hx).2.trans (f.stor _ hx).1.symm)
-    (CoveredFork.rules_storageClearRefund f.fork) f.lock (by decide)
+    (ShanghaiOnwards.rules_storageClearRefund f.fork) f.lock (by decide)
   rw [f.target] at m1
   have hAc := f.party (x := c3) (Or.inr (Or.inl rfl)) m1 (by decide)
   have ht := f.token
@@ -243,7 +243,7 @@ theorem ExitFrame.iter (f : ExitFrame msg w E a T) (i : Fin 3) {K : List B256} {
     (by
       show _ = ((initDevm msg).getStor (initSevm msg).currentTarget).get _
       rw [f.poolStor.1, f.poolStor.2])
-    hcur hk hck hne (by rw [h1, h2]; exact h3) (CoveredFork.rules_storageClearRefund f.fork)
+    hcur hk hck hne (by rw [h1, h2]; exact h3) (ShanghaiOnwards.rules_storageClearRefund f.fork)
   rw [h1] at c
   rw [h1, h2, f.target] at mv
   exact ⟨c, av, mv⟩
@@ -1010,7 +1010,7 @@ theorem ExitFrame.cold (f : ExitFrame msg w E a T) (hE : E ≠ 0) (win : RLWindo
   have hLog := mv_addLog d l
   have hcl := hLog.clean hcd
   have hdAL : At 𝐬.currentTarget _ _ (d.addLog l) := ⟨hdA.keys, hdA.stor⟩
-  have hR := lock_restore (s := 𝐬) (b := d.addLog l) (CoveredFork.rules_storageClearRefund f.fork)
+  have hR := lock_restore (s := 𝐬) (b := d.addLog l) (ShanghaiOnwards.rules_storageClearRefund f.fork)
     (by rw [hcl.orig, f.poolStor.2, ← f.poolStor.1]; exact f.lock) (by rw [hdAL.val]; exact headStor_lock 𝐬 𝐩 T)
   have hAll := (hdm.trans hLog).trans hR
   have hX : exitLast msg d l = afterSstore 𝐬 (d.addLog l) lockW (Bytes.toB256 [0]) := rfl

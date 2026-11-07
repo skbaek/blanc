@@ -116,7 +116,7 @@ continuation also receives the exact charge and the memory, equal to `cwBMem` of
 word `0xc0` (`cwD`), fully materialised. -/
 theorem rx_cw_bE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {W : Devm → Prop} {x0 x1 x2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
     (hX : xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x3a0)
     (hctr : WordAt img 0x380 (Nat.toB256 0x140))
@@ -211,7 +211,7 @@ theorem rx_cw_bE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {S : List B256
 /-- **`_xp()` between the first frame save and restore, forward.** -/
 theorem rx_cw_b {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {W : Devm → Prop} {x0 x1 x2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
     (hX : xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x3a0)
     (hctr : WordAt img 0x380 (Nat.toB256 0x140))

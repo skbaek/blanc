@@ -90,7 +90,7 @@ theorem jumps_ok : Cert.jumpsOk code cert = true := by
 /-- The converse bridge at the pinned deployed 3Crv bytes: a gas-exact synthetic run of the lifted
 program is a real Jaune execution of the deployed code. -/
 theorem exec_of_runExact {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (hrun : SProg.RunExact prog sevm pre post) :
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hrun : SProg.RunExact prog sevm pre post) :
     Nonempty (Exec 0 sevm pre (.ok post)) :=
   lift_exact cert_check jumps_ok hcode hfork hrun
 

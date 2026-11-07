@@ -21,7 +21,7 @@ open Blanc.Lift.Dai
 
 /-- `transfer` as a message, exactly. -/
 theorem xfer_msgE {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Dai.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
     (hgas : 58800 ≤ (initDevm msg).gasLeft)
@@ -47,7 +47,7 @@ theorem xfer_msgE {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).cod
 
 /-- `transferFrom` as a message, exactly. -/
 theorem pull_msgE {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Dai.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++
       v.toBytes)
@@ -78,7 +78,7 @@ theorem pull_msgE {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg)
 
 /-- `balanceOf` as a message, exactly. -/
 theorem bal_msgE {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Dai.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x70a08231 ++ a.toB256.toBytes)
     (hgas : 5300 ≤ (initDevm msg).gasLeft) :
     balG (initSevm msg) (initDevm msg) ≤ 3000 ∧
@@ -101,7 +101,7 @@ theorem bal_msgE {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Dai.code)
 
 /-- `transfer` as a message, at the store sentry above its cost. -/
 theorem xfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Dai.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
     (hgas : xferG (initSevm msg) (initDevm msg) + 2300 ≤ (initDevm msg).gasLeft)
@@ -121,7 +121,7 @@ theorem xferPost_gasLeft' (s : Sevm) (b : Devm) (R : Nat) : (xferPost s b R).gas
 
 /-- `transferFrom` as a message, at the store sentry above its cost. -/
 theorem pull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Dai.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++
       v.toBytes)
@@ -149,7 +149,7 @@ section Premises
 variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : B256}
 
 /-- **The pool's `transfer(msg.sender, amt)` into DAI, exactly.** -/
-theorem dai_coinPushExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem dai_coinPushExact (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 63000 ≤ U)
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -177,7 +177,7 @@ theorem dai_coinPushExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : se
   · rw [L.out]; decide +kernel
 
 /-- **The pool's `transferFrom(msg.sender, self, amt)` into DAI, exactly.** -/
-theorem dai_coinPullExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem dai_coinPullExact (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 95000 ≤ U)
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -211,7 +211,7 @@ theorem dai_coinPullExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : se
   · rw [L.out]; decide +kernel
 
 /-- **The pool's `balanceOf(self)` into DAI, exactly.** -/
-theorem dai_coinBalExact {B : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem dai_coinBalExact {B : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Dai.code ∧
@@ -241,7 +241,7 @@ theorem dai_coinBalExact {B : B256} (hfork : CoveredFork sevm.benvStat.fork)
 
 /-- **`transfer`'s exact profile at its floor.** -/
 theorem dai_coinPushFloor {K : Nat} (hK : 2300 + (K + 56500) / 64 + 1 ≤ K)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 63000 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -268,7 +268,7 @@ theorem dai_coinPushFloor {K : Nat} (hK : 2300 + (K + 56500) / 64 + 1 ≤ K)
 
 /-- **`transferFrom`'s exact profile at its floor.** -/
 theorem dai_coinPullFloor {K : Nat} (hK : 2300 + (K + 88000) / 64 + 1 ≤ K)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 95000 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)

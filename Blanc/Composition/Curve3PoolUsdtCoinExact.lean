@@ -22,7 +22,7 @@ open Blanc.Lift.Usdt
 
 /-- **`transfer` as a message, exactly.** -/
 theorem xfer_msgE {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Usdt.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
     (hgas : 100056 ≤ (initDevm msg).gasLeft)
@@ -71,7 +71,7 @@ theorem pull_facts {msg : Msg} {src dst : Adr} {v : B256} (hval : (initSevm msg)
 
 /-- **`transferFrom` as a message, exactly.** -/
 theorem pull_msgE {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Usdt.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++
       v.toBytes)
@@ -101,7 +101,7 @@ theorem pull_msgE {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg)
 
 /-- **`balanceOf` as a message, exactly.** -/
 theorem bal_msgE {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Usdt.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x70a08231 ++ a.toB256.toBytes)
     (hgas : 7331 ≤ (initDevm msg).gasLeft)
     (hdep : NotDeprecated (Devm.getStor (initDevm msg) (initSevm msg).currentTarget)) :
@@ -125,7 +125,7 @@ theorem bal_msgE {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Usdt.code)
 
 /-- `transfer` as a message, at the store sentry above its cost. -/
 theorem xfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Usdt.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
     (hgas : xferG (initSevm msg) (initDevm msg) + 2300 ≤ (initDevm msg).gasLeft)
@@ -144,7 +144,7 @@ theorem xfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).co
 
 /-- `transferFrom` as a message, at the store sentry above its cost. -/
 theorem pull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Usdt.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++
       v.toBytes)
@@ -161,7 +161,7 @@ theorem pull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg
 
 /-- `balanceOf` as a message, above its cost. -/
 theorem bal_execF {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Usdt.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x70a08231 ++ a.toB256.toBytes)
     (hgas : balG (initSevm msg) (initDevm msg) ≤ (initDevm msg).gasLeft)
     (hdep : NotDeprecated (Devm.getStor (initDevm msg) (initSevm msg).currentTarget)) :
@@ -181,7 +181,7 @@ section Premises
 variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : B256}
 
 /-- **The pool's `transfer(msg.sender, amt)` into USDT, exactly.** -/
-theorem usdt_coinPushExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem usdt_coinPushExact (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 104744 ≤ U)
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -210,7 +210,7 @@ theorem usdt_coinPushExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : s
   · rw [L.out]; decide
 
 /-- **The pool's `transferFrom(msg.sender, self, amt)` into USDT, exactly.** -/
-theorem usdt_coinPullExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem usdt_coinPullExact (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 129555 ≤ U)
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -243,7 +243,7 @@ theorem usdt_coinPullExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : s
   · rw [L.out]; decide
 
 /-- **The pool's `balanceOf(self)` into USDT, exactly.** -/
-theorem usdt_coinBalExact {B : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem usdt_coinBalExact {B : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Usdt.code ∧ NotDeprecated (b.getStor t.toAdr) ∧
@@ -274,7 +274,7 @@ theorem usdt_coinBalExact {B : B256} (hfork : CoveredFork sevm.benvStat.fork)
 
 /-- **`transfer`'s exact profile at its floor.** -/
 theorem usdt_coinPushFloor {K : Nat} (hK : 2300 + (K + 97756) / 64 + 1 ≤ K)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 104744 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -302,7 +302,7 @@ theorem usdt_coinPushFloor {K : Nat} (hK : 2300 + (K + 97756) / 64 + 1 ≤ K)
 
 /-- **`transferFrom`'s exact profile at its floor.** -/
 theorem usdt_coinPullFloor {K : Nat} (hK : 2300 + (K + 122180) / 64 + 1 ≤ K)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 129555 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -333,7 +333,7 @@ theorem usdt_coinPullFloor {K : Nat} (hK : 2300 + (K + 122180) / 64 + 1 ≤ K)
       (initDevm (callMsg0 sevm (b.withGasLeft 0) S M 0 t ii 0x64 oi 0x20)) _ _⟩
 
 /-- **`balanceOf`'s exact profile at its floor.** -/
-theorem usdt_coinBalFloor {B : B256} {K : Nat} (hK : (K + 5031) / 64 + 1 ≤ K) (hfork : CoveredFork sevm.benvStat.fork)
+theorem usdt_coinBalFloor {B : B256} {K : Nat} (hK : (K + 5031) / 64 + 1 ≤ K) (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hU : 70000 ≤ U)
     (hUw : U < 2 ^ 256) (hs : GasStable W')
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)

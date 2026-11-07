@@ -22,7 +22,7 @@ debit, the reply test `35`) to the push with exactly `R`, at a base equal modulo
 canonical successor and over its memory. -/
 theorem rx_oc_p1_exact {sevm : Sevm} {b n : Devm} {σ : Stor} {M : Mem} {img : Bytes} {R U : Nat}
     {Q : Outcome → Prop} {W W' : Devm → Prop} {dy fee : B256} {P : OCExactCalls}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hn : Devm.EqModGas b n) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hi3 : (ocI sevm).toNat < 3) (hmin : ¬ dy < ocMin sevm)
@@ -63,7 +63,7 @@ theorem rx_oc_p1_exact {sevm : Sevm} {b n : Devm} {σ : Stor} {M : Mem} {img : B
 the canonical `n`, at the literal memory `M`, from `R + ocP2Cost` to `STOP` with exactly `R`. -/
 theorem rx_oc_p2_exact {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {dy : B256} {P : OCExactCalls}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ) (hn : Devm.EqModGas b n)
     (hW'c : WClosed sevm W') (hi3 : (ocI sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x920) (hdy : WordAt img 0x140 dy)
@@ -127,7 +127,7 @@ variable {sevm : Sevm} {pre : Devm} {s : State} {W W' W'' : Devm → Prop} {U am
   {Q : Outcome → Prop} {T x0 x1 x2 D0 y r0 r1 r2 y2 : B256}
 
 /-- **The `remove_liquidity_one_coin` frame, forward, exact.** -/
-theorem rx_oc_frame_exact (P : OCExactCalls) (hfork : CoveredFork sevm.benvStat.fork)
+theorem rx_oc_frame_exact (P : OCExactCalls) (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityOneCoin) (hid : IdReady sevm pre)

@@ -728,11 +728,10 @@ lemma Xinst.step_shapeLogs_noStateGas (sevm : Sevm) (devm : Devm) (x : Xinst)
 
 /-- **Every executable instruction on a covered fork has a log-list shape.** -/
 lemma Xinst.step_shapeLogs (sevm : Sevm) (devm : Devm) (x : Xinst)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) :
     Xinst.ShapeLogs sevm devm (x = .create ∨ x = .create2) (Xinst.step sevm devm x) :=
   Xinst.step_shapeLogs_noStateGas sevm devm x hfork.rules_stateGas_none
-    (hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl)
+    rfl
     hfork.rules_access
 
 /-! ## Log lists across a message frame -/
@@ -860,7 +859,7 @@ theorem GenericCreate.not_ok_of_static {sevm : Sevm} {d post : Devm} {endowment 
 that its interpreted child, if any, keeps its entry log list.  A create is excluded by a
 static frame; the call family needs nothing more. -/
 theorem Xinst.logs_of_ok {sevm : Sevm} {pre post : Devm} {x : Xinst} {xl : Xlot}
-    (hfork : CoveredFork sevm.benvStat.fork) (hx : sevm.isStatic = true ∨ x = .staticcall)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hx : sevm.isStatic = true ∨ x = .staticcall)
     (run : Xinst.Run sevm pre x xl (.ok post)) (body : Xlot.KeepsLogs xl) :
     post.logs = pre.logs := by
   unfold Xinst.Run at run
@@ -893,7 +892,7 @@ theorem Rinst.log_not_ok_of_static {pc : Nat} {sevm : Sevm} {pre post : Devm} {n
 
 /-- `SELFDESTRUCT` cannot succeed in a static frame of a covered fork. -/
 theorem Linst.selfdestruct_not_ok_of_static {sevm : Sevm} {pre post : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hs : sevm.isStatic = true)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hs : sevm.isStatic = true)
     (run : Linst.Run sevm pre .selfdestruct (.ok post)) : False := by
   have hsg : sevm.benvStat.rules.stateGas = none := hfork.rules_stateGas_none
   simp only [Linst.Run, Linst.run, hsg] at run
@@ -951,7 +950,7 @@ log list. -/
 private theorem staticStep_cont_logs
     {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .cont pc' post)
-    (static : sevm.isStatic = true) (hfork : CoveredFork sevm.benvStat.fork) :
+    (static : sevm.isStatic = true) (hfork : ShanghaiOnwards sevm.benvStat.fork) :
     post.logs = pre.logs := by
   cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
   | none =>
@@ -1006,7 +1005,7 @@ private theorem staticStep_cont_logs
 private theorem staticHalt_logs
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (step : Evm.step ⟨pc, sevm, pre⟩ = .halt out)
-    (static : sevm.isStatic = true) (hfork : CoveredFork sevm.benvStat.fork) :
+    (static : sevm.isStatic = true) (hfork : ShanghaiOnwards sevm.benvStat.fork) :
     ∀ post, out = .ok post → post.logs = pre.logs := by
   intro post hout
   subst hout
@@ -1050,7 +1049,7 @@ static and merges its (empty) log list only on success. -/
 theorem Exec.logs_eq_of_static_ok
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) :
     ∀ post, out = .ok post → post.logs = pre.logs := by
   induction run with
   | halt step => exact staticHalt_logs step static hfork
@@ -1076,7 +1075,7 @@ theorem Exec.logs_eq_of_static_ok
         rw [spawn]
         exact ⟨_, RunFrame.of_run enter, resumeRun.symm⟩)
       have childStatic := Evm.step_run_isStatic step enter static
-      have childFork := Evm.step_spawn_child_fork step enter hfork
+      have childFork := Evm.step_spawn_child_shanghaiOnwards step enter hfork
       exact (nextIH static hfork post hout).trans
         (Xinst.logs_of_ok hfork (Or.inl static) xrun
           (fun childCommitted => Execution.committedPost_logs_of_ok
@@ -1089,7 +1088,7 @@ theorem Exec.logs_committedPost_eq_of_static
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
     (run : Exec pc sevm pre out) (static : sevm.isStatic = true)
     (committed : Execution.commits out = true)
-    (hfork : CoveredFork sevm.benvStat.fork) :
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) :
     (Execution.committedPost out committed).logs = pre.logs :=
   Execution.committedPost_logs_of_ok (Exec.logs_eq_of_static_ok run static hfork) committed
 
@@ -1105,7 +1104,7 @@ storage by `Ninst.staticcall_inv_getStor_exact`; logs by the same induction as
 merged only on success).  `push`/`dupn`/`swapn`/`exchange`: the `effectRec_of_instructionFrame`
 lemmas used in `Silent.lean`, with `R := logs` and `getStor`. -/
 theorem Ninst.world_of_quiet {sevm : Sevm} {pre post : Devm} {n : Ninst}
-    (hfork : CoveredFork sevm.benvStat.fork) (hn : n.quiet = true)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hn : n.quiet = true)
     (run : Ninst.Run sevm pre n post) :
     Devm.getStor post = Devm.getStor pre ∧ post.logs = pre.logs := by
   cases n with
@@ -1157,7 +1156,7 @@ theorem Ninst.world_of_quiet {sevm : Sevm} {pre post : Devm} {n : Ninst}
               (Frame.enter_run_isStatic enter).trans
                 (Xinst.step_staticcall_spawn_isStatic spawn)
             exact fun committed => Exec.logs_committedPost_eq_of_static childRun childStatic
-              committed (Xinst.Run.some_child_fork xrun hfork)
+              committed (Xinst.Run.some_child_shanghaiOnwards xrun hfork)
       exact Xinst.logs_of_ok hfork (Or.inr rfl) xrun body
   | reg r =>
       have hs : r ≠ .sstore := by
@@ -1235,7 +1234,7 @@ theorem Burn.world {a b : Devm} (h : Devm.Burn a b) :
 /-- **The quiet frame theorem**: a run of a quiet tree whose gotos and calls stay in a
 `QuietSet` keeps every storage map and the log list. -/
 theorem SFunc.Run.world_of_quiet {fs : List SFunc} {S : List Nat}
-    (hS : QuietSet fs S = true) {sevm : Sevm} (hfork : CoveredFork sevm.benvStat.fork)
+    (hS : QuietSet fs S = true) {sevm : Sevm} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     {devm : Devm} {f : SFunc} {o : Outcome}
     (hf : f.quiet = true) (hrefs : f.refs.all (· ∈ S) = true)
     (run : SFunc.Run fs sevm devm f o) :

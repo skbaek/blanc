@@ -55,7 +55,7 @@ def cwA2Post (Ms : Mem) (out : Bytes) (T : B256) : Mem :=
 theorem rx_cw_a2E {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem} {img : Bytes}
     {G R U n : Nat} {Q : Outcome → Prop} {W : Devm → Prop} {A x1 x2 x3 x4 T : B256}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = n) (hn : n % 32 = 0)
     (hext : memExtSize n 0x1e0 32 = 0x200)
     (hsup : StaticWordOkAtE sevm W W (σ.get tokenSlot) totalSupplyData T U 0x2bc 4 0x300 E)
@@ -156,7 +156,7 @@ theorem rx_cw_a2E {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem}
 /-- **From `_A`'s return to the first frame save, forward.** -/
 theorem rx_cw_a2 {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem} {img : Bytes}
     {G R U n : Nat} {Q : Outcome → Prop} {W : Devm → Prop} {A x1 x2 x3 x4 T : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = n) (hn : n % 32 = 0)
     (hext : memExtSize n 0x1e0 32 = 0x200)
     (hsup : SupplyOkAt sevm W W (σ.get tokenSlot) T U 0x2bc 0x300)
@@ -196,7 +196,7 @@ and return address stored, `_A` (`a_exact_1e0`, answering `Aw` with `Aw.toNat = 
 theorem rx_cw_aE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {S : List B256} {M : Mem}
     {img : Bytes} {G R U amp : Nat} {Q : Outcome → Prop} {W : Devm → Prop} {ρ a i T : B256}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
     (hA : aChk s sevm.benvStat.time.toNat = some amp)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x1e0)
     (hsup : StaticWordOkAtE sevm W W (σ.get tokenSlot) totalSupplyData T U 0x2bc 4 0x300 E)
@@ -255,7 +255,7 @@ and return address stored, `_A` (`a_exact_1e0`, answering `Aw` with `Aw.toNat = 
 `rx_cw_a2`. -/
 theorem rx_cw_a {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {S : List B256} {M : Mem}
     {img : Bytes} {G R U amp : Nat} {Q : Outcome → Prop} {W : Devm → Prop} {ρ a i T : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
     (hA : aChk s sevm.benvStat.time.toNat = some amp)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x1e0)
     (hsup : SupplyOkAt sevm W W (σ.get tokenSlot) T U 0x2bc 0x300)

@@ -125,7 +125,7 @@ theorem add_chain_keep {c : Adr} (htc : ∀ j : Fin 3, coinOf sevm pre j ≠ c) 
   c3With_keep (addV_blind htc k) hb hs hc
 
 /-- **Coin `k`'s pull, exact, by its index.** -/
-theorem add_pull (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : 2 ≤ sevm.depth) (hC : RealCoins sevm pre)
+theorem add_pull (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : 2 ≤ sevm.depth) (hC : RealCoins sevm pre)
     {c : Adr} (htc : ∀ j : Fin 3, coinOf sevm pre j ≠ c) (k : Fin 3) (ha : alAmt sevm k.val ≠ 0)
     (hpf : PullFitsK k (pre.getStor (coinOf sevm pre k)) sevm.caller sevm.currentTarget (alAmt sevm k.val)) :
     MutableCallProfile sevm (C3With c σ (addV sevm pre k.val)) (C3With c σ (addV sevm pre (k.val + 1))) (coinW sevm pre k.val)
@@ -160,7 +160,7 @@ theorem add_pull (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStat
       (fun b d hb hl => addV_leave hC ha (Ne.symm (htc 2)) hb hl)
 
 /-- **`ALExactPremises` with the real coins and 3Crv.** -/
-theorem add_premises {T mint : B256} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : 2 ≤ sevm.depth)
+theorem add_premises {T mint : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : 2 ≤ sevm.depth)
     (hC : RealCoins sevm pre) (hne : sevm.currentTarget ≠ tokOf sevm pre) (htp : ¬ sevm.benvStat.rules.isPrecomp (tokOf sevm pre))
     (hT : (Devm.getStor pre (tokOf sevm pre)).get Curve3Crv.vySupplySlot = T)
     (hmint : MintFits (Devm.getStor pre (tokOf sevm pre)) sevm.currentTarget sevm.caller.toB256 mint)

@@ -226,7 +226,7 @@ end Reframe
 
 /-- **`transfer(dst, v)`, exactly**: `xfer_lands` with its charge and post named. -/
 theorem xfer_landsE {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : Guards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 58800 ≤ pre.gasLeft)
     (hfits : MoveFits (Devm.getStor pre sevm.currentTarget) sevm.caller dst v) :
@@ -253,7 +253,7 @@ theorem xfer_landsE {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
 
 /-- **`transfer`'s run at the store sentry above its cost.** -/
 theorem xfer_runF {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : Guards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : xferG sevm pre + 2300 ≤ pre.gasLeft)
     (hfits : MoveFits (Devm.getStor pre sevm.currentTarget) sevm.caller dst v) :
@@ -267,7 +267,7 @@ theorem xfer_runF {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
 
 /-- **`balanceOf(a)`, exactly**: `bal_lands` with its charge and post named. -/
 theorem bal_landsE {sevm : Sevm} {pre : Devm} {a : Adr}
-    (fork : CoveredFork sevm.benvStat.fork) (g : Guards sevm 0x70a08231 (Bytes.toB256 [32]))
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (g : Guards sevm 0x70a08231 (Bytes.toB256 [32]))
     (hholder : bHolder sevm = a.toB256)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 5300 ≤ pre.gasLeft) :
     balG sevm pre ≤ 3000 ∧ FrameLands cert.prog sevm pre (balPost sevm pre (pre.gasLeft - balG sevm pre))
@@ -286,7 +286,7 @@ theorem bal_landsE {sevm : Sevm} {pre : Devm} {a : Adr}
 
 /-- A `transferFrom` frame around an entry-34 arm, its charge named. -/
 theorem pull_landsE_of {sevm : Sevm} {pre B : Devm} {Mr : Mem} {cc : Nat} {σ' : Stor} {R : Prop}
-    (fork : CoveredFork sevm.benvStat.fork) (g : Guards sevm 0x23b872dd (Bytes.toB256 [96]))
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (g : Guards sevm 0x23b872dd (Bytes.toB256 [96]))
     (hMr : FpM (Bytes.toB256 [128]) 160 Mr)
     (hc : ∀ X, 2300 ≤ X → SFunc.RunExact cert.prog sevm
       (St pre (pVal sevm :: pTo sevm :: pSrc sevm :: Bytes.toB256 [2, 186] :: [selW sevm]) mem0 (X + cc))
@@ -309,7 +309,7 @@ abbrev PullR (sevm : Sevm) (pre : Devm) (src dst : Adr) : Prop :=
 
 /-- **`transferFrom(src, dst, v)`, exactly**: `pull_lands` with its charge and post named, whichever arm. -/
 theorem pull_landsE {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : Guards sevm 0x23b872dd (Bytes.toB256 [96])) (hsrc : pSrc sevm = src.toB256)
     (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 90300 ≤ pre.gasLeft)
@@ -435,7 +435,7 @@ theorem pull_landsE {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
 
 /-- A `transferFrom` frame around an entry-34 arm, its charge named. -/
 theorem pull_landsF_of {sevm : Sevm} {pre B : Devm} {Mr : Mem} {cc : Nat} {σ' : Stor} {R : Prop}
-    (fork : CoveredFork sevm.benvStat.fork) (g : Guards sevm 0x23b872dd (Bytes.toB256 [96]))
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (g : Guards sevm 0x23b872dd (Bytes.toB256 [96]))
     (hMr : FpM (Bytes.toB256 [128]) 160 Mr)
     (hc : ∀ X, 2300 ≤ X → SFunc.RunExact cert.prog sevm
       (St pre (pVal sevm :: pTo sevm :: pSrc sevm :: Bytes.toB256 [2, 186] :: [selW sevm]) mem0 (X + cc))
@@ -462,7 +462,7 @@ theorem pullG_le (s : Sevm) (b : Devm) : pullG s b ≤ 88000 := by
 
 /-- **`transferFrom(src, dst, v)` at the store sentry above its cost.** -/
 theorem pull_landsF {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : Guards sevm 0x23b872dd (Bytes.toB256 [96])) (hsrc : pSrc sevm = src.toB256)
     (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : pullG sevm pre + 2300 ≤ pre.gasLeft)

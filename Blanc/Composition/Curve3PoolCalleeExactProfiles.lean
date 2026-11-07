@@ -64,7 +64,7 @@ theorem bodyCanon_spec {s : Sevm} {b : Devm} {f : SFunc} {c : Nat}
 keeping the code everywhere. -/
 theorem c3crv_msg_exact {msg : Msg} {k : Nat} {f : SFunc} {R : Nat} {post : Devm}
     (hcode : (initSevm msg).code = Curve3Crv.code)
-    (hfork : CoveredFork (initSevm msg).benvStat.fork)
+    (hfork : ShanghaiOnwards (initSevm msg).benvStat.fork)
     (hca : (initSevm msg).codeAddress ≠ none)
     (hf : Curve3Crv.bodies[k]? = some f)
     (hk : Curve3Crv.sels[k]? = some (Sevm.selector (initSevm msg)))
@@ -123,7 +123,7 @@ variable {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {U : Nat} {ii oi : B256
 /-- **`totalSupply()` of the deployed 3Crv, named profile**: the exact `STATICCALL` profile at
 every call window, with its debit `supplyDebit` and canonical successor `supplyNext` named, so a
 composed exact cost can read them. -/
-theorem c3crv_supplyProfile {T : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem c3crv_supplyProfile {T : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false)
     (hU : 70000 ≤ U) (hii : ii.toNat + 4 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Curve3Crv.code ∧
@@ -144,7 +144,7 @@ theorem c3crv_supplyProfile {T : B256} (hfork : CoveredFork sevm.benvStat.fork)
       (by rw [show (4 : B256).toNat = 4 from rfl]; exact hii)
       (by rw [show (0x20 : B256).toNat = 0x20 from rfl]; exact hoi)
     obtain ⟨hcode, hT⟩ := hW b hWb
-    have hfork0 : CoveredFork
+    have hfork0 : ShanghaiOnwards
         (initSevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 4 oi 0x20)).benvStat.fork := hfork
     have hraw : rawTotalSupply (initSevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 4 oi 0x20))
         (Devm.getStor (initDevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 4 oi 0x20))
@@ -211,7 +211,7 @@ theorem c3crv_supplyProfile {T : B256} (hfork : CoveredFork sevm.benvStat.fork)
     have hn : Devm.EqModGas
         (callChildPost (parent b S M G t ii 4 oi 0x20) post oi.toNat (0x20 : B256).toNat)
         (supplyNext sevm t ii oi b S M) := hp.callChildPost hcp _ _
-    obtain ⟨flag, out, hpost, -, -⟩ := ri_staticcall_bounded hfork (Ninst.Run.of_runCompiled hrunP)
+    obtain ⟨flag, out, hpost, -, -⟩ := ri_staticcall_boundedH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrunP)
     have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
       (callChildPost_stack' _ _ _ _))).1
     subst hflag
@@ -271,7 +271,7 @@ variable {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {U : Nat} {ii oi : B256
 
 /-- A mutable 3Crv body with a closed exact cost gives the exact `CALL` profile. -/
 private theorem c3crv_mutExactAt {data : Bytes} {k : Nat} {f : SFunc}
-    {cost : Sevm → Devm → Nat} {sel : B256} (hfork : CoveredFork sevm.benvStat.fork)
+    {cost : Sevm → Devm → Nat} {sel : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false)
     (hU : 70000 ≤ U) (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)
     (hf : Curve3Crv.bodies[k]? = some f) (hk : Curve3Crv.sels[k]? = some sel)
@@ -360,7 +360,7 @@ private theorem c3crv_mutExactAt {data : Bytes} {k : Nat} {f : SFunc}
     refine ⟨by rw [hdebit]; omega, _, hrunP, by rw [hgas, hdebit, hpg]; omega, hn, ?_,
       by show 32 ≤ post.output.length; omega, ?_, hstor, hW',
       fun hid => ⟨?_, ?_, hid.pre, hid.fork⟩⟩
-    · obtain ⟨flag, hpost⟩ := ri_call_post hfork (Ninst.Run.of_runCompiled hrunP)
+    · obtain ⟨flag, hpost⟩ := ri_call_postH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrunP)
       have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
         (callChildPost_stack' _ _ _ _))).1
       subst hflag
@@ -417,7 +417,7 @@ theorem burnBodyCost_le (s : Sevm) (b : Devm) :
 profile at every call window where the token holds 3Crv's code, is not the pool, and 3Crv
 accepts the mint, with its debit `mutDebit mintBodyCost 7` and canonical successor
 `mutNext mintBodyCost t_056e_c0` named. -/
-theorem c3crv_mintProfile {amt : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem c3crv_mintProfile {amt : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)
@@ -460,7 +460,7 @@ theorem c3crv_mintProfile {amt : B256} (hfork : CoveredFork sevm.benvStat.fork)
 profile at every call window where the token holds 3Crv's code, is not the pool, and 3Crv
 accepts the burn, with its debit `mutDebit burnBodyCost 8` and canonical successor
 `mutNext burnBodyCost t_0644_c0` named. -/
-theorem c3crv_burnProfile {amt : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem c3crv_burnProfile {amt : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)

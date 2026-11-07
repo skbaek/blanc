@@ -277,14 +277,14 @@ Proof sketch.  Unfold `Rinst.run .sstore` as `of_run_sstore` does (covered fork:
 `rules.stateGas = none`); the two pops, the access-set insertion (if cold), the refund update
 and `setStorVal` are exactly `afterSstore`'s pieces (`ForwardCall.lean`), and the charge and
 sentry only move gas.  Compare the pieces field by field (`Devm.ext`, `Meta.ext`). -/
-theorem ri_sstore {k v : B256} {d : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+theorem ri_sstore {k v : B256} {d : Devm} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (h : Ninst.Run sevm (St b (k :: v :: S) M G) (.reg .sstore) d) :
     ∃ G', d = St (afterSstore sevm b k v) S M G' := by
   rcases of_run_reg h with ⟨pc, run⟩
   simp only [Rinst.run, Rinst.runCore, hfork.rules_stateGas_none,
     hfork.rules_sstore, hfork.rules_access,
-    Devm.balReadStorage_of_bal_none (CoveredFork.rules_bal_none hfork),
-    Devm.balReadAccount_of_bal_none (CoveredFork.rules_bal_none hfork)] at run
+    Devm.balReadStorage_of_bal_none (ShanghaiOnwards.rules_bal_none hfork),
+    Devm.balReadAccount_of_bal_none (ShanghaiOnwards.rules_bal_none hfork)] at run
   rw [show (St b (k :: v :: S) M G).pop = .ok (k, St b (v :: S) M G) from rfl] at run
   simp only [Except.bind_ok] at run
   rw [show (St b (v :: S) M G).pop = .ok (v, St b S M G) from rfl] at run

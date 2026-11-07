@@ -54,7 +54,7 @@ and the literal memory `exMidWords` over the **pre-call** memory: the callee's s
 materialises the array, so its physical representation is gone. -/
 theorem rx_ex_mid_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {g R : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W : Devm → Prop} {B0 B1 B2 z0 z1 z2 : B256} {xp : V3}
-    (hfork : CoveredFork sevm.benvStat.fork) (hB : ExBase sevm b0 b σ) (hWc : WClosed sevm W)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hB : ExBase sevm b0 b σ) (hWc : WClosed sevm W)
     (hWb : W b) (hi : (exI sevm).toNat < 3)
     (hX : xpChk ⟨B0.toNat, B1.toNat, B2.toNat⟩ = some xp)
     (_hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x2e0)
@@ -171,7 +171,7 @@ theorem rx_ex_mid_core {sevm : Sevm} {b0 b : Devm} {σ : Stor} {g R : Nat} {Q : 
 /-- **`exchange` from `_xp_mem` to the fee test, forward.** -/
 theorem rx_ex_mid {sevm : Sevm} {b0 b : Devm} {σ : Stor} {g R : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W : Devm → Prop} {B0 B1 B2 z0 z1 z2 : B256} {xp : V3}
-    (hfork : CoveredFork sevm.benvStat.fork) (hB : ExBase sevm b0 b σ) (hWc : WClosed sevm W)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hB : ExBase sevm b0 b σ) (hWc : WClosed sevm W)
     (hWb : W b) (hi : (exI sevm).toNat < 3)
     (hX : xpChk ⟨B0.toNat, B1.toNat, B2.toNat⟩ = some xp)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x2e0)

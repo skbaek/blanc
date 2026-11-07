@@ -135,7 +135,7 @@ loop head `rliPH_3769 tlS`: on through the back edges `hBS` (skipped) and `hBT` 
 theorem rx_rli_pushF {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop} {k : Nat} {tlS gS gT : SFunc} (hk3 : k < 3)
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 k))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 k + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 k))
@@ -357,7 +357,7 @@ theorem rx_rli_pushF {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop}
 theorem rx_rli_push0E {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 0))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 0))
@@ -395,7 +395,7 @@ theorem rx_rli_push0E {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
 theorem rx_rli_push1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 1))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 1))
@@ -434,7 +434,7 @@ theorem rx_rli_push1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
 theorem rx_rli_pushG {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop} {k : Nat} {gS gT : SFunc} (hk3 : k < 3)
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hc : WordAt img 0x900 (Nat.toB256 k))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 k + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 k))
@@ -657,7 +657,7 @@ theorem rx_rli_pushG {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop}
 theorem rx_rli_push1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hc : WordAt img 0x900 (Nat.toB256 1))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 1))
@@ -694,7 +694,7 @@ theorem rx_rli_push1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
 theorem rx_rli_push2aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 2))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 2))
@@ -732,7 +732,7 @@ theorem rx_rli_push2aE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
 theorem rx_rli_push2bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hc : WordAt img 0x900 (Nat.toB256 2))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → MutCallOkAtE sevm W W' (σ.get (coinsBase + Nat.toB256 2))
@@ -768,7 +768,7 @@ theorem rx_rli_push2bE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
 /-- Transfer iteration 0 at `t_3769_c1368`, forward. -/
 theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 0))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 0))
@@ -796,7 +796,7 @@ theorem rx_rli_push0 {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop}
 /-- Transfer iteration 1 at `t_3769_c1037`, forward. -/
 theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 1))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 1))
@@ -824,7 +824,7 @@ theorem rx_rli_push1a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
 /-- Transfer iteration 1 at `t_3769_c48`, forward. -/
 theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hc : WordAt img 0x900 (Nat.toB256 1))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 1))
@@ -852,7 +852,7 @@ theorem rx_rli_push1b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
 /-- Transfer iteration 2 at `t_3769_c1045`, forward. -/
 theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 2))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 2))
@@ -880,7 +880,7 @@ theorem rx_rli_push2a {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
 /-- Transfer iteration 2 at `t_3769_c48`, forward. -/
 theorem rx_rli_push2b {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R U : Nat} {Q : Outcome → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hc : WordAt img 0x900 (Nat.toB256 2))
     (hpush : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → CoinPushOkAt sevm W W' (σ.get (coinsBase + Nat.toB256 2))

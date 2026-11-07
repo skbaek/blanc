@@ -1282,7 +1282,7 @@ theorem ninstTransfer_run_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Nins
 
 /-- Modern compatibility statement for success-only checked stack transfer. -/
 theorem ninstTransfer_run {sevm : Sevm} {devm devm' : Devm} {n : Ninst}
-    {input output : Pattern} (hfork : CoveredFork sevm.benvStat.fork)
+    {input output : Pattern} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (matched : Matches input devm.stack)
     (checked : ninstTransfer n input = some output)
     (run : Ninst.Run sevm devm n devm') :

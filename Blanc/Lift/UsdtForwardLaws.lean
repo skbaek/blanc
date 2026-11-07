@@ -189,7 +189,7 @@ theorem keeps_gate (sevm : Sevm) (pre : Devm) (a : B256) : Keeps sevm pre (gateB
 /-- **`transfer(dst, v)` from a frame entry, forward**: the frame stops with an empty reply, its charge
 at most `97756`, the source debited `v`, `dst` credited `v - fee` and the owner `fee`. -/
 theorem xfer_lands {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : LGuards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hout : pre.output = []) (hgas : 100056 ≤ pre.gasLeft)
     (hdep : NotDeprecated (Devm.getStor pre sevm.currentTarget))
@@ -285,7 +285,7 @@ def PullApart (σ : Stor) (src sp dst : Adr) (v f : B256) : Prop :=
 charge at most `122180`, a limited allowance debited, the source debited `v`, `dst` credited `v - fee` and
 the owner `fee`. -/
 theorem pull_lands {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : LGuards sevm 0x23b872dd (Bytes.toB256 [96])) (hsrc : pSrc sevm = src.toB256)
     (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hout : pre.output = []) (hgas : 124480 ≤ pre.gasLeft)
@@ -344,7 +344,7 @@ theorem pull_lands {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
 /-- **`balanceOf(a)` from a frame entry, not deprecated, forward**, static or not: it answers `a`'s entry
 and writes nothing. -/
 theorem bal_lands {sevm : Sevm} {pre : Devm} {a : Adr}
-    (fork : CoveredFork sevm.benvStat.fork) (g : LGuards sevm 0x70a08231 (Bytes.toB256 [32]))
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (g : LGuards sevm 0x70a08231 (Bytes.toB256 [32]))
     (hholder : bHolder sevm = a.toB256)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 7331 ≤ pre.gasLeft)
     (hdep : NotDeprecated (Devm.getStor pre sevm.currentTarget)) :

@@ -86,7 +86,7 @@ section Usdt
 
 open Blanc.Lift.Usdt
 
-theorem usdt_bal_site {σ : Stor} (hfork : CoveredFork s.benvStat.fork) (hclean : Clean b) (hA : At t.toAdr [] σ b)
+theorem usdt_bal_site {σ : Stor} (hfork : ShanghaiOnwards s.benvStat.fork) (hclean : Clean b) (hA : At t.toAdr [] σ b)
     (hread : (M.read ii.toNat (0x24 : B256).toNat).1 = balanceOfData s.currentTarget)
     (hne : Bytes.toB256 [10] ≠ balSlot s.currentTarget) :
     coinStaticDebit balG s t ii 0x24 oi b S M = acc (b.withGasLeft 0) t + ext (b.withGasLeft 0) S M ii 0x24 oi 0x20 + 5031 ∧
@@ -186,7 +186,7 @@ theorem pullP_output (s : Sevm) (b : Devm) : (pullP s b 0).output = b.output := 
     simp only [Devm.addLog_output, ownLogged, ownCredited, ownRead, mvCredited, mvDebited, afterSstore_output, afterSload_output, gateBase, alBase]
 
 /-- **USDT's `transferFrom` at a site**, after the pool's first `balanceOf`. -/
-theorem usdt_pull_site {σ : Stor} (hfork : CoveredFork s.benvStat.fork) (hclean : Clean b)
+theorem usdt_pull_site {σ : Stor} (hfork : ShanghaiOnwards s.benvStat.fork) (hclean : Clean b)
     (hst : b.getStor t.toAdr = σ) (hor : (getOrigAcct s t.toAdr).stor = σ)
     (hA : At t.toAdr [balSlot s.currentTarget, Bytes.toB256 [10]] σ b)
     (hread : (M.read ii.toNat (0x64 : B256).toNat).1 =
@@ -226,7 +226,7 @@ theorem usdt_pull_site {σ : Stor} (hfork : CoveredFork s.benvStat.fork) (hclean
   obtain ⟨cc, cm, -, cs⟩ := usdt_pull_child (s := initSevm c) (b := initDevm c) (σ := σ) (kr := balSlot s.caller) (kt := balSlot s.currentTarget)
     (ka := allowSlot s.caller s.currentTarget) (v := V) (f := feeOf σ V) hstor
     (by rw [hsrc, ky_bal, toAdr_toB256]) (by rw [hto, ky_bal, toAdr_toB256])
-    (by rw [hsrc, hcaller, ak_allow, toAdr_toB256]) hval rfl (CoveredFork.rules_storageClearRefund (by rw [hc]; exact hfork)) hcl
+    (by rw [hsrc, hcaller, ak_allow, toAdr_toB256]) hval rfl (ShanghaiOnwards.rules_storageClearRefund (by rw [hc]; exact hfork)) hcl
     (by rw [ct, hc]; exact ⟨hA.keys, hA.stor⟩) (by rw [ct, hc]; exact hor)
     (by rw [hsrc]; exact hrR) (by rw [hsrc]; exact htR) (by rw [hsrc]; exact haR) hne hra hta
     (by rw [hsrc]; exact hL) hle hal hnof (by rw [hsrc]; exact hown)

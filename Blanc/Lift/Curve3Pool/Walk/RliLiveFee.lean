@@ -274,7 +274,7 @@ def RliLoopB (sevm : Sevm) (S : List B256) (d : B256) (k : Nat) (Q : Outcome →
 theorem rx_rli_feeGZ {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
     {k s0 c0 jm : Nat} {rv tlS tlZ gZ : SFunc} (hk3 : k < 3) (hs0 : RliFeeSz s0 c0)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s0)
     (hc : WordAt img 0x600 (Nat.toB256 k)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * k) B)
@@ -420,7 +420,7 @@ theorem rx_rli_feeGZ {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
 theorem rx_rli_feeGS {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
     {k s0 c0 jm : Nat} {rv tlS gS : SFunc} (hk3 : k < 3) (hs0 : RliFeeSz s0 c0)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s0)
     (hc : WordAt img 0x600 (Nat.toB256 k)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * k) B)
@@ -563,7 +563,7 @@ on to `gS` when `ideal ≤ new`, through the tail into `gZ` otherwise. -/
 theorem rx_rli_feeG {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
     {k s0 c0 jm : Nat} {rv tlS tlZ gS gZ : SFunc} (hk3 : k < 3) (hs0 : RliFeeSz s0 c0)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s0)
     (hc : WordAt img 0x600 (Nat.toB256 k)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * k) B)
@@ -610,7 +610,7 @@ theorem rli_mid63 : cert.prog[1063]? = some (rliFH_3458 rliRv (.branchTo t_359f_
 /-- Fee iteration 0 at `t_336e_c1039`, forward. -/
 theorem rx_rli_fee0E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x620)
     (hc : WordAt img 0x600 (Nat.toB256 0)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 0) B)
@@ -650,7 +650,7 @@ theorem rx_rli_fee0E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
 /-- Fee iteration 1 at `t_336e_c1048`, forward. -/
 theorem rx_rli_fee1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
     (hc : WordAt img 0x600 (Nat.toB256 1)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 1) B)
@@ -690,7 +690,7 @@ theorem rx_rli_fee1aE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
 /-- Fee iteration 1 at `t_336e_c1055`, forward. -/
 theorem rx_rli_fee1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
     (hc : WordAt img 0x600 (Nat.toB256 1)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 1) B)
@@ -730,7 +730,7 @@ theorem rx_rli_fee1bE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
 /-- Fee iteration 2 at `t_336e_c1055`, forward. -/
 theorem rx_rli_fee2E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
     (hc : WordAt img 0x600 (Nat.toB256 2)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 2) B)
@@ -770,7 +770,7 @@ theorem rx_rli_fee2E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
 /-- Fee iteration 0 at `t_336e_c1039`, forward. -/
 theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x620)
     (hc : WordAt img 0x600 (Nat.toB256 0)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 0) B)
@@ -806,7 +806,7 @@ theorem rx_rli_fee0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
 /-- Fee iteration 1 at `t_336e_c1048`, forward. -/
 theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
     (hc : WordAt img 0x600 (Nat.toB256 1)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 1) B)
@@ -842,7 +842,7 @@ theorem rx_rli_fee1a {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
 /-- Fee iteration 1 at `t_336e_c1055`, forward. -/
 theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
     (hc : WordAt img 0x600 (Nat.toB256 1)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 1) B)
@@ -878,7 +878,7 @@ theorem rx_rli_fee1b {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S
 /-- Fee iteration 2 at `t_336e_c1055`, forward. -/
 theorem rx_rli_fee2 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF D0 D1 B N f st af : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
     (hc : WordAt img 0x600 (Nat.toB256 2)) (hD1 : WordAt img 0x480 D1)
     (hD0w : WordAt img 0x340 D0) (hB : WordAt img (0x280 + 32 * 2) B)

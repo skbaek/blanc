@@ -45,7 +45,7 @@ variable {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {data : Bytes} {U : Nat
 /-- **A `CALL`'s exact profile lowered to its floor.** -/
 theorem coinMutFloor {ok : Bytes → Prop} (X K Cb : Nat) (cost : Sevm → Devm → Nat) (canon : Sevm → Devm → Devm)
     (hcost : ∀ s p G', cost {s with gas := G'} (p.withGasLeft G') = cost s p)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false)
     (hK : X + (K + Cb) / 64 + 1 ≤ K) (hU : U < 2 ^ 256) (hs : GasStable W')
     (hp : MutableCallProfile sevm W W' t data ok U ii is oi (coinDebit cost sevm t ii is oi)
@@ -102,7 +102,7 @@ theorem coinMutFloor {ok : Bytes → Prop} (X K Cb : Nat) (cost : Sevm → Devm 
     have hL := hn.trans hnH.symm
     refine ⟨hle, _, hrun, by rw [hgas, hd, hg]; omega, hn, ?_, ?_, ?_, ?_, hs _ _ hL.symm hW',
       fun hb => (hid hb).of_rel hL.symm.baseRel⟩
-    · obtain ⟨flag, hpost⟩ := ri_call_post hfork (Ninst.Run.of_runCompiled hrun)
+    · obtain ⟨flag, hpost⟩ := ri_call_postH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrun)
       have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
         (callChildPost_stack' _ _ _ _))).1
       subst hflag
@@ -114,7 +114,7 @@ theorem coinMutFloor {ok : Bytes → Prop} (X K Cb : Nat) (cost : Sevm → Devm 
 /-- **A `STATICCALL`'s exact profile lowered to its floor**, as `coinMutFloor`. -/
 theorem coinStaticFloor {A : B256} (X K Cb : Nat) (cost : Sevm → Devm → Nat) (canon : Sevm → Devm → Devm)
     (hcost : ∀ s p G', cost {s with gas := G'} (p.withGasLeft G') = cost s p)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false)
     (hK : X + (K + Cb) / 64 + 1 ≤ K) (hU : U < 2 ^ 256) (hs : GasStable W')
     (hp : StaticWordCallProfile sevm W W' t data A U ii is oi (coinStaticDebit cost sevm t ii is oi)
@@ -169,7 +169,7 @@ theorem coinStaticFloor {A : B256} (X K Cb : Nat) (cost : Sevm → Devm → Nat)
     have hn : Devm.EqModGas (callChildPost (parent b S M G t ii is oi 0x20) cpost oi.toNat
         (0x20 : B256).toNat) (coinStaticNext canon sevm t ii is oi b S M) := hpr.callChildPost hcp _ _
     have hL := hn.trans hnH.symm
-    obtain ⟨flag, out', hpost, -, -⟩ := ri_staticcall_bounded hfork (Ninst.Run.of_runCompiled hrun)
+    obtain ⟨flag, out', hpost, -, -⟩ := ri_staticcall_boundedH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrun)
     have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
       (callChildPost_stack' _ _ _ _))).1
     subst hflag

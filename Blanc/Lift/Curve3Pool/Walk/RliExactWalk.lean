@@ -32,7 +32,7 @@ end Head
 /-- **The dispatcher, the prologue, `D0` and `D1`, exact.** -/
 theorem rx_rli_headX {sevm : Sevm} {pre : Devm} {s : State} {W : Devm → Prop} {U : Nat}
     {T : B256} {Q : Outcome → Prop} (P : RLIExactCalls) (w : RliWords)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance) (hid : IdReady sevm pre)
     (hWc : WClosed sevm W) (hWb : W pre)
@@ -113,7 +113,7 @@ at the canonical bases. -/
 theorem rx_rli_fee12X {X : SFunc} {n : Devm} {R : Nat}
     {T F AF Aw D0 D1 B1 B2 N1 N2 x0 f0 f1 f2 s1 s2 x1 x2 : B256}
     (hX : X = t_336e_c1048 ∨ X = t_336e_c1055)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x660)
     (hc : WordAt img 0x600 (Nat.toB256 1)) (hT : WordAt img 0x140 T) (hF : WordAt img 0x1e0 F)
     (hAF : WordAt img 0x200 AF) (hAw : WordAt img 0x220 Aw) (hB1 : WordAt img 0x2a0 B1)
@@ -196,7 +196,7 @@ theorem rx_rli_feeTailX {X : SFunc} {n : Devm} {R : Nat}
     {T F AF Aw D0 D1 B0 B1 B2 N0 N1 N2 f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256}
     {b1 : Devm} {M1 : Mem} {img1 : Bytes} {g1 : Nat}
     (hX : X = t_336e_c1048 ∨ X = t_336e_c1055)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hT : WordAt img 0x140 T) (hF : WordAt img 0x1e0 F)
     (hAF : WordAt img 0x200 AF) (hAw : WordAt img 0x220 Aw)
     (hB1 : WordAt img 0x2a0 B1) (hB2 : WordAt img 0x2c0 B2)
@@ -258,7 +258,7 @@ theorem rx_rli_feeTailX {X : SFunc} {n : Devm} {R : Nat}
 /-- **The fee loop, exact**: three iterations, each store at its canonical base. -/
 theorem rx_rli_feeLoopX {n : Devm} {R : Nat}
     {T F AF Aw D0 D1 B0 B1 B2 N0 N1 N2 f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x620)
     (hc : WordAt img 0x600 (Nat.toB256 0)) (hT : WordAt img 0x140 T) (hF : WordAt img 0x1e0 F)
     (hAF : WordAt img 0x200 AF) (hAw : WordAt img 0x220 Aw) (hB0 : WordAt img 0x280 B0)
@@ -310,7 +310,7 @@ theorem rx_rli_burnX {sevm : Sevm} {b n : Devm} {σ : Stor} {S : List B256} {M :
     {img : Bytes} {R U v : Nat} {Q : Outcome → Prop} {x : V3} {W W' : Devm → Prop}
     {T F AF Aw a0 a1 a2 D0 D1 f0 f1 f2 : B256}
     {debit : Devm → List B256 → Mem → Nat} {next : Devm → List B256 → Mem → Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W') (hn : Devm.EqModGas b n)
     (hX : xpChk ⟨a0.toNat, a1.toNat, a2.toNat⟩ = some x)
     (hres : getDChk x.get Aw.toNat 1 = some v)
@@ -370,7 +370,7 @@ variable {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {M : Mem} {
 theorem rx_rli_push0X {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {M : Mem}
     {img : Bytes} {R U : Nat} {Q : Outcome → Prop}
     (P : RLIExactCalls) {n : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 0))
     (hp : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) ≠ 0 → MutableCallProfile sevm W W' (σ.get (coinsBase + Nat.toB256 0))
@@ -432,7 +432,7 @@ theorem rx_rli_push0X {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
 theorem rx_rli_push1aX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {M : Mem}
     {img : Bytes} {R U : Nat} {Q : Outcome → Prop}
     (P : RLIExactCalls) {n : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 1))
     (hp : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → MutableCallProfile sevm W W' (σ.get (coinsBase + Nat.toB256 1))
@@ -494,7 +494,7 @@ theorem rx_rli_push1aX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
 theorem rx_rli_push1bX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {M : Mem}
     {img : Bytes} {R U : Nat} {Q : Outcome → Prop}
     (P : RLIExactCalls) {n : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hc : WordAt img 0x900 (Nat.toB256 1))
     (hp : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) ≠ 0 → MutableCallProfile sevm W W' (σ.get (coinsBase + Nat.toB256 1))
@@ -556,7 +556,7 @@ theorem rx_rli_push1bX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
 theorem rx_rli_push2aX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {M : Mem}
     {img : Bytes} {R U : Nat} {Q : Outcome → Prop}
     (P : RLIExactCalls) {n : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hc : WordAt img 0x900 (Nat.toB256 2))
     (hp : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → MutableCallProfile sevm W W' (σ.get (coinsBase + Nat.toB256 2))
@@ -618,7 +618,7 @@ theorem rx_rli_push2aX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
 theorem rx_rli_push2bX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {M : Mem}
     {img : Bytes} {R U : Nat} {Q : Outcome → Prop}
     (P : RLIExactCalls) {n : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hc : WordAt img 0x900 (Nat.toB256 2))
     (hp : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) ≠ 0 → MutableCallProfile sevm W W' (σ.get (coinsBase + Nat.toB256 2))
@@ -705,7 +705,7 @@ abbrev rliEnd0 (sevm : Sevm) (P : RLIExactCalls) (n : Devm) (M : Mem) : Devm :=
 /-- Iteration 2 at `t_3769_c1045` to `STOP`, exact. -/
 theorem rx_rli_tail2aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm → Prop} {M : Mem}
     {img : Bytes} {U : Nat} {T D1 f0 f1 f2 Bw : B256} (P : RLIExactCalls) {R : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm (V 2) b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x920) (hc : WordAt img 0x900 (Nat.toB256 2))
     (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
@@ -747,7 +747,7 @@ theorem rx_rli_tail2aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
 /-- Iteration 2 at `t_3769_c48` to `STOP`, exact. -/
 theorem rx_rli_tail2bX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm → Prop} {M : Mem}
     {img : Bytes} {U : Nat} {T D1 f0 f1 f2 Bw : B256} (P : RLIExactCalls) {R : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm (V 2) b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0xb60) (hc : WordAt img 0x900 (Nat.toB256 2))
     (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
@@ -789,7 +789,7 @@ theorem rx_rli_tail2bX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
 /-- Iterations 1–2 from `t_3769_c1037` to `STOP`, exact. -/
 theorem rx_rli_tail1aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm → Prop} {M : Mem}
     {img : Bytes} {U : Nat} {T D1 f0 f1 f2 Bw : B256} (P : RLIExactCalls) {R : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm (V 1) b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x920) (hc : WordAt img 0x900 (Nat.toB256 1))
     (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
@@ -826,7 +826,7 @@ theorem rx_rli_tail1aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
 /-- Iterations 1–2 from `t_3769_c48` to `STOP`, exact. -/
 theorem rx_rli_tail1bX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm → Prop} {M : Mem}
     {img : Bytes} {U : Nat} {T D1 f0 f1 f2 Bw : B256} (P : RLIExactCalls) {R : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm (V 1) b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0xb60) (hc : WordAt img 0x900 (Nat.toB256 1))
     (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
@@ -863,7 +863,7 @@ theorem rx_rli_tail1bX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
 /-- **The transfer loop, the event and `STOP`, exact.** -/
 theorem rx_rli_tail0X {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm → Prop} {M : Mem}
     {img : Bytes} {U : Nat} {T D1 f0 f1 f2 Bw : B256} (P : RLIExactCalls) {R : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm (V 0) b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x920) (hc : WordAt img 0x900 (Nat.toB256 0))
     (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
@@ -905,7 +905,7 @@ theorem rx_rli_tail0X {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm �
 /-- After the fee loop, exact: `D2`, the burn, the transfers, the event and `STOP`. -/
 theorem rx_rli_afterFeeX {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop} {U : Nat}
     {T : B256} (P : RLIExactCalls) (w : RliWords) {b4 : Devm} {img4 : Bytes}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j))
     (h0 : RliFeeIter (cwFee ((rliσ sevm pre).get feeSlot)) ((rliσ sevm pre).get adminFeeSlot)
       (Nat.toB256 w.v0) (Nat.toB256 w.v1) (balAt (rliσ sevm pre) 0) (rliNew sevm pre 0) w.f0 w.s0 w.x0)
@@ -975,7 +975,7 @@ headroom `66000 + 3 U` runs the frame's entry tree from `R + rliExactCost` to `S
 `R` left. -/
 theorem rx_rli_frame_exact {sevm : Sevm} {pre : Devm} {s : State} {W : Nat → Devm → Prop} {U : Nat}
     {T : B256} (P : RLIExactCalls) (w : RliWords)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance) (hid : IdReady sevm pre)
     (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre)

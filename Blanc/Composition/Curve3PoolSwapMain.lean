@@ -20,7 +20,7 @@ open Blanc.Composition.Curve3Pool3CrvInstance (coinOf tokOf)
 
 /-- **The frame's run at any residual `R ≥ 2201`**, from the words the model's step gives. -/
 theorem swap_floor_run {msg : Msg} {s0 : Curve3Pool.State} {i j : Fin 3} {amp v : Nat} {x0 x1 x2 : B256}
-    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : CoveredFork (initSevm msg).benvStat.fork)
+    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : ShanghaiOnwards (initSevm msg).benvStat.fork)
     (hstatic : (initSevm msg).isStatic = false) (hdepth : 2 ≤ (initSevm msg).depth)
     (hlen : 4 ≤ (initSevm msg).data.length) (hcd : (initSevm msg).data.length < 2 ^ 256)
     (hsel : Sevm.selector (initSevm msg) = selExchange) (hid : IdReady (initSevm msg) (initDevm msg))
@@ -707,7 +707,7 @@ theorem swap_core {msg : Msg} {w : Jaune.State} {E : Adr} {i j : Fin 3} {dx dy m
   have ht : msg.currentTarget = pool := e.entry.named.1
   have hcaller : msg.caller = E := e.entry.named.2.1
   have hopen := e.coinsOpen
-  have hfork : CoveredFork (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
+  have hfork : ShanghaiOnwards (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
   have hdata : (initSevm msg).data = swapCalldata i j dx minDy := e.data
   have hstor : ∀ x ∈ parties w, (initDevm msg).getStor x = w.getStor x := fun x hx => congrArg Acct.stor (e.entry.world x hx).1
   have hσ : (initDevm msg).getStor (initSevm msg).currentTarget = w.getStor pool := by

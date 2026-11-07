@@ -95,7 +95,7 @@ theorem proxyPost_gasLeft' (s : Sevm) (p : Devm) (Y X : Nat) (C : Devm) (w : B25
 theorem proxy_execE {msg : Msg} {I : ByteArray} {s w : B256} (F Cu : Nat) (hCu : Cu ≤ F)
     {impl : Sevm → Devm → Nat} {C : Nat → Devm}
     (himpl : ∀ s p G', impl {s with gas := G'} (p.withGasLeft G') = impl s p)
-    (hcode : (initSevm msg).code = Proxy.code) (fork : CoveredFork (initSevm msg).benvStat.fork)
+    (hcode : (initSevm msg).code = Proxy.code) (fork : ShanghaiOnwards (initSevm msg).benvStat.fork)
     (hdepth : (initSevm msg).depth ≠ 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) I)
     (hshort : 4 ≤ (initSevm msg).data.length) (hlen : (initSevm msg).data.length ≤ 100)
@@ -193,7 +193,7 @@ theorem proxyG_le {w : B256} {impl : Sevm → Devm → Nat} {s' : Sevm} {p : Dev
 theorem proxy_execF {msg : Msg} {I : ByteArray} {s w : B256} (X0 Cu : Nat) (hX0 : 2300 + (X0 + Cu) / 64 + 1 ≤ X0)
     {impl : Sevm → Devm → Nat} {C : Nat → Devm}
     (himpl : ∀ s p G', impl {s with gas := G'} (p.withGasLeft G') = impl s p)
-    (hcode : (initSevm msg).code = Proxy.code) (fork : CoveredFork (initSevm msg).benvStat.fork)
+    (hcode : (initSevm msg).code = Proxy.code) (fork : ShanghaiOnwards (initSevm msg).benvStat.fork)
     (hdepth : (initSevm msg).depth ≠ 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) I)
     (hshort : 4 ≤ (initSevm msg).data.length) (hlen : (initSevm msg).data.length ≤ 100)
@@ -275,7 +275,7 @@ open Blanc.Composition.Curve3PoolUsdc22 (xferLaw pullLaw balLaw)
 
 /-- V2_2's `transfer` as a message, exactly. -/
 theorem implXfer_msgE {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Impl.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
     (hF : 74300 ≤ (initDevm msg).gasLeft)
@@ -302,7 +302,7 @@ theorem implXfer_msgE {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg)
 
 /-- V2_2's `transfer` as a message, at the store sentry above its cost. -/
 theorem implXfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Impl.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
     (hF : implXferG (initSevm msg) (initDevm msg) + 2300 ≤ (initDevm msg).gasLeft)
@@ -320,7 +320,7 @@ theorem implXfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg
 
 /-- V2_2's `transferFrom` as a message, at the store sentry above its cost. -/
 theorem implPull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Impl.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++ v.toBytes)
     (hF : implPullG (initSevm msg) (initDevm msg) + 2300 ≤ (initDevm msg).gasLeft)
@@ -343,7 +343,7 @@ theorem implPull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm
 
 /-- V2_2's `transferFrom` as a message, exactly. -/
 theorem implPull_msgE {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Impl.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++ v.toBytes)
     (hF : 104300 ≤ (initDevm msg).gasLeft)
@@ -413,7 +413,7 @@ theorem pullProxyPost_canon (s : Sevm) (p : Devm) (F R : Nat) :
 
 /-- **`transfer` through the proxy, as a message, exactly.** -/
 theorem proxyXfer_msgE {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Proxy.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
     (static : (initSevm msg).isStatic = false) (hval : (initSevm msg).value = 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) Impl.code)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
@@ -447,7 +447,7 @@ theorem proxyXfer_msgE {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg
 
 /-- **`transferFrom` through the proxy, as a message, exactly.** -/
 theorem proxyPull_msgE {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Proxy.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
     (static : (initSevm msg).isStatic = false) (hval : (initSevm msg).value = 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) Impl.code)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++ v.toBytes)
@@ -484,7 +484,7 @@ theorem proxyPull_msgE {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm
 
 /-- **`transfer` through the proxy, at its floor.** -/
 theorem proxyXfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Proxy.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
     (static : (initSevm msg).isStatic = false) (hval : (initSevm msg).value = 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) Impl.code)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
@@ -507,7 +507,7 @@ theorem proxyXfer_execF {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm ms
 
 /-- **`transferFrom` through the proxy, at its floor.** -/
 theorem proxyPull_execF {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Proxy.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
     (static : (initSevm msg).isStatic = false) (hval : (initSevm msg).value = 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) Impl.code)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++ v.toBytes)
@@ -545,7 +545,7 @@ section Premises
 variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : B256}
 
 /-- **The pool's `transfer(msg.sender, amt)` into USDC, exactly.** -/
-theorem usdc22_coinPushExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem usdc22_coinPushExact (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 89000 ≤ U)
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -578,7 +578,7 @@ theorem usdc22_coinPushExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic :
   · rw [L.out]; decide +kernel
 
 /-- **The pool's `transferFrom(msg.sender, self, amt)` into USDC, exactly.** -/
-theorem usdc22_coinPullExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem usdc22_coinPullExact (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 120000 ≤ U)
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -615,7 +615,7 @@ theorem usdc22_coinPullExact (hfork : CoveredFork sevm.benvStat.fork) (hstatic :
 
 /-- **`transfer`'s exact profile through the proxy, at its floor.** -/
 theorem usdc22_coinPushFloor {K : Nat} (hK : 3370 + (K + 73300) / 64 + 1 ≤ K)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 89000 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -646,7 +646,7 @@ theorem usdc22_coinPushFloor {K : Nat} (hK : 3370 + (K + 73300) / 64 + 1 ≤ K)
 
 /-- **`transferFrom`'s exact profile through the proxy, at its floor.** -/
 theorem usdc22_coinPullFloor {K : Nat} (hK : 4000 + (K + 110300) / 64 + 1 ≤ K)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 120000 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)

@@ -20,7 +20,7 @@ local notation "m20" => Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
 
 /-- `proxy_frame_run` for any undelegated code behind the slot. -/
 theorem proxy_frame_any {sevm : Sevm} {pre C : Devm} {X cc : Nat} {s w : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (depth : sevm.depth ≠ 0)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (depth : sevm.depth ≠ 0)
     (pf : ProxyFacts sevm pre s)
     (hundel : getDelegatedCodeAddress ((pBase sevm pre).state.getCode (dI sevm pre)) = none)
     (hprec : sevm.benvStat.rules.isPrecomp (dI sevm pre) = false)
@@ -112,7 +112,7 @@ theorem proxyPost_refund (sevm : Sevm) (pre : Devm) (Y X : Nat) (C : Devm) (w : 
 
 /-- **A proxy frame lands where its implementation child lands.** -/
 theorem proxy_lands {sevm : Sevm} {pre C : Devm} {u : Nat} {s w : B256} {σ' : Stor} {R : Prop}
-    (fork : CoveredFork sevm.benvStat.fork) (depth : sevm.depth ≠ 0)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (depth : sevm.depth ≠ 0)
     (pf : ProxyFacts sevm pre s)
     (hundel : getDelegatedCodeAddress ((pBase sevm pre).state.getCode (dI sevm pre)) = none)
     (hprec : sevm.benvStat.rules.isPrecomp (dI sevm pre) = false)

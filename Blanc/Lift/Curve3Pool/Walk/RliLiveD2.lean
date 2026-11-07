@@ -67,7 +67,7 @@ theorem rx_rli_d2E {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem
     {img : Bytes} {G R U v : Nat} {Q : Outcome → Prop} {x : V3} {W W' : Devm → Prop}
     {T F AF Aw a0 a1 a2 D0 D1 f0 f1 f2 : B256}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hX : xpChk ⟨a0.toNat, a1.toNat, a2.toNat⟩ = some x)
     (hres : getDChk x.get Aw.toNat 1 = some v)
@@ -305,7 +305,7 @@ theorem rx_rli_d2E {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem
 theorem rx_rli_d2 {sevm : Sevm} {b : Devm} {σ : Stor} {S : List B256} {M : Mem}
     {img : Bytes} {G R U v : Nat} {Q : Outcome → Prop} {x : V3} {W W' : Devm → Prop}
     {T F AF Aw a0 a1 a2 D0 D1 f0 f1 f2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hX : xpChk ⟨a0.toNat, a1.toNat, a2.toNat⟩ = some x)
     (hres : getDChk x.get Aw.toNat 1 = some v)

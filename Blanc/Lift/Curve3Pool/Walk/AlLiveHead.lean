@@ -93,7 +93,7 @@ theorem al_pos_gt {x : B256} (h : x ≠ 0) : B256.gtCheck x (Bytes.toB256 [0]) �
 theorem rx_al_headE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
     {M : Mem} {img : Bytes} {G R i : Nat} {Q : Outcome → Prop} {F AF A T D0 : B256}
     {old nv : Nat → B256} {a1 a2 a3 a4 a5 : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hL : ExLive sevm W b σ)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hi : i < 3) (hL : ExLive sevm W b σ)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) {s : Nat} (hsz : M.size = s) (hs : 0x520 ≤ s)
     (hs32 : s % 32 = 0)
     (hm : AlPullImg img i F AF A T D0 old nv) (hT0 : T = 0 → alAmt sevm i ≠ 0)
@@ -201,7 +201,7 @@ theorem rx_al_headE {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S 
 theorem rx_al_head {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
     {M : Mem} {img : Bytes} {G R i : Nat} {Q : Outcome → Prop} {F AF A T D0 : B256}
     {old nv : Nat → B256} {a1 a2 a3 a4 a5 : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hL : ExLive sevm W b σ)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hi : i < 3) (hL : ExLive sevm W b σ)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) {s : Nat} (hsz : M.size = s) (hs : 0x520 ≤ s)
     (hs32 : s % 32 = 0)
     (hm : AlPullImg img i F AF A T D0 old nv) (hT0 : T = 0 → alAmt sevm i ≠ 0)
@@ -321,7 +321,7 @@ must be positive). -/
 theorem rx_al_head0E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
     {M : Mem} {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF A T D0 : B256}
     {old nv : Nat → B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x4e0)
     (hm : AlPullImg img 0 F AF A T D0 old nv) (hTz : T = 0) (hT0 : T = 0 → alAmt sevm 0 ≠ 0)
     (hG : 2500 + R ≤ G) (hroom : S.length + 12 < 1024)
@@ -375,7 +375,7 @@ must be positive). -/
 theorem rx_al_head0 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256}
     {M : Mem} {img : Bytes} {G R : Nat} {Q : Outcome → Prop} {F AF A T D0 : B256}
     {old nv : Nat → B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x4e0)
     (hm : AlPullImg img 0 F AF A T D0 old nv) (hTz : T = 0) (hT0 : T = 0 → alAmt sevm 0 ≠ 0)
     (hG : 2500 + R ≤ G) (hroom : S.length + 12 < 1024)

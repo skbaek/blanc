@@ -36,7 +36,7 @@ theorem asked_facts {data : Bytes} (mf : MomentFacts w) (mk : ExitMarked w) (e :
       RealCoins (initSevm msg) (initDevm msg) ∧ (initSevm msg).code = Curve3Pool.code ∧ IdReady (initSevm msg) (initDevm msg) := by
   have ht : msg.currentTarget = pool := e.entry.named.1
   have hopen := e.coinsOpen
-  have hfork : CoveredFork (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
+  have hfork : ShanghaiOnwards (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
   have hH : HistFork (initSevm msg).benvStat.fork := hfork.histFork
   have hmemP : pool ∈ parties w := by unfold parties; exact List.mem_cons_self
   have hmemD : dai ∈ parties w := by simp only [parties, List.mem_cons, true_or, or_true]
@@ -153,7 +153,7 @@ theorem exit_message (mf : MomentFacts w) (mk : ExitMarked w) (e : ColdEntry msg
   have hcaller : msg.caller = E := e.entry.named.2.1
   have hopen := e.coinsOpen
   have hE : E ≠ 0 := e.nonzero
-  have hfork : CoveredFork (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
+  have hfork : ShanghaiOnwards (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
   have hH : HistFork (initSevm msg).benvStat.fork := hfork.histFork
   have hdata : (initSevm msg).data = exitCalldata a mins := e.data
   have hmemP : pool ∈ parties w := by unfold parties; exact List.mem_cons_self

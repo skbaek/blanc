@@ -41,7 +41,7 @@ theorem dExt_le (sevm : Sevm) (b : Devm) (hlen : sevm.data.length ≤ 100) : dEx
 given at every delegate gas `Y` that forwards at least `F`. -/
 theorem proxy_msg {msg : Msg} {I : ByteArray} {s w : B256} {σ' : Stor} {R R' : Prop} {prog : List SFunc}
     (F Cu : Nat) (hCu : Cu ≤ F)
-    (hcode : (initSevm msg).code = Proxy.code) (fork : CoveredFork (initSevm msg).benvStat.fork)
+    (hcode : (initSevm msg).code = Proxy.code) (fork : ShanghaiOnwards (initSevm msg).benvStat.fork)
     (hdepth : (initSevm msg).depth ≠ 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) I)
     (hshort : 4 ≤ (initSevm msg).data.length) (hlen : (initSevm msg).data.length ≤ 100)

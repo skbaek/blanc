@@ -155,7 +155,7 @@ loop head's memory as a term. As `rx_rl_pre` (`0x2c68` → the loop head): the l
 `totalSupply` answers `T` (`SupplyOk`); the loop head runs over a base whose pool storage is the
 entry's with the lock set, with `T` at `0x140`, zero amounts and fees, and counter `0`. -/
 theorem rx_rl_preE {sevm : Sevm} {b : Devm} {Gs : Nat} {Q : Outcome → Prop} {W : Devm → Prop}
-    {U : Nat} {T : B256} {E : Devm → List B256 → Mem → Nat → Devm → Prop} (hfork : CoveredFork sevm.benvStat.fork)
+    {U : Nat} {T : B256} {E : Devm → List B256 → Mem → Nat → Devm → Prop} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hcd : sevm.data.length < 2 ^ 256)
     (hlock : (b.getStor sevm.currentTarget).get lockSlot = 0) (hval : sevm.value = 0)
     (hWc : WClosed sevm W) (hWb : W b)
@@ -299,7 +299,7 @@ theorem rx_rl_preE {sevm : Sevm} {b : Devm} {Gs : Nat} {Q : Outcome → Prop} {W
 `totalSupply` answers `T` (`SupplyOk`); the loop head runs over a base whose pool storage is the
 entry's with the lock set, with `T` at `0x140`, zero amounts and fees, and counter `0`. -/
 theorem rx_rl_pre {sevm : Sevm} {b : Devm} {Gs : Nat} {Q : Outcome → Prop} {W : Devm → Prop}
-    {U : Nat} {T : B256} (hfork : CoveredFork sevm.benvStat.fork)
+    {U : Nat} {T : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hcd : sevm.data.length < 2 ^ 256)
     (hlock : (b.getStor sevm.currentTarget).get lockSlot = 0) (hval : sevm.value = 0)
     (hWc : WClosed sevm W) (hWb : W b)
@@ -338,7 +338,7 @@ def rlS1CostA (sevm : Sevm) (b : Devm) (i : Nat) (B T : B256) : Nat :=
 memory size 0x2c0). -/
 theorem rx_rl_s1AL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
     {i : Nat} {T B : B256} {a : Nat → B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x2c0) (hL : LoopImg img i T a)
     (hB : (b.getStor sevm.currentTarget).get (balancesBase + Nat.toB256 i) = B)
     (hmulw : (B256.eqCheck (B * rlAmt sevm / B) (rlAmt sevm) ||| B256.eqCheck B 0) ≠ 0)
@@ -434,7 +434,7 @@ theorem rx_rl_s1AL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M
 memory size 0x2c0). -/
 theorem rx_rl_s1A {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
     {i : Nat} {T B : B256} {a : Nat → B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x2c0) (hL : LoopImg img i T a)
     (hB : (b.getStor sevm.currentTarget).get (balancesBase + Nat.toB256 i) = B)
     (hmulw : (B256.eqCheck (B * rlAmt sevm / B) (rlAmt sevm) ||| B256.eqCheck B 0) ≠ 0)
@@ -459,7 +459,7 @@ def rlS1CostB (sevm : Sevm) (b : Devm) (i : Nat) (B T : B256) : Nat :=
 memory size 0x5e0). -/
 theorem rx_rl_s1BL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
     {i : Nat} {T B : B256} {a : Nat → B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img i T a)
     (hB : (b.getStor sevm.currentTarget).get (balancesBase + Nat.toB256 i) = B)
     (hmulw : (B256.eqCheck (B * rlAmt sevm / B) (rlAmt sevm) ||| B256.eqCheck B 0) ≠ 0)
@@ -555,7 +555,7 @@ theorem rx_rl_s1BL {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M
 memory size 0x5e0). -/
 theorem rx_rl_s1B {sevm : Sevm} {b : Devm} {Gc : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
     {i : Nat} {T B : B256} {a : Nat → B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img i T a)
     (hB : (b.getStor sevm.currentTarget).get (balancesBase + Nat.toB256 i) = B)
     (hmulw : (B256.eqCheck (B * rlAmt sevm / B) (rlAmt sevm) ||| B256.eqCheck B 0) ≠ 0)
@@ -869,7 +869,7 @@ the `CALL` answered by `CoinPushOkAt`, the `raw_call` success test (`rxc_vyRawCa
 theorem rx_rl_s3E {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
     {s i : Nat} {T V C : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hi : i < 3) (hdepth : sevm.depth ≠ 0)
     (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s) (hs : s = 0x580 ∨ s = 0x5e0)
     (hL : LoopImg img i T a)
@@ -1036,7 +1036,7 @@ the `CALL` answered by `CoinPushOkAt`, the `raw_call` success test (`rxc_vyRawCa
 `i += 1`. -/
 theorem rx_rl_s3 {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
     {s i : Nat} {T V C : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hi : i < 3) (hdepth : sevm.depth ≠ 0)
     (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s) (hs : s = 0x580 ∨ s = 0x5e0)
     (hL : LoopImg img i T a)
@@ -1074,7 +1074,7 @@ answered by `BurnOkTo`, its reply length check, the `RemoveLiquidity` event (wit
 theorem rx_rl_postE {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem}
     {img : Bytes} {T : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hWc : WClosed sevm W) (hWb : W b)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img 3 T a)
     (hTa : (rlAmt sevm).toNat ≤ T.toNat)
@@ -1200,7 +1200,7 @@ answered by `BurnOkTo`, its reply length check, the `RemoveLiquidity` event (wit
 `total_supply - _amount` checked) and the lock cleared. -/
 theorem rx_rl_postW {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem}
     {img : Bytes} {T : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hWc : WClosed sevm W) (hWb : W b)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img 3 T a)
     (hTa : (rlAmt sevm).toNat ≤ T.toNat)
@@ -1230,7 +1230,7 @@ by `B * _amount / T`, the `transfer` to the caller answered by `CoinPushOkAt`, `
 `U + 35000` gas is used. -/
 theorem rx_rl_iterA {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M : Mem}
     {img : Bytes} {i : Nat} {T B C : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hdepth : sevm.depth ≠ 0) (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b)
     (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x2c0) (hL : LoopImg img i T a)
@@ -1302,7 +1302,7 @@ by `B * _amount / T`, the `transfer` to the caller answered by `CoinPushOkAt`, `
 `U + 35000` gas is used. -/
 theorem rx_rl_iterB {sevm : Sevm} {b : Devm} {G : Nat} {Q : Outcome → Prop} {M : Mem}
     {img : Bytes} {i : Nat} {T B C : B256} {a : Nat → B256} {W W' : Devm → Prop} {U : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hdepth : sevm.depth ≠ 0) (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b)
     (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img i T a)
@@ -1377,7 +1377,7 @@ nothing after it reads `W 4`), every gas
 `G ≥ 167000 + 5 U` runs the frame to `STOP`, whose last log carries `T - _amount`. -/
 theorem rx_rl_frame {sevm : Sevm} {b : Devm} {σ : Stor} {G : Nat} {Q : Outcome → Prop}
     {W : Nat → Devm → Prop} {U : Nat} {T : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidity) (hid : IdReady sevm b)
     (hσ : b.getStor sevm.currentTarget = σ) (hlock : σ.get lockSlot = 0) (hval : sevm.value = 0)

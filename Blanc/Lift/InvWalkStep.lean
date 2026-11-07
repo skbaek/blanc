@@ -65,7 +65,7 @@ def stepX (sevm : Sevm) : Ninst → Devm → List B256 → Mem → Option (Devm 
 
 private theorem ri_stepX_of_storageFork {sevm : Sevm} {b b' d : Devm} {S S' : List B256} {M M' : Mem} {G : Nat}
     {n : Ninst} (storageFork : (n = .reg .sload ∨ n = .reg .sstore) →
-      CoveredFork sevm.benvStat.fork)
+      ShanghaiOnwards sevm.benvStat.fork)
     (h : Ninst.Run sevm (St b S M G) n d) (hs : stepX sevm n b S M = some (b', S', M')) :
     ∃ G', d = St b' S' M' G' := by
   unfold stepX at hs

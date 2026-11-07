@@ -68,7 +68,7 @@ variable {sevm : Sevm} {b : Devm} {σ : Stor} {W : Nat → Devm → Prop} {M : M
 
 /-- **The pull loop, exact.** -/
 theorem rx_al_loopX {P : ALExactCalls} {n : Devm} {m : Mem}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm (W 0) b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = if T = 0 then 0x360 else 0x520) (hm : AlMem0 img F AF A T D0 old)
     (hn : Devm.EqModGas b n) (hmm : Mem.EqExcept M m fun _ => False)

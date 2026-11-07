@@ -39,21 +39,6 @@ theorem mainnetChainConfig_preCancun_of_timestamp_lt
 
 namespace ExecutionTrace
 
-/-- A block whose environment's time is at or after Shanghai's runs on the domain. The environment's
-time is the header's timestamp reduced modulo `2 ^ 256`, which only lowers it, so the bound reaches the
-timestamp the schedule read; the block number plays no part. -/
-theorem ConfiguredBlockTraceIn.shanghaiOnwards_of_time {F : Fork → Prop} {pre post : BlockChain}
-    (block : ConfiguredBlockTraceIn F mainnetChainConfig pre post)
-    (late : mainnetShanghaiTimestamp ≤
-      (initBenv block.fork pre block.block.header).stat.time.toNat) :
-    ShanghaiOnwards block.fork := by
-  have time : (initBenv block.fork pre block.block.header).stat.time.toNat ≤
-      block.block.header.timestamp := by
-    change (Nat.toB256 block.block.header.timestamp).toNat ≤ _
-    rw [B256.toNat_toB256]
-    exact Nat.mod_le _ _
-  exact mainnetChainConfig_shanghaiOnwards_of_timestamp_ge block.forkAt (Nat.le_trans late time)
-
 /-- The actual selected mainnet fork supplies all three disabled stage bits. -/
 theorem ConfiguredBlockTraceIn.systemStagesDisabled_of_mainnet_timestamp_lt
     {F : Fork → Prop} {pre post : BlockChain}

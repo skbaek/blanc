@@ -148,7 +148,7 @@ theorem rx_cw_runE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {S : List B2
     {img : Bytes} {G R U amp : Nat} {W : Devm → Prop}
     {ρ a iw T x0 x1 x2 D0 y r0 r1 r2 y2 : B256}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
     (hA : aChk s sevm.benvStat.time.toNat = some amp)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x1e0)
     (hsup : StaticWordOkAtE sevm W W (σ.get tokenSlot) totalSupplyData T U 0x2bc 4 0x300 E)
@@ -287,7 +287,7 @@ theorem rx_cw_runE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {S : List B2
 theorem rx_cw_run {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {S : List B256} {M : Mem}
     {img : Bytes} {G R U amp : Nat} {W : Devm → Prop}
     {ρ a iw T x0 x1 x2 D0 y r0 r1 r2 y2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
     (hA : aChk s sevm.benvStat.time.toNat = some amp)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x1e0)
     (hsup : SupplyOkAt sevm W W (σ.get tokenSlot) T U 0x2bc 0x300)

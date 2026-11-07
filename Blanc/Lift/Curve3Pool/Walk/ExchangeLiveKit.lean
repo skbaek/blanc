@@ -87,7 +87,7 @@ theorem rxe_mloadX {Q : Outcome → Prop} {i : B256} {o s c : Nat} (hR : Mem.Rea
   rxe_mloadXL hR hW hsz ho hc hroom (k _)
 
 /-- **`SLOAD` within a gas budget**, the base, the word read and the exact charge named. -/
-theorem rxe_sloadVX {Q : Outcome → Prop} {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rxe_sloadVX {Q : Outcome → Prop} {k' : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hroom : S.length < 1024) (hG : 2100 ≤ G)
     (k : ∀ G' b' v, b' = afterSload sevm b k' → v = b.getStorVal sevm.currentTarget k' →
       G ≤ G' + 2100 → G' ≤ G → G = G' + sloadCost sevm b k' →
@@ -101,7 +101,7 @@ theorem rxe_sloadVX {Q : Outcome → Prop} {k' : B256} (hfork : CoveredFork sevm
   exact rx_sload_sel hfork hroom hr
 
 /-- **`SLOAD` within a gas budget**: at most `2100` charged. -/
-theorem rxe_sloadB {Q : Outcome → Prop} {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rxe_sloadB {Q : Outcome → Prop} {k' : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hroom : S.length < 1024) (hG : 2100 ≤ G)
     (k : ∀ G', G ≤ G' + 2100 → G' ≤ G → SFunc.RunEx fs sevm
       (St (afterSload sevm b k') (b.getStorVal sevm.currentTarget k' :: S) M G') f Q) :
@@ -109,7 +109,7 @@ theorem rxe_sloadB {Q : Outcome → Prop} {k' : B256} (hfork : CoveredFork sevm.
   rxe_sloadVX hfork hroom hG fun G' _ _ e1 e2 h1 h2 _ => by subst e1 e2; exact k G' h1 h2
 
 /-- **`SSTORE` within a gas budget**: at most `22100` charged. -/
-theorem rxe_sstoreB {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rxe_sstoreB {Q : Outcome → Prop} {k' v : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hG : 24401 ≤ G)
     (k : ∀ G', G ≤ G' + 22100 → G' ≤ G →
       SFunc.RunEx fs sevm (St (afterSstore sevm b k' v) S M G') f Q) :
@@ -118,7 +118,7 @@ theorem rxe_sstoreB {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork se
     (by have := sstoreCost_le_22100 sevm b k' v; omega) (by omega)
 
 /-- **`SLOAD` within a gas budget**, the base and the word read named. -/
-theorem rxe_sloadV {Q : Outcome → Prop} {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rxe_sloadV {Q : Outcome → Prop} {k' : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hroom : S.length < 1024) (hG : 2100 ≤ G)
     (k : ∀ G' b' v, b' = afterSload sevm b k' → v = b.getStorVal sevm.currentTarget k' →
       G ≤ G' + 2100 → G' ≤ G → SFunc.RunEx fs sevm (St b' (v :: S) M G') f Q) :
@@ -126,7 +126,7 @@ theorem rxe_sloadV {Q : Outcome → Prop} {k' : B256} (hfork : CoveredFork sevm.
   rxe_sloadVX hfork hroom hG fun G' b' v e1 e2 h1 h2 _ => k G' b' v e1 e2 h1 h2
 
 /-- **`SSTORE` within a gas budget**, the base named. -/
-theorem rxe_sstoreV {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rxe_sstoreV {Q : Outcome → Prop} {k' v : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hG : 24401 ≤ G)
     (k : ∀ G' b', b' = afterSstore sevm b k' v → G ≤ G' + 22100 → G' ≤ G →
       SFunc.RunEx fs sevm (St b' S M G') f Q) :
@@ -146,7 +146,7 @@ theorem rxe_mstoreW {Q : Outcome → Prop} {i v : B256} {o s c : Nat} (hR : Mem.
   rxe_mstoreL hR hW hsz ho hc fun _ e => by subst e; exact k
 
 /-- **`SSTORE` within a gas budget**, the base and the exact charge named. -/
-theorem rxe_sstoreVX {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rxe_sstoreVX {Q : Outcome → Prop} {k' v : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hG : 24401 ≤ G)
     (k : ∀ G' b', b' = afterSstore sevm b k' v → G ≤ G' + 22100 → G' ≤ G →
       G = G' + sstoreCost sevm b k' v → SFunc.RunEx fs sevm (St b' S M G') f Q) :

@@ -31,7 +31,7 @@ theorem rawCallOk_empty : RawCallOk [] := Or.inl rfl
 /-! ## USDT's calls as messages -/
 
 theorem xfer_msg {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Usdt.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
     (hgas : 100056 ≤ (initDevm msg).gasLeft)
@@ -57,7 +57,7 @@ theorem xfer_msg {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code
     hu, L⟩
 
 theorem pull_msg {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Usdt.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++
       v.toBytes)
@@ -90,7 +90,7 @@ theorem pull_msg {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).
     hu, L⟩
 
 theorem bal_msg {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Usdt.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x70a08231 ++ a.toB256.toBytes)
     (hgas : 7331 ≤ (initDevm msg).gasLeft)
     (hdep : NotDeprecated (Devm.getStor (initDevm msg) (initSevm msg).currentTarget)) :
@@ -137,7 +137,7 @@ variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : 
 /-- **The pool's `transfer(msg.sender, amt)` into USDT succeeds with no reply**, at any window inside the
 first 4 KiB and `U ≥ 104744`, wherever the owner's gates are open and the transfer fits the coin's ledger,
 the recipient credited `amt - fee` and the owner `fee`. -/
-theorem usdt_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem usdt_coinPushOkAt (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 104744 ≤ U)
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -166,7 +166,7 @@ theorem usdt_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : se
 /-- **The pool's `transferFrom(msg.sender, self, amt)` into USDT succeeds with no reply**, at any window
 inside the first 4 KiB and `U ≥ 129555`, wherever the owner's gates are open and the pull fits the coin's
 ledger, the pool credited `amt - fee`. -/
-theorem usdt_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem usdt_coinPullOkAt (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 129555 ≤ U)
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -196,7 +196,7 @@ theorem usdt_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : se
 
 /-- **The pool's `balanceOf(self)` into USDT answers the coin's entry**, at any window inside the first
 4 KiB and `U ≥ 70000`, wherever the token is not deprecated. -/
-theorem usdt_coinBalOkAt {B : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem usdt_coinBalOkAt {B : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Usdt.code ∧ NotDeprecated (b.getStor t.toAdr) ∧

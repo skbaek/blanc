@@ -45,7 +45,7 @@ def ocPreMem (sevm : Sevm) (M : Mem) : Mem :=
 
 /-- **The guards and the arguments, forward, exactly** (core). -/
 theorem rx_oc_preE {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outcome → Prop}
-    {M : Mem} {img : Bytes} {W : Devm → Prop} (hfork : CoveredFork sevm.benvStat.fork)
+    {M : Mem} {img : Bytes} {W : Devm → Prop} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hL : ExLive sevm W b σ) (hlock : σ.get lockSlot = 0)
     (hval : sevm.value = 0) (hkill : σ.get isKilledSlot = 0) (hi3 : (ocI sevm).toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xc0) (hcl : VyClamps img)
@@ -116,7 +116,7 @@ theorem rx_oc_preE {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outcome
 
 /-- **The guards and the arguments, forward** (`t_440c_c0` → the call idiom at `0x448b`). -/
 theorem rx_oc_pre {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outcome → Prop}
-    {M : Mem} {img : Bytes} {W : Devm → Prop} (hfork : CoveredFork sevm.benvStat.fork)
+    {M : Mem} {img : Bytes} {W : Devm → Prop} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hL : ExLive sevm W b σ) (hlock : σ.get lockSlot = 0)
     (hval : sevm.value = 0) (hkill : σ.get isKilledSlot = 0) (hi3 : (ocI sevm).toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xc0) (hcl : VyClamps img)

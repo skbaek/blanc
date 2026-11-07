@@ -26,14 +26,14 @@ abbrev pKI : B256 := Bytes.toB256 [1] * Bytes.toB256 [0x70, 0x50, 0xc9, 0xe0, 0x
 
 /-- **Entry 8, `_admin()`**: the admin word. -/
 @[irreducible] noncomputable def p8W (sevm : Sevm) (b : Devm) (ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → S.length < 1000 → ∀ X,
+    {c : Nat // ShanghaiOnwards sevm.benvStat.fork → S.length < 1000 → ∀ X,
       SFunc.RunExact cert.prog sevm (St b (ret :: S) M (X + c)) t_06a8_c8
         (.returned (St (afterSload sevm b pKA) (b.getStorVal sevm.currentTarget pKA :: S) M X))} :=
   ⟨_, fun fork room X => by xrun⟩
 
 /-- **Entry 14, `_implementation()`**: the implementation word. -/
 @[irreducible] noncomputable def p14W (sevm : Sevm) (b : Devm) (ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → S.length < 1000 → ∀ X,
+    {c : Nat // ShanghaiOnwards sevm.benvStat.fork → S.length < 1000 → ∀ X,
       SFunc.RunExact cert.prog sevm (St b (ret :: S) M (X + c)) t_0651_c14
         (.returned (St (afterSload sevm b pKI) (b.getStorVal sevm.currentTarget pKI :: S) M X))} :=
   ⟨_, fun fork room X => by xrun⟩
@@ -46,7 +46,7 @@ abbrev pKI : B256 := Bytes.toB256 [1] * Bytes.toB256 [0x70, 0x50, 0xc9, 0xe0, 0x
 
 /-- **Entry 22, `_willFallback()`**: `require(msg.sender != _admin())`. -/
 @[irreducible] noncomputable def p22W (sevm : Sevm) (b : Devm) (ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → S.length < 990 →
+    {c : Nat // ShanghaiOnwards sevm.benvStat.fork → S.length < 990 →
       B256.eqCheck (m20 &&& sevm.caller.toB256) (m20 &&& b.getStorVal sevm.currentTarget pKA) = 0 →
       ∀ X, SFunc.RunExact cert.prog sevm (St b (ret :: S) M (X + c)) t_0576_c22
         (.returned (St (afterSload sevm b pKA) S M X))} :=
@@ -96,7 +96,7 @@ abbrev pRest (sevm : Sevm) (b : Devm) : List B256 :=
 /-- **The proxy frame up to `_delegate`'s `DELEGATECALL`** (a non-admin caller, a selector that is no
 admin entry point), its charge synthesized. -/
 @[irreducible] noncomputable def proxyPreW (sevm : Sevm) (b : Devm) (s : B256) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → ProxyFacts sevm b s → ∀ X o,
+    {c : Nat // ShanghaiOnwards sevm.benvStat.fork → ProxyFacts sevm b s → ∀ X o,
       SFunc.RunExact cert.prog sevm (St (pBase sevm b) (Nat.toB256 X :: pI sevm b :: Bytes.toB256 [0] ::
         Nat.toB256 sevm.data.length :: Bytes.toB256 [0] :: Bytes.toB256 [0] :: pRest sevm b) (pMem sevm) X)
         (.next (.exec .delegatecall) dRest) o →
@@ -157,7 +157,7 @@ end Dlg
 
 /-- **`_delegate`'s `DELEGATECALL` step**: with `Y < 2 ^ 256` gas left, the implementation's code at
 `dI` (undelegated, no precompile) and a clean child run, the parent resumes in `callChildPost`. -/
-theorem dlg_step {sevm : Sevm} {b cpost : Devm} {Y : Nat} (hfork : CoveredFork sevm.benvStat.fork)
+theorem dlg_step {sevm : Sevm} {b cpost : Devm} {Y : Nat} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hY : Y < 2 ^ 256)
     (hcharge : dExt sevm b + dAcc sevm b ≤ Y)
     (hundel : getDelegatedCodeAddress ((pBase sevm b).state.getCode (dI sevm b)) = none)

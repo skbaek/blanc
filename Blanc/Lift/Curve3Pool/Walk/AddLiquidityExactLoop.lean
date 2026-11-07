@@ -74,7 +74,7 @@ abbrev alPullData (sevm : Sevm) (k : Nat) : Bytes :=
 /-- **Iteration `0` on a positive supply, exact** (`t_105d_c4`, memory `0x520`, equal to `m` at
 every byte). -/
 theorem rx_al_it0X {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem} {B1 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hskip : alAmt sevm 0 = 0 → ∀ b, W b → W' b) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x520) (hm : AlPullImg img 0 F AF A T D0 old nv) (hT : T ≠ 0)
@@ -176,7 +176,7 @@ theorem rx_al_it0X {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem} 
 /-- **Iteration `1` before any pull, exact** (`t_105d_c40`, memory `0x520`, equal to `m` at every
 byte). -/
 theorem rx_al_it1X {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem} {B1 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hskip : alAmt sevm 1 = 0 → ∀ b, W b → W' b) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x520) (hm : AlPullImg img 1 F AF A T D0 old nv) (hT : T ≠ 0)
@@ -277,7 +277,7 @@ theorem rx_al_it1X {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem} 
 /-- **Iteration `0` on a first deposit, exact** (`t_105d_c4`, memory `0x4e0`; the amount is
 positive). -/
 theorem rx_al_it0TX {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem} {B1 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W') (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x4e0) (hm : AlPullImg img 0 F AF A T D0 old nv) (hTz : T = 0)
     (hT0 : T = 0 → alAmt sevm 0 ≠ 0)
@@ -350,7 +350,7 @@ theorem rx_al_it0TX {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem}
 /-- **Iteration `1` after a pull, exact** (`t_105d_c41`, memory `0x840`, equal to `m`): back to
 `t_105d_c41` either way. -/
 theorem rx_al_it1'X {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem} {B1 B2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hskip : alAmt sevm 1 = 0 → ∀ b, W b → W' b) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x840) (hm : AlPullImg img 1 F AF A T D0 old nv)
@@ -445,7 +445,7 @@ theorem rx_al_it1'X {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem}
 byte): for a zero amount out at `t_1333_c66`; for a positive one the two `balanceOf(self)` reads
 around the pull, out at `t_1333_c6` (memory `0x900`). -/
 theorem rx_al_it2X520 {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem} {B1 B2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hskip : alAmt sevm 2 = 0 → ∀ b, W b → W' b) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x520) (hm : AlPullImg img 2 F AF A T D0 old nv) (hT : T ≠ 0)
@@ -583,7 +583,7 @@ theorem rx_al_it2X520 {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Me
 amount out at `t_1333_c41`; for a positive one the two `balanceOf(self)` reads around the pull,
 out at `t_1333_c6` (memory `0x900`). -/
 theorem rx_al_it2X840 {W' : Devm → Prop} {P : ALExactCalls} {n : Devm} {m : Mem} {B1 B2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hskip : alAmt sevm 2 = 0 → ∀ b, W b → W' b) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0x840) (hm : AlPullImg img 2 F AF A T D0 old nv)

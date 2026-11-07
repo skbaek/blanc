@@ -182,7 +182,7 @@ test). -/
 theorem rx_al_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp : Nat}
     {Q : Outcome → Prop} {M : Mem} {img : Bytes} {W : Devm → Prop} {T : B256}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hcd : sevm.data.length < 2 ^ 256)
     (hL : ExLive sevm W b σ) (ha : Abstracts σ s) (hlock : σ.get lockSlot = 0)
     (hval : sevm.value = 0) (hkill : σ.get isKilledSlot = 0)
@@ -389,7 +389,7 @@ theorem rx_al_preE {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp :
 test). -/
 theorem rx_al_pre {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R U amp : Nat}
     {Q : Outcome → Prop} {M : Mem} {img : Bytes} {W : Devm → Prop} {T : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hcd : sevm.data.length < 2 ^ 256)
     (hL : ExLive sevm W b σ) (ha : Abstracts σ s) (hlock : σ.get lockSlot = 0)
     (hval : sevm.value = 0) (hkill : σ.get isKilledSlot = 0)

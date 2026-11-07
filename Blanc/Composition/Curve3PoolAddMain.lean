@@ -195,7 +195,7 @@ theorem add_paid {am : V3} {minted : Nat} {stored : V3} (ho : CoinsOpen w E) (ha
 
 /-- **The walk's end as a message's post.** -/
 theorem add_end {msg : Msg} {F R : Nat} {σ' : Stor} {f0 f1 f2 : B256} {Wm : Devm → Prop} {rf : Int}
-    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : CoveredFork (initSevm msg).benvStat.fork)
+    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : ShanghaiOnwards (initSevm msg).benvStat.fork)
     (hrun : SFunc.RunEx cert.prog {initSevm msg with gas := F} (St (initDevm msg) [] Mem.empty F) t_0000_c0
       (AlEndX {initSevm msg with gas := F} σ' f0 f1 f2 R Wm rf)) :
     ∃ post, exec (initEvm (msg.withGas F)) = .ok post ∧ post.error = none ∧ post.gasLeft = R ∧ post.refundCounter = rf ∧ Wm post ∧
@@ -230,7 +230,7 @@ theorem add_books {σ : Stor} {s0 s1 s2 : B256} {stored : V3} (he : stored = ⟨
 
 /-- **The first deposit's run, at any residual above the walk's headroom.** -/
 theorem add_run0 {msg : Msg} {s : Curve3Pool.State} {W : Nat → Devm → Prop} {U amp v1 : Nat} {B1 B2 : B256} {xb : V3} (P : ALExactCalls)
-    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
+    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
     (hdep : (initSevm msg).depth ≠ 0) (hlen : 4 ≤ (initSevm msg).data.length) (hcd : (initSevm msg).data.length < 2 ^ 256)
     (hsel : Sevm.selector (initSevm msg) = Curve3Pool.selAddLiquidity) (hid : IdReady (initSevm msg) (initDevm msg))
     (hWc : ∀ j, j ≤ 4 → WClosed (initSevm msg) (W j)) (hWb : W 0 (initDevm msg))
@@ -272,7 +272,7 @@ theorem add_run0 {msg : Msg} {s : Curve3Pool.State} {W : Nat → Devm → Prop} 
 
 /-- **A deposit's run on a positive supply, at any residual above the walk's headroom.** -/
 theorem add_run1 {msg : Msg} {s : Curve3Pool.State} {W : Nat → Devm → Prop} {U amp v0 v1 v2 : Nat} {T B1 B2 f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256} {xa xb xc : V3} (P : ALExactCalls)
-    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
+    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
     (hdep : (initSevm msg).depth ≠ 0) (hlen : 4 ≤ (initSevm msg).data.length) (hcd : (initSevm msg).data.length < 2 ^ 256)
     (hsel : Sevm.selector (initSevm msg) = Curve3Pool.selAddLiquidity) (hid : IdReady (initSevm msg) (initDevm msg))
     (hWc : ∀ j, j ≤ 4 → WClosed (initSevm msg) (W j)) (hWb : W 0 (initDevm msg))
@@ -416,7 +416,7 @@ theorem add_core (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg w E (ad
   have hTc : (initSevm msg).caller = E := e.entry.named.2.1
   have hopen := e.coinsOpen
   have hE0 : E ≠ 0 := e.nonzero
-  have hfork : CoveredFork (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
+  have hfork : ShanghaiOnwards (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
   have hH : HistFork (initSevm msg).benvStat.fork := hfork.histFork
   have hdata : (initSevm msg).data = addCalldata am minMint := e.data
   have hstatic : (initSevm msg).isStatic = false := e.entry.plain.2.1

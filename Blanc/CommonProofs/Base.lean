@@ -1,6 +1,7 @@
 -- CommonProofs/Base.lean : silent-structure, storage and code-read foundations shared by every proof layer.
 
 import Blanc.Tactics
+import Blanc.ShanghaiOnwards
 import Blanc.ExecutionSettlement
 import Jaune.DevmProjections
 
@@ -601,6 +602,25 @@ lemma Evm.step_spawn_child_fork {pc : Nat} {sevm : Sevm} {pre : Devm}
     (henter : f.enter = .run child)
     (hfork : CoveredFork sevm.benvStat.fork) :
     CoveredFork child.sta.benvStat.fork := by
+  rw [Evm.step_spawn_child_benvStat hstep henter]
+  exact hfork
+
+/-- A frame's child keeps the domain. -/
+lemma Xinst.Run.some_child_shanghaiOnwards {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {evm' : Evm} {exn' : Execution} {out : Execution}
+    (h : Xinst.Run sevm pre x (.some ⟨evm', exn'⟩) out)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) :
+    ShanghaiOnwards evm'.sta.benvStat.fork := by
+  rw [Xinst.Run.some_child_benvStat h]
+  exact hfork
+
+/-- An entered child keeps the domain. -/
+lemma Evm.step_spawn_child_shanghaiOnwards {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {f : Frame} {rsm : Resume} {pc' : Nat} {child : Evm}
+    (hstep : Evm.step ⟨pc, sevm, pre⟩ = .spawn f rsm pc')
+    (henter : f.enter = .run child)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) :
+    ShanghaiOnwards child.sta.benvStat.fork := by
   rw [Evm.step_spawn_child_benvStat hstep henter]
   exact hfork
 

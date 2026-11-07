@@ -62,7 +62,7 @@ theorem exBackCost_ge (sevm : Sevm) (n : Devm) (M : Mem) (c0 : Nat) (σ : Stor) 
 theorem rx_ex_pushX_floor {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {dyOut : B256}
     {pD : Devm → List B256 → Mem → Nat} {pN : Devm → List B256 → Mem → Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ) (hn : Devm.EqModGas b n)
     (hW'c : WClosed sevm W')
     (hj : (exJ sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xbc0)
@@ -113,7 +113,7 @@ theorem rx_ex_pushX_floor {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q 
 theorem rx_ex_tail_floor {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W W'' : Devm → Prop} {B X : Nat → B256} {D C dyOut dyFee : B256}
     {pD : Devm → List B256 → Mem → Nat} {pN : Devm → List B256 → Mem → Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ) (hn : Devm.EqModGas b n)
     (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa00)
@@ -173,7 +173,7 @@ theorem rx_ex_tail_floor {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q :
 theorem rx_ex_back_floor {sevm : Sevm} {b n : Devm} {σ : Stor} {s0 : State} {R U amp v : Nat}
     {Q : Outcome → Prop} {M : Mem} {img : Bytes} {W W'' : Devm → Prop} {B X : Nat → B256}
     {D C : B256} {s c0 : Nat} {pD : Devm → List B256 → Mem → Nat}
-    {pN : Devm → List B256 → Mem → Devm} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    {pN : Devm → List B256 → Mem → Devm} (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ) (hn : Devm.EqModGas b n) (ha : Abstracts σ s0)
     (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
@@ -301,7 +301,7 @@ theorem rx_ex_back_floor {sevm : Sevm} {b n : Devm} {σ : Stor} {s0 : State} {R 
 theorem rx_ex_pull_floor {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {B X : Nat → B256} {D C : B256} {s c0 : Nat}
     {plD : Devm → List B256 → Mem → Nat} {plN : Devm → List B256 → Mem → Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hn : Devm.EqModGas b n) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
     (hs : (s = 0x3c0 ∧ c0 = 31) ∨ (s = 0x460 ∧ c0 = 15)) (hF : ExFrame img B X D C)
@@ -405,7 +405,7 @@ theorem rx_ex_bal2_floor {sevm : Sevm} {b n : Devm} {σ : Stor} {R U : Nat} {Q :
 /-- As its exact twin, at the floor. -/
 theorem rx_ex_head_floor {sevm : Sevm} {pre : Devm} {R : Nat} {Q : Outcome → Prop}
     {W : Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selExchange) (hid : IdReady sevm pre)
     (hWc : WClosed sevm W) (hWb : W pre)
@@ -441,7 +441,7 @@ theorem rx_ex_head_floor {sevm : Sevm} {pre : Devm} {R : Nat} {Q : Outcome → P
 /-- As its exact twin, at the floor. -/
 theorem rx_ex_front_floor {sevm : Sevm} {pre : Devm} {R : Nat} {Q : Outcome → Prop}
     {W : Devm → Prop} {x0 x1 x2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selExchange) (hid : IdReady sevm pre)
     (hWc : WClosed sevm W) (hWb : W pre)
@@ -485,7 +485,7 @@ theorem rx_ex_front_floor {sevm : Sevm} {pre : Devm} {R : Nat} {Q : Outcome → 
 theorem rx_ex_nofee_floor {sevm : Sevm} {b : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {B X : Nat → B256} {D C : B256}
     {plD : Devm → List B256 → Mem → Nat} {plN : Devm → List B256 → Mem → Devm}
-    (hfee : exI sevm ≠ 2) (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfee : exI sevm ≠ 2) (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x3c0) (hF : ExFrame img B X D C)
     (hpull : MutableFloorProfile sevm W W' C (transferFromSel ++ sevm.caller.toB256.toBytes ++
@@ -510,7 +510,7 @@ theorem rx_ex_nofee_floor {sevm : Sevm} {b : Devm} {σ : Stor} {R U : Nat} {Q : 
 theorem rx_ex_fee_floor {sevm : Sevm} {b : Devm} {σ : Stor} {R U : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {B X : Nat → B256} {D C B1 B2 : B256}
     {bD1 bD2 plD : Devm → List B256 → Mem → Nat} {bN1 bN2 plN : Devm → List B256 → Mem → Devm}
-    (hfee : exI sevm = 2) (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfee : exI sevm = 2) (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x3c0) (hF : ExFrame img B X D C)
     (hb1 : StaticWordFloorProfile sevm W W C (balanceOfData sevm.currentTarget) B1 U 1000 0x3dc 0x24 0x440
@@ -594,7 +594,7 @@ def ExFrontWins (sevm : Sevm) (pre : Devm) (P : ExchangeExactCalls) (x0 x1 x2 B1
 /-- As its exact twin, at the floor. -/
 theorem rx_ex_frame_floor {sevm : Sevm} {pre : Devm} {s0 : State} {R U amp v : Nat}
     {Q : Outcome → Prop} {W W' W'' : Devm → Prop} {x0 x1 x2 B1 B2 : B256}
-    (P : ExchangeExactCalls) (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (P : ExchangeExactCalls) (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selExchange) (hid : IdReady sevm pre)
     (hWc : WClosed sevm W) (hW'c : WClosed sevm W') (hWb : W pre)

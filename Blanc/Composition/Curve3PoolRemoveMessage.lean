@@ -43,7 +43,7 @@ end Calls
 
 /-- **Coin `k`'s `transfer` with the real coins, at any window**, from a world pinning the coin to the entry. -/
 theorem pushK_profile {sevm : Sevm} {pre : Devm} {W W' : Devm → Prop} {amt ii oi : B256} (k : Fin 3)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : 2 ≤ sevm.depth)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : 2 ≤ sevm.depth)
     (hC : RealCoins sevm pre) (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hfit : PushFitsK k (pre.getStor (coinOf sevm pre k)) sevm.currentTarget sevm.caller amt)
     (hW : ∀ b, W b → Pin sevm pre k b)

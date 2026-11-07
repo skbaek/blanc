@@ -17,7 +17,7 @@ open Jaune Blanc.Lift
 /-- **The event and `STOP`, forward, exact** (core of `rx_rli_end920`; memory `0x920`). -/
 theorem rx_rli_end920E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G : Nat} {Q : Outcome → Prop} {T D1 f0 f1 f2 Bw : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
     (hf1 : WordAt img 0x5c0 f1) (hf2 : WordAt img 0x5e0 f2) (hBw : WordAt img 0x780 Bw)
@@ -86,7 +86,7 @@ theorem rx_rli_end920E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
 /-- **The event and `STOP`, forward, exact** (core of `rx_rli_endB60`; memory `0xb60`). -/
 theorem rx_rli_endB60E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G : Nat} {Q : Outcome → Prop} {T D1 f0 f1 f2 Bw : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
     (hf1 : WordAt img 0x5c0 f1) (hf2 : WordAt img 0x5e0 f2) (hBw : WordAt img 0x780 Bw)
@@ -155,7 +155,7 @@ theorem rx_rli_endB60E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
 /-- **The event and `STOP`, forward** (memory `0x920`). -/
 theorem rx_rli_end920 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G : Nat} {Q : Outcome → Prop} {T D1 f0 f1 f2 Bw : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
     (hf1 : WordAt img 0x5c0 f1) (hf2 : WordAt img 0x5e0 f2) (hBw : WordAt img 0x780 Bw)
@@ -173,7 +173,7 @@ theorem rx_rli_end920 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
 /-- **The event and `STOP`, forward** (memory `0xb60`). -/
 theorem rx_rli_endB60 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
     {img : Bytes} {G : Nat} {Q : Outcome → Prop} {T D1 f0 f1 f2 Bw : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xb60)
     (hT : WordAt img 0x140 T) (hD1 : WordAt img 0x480 D1) (hf0 : WordAt img 0x5a0 f0)
     (hf1 : WordAt img 0x5c0 f1) (hf2 : WordAt img 0x5e0 f2) (hBw : WordAt img 0x780 Bw)

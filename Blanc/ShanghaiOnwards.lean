@@ -155,54 +155,6 @@ theorem ShanghaiOnwards.rules_maxGas {s : BenvStat} (h : ShanghaiOnwards s.fork)
       (Fork.ruleSet f).tx.maxGas = some 16777216)
     (Or.inl rfl) (Or.inl rfl) (Or.inl rfl) (Or.inr rfl) (Or.inr rfl) (Or.inr rfl)
 
-/-! ## The schedule: a timestamp from Shanghai on selects a fork from Shanghai on -/
-
-/-- The last element a filter keeps lies at or after any kept element. -/
-theorem mem_of_getLast?_filter_append_cons {α : Type _} {p : α → Bool} {l₁ l₂ : List α} {a b : α}
-    (ha : p a = true) (h : ((l₁ ++ a :: l₂).filter p).getLast? = some b) : b ∈ a :: l₂ := by
-  rw [List.filter_append, List.filter_cons_of_pos ha, List.getLast?_append_of_ne_nil _
-    (List.cons_ne_nil _ _)] at h
-  rcases List.mem_cons.mp (List.mem_of_getLast? h) with rfl | hb
-  · exact List.mem_cons_self
-  · exact List.mem_cons_of_mem _ (List.mem_of_mem_filter hb)
-
-/-- A successful mainnet selection at or after Shanghai's timestamp is on the domain, whatever the
-block number: every entry from Shanghai on is timestamp-activated and later in the schedule. -/
-theorem mainnetChainConfig_shanghaiOnwards_of_timestamp_ge {number timestamp : Nat} {f : Fork}
-    (selected : mainnetChainConfig.forkAt number timestamp = .ok f)
-    (late : mainnetShanghaiTimestamp ≤ timestamp) : ShanghaiOnwards f := by
-  have valid : mainnetChainConfig.validate = .ok () := by decide
-  have someFork : mainnetChainConfig.forkAt? number timestamp = some f := by
-    rw [ChainConfig.forkAt, valid] at selected
-    cases lookup : mainnetChainConfig.forkAt? number timestamp with
-    | none => simp only [lookup, Except.mapError, bind, Except.bind] at selected; cases selected
-    | some g =>
-      simp only [lookup, Except.mapError, bind, Except.bind, Except.ok.injEq] at selected
-      rw [selected]
-  unfold ChainConfig.forkAt? at someFork
-  obtain ⟨activation, last, rfl⟩ := Option.map_eq_some_iff.mp someFork
-  have member := mem_of_getLast?_filter_append_cons (α := ForkActivation)
-    (l₁ := [.atBlock .byzantium mainnetByzantiumBlock,
-      .atBlock .petersburg mainnetPetersburgBlock,
-      .atBlock .istanbul mainnetIstanbulBlock,
-      .atBlock .muirGlacier mainnetMuirGlacierBlock,
-      .atBlock .berlin mainnetBerlinBlock,
-      .atBlock .london mainnetLondonBlock,
-      .atBlock .arrowGlacier mainnetArrowGlacierBlock,
-      .atBlock .grayGlacier mainnetGrayGlacierBlock,
-      .atBlock .paris mainnetParisBlock])
-    (a := .atTime .shanghai mainnetShanghaiTimestamp)
-    (l₂ := [.atTime .cancun mainnetCancunTimestamp,
-      .atTime .prague mainnetPragueTimestamp,
-      .atTime .osaka mainnetOsakaTimestamp,
-      .atTime .bpo1 mainnetBpo1Timestamp,
-      .atTime .bpo2 mainnetBpo2Timestamp])
-    (p := (·.criterion.reached number timestamp))
-    (by simp only [ForkActivation.atTime, ForkCriterion.reached, decide_eq_true_eq]; exact late)
-    last
-  simp only [List.mem_cons, List.not_mem_nil, or_false] at member
-  rcases member with rfl | rfl | rfl | rfl | rfl | rfl <;> decide
-
 /-! ## The `CALL` family's delegation domain -/
 
 /-- From Shanghai on, with EIP-7702 delegation live or the target holding no designator: where the

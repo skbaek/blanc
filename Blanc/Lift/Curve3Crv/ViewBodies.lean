@@ -21,7 +21,7 @@ variable {sevm : Sevm} {b : Devm}
 private theorem vyMem_size (w : B256) : (vyMem Mem.empty w).size = 192 := vyMem_empty_size w
 
 /-- The tail every word view ends with: `SLOAD` the key on the stack, return the word. -/
-theorem word_tail (hfork : CoveredFork sevm.benvStat.fork) {M : Mem} {img : Bytes}
+theorem word_tail (hfork : ShanghaiOnwards sevm.benvStat.fork) {M : Mem} {img : Bytes}
     (hwf : Mem.Wf M) (hr : Mem.Reads M img) (hn : 32 ≤ M.size) (hn32 : M.size % 32 = 0)
     (k : B256) (G : Nat) :
     ∃ post, SFunc.RunExact prog sevm (St b [k] M (G + 3 + 3 + 3 + 3 + sloadCost sevm b k))
@@ -77,7 +77,7 @@ theorem live_totalSupply (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   split_ifs at hr with hv
   cases hr
   refine ⟨34 + sloadCost sevm b vySupplySlot, fun G _ => ?_⟩
-  obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b) hfork (entry_wf sevm) (entry_reads sevm)
+  obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b) hfork.shanghaiOnwards (entry_wf sevm) (entry_reads sevm)
     (by rw [vyMem_size]; omega) (by rw [vyMem_size]) vySupplySlot G
   refine ⟨post, ?_, hg, hl⟩
   unfold entrySt t_0240_c0
@@ -101,7 +101,7 @@ theorem live_decimals (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   split_ifs at hr with hv
   cases hr
   refine ⟨34 + sloadCost sevm b vyDecimalsSlot, fun G _ => ?_⟩
-  obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b) hfork (entry_wf sevm) (entry_reads sevm)
+  obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b) hfork.shanghaiOnwards (entry_wf sevm) (entry_reads sevm)
     (by rw [vyMem_size]; omega) (by rw [vyMem_size]) vyDecimalsSlot G
   refine ⟨post, ?_, hg, hl⟩
   unfold entrySt
@@ -127,7 +127,7 @@ theorem live_balanceOf (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   have hM := vyMem_size (Sevm.dataWord sevm 0)
   set M := vyMem Mem.empty (Sevm.dataWord sevm 0)
   obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b)
-    (M := (M.write 224 a.toBytes).write 192 (3 : B256).toBytes) hfork
+    (M := (M.write 224 a.toBytes).write 192 (3 : B256).toBytes) hfork.shanghaiOnwards
     (((entry_wf sevm).write _ _).write _ _) (((entry_reads sevm).write (entry_wf sevm) _ _).write
       ((entry_wf sevm).write _ _) _ _)
     (by rw [Mem.size_write_word_at, Mem.size_write_word_at, hM]; decide)
@@ -176,7 +176,7 @@ theorem live_allowance (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   have hr1 : Mem.Reads M1 (Bytes.writeAt (Bytes.writeAt (vyImg [] (Sevm.dataWord sevm 0)) 224
       o.toBytes) 192 (4 : B256).toBytes) := ((entry_reads sevm).write (entry_wf sevm) _ _).write ((entry_wf sevm).write _ _) _ _
   obtain ⟨post, hrun, hg, hl, -⟩ := word_tail (b := b)
-    (M := (M1.write 224 q.toBytes).write 192 (mapSlot 4 o).toBytes) hfork
+    (M := (M1.write 224 q.toBytes).write 192 (mapSlot 4 o).toBytes) hfork.shanghaiOnwards
     ((hwf1.write _ _).write _ _) ((hr1.write hwf1 _ _).write (hwf1.write _ _) _ _)
     (by rw [Mem.size_write_word_at, Mem.size_write_word_at, hs1]; decide)
     (by rw [Mem.size_write_word_at, Mem.size_write_word_at, hs1]; decide) k G

@@ -37,7 +37,7 @@ theorem parentPrefix_exec_staticcall_of_cert {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true)
     (only : ∀ f ∈ c.prog, f.execsSatisfy Xinst.isStaticcall = true)
     {root node : Exec.Deriv} (pc : root.pc = 0) (installed : root.sevm.code = code)
-    (fork : CoveredFork root.sevm.benvStat.fork)
+    (fork : ShanghaiOnwards root.sevm.benvStat.fork)
     (chain : Exec.Deriv.ParentPrefix root node)
     {x : Xinst} (instruction : Ninst.At node.sevm.code node.pc (.exec x)) :
     x = .staticcall := by

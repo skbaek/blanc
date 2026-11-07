@@ -20,7 +20,7 @@ theorem coinNext_getStor (canon : Sevm → Devm → Devm) (s : Sevm) (t ii is oi
 
 /-- What a site's child sees. -/
 structure CoinSite (s : Sevm) (b : Devm) (x : Adr) : Prop where
-  fork : CoveredFork s.benvStat.fork
+  fork : ShanghaiOnwards s.benvStat.fork
   clean : Clean b
   cold : ∀ k, (⟨x, k⟩ : Adr × B256) ∉ b.accessedStorageKeys
   orig : (getOrigAcct s x).stor = b.getStor x
@@ -37,7 +37,7 @@ theorem CoinSite.child {is : B256} (h : CoinSite s b t.toAdr) :
         (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20)).currentTarget).stor =
       Devm.getStor (initDevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20))
         (initSevm (callMsg0 s (b.withGasLeft 0) S M 0 t ii is oi 0x20)).currentTarget :=
-  ⟨CoveredFork.rules_storageClearRefund h.fork, site_clean_of s _ S M 0 t ii is oi 0x20 (parent_clean _ S M 0 t ii is oi 0x20
+  ⟨ShanghaiOnwards.rules_storageClearRefund h.fork, site_clean_of s _ S M 0 t ii is oi 0x20 (parent_clean _ S M 0 t ii is oi 0x20
     ⟨h.clean.created, h.clean.del, h.clean.error⟩), h.cold, h.orig⟩
 
 /-- The child's calldata words, from the site's memory. -/
@@ -227,13 +227,13 @@ theorem canon_of_run {e : Sevm} {d post : Devm} {f : SFunc} {c : Nat} (hsg : e.b
   bodyCanon_spec (F := e.gas) hsg hf hrefs ⟨post, hrun⟩ hrun
 
 /-- **`totalSupply()` at a site**, its slot cold. -/
-theorem supply_site {ii oi : B256} (hfork : CoveredFork s.benvStat.fork) (hclean : Clean b) {σ : Stor}
+theorem supply_site {ii oi : B256} (hfork : ShanghaiOnwards s.benvStat.fork) (hclean : Clean b) {σ : Stor}
     (hA : At t.toAdr [] σ b) :
     supplyBodyCost s t ii oi b S M = 2134 ∧
       Mv (t.toAdr :: [t.toAdr]) 0 b (supplyNext s t ii oi b S M) ∧ At t.toAdr [vySupplySlot] σ (supplyNext s t ii oi b S M) ∧
       t.toAdr ∈ (supplyNext s t ii oi b S M).accessedAddresses := by
   obtain ⟨c, hc⟩ : ∃ c, c = staticMsg s (b.withGasLeft 0) S M 0 t ii 4 oi 0x20 := ⟨_, rfl⟩
-  have hfc : CoveredFork (initSevm c).benvStat.fork := by rw [hc]; exact hfork
+  have hfc : ShanghaiOnwards (initSevm c).benvStat.fork := by rw [hc]; exact hfork
   have ct : (initSevm c).currentTarget = t.toAdr := by rw [hc]; rfl
   have hAc : At (initSevm c).currentTarget [] σ (initDevm c) := by
     rw [ct, hc]; exact ⟨hA.keys, hA.stor⟩
@@ -286,7 +286,7 @@ theorem supply_site {ii oi : B256} (hfork : CoveredFork s.benvStat.fork) (hclean
     exact Std.HashSet.mem_union_iff.2 (Or.inl (Std.HashSet.mem_insert.mpr (Or.inl (beq_self_eq_true _))))
 
 /-- **`burnFrom` at a site**, the supply warm. -/
-theorem burn_site {ii oi : B256} (hfork : CoveredFork s.benvStat.fork) (hclean : Clean b) (hstatic : s.isStatic = false)
+theorem burn_site {ii oi : B256} (hfork : ShanghaiOnwards s.benvStat.fork) (hclean : Clean b) (hstatic : s.isStatic = false)
     (hA : At t.toAdr [vySupplySlot] (b.getStor t.toAdr) b)
     (hor : (getOrigAcct s t.toAdr).stor = b.getStor t.toAdr)
     (hread : (M.read ii.toNat (0x44 : B256).toNat).1 = burnFromSel ++ s.caller.toB256.toBytes ++ V.toBytes)
@@ -301,7 +301,7 @@ theorem burn_site {ii oi : B256} (hfork : CoveredFork s.benvStat.fork) (hclean :
   obtain ⟨σ, hσ⟩ : ∃ σ, σ = b.getStor t.toAdr := ⟨_, rfl⟩
   simp only [← hσ] at hA hor hfits ⊢
   obtain ⟨c, hc⟩ : ∃ c, c = callMsg0 s (b.withGasLeft 0) S M 0 t ii 0x44 oi 0x20 := ⟨_, rfl⟩
-  have hfc : CoveredFork (initSevm c).benvStat.fork := by rw [hc]; exact hfork
+  have hfc : ShanghaiOnwards (initSevm c).benvStat.fork := by rw [hc]; exact hfork
   have ct : (initSevm c).currentTarget = t.toAdr := by rw [hc]; rfl
   have hAc : At (initSevm c).currentTarget [vySupplySlot] σ (initDevm c) := by
     rw [ct, hc]; exact ⟨hA.keys, hA.stor⟩
@@ -333,7 +333,7 @@ theorem burn_site {ii oi : B256} (hfork : CoveredFork s.benvStat.fork) (hclean :
   have m2 := mv_afterSload (initSevm c) (afterSload (initSevm c) (initDevm c) vyMinterSlot) vySupplySlot
   have a2 := a1'.sload vySupplySlot
   have c2 := m2.clean (m1.clean hcC)
-  have hg : (initSevm c).benvStat.rules.gas.storageClearRefund = 4800 := CoveredFork.rules_storageClearRefund hfc
+  have hg : (initSevm c).benvStat.rules.gas.storageClearRefund = 4800 := ShanghaiOnwards.rules_storageClearRefund hfc
   have f3 : Fresh (initSevm c) (afterSload (initSevm c) (afterSload (initSevm c) (initDevm c) vyMinterSlot) vySupplySlot) vySupplySlot (σ.get vySupplySlot) :=
     ⟨c2, hor' _, a2.val _⟩
   have hle1 : V.toNat ≤ (σ.get vySupplySlot).toNat := B256.le_iff_toNat_le_toNat.1 hsup
