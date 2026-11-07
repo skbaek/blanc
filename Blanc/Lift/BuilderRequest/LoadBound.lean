@@ -90,15 +90,20 @@ theorem cost_mono {target a b : Nat} (h : a ≤ b) :
   · exact (Backlog.cost_strictMono hlt).le
   · exact Nat.le_refl _
 
+/-- The series is monotone in its numerator and accumulator. -/
+theorem fakeExpAux_mono {a b den : Nat} (h : a ≤ b) (i x : Nat) :
+    ∀ {y : Nat}, x ≤ y → fakeExpAux a den i x ≤ fakeExpAux b den i y := by
+  induction i, x using fakeExpAux.induct a den with
+  | case1 i => intro y _; simp
+  | case2 i x hx ih =>
+    intro y hxy
+    have hy : y ≠ 0 := by omega
+    rw [fakeExpAux_succ hx, fakeExpAux_succ hy]
+    exact Nat.add_le_add hxy (ih (Nat.div_le_div_right (Nat.mul_le_mul hxy h)))
+
 /-- The fee is monotone in the excess: a larger numerator quotes no less. -/
-theorem fakeExp_mono {a b : Nat} (h : a ≤ b) : fakeExp 1 a 17 ≤ fakeExp 1 b 17 := by
-  -- DRAFT: no monotonicity lemma for `fakeExp` exists in Blanc (`FakeExponential.lean`,
-  -- `FakeExponentialGrowth.lean` only give lower bounds via `factor_mul_pow_le`); the Jaune
-  -- source is not vendored in this worktree, so check Jaune pin `e8db2742` for an existing
-  -- statement first. Expected route: pointwise `≤` of the `fakeExpAux` accumulators by
-  -- induction on the fuel-bounded evaluator (`FakeExponentialEval.runFuel`), or on Jaune's
-  -- `fakeExpAux` equation lemmas once its definition is read.
-  sorry
+theorem fakeExp_mono {a b : Nat} (h : a ≤ b) : fakeExp 1 a 17 ≤ fakeExp 1 b 17 :=
+  Nat.div_le_div_right (fakeExpAux_mono h 1 _ (Nat.le_refl _))
 
 /-- A submission grows the load by exactly one, on or off the inhibitor. -/
 theorem load_submit {Record : Type} (st : QueueState Record) (r : Record) :
