@@ -139,6 +139,10 @@ structure Matches (c : Contract) (g : Delivery.Frame c) (f : Exec.Frame) : Prop 
   after : g.after = Devm.getStor f.post c.address
   event : g.event = keptEvent c f
   value : g.value ≤ f.sevm.value.toNat
+  /-- A kept frame with the system caller is an empty-calldata system call. -/
+  system : f.sevm.caller = systemAddress → g.event = .system false
+  /-- A fee read returns its quote, as one word. -/
+  returned : g.event = .feeRead → ∀ post, f.out = .ok post → ∃ q, g.quotedFee = some q ∧ post.output = q.toBytes
 
 /-- The sequence's frames are the kept frames, one for one, in order. -/
 def Corresponds (c : Contract) (frames : List (Delivery.Frame c)) (kept : List Exec.Frame) : Prop :=
@@ -227,13 +231,17 @@ private theorem Frame.ofUser (L : Linked c ty) {sevm : Sevm} {l : StorageSteps s
     (law : L.frames.Frame l pre post) :
     ∃ g : Delivery.Frame c, Matches c g ⟨0, sevm, pre, .ok post, run, committed⟩ := by
   rcases L.classify law with ⟨i, o, sub⟩ | ⟨empty, i, o, read⟩
-  · refine ⟨.submission sevm pre post l i o rules target caller sub, rfl, rfl, ?_, Nat.le_refl _⟩
+  · refine ⟨.submission sevm pre post l i o rules target caller sub, rfl, rfl, ?_, Nat.le_refl _,
+      fun same => absurd same caller, fun he => by cases he⟩
     exact (keptEvent_of_length (f := ⟨0, sevm, pre, .ok post, run, committed⟩) (c.length sub)).symm
-  · refine ⟨.feeRead sevm pre post l i o rules target caller read, rfl, rfl, ?_, Nat.le_refl _⟩
-    refine (keptEvent_user (f := ⟨0, sevm, pre, .ok post, run, committed⟩) ?_ caller).symm
-    change ¬ sevm.data.length = c.payload
-    rw [empty]
-    exact fun same => L.payload_ne same.symm
+  · refine ⟨.feeRead sevm pre post l i o rules target caller read, rfl, rfl, ?_, Nat.le_refl _,
+      fun same => absurd same caller, fun _ p ran => ?_⟩
+    · refine (keptEvent_user (f := ⟨0, sevm, pre, .ok post, run, committed⟩) ?_ caller).symm
+      change ¬ sevm.data.length = c.payload
+      rw [empty]
+      exact fun same => L.payload_ne same.symm
+    · obtain rfl : post = p := Except.ok.inj ran
+      exact ⟨_, rfl, read.output⟩
 
 /-- **A kept user frame is a sequence frame.** A frame kept at the contract, at a kept fork, with a caller other than
 the system: its frame law makes it a submission or a fee read, on the storage it found and left, with its event. -/
@@ -393,7 +401,8 @@ theorem Mapped.ofRequestStep (L : Linked c ty) {benv : Benv} {post : State} {out
   obtain ⟨f, flat, caller, data, before, after⟩ := request_step_root hfork (by rw [code]; exact L.runnable.1)
     (by rw [code]; exact L.runnable.2) (L.placed.precompile _ (.inr rfl)) run roots
   rw [flat]
-  refine ⟨[.system benv [] post out hfork code (by decide) run], .cons ⟨before.symm, after.symm, ?_, Nat.zero_le _⟩ .nil,
+  refine ⟨[.system benv [] post out hfork code (by decide) run],
+    .cons ⟨before.symm, after.symm, ?_, Nat.zero_le _, fun _ => rfl, fun he => by cases he⟩ .nil,
     by simp only [systemOutput, List.flatMap_cons, List.flatMap_nil, List.append_nil]; rfl⟩
   refine (keptEvent_system ?_ caller).symm
   rw [data]
@@ -625,6 +634,241 @@ theorem history_chain (L : Linked c ty) (h : KeptHistory cfg start blocks stop)
   obtain ⟨frames, corr, out⟩ := Mapped.ofHistory (ty := ty) L h code outside others
     (h.entry_in code L.runnable.1 L.runnable.2)
   exact ⟨frames, corr.chain (h.chain hc hd).1, corr, out⟩
+
+/-! ## The fee over a history -/
+
+/-- The stored excess, slot 0, when a kept frame started. -/
+def excessAt (a : Adr) (f : Exec.Frame) : Nat := ((Devm.getStor f.pre a).get 0).toNat
+
+/-- The stored count, slot 1, when a kept frame started. -/
+def countAt (a : Adr) (f : Exec.Frame) : Nat := ((Devm.getStor f.pre a).get 1).toNat
+
+/-- The natural fee the storage a kept frame found quotes: `fake_exponential(1, excess + max(0, count - target), 17)`. -/
+def naturalFee (c : Contract) (f : Exec.Frame) : Nat :=
+  fakeExp 1 (excessAt c.address f + (countAt c.address f - c.target.toNat)) 17
+
+/-- A quoting event's frame has a quote. -/
+theorem exists_quotedFee (g : Delivery.Frame c) (user : ∀ latch, g.event ≠ .system latch) :
+    ∃ q, g.quotedFee = some q := by
+  cases g with
+  | submission sevm pre post l i o rules target caller law => exact ⟨_, rfl⟩
+  | feeRead sevm pre post l i o rules target caller law => exact ⟨_, rfl⟩
+  | system benv data post out fork installed length run => exact absurd rfl (user _)
+
+/-- Only a kept frame with the system caller has a system event. -/
+theorem caller_of_keptEvent {f : Exec.Frame} {latch : Bool} (h : keptEvent c f = .system latch) :
+    f.sevm.caller = systemAddress := by
+  unfold keptEvent at h
+  split at h
+  · cases h
+  · split at h
+    · assumption
+    · cases h
+
+theorem Corresponds.noSystem {frames : List (Delivery.Frame c)} {kept : List Exec.Frame} (h : Corresponds c frames kept)
+    (users : ∀ x ∈ kept, x.sevm.caller ≠ systemAddress) : NoSystem (events frames) := by
+  induction h with
+  | nil => exact fun e he => absurd he List.not_mem_nil
+  | @cons g f gs fs m _ ih =>
+      intro e he latch same
+      rcases List.mem_cons.mp he with rfl | he
+      · exact users f List.mem_cons_self (caller_of_keptEvent (m.event.symm.trans same))
+      · exact ih (fun x hx => users x (List.mem_cons_of_mem _ hx)) e he latch same
+
+theorem Corresponds.split_append {frames : List (Delivery.Frame c)} {xs ys : List Exec.Frame}
+    (h : Corresponds c frames (xs ++ ys)) :
+    ∃ gs hs, frames = gs ++ hs ∧ Corresponds c gs xs ∧ Corresponds c hs ys := by
+  induction xs generalizing frames with
+  | nil => exact ⟨[], frames, rfl, .nil, h⟩
+  | cons x xs ih =>
+      cases h with
+      | cons m rest =>
+          obtain ⟨gs, hs, rfl, left, right⟩ := ih rest
+          exact ⟨_ :: gs, hs, rfl, .cons m left, right⟩
+
+theorem Corresponds.split {frames : List (Delivery.Frame c)} {xs ys : List Exec.Frame} {f : Exec.Frame}
+    (h : Corresponds c frames (xs ++ f :: ys)) :
+    ∃ gs g hs, frames = gs ++ g :: hs ∧ Corresponds c gs xs ∧ Matches c g f ∧ Corresponds c hs ys := by
+  obtain ⟨gs, hs, rfl, left, right⟩ := h.split_append
+  cases right with
+  | cons m rest => exact ⟨gs, _, _, rfl, left, m, rest⟩
+
+/-- The two counters a represented queue keeps in its first two slots. -/
+theorem holds_slots {s : Stor} {st : QueueState c.Record} (rep : Holds c s st) :
+    (s.get 0).toNat = st.excess ∧ (s.get 1).toNat = st.count := by
+  have he : s.get 0 = st.excess.toB256 := rep.excess
+  have hc : s.get 1 = st.count.toB256 := rep.count
+  rw [he, hc]
+  exact ⟨B256.toNat_toB256_of_lt rep.excess_lt, B256.toNat_toB256_of_lt rep.count_lt⟩
+
+theorem Matches.slots {g : Delivery.Frame c} {f : Exec.Frame} (m : Matches c g f) {st : QueueState c.Record}
+    (rep : Holds c g.before st) : excessAt c.address f = st.excess ∧ countAt c.address f = st.count := by
+  rw [m.before] at rep
+  exact holds_slots rep
+
+/-- The queue a matched frame finds, on a chain through it. -/
+theorem chain_holds_at {s t : Stor} {gs hs : List (Delivery.Frame c)} {g : Delivery.Frame c}
+    (chain : Chain s (gs ++ g :: hs) t) {st : QueueState c.Record} (rep : Holds c s st)
+    (slots : queueBase c.width (st.tail + (submissions gs).length) ≤ 2 ^ 256)
+    (count : st.count + (submissions gs).length < 2 ^ 256) : Holds c g.before (queueAfter st gs) := by
+  obtain ⟨m, first, second⟩ := chain.append_split
+  cases second with
+  | cons starts _ =>
+      rw [starts]
+      exact (first.holds rep slots count).1
+
+/-- A kept frame's matching sequence frame, for a fee read returning `q`: that frame's quote is `q`. -/
+theorem Corresponds.quoted {frames : List (Delivery.Frame c)} {kept : List Exec.Frame} {f : Exec.Frame} {post : Devm}
+    {q : B256} (h : Corresponds c frames kept) (L : Linked c ty) (mem : f ∈ kept) (caller : f.sevm.caller ≠ systemAddress)
+    (empty : f.sevm.data = []) (ran : f.out = .ok post) (returned : post.output = q.toBytes) :
+    ∃ g, Matches c g f ∧ g.quotedFee = some q := by
+  obtain ⟨xs, ys, rfl⟩ := List.append_of_mem mem
+  obtain ⟨gs, g, hs, -, -, m, -⟩ := h.split
+  have read : g.event = .feeRead := m.event.trans (keptEvent_user (by rw [empty]; exact fun same => L.payload_ne same.symm)
+    caller)
+  obtain ⟨q', hq, out⟩ := m.returned read post ran
+  have same : q = q' := by simpa only [B256.toB256_toBytes] using congrArg Bytes.toB256 (returned.symm.trans out)
+  exact ⟨g, m, same ▸ hq⟩
+
+/-- Frames with the system caller correspond to empty-calldata calls. -/
+theorem Corresponds.calls {frames : List (Delivery.Frame c)} {kept : List Exec.Frame} (h : Corresponds c frames kept)
+    (requests : ∀ x ∈ kept, x.sevm.caller = systemAddress) : ∀ g ∈ frames, g.event = .system false := by
+  induction h with
+  | nil => exact fun _ hg => absurd hg List.not_mem_nil
+  | @cons g f gs fs m _ ih =>
+      intro x hx
+      rcases List.mem_cons.mp hx with rfl | hx
+      · exact m.system (requests f List.mem_cons_self)
+      · exact ih (fun y hy => requests y (List.mem_cons_of_mem _ hy)) x hx
+
+theorem Corresponds.length_eq {frames : List (Delivery.Frame c)} {kept : List Exec.Frame} (h : Corresponds c frames kept) :
+    frames.length = kept.length := List.Forall₂.length_eq h
+
+section Fee
+
+variable {s t : Stor} {frames : List (Delivery.Frame c)} {xs ys zs : List Exec.Frame} {f f' : Exec.Frame}
+  {st : QueueState c.Record}
+
+/-- **The frames before a kept frame, with no system call among them, moved nothing but the count.** -/
+theorem kept_slots (chain : Chain s frames t) (corr : Corresponds c frames (xs ++ f :: ys)) (rep : Holds c s st)
+    (slots : queueBase c.width (st.tail + (xs.filterMap (submittedBy c)).length) ≤ 2 ^ 256)
+    (count : st.count + (xs.filterMap (submittedBy c)).length < 2 ^ 256)
+    (users : ∀ x ∈ xs, x.sevm.caller ≠ systemAddress) :
+    excessAt c.address f = st.excess ∧ countAt c.address f = st.count + (xs.filterMap (submittedBy c)).length := by
+  obtain ⟨gs, g, hs, rfl, left, m, -⟩ := corr.split
+  have hsub := left.submissions
+  rw [← hsub] at slots count ⊢
+  have none := left.noSystem users
+  obtain ⟨he, hc⟩ := m.slots (chain_holds_at chain rep slots count)
+  exact ⟨he.trans (excess_noSystem c.cap c.target _ none), hc.trans (count_noSystem c.cap c.target _ none)⟩
+
+/-- A kept frame's quote is the natural fee of the storage it found, with at most 2892 submissions before it on a
+chain from a state with no load. -/
+theorem kept_quote (chain : Chain s frames t) (corr : Corresponds c frames (xs ++ f :: ys)) (rep : Holds c s st)
+    (slots : queueBase c.width (st.tail + (xs.filterMap (submittedBy c)).length) ≤ 2 ^ 256)
+    (count : st.count + (xs.filterMap (submittedBy c)).length < 2 ^ 256) (hload : load st = 0)
+    (few : (xs.filterMap (submittedBy c)).length ≤ 2892) :
+    ∃ g, Matches c g f ∧ ∀ q, g.quotedFee = some q → q.toNat = naturalFee c f := by
+  obtain ⟨gs, g, hs, rfl, left, m, -⟩ := corr.split
+  have hsub := left.submissions
+  rw [← hsub] at slots count few
+  refine ⟨g, m, fun q hq => ?_⟩
+  obtain ⟨he, hc⟩ := m.slots (chain_holds_at chain rep slots count)
+  unfold naturalFee
+  rw [he, hc]
+  exact chain.quote_natural rep slots count hload few hq
+
+/-- **A kept fee read returns the natural fee of the storage it found.** -/
+theorem kept_fee_read (L : Linked c ty) (chain : Chain s frames t) (corr : Corresponds c frames (xs ++ f :: ys))
+    (rep : Holds c s st) (slots : queueBase c.width (st.tail + (xs.filterMap (submittedBy c)).length) ≤ 2 ^ 256)
+    (count : st.count + (xs.filterMap (submittedBy c)).length < 2 ^ 256) (hload : load st = 0)
+    (few : (xs.filterMap (submittedBy c)).length ≤ 2892) (caller : f.sevm.caller ≠ systemAddress)
+    (empty : f.sevm.data = []) {post : Devm} (ran : f.out = .ok post) :
+    post.output = (naturalFee c f).toB256.toBytes := by
+  obtain ⟨g, m, law⟩ := kept_quote chain corr rep slots count hload few
+  have read : g.event = .feeRead := m.event.trans (keptEvent_user (by rw [empty]; exact fun same => L.payload_ne same.symm)
+    caller)
+  obtain ⟨q, hq, out⟩ := m.returned read post ran
+  rw [out, ← law q hq, toB256_toNat]
+
+/-- **A kept submission's value covers the natural fee of the storage it found.** -/
+theorem kept_submission_pays (chain : Chain s frames t) (corr : Corresponds c frames (xs ++ f :: ys))
+    (rep : Holds c s st) (slots : queueBase c.width (st.tail + (xs.filterMap (submittedBy c)).length) ≤ 2 ^ 256)
+    (count : st.count + (xs.filterMap (submittedBy c)).length < 2 ^ 256) (hload : load st = 0)
+    (few : (xs.filterMap (submittedBy c)).length ≤ 2892) (length : f.sevm.data.length = c.payload) :
+    naturalFee c f ≤ f.sevm.value.toNat := by
+  obtain ⟨g, m, law⟩ := kept_quote chain corr rep slots count hload few
+  have sub := m.event.trans (keptEvent_of_length length)
+  obtain ⟨q, hq⟩ := exists_quotedFee g fun latch same => by
+    rw [sub] at same
+    cases same
+  rw [← law q hq]
+  exact (g.value_covers hq (by rw [sub]; exact fun same => by cases same)).trans m.value
+
+/-- **A later kept frame's counters differ only by the submissions between.** With no system call from `f` up to `f'`,
+the excess `f'` finds is the one `f` found, and the count is `f`'s plus the submissions from `f` on. -/
+theorem kept_later (chain : Chain s frames t) (corr : Corresponds c frames ((xs ++ f :: ys) ++ f' :: zs))
+    (rep : Holds c s st)
+    (slots : queueBase c.width (st.tail + ((xs ++ f :: ys).filterMap (submittedBy c)).length) ≤ 2 ^ 256)
+    (count : st.count + ((xs ++ f :: ys).filterMap (submittedBy c)).length < 2 ^ 256)
+    (users : ∀ x ∈ f :: ys, x.sevm.caller ≠ systemAddress) :
+    excessAt c.address f' = excessAt c.address f ∧
+      countAt c.address f' = countAt c.address f + ((f :: ys).filterMap (submittedBy c)).length := by
+  obtain ⟨gs, g', hs, rfl, left, m', -⟩ := corr.split
+  obtain ⟨as, g, bs, rfl, front, m, back⟩ := left.split
+  have whole : Corresponds c (as ++ g :: bs) (xs ++ f :: ys) := left
+  have hsub := whole.submissions
+  have hfront := front.submissions
+  have hback : Delivery.submissions (g :: bs) = (f :: ys).filterMap (submittedBy c) := Corresponds.submissions (.cons m back)
+  have split : queueAfter st (as ++ g :: bs) = replay c.cap c.target (queueAfter st as) (events (g :: bs)) := by
+    simp only [queueAfter, events, List.map_append, replay_append]
+  have none := (Corresponds.noSystem (.cons m back) users)
+  rw [← hsub] at slots count
+  have hlen : (Delivery.submissions (as ++ g :: bs)).length = (submissions as).length + (submissions (g :: bs)).length := by
+    rw [submissions_append, List.length_append]
+  have here : Holds c g.before (queueAfter st as) := by
+    have chain' : Chain s (as ++ g :: (bs ++ g' :: hs)) t := by
+      simpa only [List.append_assoc, List.cons_append] using chain
+    exact chain_holds_at chain' rep (by
+      refine le_trans ?_ slots
+      exact Nat.add_le_add_left (Nat.mul_le_mul_left _ (by omega)) _) (by omega)
+  obtain ⟨he, hc⟩ := m.slots here
+  obtain ⟨he', hc'⟩ := m'.slots (chain_holds_at chain rep slots count)
+  rw [← hback, he', hc', he, hc, split]
+  exact ⟨excess_noSystem _ _ _ none, count_noSystem _ _ _ none⟩
+
+/-- **A system call's excess update, on the storage.** An empty-calldata call kept after `xs` leaves 0 on the inhibitor
+and `excess + count - target` in naturals off it. -/
+theorem kept_excess_update (chain : Chain s frames t) (corr : Corresponds c frames (xs ++ f :: ys)) (rep : Holds c s st)
+    (slots : queueBase c.width (st.tail + (xs.filterMap (submittedBy c)).length) ≤ 2 ^ 256)
+    (count : st.count + (xs.filterMap (submittedBy c)).length < 2 ^ 256)
+    (hload : load st + (xs.filterMap (submittedBy c)).length < 2 ^ 256)
+    (caller : f.sevm.caller = systemAddress) :
+    ((Devm.getStor f.post c.address).get 0).toNat =
+      if excessAt c.address f = 2 ^ 256 - 1 then 0
+      else excessAt c.address f + countAt c.address f - c.target.toNat := by
+  obtain ⟨gs, g, hs, rfl, left, m, -⟩ := corr.split
+  have hsub := left.submissions
+  rw [← hsub] at slots count hload
+  have call := m.system caller
+  have one : submissions (gs ++ [g]) = submissions gs := by
+    rw [submissions_append]
+    change submissions gs ++ submitted [g.event] = _
+    rw [call]
+    exact List.append_nil _
+  have chain' : Chain s ((gs ++ [g]) ++ hs) t := by
+    simpa only [List.append_assoc, List.singleton_append] using chain
+  obtain ⟨mid, first, -⟩ := chain'.append_split
+  obtain ⟨he, hc⟩ := m.slots (chain_holds_at chain rep slots count)
+  have after : Holds c mid (queueAfter st (gs ++ [g])) := (first.holds rep (by rw [one]; exact slots) (by rw [one]; exact count)).1
+  obtain ⟨_, -, last⟩ := first.append_split
+  cases last with
+  | cons starts tail =>
+      cases tail
+      have stored := (holds_slots after).1
+      rw [← m.after, stored, excess_update rep.excess_lt hload call, he, hc]
+
+end Fee
 
 /-- A prefix of a list has the prefix of its bytes. -/
 theorem take_flatMap_prefix {α : Type} (out : α → Bytes) (xs : List α) (k : Nat) :
