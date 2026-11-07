@@ -42,7 +42,7 @@ structure Admitted (sevm : Sevm) (fee : B256) : Prop where
   credited : 10 ^ 18 ≤ creditedWei sevm
   covered : creditedWei sevm + fee.toNat ≤ sevm.value.toNat
 
-private theorem gwei_mul (sevm : Sevm) :
+theorem gwei_mul (sevm : Sevm) :
     ((Bytes.toB256 [0x3b, 0x9a, 0xca, 0x00]) * amountGwei sevm).toNat = creditedWei sevm := by
   have small : creditedWei sevm < 2 ^ 256 := by
     have := amountGwei_lt sevm
@@ -52,7 +52,7 @@ private theorem gwei_mul (sevm : Sevm) :
   rw [B256.toNat_mul, gwei, Nat.mul_comm, Nat.lo]
   exact Nat.mod_eq_of_lt small
 
-private theorem value_sub {sevm : Sevm} {fee : B256} (paid : fee.toNat ≤ sevm.value.toNat) :
+theorem value_sub {sevm : Sevm} {fee : B256} (paid : fee.toNat ≤ sevm.value.toNat) :
     (sevm.value - fee).toNat = sevm.value.toNat - fee.toNat := by
   rw [B256.toNat_sub, Nat.lo, Nat.add_sub_mod_eq_sub (B256.toNat_lt sevm.value) paid]
 
