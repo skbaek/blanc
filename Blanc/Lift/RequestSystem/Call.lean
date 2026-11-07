@@ -262,6 +262,25 @@ theorem sysState_getCode (p : SysShape) (σ : State) (a x : Adr) :
   simp only [sysState]
   split <;> simp only [State.getCode_setStorVal]
 
+theorem getStor_setStorVal_other (w : State) {owner a : Adr} (k v : B256) (h : owner ≠ a) :
+    (w.setStorVal owner k v).getStor a = w.getStor a := by
+  show ((w.setStorVal owner k v).get a).stor = _
+  rw [State.get_setStorVal_ne _ _ _ h]
+  rfl
+
+/-- A storage write leaves every balance alone. -/
+theorem bal_setStorVal (w : State) (owner : Adr) (key value : B256) (x : Adr) :
+    ((w.setStorVal owner key value).get x).bal = (w.get x).bal := by
+  by_cases h : owner = x
+  · subst h
+    rw [State.get_setStorVal_self]
+  · rw [State.get_setStorVal_ne _ _ _ h]
+
+theorem sysState_bal (p : SysShape) (σ : State) (a x : Adr) :
+    ((sysState p σ a).get x).bal = (σ.get x).bal := by
+  simp only [sysState]
+  split <;> simp only [bal_setStorVal]
+
 namespace SysPath
 
 variable {k : SysPath}

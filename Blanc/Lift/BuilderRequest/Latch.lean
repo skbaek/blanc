@@ -113,23 +113,10 @@ theorem latchState_get (p : SysShape) (σ : State) (a : Adr) (key : B256) :
   all_goals
     exact absurd (h0.trans h1.symm) (by decide)
 
-/-- A storage write leaves every balance alone. -/
-theorem State.bal_setStorVal (w : State) (owner : Adr) (key value : B256) (x : Adr) :
-    ((w.setStorVal owner key value).get x).bal = (w.get x).bal := by
-  by_cases h : owner = x
-  · subst h
-    rw [State.get_setStorVal_self]
-  · rw [State.get_setStorVal_ne _ _ _ h]
-
-theorem sysState_bal (p : SysShape) (σ : State) (a x : Adr) :
-    ((sysState p σ a).get x).bal = (σ.get x).bal := by
-  simp only [sysState]
-  split <;> simp only [State.bal_setStorVal]
-
 theorem latchState_bal (p : SysShape) (σ : State) (a x : Adr) :
     ((latchState p σ a).get x).bal = (σ.get x).bal := by
   simp only [latchState]
-  split <;> simp only [State.bal_setStorVal]
+  split <;> simp only [bal_setStorVal]
 
 theorem latchState_getCode (p : SysShape) (σ : State) (a x : Adr) :
     (latchState p σ a).getCode x = σ.getCode x := by
@@ -201,9 +188,6 @@ theorem latch_spec (c : SysCall k) (p : LatchWords) (tree : k.shape.excessTree =
   show systemTransactionGas - latchCost k s b ≤ systemTransactionGas ∧
     systemTransactionGas - (systemTransactionGas - latchCost k s b) ≤ c.bound
   omega
-
-theorem chargedRetPost_output (b : Devm) (S : List B256) (M : Mem) (G : Nat) (i sz : B256) :
-    (chargedRetPost b S M G i sz).output = (M.read i.toNat sz.toNat).1 := rfl
 
 theorem latchPost_output (k : SysPath) (sevm : Sevm) (b : Devm) (G G' : Nat) :
     (latchPost k sevm b G).output = (k.framePost sevm b G').output := by

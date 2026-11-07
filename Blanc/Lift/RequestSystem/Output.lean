@@ -21,6 +21,9 @@ theorem readsBase_getStorVal (sevm : Sevm) (d : Devm) (keys : List B256) (a : Ad
   unfold Devm.getStorVal Devm.getAcct
   rw [readsBase_state]
 
+theorem chargedRetPost_output (b : Devm) (S : List B256) (M : Mem) (G : Nat) (i sz : B256) :
+    (chargedRetPost b S M G i sz).output = (M.read i.toNat sz.toNat).1 := rfl
+
 /-- A runtime's records extend the return window one at a time. -/
 structure SysOutput (k : SysPath) (m : SysMemory k) where
   /-- One record's returned bytes, from the storage read. -/

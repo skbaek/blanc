@@ -483,4 +483,27 @@ theorem rx_sstoreR {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : O
   simp only [List.length_cons, Nat.add_mul, Nat.one_mul] at hr
   omega
 
+/-! ## Logs and output -/
+
+theorem afterSloadA_logs (sevm : Sevm) (d : Devm) (k : B256) : (afterSloadA sevm d k).logs = d.logs := by
+  unfold afterSloadA Devm.balReadStorage afterSload
+  split <;> split <;> rfl
+
+theorem afterSloadA_output (sevm : Sevm) (d : Devm) (k : B256) :
+    (afterSloadA sevm d k).output = d.output := by
+  unfold afterSloadA Devm.balReadStorage afterSload
+  split <;> split <;> rfl
+
+theorem afterSstoreA_logs (sevm : Sevm) (d : Devm) (k v : B256) :
+    (afterSstoreA amsterdamStateGasRules sevm d k v).logs = d.logs := by
+  unfold afterSstoreA Devm.balReadAccount Devm.balReadStorage
+  dsimp only
+  split <;> split <;> rfl
+
+theorem afterSstoreA_output (sevm : Sevm) (d : Devm) (k v : B256) :
+    (afterSstoreA amsterdamStateGasRules sevm d k v).output = d.output := by
+  unfold afterSstoreA Devm.balReadAccount Devm.balReadStorage
+  dsimp only
+  split <;> split <;> rfl
+
 end Blanc.Lift
