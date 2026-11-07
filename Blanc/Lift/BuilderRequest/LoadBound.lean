@@ -1,5 +1,6 @@
 import Blanc.Lift.BuilderRequest.Deposit.Delivery
 import Blanc.Lift.BuilderRequest.Exit.Delivery
+import Blanc.Lift.BuilderRequest.Exit.Flood
 import Blanc.Lift.BuilderRequest.Flood
 
 /-!
@@ -33,9 +34,6 @@ the queue comparison (`queue_length_le_load`), the latch witness and the O32
 overhang; all are hoist candidates for `Delivery.lean` / `Flood.lean` at the green
 boundary, since nothing here is contract-specific except the instances.
 
-**Draft status.** This file was written without Lean elaboration under the run's
-no-elaboration constraint. Every `sorry` carries a `-- DRAFT:` comment giving the
-proof route and the lemmas it needs; the master compiles this file and clears them.
 -/
 
 namespace Blanc.Lift.BuilderRequest.LoadBound
@@ -481,37 +479,30 @@ theorem latch_breaks_queue_bound :
 
 /-! ## Fee budgets bound load and queue (O31 instances) -/
 
-/-- 1 ETH of fees bounds a deposit list: load and queue length at most 664. -/
-theorem deposit_load_le_664 {frames : List Deposit.Frame} {t : Stor}
+/-- **Load from a fee budget (generic half of the six instances).** If the end load's
+potential is at most the fees paid and the fees meet a budget strictly below the
+potential of `T + 1`, the end load is at most `T`. -/
+theorem load_le_of_budget {target L B T fees : Nat}
+    (hpot : Backlog.cost target 0 L ≤ fees) (hb : fees ≤ B)
+    (hlt : B < Backlog.cost target 0 (T + 1)) :
+    L ≤ T := by
+  have hlt' : Backlog.cost target 0 L < Backlog.cost target 0 (T + 1) := by omega
+  by_contra hgt
+  push Not at hgt
+  have hge : Backlog.cost target 0 (T + 1) ≤ Backlog.cost target 0 L :=
+    cost_mono (by omega)
+  omega
+
+/-- Queue bound from the deployed deposit queue under the word range. -/
+theorem deposit_queue_le {frames : List Deposit.Frame} {t : Stor}
     (chain : Chain Stor.empty frames t) (rp : RequestPhaseOnly frames)
-    (range : 4 + 6 * (submissions frames).length ≤ 2 ^ 256)
-    (hb : fees frames ≤ 10 ^ 18) :
-    load (queueAfter Deposit.deployedQueue frames) ≤ 664 ∧
-      (queueAfter Deposit.deployedQueue frames).queue.length ≤ 664 := by
-  have heq665 : Backlog.costEval 8 0 665 = Backlog.cost 8 0 665 :=
-    Backlog.costEval_eq (by omega)
-  have h665_lt : (10 ^ 18 : Nat) < Backlog.cost 8 0 665 := by
-    have h := cost_664.2
-    rw [heq665] at h
-    exact h
-  have h665_le : Backlog.cost 8 0 665 ≤ Backlog.cost 8 0 2893 := cost_mono (by omega)
-  have hwrap : fees frames < Backlog.cost 8 0 2893 := by omega
-  have hpot := deposit_potential chain range hwrap
-  have hlt : Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) <
-      Backlog.cost 8 0 665 := by omega
-  have hload : load (queueAfter Deposit.deployedQueue frames) ≤ 664 := by
-    by_contra hgt
-    push Not at hgt
-    have hge : Backlog.cost 8 0 665 ≤
-        Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) :=
-      cost_mono (by omega)
-    omega
-  refine ⟨hload, ?_⟩
-  have htarget : Deposit.contract.target.toNat = 8 := by decide
-  have hwidth : Deposit.contract.width = 6 := rfl
+    (range : 4 + 6 * (submissions frames).length ≤ 2 ^ 256) :
+    (queueAfter Deposit.deployedQueue frames).queue.length ≤
+      load (queueAfter Deposit.deployedQueue frames) := by
   have htail : Deposit.deployedQueue.tail = 0 := rfl
   have hcount0 : Deposit.deployedQueue.count = 0 := rfl
   have hload0 : load Deposit.deployedQueue = 0 := by decide
+  have hwidth : Deposit.contract.width = 6 := rfl
   have hslots : queueBase Deposit.contract.width
       (Deposit.deployedQueue.tail + (submissions frames).length) ≤ 2 ^ 256 := by
     rw [htail, Nat.zero_add, hwidth]
@@ -522,9 +513,26 @@ theorem deposit_load_le_664 {frames : List Deposit.Frame} {t : Stor}
   have hrange : load Deposit.deployedQueue + (submissions frames).length < 2 ^ 256 := by
     rw [hload0, Nat.zero_add]
     omega
-  have hq := queue_length_le_load (c := Deposit.contract) chain Deposit.deployed_represents
+  exact queue_length_le_load (c := Deposit.contract) chain Deposit.deployed_represents
     hslots hcount hrange rp (by decide) (by decide) (by decide)
-  omega
+
+/-- 1 ETH of fees bounds a deposit list: load and queue length at most 664. -/
+theorem deposit_load_le_664 {frames : List Deposit.Frame} {t : Stor}
+    (chain : Chain Stor.empty frames t) (rp : RequestPhaseOnly frames)
+    (range : 4 + 6 * (submissions frames).length ≤ 2 ^ 256)
+    (hb : fees frames ≤ 10 ^ 18) :
+    load (queueAfter Deposit.deployedQueue frames) ≤ 664 ∧
+      (queueAfter Deposit.deployedQueue frames).queue.length ≤ 664 := by
+  have heq665 : Backlog.costEval 8 0 665 = Backlog.cost 8 0 665 :=
+    Backlog.costEval_eq (by omega)
+  have h665_lt : (10 ^ 18 : Nat) < Backlog.cost 8 0 665 := by
+    rw [← heq665]
+    exact cost_664.2
+  have hload : load (queueAfter Deposit.deployedQueue frames) ≤ 664 :=
+    load_le_of_budget (deposit_potential chain range (by
+      have hle : Backlog.cost 8 0 665 ≤ Backlog.cost 8 0 2893 := cost_mono (by omega)
+      omega)) hb h665_lt
+  exact ⟨hload, by have hq := deposit_queue_le chain rp range; omega⟩
 
 /-- 100 ETH of fees bounds a deposit list: load and queue length at most 743. -/
 theorem deposit_load_le_743 {frames : List Deposit.Frame} {t : Stor}
@@ -536,39 +544,13 @@ theorem deposit_load_le_743 {frames : List Deposit.Frame} {t : Stor}
   have heq744 : Backlog.costEval 8 0 744 = Backlog.cost 8 0 744 :=
     Backlog.costEval_eq (by omega)
   have h744_lt : (100 * 10 ^ 18 : Nat) < Backlog.cost 8 0 744 := by
-    have h := cost_743.2
-    rw [heq744] at h
-    exact h
-  have h744_le : Backlog.cost 8 0 744 ≤ Backlog.cost 8 0 2893 := cost_mono (by omega)
-  have hwrap : fees frames < Backlog.cost 8 0 2893 := by omega
-  have hpot := deposit_potential chain range hwrap
-  have hlt : Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) <
-      Backlog.cost 8 0 744 := by omega
-  have hload : load (queueAfter Deposit.deployedQueue frames) ≤ 743 := by
-    by_contra hgt
-    push Not at hgt
-    have hge : Backlog.cost 8 0 744 ≤
-        Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) :=
-      cost_mono (by omega)
-    omega
-  refine ⟨hload, ?_⟩
-  have hwidth : Deposit.contract.width = 6 := rfl
-  have htail : Deposit.deployedQueue.tail = 0 := rfl
-  have hcount0 : Deposit.deployedQueue.count = 0 := rfl
-  have hload0 : load Deposit.deployedQueue = 0 := by decide
-  have hslots : queueBase Deposit.contract.width
-      (Deposit.deployedQueue.tail + (submissions frames).length) ≤ 2 ^ 256 := by
-    rw [htail, Nat.zero_add, hwidth]
-    simpa only [queueBase] using range
-  have hcount : Deposit.deployedQueue.count + (submissions frames).length < 2 ^ 256 := by
-    rw [hcount0, Nat.zero_add]
-    omega
-  have hrange : load Deposit.deployedQueue + (submissions frames).length < 2 ^ 256 := by
-    rw [hload0, Nat.zero_add]
-    omega
-  have hq := queue_length_le_load (c := Deposit.contract) chain Deposit.deployed_represents
-    hslots hcount hrange rp (by decide) (by decide) (by decide)
-  omega
+    rw [← heq744]
+    exact cost_743.2
+  have hload : load (queueAfter Deposit.deployedQueue frames) ≤ 743 :=
+    load_le_of_budget (deposit_potential chain range (by
+      have hle : Backlog.cost 8 0 744 ≤ Backlog.cost 8 0 2893 := cost_mono (by omega)
+      omega)) hb h744_lt
+  exact ⟨hload, by have hq := deposit_queue_le chain rp range; omega⟩
 
 /-- 120M ETH of fees bounds a deposit list: load and queue length at most 981. -/
 theorem deposit_load_le_981 {frames : List Deposit.Frame} {t : Stor}
@@ -580,155 +562,13 @@ theorem deposit_load_le_981 {frames : List Deposit.Frame} {t : Stor}
   have heq982 : Backlog.costEval 8 0 982 = Backlog.cost 8 0 982 :=
     Backlog.costEval_eq (by omega)
   have h982_lt : (120000000 * 10 ^ 18 : Nat) < Backlog.cost 8 0 982 := by
-    have h := cost_981.2
-    rw [heq982] at h
-    exact h
-  have h982_le : Backlog.cost 8 0 982 ≤ Backlog.cost 8 0 2893 := cost_mono (by omega)
-  have hwrap : fees frames < Backlog.cost 8 0 2893 := by omega
-  have hpot := deposit_potential chain range hwrap
-  have hlt : Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) <
-      Backlog.cost 8 0 982 := by omega
-  have hload : load (queueAfter Deposit.deployedQueue frames) ≤ 981 := by
-    by_contra hgt
-    push Not at hgt
-    have hge : Backlog.cost 8 0 982 ≤
-        Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) :=
-      cost_mono (by omega)
-    omega
-  refine ⟨hload, ?_⟩
-  have hwidth : Deposit.contract.width = 6 := rfl
-  have htail : Deposit.deployedQueue.tail = 0 := rfl
-  have hcount0 : Deposit.deployedQueue.count = 0 := rfl
-  have hload0 : load Deposit.deployedQueue = 0 := by decide
-  have hslots : queueBase Deposit.contract.width
-      (Deposit.deployedQueue.tail + (submissions frames).length) ≤ 2 ^ 256 := by
-    rw [htail, Nat.zero_add, hwidth]
-    simpa only [queueBase] using range
-  have hcount : Deposit.deployedQueue.count + (submissions frames).length < 2 ^ 256 := by
-    rw [hcount0, Nat.zero_add]
-    omega
-  have hrange : load Deposit.deployedQueue + (submissions frames).length < 2 ^ 256 := by
-    rw [hload0, Nat.zero_add]
-    omega
-  have hq := queue_length_le_load (c := Deposit.contract) chain Deposit.deployed_represents
-    hslots hcount hrange rp (by decide) (by decide) (by decide)
-  omega
-
-/-- 1 ETH of fees bounds an exit list: load and queue length at most 658. -/
-theorem exit_load_le_658 {frames : List Exit.Frame} {t : Stor}
-    (chain : Chain Exit.deployedStorage frames t) (rp : RequestPhaseOnly frames)
-    (range : 4 + 3 * (submissions frames).length ≤ 2 ^ 256)
-    (hb : fees frames ≤ 10 ^ 18) :
-    load (queueAfter Exit.deployedQueue frames) ≤ 658 ∧
-      (queueAfter Exit.deployedQueue frames).queue.length ≤ 658 := by
-  have heq659 : Backlog.costEval 2 0 659 = Backlog.cost 2 0 659 :=
-    Backlog.costEval_eq (by omega)
-  have h659_lt : (10 ^ 18 : Nat) < Backlog.cost 2 0 659 := by
-    have h : Backlog.costEval 2 0 658 ≤ 10 ^ 18 ∧
-        (10 ^ 18 : Nat) < Backlog.costEval 2 0 659 := by decide +kernel
-    rw [heq659] at h
-    exact h.2
-  have h659_le : Backlog.cost 2 0 659 ≤ Backlog.cost 2 0 2893 := cost_mono (by omega)
-  have hwrap : fees frames < Backlog.cost 2 0 2893 := by omega
-  have hpot := exit_potential chain range hwrap
-  have hlt : Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) <
-      Backlog.cost 2 0 659 := by omega
-  have hload : load (queueAfter Exit.deployedQueue frames) ≤ 658 := by
-    by_contra hgt
-    push Not at hgt
-    have hge : Backlog.cost 2 0 659 ≤
-        Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) :=
-      cost_mono (by omega)
-    omega
-  refine ⟨hload, ?_⟩
-  cases frames with
-  | nil =>
-    have hq : queueAfter Exit.deployedQueue ([] : List Exit.Frame) = Exit.deployedQueue := rfl
-    rw [hq]
-    show ([] : List Exit.contract.Record).length ≤ 658
-    simp only [List.length_nil, Nat.zero_le]
-  | cons f rest =>
-    obtain ⟨latch, hcall⟩ := Exit.first_frame_system chain
-    have hrp := rp f List.mem_cons_self latch hcall
-    subst hrp
-    cases hchain : chain with
-    | cons starts tail =>
-      have hrep0 : Holds Exit.contract f.before Exit.deployedQueue := by
-        rw [starts]
-        exact Exit.deployed_represents
-      have hsub0 : (submitted [f.event]).length = 0 := by
-        simp only [hcall, submitted, List.length_nil]
-      have hsub : (submissions (f :: rest)).length = (submissions rest).length := by
-        have h := submitted_cons_length f.event (events rest)
-        simp only [submissions, events, List.map_cons] at h ⊢
-        rw [h, hsub0, Nat.zero_add]
-      rw [hsub] at range
-      have slots_f : queueBase Exit.contract.width
-          (Exit.deployedQueue.tail + (submitted [f.event]).length) ≤ 2 ^ 256 := by
-        have htail : Exit.deployedQueue.tail = 0 := rfl
-        have hwidth : Exit.contract.width = 3 := rfl
-        rw [htail, Nat.zero_add, hwidth, hsub0]
-        simp only [queueBase]
-        omega
-      have count_f : Exit.deployedQueue.count + (submitted [f.event]).length < 2 ^ 256 := by
-        have hcount0 : Exit.deployedQueue.count = 0 := rfl
-        rw [hcount0, Nat.zero_add, hsub0]
-        omega
-      obtain ⟨hrep1, -⟩ := f.step_holds hrep0 slots_f count_f
-      have hstep_eq : step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-          (.system false) = ⟨0, 0, 0, 0, []⟩ := by
-        have hdeq : Exit.deployedQueue = ⟨2 ^ 256 - 1, 0, 0, 0, []⟩ := rfl
-        have hex : (excessNext (2 : B256) (2 ^ 256 - 1).toB256 (0 : Nat).toB256).toNat = 0 := by
-          rw [show (2 ^ 256 - 1 : Nat).toB256 = B256.max from inhibitor_toB256,
-            excessNext_inhibitor]
-          rfl
-        have hcap : Exit.contract.cap = 16 := rfl
-        have htgt : Exit.contract.target = 2 := rfl
-        rw [hdeq, hcap, htgt]
-        simp only [step, drainedState, hex]
-        rw [ite_eq_left (by decide : ([] : List Exit.contract.Record).length ≤ 16)]
-      have hrep1' : Holds Exit.contract f.after
-          (step Exit.contract.cap Exit.contract.target Exit.deployedQueue f.event) := hrep1
-      rw [hcall] at hrep1'
-      have hst0 : step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-          (.system false) = ⟨0, 0, 0, 0, []⟩ := hstep_eq
-      have htail_s : (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-          (.system false)).tail = 0 := by rw [hst0]
-      have hcount_s : (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-          (.system false)).count = 0 := by rw [hst0]
-      have hload_s : load (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-          (.system false)) = 0 := by rw [hst0]; decide
-      have hslots_t : queueBase Exit.contract.width
-          ((step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-            (.system false)).tail + (submissions rest).length) ≤ 2 ^ 256 := by
-        rw [htail_s, Nat.zero_add]
-        have hwidth : Exit.contract.width = 3 := rfl
-        rw [hwidth]
-        simpa only [queueBase, Nat.zero_add] using range
-      have hcount_t : (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-          (.system false)).count + (submissions rest).length < 2 ^ 256 := by
-        rw [hcount_s, Nat.zero_add]
-        omega
-      have hrange_t : load (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-          (.system false)) + (submissions rest).length < 2 ^ 256 := by
-        rw [hload_s, Nat.zero_add]
-        omega
-      have rp_tail : RequestPhaseOnly rest := fun x hx => rp x (List.mem_cons_of_mem _ hx)
-      have hq := queue_length_le_load (c := Exit.contract) tail hrep1'
-        hslots_t hcount_t hrange_t rp_tail (by decide) (by rw [hst0]; decide)
-        (by rw [hst0]; decide)
-      have hqeq : queueAfter Exit.deployedQueue (f :: rest) =
-          queueAfter (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-            (.system false)) rest := by
-        simp only [queueAfter, events, List.map_cons, replay, hcall]
-        rfl
-      have hload_eq : load (queueAfter Exit.deployedQueue (f :: rest)) =
-          load (queueAfter (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-            (.system false)) rest) := congrArg load hqeq
-      have hqfin : (queueAfter (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
-          (.system false)) rest).queue.length ≤ 658 := by omega
-      rw [hqeq]
-      exact hqfin
+    rw [← heq982]
+    exact cost_981.2
+  have hload : load (queueAfter Deposit.deployedQueue frames) ≤ 981 :=
+    load_le_of_budget (deposit_potential chain range (by
+      have hle : Backlog.cost 8 0 982 ≤ Backlog.cost 8 0 2893 := cost_mono (by omega)
+      omega)) hb h982_lt
+  exact ⟨hload, by have hq := deposit_queue_le chain rp range; omega⟩
 
 /-- The exit queue is at most any bound its load meets: the splitting half of the exit
 instances, so the three budgets share one proof. After the unlocking call the queue is
@@ -825,6 +665,24 @@ theorem exit_queue_le_of_load {frames : List Exit.Frame} {t : Stor} {B : Nat}
       rw [hqeq]
       omega
 
+/-- 1 ETH of fees bounds an exit list: load and queue length at most 658. -/
+theorem exit_load_le_658 {frames : List Exit.Frame} {t : Stor}
+    (chain : Chain Exit.deployedStorage frames t) (rp : RequestPhaseOnly frames)
+    (range : 4 + 3 * (submissions frames).length ≤ 2 ^ 256)
+    (hb : fees frames ≤ 10 ^ 18) :
+    load (queueAfter Exit.deployedQueue frames) ≤ 658 ∧
+      (queueAfter Exit.deployedQueue frames).queue.length ≤ 658 := by
+  have heq659 : Backlog.costEval 2 0 659 = Backlog.cost 2 0 659 :=
+    Backlog.costEval_eq (by omega)
+  have h659_lt : (10 ^ 18 : Nat) < Backlog.cost 2 0 659 := by
+    rw [← heq659]
+    exact Exit.cost_658.2
+  have hload : load (queueAfter Exit.deployedQueue frames) ≤ 658 :=
+    load_le_of_budget (exit_potential chain range (by
+      have hle : Backlog.cost 2 0 659 ≤ Backlog.cost 2 0 2893 := cost_mono (by omega)
+      omega)) hb h659_lt
+  exact ⟨hload, exit_queue_le_of_load chain rp range hload⟩
+
 /-- 100 ETH of fees bounds an exit list: load and queue length at most 737. -/
 theorem exit_load_le_737 {frames : List Exit.Frame} {t : Stor}
     (chain : Chain Exit.deployedStorage frames t) (rp : RequestPhaseOnly frames)
@@ -835,22 +693,12 @@ theorem exit_load_le_737 {frames : List Exit.Frame} {t : Stor}
   have heq738 : Backlog.costEval 2 0 738 = Backlog.cost 2 0 738 :=
     Backlog.costEval_eq (by omega)
   have h738_lt : (100 * 10 ^ 18 : Nat) < Backlog.cost 2 0 738 := by
-    have h : Backlog.costEval 2 0 737 ≤ 100 * 10 ^ 18 ∧
-        (100 * 10 ^ 18 : Nat) < Backlog.costEval 2 0 738 := by decide +kernel
-    rw [heq738] at h
-    exact h.2
-  have h738_le : Backlog.cost 2 0 738 ≤ Backlog.cost 2 0 2893 := cost_mono (by omega)
-  have hwrap : fees frames < Backlog.cost 2 0 2893 := by omega
-  have hpot := exit_potential chain range hwrap
-  have hlt : Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) <
-      Backlog.cost 2 0 738 := by omega
-  have hload : load (queueAfter Exit.deployedQueue frames) ≤ 737 := by
-    by_contra hgt
-    push Not at hgt
-    have hge : Backlog.cost 2 0 738 ≤
-        Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) :=
-      cost_mono (by omega)
-    omega
+    rw [← heq738]
+    exact Exit.cost_737.2
+  have hload : load (queueAfter Exit.deployedQueue frames) ≤ 737 :=
+    load_le_of_budget (exit_potential chain range (by
+      have hle : Backlog.cost 2 0 738 ≤ Backlog.cost 2 0 2893 := cost_mono (by omega)
+      omega)) hb h738_lt
   exact ⟨hload, exit_queue_le_of_load chain rp range hload⟩
 
 /-- 120M ETH of fees bounds an exit list: load and queue length at most 975. -/
@@ -863,22 +711,12 @@ theorem exit_load_le_975 {frames : List Exit.Frame} {t : Stor}
   have heq976 : Backlog.costEval 2 0 976 = Backlog.cost 2 0 976 :=
     Backlog.costEval_eq (by omega)
   have h976_lt : (120000000 * 10 ^ 18 : Nat) < Backlog.cost 2 0 976 := by
-    have h : Backlog.costEval 2 0 975 ≤ 120000000 * 10 ^ 18 ∧
-        (120000000 * 10 ^ 18 : Nat) < Backlog.costEval 2 0 976 := by decide +kernel
-    rw [heq976] at h
-    exact h.2
-  have h976_le : Backlog.cost 2 0 976 ≤ Backlog.cost 2 0 2893 := cost_mono (by omega)
-  have hwrap : fees frames < Backlog.cost 2 0 2893 := by omega
-  have hpot := exit_potential chain range hwrap
-  have hlt : Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) <
-      Backlog.cost 2 0 976 := by omega
-  have hload : load (queueAfter Exit.deployedQueue frames) ≤ 975 := by
-    by_contra hgt
-    push Not at hgt
-    have hge : Backlog.cost 2 0 976 ≤
-        Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) :=
-      cost_mono (by omega)
-    omega
+    rw [← heq976]
+    exact Exit.cost_975.2
+  have hload : load (queueAfter Exit.deployedQueue frames) ≤ 975 :=
+    load_le_of_budget (exit_potential chain range (by
+      have hle : Backlog.cost 2 0 976 ≤ Backlog.cost 2 0 2893 := cost_mono (by omega)
+      omega)) hb h976_lt
   exact ⟨hload, exit_queue_le_of_load chain rp range hload⟩
 
 /-! ## A record waits a bounded number of calls (O31) -/
@@ -1037,35 +875,44 @@ theorem quote_after_calls {k : Nat} (hk : 0 < k) {g : Frame c} {q : B256}
   rw [hex, hcount, Nat.zero_sub, Nat.add_zero] at hqeq
   exact hqeq
 
-/-- **The quote at call `k` after a pre-fork backlog (O32, deposit).** Over a chain from the
-deployed storage of a covered-fork backlog with `n` submissions followed by Amsterdam empty
-calls, the `k`-th call (`1 ≤ k`) quotes `fakeExp 1 (n - 8 * k) 17`. Attached to the activation
-headline: after at least one call the count is 0 and the excess is `n - 8k` in naturals. -/
-theorem deposit_quote_at_call {backlog calls : List Deposit.Frame} {t : Stor} {q : B256} {k : Nat}
-    (_chain : Chain Stor.empty (backlog ++ calls) t)
-    (_hp : ∀ f ∈ backlog, Deposit.PreFork f) (hc : ∀ f ∈ calls, Deposit.EmptyCall f)
-    (_hk1 : 1 ≤ k) (_hk : k - 1 < calls.length)
-    (_range : 4 + 6 * (submissions backlog).length ≤ 2 ^ 256)
-    (_few : (submissions backlog).length ≤ 2892)
-    {g : Deposit.Frame} {ys : List Deposit.Frame}
-    (split : calls = calls.take (k - 1) ++ g :: ys) (hq : g.quotedFee = some q) :
+/-- **The quote after `k` empty calls on a pre-fork backlog (O32, deposit).** Over a chain
+from the deployed storage of a covered-fork backlog of `n` submissions followed by `k ≥ 1`
+empty Amsterdam calls and then a quoting frame, the quote is `fakeExp 1 (n - 8 * k) 17`:
+after the calls the count is `0` and the excess is `n - 8 * k` (`prefork_then_calls`), and
+that is the numerator `Frame.quote_natural` charges. There is no unlock on this path: the
+deployed excess is `0` (`excess_dynamics`: slot 0 is `0` until the first system call), so
+the first call already moves `(0, n)` to excess `n - 8`, count `0` — one target off, like
+every later call. (The former statement made `g` the `k`-th call itself; a system call
+never quotes, so its premises could not all hold. The quoting frame comes after the
+`k` calls, as `Chain.append_split` gives.) -/
+theorem deposit_quote_at_call {backlog calls : List Deposit.Frame} {g : Deposit.Frame}
+    {ys : List Deposit.Frame} {t : Stor} {q : B256} {k : Nat}
+    (chain : Chain Stor.empty ((backlog ++ calls) ++ g :: ys) t)
+    (hp : ∀ f ∈ backlog, Deposit.PreFork f) (hc : ∀ f ∈ calls, Deposit.EmptyCall f)
+    (hk1 : 1 ≤ k) (hlen : calls.length = k)
+    (range : 4 + 6 * (submissions backlog).length ≤ 2 ^ 256)
+    (few : (submissions backlog).length - 8 * k ≤ 2892)
+    (hq : g.quotedFee = some q) :
     q.toNat = fakeExp 1 ((submissions backlog).length - 8 * k) 17 := by
-  -- The premises are contradictory as drafted: `hc` forces every element of `calls`,
-  -- hence `g` via `split`, to satisfy `EmptyCall` (`event = .system false`), whose
-  -- `quotedFee` is `none`, contradicting `hq`. Proved vacuously; the intended O32 fact
-  -- is a quoting frame *after* `k - 1` calls (not the `k`-th call itself), whose quote is
-  -- `n - 8 * k` via `prefork_then_calls` + `Chain.quote_natural`. Reported to master.
-  have hg_in : g ∈ calls := by
-    rw [split]
-    exact List.mem_append_right _ List.mem_cons_self
-  have hg_empty := hc g hg_in
-  cases g with
-  | submission sevm pre post l i o rules at_contract caller law =>
-    cases hg_empty
-  | feeRead sevm pre post l i o rules at_contract caller law =>
-    cases hg_empty
-  | system benv data post out fork installed length run =>
-    cases hq
+  obtain ⟨m, h1, h2⟩ := chain.append_split
+  obtain ⟨rep, -, -, hact⟩ := Deposit.prefork_then_calls h1 hp hc range
+  have hpos : 0 < calls.length := by omega
+  obtain ⟨hex, hcount⟩ := hact hpos
+  cases h2 with
+  | cons starts tail =>
+    have hrep : Holds Deposit.contract g.before
+        (queueAfter Deposit.deployedQueue (backlog ++ calls)) := by
+      rw [starts]
+      exact rep
+    have htarget : Deposit.contract.target.toNat = 8 := by decide
+    have he : (queueAfter Deposit.deployedQueue (backlog ++ calls)).excess +
+        ((queueAfter Deposit.deployedQueue (backlog ++ calls)).count -
+          Deposit.contract.target.toNat) ≤ 2892 := by
+      rw [hex, hcount, htarget, Nat.zero_sub, Nat.add_zero, hlen]
+      exact few
+    have hqeq := Frame.quote_natural (c := Deposit.contract) g hrep hq he
+    rw [hex, hcount, htarget, Nat.zero_sub, Nat.add_zero, hlen] at hqeq
+    exact hqeq
 
 /-- **The quote after `k` post-unlock calls (O32, exit).** From a represented off-inhibitor
 exit queue, a frame quoting after `k ≥ 1` empty system calls quotes
