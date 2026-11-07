@@ -70,10 +70,9 @@ def system_call_succeeds : Prop :=
 
 /-- **Guarantee 2, history form: the next request pass cannot fail.** At the end
 of every kept history that started with all four codes installed, the next
-block's request pass over `amsterdamRules.requests` succeeds. -/
--- DRAFT: `runRequestContracts`, `BalBuilder` and `amsterdamRules` are read from
--- `Blanc/Composition/RequestPhaseAmsterdam.lean`; their homes (Jaune-level) are
--- confirmed at compile time.
+block's request pass over `amsterdamRules.requests` succeeds.
+`runRequestContracts`, `BalBuilder` and `amsterdamRules` are read from
+`Blanc/Composition/RequestPhaseAmsterdam.lean`. -/
 def next_pass_cannot_fail : Prop :=
   ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
     CodesKept cfg start blocks stop →
