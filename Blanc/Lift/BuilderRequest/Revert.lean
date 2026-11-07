@@ -11,6 +11,10 @@ Both runtimes have one `REVERT` site, and every path to it comes before their fi
 exact fee path on cut trees (`Blanc/Lift/ExecCut.lean`), up to the `REVERT`, so a frame that reverts is a positive
 statement: it executes `REVERT`, with its machine. `FrameReverts` is that statement, and `Submissions.message_reverts`
 takes it through `processMessageCall`: pre-call state, value returned, no log, state gas restored.
+
+The `*_on` variants state the same walks over any fork's `StorageSteps`, with a state-gas premise the two meters
+each discharge; the Amsterdam statements are thin corollaries of them. Covered-fork instances live in
+`Blanc/Lift/BuilderRequest/RevertCovered.lean`.
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -97,6 +101,30 @@ structure Cut (g t : SFunc) (es : List Nat) (e : Nat) : Prop where
 
 variable {k} {s : Sevm} {b : Devm} {M : Mem} {G : Nat} {g t : SFunc} {es : List Nat} {e : Nat}
 
+/-- What a cut of the fee path gives, on a fork's steps: an arm walked up to the `REVERT` is a reverting execution from the frame's start, through the fee path. -/
+theorem exec_revert_of_cut_on {l : StorageSteps sevm} (v : l.Valid)
+    (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
+    (cut : k.Cut g t es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
+    (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
+    (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
+    (wordRun : WordFakeExponential.Run (storedExcess k.target s b) 17 1 17 0 n out)
+    {d : Devm} {S : List B256} {M' : Mem} {G' : Nat}
+    (tail : SFunc.RunExact (k.cutProg g t) s
+      (St (l.feeBase b) [out / (17 : B256)] M G)
+      (selected s k.shape.len.word g t) (.halted (St d (0 :: 0 :: S) M' G'))) :
+    Nonempty (Exec 0 s (St b [] M (G + l.feePathGas b n + dispatchGas))
+      (.error (.revert, (St d S M' G').withOutput []))) := by
+  have path := feePath_exact (fs := k.cutProg g t) k.shape v (revert := .undefined)
+    (getter := g) (submission := t)
+    ((congrArg (fun i => (k.cutProg g t)[i]?) hw).trans rfl)
+    ((congrArg (fun i => (k.cutProg g t)[i]?) hl).trans rfl) off wordRun tail
+  have root : SFunc.RunExact (k.cutProg g t) s (St b [] M (G + l.feePathGas b n + dispatchGas))
+      (k.cutRoot g t) (.halted (St d (0 :: 0 :: S) M' G')) :=
+    dispatch_exact (by simpa only [dispatchArm, ite_eq_right caller] using path)
+  have hat : Linst.At s.code e .revert := by rw [hcode]; exact rev
+  exact exec_of_cut (es := es) (e := e) (by rw [hcode]; exact cutAll_spec cut.all) root rfl 0 none
+    (by rw [hcode]; exact cut.root) (fun _ h => by cases h) (exec_revert_empty hat)
+
 /-- What a cut of the fee path gives: an arm walked up to the `REVERT` is a reverting execution from the frame's start,
 through the fee path. -/
 theorem exec_revert_of_cut (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
@@ -109,31 +137,50 @@ theorem exec_revert_of_cut (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6
       (St ((amsterdamSteps s).feeBase b) [out / (17 : B256)] M G)
       (selected s k.shape.len.word g t) (.halted (St d (0 :: 0 :: S) M' G'))) :
     Nonempty (Exec 0 s (St b [] M (G + (amsterdamSteps s).feePathGas b n + dispatchGas))
-      (.error (.revert, (St d S M' G').withOutput []))) := by
-  have path := feePath_exact (fs := k.cutProg g t) k.shape (amsterdamSteps_valid hfork) (revert := .undefined)
-    (getter := g) (submission := t)
-    ((congrArg (fun i => (k.cutProg g t)[i]?) hw).trans rfl)
-    ((congrArg (fun i => (k.cutProg g t)[i]?) hl).trans rfl) off wordRun tail
-  have root : SFunc.RunExact (k.cutProg g t) s (St b [] M (G + (amsterdamSteps s).feePathGas b n + dispatchGas))
-      (k.cutRoot g t) (.halted (St d (0 :: 0 :: S) M' G')) :=
-    dispatch_exact (by simpa only [dispatchArm, ite_eq_right caller] using path)
-  have hat : Linst.At s.code e .revert := by rw [hcode]; exact rev
-  exact exec_of_cut (es := es) (e := e) (by rw [hcode]; exact cutAll_spec cut.all) root rfl 0 none
-    (by rw [hcode]; exact cut.root) (fun _ h => by cases h) (exec_revert_empty hat)
+      (.error (.revert, (St d S M' G').withOutput []))) :=
+  exec_revert_of_cut_on (amsterdamSteps_valid hfork) hw hl cut rev hcode caller off wordRun tail
 
-/-- The charge of a cut fee path, within `revertBound`. -/
-theorem feePath_charge_le (s : Sevm) (b : Devm) (n X : Nat) (hX : X ≤ 100) :
-    X + (amsterdamSteps s).feePathGas b n + dispatchGas ≤ revertBound n := by
-  have a1 := sloadCost_le s b 0
-  have a2 := sloadCost_le s ((amsterdamSteps s).afterRead b 0) 1
+/-- The charge of a cut fee path, within `revertBound`, on a fork's steps. -/
+theorem feePath_charge_le_on {sevm : Sevm} {l : StorageSteps sevm} (b : Devm) (n X : Nat) (hX : X ≤ 100) :
+    X + l.feePathGas b n + dispatchGas ≤ revertBound n := by
+  have a1 := sloadCost_le sevm b 0
+  have a2 := sloadCost_le sevm (l.afterRead b 0) 1
   unfold StorageSteps.feePathGas revertBound
   rw [RequestFee.feeLoopGas_eq, feePathFixedGas, dispatchGas]
   omega
+
+/-- The charge of a cut fee path, within `revertBound`. -/
+theorem feePath_charge_le (s : Sevm) (b : Devm) (n X : Nat) (hX : X ≤ 100) :
+    X + (amsterdamSteps s).feePathGas b n + dispatchGas ≤ revertBound n :=
+  feePath_charge_le_on (l := amsterdamSteps s) b n X hX
 
 /-- The two meters a read leaves alone. -/
 theorem feeBase_stateGas (s : Sevm) (b : Devm) : ((amsterdamSteps s).feeBase b).stateGas = b.stateGas := by
   show (afterSloadA s (afterSloadA s b 0) 1).stateGas = _
   rw [afterSloadA_stateGas, afterSloadA_stateGas]
+
+/-- **Reverting through the fee path, on a fork's steps.** A contract's arm walked up to the `REVERT`, at a cost `X` of at most 100 regular gas, gives `FrameReverts`. -/
+theorem frameReverts_of_arm_on {l : StorageSteps sevm} (v : l.Valid)
+    (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
+    (cut : k.Cut g t es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
+    (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
+    (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
+    (wordRun : WordFakeExponential.Run (storedExcess k.target s b) 17 1 17 0 n out)
+    (hmeter : (l.feeBase b).stateGas = b.stateGas)
+    {S : List B256} {X : Nat} (hX : X ≤ 100)
+    (tail : ∀ G, SFunc.RunExact (k.cutProg g t) s
+      (St (l.feeBase b) [out / (17 : B256)] .empty (G + X))
+      (selected s k.shape.len.word g t)
+      (.halted (St (l.feeBase b) (0 :: 0 :: S) .empty G))) :
+    FrameReverts s b (revertBound n) := by
+  refine ⟨X + l.feePathGas b n + dispatchGas, feePath_charge_le_on b n X hX, fun G => ?_⟩
+  refine ⟨(St (l.feeBase b) S .empty G).withOutput [], ?_, rfl, hmeter, rfl⟩
+  have hrun := exec_revert_of_cut_on v hw hl cut rev hcode caller off wordRun (tail G)
+  have hgas : G + (X + l.feePathGas b n + dispatchGas) =
+      G + X + l.feePathGas b n + dispatchGas := by
+    simp only [Nat.add_assoc]
+  rw [hgas]
+  exact hrun
 
 /-- **Reverting through the fee path.** A contract's arm walked up to the `REVERT`, at a cost `X` of at most 100 regular
 gas, gives `FrameReverts`. -/
@@ -147,15 +194,9 @@ theorem frameReverts_of_arm (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 
       (St ((amsterdamSteps s).feeBase b) [out / (17 : B256)] .empty (G + X))
       (selected s k.shape.len.word g t)
       (.halted (St ((amsterdamSteps s).feeBase b) (0 :: 0 :: S) .empty G))) :
-    FrameReverts s b (revertBound n) := by
-  refine ⟨X + (amsterdamSteps s).feePathGas b n + dispatchGas, feePath_charge_le s b n X hX, fun G => ?_⟩
-  refine ⟨(St ((amsterdamSteps s).feeBase b) S .empty G).withOutput [], ?_, rfl, feeBase_stateGas s b, rfl⟩
-  have hrun := exec_revert_of_cut hw hl cut rev hcode hfork caller off wordRun (tail G)
-  have hgas : G + (X + (amsterdamSteps s).feePathGas b n + dispatchGas) =
-      G + X + (amsterdamSteps s).feePathGas b n + dispatchGas := by
-    simp only [Nat.add_assoc]
-  rw [hgas]
-  exact hrun
+    FrameReverts s b (revertBound n) :=
+  frameReverts_of_arm_on (amsterdamSteps_valid hfork) hw hl cut rev hcode caller off wordRun
+    (feeBase_stateGas s b) hX tail
 
 /-- The getter arm cut for wrong calldata: `CALLDATASIZE` nonzero takes the `REVERT`. -/
 def badLengthCut (k : UserPath) : SFunc :=
@@ -168,6 +209,26 @@ def paidReadCut (k : UserPath) : SFunc :=
     (.branch (.next (.reg .callvalue) (.next (.push (k.getterDest.head :: k.getterDest.tail) k.getterDest.le)
       (.branch .undefined rev0))) .undefined)))
 
+/-- **Calldata of neither form, on a fork's steps.** At a length that is neither the submission's nor zero, the frame executes `REVERT`. -/
+theorem frameReverts_badLength_on {l : StorageSteps sevm} (v : l.Valid)
+    (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
+    (cut : k.Cut (badLengthCut k) .undefined es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
+    (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
+    (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
+    (wordRun : WordFakeExponential.Run (storedExcess k.target s b) 17 1 17 0 n out)
+    (hmeter : (l.feeBase b).stateGas = b.stateGas)
+    (other : s.data.length.toB256 ≠ k.shape.len.word) (nonzero : s.data.length.toB256 ≠ 0) :
+    FrameReverts s b (revertBound n) := by
+  refine frameReverts_of_arm_on v (X := 5 + 10 + 3 + 2) (S := [out / (17 : B256)]) hw hl cut rev hcode caller off
+    wordRun hmeter (by omega) fun G => ?_
+  simp only [selected, ite_eq_right other]
+  have hgas : G + (5 + 10 + 3 + 2) = (G + 2 + 2 + 1) + 10 + 3 + 2 := by omega
+  rw [hgas]
+  unfold badLengthCut
+  refine rx_calldatasize (by change 1 < 1024; decide) ?_
+  refine rx_push rfl (by change 2 < 1024; decide) ?_
+  exact rx_branch_succ nonzero (rev0_exact v.push0 (by change 2 < 1024; decide))
+
 /-- **Calldata of neither form.** At a length that is neither the submission's nor zero, the frame executes `REVERT`. -/
 theorem frameReverts_badLength (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
     (cut : k.Cut (badLengthCut k) .undefined es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
@@ -175,31 +236,26 @@ theorem frameReverts_badLength (hw : k.shape.window = 1) (hl : k.shape.loopEntry
     (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (storedExcess k.target s b) 17 1 17 0 n out)
     (other : s.data.length.toB256 ≠ k.shape.len.word) (nonzero : s.data.length.toB256 ≠ 0) :
-    FrameReverts s b (revertBound n) := by
-  refine frameReverts_of_arm (X := 5 + 10 + 3 + 2) (S := [out / (17 : B256)]) hw hl cut rev hcode hfork caller off
-    wordRun (by omega) fun G => ?_
-  simp only [selected, ite_eq_right other]
-  have hgas : G + (5 + 10 + 3 + 2) = (G + 2 + 2 + 1) + 10 + 3 + 2 := by omega
-  rw [hgas]
-  unfold badLengthCut
-  refine rx_calldatasize (by change 1 < 1024; decide) ?_
-  refine rx_push rfl (by change 2 < 1024; decide) ?_
-  exact rx_branch_succ nonzero (rev0_exact (amsterdam_push0 hfork) (by change 2 < 1024; decide))
+    FrameReverts s b (revertBound n) :=
+  frameReverts_badLength_on (amsterdamSteps_valid hfork) hw hl cut rev hcode caller off wordRun
+    (feeBase_stateGas s b) other nonzero
 
-/-- **A fee read carrying value.** Empty calldata and nonzero value: the frame executes `REVERT`. -/
-theorem frameReverts_paidRead (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
+/-- **A fee read carrying value, on a fork's steps.** Empty calldata and nonzero value: the frame executes `REVERT`. -/
+theorem frameReverts_paidRead_on {l : StorageSteps sevm} (v : l.Valid)
+    (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
     (cut : k.Cut (paidReadCut k) .undefined es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
-    (hfork : s.benvStat.fork = .amsterdam) (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
+    (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
     (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (storedExcess k.target s b) 17 1 17 0 n out)
+    (hmeter : (l.feeBase b).stateGas = b.stateGas)
     (empty : s.data = []) (paid : s.value ≠ 0) :
     FrameReverts s b (revertBound n) := by
   have other : s.data.length.toB256 ≠ k.shape.len.word := by
     rw [empty]
     exact k.len_ne.symm
   have zero : s.data.length.toB256 = 0 := by rw [empty]; rfl
-  refine frameReverts_of_arm (X := 5 + 10 + 3 + 2 + 10 + 3 + 2) (S := [out / (17 : B256)]) hw hl cut rev hcode hfork
-    caller off wordRun (by omega) fun G => ?_
+  refine frameReverts_of_arm_on v (X := 5 + 10 + 3 + 2 + 10 + 3 + 2) (S := [out / (17 : B256)]) hw hl cut rev hcode
+    caller off wordRun hmeter (by omega) fun G => ?_
   simp only [selected, ite_eq_right other]
   have hgas : G + (5 + 10 + 3 + 2 + 10 + 3 + 2) = (G + 2 + 2 + 1) + 10 + 3 + 2 + 10 + 3 + 2 := by omega
   rw [hgas]
@@ -210,7 +266,18 @@ theorem frameReverts_paidRead (hw : k.shape.window = 1) (hl : k.shape.loopEntry 
   refine rx_branch_zero ?_
   refine rx_callvalue (by change 1 < 1024; decide) ?_
   refine rx_push rfl (by change 2 < 1024; decide) ?_
-  exact rx_branch_succ paid (rev0_exact (amsterdam_push0 hfork) (by change 2 < 1024; decide))
+  exact rx_branch_succ paid (rev0_exact v.push0 (by change 2 < 1024; decide))
+
+/-- **A fee read carrying value.** Empty calldata and nonzero value: the frame executes `REVERT`. -/
+theorem frameReverts_paidRead (hw : k.shape.window = 1) (hl : k.shape.loopEntry = 6)
+    (cut : k.Cut (paidReadCut k) .undefined es e) (rev : Linst.At k.code e .revert) (hcode : s.code = k.code)
+    (hfork : s.benvStat.fork = .amsterdam) (caller : s.caller ≠ systemAddress) {n : Nat} {out : B256}
+    (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
+    (wordRun : WordFakeExponential.Run (storedExcess k.target s b) 17 1 17 0 n out)
+    (empty : s.data = []) (paid : s.value ≠ 0) :
+    FrameReverts s b (revertBound n) :=
+  frameReverts_paidRead_on (amsterdamSteps_valid hfork) hw hl cut rev hcode caller off wordRun
+    (feeBase_stateGas s b) empty paid
 
 end UserPath
 
@@ -218,22 +285,24 @@ end UserPath
 def inhibitCut (systemDest revert : PushWord) : SFunc :=
   dispatchTree systemDest (inhibitorTree revert .undefined rev0) .undefined
 
-/-- **While slot 0 holds the inhibitor, a non-system frame executes `REVERT`.** Any calldata, value and storage. -/
-theorem frameReverts_inhibited {code : ByteArray} {systemDest revert : PushWord} {e : Nat} {s : Sevm} {b : Devm}
+/-- **While slot 0 holds the inhibitor, a non-system frame executes `REVERT`, on a fork's steps.** Any calldata, value and storage. -/
+theorem frameReverts_inhibited_on {code : ByteArray} {systemDest revert : PushWord} {e : Nat} {s : Sevm} {b : Devm}
+    {l : StorageSteps s} (v : l.Valid)
     (root : cutOk code [] e 0 none (inhibitCut systemDest revert) = true) (rev : Linst.At code e .revert)
-    (hcode : s.code = code) (hfork : s.benvStat.fork = .amsterdam) (caller : s.caller ≠ systemAddress)
-    (inhibited : b.getStorVal s.currentTarget 0 = B256.max) :
+    (hcode : s.code = code) (caller : s.caller ≠ systemAddress)
+    (inhibited : b.getStorVal s.currentTarget 0 = B256.max)
+    (hread : (l.afterRead b 0).stateGas = b.stateGas) :
     FrameReverts s b (revertBound 0) := by
-  have hp0 := amsterdam_push0 hfork
+  have hp0 := v.push0
   have a0 := sloadCost_le s b 0
   refine ⟨5 + 10 + 3 + 3 + 3 + 3 + sloadCost s b 0 + 2 + dispatchGas, ?_, fun G => ?_⟩
   · unfold revertBound
     rw [dispatchGas]
     omega
-  refine ⟨(St (afterSloadA s b 0) [B256.max] .empty G).withOutput [], ?_, rfl, afterSloadA_stateGas, rfl⟩
+  refine ⟨(St (l.afterRead b 0) [B256.max] .empty G).withOutput [], ?_, rfl, hread, rfl⟩
   have run : SFunc.RunExact [] s
       (St b [] .empty (G + (5 + 10 + 3 + 3 + 3 + 3 + sloadCost s b 0 + 2 + dispatchGas)))
-      (inhibitCut systemDest revert) (.halted (St (afterSloadA s b 0) [0, 0, B256.max] .empty G)) := by
+      (inhibitCut systemDest revert) (.halted (St (l.afterRead b 0) [0, 0, B256.max] .empty G)) := by
     have hgas : G + (5 + 10 + 3 + 3 + 3 + 3 + sloadCost s b 0 + 2 + dispatchGas) =
         (G + 2 + 2 + 1) + 10 + 3 + 3 + 3 + 3 + sloadCost s b 0 + 2 + dispatchGas := by
       omega
@@ -242,7 +311,8 @@ theorem frameReverts_inhibited {code : ByteArray} {systemDest revert : PushWord}
     simp only [dispatchArm, ite_eq_right caller]
     unfold inhibitorTree
     refine rx_push0 (h_push0 := hp0) (by change 0 < 1024; decide) ?_
-    refine rx_sloadV (amsterdam_access hfork) (by change 0 < 1024; decide) inhibited ?_
+    refine v.readRun (by change 0 < 1024; decide) ?_
+    rw [inhibited]
     refine rx_dup1 (by change 1 < 1024; decide) ?_
     refine rx_push inhibitor_push (by change 2 < 1024; decide) ?_
     refine rx_eq (v := 1) (by decide) (by change 1 < 1024; decide) ?_
@@ -251,6 +321,14 @@ theorem frameReverts_inhibited {code : ByteArray} {systemDest revert : PushWord}
   have hat : Linst.At s.code e .revert := by rw [hcode]; exact rev
   exact exec_of_cut (fs := []) (es := []) (e := e) (fun _ _ h => by simp only [List.getElem?_nil, reduceCtorEq] at h) run
     rfl 0 none (by rw [hcode]; exact root) (fun _ h => by cases h) (exec_revert_empty hat)
+
+/-- **While slot 0 holds the inhibitor, a non-system frame executes `REVERT`.** Any calldata, value and storage. -/
+theorem frameReverts_inhibited {code : ByteArray} {systemDest revert : PushWord} {e : Nat} {s : Sevm} {b : Devm}
+    (root : cutOk code [] e 0 none (inhibitCut systemDest revert) = true) (rev : Linst.At code e .revert)
+    (hcode : s.code = code) (hfork : s.benvStat.fork = .amsterdam) (caller : s.caller ≠ systemAddress)
+    (inhibited : b.getStorVal s.currentTarget 0 = B256.max) :
+    FrameReverts s b (revertBound 0) :=
+  frameReverts_inhibited_on (amsterdamSteps_valid hfork) root rev hcode caller inhibited afterSloadA_stateGas
 
 namespace Submissions
 
