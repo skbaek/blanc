@@ -3159,6 +3159,15 @@ a bare set-membership goal does not identify this execution-specific route.
   `Exec.committedCell_eq_of_noRetainedWriteTo_noStateGas` generalization needs
   only the actual selected rules' state-gas absence; the covered theorem is
   its compatibility wrapper.
+  For the storage at one account under any rule record, Amsterdam included, with no statement about a
+  frame that did not commit, use the kept-frames layer.
+  [`Blanc/ExecutionKeptFrames.lean`](../Blanc/ExecutionKeptFrames.lean): `Exec.keptAt`, `Exec.keptAt_chain`, the one
+  fold; `Exec.retained_induction`, the recursor on committing runs; `Xinst.step_spawn_form`, every spawn shape at once.
+  [`Blanc/ExecutionKeptFacts.lean`](../Blanc/ExecutionKeptFacts.lean): `Exec.keptAt_entry`, `Exec.keptAccount`,
+  `Exec.descendantFrames_caller_excluded_neutral`.
+  [`Blanc/ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean): `MessageRoots`, both lanes of `processMessageCall`.
+  [`Blanc/ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean): `TransactionRoots`, `BodyRoots`, `KeptHistory`.
+  `ConfiguredBlockTraceIn` has no Amsterdam inhabitant, since its request stage fixes two contracts: use `KeptHistory`.
   For the cell at every actual settlement-retained node entry, use
   [`Blanc/ExecutionRetainedCellAt.lean`](../Blanc/ExecutionRetainedCellAt.lean):
   `Exec.retainedNodes_cellProv_noStateGas` takes a committing run, state-gas
