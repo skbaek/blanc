@@ -67,7 +67,7 @@ theorem c3Ready_of_history (trace : ConfiguredHistoryTrace cfg checkpoint future
   refine ⟨?_, ?_, ?_⟩
   · show pre.state.getCode c3 = _
     rw [state]
-    exact Curve3PoolSupply.c3crv_code_of_image hcode
+    exact Blanc.Lift.Curve3Crv.code_of_image hcode
   · rw [hst, hinv.minter, hminter]
   · rw [hst]
     have htok := hck.abs.token

@@ -48,7 +48,7 @@ theorem afterTransactionsIn (L : AccountingLadderAdmittedIn F c ca entry)
     (rewards : trace.RewardCreditsFunded)
     (hF : F benv.stat.fork)
     (hsg : benv.stat.rules.stateGas = none)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState trace.transactionBenv.state) steps
       (L.carrier.ofState state) ∧
@@ -148,7 +148,7 @@ theorem configuredBlockTailIn (L : AccountingLadderAdmittedIn F c ca entry)
     (capabilities : BodyStageCapabilities F)
     (rewards : block.RewardCreditsFunded)
     (inv : c.StateInv ca cut.afterBenv.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     (blockIndex : Nat) :
     ∃ steps, L.carrier.Replay (L.carrier.ofState cut.afterBenv.state) steps
       (L.carrier.ofState post.state) ∧
@@ -194,7 +194,7 @@ theorem midHistoryIn (L : AccountingLadderAdmittedIn F c ca entry)
     (capabilities : BodyStageCapabilities F)
     (rewards : history.RewardCreditsFunded)
     (inv : c.StateInv ca start.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∃ frames, L.carrier.Replay (L.carrier.ofState start.state) frames
         (L.carrier.ofState future.state) ∧
       L.view.obs frames = history.settledFrames.flatMap L.view.frameObs := by

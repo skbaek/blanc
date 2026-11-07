@@ -16,9 +16,10 @@ namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift Blanc.StableSwapNewton
 
-/-- The add-liquidity end with exactly `R` gas left. -/
-def AlEndX (sevm : Sevm) (σ : Stor) (f0 f1 f2 : B256) (R : Nat) : Outcome → Prop := fun r =>
-  AlEnd sevm σ f0 f1 f2 r ∧ ∃ D, r = .halted D ∧ D.gasLeft = R
+/-- The add-liquidity end with exactly `R` gas left, the world in `W` and the refund counter at `rf`. -/
+def AlEndX (sevm : Sevm) (σ : Stor) (f0 f1 f2 : B256) (R : Nat) (W : Devm → Prop) (rf : Int) :
+    Outcome → Prop := fun r =>
+  AlEnd sevm σ f0 f1 f2 r ∧ ∃ D, r = .halted D ∧ D.gasLeft = R ∧ W D ∧ D.refundCounter = rf
 
 /-- **The tail's exact charge**: `150`, the token slot read, the mint's debit, `3416` and the
 lock's reset, each at its canonical state. -/
@@ -26,6 +27,11 @@ def alTailCost (sevm : Sevm) (P : ALExactCalls) (n : Devm) (M : Mem) (mint : B25
   150 + sloadCost sevm n tokenSlot + P.mintDebit (afterSload sevm n tokenSlot) [] (alMintMem sevm M mint) +
     3416 + sstoreCost sevm (P.mintNext (afterSload sevm n tokenSlot) [] (alMintMem sevm M mint))
       lockSlot 0
+
+/-- The refund counter the tail ends at, read at its canonical state. -/
+def alTailRefund (sevm : Sevm) (P : ALExactCalls) (n : Devm) (M : Mem) (mint : B256) : Int :=
+  (afterSstore sevm (P.mintNext (afterSload sevm n tokenSlot) [] (alMintMem sevm M mint))
+    lockSlot 0).refundCounter
 
 /-- **The tail, exact.** -/
 theorem rx_al_tailX {sevm : Sevm} {b n : Devm} {σ : Stor} {W W' : Devm → Prop} {M m : Mem}
@@ -42,18 +48,21 @@ theorem rx_al_tailX {sevm : Sevm} {b n : Devm} {σ : Stor} {W W' : Devm → Prop
     (hn : Devm.EqModGas b n) (hMm : M = m) (hG : U + 60000 ≤ R)
     (hGb : R + alTailCost sevm P n m mint < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St b [] M (R + alTailCost sevm P n m mint)) (alTail a1 a2 a3 a4)
-      (AlEndX sevm (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) f0 f1 f2 R) := by
+      (AlEndX sevm (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) f0 f1 f2 R W'
+        (alTailRefund sevm P n m mint)) := by
   subst hMm
   refine rx_al_tailE (E := ExactE P.mintDebit P.mintNext) hfork hstatic hL hW'c hR hW hsz hT hm hf0
     hf1 hf2 hslip hadd (MutableCallProfile.okE hmint) (by unfold alTailCost; omega) hGb
     (by simp only [List.length_nil]; omega) ?_
-  intro D hD hlog ⟨g3, d, ⟨hEg, hEn⟩, hG3, hDg⟩
-  refine ⟨⟨D, rfl, hD.stor, hlog⟩, D, rfl, ?_⟩
+  intro D hD hlog ⟨g3, d, ⟨hEg, hEn⟩, hG3, hDg, hrf⟩
   obtain ⟨hdeb, hnext⟩ := hmint.congr [] (alMintMem sevm M mint) (hn.afterSload sevm tokenSlot)
   have hs := (hEn.trans hnext).sstoreCost_congr sevm lockSlot 0
   have hl := hn.sloadCost_congr sevm tokenSlot
-  unfold alTailCost at hG3
-  omega
+  refine ⟨⟨D, rfl, hD.stor, hlog⟩, D, rfl, ?_, hD.w, ?_⟩
+  · unfold alTailCost at hG3
+    omega
+  · rw [hrf]
+    exact ((hEn.trans hnext).afterSstore sevm lockSlot 0).refundCounter_eq
 
 /-- The memory after `D1` and the supply test on a positive supply. -/
 def alFeePreMem (M : Mem) (nv : Nat → B256) (A : B256) (xb : V3) (v1 : Nat) : Mem :=
@@ -65,6 +74,12 @@ def alBack1Mem (M : Mem) (A D0 T : B256) (old nv : Nat → B256) (xb xc : V3) (v
     (f0 f1 f2 x0 x1 x2 : B256) : Mem :=
   alMintAmtMem (alD2Mem (alFeeLoopMem (alFeePreMem M nv A xb v1) D0 (Nat.toB256 v1) old nv f0 f1 f2
     x0 x1 x2) x0 x1 x2 A xc v2) (alMintW T D0 (Nat.toB256 v2))
+
+/-- The refund counter at the end on a positive supply. -/
+def alBack1Refund (sevm : Sevm) (P : ALExactCalls) (n : Devm) (M : Mem) (A D0 T : B256)
+    (old nv : Nat → B256) (xb xc : V3) (v1 v2 : Nat) (f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256) : Int :=
+  alTailRefund sevm P (alFeeLoopBase sevm n s0 s1 s2)
+    (alBack1Mem M A D0 T old nv xb xc v1 v2 f0 f1 f2 x0 x1 x2) (alMintW T D0 (Nat.toB256 v2))
 
 /-- **After the pull loop on a positive supply, the exact charge**: `D1` (`8826 + c0` and its
 `get_D_mem`), the supply test (`69`), the fee loop, `D2` (`10048` and its `get_D_mem`), the mint
@@ -81,6 +96,11 @@ def alBack1Cost (sevm : Sevm) (P : ALExactCalls) (n : Devm) (M : Mem) (c0 : Nat)
 def alBack0Mem (M : Mem) (A : B256) (nv : Nat → B256) (xb : V3) (v1 : Nat) : Mem :=
   alMintAmtMem (((alD1Mem M (nv 0) (nv 1) (nv 2) A xb v1).write 0xa20 (Nat.toB256 v1).toBytes).write
     0xc0 (Bytes.toB256 [1]).toBytes) (Nat.toB256 v1)
+
+/-- The refund counter at the end on a first deposit. -/
+def alBack0Refund (sevm : Sevm) (P : ALExactCalls) (n : Devm) (M : Mem) (A : B256)
+    (nv : Nat → B256) (xb : V3) (v1 : Nat) : Int :=
+  alTailRefund sevm P (alStore0Base sevm n nv) (alBack0Mem M A nv xb v1) (Nat.toB256 v1)
 
 /-- **After the pull loop on a first deposit, the exact charge**: `D1`, the supply test (`45`),
 the balances' stores, the mint amount (`98`) and the tail. -/
@@ -121,8 +141,10 @@ theorem rx_al_back1X {P : ALExactCalls} {n : Devm} {s c0 : Nat} {X : SFunc} {xb 
       2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: []) M
         (R + alBack1Cost sevm P n m c0 A D0 T old nv xb xc v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)) X
-      (AlEndX sevm (alUnlock (alStor3 σ s0 s1 s2)) f0 f1 f2 R) := by
+      (AlEndX sevm (alUnlock (alStor3 σ s0 s1 s2)) f0 f1 f2 R Wm
+        (alBack1Refund sevm P n m A D0 T old nv xb xc v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)) := by
   subst hMm
+  unfold alBack1Refund
   unfold alBack1Cost at hGb ⊢
   refine rx_al_d1E (R := 0) hctx hR hW hsz hm hXb hD1 hlt (by omega)
     (by simp only [List.length_nil]; omega) ?_
@@ -206,8 +228,10 @@ theorem rx_al_back0X {P : ALExactCalls} {n : Devm} {s c0 : Nat} {X : SFunc} {xb 
     (hG : U + 100000 ≤ R)
     (hGb : R + alBack0Cost sevm P n m c0 A nv xb v1 < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St b (3 :: 0x4c0 :: []) M (R + alBack0Cost sevm P n m c0 A nv xb v1)) X
-      (AlEndX sevm (alUnlock (alStor3 σ (nv 0) (nv 1) (nv 2))) 0 0 0 R) := by
+      (AlEndX sevm (alUnlock (alStor3 σ (nv 0) (nv 1) (nv 2))) 0 0 0 R Wm
+        (alBack0Refund sevm P n m A nv xb v1)) := by
   subst hMm
+  unfold alBack0Refund
   unfold alBack0Cost at hGb ⊢
   refine rx_al_d1E (R := 0) hctx hR hW hsz hm hXb hD1 hlt (by omega)
     (by simp only [List.length_nil]; omega) ?_

@@ -296,13 +296,6 @@ theorem run_lt_top (run : Ninst.Run sevm d (.reg .lt) d') (hs : d.stack = x :: y
   simp only [Rinst.run, Rinst.runCore] at run
   exact binary_top run hs
 
-theorem run_msize_top (run : Ninst.Run sevm d (.reg .msize) d') :
-    d'.stack = d.memory.size.toB256 :: d.stack := by
-  rcases of_run_reg run with ⟨pc, run⟩
-  simp only [Rinst.run, Rinst.runCore] at run
-  have h := (Devm.pushBurn_of_pushItem run).stack
-  simpa only [Stack.Push, Split, List.singleton_append, List.cons_append, List.nil_append] using h
-
 end Ops
 
 end Blanc.Lift.SymTransfer

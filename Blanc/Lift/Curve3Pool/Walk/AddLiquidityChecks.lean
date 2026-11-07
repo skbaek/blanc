@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Bridge
 import Blanc.Lift.Curve3Pool.Walk.AddLiquiditySafe
 
@@ -21,7 +22,7 @@ code), computed the model's step on the decoded call in the environment it obser
 raw effect Spec states. -/
 theorem addLiquidity_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAddLiquidity)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -30,7 +31,7 @@ theorem addLiquidity_raw {sevm : Sevm} {pre post : Devm} {s : State}
       ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ e o, step s e (decodeCall sevm) = some o ∧
@@ -42,7 +43,7 @@ theorem addLiquidity_raw {sevm : Sevm} {pre post : Devm} {s : State}
 child's reply. -/
 theorem addLiquidity_rawE {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAddLiquidity)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -51,7 +52,7 @@ theorem addLiquidity_rawE {sevm : Sevm} {pre post : Devm} {s : State}
       ((pre.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
       ((pre.getStor sevm.currentTarget).get (coinSlot k)).toAdr)
-    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm pre)
+    (hpc : pre.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm pre)
     (hkeep : PoolCallsKeep ⟨0, sevm, pre, .ok post, exc⟩)
     (hidk : ∀ c ∈ Exec.childFrames exc, c.post.getCode 4 = c.pre.getCode 4) :
     ∃ (T : B256) (L0 L1 L2 : List Exec.Frame) (o : Out),

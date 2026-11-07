@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.KitCheck
 import Blanc.Lift.Curve3Pool.Layout
 import Blanc.Lift.VyperCallee
@@ -38,6 +39,14 @@ abbrev aWin : List (Nat × Nat) := [(0, 0x20), (0x140, 0x200)]
 
 /-- The base `_A` leaves: `future_A_time` and `future_A` loaded, and while the ramp runs
 `initial_A` and `initial_A_time` too. -/
+def aBaseH (sevm : Sevm) (b : Devm) : Devm :=
+  if sevm.benvStat.time.toNat < (b.getStorVal sevm.currentTarget futureATimeSlot).toNat then
+    afterSloadH sevm (afterSloadH sevm (afterSloadH sevm (afterSloadH sevm b futureATimeSlot)
+      futureASlot) initialASlot) initialATimeSlot
+  else afterSloadH sevm (afterSloadH sevm b futureATimeSlot) futureASlot
+
+/-- The base `_A` leaves under EIP-2929 selection (the exact lanes): `future_A_time` and `future_A` loaded, and while the ramp runs
+`initial_A` and `initial_A_time` too. -/
 def aBase (sevm : Sevm) (b : Devm) : Devm :=
   if sevm.benvStat.time.toNat < (b.getStorVal sevm.currentTarget futureATimeSlot).toNat then
     afterSload sevm (afterSload sevm (afterSload sevm (afterSload sevm b futureATimeSlot)
@@ -45,9 +54,9 @@ def aBase (sevm : Sevm) (b : Devm) : Devm :=
   else afterSload sevm (afterSload sevm b futureATimeSlot) futureASlot
 
 /-- **What `_A` leaves**: the amplification `aChk s t` at the frame's timestamp on top of the
-caller's stack, over `aBase`, with the entry memory kept off `aWin`. -/
+caller's stack, over `aBaseH`, with the entry memory kept off `aWin`. -/
 def ALands (sevm : Sevm) (s : State) (b : Devm) (S : List B256) (M : Mem) (d : Devm) : Prop :=
-  ∃ v M' G', d = St (aBase sevm b) (v :: S) M' G' ∧
+  ∃ v M' G', d = St (aBaseH sevm b) (v :: S) M' G' ∧
     aChk s sevm.benvStat.time.toNat = some v.toNat ∧ Mem.KeepsOff M M' aWin ∧
     Mem.Wf M' ∧ (M.size % 32 = 0 → M'.size % 32 = 0)
 
@@ -299,12 +308,19 @@ theorem slot_07 : Bytes.toB256 [0x07] = futureASlot := by decide
 theorem slot_08 : Bytes.toB256 [0x08] = initialATimeSlot := by decide
 theorem slot_09 : Bytes.toB256 [0x09] = futureATimeSlot := by decide
 
+/-- `_A` changes the world only by warming its storage keys. -/
+theorem aBase_sloadsOnly (sevm : Sevm) (b : Devm) : SloadsOnly sevm b (aBase sevm b) := by
+  unfold aBase
+  split
+  · exact ((((SloadsOnly.refl).sload _).sload _).sload _).sload _
+  · exact ((SloadsOnly.refl).sload _).sload _
+
 -- SEGMENT: aSpec
 /-- **`_A`'s contract**: every run of entry 27 from its return address over the caller's stack
 returns (it never halts the frame), and lands as `ALands`: `aChk s t` on top of `S`, over the
-loads of `aBase`, the memory kept off `aWin`. -/
+loads of `aBaseH`, the memory kept off `aWin`. -/
 theorem a_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ret : B256}
-    {s : State} {o : Outcome} (hfork : CoveredFork sevm.benvStat.fork)
+    {s : State} {o : Outcome} (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hwf : Mem.Wf M)
     (run : SFunc.Run prog sevm (St b (ret :: S) M G) t_00a9_c27 o) :
     ∃ d, o = .returned d ∧ ALands sevm s b S M d := by
@@ -325,11 +341,11 @@ theorem a_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ret
   · have ht := ltCheck_iszero_eq hw
     istep; istep; imstore 0x1c0; istep; istep; imstore 0x1e0
     imload 0x1c0; imload 0x180; istep; istep; istep
-    simp only [getStorVal_eq_getStor, afterSload_getStor] at ht hT run ⊢
-    have hb : aBase sevm b = afterSload sevm (afterSload sevm (afterSload sevm (afterSload sevm b
+    simp only [getStorVal_eq_getStor, afterSloadH_getStor] at ht hT run ⊢
+    have hb : aBaseH sevm b = afterSloadH sevm (afterSloadH sevm (afterSloadH sevm (afterSloadH sevm b
         (Bytes.toB256 [0x09])) (Bytes.toB256 [0x07])) (Bytes.toB256 [0x06]))
         (Bytes.toB256 [0x08]) := by
-      unfold aBase
+      unfold aBaseH
       rw [← slot_09, ← slot_07, ← slot_06, ← slot_08, getStorVal_eq_getStor, ite_eq_left ht]
     rcases ric_branch run with ⟨hw2, _, run⟩ | ⟨hw2, _, run⟩
     · have hup := gtCheck_iszero_eq hw2
@@ -350,11 +366,11 @@ theorem a_spec {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {ret
     obtain ⟨G', hr⟩ := ric_ret run
     cases hr
     simp only [getStorVal_eq_getStor] at ht ⊢
-    have hb : aBase sevm b = afterSload sevm (afterSload sevm b (Bytes.toB256 [0x09]))
+    have hb : aBaseH sevm b = afterSloadH sevm (afterSloadH sevm b (Bytes.toB256 [0x09]))
         (Bytes.toB256 [0x07]) := by
-      unfold aBase
+      unfold aBaseH
       rw [← slot_09, ← slot_07, getStorVal_eq_getStor, ite_eq_right ht]
-    exact ⟨_, rfl, _, _, G', by rw [hb], by rw [aChk_eq, ← e1, ← e2, ite_eq_right ht, afterSload_getStor],
+    exact ⟨_, rfl, _, _, G', by rw [hb], by rw [aChk_eq, ← e1, ← e2, ite_eq_right ht, afterSloadH_getStor],
       hT.keeps, hT.wf, hT.aligned⟩
 
 /-! ## The forward contract -/
@@ -517,11 +533,11 @@ theorem a_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat}
   ⟨w, ⟨M', h1, h2⟩, h3⟩
 
 /-- `_A` changes the world only by warming its storage keys. -/
-theorem aBase_sloadsOnly (sevm : Sevm) (b : Devm) : SloadsOnly sevm b (aBase sevm b) := by
-  unfold aBase
+theorem aBaseH_sloadsOnly (sevm : Sevm) (b : Devm) : SloadsOnlyH sevm b (aBaseH sevm b) := by
+  unfold aBaseH
   split
-  · exact ((((SloadsOnly.refl).sload _).sload _).sload _).sload _
-  · exact ((SloadsOnly.refl).sload _).sload _
+  · exact ((((SloadsOnlyH.refl).sload _).sload _).sload _).sload _
+  · exact ((SloadsOnlyH.refl).sload _).sload _
 
 /-! ## Kernel facts over the entry closure -/
 

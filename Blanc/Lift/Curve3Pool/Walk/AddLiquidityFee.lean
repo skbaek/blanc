@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityD1
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -208,7 +209,7 @@ theorem xa_al_feeWord {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
 /-- Store the balance after the checked admin share (`0x1547` → `0x15e0`). -/
 theorem xa_al_adminStore {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {i : Nat} {f AF N : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) (hi : i < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hctr : WordAt img 0xa40 (Nat.toB256 i)) (haf : WordAt img 0x1c0 AF)
     (hfee : WordAt img (0x140 + 32 * i) f) (hN : WordAt img (0x460 + 32 * i) N)
@@ -217,7 +218,7 @@ theorem xa_al_adminStore {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G 
     ∃ M' G', Mem.Reads M' (Bytes.writeAt img 0xc0 (Bytes.toB256 [1]).toBytes) ∧
       Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       XAt sevm post 0x15e0
-        (St (afterSstore sevm b (balancesBase + Nat.toB256 i)
+        (St (afterSstoreH sevm b (balancesBase + Nat.toB256 i)
           (N - f * AF / Nat.toB256 feeDen)) [3, 0xa40] M' G') L := by
   xa 2
   xma 0x154e (.reg .mload) (ri_mload_imgAtA (o := 0xa40) rfl)
@@ -271,7 +272,7 @@ theorem xa_al_adminStore {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G 
   xma 0x15de (.reg .keccak256) (ri_keccak_imgAtA (o := 0xc0) (z := 32) rfl rfl)
   rw [keccak_one] at h
   xs 0x15df (.reg .add) ri_add
-  xw 0x15e0 (.reg .sstore) ri_sstore
+  xw 0x15e0 (.reg .sstore) ri_sstoreF
   exact ⟨hmulAF, hge, _, _, hR, hW, hA, h⟩
 
 

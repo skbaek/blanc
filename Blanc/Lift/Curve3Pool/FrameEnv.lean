@@ -1,5 +1,6 @@
 import Blanc.Lift.Curve3Pool.Observe
 import Blanc.Lift.IdentityCall
+import Blanc.Lift.HistIdentityCall
 
 /-!
 # The ENV premises of one pool frame
@@ -42,6 +43,36 @@ structure PoolFrameEnv (D : Exec.Deriv) : Prop where
   coins : ∀ k : Fin 3, ¬ D.sevm.benvStat.rules.isPrecomp (coinAdr D k)
   /-- The token is not a precompile. -/
   token : ¬ D.sevm.benvStat.rules.isPrecomp (tokenAdr D)
+
+/-- `PoolFrameEnv` with the identity readiness under the frame's actual rules. -/
+structure PoolFrameEnvH (D : Exec.Deriv) : Prop where
+  keep : PoolCallsKeep D
+  keepToken : PoolCoinCallsKeepToken D
+  code4 : ∀ c ∈ children D, c.post.getCode 4 = c.pre.getCode 4
+  id : IdReadyH D.sevm D.devm
+  coins : ∀ k : Fin 3, ¬ D.sevm.benvStat.rules.isPrecomp (coinAdr D k)
+  token : ¬ D.sevm.benvStat.rules.isPrecomp (tokenAdr D)
+
+theorem PoolFrameEnv.toH {D : Exec.Deriv} (h : PoolFrameEnv D) : PoolFrameEnvH D :=
+  ⟨h.keep, h.keepToken, h.code4, h.id.toH, h.coins, h.token⟩
+
+namespace PoolFrameEnvH
+
+variable {D : Exec.Deriv}
+
+theorem hcoin (h : PoolFrameEnvH D) (k : Fin 3) :
+    ¬ D.sevm.benvStat.rules.isPrecomp ((D.devm.getStor D.sevm.currentTarget).get (coinSlot k)).toAdr :=
+  h.coins k
+
+theorem htok (h : PoolFrameEnvH D) :
+    ¬ D.sevm.benvStat.rules.isPrecomp ((D.devm.getStor D.sevm.currentTarget).get tokenSlot).toAdr :=
+  h.token
+
+theorem hidk (h : PoolFrameEnvH D) :
+    ∀ c ∈ Exec.childFrames D.exc, c.post.getCode 4 = c.pre.getCode 4 :=
+  h.code4
+
+end PoolFrameEnvH
 
 namespace PoolFrameEnv
 

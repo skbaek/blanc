@@ -179,55 +179,55 @@ theorem implStepLaw_famAdmin : ImplStepLaw famAdmin := by
   cases c <;> simp only [famAdmin] at fam
   case pause  =>
     have hsel := decode_pause dec
-    exact ⟨pause_out apart (pause_run fork hsel hrun),
+    exact ⟨pause_out apart (pause_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_pause hP hsel r hT⟩
   case unpause  =>
     have hsel := decode_unpause dec
-    exact ⟨unpause_out apart (unpause_run fork hsel hrun),
+    exact ⟨unpause_out apart (unpause_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_unpause hP hsel r hT⟩
   case updatePauser a =>
     obtain ⟨hsel, rfl⟩ := decode_updatePauser dec
-    exact ⟨updatePauser_out apart (updatePauser_run fork hsel hrun),
+    exact ⟨updatePauser_out apart (updatePauser_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_updatePauser hP hsel r hT⟩
   case updateMasterMinter a =>
     obtain ⟨hsel, rfl⟩ := decode_updateMasterMinter dec
-    exact ⟨updateMasterMinter_out apart (updateMasterMinter_run fork hsel hrun),
+    exact ⟨updateMasterMinter_out apart (updateMasterMinter_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_updateMasterMinter hP hsel r hT⟩
   case updateBlacklister a =>
     obtain ⟨hsel, rfl⟩ := decode_updateBlacklister dec
-    exact ⟨updateBlacklister_out apart (updateBlacklister_run fork hsel hrun),
+    exact ⟨updateBlacklister_out apart (updateBlacklister_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_updateBlacklister hP hsel r hT⟩
   case updateRescuer a =>
     obtain ⟨hsel, rfl⟩ := decode_updateRescuer dec
-    exact ⟨updateRescuer_out apart (updateRescuer_run fork hsel hrun),
+    exact ⟨updateRescuer_out apart (updateRescuer_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_updateRescuer hP hsel r hT⟩
   case transferOwnership a =>
     obtain ⟨hsel, rfl⟩ := decode_transferOwnership dec
-    exact ⟨transferOwnership_out apart (transferOwnership_run fork hsel hrun),
+    exact ⟨transferOwnership_out apart (transferOwnership_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_transferOwnership hP hsel r hT⟩
   case removeMinter a =>
     obtain ⟨hsel, rfl⟩ := decode_removeMinter dec
-    exact ⟨removeMinter_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (removeMinter_run fork hsel hrun),
+    exact ⟨removeMinter_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (removeMinter_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_removeMinter hP hsel r hT⟩
   case configureMinter a v =>
     obtain ⟨hsel, rfl, rfl⟩ := decode_configureMinter dec
-    exact ⟨configureMinter_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (configureMinter_run fork hsel hrun),
+    exact ⟨configureMinter_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (configureMinter_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_configureMinter hP hsel r hT⟩
   case unBlacklist a =>
     obtain ⟨hsel, rfl⟩ := decode_unBlacklist dec
-    exact ⟨unBlacklist_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (unBlacklist_run fork hsel hrun),
+    exact ⟨unBlacklist_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (unBlacklist_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_unBlacklist hP hsel r hT⟩
   case blacklist a =>
     obtain ⟨hsel, rfl⟩ := decode_blacklist dec
-    exact ⟨blacklist_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (blacklist_run fork hsel hrun),
+    exact ⟨blacklist_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (blacklist_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_blacklist hP hsel r hT⟩
   case mint a v =>
     obtain ⟨hsel, rfl, rfl⟩ := decode_mint dec
-    exact ⟨mint_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (mint_run fork hsel hrun),
+    exact ⟨mint_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (mint_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_mint hP hsel r hT⟩
   case burn v =>
     obtain ⟨hsel, rfl⟩ := decode_burn dec
-    exact ⟨burn_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (burn_run fork hsel hrun),
+    exact ⟨burn_out inj apart (hk _ (by simp only [Call.keys, List.mem_cons, true_or])) (hk _ (by simp only [Call.keys, List.mem_cons, true_or, or_true])) (burn_run fork.histFork hsel hrun),
       impl_noExec run codeEq fork fun hP _ r hT => reach_burn hP hsel r hT⟩
 
 /-- **U6f: the model law of `rescueERC20`.**  The book's step is the identity (the frame passed

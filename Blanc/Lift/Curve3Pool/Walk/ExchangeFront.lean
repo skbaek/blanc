@@ -1,3 +1,5 @@
+import Blanc.Lift.PoolCoinSel
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ExchangeDispatch
 import Blanc.Lift.Curve3Pool.Walk.ExchangePull
 import Blanc.Lift.Curve3Pool.Walk.ExchangeTail
@@ -26,7 +28,7 @@ structure ExBase (sevm : Sevm) (b0 b : Devm) (σ : Stor) : Prop where
   stor : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x
   code : b.getCode sevm.currentTarget = b0.getCode sevm.currentTarget
   output : b.output = b0.output
-  id : IdReady sevm b
+  id : IdReadyH sevm b
 
 theorem ExBase.rel {sevm : Sevm} {b0 b b' : Devm} {σ : Stor} (h : ExBase sevm b0 b σ)
     (hr : BaseRel b b') : ExBase sevm b0 b' σ :=
@@ -43,7 +45,7 @@ theorem ExBase.child {sevm : Sevm} {b0 b d : Devm} {σ : Stor} {t : Adr} {input 
   have hpc' : b.getCode sevm.currentTarget ≠ .empty := by rw [h.code]; exact hpc
   refine ⟨fun x => ?_, by rw [hc.code _ hpc', h.code], by rw [hc.outputKeep, h.output],
     ⟨by rw [hc.codePost, hidk, hc.codePre]; exact h.id.nodeleg, hc.warm _ h.id.warm, h.id.pre,
-      h.id.fork⟩⟩
+      h.id.stateGas⟩⟩
   rw [hc.storPost _ hpc' x, hkeep x, hc.storPre _ hpc', h.stor]
 
 /-- Across a `balanceOf` child. -/
@@ -55,12 +57,12 @@ theorem ExBase.bal {sevm : Sevm} {b0 b d : Devm} {σ : Stor} {C : B256} {c : Exe
   refine ⟨fun x => by rw [hc.stor]; exact h.stor x, by rw [hc.code _ hpc', h.code],
     by rw [hc.output, h.output],
     ⟨by rw [hc.codePost, hidk, hc.codePre]; exact h.id.nodeleg, hc.acc _ h.id.warm, h.id.pre,
-      h.id.fork⟩⟩
+      h.id.stateGas⟩⟩
 
 theorem ExBase.sload {sevm : Sevm} {b0 b : Devm} {σ : Stor} (h : ExBase sevm b0 b σ) (k : B256) :
-    ExBase sevm b0 (afterSload sevm b k) σ :=
-  ⟨fun x => by rw [afterSload_getStor]; exact h.stor x, by rw [afterSload_getCode]; exact h.code,
-    by rw [afterSload_output]; exact h.output, h.id.afterSload k⟩
+    ExBase sevm b0 (afterSloadH sevm b k) σ :=
+  ⟨fun x => by rw [afterSloadH_getStor]; exact h.stor x, by rw [afterSloadH_getCode]; exact h.code,
+    by rw [afterSloadH_output]; exact h.output, h.id.afterSloadH k⟩
 
 /-- A `balanceOf(self)` child at the coin word `C`, as `EnvOf` reads it. -/
 abbrev ExBalChild := PoolBalanceChild
@@ -86,6 +88,11 @@ the identity precompile's code). -/
 def ExCoinChild (sevm : Sevm) (b : Devm) (c : Exec.Frame) : Prop :=
   ∃ k : Fin 3, c.sevm.currentTarget = ((b.getStor sevm.currentTarget).get (coinSlot k)).toAdr
 
+/-- A child at a coin on one of the selectors the pool sends coins: what the walk's keep premises
+need of a child, and all the walk shows before it needs that child's keep. -/
+def ExCoinSel (sevm : Sevm) (b : Devm) (c : Exec.Frame) : Prop :=
+  ExCoinChild sevm b c ∧ CurveCoins.PoolCoinSel (Sevm.selector c.sevm)
+
 theorem exCoinChild_of {sevm : Sevm} {b : Devm} {c : Exec.Frame} {w : B256} (hw : w.toNat < 3)
     (ht : c.sevm.currentTarget = ((b.getStor sevm.currentTarget).get (coinsBase + w)).toAdr) :
     ExCoinChild sevm b c :=
@@ -93,15 +100,15 @@ theorem exCoinChild_of {sevm : Sevm} {b : Devm} {c : Exec.Frame} {w : B256} (hw 
 
 /-- **`exchange` up to `x`** (see the module note). -/
 theorem xa_ex_front {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selExchange)
     (hcoin : (exI sevm).toNat < 3 → ¬ sevm.benvStat.rules.isPrecomp
       ((b.getStor sevm.currentTarget).get (coinsBase + exI sevm)).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
-    (hkeep : ∀ c ∈ L, ExCoinChild sevm b c → ∀ x, (c.post.getStor sevm.currentTarget).get x =
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
+    (hkeep : ∀ c ∈ L, ExCoinSel sevm b c → ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
-    (hidk : ∀ c ∈ L, ExCoinChild sevm b c → c.post.getCode 4 = c.pre.getCode 4)
+    (hidk : ∀ c ∈ L, ExCoinSel sevm b c → c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
     (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
     (b.getStor sevm.currentTarget).get isKilledSlot = 0 ∧ (exI sevm).toNat < 3 ∧
@@ -142,8 +149,8 @@ theorem xa_ex_front {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   have hB1 : ExBase sevm b b1 ((b.getStor sevm.currentTarget).set lockSlot 1) :=
     ⟨hs1, hcd1 _, ho1, hid1 hid⟩
   have hB2 := hB1.sload (coinsBase + exI sevm)
-  have hl2 : (afterSload sevm b1 (coinsBase + exI sevm)).logs = b.logs := by
-    rw [afterSload_logs, hl1]
+  have hl2 : (afterSloadH sevm b1 (coinsBase + exI sevm)).logs = b.logs := by
+    rw [afterSloadH_logs, hl1]
   -- the optional first `balanceOf`
   have hmid : ∃ (Lpre L1 : List Exec.Frame) (bb : Devm) (M : Mem) (img : Bytes) (G : Nat)
       (D1 : B256), L = Lpre ++ L1 ∧
@@ -163,21 +170,23 @@ theorem xa_ex_front {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
     · obtain ⟨c1, L1, d1, M', img', G', rfl, -, hb1, hR', hW', hF', h'⟩ :=
         xa_ex_bal1 hcode hfork hR hW hF hcoin h
       refine ⟨[c1], L1, d1, M', img', G', _, rfl, .inr ⟨he, c1, rfl, hb1.child, rfl⟩,
-        hB2.bal hb1 hpc (hidk c1 List.mem_cons_self (exCoinChild_of hi3 hb1.target)), ?_, hR',
+        hB2.bal hb1 hpc (hidk c1 List.mem_cons_self
+          ⟨exCoinChild_of hi3 hb1.target, CurveCoins.poolCoinSel_balanceOf hb1.data⟩), ?_, hR',
         hW', hF', h'⟩
       rw [hb1.dlogs, hl2, List.flatMap_cons, hb1.logs, List.flatMap_nil, List.append_nil,
         List.append_nil]
   clear hbr hF hR hW
   obtain ⟨Lpre, L1, bb, M4, img4, G4, D1, rfl, hpre, hBb, hlb, hR, hW, hF, h⟩ := hmid
   -- the pull and its `raw_call` test
-  have hk1 : ∀ c ∈ L1, ExCoinChild sevm b c → ∀ x, (c.post.getStor sevm.currentTarget).get x =
+  have hk1 : ∀ c ∈ L1, ExCoinSel sevm b c → ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x :=
     fun c hc => hkeep c (List.mem_append_right _ hc)
-  have hi1 : ∀ c ∈ L1, ExCoinChild sevm b c → c.post.getCode 4 = c.pre.getCode 4 :=
+  have hi1 : ∀ c ∈ L1, ExCoinSel sevm b c → c.post.getCode 4 = c.pre.getCode 4 :=
     fun c hc => hidk c (List.mem_append_right _ hc)
   obtain ⟨hdepth, b', cp, L2, d, img5, G5, hbr', rfl, hcp, hF5, hR5, hW5, hrd5, h⟩ :=
     xa_ex_pull hcode hfork hR hW hF hBb.id hcoin h
-  have hcpC : ExCoinChild sevm b cp := exCoinChild_of hi3 hcp.target
+  have hcpC : ExCoinSel sevm b cp :=
+    ⟨exCoinChild_of hi3 hcp.target, CurveCoins.poolCoinSel_transferFrom hcp.data⟩
   have hBd := (hBb.rel hbr').child hcp hpc (hk1 cp List.mem_cons_self hcpC)
     (hi1 cp List.mem_cons_self hcpC)
   obtain ⟨hok, b6, M6, img6, G6, hb6, hR6, hW6, hk6, h⟩ := xa_ex_tail1 hcode hBd.id hR5 hW5 hrd5 h
@@ -202,7 +211,8 @@ theorem xa_ex_front {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
       refine ⟨[c1, cp, c2], L3, cp, exAns c2 - exAns c1, d2, M7, img7, G7, hdepth, by simp only [List.cons_append, List.nil_append], List.mem_cons_of_mem _ List.mem_cons_self,
         hcp.target, hcp.data, hcp.value, hcp.isStatic, hcp.output ▸ hok,
         .inr ⟨he, c1, c2, rfl, hc1, hb2.child, hle, rfl⟩,
-        hB6.bal hb2 hpc (hi1 c2 hmem2 (exCoinChild_of hi3 hb2.target)), ?_, hR7, hW7, hF7, hX⟩
+        hB6.bal hb2 hpc (hi1 c2 hmem2
+          ⟨exCoinChild_of hi3 hb2.target, CurveCoins.poolCoinSel_balanceOf hb2.data⟩), ?_, hR7, hW7, hF7, hX⟩
       rw [hb2.dlogs, hl6]
       simp only [List.flatMap_cons, List.flatMap_nil, hc1.logs, hb2.logs, List.append_nil,
         List.nil_append]

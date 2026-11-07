@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsKit
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -20,10 +21,10 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : Stat
 /-- **`get_virtual_price` up to `_A`'s frame save**: no value; the thirteen saved words on
 the stack; `xpChk s.balances` at `0x300…0x340`. -/
 theorem xa_gvp_xp (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (h : XAt sevm post 0x91c (St b [] (vdMem sevm) G) L) :
-    sevm.value = 0 ∧ ∃ x0 x1 x2 b1 ws M G1, SloadsOnly sevm b b1 ∧ ws.length = 13 ∧
+    sevm.value = 0 ∧ ∃ x0 x1 x2 b1 ws M G1, SloadsOnlyH sevm b b1 ∧ ws.length = 13 ∧
       XAt sevm post 0x9be (St b1 ws M G1) L ∧
       xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧
       VW M [(0x340, x2), (0x320, x1), (0x300, x0)] := by
@@ -107,11 +108,11 @@ theorem xa_gvp_xp (hc : Cert.CheckedM code cert mems true)
 /-- **`get_virtual_price` from `_A`'s frame save to the call of `get_D`**: `_A`'s value `amp`
 (`aChk`), the frame restored, and `get_D`'s arguments `xp` and `amp` above the return tag. -/
 theorem xa_gvp_a (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 : B256}
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) {x0 x1 x2 : B256}
     {ws : List B256} {M : Mem} (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hV : VW M [(0x340, x2), (0x320, x1), (0x300, x0)])
     (h : XAt sevm post 0x9be (St b ws M G) L) :
-    ∃ amp b2 M2 G2 ρ, SloadsOnly sevm b b2 ∧ ρ.toNat = 0xa40 ∧
+    ∃ amp b2 M2 G2 ρ, SloadsOnlyH sevm b b2 ∧ ρ.toNat = 0xa40 ∧
       XAt sevm post 0x4c9 (St b2 (ρ :: x0 :: x1 :: x2 :: amp :: ws) M2 G2) L ∧
       aChk s sevm.benvStat.time.toNat = some amp.toNat ∧ VW M2 [(0x360, amp)] := by
   xa 2
@@ -172,7 +173,7 @@ frame restored, `totalSupply()` read from the token (the frame's only child, sta
 back), `D · 10^18` unchecked-free and the supply nonzero; storage and logs kept, the output
 `D · 10^18 / supply`. -/
 theorem xa_gvp_d (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {x0 x1 x2 amp ρ : B256} {ws : List B256} {M : Mem} (hρ : ρ.toNat = 0xa40)
     (hws : ws.length = 13) (hV : VW M [(0x360, amp)])
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
@@ -217,7 +218,7 @@ theorem xa_gvp_d (hc : Cert.CheckedM code cert mems true)
   have hW0 := hV.wf
   xsw 0xa88 0x400  -- 0a87 MSTORE
   xa 2
-  xw 0xa8e (.reg .sload) ri_sload  -- 0a8d SLOAD
+  xw 0xa8e (.reg .sload) ri_sloadF  -- 0a8d SLOAD
   xs 0xa8f (.reg .gas) ri_gas_remaining  -- 0a8e GAS
   obtain ⟨d, flag, out, M', L1, h, hVo, hrd, hob, hstor, hlogs, hk⟩ :=
     xa_staticcallV (pc' := 0xa90) (o := 0x460) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl hV h
@@ -276,8 +277,8 @@ theorem xa_gvp_d (hc : Cert.CheckedM code cert mems true)
     · exact .inl (B256.eq_of_eqCheck_ne_zero h1)
     · exact .inr (B256.eq_of_eqCheck_ne_zero h1)
   · intro a
-    rw [hstor', hstor, afterSload_getStor]
-  · rw [hlogs', hlogs, afterSload_logs]
+    rw [hstor', hstor, afterSloadH_getStor]
+  · rw [hlogs', hlogs, afterSloadH_logs]
   · generalize (M'.write 992 _).write 0 _ = Mf at hV hout
     have hl0 : (Mf.read 0 32).1.length = 32 := by
       simp only [Mem.read, Array.sliceD_eq_map, List.length_map, List.length_range]

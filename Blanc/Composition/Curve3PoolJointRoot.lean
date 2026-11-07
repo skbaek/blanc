@@ -1,0 +1,487 @@
+import Blanc.Composition.Curve3Pool3CrvCheckpoint
+import Blanc.Lift.Curve3Pool.Creation.HistoricalTxTrace
+import Blanc.Lift.Curve3Pool.HistoryWindow
+import Blanc.Lift.Curve3Crv.HistFrameReady
+import Blanc.Lift.Curve3Crv.HistWindow
+import Blanc.Lift.Curve3Crv.SetMinterTx
+import Blanc.ExecutionHistoryInAppend
+import Blanc.Composition.Curve3PoolKeepHistory
+import Blanc.Lift.CurveCoins.PoolFreshAtCreation
+import Blanc.TransactionItemTransport
+
+/-!
+# The joint deployment root of the Curve 3pool and 3Crv
+
+`JointDeployment` is one retained `HistFork` mainnet history from 3Crv's actual creation
+transaction (block 10,809,467, slot 76) through the pool's (block 10,809,473, slot 53) and the
+minter assignment (block 10,809,482, slot 135), each with its successful receipt, running to the end
+of the minter block. Each slot is named by its RLP item (`HoldsItem`), which is what a block's roots fix.
+It takes no contract fact: code, nonce, sender, funds, deployed storage and the joint checkpoint are
+theorems.
+
+Besides the blocks, these facts about the history are fields:
+
+* `fresh`: 3Crv's HASH-T (R4's own premise, over the same frames);
+* `coins`: the coins are their deployed bytes and the operators' two powers are restrained, over the span from
+  the pool's creation (`CoinsHold`). The keep premise the replay needs is a theorem from it;
+* `idEmpty`: the identity precompile's account holds no code just after 3Crv's creation block;
+* `idNoFrame`: no CREATE frame of the history lands at the identity precompile's address.
+
+`joint_root` is the headline, stated **right after the minter assignment**: both runtimes are installed
+and `JointCheckpoint` holds. `joint_root_replay` says what the checkpoint's states are: the pool's is
+the state its model reaches from the constructor's `poolInitState deployTime` over exactly the
+committed pool calls between the pool's creation and that cut, and 3Crv's the state its model reaches
+over exactly its committed invocations. The minter is not assumed: the model accepts `set_minter` only
+from the current minter, so the slot's successful receipt is enough, and nothing runs at 3Crv after it
+up to the cut. No frame-level exclusion over the window is assumed: a pool frame in the window is
+replayed like any other.
+-/
+
+namespace Blanc.Composition.Curve3PoolJointRoot
+
+open Jaune Blanc Blanc.ExecutionTrace
+open Blanc.Composition.Curve3Pool3CrvJoint (JointCheckpoint)
+
+local notation "pool" => Lift.Curve3Pool.Creation.poolAddress
+local notation "c3Adr" => Lift.Curve3Crv.Creation.tokenAddress
+
+/-- **The joint deployment record.** The three recorded transactions in their retained Muir blocks
+with their successful receipts, the configured history joining them, and the facts listed above. -/
+structure JointDeployment where
+  c3Pre : BlockChain
+  c3Completed : BlockChain
+  c3Block : ConfiguredBlockTraceIn HistFork mainnetChainConfig c3Pre c3Completed
+  c3Number : c3Block.block.header.number = 10809467
+  c3Time : c3Block.block.header.timestamp = 1599414946
+  c3Slot : HoldsItem c3Block.block.txs 76 Lift.Curve3Crv.Creation.HistoricalTx.tx
+  c3Receipt : Fin 5 × Receipt
+  c3Lookup : c3Block.blockOutput.receiptsTrie[BLT.toBytes (.bytes (76 : Nat).toBytes)]? =
+    some c3Receipt
+  c3Succeeded : c3Receipt.2.succeeded = true
+  poolPre : BlockChain
+  toPool : ConfiguredHistoryTraceIn HistFork mainnetChainConfig c3Completed poolPre
+  poolCompleted : BlockChain
+  poolBlock : ConfiguredBlockTraceIn HistFork mainnetChainConfig poolPre poolCompleted
+  poolNumber : poolBlock.block.header.number = 10809473
+  poolTime : poolBlock.block.header.timestamp = 1599414978
+  poolSlot : HoldsItem poolBlock.block.txs 53 Lift.Curve3Pool.Creation.HistoricalTx.tx
+  poolReceipt : Fin 5 × Receipt
+  poolLookup : poolBlock.blockOutput.receiptsTrie[BLT.toBytes (.bytes (53 : Nat).toBytes)]? =
+    some poolReceipt
+  poolSucceeded : poolReceipt.2.succeeded = true
+  minterPre : BlockChain
+  toMinter : ConfiguredHistoryTraceIn HistFork mainnetChainConfig poolCompleted minterPre
+  minterCompleted : BlockChain
+  minterBlock : ConfiguredBlockTraceIn HistFork mainnetChainConfig minterPre minterCompleted
+  minterNumber : minterBlock.block.header.number = 10809482
+  minterTime : minterBlock.block.header.timestamp = 1599415164
+  minterSlot : HoldsItem minterBlock.block.txs 135 Lift.Curve3Crv.SetMinter.tx
+  minterReceipt : Fin 5 × Receipt
+  minterLookup : minterBlock.blockOutput.receiptsTrie[BLT.toBytes (.bytes (135 : Nat).toBytes)]? =
+    some minterReceipt
+  minterSucceeded : minterReceipt.2.succeeded = true
+  fresh : Lift.Curve3Crv.FreshKeys (fun _ => False)
+    (Lift.Curve3Crv.midTouchedKeysIn c3Adr
+      ((MidHistoryTraceIn.tail c3Block (c3Block.bodyTrace.txSplitOfItem c3Slot)).append
+        (((toPool.step poolBlock).append toMinter).step minterBlock)))
+  coins : Curve3PoolCoinKeep.CoinsHold (((MidHistoryTraceIn.tail poolBlock
+      (poolBlock.bodyTrace.txSplitOfItem poolSlot)).append toMinter).step minterBlock)
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 0))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 1))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 2))
+  idEmpty : c3Completed.state.getCode 4 = ByteArray.empty
+  idNoFrame : ∀ root ∈ (((toPool.step poolBlock).append toMinter).step minterBlock).rawFrames,
+    root.sevm.codeAddress = none → root.sevm.currentTarget ≠ 4
+
+namespace JointDeployment
+
+variable (j : JointDeployment)
+
+/-- The whole history after 3Crv's creation block, as R4's premise. -/
+noncomputable def history :
+    ConfiguredHistoryTraceIn HistFork mainnetChainConfig j.c3Completed j.minterCompleted :=
+  ((j.toPool.step j.poolBlock).append j.toMinter).step j.minterBlock
+
+/-- 3Crv's creation cut. -/
+noncomputable def c3Cut : j.c3Block.bodyTrace.transactions.TxSplit 76 :=
+  j.c3Block.bodyTrace.txSplitOfItem j.c3Slot
+
+/-- The rest of 3Crv's creation block followed by the whole history. -/
+noncomputable def c3Trace :
+    MidHistoryTraceIn HistFork mainnetChainConfig j.c3Cut.afterBenv j.minterCompleted :=
+  (MidHistoryTraceIn.tail j.c3Block j.c3Cut).append j.history
+
+/-- The pool's creation cut. -/
+noncomputable def poolCut : j.poolBlock.bodyTrace.transactions.TxSplit 53 :=
+  j.poolBlock.bodyTrace.txSplitOfItem j.poolSlot
+
+/-- The minter assignment's cut. -/
+noncomputable def minterCut : j.minterBlock.bodyTrace.transactions.TxSplit 135 :=
+  j.minterBlock.bodyTrace.txSplitOfItem j.minterSlot
+
+/-- From just after the pool's creation to the block before the minter block. -/
+noncomputable def poolMid :
+    MidHistoryTraceIn HistFork mainnetChainConfig j.poolCut.afterBenv j.minterPre :=
+  (MidHistoryTraceIn.tail j.poolBlock j.poolCut).append j.toMinter
+
+/-- From just after the pool's creation to the end of the minter block. -/
+noncomputable def span :
+    MidHistoryTraceIn HistFork mainnetChainConfig j.poolCut.afterBenv j.minterCompleted :=
+  j.poolMid.step j.minterBlock
+
+/-- From just after 3Crv's creation to the block before the minter block. -/
+noncomputable def c3Mid :
+    MidHistoryTraceIn HistFork mainnetChainConfig j.c3Cut.afterBenv j.minterPre :=
+  (MidHistoryTraceIn.tail j.c3Block j.c3Cut).append ((j.toPool.step j.poolBlock).append j.toMinter)
+
+/-- The world right after the minter assignment. -/
+noncomputable def cutState : Jaune.State := j.minterCut.afterBenv.state
+
+/-- The committed pool calls of the window from the pool's creation to the minter assignment. -/
+noncomputable def poolFrames : List Exec.Frame :=
+  Lift.Curve3Pool.committedPoolFramesWindow pool j.poolMid j.minterBlock j.minterCut
+
+/-- 3Crv's committed writer invocations from its creation through the minter assignment. -/
+noncomputable def c3Invocations : List Lift.Curve3Crv.WriterInvocation :=
+  Lift.Curve3Crv.windowCommittedInvocationsIn c3Adr j.c3Mid j.minterBlock j.minterCut
+
+/-- The 3Crv keys tracked at the cut: those its committed invocations touch. -/
+noncomputable def c3Keys : Lift.Curve3Crv.Key → Prop :=
+  Lift.Curve3Crv.Key.extend (fun _ => False) (Lift.Curve3Crv.invocationKeys j.c3Invocations)
+
+end JointDeployment
+
+/-! ## The three recorded transactions, at their items -/
+
+/-- A Muir-fork environment has no state gas and no block access list. -/
+theorem muir_lanes {e : Benv} (hfork : e.stat.fork = .muirGlacier) :
+    e.stat.rules.stateGas = none ∧ e.stat.rules.bal = none := by
+  have rules : e.stat.rules = muirGlacierRules := by
+    change Fork.ruleSet e.stat.fork = muirGlacierRules
+    rw [hfork]
+    rfl
+  rw [rules]
+  exact ⟨rfl, rfl⟩
+
+/-- The pool's creation transaction, on a retained trace that succeeded: the runtime and the deployed
+storage after it, and no code and nonce 0 at the pool's address before it. -/
+theorem pool_created_of_head {benv : Benv} {bout bout' : BlockOutput} {state : Jaune.State} {index : Nat}
+    (head : TransactionTrace benv bout Lift.Curve3Pool.Creation.HistoricalTx.tx index state bout')
+    (hfork : benv.stat.fork = .muirGlacier) (hbasefee : benv.stat.baseFeePerGas = 0)
+    (htime : benv.stat.time = Lift.Curve3Pool.Creation.deployTime)
+    (success : head.messageOut.error = none) :
+    (state.getCode pool).toList = Lift.Curve3Pool.code.toList ∧
+      state.getStor pool = Lift.Curve3Pool.Creation.deployedStor Lift.Curve3Pool.Creation.deployTime := by
+  open Lift.Curve3Pool.Creation.HistoricalTx in
+  obtain ⟨-, -, nonce, senderCode, funds, room⟩ := actual_prechecks head hfork hbasefee
+  have fresh := actual_fresh_of_success head hfork hbasefee success
+  obtain ⟨post, bout'', transaction, -, -, code, storage⟩ :=
+    settle_muir_actual_creation benv bout index hfork hbasefee htime nonce senderCode funds room fresh
+  have same := Prod.mk.inj (Except.ok.inj (transaction.symm.trans head.result))
+  rw [← same.1]
+  exact ⟨code, storage⟩
+
+namespace JointDeployment
+
+variable (j : JointDeployment)
+
+/-- The block's receipt lookup at the cut's own index, for a cut at the slot `i`. -/
+theorem lookup_at {F : Fork → Prop} {pre post : BlockChain}
+    {block : ConfiguredBlockTraceIn F mainnetChainConfig pre post} {i : Nat}
+    {cut : block.bodyTrace.transactions.TxSplit i} {receipt : Fin 5 × Receipt}
+    (index : cut.index = i)
+    (lookup : block.blockOutput.receiptsTrie[BLT.toBytes (.bytes i.toBytes)]? = some receipt) :
+    block.blockOutput.receiptsTrie[BLT.toBytes (.bytes cut.index.toBytes)]? = some receipt := by
+  rw [index]
+  exact lookup
+
+/-- **3Crv right after its creation:** its runtime, its deployed storage, and its invariant there. -/
+theorem c3Created :
+    (j.c3Cut.afterBenv.state.getCode c3Adr).toList = Lift.Curve3Crv.code.toList ∧
+      j.c3Cut.afterBenv.state.getStor c3Adr =
+        Lift.Curve3Crv.Creation.deployedStor Lift.Curve3Crv.Creation.deployer.toB256 ∧
+      Lift.Curve3Crv.VyInv (j.c3Cut.afterBenv.state.getStor c3Adr)
+        (Lift.Curve3Crv.Creation.curveDeployedState Lift.Curve3Crv.Creation.deployer)
+        (fun _ => False) := by
+  obtain ⟨forkEq, forkAtCut, baseFee⟩ :=
+    Lift.Curve3Crv.Creation.HistoricalTx.block_muir j.c3Block j.c3Number j.c3Time j.c3Cut
+  obtain ⟨hsg, hbal⟩ := muir_lanes forkAtCut
+  obtain ⟨index, _, head, -, sameOut⟩ :=
+    j.c3Block.bodyTrace.exists_item_head j.c3Cut j.c3Slot (tx := Lift.Curve3Crv.Creation.HistoricalTx.tx)
+      rfl hsg hbal
+  have success := j.c3Block.txSplit_error_eq_none_of_receipt j.c3Cut (by rw [forkEq]; rfl)
+    (lookup_at index j.c3Lookup) j.c3Succeeded
+  obtain ⟨hcode, hstor, -, -⟩ := Lift.Curve3Crv.Creation.HistoricalTx.actual_settled_cut_of_tx_eq head rfl
+    forkAtCut baseFee (by rw [sameOut]; exact success)
+  have hstor' : j.c3Cut.afterBenv.state.getStor c3Adr =
+      Lift.Curve3Crv.Creation.deployedStor Lift.Curve3Crv.Creation.deployer.toB256 := hstor
+  exact ⟨hcode, hstor', by
+    rw [hstor']
+    exact Lift.Curve3Crv.Creation.deployedStor_vyInv _ Lift.Curve3Crv.Creation.deployer_balSlot⟩
+
+/-- The pool's cut holds its creation's retained trace, which succeeded. -/
+theorem pool_head : j.poolCut.benv.stat.fork = .muirGlacier ∧ j.poolCut.benv.stat.baseFeePerGas = 0 ∧
+    j.poolCut.benv.stat.time = Lift.Curve3Pool.Creation.deployTime ∧
+    ∃ (bout'' : BlockOutput) (head : TransactionTrace j.poolCut.benv j.poolCut.bout
+        Lift.Curve3Pool.Creation.HistoricalTx.tx j.poolCut.index j.poolCut.txState bout''),
+      head.messageOut.error = none := by
+  obtain ⟨forkEq, forkAtCut, baseFee, time⟩ := j.poolBlock.txSplit_muir (by
+    rw [j.poolNumber, j.poolTime]; decide +kernel) j.poolCut
+  obtain ⟨hsg, hbal⟩ := muir_lanes forkAtCut
+  obtain ⟨index, _, head, -, sameOut⟩ :=
+    j.poolBlock.bodyTrace.exists_item_head j.poolCut j.poolSlot
+      (tx := Lift.Curve3Pool.Creation.HistoricalTx.tx) rfl hsg hbal
+  have success := j.poolBlock.txSplit_error_eq_none_of_receipt j.poolCut (by rw [forkEq]; rfl)
+    (lookup_at index j.poolLookup) j.poolSucceeded
+  refine ⟨forkAtCut, baseFee, ?_, _, head, by rw [sameOut]; exact success⟩
+  rw [time, j.poolTime]
+  rfl
+
+/-- **Nonce 0 and no code at the pool's address just before its creation.** What backs the check that
+the pool's allowance rows are empty at creation: before its code exists only its key could set one. -/
+theorem pool_fresh_before_creation :
+    j.poolCut.benv.state.getNonce pool = 0 ∧ (j.poolCut.benv.state.getCode pool).isEmpty = true := by
+  obtain ⟨hfork, hbasefee, -, _, head, success⟩ := j.pool_head
+  exact Lift.CurveCoins.fresh_of_no_collision
+    (Lift.Curve3Pool.Creation.HistoricalTx.actual_fresh_of_success head hfork hbasefee success)
+
+end JointDeployment
+
+/-! ## The pool's environment, from the history -/
+
+/-- The recorded coins and token are no precompile of any historical fork. -/
+theorem parties_not_precompile {f : Fork} (hf : HistFork f) :
+    (∀ k : Fin 3, ¬ (Fork.ruleSet f).isPrecomp
+      (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get k))) ∧
+      ¬ (Fork.ruleSet f).isPrecomp (Lift.Curve3Pool.adrOf Lift.Curve3Pool.Creation.tokenN) := by
+  revert hf
+  cases f <;> decide +kernel
+
+/-- The history ends before Cancun, so every block's fork is pre-Cancun. -/
+theorem JointDeployment.forks (j : JointDeployment) : j.history.ForksSatisfy PreCancun := by
+  have last : j.minterCompleted.blocks.getLast? = some j.minterBlock.block :=
+    (congrArg (fun chain : BlockChain => chain.blocks.getLast?) j.minterBlock.postEq).trans
+      (appendBlock_getLast? _ _)
+  exact j.history.forksPreCancun_of_mainnet_tip last (by rw [j.minterTime]; decide)
+
+/-- The pool's recorded coins are the three coins, its token 3Crv, none of them the pool or `4`. -/
+theorem party_words : Curve3PoolCoinKeep.PartyWords Lift.Curve3Pool.Creation.coinsN
+    Lift.Curve3Pool.Creation.tokenN pool
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 0))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 1))
+    (Lift.Curve3Pool.adrOf (Lift.Curve3Pool.Creation.coinsN.get 2)) c3Adr where
+  coin := by decide +kernel
+  token := by decide +kernel
+  coinNe := by decide +kernel
+  tokNe := by decide +kernel
+  apart := by decide +kernel
+
+/-- **The pool's history facts over the span**: `parties`, `sysNe` and `idNoAuthority` are theorems here, the last
+two because the history ends before Cancun. -/
+theorem JointDeployment.poolFacts (j : JointDeployment) :
+    Lift.Curve3Pool.PoolMidFacts j.history j.span pool Lift.Curve3Pool.Creation.coinsN
+      Lift.Curve3Pool.Creation.tokenN where
+  subset := by
+    intro root member
+    rcases List.mem_append.mp member with member | member
+    · exact List.mem_append_left _
+        (MidHistoryTraceIn.rawFrames_subset_full j.toPool j.poolBlock j.poolCut j.toMinter member)
+    · exact List.mem_append_right _ member
+  parties := fun root member _ =>
+    parties_not_precompile (j.span.rootEntryIn root member).2
+  idEmpty := j.idEmpty
+  idNoAuthority := j.history.pragueNoAuthorityAt_of_prePrague
+    (j.forks.mono fun _ hf => hf.toPrePrague) 4
+  idNoFrame := j.idNoFrame
+  sysNe := fun root member => by
+    rw [j.history.systemRawFrames_nil_of_preCancun j.forks] at member
+    cases member
+
+/-- 3Crv's runtime is at every raw frame of the span: certified bytes installed by its creation. -/
+theorem JointDeployment.c3Code (j : JointDeployment) :
+    ∀ R ∈ j.span.rawFrames, R.devm.getCode c3Adr = Lift.Curve3Crv.code := by
+  obtain ⟨hcode, -, -⟩ := j.c3Created
+  intro R member
+  have memberC3 : R ∈ j.c3Trace.rawFrames := by
+    change R ∈ ((MidHistoryTraceIn.tail j.c3Block j.c3Cut).append j.history).rawFrames
+    rw [MidHistoryTraceIn.append_rawFrames]
+    exact List.mem_append_right _ (j.poolFacts.subset member)
+  exact Curve3PoolCoinKeep.midCode_of_cert Lift.Curve3Crv.c3crvInstalledCert j.c3Trace
+    (Lift.Curve3Crv.code_of_image (by rw [hcode]; rfl)) R memberC3
+
+/-- **The pool's history environment over the span.** -/
+theorem JointDeployment.poolEnv (j : JointDeployment) :
+    Lift.Curve3Pool.PoolMidEnv j.history j.span pool Lift.Curve3Pool.Creation.coinsN
+      Lift.Curve3Pool.Creation.tokenN :=
+  { j.poolFacts with
+    callbacks := Curve3PoolCoinKeep.pool_keepAt_of_frames j.poolFacts party_words
+      (Curve3PoolCoinKeep.framesHold_of_coins j.coins j.c3Code) }
+
+/-! ## 3Crv's minter -/
+
+section Minter
+
+open Lift.Curve3Crv
+
+variable {A : Sevm → Devm → Adr → B256 → Prop}
+
+/-- A run over a concatenation passes through a state after the first part. -/
+theorem InvRunBy.of_append :
+    ∀ {s s' : Blanc.Curve3Crv.State} {xs ys : List WriterInvocation},
+      InvRunBy A s (xs ++ ys) s' → ∃ m, InvRunBy A s xs m ∧ InvRunBy A m ys s'
+  | s, s', [], ys, h => ⟨s, rfl, h⟩
+  | s, s', inv :: rest, ys, h => by
+      obtain ⟨o, step, tail⟩ := h
+      obtain ⟨m, first, second⟩ := InvRunBy.of_append tail
+      exact ⟨m, ⟨o, step, first⟩, second⟩
+
+/-- A run over frames ending with the frame writing `set_minter` to `a`, followed only by frames
+that invoke nothing, ends at minter `a`. -/
+theorem minter_of_split {s s' : Blanc.Curve3Crv.State} {before after : List Exec.Frame}
+    {frame : Exec.Frame}
+    (run : InvRunBy A s ((before ++ frame :: after).flatMap (committedFrameInvocations c3Adr)) s')
+    (target : frame.sevm.currentTarget = c3Adr)
+    (data : frame.sevm.data = SetMinter.callData)
+    (silent : ∀ f ∈ after, committedFrameInvocations c3Adr f = []) :
+    s'.minter = SetMinter.poolWord.toAdr := by
+  have call := SetMinter.decodeCall_of_data data
+  have selected : committedFrameInvocations c3Adr frame = [frameInvocation frame] := by
+    unfold committedFrameInvocations
+    rw [ite_eq_left ⟨target, by rw [call]; trivial⟩]
+  rw [List.flatMap_append, List.flatMap_cons, selected, List.flatMap_eq_nil_iff.mpr silent,
+    List.append_nil] at run
+  obtain ⟨_, -, o, ⟨accepted, -⟩, tail⟩ := InvRunBy.of_append run
+  change Blanc.Curve3Crv.step _ (decodeCall frame.sevm) _ = _ at accepted
+  rw [call] at accepted
+  rw [InvRunBy] at tail
+  rw [tail]
+  exact SetMinter.minter_of_setMinter accepted
+
+end Minter
+
+/-- **The minter assignment landed**: the model state 3Crv's replay reaches right after the minter
+assignment has the pool as minter. -/
+theorem c3_minter (j : JointDeployment) {s : Blanc.Curve3Crv.State}
+    (run : Lift.Curve3Crv.InvRunBy Lift.Curve3Crv.OwnerAnswerH
+      (Lift.Curve3Crv.Creation.curveDeployedState Lift.Curve3Crv.Creation.deployer)
+      j.c3Invocations s) :
+    s.minter = pool := by
+  obtain ⟨forkEq, hfork, -, -⟩ := j.minterBlock.txSplit_muir (by
+    rw [j.minterNumber, j.minterTime]; decide +kernel) j.minterCut
+  obtain ⟨hsg, hbal⟩ := muir_lanes hfork
+  obtain ⟨index, _, head, sameFrames, sameOut⟩ :=
+    j.minterBlock.bodyTrace.exists_item_head j.minterCut j.minterSlot
+      (tx := Lift.Curve3Crv.SetMinter.tx) rfl hsg hbal
+  have success := j.minterBlock.txSplit_error_eq_none_of_receipt j.minterCut
+    (by rw [forkEq]; rfl) (JointDeployment.lookup_at index j.minterLookup) j.minterSucceeded
+  have root : ∃ frame, j.minterCut.head.settledFrames = frame :: Exec.descendantFrames frame.run ∧
+      frame.sevm.currentTarget = c3Adr ∧ frame.sevm.data = Lift.Curve3Crv.SetMinter.callData := by
+    rw [← sameFrames]
+    exact Lift.Curve3Crv.SetMinter.root_of_success head hfork (by rw [sameOut]; exact success)
+  obtain ⟨frame, heads, target, data⟩ := root
+  obtain ⟨hcode, -, hinv⟩ := j.c3Created
+  have installed : some (j.c3Cut.afterBenv.state.getCode c3Adr).toList =
+      Lift.Curve3Crv.c3crvSem.image := by
+    rw [hcode]
+    rfl
+  have ready := Lift.Curve3Crv.c3crv_mid_readyH j.c3Trace installed hinv j.fresh
+  have inTrace : ∀ f ∈ j.minterCut.head.settledFrames, f ∈ j.c3Trace.settledFrames := by
+    intro f member
+    change f ∈ j.c3Mid.settledFrames ++ j.minterBlock.settledFrames
+    rw [j.minterBlock.settledFrames_throughCut j.minterCut]
+    exact List.mem_append_right _ (List.mem_append_left _ (List.mem_append_right _ member))
+  have readyFrame := ready frame (inTrace frame (by rw [heads]; exact List.mem_cons_self))
+  have silent : ∀ f ∈ Exec.descendantFrames frame.run,
+      Lift.Curve3Crv.committedFrameInvocations c3Adr f = [] := fun f member =>
+    Lift.Curve3Crv.committedFrameInvocations_nil_of_static
+      (ready f (inTrace f (by rw [heads]; exact List.mem_cons_of_mem _ member)))
+      (Lift.Curve3Crv.c3crv_descendants_staticH readyFrame target f member)
+  have run' : Lift.Curve3Crv.InvRunBy Lift.Curve3Crv.OwnerAnswerH
+      (Lift.Curve3Crv.Creation.curveDeployedState Lift.Curve3Crv.Creation.deployer)
+      ((j.c3Mid.settledFrames ++ (j.minterBlock.bodyTrace.beacon.settledFrames ++
+        j.minterBlock.bodyTrace.history.settledFrames ++ j.minterCut.before.settledFrames) ++
+          frame :: Exec.descendantFrames frame.run).flatMap
+        (Lift.Curve3Crv.committedFrameInvocations c3Adr)) s := by
+    have shape : j.c3Invocations = (j.c3Mid.settledFrames ++
+        (j.minterBlock.bodyTrace.beacon.settledFrames ++
+          j.minterBlock.bodyTrace.history.settledFrames ++ j.minterCut.before.settledFrames ++
+            j.minterCut.head.settledFrames)).flatMap
+        (Lift.Curve3Crv.committedFrameInvocations c3Adr) := rfl
+    rw [shape, heads, ← List.append_assoc] at run
+    exact run
+  have word : Lift.Curve3Crv.SetMinter.poolWord.toAdr = pool := by decide +kernel
+  rw [← word]
+  exact minter_of_split run' target data silent
+
+/-! ## The headline -/
+
+/-- **The checkpoint is the replay.** Right after the minter assignment both runtimes are installed
+and `JointCheckpoint` holds of two states: the pool's is the state its model reaches from the
+constructor's `poolInitState deployTime` over exactly the committed pool calls between the pool's
+creation and the cut, each authentic and entered at a checkpoint of the state its prefix reaches; and
+3Crv's is the state its model reaches over exactly its committed invocations from its deployed state. -/
+theorem joint_root_replay (j : JointDeployment) :
+    some (j.cutState.getCode pool).toList = Lift.Curve3Pool.poolSem.image ∧
+    some (j.cutState.getCode c3Adr).toList = Lift.Curve3Crv.c3crvSem.image ∧
+    ∃ (invs : List Lift.Curve3Pool.PoolInvocation) (ps : Lift.Curve3Pool.State)
+      (cs : Blanc.Curve3Crv.State),
+      invs.flatMap (fun i => Lift.Curve3Pool.poolSubtreeFrames pool i.frame) = j.poolFrames ∧
+      (∀ i ∈ invs, i.Authentic pool) ∧
+      Lift.Curve3Pool.PoolEntries
+        (Lift.Curve3Pool.Creation.poolInitState Lift.Curve3Pool.Creation.deployTime.toNat) invs ∧
+      Lift.Curve3Pool.PoolRun
+        (Lift.Curve3Pool.Creation.poolInitState Lift.Curve3Pool.Creation.deployTime.toNat) invs ps ∧
+      Lift.Curve3Pool.runPool
+        (Lift.Curve3Pool.Creation.poolInitState Lift.Curve3Pool.Creation.deployTime.toNat) invs =
+          some ps ∧
+      Lift.Curve3Crv.InvRunBy Lift.Curve3Crv.OwnerAnswerH
+        (Lift.Curve3Crv.Creation.curveDeployedState Lift.Curve3Crv.Creation.deployer)
+        j.c3Invocations cs ∧
+      JointCheckpoint pool c3Adr ps cs j.c3Keys j.cutState := by
+  -- the pool
+  obtain ⟨hfork, hbasefee, htime, _, head, success⟩ := j.pool_head
+  obtain ⟨hcode, hstor⟩ := pool_created_of_head head hfork hbasefee htime success
+  have poolInstalled : some (j.poolCut.afterBenv.state.getCode pool).toList =
+      Lift.Curve3Pool.poolSem.image := by
+    change some (j.poolCut.txState.getCode pool).toList = _
+    rw [hcode]
+    rfl
+  have poolInitial : Lift.Curve3Pool.Checkpoint (j.poolCut.afterBenv.state.getStor pool)
+      (Lift.Curve3Pool.Creation.poolInitState Lift.Curve3Pool.Creation.deployTime.toNat) := by
+    change Lift.Curve3Pool.Checkpoint (j.poolCut.txState.getStor pool) _
+    rw [hstor]
+    exact Lift.Curve3Pool.Creation.deployedStor_checkpoint (by decide)
+  obtain ⟨poolCode, invs, obs, auth, entries, ps, run, fold, poolCk, -, htoken⟩ :=
+    Lift.Curve3Pool.pool_window_history j.poolMid j.minterBlock j.minterCut poolInstalled poolInitial
+      j.poolEnv
+  -- 3Crv
+  obtain ⟨c3Hcode, -, hinv⟩ := j.c3Created
+  have c3Installed : some (j.c3Cut.afterBenv.state.getCode c3Adr).toList =
+      Lift.Curve3Crv.c3crvSem.image := by
+    rw [c3Hcode]
+    rfl
+  obtain ⟨c3Code, cs, c3Run, c3Final⟩ := Lift.Curve3Crv.c3crv_window_framesHist j.c3Mid j.minterBlock
+    j.minterCut c3Installed hinv j.fresh
+  exact ⟨poolCode, c3Code, invs, ps, cs, obs, auth, entries, run, fold, c3Run,
+    { poolCk := poolCk
+      c3 := c3Final
+      tokenIs := by rw [htoken]; decide
+      minterIs := c3_minter j c3Run
+      apart := by decide }⟩
+
+/-- **The joint deployment root.** Over one configured history from 3Crv's actual creation through
+the pool's and the minter assignment, right after the assignment both runtimes are installed and
+`JointCheckpoint` holds: the pool's storage abstracts a replayed state whose coins and token are the
+constructor's (`joint_root_replay` says which), and 3Crv's the state its model reaches over exactly
+its committed invocations from its deployed state, with the pool as minter. -/
+theorem joint_root (j : JointDeployment) :
+    some (j.cutState.getCode pool).toList = Lift.Curve3Pool.poolSem.image ∧
+    some (j.cutState.getCode c3Adr).toList = Lift.Curve3Crv.c3crvSem.image ∧
+    ∃ ps cs, Lift.Curve3Crv.InvRunBy Lift.Curve3Crv.OwnerAnswerH
+        (Lift.Curve3Crv.Creation.curveDeployedState Lift.Curve3Crv.Creation.deployer)
+        j.c3Invocations cs ∧
+      JointCheckpoint pool c3Adr ps cs j.c3Keys j.cutState := by
+  obtain ⟨poolCode, c3Code, _, ps, cs, -, -, -, -, -, run, joint⟩ := joint_root_replay j
+  exact ⟨poolCode, c3Code, ps, cs, run, joint⟩
+
+end Blanc.Composition.Curve3PoolJointRoot

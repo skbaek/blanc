@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceD0
 import Blanc.Lift.FrameWalkAligned
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -54,7 +55,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
 -- SEGMENT: rliD1
 /-- **`D1`, `fees` and the fee loop's counter** (`0x32ba` → `0x336e`). -/
 theorem xa_rli_d1 (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {M : Mem} {D0 T F AF A o0 o1 o2 n0 n1 n2 : B256}
     (hV : VW M [(0x340, D0), (0x140, T), (0x1e0, F), (0x200, AF), (0x220, A), (0x280, o0), (0x2a0, o1),
       (0x2c0, o2), (0x2e0, n0), (0x300, n1), (0x320, n2)])

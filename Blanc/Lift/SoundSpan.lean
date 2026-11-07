@@ -208,7 +208,7 @@ theorem SilentSet.execFreeSet {fs : List SFunc} {S : List Nat} (h : SilentSet fs
 def SpanClaim (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool) (E : List Nat)
     (pk : Exec.Deriv) : Prop :=
   ∀ (post : Devm), pk.exn = .ok post → pk.sevm.code = code →
-  CoveredFork pk.sevm.benvStat.fork →
+  pk.sevm.benvStat.rules.stateGas = none →
   ∀ (m : Nat) (a : List AVal) (f : SFunc) (ρ : B256) (S base : List B256) (μ : MemMap),
     checkNodeM code c.entries ms b m pk.pc a μ f = true → f.execFreeIn E = true →
     pk.devm.stack = S ++ base → FrameMatches ρ a S → MemMatches ρ μ pk.devm.memory →
@@ -392,7 +392,7 @@ theorem node_spanM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool} {
             exact hcheck.2
           have hstack' : inter.stack = Bytes.toB256 bs :: (S ++ base) := by
             rw [push_run_stack run, hstack]
-          obtain ⟨hframe', hmem'⟩ := step_mem_sound b hfork hframe hstack hmem run
+          obtain ⟨hframe', hmem'⟩ := step_mem_sound_noStateGas b hfork hframe hstack hmem run
             (by rw [hstack']; rfl)
             (show FrameMatches ρ (.const (Bytes.toB256 bs) :: a) (Bytes.toB256 bs :: S) from
               List.Forall₂.cons rfl hframe)
@@ -426,7 +426,7 @@ theorem node_spanM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool} {
               · rw [indexPattern_map_label hlen]
                 exact frameMatches_matches hframe
               · exact matches_some_map base
-            have hout := ninstTransfer_run hfork hinput
+            have hout := ninstTransfer_run_noStateGas hfork hinput
               (ninstTransfer_append (base.map some) (ninstTransfer_map (label a ρ) rfl htrans)) run
             rw [mapM_readBack_label hread] at hout
             rcases matches_split hout with ⟨S', below, hsp, hfirst, hbelow⟩
@@ -435,7 +435,7 @@ theorem node_spanM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool} {
             have hframe0 : FrameMatches ρ a' S' := by
               rw [hfold]
               exact frameMatches_foldTop hframe hstack run hinter (matches_to_frame hfirst)
-            obtain ⟨hframe', hmem'⟩ := step_mem_sound b hfork hframe hstack hmem run hinter hframe0
+            obtain ⟨hframe', hmem'⟩ := step_mem_sound_noStateGas b hfork hframe hstack hmem run hinter hframe0
             refine ⟨_, _, _, hchild, hinter, hframe', hmem', fun hret => ?_⟩
             rcases RetIn.of_step b hret with h | h | h
             · exact .inl (ret_mem_of_readBack hread (ret_mem_of_foldTop (hfold ▸ h)))
@@ -706,7 +706,7 @@ to `ρ` at an actual node with the same remaining direct children. -/
 theorem node_span_childFrames {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     {E : List Nat} (hc : Cert.CheckedM code c ms b) (hE : ExecFreeSet c.prog E = true)
     {pc : Nat} {sevm : Sevm} {d post : Devm} (exc : Exec pc sevm d (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : sevm.benvStat.rules.stateGas = none)
     {m : Nat} {a : List AVal} {f : SFunc} {ρ : B256} {S base : List B256} {μ : MemMap}
     (hcheck : checkNodeM code c.entries ms b m pc a μ f = true) (hfree : f.execFreeIn E = true)
     (hstack : d.stack = S ++ base) (hframe : FrameMatches ρ a S)

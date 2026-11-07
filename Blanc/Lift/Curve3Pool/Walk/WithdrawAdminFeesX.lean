@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Curve3Pool.Walk.AdminBalancesX
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLoop
@@ -32,13 +33,13 @@ open Jaune Blanc.Lift
 /-- **Guards of `withdraw_admin_fees`**: no value, the caller is the owner, the counter at
 `0x140` set to `0` with `[3, 0x140]` on the stack, entering the loop at `0x4d5e`. -/
 theorem wdx_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (h : XAt sevm post 0x4d3a (St b [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G) L) :
     sevm.value = 0 ∧ sevm.caller.toB256 = (b.getStor sevm.currentTarget).get ownerSlot ∧
     ∃ G' M' img', Mem.Wf M' ∧ Mem.Reads M' img' ∧
       Region img' 0x140 (Nat.toB256 0).toBytes ∧
       XAt sevm post 0x4d5e
-        (St (afterSload sevm b ownerSlot) [Bytes.toB256 [0x03], Bytes.toB256 [0x01, 0x40]]
+        (St (afterSloadH sevm b ownerSlot) [Bytes.toB256 [0x03], Bytes.toB256 [0x01, 0x40]]
           M' G') L := by
   have hR : Mem.Reads (vyMem Mem.empty (Sevm.dataWord sevm 0))
       (vyImg [] (Sevm.dataWord sevm 0)) :=
@@ -50,7 +51,7 @@ theorem wdx_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xa 2
-  xw 0x4d48 (.reg .sload) ri_sload
+  xw 0x4d48 (.reg .sload) ri_sloadF
   rw [show Bytes.toB256 [4] = ownerSlot from by decide] at h
   xa 3
   xji 0x4d4e 0x4d52 hw
@@ -118,10 +119,10 @@ balance load; either the fresh answer equals the recording (skip to the tail at 
 or it exceeds it (fall into the transfer at `0x4dfc`). -/
 theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
     {img : Bytes} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
-    (k : Fin 3) (hid : IdReady sevm d)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
+    (k : Fin 3) (hid : IdReadyH sevm d)
     (hpc : d.getCode sevm.currentTarget ≠ .empty)
-    (hkeep : RlKeep sevm L)
+    (hkeep : KeepCoin sevm ((d.getStor sevm.currentTarget).get (coinSlot k)) L)
     (hctrR : Region img 0x140 (Nat.toB256 ↑k).toBytes)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hcoinK : ¬ sevm.benvStat.rules.isPrecomp
@@ -142,7 +143,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
       (d'.getStor sevm.currentTarget) = (d.getStor sevm.currentTarget) ∧
       d'.logs = d.logs ∧
       d'.output = d.output ∧
-      0 < sevm.depth ∧ IdReady sevm d' ∧
+      0 < sevm.depth ∧ IdReadyH sevm d' ∧
       d'.getCode sevm.currentTarget = d.getCode sevm.currentTarget ∧
       Region img' 0x140 (Nat.toB256 ↑k).toBytes ∧
       Region img' 0x160 ((d.getStor sevm.currentTarget).get (coinSlot k)).toBytes ∧
@@ -174,7 +175,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
   xs 0x4d7b (.reg .add) ri_add
   have hslot : coinsBase + Nat.toB256 ↑k = coinSlot k := rfl
   rw [hslot] at h
-  xw 0x4d7c (.reg .sload) ri_sload
+  xw 0x4d7c (.reg .sload) ri_sloadF
   rw [getStorVal_eq] at h
   xs 0x4d7f (.push [0x01, 0x60] (by decide)) ri_push
   xmo 0x4d80 (.reg .mstore) (ri_mstore_imgAt (o := 0x160) rfl)
@@ -218,8 +219,8 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
   xmo 0x4d9c (.reg .mload) (ri_mload_imgAt (o := 0x160) rfl)
   rw [Region.read hcoinW2 (B256.length_toBytes _), B256.toB256_toBytes] at h
   xs 0x4d9d (.reg .gas) ri_gas_remaining
-  replace h := xa_staticcall_img (pc' := 0x4d9e) (i := 0x1bc) (n := 0x24) (o := 0x220)
-    (z := 0x20) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
+  replace h := xa_staticcall_imgH (pc' := 0x4d9e) (i := 0x1bc) (n := 0x24) (o := 0x220)
+    (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
   obtain ⟨d1, flag, out, M', L1, h, -, hR, hW, hrd, hob, hstor1, hlogs1, hk⟩ := h
   have hctrR_G : Region (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt
@@ -236,16 +237,17 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
     hclogs, hcpre, hcpost⟩
   · exact absurd hpre hcoinK
   clear hk hw
-  have h4 : d1.getCode 4 = d.getCode 4 := by
-    rw [hcpost, (hkeep c (by rw [hL]; exact List.mem_cons_self)).2, hcpre, afterSload_getCode]
-  have hid1 : IdReady sevm d1 :=
-    ⟨by rw [h4]; exact hid.nodeleg,
-      hacc _ (by rw [afterSload_accessedAddresses]; exact hid.warm), hid.pre, hid.fork⟩
-  have hcode1 : d1.getCode sevm.currentTarget = d.getCode sevm.currentTarget := by
-    have hpc0 : (afterSload sevm d (coinSlot k)).getCode sevm.currentTarget ≠ .empty := by
-      rw [afterSload_getCode]; exact hpc
-    rw [hcodeKeep _ hpc0, afterSload_getCode]
   rw [wdx_input] at hdata
+  have h4 : d1.getCode 4 = d.getCode 4 := by
+    rw [hcpost, (hkeep c (by rw [hL]; exact List.mem_cons_self) htgt
+      (poolCoinSel_balanceOfData hdata)).2, hcpre, afterSloadH_getCode]
+  have hid1 : IdReadyH sevm d1 :=
+    ⟨by rw [h4]; exact hid.nodeleg,
+      hacc _ (by rw [afterSloadH_accessedAddresses]; exact hid.warm), hid.pre, hid.stateGas⟩
+  have hcode1 : d1.getCode sevm.currentTarget = d.getCode sevm.currentTarget := by
+    have hpc0 : (afterSloadH sevm d (coinSlot k)).getCode sevm.currentTarget ≠ .empty := by
+      rw [afterSloadH_getCode]; exact hpc
+    rw [hcodeKeep _ hpc0, afterSloadH_getCode]
   xa 5
   xji 0x4daf 0x4db3 hw
   · xdead
@@ -282,7 +284,7 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
   xs 0x4dd7 (.reg .add) ri_add
   have hslotB : balancesBase + Nat.toB256 ↑k = balanceSlot k := rfl
   rw [hslotB] at h
-  xw 0x4dd8 (.reg .sload) ri_sload
+  xw 0x4dd8 (.reg .sload) ri_sloadF
   rw [getStorVal_eq] at h
   xa 5
   xji 0x4de0 0x4de4 hw
@@ -364,14 +366,14 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
     refine ⟨c, out, L1, _, _, _, _,
       Bytes.toB256 (out.take 32),
       (d1.getStor sevm.currentTarget).get (balanceSlot k), hL, htgt, hdata, hstat, hout,
-      hlen32, hclogs, rfl, by rw [afterSload_getStor sevm d1 (balanceSlot k)], hge,
-      by rw [afterSload_getStor sevm d1 (balanceSlot k), hstor1,
-        afterSload_getStor sevm d (coinSlot k)],
-      by rw [afterSload_logs sevm d1 (balanceSlot k), hlogs1,
-        afterSload_logs sevm d (coinSlot k)],
-      by rw [afterSload_output sevm d1 (balanceSlot k), houtKeep,
-        afterSload_output sevm d (coinSlot k)], hdepth, hid1.afterSload _,
-      by rw [afterSload_getCode, hcode1], hctrR_H, hcoinR0, hfeesR0, hR, hW,
+      hlen32, hclogs, rfl, by rw [afterSloadH_getStor sevm d1 (balanceSlot k)], hge,
+      by rw [afterSloadH_getStor sevm d1 (balanceSlot k), hstor1,
+        afterSloadH_getStor sevm d (coinSlot k)],
+      by rw [afterSloadH_logs sevm d1 (balanceSlot k), hlogs1,
+        afterSloadH_logs sevm d (coinSlot k)],
+      by rw [afterSloadH_output sevm d1 (balanceSlot k), houtKeep,
+        afterSloadH_output sevm d (coinSlot k)], hdepth, hid1.afterSloadH _,
+      by rw [afterSloadH_getCode, hcode1], hctrR_H, hcoinR0, hfeesR0, hR, hW,
       Or.inr ⟨hne, h⟩⟩
   · have heqFees : B256.gtCheck (Bytes.toB256 (out.take 32) -
         (d1.getStor sevm.currentTarget).get (balanceSlot k)) 0 = 0 :=
@@ -385,14 +387,14 @@ theorem wdx_iter_static {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M :
     refine ⟨c, out, L1, _, _, _, _,
       Bytes.toB256 (out.take 32),
       (d1.getStor sevm.currentTarget).get (balanceSlot k), hL, htgt, hdata, hstat, hout,
-      hlen32, hclogs, rfl, by rw [afterSload_getStor sevm d1 (balanceSlot k)], hge,
-      by rw [afterSload_getStor sevm d1 (balanceSlot k), hstor1,
-        afterSload_getStor sevm d (coinSlot k)],
-      by rw [afterSload_logs sevm d1 (balanceSlot k), hlogs1,
-        afterSload_logs sevm d (coinSlot k)],
-      by rw [afterSload_output sevm d1 (balanceSlot k), houtKeep,
-        afterSload_output sevm d (coinSlot k)], hdepth, hid1.afterSload _,
-      by rw [afterSload_getCode, hcode1], hctrR_H, hcoinR0, hfeesR0, hR, hW,
+      hlen32, hclogs, rfl, by rw [afterSloadH_getStor sevm d1 (balanceSlot k)], hge,
+      by rw [afterSloadH_getStor sevm d1 (balanceSlot k), hstor1,
+        afterSloadH_getStor sevm d (coinSlot k)],
+      by rw [afterSloadH_logs sevm d1 (balanceSlot k), hlogs1,
+        afterSloadH_logs sevm d (coinSlot k)],
+      by rw [afterSloadH_output sevm d1 (balanceSlot k), houtKeep,
+        afterSloadH_output sevm d (coinSlot k)], hdepth, hid1.afterSloadH _,
+      by rw [afterSloadH_getCode, hcode1], hctrR_H, hcoinR0, hfeesR0, hR, hW,
       Or.inl ⟨heq, h⟩⟩
 
 /-! ## The loop tail -/
@@ -466,7 +468,7 @@ identity precompile to `0x320`; no child, storage/logs/output kept. -/
 theorem wdx_xfer_stage {sevm : Sevm} {post d' : Devm} {L : List Exec.Frame} {M : Mem}
     {img : Bytes} {G : Nat}
     (hcode : sevm.code = code)
-    (k : Fin 3) (feesW : B256) (hdepth : 0 < sevm.depth) (hid : IdReady sevm d')
+    (k : Fin 3) (feesW : B256) (hdepth : 0 < sevm.depth) (hid : IdReadyH sevm d')
     (hctrR : Region img 0x140 (Nat.toB256 ↑k).toBytes)
     (hcoinR : Region img 0x160
       ((d'.getStor sevm.currentTarget).get (coinSlot k)).toBytes)
@@ -514,7 +516,7 @@ theorem wdx_xfer_stage {sevm : Sevm} {post d' : Devm} {L : List Exec.Frame} {M :
       Bytes.toB256 [0x02, 0xc0] := by decide
   rw [hadd3] at h
   xa 3
-  replace h := xa_identity_img (pc' := 0x4e42) (i := 0x2c0) (n := 4) (o := 0x320)
+  replace h := xa_identity_imgH (pc' := 0x4e42) (i := 0x2c0) (n := 4) (o := 0x320)
     (z := 4) hid (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide)
     (by decide) hR hW h
   clear hR hW
@@ -658,7 +660,7 @@ theorem wdx_xfer_payload {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
 /-- The checked identity copy of the complete transfer payload (`0x4e78 → 0x4e94`). -/
 theorem wdx_xfer_copy {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
     {M : Mem} {img : Bytes} {G : Nat} (hcode : sevm.code = code)
-    (k : Fin 3) (coin fees : B256) (hid : IdReady sevm b)
+    (k : Fin 3) (coin fees : B256) (hid : IdReadyH sevm b)
     (hctr : Region img 0x140 (Nat.toB256 ↑k).toBytes)
     (hcoin : Region img 0x160 coin.toBytes)
     (hdata : Region img 0x300 ((0x44 : B256).toBytes ++
@@ -677,7 +679,7 @@ theorem wdx_xfer_copy {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
   xmo 0x4e7a (.reg .mload) (ri_mload_imgAt (o := 0x300) rfl)
   rw [hdata.left.read (B256.length_toBytes _), B256.toB256_toBytes] at h
   xa 9
-  replace h := xa_identity_img (pc' := 0x4e89) (i := 0x300) (n := 0x64)
+  replace h := xa_identity_imgH (pc' := 0x4e89) (i := 0x300) (n := 0x64)
     (o := 0x3a0) (z := 0x64) hid (atN hcode (by kernel_rfl)) rfl
     (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
@@ -710,13 +712,13 @@ theorem wdx_xfer_copy {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
 /-- The actual transfer CALL and its successful flag (`0x4e94 → 0x4eb1`). -/
 theorem wdx_xfer_call {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
     {M : Mem} {img : Bytes} {G : Nat} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (coin fees : B256)
+    (hfork : HistFork sevm.benvStat.fork) (coin fees : B256)
     (hcoinR : Region img 0x160 coin.toBytes)
     (hdata : Region img 0x3a0 ((0x44 : B256).toBytes ++
       (transferSel ++ sevm.caller.toB256.toBytes ++ fees.toBytes)))
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp coin.toAdr)
-    (hK : RlKeep sevm L)
+    (hK : KeepCoin sevm coin L)
     (h : XAt sevm post 0x4e94
       (St b [Bytes.toB256 [3], Bytes.toB256 [1, 0x40]] M G) L) :
     ∃ c L' d G', L = c :: L' ∧
@@ -740,8 +742,8 @@ theorem wdx_xfer_call {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
     refine Region.slice hdata.right ?_
     simp only [List.length_append, B256.length_toBytes, transferSel,
       List.length_cons, List.length_nil]
-  replace h := xa_call_img (pc' := 0x4ea8) (i := 0x3c0) (n := 0x44)
-    (o := 0x460) (z := 0x20) hfork (atN hcode (by kernel_rfl)) rfl
+  replace h := xa_call_imgH (pc' := 0x4ea8) (i := 0x3c0) (n := 0x44)
+    (o := 0x460) (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl
     (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, flag, L', h, hrun, hrd, hk⟩ := h
@@ -754,12 +756,12 @@ theorem wdx_xfer_call {sevm : Sevm} {post b : Devm} {L : List Exec.Frame}
   · exact absurd hp hcoin
   xjd 0x4eb1
   rw [zero_lit] at hc
-  refine ⟨c, L', d, _, rfl, ?_, hK.head, hR, hW, hrd, h⟩
+  refine ⟨c, L', d, _, rfl, ?_, hK c List.mem_cons_self hc.target (poolCoinSel_transferData hc.data), hR, hW, hrd, h⟩
   exact hc.congr_left (fun _ => rfl) (fun _ => rfl) rfl rfl rfl
 
 /-- The transfer reply passes the deployed raw-call check (`0x4eb1 → 0x4f3c`). -/
 theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} (hcode : sevm.code = code) (hid : IdReady sevm d)
+    {img : Bytes} (hcode : sevm.code = code) (hid : IdReadyH sevm d)
     (hR : Mem.Reads M (Bytes.writeAt img 0x460 (d.returnData.take 0x20))) (hW : Mem.Wf M)
     (hrd : d.returnData.length < 2 ^ 256)
     (h : XAt sevm post 0x4eb1 (St d [3, 0x140] M G) L) :
@@ -801,7 +803,7 @@ theorem wdx_xfer_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : N
   have hsz : (Bytes.toB256 [0x20] + nW).toNat = 32 + (d.returnData.take 32).length := by
     rw [B256.toNat_add, hn, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
     exact Nat.mod_eq_of_lt (by omega)
-  replace h := xa_identity_img (pc' := 0x4ee0) (i := 0x440) (n := 32 + (d.returnData.take 32).length)
+  replace h := xa_identity_imgH (pc' := 0x4ee0) (i := 0x440) (n := 32 + (d.returnData.take 32).length)
     (o := 0x240) (z := 32 + (d.returnData.take 32).length) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) hsz (by decide) hsz hR hW h
   clear hR hW

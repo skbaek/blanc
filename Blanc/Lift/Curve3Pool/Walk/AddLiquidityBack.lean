@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidity
 
 /-!
@@ -16,10 +17,10 @@ namespace Blanc.Lift.Curve3Pool
 open Jaune Blanc.Lift
 
 /-- **`add_liquidity` from the mint amount to the end** (`0x170b` → end). -/
-theorem xa_al_mintTailC {sevm : Sevm} {P : Adr → Prop}
+theorem xa_al_mintTailC {sevm : Sevm}
     {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {f0 f1 f2 T D0 D1 D2 : B256} {τ : Stor}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hf0 : WordAt img 0x140 f0) (hf1 : WordAt img 0x160 f1) (hf2 : WordAt img 0x180 f2)
     (ht : WordAt img 0x240 T) (hd0 : WordAt img 0x2e0 D0) (hd1 : WordAt img 0x900 D1)
@@ -27,8 +28,7 @@ theorem xa_al_mintTailC {sevm : Sevm} {P : Adr → Prop}
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = τ.get x)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (τ.get tokenSlot).toAdr)
     (hpc : b.getCode sevm.currentTarget ≠ .empty)
-    (hPt : P (τ.get tokenSlot).toAdr)
-    (hK : ∀ c ∈ L, P c.sevm.currentTarget → ∀ x,
+    (hK : ∀ c ∈ L, c.sevm.currentTarget = (τ.get tokenSlot).toAdr → ∀ x,
       (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x)
     (h : XAt sevm post 0x170b (St b [] M G) L) :
     ∃ (mint : B256) (cm : Exec.Frame), L = [cm] ∧
@@ -46,7 +46,7 @@ theorem xa_al_mintTailC {sevm : Sevm} {P : Adr → Prop}
   obtain ⟨hslip, M2, img2, G2, hR2, hW2, hA2, P2, h⟩ := xa_al_slippage hcode hR1 hW1 hA1 w1 h
   obtain ⟨cm, L', d, img3, G3, rfl, hc, hlen, hdk, hR3, hW3, hA3, P3, h⟩ :=
     xa_al_mintCallC hcode hfork hR2 hW2 hA2 (P2 _ _ w1 (by omega)) (hst tokenSlot) htok hpc
-      (fun c hc ht => hK c hc (by rw [ht]; exact hPt)) h
+      (fun c hc ht => hK c hc (by rw [ht])) h
   have Q : ∀ o w, WordAt img o w → o + 32 ≤ 0xba0 → WordAt img3 o w := fun o w hw ho =>
     P3 o w (P2 o w (P1 o w hw ho) (by omega)) (by omega)
   obtain ⟨hadd, rfl, hsP, hlP, hoP⟩ := xa_al_finish hcode hfork hR3 hW3 hA3
@@ -61,7 +61,7 @@ theorem xa_al_mintTailC {sevm : Sevm} {P : Adr → Prop}
 /-- **`xa_al_mintTail`**: `xa_al_mintTailC` with every child keeping the pool. -/
 theorem xa_al_mintTail {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {f0 f1 f2 T D0 D1 D2 : B256} {τ : Stor}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hf0 : WordAt img 0x140 f0) (hf1 : WordAt img 0x160 f1) (hf2 : WordAt img 0x180 f2)
     (ht : WordAt img 0x240 T) (hd0 : WordAt img 0x2e0 D0) (hd1 : WordAt img 0x900 D1)
@@ -82,8 +82,8 @@ theorem xa_al_mintTail {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : 
       (∀ x, (post.getStor sevm.currentTarget).get x = (τ.set lockSlot 0).get x) ∧
       post.logs = b.logs ++ cm.post.logs ++ [alLog sevm f0 f1 f2 D1 (T + mint)] ∧
       post.output = b.output :=
-  xa_al_mintTailC (P := fun _ => True)
-    hcode hfork hR hW hA hf0 hf1 hf2 ht hd0 hd1 hd2 hst htok hpc trivial
+  xa_al_mintTailC
+    hcode hfork hR hW hA hf0 hf1 hf2 ht hd0 hd1 hd2 hst htok hpc
     (fun c hc _ => hkeep c hc) h
 
 /-- The pool storage after the three balance stores and the lock clear. -/
@@ -94,19 +94,18 @@ abbrev alStored (σ : Stor) (s0 s1 s2 : B256) : Stor :=
 /-- **`add_liquidity` from `D1` to the end** (see the module note): the first deposit stores the
 new balances with zero fees and `D2 = D1`; otherwise every fee iteration's checks pass, the
 stored balances are the fee loop's, and `D2` is `get_D_mem` at the fee-adjusted balances. -/
-theorem xa_al_backC {sevm : Sevm} {P : Adr → Prop}
+theorem xa_al_backC {sevm : Sevm}
     {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {F AF A T D0 D1 : B256} {old nv : Nat → B256} {σ : Stor}
     (hchk : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlPullImg img 3 F AF A T D0 old nv) (hd1 : WordAt img 0x900 D1)
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
     (htokB : ∀ k : Nat, k < 3 → balancesBase + Nat.toB256 k ≠ tokenSlot)
     (hpc : b.getCode sevm.currentTarget ≠ .empty)
-    (hPt : P (σ.get tokenSlot).toAdr)
-    (hK : ∀ c ∈ L, P c.sevm.currentTarget → ∀ x,
+    (hK : ∀ c ∈ L, c.sevm.currentTarget = (σ.get tokenSlot).toAdr → ∀ x,
       (c.post.getStor sevm.currentTarget).get x = (c.pre.getStor sevm.currentTarget).get x)
     (h : XAt sevm post 0x13e9 (St b [] M G) L) :
     ∃ (f0 f1 f2 s0 s1 s2 D2 mint : B256) (cm : Exec.Frame), L = [cm] ∧
@@ -141,8 +140,8 @@ theorem xa_al_backC {sevm : Sevm} {P : Adr → Prop}
       (P1 o w hw ho).write_other (by simp only [B256.length_toBytes]; omega)
     have hb1 : balancesBase + Bytes.toB256 [1] = balancesBase + Nat.toB256 1 := by decide
     have hb2 : balancesBase + Bytes.toB256 [2] = balancesBase + Nat.toB256 2 := by decide
-    have hb0 : afterSstore sevm b balancesBase (nv 0) =
-        afterSstore sevm b (balancesBase + Nat.toB256 0) (nv 0) := by rw [← al_bal0]
+    have hb0 : afterSstoreH sevm b balancesBase (nv 0) =
+        afterSstoreH sevm b (balancesBase + Nat.toB256 0) (nv 0) := by rw [← al_bal0]
     rw [hb1, hb2, hb0] at h
     obtain ⟨mint, cm, rfl, hmint, hslip, hadd, hct, hcd, hcv, hcs, hcl, hsP, hlP, hoP⟩ :=
       xa_al_mintTailC (τ := ((σ.set (balancesBase + Nat.toB256 0) (nv 0)).set
@@ -152,14 +151,14 @@ theorem xa_al_backC {sevm : Sevm} {P : Adr → Prop}
         (Q _ _ hm.m0.f2 (by omega) (by omega)) (Q _ _ hm.m0.supply (by omega) (by omega))
         (Q _ _ hm.m0.d0 (by omega) (by omega)) (Q _ _ hd1 (by omega) (by omega))
         (wa20.write_other (by simp only [B256.length_toBytes]; omega))
-        (fun x => by simp only [afterSstore_getStor_self, Stor.get_set_ite, hst])
+        (fun x => by simp only [afterSstoreH_getStor_self, Stor.get_set_ite, hst])
         (by rw [htokS]; exact htok)
-        (by simp only [afterSstore_getCode]; exact hpc) (by rw [htokS]; exact hPt) hK h
+        (by simp only [afterSstoreH_getCode]; exact hpc) (fun c hc ht => hK c hc (by rw [ht, htokS])) h
     refine ⟨0, 0, 0, nv 0, nv 1, nv 2, D1, mint, cm, rfl,
       .inl ⟨hT, rfl, rfl, rfl, rfl, rfl, rfl, rfl⟩, hmint, hslip, hadd,
       by rw [hct, htokS], hcd, hcv, hcs, hcl, hsP, ?_, ?_⟩
-    · rw [hlP]; simp only [afterSstore_logs]
-    · rw [hoP]; simp only [afterSstore_output]
+    · rw [hlP]; simp only [afterSstoreH_logs]
+    · rw [hoP]; simp only [afterSstoreH_output]
   · -- the fee loop and `D2`
     obtain ⟨f0, s0, a0, f1, s1, a1, f2, s2, a2, M2, img2, G2, hF0, hF1, hF2, hR2, hW2, hA2, hm2,
       h⟩ := xa_al_feeLoop hcode hfork hR1 hW1 hA1 (al_feeImg_of_pull hm hd1 hctr P1) h
@@ -172,20 +171,20 @@ theorem xa_al_backC {sevm : Sevm} {P : Adr → Prop}
         (K3 0 _ (by decide) (hm2.fs 0 (by decide))) (K3 1 _ (by decide) (hm2.fs 1 (by decide)))
         (K3 2 _ (by decide) (hm2.fs 2 (by decide))) (K3 8 _ (by decide) hm2.supply)
         (K3 13 _ (by decide) hm2.d0) (K3 62 _ (by decide) hm2.d1) w3
-        (fun x => by simp only [afterSstore_getStor_self, Stor.get_set_ite, hst])
+        (fun x => by simp only [afterSstoreH_getStor_self, Stor.get_set_ite, hst])
         (by rw [htokS]; exact htok)
-        (by simp only [afterSstore_getCode]; exact hpc) (by rw [htokS]; exact hPt) hK h
+        (by simp only [afterSstoreH_getCode]; exact hpc) (fun c hc ht => hK c hc (by rw [ht, htokS])) h
     refine ⟨f0, f1, f2, s0, s1, s2, D2, mint, cm, rfl,
       .inr ⟨hT, a0, a1, a2, hF0, hF1, hF2, hD2⟩, hmint, hslip, hadd,
       by rw [hct, htokS], hcd, hcv, hcs, hcl, hsP, ?_, ?_⟩
-    · rw [hlP]; simp only [afterSstore_logs]; rfl
-    · rw [hoP]; simp only [afterSstore_output]
+    · rw [hlP]; simp only [afterSstoreH_logs]; rfl
+    · rw [hoP]; simp only [afterSstoreH_output]
 
 /-- **`xa_al_back`**: `xa_al_backC` with every child keeping the pool. -/
 theorem xa_al_back {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {F AF A T D0 D1 : B256} {old nv : Nat → B256} {σ : Stor}
     (hchk : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlPullImg img 3 F AF A T D0 old nv) (hd1 : WordAt img 0x900 D1)
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
@@ -210,8 +209,8 @@ theorem xa_al_back {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
       (∀ x, (post.getStor sevm.currentTarget).get x = (alStored σ s0 s1 s2).get x) ∧
       post.logs = b.logs ++ cm.post.logs ++ [alLog sevm f0 f1 f2 D1 (T + mint)] ∧
       post.output = b.output :=
-  xa_al_backC (P := fun _ => True)
-    hchk hcode hfork hR hW hA hm hd1 hst htok htokB hpc trivial
+  xa_al_backC
+    hchk hcode hfork hR hW hA hm hd1 hst htok htokB hpc
     (fun c hc _ => hkeep c hc) h
 
 end Blanc.Lift.Curve3Pool

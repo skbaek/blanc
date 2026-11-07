@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvp
 import Blanc.Lift.Curve3Pool.Walk.ViewsA
 
@@ -59,7 +60,7 @@ theorem getVirtualPrice_eq {s : State} {e : Env} {amp x0 x1 x2 D T : Nat}
 
 /-- **The `get_virtual_price()` frame.** -/
 theorem xa_gvp (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selGetVirtualPrice)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
@@ -91,7 +92,7 @@ theorem xa_gvp (hc : Cert.CheckedM code cert mems true)
 /-- **`get_virtual_price()`'s raw effect**, given the certificate's checkedness. -/
 theorem gvp_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selGetVirtualPrice)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)

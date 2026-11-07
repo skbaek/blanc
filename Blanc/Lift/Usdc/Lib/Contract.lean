@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.CodeImage
+import Blanc.Lift.CodeImage
 import Blanc.Lift.Usdc.Lib.Cert
 
 /-! The certified code semantics of the 1,741-byte `SignatureChecker` library runtime at `usdcLib`.

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsCtaPost
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvpRaw
 
@@ -56,7 +57,7 @@ variable {sevm : Sevm} {post : Devm} {s : State}
 /-- **`calc_token_amount`'s raw effect**, given the certificate's checkedness. -/
 theorem cta_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selCalcTokenAmount)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)

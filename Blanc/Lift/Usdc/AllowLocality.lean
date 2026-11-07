@@ -1,4 +1,4 @@
-import Blanc.Lift.WriteSiteRows
+import Blanc.Lift.WriteSiteRowClass
 import Blanc.AddressSlotProofs
 import Blanc.Lift.Usdc.Slots
 import Blanc.Lift.Usdc.ImplV1Ws
@@ -36,62 +36,8 @@ namespace Blanc.Lift.Usdc
 
 open Jaune Blanc Blanc.Lift Blanc.Lift.WriteSite
 
-/-- solc's address mask. -/
-def addrMaskT : Term := .const 0xffffffffffffffffffffffffffffffffffffffff
-
-/-- The masked caller word, a caller-keyed row's owner. -/
-def callerWordT : Term := .op2 .and .caller addrMaskT
-
-/-- The masked calldata word 4, an owner-word row's owner (the signer of a signed write). -/
-def ownerWordT : Term := .op2 .and (.cd (.const 4)) addrMaskT
-
-/-- A version's selector table: the dispatcher's selector term and the selectors whose allowance
-writes are caller-keyed, owner-word keyed, and the initializers. -/
-structure SelTable where
-  selT : Term
-  callers : List B256
-  owners : List B256
-  inits : List B256
-
-/-- The site carries a guard `selT = c` with `c ∈ cs`. -/
-def hasSel (selT : Term) (cs : List B256) (s : Site) : Bool :=
-  s.guards.any fun g => g.1 == selT && cs.contains g.2
-
-/-- A root site is allowed by the table: non-increasing, a non-allowance known slot, an allowance
-row whose owner word fits its selector, or an initializer's. -/
-def allowSiteOk (t : SelTable) (s : Site) : Bool :=
-  s.nonInc ||
-    if s.slot.known then
-      match rowOf 10 s.slot with
-      | some (o, _) => (o == callerWordT && hasSel t.selT t.callers s) ||
-          (o == ownerWordT && hasSel t.selT t.owners s) || hasSel t.selT t.inits s
-      | none => true
-    else hasSel t.selT t.inits s
-
-/-- What the law allows a protected allowance write in frame `ε`. -/
-def AllowedFrame (t : SelTable) (pair : Adr) (ε : Env) : Prop :=
-  (t.selT.eval ε ∈ t.callers ∧ ε.caller.toAdr = pair) ∨
-  (t.selT.eval ε ∈ t.owners ∧ ((Term.cd (.const 4)).eval ε).toAdr = pair) ∨
-  t.selT.eval ε ∈ t.inits
-
-/-- The tracked spender words of the Pair's rows. -/
-def AllowKey (Tr : Adr → Prop) (w : B256) : Prop := ∃ g, Tr g ∧ g.toB256 = w
-
-theorem hasSel_sound {selT : Term} {cs : List B256} {s : Site} {ε : Env}
-    (h : hasSel selT cs s = true) (hk : selT.known = true) (hg : s.GuardsHold ε) :
-    selT.eval ε ∈ cs := by
-  simp only [hasSel, List.any_eq_true, Bool.and_eq_true, beq_iff_eq,
-    List.contains_iff_mem] at h
-  obtain ⟨g, hmem, rfl, hc⟩ := h
-  rw [← hg g hmem hk]
-  exact hc
-
-theorem addrMaskT_eval (t : Term) (ε : Env) :
-    (Term.op2 .and t addrMaskT).eval ε = (t.eval ε).toAdr.toB256 := by
-  have hm : (0xffffffffffffffffffffffffffffffffffffffff : B256) = ~~~ addressMask := by decide
-  show B256.and (t.eval ε) 0xffffffffffffffffffffffffffffffffffffffff = _
-  rw [hm]
-  exact and_mask_word (t.eval ε)
+/-- A root site is allowed by the table, at the allowance mapping (slot 10). -/
+abbrev allowSiteOk (t : SelTable) (s : Site) : Bool := rowSiteOk 10 t s
 
 /-- **The allowance law over a checked site list.** -/
 theorem allow_locality {t : SelTable} {pair : Adr} {Tr : Adr → Prop} {sites : List Site}
@@ -101,29 +47,8 @@ theorem allow_locality {t : SelTable} {pair : Adr} {Tr : Adr → Prop} {sites : 
     (run : SProg.RunP (WsStep sites ε P) fs sevm pre post) :
     SProg.RunP (fun s d n d' => P s d n d' ∧
         GuardObs (fun x => ∃ g, Tr g ∧ allowSlot pair g = x) (AllowedFrame t pair ε) s d n)
-      fs sevm pre post := by
-  have hloc := ws_row_locality (allowed := AllowedFrame t pair ε) sep ?hown ?htop run
-  case hown =>
-    intro s hs hni hg hk o k hr ho
-    have h1 := List.all_eq_true.mp hok s hs
-    simp only [allowSiteOk, hni, hk, hr, Bool.false_or, ↓reduceIte, Bool.or_eq_true,
-      Bool.and_eq_true, beq_iff_eq] at h1
-    rcases h1 with (⟨rfl, hc⟩ | ⟨rfl, hc⟩) | hc
-    · rw [callerWordT, addrMaskT_eval] at ho
-      exact Or.inl ⟨hasSel_sound hc hsel hg, Adr.toB256_inj ho⟩
-    · rw [ownerWordT, addrMaskT_eval] at ho
-      exact Or.inr (Or.inl ⟨hasSel_sound hc hsel hg, Adr.toB256_inj ho⟩)
-    · exact Or.inr (Or.inr (hasSel_sound hc hsel hg))
-  case htop =>
-    intro s hs hni hg hk
-    have h1 := List.all_eq_true.mp hok s hs
-    simp only [allowSiteOk, hni, hk, Bool.false_or, Bool.false_eq_true, ↓reduceIte] at h1
-    exact Or.inr (Or.inr (hasSel_sound h1 hsel hg))
-  refine SProg.RunP.mono ?_ hloc
-  intro s d n d' h
-  refine ⟨h.1, GuardObs.mono ?_ h.2⟩
-  rintro x ⟨g, hTg, rfl⟩
-  exact ⟨g.toB256, ⟨g, hTg, rfl⟩, rfl⟩
+      fs sevm pre post :=
+  row_locality hsel hok sep run
 
 /-! ## The three versions -/
 

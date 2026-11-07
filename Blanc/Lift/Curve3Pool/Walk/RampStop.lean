@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RampKit
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -26,7 +27,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : Stat
 -- SEGMENT: stopRampFrame
 /-- **The `stop_ramp_A()` frame.** -/
 theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selStopRampA) (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
@@ -48,7 +49,7 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xa 2
-  xw 0x4928 (.reg .sload) ri_sload  -- 4927 SLOAD
+  xw 0x4928 (.reg .sload) ri_sloadF  -- 4927 SLOAD
   xa 3
   xji 0x492e 0x4932 hw
   · xdead
@@ -60,8 +61,8 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
   cvpc 0x493a  -- 4939 PC
   xa 2
   xjmp 0xa9  -- 493e JUMP
-  have ha1 : Abstracts ((afterSload sevm b (Bytes.toB256 [4])).getStor sevm.currentTarget) s := by
-    rw [afterSload_getStor]; exact ha
+  have ha1 : Abstracts ((afterSloadH sevm b (Bytes.toB256 [4])).getStor sevm.currentTarget) s := by
+    rw [afterSloadH_getStor]; exact ha
   obtain ⟨A, b2, M, _, hb2, h, hA, hV1⟩ := xa_vAV hc hcode hfork ha1 hV h
   clear hV
   have hV := hV1
@@ -78,15 +79,15 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
   xs 0x4953 (.push [0x01, 0x40] (by decide)) ri_push  -- 4950 PUSH2 0x0140
   xl 0x4954 0x140  -- 4953 MLOAD
   xs 0x4956 (.push [0x06] (by decide)) ri_push  -- 4954 PUSH1 0x06
-  xw 0x4957 (.reg .sstore) ri_sstore  -- 4956 SSTORE
+  xw 0x4957 (.reg .sstore) ri_sstoreF  -- 4956 SSTORE
   xs 0x495a (.push [0x01, 0x40] (by decide)) ri_push  -- 4957 PUSH2 0x0140
   xl 0x495b 0x140  -- 495a MLOAD
   xs 0x495d (.push [0x07] (by decide)) ri_push  -- 495b PUSH1 0x07
-  xw 0x495e (.reg .sstore) ri_sstore  -- 495d SSTORE
+  xw 0x495e (.reg .sstore) ri_sstoreF  -- 495d SSTORE
   xa 2
-  xw 0x4962 (.reg .sstore) ri_sstore  -- 4961 SSTORE
+  xw 0x4962 (.reg .sstore) ri_sstoreF  -- 4961 SSTORE
   xa 2
-  xw 0x4966 (.reg .sstore) ri_sstore  -- 4965 SSTORE
+  xw 0x4966 (.reg .sstore) ri_sstoreF  -- 4965 SSTORE
   xs 0x4969 (.push [0x01, 0x40] (by decide)) ri_push  -- 4966 PUSH2 0x0140
   xl 0x496a 0x140  -- 4969 MLOAD
   xs 0x496d (.push [0x01, 0xa0] (by decide)) ri_push  -- 496a PUSH2 0x01a0
@@ -108,15 +109,15 @@ theorem xa_stopRamp (hc : Cert.CheckedM code cert mems true)
   refine ⟨hval, rfl, ?_, A, hA, fun x => ?_, ?_, ?_⟩
   · rw [hown, getStorVal_eq, show Bytes.toB256 [4] = ownerSlot by decide]
   · simp only [St]
-    rw [← getStorVal_eq, Devm.getStorVal_setMach, getStorVal_eq, getStor_addLog, afterSstore_getStor_self, afterSstore_getStor_self, afterSstore_getStor_self,
-      afterSstore_getStor_self, hb2.getStor, afterSload_getStor, slot_06, slot_07, slot_08, slot_09]
+    rw [← getStorVal_eq, Devm.getStorVal_setMach, getStorVal_eq, getStor_addLog, afterSstoreH_getStor_self, afterSstoreH_getStor_self, afterSstoreH_getStor_self,
+      afterSstoreH_getStor_self, hb2.getStor, afterSloadH_getStor, slot_06, slot_07, slot_08, slot_09]
   · simp only [St, Devm.setMach_logs]
-    rw [Devm.addLog_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs, afterSstore_logs, hb2.logs,
-      afterSload_logs, stopRamp_topic, show (Bytes.toB256 [1, 160]).toNat = 416 from rfl,
+    rw [Devm.addLog_logs, afterSstoreH_logs, afterSstoreH_logs, afterSstoreH_logs, afterSstoreH_logs, hb2.logs,
+      afterSloadH_logs, stopRamp_topic, show (Bytes.toB256 [1, 160]).toNat = 416 from rfl,
       show (Bytes.toB256 [64]).toNat = 64 from rfl, hdata]
   · simp only [St, Devm.setMach_output]
-    rw [Devm.addLog_output, afterSstore_output, afterSstore_output, afterSstore_output, afterSstore_output,
-      hb2.output, afterSload_output]
+    rw [Devm.addLog_output, afterSstoreH_output, afterSstoreH_output, afterSstoreH_output, afterSstoreH_output,
+      hb2.output, afterSloadH_output]
 
 /-- The model's `stop_ramp_A` when the caller is the owner. -/
 theorem stopRampA_eq {s : State} {e : Env} {a : Nat} (hown : e.caller = s.owner)
@@ -127,7 +128,7 @@ theorem stopRampA_eq {s : State} {e : Env} {a : Nat} (hown : e.caller = s.owner)
 /-- **`stop_ramp_A()`'s raw effect**, given the certificate's checkedness. -/
 theorem stopRampA_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selStopRampA)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)

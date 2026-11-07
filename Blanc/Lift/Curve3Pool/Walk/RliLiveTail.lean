@@ -24,7 +24,7 @@ theorem rx_rli_tail2a {sevm : Sevm} {b : Devm} {σ : Stor} {V : Nat → Devm →
     (hs : ∀ j, j < 3 → rliAmt sevm j = 0 → ∀ b, V j b → V (j + 1) b)
     (hp2 : rliAmt sevm 2 ≠ 0 → CoinPushOkAt sevm (V 2) (V 3) (σ.get (coinsBase + Nat.toB256 2))
       (rliAmt sevm 2) U 0xaa0 0xb40)
-    (hG : 42000 + 1 * U ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 42000 + 1 * U ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (k : ∀ D : Devm, ExLive sevm (V 3) D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
@@ -50,7 +50,7 @@ theorem rx_rli_tail2b {sevm : Sevm} {b : Devm} {σ : Stor} {V : Nat → Devm →
     (hs : ∀ j, j < 3 → rliAmt sevm j = 0 → ∀ b, V j b → V (j + 1) b)
     (hp2 : rliAmt sevm 2 ≠ 0 → CoinPushOkAt sevm (V 2) (V 3) (σ.get (coinsBase + Nat.toB256 2))
       (rliAmt sevm 2) U 0xaa0 0xb40)
-    (hG : 42000 + 1 * U ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 42000 + 1 * U ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (k : ∀ D : Devm, ExLive sevm (V 3) D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
@@ -77,7 +77,7 @@ theorem rx_rli_tail1a {sevm : Sevm} {b : Devm} {σ : Stor} {V : Nat → Devm →
     (hp1 : rliAmt sevm 1 ≠ 0 → CoinPushOkAt sevm (V 1) (V 2) (σ.get (coinsBase + Nat.toB256 1))
       (rliAmt sevm 1) U 0xaa0 0xb40) (hp2 : rliAmt sevm 2 ≠ 0 → CoinPushOkAt sevm (V 2) (V 3) (σ.get (coinsBase + Nat.toB256 2))
       (rliAmt sevm 2) U 0xaa0 0xb40)
-    (hG : 54000 + 2 * U ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 54000 + 2 * U ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (k : ∀ D : Devm, ExLive sevm (V 3) D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
@@ -104,7 +104,7 @@ theorem rx_rli_tail1b {sevm : Sevm} {b : Devm} {σ : Stor} {V : Nat → Devm →
     (hp1 : rliAmt sevm 1 ≠ 0 → CoinPushOkAt sevm (V 1) (V 2) (σ.get (coinsBase + Nat.toB256 1))
       (rliAmt sevm 1) U 0xaa0 0xb40) (hp2 : rliAmt sevm 2 ≠ 0 → CoinPushOkAt sevm (V 2) (V 3) (σ.get (coinsBase + Nat.toB256 2))
       (rliAmt sevm 2) U 0xaa0 0xb40)
-    (hG : 54000 + 2 * U ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 54000 + 2 * U ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (k : ∀ D : Devm, ExLive sevm (V 3) D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
@@ -132,7 +132,7 @@ theorem rx_rli_tail0 {sevm : Sevm} {b : Devm} {σ : Stor} {V : Nat → Devm → 
       (rliAmt sevm 0) U 0xaa0 0xb40) (hp1 : rliAmt sevm 1 ≠ 0 → CoinPushOkAt sevm (V 1) (V 2) (σ.get (coinsBase + Nat.toB256 1))
       (rliAmt sevm 1) U 0xaa0 0xb40) (hp2 : rliAmt sevm 2 ≠ 0 → CoinPushOkAt sevm (V 2) (V 3) (σ.get (coinsBase + Nat.toB256 2))
       (rliAmt sevm 2) U 0xaa0 0xb40)
-    (hG : 66000 + 3 * U ≤ G) (hGb : G + 3000 < 2 ^ 256) (hroom : S.length + 40 < 1024)
+    (hG : 66000 + 3 * U ≤ G) (hGb : G < 2 ^ 256) (hroom : S.length + 40 < 1024)
     (k : ∀ D : Devm, ExLive sevm (V 3) D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       (∃ L ts data, D.logs = L ++ [⟨sevm.currentTarget, ts, data⟩] ∧
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧

@@ -206,8 +206,8 @@ theorem removeLiquidity_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {T
     (by rw [← hA]; exact hTa) hG hG256 (fun D h => ⟨D, rfl, h⟩)
   obtain ⟨exc⟩ := lift_exactM cert_checkM cert_jumpsOkM hcode hfork ⟨t_0000_c0, rfl, hr⟩
   -- the safety theorem on that execution
-  obtain ⟨T', o', hstep', hraw⟩ := removeLiquidity_rawTK exc hcode hfork hlen hcd hsel rfl rfl hGm
-    hck htok hcoin hpc (hid.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩)
+  obtain ⟨T', o', hstep', hraw⟩ := removeLiquidity_rawTK exc hcode hfork.histFork hlen hcd hsel rfl rfl hGm
+    hck htok hcoin hpc (hid.toH.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩)
     (hkeep D exc).1 (hkeep D exc).2
   -- the observed supply is `T`
   obtain ⟨-, hrl'⟩ := hbody hstep'

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Curve3Pool.Walk.ArmChecks
 import Blanc.Lift.Curve3Pool.Walk.Admin
@@ -25,7 +26,7 @@ open Jaune Blanc.Lift Blanc.StableSwapNewton
 /-- **The `commit_new_fee` raw effect.** -/
 theorem commitNewFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selCommitNewFee)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -41,7 +42,7 @@ theorem commitNewFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G3).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_commitNewFee
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_commitNewFee
       admRaw_free_commitNewFee hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_commitNewFee hfork hck hsel hlen _ _ run
@@ -52,7 +53,7 @@ theorem commitNewFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `apply_new_fee` raw effect.** -/
 theorem applyNewFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selApplyNewFee)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -68,7 +69,7 @@ theorem applyNewFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G4).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_applyNewFee
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_applyNewFee
       admRaw_free_applyNewFee hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_applyNewFee hfork hck hsel hlen _ _ run
@@ -79,7 +80,7 @@ theorem applyNewFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `revert_new_parameters` raw effect.** -/
 theorem revertNewParameters_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRevertNewParameters)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -95,7 +96,7 @@ theorem revertNewParameters_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G5).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_revertNewParameters
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_revertNewParameters
       admRaw_free_revertNewParameters hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_revertNewParameters hfork hck hsel hlen _ _ run
@@ -106,7 +107,7 @@ theorem revertNewParameters_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `commit_transfer_ownership` raw effect.** -/
 theorem commitTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selCommitTransferOwnership)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -122,7 +123,7 @@ theorem commitTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G6).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_commitTransferOwnership
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_commitTransferOwnership
       admRaw_free_commitTransferOwnership hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_commitTransferOwnership hfork hck hsel hlen _ _ run
@@ -133,7 +134,7 @@ theorem commitTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `apply_transfer_ownership` raw effect.** -/
 theorem applyTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selApplyTransferOwnership)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -149,7 +150,7 @@ theorem applyTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G7).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_applyTransferOwnership
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_applyTransferOwnership
       admRaw_free_applyTransferOwnership hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_applyTransferOwnership hfork hck hsel hlen _ _ run
@@ -160,7 +161,7 @@ theorem applyTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `revert_transfer_ownership` raw effect.** -/
 theorem revertTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRevertTransferOwnership)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -176,7 +177,7 @@ theorem revertTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G8).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_revertTransferOwnership
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_revertTransferOwnership
       admRaw_free_revertTransferOwnership hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_revertTransferOwnership hfork hck hsel hlen _ _ run
@@ -187,7 +188,7 @@ theorem revertTransferOwnership_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `kill_me` raw effect.** -/
 theorem killMe_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selKillMe)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -203,7 +204,7 @@ theorem killMe_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G12).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_killMe
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_killMe
       admRaw_free_killMe hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_killMe hfork hck hsel hlen _ _ run
@@ -214,7 +215,7 @@ theorem killMe_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `unkill_me` raw effect.** -/
 theorem unkillMe_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selUnkillMe)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -230,7 +231,7 @@ theorem unkillMe_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G13).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_unkillMe
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_unkillMe
       admRaw_free_unkillMe hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_unkillMe hfork hck hsel hlen _ _ run
@@ -241,7 +242,7 @@ theorem unkillMe_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `coins` raw effect.** -/
 theorem coins_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selCoins)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -257,7 +258,7 @@ theorem coins_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G14).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_coinsGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_coinsGetter
       admRaw_free_coinsGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_coinsGetter hfork hck hsel hlen _ _ run
@@ -268,7 +269,7 @@ theorem coins_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `balances` raw effect.** -/
 theorem balances_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selBalances)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -284,7 +285,7 @@ theorem balances_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G15).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_balancesGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_balancesGetter
       admRaw_free_balancesGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_balancesGetter hfork hck hsel hlen _ _ run
@@ -295,7 +296,7 @@ theorem balances_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `fee` raw effect.** -/
 theorem fee_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selFee)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -311,7 +312,7 @@ theorem fee_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G16).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_feeGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_feeGetter
       admRaw_free_feeGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_feeGetter hfork hck hsel hlen _ _ run
@@ -322,7 +323,7 @@ theorem fee_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `admin_fee` raw effect.** -/
 theorem adminFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAdminFee)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -338,7 +339,7 @@ theorem adminFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G17).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_adminFeeGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_adminFeeGetter
       admRaw_free_adminFeeGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_adminFeeGetter hfork hck hsel hlen _ _ run
@@ -349,7 +350,7 @@ theorem adminFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `owner` raw effect.** -/
 theorem owner_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selOwner)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -365,7 +366,7 @@ theorem owner_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G18).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_ownerGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_ownerGetter
       admRaw_free_ownerGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_ownerGetter hfork hck hsel hlen _ _ run
@@ -376,7 +377,7 @@ theorem owner_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `initial_A` raw effect.** -/
 theorem initialA_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selInitialA)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -392,7 +393,7 @@ theorem initialA_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G19).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_initialAGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_initialAGetter
       admRaw_free_initialAGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_initialAGetter hfork hck hsel hlen _ _ run
@@ -403,7 +404,7 @@ theorem initialA_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `future_A` raw effect.** -/
 theorem futureA_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selFutureA)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -419,7 +420,7 @@ theorem futureA_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G20).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_futureAGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_futureAGetter
       admRaw_free_futureAGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_futureAGetter hfork hck hsel hlen _ _ run
@@ -430,7 +431,7 @@ theorem futureA_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `initial_A_time` raw effect.** -/
 theorem initialATime_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selInitialATime)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -446,7 +447,7 @@ theorem initialATime_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G21).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_initialATimeGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_initialATimeGetter
       admRaw_free_initialATimeGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_initialATimeGetter hfork hck hsel hlen _ _ run
@@ -457,7 +458,7 @@ theorem initialATime_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `future_A_time` raw effect.** -/
 theorem futureATime_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selFutureATime)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -473,7 +474,7 @@ theorem futureATime_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G22).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_futureATimeGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_futureATimeGetter
       admRaw_free_futureATimeGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_futureATimeGetter hfork hck hsel hlen _ _ run
@@ -484,7 +485,7 @@ theorem futureATime_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `admin_actions_deadline` raw effect.** -/
 theorem adminActionsDeadline_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAdminActionsDeadline)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -500,7 +501,7 @@ theorem adminActionsDeadline_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G23).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none
       admRaw_check_adminActionsDeadlineGetter admRaw_free_adminActionsDeadlineGetter hst hfr hmm
       hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
@@ -512,7 +513,7 @@ theorem adminActionsDeadline_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `transfer_ownership_deadline` raw effect.** -/
 theorem transferOwnershipDeadline_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selTransferOwnershipDeadline)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -528,7 +529,7 @@ theorem transferOwnershipDeadline_raw {sevm : Sevm} {pre post : Devm} {s : State
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G24).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none
       admRaw_check_transferOwnershipDeadlineGetter admRaw_free_transferOwnershipDeadlineGetter hst
       hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
@@ -540,7 +541,7 @@ theorem transferOwnershipDeadline_raw {sevm : Sevm} {pre post : Devm} {s : State
 /-- **The `future_fee` raw effect.** -/
 theorem futureFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selFutureFee)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -556,7 +557,7 @@ theorem futureFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G25).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_futureFeeGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_futureFeeGetter
       admRaw_free_futureFeeGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_futureFeeGetter hfork hck hsel hlen _ _ run
@@ -567,7 +568,7 @@ theorem futureFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `future_admin_fee` raw effect.** -/
 theorem futureAdminFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selFutureAdminFee)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -583,7 +584,7 @@ theorem futureAdminFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G26).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_futureAdminFeeGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_futureAdminFeeGetter
       admRaw_free_futureAdminFeeGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_futureAdminFeeGetter hfork hck hsel hlen _ _ run
@@ -594,7 +595,7 @@ theorem futureAdminFee_raw {sevm : Sevm} {pre post : Devm} {s : State}
 /-- **The `future_owner` raw effect.** -/
 theorem futureOwner_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selFutureOwner)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -610,7 +611,7 @@ theorem futureOwner_raw {sevm : Sevm} {pre post : Devm} {s : State}
   have hmm : MemMatches (0 : B256) ([] : MemMap)
       (St pre [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G27).memory :=
     memMatches_nil _ _
-  rcases xa_node_span checkedM admRawExecFreeSet hcode hfork admRaw_check_futureOwnerGetter
+  rcases xa_node_spanH checkedM admRawExecFreeSet hcode hfork.stateGas_none admRaw_check_futureOwnerGetter
       admRaw_free_futureOwnerGetter hst hfr hmm hX with
     ⟨run, hL⟩ | ⟨d', S', run, _hX', _hst', _hlen'⟩
   · obtain ⟨o, hstep, hlands⟩ := safe_futureOwnerGetter hfork hck hsel hlen _ _ run

@@ -92,8 +92,8 @@ theorem StepSupplies.split {ca : Adr} :
 /-! ## Trace facts -/
 
 /-- A settled frame came from a raw frame of the history. -/
-theorem settled_mem_rawFrames {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) :
+theorem settled_mem_rawFrames {cfg : ChainConfig}
+    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future) :
     ∀ f ∈ trace.settledFrames, Blanc.Exec.Frame.rootDeriv f ∈ trace.rawFrames := by
   induction trace with
   | refl => intro f member; cases member
@@ -135,7 +135,7 @@ theorem view_at {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (split : trace.settledFrames = before ++ f :: after)
     (noOpaque : ∀ A ∈ before, A.Encloses f →
       ¬ (A.sevm.currentTarget = ca ∧ A.sevm.isStatic = false)) :
-    ViewReplay (historyKeyUniverse ca trace initialKeys) (viewOf (checkpoint.state.getStor ca))
+    ViewReplayH (historyKeyUniverse ca trace initialKeys) (viewOf (checkpoint.state.getStor ca))
       (before.flatMap (viewFrameObs ca)) (viewOf (f.pre.state.getStor ca)) := by
   let U := historyKeyUniverse ca trace initialKeys
   have topology : VyInv (checkpoint.state.getStor ca) initial U := invariant.extend fresh
@@ -149,9 +149,10 @@ theorem view_at {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
   have start : (curveSpec U).StateInv ca checkpoint.state :=
     ⟨installed, trivial, ⟨initial, initialKeys, fun _ hk => Or.inl hk, invariant⟩⟩
   obtain ⟨steps, replay, observed⟩ :=
-    (c3crvPositionalLadder ca U topology.inj topology.apart).configuredHistory_at trace admitted
-      start before f after split noOpaque
-  change ViewReplay U (viewOf (checkpoint.state.getStor ca)) steps
+    (c3crvPositionalLadder OwnerAnswerH (frameRefines_noStateGas CoveredFork.stateGas_none) ca U
+      topology.inj topology.apart).configuredHistory_at trace admitted start before f after split
+      noOpaque
+  change ViewReplayH U (viewOf (checkpoint.state.getStor ca)) steps
     (viewOf (f.pre.state.getStor ca)) at replay
   change steps = before.flatMap (viewFrameObs ca) at observed
   subst observed
@@ -164,7 +165,7 @@ theorem view_end {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
     (installed : some (checkpoint.state.getCode ca).toList = c3crvSem.image)
     (invariant : VyInv (checkpoint.state.getStor ca) initial initialKeys)
     (fresh : FreshKeys initialKeys (historyTouchedKeys ca trace)) :
-    ViewReplay (historyKeyUniverse ca trace initialKeys) (viewOf (checkpoint.state.getStor ca))
+    ViewReplayH (historyKeyUniverse ca trace initialKeys) (viewOf (checkpoint.state.getStor ca))
       (trace.settledFrames.flatMap (viewFrameObs ca)) (viewOf (future.state.getStor ca)) := by
   let U := historyKeyUniverse ca trace initialKeys
   have topology : VyInv (checkpoint.state.getStor ca) initial U := invariant.extend fresh
@@ -178,21 +179,20 @@ theorem view_end {ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
   have start : (curveSpec U).StateInv ca checkpoint.state :=
     ⟨installed, trivial, ⟨initial, initialKeys, fun _ hk => Or.inl hk, invariant⟩⟩
   obtain ⟨steps, replay, observed⟩ :=
-    (c3crvPositionalLadder ca U topology.inj topology.apart).toAccountingLadderAdmitted.configuredHistory
+    (c3crvPositionalLadder OwnerAnswerH (frameRefines_noStateGas CoveredFork.stateGas_none) ca U
+      topology.inj topology.apart).toAccountingLadderAdmitted.configuredHistory
       trace admitted start
-  change ViewReplay U (viewOf (checkpoint.state.getStor ca)) steps
+  change ViewReplayH U (viewOf (checkpoint.state.getStor ca)) steps
     (viewOf (future.state.getStor ca)) at replay
   change steps = trace.settledFrames.flatMap (viewFrameObs ca) at observed
   subst observed
   exact replay
 
-/-- On settled frames 3Crv's view observation is its committed writer extraction (a static frame
+/-- On ready frames 3Crv's view observation is its committed writer extraction (a static frame
 runs no writer). -/
-theorem viewObs_eq_committed {ca : Adr} {U : Key → Prop} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (ready : ∀ f ∈ trace.settledFrames, FrameReady ca U f) :
-    trace.settledFrames.flatMap (viewFrameObs ca) = committedInvocations ca trace := by
-  unfold committedInvocations
+theorem viewObs_eq_committed {ca : Adr} {U : Key → Prop} {frames : List Exec.Frame}
+    (ready : ∀ f ∈ frames, FrameReady ca U f) :
+    frames.flatMap (viewFrameObs ca) = frames.flatMap (committedFrameInvocations ca) := by
   apply List.flatMap_congr
   intro f member
   unfold viewFrameObs
@@ -200,23 +200,7 @@ theorem viewObs_eq_committed {ca : Adr} {U : Key → Prop} {cfg : ChainConfig}
   · rfl
   · rename_i hs
     have hs' : f.sevm.isStatic = true := by simpa only [Bool.not_eq_false] using hs
-    unfold committedFrameInvocations
-    split
-    · rename_i sel
-      exfalso
-      obtain ⟨hpc, fork, at_, admitted, -⟩ := ready f member
-      obtain ⟨⟨hstack, hmem⟩, hcd, -⟩ := admitted.root sel.1
-      have hcode : f.sevm.code = code := c3crv_code_of_image (at_.2 sel.1).1
-      obtain ⟨pc, sevm, pre, out, run, committed⟩ := f
-      dsimp only at hpc hs' sel hstack hmem hcd hcode
-      subst hpc
-      cases out with
-      | error e => simp only [Execution.commits, Bool.false_eq_true] at committed
-      | ok post =>
-        have := c3crv_writer_nonstatic hcode fork hcd hstack hmem run sel.2
-        rw [hs'] at this
-        cases this
-    · rfl
+    exact (committedFrameInvocations_nil_of_static (ready f member) hs').symm
 
 /-! ## Gaps -/
 
@@ -225,11 +209,11 @@ theorem poolFrameObs_eq_pair (pool : Adr) : poolFrameObs pool = Blanc.Exec.Frame
 /-- **The pool sends no 3Crv invocation inside a gap** after a pool-closed prefix: such an
 invocation's positional parent would be a non-static pool frame whose block ends inside the gap,
 or a non-static 3Crv frame, whose children are static. -/
-theorem gap_callers {pool ca : Adr} {U : Key → Prop} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} (trace : ConfiguredHistoryTrace cfg checkpoint future)
-    (ready : ∀ f ∈ trace.settledFrames, FrameReady ca U f)
-    (roots : ∀ R ∈ trace.settledRoots, R.sevm.caller ≠ pool)
-    {pre gap post : List Exec.Frame} (split : trace.settledFrames = pre ++ gap ++ post)
+theorem gap_callers {pool ca : Adr} {U : Key → Prop} {frames rootList : List Exec.Frame}
+    (forest : frames = rootList.flatMap fun R => Exec.committedFrames R.run)
+    (ready : ∀ f ∈ frames, FrameReady ca U f)
+    (roots : ∀ R ∈ rootList, R.sevm.caller ≠ pool)
+    {pre gap post : List Exec.Frame} (split : frames = pre ++ gap ++ post)
     (closed : Blanc.ExecutionTrace.TargetClosed pool pre)
     (quiet : gap.flatMap (poolFrameObs pool) = []) :
     ∀ inv ∈ gap.flatMap (viewFrameObs ca), inv.sevm.caller ≠ pool := by
@@ -247,13 +231,13 @@ theorem gap_callers {pool ca : Adr} {U : Key → Prop} {cfg : ChainConfig}
   obtain ⟨mutable, atCa, rfl⟩ := hF
   change F.sevm.caller = pool at caller
   obtain ⟨g₁, g₂, rfl⟩ := List.mem_iff_append.mp inGap
-  have at' : trace.settledFrames = (pre ++ g₁) ++ F :: (g₂ ++ post) := by
+  have at' : frames = (pre ++ g₁) ++ F :: (g₂ ++ post) := by
     rw [split]
     simp only [List.append_assoc, List.cons_append]
-  rcases trace.settledFrames_parent at' with root | ⟨b₁, G, b₂, hb, child, ⟨relation, static⟩,
+  rcases (rootFrames_forest (forest.symm.trans at')).2 with root | ⟨b₁, G, b₂, hb, child, ⟨relation, static⟩,
     shorter⟩
   · exact roots F root caller
-  · have settledG : G ∈ trace.settledFrames := by
+  · have settledG : G ∈ frames := by
       rw [at', hb]
       exact List.mem_append_left _ (List.mem_append_right _ List.mem_cons_self)
     cases mutableG : G.sevm.isStatic
@@ -270,7 +254,7 @@ theorem gap_callers {pool ca : Adr} {U : Key → Prop} {cfg : ChainConfig}
             (List.mem_append_left _ inG₁) atPool mutableG
           rw [← poolFrameObs_eq_pair, quiet] at obs'
           cases obs'
-      · have desc := c3crv_descendants_static (ready G settledG) (targetEq.symm.trans atCa) F
+      · have desc := c3crv_descendants_staticH (ready G settledG) (targetEq.symm.trans atCa) F
           (Exec.mem_descendantFrames_of_mem_childFrames G.run F child)
         rw [mutable] at desc
         cases desc
@@ -279,23 +263,28 @@ theorem gap_callers {pool ca : Adr} {U : Key → Prop} {cfg : ChainConfig}
 
 /-! ## The walk -/
 
-/-- The fixed inputs of the walk. -/
-structure WalkEnv {cfg : ChainConfig} {checkpoint future : BlockChain}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future) (pool ca : Adr) (coins : Curve3Pool.V3)
-    (cs₀ : Blanc.Curve3Crv.State) (K₀ U : Key → Prop) : Prop where
+/-- The fixed inputs of the walk, over a list of settled frames in forest order below its roots,
+with 3Crv's storage `σ₀` at the list's start. -/
+structure WalkEnv (frames rootList : List Exec.Frame) (σ₀ : Stor) (pool ca : Adr)
+    (coins : Curve3Pool.V3) (cs₀ : Blanc.Curve3Crv.State) (K₀ U : Key → Prop) : Prop where
   injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k'
   apartU : ∀ k, U k → k.slot ∉ vyFixedSlots
-  ready : ∀ f ∈ trace.settledFrames, FrameReady ca U f
+  forest : frames = rootList.flatMap fun R => Exec.committedFrames R.run
+  ready : ∀ f ∈ frames, FrameReady ca U f
   hK : ∀ k, K₀ k → U k
-  invariant : VyInv (checkpoint.state.getStor ca) cs₀ K₀
+  invariant : VyInv σ₀ cs₀ K₀
   apart : pool ≠ ca
-  roots : ∀ R ∈ trace.settledRoots, R.sevm.caller ≠ pool
+  roots : ∀ R ∈ rootList, R.sevm.caller ≠ pool
   view : ∀ {before : List Exec.Frame} {f : Exec.Frame} {after : List Exec.Frame},
-    trace.settledFrames = before ++ f :: after → f.sevm.isStatic = false →
-    ViewReplay U (viewOf (checkpoint.state.getStor ca)) (before.flatMap (viewFrameObs ca))
-      (viewOf (f.pre.state.getStor ca))
-  whole : ∃ Z, runInvocations cs₀ (trace.settledFrames.flatMap (viewFrameObs ca)) = some Z
-  env : Curve3Pool.PoolTraceEnv trace pool coins ca.toNat
+    frames = before ++ f :: after → f.sevm.isStatic = false →
+    ViewReplayH U (viewOf σ₀) (before.flatMap (viewFrameObs ca)) (viewOf (f.pre.state.getStor ca))
+  whole : ∃ Z, runInvocations cs₀ (frames.flatMap (viewFrameObs ca)) = some Z
+  parties : ∀ f ∈ frames, f.sevm.currentTarget = pool →
+    (∀ k : Fin 3, ¬ f.sevm.benvStat.rules.isPrecomp (Curve3Pool.adrOf (coins.get k))) ∧
+      ¬ f.sevm.benvStat.rules.isPrecomp (Curve3Pool.adrOf ca.toNat)
+  keepToken : ∀ f ∈ frames, f.sevm.currentTarget = pool → f.sevm.isStatic = false →
+    ∀ s : Curve3Pool.State, Curve3Pool.Checkpoint (f.pre.getStor pool) s → s.coins = coins →
+      s.token = ca.toNat → Curve3Pool.PoolCoinCallsKeepToken (Blanc.Exec.Frame.rootDeriv f)
 
 theorem runInvocations_prefix {s t : Blanc.Curve3Crv.State} {xs ys : List WriterInvocation}
     (h : runInvocations s (xs ++ ys) = some t) : ∃ m, runInvocations s xs = some m := by
@@ -305,22 +294,20 @@ theorem runInvocations_prefix {s t : Blanc.Curve3Crv.State} {xs ys : List Writer
   | some m => exact ⟨m, rfl⟩
 
 /-- 3Crv's fold reaches every prefix of the settled frames. -/
-theorem WalkEnv.prefix {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {cs₀ : Blanc.Curve3Crv.State} {K₀ U : Key → Prop}
-    {trace : ConfiguredHistoryTrace cfg checkpoint future}
-    (W : WalkEnv trace pool ca coins cs₀ K₀ U) {pre post : List Exec.Frame}
-    (split : trace.settledFrames = pre ++ post) :
+theorem WalkEnv.prefix {frames rootList : List Exec.Frame} {σ₀ : Stor} {pool ca : Adr}
+    {coins : Curve3Pool.V3} {cs₀ : Blanc.Curve3Crv.State} {K₀ U : Key → Prop}
+    (W : WalkEnv frames rootList σ₀ pool ca coins cs₀ K₀ U) {pre post : List Exec.Frame}
+    (split : frames = pre ++ post) :
     ∃ m, runInvocations cs₀ (pre.flatMap (viewFrameObs ca)) = some m := by
   obtain ⟨Z, hZ⟩ := W.whole
   rw [split, List.flatMap_append] at hZ
   exact runInvocations_prefix hZ
 
 /-- **Supply and minter are kept across a gap** after a pool-closed prefix. -/
-theorem WalkEnv.gap_keep {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {cs₀ : Blanc.Curve3Crv.State} {K₀ U : Key → Prop}
-    {trace : ConfiguredHistoryTrace cfg checkpoint future}
-    (W : WalkEnv trace pool ca coins cs₀ K₀ U) {pre gap post : List Exec.Frame}
-    (split : trace.settledFrames = pre ++ gap ++ post)
+theorem WalkEnv.gap_keep {frames rootList : List Exec.Frame} {σ₀ : Stor} {pool ca : Adr}
+    {coins : Curve3Pool.V3} {cs₀ : Blanc.Curve3Crv.State} {K₀ U : Key → Prop}
+    (W : WalkEnv frames rootList σ₀ pool ca coins cs₀ K₀ U) {pre gap post : List Exec.Frame}
+    (split : frames = pre ++ gap ++ post)
     (closed : Blanc.ExecutionTrace.TargetClosed pool pre) (quiet : gap.flatMap (poolFrameObs pool) = [])
     {X Y : Blanc.Curve3Crv.State} (hX : runInvocations cs₀ (pre.flatMap (viewFrameObs ca)) = some X)
     (hY : runInvocations cs₀ ((pre ++ gap).flatMap (viewFrameObs ca)) = some Y)
@@ -331,7 +318,7 @@ theorem WalkEnv.gap_keep {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainCon
   have book : c3crvBook.run X (invMessages (gap.flatMap (viewFrameObs ca))) = some Y := by
     rw [c3crvBook_run_eq _ _ (viewObs_canonical ca gap)]
     exact step
-  have callers := gap_callers trace W.ready W.roots split closed quiet
+  have callers := gap_callers W.forest W.ready W.roots split closed quiet
   obtain ⟨hs, hm⟩ := c3crvSupply.run_keep book fun a member => by
     obtain ⟨inv, hinv, rfl⟩ := List.mem_map.mp member
     change inv.sevm.caller ≠ X.minter
@@ -344,15 +331,14 @@ theorem WalkEnv.gap_keep {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainCon
 `fs` after a pool-closed prefix `pre`, 3Crv's fold carries the minter `pool` and moves the supply by
 the invocations' minted and burned amounts, and each invocation moves the supply word across its
 frame by its own amounts. -/
-theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
-    {checkpoint future : BlockChain} {cs₀ : Blanc.Curve3Crv.State} {K₀ U : Key → Prop}
-    {trace : ConfiguredHistoryTrace cfg checkpoint future}
-    (W : WalkEnv trace pool ca coins cs₀ K₀ U) :
+theorem supply_walk {frames rootList : List Exec.Frame} {σ₀ : Stor} {pool ca : Adr}
+    {coins : Curve3Pool.V3} {cs₀ : Blanc.Curve3Crv.State} {K₀ U : Key → Prop}
+    (W : WalkEnv frames rootList σ₀ pool ca coins cs₀ K₀ U) :
     ∀ (invs : List PoolInvocation) {st st' : Curve3Pool.State} {pre fs post : List Exec.Frame}
       {X : Blanc.Curve3Crv.State},
       PoolRun st invs st' → PoolEntries st invs → (∀ i ∈ invs, i.Authentic pool) →
       invs.flatMap (fun i => poolSubtreeFrames pool i.frame) = fs.flatMap (poolFrameObs pool) →
-      trace.settledFrames = pre ++ fs ++ post →
+      frames = pre ++ fs ++ post →
       Blanc.ExecutionTrace.TargetClosed pool pre → Blanc.ExecutionTrace.TargetClosed pool (pre ++ fs) →
       st.coins = coins → st.token = ca.toNat →
       runInvocations cs₀ (pre.flatMap (viewFrameObs ca)) = some X → X.minter = pool →
@@ -385,25 +371,24 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
     -- the invocation's subtree is contiguous and inside `fs`
     have closedAt := closedAll (pre ++ gap) i.frame rest' (by
       simp only [List.append_assoc]) atPool mutable
-    have globalSplit : trace.settledFrames = (pre ++ gap) ++ i.frame :: (rest' ++ post) := by
+    have globalSplit : frames = (pre ++ gap) ++ i.frame :: (rest' ++ post) := by
       rw [split]
       simp only [List.append_assoc, List.cons_append]
-    obtain ⟨r, contig⟩ := trace.settledFrames_contig globalSplit
+    obtain ⟨r, contig⟩ := (rootFrames_forest (W.forest.symm.trans globalSplit)).1
     have descPrefix : Exec.descendantFrames i.frame.run <+: rest' :=
       List.prefix_of_prefix_length_le ⟨r, contig.symm⟩ (List.prefix_append rest' post) closedAt
     obtain ⟨rest'', rfl⟩ := descPrefix
     rw [List.flatMap_append, List.append_cancel_left_eq] at restObs
     -- across the gap
-    have gapSplit : trace.settledFrames = pre ++ gap ++
+    have gapSplit : frames = pre ++ gap ++
         (i.frame :: (Exec.descendantFrames i.frame.run ++ rest'' ++ post)) := by
       rw [globalSplit]
     obtain ⟨Xg, hXg⟩ := W.prefix (pre := pre ++ gap) (post := _) (by
       rw [gapSplit, List.append_assoc])
     obtain ⟨gapSup, gapMin⟩ := W.gap_keep gapSplit closedPre quiet atPre hXg minter
     -- the invocation's frame
-    have settledP : i.frame ∈ trace.settledFrames := by
+    have settledP : i.frame ∈ frames := by
       rw [globalSplit]; exact List.mem_append_right _ List.mem_cons_self
-    have raw := settled_mem_rawFrames trace i.frame settledP
     have entryCk := entries.1
     rw [atPool] at entryCk
     have abs : Curve3Pool.Abstracts (Curve3Pool.entryStor (Blanc.Exec.Frame.rootDeriv i.frame))
@@ -413,7 +398,7 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
       exact this
     have token : Curve3Pool.tokenAdr (Blanc.Exec.Frame.rootDeriv i.frame) = ca := by
       rw [Curve3Pool.tokenAdr_eq abs, htoken, adrOf_toNat]
-    have parties := W.env.parties _ raw atPool
+    have parties := W.parties _ settledP atPool
     have calls : Curve3Pool.CallsOf (Blanc.Exec.Frame.rootDeriv i.frame) =
         o.calls.map (Curve3Pool.encodeCall i.frame.sevm.currentTarget
           (Curve3Pool.coinAdr (Blanc.Exec.Frame.rootDeriv i.frame))
@@ -453,16 +438,14 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
           (Curve3Pool.tokenAdr (Blanc.Exec.Frame.rootDeriv i.frame))
         rw [Curve3Pool.tokenAdr_eq abs, htoken]
         exact parties.2
-    have keepToken : Curve3Pool.PoolCoinCallsKeepToken (Blanc.Exec.Frame.rootDeriv i.frame) :=
-      (derivEntry_frame hpc
-        ((trace.frameAdmitted_iff_rawFrames pool _).1 W.env.callbacks _ raw atPool)).2
+    have keepToken := W.keepToken _ settledP atPool mutable st entryCk hcoins htoken
     obtain ⟨X', Y', runX', runY', invX', invY', moved, kept, prefixes⟩ :=
-      pool_frame_supply trace W.injective W.apartU W.ready W.hK W.invariant W.apart globalSplit
+      pool_frame_supply W.injective W.apartU W.ready W.hK W.invariant W.apart globalSplit ⟨r, contig⟩
         atPool (W.view globalSplit mutable) token calls keepToken
     have hX' : X' = Xg := Option.some.inj (runX'.symm.trans hXg)
     subst hX'
     -- the rest of the walk
-    have restSplit : trace.settledFrames =
+    have restSplit : frames =
         ((pre ++ gap) ++ Exec.committedFrames i.frame.run) ++ rest'' ++ post := by
       rw [globalSplit, Exec.Frame.committedFrames_self]
       simp only [List.append_assoc, List.cons_append]
@@ -501,7 +484,7 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
           exact notPre unframed.1
         · have memc : c ∈ Exec.childFrames i.frame.run := List.mem_of_getElem? hget
           rw [token] at ht
-          have settledC : c ∈ trace.settledFrames := by
+          have settledC : c ∈ frames := by
             rw [globalSplit, contig]
             exact List.mem_append_right _ (List.mem_cons_of_mem _ (List.mem_append_left _
               (Exec.mem_descendantFrames_of_mem_childFrames i.frame.run c memc)))
@@ -514,7 +497,7 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
             have h := List.take_append_drop n (Exec.childFrames i.frame.run)
             rw [List.drop_eq_getElem_cons hn', hc'] at h
             exact h.symm
-          obtain ⟨Xs, Ks, runS, invS⟩ := child_entry_vyInv trace W.injective W.apartU W.ready W.hK
+          obtain ⟨Xs, Ks, runS, invS⟩ := child_entry_vyInv W.injective W.apartU W.ready W.hK
             W.invariant W.apart globalSplit atPool (W.view globalSplit mutable) _ _ _ hsplit
           obtain ⟨Xp, runXp, supXp⟩ := prefixes _ _ hsplit
           have hXs : Xs = Xp := Option.some.inj (runS.symm.trans runXp)
@@ -544,6 +527,33 @@ theorem supply_walk {pool ca : Adr} {coins : Curve3Pool.V3} {cfg : ChainConfig}
           rw [invS.supply, invX'.supply]
           simpa only [SupplyFacet.minted, SupplyFacet.burned, List.filterMap_nil, List.map_nil,
             List.sum_nil, Nat.add_zero] using supXp
+
+/-- The whole list is target-closed: every frame's block of descendants follows it. -/
+theorem targetClosed_of_forest {pair : Adr} {frames rootList : List Exec.Frame}
+    (forest : frames = rootList.flatMap fun R => Exec.committedFrames R.run) :
+    Blanc.ExecutionTrace.TargetClosed pair frames := by
+  intro b₁ G b₂ split _ _
+  obtain ⟨r, rfl⟩ := (rootFrames_forest (forest.symm.trans split)).1
+  rw [List.length_append]
+  omega
+
+/-- **The walk over the whole list**, from a joint checkpoint's token and minter. -/
+theorem supply_whole {frames rootList : List Exec.Frame} {σ₀ : Stor} {pool ca : Adr}
+    {cs₀ : Blanc.Curve3Crv.State} {K₀ U : Key → Prop} {ps₀ s : Curve3Pool.State}
+    {invs : List PoolInvocation}
+    (W : WalkEnv frames rootList σ₀ pool ca ps₀.coins cs₀ K₀ U)
+    (run : PoolRun ps₀ invs s) (entries : PoolEntries ps₀ invs)
+    (auth : ∀ i ∈ invs, i.Authentic pool)
+    (observed : invs.flatMap (fun i => poolSubtreeFrames pool i.frame) =
+      frames.flatMap (poolFrameObs pool))
+    (tokenIs : ps₀.token = ca.toNat) (minterIs : cs₀.minter = pool) :
+    ∃ Y, runInvocations cs₀ (frames.flatMap (viewFrameObs ca)) = some Y ∧ Y.minter = pool ∧
+      Y.totalSupply.toNat + poolBurned ps₀ invs = cs₀.totalSupply.toNat + poolMinted ps₀ invs ∧
+      StepSupplies ca ps₀ invs := by
+  have h := supply_walk W invs run entries auth observed (pre := []) (post := [])
+    (by rw [List.nil_append, List.append_nil]) (Blanc.ExecutionTrace.TargetClosed.nil pool)
+    (by rw [List.nil_append]; exact targetClosed_of_forest W.forest) rfl tokenIs rfl minterIs
+  rwa [List.nil_append] at h
 
 /-! ## The headline -/
 
@@ -594,7 +604,8 @@ theorem pool_3crv_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future
             SupplyObserved c3 i := by
   let U := historyKeyUniverse c3 trace K₀
   have topology : VyInv (checkpoint.state.getStor c3) cs₀ U := joint.c3.extend fresh
-  have ready := settled_ready trace c3Installed joint.c3 fresh
+  have ready : ∀ f ∈ trace.settledFrames, FrameReady c3 U f :=
+    settled_ready trace c3Installed joint.c3 fresh
   have poolCode := Curve3Pool.code_eq_of_toList poolInstalled
   have nonempty : Curve3Pool.code.toList ≠ [] := fun h => by
     have := Curve3Pool.code_toList_length
@@ -605,30 +616,34 @@ theorem pool_3crv_history {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future
   have roots := trace.settledRoots_caller_ne_of_code nonempty nondelegating poolCode notSystem
   obtain ⟨Z, runZ, -⟩ := replay_run (fun _ hk => Or.inl hk) joint.c3
     (view_end trace c3Installed joint.c3 fresh)
-  have W : WalkEnv trace pool c3 ps₀.coins cs₀ K₀ U :=
+  have env' : Curve3Pool.PoolTraceEnv trace pool ps₀.coins c3.toNat := joint.tokenIs ▸ env
+  have W : WalkEnv trace.settledFrames trace.settledRoots (checkpoint.state.getStor c3) pool c3
+      ps₀.coins cs₀ K₀ U :=
     { injective := topology.inj
       apartU := topology.apart
+      forest := trace.settledFrames_eq
       ready := ready
       hK := fun _ hk => Or.inl hk
       invariant := joint.c3
       apart := joint.apart
       roots := roots
       view := fun split nonstatic => view_at trace c3Installed joint.c3 fresh split
-        (noOpaque_of_nonstatic trace ready split nonstatic)
+        (noOpaque_of_nonstatic ready split nonstatic)
       whole := ⟨Z, runZ⟩
-      env := joint.tokenIs ▸ env }
+      parties := fun f member =>
+        env'.parties _ (settled_mem_rawFrames trace f member)
+      keepToken := fun f member target _ _ _ _ _ => (derivEntry_frame (ready f member).1
+        ((trace.frameAdmitted_iff_rawFrames pool _).1 env'.callbacks _
+          (settled_mem_rawFrames trace f member) target)).2 }
   obtain ⟨code, invs, obs, auth, entries, s, run, fold, hc, hcoins, htoken, -⟩ :=
     Curve3Pool.pool_history_committed_entries (Curve3Pool.poolParties_keeps ps₀.coins ps₀.token)
       (Curve3Pool.pool_frame_refines_at ps₀.coins ps₀.token) trace poolInstalled joint.poolCk
       ⟨rfl, rfl⟩
       (Curve3Pool.pool_trace_admitted trace poolInstalled env.callbacks env.parties env.idEmpty
         env.idNoAuthority env.idNoFrame env.sysNe)
-  obtain ⟨Y, runY, minY, supY, steps⟩ := supply_walk W invs run entries auth obs
-    (pre := []) (post := []) (by rw [List.nil_append, List.append_nil])
-    (Blanc.ExecutionTrace.TargetClosed.nil pool) (by
-      rw [List.nil_append]; exact Blanc.ExecutionTrace.settledFrames_targetClosed trace)
-    rfl joint.tokenIs rfl joint.minterIs
-  rw [List.nil_append, viewObs_eq_committed trace ready] at runY
+  obtain ⟨Y, runY, minY, supY, steps⟩ := supply_whole W run entries auth obs joint.tokenIs
+    joint.minterIs
+  rw [viewObs_eq_committed ready] at runY
   obtain ⟨-, cs, -, runCs, final, -⟩ :=
     c3crv_history_committed_derived trace c3Installed joint.c3 fresh
   have hY : Y = cs := Option.some.inj (runY.symm.trans runCs)

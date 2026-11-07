@@ -182,6 +182,58 @@ theorem processCreateMessage_preserves_noDel_of_installedCert
             rw [← Frame.enter_run_currentTarget henter]; exact htgt
           exact hinner) h_ct))
 
+/-- The executable call-message form, over the runtime-safety bundle. -/
+theorem processMessage_preserves_noDel_of_runtimeSafety (K : InstalledRuntimeSafety C)
+    {msg : Msg} {evm : Devm}
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (h_run : processMessage msg = .ok evm)
+    (installed : msg.benv.state.getCode wa = C)
+    (hcode : msg.currentTarget = wa → msg.code = C)
+    (h : Msg.NoDel wa msg) (h_inherited : wa ∉ msg.inheritedDeletions) :
+    Devm.NoDel wa evm := by
+  obtain ⟨xl, hfill, hrel⟩ := of_processMessage msg (.ok evm) h_run
+  rcases xl with _ | ⟨evm', raw⟩
+  · have obl : Xlot.InvNoDel wa .none := by trivial
+    exact ProcessMessage.inv_noDel obl hrel h h_inherited
+  · obtain ⟨exc⟩ := hfill
+    obtain ⟨henter, -⟩ := RunFrame.some_inv hrel
+    exact ProcessMessage.inv_noDel_of_safe (e := rfl) exc hrel hsg h h_inherited
+      (K.safe exc
+        (by rw [Frame.enter_run_benvStat henter]; exact hsg)
+        (by rw [Frame.enter_run_getCode henter]; exact installed)
+        (fun htgt => ⟨Frame.enter_run_pc henter, by
+          rw [Frame.enter_run_code henter]
+          exact hcode (show (Frame.ofCall msg).inner.currentTarget = wa from by
+            rw [← Frame.enter_run_currentTarget henter]; exact htgt)⟩))
+
+/-- The executable create-message form, over the runtime-safety bundle. -/
+theorem processCreateMessage_preserves_noDel_of_runtimeSafety (K : InstalledRuntimeSafety C)
+    {msg : Msg} {evm : Devm}
+    (hsg : msg.benv.stat.rules.stateGas = none)
+    (h_run : processCreateMessage msg = .ok evm)
+    (installed : msg.benv.state.getCode wa = C)
+    (h_ct : msg.currentTarget ≠ wa)
+    (h : Msg.NoDel wa msg) (h_inherited : wa ∉ msg.inheritedDeletions) :
+    Devm.NoDel wa evm := by
+  obtain ⟨xl, hfill, hrel⟩ := of_processCreateMessage msg (.ok evm) h_run
+  rcases xl with _ | ⟨evm', raw⟩
+  · have obl : Xlot.InvNoDel wa .none := by trivial
+    exact ProcessCreateMessage.inv_noDel obl hrel h_ct h h_inherited
+  · obtain ⟨exc⟩ := hfill
+    obtain ⟨henter, -⟩ := RunFrame.some_inv hrel
+    exact ProcessCreateMessage.inv_noDel_of_safe (e := rfl) exc hrel hsg h_ct h h_inherited
+      (K.safe exc
+        (by rw [Frame.enter_run_benvStat henter,
+          show (Frame.ofCreate msg).inner = processCreateMessage.msg msg from rfl,
+          processCreateMessage.msg_benvStat]; exact hsg)
+        (by rw [Frame.enter_run_getCode henter,
+          show (Frame.ofCreate msg).inner = processCreateMessage.msg msg from rfl,
+          processCreateMessage.msg_getCode]; exact installed)
+        (fun htgt => absurd (show msg.currentTarget = wa from by
+          have hinner : (Frame.ofCreate msg).inner.currentTarget = wa := by
+            rw [← Frame.enter_run_currentTarget henter]; exact htgt
+          exact hinner) h_ct))
+
 end InstalledCert
 
 namespace ExecutionTrace

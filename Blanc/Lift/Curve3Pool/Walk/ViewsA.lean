@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsKit
 import Blanc.Lift.Curve3Pool.Walk.Quiet
 import Blanc.Lift.Curve3Pool.Spec
@@ -45,7 +46,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : Stat
 had no value and no child, and returned the word `v` with `aChk s t = some v`, keeping the
 storage and logs. -/
 theorem xa_vA_frame (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selA) (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
@@ -77,15 +78,15 @@ theorem xa_vA_frame (hc : Cert.CheckedM code cert mems true)
   xs 0x276 (.push [0x00] (by decide)) ri_push
   obtain ⟨hrun, rfl⟩ := xa_halt (l := .return_) (atL hcode (by kernel_rfl)) h
   obtain ⟨hout, hstor, hlogs⟩ := ri_return hrun
-  refine ⟨hval, rfl, v, hv, fun a => by rw [hstor, (aBase_sloadsOnly sevm b).getStor],
-    by rw [hlogs, (aBase_sloadsOnly sevm b).logs], ?_⟩
+  refine ⟨hval, rfl, v, hv, fun a => by rw [hstor, (aBaseH_sloadsOnly sevm b).getStor],
+    by rw [hlogs, (aBaseH_sloadsOnly sevm b).logs], ?_⟩
   rw [hout, hR.read, (WordAt.write_self _ _ v).read]
   exact WordAt.write_self _ _ _
 
 /-- **`A()`'s raw effect**, given the certificate's checkedness. -/
 theorem a_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selA)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)

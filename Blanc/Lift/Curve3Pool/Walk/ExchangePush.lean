@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ExchangeMid
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -41,10 +42,10 @@ abbrev exPushData (sevm : Sevm) (v : B256) : Bytes :=
 /-- **The push** (`0x2ab4` → `0x2b81`). -/
 theorem xa_ex_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {v cw : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hj3 : (exJ sevm).toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hv : WordAt img 0x920 v)
-    (hid : IdReady sevm b) (hdepth : 0 < sevm.depth)
+    (hid : IdReadyH sevm b) (hdepth : 0 < sevm.depth)
     (hcw : (b.getStor sevm.currentTarget).get (coinsBase + exJ sevm) = cw)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp cw.toAdr)
     (h : XAt sevm post 0x2ab4 (St b [] M G) L) :
@@ -65,7 +66,7 @@ theorem xa_ex_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   have f_sel : WordAt img1 0xa60 (Bytes.toB256 [0xa9, 0x05, 0x9c, 0xbb, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]) := by
     rw [hI]; wchainT
   clear hI hv
-  replace h := xa_identity_img (pc' := 0x2afa) (i := 0xa60) (n := 4) (o := 0xac0) (z := 4) hid
+  replace h := xa_identity_imgH (pc' := 0x2afa) (i := 0xa60) (n := 4) (o := 0xac0) (z := 4) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, L1, h, hk⟩ := h
@@ -95,7 +96,7 @@ theorem xa_ex_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xmo 0x2b32 (.reg .mload) (ri_mload_imgAt (o := 0xaa0) rfl)
   rw [Bytes.readWord_writeAt_self] at h
   xa 9
-  replace h := xa_identity_img (pc' := 0x2b41) (i := 0xaa0) (n := 0x64) (o := 0xb40) (z := 0x64)
+  replace h := xa_identity_imgH (pc' := 0x2b41) (i := 0xaa0) (n := 0x64) (o := 0xb40) (z := 0x64)
     (hid.of_rel hb12) (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide)
     (by decide) hR hW h
   clear hR hW
@@ -135,14 +136,14 @@ theorem xa_ex_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xmo 0x2b74 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_zero] at h
   xs 0x2b75 (.reg .add) ri_add
-  xw 0x2b76 (.reg .sload) ri_sload
+  xw 0x2b76 (.reg .sload) ri_sloadF
   rw [getStorVal_eq, hb23.stor, hb12.stor, hcw] at h
   xs 0x2b77 (.reg .gas) ri_gas_remaining
   have hin : (Bytes.writeAt img3 0xc0 (Bytes.toB256 [0]).toBytes).sliceD 0xb60 0x44 0 =
       exPushData sevm v :=
     Region.slice (Region.write_other g_data.right (by simp only [B256.length_toBytes]; omega))
       (by simp only [List.length_append, B256.length_toBytes]; rfl)
-  replace h := xa_call_img (pc' := 0x2b78) (i := 0xb60) (n := 0x44) (o := 0xc00) (z := 0x20) hfork
+  replace h := xa_call_imgH (pc' := 0x2b78) (i := 0xb60) (n := 0x44) (o := 0xc00) (z := 0x20) hfork.stateGas_none
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d4, flag, L4, h, _, hrd4, hk⟩ := h
@@ -157,8 +158,8 @@ theorem xa_ex_push {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   xjd 0x2b81
   rw [zero_lit] at hc
   exact ⟨b3, c, L4, d4, _, _, hb12.trans hb23, rfl,
-    hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
-      (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _),
+    hc.congr_left (fun _ => afterSloadH_getCode _ _ _ _) (fun _ => afterSloadH_getStor _ _ _ _)
+      (afterSloadH_logs _ _ _) (afterSloadH_output _ _ _) (afterSloadH_accessedAddresses _ _ _),
     g_v.write_other (by simp only [B256.length_toBytes]; omega), hR, hW, hrd4, h⟩
 
 /-- The `TokenExchange` topic word. -/
@@ -168,7 +169,7 @@ abbrev exTopic : B256 := Bytes.toB256 [0x8b, 0x3e, 0x96, 0xf2, 0xb8, 0x89, 0xfa,
 
 /-- **The event and the lock** (`0x2c0c` → `STOP`). -/
 theorem xa_ex_log {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} {v : B256} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    {img : Bytes} {v : B256} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hv : WordAt img 0x920 v)
     (h : XAt sevm post 0x2c0c (St b [] M G) L) :
     L = [] ∧
@@ -209,20 +210,20 @@ theorem xa_ex_log {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     show (Bytes.toB256 [0x80]).toNat = 0x80 from rfl,
     hdata.slice (by simp only [List.length_append, B256.length_toBytes])] at h
   xa 2
-  xw 0x2c58 (.reg .sstore) ri_sstore
+  xw 0x2c58 (.reg .sstore) ri_sstoreF
   obtain ⟨hrun, hL⟩ := xa_halt (l := .stop) (atL hcode (by kernel_rfl)) h
   have hp := (Except.ok.inj hrun).symm
   subst hp hL
   refine ⟨rfl, ?_, ?_, ?_⟩
   · intro x
-    show ((afterSstore sevm _ _ _).getStor _).get x = _
-    rw [afterSstore_getStor_self, lockSlot_lit, zero_lit]
+    show ((afterSstoreH sevm _ _ _).getStor _).get x = _
+    rw [afterSstoreH_getStor_self, lockSlot_lit, zero_lit]
     rfl
-  · show (afterSstore sevm _ _ _).logs = _
-    rw [afterSstore_logs]
+  · show (afterSstoreH sevm _ _ _).logs = _
+    rw [afterSstoreH_logs]
     rfl
-  · show (afterSstore sevm _ _ _).output = _
-    rw [afterSstore_output]
+  · show (afterSstoreH sevm _ _ _).output = _
+    rw [afterSstoreH_output]
     rfl
 
 end Blanc.Lift.Curve3Pool

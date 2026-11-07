@@ -36,11 +36,11 @@ theorem genericCreate.step_spawn_inner_isStatic
   rfl
 
 /-- **A spawned static frame has a code address**: it is not a CREATE frame. -/
-theorem Xinst.step_spawn_codeAddress_of_static {sevm : Sevm} {devm : Devm} {x : Xinst}
-    (hfork : CoveredFork sevm.benvStat.fork) {f : Frame} {rsm : Resume}
+theorem Xinst.step_spawn_codeAddress_of_static_noStateGas {sevm : Sevm} {devm : Devm} {x : Xinst}
+    (hsg : sevm.benvStat.rules.stateGas = none) {f : Frame} {rsm : Resume}
     (hs : Xinst.step sevm devm x = .spawn f rsm) (hst : f.inner.isStatic = true) :
     f.inner.codeAddress ≠ none := by
-  rcases Xinst.step_shapeCovered sevm devm x hfork with ⟨ex, hsh, -⟩ |
+  rcases Xinst.step_shapeNoStateGas sevm devm x hsg with ⟨ex, hsh, -⟩ |
     ⟨d, e, na, mi, ms, hf, hsh⟩ |
     ⟨d, d₀, g, v, c, t, cadr, stv, isSt, ii, isz, oi, osz, code, dp,
       hf, -, -, -, hsh⟩ <;> rw [hsh] at hs
@@ -51,8 +51,8 @@ theorem Xinst.step_spawn_codeAddress_of_static {sevm : Sevm} {devm : Devm} {x : 
     exact Option.some_ne_none _
 
 /-- **Every frame a static execution enters is static and has a code address.** -/
-theorem Exec.static_rawFrameRoots {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
+theorem Exec.static_rawFrameRoots_noStateGas {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (hfork : sevm.benvStat.rules.stateGas = none)
     (hstatic : sevm.isStatic = true) (hca : sevm.codeAddress ≠ none) :
     ∀ root ∈ Exec.rawFrameRoots run, root.sevm.isStatic = true ∧ root.sevm.codeAddress ≠ none := by
   induction run with
@@ -84,10 +84,10 @@ theorem Exec.static_rawFrameRoots {pc : Nat} {sevm : Sevm} {pre : Devm} {out : E
       obtain ⟨x, -, hxs, -⟩ := Evm.step_spawn_inv hstep
       have hfst := Xinst.step_spawn_isStatic hxs hstatic
       have hcst := Evm.step_run_isStatic hstep henter hstatic
-      have hcac : f.inner.codeAddress ≠ none := Xinst.step_spawn_codeAddress_of_static hfork hxs hfst
+      have hcac : f.inner.codeAddress ≠ none := Xinst.step_spawn_codeAddress_of_static_noStateGas hfork hxs hfst
       obtain ⟨_, _, hcev⟩ := Frame.enter_run_inv henter
       have hcac' : cevm.sta.codeAddress ≠ none := by rw [hcev]; exact hcac
-      have hroots := ih (Evm.step_spawn_child_fork hstep henter hfork) hcst hcac'
+      have hroots := ih (Evm.step_spawn_child_fork_noStateGas hstep henter hfork) hcst hcac'
       intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons] at member
       rcases member with rfl | member
@@ -99,10 +99,10 @@ theorem Exec.static_rawFrameRoots {pc : Nat} {sevm : Sevm} {pre : Devm} {out : E
       obtain ⟨x, -, hxs, -⟩ := Evm.step_spawn_inv hstep
       have hfst := Xinst.step_spawn_isStatic hxs hstatic
       have hcst := Evm.step_run_isStatic hstep henter hstatic
-      have hcac : f.inner.codeAddress ≠ none := Xinst.step_spawn_codeAddress_of_static hfork hxs hfst
+      have hcac : f.inner.codeAddress ≠ none := Xinst.step_spawn_codeAddress_of_static_noStateGas hfork hxs hfst
       obtain ⟨_, _, hcev⟩ := Frame.enter_run_inv henter
       have hcac' : cevm.sta.codeAddress ≠ none := by rw [hcev]; exact hcac
-      have hrootsChild := ihChild (Evm.step_spawn_child_fork hstep henter hfork) hcst hcac'
+      have hrootsChild := ihChild (Evm.step_spawn_child_fork_noStateGas hstep henter hfork) hcst hcac'
       have hrootsNext := ihNext hfork hstatic hca
       intro root member
       simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
@@ -112,6 +112,20 @@ theorem Exec.static_rawFrameRoots {pc : Nat} {sevm : Sevm} {pre : Devm} {out : E
       · exact hrootsChild root (by rw [member]; exact List.mem_cons_self ..)
       · exact hrootsChild root (List.mem_cons_of_mem _ member)
       · exact hrootsNext root (List.mem_cons_of_mem _ member)
+
+/-- **A spawned static frame has a code address**: it is not a CREATE frame. -/
+theorem Xinst.step_spawn_codeAddress_of_static {sevm : Sevm} {devm : Devm} {x : Xinst}
+    (hfork : CoveredFork sevm.benvStat.fork) {f : Frame} {rsm : Resume}
+    (hs : Xinst.step sevm devm x = .spawn f rsm) (hst : f.inner.isStatic = true) :
+    f.inner.codeAddress ≠ none :=
+  Xinst.step_spawn_codeAddress_of_static_noStateGas hfork.rules_stateGas_none hs hst
+
+/-- **Every frame a static execution enters is static and has a code address.** -/
+theorem Exec.static_rawFrameRoots {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
+    (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
+    (hstatic : sevm.isStatic = true) (hca : sevm.codeAddress ≠ none) :
+    ∀ root ∈ Exec.rawFrameRoots run, root.sevm.isStatic = true ∧ root.sevm.codeAddress ≠ none :=
+  Exec.static_rawFrameRoots_noStateGas run hfork.rules_stateGas_none hstatic hca
 
 /-- **Below a frame of certified code that executes only `STATICCALL`, every entered frame has a
 code address**: the certified frame's children are `STATICCALL` frames and every frame below

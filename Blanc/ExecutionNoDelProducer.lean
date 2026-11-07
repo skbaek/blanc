@@ -144,12 +144,14 @@ private theorem Exec.protectedDescendants {wa : Adr} {C : ByteArray}
           exact ⟨R, hRpc, hRcode, chain.snoc edge⟩
 
 /-- Shared all-outcome safety traversal for direct calls and guarded CREATE2. -/
-private theorem Exec.safe_of_installedSpawns {wa : Adr} {C : ByteArray} {c : Lift.Cert}
-    (hc : Lift.Cert.check C c = true)
+theorem Exec.safe_of_spawnsTerminal {wa : Adr} {C : ByteArray}
     (spawns : ∀ {R N : Exec.Deriv} {x : Xinst}, R.pc = 0 → R.sevm.code = C →
       R.sevm.benvStat.rules.stateGas = none → Exec.Deriv.ParentPrefix R N →
       Ninst.At N.sevm.code N.pc (.exec x) → x = .call ∨ x = .staticcall ∨ x = .create2)
-    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
+    (terminal : ∀ {R N : Exec.Deriv}, R.pc = 0 → R.sevm.code = C →
+      R.sevm.benvStat.rules.stateGas = none → Exec.Deriv.ParentPrefix R N →
+      ¬ Linst.At N.sevm.code N.pc .selfdestruct)
+    (hCdel : ¬ isValidDelegation C)
     {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out)
     (hsg : sevm.benvStat.rules.stateGas = none)
     (installed : pre.getCode wa = C) (hCne : C.toList ≠ [])
@@ -168,8 +170,23 @@ private theorem Exec.safe_of_installedSpawns {wa : Adr} {C : ByteArray} {c : Lif
         Exec.protectedDescendants spawns hCne hCdel run hsg installed
           (fun h => ⟨_, (root h).1, (root h).2, .refl _⟩) F hF
       exact ⟨hpc0, hsgF, hcode htgt⟩
-  exact Lift.not_selfdestruct_of_parentPrefix_noStateGas hc noSelfdestruct entry.1 entry.2.2
-    entry.2.1 chain
+  exact terminal entry.1 entry.2.2 entry.2.1 chain
+
+private theorem Exec.safe_of_installedSpawns {wa : Adr} {C : ByteArray} {c : Lift.Cert}
+    (hc : Lift.Cert.check C c = true)
+    (spawns : ∀ {R N : Exec.Deriv} {x : Xinst}, R.pc = 0 → R.sevm.code = C →
+      R.sevm.benvStat.rules.stateGas = none → Exec.Deriv.ParentPrefix R N →
+      Ninst.At N.sevm.code N.pc (.exec x) → x = .call ∨ x = .staticcall ∨ x = .create2)
+    (noSelfdestruct : c.noSelfdestruct = true) (hCdel : ¬ isValidDelegation C)
+    {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out)
+    (hsg : sevm.benvStat.rules.stateGas = none)
+    (installed : pre.getCode wa = C) (hCne : C.toList ≠ [])
+    (root : sevm.currentTarget = wa → pc = 0 ∧ sevm.code = C) :
+    ∀ node ∈ Exec.rawNodes run, node.sevm.currentTarget = wa →
+      ¬ Linst.At node.sevm.code node.pc .selfdestruct :=
+  Exec.safe_of_spawnsTerminal spawns
+    (fun hpc hcode hsg chain => Lift.not_selfdestruct_of_parentPrefix_noStateGas hc noSelfdestruct
+      hpc hcode hsg chain) hCdel run hsg installed hCne root
 
 /-- **Raw terminal safety from an installed checked runtime.** If `wa` holds a nonempty,
 undesignated code `C` checked by a certificate without SELFDESTRUCT terminals that spawns only by

@@ -39,9 +39,9 @@ open Jaune
 
 /-- **Every committed direct child of an execution keeps the code at `a`**, when the execution
 enters no CREATE frame targeting `a` (`Exec.codeAt_avoid` on each child). -/
-theorem Exec.childFrames_codeAt_keep {a : Adr} :
+theorem Exec.childFrames_codeAt_keepH {a : Adr} :
     ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out),
-      CoveredFork sevm.benvStat.fork →
+      sevm.benvStat.rules.stateGas = none →
       (∀ root ∈ Exec.rawFrameRoots run,
         root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) →
       ∀ c ∈ Exec.childFrames run, c.post.getCode a = c.pre.getCode a := by
@@ -86,8 +86,8 @@ theorem Exec.childFrames_codeAt_keep {a : Adr} :
       · rename_i committed
         rw [List.mem_singleton] at here
         subst here
-        have forkc := (ExecutionTrace.Evm.step_spawn_child_data hfork step enter).2
-        have keep := (Exec.codeAt_avoid child forkc (by
+        have forkc := (ExecutionTrace.Evm.step_spawn_child_data_noStateGas hfork step enter).2
+        have keep := (ExecutionTrace.Exec.codeAt_avoid_noStateGas child forkc (by
           intro root member
           exact avoid root (by
             simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
@@ -109,6 +109,14 @@ theorem Exec.childFrames_codeAt_keep {a : Adr} :
       · exact avoid root (by
           simp only [Exec.rawFrameRoots, Exec.rawFrameDescendants, List.mem_cons,
             List.mem_append, member, or_true])
+
+/-- The covered-fork form of `Exec.childFrames_codeAt_keepH`. -/
+theorem Exec.childFrames_codeAt_keep {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm}
+    {out : Execution} (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
+    (avoid : ∀ root ∈ Exec.rawFrameRoots run,
+      root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
+    ∀ c ∈ Exec.childFrames run, c.post.getCode a = c.pre.getCode a :=
+  Exec.childFrames_codeAt_keepH run hfork.rules_stateGas_none avoid
 
 /-- No entered frame of an execution starts with more gas than the execution's own root. -/
 theorem Exec.rawFrameRoots_gas_le {pc : Nat} {sevm : Sevm} {pre : Devm}

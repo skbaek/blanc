@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXFirst
 import Blanc.Lift.Curve3Pool.Walk.ViewsGvpRaw
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -21,7 +22,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {s : Stat
 -- SEGMENT: cwo2
 /-- **The `calc_withdraw_one_coin` body** on the derivation, with its second `get_y_D` call. -/
 theorem xa_cwo2 (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (h : XAt sevm post 0x4398 (St b [] (vdMem sevm) G) L) :
@@ -93,7 +94,7 @@ theorem xa_cwo2 (hc : Cert.CheckedM code cert mems true)
 -- SEGMENT: cwo
 /-- **The `calc_withdraw_one_coin` body** on the derivation. -/
 theorem xa_cwo (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
     (h : XAt sevm post 0x4398 (St b [] (vdMem sevm) G) L) :
@@ -115,7 +116,7 @@ certificate's checkedness: the frame's observed environment `e` (its time, the s
 read) is the one at which the walk's first `get_y_D` call (`CwFirstGetYD`) was made. -/
 theorem cwo_raw_getYD2_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selCalcWithdrawOneCoin)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -171,7 +172,7 @@ certificate's checkedness: the frame's observed environment `e` (its time, the s
 read) is the one at which the walk's first `get_y_D` call (`CwFirstGetYD`) was made. -/
 theorem cwo_raw_getYD_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selCalcWithdrawOneCoin)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)
@@ -189,7 +190,7 @@ theorem cwo_raw_getYD_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
 /-- **`calc_withdraw_one_coin`'s raw effect**, given the certificate's checkedness. -/
 theorem cwo_raw_of (hc : Cert.CheckedM code cert mems true) {pre : Devm}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selCalcWithdrawOneCoin)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)

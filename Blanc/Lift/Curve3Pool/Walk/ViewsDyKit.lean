@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsKit
 import Blanc.Lift.ThreeWordFrame
 import Blanc.Lift.Curve3Pool.Callee.GetY
@@ -34,12 +35,12 @@ theorem vk_gy_entry :
 theorem vk_gy_mems : mems.getD 252 [] = [] := by decide +kernel
 
 /-- **`get_y` crossed and read** over the carrier: `y` with `getYChk amp i j x xp = some y` on
-`S` (`amp = aChk s t`), over `aBase`, the words off `gyWin` kept and `y` at word `0`. -/
+`S` (`amp = aChk s t`), over `aBaseH`, the words off `gyWin` kept and `y` at word `0`. -/
 theorem xa_vGetY (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {i j x x0 x1 x2 : B256}
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) {i j x x0 x1 x2 : B256}
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hV : VW M LW)
     (h : XAt sevm post 0x18a4 (St b (ρ :: i :: j :: x :: x0 :: x1 :: x2 :: S) M G) L) :
-    ∃ v M' G', XAt sevm post ρ.toNat (St (aBase sevm b) (v :: S) M' G') L ∧
+    ∃ v M' G', XAt sevm post ρ.toNat (St (aBaseH sevm b) (v :: S) M' G') L ∧
       ∃ amp, aChk s sevm.benvStat.time.toNat = some amp ∧
       ∃ (hi : i.toNat < 3) (hj : j.toNat < 3),
         getYChk amp ⟨i.toNat, hi⟩ ⟨j.toNat, hj⟩ x.toNat (V3.mk x0.toNat x1.toNat x2.toNat).get =

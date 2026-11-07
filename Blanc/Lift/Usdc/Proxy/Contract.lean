@@ -1,4 +1,4 @@
-import Blanc.Lift.Usdc.CodeImage
+import Blanc.Lift.CodeImage
 import Blanc.Lift.Usdc.Proxy.Cert
 
 /-! The certified code semantics of the 2,186-byte `FiatTokenProxy` runtime at `usdcProxy`.

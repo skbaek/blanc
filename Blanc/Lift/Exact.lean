@@ -1459,35 +1459,6 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     ExactClaim code c ms b hcode hfork run :=
   node_exactM_noStateGas hc hj hcode hfork.rules_stateGas_none run
 
-/-- The gas-exact converse from checked, jump-safe entries whose entry `0`
-starts the frame. -/
-theorem lift_exactM_core {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
-    (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms b)
-    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
-    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
-    (hrun : SProg.RunExact c.prog sevm pre post) :
-    Nonempty (Exec 0 sevm pre (.ok post)) := by
-  obtain ⟨e, f, cs, rfl, hepc, hef, hm0⟩ := hstart
-  rcases hrun with ⟨f0, hf0, hrf⟩
-  have hf0' : f0 = f := by simpa only [Cert.prog, List.map_cons, List.length_cons, List.length_map,
-    lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero,
-    Option.some.injEq] using hf0.symm
-  subst f0
-  have hf := hc 0 e f (by simp only [Cert.entries, List.map_cons, List.length_cons, List.length_map,
-    lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos, List.getElem_cons_zero]) (by simp only [Cert.prog, List.map_cons,
-    List.length_cons, List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
-    getElem?_pos, List.getElem_cons_zero])
-  have hentry := hj 0 e f (by simp only [Cert.entries, List.map_cons, List.length_cons,
-    List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true, getElem?_pos,
-    List.getElem_cons_zero]) (by simp only [Cert.prog, List.map_cons,
-    List.length_cons, List.length_map, lt_add_iff_pos_left, add_pos_iff, zero_lt_one, or_true,
-    getElem?_pos, List.getElem_cons_zero])
-  rw [hm0, hepc, hef] at hf
-  rw [hm0, hef] at hentry
-  exact node_exactM hc hj hcode hfork hrf 0 e.rets [] 0 [] pre.stack [] hf hentry rfl
-    (by simp only [FrameMatches, List.forall₂_nil_right_iff]) (memMatches_nil _ _) (fun h => absurd h retIn_nil_nil)
-
 /-- Historical form of `lift_exactM_core`: needs only `stateGas = none`. -/
 theorem lift_exactM_core_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms b)
@@ -1515,6 +1486,17 @@ theorem lift_exactM_core_noStateGas {code : ByteArray} {c : Cert} {ms : List Mem
   rw [hm0, hef] at hentry
   exact node_exactM_noStateGas hc hj hcode hstateGas hrf 0 e.rets [] 0 [] pre.stack [] hf hentry rfl
     (by simp only [FrameMatches, List.forall₂_nil_right_iff]) (memMatches_nil _ _) (fun h => absurd h retIn_nil_nil)
+
+/-- The gas-exact converse from checked, jump-safe entries whose entry `0`
+starts the frame. -/
+theorem lift_exactM_core {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms b)
+    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hrun : SProg.RunExact c.prog sevm pre post) :
+    Nonempty (Exec 0 sevm pre (.ok post)) :=
+  lift_exactM_core_noStateGas hc hj hstart hcode hfork.rules_stateGas_none hrun
 
 /-- Historical form of `lift_exact`: needs only `stateGas = none`. -/
 theorem lift_exact_noStateGas {code : ByteArray} {c : Cert}

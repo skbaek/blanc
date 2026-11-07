@@ -318,7 +318,7 @@ theorem ApplyTransactionsTrace.settledRoots_ownCodeIn {F : Fork → Prop}
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
     (sumNof : sum benv.state.bal < 2 ^ 256)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ R ∈ trace.settledRoots, OwnCodeAtIn F ca C R := by
   induction trace with
   | nil =>
@@ -380,7 +380,7 @@ theorem RequestsTrace.settledRoots_ownCodeIn {F : Fork → Prop}
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
     (sumNof : sum benv.state.bal < 2 ^ 256)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ R ∈ trace.settledRoots, OwnCodeAtIn F ca C R := by
   have withdrawal := trace.withdrawal.stateInv_and_sum_le_admitted_semIn
     preserves hF hsg admitted.withdrawal inv K image
@@ -451,7 +451,7 @@ theorem RequestStageTrace.settledRoots_ownCodeIn {F : Fork → Prop}
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
     (sumNof : sum benv.state.bal < 2 ^ 256)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ R ∈ trace.settledRoots, OwnCodeAtIn F ca C R := by
   cases trace with
   | skipped =>
@@ -475,7 +475,7 @@ theorem StagedBodyTrace.settledRoots_ownCodeIn {F : Fork → Prop}
     (admitted : trace.FrameAdmitted ca entry)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ R ∈ trace.settledRoots, OwnCodeAtIn F ca C R := by
   have openSum : sum benv.state.bal < 2 ^ 256 := by omega
   have beacon := trace.beacon.stateInv_and_sum_le_admitted_semIn
@@ -576,7 +576,7 @@ theorem ConfiguredBlockTraceIn.settledRoots_ownCodeIn {F : Fork → Prop}
     (capabilities : BodyStageCapabilities F)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.StateInv ca pre.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ R ∈ trace.settledRoots, OwnCodeAtIn F ca C R := by
   intro R member
   exact trace.bodyTrace.settledRoots_ownCodeIn preserves trace.forkIn
@@ -598,7 +598,7 @@ theorem ConfiguredHistoryTraceIn.settledRoots_ownCodeIn (sem : CodeSem) (a : Adr
     (capabilities : BodyStageCapabilities F)
     (rewards : history.RewardCreditsFunded)
     (installed : some (checkpoint.state.getCode a).toList = sem.image)
-    (K : InstalledCert C) (image : sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : sem.image = some C.toList) :
     ∀ R ∈ history.settledRoots, OwnCodeAtIn F a C R := by
   have admitted : history.FrameAdmitted a (fun _ _ => True) :=
     (history.frameAdmitted_iff_rawFrames a _).2 fun _ _ _ => trivial
@@ -1025,7 +1025,7 @@ theorem ApplyTransactionsTrace.settledFrames_ownCodeIn {F : Fork → Prop}
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
     (sumNof : sum benv.state.bal < 2 ^ 256)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ f ∈ trace.settledFrames, OwnCodeAtIn F ca C f := by
   induction trace with
   | nil =>
@@ -1089,7 +1089,7 @@ theorem RequestsTrace.settledFrames_ownCodeIn {F : Fork → Prop}
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
     (sumNof : sum benv.state.bal < 2 ^ 256)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ f ∈ trace.settledFrames, OwnCodeAtIn F ca C f := by
   have withdrawal := trace.withdrawal.stateInv_and_sum_le_admitted_semIn
     preserves hF hsg admitted.withdrawal inv K image
@@ -1167,7 +1167,7 @@ theorem RequestStageTrace.settledFrames_ownCodeIn {F : Fork → Prop}
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
     (sumNof : sum benv.state.bal < 2 ^ 256)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ f ∈ trace.settledFrames, OwnCodeAtIn F ca C f := by
   cases trace with
   | skipped =>
@@ -1191,7 +1191,7 @@ theorem StagedBodyTrace.settledFrames_ownCodeIn {F : Fork → Prop}
     (admitted : trace.FrameAdmitted ca entry)
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ f ∈ trace.settledFrames, OwnCodeAtIn F ca C f := by
   have openSum : sum benv.state.bal < 2 ^ 256 := by omega
   have beacon := trace.beacon.stateInv_and_sum_le_admitted_semIn
@@ -1294,7 +1294,7 @@ theorem ConfiguredBlockTraceIn.settledFrames_ownCodeIn {F : Fork → Prop}
     (capabilities : BodyStageCapabilities F)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.StateInv ca pre.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     ∀ f ∈ trace.settledFrames, OwnCodeAtIn F ca C f := by
   intro f member
   exact trace.bodyTrace.settledFrames_ownCodeIn nonempty nondelegating spawns
@@ -1317,7 +1317,7 @@ theorem ConfiguredHistoryTraceIn.settled_ownCodeIn (sem : CodeSem) (a : Adr)
     (capabilities : BodyStageCapabilities F)
     (rewards : history.RewardCreditsFunded)
     (installed : some (checkpoint.state.getCode a).toList = sem.image)
-    (K : InstalledCert C) (image : sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : sem.image = some C.toList) :
     ∀ f ∈ history.settledFrames, OwnCodeAtIn F a C f := by
   have admitted : history.FrameAdmitted a (fun _ _ => True) :=
     (history.frameAdmitted_iff_rawFrames a _).2 fun _ _ _ => trivial

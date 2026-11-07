@@ -18,7 +18,7 @@ namespace Blanc.Lift.Curve3Crv
 open Jaune Blanc.Lift Blanc.ExecutionTrace
 
 /-- The checked deployed certificate executes no external instruction but `STATICCALL`. -/
-private theorem cert_onlyStaticcall :
+theorem cert_onlyStaticcall :
     ∀ f ∈ cert.prog, f.execsSatisfy Xinst.isStaticcall = true := by
   intro f member
   simp only [Cert.prog, cert, List.map_cons, List.map_nil,

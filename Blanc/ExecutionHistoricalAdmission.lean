@@ -17,7 +17,7 @@ frame and settles NoDel through the modern `processMessageCall_accountsToDelete_
   `PreservesAdmittedIn CoveredFork` by `PreservesAdmitted.toIn`).
 * The message wrappers split the old `hfork` into domain routing `F fork` (handed to
   `PreservesAdmittedIn`) and `stateGas = none` (settlement). The deletion exclusion of the
-  protected account comes from an installed checked runtime (`InstalledCert C` with
+  protected account comes from an installed checked runtime (`InstalledRuntimeSafety C` with
   `c.sem.image = some C.toList`) through the E2 producer, never from a fork premise or an assumed
   endpoint fact.
 * The selected transaction rung threads the invariant through debit, the settled message, the
@@ -450,15 +450,14 @@ theorem ProcessCreateMessageTrace.stateInv_admitted_semIn {F : Fork → Prop}
 /-- **Protected-account deletion exclusion of a settled message call from the message
 invariant**, under `stateGas = none`, for an installed checked runtime matching the contract's
 code image. Replaces the modern `processMessageCall_accountsToDelete_ne hfork`. -/
-theorem MessageCallTrace.accountsToDelete_ne_of_installedCert {C : ByteArray}
-    (K : InstalledCert C) (image : c.sem.image = some C.toList)
+theorem MessageCallTrace.accountsToDelete_ne_of_runtimeSafety {C : ByteArray}
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList)
     {ca : Adr} {msg : Msg} {state : State} {out : MsgCallOutput}
     (trace : MessageCallTrace msg state out)
     (hsg : msg.benv.stat.rules.stateGas = none)
     (ready : c.MsgInv ca msg)
     (h_inherited : ca ∉ msg.inheritedDeletions) :
     ∀ address ∈ out.accountsToDelete.toList, address ≠ ca := by
-  obtain ⟨cert, hc, callOnly, noSelfdestruct⟩ := K.exists_cert
   suffices hnot : ca ∉ out.accountsToDelete by
     intro address member heq
     subst heq
@@ -468,8 +467,8 @@ theorem MessageCallTrace.accountsToDelete_ne_of_installedCert {C : ByteArray}
       exact (processMessageCall_createCollision_out_noStateGas hsg target collision result).2 ca
   | createRun target collision evm core coreTrace result =>
       have targetNe := StateInv.ne_of_messageCreateCollision_false ready.state collision
-      have hevm := processCreateMessage_preserves_noDel_of_installedCert hc callOnly
-        noSelfdestruct K.notDelegation hsg core (ready.state.getCode_eq_of_image image)
+      have hevm := processCreateMessage_preserves_noDel_of_runtimeSafety K
+        hsg core (ready.state.getCode_eq_of_image image)
         targetNe ready.nodel h_inherited
       exact fun member => hevm.atd
         ((processMessageCall_createRun_out_noStateGas hsg target collision core result).2
@@ -492,8 +491,8 @@ theorem MessageCallTrace.accountsToDelete_ne_of_installedCert {C : ByteArray}
         exact h_inherited
       have execCode : execMsg.currentTarget = ca → execMsg.code = C := fun current =>
         byteArray_eq_of_toList (Option.some.inj ((execReady.code execTarget current).trans image))
-      have hevm := processMessage_preserves_noDel_of_installedCert hc callOnly noSelfdestruct
-        K.notDelegation execSg core (execReady.state.getCode_eq_of_image image) execCode
+      have hevm := processMessage_preserves_noDel_of_runtimeSafety K
+        execSg core (execReady.state.getCode_eq_of_image image) execCode
         execReady.nodel execInherited
       exact fun member => hevm.atd
         ((processMessageCall_callRun_out_noStateGas hsg target delegation execMsgEq core
@@ -512,10 +511,10 @@ theorem MessageCallTrace.stateInv_admitted_semIn {F : Fork → Prop} {C : ByteAr
     (admitted : trace.FrameAdmitted ca entry)
     (ready : c.MsgInv ca msg)
     (h_inherited : ca ∉ msg.inheritedDeletions)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca state ∧
       (∀ address ∈ out.accountsToDelete.toList, address ≠ ca) := by
-  refine ⟨?_, trace.accountsToDelete_ne_of_installedCert K image hsg ready h_inherited⟩
+  refine ⟨?_, trace.accountsToDelete_ne_of_runtimeSafety K image hsg ready h_inherited⟩
   cases trace with
   | createCollision target collision result =>
       rw [(processMessageCall_createCollision_out_noStateGas hsg target collision result).1]
@@ -560,7 +559,7 @@ theorem TransactionTrace.benvInv_admitted_semIn {F : Fork → Prop} {C : ByteArr
     (admitted : trace.FrameAdmitted ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.BenvInv ca (benv.withState state) := by
   have msgInv : c.MsgInv ca trace.msg :=
     trace.msgInv_sem inv.state inv.ca
@@ -601,7 +600,7 @@ theorem ApplyTransactionsTrace.benvInv_admitted_semIn {F : Fork → Prop} {C : B
     (admitted : trace.FrameAdmitted ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.BenvInv ca finalBenv := by
   induction trace with
   | nil => exact inv
@@ -634,7 +633,7 @@ theorem MessageCallTrace.stateInv_admittedIn {F : Fork → Prop} {C : ByteArray}
     (admitted : trace.FrameAdmitted ca entry)
     (ready : c.MsgInv ca msg)
     (h_inherited : ca ∉ msg.inheritedDeletions)
-    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : Prog.compile c.prog = some C.toList) :
     c.StateInv ca state ∧
       (∀ address ∈ out.accountsToDelete.toList, address ≠ ca) := by
   rcases trace.stateInv_admitted_semIn (c := c.toSem)
@@ -654,7 +653,7 @@ theorem TransactionTrace.benvInv_admittedIn {F : Fork → Prop} {C : ByteArray}
     (admitted : trace.FrameAdmitted ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : Prog.compile c.prog = some C.toList) :
     c.BenvInv ca (benv.withState state) :=
   benvInv_ofSem (trace.benvInv_admitted_semIn (c := c.toSem)
     (preservesAdmittedIn_toSem c ca entry preserves) hF hsg admitted sumNof
@@ -672,7 +671,7 @@ theorem ApplyTransactionsTrace.benvInv_admittedIn {F : Fork → Prop} {C : ByteA
     (admitted : trace.FrameAdmitted ca entry)
     (sumNof : sum benv.state.bal < 2 ^ 256)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : Prog.compile c.prog = some C.toList) :
     c.BenvInv ca finalBenv :=
   benvInv_ofSem (trace.benvInv_admitted_semIn (c := c.toSem)
     (preservesAdmittedIn_toSem c ca entry preserves) hF hsg admitted sumNof
@@ -754,7 +753,7 @@ theorem SystemMessageTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop
     (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
   have msgInv : c.MsgInv ca (systemTransactionMessage benv target data) :=
     systemTransactionMessage_msgInv_sem inv.state inv.ca
@@ -779,7 +778,7 @@ theorem RequestsTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop} {C 
     (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
   have withdrawal := trace.withdrawal.stateInv_and_sum_le_admitted_semIn
     preserves hF hsg admitted.withdrawal inv K image
@@ -801,7 +800,7 @@ theorem BeaconStageTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop} 
     (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
   cases trace with
   | skipped => exact ⟨inv.state, le_rfl⟩
@@ -818,7 +817,7 @@ theorem HistoryStageTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop}
     (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
   cases trace with
   | skipped => exact ⟨inv.state, le_rfl⟩
@@ -835,7 +834,7 @@ theorem RequestStageTrace.stateInv_and_sum_le_admitted_semIn {F : Fork → Prop}
     (hF : F benv.stat.fork) (hsg : benv.stat.rules.stateGas = none)
     (admitted : trace.FrameAdmitted ca entry)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca state ∧ sum state.bal ≤ sum benv.state.bal := by
   cases trace with
   | skipped => exact ⟨inv.state, le_rfl⟩
@@ -864,7 +863,7 @@ theorem StagedBodyTrace.stateInv_admitted_semIn {F : Fork → Prop} {C : ByteArr
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (rewards : trace.RewardCreditsFunded)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca state := by
   have beacon := trace.beacon.stateInv_and_sum_le_admitted_semIn
     preserves hF hsg admitted.beacon inv K image
@@ -932,7 +931,7 @@ theorem ConfiguredBlockTraceIn.stateInv_admitted_semIn {F : Fork → Prop} {C : 
     (admitted : trace.FrameAdmitted ca entry)
     (rewards : trace.RewardCreditsFunded)
     (inv : c.StateInv ca pre.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca post.state := by
   have hstate := trace.bodyTrace.stateInv_admitted_semIn preserves trace.forkIn
     (capabilities.stateGas_none trace.forkIn) admitted trace.withdrawalsBound rewards
@@ -957,7 +956,7 @@ theorem ConfiguredHistoryTraceIn.stateInv_admitted_semIn {F : Fork → Prop} {C 
     (admitted : history.FrameAdmitted ca entry)
     (rewards : history.RewardCreditsFunded)
     (inv : c.StateInv ca checkpoint.state)
-    (K : InstalledCert C) (image : c.sem.image = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : c.sem.image = some C.toList) :
     c.StateInv ca future.state := by
   induction history with
   | refl => exact inv
@@ -985,7 +984,7 @@ theorem StagedBodyTrace.stateInv_admittedIn {F : Fork → Prop} {C : ByteArray}
     (bound : sum benv.state.bal + wdsum wds < 2 ^ 256)
     (rewards : trace.RewardCreditsFunded)
     (inv : c.BenvInv ca benv)
-    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : Prog.compile c.prog = some C.toList) :
     c.StateInv ca state :=
   stateInv_ofSem (trace.stateInv_admitted_semIn (c := c.toSem)
     (preservesAdmittedIn_toSem c ca entry preserves) hF hsg admitted bound rewards
@@ -1001,7 +1000,7 @@ theorem ConfiguredBlockTraceIn.stateInv_admittedIn {F : Fork → Prop} {C : Byte
     (admitted : trace.FrameAdmitted ca entry)
     (rewards : trace.RewardCreditsFunded)
     (inv : c.StateInv ca pre.state)
-    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : Prog.compile c.prog = some C.toList) :
     c.StateInv ca post.state :=
   stateInv_ofSem (trace.stateInv_admitted_semIn (c := c.toSem)
     (preservesAdmittedIn_toSem c ca entry preserves) capabilities admitted rewards
@@ -1017,7 +1016,7 @@ theorem ConfiguredHistoryTraceIn.stateInv_admittedIn {F : Fork → Prop} {C : By
     (admitted : history.FrameAdmitted ca entry)
     (rewards : history.RewardCreditsFunded)
     (inv : c.StateInv ca checkpoint.state)
-    (K : InstalledCert C) (image : Prog.compile c.prog = some C.toList) :
+    (K : InstalledRuntimeSafety C) (image : Prog.compile c.prog = some C.toList) :
     c.StateInv ca future.state :=
   stateInv_ofSem (history.stateInv_admitted_semIn (c := c.toSem)
     (preservesAdmittedIn_toSem c ca entry preserves) capabilities admitted rewards

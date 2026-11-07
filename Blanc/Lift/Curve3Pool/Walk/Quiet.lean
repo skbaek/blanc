@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Refine
 import Blanc.Lift.Curve3Pool.Cert
 import Blanc.Lift.InvWalkWorld
@@ -107,15 +108,15 @@ theorem ric_assertJump {h l : UInt8} {w : B256} {le : [h, l].length ≤ 32}
   exact ⟨hw, G3, run⟩
 
 /-- The owner guard `PUSH1 4 SLOAD CALLER EQ PUSH2 ok JUMPI`, inverted. -/
-theorem ric_ownerGuard (hfork : CoveredFork sevm.benvStat.fork) {h l : UInt8}
+theorem ric_ownerGuard (hfork : HistFork sevm.benvStat.fork) {h l : UInt8}
     {le4 : [(0x04 : UInt8)].length ≤ 32} {le : [h, l].length ≤ 32} (hf : fail.noOk = true)
     (run : SFunc.RunCut fs sevm C (St b S M G)
       (.next (.push [0x04] le4) (.next (.reg .sload) (.next (.reg .caller) (.next (.reg .eq)
         (.next (.push [h, l] le) (.branch fail (.dest ok))))))) r) :
     sevm.caller.toB256 = b.getStorVal sevm.currentTarget ownerSlot ∧
-      ∃ G', SFunc.RunCut fs sevm C (St (afterSload sevm b ownerSlot) S M G') ok r := by
+      ∃ G', SFunc.RunCut fs sevm C (St (afterSloadH sevm b ownerSlot) S M G') ok r := by
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G1, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G2, rfl⟩ := ri_sloadF hfork s1
   winv 2
   obtain ⟨hw, G5, run⟩ := ric_assertJump hf run
   exact ⟨B256.eq_of_eqCheck_ne_zero hw, G5, run⟩
@@ -133,26 +134,26 @@ theorem QStep.refl (sevm : Sevm) (b : Devm) : QStep sevm b b (b.getStor sevm.cur
   ⟨rfl, fun _ _ => rfl, rfl, rfl⟩
 
 theorem QStep.sload {B : Devm} {st : Stor} (h : QStep sevm b B st) (k : B256) :
-    QStep sevm b (afterSload sevm B k) st :=
-  ⟨by rw [afterSload_getStor, h.self], fun a ha => by rw [afterSload_getStor, h.other a ha],
-    by rw [afterSload_logs, h.logs], by rw [afterSload_output, h.output]⟩
+    QStep sevm b (afterSloadH sevm B k) st :=
+  ⟨by rw [afterSloadH_getStor, h.self], fun a ha => by rw [afterSloadH_getStor, h.other a ha],
+    by rw [afterSloadH_logs, h.logs], by rw [afterSloadH_output, h.output]⟩
 
 theorem QStep.sstore {B : Devm} {st : Stor} (h : QStep sevm b B st) (k v : B256) :
-    QStep sevm b (afterSstore sevm B k v) (st.set k v) :=
-  ⟨by rw [afterSstore_getStor_self, h.self],
-    fun a ha => by rw [afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), h.other a ha],
-    by rw [afterSstore_logs, h.logs], by rw [afterSstore_output, h.output]⟩
+    QStep sevm b (afterSstoreH sevm B k v) (st.set k v) :=
+  ⟨by rw [afterSstoreH_getStor_self, h.self],
+    fun a ha => by rw [afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), h.other a ha],
+    by rw [afterSstoreH_logs, h.logs], by rw [afterSstoreH_output, h.output]⟩
 
 theorem QStep.getStorVal {B : Devm} {st : Stor} (h : QStep sevm b B st) (k : B256) :
     B.getStorVal sevm.currentTarget k = st.get k := by
   show (Devm.getStor B sevm.currentTarget).get k = _
   rw [h.self]
 
-theorem getStorVal_afterSstore_self' {B : Devm} {k v x : B256} :
-    (afterSstore sevm B k v).getStorVal sevm.currentTarget x =
+theorem getStorVal_afterSstoreH_self' {B : Devm} {k v x : B256} :
+    (afterSstoreH sevm B k v).getStorVal sevm.currentTarget x =
       ((B.getStor sevm.currentTarget).set k v).get x := by
   show (Devm.getStor _ _).get _ = _
-  rw [afterSstore_getStor_self]
+  rw [afterSstoreH_getStor_self]
 
 theorem quietEnv_value (hv : sevm.value = 0) : (quietEnv sevm).value = 0 := by
   show sevm.value.toNat = 0

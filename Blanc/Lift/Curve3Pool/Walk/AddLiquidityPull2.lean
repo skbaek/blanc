@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPull
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -17,7 +18,7 @@ after the `transfer` call (`len = min(RETURNDATASIZE, 32)` at `0x800`, the check
 of `0x800[0 : 32 + len]` to `0x5c0`, and the `len > 0` conversion test): the returned data
 passes `RawCallOk`. -/
 theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} (hcode : sevm.code = code) (hid : IdReady sevm d)
+    {img : Bytes} (hcode : sevm.code = code) (hid : IdReadyH sevm d)
     (hR : Mem.Reads M (Bytes.writeAt img 0x820 (d.returnData.take 0x20))) (hW : Mem.Wf M)
     (hA : M.size % 32 = 0)
     (hrd : d.returnData.length < 2 ^ 256)
@@ -61,7 +62,7 @@ theorem xa_al_pl4 {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {G : Nat} 
   have hsz : (Bytes.toB256 [0x20] + nW).toNat = 32 + (d.returnData.take 32).length := by
     rw [B256.toNat_add, hn, show (Bytes.toB256 [0x20]).toNat = 32 by decide]
     exact Nat.mod_eq_of_lt (by omega)
-  replace h := xa_identity_imgA (pc' := 0x1216) (i := 0x800) (n := 32 + (d.returnData.take 32).length)
+  replace h := xa_identity_imgAH (pc' := 0x1216) (i := 0x800) (n := 32 + (d.returnData.take 32).length)
     (o := 0x5c0) (z := 32 + (d.returnData.take 32).length) hid
     (atN hcode (by kernel_rfl)) rfl (by decide) hsz (by decide) hsz hR hW hA h
   clear hR hW hA
@@ -171,11 +172,11 @@ theorem al_balanceOf_input2 (img : Bytes) (self : Adr) :
 in_amount` (a second `STATICCALL`, the difference checked). -/
 theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {i : Nat} {v C : B256} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (hfork : HistFork sevm.benvStat.fork) (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hv : WordAt img 0x4e0 v)
     (hC : WordAt img 0x500 C) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
     (hidk : ∀ c ∈ L, c.sevm.currentTarget = C.toAdr →
-      c.post.getCode 4 = c.pre.getCode 4)
+      CurveCoins.PoolCoinSel (Sevm.selector c.sevm) → c.post.getCode 4 = c.pre.getCode 4)
     (h : XAt sevm post 0x1272 (St b [3, 0x4c0] M G) L) :
     (i ≠ 2 ∧ ∃ M' G', Mem.Reads M' img ∧ Mem.Wf M' ∧ M'.size % 32 = 0 ∧
       XAt sevm post 0x12d6 (St b [3, 0x4c0] M' G') L) ∨
@@ -206,8 +207,8 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     xa 2
     xml 0x129a 0x500 hC
     xs 0x129b (.reg .gas) ri_gas_remaining
-    replace h := xa_staticcall_imgA (pc' := 0x129c) (i := 0x87c) (n := 0x24) (o := 0x8e0)
-      (z := 0x20) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW hA h
+    replace h := xa_staticcall_imgAH (pc' := 0x129c) (i := 0x87c) (n := 0x24) (o := 0x8e0)
+      (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW hA h
     clear hR hW hA
     obtain ⟨d1, flag, out, M, L1, h, ⟨d0, hrun0, hcd0⟩, hR, hW, hA, hrd, hob, hstor, hlogs, hk⟩ := h
     xs 0x129f (.push [0x12, 0xa4] (by decide)) ri_push
@@ -218,7 +219,8 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
     · exact absurd hpre hcoin
     clear hk
     have h4 : d1.getCode 4 = b.getCode 4 := by
-      rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self) htgt, hcpre]
+      rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self) htgt
+        (poolCoinSel_balanceOfData (a := sevm.currentTarget) (by rw [hdata, al_balanceOf_input2])), hcpre]
     xa 5
     xji 0x12ad 0x12b1 hw2
     · xdead
@@ -257,7 +259,7 @@ theorem xa_al_pl5C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
 /-- **`xa_al_pl5`**: `xa_al_pl5C` with every child keeping the pool. -/
 theorem xa_al_pl5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {i : Nat} {v C : B256} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
+    (hfork : HistFork sevm.benvStat.fork) (hi : i < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hA : M.size % 32 = 0) (hctr : WordAt img 0x4c0 (Nat.toB256 i)) (hv : WordAt img 0x4e0 v)
     (hC : WordAt img 0x500 C) (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
     (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
@@ -272,7 +274,7 @@ theorem xa_al_pl5 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
         WordAt img' o w) ∧
       WordAt img' 0x4e0 (Bytes.toB256 (c.post.output.take 32) - v) ∧
       XAt sevm post 0x12d6 (St d [3, 0x4c0] M' G') L') :=
-  xa_al_pl5C hcode hfork hi hR hW hA hctr hv hC hcoin (fun c hc _ => hidk c hc) h
+  xa_al_pl5C hcode hfork hi hR hW hA hctr hv hC hcoin (fun c hc _ _ => hidk c hc) h
 
 theorem al_off {i : Nat} (hi : i < 3) (hb : Nat) (hbl : hb < 2 ^ 16) (hl : B256)
     (hlv : hl.toNat = hb) :

@@ -140,7 +140,7 @@ theorem inhibited_mid_history_observations {F : Fork → Prop}
     ⟨by rw [installed]; rfl, trivial, initialStorage⟩
   obtain ⟨frames, replay, observed⟩ := (inhibitedLadder neutral).midHistoryIn trace
     (inhibited_mid_admitted trace callers) capabilities (trace.rewardCreditsFunded capabilities)
-    startInv inhibitedInstalledCert rfl
+    startInv inhibitedInstalledCert.runtimeSafety rfl
   obtain ⟨finalStorage, empty⟩ := replay initialStorage
   exact ⟨finalStorage, observed.symm.trans empty⟩
 

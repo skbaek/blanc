@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceTransfers
 
 /-!
@@ -45,13 +46,13 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
 
 /-- **The `remove_liquidity_imbalance` frame** (see the module note). -/
 theorem xa_rli (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance)
     (hσ : b.getStor sevm.currentTarget = σ) (ha : Abstracts σ s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
     (hcoin : ∀ k, k < 3 → ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + Nat.toB256 k)).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
     (hkeep : ∀ c ∈ L, ∀ x, (c.post.getStor sevm.currentTarget).get x =
       (c.pre.getStor sevm.currentTarget).get x)
     (hidk : ∀ c ∈ L, c.post.getCode 4 = c.pre.getCode 4)
@@ -219,20 +220,17 @@ theorem xa_rli (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
 
 /-- **The `remove_liquidity_imbalance` frame under the conditional keep**: the same conclusion
 as `xa_rli` when only the children at neither the pool nor `4` are known to keep the pool
-(`RlKeepC`, which every frame at depth `1` satisfies), given that 3Crv and the coins are
+(`KeepSel`, which every frame at depth `1` satisfies), given that 3Crv and the coins are
 neither. -/
 theorem xa_rliC (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidityImbalance)
     (hσ : b.getStor sevm.currentTarget = σ) (ha : Abstracts σ s)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
     (hcoin : ∀ k, k < 3 → ¬ sevm.benvStat.rules.isPrecomp (σ.get (coinsBase + Nat.toB256 k)).toAdr)
-    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReady sevm b)
-    (htokne : (σ.get tokenSlot).toAdr ≠ sevm.currentTarget ∧ (σ.get tokenSlot).toAdr ≠ 4)
-    (hcoinne : ∀ k, k < 3 → (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ sevm.currentTarget ∧
-      (σ.get (coinsBase + Nat.toB256 k)).toAdr ≠ 4)
-    (hK : RlKeepC sevm L)
+    (hpc : b.getCode sevm.currentTarget ≠ .empty) (hid : IdReadyH sevm b)
+    (hK : KeepSel sevm σ L)
     (h : XAt sevm post 0 (St b [] Mem.empty G) L) :
     σ.get lockSlot = 0 ∧ sevm.value = 0 ∧ σ.get isKilledSlot = 0 ∧
     ∃ (cs cb : Exec.Frame) (L0 L1 L2 : List Exec.Frame) (A D0 D1 D2 f0 f1 f2 : B256),
@@ -292,11 +290,10 @@ theorem xa_rliC (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
   obtain ⟨hlock, hval, hkill, cs, L1, A, b1, M1, G1, rfl, hsw, hT0, hm3, hA, hs1, hl1, ho1, hc1,
     hid1, h, hV⟩ := xa_rli_front hc hcode hfork ha htok h
   refine ⟨hlock, hval, hkill, ?_⟩
-  have hks := hK cs List.mem_cons_self (by rw [hsw.target]; exact htokne.1)
-    (by rw [hsw.target]; exact htokne.2)
+  have hks := hK.tok cs List.mem_cons_self hsw.target
   have hB1 : ExBase sevm b b1 ((b.getStor sevm.currentTarget).set lockSlot 1) :=
     ⟨hs1, hc1 _ hpc, ho1, hid1 hid hks.2⟩
-  have hK1 : RlKeepC sevm L1 := hK.tail
+  have hK1 : KeepSel sevm (b.getStor sevm.currentTarget) L1 := hK.tail
   clear hK
   obtain ⟨D0, M2, G2, hD0, hu0, hu1, hu2, h, hV⟩ := xa_rli_d0 hc hcode hfork hV h
   obtain ⟨D1, M3, G3, hD1, h, hV⟩ := xa_rli_d1 hc hcode hfork (D0 := D0) (T := vSupply cs) (F := (b.getStor sevm.currentTarget).get feeSlot * Bytes.toB256 [3] / Bytes.toB256 [8])
@@ -330,10 +327,9 @@ theorem xa_rliC (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
       Stor.get_set_ne _ lock_ne_token]
   obtain ⟨cb, Lr, d5, M11, img11, G11, rfl, hcb, hlen5, hdepth, hR, hW, hI, hc0, h⟩ :=
     xa_rli_burn hcode hfork hV htw htok h
-  have hkb := hK1 cb List.mem_cons_self (by rw [hcb.target]; exact htokne.1)
-    (by rw [hcb.target]; exact htokne.2)
+  have hkb := hK1.tok cb List.mem_cons_self hcb.target
   have hB5 := hB4.child hcb hpc hkb.1 hkb.2
-  have hK2 : RlKeepC sevm Lr := hK1.tail
+  have hK2 : KeepSel sevm (b.getStor sevm.currentTarget) Lr := hK1.tail
   clear hK1
   -- the transfers
   have hco : ∀ {v a0 a1 a2 : B256} (k : Nat), k < 3 → rliAmt sevm k ≠ 0 →
@@ -342,17 +338,10 @@ theorem xa_rliC (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
           a0).set (balancesBase + Nat.toB256 1) a1).set (balancesBase + Nat.toB256 2) a2).get
           (coinsBase + Nat.toB256 k)).toAdr) := fun k hk _ => by
     rw [rli_coin_get hk]; exact hcoin k hk
-  have hcone : ∀ {v a0 a1 a2 : B256} (k : Nat), k < 3 →
-      ((((((b.getStor sevm.currentTarget).set lockSlot v).set (balancesBase + Nat.toB256 0)
-        a0).set (balancesBase + Nat.toB256 1) a1).set (balancesBase + Nat.toB256 2) a2).get
-        (coinsBase + Nat.toB256 k)).toAdr ≠ sevm.currentTarget ∧
-      ((((((b.getStor sevm.currentTarget).set lockSlot v).set (balancesBase + Nat.toB256 0)
-        a0).set (balancesBase + Nat.toB256 1) a1).set (balancesBase + Nat.toB256 2) a2).get
-        (coinsBase + Nat.toB256 k)).toAdr ≠ 4 := fun k hk => by
-    rw [rli_coin_get hk]; exact hcoinne k hk
   -- coin 0
   obtain ⟨Lc0, Lr0, b6, M12, img12, G12, rfl, hB6, hl6, hP0, hR, hW, hI, hc, h⟩ :=
-    xa_rli_iterC hcode hfork hB5 hpc (hcone 0 (by decide)) hK2 hdepth (hco 0 (by decide)) hR hW hI hc0 h
+    xa_rli_iterC hcode hfork hB5 hpc
+      (fun c hc' ht hs => hK2.coin (i := 0) (by decide) c hc' (by rw [ht, rli_coin_get (by decide)]) hs) hdepth (hco 0 (by decide)) hR hW hI hc0 h
   obtain ⟨M13, img13, G13, hR, hW, hI, hc, hbr⟩ := xa_rli_next hcode hR hW hI hc h
   rcases hbr with ⟨-, h⟩ | ⟨he, -⟩
   swap
@@ -360,8 +349,9 @@ theorem xa_rliC (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
   rw [show Bytes.toB256 [1] + Nat.toB256 0 = Nat.toB256 1 from by decide] at hc
   -- coin 1
   obtain ⟨Lc1, Lr1, b7, M14, img14, G14, rfl, hB7, hl7, hP1, hR, hW, hI, hc, h⟩ :=
-    xa_rli_iterC hcode hfork hB6 hpc (hcone 1 (by decide))
-      (fun c hc' h1 h2 => hK2 c (List.mem_append_right _ hc') h1 h2) hdepth (hco 1 (by decide))
+    xa_rli_iterC hcode hfork hB6 hpc
+      (fun c hc' ht hs => hK2.coin (i := 1) (by decide) c (List.mem_append_right _ hc')
+        (by rw [ht, rli_coin_get (by decide)]) hs) hdepth (hco 1 (by decide))
       hR hW hI hc h
   obtain ⟨M15, img15, G15, hR, hW, hI, hc, hbr⟩ := xa_rli_next hcode hR hW hI hc h
   rcases hbr with ⟨-, h⟩ | ⟨he, -⟩
@@ -370,8 +360,10 @@ theorem xa_rliC (hc : Cert.CheckedM code cert mems true) {σ : Stor} {s : State}
   rw [show Bytes.toB256 [1] + Nat.toB256 1 = Nat.toB256 2 from by decide] at hc
   -- coin 2
   obtain ⟨Lc2, Lr2, b8, M16, img16, G16, rfl, hB8, hl8, hP2, hR, hW, hI, hc, h⟩ :=
-    xa_rli_iterC hcode hfork hB7 hpc (hcone 2 (by decide))
-      (fun c hc' h1 h2 => hK2 c (List.mem_append_right _ (List.mem_append_right _ hc')) h1 h2)
+    xa_rli_iterC hcode hfork hB7 hpc
+      (fun c hc' ht hs => hK2.coin (i := 2) (by decide) c
+        (List.mem_append_right _ (List.mem_append_right _ hc'))
+        (by rw [ht, rli_coin_get (by decide)]) hs)
       hdepth (hco 2 (by decide)) hR hW hI hc h
   obtain ⟨M17, img17, G17, hR, hW, hI, hc, hbr⟩ := xa_rli_next hcode hR hW hI hc h
   rcases hbr with ⟨hne, -⟩ | ⟨-, h⟩

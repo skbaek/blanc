@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityIter
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -12,7 +13,7 @@ open Jaune Blanc.Lift
 theorem xa_al_d1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {F AF A T D0 : B256} {old nv : Nat → B256}
     (hchk : Cert.CheckedM code cert mems true) (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hm : AlPullImg img 3 F AF A T D0 old nv)
     (h : XAt sevm post 0x1333 (St b [3, 0x4c0] M G) L) :

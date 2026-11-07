@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityPre
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -35,7 +36,7 @@ theorem al_restored {src img : Bytes} {o : Nat} {w : B256}
 theorem xa_al_p3 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {F AF A T : B256} {old : Nat → B256}
     (hchk : Cert.CheckedM code cert mems true) (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0) (hm : AlMem0 img F AF A T 0 old)
     (h : XAt sevm post 0xf83 (St b [] M G) L) :
     ∃ (D0 : B256) (M' : Mem) (img' : Bytes) (G' : Nat), Mem.Reads M' img' ∧ Mem.Wf M' ∧

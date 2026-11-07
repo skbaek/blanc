@@ -1025,29 +1025,40 @@ private theorem callMsg_none_precompile {sevm : Sevm} {parent child : Devm}
 
 /-- A successful CALL step with a nonzero flag that enters no code frame ran the precompile
 at its target: the target is a precompile of the fork and carries no delegation. -/
+theorem Xinst.call_none_precompileH {sevm : Sevm} {s sf : Devm}
+    {g c v ii is oi os : B256} {xs : List B256}
+    (stateGas : sevm.benvStat.rules.stateGas = none)
+    (operands : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
+    (run : Xinst.Run sevm s .call .none (.ok sf))
+    (flag : ∃ f rest, sf.stack = f :: rest ∧ f ≠ 0) :
+    sevm.benvStat.rules.isPrecomp c.toAdr := by
+  have stepRun : Ninst.StepRun 0 sevm s Ninst.call .none (.ok sf) := by
+    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
+    exact run
+  rcases of_step_call_val_with_depth_frameH operands
+      (show Xlot.Filled .none from trivial) stepRun stateGas with
+    ⟨failed, _⟩ | ⟨parent, child, dp, na, code, avail, _, _, _, _, _, _, routing,
+      _, process, _⟩
+  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
+    rw [flagStack] at failed
+    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
+  · apply callMsg_none_precompile (process := process)
+    unfold CallCodeH at routing
+    split at routing
+    · rcases routing with ⟨_, nameEq, _, dpEq⟩ | ⟨_, _, _, _, dpEq⟩
+      · exact Or.inl ⟨nameEq, dpEq⟩
+      · exact Or.inr dpEq
+    · exact Or.inl ⟨routing.1, routing.2.2⟩
+
+/-- The covered-fork form of `Xinst.call_none_precompileH`. -/
 theorem Xinst.call_none_precompile {sevm : Sevm} {s sf : Devm}
     {g c v ii is oi os : B256} {xs : List B256}
     (fork : CoveredFork sevm.benvStat.fork)
     (operands : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (run : Xinst.Run sevm s .call .none (.ok sf))
     (flag : ∃ f rest, sf.stack = f :: rest ∧ f ≠ 0) :
-    sevm.benvStat.rules.isPrecomp c.toAdr := by
-  have stepRun : ∀ pc, Ninst.StepRun pc sevm s Ninst.call .none (.ok sf) := by
-    intro pc
-    rw [Ninst.StepRun, Ninst.step_exec, XStep.run_toStep]
-    exact run
-  rcases of_run_call_val_with_depth_frame operands ⟨.none, trivial, 0, stepRun 0⟩ fork with
-    ⟨failed, _⟩ | ⟨parent, child, xl, dp, na, code, avail, pc, step, _, _, _, _, _, _, routing,
-      filled, process, _, _, _, _, _, _⟩
-  · obtain ⟨f, rest, flagStack, nonzero⟩ := flag
-    rw [flagStack] at failed
-    exact (nonzero (pref_head_unique failed (pref_append [f] rest)).symm).elim
-  · obtain ⟨slotEq, _⟩ := Step.Run.unique_of_filled (show Xlot.Filled .none from trivial) filled (stepRun pc) step
-    subst slotEq
-    apply callMsg_none_precompile (process := process)
-    rcases routing with ⟨_, nameEq, _, dpEq⟩ | ⟨_, _, _, _, dpEq⟩
-    · exact Or.inl ⟨nameEq, dpEq⟩
-    · exact Or.inr dpEq
+    sevm.benvStat.rules.isPrecomp c.toAdr :=
+  Xinst.call_none_precompileH fork.rules_stateGas_none operands run flag
 
 /-- `Xinst.staticcall_none_precompile` from `rules.stateGas = none` alone, under the frame's
 actual delegation flag (`CallCodeH`). -/

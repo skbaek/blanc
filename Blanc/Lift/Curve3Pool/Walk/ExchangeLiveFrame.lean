@@ -294,7 +294,7 @@ theorem rx_ex_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
   obtain ⟨g0, rfl⟩ : ∃ g, G = g + 422 := ⟨G - 422, by omega⟩
   refine rx_dispatch_ex hlen hcd hsel ?_
   refine rx_ex_pre (b0 := pre) (σ := pre.getStor sevm.currentTarget) (R := g0 - 33261) hfork
-    hstatic ⟨fun _ => rfl, rfl, rfl, hid⟩ hWc hWb hlock hval hkill hi hj
+    hstatic ⟨fun _ => rfl, rfl, rfl, hid.toH⟩ hWc hWb hlock hval hkill hi hj
     (vyMem_reads Mem.wf_empty Mem.reads_empty _) (vyMem_wf Mem.wf_empty _)
     (vyMem_empty_size _) (vyImg_clamps _ _) (by omega) ?_
   intro b1 M1 img1 g1 z0 z1 z2 hB1 hW1 hR1 hWf1 hsz1 hg1 hg1'
@@ -306,7 +306,7 @@ theorem rx_ex_frame (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isS
   obtain rfl := B256.toNat_inj _ _ e2
   rw [eci] at hF2
   have hL2 : ExLive sevm W b2 ((pre.getStor sevm.currentTarget).set lockSlot 1) :=
-    ⟨hB2.stor, hB2.id, hWc, hW2⟩
+    ⟨hB2.stor, (hB2.id.toCovered hfork), hWc, hW2⟩
   obtain ⟨g3, rfl⟩ : ∃ g, g2 = g + 10 := ⟨g2 - 10, by omega⟩
   by_cases hfee : exI sevm = 2
   · -- the fee coin: `balanceOf`, the pull, `balanceOf`

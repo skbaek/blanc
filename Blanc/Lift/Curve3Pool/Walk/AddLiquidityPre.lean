@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.AddLiquidityFrames
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidity
@@ -28,7 +29,7 @@ theorem xa_dispatch_addLiquidity {sevm : Sevm} {post b : Devm} {L : List Exec.Fr
 
 /-- The base after `add_liquidity`'s guards and fee reads. -/
 def alB1 (sevm : Sevm) (b : Devm) : Devm :=
-  afterSload sevm (afterSload sevm (afterSload sevm (afterSstore sevm (afterSload sevm b
+  afterSloadH sevm (afterSloadH sevm (afterSloadH sevm (afterSstoreH sevm (afterSloadH sevm b
     (Bytes.toB256 [0xff, 0xff, 0xff])) (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0x01]))
     (Bytes.toB256 [0x0f])) feeSlot) adminFeeSlot
 
@@ -68,13 +69,13 @@ theorem al_abstracts_lock {σ : Stor} {s : State} (h : Abstracts σ s) (v : B256
 
 theorem alB1_getStor (sevm : Sevm) (b : Devm) :
     (alB1 sevm b).getStor sevm.currentTarget = (b.getStor sevm.currentTarget).set lockSlot 1 := by
-  rw [alB1, afterSload_getStor, afterSload_getStor, afterSload_getStor, afterSstore_getStor_self,
-    afterSload_getStor, lockSlot_lit]
+  rw [alB1, afterSloadH_getStor, afterSloadH_getStor, afterSloadH_getStor, afterSstoreH_getStor_self,
+    afterSloadH_getStor, lockSlot_lit]
   rfl
 
 theorem xa_al_p1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {s : State} (hchk : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hcd : sevm.data.length < 2 ^ 256) (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (h : XAt sevm post 0xe55 (St b [] M G) L) :
@@ -90,9 +91,9 @@ theorem xa_al_p1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
         Bytes.toB256 [8]) ∧
       WordAt img1 0x1c0 ((b.getStor sevm.currentTarget).get adminFeeSlot) ∧
       WordAt img1 0x1e0 A ∧
-      XAt sevm post 0xf0d (St (aBase sevm (alB1 sevm b)) [] M1 G1) L := by
+      XAt sevm post 0xf0d (St (aBaseH sevm (alB1 sevm b)) [] M1 G1) L := by
   xs 0xe59 (.push [0xff, 0xff, 0xff] (by decide)) ri_push
-  xw 0xe5a (.reg .sload) ri_sload
+  xw 0xe5a (.reg .sload) ri_sloadF
   xa 2
   xji 0xe5f 0xe63 hw
   · xdead
@@ -102,28 +103,28 @@ theorem xa_al_p1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
     exact e
   clear hw
   xa 3
-  xw 0xe6b (.reg .sstore) ri_sstore
+  xw 0xe6b (.reg .sstore) ri_sstoreF
   xa 3
   xji 0xe71 0xe75 hw
   · xdead
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xa 2
-  xw 0xe79 (.reg .sload) ri_sload
+  xw 0xe79 (.reg .sload) ri_sloadF
   xa 2
   xji 0xe7e 0xe82 hw
   · xdead
   have hkill : (b.getStor sevm.currentTarget).get isKilledSlot = 0 := by
     have e := B256.eq_of_eqCheck_ne_zero hw
-    rw [getStorVal_afterSstore_ne (by decide), getStorVal_eq, afterSload_getStor,
+    rw [getStorVal_afterSstoreH_ne (by decide), getStorVal_eq, afterSloadH_getStor,
       isKilledSlot_lit] at e
     exact e
   clear hw
   xa 4
   xma 0xe8a (.reg .calldatacopy) (ri_calldatacopy_imgAtA (o := 0x140) (z := 0x60) rfl rfl)
   xs 0xe8c (.push [0x02] (by decide)) ri_push
-  xw 0xe8d (.reg .sload) ri_sload
-  rw [getStorVal_afterSload, getStorVal_afterSstore_ne (by decide), getStorVal_eq, afterSload_getStor, feeSlot_lit] at h
+  xw 0xe8d (.reg .sload) ri_sloadF
+  rw [getStorVal_afterSloadH, getStorVal_afterSstoreH_ne (by decide), getStorVal_eq, afterSloadH_getStor, feeSlot_lit] at h
   xa 13
   xji 0xe9e 0xea2 hw
   · xdead
@@ -136,8 +137,8 @@ theorem xa_al_p1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xa 8
   xma 0xec1 (.reg .mstore) (ri_mstore_imgAtA (o := 0x1a0) rfl)
   xs 0xec3 (.push [0x03] (by decide)) ri_push
-  xw 0xec4 (.reg .sload) ri_sload
-  rw [getStorVal_afterSload, getStorVal_afterSload, getStorVal_afterSstore_ne (by decide), getStorVal_eq, afterSload_getStor, adminFeeSlot_lit] at h
+  xw 0xec4 (.reg .sload) ri_sloadF
+  rw [getStorVal_afterSloadH, getStorVal_afterSloadH, getStorVal_afterSstoreH_ne (by decide), getStorVal_eq, afterSloadH_getStor, adminFeeSlot_lit] at h
   xs 0xec7 (.push [0x01, 0xc0] (by decide)) ri_push
   xma 0xec8 (.reg .mstore) (ri_mstore_imgAtA (o := 0x1c0) rfl)
   xs 0xecb (.push [0x01, 0x40] (by decide)) ri_push
@@ -219,7 +220,7 @@ theorem al_bal0 : balancesBase = balancesBase + Nat.toB256 0 := by decide
 /-- **`add_liquidity`, part 2** (`0xf0d` → `0xf83`): `token_supply = token.totalSupply()` (a
 `STATICCALL` returning at least a word), `D0 = 0`, `old_balances = self.balances`. -/
 theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} {σ : Stor} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    {img : Bytes} {σ : Stor} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)
@@ -245,11 +246,10 @@ theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xa 5
   xma 0xf1d (.reg .mstore) (ri_mstore_imgAtA (o := 0x260) rfl)
   xa 2
-  xw 0xf23 (.reg .sload) ri_sload
+  xw 0xf23 (.reg .sload) ri_sloadF
   rw [getStorVal_eq, hst, tokenSlot_lit] at h
   xs 0xf24 (.reg .gas) ri_gas_remaining
-  replace h := xa_staticcall_imgA (pc' := 0xf25) (i := 0x27c) (n := 4) (o := 0x2c0) (z := 0x20)
-    hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW hA h
+  replace h := xa_staticcall_imgAH (pc' := 0xf25) (i := 0x27c) (n := 4) (o := 0x2c0) (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW hA h
   clear hR hW hA
   obtain ⟨d1, flag, out, M, L1, h, ⟨d0, hrun0, hcd0⟩, hR, hW, hA, hrd, hob, hstor, hlogs, hk⟩ := h
   xs 0xf28 (.push [0x0f, 0x2d] (by decide)) ri_push
@@ -261,8 +261,8 @@ theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   clear hk
   have h4 : d1.getCode 4 = b.getCode 4 := by
     rw [hcpost, hidk c (by rw [hL]; exact List.mem_cons_self) htgt, hcpre]
-    show (afterSload sevm _ _).getCode 4 = _
-    rw [afterSload_getCode]
+    show (afterSloadH sevm _ _).getCode 4 = _
+    rw [afterSloadH_getCode]
   xa 5
   xji 0xf36 0xf3a hw2
   · xdead
@@ -272,7 +272,7 @@ theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     exact e
   clear hw2
   have hst1 : ∀ x, (d1.getStor sevm.currentTarget).get x = σ.get x := by
-    intro x; rw [hstor, afterSload_getStor, hst]
+    intro x; rw [hstor, afterSloadH_getStor, hst]
   xa 4
   xma 0xf42 (.reg .mload) (ri_mload_imgAtA (o := 0x2c0) rfl)
   xs 0xf45 (.push [0x02, 0x40] (by decide)) ri_push
@@ -284,7 +284,7 @@ theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xa 2
   xma 0xf5a (.reg .keccak256) (ri_keccak_imgAtA (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_one, al_bal0] at h
-  xw 0xf5b (.reg .sload) ri_sload
+  xw 0xf5b (.reg .sload) ri_sloadF
   rw [getStorVal_eq, hst1] at h
   xs 0xf5c (.reg (.dup 2)) (ri_dup (by rfl))
   xma 0xf5d (.reg .mstore) (ri_mstore_imgAtA (o := 0x300) rfl)
@@ -295,8 +295,8 @@ theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   rw [keccak_one] at h
   xs 0xf69 (.reg .add) ri_add
   rw [show balancesBase + Bytes.toB256 [1] = balancesBase + Nat.toB256 1 by decide] at h
-  xw 0xf6a (.reg .sload) ri_sload
-  rw [getStorVal_afterSload, getStorVal_eq, hst1] at h
+  xw 0xf6a (.reg .sload) ri_sloadF
+  rw [getStorVal_afterSloadH, getStorVal_eq, hst1] at h
   xa 3
   xma 0xf6f (.reg .mstore) (ri_mstore_imgAtA (o := 0x320) rfl)
   xa 3
@@ -306,8 +306,8 @@ theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   rw [keccak_one] at h
   xs 0xf7b (.reg .add) ri_add
   rw [show balancesBase + Bytes.toB256 [2] = balancesBase + Nat.toB256 2 by decide] at h
-  xw 0xf7c (.reg .sload) ri_sload
-  rw [getStorVal_afterSload, getStorVal_afterSload, getStorVal_eq, hst1] at h
+  xw 0xf7c (.reg .sload) ri_sloadF
+  rw [getStorVal_afterSloadH, getStorVal_afterSloadH, getStorVal_eq, hst1] at h
   xa 3
   xma 0xf81 (.reg .mstore) (ri_mstore_imgAtA (o := 0x340) rfl)
   xa 2
@@ -324,25 +324,25 @@ theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       (by rw [B256.length_toBytes])]
     decide
   · intro a
-    rw [hcpre, afterSload_getCode]
+    rw [hcpre, afterSloadH_getCode]
   · intro a
-    rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, hcpost]
+    rw [afterSloadH_getCode, afterSloadH_getCode, afterSloadH_getCode, hcpost]
   · intro x
-    rw [afterSload_getStor, afterSload_getStor, afterSload_getStor, hst1]
+    rw [afterSloadH_getStor, afterSloadH_getStor, afterSloadH_getStor, hst1]
   · intro a
-    rw [afterSload_getStor, afterSload_getStor, afterSload_getStor, hstor, afterSload_getStor]
-  · rw [afterSload_logs, afterSload_logs, afterSload_logs, hlogs, afterSload_logs]
-  · rw [afterSload_output, afterSload_output, afterSload_output, hout, afterSload_output]
+    rw [afterSloadH_getStor, afterSloadH_getStor, afterSloadH_getStor, hstor, afterSloadH_getStor]
+  · rw [afterSloadH_logs, afterSloadH_logs, afterSloadH_logs, hlogs, afterSloadH_logs]
+  · rw [afterSloadH_output, afterSloadH_output, afterSloadH_output, hout, afterSloadH_output]
   · refine Devm.AccGrow.trans (Devm.AccGrow.of_eq ?_) (Devm.AccGrow.trans hacc
       (Devm.AccGrow.of_eq ?_))
-    · rw [afterSload_accessedAddresses]
-    · rw [afterSload_accessedAddresses, afterSload_accessedAddresses,
-        afterSload_accessedAddresses]
-  · rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, h4]
+    · rw [afterSloadH_accessedAddresses]
+    · rw [afterSloadH_accessedAddresses, afterSloadH_accessedAddresses,
+        afterSloadH_accessedAddresses]
+  · rw [afterSloadH_getCode, afterSloadH_getCode, afterSloadH_getCode, h4]
   · intro a ha
-    have e := hcodeK a (by rwa [afterSload_getCode])
-    rw [afterSload_getCode] at e
-    rw [afterSload_getCode, afterSload_getCode, afterSload_getCode, e]
+    have e := hcodeK a (by rwa [afterSloadH_getCode])
+    rw [afterSloadH_getCode] at e
+    rw [afterSloadH_getCode, afterSloadH_getCode, afterSloadH_getCode, e]
   · intro o w hw h1 h2 h3 h4'
     rw [hI]; wchain; exact hw
   · rw [hI]; wchain
@@ -355,7 +355,7 @@ theorem xa_al_p2C {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
 
 /-- **`xa_al_p2`**: `xa_al_p2C` with every child keeping the pool. -/
 theorem xa_al_p2 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} {σ : Stor} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    {img : Bytes} {σ : Stor} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (hst : ∀ x, (b.getStor sevm.currentTarget).get x = σ.get x)
     (htok : ¬ sevm.benvStat.rules.isPrecomp (σ.get tokenSlot).toAdr)

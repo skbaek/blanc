@@ -200,10 +200,10 @@ theorem c3crv_mid_history_framesHist {ca : Adr} {cfg : ChainConfig} {start : Ben
   have finish := trace.stateInv_admitted_semIn
     (curveSpec_preservesAdmittedIn HistFork HistFork.stateGas_none ca U topology.inj
       topology.apart) capabilities admitted rewards startInv
-    c3crvInstalledCert rfl
+    c3crvInstalledCert.runtimeSafety rfl
   obtain ⟨steps, replay, observed⟩ :=
     (curveAccountingLadderIn HistFork HistFork.stateGas_none ca U topology.inj
-      topology.apart).midHistoryIn trace admitted capabilities rewards startInv c3crvInstalledCert rfl
+      topology.apart).midHistoryIn trace admitted capabilities rewards startInv c3crvInstalledCert.runtimeSafety rfl
   change CurveFrameReplayBy OwnerAnswerH ca U (start.state.getStor ca) steps
     (future.state.getStor ca) at replay
   change steps = midCommittedInvocationsIn ca trace at observed

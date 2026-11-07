@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalancePush
 import Blanc.Lift.Curve3Pool.Walk.OneCoinBurn
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -54,7 +55,7 @@ theorem rli_burn_input (img : Bytes) (C A : B256) :
 
 /-- **The burn** (`0x3719` → `0x3769`). -/
 theorem xa_rli_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {X D1 T f0 f1 f2 tw : B256} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    {X D1 T f0 f1 f2 tw : B256} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hV : VW M [(0x780, X), (0x480, D1), (0x140, T), (0x5a0, f0), (0x5c0, f1), (0x5e0, f2)])
     (htw : (b.getStor sevm.currentTarget).get tokenSlot = tw)
     (htok : ¬ sevm.benvStat.rules.isPrecomp tw.toAdr)
@@ -82,10 +83,10 @@ theorem xa_rli_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   xs 0x3736 (.push [0x08, 0x80] (by decide)) ri_push
   xmo 0x3737 (.reg .mstore) (ri_mstore_imgAt (o := 0x880) rfl)
   xa 3
-  xw 0x373f (.reg .sload) ri_sload
+  xw 0x373f (.reg .sload) ri_sloadF
   rw [tokenSlot_lit, getStorVal_eq, htw] at h
   xs 0x3740 (.reg .gas) ri_gas_remaining
-  replace h := xa_call_img (pc' := 0x3741) (i := 0x85c) (n := 0x44) (o := 0x8e0) (z := 0x20) hfork
+  replace h := xa_call_imgH (pc' := 0x3741) (i := 0x85c) (n := 0x44) (o := 0x8e0) (z := 0x20) hfork.stateGas_none
     (atN hcode (by kernel_rfl)) rfl (by decide) (by decide) (by decide) (by decide) hR hW h
   clear hR hW
   obtain ⟨d, flag, L1, h, -, hrd, hk⟩ := h
@@ -100,8 +101,8 @@ theorem xa_rli_burn {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   have hc' : ChildOf b d tw.toAdr (burnFromSel ++ sevm.caller.toB256.toBytes ++ X.toBytes) 0
       sevm.isStatic c := by
     rw [zero_lit] at hc
-    exact hc.congr_left (fun _ => afterSload_getCode _ _ _ _) (fun _ => afterSload_getStor _ _ _ _)
-      (afterSload_logs _ _ _) (afterSload_output _ _ _) (afterSload_accessedAddresses _ _ _)
+    exact hc.congr_left (fun _ => afterSloadH_getCode _ _ _ _) (fun _ => afterSloadH_getStor _ _ _ _)
+      (afterSloadH_logs _ _ _) (afterSloadH_output _ _ _) (afterSloadH_accessedAddresses _ _ _)
   clear hc
   xa 5
   xji 0x3752 0x3756 hw

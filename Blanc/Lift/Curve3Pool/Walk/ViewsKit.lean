@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsDispatch
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.GetDMem
@@ -72,7 +73,7 @@ theorem xa_calleeC (hc : Cert.CheckedM code cert mems true) {k : Nat} {e : Entry
     (hm : mems.getD k [] = []) (hE : ExecFreeSet cert.prog E = true)
     (hfree : f.execFreeIn E = true)
     {sevm : Sevm} {post d : Devm} {ρ : B256} {S base : List B256} {L : List Exec.Frame}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hstack : d.stack = S ++ base) (hframe : FrameMatches ρ e.frame S)
     (h : XAt sevm post e.pc d L) :
     (SFunc.Run cert.prog sevm d f (.halted post) ∧ L = []) ∨
@@ -81,7 +82,7 @@ theorem xa_calleeC (hc : Cert.CheckedM code cert mems true) {k : Nat} {e : Entry
         d'.stack = S' ++ base ∧ S'.length = e.rets := by
   have hcheck := hc k e f hk hf
   rw [hm] at hcheck
-  exact xa_node_span hc hE hcode hfork hcheck hfree hstack hframe (memMatches_nil _ _) h
+  exact xa_node_spanH hc hE hcode hfork.stateGas_none hcheck hfree hstack hframe (memMatches_nil _ _) h
 
 /-! ## `_A` -/
 
@@ -91,14 +92,14 @@ theorem vk_a_execFreeSet : ExecFreeSet cert.prog [27] = true := by decide
 theorem vk_a_free : t_00a9_c27.execFreeIn [27] = true := by decide
 
 /-- **`_A` crossed and read**: a walk at `_A`'s entry with the return tag `ρ` over `S` resumes
-at `ρ` with `aChk s t` on `S`, over `aBase`, the memory kept off `aWin`, the same remaining
+at `ρ` with `aChk s t` on `S`, over `aBaseH`, the memory kept off `aWin`, the same remaining
 children. -/
 theorem xa_vA (hc : Cert.CheckedM code cert mems true) {sevm : Sevm} {post b : Devm} {ρ : B256}
     {S : List B256} {M : Mem} {G : Nat} {L : List Exec.Frame} {s : State}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hwf : Mem.Wf M)
     (h : XAt sevm post 0xa9 (St b (ρ :: S) M G) L) :
-    ∃ v M' G', XAt sevm post ρ.toNat (St (aBase sevm b) (v :: S) M' G') L ∧
+    ∃ v M' G', XAt sevm post ρ.toNat (St (aBaseH sevm b) (v :: S) M' G') L ∧
       aChk s sevm.benvStat.time.toNat = some v.toNat ∧ Mem.KeepsOff M M' aWin ∧ Mem.Wf M' ∧
       (M.size % 32 = 0 → M'.size % 32 = 0) := by
   rcases xa_calleeC hc vk_a_entry prog_27 vk_a_mems vk_a_execFreeSet vk_a_free hcode hfork
@@ -257,7 +258,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {S : List B256} {M 
 returned data `out`; a reply of at least a word is carried at `o`; storage and logs kept; on a
 nonzero flag, a precompile target and no child, or the next remaining child is the call's. -/
 theorem xa_staticcallV {pc' : Nat} {g t ii is oi os : B256} {o : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hat : Ninst.At sevm.code pc (.exec .staticcall))
+    (hfork : HistFork sevm.benvStat.fork) (hat : Ninst.At sevm.code pc (.exec .staticcall))
     (hpc : pc + 1 = pc') (hoi : oi.toNat = o) (hos : os.toNat = 32) (hV : VW M LW)
     (h : XAt sevm post pc (St b (g :: t :: ii :: is :: oi :: os :: S) M G) L) :
     ∃ d flag out M' L', XAt sevm post pc' (St d (flag :: S) M' d.gasLeft) L' ∧
@@ -272,8 +273,8 @@ theorem xa_staticcallV {pc' : Nat} {g t ii is oi os : B256} {o : Nat}
           c.sevm.isStatic = true ∧ c.post.output = out ∧ c.post.logs = [] ∧
           (∀ a, c.pre.getCode a = b.getCode a) ∧ (∀ a, d.getCode a = c.post.getCode a))) := by
   subst hpc hoi
-  obtain ⟨d, s, L', h, hk⟩ := xa_staticcall hfork hat rfl h
-  obtain ⟨flag, out, hpost, hbound, -⟩ := ri_staticcall_bounded hfork s
+  obtain ⟨d, s, L', h, hk⟩ := xa_staticcallH hfork.stateGas_none hat rfl h
+  obtain ⟨flag, out, hpost, hbound, -⟩ := ri_staticcall_boundedH hfork.stateGas_none s
   refine ⟨d, flag, out, _, L', hpost.eq_St ▸ h, fun hl => ?_, hpost.returnData,
     hbound, hpost.stor, hpost.logs, fun nz => ?_⟩
   · rw [hos]
@@ -298,13 +299,13 @@ variable {sevm : Sevm} {post b : Devm} {ρ : B256} {S : List B256} {M : Mem} {G 
 
 /-- `_A` over the carrier. -/
 theorem xa_vAV (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hV : VW M LW)
     (h : XAt sevm post 0xa9 (St b (ρ :: S) M G) L) :
-    ∃ v b' M' G', SloadsOnly sevm b b' ∧ XAt sevm post ρ.toNat (St b' (v :: S) M' G') L ∧
+    ∃ v b' M' G', SloadsOnlyH sevm b b' ∧ XAt sevm post ρ.toNat (St b' (v :: S) M' G') L ∧
       aChk s sevm.benvStat.time.toNat = some v.toNat ∧ VW M' (wordsOffW aWin LW) := by
   obtain ⟨v, M', G', hx, hv, hk, hw, hal⟩ := xa_vA hc hcode hfork ha hV.wf h
-  exact ⟨v, _, M', G', aBase_sloadsOnly sevm b, hx, hv, hV.keepsOff hk hw (hal hV.al)⟩
+  exact ⟨v, _, M', G', aBaseH_sloadsOnly sevm b, hx, hv, hV.keepsOff hk hw (hal hV.al)⟩
 
 theorem vk_xp_entry : cert.entries[31]? = some ⟨0x281, [.ret], 3⟩ := rfl
 theorem vk_xp_prog : cert.prog[31]? = some t_0281_c31 := by decide +kernel
@@ -315,10 +316,10 @@ theorem vk_xp_free : t_0281_c31.execFreeIn [31, 56, 83, 105, 126, 148, 170] = tr
 /-- **`_xp` crossed and read** over the carrier: the words of `xpChk s.balances` (coin 0 on
 top) on `S`, over a base of storage loads, the words off `xpWin` kept. -/
 theorem xa_vXp (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hV : VW M LW)
     (h : XAt sevm post 0x281 (St b (ρ :: S) M G) L) :
-    ∃ x0 x1 x2 b' M' G', SloadsOnly sevm b b' ∧
+    ∃ x0 x1 x2 b' M' G', SloadsOnlyH sevm b b' ∧
       XAt sevm post ρ.toNat (St b' (x0 :: x1 :: x2 :: S) M' G') L ∧
       xpChk s.balances = some ⟨x0.toNat, x1.toNat, x2.toNat⟩ ∧ VW M' (wordsOffW xpWin LW) := by
   rcases xa_calleeC hc vk_xp_entry vk_xp_prog vk_xp_mems xp_execFreeSet vk_xp_free hcode hfork
@@ -328,7 +329,7 @@ theorem xa_vXp (hc : Cert.CheckedM code cert mems true)
     cases he
   · obtain ⟨d, he, x0, x1, x2, M', G', rfl, hv, hk, hw, hal⟩ := xp_spec hfork ha hV.wf run
     cases he
-    exact ⟨x0, x1, x2, _, M', G', xpBase_sloadsOnly sevm b, hx, hv, hV.keepsOff hk hw (hal hV.al)⟩
+    exact ⟨x0, x1, x2, _, M', G', xpBaseH_sloadsOnly sevm b, hx, hv, hV.keepsOff hk hw (hal hV.al)⟩
 
 theorem vk_gd_entry : cert.entries[417]? = some ⟨0x4c9, [.ret, .unk, .unk, .unk, .unk], 1⟩ := by
   rfl
@@ -339,7 +340,7 @@ theorem vk_gd_mems : mems.getD 417 [] = [] := by decide +kernel
 `getDChk x amp 1 = some D` on `S`, the base unchanged, the words off its windows kept and `D`
 at the scratch word `0`. -/
 theorem xa_vGetD (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {x0 x1 x2 amp : B256}
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) {x0 x1 x2 amp : B256}
     (hV : VW M LW) (hcov : 0x340 ≤ M.size)
     (h : XAt sevm post 0x4c9 (St b (ρ :: x0 :: x1 :: x2 :: amp :: S) M G) L) :
     ∃ v M' G', XAt sevm post ρ.toNat (St b (v :: S) M' G') L ∧
@@ -494,7 +495,7 @@ theorem vk_gdm_mems : mems.getD 29 [] = [] := by decide +kernel
 /-- **`get_D_mem` crossed and read** over the carrier: `getDMem b amp` on `S`, the base
 unchanged, the words off `gdmWin` kept and the result at the scratch word `0`. -/
 theorem xa_vGetDMem (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork) {b0 b1 b2 amp : B256}
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork) {b0 b1 b2 amp : B256}
     (hV : VW M LW)
     (h : XAt sevm post 0x7b7 (St b (ρ :: b0 :: b1 :: b2 :: amp :: S) M G) L) :
     ∃ v M' G', XAt sevm post ρ.toNat (St b (v :: S) M' G') L ∧

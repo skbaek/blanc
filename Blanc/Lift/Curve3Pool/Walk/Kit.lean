@@ -1,3 +1,4 @@
+import Blanc.Lift.HistFrameWalk
 import Blanc.Lift.FrameWalkKit
 import Blanc.Lift.Curve3Pool.CheckTries
 import Blanc.Lift.NodeWalk

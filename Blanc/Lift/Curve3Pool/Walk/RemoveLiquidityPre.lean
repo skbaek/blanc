@@ -1,4 +1,5 @@
-import Blanc.Lift.Curve3Pool.Walk.Kit
+import Blanc.Lift.HistIdentityCall
+import Blanc.Lift.Curve3Pool.Walk.KeepSel
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
 /-!
@@ -21,11 +22,11 @@ open Jaune Blanc.Lift
 
 /-- **`remove_liquidity` up to its loop** (see the module note). -/
 theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
-    {img : Bytes} (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    {img : Bytes} (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hcd : sevm.data.length < 2 ^ 256)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (htok : ¬ sevm.benvStat.rules.isPrecomp ((b.getStor sevm.currentTarget).get tokenSlot).toAdr)
-    (hSK : RlKeepAt sevm ((b.getStor sevm.currentTarget).get tokenSlot) L ∨ RlKeep sevm L)
+    (hSK : KeepTok sevm ((b.getStor sevm.currentTarget).get tokenSlot) L)
     (h : XAt sevm post 0x2c68 (St b [] M G) L) :
     (b.getStor sevm.currentTarget).get lockSlot = 0 ∧ sevm.value = 0 ∧
     ∃ (c : Exec.Frame) (L' : List Exec.Frame) (b1 : Devm) (M1 : Mem) (G1 : Nat) (img1 : Bytes),
@@ -44,7 +45,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       (∀ j < 6, WordAt img1 (0x1e0 + 32 * j) 0) ∧ WordAt img1 0x2a0 0 ∧
       XAt sevm post 0x2cdb (St b1 [3, 0x2a0] M1 G1) L' := by
   xs 0x2c6c (.push [0xff, 0xff, 0xff] (by decide)) ri_push
-  xw 0x2c6d (.reg .sload) ri_sload
+  xw 0x2c6d (.reg .sload) ri_sloadF
   xa 2
   xji 0x2c72 0x2c76 hw
   · xdead
@@ -54,7 +55,7 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
     exact e
   clear hw
   xa 3
-  xw 0x2c7e (.reg .sstore) ri_sstore
+  xw 0x2c7e (.reg .sstore) ri_sstoreF
   xa 3
   xji 0x2c84 0x2c88 hw
   · xdead
@@ -64,31 +65,26 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
   xa 6
   xmo 0x2c99 (.reg .mstore) (ri_mstore_imgAt (o := 0x160) rfl)
   xa 2
-  xw 0x2c9f (.reg .sload) ri_sload
+  xw 0x2c9f (.reg .sload) ri_sloadF
   xs 0x2ca0 (.reg .gas) ri_gas_remaining
-  replace h := xa_staticcall_img (pc' := 0x2ca1) (i := 0x17c) (n := 4) (o := 0x1c0) (z := 0x20)
-    hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
+  replace h := xa_staticcall_imgH (pc' := 0x2ca1) (i := 0x17c) (n := 4) (o := 0x1c0) (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
   obtain ⟨d1, flag, out, M, L1, h, ⟨d0, hrun0, hcd0⟩, hR, hW, hrd, hob, hstor, hlogs, hk⟩ := h
   xs 0x2ca4 (.push [0x2c, 0xa9] (by decide)) ri_push
   xji 0x2ca5 0x2ca9 hw
   · xdead
-  have htok' : ((afterSstore sevm (afterSload sevm b (Bytes.toB256 [255, 255, 255]))
+  have htok' : ((afterSstoreH sevm (afterSloadH sevm b (Bytes.toB256 [255, 255, 255]))
       (Bytes.toB256 [255, 255, 255]) (Bytes.toB256 [1])).getStorVal sevm.currentTarget
       (Bytes.toB256 [5])) = (b.getStor sevm.currentTarget).get tokenSlot := by
-    rw [lockSlot_lit, tokenSlot_lit, getStorVal_afterSstore_ne lock_ne_token, getStorVal_afterSload]
+    rw [lockSlot_lit, tokenSlot_lit, getStorVal_afterSstoreH_ne lock_ne_token, getStorVal_afterSloadH]
     rfl
   rw [htok'] at hk hrun0
   rcases hk hw with ⟨hpre, -⟩ | ⟨c, hL, hdepth, hout, hacc, hcodeK, htgt, hdata, hstat, hcout, hclogs, hcpre,
     hcpost⟩
   · exact absurd hpre htok
   have h4 : d1.getCode 4 = b.getCode 4 := by
-    rcases hSK with hSK | hSK
-    · rw [hcpost, (hSK.2.2 c (by rw [hL]; exact List.mem_cons_self) (by rw [htgt]; exact hSK.1)
-        (by rw [htgt]; exact hSK.2.1)).2, hcpre, afterSload_getCode, afterSstore_getCode,
-        afterSload_getCode]
-    · rw [hcpost, (hSK c (by rw [hL]; exact List.mem_cons_self)).2, hcpre, afterSload_getCode,
-        afterSstore_getCode, afterSload_getCode]
+    rw [hcpost, (hSK c (by rw [hL]; exact List.mem_cons_self) htgt).2, hcpre, afterSloadH_getCode,
+      afterSstoreH_getCode, afterSloadH_getCode]
   clear hk
   xa 5
   xji 0x2cb2 0x2cb6 hw2
@@ -119,19 +115,19 @@ theorem xa_rl_pre {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} 
       (by rw [B256.length_toBytes])]
     decide
   · intro a
-    rw [hcpre, afterSload_getCode, afterSstore_getCode, afterSload_getCode]
+    rw [hcpre, afterSloadH_getCode, afterSstoreH_getCode, afterSloadH_getCode]
   · intro x
-    rw [hstor, afterSload_getStor, afterSstore_getStor_self, afterSload_getStor, lockSlot_lit]
+    rw [hstor, afterSloadH_getStor, afterSstoreH_getStor_self, afterSloadH_getStor, lockSlot_lit]
     rfl
   · intro a ha
-    rw [hstor, afterSload_getStor, afterSstore_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSload_getStor]
-  · rw [hlogs, afterSload_logs, afterSstore_logs, afterSload_logs]
-  · rw [hout, afterSload_output, afterSstore_output, afterSload_output]
+    rw [hstor, afterSloadH_getStor, afterSstoreH_getStor_ne _ _ _ _ _ (Ne.symm ha), afterSloadH_getStor]
+  · rw [hlogs, afterSloadH_logs, afterSstoreH_logs, afterSloadH_logs]
+  · rw [hout, afterSloadH_output, afterSstoreH_output, afterSloadH_output]
   · refine Devm.AccGrow.trans (Devm.AccGrow.of_eq ?_) hacc
-    rw [afterSload_accessedAddresses, afterSstore_accessedAddresses, afterSload_accessedAddresses]
+    rw [afterSloadH_accessedAddresses, afterSstoreH_accessedAddresses, afterSloadH_accessedAddresses]
   · intro a ha
-    have e := hcodeK a (by rwa [afterSload_getCode, afterSstore_getCode, afterSload_getCode])
-    rwa [afterSload_getCode, afterSstore_getCode, afterSload_getCode] at e
+    have e := hcodeK a (by rwa [afterSloadH_getCode, afterSstoreH_getCode, afterSloadH_getCode])
+    rwa [afterSloadH_getCode, afterSstoreH_getCode, afterSloadH_getCode] at e
   · have hZ : List.sliceD sevm.data (Nat.toB256 (List.length sevm.data)).toNat 96 0 =
         List.replicate 96 0 := by
       rw [B256.toNat_toB256_of_lt hcd]; exact List.sliceD_length_eq

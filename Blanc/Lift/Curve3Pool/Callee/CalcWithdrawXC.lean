@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Callee.CalcWithdrawXB
 import Blanc.Lift.ThreeWordFrame
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -19,7 +20,7 @@ D1)` inside the save of `[0x140, 0x5c0)` — its actual arguments are `0x5e0…0
 `i`, `xp` and `D1` — then the checked `dy_0 = (xp[i] - new_y) / PRECISION_MUL[i]` at `0x700`
 and the loop counter at `0x720`. -/
 theorem xa_cw_c (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {a i A F T x0 x1 x2 D0 D1 : B256}
     (hV : VW M [(0x520, D1), (0x400, D0), (0x360, x2), (0x340, x1), (0x320, x0),
       (0x280, T), (0x260, cwPm), (0x240, cwPm), (0x220, cwP1), (0x200, F), (0x1a0, A),

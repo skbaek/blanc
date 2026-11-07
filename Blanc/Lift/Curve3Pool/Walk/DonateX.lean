@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Curve3Pool.Walk.Donate
 import Blanc.Lift.Curve3Pool.Walk.AdminBalancesX
@@ -37,13 +38,13 @@ open Jaune Blanc.Lift
 /-- **Guards of `donate_admin_fees`**: no value, the caller is the owner, the counter at
 `0x140` set to `0` with `[3, 0x140]` on the stack, entering the loop at `0x4f84`. -/
 theorem donX_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (h : XAt sevm post 0x4f60 (St b [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G) L) :
     sevm.value = 0 ∧ sevm.caller.toB256 = (b.getStor sevm.currentTarget).get ownerSlot ∧
     ∃ G' M' img', Mem.Wf M' ∧ Mem.Reads M' img' ∧
       Region img' 0x140 (Nat.toB256 0).toBytes ∧
       XAt sevm post 0x4f84
-        (St (afterSload sevm b ownerSlot) [Bytes.toB256 [0x03], Bytes.toB256 [0x01, 0x40]]
+        (St (afterSloadH sevm b ownerSlot) [Bytes.toB256 [0x03], Bytes.toB256 [0x01, 0x40]]
           M' G') L := by
   have hR : Mem.Reads (vyMem Mem.empty (Sevm.dataWord sevm 0))
       (vyImg [] (Sevm.dataWord sevm 0)) :=
@@ -55,7 +56,7 @@ theorem donX_guards {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat
   have hval : sevm.value = 0 := B256.eq_of_eqCheck_ne_zero hw
   clear hw
   xa 2
-  xw 0x4f6e (.reg .sload) ri_sload
+  xw 0x4f6e (.reg .sload) ri_sloadF
   rw [show Bytes.toB256 [4] = ownerSlot from by decide] at h
   xa 3
   xji 0x4f74 0x4f78 hw
@@ -178,7 +179,7 @@ theorem donX_tail {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
 `balanceOf` `STATICCALL`, the answer stored at `balances[k]`. -/
 theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
     {img : Bytes} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (k : Fin 3)
     (hctrR : Region img 0x140 (Nat.toB256 ↑k).toBytes)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
@@ -239,11 +240,11 @@ theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
   xs 0x4fb9 (.reg .add) ri_add
   have hslot : coinsBase + Nat.toB256 ↑k = coinSlot k := rfl
   rw [hslot] at h
-  xw 0x4fba (.reg .sload) ri_sload
+  xw 0x4fba (.reg .sload) ri_sloadF
   rw [getStorVal_eq] at h
   xs 0x4fbb (.reg .gas) ri_gas_remaining
-  replace h := xa_staticcall_img (pc' := 0x4fbc) (i := 0x17c) (n := 0x24) (o := 0x1e0)
-    (z := 0x20) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
+  replace h := xa_staticcall_imgH (pc' := 0x4fbc) (i := 0x17c) (n := 0x24) (o := 0x1e0)
+    (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
   obtain ⟨d1, flag, out, M', L1, h, _, hR, hW, hrd, hob, hstor1, hlogs1, hk⟩ := h
   have hctrR_D : Region (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt (Bytes.writeAt img
@@ -292,18 +293,18 @@ theorem donX_iter {sevm : Sevm} {post d : Devm} {L : List Exec.Frame} {M : Mem}
   xs 0x4ff5 (.reg .add) ri_add
   have hslotB : balancesBase + Nat.toB256 ↑k = balanceSlot k := rfl
   rw [hslotB] at h
-  xw 0x4ff6 (.reg .sstore) ri_sstore
+  xw 0x4ff6 (.reg .sstore) ri_sstoreF
   refine ⟨c, out, L1, _, _, _, _, hL, htgt, hdata, hstat, hout, hlen32, hclogs,
     ?_, ?_, ?_, ?_, hctrR_E, hR, hW, h⟩
-  · show (afterSstore sevm d1 (balanceSlot k) (Bytes.toB256 (out.take 32))).getStorVal
+  · show (afterSstoreH sevm d1 (balanceSlot k) (Bytes.toB256 (out.take 32))).getStorVal
       sevm.currentTarget (balanceSlot k) = _
-    rw [getStorVal_afterSstore_self, Stor.get_set_self]
+    rw [getStorVal_afterSstoreH_self, Stor.get_set_self]
   · intro x hx
-    show (afterSstore sevm d1 (balanceSlot k) (Bytes.toB256 (out.take 32))).getStorVal
+    show (afterSstoreH sevm d1 (balanceSlot k) (Bytes.toB256 (out.take 32))).getStorVal
       sevm.currentTarget x = (d.getStor sevm.currentTarget).get x
-    rw [getStorVal_afterSstore_ne (Ne.symm hx), getStorVal_eq, hstor1, afterSload_getStor]
-  · rw [afterSstore_logs, hlogs1, afterSload_logs]
-  · rw [afterSstore_output, houtKeep, afterSload_output]
+    rw [getStorVal_afterSstoreH_ne (Ne.symm hx), getStorVal_eq, hstor1, afterSloadH_getStor]
+  · rw [afterSstoreH_logs, hlogs1, afterSloadH_logs]
+  · rw [afterSstoreH_output, houtKeep, afterSloadH_output]
 /-! ## The frame theorem -/
 
 /-- **The `donate_admin_fees` frame**: from the frame's start, past the dispatcher, the
@@ -311,7 +312,7 @@ guards and three loop iterations ran: no value; three static children (coin `k`'
 `balanceOf(self)`, at least 32 bytes back); the answers stored at `balances[0..2]`;
 everything else kept; logs and output kept; halted at `STOP`. -/
 theorem xa_donate {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selDonateAdminFees)
     (hcoin : ∀ k : Fin 3, ¬ sevm.benvStat.rules.isPrecomp
@@ -348,8 +349,8 @@ theorem xa_donate {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   obtain ⟨G5, h⟩ := xa_dispatch (q := 0x4f60) hcode hlen hcd hsel h
   obtain ⟨hval, hown, G6, M6, img6, hW6, hR6, hctrR6, h⟩ := donX_guards hcode hfork h
   have hcoinK0 : ¬ sevm.benvStat.rules.isPrecomp
-      (((afterSload sevm b ownerSlot).getStor sevm.currentTarget).get (coinSlot 0)).toAdr := by
-    rw [afterSload_getStor]
+      (((afterSloadH sevm b ownerSlot).getStor sevm.currentTarget).get (coinSlot 0)).toAdr := by
+    rw [afterSloadH_getStor]
     exact hcoin 0
   obtain ⟨c0, out0, L1, d1, M1, img1, G7, hL0, htgt0, hdata0, hstat0, hout0, hlen0,
     hclogs0, hbal0, hkept0, hlogs0, houtD0, hctrR1, hR1, hW1, h⟩ :=
@@ -360,7 +361,7 @@ theorem xa_donate {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
         (((d1.getStor sevm.currentTarget).get (coinSlot 1)).toAdr) := by
       have e : (d1.getStor sevm.currentTarget).get (coinSlot 1) =
           (b.getStor sevm.currentTarget).get (coinSlot 1) := by
-        rw [hkept0 _ (by decide), afterSload_getStor]
+        rw [hkept0 _ (by decide), afterSloadH_getStor]
       rw [e]
       exact hcoin 1
     obtain ⟨c1, out1, L2, d2, M2, img2, G9, hL1, htgt1, hdata1, hstat1, hout1, hlen1,
@@ -372,7 +373,7 @@ theorem xa_donate {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
           (((d2.getStor sevm.currentTarget).get (coinSlot 2)).toAdr) := by
         have e : (d2.getStor sevm.currentTarget).get (coinSlot 2) =
             (b.getStor sevm.currentTarget).get (coinSlot 2) := by
-          rw [hkept1 _ (by decide), hkept0 _ (by decide), afterSload_getStor]
+          rw [hkept1 _ (by decide), hkept0 _ (by decide), afterSloadH_getStor]
         rw [e]
         exact hcoin 2
       obtain ⟨c2, out2, L3, d3, M3, img3, G11, hL2, htgt2, hdata2, hstat2, hout2,
@@ -388,14 +389,14 @@ theorem xa_donate {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
         have hL : L = [c0, c1, c2] := by rw [hL0, hL1, hL2, hLfin]
         have htgt0' : c0.sevm.currentTarget =
             ((b.getStor sevm.currentTarget).get (coinSlot 0)).toAdr := by
-          rw [afterSload_getStor] at htgt0
+          rw [afterSloadH_getStor] at htgt0
           exact htgt0
         have e1 : (d1.getStor sevm.currentTarget).get (coinSlot 1) =
             (b.getStor sevm.currentTarget).get (coinSlot 1) := by
-          rw [hkept0 _ (by decide), afterSload_getStor]
+          rw [hkept0 _ (by decide), afterSloadH_getStor]
         have e2 : (d2.getStor sevm.currentTarget).get (coinSlot 2) =
             (b.getStor sevm.currentTarget).get (coinSlot 2) := by
-          rw [hkept1 _ (by decide), hkept0 _ (by decide), afterSload_getStor]
+          rw [hkept1 _ (by decide), hkept0 _ (by decide), afterSloadH_getStor]
         have htgt1' : c1.sevm.currentTarget =
             ((b.getStor sevm.currentTarget).get (coinSlot 1)).toAdr := by
           rw [e1] at htgt1
@@ -427,15 +428,15 @@ theorem xa_donate {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
           intro x h0 h1 h2
           rw [← hpost]
           show (d3.getStor sevm.currentTarget).get x = _
-          rw [hkept2 _ h2, hkept1 _ h1, hkept0 _ h0, afterSload_getStor]
+          rw [hkept2 _ h2, hkept1 _ h1, hkept0 _ h0, afterSloadH_getStor]
         have hlogs' : post.logs = b.logs := by
           rw [← hpost]
           show d3.logs = _
-          rw [hlogs2, hlogs1, hlogs0, afterSload_logs]
+          rw [hlogs2, hlogs1, hlogs0, afterSloadH_logs]
         have hout' : post.output = b.output := by
           rw [← hpost]
           show d3.output = _
-          rw [houtD2, houtD1, houtD0, afterSload_output]
+          rw [houtD2, houtD1, houtD0, afterSloadH_output]
         exact ⟨hval, hown, c0, c1, c2, out0, out1, out2, hL, htgt0', hdata0, hstat0,
           hout0, hlen0, hclogs0, htgt1', hdata1, hstat1, hout1, hlen1, hclogs1,
           htgt2', hdata2, hstat2, hout2, hlen2, hclogs2, hbal0', hbal1', hbal2',
@@ -451,7 +452,7 @@ the frame premises (no coin is a precompile), computed the model's step on the d
 in the environment `donEnv` it observed, with the raw effect Spec states. -/
 theorem donate_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selDonateAdminFees)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)

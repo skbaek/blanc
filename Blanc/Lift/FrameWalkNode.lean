@@ -99,9 +99,9 @@ theorem xa_node (hc : Cert.CheckedM code c ms b) (hcode : sevm.code = code)
 /-- **An exec-free checked node crossed from a walked state.**  As `xa_node`, and the tree
 spawns no frame: a halting run leaves no remaining child, and the walk continues at `ρ` with
 the same remaining children `L`. -/
-theorem xa_node_span {E : List Nat} (hc : Cert.CheckedM code c ms b)
+theorem xa_node_spanH {E : List Nat} (hc : Cert.CheckedM code c ms b)
     (hE : ExecFreeSet c.prog E = true) (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : sevm.benvStat.rules.stateGas = none)
     (hcheck : checkNodeM code c.entries ms b m pc a μ f = true) (hfree : f.execFreeIn E = true)
     (hstack : d.stack = S ++ base) (hframe : FrameMatches ρ a S)
     (hmem : MemMatches ρ μ d.memory) (h : XAt sevm post pc d L) :
@@ -115,6 +115,19 @@ theorem xa_node_span {E : List Nat} (hc : Cert.CheckedM code c ms b)
   · exact .inl ⟨run, hnil⟩
   · exact .inr ⟨d', S', run,
       ⟨exc', hch, lt_of_le_of_lt (Exec.Deriv.ParentPrefix.gasMeasure_le pp) hg⟩, hst, hlen⟩
+
+/-- The covered-fork form. -/
+theorem xa_node_span {E : List Nat} (hc : Cert.CheckedM code c ms b)
+    (hE : ExecFreeSet c.prog E = true) (hcode : sevm.code = code)
+    (hfork : CoveredFork sevm.benvStat.fork)
+    (hcheck : checkNodeM code c.entries ms b m pc a μ f = true) (hfree : f.execFreeIn E = true)
+    (hstack : d.stack = S ++ base) (hframe : FrameMatches ρ a S)
+    (hmem : MemMatches ρ μ d.memory) (h : XAt sevm post pc d L) :
+    (SFunc.Run c.prog sevm d f (.halted post) ∧ L = []) ∨
+      ∃ (d' : Devm) (S' : List B256),
+        SFunc.Run c.prog sevm d f (.returned d') ∧ XAt sevm post ρ.toNat d' L ∧
+        d'.stack = S' ++ base ∧ S'.length = m :=
+  xa_node_spanH hc hE hcode hfork.rules_stateGas_none hcheck hfree hstack hframe hmem h
 
 end Node
 

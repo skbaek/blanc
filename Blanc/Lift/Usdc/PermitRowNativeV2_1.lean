@@ -6,7 +6,7 @@ import Blanc.Lift.Usdc.PermitRowPrefixV2_1
 
 namespace Blanc.Lift.Usdc
 
-open Jaune Blanc Blanc.Lift
+open Jaune Blanc Blanc.Lift Blanc.Lift.WriteSite
 
 /-- The listed pre-authentication nonce site is separated from every tracked
 allowance row by the existing finite row-separation interface. -/

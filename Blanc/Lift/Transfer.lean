@@ -64,6 +64,7 @@ def liftRegularTransfer : Rinst → Pattern → Option Pattern
   | .chainid, words => some (none :: words)
   | .codesize, words => some (none :: words)
   | .selfbalance, words => some (none :: words)
+  | .msize, words => some (none :: words)
   | r, words => regularTransfer r words
 
 def staticcallTransfer : Pattern → Option Pattern
@@ -332,7 +333,7 @@ private theorem liftRegularTransfer_map {r : Rinst} {words output : Pattern}
   cases r <;> simp only [liftRegularTransfer] at checked ⊢
   case exp | slt | keccak256 | sdiv | signextend | sgt => exact binaryTransfer_map φ hφ checked
   case not | balance | extcodesize | extcodehash | tload => exact unaryTransfer_map φ hφ checked
-  case address | origin | chainid | selfbalance | codesize | number => cases checked; simp only [List.map_cons,
+  case address | origin | chainid | selfbalance | codesize | number | msize => cases checked; simp only [List.map_cons,
     hφ]
   case log n =>
       rw [← dropTransfer_map φ hφ (n.val + 2) words]
@@ -354,7 +355,7 @@ private theorem liftRegularTransfer_append {r : Rinst}
   cases r <;> simp only [liftRegularTransfer] at checked ⊢
   case exp | slt | keccak256 | sdiv | signextend | sgt => exact binaryTransfer_append checked
   case not | balance | extcodesize | extcodehash | tload => exact unaryTransfer_append checked
-  case address | origin | chainid | selfbalance | codesize | number => cases checked; rfl
+  case address | origin | chainid | selfbalance | codesize | number | msize => cases checked; rfl
   case log n => exact dropTransfer_append (n.val + 2) checked
   case mod | or | xor | byte | shl => exact binaryTransfer_append checked
   case calldatacopy | codecopy | returndatacopy => exact dropTransfer_append 3 checked
@@ -1171,7 +1172,7 @@ theorem ninstTransfer_run_noStateGas {sevm : Sevm} {devm devm' : Devm} {n : Nins
       | address =>
           cases checked
           exact matches_diff matched (diff_of_push (of_run_address run).stack)
-      | origin | codesize | number =>
+      | origin | codesize | number | msize =>
           cases checked
           rcases of_run_reg run with ⟨pc, hr⟩
           simp only [Rinst.run, Rinst.runCore] at hr

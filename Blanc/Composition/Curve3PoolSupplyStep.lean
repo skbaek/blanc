@@ -49,9 +49,10 @@ theorem runInvocations_split {s m t : Blanc.Curve3Crv.State} {xs ys : List Write
   exact h
 
 /-- A 3Crv view replay from the checkpoint is a model fold from its state. -/
-theorem replay_run {U K₀ : Key → Prop} {cs₀ : Blanc.Curve3Crv.State} {σ₀ σ : Stor}
+theorem replay_run {A : Sevm → Devm → Adr → B256 → Prop} {U K₀ : Key → Prop}
+    {cs₀ : Blanc.Curve3Crv.State} {σ₀ σ : Stor}
     {L : List WriterInvocation} (hK : ∀ k, K₀ k → U k) (invariant : VyInv σ₀ cs₀ K₀)
-    (r : ViewReplay U (viewOf σ₀) L (viewOf σ)) :
+    (r : ViewReplayBy A U (viewOf σ₀) L (viewOf σ)) :
     ∃ s, runInvocations cs₀ L = some s ∧ VyInv σ s (Key.extend K₀ (invocationKeys L)) := by
   obtain ⟨s, run, final⟩ := (r _ _ rfl rfl).2 cs₀ K₀ hK invariant
   exact ⟨s, run.runInvocations_eq, final⟩
@@ -129,18 +130,18 @@ theorem encoded_minted_burned (pool token : Adr) (coin : Fin 3 → Adr) :
 /-! ## One pool frame -/
 
 /-- **One pool frame moves 3Crv's supply by its own mint and burn calls.** -/
-theorem pool_frame_supply {pool ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+theorem pool_frame_supply {pool ca : Adr} {frames : List Exec.Frame} {σ₀ : Stor}
     {cs₀ : Blanc.Curve3Crv.State} {U K₀ : Key → Prop}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
     (apartU : ∀ k, U k → k.slot ∉ vyFixedSlots)
-    (ready : ∀ f ∈ trace.settledFrames, FrameReady ca U f)
-    (hK : ∀ k, K₀ k → U k) (invariant : VyInv (checkpoint.state.getStor ca) cs₀ K₀)
+    (ready : ∀ f ∈ frames, FrameReady ca U f)
+    (hK : ∀ k, K₀ k → U k) (invariant : VyInv σ₀ cs₀ K₀)
     (apart : pool ≠ ca)
     {before after : List Exec.Frame} {P : Exec.Frame}
-    (split : trace.settledFrames = before ++ P :: after)
+    (split : frames = before ++ P :: after)
+    (contig : ∃ r, after = Exec.descendantFrames P.run ++ r)
     (target : P.sevm.currentTarget = pool)
-    (entry : ViewReplay U (viewOf (checkpoint.state.getStor ca))
+    (entry : ViewReplayH U (viewOf σ₀)
       (before.flatMap (viewFrameObs ca)) (viewOf (P.pre.state.getStor ca)))
     {o : Curve3Pool.Out}
     (token : Curve3Pool.tokenAdr (Blanc.Exec.Frame.rootDeriv P) = ca)
@@ -175,10 +176,10 @@ theorem pool_frame_supply {pool ca : Adr} {cfg : ChainConfig} {checkpoint future
   have obP : viewFrameObs ca P = [] := viewFrameObs_foreign (by rw [target]; exact apart)
   have hobs : (Exec.committedFrames P.run).flatMap (viewFrameObs ca) = cs.flatMap g := by
     rw [hcf, List.flatMap_cons, obP, List.nil_append, List.flatMap_assoc]
-  have settledP : P ∈ trace.settledFrames := by
+  have settledP : P ∈ frames := by
     rw [split]; exact List.mem_append_right _ List.mem_cons_self
-  obtain ⟨r, contig⟩ := trace.settledFrames_contig split
-  have childSettled : ∀ c ∈ cs, c ∈ trace.settledFrames := by
+  obtain ⟨r, contig⟩ := contig
+  have childSettled : ∀ c ∈ cs, c ∈ frames := by
     intro c member
     rw [split, contig]
     exact List.mem_append_right _ (List.mem_cons_of_mem _ (List.mem_append_left _
@@ -257,7 +258,7 @@ theorem pool_frame_supply {pool ca : Adr} {cfg : ChainConfig} {checkpoint future
         by_cases hs : c.sevm.isStatic = true
         · -- a static child observes nothing
           have gnil : g c = [] := List.flatMap_eq_nil_iff.mpr fun D member =>
-            viewFrameObs_static (committedFrames_isStatic c.run hs D member)
+            viewFrameObs_static (Blanc.Exec.committedFrames_isStatic c.run hs D member)
           rw [gnil] at stepY
           have hY : Xc = Y := Option.some.inj stepY
           subst hY
@@ -286,7 +287,7 @@ theorem pool_frame_supply {pool ca : Adr} {cfg : ChainConfig} {checkpoint future
             simp only [tokMsgs, isTok, List.filter_cons, hs', ht, and_self, decide_true, ↓reduceIte,
               List.filter_nil, List.map_cons, List.map_nil]
           rw [tone]
-          have desc := c3crv_descendants_static readyC ht
+          have desc := c3crv_descendants_staticH readyC ht
           have gOne : g c = viewFrameObs ca c := by
             change (Exec.committedFrames c.run).flatMap _ = _
             rw [Exec.Frame.committedFrames_self, List.flatMap_cons,
@@ -399,18 +400,17 @@ theorem pool_frame_supply {pool ca : Adr} {cfg : ChainConfig} {checkpoint future
 
 /-- **3Crv at the entry of a pool frame's child**: some model state abstracts 3Crv's storage there
 (the positional replay inside the frame, from 3Crv's replay at the frame's entry). -/
-theorem child_entry_vyInv {pool ca : Adr} {cfg : ChainConfig} {checkpoint future : BlockChain}
+theorem child_entry_vyInv {pool ca : Adr} {frames : List Exec.Frame} {σ₀ : Stor}
     {cs₀ : Blanc.Curve3Crv.State} {U K₀ : Key → Prop}
-    (trace : ConfiguredHistoryTrace cfg checkpoint future)
     (injective : ∀ k k', U k → U k' → k.slot = k'.slot → k = k')
     (apartU : ∀ k, U k → k.slot ∉ vyFixedSlots)
-    (ready : ∀ f ∈ trace.settledFrames, FrameReady ca U f)
-    (hK : ∀ k, K₀ k → U k) (invariant : VyInv (checkpoint.state.getStor ca) cs₀ K₀)
+    (ready : ∀ f ∈ frames, FrameReady ca U f)
+    (hK : ∀ k, K₀ k → U k) (invariant : VyInv σ₀ cs₀ K₀)
     (apart : pool ≠ ca)
     {before after : List Exec.Frame} {P : Exec.Frame}
-    (split : trace.settledFrames = before ++ P :: after)
+    (split : frames = before ++ P :: after)
     (target : P.sevm.currentTarget = pool)
-    (entry : ViewReplay U (viewOf (checkpoint.state.getStor ca))
+    (entry : ViewReplayH U (viewOf σ₀)
       (before.flatMap (viewFrameObs ca)) (viewOf (P.pre.state.getStor ca))) :
     ∀ xs c ys, Exec.childFrames P.run = xs ++ c :: ys → ∃ X K,
       runInvocations cs₀ (before.flatMap (viewFrameObs ca) ++
@@ -418,7 +418,7 @@ theorem child_entry_vyInv {pool ca : Adr} {cfg : ChainConfig} {checkpoint future
       VyInv (c.pre.state.getStor ca) X K := by
   intro xs c ys hxs
   have memc : c ∈ Exec.childFrames P.run := by rw [hxs]; exact List.mem_append_right _ List.mem_cons_self
-  have settledP : P ∈ trace.settledFrames := by
+  have settledP : P ∈ frames := by
     rw [split]; exact List.mem_append_right _ List.mem_cons_self
   have localSplit : Exec.committedFrames P.run =
       (P :: xs.flatMap fun c => Exec.committedFrames c.run) ++
@@ -467,7 +467,7 @@ theorem totalSupply_answer {ca : Adr} {U : Key → Prop} {S : Exec.Frame}
     S.post.output = X.totalSupply.toBytes := by
   obtain ⟨hpc, fork, at_, admitted, -⟩ := ready
   obtain ⟨⟨hstack, hmem⟩, hcd, -⟩ := admitted.root target
-  have hcode : S.sevm.code = code := c3crv_code_of_image (at_.2 target).1
+  have hcode : S.sevm.code = code := code_of_image (at_.2 target).1
   have hdec := decode_totalSupply data
   obtain ⟨pc, sevm, pre, out, run, committed⟩ := S
   dsimp only at hpc hstack hmem hcd hcode target data hdec inv ⊢
@@ -479,7 +479,7 @@ theorem totalSupply_answer {ca : Adr} {U : Key → Prop} {S : Exec.Frame}
     have hfresh : FreshKeys K (callKeys sevm.caller (decodeCall sevm)) := by
       rw [hdec]
       exact ⟨fun k hk => absurd hk List.not_mem_nil, fun k hk => absurd hk List.not_mem_nil⟩
-    have refinement := c3crv_frame_refines_raw hcode fork hcd hstack hmem inv hfresh run
+    have refinement := c3crv_frame_refines_rawH hcode fork hcd hstack hmem inv hfresh run
     obtain ⟨-, -, o, hstep, hret⟩ := refinement.2 (by rw [hdec]; exact id)
     rw [hdec] at hstep
     obtain ⟨-, hbody⟩ := Blanc.Curve3Crv.step_eq_ok.mp hstep

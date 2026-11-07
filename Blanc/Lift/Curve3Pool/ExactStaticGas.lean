@@ -650,6 +650,21 @@ theorem alExactCost_withStaticGas (sevm : Sevm) (F : Nat) (pre : Devm) (P : ALEx
       alExactCost sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 := by
   simp only [alExactCost, alExactCost0_withStaticGas, alExactCost1_withStaticGas]
 
+theorem alTailRefund_withStaticGas (sevm : Sevm) (F : Nat) (P : ALExactCalls) (n : Devm) (M : Mem) (mint : B256) :
+    alTailRefund {sevm with gas := F} P n M mint = alTailRefund sevm P n M mint := by
+  simp only [alTailRefund, afterSload_withStaticGas, afterSstore_withStaticGas, alMintMem_withStaticGas]
+
+theorem alRefund1_withStaticGas (sevm : Sevm) (F : Nat) (pre : Devm) (P : ALExactCalls) (amp : Nat) (T : B256) (B1 : B256) (B2 : B256) (xa : V3) (xb : V3) (xc : V3) (v0 : Nat) (v1 : Nat) (v2 : Nat) (f0 : B256) (f1 : B256) (f2 : B256) (s0 : B256) (s1 : B256) (s2 : B256) (x0 : B256) (x1 : B256) (x2 : B256) :
+    alRefund1 {sevm with gas := F} pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 =
+      alRefund1 sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 := by
+  simp only [alLiveNew_fun_withStaticGas, alRefund1, alBack1Refund, alTailRefund_withStaticGas, alFeeLoopBase_withStaticGas,
+    alLN3_withStaticGas, alLM3_withStaticGas, alFN1_withStaticGas, alFM0_withStaticGas]
+
+theorem alRefund0_withStaticGas (sevm : Sevm) (F : Nat) (pre : Devm) (P : ALExactCalls) (amp : Nat) (B1 : B256) (B2 : B256) (xb : V3) (v1 : Nat) :
+    alRefund0 {sevm with gas := F} pre P amp B1 B2 xb v1 = alRefund0 sevm pre P amp B1 B2 xb v1 := by
+  simp only [alLiveNew_fun_withStaticGas, alRefund0, alBack0Refund, alTailRefund_withStaticGas, alStore0Base_withStaticGas,
+    alLN3_withStaticGas, alLM3_withStaticGas, alFN1_withStaticGas, alFM1_withStaticGas]
+
 end StaticGas
 
 /-- `add_liquidity`'s exact premises survive a change of static initial gas, with the same

@@ -42,9 +42,10 @@ theorem lits_auth : Bytes.toB256 [4] = 4 ∧ Bytes.toB256 [4] + Bytes.toB256 [32
 variable {sevm : Sevm} {pre post : Devm}
 
 theorem frame_twa_vrs (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
     (sel : Blanc.Sevm.selector sevm = 0xe3ee160e) :
-    AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) := by
+    AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) ∧
+      AuthLogged sevm post (Sevm.dataWord sevm 4).toAdr := by
   obtain ⟨-, -, M, G, h⟩ := impl_preamble_cut (impl_run_cut run code fork)
   rw [sel] at h
   clear run
@@ -55,21 +56,24 @@ theorem frame_twa_vrs (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Imp
   ibranch h c1
   repeat istep h
   icallA h hc 20 t_3889_c20
-  obtain ⟨p0, f1, f2, b1, M1, G1, e, post1⟩ := e20_inv fork hcode hc
+  obtain ⟨p0, f1, f2, b1, M1, G1, e, post1, lg⟩ := e20_inv fork hcode hc
   cases e
   clear hc
   repeat istep h
   have sp := ric_stop_getStor h
+  have sl := ric_stop_logs h
   clear h
   obtain ⟨l4, l36, l68, l100, l132, l164⟩ := lits_auth
   simp only [l36, l68, l100, l132, l164] at f1 f2 post1
+  simp only [ff20_word, toAdr_toB256, l4] at lg
   simp only [ff20_word, toAdr_toB256, l4] at f1 f2 post1
-  exact ⟨p0, f1, f2, by rw [congrFun sp]; exact post1⟩
+  exact ⟨⟨p0, f1, f2, by rw [congrFun sp]; exact post1⟩, lg.of_eq sl⟩
 
 theorem frame_rwa_vrs (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
     (sel : Blanc.Sevm.selector sevm = 0xef55bec6) :
-    sevm.caller = (Sevm.dataWord sevm 36).toAdr ∧ AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) := by
+    sevm.caller = (Sevm.dataWord sevm 36).toAdr ∧ AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) ∧
+      AuthLogged sevm post (Sevm.dataWord sevm 4).toAdr := by
   obtain ⟨-, -, M, G, h⟩ := impl_preamble_cut (impl_run_cut run code fork)
   rw [sel] at h
   clear run
@@ -80,21 +84,24 @@ theorem frame_rwa_vrs (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Imp
   ibranch h c1
   repeat istep h
   icallA h hc 15 t_3aa2_c15
-  obtain ⟨p0, f1, f2, cl, b1, M1, G1, e, post1⟩ := e15_inv fork hcode hc
+  obtain ⟨p0, f1, f2, cl, b1, M1, G1, e, post1, lg⟩ := e15_inv fork hcode hc
   cases e
   clear hc
   repeat istep h
   have sp := ric_stop_getStor h
+  have sl := ric_stop_logs h
   clear h
   obtain ⟨l4, l36, l68, l100, l132, l164⟩ := lits_auth
   simp only [l36, l68, l100, l132, l164] at f1 f2 cl post1
+  simp only [ff20_word, toAdr_toB256, l4] at lg
   simp only [ff20_word, toAdr_toB256, l4] at f1 f2 cl post1
-  exact ⟨cl, p0, f1, f2, by rw [congrFun sp]; exact post1⟩
+  exact ⟨cl, ⟨p0, f1, f2, by rw [congrFun sp]; exact post1⟩, lg.of_eq sl⟩
 
 theorem frame_twa_bytes (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
     (sel : Blanc.Sevm.selector sevm = 0xcf092995) :
-    AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) := by
+    AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) ∧
+      AuthLogged sevm post (Sevm.dataWord sevm 4).toAdr := by
   obtain ⟨-, -, M, G, h⟩ := impl_preamble_cut (impl_run_cut run code fork)
   rw [sel] at h
   clear run
@@ -109,22 +116,25 @@ theorem frame_twa_bytes (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = I
   ibranch h c3
   obtain ⟨b0, u0, M0, G0, st0, h⟩ := ric_seg_w138 id fork h
   icallA h hc 30 t_3549_c30
-  obtain ⟨p0, f1, f2, b1, M1, G1, e, post1⟩ := e30_inv fork ((getCode_eq_of_state_eq st0 _).trans hcode) hc
+  obtain ⟨p0, f1, f2, b1, M1, G1, e, post1, lg⟩ := e30_inv fork ((getCode_eq_of_state_eq st0 _).trans hcode) hc
   cases e
   clear hc
   repeat istep h
   have sp := ric_stop_getStor h
+  have sl := ric_stop_logs h
   clear h
   rw [getStor_eq_of_state_eq st0] at p0 f1 f2 post1
   obtain ⟨l4, l36, l68, l100, l132, l164⟩ := lits_auth
   simp only [l36, l68, l100, l132, l164] at f1 f2 post1
+  simp only [ff20_word, toAdr_toB256, l4] at lg
   simp only [ff20_word, toAdr_toB256, l4] at f1 f2 post1
-  exact ⟨p0, f1, f2, by rw [congrFun sp]; exact post1⟩
+  exact ⟨⟨p0, f1, f2, by rw [congrFun sp]; exact post1⟩, lg.of_eq sl⟩
 
 theorem frame_rwa_bytes (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = Impl.code)
-    (fork : CoveredFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
+    (fork : HistFork sevm.benvStat.fork) (hcode : pre.getCode usdcLib = Lib.code)
     (sel : Blanc.Sevm.selector sevm = 0x88b7ab63) :
-    sevm.caller = (Sevm.dataWord sevm 36).toAdr ∧ AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) := by
+    sevm.caller = (Sevm.dataWord sevm 36).toAdr ∧ AuthFrame sevm (pre.getStor sevm.currentTarget) (post.getStor sevm.currentTarget) ∧
+      AuthLogged sevm post (Sevm.dataWord sevm 4).toAdr := by
   obtain ⟨-, -, M, G, h⟩ := impl_preamble_cut (impl_run_cut run code fork)
   rw [sel] at h
   clear run
@@ -139,16 +149,18 @@ theorem frame_rwa_bytes (run : Exec 0 sevm pre (.ok post)) (code : sevm.code = I
   ibranch h c3
   obtain ⟨b0, u0, M0, G0, st0, h⟩ := ric_seg_w151 id fork h
   icallA h hc 43 t_2c16_c43
-  obtain ⟨p0, f1, f2, cl, b1, M1, G1, e, post1⟩ := e43_inv fork ((getCode_eq_of_state_eq st0 _).trans hcode) hc
+  obtain ⟨p0, f1, f2, cl, b1, M1, G1, e, post1, lg⟩ := e43_inv fork ((getCode_eq_of_state_eq st0 _).trans hcode) hc
   cases e
   clear hc
   repeat istep h
   have sp := ric_stop_getStor h
+  have sl := ric_stop_logs h
   clear h
   rw [getStor_eq_of_state_eq st0] at p0 f1 f2 post1
   obtain ⟨l4, l36, l68, l100, l132, l164⟩ := lits_auth
   simp only [l36, l68, l100, l132, l164] at f1 f2 cl post1
+  simp only [ff20_word, toAdr_toB256, l4] at lg
   simp only [ff20_word, toAdr_toB256, l4] at f1 f2 cl post1
-  exact ⟨cl, p0, f1, f2, by rw [congrFun sp]; exact post1⟩
+  exact ⟨cl, ⟨p0, f1, f2, by rw [congrFun sp]; exact post1⟩, lg.of_eq sl⟩
 
 end Blanc.Lift.Usdc

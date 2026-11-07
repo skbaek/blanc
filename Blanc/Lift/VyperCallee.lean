@@ -544,7 +544,7 @@ set_option hygiene false in
 open _root_.Lean _root_.Lean.Elab _root_.Lean.Elab.Tactic _root_.Lean.Meta in
 /-- **One inversion step** of a cut-run walk over the hypothesis `run`: peel the next node
 (`ric_next`) and invert its instruction by the matching `ri_*` lemma (`PUSH`, `DUP`/`SWAP` by
-`rfl`, `SLOAD` with the covered-fork hypothesis in context, every other register instruction
+`rfl`, `SLOAD` with the covered- or historical-fork hypothesis in context, every other register instruction
 by `ri_<name>`), substituting the successor state.  The instruction is read off the node, so
 no unification against a mismatched lemma is attempted. -/
 elab "istep" : tactic => do
@@ -565,7 +565,15 @@ elab "istep" : tactic => do
         match rc.componentsRev.head!.toString with
         | "dup" => `(tactic| obtain ⟨_, rfl⟩ := Blanc.Lift.ri_dup rfl $s1)
         | "swap" => `(tactic| obtain ⟨_, rfl⟩ := Blanc.Lift.ri_swap rfl $s1)
-        | "sload" => `(tactic| obtain ⟨_, rfl⟩ := Blanc.Lift.ri_sload (by assumption) $s1)
+        | "sload" =>
+          -- A walk with a `HistFork` hypothesis takes the historical twin `ri_sloadF`
+          -- (`HistIdentityCall.lean`), resolved in the caller's environment.
+          let hist := (← getLCtx).decls.foldl (init := false) fun found decl? =>
+            found || match decl? with
+              | some decl => decl.type.getAppFn.isConstOf `Blanc.HistFork
+              | none => false
+          let step := mkIdent (if hist then `Blanc.Lift.ri_sloadF else `Blanc.Lift.ri_sload)
+          `(tactic| obtain ⟨_, rfl⟩ := $step (by assumption) $s1)
         | "keccak256" => `(tactic| obtain ⟨_, rfl⟩ := Blanc.Lift.ri_keccak $s1)
         | o => do
           let id := mkIdent (`Blanc.Lift ++ Name.mkSimple ("ri_" ++ o))

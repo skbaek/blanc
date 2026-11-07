@@ -145,8 +145,8 @@ theorem exchange_live {sevm : Sevm} {pre : Devm} {s : State} {o : Out} {i j : Fi
   -- the safety theorem on that execution
   obtain ⟨hkp, hidk⟩ := hkeep D exc
   obtain ⟨hi3'', hj3'', bp, bq, o', hstep', hraw⟩ :=
-    exchange_rawE exc hcode hfork hlen hcd hsel rfl rfl hGm
-    hck hcoin hpc (hid.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩) hkp hidk
+    exchange_rawE exc hcode hfork.histFork hlen hcd hsel rfl rfl hGm
+    hck hcoin hpc (hid.toH.of_rel ⟨fun _ => rfl, fun _ => rfl, rfl, rfl, rfl, rfl⟩) hkp hidk
   obtain ⟨-, hex'⟩ := ex_body hi3 hj3 hlen hsel hstep'
   -- the stored balance of coin `i` pins the credited amount
   have hbI : balancesBase + exI sevm = balancesBase + Nat.toB256 (exI sevm).toNat := by

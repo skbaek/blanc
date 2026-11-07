@@ -74,6 +74,27 @@ theorem supplyAfter_of_moved {pre post : Nat} {cs : List Curve3Pool.ExtCall}
     rw [h0] at e
     omega
 
+/-- **The U3 bounds at the ledger supplies, for one invocation**: an accepted step whose frame moved
+3Crv's supply word by the step's own amounts and observed that supply takes the entry supply to the post
+supply (`supplyAfter`), and satisfies `U3Ledger` at the two. -/
+theorem u3Ledger_of_moved {c3 : Adr} {i : PoolInvocation} {sᵢ : Curve3Pool.State}
+    {o : Curve3Pool.Out}
+    (hstep : Curve3Pool.step sᵢ i.env (Curve3Pool.decodeCall i.frame.sevm) = some o)
+    (moved : supplyAt c3 i.frame.post.state + callsBurned o.calls =
+      supplyAt c3 i.frame.pre.state + callsMinted o.calls)
+    (observed : SupplyObserved c3 i) :
+    Curve3Pool.supplyAfter (supplyAt c3 i.frame.pre.state) o.calls =
+        supplyAt c3 i.frame.post.state ∧
+      Curve3Pool.U3Ledger sᵢ i.env (Curve3Pool.decodeCall i.frame.sevm) o
+        (supplyAt c3 i.frame.pre.state) (supplyAt c3 i.frame.post.state) := by
+  have hT : ∀ T, i.env.supply = some T → T = supplyAt c3 i.frame.pre.state :=
+    fun T h => (observed T h).1
+  obtain ⟨words, oneWay⟩ := Curve3Pool.step_moves hstep
+    (fun T h => by rw [hT T h]; exact B256.toNat_lt _)
+    (fun a j m h => Curve3Pool.decodeCall_oneCoin_word h)
+  have after := supplyAfter_of_moved moved words oneWay
+  exact ⟨after, Curve3Pool.u3Ledger_of_step hstep hT after⟩
+
 open Blanc.Composition.Curve3Pool3CrvJoint in
 /-- **Composed U3.**  Under `pool_3crv_history`'s premises, every replayed invocation ran at its
 block's header time and is an accepted step with its raw effect, the supply it observed is 3Crv's
@@ -115,14 +136,8 @@ theorem pool_3crv_u3 {pool c3 : Adr} {cfg : ChainConfig} {checkpoint future : Bl
     rw [split]
     exact List.mem_append_right _ List.mem_cons_self
   obtain ⟨o, hstep, hraw, moved, observed⟩ := perStep pre i post sᵢ split hpre
-  have hT : ∀ T, i.env.supply = some T → T = supplyAt c3 i.frame.pre.state :=
-    fun T h => (observed T h).1
-  obtain ⟨words, oneWay⟩ := Curve3Pool.step_moves hstep
-    (fun T h => by rw [hT T h]; exact B256.toNat_lt _)
-    (fun a j m h => Curve3Pool.decodeCall_oneCoin_word h)
-  have after := supplyAfter_of_moved moved words oneWay
+  obtain ⟨after, ledger⟩ := u3Ledger_of_moved hstep moved observed
   exact ⟨Curve3Pool.pool_invocation_time obs hi (auth i hi),
-    fun h => PoolRun.keeps Curve3Pool.feeBounded_keeps hpre h, o, hstep, hraw, observed, after,
-    Curve3Pool.u3Ledger_of_step hstep hT after⟩
+    fun h => PoolRun.keeps Curve3Pool.feeBounded_keeps hpre h, o, hstep, hraw, observed, after, ledger⟩
 
 end Blanc.Composition.Curve3PoolSupply

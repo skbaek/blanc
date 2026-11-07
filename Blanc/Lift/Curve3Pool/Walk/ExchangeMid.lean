@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ExchangePre
 import Blanc.Lift.Curve3Pool.Walk.AdminBalances
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
@@ -68,7 +69,7 @@ theorem ex_lt3 {k : B256} (h : B256.ltCheck k (Bytes.toB256 [0x03]) ≠ 0) : k.t
 /-- **After `_xp_mem`** (`0x2458` → the `i == 2` test). -/
 theorem xa_ex_xp {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {x0 x1 x2 z0 z1 z2 B0 B1 B2 : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (h : XAt sevm post 0x2458 (St b [x0, x1, x2, z2, z1, z0, B2, B1, B0, exR1, exR1, exR0,
       Bytes.toB256 [2, 0]] M G) L) :
@@ -76,9 +77,9 @@ theorem xa_ex_xp {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
       ExFrame img' (exW3 B0 B1 B2) (exW3 x0 x1 x2) (exDx sevm)
         ((b.getStor sevm.currentTarget).get (coinsBase + exI sevm)) ∧
       ((exI sevm ≠ 2 ∧ XAt sevm post 0x2517
-          (St (afterSload sevm b (coinsBase + exI sevm)) [] M' G') L) ∨
+          (St (afterSloadH sevm b (coinsBase + exI sevm)) [] M' G') L) ∨
         (exI sevm = 2 ∧ XAt sevm post 0x24d8
-          (St (afterSload sevm b (coinsBase + exI sevm)) [] M' G') L)) := by
+          (St (afterSloadH sevm b (coinsBase + exI sevm)) [] M' G') L)) := by
   xa 2
   xmo 0x245d (.reg .mstore) (ri_mstore_imgAt (o := 0x320) rfl)
   xs 0x2460 (.push [0x03, 0x40] (by decide)) ri_push
@@ -129,7 +130,7 @@ theorem xa_ex_xp {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {
   xmo 0x24c7 (.reg .keccak256) (ri_keccak_imgAt (o := 0xc0) (z := 0x20) rfl rfl)
   rw [keccak_zero] at h
   xs 0x24c8 (.reg .add) ri_add
-  xw 0x24c9 (.reg .sload) ri_sload
+  xw 0x24c9 (.reg .sload) ri_sloadF
   rw [getStorVal_eq] at h
   xs 0x24cc (.push [0x03, 0xa0] (by decide)) ri_push
   xmo 0x24cd (.reg .mstore) (ri_mstore_imgAt (o := 0x3a0) rfl)
@@ -200,7 +201,7 @@ structure ExBal (sevm : Sevm) (b d : Devm) (C : B256) (c : Exec.Frame) : Prop wh
 child is the static call to `input_coin`, at least a word back, its first word at `0x380`. -/
 theorem xa_ex_bal1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat} {M : Mem}
     {img : Bytes} {B X : Nat → B256} {D C : B256}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hF : ExFrame img B X D C)
     (hcoin : ¬ sevm.benvStat.rules.isPrecomp C.toAdr)
     (h : XAt sevm post 0x24d8 (St b [] M G) L) :
@@ -217,8 +218,7 @@ theorem xa_ex_bal1 {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
   rw [Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by decide),
     Bytes.readWord_writeAt_of_disjoint _ _ _ _ (by decide), hF.coin.read] at h
   xs 0x24f5 (.reg .gas) ri_gas_remaining
-  replace h := xa_staticcall_img (pc' := 0x24f6) (i := 0x3dc) (n := 0x24) (o := 0x440) (z := 0x20)
-    hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
+  replace h := xa_staticcall_imgH (pc' := 0x24f6) (i := 0x3dc) (n := 0x24) (o := 0x440) (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
   obtain ⟨d1, flag, out, M1, L1, h, _, hR, hW, hrd, hob, hstor, hlogs, hk⟩ := h
   xs 0x24f9 (.push [0x24, 0xfe] (by decide)) ri_push

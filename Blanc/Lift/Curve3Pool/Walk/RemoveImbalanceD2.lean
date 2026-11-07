@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.RemoveImbalanceFeeLoop
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -21,7 +22,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
 -- SEGMENT: rliD2
 /-- **`D2` and the burn amount** (`0x35a2` → `0x3719`). -/
 theorem xa_rli_d2 (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {M : Mem} {D0 D1 T F AF A o0 o1 o2 n0 n1 n2 f0 f1 f2 : B256}
     (hV : VW M ((0x600, Nat.toB256 3) :: [(0x480, D1), (0x340, D0), (0x140, T), (0x1e0, F), (0x200, AF), (0x220, A), (0x280, o0),
       (0x2a0, o1), (0x2c0, o2), (0x2e0, n0), (0x300, n1), (0x320, n2), (0x5a0, f0), (0x5c0, f1),

@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Kit
 import Blanc.Lift.FrameWalkNode
 import Blanc.Lift.MemGlue
@@ -47,7 +48,7 @@ theorem xa_al_callee {k : Nat} {e : Entry} {f : SFunc} {E : List Nat}
     (hm : mems.getD k [] = []) (hE : ExecFreeSet cert.prog E = true)
     (hfree : f.execFreeIn E = true)
     {sevm : Sevm} {post d : Devm} {ρ : B256} {S base : List B256} {L : List Exec.Frame}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hstack : d.stack = S ++ base) (hframe : FrameMatches ρ e.frame S)
     (h : XAt sevm post e.pc d L) :
     (SFunc.Run cert.prog sevm d f (.halted post) ∧ L = []) ∨
@@ -56,7 +57,7 @@ theorem xa_al_callee {k : Nat} {e : Entry} {f : SFunc} {E : List Nat}
         d'.stack = S' ++ base ∧ S'.length = e.rets := by
   have hcheck := hchk k e f hk hf
   rw [hm] at hcheck
-  exact xa_node_span hchk hE hcode hfork hcheck hfree hstack hframe (memMatches_nil _ _) h
+  exact xa_node_spanH hchk hE hcode hfork.stateGas_none hcheck hfree hstack hframe (memMatches_nil _ _) h
 
 theorem al_a_entry : cert.entries[27]? = some ⟨0xa9, [.ret], 1⟩ := rfl
 theorem al_a_prog : cert.prog[27]? = some t_00a9_c27 := rfl
@@ -65,15 +66,15 @@ theorem al_a_execFreeSet : ExecFreeSet cert.prog [27] = true := by decide
 theorem al_a_free : t_00a9_c27.execFreeIn [27] = true := by decide
 
 /-- **`_A` crossed**: from its entry with return address `ρ` above the caller's stack `S`, the
-walk resumes at `ρ` over `aBase`, with `aChk` on top, the memory kept off `aWin`. -/
+walk resumes at `ρ` over `aBaseH`, with `aChk` on top, the memory kept off `aWin`. -/
 theorem xa_al_A {sevm : Sevm} {post b : Devm} {ρ : B256} {S : List B256} {M : Mem} {G : Nat}
     {s : State} {L : List Exec.Frame} (hchk : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hwf : Mem.Wf M)
     (h : XAt sevm post 0xa9 (St b (ρ :: S) M G) L) :
     ∃ v M' G', aChk s sevm.benvStat.time.toNat = some v.toNat ∧ Mem.KeepsOff M M' aWin ∧
       Mem.Wf M' ∧ (M.size % 32 = 0 → M'.size % 32 = 0) ∧
-      XAt sevm post ρ.toNat (St (aBase sevm b) (v :: S) M' G') L := by
+      XAt sevm post ρ.toNat (St (aBaseH sevm b) (v :: S) M' G') L := by
   rcases xa_al_callee hchk al_a_entry al_a_prog al_a_mems al_a_execFreeSet al_a_free hcode hfork
       (S := [ρ]) (base := S) rfl (List.Forall₂.cons rfl .nil) h with
     ⟨run, -⟩ | ⟨d', S', run, hx, -, -⟩
@@ -92,7 +93,7 @@ theorem al_gdm_mems : mems.getD 29 [] = [] := by decide
 memory kept off `gdmWin`. -/
 theorem xa_al_getDMem {sevm : Sevm} {post b : Devm} {ρ b0 b1 b2 amp : B256} {S : List B256}
     {M : Mem} {G : Nat} {L : List Exec.Frame} (hchk : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hwf : Mem.Wf M) (hsz : M.size % 32 = 0)
     (h : XAt sevm post 0x7b7 (St b (ρ :: b0 :: b1 :: b2 :: amp :: S) M G) L) :
     ∃ v M' G', getDMem ⟨b0.toNat, b1.toNat, b2.toNat⟩ amp.toNat = some v.toNat ∧

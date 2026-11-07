@@ -75,6 +75,18 @@ def alExactCost1 (T B1 B2 : B256) (xa xb xc : V3) (v0 v1 v2 : Nat)
       (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) xb xc v1 v2
       f0 f1 f2 s0 s1 s2 x0 x1 x2
 
+/-- The refund counter `add_liquidity` ends at on a positive supply, read at the canonical states. -/
+def alRefund1 (T B1 B2 : B256) (xa xb xc : V3) (v0 v1 v2 : Nat)
+    (f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256) : Int :=
+  alBack1Refund sevm P
+    (alLN3 sevm (alLocked1 (pre.getStor sevm.currentTarget)) P (alFN1 sevm pre P amp)
+      (alFM0 sevm pre P amp T xa v0) B1 B2 (alOld (pre.getStor sevm.currentTarget)))
+    (alLM3 sevm (alLocked1 (pre.getStor sevm.currentTarget)) P (alFN1 sevm pre P amp)
+      (alFM0 sevm pre P amp T xa v0) B1 B2 (alOld (pre.getStor sevm.currentTarget)))
+    (Nat.toB256 amp) (Nat.toB256 v0) T (alOld (pre.getStor sevm.currentTarget))
+    (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) xb xc v1 v2
+    f0 f1 f2 s0 s1 s2 x0 x1 x2
+
 /-- **`add_liquidity`'s exact charge on a first deposit.** -/
 def alExactCost0 (B1 B2 : B256) (xb : V3) (v1 : Nat) : Nat :=
   alFrontCost sevm pre P amp +
@@ -87,6 +99,15 @@ def alExactCost0 (B1 B2 : B256) (xb : V3) (v1 : Nat) : Nat :=
         (alFM1 sevm pre P amp 0) B1 B2 (alOld (pre.getStor sevm.currentTarget)))
       (alD1c0 sevm) (Nat.toB256 amp)
       (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) xb v1
+
+/-- The refund counter `add_liquidity` ends at on a first deposit, read at the canonical states. -/
+def alRefund0 (B1 B2 : B256) (xb : V3) (v1 : Nat) : Int :=
+  alBack0Refund sevm P
+    (alLN3 sevm (alLocked1 (pre.getStor sevm.currentTarget)) P (alFN1 sevm pre P amp)
+      (alFM1 sevm pre P amp 0) B1 B2 (alOld (pre.getStor sevm.currentTarget)))
+    (alLM3 sevm (alLocked1 (pre.getStor sevm.currentTarget)) P (alFN1 sevm pre P amp)
+      (alFM1 sevm pre P amp 0) B1 B2 (alOld (pre.getStor sevm.currentTarget)))
+    (Nat.toB256 amp) (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) xb v1
 
 end Front
 
@@ -161,16 +182,19 @@ theorem rx_al_frame1_exact {xa xb xc : V3} {v0 v1 v2 : Nat} {f0 f1 f2 s0 s1 s2 x
     (hslip : ¬ alMintW T (Nat.toB256 v0) (Nat.toB256 v2) <
       Sevm.dataWord sevm (Bytes.toB256 [0x64]))
     (hadd : ¬ T + alMintW T (Nat.toB256 v0) (Nat.toB256 v2) < T)
-    {R : Nat} (hR : 100000 + 5 * U ≤ R)
+    {R m : Nat} (hR : 100000 + 5 * U ≤ R) (hm : 6000 ≤ alFrontCost sevm pre P amp + m)
     (hGb : R + alExactCost1 sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2 +
-      6000 < 2 ^ 256) :
+      m < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St pre [] Mem.empty
         (R + alExactCost1 sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2))
       t_0000_c0
       (AlEndX sevm (alUnlock (alStor3 (alLocked1 (pre.getStor sevm.currentTarget)) s0 s1 s2))
-        f0 f1 f2 R) := by
+        f0 f1 f2 R (W 4)
+        (alRefund1 sevm pre P amp T B1 B2 xa xb xc v0 v1 v2 f0 f1 f2 s0 s1 s2 x0 x1 x2)) := by
   obtain ⟨hsup, hpull, hbalB, hbalA, hmint⟩ := hP
+  unfold alRefund1
   unfold alExactCost1 alFrontCost at hGb ⊢
+  unfold alFrontCost at hm
   rw [show ∀ a b c d e f, R + (315 + a + b + c + d + e + f) =
       (R + f + e + d + c + b + a) + 315 by intros; omega]
   refine rx_dispatch_al hlen hcd hsel ?_
@@ -238,7 +262,13 @@ theorem rx_al_frame1_exact {xa xb xc : V3} {v0 v1 v2 : Nat} {f0 f1 f2 s0 s1 s2 x
         (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) xb xc v1 v2
         f0 f1 f2 s0 s1 s2 x0 x1 x2)) X
       (AlEndX sevm (alUnlock (alStor3 (alLocked1 (pre.getStor sevm.currentTarget)) s0 s1 s2))
-        f0 f1 f2 R) := by
+        f0 f1 f2 R (W 4) (alBack1Refund sevm P (alLN3 sevm (alLocked1 (pre.getStor sevm.currentTarget)) P (alFN1 sevm pre P amp)
+          (alFM0 sevm pre P amp T xa v0) B1 B2 (alOld (pre.getStor sevm.currentTarget)))
+        (alLM3 sevm (alLocked1 (pre.getStor sevm.currentTarget)) P (alFN1 sevm pre P amp)
+          (alFM0 sevm pre P amp T xa v0) B1 B2 (alOld (pre.getStor sevm.currentTarget)))
+        (Nat.toB256 amp) (Nat.toB256 v0) T (alOld (pre.getStor sevm.currentTarget))
+        (alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) xb xc v1 v2
+        f0 f1 f2 s0 s1 s2 x0 x1 x2)) := by
     intro s' c0 X hctx hc0 b' M' img' hL' hR' hW' hsz' hm' hn' hM'
     rw [hc0]
     rw [hc0] at hGb
@@ -294,14 +324,17 @@ theorem rx_al_frame0_exact {xb : V3} {v1 : Nat} (P : ALExactCalls)
     (hD1 : getDChk xb.get amp 1 = some v1) (hlt : 0 < Nat.toB256 v1)
     (hslip : ¬ Nat.toB256 v1 < Sevm.dataWord sevm (Bytes.toB256 [0x64]))
     (hadd : ¬ 0 + Nat.toB256 v1 < 0)
-    {R : Nat} (hR : 100000 + 5 * U ≤ R)
-    (hGb : R + alExactCost0 sevm pre P amp B1 B2 xb v1 + 6000 < 2 ^ 256) :
+    {R m : Nat} (hR : 100000 + 5 * U ≤ R) (hm : 6000 ≤ alFrontCost sevm pre P amp + m)
+    (hGb : R + alExactCost0 sevm pre P amp B1 B2 xb v1 + m < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St pre [] Mem.empty (R + alExactCost0 sevm pre P amp B1 B2 xb v1))
       t_0000_c0
       (AlEndX sevm (alUnlock (alStor3 (alLocked1 (pre.getStor sevm.currentTarget))
-        ((alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) 0) ((alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) 1) ((alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) 2))) 0 0 0 R) := by
+        ((alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) 0) ((alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) 1) ((alLiveNew sevm (alOld (pre.getStor sevm.currentTarget)) B1 B2) 2))) 0 0 0 R (W 4)
+        (alRefund0 sevm pre P amp B1 B2 xb v1)) := by
   obtain ⟨hsup, hpull, hbalB, hbalA, hmint⟩ := hP
+  unfold alRefund0
   unfold alExactCost0 alFrontCost at hGb ⊢
+  unfold alFrontCost at hm
   rw [show ∀ a b c d e, R + (315 + a + b + c + d + e) = (R + e + d + c + b + a) + 315
     by intros; omega]
   refine rx_dispatch_al hlen hcd hsel ?_

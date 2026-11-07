@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.IdentityCallGas
 
@@ -12,6 +13,23 @@ output, and an identity-ready base stays identity-ready. Walk-neutral: the `exch
 namespace Blanc.Lift.Curve3Pool
 
 open Jaune Blanc.Lift
+
+theorem aBaseH_getStor (sevm : Sevm) (b : Devm) (a : Adr) : (aBaseH sevm b).getStor a = b.getStor a := by
+  unfold aBaseH; split <;> simp only [afterSloadH_getStor]
+
+theorem aBaseH_logs (sevm : Sevm) (b : Devm) : (aBaseH sevm b).logs = b.logs := by
+  unfold aBaseH; split <;> simp only [afterSloadH_logs]
+
+theorem aBaseH_output (sevm : Sevm) (b : Devm) : (aBaseH sevm b).output = b.output := by
+  unfold aBaseH; split <;> simp only [afterSloadH_output]
+
+theorem aBaseH_getCode (sevm : Sevm) (b : Devm) (a : Adr) : (aBaseH sevm b).getCode a = b.getCode a := by
+  unfold aBaseH; split <;> simp only [afterSloadH_getCode]
+
+theorem IdReadyH_aBaseH {sevm : Sevm} {b : Devm} (h : IdReadyH sevm b) : IdReadyH sevm (aBaseH sevm b) := by
+  unfold aBaseH; split
+  · exact (((h.afterSloadH _).afterSloadH _).afterSloadH _).afterSloadH _
+  · exact (h.afterSloadH _).afterSloadH _
 
 theorem aBase_getStor (sevm : Sevm) (b : Devm) (a : Adr) : (aBase sevm b).getStor a = b.getStor a := by
   unfold aBase; split <;> simp only [afterSload_getStor]

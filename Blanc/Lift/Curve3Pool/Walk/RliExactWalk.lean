@@ -377,7 +377,7 @@ theorem rx_rli_push0X {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 0) (P.pushNext 0))
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 0 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hn : Devm.EqModGas b n) (hR0 : 12000 + U ≤ R)
-    (hGb : R + rliPushCost sevm P n M 0 false + 3000 < 2 ^ 256)
+    (hGb : R + rliPushCost sevm P n M 0 false < 2 ^ 256)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -439,7 +439,7 @@ theorem rx_rli_push1aX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 1) (P.pushNext 1))
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hn : Devm.EqModGas b n) (hR0 : 12000 + U ≤ R)
-    (hGb : R + rliPushCost sevm P n M 1 false + 3000 < 2 ^ 256)
+    (hGb : R + rliPushCost sevm P n M 1 false < 2 ^ 256)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -501,7 +501,7 @@ theorem rx_rli_push1bX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 1) (P.pushNext 1))
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 1 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hn : Devm.EqModGas b n) (hR0 : 12000 + U ≤ R)
-    (hGb : R + rliPushCost sevm P n M 1 true + 3000 < 2 ^ 256)
+    (hGb : R + rliPushCost sevm P n M 1 true < 2 ^ 256)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -563,7 +563,7 @@ theorem rx_rli_push2aX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 2) (P.pushNext 2))
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hn : Devm.EqModGas b n) (hR0 : 12000 + U ≤ R)
-    (hGb : R + rliPushCost sevm P n M 2 false + 3000 < 2 ^ 256)
+    (hGb : R + rliPushCost sevm P n M 2 false < 2 ^ 256)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0x920 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -625,7 +625,7 @@ theorem rx_rli_push2bX {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Pro
       (transferSel ++ sevm.caller.toB256.toBytes ++ (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 2) (P.pushNext 2))
     (hW'c : WClosed sevm W') (hskip : (Sevm.dataWord sevm (Bytes.toB256 [32] * Nat.toB256 2 + Bytes.toB256 [4])) = 0 → ∀ b, W b → W' b)
     (hn : Devm.EqModGas b n) (hR0 : 12000 + U ≤ R)
-    (hGb : R + rliPushCost sevm P n M 2 true + 3000 < 2 ^ 256)
+    (hGb : R + rliPushCost sevm P n M 2 true < 2 ^ 256)
     (kS : ∀ (b' : Devm) (M' : Mem) (img' : Bytes), ExLive sevm W' b' σ →
       Mem.Reads M' img' → Mem.Wf M' → M'.size = 0xb60 →
       (∀ o v, WordAt img o v → (o + 32 ≤ 0x900 ∨ 0x920 ≤ o) → WordAt img' o v) →
@@ -681,6 +681,27 @@ end Push
 
 /-! ## The transfer loop composed, the event and `STOP` -/
 
+/-! ## Where the frame ends -/
+
+/-- **How the frame ends with `R` left**: halted, at the world `W` and the storage `σ` with the lock released, its last
+state the event and the lock's release over a state equal to `F` modulo gas. -/
+def RliEnds (sevm : Sevm) (W : Devm → Prop) (σ : Stor) (F : Devm) (R : Nat) (r : Outcome) : Prop :=
+  ∃ D, r = .halted D ∧ D.gasLeft = R ∧
+    ExLive sevm W D (σ.set (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) ∧
+    ∃ d l S M G, Devm.EqModGas d F ∧
+      D = St (afterSstore sevm (d.addLog l) (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) S M G
+
+/-- The state the last iteration leaves. -/
+abbrev rliEnd2 (sevm : Sevm) (P : RLIExactCalls) (n : Devm) (M : Mem) : Devm := rliPushBase sevm P n M 2
+
+/-- The state iteration 2 leaves, from iteration 1. -/
+abbrev rliEnd1 (sevm : Sevm) (P : RLIExactCalls) (n : Devm) (M : Mem) : Devm :=
+  rliEnd2 sevm P (rliPushBase sevm P n M 1) (rliPushMemNext sevm P n M 1)
+
+/-- The state iteration 2 leaves, from iteration 0. -/
+abbrev rliEnd0 (sevm : Sevm) (P : RLIExactCalls) (n : Devm) (M : Mem) : Devm :=
+  rliEnd1 sevm P (rliPushBase sevm P n M 0) (rliPushMemNext sevm P n M 0)
+
 /-- Iteration 2 at `t_3769_c1045` to `STOP`, exact. -/
 theorem rx_rli_tail2aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm → Prop} {M : Mem}
     {img : Bytes} {U : Nat} {T D1 f0 f1 f2 Bw : B256} (P : RLIExactCalls) {R : Nat}
@@ -695,9 +716,9 @@ theorem rx_rli_tail2aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
       (σ.get (coinsBase + Nat.toB256 2)) (transferSel ++ sevm.caller.toB256.toBytes ++
         (rliAmt sevm 2).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 2) (P.pushNext 2))
     (hn : Devm.EqModGas b n) (hR0 : 42000 + U ≤ R)
-    (hGb : R + rliTail2Cost sevm P n M false + 3000 < 2 ^ 256) :
+    (hGb : R + rliTail2Cost sevm P n M false < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
-      Bytes.toB256 [9, 0] :: []) M (R + rliTail2Cost sevm P n M false)) t_3769_c1045 (fun r => ∃ D, r = .halted D ∧ D.gasLeft = R) := by
+      Bytes.toB256 [9, 0] :: []) M (R + rliTail2Cost sevm P n M false)) t_3769_c1045 (RliEnds sevm (V 3) σ (rliEnd2 sevm P n M) R) := by
   unfold rliTail2Cost at hGb ⊢
   rw [show ∀ x y, R + (x + y) = R + y + x from fun _ _ => by omega] at hGb ⊢
   refine rx_rli_push2aX P hfork hdepth hL hR hW hsz hc hp2 (hVc 3 (by decide)) (hs 2 (by decide)) hn
@@ -711,7 +732,7 @@ theorem rx_rli_tail2aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
     have hs' := hb'.sstoreCost_congr sevm (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])
     exact rx_rli_end920E hfork hstatic hL' hR' hW' hsz' (hk' _ _ hT (by omega)) (hk' _ _ hD1 (by omega)) (hk' _ _ hf0 (by omega)) (hk' _ _ hf1 (by omega))
         (hk' _ _ hf2 (by omega)) (hk' _ _ hBw (by omega)) hTX (by omega)
-      (by simp only [List.length_nil]; omega) fun D _ _ hg => ⟨D, rfl, by omega⟩
+      (by simp only [List.length_nil]; omega) fun D hLD _ ⟨l, S', M', G', hD⟩ hg => ⟨D, rfl, by omega, hLD, b', l, S', M', G', hb', hD⟩
   · intro b' M' img' hL' hR' hW' hsz' hk' hc' hz hb' hM'
     have hE : rliEndCostAt sevm (rliPushBase sevm P n M 2) (false || !decide (rliAmt sevm 2 = 0)) =
         3372 + sstoreCost sevm (rliPushBase sevm P n M 2) (Bytes.toB256 [0xff, 0xff, 0xff])
@@ -721,7 +742,7 @@ theorem rx_rli_tail2aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
     have hs' := hb'.sstoreCost_congr sevm (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])
     exact rx_rli_endB60E hfork hstatic hL' hR' hW' hsz' (hk' _ _ hT (by omega)) (hk' _ _ hD1 (by omega)) (hk' _ _ hf0 (by omega)) (hk' _ _ hf1 (by omega))
         (hk' _ _ hf2 (by omega)) (hk' _ _ hBw (by omega)) hTX (by omega)
-      (by simp only [List.length_nil]; omega) fun D _ _ hg => ⟨D, rfl, by omega⟩
+      (by simp only [List.length_nil]; omega) fun D hLD _ ⟨l, S', M', G', hD⟩ hg => ⟨D, rfl, by omega, hLD, b', l, S', M', G', hb', hD⟩
 
 /-- Iteration 2 at `t_3769_c48` to `STOP`, exact. -/
 theorem rx_rli_tail2bX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm → Prop} {M : Mem}
@@ -737,9 +758,9 @@ theorem rx_rli_tail2bX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
       (σ.get (coinsBase + Nat.toB256 2)) (transferSel ++ sevm.caller.toB256.toBytes ++
         (rliAmt sevm 2).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 2) (P.pushNext 2))
     (hn : Devm.EqModGas b n) (hR0 : 42000 + U ≤ R)
-    (hGb : R + rliTail2Cost sevm P n M true + 3000 < 2 ^ 256) :
+    (hGb : R + rliTail2Cost sevm P n M true < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
-      Bytes.toB256 [9, 0] :: []) M (R + rliTail2Cost sevm P n M true)) t_3769_c48 (fun r => ∃ D, r = .halted D ∧ D.gasLeft = R) := by
+      Bytes.toB256 [9, 0] :: []) M (R + rliTail2Cost sevm P n M true)) t_3769_c48 (RliEnds sevm (V 3) σ (rliEnd2 sevm P n M) R) := by
   unfold rliTail2Cost at hGb ⊢
   rw [show ∀ x y, R + (x + y) = R + y + x from fun _ _ => by omega] at hGb ⊢
   refine rx_rli_push2bX P hfork hdepth hL hR hW hsz hc hp2 (hVc 3 (by decide)) (hs 2 (by decide)) hn
@@ -753,7 +774,7 @@ theorem rx_rli_tail2bX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
     have hs' := hb'.sstoreCost_congr sevm (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])
     exact rx_rli_endB60E hfork hstatic hL' hR' hW' hsz' (hk' _ _ hT (by omega)) (hk' _ _ hD1 (by omega)) (hk' _ _ hf0 (by omega)) (hk' _ _ hf1 (by omega))
         (hk' _ _ hf2 (by omega)) (hk' _ _ hBw (by omega)) hTX (by omega)
-      (by simp only [List.length_nil]; omega) fun D _ _ hg => ⟨D, rfl, by omega⟩
+      (by simp only [List.length_nil]; omega) fun D hLD _ ⟨l, S', M', G', hD⟩ hg => ⟨D, rfl, by omega, hLD, b', l, S', M', G', hb', hD⟩
   · intro b' M' img' hL' hR' hW' hsz' hk' hc' hz hb' hM'
     have hE : rliEndCostAt sevm (rliPushBase sevm P n M 2) (true || !decide (rliAmt sevm 2 = 0)) =
         3372 + sstoreCost sevm (rliPushBase sevm P n M 2) (Bytes.toB256 [0xff, 0xff, 0xff])
@@ -763,7 +784,7 @@ theorem rx_rli_tail2bX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
     have hs' := hb'.sstoreCost_congr sevm (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])
     exact rx_rli_endB60E hfork hstatic hL' hR' hW' hsz' (hk' _ _ hT (by omega)) (hk' _ _ hD1 (by omega)) (hk' _ _ hf0 (by omega)) (hk' _ _ hf1 (by omega))
         (hk' _ _ hf2 (by omega)) (hk' _ _ hBw (by omega)) hTX (by omega)
-      (by simp only [List.length_nil]; omega) fun D _ _ hg => ⟨D, rfl, by omega⟩
+      (by simp only [List.length_nil]; omega) fun D hLD _ ⟨l, S', M', G', hD⟩ hg => ⟨D, rfl, by omega, hLD, b', l, S', M', G', hb', hD⟩
 
 /-- Iterations 1–2 from `t_3769_c1037` to `STOP`, exact. -/
 theorem rx_rli_tail1aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm → Prop} {M : Mem}
@@ -782,9 +803,9 @@ theorem rx_rli_tail1aX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
       (σ.get (coinsBase + Nat.toB256 2)) (transferSel ++ sevm.caller.toB256.toBytes ++
         (rliAmt sevm 2).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 2) (P.pushNext 2))
     (hn : Devm.EqModGas b n) (hR0 : 54000 + 2 * U ≤ R)
-    (hGb : R + rliTail1Cost sevm P n M false + 3000 < 2 ^ 256) :
+    (hGb : R + rliTail1Cost sevm P n M false < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
-      Bytes.toB256 [9, 0] :: []) M (R + rliTail1Cost sevm P n M false)) t_3769_c1037 (fun r => ∃ D, r = .halted D ∧ D.gasLeft = R) := by
+      Bytes.toB256 [9, 0] :: []) M (R + rliTail1Cost sevm P n M false)) t_3769_c1037 (RliEnds sevm (V 3) σ (rliEnd1 sevm P n M) R) := by
   unfold rliTail1Cost at hGb ⊢
   rw [show ∀ x y, R + (x + y) = R + y + x from fun _ _ => by omega] at hGb ⊢
   refine rx_rli_push1aX P hfork hdepth hL hR hW hsz hc hp1 (hVc 2 (by decide)) (hs 1 (by decide)) hn
@@ -819,9 +840,9 @@ theorem rx_rli_tail1bX {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm 
       (σ.get (coinsBase + Nat.toB256 2)) (transferSel ++ sevm.caller.toB256.toBytes ++
         (rliAmt sevm 2).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 2) (P.pushNext 2))
     (hn : Devm.EqModGas b n) (hR0 : 54000 + 2 * U ≤ R)
-    (hGb : R + rliTail1Cost sevm P n M true + 3000 < 2 ^ 256) :
+    (hGb : R + rliTail1Cost sevm P n M true < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
-      Bytes.toB256 [9, 0] :: []) M (R + rliTail1Cost sevm P n M true)) t_3769_c48 (fun r => ∃ D, r = .halted D ∧ D.gasLeft = R) := by
+      Bytes.toB256 [9, 0] :: []) M (R + rliTail1Cost sevm P n M true)) t_3769_c48 (RliEnds sevm (V 3) σ (rliEnd1 sevm P n M) R) := by
   unfold rliTail1Cost at hGb ⊢
   rw [show ∀ x y, R + (x + y) = R + y + x from fun _ _ => by omega] at hGb ⊢
   refine rx_rli_push1bX P hfork hdepth hL hR hW hsz hc hp1 (hVc 2 (by decide)) (hs 1 (by decide)) hn
@@ -859,9 +880,9 @@ theorem rx_rli_tail0X {sevm : Sevm} {b n : Devm} {σ : Stor} {V : Nat → Devm �
       (σ.get (coinsBase + Nat.toB256 2)) (transferSel ++ sevm.caller.toB256.toBytes ++
         (rliAmt sevm 2).toBytes) RawCallOk U 0xaa0 0x44 0xb40 (P.pushDebit 2) (P.pushNext 2))
     (hn : Devm.EqModGas b n) (hR0 : 66000 + 3 * U ≤ R)
-    (hGb : R + rliTail0Cost sevm P n M + 3000 < 2 ^ 256) :
+    (hGb : R + rliTail0Cost sevm P n M < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
-      Bytes.toB256 [9, 0] :: []) M (R + rliTail0Cost sevm P n M)) t_3769_c1368 (fun r => ∃ D, r = .halted D ∧ D.gasLeft = R) := by
+      Bytes.toB256 [9, 0] :: []) M (R + rliTail0Cost sevm P n M)) t_3769_c1368 (RliEnds sevm (V 3) σ (rliEnd0 sevm P n M) R) := by
   unfold rliTail0Cost at hGb ⊢
   rw [show ∀ x y, R + (x + y) = R + y + x from fun _ _ => by omega] at hGb ⊢
   refine rx_rli_push0X P hfork hdepth hL hR hW hsz hc hp0 (hVc 1 (by decide)) (hs 0 (by decide)) hn
@@ -913,12 +934,12 @@ theorem rx_rli_afterFeeX {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop} 
     (hn4 : Devm.EqModGas b4 (rliNF3 sevm pre P w))
     {R : Nat} (hR : 66000 + 3 * U ≤ R)
     (hGb : R + rliTail0Cost sevm P (rliP0 sevm pre P T w) (rliPM0 sevm pre P T w) +
-      rliBurnCost sevm pre P T w + 3000 < 2 ^ 256) :
+      rliBurnCost sevm pre P T w < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St b4 ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [6, 0] :: []) (rliMF3 sevm pre P T w)
       (R + rliTail0Cost sevm P (rliP0 sevm pre P T w) (rliPM0 sevm pre P T w) +
         rliBurnCost sevm pre P T w)) rliExit
-      (fun r => ∃ D, r = .halted D ∧ D.gasLeft = R) := by
+      (RliEnds sevm (W 4) (rliStor (rliσ sevm pre) w.s0 w.s1 w.s2) (rliEnd0 sevm P (rliP0 sevm pre P T w) (rliPM0 sevm pre P T w)) R) := by
   -- `D2`, the burn
   have e_tok : (rliStor (rliσ sevm pre) w.s0 w.s1 w.s2).get tokenSlot = (rliσ sevm pre).get tokenSlot :=
     rliStor_get (by decide) (by decide) (by decide) (by decide)
@@ -990,9 +1011,9 @@ theorem rx_rli_frame_exact {sevm : Sevm} {pre : Devm} {s : State} {W : Nat → D
     (hP : RLIExactPremises sevm (rliσ sevm pre) T (rliBurnW (Nat.toB256 w.v0) (Nat.toB256 w.v2) T)
       W U P)
     (hskip : ∀ j, j < 3 → rliAmt sevm j = 0 → ∀ b, W (j + 1) b → W (j + 2) b)
-    {R : Nat} (hR : 66000 + 3 * U ≤ R) (hGb : R + rliExactCost sevm pre P T w + 3000 < 2 ^ 256) :
+    {R : Nat} (hR : 66000 + 3 * U ≤ R) (hGb : R + rliExactCost sevm pre P T w < 2 ^ 256) :
     SFunc.RunEx cert.prog sevm (St pre [] Mem.empty (R + rliExactCost sevm pre P T w)) t_0000_c0
-      (fun r => ∃ D, r = .halted D ∧ D.gasLeft = R) := by
+      (RliEnds sevm (W 4) (rliStor (rliσ sevm pre) w.s0 w.s1 w.s2) (rliEnd0 sevm P (rliP0 sevm pre P T w) (rliPM0 sevm pre P T w)) R) := by
   have hc : rliExactCost sevm pre P T w = rliHeadCost sevm pre P w + rliFeeLoopCost sevm pre P w +
       rliBurnCost sevm pre P T w + rliTail0Cost sevm P (rliP0 sevm pre P T w) (rliPM0 sevm pre P T w) := by
     unfold rliExactCost rliHeadCost; omega

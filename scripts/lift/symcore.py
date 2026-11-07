@@ -160,8 +160,6 @@ def ninst_kind(op: int, lean_reg: Dict[int, str]):
         return ('dup',)
     if 0x90 <= op <= 0x9f:
         return ('swap',)
-    if op == 0x59:  # MSIZE: a FreePtr arm lift cannot emit; kept for the mirror
-        return ('reg', 'msize')
     s = lean_reg.get(op)
     if s is None:
         raise Reject(f"no Ninst for opcode {op:#x}")
@@ -216,8 +214,6 @@ def op_facts(fs, kind, xs, r) -> Set[Tuple]:
         return {('isz', r, x), ('bnd', r, 0, 1)}
     if name == 'eq':
         return {('bnd', r, 0, 1)}
-    if name == 'msize':
-        return {('bnd', r, 0, MEMCAP)}
     return set()
 
 

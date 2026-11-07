@@ -37,7 +37,7 @@ The crossing is the zero-value `CALL` / `STATICCALL` crossing with a known child
 `c3crv_exec_le` over the bounded bodies of `CostBounds.lean`; the child settles cleanly by
 `Exec.ok_error_eq`; the code at the identity precompile survives the child by `Exec.codeAt_avoid`,
 because every frame below a 3Crv frame is a static call frame (`Exec.staticOnly_rawFrameDescendants`
-with `c3crv_cert_staticOnly`).
+with `cert_onlyStaticcall`).
 
 * `c3crv_supplyOkAt`, `c3crv_mintOkAt`, `c3crv_burnOkAt` — the windowed premises;
 * `c3crv_supplyOk` — `remove_liquidity`'s supply window.
@@ -196,7 +196,7 @@ theorem c3crv_msg_run {msg : Msg} {k : Nat} {f : SFunc} {r : Curve3Crv.Raw} {U :
     rcases member with rfl | member
     · exact absurd hnone hca
     · exact absurd hnone (Exec.staticOnly_rawFrameDescendants Curve3Crv.cert_check
-        Curve3CrvToken.c3crv_cert_staticOnly (root := ⟨0, _, _, _, run⟩) rfl hcode hfork run
+        Blanc.Lift.Curve3Crv.cert_onlyStaticcall (root := ⟨0, _, _, _, run⟩) rfl hcode hfork run
         (Exec.Deriv.ParentPrefix.refl _) root member)
 
 end Child

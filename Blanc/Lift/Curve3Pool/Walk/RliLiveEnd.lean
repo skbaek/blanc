@@ -27,6 +27,7 @@ theorem rx_rli_end920E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
         Bytes.toB256 (data.sliceD 0xa0 32 0) = f2 ∧ Bytes.toB256 (data.sliceD 0xc0 32 0) = D1 ∧
         Bytes.toB256 (data.sliceD 0xe0 32 0) = T - Bw) →
+      (∃ l S' M' G', D = St (afterSstore sevm (b.addLog l) (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) S' M' G') →
       G = D.gasLeft + (3432 + sstoreCost sevm b (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -68,6 +69,7 @@ theorem rx_rli_end920E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
   have hL2 := (hL.addLogE _).sstoreE hb2
   refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩
+    ⟨_, _, _, _, by rw [hb2]⟩
     (by show _ = g2 + _; rw [g2x, sstoreCost_addLog]; omega)⟩
   all_goals rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide)]
   · rw [show (Bytes.toB256 [0x0b, 0x80]).toNat + 0x60 = 0xbe0 by decide]
@@ -94,6 +96,7 @@ theorem rx_rli_endB60E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
         Bytes.toB256 (data.sliceD 0x60 32 0) = f0 ∧ Bytes.toB256 (data.sliceD 0x80 32 0) = f1 ∧
         Bytes.toB256 (data.sliceD 0xa0 32 0) = f2 ∧ Bytes.toB256 (data.sliceD 0xc0 32 0) = D1 ∧
         Bytes.toB256 (data.sliceD 0xe0 32 0) = T - Bw) →
+      (∃ l S' M' G', D = St (afterSstore sevm (b.addLog l) (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) S' M' G') →
       G = D.gasLeft + (3372 + sstoreCost sevm b (Bytes.toB256 [0xff, 0xff, 0xff]) (Bytes.toB256 [0])) →
       Q (.halted D)) :
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
@@ -135,6 +138,7 @@ theorem rx_rli_endB60E {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} 
   refine rxe_sstoreVX hfork hstatic (by omega) ?_; intro g2 b2 hb2 hg21 hg22 g2x
   have hL2 := (hL.addLogE _).sstoreE hb2
   refine ⟨_, .last rfl, k _ (hL2.st _ _ _) ⟨_, _, _, by rw [hb2]; exact (afterSstore_logs _ _ _ _).trans rfl, ?_, ?_, ?_, ?_, ?_⟩
+    ⟨_, _, _, _, by rw [hb2]⟩
     (by show _ = g2 + _; rw [g2x, sstoreCost_addLog]; omega)⟩
   all_goals rw [hR.read, Bytes.sliceD_sliceD_of_le _ _ _ _ _ (by decide)]
   · rw [show (Bytes.toB256 [0x0b, 0x80]).toNat + 0x60 = 0xbe0 by decide]
@@ -164,7 +168,7 @@ theorem rx_rli_end920 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) rliEnd Q :=
   rx_rli_end920E hfork hstatic hL hR hW hsz hT hD1 hf0 hf1 hf2 hBw hTX hG hroom
-    fun D h1 h2 _ => k D h1 h2
+    fun D h1 h2 _ _ => k D h1 h2
 
 /-- **The event and `STOP`, forward** (memory `0xb60`). -/
 theorem rx_rli_endB60 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {S : List B256} {M : Mem}
@@ -182,6 +186,6 @@ theorem rx_rli_endB60 {sevm : Sevm} {b : Devm} {σ : Stor} {W : Devm → Prop} {
     SFunc.RunEx cert.prog sevm (St b ((Bytes.toB256 [3] + Bytes.toB256 [0]) ::
       Bytes.toB256 [9, 0] :: S) M G) rliEnd Q :=
   rx_rli_endB60E hfork hstatic hL hR hW hsz hT hD1 hf0 hf1 hf2 hBw hTX hG hroom
-    fun D h1 h2 _ => k D h1 h2
+    fun D h1 h2 _ _ => k D h1 h2
 
 end Blanc.Lift.Curve3Pool

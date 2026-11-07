@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Dispatch
 import Blanc.Lift.Curve3Pool.Walk.AdminBalances
 import Blanc.Lift.Curve3Pool.Walk.RemoveLiquidityLoop
@@ -74,7 +75,7 @@ theorem adminBal_read_ans (img : Bytes) (out : Bytes) (hlen : (out.take 32).leng
 `balanceOf(self)`, at least 32 bytes back); storage kept; logs the child's; the difference
 returned. -/
 theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hcoin : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp
       (((b.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i)).toAdr))
     (h : XAt sevm post 0x4c93 (St b [] (vyMem Mem.empty (Sevm.dataWord sevm 0)) G) L) :
@@ -130,11 +131,11 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   rw [keccak_zero] at h
   xs 0x4cd1 (.reg .add) ri_add
   rw [hslot] at h
-  xw 0x4cd2 (.reg .sload) ri_sload
+  xw 0x4cd2 (.reg .sload) ri_sloadF
   rw [getStorVal_eq] at h
   xs 0x4cd3 (.reg .gas) ri_gas_remaining
-  replace h := xa_staticcall_img (pc' := 0x4cd4) (i := 0x15c) (n := 0x24) (o := 0x1c0)
-    (z := 0x20) hfork (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
+  replace h := xa_staticcall_imgH (pc' := 0x4cd4) (i := 0x15c) (n := 0x24) (o := 0x1c0)
+    (z := 0x20) hfork.stateGas_none (atN hcode (by kernel_rfl)) rfl rfl rfl rfl rfl hR hW h
   clear hR hW
   obtain ⟨d1, flag, out, M', L1, h, _, hR, hW, hrd, hob, hstor1, hlogs1, hk⟩ := h
   xs 0x4cd7 (.push [0x4c, 0xdc] (by decide)) ri_push
@@ -171,8 +172,8 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
   have hslot2 : balancesBase + Sevm.dataWord sevm (Bytes.toB256 [4]) = balanceSlot k := by
     rw [hargv]; rfl
   rw [hslot2] at h
-  xw 0x4d0d (.reg .sload) ri_sload
-  rw [getStorVal_eq, hstor1, afterSload_getStor] at h
+  xw 0x4d0d (.reg .sload) ri_sloadF
+  rw [getStorVal_eq, hstor1, afterSloadH_getStor] at h
   xa 5
   xji 0x4d15 0x4d19 hw
   · xdead
@@ -214,14 +215,14 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
       exact Region.slice (Region.write_self _ _ _) (by simp only [B256.length_toBytes])
     have hlogs_post : post.logs = b.logs ++ c.post.logs := by
       rw [← hpost, Devm.withOutput_logs, Devm.memRead_logs]
-      show (afterSload sevm d1 (balanceSlot k)).logs = b.logs ++ c.post.logs
-      rw [afterSload_logs, hlogs1, afterSload_logs, hclogs, List.append_nil]
+      show (afterSloadH sevm d1 (balanceSlot k)).logs = b.logs ++ c.post.logs
+      rw [afterSloadH_logs, hlogs1, afterSloadH_logs, hclogs, List.append_nil]
     have hstor_post : ∀ x, (post.getStor sevm.currentTarget).get x =
         (b.getStor sevm.currentTarget).get x := by
       intro x
       rw [← hpost]
-      show ((afterSload sevm d1 (balanceSlot k)).getStor _).get x = _
-      rw [afterSload_getStor, hstor1, afterSload_getStor]
+      show ((afterSloadH sevm d1 (balanceSlot k)).getStor _).get x = _
+      rw [afterSloadH_getStor, hstor1, afterSloadH_getStor]
     rw [hL1] at hL
     refine ⟨hval, k, c, out, hL, ?_, htgt, hdata, hstat, hout, hlen32, hclogs, hstor_post,
       hlogs_post, hout_post, hle⟩
@@ -234,7 +235,7 @@ theorem adminBal_body {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : N
 no value; one static child (coin `k`'s `balanceOf(self)`, at least 32 bytes back); storage
 kept; logs the child's; the difference returned. -/
 theorem xa_adminBalances {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAdminBalances)
     (hcoin : ∀ i, i < 3 → ¬ sevm.benvStat.rules.isPrecomp
@@ -289,7 +290,7 @@ frame premises (no coin is a precompile), computed the model's step on the decod
 the environment `adminBal_env` it observed, with the raw effect Spec states. -/
 theorem adminBalances_raw {sevm : Sevm} {pre post : Devm} {s : State}
     (exc : Exec 0 sevm pre (.ok post))
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAdminBalances)
     (hstack : pre.stack = []) (hmem : pre.memory = Mem.empty) (hgas : pre.gasMeasure < 2 ^ 256)

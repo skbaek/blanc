@@ -41,7 +41,7 @@ theorem lit36 : Bytes.toB256 [32] + Bytes.toB256 [4] = 36 := by decide
 
 /-- **The frame of `transfer(to, value)`** at its pc-0 tree: the guards it passed and the
 storage it leaves at its owner. -/
-theorem frame_transfer {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_transfer {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Sevm.selector sevm = 0xa9059cbb)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧
@@ -85,7 +85,7 @@ theorem frame_transfer {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   exact ⟨d1, d2, d3, d4, d5, d6, d7, d8, by rw [sp, s1]⟩
 
 /-- **The frame of `approve(spender, value)`** at its pc-0 tree. -/
-theorem frame_approve {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_approve {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Sevm.selector sevm = 0x095ea7b3)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧ sevm.caller ≠ 0 ∧
@@ -118,7 +118,7 @@ theorem frame_approve {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
   exact ⟨d1, d2, d3, by rw [sp, s1]⟩
 
 /-- **The frame of `increaseAllowance(spender, increment)`** at its pc-0 tree. -/
-theorem frame_increaseAllowance {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_increaseAllowance {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Sevm.selector sevm = 0x39509351)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧ sevm.caller ≠ 0 ∧
@@ -156,7 +156,7 @@ theorem frame_increaseAllowance {post : Devm} (fork : CoveredFork sevm.benvStat.
   exact ⟨d1, d2, d3, d4, by rw [sp, s1]⟩
 
 /-- **The frame of `decreaseAllowance(spender, decrement)`** at its pc-0 tree. -/
-theorem frame_decreaseAllowance {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_decreaseAllowance {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Sevm.selector sevm = 0xa457c2d7)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧ sevm.caller ≠ 0 ∧
@@ -193,7 +193,7 @@ theorem frame_decreaseAllowance {post : Devm} (fork : CoveredFork sevm.benvStat.
   exact ⟨d1, d2, d3, d4, by rw [sp, s1]⟩
 
 /-- **The frame of `transferFrom(from, to, value)`** at its pc-0 tree. -/
-theorem frame_transferFrom {post : Devm} (fork : CoveredFork sevm.benvStat.fork)
+theorem frame_transferFrom {post : Devm} (fork : HistFork sevm.benvStat.fork)
     (sel : Sevm.selector sevm = 0x23b872dd)
     (run : SFunc.Run cert.prog sevm (St b S M G) t_0000_c0 (.halted post)) :
     flag20 ((Devm.getStor b sevm.currentTarget).get 1) = false ∧

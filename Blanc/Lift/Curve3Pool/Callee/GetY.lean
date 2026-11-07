@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Callee.GetYCoins
 import Blanc.Lift.Curve3Pool.Callee.A
 import Blanc.Lift.Curve3Pool.Callee.GetD
@@ -141,15 +142,15 @@ theorem lt_three_of_asserts {i : B256}
 -- SEGMENT: getY_spec
 /-- **`get_y`'s callee contract.**  Any outcome of the entry tree from the call's state is a
 return: `0 ≤ i, j < 3`, `_A`'s value `amp` (`aChk`), the result `v` over the caller's stack with
-`getYChk amp i j x xp_ = some v`, the world moved only by `_A`'s storage reads (`aBase`), and
+`getYChk amp i j x xp_ = some v`, the world moved only by `_A`'s storage reads (`aBaseH`), and
 memory kept off `get_y`'s windows `[0, 0x20)` and `[0x140, 0x4c0)`, well formed, word-aligned,
 with `v` at scratch word `0`. -/
 theorem getY_spec {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List B256} {M : Mem}
-    {G : Nat} {s : State} {o : Outcome} (hfork : CoveredFork sevm.benvStat.fork)
+    {G : Nat} {s : State} {o : Outcome} (hfork : HistFork sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hwf : Mem.Wf M) (hsz : M.size % 32 = 0)
     (run : SFunc.Run prog sevm (St b (ρ :: i :: j :: x :: x0 :: x1 :: x2 :: S) M G)
       t_18a4_c252 o) :
-    ∃ d, o = .returned d ∧ ∃ v M' G', d = St (aBase sevm b) (v :: S) M' G' ∧
+    ∃ d, o = .returned d ∧ ∃ v M' G', d = St (aBaseH sevm b) (v :: S) M' G' ∧
       ∃ amp, aChk s sevm.benvStat.time.toNat = some amp ∧
       ∃ (hi : i.toNat < 3) (hj : j.toNat < 3),
         getYChk amp ⟨i.toNat, hi⟩ ⟨j.toNat, hj⟩ x.toNat (V3.mk x0.toNat x1.toNat x2.toNat).get =
@@ -323,7 +324,7 @@ theorem getY_spec {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List 
     hs12, hann12, hxv12, hcc12, toB256_zero] at hF
   have hst := gyStage0 (M0 := Mc) hT.wf hF run
   obtain ⟨y, hres, hy, Mf, Gf, hr, hkf, hwff, hwf0, half⟩ := hst
-  have ho : o = .returned (St (aBase sevm b) (Nat.toB256 y :: S) Mf Gf) := by injection hr
+  have ho : o = .returned (St (aBaseH sevm b) (Nat.toB256 y :: S) Mf Gf) := by injection hr
   subst ho
   have hann : chkMul amp.toNat 3 = some (amp * Bytes.toB256 [0x03]).toNat := by
     have e3 : (3 : Nat) = (Bytes.toB256 [0x03]).toNat := by decide

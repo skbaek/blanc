@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.ViewsCtaLoop
 import Blanc.Lift.Curve3Pool.Walk.AutoStep
 
@@ -15,7 +16,7 @@ variable {sevm : Sevm} {post b : Devm} {L : List Exec.Frame} {G : Nat}
 /-- **From the frame save (`0xcdc`) to `D1` at `0x340`**: the save of `[0x140, 0x360)`,
 `get_D_mem(new_balances, amp)`, the restore; `D0` kept at `0x200`. -/
 theorem xa_cta_d1 (hc : Cert.CheckedM code cert mems true)
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : HistFork sevm.benvStat.fork)
     {M : Mem} {D0 amp v0 v1 v2 : B256}
     (hV : VW M [(0x360, Bytes.toB256 [1, 64]), (0x200, D0), (0x140, v0), (0x160, v1),
       (0x180, v2), (0x1a0, amp)])

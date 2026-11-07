@@ -1,3 +1,4 @@
+import Blanc.Lift.HistIdentityCall
 import Blanc.Lift.Curve3Pool.Walk.Quiet
 import Blanc.Lift.WalkInvKit
 
@@ -28,7 +29,7 @@ variable {sevm : Sevm} {b : Devm} {s : State}
 local notation "stor₀" => Devm.getStor b sevm.currentTarget
 
 -- SEGMENT: safeCommitNewFee
-theorem safe_commitNewFee (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_commitNewFee (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selCommitNewFee)
     (hlen : 4 ≤ sevm.data.length) : QuietSafe sevm b s t_49aa_c0 := by
   intro G post run
@@ -39,7 +40,7 @@ theorem safe_commitNewFee (hfork : CoveredFork sevm.benvStat.fork)
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (fail := t_49b0_c0) rfl run
   obtain ⟨hown, G2, run⟩ := ric_ownerGuard hfork rfl run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sloadF hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_iszero s1
   obtain ⟨hdl, G7, run⟩ := ric_assertJump rfl run
   winv 5
@@ -50,12 +51,12 @@ theorem safe_commitNewFee (hfork : CoveredFork sevm.benvStat.fork)
   obtain ⟨hnof, G28, run⟩ := ric_assertJump rfl run
   winv 12
   obtain ⟨d1, s1, run⟩ := ric_next run
-  have hstatic := ri_sstore_nonstatic hfork s1
-  obtain ⟨G41, rfl⟩ := ri_sstore hfork s1
+  have hstatic := ri_sstore_nonstaticF hfork s1
+  obtain ⟨G41, rfl⟩ := ri_sstoreF hfork s1
   winv 3
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G45, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G45, rfl⟩ := ri_sstoreF hfork s1
   winv 3
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G49, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G49, rfl⟩ := ri_sstoreF hfork s1
   winv 13
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G63, rfl⟩ := ri_log2_post s1
   cases run with
@@ -103,7 +104,7 @@ theorem safe_commitNewFee (hfork : CoveredFork sevm.benvStat.fork)
     show sevm.caller.toB256.toNat = s.owner
     rw [hown]; exact hc.abs.owner
   have hdlN : s.adminActionsDeadline = 0 := by
-    rw [getStorVal_afterSload] at hdl
+    rw [getStorVal_afterSloadH] at hdl
     rw [← hc.abs.adminActionsDeadline]
     show (b.getStorVal sevm.currentTarget adminActionsDeadlineSlot).toNat = 0
     rw [eq_zero_of_iszero_ne_zero hdl]; rfl
@@ -156,7 +157,7 @@ theorem safe_commitNewFee (hfork : CoveredFork sevm.benvStat.fork)
   · simp only [List.map_cons, List.map_nil, eventLog, arg, Jaune.toB256_toNat, word]
 
 -- SEGMENT: safeApplyNewFee
-theorem safe_applyNewFee (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_applyNewFee (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selApplyNewFee)
     (hlen : 4 ≤ sevm.data.length) : QuietSafe sevm b s t_4a73_c0 := by
   intro G post run
@@ -166,23 +167,23 @@ theorem safe_applyNewFee (hfork : CoveredFork sevm.benvStat.fork)
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (fail := t_4a79_c0) rfl run
   obtain ⟨hown, G2, run⟩ := ric_ownerGuard hfork rfl run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sloadF hfork s1
   winv 3
   obtain ⟨htm, G9, run⟩ := ric_assertJump rfl run
   winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_sloadF hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_xor s1
   obtain ⟨hnz, G14, run⟩ := ric_assertJump rfl run
   winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_sstoreF hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_sloadF hfork s1
   winv 3
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G23, rfl⟩ := ri_sloadF hfork s1
   winv 5
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G29, rfl⟩ := ri_sstoreF hfork s1
   winv 3
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G33, rfl⟩ := ri_sstoreF hfork s1
   winv 12
   cases run with
   | last hl =>
@@ -202,8 +203,8 @@ theorem safe_applyNewFee (hfork : CoveredFork sevm.benvStat.fork)
     show Bytes.toB256 [3] = adminFeeSlot from by decide,
     show Bytes.toB256 [0] = 0 from by decide] at htm hnz ⊢
   mem_reads
-  simp only [getStorVal_afterSload, getStorVal_afterSstore_self', afterSload_getStor,
-    afterSstore_getStor_self, getStorVal_eq_getStor] at htm hnz ⊢
+  simp only [getStorVal_afterSloadH, getStorVal_afterSstoreH_self', afterSloadH_getStor,
+    afterSstoreH_getStor_self, getStorVal_eq_getStor] at htm hnz ⊢
   simp (disch := decide) only [Stor.get_set_ne]
   rw [B256.xor_zero] at hnz
   have hvN : (quietEnv sevm).value = 0 := by
@@ -246,7 +247,7 @@ theorem safe_applyNewFee (hfork : CoveredFork sevm.benvStat.fork)
     rfl
 
 -- SEGMENT: safeRevertNewParameters
-theorem safe_revertNewParameters (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_revertNewParameters (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selRevertNewParameters)
     (hlen : 4 ≤ sevm.data.length) : QuietSafe sevm b s t_4b12_c0 := by
   intro G post run
@@ -256,7 +257,7 @@ theorem safe_revertNewParameters (hfork : CoveredFork sevm.benvStat.fork)
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (fail := t_4b18_c0) rfl run
   obtain ⟨hown, G2, run⟩ := ric_ownerGuard hfork rfl run
   winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sstoreF hfork s1
   cases run with
   | last hl =>
   cases hl
@@ -279,7 +280,7 @@ theorem safe_revertNewParameters (hfork : CoveredFork sevm.benvStat.fork)
     rfl
 
 -- SEGMENT: safeRevertTransferOwnership
-theorem safe_revertTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_revertTransferOwnership (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selRevertTransferOwnership)
     (hlen : 4 ≤ sevm.data.length) : QuietSafe sevm b s t_4c65_c0 := by
   intro G post run
@@ -289,7 +290,7 @@ theorem safe_revertTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (fail := t_4c6b_c0) rfl run
   obtain ⟨hown, G2, run⟩ := ric_ownerGuard hfork rfl run
   winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sstoreF hfork s1
   cases run with
   | last hl =>
   cases hl
@@ -312,7 +313,7 @@ theorem safe_revertTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
     rfl
 
 -- SEGMENT: safeUnkillMe
-theorem safe_unkillMe (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_unkillMe (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selUnkillMe)
     (hlen : 4 ≤ sevm.data.length) : QuietSafe sevm b s t_5055_c0 := by
   intro G post run
@@ -322,7 +323,7 @@ theorem safe_unkillMe (hfork : CoveredFork sevm.benvStat.fork)
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (fail := t_505b_c0) rfl run
   obtain ⟨hown, G2, run⟩ := ric_ownerGuard hfork rfl run
   winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sstoreF hfork s1
   cases run with
   | last hl =>
   cases hl
@@ -344,7 +345,7 @@ theorem safe_unkillMe (hfork : CoveredFork sevm.benvStat.fork)
     simp only [Fld.Reads, Stor.get_set_self]
 
 -- SEGMENT: safeKillMe
-theorem safe_killMe (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_killMe (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selKillMe)
     (hlen : 4 ≤ sevm.data.length) : QuietSafe sevm b s t_5019_c0 := by
   intro G post run
@@ -354,17 +355,17 @@ theorem safe_killMe (hfork : CoveredFork sevm.benvStat.fork)
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (fail := t_501f_c0) rfl run
   obtain ⟨hown, G2, run⟩ := ric_ownerGuard hfork rfl run
   winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sloadF hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_gt s1
   obtain ⟨hkd, G7, run⟩ := ric_assertJump rfl run
   winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G10, rfl⟩ := ri_sstoreF hfork s1
   cases run with
   | last hl =>
   cases hl
   rw [show Bytes.toB256 [15] = isKilledSlot from by decide,
     show Bytes.toB256 [1] = boolWord true from by decide]
-  rw [show Bytes.toB256 [16] = killDeadlineSlot from by decide, getStorVal_afterSload,
+  rw [show Bytes.toB256 [16] = killDeadlineSlot from by decide, getStorVal_afterSloadH,
     getStorVal_eq_getStor] at hkd
   have hkdN : s.killDeadline > (quietEnv sevm).time := by
     rw [← hc.abs.killDeadline]
@@ -390,7 +391,7 @@ theorem safe_killMe (hfork : CoveredFork sevm.benvStat.fork)
     simp only [Fld.Reads, Stor.get_set_self]
 
 -- SEGMENT: safeApplyTransferOwnership
-theorem safe_applyTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_applyTransferOwnership (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selApplyTransferOwnership)
     (hlen : 4 ≤ sevm.data.length) : QuietSafe sevm b s t_4be1_c0 := by
   intro G post run
@@ -400,19 +401,19 @@ theorem safe_applyTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
   obtain ⟨hv, G1, run⟩ := ric_vyNonpayable (fail := t_4be7_c0) rfl run
   obtain ⟨hown, G2, run⟩ := ric_ownerGuard hfork rfl run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sloadF hfork s1
   winv 3
   obtain ⟨htm, G9, run⟩ := ric_assertJump rfl run
   winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G12, rfl⟩ := ri_sloadF hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G13, rfl⟩ := ri_xor s1
   obtain ⟨hnz, G14, run⟩ := ric_assertJump rfl run
   winv 2
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G17, rfl⟩ := ri_sstoreF hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G18, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G19, rfl⟩ := ri_sloadF hfork s1
   winv 5
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G25, rfl⟩ := ri_sstoreF hfork s1
   winv 5
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G31, rfl⟩ := ri_log2_post s1
   cases run with
@@ -428,7 +429,7 @@ theorem safe_applyTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
     show Bytes.toB256 [4] = ownerSlot from by decide,
     show Bytes.toB256 [0] = 0 from by decide] at htm hnz ⊢
   mem_reads
-  simp only [getStorVal_afterSload, afterSload_getStor, afterSstore_getStor_self,
+  simp only [getStorVal_afterSloadH, afterSloadH_getStor, afterSstoreH_getStor_self,
     getStorVal_eq_getStor] at htm hnz ⊢
   simp (disch := decide) only [Stor.get_set_ne]
   rw [B256.xor_zero] at hnz
@@ -463,7 +464,7 @@ theorem safe_applyTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
     rfl
 
 -- SEGMENT: safeCommitTransferOwnership
-theorem safe_commitTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
+theorem safe_commitTransferOwnership (hfork : HistFork sevm.benvStat.fork)
     (hc : Checkpoint stor₀ s) (hsel : Sevm.selector sevm = selCommitTransferOwnership)
     (hlen : 4 ≤ sevm.data.length) : QuietSafe sevm b s t_4b40_c0 := by
   intro G post run
@@ -478,15 +479,15 @@ theorem safe_commitTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
     (by rw [hM]; omega) run
   obtain ⟨hown, G3, run⟩ := ric_ownerGuard hfork rfl run
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G4, rfl⟩ := ri_push s1
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sload hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G5, rfl⟩ := ri_sloadF hfork s1
   obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G6, rfl⟩ := ri_iszero s1
   obtain ⟨hdl, G7, run⟩ := ric_assertJump rfl run
   winv 8
   obtain ⟨hnof, G28, run⟩ := ric_assertJump rfl run
   winv 12
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G41, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G41, rfl⟩ := ri_sstoreF hfork s1
   winv 3
-  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G45, rfl⟩ := ri_sstore hfork s1
+  obtain ⟨d1, s1, run⟩ := ric_next run; obtain ⟨G45, rfl⟩ := ri_sstoreF hfork s1
   winv 8
   cases run with
   | last hl =>
@@ -501,7 +502,7 @@ theorem safe_commitTransferOwnership (hfork : CoveredFork sevm.benvStat.fork)
     show Bytes.toB256 [14] = futureOwnerSlot from by decide, ha0] at hcl hdl hnof ⊢
   generalize hdw : sevm.benvStat.time + Bytes.toB256 [3, 244, 128] = d
   mem_reads
-  simp only [getStorVal_afterSload, getStorVal_eq_getStor, afterSload_getStor] at hdl
+  simp only [getStorVal_afterSloadH, getStorVal_eq_getStor, afterSloadH_getStor] at hdl
   have hdlN : s.transferOwnershipDeadline = 0 := by
     rw [← hc.abs.transferOwnershipDeadline, eq_zero_of_iszero_ne_zero hdl]; rfl
   have hdN : d.toNat = (quietEnv sevm).time + adminActionsDelay ∧
