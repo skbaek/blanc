@@ -8700,7 +8700,7 @@ excess arm (no latch; the inhibitor counts as zero) is `plainShape` in
 `SysPath.frame_prefix` and `SysPath.prefix_le`, is `Blanc/Lift/BuilderRequest/Latch.lean`. The builder family's
 statements over a given list of frames (`Contract`, `Frame`, `Chain`, the queue model `step`/`replay`/`chunks`) are
 `Blanc/Lift/BuilderRequest/Delivery.lean`, family-local; word and natural request fee at fraction 17, through excess
-2892 and not at 2893, are `Blanc/RequestFeeWordDomain.lean`.
+2892 and not at 2893, are `Blanc/RequestFeeWordDomain.lean`. The fee loop's run, length (at most 462, tight at 2892) and value on that domain, its linear bound above, are `Blanc/RequestFeeWordBound.lean`.
 `Blanc/Lift/RequestSystem/Effects.lean` holds what a call touches and returns: `sysState_getElem_ne` and
 `sysState_getElem_congr` (every other account is unchanged; its own result depends only on its own account),
 `sysFold` with `run_sysFold` and `sysFold_getElem` (a fold of calls, by account), `SysPath.frame_exec` (the walk as

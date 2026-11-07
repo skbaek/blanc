@@ -193,7 +193,7 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkO
            "Lift.InvWalkWorld", "Lift.InvWalkGas", "Lift.ExactMustRun", "Lift.InvWalkSha", "Lift.InvWalkDispatch", "Lift.InvWalkProvenance", "Lift.CodeSizeWalk", "Lift.HistAccessWalk", "Lift.HistStaticCall", "Lift.HistCursorCuts", "Lift.HistCursorReturn", "Lift.HistAccessFacts", "Lift.HistEcrecover", "Lift.HistCreate", "Lift.HistAccessMeta", "Lift.HistAccessWalkFacts"]
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
-SHARED += ["RequestFeeWord", "RequestFeeWordDomain", "Lift.RequestFee.Window", "Lift.RequestFee.Getter"]
+SHARED += ["RequestFeeWord", "RequestFeeWordDomain", "RequestFeeWordBound", "Lift.RequestFee.Window", "Lift.RequestFee.Getter"]
 SHARED += ["Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckRange", "Lift.WitnessShadow"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
@@ -1500,6 +1500,11 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Delivery", "Lift.BuilderRequest.Deposit.Delivery",
     "Lift.BuilderRequest.Deposit.DeliveryWitness", "Lift.BuilderRequest.Exit.Delivery",
     "Lift.BuilderRequest.Exit.DeliveryWitness",
+    "Lift.BuilderRequest.FeeDomain", "Lift.BuilderRequest.FeeRead", "Lift.BuilderRequest.FeeDomainWitness",
+    "Lift.BuilderRequest.Deposit.FeeDomain", "Lift.BuilderRequest.Exit.FeeDomain",
+    "Lift.BuilderRequest.Static", "Lift.BuilderRequest.Deposit.Static", "Lift.BuilderRequest.Exit.Static",
+    "Lift.BuilderRequest.Flood", "Lift.BuilderRequest.Exit.Flood", "Lift.BuilderRequest.Surplus",
+    "Lift.BuilderRequest.Deposit.Properties", "Lift.BuilderRequest.Exit.Properties",
 ]
 
 # Explicit semantic ownership, not the union of existing imports. Abstract token
