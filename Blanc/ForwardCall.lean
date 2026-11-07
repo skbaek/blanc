@@ -244,7 +244,7 @@ assumed — which is what lets a single walk serve a statement with no warmth
 premise. -/
 lemma Ninst.runCompiled_sload_of {sevm : Sevm} {devm base : Devm} {k v : B256}
     {s : List B256} {c G : Nat} (h_stk : devm.stack = k :: s)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (h_base : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
       then devm else addAccessedStorageKey devm sevm.currentTarget k) = base)
     (h_cost : (if (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys
@@ -366,7 +366,7 @@ charge and is therefore suitable for minimal-gas theorems. -/
 theorem Ninst.runCompiled_sload_selected
     {sevm : Sevm} {base : Devm} {key value : B256}
     {stack : List B256} {memory : Mem} {G : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hvalue : base.getStorVal sevm.currentTarget key = value)
     (hroom : stack.length < 1024) :
     Ninst.RunCompiled sevm
@@ -430,7 +430,7 @@ premises; the successor exposes the selected access-set and refund update. -/
 theorem Ninst.runCompiled_sstore_selected
     {sevm : Sevm} {devm : Devm} {key value : B256}
     {stack : List B256} {G : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstack : devm.stack = key :: value :: stack)
     (hsentry : gCallStipend < devm.gasLeft)
     (hstatic : sevm.isStatic = false)
@@ -478,7 +478,7 @@ term in either one. -/
 theorem Ninst.runCompiled_sstore_selected_setMach
     {sevm : Sevm} {base : Devm} {key value : B256}
     {stack : List B256} {memory : Mem} {G : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hsentry : gCallStipend < G + sstoreCost sevm base key value)
     (hstatic : sevm.isStatic = false) :
     Ninst.RunCompiled sevm
@@ -526,7 +526,7 @@ continuation.  `h_gas` is the worst case, so no warmth premise is needed to know
 the frame can pay. -/
 lemma Func.runCompiledTo_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
     {k v : B256} {s : List B256} {M : Mem} {rest : Func} {ex : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (h_stk : devm.stack = k :: s) (h_room : s.length < 1024)
     (h_val : devm.getStorVal sevm.currentTarget k = v)
     (h_mem : devm.memory = M)
@@ -575,7 +575,7 @@ unhandled. -/
 lemma Func.runCompiledTo_sstore_warm_step {fs : List Func} {sevm : Sevm}
     {devm : Devm} {k v : B256} {s : List B256} {M : Mem} {rest : Func}
     {ex : Execution}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (h_stk : devm.stack = k :: v :: s)
     (h_warm : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys)
     (h_static : sevm.isStatic = false)
@@ -1122,7 +1122,7 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -1142,12 +1142,9 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
         iiw.toNat isw.toNat oiw.toNat osw.toNat code dp := by
   subst h_ext; subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_covered hfork
-  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl
-  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    BenvStat.gas_eq_prague_of_shanghaiOnwards hfork.shanghai
+  simp only [Xinst.step, hfork.shanghai.rules_stateGas_none, hfork.shanghai.rules_access,
+    hgas,
     pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
@@ -1162,7 +1159,7 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
     let preAccessCost := accessCost callee d.accessedAddresses
     let d := addAccessedAddress d callee
     let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
-      accessDelegation d callee
+      sevm.benvStat.rules.accessDelegation d callee
     let accessCost := preAccessCost + delegatedAccessGasCost
     let createCost :=
       if (¬ (d.getAcct callee).Empty) ∨ value = 0 then 0 else gNewAccount
@@ -1214,7 +1211,7 @@ lemma Xinst.step_call_zero_value {sevm : Sevm} {devm : Devm}
   -- static-context assertion, on their right disjuncts.  `simp only` rather
   -- than `rw` for `h_del`: the new-account `if` carries a `Decidable` instance
   -- that depends on the term being rewritten.
-  simp only [h_del]
+  simp only [hfork.rules_accessDelegation h_del]
   simp only [ite_eq_left (show ¬(d1.getAcct cw.toAdr).Empty ∨ True from Or.inr trivial),
     ite_eq_left trivial, Nat.add_zero,
     show ((0 : B256).toNat) = 0 from rfl]
@@ -1238,7 +1235,7 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
     {gw cw vw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc create mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
@@ -1266,12 +1263,9 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
   subst h_ext
   subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_covered hfork
-  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl
-  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    BenvStat.gas_eq_prague_of_shanghaiOnwards hfork.shanghai
+  simp only [Xinst.step, hfork.shanghai.rules_stateGas_none, hfork.shanghai.rules_access,
+    hgas,
     pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
@@ -1286,7 +1280,7 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
     let preAccessCost := accessCost callee d.accessedAddresses
     let d := addAccessedAddress d callee
     let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
-      accessDelegation d callee
+      sevm.benvStat.rules.accessDelegation d callee
     let accessCost := preAccessCost + delegatedAccessGasCost
     let createCost :=
       if (¬ (d.getAcct callee).Empty) ∨ value = 0 then 0 else gNewAccount
@@ -1340,7 +1334,7 @@ lemma Xinst.step_call_nonzero {sevm : Sevm} {devm : Devm}
     (devm := devm.setMach
       ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
-  simp only [h_del, h_value, or_false, ite_false, h_create, h_split]
+  simp only [hfork.rules_accessDelegation h_del, h_value, or_false, ite_false, h_create, h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
   simp only [Except.assert, h_dynamic, Bool.not_false, ite_true]
   have h_sender' :
@@ -1376,7 +1370,7 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
     {gw cw vw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc create mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
@@ -1405,12 +1399,9 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
   subst h_ext
   subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_covered hfork
-  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl
-  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    BenvStat.gas_eq_prague_of_shanghaiOnwards hfork.shanghai
+  simp only [Xinst.step, hfork.shanghai.rules_stateGas_none, hfork.shanghai.rules_access,
+    hgas,
     pragueRules_gas_accessCost, pragueRules_gas_callValue]
   change ∃ post, XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
@@ -1425,7 +1416,7 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
     let preAccessCost := accessCost callee d.accessedAddresses
     let d := addAccessedAddress d callee
     let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
-      accessDelegation d callee
+      sevm.benvStat.rules.accessDelegation d callee
     let accessCost := preAccessCost + delegatedAccessGasCost
     let createCost :=
       if (¬ (d.getAcct callee).Empty) ∨ value = 0 then 0 else gNewAccount
@@ -1490,7 +1481,7 @@ lemma Xinst.step_call_nonzero_insufficient {sevm : Sevm} {devm : Devm}
       ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach,
     Devm.gasLeft_setMach, Devm.stateGas_setMach]
-  simp only [h_del, h_value, or_false, ite_false, h_create, h_split]
+  simp only [hfork.rules_accessDelegation h_del, h_value, or_false, ite_false, h_create, h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
   simp only [Except.assert, h_dynamic, Bool.not_false, ite_true]
   have h_sender' :
@@ -1539,7 +1530,7 @@ lemma Xinst.step_staticcall {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -1560,12 +1551,9 @@ lemma Xinst.step_staticcall {sevm : Sevm} {devm : Devm}
   subst h_ext
   subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_covered hfork
-  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl
-  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    BenvStat.gas_eq_prague_of_shanghaiOnwards hfork.shanghai
+  simp only [Xinst.step, hfork.shanghai.rules_stateGas_none, hfork.shanghai.rules_access,
+    hgas,
     pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
@@ -1579,7 +1567,7 @@ lemma Xinst.step_staticcall {sevm : Sevm} {devm : Devm}
     let preAccessCost := accessCost target d.accessedAddresses
     let d := addAccessedAddress d target
     let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
-      accessDelegation d target
+      sevm.benvStat.rules.accessDelegation d target
     let accessCost := preAccessCost + delegatedAccessGasCost
     let ⟨msgCallCost, msgCallStipend⟩ :=
       calculateMsgCallGas 0 gas.toNat d.gasLeft extendCost accessCost
@@ -1610,7 +1598,7 @@ lemma Xinst.step_staticcall {sevm : Sevm} {devm : Devm}
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
-  simp only [h_del, h_split]
+  simp only [hfork.rules_accessDelegation h_del, h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
   rfl
 
@@ -1642,7 +1630,7 @@ lemma Xinst.step_delegatecall {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -1663,12 +1651,9 @@ lemma Xinst.step_delegatecall {sevm : Sevm} {devm : Devm}
   subst h_ext
   subst h_acc
   have hgas : sevm.benvStat.rules.gas = pragueRules.gas :=
-    BenvStat.gas_eq_prague_of_covered hfork
-  have delegation : sevm.benvStat.rules.delegationEnabled = true :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).delegationEnabled = true)
-      rfl rfl rfl rfl
-  simp only [Xinst.step, hfork.rules_stateGas_none, hfork.rules_access,
-    ForkRules.accessDelegation_enabled delegation, hgas, accessDelegation_eq,
+    BenvStat.gas_eq_prague_of_shanghaiOnwards hfork.shanghai
+  simp only [Xinst.step, hfork.shanghai.rules_stateGas_none, hfork.shanghai.rules_access,
+    hgas,
     pragueRules_gas_accessCost, pragueRules_gas_callValue]
   show XStep.ofExcept (do
     let ⟨gas, d⟩ ← devm.pop
@@ -1682,7 +1667,7 @@ lemma Xinst.step_delegatecall {sevm : Sevm} {devm : Devm}
     let preAccessCost := accessCost codeAddress d.accessedAddresses
     let d := addAccessedAddress d codeAddress
     let ⟨disablePrecompiles, newCodeAddress, code, delegatedAccessGasCost, d⟩ :=
-      accessDelegation d codeAddress
+      sevm.benvStat.rules.accessDelegation d codeAddress
     let accessCost := preAccessCost + delegatedAccessGasCost
     let ⟨msgCallCost, msgCallStipend⟩ :=
       calculateMsgCallGas 0 gas.toNat d.gasLeft extendCost accessCost
@@ -1713,7 +1698,7 @@ lemma Xinst.step_delegatecall {sevm : Sevm} {devm : Devm}
   rw [Devm.popToNat_eq_ok
     (devm := devm.setMach ⟨osw :: s, devm.memory, devm.gasLeft, devm.stateGas⟩) rfl]
   simp only [Devm.setMach_setMach, Devm.memory_setMach, Devm.gasLeft_setMach, Devm.stateGas_setMach]
-  simp only [h_del, h_split]
+  simp only [hfork.rules_accessDelegation h_del, h_split]
   rw [chargeGas_eq_ok (devm := d1) h_gas]
   rfl
 
@@ -1784,7 +1769,7 @@ lemma Xinst.step_call_nonzero_spawn {sevm : Sevm} {devm : Devm}
     {gw cw vw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc create mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
@@ -1823,7 +1808,7 @@ lemma Xinst.step_call_zero_value_spawn {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -1852,7 +1837,7 @@ lemma Xinst.step_staticcall_spawn {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -1881,7 +1866,7 @@ lemma Xinst.step_delegatecall_spawn {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -1919,7 +1904,7 @@ lemma Ninst.runCompiled_call_zero_value {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat} {cevm : Evm} {devm' : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -1955,7 +1940,7 @@ lemma Ninst.runCompiled_call_nonzero {sevm : Sevm} {devm : Devm}
     {gw cw vw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc create mcc mcs : Nat} {cevm : Evm} {devm' : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
@@ -2008,7 +1993,7 @@ lemma Ninst.runCompiled_delegatecall {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat} {cevm : Evm} {devm' : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -2099,7 +2084,7 @@ lemma Ninst.childlessRunCompiled_staticcall_doneFrame
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat} {devm' : Devm}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -2131,7 +2116,7 @@ lemma Ninst.runCompiled_staticcall_doneFrame {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat} {devm' : Devm}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -2165,7 +2150,7 @@ lemma Ninst.runCompiled_delegatecall_doneFrame {sevm : Sevm} {devm : Devm}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat} {devm' : Devm}
     {r : Except (EvmError × State × AdrSet × Tra) Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -2209,7 +2194,7 @@ theorem delegatecall_enters_with_parent_as_storage_owner {sevm : Sevm} {devm : D
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -3155,7 +3140,7 @@ sibling's with the pair threaded. -/
 /-- `SLOAD` as an `ExecSat` walk step, preserving every account nonce. -/
 lemma Func.execSat_sload_step_with_nonce {fs : List Func} {sevm : Sevm} {devm : Devm}
     {k v : B256} {s : List B256} {M : Mem} {rest : Func} {P : Execution → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (h_stk : devm.stack = k :: s) (h_room : s.length < 1024)
     (h_val : devm.getStorVal sevm.currentTarget k = v)
     (h_mem : devm.memory = M)
@@ -3206,7 +3191,7 @@ lemma Func.execSat_sload_step_with_nonce {fs : List Func} {sevm : Sevm} {devm : 
 `Func.runCompiledTo_sload_step`. -/
 lemma Func.execSat_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
     {k v : B256} {s : List B256} {M : Mem} {rest : Func} {P : Execution → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (h_stk : devm.stack = k :: s) (h_room : s.length < 1024)
     (h_val : devm.getStorVal sevm.currentTarget k = v)
     (h_mem : devm.memory = M)
@@ -3234,7 +3219,7 @@ lemma Func.execSat_sload_step {fs : List Func} {sevm : Sevm} {devm : Devm}
 lemma Func.execSat_sstore_warm_step_with_nonce {fs : List Func} {sevm : Sevm}
     {devm : Devm} {k v : B256} {s : List B256} {M : Mem} {rest : Func}
     {P : Execution → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (h_stk : devm.stack = k :: v :: s)
     (h_warm : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys)
     (h_static : sevm.isStatic = false)
@@ -3328,7 +3313,7 @@ lemma Func.execSat_sstore_warm_step_with_nonce {fs : List Func} {sevm : Sevm}
 lemma Func.execSat_sstore_warm_step {fs : List Func} {sevm : Sevm}
     {devm : Devm} {k v : B256} {s : List B256} {M : Mem} {rest : Func}
     {P : Execution → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (h_stk : devm.stack = k :: v :: s)
     (h_warm : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ devm.accessedStorageKeys)
     (h_static : sevm.isStatic = false)
@@ -3580,7 +3565,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     {gw cw vw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc create mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
@@ -3698,7 +3683,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
     change p.logs ++ (initDevm (msg.withBenv benv')).logs = p.logs
     have hsg : benv'.stat.rules.stateGas = none := by
       change sevm.benvStat.rules.stateGas = none
-      exact hfork.rules_stateGas_none
+      exact hfork.shanghai.rules_stateGas_none
     change p.logs ++ (match benv'.stat.rules.stateGas with | none => [] | some _ => _) = p.logs
     rw [hsg]
     simp only [List.append_nil]
@@ -3710,8 +3695,7 @@ lemma Ninst.runCompiled_call_nonzero_codeFree {sevm : Sevm} {devm : Devm}
       post.accountsToDelete.isEmpty = p.accountsToDelete.isEmpty := by
     dsimp only [post, child, initEvm, initDevm]
     have refund : sevm.benvStat.rules.settle.selfdestructRefund = 0 :=
-      hfork.cases (motive := fun f => (Fork.ruleSet f).settle.selfdestructRefund = 0)
-        rfl rfl rfl rfl
+      hfork.shanghai.rules_selfdestructRefund
     have inherited : msg.inheritedDeletions = .emptyWithCapacity := by
       change (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then _ else _) = _
       rw [refund, if_pos rfl]
@@ -3764,7 +3748,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -3868,7 +3852,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
     change p.logs ++ (initDevm (msg.withBenv benv')).logs = p.logs
     have hsg : benv'.stat.rules.stateGas = none := by
       change sevm.benvStat.rules.stateGas = none
-      exact hfork.rules_stateGas_none
+      exact hfork.shanghai.rules_stateGas_none
     change p.logs ++ (match benv'.stat.rules.stateGas with | none => [] | some _ => _) = p.logs
     rw [hsg]
     simp only [List.append_nil]
@@ -3880,8 +3864,7 @@ lemma Ninst.runCompiled_call_zero_value_codeFree {sevm : Sevm} {devm : Devm}
       post.accountsToDelete.isEmpty = p.accountsToDelete.isEmpty := by
     dsimp only [post, child, initEvm, initDevm]
     have refund : sevm.benvStat.rules.settle.selfdestructRefund = 0 :=
-      hfork.cases (motive := fun f => (Fork.ruleSet f).settle.selfdestructRefund = 0)
-        rfl rfl rfl rfl
+      hfork.shanghai.rules_selfdestructRefund
     have inherited : msg.inheritedDeletions = .emptyWithCapacity := by
       change (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then _ else _) = _
       rw [refund, if_pos rfl]
@@ -3930,7 +3913,7 @@ lemma Ninst.runCompiled_call_zero_value_zero_depth {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)

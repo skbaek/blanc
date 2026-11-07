@@ -37,6 +37,7 @@
 import Blanc.Compiled
 import Blanc.CommonProofs.Walk
 import Blanc.CommonProofs.NoDel
+import Blanc.ShanghaiOnwards
 
 namespace Blanc
 
@@ -2799,22 +2800,31 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
   -- Activation and schedule fields come from the actual rules, not from
   -- absence of the independent state-gas meter.
   let access ← `(tactic| first | with_reducible assumption | rfl |
-    exact CoveredFork.rules_access (by with_reducible assumption))
+    exact CoveredFork.rules_access (by with_reducible assumption) |
+    exact ShanghaiOnwards.rules_access (by with_reducible assumption))
   let surcharge ← `(tactic| first | with_reducible assumption | rfl |
     exact (congrArg GasSchedule.codeReadSurcharge
       (BenvStat.gas_eq_prague_of_covered (by with_reducible assumption))).trans
+        pragueRules_gas_codeReadSurcharge |
+    exact (congrArg GasSchedule.codeReadSurcharge
+      (BenvStat.gas_eq_prague_of_shanghaiOnwards (by with_reducible assumption))).trans
         pragueRules_gas_codeReadSurcharge)
   let coldCost ← `(tactic| first | with_reducible assumption | rfl |
     exact (congrArg GasSchedule.coldAccountAccess
       (BenvStat.gas_eq_prague_of_covered (by with_reducible assumption))).trans
+        pragueRules_gas_coldAccountAccess |
+    exact (congrArg GasSchedule.coldAccountAccess
+      (BenvStat.gas_eq_prague_of_shanghaiOnwards (by with_reducible assumption))).trans
         pragueRules_gas_coldAccountAccess)
   let sstoreRules ← `(tactic| first | with_reducible assumption | rfl |
-    exact CoveredFork.rules_sstore (by with_reducible assumption))
+    exact CoveredFork.rules_sstore (by with_reducible assumption) |
+    exact ShanghaiOnwards.rules_sstore (by with_reducible assumption))
   let push0 ← `(tactic|
     first
     | with_reducible assumption
     | intro _; with_reducible assumption
     | intro empty; exact CoveredFork.rules_push0 (by with_reducible assumption)
+    | intro empty; exact ShanghaiOnwards.rules_push0 (by with_reducible assumption)
     | intro empty; rfl
     | intro empty; exact absurd empty (List.cons_ne_nil _ _)
     | intro empty; refine absurd empty (B256.toBytes_sig_ne_nil ?_); decide
@@ -3487,9 +3497,11 @@ def ninstStep (g : MVarId) : ForwardM Unit := g.withContext do
         | some (lem, fact) => do
           let lemId := mkIdent lem
           let factId := mkIdent fact
+          let wideId := mkIdent (fact.replacePrefix ``Blanc.CoveredFork ``Blanc.ShanghaiOnwards)
           `(tactic| first
               | exact $lemId (by with_reducible assumption)
-              | exact $lemId ($factId (by with_reducible assumption)))
+              | exact $lemId ($factId (by with_reducible assumption))
+              | exact $lemId ($wideId (by with_reducible assumption)))
         | none => `(tactic| rfl)
       match core.getAppFnArgs with
       | (``Jaune.applyBinary, #[f, costE, _]) => do

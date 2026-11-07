@@ -875,18 +875,20 @@ theorem calculateIntrinsicCost_two_call {rules : ForkRules} {tx : Tx} {sender : 
   simp only [TxType.receiver?, htype, hsg, add_zero, Option.isNone_some, Bool.false_eq_true,
     ↓reduceIte, List.map_nil, List.sum_nil, hnz, hfloor, ite_self, dataCost_eq_tokens_mul]
 
-/-- **The per-transaction gas cap on the covered forks**: no cap at Prague, the EIP-7825 cap `2 ^ 24`
-from Osaka; a transaction whose gas is at most `2 ^ 24` passes on every covered fork. -/
-theorem CoveredFork.checkTransactionGasCap_ok {s : BenvStat} (h : CoveredFork s.fork) {gas : Nat}
-    (hgas : gas ≤ 16777216) : checkTransactionGasCap s.rules.tx gas = .ok () := by
-  have hcap : s.rules.tx.maxGas = none ∨ s.rules.tx.maxGas = some 16777216 :=
-    h.cases (motive := fun f => (Fork.ruleSet f).tx.maxGas = none ∨
-      (Fork.ruleSet f).tx.maxGas = some 16777216) (Or.inl rfl) (Or.inr rfl) (Or.inr rfl) (Or.inr rfl)
+/-- **The per-transaction gas cap from Shanghai on**: no cap before Osaka, the EIP-7825 cap `2 ^ 24`
+from Osaka; a transaction whose gas is at most `2 ^ 24` passes on all of them. -/
+theorem ShanghaiOnwards.checkTransactionGasCap_ok {s : BenvStat} (h : ShanghaiOnwards s.fork)
+    {gas : Nat} (hgas : gas ≤ 16777216) : checkTransactionGasCap s.rules.tx gas = .ok () := by
   unfold checkTransactionGasCap
-  rcases hcap with hc | hc <;> rw [hc]
+  rcases h.rules_maxGas with hc | hc <;> rw [hc]
   · rfl
   · change (if gas > 16777216 then _ else .ok () : Except TxValidationError Unit) = .ok ()
     rw [ite_eq_right (Nat.not_lt.mpr hgas)]
+
+/-- The gas cap on the covered forks, from the wider domain. -/
+theorem CoveredFork.checkTransactionGasCap_ok {s : BenvStat} (h : CoveredFork s.fork) {gas : Nat}
+    (hgas : gas ≤ 16777216) : checkTransactionGasCap s.rules.tx gas = .ok () :=
+  h.shanghaiOnwards.checkTransactionGasCap_ok hgas
 
 /-- The sender's debit (nonce bump and balance write) leaves every other account alone. -/
 theorem debit_get_ne {st : State} {E a : Adr} {v : B256} (h : E ≠ a) :
