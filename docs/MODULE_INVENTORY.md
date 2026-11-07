@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-611 shared modules, 584 with a module summary.
+615 shared modules, 588 with a module summary.
 
 ## `Blanc/`
 
@@ -126,6 +126,10 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ExecutionInRootOwnCode.lean`](../Blanc/ExecutionInRootOwnCode.lean) | Own code and code addresses at actual complete-settlement outer roots. | [E3](COMMON_API.md#e3-i-must-carry-a-predicate-over-all-entered-child-roots) |
 | [`ExecutionIndexedReceipts.lean`](../Blanc/ExecutionIndexedReceipts.lean) | Original indexed receipts and complete transaction-root log coverage. | [T3](COMMON_API.md#t3-the-wrapper-is-a-transaction-and-the-fact-is-about-an-installed-contract) |
 | [`ExecutionInstalledCertCuts.lean`](../Blanc/ExecutionInstalledCertCuts.lean) | **Checked installed runtimes across actual transaction cuts.** Transport starts immediately after an actual transaction, follows the remaining transactions, withdrawals, requests and rewards to block completion, then the existing selected-domain history spine and the target … | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
+| [`ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean) | **Kept frames along a transaction, a body and a history.** The levels above `MessageRoots`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
+| [`ExecutionKeptFacts.lean`](../Blanc/ExecutionKeptFacts.lean) | **What every kept frame enters with, and what a committing run leaves at the account.** Rule-neutral companions of `ExecutionKeptFrames`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
+| [`ExecutionKeptFrames.lean`](../Blanc/ExecutionKeptFrames.lean) | **Kept frames at one account, by recursion on the run.** Rule-neutral: nothing here reads `stateGas` or a fork. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
+| [`ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean) | **The top-level executions of a message.** `processMessageCall` runs at most one interpreter execution, on either lane of the rule record. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionMessageAdmission.lean`](../Blanc/ExecutionMessageAdmission.lean) | **Trace-local admission through message wrappers.** The retained message carriers expose the exact recursive `Exec` selected by Jaune's deterministic wrappers. | [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |
 | [`ExecutionMessageEffects.lean`](../Blanc/ExecutionMessageEffects.lean) | Contract-neutral projections and invariant transports for retained message wrappers. | [E8](COMMON_API.md#e8-i-need-an-exact-ordered-replay-of-world-state-changes), [T3](COMMON_API.md#t3-the-wrapper-is-a-transaction-and-the-fact-is-about-an-installed-contract), [T4](COMMON_API.md#t4-the-wrapper-is-a-message-call-and-i-must-see-through-delegation) |
 | [`ExecutionMessageGas.lean`](../Blanc/ExecutionMessageGas.lean) | *(no module summary)* | [T2](COMMON_API.md#t2-i-need-to-know-which-child-effects-survive-settlement), [T2a](COMMON_API.md#t2a-i-need-a-frame-invariant-under-trace-local-entry-premises) |

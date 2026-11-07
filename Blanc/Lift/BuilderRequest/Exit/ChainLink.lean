@@ -29,8 +29,7 @@ def linked : Linked contract 4 where
   placed :=
     { precompile := KeptFork.forall (by decide) (by decide)
       beacon := by decide
-      history := by decide
-      system := by decide }
+      history := by decide }
   payload_ne := by decide
   ty_ne := by decide
   listed := by decide

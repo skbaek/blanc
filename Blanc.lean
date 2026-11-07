@@ -857,6 +857,10 @@ import Blanc.ExecutionInRawNodes
 import Blanc.ExecutionCellProvenance
 import Blanc.ExecutionRetainedCellZero
 import Blanc.ExecutionRetainedCellAt
+import Blanc.ExecutionKeptFrames
+import Blanc.ExecutionKeptFacts
+import Blanc.ExecutionKeptTop
+import Blanc.ExecutionKeptChain
 import Blanc.ExecutionInCellProvenance
 import Blanc.ExecutionCommittedCell
 import Blanc.ExecutionSettledRootEntry
@@ -1223,3 +1227,6 @@ import Blanc.Lift.BuilderRequest.Deposit.Delivery
 import Blanc.Lift.BuilderRequest.Deposit.DeliveryWitness
 import Blanc.Lift.BuilderRequest.Exit.Delivery
 import Blanc.Lift.BuilderRequest.Exit.DeliveryWitness
+import Blanc.Lift.BuilderRequest.ChainLink
+import Blanc.Lift.BuilderRequest.Deposit.ChainLink
+import Blanc.Lift.BuilderRequest.Exit.ChainLink

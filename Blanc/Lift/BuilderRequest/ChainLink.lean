@@ -39,8 +39,6 @@ structure Placed (a : Adr) : Prop where
   beacon : beaconRootsAddress ≠ a
   /-- It is not the history contract. -/
   history : historyStorageAddress ≠ a
-  /-- It is not the system caller. -/
-  system : a ≠ systemAddress
 
 /-- What the chain link needs of a builder contract, beyond its frame laws in `Contract`. `ty` is its request type. -/
 structure Linked (c : Contract) (ty : UInt8) where
