@@ -260,6 +260,13 @@ lines when next changed or relied on, not by a wholesale rewrite.
   `Rinst.runCore_{chainid_of_chainId,basefee_of_baseFee}`.
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
+- Storage access on a fork with a `StateGasRules` record: `rx_sstoreA` over `sstoreCostA` /
+  `afterSstoreA` (with `sstoreChargeA`, `sstoreCreditA`, `sstoreMeterA`, `chargeStateGas_of_le`,
+  `creditStateGasRefund_of_no_spill`, `chargeGas_ok_of_eq`, `sstoreAmsterdamRefund_ge` and the
+  `afterSstoreA_*` observers) and `rx_sloadA` over `sloadCost` / `afterSloadA` are in
+  [`Blanc/Lift/AmsterdamWalk.lean`](../Blanc/Lift/AmsterdamWalk.lean), stated against the record, not
+  literal prices. `Ninst.runCompiled_sloadA` (`Blanc/ForwardCall.lean`) needs only EIP-2929 access;
+  `Ninst.runCompiled_sload_selected` is it where the read record vanishes.
 - Selected storage access uses the neutral `sloadCost` / `afterSload` and
   `sstoreCost` / `afterSstore` carriers in
   [`Blanc/ForwardStorageAccess.lean`](../Blanc/ForwardStorageAccess.lean).
@@ -6656,6 +6663,20 @@ EIP-2935 walks `Blanc/Lift/SystemExecution/BeaconRoots/SystemWalk.lean` and
 `Blanc/Lift/SystemExecution/ConsolidationRequest/SystemWalk.lean`
 (`processCheckedSystemTransaction_consolidationRequest_empty`, via the checked form).
 
+**Under Amsterdam** the wrapper takes `processTopLevelAmsterdam`, and the frame starts from
+`systemCallBase` (two read records on `initDevm`), not `initEvm`. Use
+[`Blanc/Lift/SystemCallAmsterdam.lean`](../Blanc/Lift/SystemCallAmsterdam.lean):
+`processSystemTransaction_amsterdam_of_exec`, `processUncheckedSystemTransaction_amsterdam_of_exec`
+and `processCheckedSystemTransaction_amsterdam_of_exec` return the exact `(post.state,
+systemCallOutputA msg post)` for any target, from `benv.stat.fork = .amsterdam`, installed code that is
+no delegation and not at a precompile, and `exec ⟨0, initSevm msg, systemCallBase msg⟩ = .ok post` with no
+frame error and a non-negative refund counter. `systemCallBase_St` starts a walk there;
+`systemCallBase_stateGas`, `systemCallBase_error`, `systemCallBase_refundCounter`,
+`systemCallBase_state` and `systemCallBase_orig` read the base. The module holds this repository's only
+`open private` on Jaune's top-level path. Rule facts under Amsterdam, with `CoveredFork` left as it is,
+are `amsterdam_rules`, `amsterdam_stateGas`, `amsterdam_access`, `amsterdam_push0` and
+`amsterdam_shifts` in [`Blanc/HistoricalFork.lean`](../Blanc/HistoricalFork.lean).
+
 The canonical system-operation support is owned by `Blanc/Lift/SystemExecution/`.
 For each walk above, the exact runtime certificate, checked lift, jump table, and
 program bridge are its supporting modules:
@@ -7189,6 +7210,11 @@ every shared module with its own summary and the branches that cite it.
   execution theorems assert neither opcode availability nor no-deletion.
 - Lifted run to execution (liveness, exact gas): `SFunc.RunExact`,
   `Cert.jumpsOk` and `lift_exact` in [`Blanc/Lift/Exact.lean`](../Blanc/Lift/Exact.lean);
+  on a fork with state gas, for a certificate with no call-family node, `lift_exact_noExec` (no fork
+  premise; `ProgNoExec` from `progNoExec_of_all (by decide +kernel)`, a fact about the certificate's
+  nodes, so push data that decodes as a call does not matter), and `lift_exact_lane`,
+  `lift_exactM_core_lane` and `node_exactM_lane` carry the proof for both premises;
+  `RETURN` with its expansion charged is `rx_return_charged` (`retExt`, `retPost`);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
   over the gas-carrying state `St`, a frame's entry state as an `St` (`pre_eq_St`), the
   `St` projections (`St.stack`, `St.memory`, `St.gasLeft`, `St.returnData`, `St_error`,

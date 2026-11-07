@@ -351,6 +351,22 @@ theorem afterSload_setMach {sevm : Sevm} {base : Devm} {mach : Mach} {key : B256
   · simp only [Devm.setMach_accessedStorageKeys, warm, ite_false]
     rfl
 
+/-- `afterSload` with the EIP-7928 storage-read record, which is a no-op when the fork keeps no
+block access list: the successor base of one `SLOAD` on every fork with EIP-2929 access. -/
+def afterSloadA (sevm : Sevm) (base : Devm) (key : B256) : Devm :=
+  (afterSload sevm base key).balReadStorage sevm.benvStat.rules sevm.currentTarget key
+
+/-- With no block access list the read record vanishes. -/
+theorem afterSloadA_of_bal_none {sevm : Sevm} {base : Devm} {key : B256}
+    (hbal : sevm.benvStat.rules.bal = none) :
+    afterSloadA sevm base key = afterSload sevm base key :=
+  Devm.balReadStorage_none hbal _ _ _
+
+/-- A selected `SLOAD` with its read record leaves the state-gas meter unchanged. -/
+theorem afterSloadA_stateGas {sevm : Sevm} {base : Devm} {key : B256} :
+    (afterSloadA sevm base key).stateGas = base.stateGas :=
+  afterSload_stateGas
+
 /-- Adding a log commutes with replacement of the machine registers. -/
 theorem addLog_setMach {base : Devm} {mach : Mach} {log : Jaune.Log} :
     (base.setMach mach).addLog log = (base.addLog log).setMach mach := rfl
@@ -359,6 +375,47 @@ private lemma addAccessedStorageKey_setMach_setMach_selected
     {base : Devm} {target : Adr} {key : B256} {mach mach' : Mach} :
     (addAccessedStorageKey (base.setMach mach) target key).setMach mach' =
       (addAccessedStorageKey base target key).setMach mach' := rfl
+
+/-- One exact `SLOAD` on any fork with EIP-2929 access, its warm/cold choice inside neutral carrier
+definitions: Amsterdam's read record is carried by `afterSloadA`, and the fork premise is the access
+rule alone. -/
+theorem Ninst.runCompiled_sloadA
+    {sevm : Sevm} {base : Devm} {key value : B256}
+    {stack : List B256} {memory : Mem} {G : Nat}
+    (hacc : sevm.benvStat.rules.access = .eip2929)
+    (hvalue : base.getStorVal sevm.currentTarget key = value)
+    (hroom : stack.length < 1024) :
+    Ninst.RunCompiled sevm
+      (base.setMach
+        ⟨key :: stack, memory, G + sloadCost sevm base key, base.stateGas⟩)
+      sload
+      ((afterSloadA sevm base key).setMach
+        ⟨value :: stack, memory, G, base.stateGas⟩) := by
+  subst hvalue
+  refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
+  have hpop : (base.setMach ⟨key :: stack, memory, G + sloadCost sevm base key, base.stateGas⟩).pop =
+      .ok (key, base.setMach ⟨stack, memory, G + sloadCost sevm base key, base.stateGas⟩) := rfl
+  simp only [Rinst.runCore, hacc, bind, Except.bind]
+  rw [hpop]
+  simp only [bind, Except.bind, Devm.setMach_accessedStorageKeys]
+  by_cases hw : (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys
+  · simp only [hw, ↓reduceIte, sloadCost]
+    rw [chargeGas_eq_ok (by show gasWarmAccess ≤ G + gasWarmAccess; omega)]
+    simp only [bind, Except.bind]
+    rw [Devm.push_eq_ok (by exact hroom)]
+    have hg : (base.setMach ⟨stack, memory, G + gasWarmAccess, base.stateGas⟩).gasLeft -
+        gasWarmAccess = G := Nat.add_sub_cancel _ _
+    simp only [afterSloadA, afterSload, hw, ↓reduceIte, hg]
+    rfl
+  · simp only [hw, ↓reduceIte, sloadCost]
+    rw [chargeGas_eq_ok (by show gasColdSload ≤ G + gasColdSload; omega)]
+    simp only [bind, Except.bind]
+    rw [Devm.push_eq_ok (by exact hroom)]
+    have hg : (addAccessedStorageKey
+        (base.setMach ⟨stack, memory, G + gasColdSload, base.stateGas⟩) sevm.currentTarget
+        key).gasLeft - gasColdSload = G := Nat.add_sub_cancel _ _
+    simp only [afterSloadA, afterSload, hw, ↓reduceIte, hg]
+    rfl
 
 /-- One exact `SLOAD` whose warm/cold choice stays inside neutral carrier
 definitions.  Unlike the CPS rule below, this needs only the actually selected
@@ -375,27 +432,8 @@ theorem Ninst.runCompiled_sload_selected
       sload
       ((afterSload sevm base key).setMach
         ⟨value :: stack, memory, G, base.stateGas⟩) := by
-  by_cases hwarm :
-      (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈
-        base.accessedStorageKeys
-  · rw [sloadCost, ite_eq_left hwarm, afterSload, ite_eq_left hwarm]
-    exact Ninst.runCompiled_sload_warm
-      (k := key) (v := value) (s := stack) (G := G)
-      hfork.rules_stateGas_none hfork.rules_access rfl hwarm hvalue
-      (by simp only [Devm.gasLeft_setMach, gasWarmAccess])
-      hroom
-  · rw [sloadCost, ite_eq_right hwarm, afterSload, ite_eq_right hwarm]
-    simpa only [addAccessedStorageKey_setMach_setMach_selected,
-      Devm.memory_setMach, Devm.stateGas_setMach] using
-      (Ninst.runCompiled_sload_cold
-        (sevm := sevm)
-        (devm := base.setMach
-          ⟨key :: stack, memory, G + gasColdSload, base.stateGas⟩)
-        (k := key) (v := value) (s := stack) (G := G)
-        hfork.rules_stateGas_none hfork.rules_access rfl hwarm
-        (by simpa only [Devm.getStorVal_setMach] using hvalue)
-        (by simp only [Devm.gasLeft_setMach, gasColdSload])
-        hroom)
+  have h := Ninst.runCompiled_sloadA (G := G) (memory := memory) hfork.rules_access hvalue hroom
+  rwa [afterSloadA_of_bal_none hfork.rules_bal_none] at h
 
 /-- Exact selected warm/cold charge of one `SSTORE`. -/
 def sstoreCost (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=

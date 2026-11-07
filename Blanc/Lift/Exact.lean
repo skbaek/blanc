@@ -365,11 +365,58 @@ private lemma dest_cont_exact {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
     Evm.step ⟨pc, sevm, devm⟩ = .cont (pc + 1) devm' := by
   exact Evm.jumpdest_cont h_at h
 
+/-- This node is not a call-family instruction. -/
+def nodeNoExec : Ninst → Bool
+  | .exec _ => false
+  | _ => true
+
+theorem nodeNe_of_noExec {n : Ninst} (h : nodeNoExec n = true) : ∀ x, n ≠ .exec x := by
+  rintro x rfl
+  simp only [nodeNoExec, Bool.false_eq_true] at h
+
+/-- No node of this certificate tree is a call-family instruction. A syntactic fact about the
+certificate: data bytes that merely decode to `DELEGATECALL` are not nodes. -/
+def treeNoExec : SFunc → Bool
+  | .branch f g => treeNoExec f && treeNoExec g
+  | .branchTo f _ => treeNoExec f
+  | .last _ => true
+  | .next n f => nodeNoExec n && treeNoExec f
+  | .dest f => treeNoExec f
+  | .jump _ => true
+  | .callNext _ f => treeNoExec f
+  | .ret => true
+  | .pcAt _ f => treeNoExec f
+  | .undefined => true
+
+/-- Every tree the program can jump to has no call-family node. -/
+abbrev ProgNoExec (fs : List SFunc) : Prop :=
+  ∀ (j : Nat) (g : SFunc), fs[j]? = some g → treeNoExec g = true
+
+/-- A certificate decides `ProgNoExec` by `decide +kernel` on `fs.all treeNoExec`. -/
+theorem progNoExec_of_all {fs : List SFunc} (h : fs.all treeNoExec = true) : ProgNoExec fs :=
+  fun _ _ hg => List.all_eq_true.mp h _ (List.mem_of_getElem? hg)
+
 private def ExactClaim {fs : List SFunc} {sevm : Sevm}
     (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool) (hcode : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork)
     {devm : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunExact fs sevm devm f o) : Prop :=
+  ∀ (pc m : Nat) (a : List AVal) (ρ : B256) (S base : List B256) (μ : MemMap),
+    checkNodeM code c.entries ms b m pc a μ f = true →
+    jumpsOkNodeM code c.entries b f a μ = true →
+    devm.stack = S ++ base →
+    FrameMatches ρ a S →
+    MemMatches ρ μ devm.memory →
+    (RetIn a μ → jumpdestOk code ρ.toNat = true) →
+    ExactResult code c sevm pc m a μ f ρ S base devm o
+
+/-- The most general node-exactness claim: the tree is in the no-state-gas lane or has no
+call-family node. -/
+private def ExactClaimLane {fs : List SFunc} {sevm : Sevm}
+    (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool) (hcode : sevm.code = code)
+    {devm : Devm} {f : SFunc} {o : Outcome}
+    (run : SFunc.RunExact fs sevm devm f o) : Prop :=
+  (sevm.benvStat.rules.stateGas = none ∨ treeNoExec f = true) →
   ∀ (pc m : Nat) (a : List AVal) (ρ : B256) (S base : List B256) (μ : MemMap),
     checkNodeM code c.entries ms b m pc a μ f = true →
     jumpsOkNodeM code c.entries b f a μ = true →
@@ -395,19 +442,23 @@ private def ExactClaimNoStateGas {fs : List SFunc} {sevm : Sevm}
     (RetIn a μ → jumpdestOk code ρ.toNat = true) →
     ExactResult code c sevm pc m a μ f ρ S base devm o
 
-/-- Node exactness over a historical fork: needs only `stateGas = none`. -/
-theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+/-- Node exactness under the lift's premise: the no-state-gas lane, or no call-family node in the
+program. The induction carries the tree's half of the premise, and a jump takes it for its target
+from the program's. -/
+theorem node_exactM_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b)
     (hj : Cert.JumpsOkM code c ms b) {sevm : Sevm}
-    (hcode : sevm.code = code) (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (hcode : sevm.code = code)
+    (hlane : sevm.benvStat.rules.stateGas = none ∨ ProgNoExec c.prog)
     {devm : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunExact c.prog sevm devm f o) :
-    ExactClaimNoStateGas code c ms b hcode hstateGas run := by
+    ExactClaimLane code c ms b hcode run := by
   refine SFunc.RunExact.rec
     (fs := c.prog) (sevm := sevm)
-    (motive := fun devm f o run => ExactClaimNoStateGas code c ms b hcode hstateGas run)
+    (motive := fun devm f o run => ExactClaimLane code c ms b hcode run)
     (fun {devm devm' f g o} d hpop hrun ih => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have ih := ih (hno.imp_right fun h => by simp only [treeNoExec, Bool.and_eq_true] at h; exact h.1)
       cases a with
       | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a0 =>
@@ -485,7 +536,8 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
                       rcases hcont hr with ⟨exc⟩
                       exact ⟨Exec.cont (jumpi_zero_cont h_at hpop) exc⟩)
     (fun {devm devm' f g o} d w hne hpop hrun ih => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have ih := ih (hno.imp_right fun h => by simp only [treeNoExec, Bool.and_eq_true] at h; exact h.2)
       cases a with
       | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a0 =>
@@ -571,7 +623,8 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
                       subst s0
                       exact ⟨Exec.cont (jumpi_succ_cont h_at hne hjp' hpop) exc⟩)
     (fun {devm devm' f k o} d hpop hrun ih => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have ih := ih hno
       cases a with
       | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a0 =>
@@ -659,7 +712,8 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
                         rcases hcont hr with ⟨exc⟩
                         exact ⟨Exec.cont (jumpi_zero_cont h_at hpop) exc⟩)
     (fun {devm devm' f g k o} d w hne hget hpop hrun ih => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have ih := ih (hlane.imp_right fun h => h _ _ hget)
       cases a with
       | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a0 =>
@@ -762,7 +816,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
                         subst s0
                         exact ⟨Exec.cont (jumpi_succ_cont h_at hne hjp hpop) exc⟩)
     (fun {devm devm' l} hrun => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro _ pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       have hbyte : byteAt code pc = some l.toUInt8 := by
         simpa only [checkNodeM, beq_iff_eq] using hcheck
       have h_at : Linst.At sevm.code pc l := by
@@ -773,10 +827,15 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
       rw [Evm.step_last h_at]
       exact congrArg Step.halt hrun)
     (fun {devm devm' n f o} hrun hnext ih => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have hneN : sevm.benvStat.rules.stateGas = none ∨ ∀ x, n ≠ .exec x :=
+        hno.imp_right fun h => nodeNe_of_noExec (by
+          simp only [treeNoExec, Bool.and_eq_true] at h; exact h.1)
+      have ih := ih (hno.imp_right fun h => by simp only [treeNoExec, Bool.and_eq_true] at h; exact h.2)
       rcases hrun with ⟨xl, hfilled, hsteps⟩
       have hrunN : Ninst.Run sevm devm n devm' := ⟨xl, hfilled, 0, hsteps 0⟩
-      have next_nonpush (n0 : Ninst) (a1 a0 : List AVal) (out : Pattern)
+      have next_nonpush (n0 : Ninst)
+          (hne0 : sevm.benvStat.rules.stateGas = none ∨ ∀ x, n0 ≠ .exec x) (a1 a0 : List AVal) (out : Pattern)
           (hlen : a.length ≤ 1024)
           (htrans : ninstTransfer n0 (indexPattern a.length) = some out)
           (hread : out.mapM (readBack a) = some a1)
@@ -801,7 +860,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
           · exact matches_some_map base
         have hmap := ninstTransfer_map (label a ρ) rfl htrans
         have happ := ninstTransfer_append (base.map some) hmap
-        have hout := ninstTransfer_run_noStateGas hstateGas hinput happ
+        have hout := ninstTransfer_run_lane hne0 hinput happ
           ⟨xl, hfilled, pc, hstep0⟩
         rw [mapM_readBack_label hread] at hout
         rcases matches_split hout with ⟨S', below, hsp, hfirst, hbelow⟩
@@ -813,7 +872,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
           exact frameMatches_foldTop hframe hstack ⟨xl, hfilled, pc, hstep0⟩ hinter
             (matches_to_frame hfirst)
         obtain ⟨hframe', hmem'⟩ :=
-          step_mem_sound_noStateGas b hstateGas hframe hstack hmem ⟨xl, hfilled, pc, hstep0⟩ hinter hframe0
+          step_mem_sound_lane b hne0 hframe hstack hmem ⟨xl, hfilled, pc, hstep0⟩ hinter hframe0
         have hret0 : ∀ {a2 : List AVal}, RetIn (if b then memFold (memTop n0 a μ) a2 else a2)
             (if b then absMem n0 a μ else []) → (AVal.ret ∈ a2 → AVal.ret ∈ a) → RetIn a μ := by
           intro a2 h ha2
@@ -849,7 +908,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
         have hframe0 :
             FrameMatches ρ (.const (Bytes.toB256 bs) :: a)
               (Bytes.toB256 bs :: S) := List.Forall₂.cons rfl hframe
-        obtain ⟨hframe', hmem'⟩ := step_mem_sound_noStateGas b hstateGas hframe hstack hmem hrunN
+        obtain ⟨hframe', hmem'⟩ := step_mem_sound_lane b (Or.inr fun _ h => by cases h) hframe hstack hmem hrunN
           (by rw [hstack']; rfl) hframe0
         have hjump' := hjump
         simp only [jumpsOkNodeM, absNinst] at hjump'
@@ -892,7 +951,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
             cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' := hjump
           simp only [jumpsOkNodeM, ha] at hjump'
-          exact next_nonpush (Ninst.reg r) a1 a0 out hlen htrans hread hfold hchild hjump'
+          exact next_nonpush (Ninst.reg r) hneN a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at
       | exec x =>
         have hchk := hcheck
@@ -912,7 +971,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
             cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' := hjump
           simp only [jumpsOkNodeM, ha] at hjump'
-          exact next_nonpush (Ninst.exec x) a1 a0 out hlen htrans hread hfold hchild hjump'
+          exact next_nonpush (Ninst.exec x) hneN a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at
       | dupn i =>
         have hchk := hcheck
@@ -932,7 +991,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
             cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' := hjump
           simp only [jumpsOkNodeM, ha] at hjump'
-          exact next_nonpush (Ninst.dupn i) a1 a0 out hlen htrans hread hfold hchild hjump'
+          exact next_nonpush (Ninst.dupn i) hneN a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at
       | swapn i =>
         have hchk := hcheck
@@ -952,7 +1011,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
             cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' := hjump
           simp only [jumpsOkNodeM, ha] at hjump'
-          exact next_nonpush (Ninst.swapn i) a1 a0 out hlen htrans hread hfold hchild hjump'
+          exact next_nonpush (Ninst.swapn i) hneN a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at
       | exchange i =>
         have hchk := hcheck
@@ -972,10 +1031,11 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
             cases h) ha with ⟨hlen, out, a1, htrans, hread, hfold⟩
           have hjump' := hjump
           simp only [jumpsOkNodeM, ha] at hjump'
-          exact next_nonpush (Ninst.exchange i) a1 a0 out hlen htrans hread hfold hchild hjump'
+          exact next_nonpush (Ninst.exchange i) hneN a1 a0 out hlen htrans hread hfold hchild hjump'
             (hsteps pc) h_at)
     (fun {devm devm' f o} hburn hrun ih => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have ih := ih hno
       have hcheck' :
           byteAt code pc = some (Jinst.toUInt8 .jumpdest) ∧
             checkNodeM code c.entries ms b m (pc + 1) a μ f = true := by
@@ -1000,7 +1060,8 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
         rcases hcont hr with ⟨exc⟩
         exact ⟨Exec.cont (dest_cont_exact h_at hburn) exc⟩)
     (fun {devm devm' k f o} d hget hpop hrun ih => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have ih := ih (hlane.imp_right fun h => h _ _ hget)
       cases a with
       | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a' =>
@@ -1085,7 +1146,7 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
                   subst s0
                   exact ⟨Exec.cont (jump_cont_exact h_at hjp hpop) exc⟩)
     (fun {devm devm'} d hpop => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro _ pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
       cases a with
       | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a' =>
@@ -1129,7 +1190,8 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
               rcases hr with ⟨exc⟩
               exact ⟨Exec.cont (jump_cont_exact h_at hjp hpop') exc⟩)
     (fun {devm devm' devm'' k f g} d hget hpop hrun ih => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have ih := ih (hlane.imp_right fun h => h _ _ hget)
       cases a with
       | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a' =>
@@ -1242,7 +1304,9 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
           | pcAt _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
           | undefined => simp only [checkNodeM, Bool.false_eq_true] at hcheck)
     (fun {devm devm' devm'' k f g o} d hget hpop hrun hcont ihrun ihcont => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have ihrun := ihrun (hlane.imp_right fun h => h _ _ hget)
+      have ihcont := ihcont hno
       cases a with
       | nil => simp only [checkNodeM, Bool.false_eq_true] at hcheck
       | cons av a' =>
@@ -1414,7 +1478,8 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
           | pcAt _ _ => simp only [checkNodeM, Bool.false_eq_true] at hcheck
           | undefined => simp only [checkNodeM, Bool.false_eq_true] at hcheck)
     (fun {devm devm' p f o} hstepPc _ ih => by
-      intro pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      intro hno pc m a ρ S base μ hcheck hjump hstack hframe hmem hρ
+      have ih := ih hno
       have hcheck' :
           (bytesAt code pc (Ninst.toBytes (Ninst.reg .pc)) = true ∧ p = pc) ∧
             checkNodeM code c.entries ms b m (pc + 1) (.const (Nat.toB256 pc) :: a) μ f = true := by
@@ -1449,6 +1514,16 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
         exact Ninst.exec_of_stepRun (xl := .none) h_at trivial hstepPc ⟨exc⟩)
     run
 
+/-- Node exactness over a historical fork: needs only `stateGas = none`. -/
+theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.CheckedM code c ms b)
+    (hj : Cert.JumpsOkM code c ms b) {sevm : Sevm}
+    (hcode : sevm.code = code) (hstateGas : sevm.benvStat.rules.stateGas = none)
+    {devm : Devm} {f : SFunc} {o : Outcome}
+    (run : SFunc.RunExact c.prog sevm devm f o) :
+    ExactClaimNoStateGas code c ms b hcode hstateGas run :=
+  node_exactM_lane hc hj hcode (Or.inl hstateGas) run (Or.inl hstateGas)
+
 /-- Modern compatibility wrapper: covered forks discharge `stateGas = none`. -/
 theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b)
@@ -1459,12 +1534,13 @@ theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     ExactClaim code c ms b hcode hfork run :=
   node_exactM_noStateGas hc hj hcode hfork.rules_stateGas_none run
 
-/-- Historical form of `lift_exactM_core`: needs only `stateGas = none`. -/
-theorem lift_exactM_core_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+/-- `lift_exactM_core` under the lift's premise: the no-state-gas lane, or no call-family node in
+the program. -/
+theorem lift_exactM_core_lane {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms b)
     (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (hlane : sevm.benvStat.rules.stateGas = none ∨ ProgNoExec c.prog)
     (hrun : SProg.RunExact c.prog sevm pre post) :
     Nonempty (Exec 0 sevm pre (.ok post)) := by
   obtain ⟨e, f, cs, rfl, hepc, hef, hm0⟩ := hstart
@@ -1484,8 +1560,18 @@ theorem lift_exactM_core_noStateGas {code : ByteArray} {c : Cert} {ms : List Mem
     getElem?_pos, List.getElem_cons_zero])
   rw [hm0, hepc, hef] at hf
   rw [hm0, hef] at hentry
-  exact node_exactM_noStateGas hc hj hcode hstateGas hrf 0 e.rets [] 0 [] pre.stack [] hf hentry rfl
+  exact node_exactM_lane hc hj hcode hlane hrf (hlane.imp_right fun h => h 0 f hf0) 0 e.rets [] 0 [] pre.stack [] hf hentry rfl
     (by simp only [FrameMatches, List.forall₂_nil_right_iff]) (memMatches_nil _ _) (fun h => absurd h retIn_nil_nil)
+
+/-- Historical form of `lift_exactM_core`: needs only `stateGas = none`. -/
+theorem lift_exactM_core_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
+    (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms b)
+    (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (hrun : SProg.RunExact c.prog sevm pre post) :
+    Nonempty (Exec 0 sevm pre (.ok post)) :=
+  lift_exactM_core_lane hc hj hstart hcode (Or.inl hstateGas) hrun
 
 /-- The gas-exact converse from checked, jump-safe entries whose entry `0`
 starts the frame. -/
@@ -1498,15 +1584,16 @@ theorem lift_exactM_core {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
     Nonempty (Exec 0 sevm pre (.ok post)) :=
   lift_exactM_core_noStateGas hc hj hstart hcode hfork.rules_stateGas_none hrun
 
-/-- Historical form of `lift_exact`: needs only `stateGas = none`. -/
-theorem lift_exact_noStateGas {code : ByteArray} {c : Cert}
+/-- `lift_exact` under the lift's premise: the no-state-gas lane, or no call-family node in the
+program. -/
+theorem lift_exact_lane {code : ByteArray} {c : Cert}
     (hc : Cert.check code c = true) (hj : Cert.jumpsOk code c = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (hlane : sevm.benvStat.rules.stateGas = none ∨ ProgNoExec c.prog)
     (hrun : SProg.RunExact c.prog sevm pre post) :
     Nonempty (Exec 0 sevm pre (.ok post)) := by
-  apply lift_exactM_core_noStateGas (Cert.checkedM_of_check hc) (Cert.jumpsOkM_of_jumpsOk hj) _
-    hcode hstateGas hrun
+  apply lift_exactM_core_lane (Cert.checkedM_of_check hc) (Cert.jumpsOkM_of_jumpsOk hj) _
+    hcode hlane hrun
   cases c with
   | nil => simp only [Cert.check, List.all_nil, Bool.and_true, Bool.false_eq_true] at hc
   | cons p cs =>
@@ -1515,6 +1602,25 @@ theorem lift_exact_noStateGas {code : ByteArray} {c : Cert}
       List.isEmpty_iff, List.all_eq_true, Prod.forall] at hc
     exact ⟨e, f, cs, rfl, by simpa only using hc.1.1, by simpa only using hc.1.2, by simp only [List.getD_eq_getElem?_getD,
       List.length_nil, lt_self_iff_false, not_false_eq_true, getElem?_neg, Option.getD_none]⟩
+
+/-- Historical form of `lift_exact`: needs only `stateGas = none`. -/
+theorem lift_exact_noStateGas {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) (hj : Cert.jumpsOk code c = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hstateGas : sevm.benvStat.rules.stateGas = none)
+    (hrun : SProg.RunExact c.prog sevm pre post) :
+    Nonempty (Exec 0 sevm pre (.ok post)) :=
+  lift_exact_lane hc hj hcode (Or.inl hstateGas) hrun
+
+/-- **The gas-exact converse on every fork, Amsterdam included,** for a certificate with no
+call-family node. -/
+theorem lift_exact_noExec {code : ByteArray} {c : Cert}
+    (hc : Cert.check code c = true) (hj : Cert.jumpsOk code c = true)
+    {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
+    (hno : ProgNoExec c.prog)
+    (hrun : SProg.RunExact c.prog sevm pre post) :
+    Nonempty (Exec 0 sevm pre (.ok post)) :=
+  lift_exact_lane hc hj hcode (Or.inr hno) hrun
 
 /-- The top-level gas-exact converse. -/
 theorem lift_exact {code : ByteArray} {c : Cert}

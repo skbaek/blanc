@@ -123,6 +123,8 @@ import Blanc.ExecutionNoninterference
 import Blanc.TransactionForward
 import Blanc.TransactionForwardH
 import Blanc.SystemCallForward
+import Blanc.Lift.AmsterdamWalk
+import Blanc.Lift.SystemCallAmsterdam
 import Blanc.TransientSettlement
 import Blanc.TransientInvariance
 import Blanc.Compiled
