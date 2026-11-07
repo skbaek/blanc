@@ -18,7 +18,6 @@ namespace Blanc.Lift.BuilderRequest.ChainLink
 open Jaune ExecutionTrace Delivery
 
 open private runPrepared_cases from Blanc.ExecutionKeptTop
-open private prepare_system from Blanc.Lift.SystemCallAmsterdam
 open private runPreparedTopFrame msgCallOutputAmsterdam from Jaune.Transaction
 open private withdrawalsPass_getCode withdrawalsPass_requests from Blanc.ExecutionKeptChain
 
@@ -305,7 +304,11 @@ theorem request_step_root {benv : Benv} {a : Adr} {post : State} {out : MsgCallO
     simp only [getDelegatedCodeAddress, hd, ↓reduceIte]
   have hprep : prepareTopLevelAmsterdam amsterdamStateGasRules (systemTransactionMessage benv a []) =
       .ok (systemTransactionMessage benv a [], systemCallBase (systemTransactionMessage benv a [])) :=
-    prepare_system hfork rfl hdel
+    Blanc.Lift.prepare_user (M := systemTransactionMessage benv a []) hfork rfl rfl rfl
+      (by
+        show ((0 : B256) != 0 && _) = false
+        simp only [bne_self_eq_false, Bool.false_and])
+      hdel
   have hsg : (systemTransactionMessage benv a []).benv.stat.rules.stateGas = some amsterdamStateGasRules :=
     amsterdam_stateGas (s := (systemTransactionMessage benv a []).benv.stat) hfork
   have hm := roots.1
