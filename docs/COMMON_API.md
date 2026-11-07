@@ -8652,7 +8652,9 @@ the post state `feeGetterPost`. Exact walks take `PUSH0`'s activation as a hypot
 read, the inhibitor guard and the submission body are not here, since they differ by contract.
 The worked consumers are `Blanc/Lift/WithdrawalRequest/FeeLoop.lean` and
 `Blanc/Lift/BuilderRequest/FeePath.lean`. The builder family's queue layout, generic over record
-width, is family-local at `Blanc/Lift/BuilderRequest/QueueLayout.lean`.
+width, is family-local at `Blanc/Lift/BuilderRequest/QueueLayout.lean`. Its system path under Amsterdam, a
+candidate shape for EIP-7002 and EIP-7251 under Amsterdam, is `SysPath` in
+`Blanc/Lift/BuilderRequest/SystemPath.lean`, also family-local.
 
 #### C9.10. I need a Vyper 0.2 runtime's idioms
 
