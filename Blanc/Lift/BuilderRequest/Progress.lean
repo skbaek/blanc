@@ -11,6 +11,7 @@ import Blanc.Lift.BuilderRequest.Deposit.Latch
 import Blanc.Lift.BuilderRequest.Exit.Latch
 import Blanc.Lift.BuilderRequest.Deposit.System
 import Blanc.Lift.BuilderRequest.Exit.System
+import Blanc.Lift.RequestSystem.Effects
 
 /-!
 # Progress for a frame at either builder code (O36)
@@ -48,7 +49,7 @@ theorem progress_submission_covered {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (wordRun : WordFakeExponential.Run (storedExcess 8 sevm b) 17 1 17 0 iterations finalOutput)
     (admitted : Deposit.Admitted sevm (finalOutput / (17 : B256))) :
     Nonempty (Exec 0 sevm (St b [] M (G + Deposit.submissionGas sevm b M iterations))
-      (.ok (Deposit.submissionPost sevm (Deposit.feeBase sevm b) M G))) :=
+      (.ok (Deposit.submissionPost sevm (feeBase sevm b) M G))) :=
   Deposit.exec_submission_exact hcode fork caller hlen dynamic slack off wordRun admitted
 
 /-- **Deposit fee-read progress, under covered forks.** -/
@@ -60,7 +61,7 @@ theorem progress_feeread_covered {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (storedExcess 8 sevm b) 17 1 17 0 iterations finalOutput) :
     Nonempty (Exec 0 sevm (St b [] M (G + UserPath.feeReadGas sevm b M iterations))
-      (.ok (RequestFee.feeGetterPost (Deposit.feeBase sevm b) M (finalOutput / (17 : B256)) G))) :=
+      (.ok (RequestFee.feeGetterPost (feeBase sevm b) M (finalOutput / (17 : B256)) G))) :=
   Deposit.exec_fee_read_exact hcode fork aligned caller empty zero off wordRun
 
 /-- **Deposit submission progress, under Amsterdam.** -/
@@ -103,7 +104,7 @@ theorem progress_submission_covered_exit {sevm : Sevm} {b : Devm} {M : Mem} {G :
     (wordRun : WordFakeExponential.Run (storedExcess 2 sevm b) 17 1 17 0 iterations finalOutput)
     (cov : (finalOutput / (17 : B256)).toNat ≤ sevm.value.toNat) :
     Nonempty (Exec 0 sevm (St b [] M (G + Exit.submissionGas sevm b M iterations))
-      (.ok (Exit.submissionPost sevm (Exit.feeBase sevm b) M G))) :=
+      (.ok (Exit.submissionPost sevm (feeBase sevm b) M G))) :=
   Exit.exec_submission_exact hcode fork caller hlen dynamic slack off wordRun cov
 
 /-- **Exit fee-read progress, under covered forks.** -/
@@ -115,7 +116,7 @@ theorem progress_feeread_covered_exit {sevm : Sevm} {b : Devm} {M : Mem} {G : Na
     (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (storedExcess 2 sevm b) 17 1 17 0 iterations finalOutput) :
     Nonempty (Exec 0 sevm (St b [] M (G + UserPath.feeReadGas sevm b M iterations))
-      (.ok (RequestFee.feeGetterPost (Exit.feeBase sevm b) M (finalOutput / (17 : B256)) G))) :=
+      (.ok (RequestFee.feeGetterPost (feeBase sevm b) M (finalOutput / (17 : B256)) G))) :=
   Exit.exec_fee_read_exact hcode fork aligned caller empty zero off wordRun
 
 /-- **Exit submission progress, under Amsterdam.** -/
@@ -158,19 +159,19 @@ theorem progress_system_submission_amsterdam {sevm : Sevm} {b : Devm} {G : Nat}
     (r : Ready sevm b [2, 3, 0, 1]) (hG : gCallStipend < G) :
     ∃ post, Nonempty (Exec 0 sevm (St b [] .empty (G + latchCost Deposit.sysPath sevm b))
       (.ok post)) := by
-  -- DRAFT: apply `latch_frame_run Deposit.sysPath p tree len hfork hstatic hcaller` at
-  -- `data_length_ne hne hlen`, then `lift_exact_noExec` as in `latch_spec`.
-  sorry
+  have hdata : sevm.data.length.toB256 ≠ 0 := data_length_ne hne hlen
+  have run := latch_frame_run Deposit.sysPath p tree len hfork hstatic hcaller hdata r hG
+  exact ⟨_, lift_exact_noExec Deposit.sysPath.check Deposit.sysPath.jumps hcode
+    Deposit.sysPath.noExec ⟨_, Deposit.sysPath.root, run⟩⟩
 
 /-- **A system-caller frame with empty calldata succeeds at the deposit code, under Amsterdam.** -/
 theorem progress_system_empty_amsterdam {sevm : Sevm} {b : Devm} {G : Nat}
     (hcode : sevm.code = Deposit.code) (hfork : sevm.benvStat.fork = .amsterdam)
     (hstatic : sevm.isStatic = false) (hcaller : sevm.caller = systemAddress) (hdata : sevm.data = [])
     (r : Ready sevm b [2, 3, 0, 1]) (hG : gCallStipend < G) :
-    ∃ post, Nonempty (Exec 0 sevm (St b [] .empty (G + SysPath.frameCost Deposit.sysPath sevm b))
-      (.ok post)) := by
-  -- DRAFT: project the post from `SysPath.frame_exec Deposit.sysPath hcode hfork hstatic hcaller hdata r hG`.
-  sorry
+    ∃ post, Nonempty (Exec 0 sevm (St b [] .empty (G + RequestSystem.SysPath.frameCost Deposit.sysPath sevm b))
+      (.ok post)) :=
+  ⟨_, RequestSystem.SysPath.frame_exec Deposit.sysPath hcode hfork hstatic hcaller hdata r hG⟩
 
 /-- **A system-caller frame with nonempty calldata succeeds at the exit code, under Amsterdam.** -/
 theorem progress_system_submission_amsterdam_exit {sevm : Sevm} {b : Devm} {G : Nat}
@@ -182,19 +183,19 @@ theorem progress_system_submission_amsterdam_exit {sevm : Sevm} {b : Devm} {G : 
     (r : Ready sevm b [2, 3, 0, 1]) (hG : gCallStipend < G) :
     ∃ post, Nonempty (Exec 0 sevm (St b [] .empty (G + latchCost Exit.sysPath sevm b))
       (.ok post)) := by
-  -- DRAFT: apply `latch_frame_run Exit.sysPath p tree len hfork hstatic hcaller` at
-  -- `data_length_ne hne hlen`, then `lift_exact_noExec` as in `latch_spec`.
-  sorry
+  have hdata : sevm.data.length.toB256 ≠ 0 := data_length_ne hne hlen
+  have run := latch_frame_run Exit.sysPath p tree len hfork hstatic hcaller hdata r hG
+  exact ⟨_, lift_exact_noExec Exit.sysPath.check Exit.sysPath.jumps hcode
+    Exit.sysPath.noExec ⟨_, Exit.sysPath.root, run⟩⟩
 
 /-- **A system-caller frame with empty calldata succeeds at the exit code, under Amsterdam.** -/
 theorem progress_system_empty_amsterdam_exit {sevm : Sevm} {b : Devm} {G : Nat}
     (hcode : sevm.code = Exit.code) (hfork : sevm.benvStat.fork = .amsterdam)
     (hstatic : sevm.isStatic = false) (hcaller : sevm.caller = systemAddress) (hdata : sevm.data = [])
     (r : Ready sevm b [2, 3, 0, 1]) (hG : gCallStipend < G) :
-    ∃ post, Nonempty (Exec 0 sevm (St b [] .empty (G + SysPath.frameCost Exit.sysPath sevm b))
-      (.ok post)) := by
-  -- DRAFT: project the post from `SysPath.frame_exec Exit.sysPath hcode hfork hstatic hcaller hdata r hG`.
-  sorry
+    ∃ post, Nonempty (Exec 0 sevm (St b [] .empty (G + RequestSystem.SysPath.frameCost Exit.sysPath sevm b))
+      (.ok post)) :=
+  ⟨_, RequestSystem.SysPath.frame_exec Exit.sysPath hcode hfork hstatic hcaller hdata r hG⟩
 
 /-! ## System arm, under covered forks -/
 
@@ -204,9 +205,11 @@ theorem progress_system_covered {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     (hstatic : sevm.isStatic = false) (hcaller : sevm.caller = systemAddress)
     (hdata : sevm.data = []) :
     ∃ C post, Nonempty (Exec 0 sevm (St b [] M (G + C)) (.ok post)) := by
-  -- DRAFT: no system-arm walk exists under covered steps; walk the drain under `coveredSteps` (no `Ready`
-  -- needed, stores priced by `sstoreCost_le`), likely mirroring the empty-calldata system frame at a bound
-  -- from `sloadCost_le`/`sstoreCost_le_value`. Flagged uncertain: adversarial queue storage is untested.
+  -- DRAFT (blocked): no system-arm walk exists over `coveredSteps`. Closing this needs a `frame_exec`
+  -- analogue over covered steps, but `fold_ready`, `ready_book`, `final_run`, `frame_prefix` and `Ready`
+  -- are Amsterdam-only (`Latch.lean`, `RequestSystem/*`, not owned here), and adversarial queue storage is
+  -- untested under covered pricing. Caller condition: covered-fork progress covers non-system callers;
+  -- the protocol issues no system call before Amsterdam, so SYSTEM-at-covered-forks has no protocol path.
   sorry
 
 /-- **A system-caller frame at the exit code under covered forks.** -/
@@ -215,9 +218,11 @@ theorem progress_system_covered_exit {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat
     (hstatic : sevm.isStatic = false) (hcaller : sevm.caller = systemAddress)
     (hdata : sevm.data = []) :
     ∃ C post, Nonempty (Exec 0 sevm (St b [] M (G + C)) (.ok post)) := by
-  -- DRAFT: no system-arm walk exists under covered steps; walk the drain under `coveredSteps` (no `Ready`
-  -- needed, stores priced by `sstoreCost_le`), likely mirroring the empty-calldata system frame at a bound
-  -- from `sloadCost_le`/`sstoreCost_le_value`. Flagged uncertain: adversarial queue storage is untested.
+  -- DRAFT (blocked): no system-arm walk exists over `coveredSteps`. Closing this needs a `frame_exec`
+  -- analogue over covered steps, but `fold_ready`, `ready_book`, `final_run`, `frame_prefix` and `Ready`
+  -- are Amsterdam-only (`Latch.lean`, `RequestSystem/*`, not owned here), and adversarial queue storage is
+  -- untested under covered pricing. Caller condition: covered-fork progress covers non-system callers;
+  -- the protocol issues no system call before Amsterdam, so SYSTEM-at-covered-forks has no protocol path.
   sorry
 
 end Blanc.Lift.BuilderRequest
