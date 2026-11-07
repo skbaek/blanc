@@ -94,7 +94,7 @@ def CoinbaseApart (benv : Benv) (E : Adr) : Prop :=
 
 /-- **`tx`, signed by `E`, is admissible at `benv` with `need` gas.** -/
 structure TxAdmitted (benv : Benv) (bout : BlockOutput) (tx : Tx) (E : Adr) (need : Nat) : Prop where
-  /-- The block's fork is Shanghai or later: Shanghai is the earliest fork V2_2 ran on, with the same rules throughout it. -/
+  /-- The block's fork is Shanghai through BPO2: V2_2 first ran under Shanghai, and a fork's rules hold from its first block, so the theorems cover all of it. -/
   fork : ShanghaiOnwards benv.stat.fork
   /-- Some fees make the transaction a signed type-2 call `E` can pay for. -/
   form : ∃ prio maxFee, TxForm benv tx prio maxFee ∧ SignerReady benv tx E maxFee

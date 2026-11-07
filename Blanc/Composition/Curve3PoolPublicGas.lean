@@ -8,7 +8,7 @@ import Blanc.TransactionForward
 `exitGasUsed` and `swapGasUsed`, each intrinsic gas plus the frame's, less the capped refund, each coin's
 cost its own short definition. The shape comes from `rlExactCost_eq` and `exExactCost` at a transaction's
 entry, where every slot starts cold and every original value is current. The literals are **measured**, by
-running the real runtimes on the execution specs' Prague interpreter; `ExitFrame.cold` and `SwapFrame.cold` prove them.
+running the real runtimes on the execution specs' Prague interpreter, the same schedule Jaune gives every fork from London on; `ExitFrame.cold` and `SwapFrame.cold` prove them.
 -/
 
 namespace Blanc.Composition.Curve3PoolPublic
