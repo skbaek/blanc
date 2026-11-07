@@ -6689,6 +6689,17 @@ EIP-2935 walks `Blanc/Lift/SystemExecution/BeaconRoots/SystemWalk.lean` and
 systemCallOutputA msg post)` for any target, from `benv.stat.fork = .amsterdam`, installed code that is
 no delegation and not at a precompile, and `exec ⟨0, initSevm msg, systemCallBase msg⟩ = .ok post` with no
 frame error and a non-negative refund counter. `systemCallBase_St` starts a walk there;
+A direct user message takes the same path: `processMessageCall_ok`, `processMessageCall_revert`,
+`processMessageCall_halt` and the inverse `processMessageCall_inv` over `userSevm` / `userEntry`, with `failedOutput`
+for the settled failure. A direct type-2 transaction with an empty reservoir composes in
+[`Blanc/Lift/TransactionAmsterdam.lean`](../Blanc/Lift/TransactionAmsterdam.lean): `DirectTx` names what it takes from its
+block and sender, `DirectTx.stages` gives the stages, and `processTransaction_amsterdam_of_stages` the settled result.
+An EIP-7928 access record is [`Blanc/Lift/AmsterdamAccess.lean`](../Blanc/Lift/AmsterdamAccess.lean)'s `Access`, and
+[`Blanc/Lift/BalEffect.lean`](../Blanc/Lift/BalEffect.lean)'s `incorporate_storage` / `incorporate_keysets` read what
+`BalBuilder.incorporate` does to one account's slots. A frame that fails at a known instruction comes from an exact walk on
+a cut tree: `cutOk` and `exec_of_cut` in [`Blanc/Lift/ExecCut.lean`](../Blanc/Lift/ExecCut.lean), which reuse exact walks
+up to a `REVERT` with no change to `Outcome`. A request contract's system call has its access-list entries in
+[`Blanc/Lift/RequestSystem/Access.lean`](../Blanc/Lift/RequestSystem/Access.lean) (`SysCall.bal`).
 `systemCallBase_stateGas`, `systemCallBase_error`, `systemCallBase_refundCounter`
 and `systemCallBase_orig` read the base. The module holds this repository's only
 `open private` on Jaune's top-level path. Rule facts under Amsterdam, with `CoveredFork` left as it is,

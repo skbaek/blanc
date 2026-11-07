@@ -713,4 +713,126 @@ theorem afterSstoreA_output (sevm : Sevm) (d : Devm) (k v : B256) :
   dsimp only
   split <;> split <;> rfl
 
+/-! ## What a frame keeps to settle cleanly, under any state-gas meter -/
+
+/-- What a top-level frame keeps while its remaining `SSTORE`s at `keys` hit slots untouched in this transaction.
+`grant` is the frame's state-gas grant, `used` what its stores have charged so far, and `n` a bound on the stores
+it makes. Regular gas is not in here: `used` is state gas. -/
+structure Fresh (sevm : Sevm) (d : Devm) (keys : List B256) (grant used n : Nat) : Prop where
+  error : d.error = none
+  refund : 0 ≤ d.refundCounter
+  deleted : d.accountsToDelete.toList = []
+  /-- The remaining slots hold their original value. -/
+  clean : ∀ k ∈ keys, d.getOrigStorVal sevm sevm.currentTarget k = d.getStorVal sevm.currentTarget k
+  /-- The reservoir only falls. -/
+  drawn : d.stateGas.left ≤ grant
+  /-- State gas charged is what left the reservoir plus what spilled. -/
+  ledger : d.stateGas.left + used = grant + d.stateGas.spilled
+  committed : d.stateGas.committedSpill = 0
+  budget : used + keys.length * amsterdamStateGasRules.storageSet ≤ n * amsterdamStateGasRules.storageSet
+
+namespace Fresh
+
+variable {sevm : Sevm} {d : Devm} {keys : List B256} {grant used n : Nat}
+
+theorem sload (r : Fresh sevm d keys grant used n) (k : B256) :
+    Fresh sevm (afterSloadA sevm d k) keys grant used n where
+  error := (afterSloadA_error sevm d k).trans r.error
+  refund := by rw [afterSloadA_refundCounter]; exact r.refund
+  deleted := by
+    have h : (afterSloadA sevm d k).accountsToDelete = d.accountsToDelete := by
+      unfold afterSloadA Devm.balReadStorage afterSload
+      split <;> split <;> rfl
+    rw [h]
+    exact r.deleted
+  clean := fun k' hk' => by
+    rw [afterSloadA_getOrig, afterSloadA_getStorVal]
+    exact r.clean k' hk'
+  drawn := by rw [afterSloadA_stateGas]; exact r.drawn
+  ledger := by rw [afterSloadA_stateGas]; exact r.ledger
+  committed := by rw [afterSloadA_stateGas]; exact r.committed
+  budget := r.budget
+
+theorem addLog (r : Fresh sevm d keys grant used n) (l : Log) :
+    Fresh sevm (d.addLog l) keys grant used n where
+  error := r.error
+  refund := r.refund
+  deleted := r.deleted
+  clean := r.clean
+  drawn := r.drawn
+  ledger := r.ledger
+  committed := r.committed
+  budget := r.budget
+
+/-- A store at an untouched slot credits nothing. -/
+theorem credit_zero {k : B256} (v : B256)
+    (h : d.getOrigStorVal sevm sevm.currentTarget k = d.getStorVal sevm.currentTarget k) :
+    sstoreCreditA amsterdamStateGasRules sevm d k v = 0 := by
+  unfold sstoreCreditA sstoreAmsterdamStateRefund
+  rw [h]
+  exact ite_eq_right fun hc => hc.1 hc.2.1
+
+/-- A store at an untouched slot repays no spill. -/
+theorem repay_zero {k : B256} (v : B256)
+    (h : d.getOrigStorVal sevm sevm.currentTarget k = d.getStorVal sevm.currentTarget k) :
+    sstoreRepayA amsterdamStateGasRules sevm d k v = 0 := by
+  rw [sstoreRepayA, credit_zero v h, Nat.zero_min]
+
+theorem sstore {k : B256} {ks : List B256} (r : Fresh sevm d (k :: ks) grant used n)
+    (fresh : k ∉ ks) (v : B256) :
+    Fresh sevm (afterSstoreA amsterdamStateGasRules sevm d k v) ks grant
+      (used + sstoreChargeA amsterdamStateGasRules sevm d k v) n := by
+  have hclean := r.clean k List.mem_cons_self
+  have hcredit := credit_zero v hclean
+  have hrepay := repay_zero v hclean
+  have hle := sstoreChargeA_le amsterdamStateGasRules sevm d k v
+  have hdrawn := r.drawn
+  have hledger := r.ledger
+  have hbudget := r.budget
+  have hleft : (afterSstoreA amsterdamStateGasRules sevm d k v).stateGas.left =
+      d.stateGas.left - sstoreChargeA amsterdamStateGasRules sevm d k v := by
+    rw [afterSstoreA_stateGas]
+    simp only [sstoreMeterA, hcredit, hrepay, Nat.sub_zero, Nat.add_zero]
+  have hspilled : (afterSstoreA amsterdamStateGasRules sevm d k v).stateGas.spilled =
+      d.stateGas.spilled + (sstoreChargeA amsterdamStateGasRules sevm d k v - d.stateGas.left) := by
+    rw [afterSstoreA_stateGas]
+    simp only [sstoreMeterA, sstoreSpillA, hcredit, hrepay, Nat.sub_zero, Nat.add_zero]
+  simp only [List.length_cons, Nat.add_mul, Nat.one_mul] at hbudget
+  refine ⟨(afterSstoreA_error _ sevm d k v).trans r.error, ?_, ?_, ?_, ?_, ?_, ?_, ?_⟩
+  · rw [afterSstoreA_refundCounter]
+    exact Int.le_trans r.refund (sstoreAmsterdamRefund_ge _ _ (Or.inl hclean))
+  · have h : (afterSstoreA amsterdamStateGasRules sevm d k v).accountsToDelete = d.accountsToDelete := by
+      unfold afterSstoreA Devm.balReadAccount Devm.balReadStorage
+      dsimp only
+      split <;> split <;> rfl
+    rw [h]
+    exact r.deleted
+  · intro k' hk'
+    have hne : k ≠ k' := fun e => fresh (e ▸ hk')
+    have hk := r.clean k' (List.mem_cons_of_mem _ hk')
+    unfold Devm.getOrigStorVal at hk ⊢
+    rw [afterSstoreA_createdAccounts, afterSstoreA_getStorVal_ne sevm d v hne]
+    exact hk
+  · rw [hleft]
+    omega
+  · rw [hleft, hspilled]
+    omega
+  · rw [afterSstoreA_stateGas]
+    exact r.committed
+  · omega
+
+/-- One store at an untouched slot: `Fresh` goes on, with the rest of the keys, and it repays no spill. -/
+theorem step {k : B256} {ks : List B256} (r : Fresh sevm d (k :: ks) grant used n) (nodup : (k :: ks).Nodup) (v : B256) :
+    (∃ used', Fresh sevm (afterSstoreA amsterdamStateGasRules sevm d k v) ks grant used' n) ∧ ks.Nodup ∧
+      sstoreRepayA amsterdamStateGasRules sevm d k v = 0 :=
+  ⟨⟨_, r.sstore (List.nodup_cons.mp nodup).1 v⟩, (List.nodup_cons.mp nodup).2,
+    repay_zero v (r.clean k List.mem_cons_self)⟩
+
+/-- `Fresh` passes through a machine-register replacement. -/
+theorem st (r : Fresh sevm d keys grant used n) (S : List B256) (M : Mem) (G : Nat) :
+    Fresh sevm (St d S M G) keys grant used n :=
+  ⟨r.error, r.refund, r.deleted, r.clean, r.drawn, r.ledger, r.committed, r.budget⟩
+
+end Fresh
+
 end Blanc.Lift
