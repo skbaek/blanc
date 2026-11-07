@@ -6,7 +6,8 @@ import Blanc.Lift.BuilderRequest.QueueLayout
 
 While slot 0 holds the inhibitor, no user call at the exit code succeeds. With slot 0 off the inhibitor,
 every successful non-system frame is exactly a submission or a fee read, each with its exact storage, logs
-and return bytes, and each of those has a converse constructing the execution. These are statements about
+and return bytes, and each of those has a converse constructing the execution. Each is an instance of a statement on a fork's
+`StorageSteps`, which `Exit.SubmissionAmsterdam` instantiates too. These are statements about
 one frame over any storage, not a claim that such storage is reachable: under covered forks the exit
 contract never leaves inhibition on mainnet. They do not cover message or transaction level.
 -/
@@ -21,6 +22,7 @@ def userPath : UserPath where
   cert := cert
   check := cert_check
   jumps := jumps_ok
+  noExec := progNoExec_of_all (by decide +kernel)
   shape :=
     { revert := ⟨0x01, [0xc6], by decide⟩
       target := ⟨0x02, [], by decide⟩
@@ -54,7 +56,7 @@ theorem exec_user_inhibited_no_ok (hcode : sevm.code = code)
     (caller : sevm.caller ≠ systemAddress)
     (inhibited : pre.getStorVal sevm.currentTarget 0 = B256.max)
     (exec : Exec 0 sevm pre (.ok post)) : False :=
-  UserPath.exec_inhibited_no_ok (k := userPath) hcode fork stack caller inhibited exec
+  UserPath.exec_inhibited_no_ok (k := userPath) (coveredSteps_valid fork) hcode stack caller inhibited exec
 
 /-- **Exit rejection.** While slot 0 holds the inhibitor, every execution of the exit code at a
 non-system caller from an empty stack ends in failure, for any calldata, value and memory. The only
@@ -78,7 +80,7 @@ theorem exec_fee_read (hcode : sevm.code = code) (fork : CoveredFork sevm.benvSt
     (caller : sevm.caller ≠ systemAddress) (empty : sevm.data = [])
     (exec : Exec 0 sevm pre (.ok post)) :
     ∃ iterations finalOutput, UserPath.FeeRead 2 sevm pre post iterations finalOutput :=
-  UserPath.exec_fee_read (k := userPath) hcode fork stack aligned wf caller empty exec
+  UserPath.exec_fee_read (k := userPath) (coveredSteps_valid fork) hcode stack aligned wf caller empty exec
 
 /-- The exit fee read, forward: such a read exists at the exact charge whenever slot 0 is off the
 inhibitor, so `exec_fee_read`'s premises can be met. -/
@@ -90,7 +92,7 @@ theorem exec_fee_read_exact {b : Devm} {M : Mem} {G iterations : Nat} {finalOutp
     (wordRun : WordFakeExponential.Run (storedExcess 2 sevm b) 17 1 17 0 iterations finalOutput) :
     Nonempty (Exec 0 sevm (St b [] M (G + UserPath.feeReadGas sevm b M iterations))
       (.ok (RequestFee.feeGetterPost (feeBase sevm b) M (finalOutput / (17 : B256)) G))) :=
-  UserPath.exec_fee_read_exact (k := userPath) hcode fork aligned caller empty zero off wordRun
+  UserPath.exec_fee_read_exact (k := userPath) (coveredSteps_valid fork) hcode aligned caller empty zero off wordRun
 
 /-! ## Submissions -/
 
@@ -103,9 +105,23 @@ def submittedStorage (sevm : Sevm) (s : Stor) : Stor :=
   ((((s.set 1 (1 + s.get 1)).set key sevm.caller.toB256).set (1 + key) (Sevm.dataWord sevm 0)).set
     (1 + (1 + key)) (Sevm.dataWord sevm 32)).set 3 (1 + tail)
 
-/-- What a successful submission does, for the fee recurrence's iteration count and final output. -/
-structure Submitted (sevm : Sevm) (pre post : Devm) (iterations : Nat) (finalOutput : B256) :
-    Prop where
+/-- What a submission's frame does to the world and its log, from the base it starts on. -/
+structure SubmissionEffects (sevm : Sevm) (pre post : Devm) : Prop where
+  /-- The contract's storage is exactly `submittedStorage`; `submittedStorage_record` reads its record. -/
+  storage : post.getStor sevm.currentTarget = submittedStorage sevm (pre.getStor sevm.currentTarget)
+  /-- No other account's storage changed. -/
+  otherStorage : ∀ address, address ≠ sevm.currentTarget → post.getStor address = pre.getStor address
+  /-- No balance changed within the frame's code. -/
+  balance : ∀ address, post.getBal address = pre.getBal address
+  /-- One topicless log is appended, its data the caller's 20 bytes and the calldata. -/
+  logs : post.logs = pre.logs ++ [⟨sevm.currentTarget, [], sevm.caller.toBytes ++ sevm.data⟩]
+  /-- `STOP` returns nothing of its own: the output is the one the frame started with. -/
+  output : post.output = pre.output
+
+/-- What a successful submission does on a fork's steps, for the fee recurrence's iteration count and final
+output. -/
+structure SubmittedOn (l : StorageSteps sevm) (pre post : Devm) (iterations : Nat) (finalOutput : B256) :
+    Prop extends SubmissionEffects sevm pre post where
   /-- The frame is not static. -/
   dynamic : sevm.isStatic = false
   /-- The calldata is exactly 48 bytes. -/
@@ -116,29 +132,24 @@ structure Submitted (sevm : Sevm) (pre post : Devm) (iterations : Nat) (finalOut
   quote : WordFakeExponential.Run (storedExcess 2 sevm pre) 17 1 17 0 iterations finalOutput
   /-- The value covers the quoted fee. Surplus value is accepted and stays with the contract. -/
   covered : (finalOutput / (17 : B256)).toNat ≤ sevm.value.toNat
-  /-- The contract's storage is exactly `submittedStorage`; `submittedStorage_record` reads its record. -/
-  storage : post.getStor sevm.currentTarget =
-    submittedStorage sevm (pre.getStor sevm.currentTarget)
-  /-- No other account's storage changed. -/
-  otherStorage : ∀ address, address ≠ sevm.currentTarget →
-    post.getStor address = pre.getStor address
-  /-- No balance changed within the frame's code. -/
-  balance : ∀ address, post.getBal address = pre.getBal address
-  /-- One topicless log is appended, its data the caller's 20 bytes and the 48 calldata bytes. -/
-  logs : post.logs = pre.logs ++ [⟨sevm.currentTarget, [], sevm.caller.toBytes ++ sevm.data⟩]
-  /-- `STOP` returns nothing of its own: the output is the one the frame started with. -/
-  output : post.output = pre.output
   /-- The whole post state, including warmed keys, refunds and memory. -/
-  state : ∃ gas, post = submissionPost sevm (feeBase sevm pre) pre.memory gas
+  state : ∃ gas, post = Steps.submissionPost l (l.feeBase pre) pre.memory gas
 
-/-- **Exit frames.** A successful non-system frame at the exit code. -/
-inductive UserFrame (sevm : Sevm) (pre post : Devm) : Prop where
+/-- A successful non-system frame at the exit code, on a fork's steps. -/
+inductive UserFrameOn (l : StorageSteps sevm) (pre post : Devm) : Prop where
   /-- A submission. -/
   | submission (iterations : Nat) (finalOutput : B256)
-      (effect : Submitted sevm pre post iterations finalOutput)
+      (effect : SubmittedOn l pre post iterations finalOutput)
   /-- A fee read: empty calldata. -/
   | feeRead (iterations : Nat) (finalOutput : B256) (empty : sevm.data = [])
-      (effect : UserPath.FeeRead 2 sevm pre post iterations finalOutput)
+      (effect : UserPath.FeeReadOn l 2 pre post iterations finalOutput)
+
+/-- What a successful submission does under covered forks. -/
+abbrev Submitted (sevm : Sevm) (pre post : Devm) (iterations : Nat) (finalOutput : B256) : Prop :=
+  SubmittedOn (coveredSteps sevm) pre post iterations finalOutput
+
+/-- **Exit frames.** A successful non-system frame at the exit code under covered forks. -/
+abbrev UserFrame (sevm : Sevm) (pre post : Devm) : Prop := UserFrameOn (coveredSteps sevm) pre post
 
 /-- On a tail with its slots below the word modulus, the record a submission leaves: **the source is
 exactly the caller**, and the two words after it are the calldata's. -/
@@ -204,75 +215,121 @@ theorem submissionLog_eq {sevm : Sevm} {M : Mem} (hlen : sevm.data.length = 48) 
   rw [whole] at image
   rw [submissionLog, windowLog, image]
 
-theorem submissionPost_effects {sevm : Sevm} {b : Devm} {M : Mem} (hlen : sevm.data.length = 48)
-    (wf : Mem.Wf M) (gas : Nat) :
-    (submissionPost sevm (feeBase sevm b) M gas).getStor sevm.currentTarget =
-      submittedStorage sevm (b.getStor sevm.currentTarget) ∧
-    (∀ a, a ≠ sevm.currentTarget →
-      (submissionPost sevm (feeBase sevm b) M gas).getStor a = b.getStor a) ∧
-    (∀ a, (submissionPost sevm (feeBase sevm b) M gas).getBal a = b.getBal a) ∧
-    (submissionPost sevm (feeBase sevm b) M gas).logs =
-      b.logs ++ [⟨sevm.currentTarget, [], sevm.caller.toBytes ++ sevm.data⟩] ∧
-    (submissionPost sevm (feeBase sevm b) M gas).output = b.output := by
-  have facts := fun a => stop_projections (submissionBase sevm (feeBase sevm b) M) []
-    (submissionMemory sevm M) gas a
-  have base := read_feeBase sevm (s := b)
-  have other : ∀ (s : Devm) (k v : B256) (a : Adr), a ≠ sevm.currentTarget →
-      (afterSstore sevm s k v).getStor a = s.getStor a := fun s k v a h =>
-    afterSstore_getStor_ne sevm s k v a h.symm
-  unfold submissionPost
-  refine ⟨?_, ?_, ?_, ?_, ?_⟩
-  · refine (facts _).1.trans ?_
-    rw [submissionBase, afterSstore_getStor_self, Devm.addLog_getStor, recordsWritten, recordStore,
-      afterSstore_getStor_self, afterSstore_getStor_self, afterSstore_getStor_self, tailRead,
-      afterSload_getStor, tailWord_eq, countStore, afterSstore_getStor_self, afterSload_getStor,
-      countWord_feeBase, base]
-    simp only [submittedStorage, feeBase, afterSload_getStor]
-    rfl
-  · intro a hne
-    refine (facts a).1.trans ?_
-    simp only [submissionBase, recordsWritten, recordStore, tailRead, countStore, feeBase,
-      other _ _ _ _ hne, afterSload_getStor, Devm.addLog_getStor]
-  · intro a
-    refine (facts a).2.1.trans ?_
-    simp only [submissionBase, addLog_getBal, recordsWritten, recordStore, tailRead,
-      countStore, feeBase, afterSstore_getBal, afterSload_getBal]
-  · refine (facts sevm.currentTarget).2.2.1.trans ?_
-    rw [submissionBase, afterSstore_logs, Devm.addLog_logs, submissionLog_eq hlen wf]
-    simp only [recordsWritten, recordStore, afterSstore_logs, tailRead, afterSload_logs, countStore,
-      feeBase]
-  · refine (facts sevm.currentTarget).2.2.2.trans ?_
-    simp only [submissionBase, addLog_output, afterSstore_output, recordsWritten, recordStore,
-      tailRead, afterSload_output, countStore, feeBase]
+/-- The world's post state of a submission, from the base's state. -/
+theorem submissionBase_state {l : StorageSteps sevm} {b : Devm} {M : Mem} (v : l.Valid) :
+    (Steps.submissionBase l (l.feeBase b) M).state =
+      let tail := (b.state.getStor sevm.currentTarget).get 3
+      let key := submissionKey tail
+      let a := sevm.currentTarget
+      ((((b.state.setStorVal a 1 (1 + (b.state.getStor a).get 1)).setStorVal a key
+        sevm.caller.toB256).setStorVal a (1 + key) (Sevm.dataWord sevm 0)).setStorVal a (1 + (1 + key))
+        (Sevm.dataWord sevm 32)).setStorVal a 3 (1 + tail) := by
+  have hbase := v.state_feeBase b
+  have hc : countWord sevm (l.feeBase b) = (b.state.getStor sevm.currentTarget).get 1 :=
+    v.read_feeBase 1 _ b
+  have ht : l.tailWord (l.feeBase b) = (b.state.getStor sevm.currentTarget).get 3 :=
+    (v.tailWord_eq _).trans (v.read_feeBase 3 _ b)
+  have hcs : (l.countStore (l.feeBase b)).state =
+      b.state.setStorVal sevm.currentTarget 1 (1 + (b.state.getStor sevm.currentTarget).get 1) := by
+    rw [v.countStore_state, hbase]
+    have h1 : (l.feeBase b).getStorVal sevm.currentTarget 1 = (b.state.getStor sevm.currentTarget).get 1 := hc
+    rw [h1]
+  show (l.afterWrite _ 3 _).state = _
+  rw [v.writeState, ht]
+  show State.setStorVal (Steps.recordsWritten l (l.feeBase b)).state _ _ _ = _
+  simp only [Steps.recordsWritten, Steps.recordStore, v.writeState, StorageSteps.tailRead, v.readState, hcs, ht]
 
-/-- **Exit frames.** Every successful execution of the exit code at a non-system caller, from an empty
-stack, is a submission or a fee read. `aligned` and `wf` hold of the empty memory every frame starts with;
-`lengthBound` holds of any calldata a frame can carry, since `CALLDATASIZE` is read as a word. Success
-already implies slot 0 is off the inhibitor (`Submitted.active`, `FeeRead.active`). The converses are
-`exec_submission_exact` and `exec_fee_read_exact`. The statement stops at the frame: it does not cover
-message or transaction level. -/
-theorem exec_user_frame (hcode : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+/-- **What a submission's frame does**, on a fork's steps: the same storage, log and balances on every
+fork. -/
+theorem submissionPost_effects {l : StorageSteps sevm} {b : Devm} {M : Mem} (v : l.Valid)
+    (hlen : sevm.data.length = 48) (wf : Mem.Wf M) (gas : Nat) :
+    SubmissionEffects sevm b (Steps.submissionPost l (l.feeBase b) M gas) := by
+  have hstate := submissionBase_state (b := b) (M := M) v
+  have stor : ∀ x, (Steps.submissionPost l (l.feeBase b) M gas).getStor x =
+      (Steps.submissionBase l (l.feeBase b) M).state.getStor x := fun _ => rfl
+  have bal : ∀ x, (Steps.submissionPost l (l.feeBase b) M gas).getBal x =
+      ((Steps.submissionBase l (l.feeBase b) M).state.get x).bal := fun _ => rfl
+  refine ⟨?_, ?_, ?_, ?_, ?_⟩
+  · rw [stor, hstate]
+    show _ = submittedStorage sevm (b.state.getStor sevm.currentTarget)
+    simp only [State.getStor_setStorVal_self, submittedStorage]
+  · intro a hne
+    rw [stor, hstate]
+    show _ = b.state.getStor a
+    simp only [State.getStor_setStorVal_other _ _ _ hne.symm]
+  · intro a
+    rw [bal, hstate]
+    show _ = (b.state.get a).bal
+    simp only [State.bal_setStorVal]
+  · show (Steps.submissionBase l (l.feeBase b) M).logs = b.logs ++ _
+    rw [Steps.submissionBase, v.writeLogs, Steps.logged, Devm.addLog_logs, submissionLog_eq hlen wf]
+    simp only [Steps.recordsWritten, Steps.recordStore, v.writeLogs, StorageSteps.tailRead, v.readLogs,
+      StorageSteps.countStore, StorageSteps.feeBase]
+  · show (Steps.submissionBase l (l.feeBase b) M).output = b.output
+    simp only [Steps.submissionBase, Steps.logged, v.writeOutput, addLog_output, Steps.recordsWritten,
+      Steps.recordStore, StorageSteps.tailRead, v.readOutput, StorageSteps.countStore, StorageSteps.feeBase]
+
+/-- Every successful execution of the exit code at a non-system caller, from an empty stack, on a fork's
+steps, is a submission or a fee read. -/
+theorem exec_user_frame_on {l : StorageSteps sevm} (v : l.Valid) (hcode : sevm.code = code)
     (stack : pre.stack = []) (aligned : pre.memory.size % 32 = 0) (wf : Mem.Wf pre.memory)
     (lengthBound : sevm.data.length < 2 ^ 256) (caller : sevm.caller ≠ systemAddress)
-    (exec : Exec 0 sevm pre (.ok post)) : UserFrame sevm pre post := by
-  rcases UserPath.exec_user_cases (k := userPath) hcode fork stack aligned wf lengthBound caller exec with
+    (exec : Exec 0 sevm pre (.ok post)) : UserFrameOn l pre post := by
+  rcases UserPath.exec_user_cases (k := userPath) v hcode stack aligned wf lengthBound caller exec with
     ⟨active, literal, iterations, finalOutput, wordRun, _, run⟩ | ⟨empty, iterations, finalOutput, read⟩
   · have literal : sevm.data.length = 48 := literal
     obtain ⟨cov, _, run⟩ := guard_inv run
-    obtain ⟨dynamic, gas, state⟩ := body_inv fork run
+    obtain ⟨dynamic, gas, state⟩ := body_inv v run
     have state := Outcome.halted.inj state
     subst state
-    obtain ⟨storage, other, balance, logs, output⟩ :=
-      submissionPost_effects (b := pre) (M := pre.memory) literal wf gas
-    exact .submission iterations finalOutput ⟨dynamic, literal, active, wordRun, cov, storage,
-      other, balance, logs, output, gas, rfl⟩
+    exact .submission iterations finalOutput
+      ⟨submissionPost_effects v literal wf gas, dynamic, literal, active, wordRun, cov, gas, rfl⟩
   · exact .feeRead iterations finalOutput empty read
 
-/-- The charge of a submission, from the frame's start. -/
+/-- The exit contract's user frames. -/
+def frames : UserFrames where
+  code := code
+  Frame := UserFrameOn
+  frame := exec_user_frame_on
+
+/-- **Exit frames.** `UserFrames.exec_user_frame` at the exit code: every successful execution at a
+non-system caller, from an empty stack, under covered forks, is a `UserFrame`. -/
+abbrev exec_user_frame := @UserFrames.exec_user_frame frames
+
+/-- What a submission takes from `gasLeft`, from the frame's start, on a fork's steps. -/
+def submissionGasOn (l : StorageSteps sevm) (b : Devm) (M : Mem) (iterations : Nat) : Nat :=
+  Steps.bodyGas l (l.feeBase b) M + 19 + l.feePathGas b iterations + RequestSystem.dispatchGas
+
+/-- The charge of a submission, from the frame's start, under covered forks. -/
 def submissionGas (sevm : Sevm) (b : Devm) (M : Mem) (iterations : Nat) : Nat :=
-  bodyGas sevm (feeBase sevm b) M + 19 + feePathGas sevm b iterations + RequestSystem.dispatchGas
+  submissionGasOn (coveredSteps sevm) b M iterations
 
 variable {b : Devm} {M : Mem} {G : Nat}
+
+/-- **Submission, forward**, on a fork's steps. 48 bytes of calldata in a non-static frame, slot 0 off the
+inhibitor and value covering the fee give a successful execution, taking `submissionGasOn` from `gasLeft`
+and returning `bodyRepay`, leaving `slack` over the `SSTORE` sentry. -/
+theorem exec_submission_on {l : StorageSteps sevm} {iterations : Nat} {finalOutput : B256} (v : l.Valid)
+    (hcode : sevm.code = code) (caller : sevm.caller ≠ systemAddress) (hlen : sevm.data.length = 48)
+    (dynamic : sevm.isStatic = false) (slack : gCallStipend < G)
+    (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
+    (wordRun : WordFakeExponential.Run (storedExcess 2 sevm b) 17 1 17 0 iterations finalOutput)
+    (cov : (finalOutput / (17 : B256)).toNat ≤ sevm.value.toNat) :
+    Nonempty (Exec 0 sevm (St b [] M (G + submissionGasOn l b M iterations))
+      (.ok (Steps.submissionPost l (l.feeBase b) M (G + Steps.bodyRepay l (l.feeBase b) M)))) := by
+  have word : sevm.data.length.toB256 = userPath.shape.len.word := by rw [hlen]; rfl
+  have body := guard_exact cov (body_exact (b := l.feeBase b) (M := M) v dynamic slack)
+  have path := feePath_exact userPath.shape v (revert := userPath.revert)
+    (getter := userPath.getter) (submission := t_009e_c1) userPath.window userPath.loop off
+    wordRun (by
+      rw [RequestFee.selected, ite_eq_left word]
+      exact body)
+  have hgas : G + submissionGasOn l b M iterations =
+      (G + Steps.bodyGas l (l.feeBase b) M + 19 + l.feePathGas b iterations) +
+        RequestSystem.dispatchGas := by
+    simp only [submissionGasOn, Nat.add_assoc]
+  rw [hgas]
+  exact UserPath.exec_of_user (k := userPath) hcode caller path
 
 /-- **Submission, forward.** 48 bytes of calldata in a non-static frame, slot 0 off the inhibitor and value
 covering the fee give a successful execution at the exact charge, leaving `slack` over the `SSTORE` sentry. -/
@@ -284,20 +341,9 @@ theorem exec_submission_exact {iterations : Nat} {finalOutput : B256}
     (wordRun : WordFakeExponential.Run (storedExcess 2 sevm b) 17 1 17 0 iterations finalOutput)
     (cov : (finalOutput / (17 : B256)).toNat ≤ sevm.value.toNat) :
     Nonempty (Exec 0 sevm (St b [] M (G + submissionGas sevm b M iterations))
-      (.ok (submissionPost sevm (feeBase sevm b) M G))) := by
-  have word : sevm.data.length.toB256 = userPath.shape.len.word := by rw [hlen]; rfl
-  have body := guard_exact cov (body_exact (b := feeBase sevm b) (M := M) fork dynamic slack)
-  have path := feePath_exact userPath.shape (revert := userPath.revert)
-    (getter := userPath.getter) (submission := t_009e_c1) fork userPath.window userPath.loop off
-    wordRun (by
-      rw [RequestFee.selected, ite_eq_left word]
-      exact body)
-  have hgas : G + submissionGas sevm b M iterations =
-      (G + bodyGas sevm (feeBase sevm b) M + 19 + feePathGas sevm b iterations) +
-        RequestSystem.dispatchGas := by
-    simp only [submissionGas, Nat.add_assoc]
-  rw [hgas]
-  exact UserPath.exec_of_user (k := userPath) hcode fork caller path
+      (.ok (submissionPost sevm (feeBase sevm b) M G))) :=
+  exec_submission_on (l := coveredSteps sevm) (M := M) (coveredSteps_valid fork) hcode caller hlen dynamic slack off
+    wordRun cov
 
 /-- **The submission's premises can all be met together.** On storage whose slots 0 and 1 are zero, any 48
 bytes of calldata and a value of at least 1 wei in a non-static frame run to `STOP`. -/

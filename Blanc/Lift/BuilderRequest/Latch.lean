@@ -116,7 +116,7 @@ theorem latchState_get (p : SysShape) (σ : State) (a : Adr) (key : B256) :
 theorem latchState_bal (p : SysShape) (σ : State) (a x : Adr) :
     ((latchState p σ a).get x).bal = (σ.get x).bal := by
   simp only [latchState]
-  split <;> simp only [bal_setStorVal]
+  split <;> simp only [State.bal_setStorVal]
 
 theorem latchState_getCode (p : SysShape) (σ : State) (a x : Adr) :
     (latchState p σ a).getCode x = σ.getCode x := by

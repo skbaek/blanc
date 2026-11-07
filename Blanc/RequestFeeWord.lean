@@ -121,4 +121,35 @@ theorem word_fee_le {excess : B256} {iterations : Nat} {output : B256}
       (by decide) (by decide) (small_run_window run small)
   · exact (word_fee_lt_of_large_excess output (not_lt.mp small)).le
 
+/-- A no-wrap checker for the natural recurrence, run from a sum prefix. -/
+def noWrapCheck (numerator : Nat) : Nat → Nat → Nat → Nat → Bool
+  | 0, _, accumulator, sum => accumulator == 0 && decide (sum < 2 ^ 256)
+  | fuel + 1, counter, accumulator, sum =>
+    if accumulator = 0 then decide (sum < 2 ^ 256)
+    else
+      decide (sum + accumulator < 2 ^ 256) && decide (accumulator * numerator < 2 ^ 256) &&
+        decide (17 * counter < 2 ^ 256) &&
+        noWrapCheck numerator fuel (counter + 1) (accumulator * numerator / (17 * counter))
+          (sum + accumulator)
+
+/-- A passing check is a Nat trace with the no-wrap bounds. -/
+theorem noWrap_of_check {numerator fuel counter accumulator sum : Nat}
+    (h : noWrapCheck numerator fuel counter accumulator sum = true) :
+    ∃ iterations output, ∃ run : FakeExponential.Run numerator 17 counter accumulator iterations output,
+      FakeExponentialWordCorrespondence.NoWrap run sum := by
+  induction fuel generalizing counter accumulator sum with
+  | zero =>
+    simp only [noWrapCheck, Bool.and_eq_true, beq_iff_eq, decide_eq_true_eq] at h
+    obtain ⟨rfl, hs⟩ := h
+    exact ⟨0, 0, .stop counter, .stop counter sum hs⟩
+  | succ fuel ih =>
+    by_cases ha : accumulator = 0
+    · subst ha
+      simp only [noWrapCheck, ite_true, decide_eq_true_eq] at h
+      exact ⟨0, 0, .stop counter, .stop counter sum h⟩
+    · simp only [noWrapCheck, ha, ite_false, Bool.and_eq_true, decide_eq_true_eq] at h
+      obtain ⟨⟨⟨h1, h2⟩, h3⟩, h4⟩ := h
+      obtain ⟨iterations, output, run, safe⟩ := ih h4
+      exact ⟨_, _, .step ha run, .step (active := ha) h1 h2 h3 safe⟩
+
 end Blanc.RequestFeeWord

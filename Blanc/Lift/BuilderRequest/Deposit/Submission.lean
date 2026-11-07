@@ -6,7 +6,7 @@ import Blanc.CommonProofs.MemImage
 /-!
 # The deposit runtime's submission path
 
-The three guards after the calldata-length branch, then the body: bump the count, write six calldata
+The walks are over a fork's `StorageSteps`. The three guards after the calldata-length branch, then the body: bump the count, write six calldata
 words at the tail record, emit the 184 calldata bytes as a topicless `LOG0`, bump the tail, `STOP`.
 Writes are stated in order, so everything here holds even when a record key aliases a metadata slot.
 -/
@@ -56,7 +56,7 @@ private theorem value_sub {sevm : Sevm} {fee : B256} (paid : fee.toNat ≤ sevm.
     (sevm.value - fee).toNat = sevm.value.toNat - fee.toNat := by
   rw [B256.toNat_sub, Nat.lo, Nat.add_sub_mod_eq_sub (B256.toNat_lt sevm.value) paid]
 
-variable {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
+variable {sevm : Sevm} {l : StorageSteps sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
 
 /-- Success passes all three guards. -/
 theorem guards_inv {fee : B256} (run : SFunc.Run prog sevm (St b [fee] M G) t_009f_c1 o) :
@@ -145,16 +145,6 @@ theorem guards_exact {fee : B256} (admitted : Admitted sevm fee)
 /-- The record's first storage key. -/
 def submissionKey (tail : B256) : B256 := 4 + 6 * tail
 
-/-- Store the calldata word at byte `off` under `key`. -/
-def wordStore (sevm : Sevm) (b : Devm) (key off : B256) : Devm :=
-  afterSstore sevm b key (Sevm.dataWord sevm off)
-
-/-- The six ordered record writes, at the keys the code computes from `key`. -/
-def recordStore (sevm : Sevm) (b : Devm) (key : B256) : Devm :=
-  wordStore sevm (wordStore sevm (wordStore sevm (wordStore sevm (wordStore sevm (wordStore sevm b
-    key 0) (1 + key) 32) (1 + (1 + key)) 64) (1 + (1 + (1 + key))) 96)
-    (1 + (1 + (1 + (1 + key)))) 128) (1 + (1 + (1 + (1 + (1 + key))))) 160
-
 /-- Memory holding the calldata copy. -/
 def copyMemory (sevm : Sevm) (M : Mem) : Mem := M.write 0 (sevm.data.sliceD 0 184 0)
 
@@ -164,136 +154,173 @@ def submissionLog (sevm : Sevm) (M : Mem) : Log := windowLog sevm (copyMemory se
 /-- Memory after the log's read. -/
 def submissionMemory (sevm : Sevm) (M : Mem) : Mem := ((copyMemory sevm M).read 0 184).2
 
-/-- The state after all six words. -/
-def recordsWritten (sevm : Sevm) (b : Devm) : Devm :=
-  recordStore sevm (tailRead sevm b) (submissionKey (tailWord sevm b))
-
-/-- The state after the log. -/
-def logged (sevm : Sevm) (b : Devm) (M : Mem) : Devm :=
-  (recordsWritten sevm b).addLog (submissionLog sevm M)
-
-/-- The base state of a finished submission. -/
-def submissionBase (sevm : Sevm) (b : Devm) (M : Mem) : Devm :=
-  afterSstore sevm (logged sevm b M) 3 (1 + tailWord sevm b)
-
-/-- `STOP` after a submission; `STOP` keeps the inherited output and error. -/
-def submissionPost (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) : Devm :=
-  St (submissionBase sevm b M) [] (submissionMemory sevm M) G
-
-/-- The charge of the record writes' `SSTORE`s. -/
-def recordWritesGas (sevm : Sevm) (b : Devm) (key : B256) : Nat :=
-  let s0 := wordStore sevm b key 0
-  let s1 := wordStore sevm s0 (1 + key) 32
-  let s2 := wordStore sevm s1 (1 + (1 + key)) 64
-  let s3 := wordStore sevm s2 (1 + (1 + (1 + key))) 96
-  let s4 := wordStore sevm s3 (1 + (1 + (1 + (1 + key)))) 128
-  sstoreCost sevm b key (Sevm.dataWord sevm 0) +
-  sstoreCost sevm s0 (1 + key) (Sevm.dataWord sevm 32) +
-  sstoreCost sevm s1 (1 + (1 + key)) (Sevm.dataWord sevm 64) +
-  sstoreCost sevm s2 (1 + (1 + (1 + key))) (Sevm.dataWord sevm 96) +
-  sstoreCost sevm s3 (1 + (1 + (1 + (1 + key)))) (Sevm.dataWord sevm 128) +
-  sstoreCost sevm s4 (1 + (1 + (1 + (1 + (1 + key))))) (Sevm.dataWord sevm 160)
-
 /-- `CALLDATACOPY` of the payload. -/
 def copyGas (M : Mem) : Nat :=
   gVerylow + gasCopy * ceilDiv 184 32 +
     (calculateMemoryGasCost (memExtSize M.size 0 184) - calculateMemoryGasCost M.size)
 
 /-- `LOG0` of the payload. -/
-def logGas (sevm : Sevm) (M : Mem) : Nat := log0Gas (copyMemory sevm M) 184
+def logGas (M : Mem) : Nat := log0Gas (copyMemory sevm M) 184
 
-/-- The exact charge of the submission body. -/
-def bodyGas (sevm : Sevm) (b : Devm) (M : Mem) : Nat :=
-  136 + sloadCost sevm b 1 + sstoreCost sevm (afterSload sevm b 1) 1 (1 + countWord sevm b) +
-    sloadCost sevm (countStore sevm b) 3 +
-    recordWritesGas sevm (tailRead sevm b) (submissionKey (tailWord sevm b)) +
-    copyGas M + logGas sevm M + sstoreCost sevm (logged sevm b M) 3 (1 + tailWord sevm b)
+namespace Steps
+
+variable (l : StorageSteps sevm)
+
+/-- Store the calldata word at byte `off` under `key`. -/
+def wordStore (b : Devm) (key off : B256) : Devm := l.afterWrite b key (Sevm.dataWord sevm off)
+
+/-- The six ordered record writes, at the keys the code computes from `key`. -/
+def recordStore (b : Devm) (key : B256) : Devm :=
+  wordStore l (wordStore l (wordStore l (wordStore l (wordStore l (wordStore l b
+    key 0) (1 + key) 32) (1 + (1 + key)) 64) (1 + (1 + (1 + key))) 96)
+    (1 + (1 + (1 + (1 + key)))) 128) (1 + (1 + (1 + (1 + (1 + key))))) 160
+
+/-- The state after all six words. -/
+def recordsWritten (b : Devm) : Devm := recordStore l (l.tailRead b) (submissionKey (l.tailWord b))
+
+/-- The state after the log. -/
+def logged (b : Devm) (M : Mem) : Devm := (recordsWritten l b).addLog (submissionLog sevm M)
+
+/-- The base state of a finished submission. -/
+def submissionBase (b : Devm) (M : Mem) : Devm := l.afterWrite (logged l b M) 3 (1 + l.tailWord b)
+
+/-- `STOP` after a submission; `STOP` keeps the inherited output and error. -/
+def submissionPost (b : Devm) (M : Mem) (G : Nat) : Devm :=
+  St (submissionBase l b M) [] (submissionMemory sevm M) G
+
+/-- What the record's stores take from `gasLeft`. -/
+def recordWritesGas (b : Devm) (key : B256) : Nat :=
+  let s0 := wordStore l b key 0
+  let s1 := wordStore l s0 (1 + key) 32
+  let s2 := wordStore l s1 (1 + (1 + key)) 64
+  let s3 := wordStore l s2 (1 + (1 + (1 + key))) 96
+  let s4 := wordStore l s3 (1 + (1 + (1 + (1 + key)))) 128
+  l.writeCharge b key (Sevm.dataWord sevm 0) +
+  l.writeCharge s0 (1 + key) (Sevm.dataWord sevm 32) +
+  l.writeCharge s1 (1 + (1 + key)) (Sevm.dataWord sevm 64) +
+  l.writeCharge s2 (1 + (1 + (1 + key))) (Sevm.dataWord sevm 96) +
+  l.writeCharge s3 (1 + (1 + (1 + (1 + key)))) (Sevm.dataWord sevm 128) +
+  l.writeCharge s4 (1 + (1 + (1 + (1 + (1 + key))))) (Sevm.dataWord sevm 160)
+
+/-- What the record's stores return to `gasLeft`. -/
+def recordWritesRepay (b : Devm) (key : B256) : Nat :=
+  let s0 := wordStore l b key 0
+  let s1 := wordStore l s0 (1 + key) 32
+  let s2 := wordStore l s1 (1 + (1 + key)) 64
+  let s3 := wordStore l s2 (1 + (1 + (1 + key))) 96
+  let s4 := wordStore l s3 (1 + (1 + (1 + (1 + key)))) 128
+  l.writeRepay b key (Sevm.dataWord sevm 0) +
+  l.writeRepay s0 (1 + key) (Sevm.dataWord sevm 32) +
+  l.writeRepay s1 (1 + (1 + key)) (Sevm.dataWord sevm 64) +
+  l.writeRepay s2 (1 + (1 + (1 + key))) (Sevm.dataWord sevm 96) +
+  l.writeRepay s3 (1 + (1 + (1 + (1 + key)))) (Sevm.dataWord sevm 128) +
+  l.writeRepay s4 (1 + (1 + (1 + (1 + (1 + key))))) (Sevm.dataWord sevm 160)
+
+/-- What the submission body takes from `gasLeft`, on its way. -/
+def bodyGas (b : Devm) (M : Mem) : Nat :=
+  136 + sloadCost sevm b 1 + l.writeCharge (l.afterRead b 1) 1 (1 + countWord sevm b) +
+    sloadCost sevm (l.countStore b) 3 +
+    recordWritesGas l (l.tailRead b) (submissionKey (l.tailWord b)) +
+    copyGas M + logGas (sevm := sevm) M + l.writeCharge (logged l b M) 3 (1 + l.tailWord b)
+
+/-- What the submission body's stores return to `gasLeft`: state gas a store credits against an earlier
+spill. -/
+def bodyRepay (b : Devm) (M : Mem) : Nat :=
+  l.writeRepay (l.afterRead b 1) 1 (1 + countWord sevm b) +
+    recordWritesRepay l (l.tailRead b) (submissionKey (l.tailWord b)) +
+    l.writeRepay (logged l b M) 3 (1 + l.tailWord b)
+
+end Steps
+
+/-- `STOP` after a submission under covered forks. -/
+abbrev submissionPost (sevm : Sevm) (b : Devm) (M : Mem) (G : Nat) : Devm :=
+  Steps.submissionPost (coveredSteps sevm) b M G
 
 private theorem word_inv {p : Bytes} {le : p.length ≤ 32} {off key tail : B256} {f : SFunc}
-    {r : Seg} (hp : Bytes.toB256 p = off) (fork : CoveredFork sevm.benvStat.fork)
+    {r : Seg} (hp : Bytes.toB256 p = off) (v : l.Valid)
     {le1 : [(0x01 : UInt8)].length ≤ 32}
     (run : SFunc.RunCut prog sevm [] (St b [key, tail] M G)
       (.next (.push p le) (.next (.reg .calldataload) (.next (.reg (.dup 1)) (.next (.reg .sstore)
         (.next (.push [0x01] le1) (.next (.reg .add) f)))))) r) :
-    ∃ G', SFunc.RunCut prog sevm [] (St (wordStore sevm b key off) [1 + key, tail] M G') f r := by
+    ∃ G', SFunc.RunCut prog sevm [] (St (Steps.wordStore l b key off) [1 + key, tail] M G') f r := by
   subst hp
   winv 3
   obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_sstore fork h
+  obtain ⟨_, rfl⟩ := v.writeInv h
   winv 2
   exact ⟨_, run⟩
 
 /-- A successful body run is non-static and ends in exactly `submissionPost`. -/
-theorem body_inv (fork : CoveredFork sevm.benvStat.fork)
+theorem body_inv (v : l.Valid)
     (run : SFunc.Run prog sevm (St b [] M G) t_00cd_c1 o) :
-    sevm.isStatic = false ∧ ∃ G', o = .halted (submissionPost sevm b M G') := by
+    sevm.isStatic = false ∧ ∃ G', o = .halted (Steps.submissionPost l b M G') := by
   have run := run.cut
   unfold t_00cd_c1 at run
   winv 1
   obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_val (w := countWord sevm b) rfl (ri_sload fork h)
+  obtain ⟨_, rfl⟩ := ri_val (w := countWord sevm b) rfl (v.readInv h)
   winv 3
   obtain ⟨_, h, run⟩ := ric_next run
-  have dynamic := ri_sstore_nonstatic fork h
-  obtain ⟨_, rfl⟩ := ri_sstore fork h
-  change SFunc.RunCut _ _ _ (St (countStore sevm b) [] M _) _ _ at run
+  have dynamic := v.writeDynamic h
+  obtain ⟨_, rfl⟩ := v.writeInv h
+  change SFunc.RunCut _ _ _ (St (l.countStore b) [] M _) _ _ at run
   winv 1
   obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_val (w := tailWord sevm b) rfl (ri_sload fork h)
+  obtain ⟨_, rfl⟩ := ri_val (w := l.tailWord b) rfl (v.readInv h)
   winv 5
   change SFunc.RunCut _ _ _
-    (St (tailRead sevm b) [submissionKey (tailWord sevm b), tailWord sevm b] M _) _ _ at run
-  obtain ⟨_, run⟩ := word_inv rfl fork run
-  obtain ⟨_, run⟩ := word_inv rfl fork run
-  obtain ⟨_, run⟩ := word_inv rfl fork run
-  obtain ⟨_, run⟩ := word_inv rfl fork run
-  obtain ⟨_, run⟩ := word_inv rfl fork run
+    (St (l.tailRead b) [submissionKey (l.tailWord b), l.tailWord b] M _) _ _ at run
+  obtain ⟨_, run⟩ := word_inv rfl v run
+  obtain ⟨_, run⟩ := word_inv rfl v run
+  obtain ⟨_, run⟩ := word_inv rfl v run
+  obtain ⟨_, run⟩ := word_inv rfl v run
+  obtain ⟨_, run⟩ := word_inv rfl v run
   winv 3
   obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_sstore fork h
-  change SFunc.RunCut _ _ _ (St (recordsWritten sevm b) [tailWord sevm b] M _) _ _ at run
+  obtain ⟨_, rfl⟩ := v.writeInv h
+  change SFunc.RunCut _ _ _ (St (Steps.recordsWritten l b) [l.tailWord b] M _) _ _ at run
   winv 3
   obtain ⟨_, h, run⟩ := ric_next run
   obtain ⟨_, rfl⟩ := ri_calldatacopy h
   winv 2
-  change SFunc.RunCut _ _ _ (St (recordsWritten sevm b) [0, Bytes.toB256 [0xb8], tailWord sevm b]
+  change SFunc.RunCut _ _ _ (St (Steps.recordsWritten l b) [0, Bytes.toB256 [0xb8], l.tailWord b]
     (copyMemory sevm M) _) logTail _ at run
-  obtain ⟨_, rfl⟩ := logTail_inv fork run
+  obtain ⟨_, rfl⟩ := v.logTail_inv run
   exact ⟨dynamic, _, rfl⟩
 
 private theorem word_exact {x : UInt8} {xs : Bytes} {le : (x :: xs).length ≤ 32} {off key tail : B256}
-    {f : SFunc} (hp : Bytes.toB256 (x :: xs) = off)
-    (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
-    (slack : gCallStipend < G) {le1 : [(0x01 : UInt8)].length ≤ 32}
-    (tail' : SFunc.RunExact prog sevm
-      (St (wordStore sevm b key off) [1 + key, tail] M G) f o) :
+    {f : SFunc} {X : Nat} (hp : Bytes.toB256 (x :: xs) = off) (v : l.Valid) (dynamic : sevm.isStatic = false)
+    (slack : gCallStipend < X) {le1 : [(0x01 : UInt8)].length ≤ 32}
+    (tail' : ∀ r, r = l.writeRepay b key (Sevm.dataWord sevm off) → SFunc.RunExact prog sevm
+      (St (Steps.wordStore l b key off) [1 + key, tail] M (X + r)) f o) :
     SFunc.RunExact prog sevm
-      (St b [key, tail] M (G + 3 + 3 + sstoreCost sevm b key (Sevm.dataWord sevm off) + 3 + 3 + 3))
+      (St b [key, tail] M (X + 3 + 3 + l.writeCharge b key (Sevm.dataWord sevm off) + 3 + 3 + 3))
       (.next (.push (x :: xs) le) (.next (.reg .calldataload) (.next (.reg (.dup 1))
         (.next (.reg .sstore) (.next (.push [0x01] le1) (.next (.reg .add) f)))))) o := by
   refine rx_push hp (by change 2 < 1024; decide) ?_
   refine rx_calldataload (by change 2 < 1024; decide) ?_
   refine rx_dup2 (by change 3 < 1024; decide) ?_
-  refine rx_sstore fork (by omega) dynamic ?_
+  refine v.write_sink dynamic (by omega) fun r hr => ?_
+  simp only [Nat.add_right_comm _ _ r]
   refine rx_push rfl (by change 2 < 1024; decide) ?_
-  exact rx_add' rfl (by change 1 < 1024; decide) tail'
+  exact rx_add' rfl (by change 1 < 1024; decide) (tail' r hr)
 
-private theorem word0_exact {key tail : B256} {f : SFunc}
-    (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
-    (slack : gCallStipend < G) {le0 : ([] : Bytes).length ≤ 32}
+private theorem word0_exact {key tail : B256} {f : SFunc} {X : Nat} (v : l.Valid)
+    (dynamic : sevm.isStatic = false) (slack : gCallStipend < X) {le0 : ([] : Bytes).length ≤ 32}
     {le1 : [(0x01 : UInt8)].length ≤ 32}
-    (tail' : SFunc.RunExact prog sevm
-      (St (wordStore sevm b key 0) [1 + key, tail] M G) f o) :
+    (tail' : ∀ r, r = l.writeRepay b key (Sevm.dataWord sevm 0) → SFunc.RunExact prog sevm
+      (St (Steps.wordStore l b key 0) [1 + key, tail] M (X + r)) f o) :
     SFunc.RunExact prog sevm
-      (St b [key, tail] M (G + 3 + 3 + sstoreCost sevm b key (Sevm.dataWord sevm 0) + 3 + 3 + 2))
+      (St b [key, tail] M (X + 3 + 3 + l.writeCharge b key (Sevm.dataWord sevm 0) + 3 + 3 + 2))
       (.next (.push [] le0) (.next (.reg .calldataload) (.next (.reg (.dup 1))
         (.next (.reg .sstore) (.next (.push [0x01] le1) (.next (.reg .add) f)))))) o := by
-  refine rx_push0 (h_push0 := fork.rules_push0) (by change 2 < 1024; decide) ?_
+  refine rx_push0 (h_push0 := v.push0) (by change 2 < 1024; decide) ?_
   refine rx_calldataload (by change 2 < 1024; decide) ?_
   refine rx_dup2 (by change 3 < 1024; decide) ?_
-  refine rx_sstore fork (by omega) dynamic ?_
+  refine v.write_sink dynamic (by omega) fun r hr => ?_
+  simp only [Nat.add_right_comm _ _ r]
   refine rx_push rfl (by change 2 < 1024; decide) ?_
-  exact rx_add' rfl (by change 1 < 1024; decide) tail'
+  exact rx_add' rfl (by change 1 < 1024; decide) (tail' r hr)
 
 private def memoryTree : SFunc :=
   (.next (.push [0xb8] (by decide)) (.next (.push [] (by decide)) (.next (.push [] (by decide))
@@ -322,94 +349,116 @@ private def bodyTree : SFunc :=
 
 private theorem body_split : t_00cd_c1 = bodyTree := rfl
 
-private theorem suffix_exact (fork : CoveredFork sevm.benvStat.fork)
-    (dynamic : sevm.isStatic = false) (slack : gCallStipend < G) :
+private theorem suffix_exact {H : Nat} (v : l.Valid) (dynamic : sevm.isStatic = false)
+    (slack : gCallStipend < H) :
     SFunc.RunExact prog sevm
-      (St (recordsWritten sevm b) [tailWord sevm b] M
-        (G + sstoreCost sevm (logged sevm b M) 3 (1 + tailWord sevm b) + 3 + 3 + 3 +
-          logGas sevm M + 2 + 3 + copyGas M + 2 + 2 + 3))
-      memoryTree (.halted (submissionPost sevm b M G)) := by
+      (St (Steps.recordsWritten l b) [l.tailWord b] M
+        (H + l.writeCharge (Steps.logged l b M) 3 (1 + l.tailWord b) + 3 + 3 + 3 +
+          logGas (sevm := sevm) M + 2 + 3 + copyGas M + 2 + 2 + 3))
+      memoryTree (.halted (Steps.submissionPost l b M
+        (H + l.writeRepay (Steps.logged l b M) 3 (1 + l.tailWord b)))) := by
   unfold memoryTree
   refine rx_push rfl (by change 1 < 1024; decide) ?_
-  refine rx_push0 (h_push0 := fork.rules_push0) (by change 2 < 1024; decide) ?_
-  refine rx_push0 (h_push0 := fork.rules_push0) (by change 3 < 1024; decide) ?_
+  refine rx_push0 (h_push0 := v.push0) (by change 2 < 1024; decide) ?_
+  refine rx_push0 (h_push0 := v.push0) (by change 3 < 1024; decide) ?_
   refine rx_calldatacopy (Devm.extCost_add_of_size rfl rfl) rfl ?_
   refine rx_push rfl (by change 1 < 1024; decide) ?_
-  refine rx_push0 (h_push0 := fork.rules_push0) (by change 2 < 1024; decide) ?_
-  exact logTail_exact (n := Bytes.toB256 [0xb8]) fork dynamic slack
+  refine rx_push0 (h_push0 := v.push0) (by change 2 < 1024; decide) ?_
+  exact v.logTail_exact (n := Bytes.toB256 [0xb8]) dynamic slack
 
-private theorem word5_exact {key tail : B256} {G' : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
-    (slack : gCallStipend < G')
-    (next : SFunc.RunExact prog sevm (St (wordStore sevm b key 160) [tail] M G') memoryTree o) :
+private theorem word5_exact {key tail : B256} {X : Nat} (v : l.Valid) (dynamic : sevm.isStatic = false)
+    (slack : gCallStipend < X)
+    (next : ∀ r, r = l.writeRepay b key (Sevm.dataWord sevm 160) → SFunc.RunExact prog sevm
+      (St (Steps.wordStore l b key 160) [tail] M (X + r)) memoryTree o) :
     SFunc.RunExact prog sevm
-      (St b [key, tail] M (G' + sstoreCost sevm b key (Sevm.dataWord sevm 160) + 3 + 3 + 3))
+      (St b [key, tail] M (X + l.writeCharge b key (Sevm.dataWord sevm 160) + 3 + 3 + 3))
       word5Tree o := by
   unfold word5Tree
   refine rx_push rfl (by change 2 < 1024; decide) ?_
   refine rx_calldataload (by change 2 < 1024; decide) ?_
   refine rx_swap1 ?_
-  exact rx_sstore fork (by omega) dynamic next
+  exact v.write_sink dynamic (by omega) next
 
-private theorem words_exact {key tail : B256} {G' : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
-    (slack : gCallStipend < G')
-    (next : SFunc.RunExact prog sevm (St (recordStore sevm b key) [tail] M G') memoryTree o) :
-    SFunc.RunExact prog sevm (St b [key, tail] M (G' + 83 + recordWritesGas sevm b key))
-      wordsTree o := by
-  have h5 := word5_exact (b := wordStore sevm (wordStore sevm (wordStore sevm (wordStore sevm
-    (wordStore sevm b key 0) (1 + key) 32) (1 + (1 + key)) 64) (1 + (1 + (1 + key))) 96)
-    (1 + (1 + (1 + (1 + key)))) 128) fork dynamic slack next
-  have h4 := word_exact (x := 0x80) (xs := []) (le := by decide) (off := 128) (le1 := by decide)
-    rfl fork dynamic (by omega) h5
-  have h3 := word_exact (x := 0x60) (xs := []) (le := by decide) (off := 96) (le1 := by decide)
-    rfl fork dynamic (by omega) h4
-  have h2 := word_exact (x := 0x40) (xs := []) (le := by decide) (off := 64) (le1 := by decide)
-    rfl fork dynamic (by omega) h3
-  have h1 := word_exact (x := 0x20) (xs := []) (le := by decide) (off := 32) (le1 := by decide)
-    rfl fork dynamic (by omega) h2
-  have h0 := word0_exact (le0 := by decide) (le1 := by decide) fork dynamic (by omega) h1
-  have hgas : ∀ X, X = G' + 83 + recordWritesGas sevm b key →
-      SFunc.RunExact prog sevm (St b [key, tail] M X) wordsTree o →
-      SFunc.RunExact prog sevm (St b [key, tail] M (G' + 83 + recordWritesGas sevm b key))
-        wordsTree o := fun _ eq h => eq ▸ h
-  refine hgas _ ?_ h0
-  simp only [recordWritesGas]
-  omega
-
-/-- The submission body, forward: non-static, with more than the `SSTORE` sentry left at the end. -/
-theorem body_exact (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
-    (slack : gCallStipend < G) :
-    SFunc.RunExact prog sevm (St b [] M (G + bodyGas sevm b M)) t_00cd_c1
-      (.halted (submissionPost sevm b M G)) := by
-  have suffix := suffix_exact (b := b) (M := M) fork dynamic slack
-  have words := words_exact (b := tailRead sevm b) (key := submissionKey (tailWord sevm b))
-    fork dynamic (by omega) suffix
+/-- The submission body, forward: non-static, with more than the `SSTORE` sentry left at the end. It takes
+`bodyGas` and returns `bodyRepay`. -/
+theorem body_exact (v : l.Valid) (dynamic : sevm.isStatic = false) (slack : gCallStipend < G) :
+    SFunc.RunExact prog sevm (St b [] M (G + Steps.bodyGas l b M)) t_00cd_c1
+      (.halted (Steps.submissionPost l b M (G + Steps.bodyRepay l b M))) := by
   rw [body_split]
-  have hgas : G + bodyGas sevm b M =
-      G + sstoreCost sevm (logged sevm b M) 3 (1 + tailWord sevm b) + 3 + 3 + 3 +
-          logGas sevm M + 2 + 3 + copyGas M + 2 + 2 + 3
-        + 83 + recordWritesGas sevm (tailRead sevm b) (submissionKey (tailWord sevm b))
-        + 3 + 3 + 5 + 3 + 3 + sloadCost sevm (countStore sevm b) 3 + 3
-        + sstoreCost sevm (afterSload sevm b 1) 1 (1 + countWord sevm b) + 3 + 3 + 3
+  have hgas : G + Steps.bodyGas l b M =
+      G + l.writeCharge (Steps.logged l b M) 3 (1 + l.tailWord b) + 3 + 3 + 3 +
+          logGas (sevm := sevm) M + 2 + 3 + copyGas M + 2 + 2 + 3
+        + l.writeCharge (Steps.wordStore l (Steps.wordStore l (Steps.wordStore l (Steps.wordStore l
+            (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0)
+            (1 + submissionKey (l.tailWord b)) 32) (1 + (1 + submissionKey (l.tailWord b))) 64)
+            (1 + (1 + (1 + submissionKey (l.tailWord b)))) 96)
+            (1 + (1 + (1 + (1 + submissionKey (l.tailWord b))))) 128)
+            (1 + (1 + (1 + (1 + (1 + submissionKey (l.tailWord b)))))) (Sevm.dataWord sevm 160)
+        + 3 + 3 + 3
+        + 3 + 3 + l.writeCharge (Steps.wordStore l (Steps.wordStore l (Steps.wordStore l
+            (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0)
+            (1 + submissionKey (l.tailWord b)) 32) (1 + (1 + submissionKey (l.tailWord b))) 64)
+            (1 + (1 + (1 + submissionKey (l.tailWord b)))) 96)
+            (1 + (1 + (1 + (1 + submissionKey (l.tailWord b))))) (Sevm.dataWord sevm 128) + 3 + 3 + 3
+        + 3 + 3 + l.writeCharge (Steps.wordStore l (Steps.wordStore l
+            (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0)
+            (1 + submissionKey (l.tailWord b)) 32) (1 + (1 + submissionKey (l.tailWord b))) 64)
+            (1 + (1 + (1 + submissionKey (l.tailWord b)))) (Sevm.dataWord sevm 96) + 3 + 3 + 3
+        + 3 + 3 + l.writeCharge (Steps.wordStore l
+            (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0)
+            (1 + submissionKey (l.tailWord b)) 32) (1 + (1 + submissionKey (l.tailWord b)))
+            (Sevm.dataWord sevm 64) + 3 + 3 + 3
+        + 3 + 3 + l.writeCharge (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0)
+            (1 + submissionKey (l.tailWord b)) (Sevm.dataWord sevm 32) + 3 + 3 + 3
+        + 3 + 3 + l.writeCharge (l.tailRead b) (submissionKey (l.tailWord b)) (Sevm.dataWord sevm 0)
+          + 3 + 3 + 2
+        + 3 + 3 + 5 + 3 + 3 + sloadCost sevm (l.countStore b) 3 + 3
+        + l.writeCharge (l.afterRead b 1) 1 (1 + countWord sevm b) + 3 + 3 + 3
         + sloadCost sevm b 1 + 3 := by
-    simp only [bodyGas]
+    simp only [Steps.bodyGas, Steps.recordWritesGas]
     omega
   rw [hgas]
   unfold bodyTree
   refine rx_push rfl (by decide) ?_
-  refine rx_sload_sel fork (by decide) ?_
+  refine v.readRun (by decide) ?_
   refine rx_push rfl (by change 1 < 1024; decide) ?_
   refine rx_add' rfl (by change 0 < 1024; decide) ?_
   refine rx_push rfl (by change 1 < 1024; decide) ?_
-  refine rx_sstore fork (by omega) dynamic ?_
+  refine v.write_sink dynamic (by omega) fun r hr => ?_
+  simp only [Nat.add_right_comm _ _ r]
   refine rx_push rfl (by decide) ?_
-  refine rx_sload_sel fork (by decide) ?_
+  refine v.readRun (by decide) ?_
   refine rx_dup1 (by change 1 < 1024; decide) ?_
   refine rx_push rfl (by change 2 < 1024; decide) ?_
   refine rx_mul rfl (by change 1 < 1024; decide) ?_
   refine rx_push rfl (by change 2 < 1024; decide) ?_
   refine rx_add' rfl (by change 1 < 1024; decide) ?_
-  exact words
+  unfold wordsTree
+  refine word0_exact v dynamic (by omega) fun r0 hr0 => ?_
+  simp only [Nat.add_right_comm _ _ r0]
+  unfold wordTree
+  refine word_exact (off := 32) rfl v dynamic (by omega) fun r1 hr1 => ?_
+  simp only [Nat.add_right_comm _ _ r1]
+  refine word_exact (off := 64) rfl v dynamic (by omega) fun r2 hr2 => ?_
+  simp only [Nat.add_right_comm _ _ r2]
+  refine word_exact (off := 96) rfl v dynamic (by omega) fun r3 hr3 => ?_
+  simp only [Nat.add_right_comm _ _ r3]
+  refine word_exact (off := 128) rfl v dynamic (by omega) fun r4 hr4 => ?_
+  simp only [Nat.add_right_comm _ _ r4]
+  refine word5_exact v dynamic (by omega) fun r5 hr5 => ?_
+  simp only [Nat.add_right_comm _ _ r5]
+  have hout : G + Steps.bodyRepay l b M = G + r5 + r4 + r3 + r2 + r1 + r0 + r +
+      l.writeRepay (Steps.logged l b M) 3 (1 + l.tailWord b) := by
+    have e : r = l.writeRepay (l.afterRead b 1) 1 (1 + countWord sevm b) := hr
+    have e0 : r0 = l.writeRepay (l.tailRead b) (submissionKey (l.tailWord b)) (Sevm.dataWord sevm 0) := hr0
+    have e1 : r1 = l.writeRepay (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0) (1 + (submissionKey (l.tailWord b))) (Sevm.dataWord sevm 32) := hr1
+    have e2 : r2 = l.writeRepay (Steps.wordStore l (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0) (1 + (submissionKey (l.tailWord b))) 32) (1 + (1 + (submissionKey (l.tailWord b)))) (Sevm.dataWord sevm 64) := hr2
+    have e3 : r3 = l.writeRepay (Steps.wordStore l (Steps.wordStore l (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0) (1 + (submissionKey (l.tailWord b))) 32) (1 + (1 + (submissionKey (l.tailWord b)))) 64) (1 + (1 + (1 + (submissionKey (l.tailWord b))))) (Sevm.dataWord sevm 96) := hr3
+    have e4 : r4 = l.writeRepay (Steps.wordStore l (Steps.wordStore l (Steps.wordStore l (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0) (1 + (submissionKey (l.tailWord b))) 32) (1 + (1 + (submissionKey (l.tailWord b)))) 64) (1 + (1 + (1 + (submissionKey (l.tailWord b))))) 96) (1 + (1 + (1 + (1 + (submissionKey (l.tailWord b)))))) (Sevm.dataWord sevm 128) := hr4
+    have e5 : r5 = l.writeRepay (Steps.wordStore l (Steps.wordStore l (Steps.wordStore l (Steps.wordStore l (Steps.wordStore l (l.tailRead b) (submissionKey (l.tailWord b)) 0) (1 + (submissionKey (l.tailWord b))) 32) (1 + (1 + (submissionKey (l.tailWord b)))) 64) (1 + (1 + (1 + (submissionKey (l.tailWord b))))) 96) (1 + (1 + (1 + (1 + (submissionKey (l.tailWord b)))))) 128) (1 + (1 + (1 + (1 + (1 + (submissionKey (l.tailWord b))))))) (Sevm.dataWord sevm 160) := hr5
+    simp only [Steps.bodyRepay, Steps.recordWritesRepay]
+    omega
+  rw [hout]
+  exact suffix_exact v dynamic (by omega)
 
 end Blanc.Lift.BuilderRequest.Deposit

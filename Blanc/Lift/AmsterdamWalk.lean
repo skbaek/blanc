@@ -1,6 +1,7 @@
 import Blanc.Lift.ExactWalk
 import Blanc.StorageAccessGas
 import Blanc.SystemCallForward
+import Blanc.Lift.InvWalkWorld
 
 /-!
 # Exact walk steps under a state-gas fork
@@ -37,12 +38,45 @@ def sstoreCreditA (state : StateGasRules) (sevm : Sevm) (devm : Devm) (key value
   sstoreAmsterdamStateRefund state value (devm.getOrigStorVal sevm sevm.currentTarget key)
     (devm.getStorVal sevm.currentTarget key)
 
-/-- The state-gas meter after one `SSTORE` that does not spill, from a meter with no spill. -/
+/-- The part of the credit that repays an earlier spill, and so returns to `gasLeft`. -/
+def sstoreRepayA (state : StateGasRules) (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
+  min (sstoreCreditA state sevm devm key value) devm.stateGas.spilled
+
+/-- The state gas the reservoir cannot cover, drawn from `gasLeft`. An ordinary transaction's frame has an
+empty reservoir, so there this is the whole charge. -/
+def sstoreSpillA (state : StateGasRules) (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
+  sstoreChargeA state sevm devm key value -
+    (devm.stateGas.left +
+      (sstoreCreditA state sevm devm key value - sstoreRepayA state sevm devm key value))
+
+/-- What one `SSTORE` takes from `gasLeft`: its execution gas and its spill. A repaid spill comes back
+after: see `rx_sstoreS`. -/
+def sstoreTotalA (state : StateGasRules) (sevm : Sevm) (devm : Devm) (key value : B256) : Nat :=
+  sstoreCostA state sevm devm key value + sstoreSpillA state sevm devm key value
+
+/-- The state-gas meter after one `SSTORE`, as Jaune's `creditStateGasRefund` and `chargeStateGas` leave it:
+the credit repays the spill first and refills the reservoir with the rest, then the charge draws on the
+reservoir and spills what it cannot cover. -/
 def sstoreMeterA (state : StateGasRules) (sevm : Sevm) (devm : Devm) (key value : B256) :
     StateGasMeter :=
   { devm.stateGas with
-    left := devm.stateGas.left + sstoreCreditA state sevm devm key value -
-      sstoreChargeA state sevm devm key value }
+    left := devm.stateGas.left +
+        (sstoreCreditA state sevm devm key value - sstoreRepayA state sevm devm key value) -
+      sstoreChargeA state sevm devm key value
+    spilled := devm.stateGas.spilled - sstoreRepayA state sevm devm key value +
+      sstoreSpillA state sevm devm key value }
+
+theorem sstoreRepayA_of_no_spill {state : StateGasRules} {sevm : Sevm} {devm : Devm} {key value : B256}
+    (h : devm.stateGas.spilled = 0) : sstoreRepayA state sevm devm key value = 0 := by
+  simp only [sstoreRepayA, h, Nat.min_zero]
+
+theorem sstoreSpillA_of_room {state : StateGasRules} {sevm : Sevm} {devm : Devm} {key value : B256}
+    (hspill : devm.stateGas.spilled = 0)
+    (hres : sstoreChargeA state sevm devm key value ≤
+      devm.stateGas.left + sstoreCreditA state sevm devm key value) :
+    sstoreSpillA state sevm devm key value = 0 := by
+  rw [sstoreSpillA, sstoreRepayA_of_no_spill hspill]
+  omega
 
 /-- The successor base of one `SSTORE` under Amsterdam: the warmed key, the two read records
 (no-ops unless `rules.bal` is present), the Amsterdam refund and the state-gas meter. -/
@@ -79,15 +113,52 @@ theorem chargeStateGas_of_le {amount : Nat} {devm : Devm} (h : amount ≤ devm.s
     Footprint.toExecution]
   rfl
 
-/-- `creditStateGasRefund` with no outstanding spill refills the reservoir. -/
-theorem creditStateGasRefund_of_no_spill {amount : Nat} {devm : Devm}
-    (h : devm.stateGas.spilled = 0) :
-    devm.creditStateGasRefund amount = devm.setMach { devm.mach with
-      stateGas := { devm.stateGas with left := devm.stateGas.left + amount } } := by
-  have h' : devm.mach.stateGas.spilled = 0 := h
-  simp only [Devm.creditStateGasRefund, Mach.creditStateGasRefund, h', h, Nat.min_zero,
-    Nat.add_zero, Nat.sub_zero]
-  rfl
+/-- `chargeStateGas` under any meter: the reservoir first, then `gasLeft`. -/
+theorem chargeStateGas_spill {amount : Nat} {devm : Devm}
+    (h : amount - devm.stateGas.left ≤ devm.gasLeft) :
+    chargeStateGas amount devm = .ok (devm.setMach { devm.mach with
+      gasLeft := devm.gasLeft - (amount - devm.stateGas.left)
+      stateGas := { devm.stateGas with
+        left := devm.stateGas.left - amount
+        spilled := devm.stateGas.spilled + (amount - devm.stateGas.left) } }) := by
+  by_cases hle : amount ≤ devm.stateGas.left
+  · rw [chargeStateGas_of_le hle, Nat.sub_eq_zero_of_le hle]
+    rfl
+  · have core : Mach.chargeStateGas amount devm.mach = .ok ((), { devm.mach with
+        gasLeft := devm.gasLeft - (amount - devm.stateGas.left)
+        stateGas := { devm.stateGas with
+          left := devm.stateGas.left - amount
+          spilled := devm.stateGas.spilled + (amount - devm.stateGas.left) } }) := by
+      have h0 : devm.stateGas.left - amount = 0 := by omega
+      have hle' : ¬ amount ≤ devm.mach.stateGas.left := hle
+      have h' : amount - devm.mach.stateGas.left ≤ devm.mach.gasLeft := h
+      unfold Mach.chargeStateGas
+      rw [ite_eq_right hle', ite_eq_left h', h0]
+      rfl
+    simp only [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome, core,
+      Footprint.toExecution]
+
+/-- What a successful `chargeStateGas` leaves, under any meter: the inverse of `chargeStateGas_spill`. -/
+theorem chargeStateGas_ok_inv {amount : Nat} {devm post : Devm}
+    (h : chargeStateGas amount devm = .ok post) :
+    post = devm.setMach { devm.mach with
+      gasLeft := devm.gasLeft - (amount - devm.stateGas.left)
+      stateGas := { devm.stateGas with
+        left := devm.stateGas.left - amount
+        spilled := devm.stateGas.spilled + (amount - devm.stateGas.left) } } := by
+  by_cases hle : amount - devm.stateGas.left ≤ devm.gasLeft
+  · rw [chargeStateGas_spill hle] at h
+    exact (Except.ok.inj h).symm
+  · have hcore : Mach.chargeStateGas amount devm.mach = .error (.halt (.outOfGas .none), devm.mach) := by
+      have h1 : ¬ amount ≤ devm.mach.stateGas.left := fun hh => hle (by
+        have : amount - devm.stateGas.left = 0 := Nat.sub_eq_zero_of_le hh
+        omega)
+      have h2 : ¬ amount - devm.mach.stateGas.left ≤ devm.mach.gasLeft := hle
+      unfold Mach.chargeStateGas
+      rw [ite_eq_right h1, ite_eq_right h2]
+    simp only [chargeStateGas, liftMachExecution, liftMach, Footprint.liftOutcome, hcore,
+      Footprint.toExecution] at h
+    cases h
 
 /-- `chargeGas` at an exact remainder. -/
 theorem chargeGas_ok_of_eq {cost G : Nat} {d : Devm} (h : d.gasLeft = G + cost) :
@@ -101,43 +172,69 @@ theorem sstoreAmsterdamGasCost_access_le (state : StateGasRules) (v o c : B256) 
   unfold sstoreAmsterdamGasCost
   omega
 
-/-- The common tail of one Amsterdam `SSTORE`, after the access choice. -/
+/-- The common tail of one Amsterdam `SSTORE`, after the access choice, under any meter. -/
 private theorem sstoreA_tail {rules : ForkRules} {ct : Adr} {key value : B256} {d : Devm}
     {r : Int} {credit charge cost G : Nat}
-    (hspill : d.stateGas.spilled = 0) (hres : charge ≤ d.stateGas.left + credit)
-    (hgas : d.gasLeft = G + cost) :
+    (hgas : d.gasLeft = G + cost +
+      (charge - (d.stateGas.left + (credit - min credit d.stateGas.spilled)))) :
     Except.bind (chargeGas cost (Devm.creditStateGasRefund credit
         ((Devm.balReadStorage rules ct key d).withRefundCounter r))) (fun v =>
       Except.bind (chargeStateGas charge v) (fun v =>
         Except.ok ((Devm.balReadAccount rules ct v).setStorVal ct key value))) =
       Except.ok ((Devm.balReadAccount rules ct
         (((Devm.balReadStorage rules ct key d).withRefundCounter r).setMach
-          ⟨d.stack, d.memory, G,
-            { d.stateGas with left := d.stateGas.left + credit - charge }⟩)).setStorVal
+          ⟨d.stack, d.memory, G + min credit d.stateGas.spilled,
+            { d.stateGas with
+              left := d.stateGas.left + (credit - min credit d.stateGas.spilled) - charge
+              spilled := d.stateGas.spilled - min credit d.stateGas.spilled +
+                (charge - (d.stateGas.left + (credit - min credit d.stateGas.spilled))) }⟩)).setStorVal
         ct key value) := by
-  have hsp : ((Devm.balReadStorage rules ct key d).withRefundCounter r).stateGas.spilled = 0 := hspill
-  rw [creditStateGasRefund_of_no_spill hsp, chargeGas_ok_of_eq (G := G) (cost := cost) ?hg]
-  case hg => exact hgas
+  generalize hrep : min credit d.stateGas.spilled = rep at hgas ⊢
+  generalize hsp : charge - (d.stateGas.left + (credit - rep)) = sp at hgas ⊢
+  have hcharge : chargeGas cost (Devm.creditStateGasRefund credit
+      ((Devm.balReadStorage rules ct key d).withRefundCounter r)) = .ok
+      ((Devm.creditStateGasRefund credit
+        ((Devm.balReadStorage rules ct key d).withRefundCounter r)).setMach
+        ⟨d.stack, d.memory, G + sp + rep, (Devm.creditStateGasRefund credit
+          ((Devm.balReadStorage rules ct key d).withRefundCounter r)).stateGas⟩) := by
+    refine chargeGas_ok_of_eq ?_
+    show d.gasLeft + min credit d.stateGas.spilled = _
+    omega
+  rw [hcharge]
   simp only [Except.bind]
-  rw [chargeStateGas_of_le (amount := charge) ?hl]
-  case hl => exact hres
+  have hmeter : (Devm.creditStateGasRefund credit
+      ((Devm.balReadStorage rules ct key d).withRefundCounter r)).stateGas =
+      { d.stateGas with left := d.stateGas.left + (credit - rep), spilled := d.stateGas.spilled - rep } := by
+    subst hrep
+    rfl
+  rw [chargeStateGas_spill (amount := charge) ?hl]
+  case hl =>
+    show charge - (Devm.creditStateGasRefund credit _).stateGas.left ≤ G + sp + rep
+    rw [hmeter]
+    show charge - (d.stateGas.left + (credit - rep)) ≤ _
+    omega
+  simp only [Devm.setMach, Devm.stateGas, Devm.gasLeft, Devm.mach] at hmeter hsp ⊢
+  have hl := congrArg StateGasMeter.left hmeter
+  have hs := congrArg StateGasMeter.spilled hmeter
+  simp only at hl hs
+  have e : G + sp + rep - sp = G + rep := by omega
+  simp only [hl, hs, hsp, e]
   rfl
 
-/-- **One exact `SSTORE` under Amsterdam.** -/
-theorem runCompiled_sstoreA {state : StateGasRules} {sevm : Sevm} {base : Devm} {key value : B256}
+/-- **One exact `SSTORE` under Amsterdam, under any meter**: it takes its execution gas and its spill from
+`gasLeft`, and repays the spill it can. -/
+theorem runCompiled_sstoreS {state : StateGasRules} {sevm : Sevm} {base : Devm} {key value : B256}
     {stack : List B256} {memory : Mem} {G : Nat}
     (hsg : sevm.benvStat.rules.stateGas = some state)
     (hstatic : sevm.isStatic = false)
-    (hsentry : gCallStipend < G + sstoreCostA state sevm base key value)
-    (hspill : base.stateGas.spilled = 0)
-    (hres : sstoreChargeA state sevm base key value ≤
-      base.stateGas.left + sstoreCreditA state sevm base key value) :
+    (hsentry : gCallStipend < G + sstoreTotalA state sevm base key value) :
     Ninst.RunCompiled sevm
-      (St base (key :: value :: stack) memory (G + sstoreCostA state sevm base key value))
+      (St base (key :: value :: stack) memory (G + sstoreTotalA state sevm base key value))
       (.reg .sstore)
-      (St (afterSstoreA state sevm base key value) stack memory G) := by
+      (St (afterSstoreA state sevm base key value) stack memory
+        (G + sstoreRepayA state sevm base key value)) := by
   refine Ninst.runCompiled_reg (by rintro ⟨⟩) ?_
-  generalize hX : G + sstoreCostA state sevm base key value = X at hsentry ⊢
+  generalize hX : G + sstoreTotalA state sevm base key value = X at hsentry ⊢
   have hpop1 : (St base (key :: value :: stack) memory X).pop =
       .ok (key, St base (value :: stack) memory X) := rfl
   have hpop2 : (St base (value :: stack) memory X).pop =
@@ -151,7 +248,9 @@ theorem runCompiled_sstoreA {state : StateGasRules} {sevm : Sevm} {base : Devm} 
   have hle := sstoreAmsterdamGasCost_access_le state value
     (base.getOrigStorVal sevm sevm.currentTarget key) (base.getStorVal sevm.currentTarget key)
     (decide (isColdA sevm base key))
-  have hXeq : X = G + sstoreCostA state sevm base key value := hX.symm
+  have hXeq : X = G + sstoreCostA state sevm base key value +
+      sstoreSpillA state sevm base key value := by
+    rw [← hX, sstoreTotalA, Nat.add_assoc]
   unfold sstoreCostA at hXeq
   by_cases hw : (⟨sevm.currentTarget, key⟩ : Adr × B256) ∈ base.accessedStorageKeys
   · have hcold : decide (isColdA sevm base key) = false := by simp only [isColdA, hw,
@@ -172,7 +271,7 @@ theorem runCompiled_sstoreA {state : StateGasRules} {sevm : Sevm} {base : Devm} 
       (credit := sstoreCreditA state sevm base key value)
       (charge := sstoreChargeA state sevm base key value)
       (cost := sstoreAmsterdamGasCost state value (base.getOrigStorVal sevm sevm.currentTarget key)
-        (base.getStorVal sevm.currentTarget key) false) (G := G) hspill hres hXeq
+        (base.getStorVal sevm.currentTarget key) false) (G := G) hXeq
     simp only [Except.bind] at tail
     refine tail.trans ?_
     simp only [St, afterSstoreA, isColdA, hw, not_true_eq_false, ↓reduceIte]
@@ -195,11 +294,42 @@ theorem runCompiled_sstoreA {state : StateGasRules} {sevm : Sevm} {base : Devm} 
       (credit := sstoreCreditA state sevm base key value)
       (charge := sstoreChargeA state sevm base key value)
       (cost := sstoreAmsterdamGasCost state value (base.getOrigStorVal sevm sevm.currentTarget key)
-        (base.getStorVal sevm.currentTarget key) true) (G := G) hspill hres hXeq
+        (base.getStorVal sevm.currentTarget key) true) (G := G) hXeq
     simp only [Except.bind] at tail
     refine tail.trans ?_
     simp only [St, afterSstoreA, isColdA, hw, not_false_eq_true, ↓reduceIte]
     rfl
+
+/-- **One exact `SSTORE` under Amsterdam, from a frame that does not spill.** -/
+theorem runCompiled_sstoreA {state : StateGasRules} {sevm : Sevm} {base : Devm} {key value : B256}
+    {stack : List B256} {memory : Mem} {G : Nat}
+    (hsg : sevm.benvStat.rules.stateGas = some state)
+    (hstatic : sevm.isStatic = false)
+    (hsentry : gCallStipend < G + sstoreCostA state sevm base key value)
+    (hspill : base.stateGas.spilled = 0)
+    (hres : sstoreChargeA state sevm base key value ≤
+      base.stateGas.left + sstoreCreditA state sevm base key value) :
+    Ninst.RunCompiled sevm
+      (St base (key :: value :: stack) memory (G + sstoreCostA state sevm base key value))
+      (.reg .sstore)
+      (St (afterSstoreA state sevm base key value) stack memory G) := by
+  have ht : sstoreTotalA state sevm base key value = sstoreCostA state sevm base key value := by
+    rw [sstoreTotalA, sstoreSpillA_of_room hspill hres, Nat.add_zero]
+  have h := runCompiled_sstoreS (stack := stack) (memory := memory) (G := G) hsg hstatic
+    (ht ▸ hsentry : gCallStipend < G + sstoreTotalA state sevm base key value)
+  rwa [ht, sstoreRepayA_of_no_spill hspill, Nat.add_zero] at h
+
+/-- `SSTORE` in an exact run under Amsterdam, under any meter: the charge is the execution gas and the spill,
+and a repaid spill returns to `gasLeft`. -/
+theorem rx_sstoreS {state : StateGasRules} {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc}
+    {o : Outcome} {S : List B256} {M : Mem} {G : Nat} {k' v : B256}
+    (hsg : sevm.benvStat.rules.stateGas = some state) (hstatic : sevm.isStatic = false)
+    (hsentry : gCallStipend < G + sstoreTotalA state sevm b k' v)
+    (k : SFunc.RunExact fs sevm
+      (St (afterSstoreA state sevm b k' v) S M (G + sstoreRepayA state sevm b k' v)) f o) :
+    SFunc.RunExact fs sevm (St b (k' :: v :: S) M (G + sstoreTotalA state sevm b k' v))
+      (.next (.reg .sstore) f) o :=
+  .next (runCompiled_sstoreS hsg hstatic hsentry) k
 
 /-- `SSTORE` in an exact run under Amsterdam: the analogue of `rx_sstore`. -/
 theorem rx_sstoreA {state : StateGasRules} {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc}
@@ -234,10 +364,14 @@ theorem afterSstoreA_meter (state : StateGasRules) {sevm : Sevm} {b : Devm} {k v
     (afterSstoreA state sevm b k v).stateGas.spilled = 0 ∧
       n ≤ (afterSstoreA state sevm b k v).stateGas.left := by
   have hc := sstoreChargeA_le state sevm b k v
+  have hrep := sstoreRepayA_of_no_spill (state := state) (sevm := sevm) (key := k) (value := v) hs
   rw [afterSstoreA_stateGas]
-  refine ⟨hs, ?_⟩
-  show n ≤ b.stateGas.left + _ - sstoreChargeA state sevm b k v
-  omega
+  refine ⟨?_, ?_⟩
+  · show b.stateGas.spilled - sstoreRepayA state sevm b k v + sstoreSpillA state sevm b k v = 0
+    rw [sstoreSpillA_of_room hs (by omega), hs, hrep]
+  · show n ≤ b.stateGas.left + (_ - sstoreRepayA state sevm b k v) - sstoreChargeA state sevm b k v
+    rw [hrep, Nat.sub_zero]
+    omega
 
 theorem afterSstoreA_state (state : StateGasRules) (sevm : Sevm) (b : Devm) (k v : B256) :
     (afterSstoreA state sevm b k v).state = b.state.setStorVal sevm.currentTarget k v := by
@@ -326,6 +460,79 @@ theorem rx_sloadA {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {oc : O
   have h := Ninst.runCompiled_sloadA (sevm := sevm) (base := b) (key := k') (stack := S)
     (memory := M) (G := G) hacc rfl hroom
   simpa only [St, afterSloadA_stateGas] using h
+
+/-! ## The steps inverted, under any meter -/
+
+/-- `SLOAD`, inverted, on any fork with EIP-2929 access. -/
+theorem ri_sloadA {sevm : Sevm} {b d : Devm} {S : List B256} {M : Mem} {G : Nat} {k : B256}
+    (hacc : sevm.benvStat.rules.access = .eip2929)
+    (h : Ninst.Run sevm (St b (k :: S) M G) (.reg .sload) d) :
+    ∃ G', d = St (afterSloadA sevm b k) (b.getStorVal sevm.currentTarget k :: S) M G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore, hacc] at run
+  rw [show (St b (k :: S) M G).pop = .ok (k, St b S M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  by_cases hw : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ b.accessedStorageKeys
+  · simp only [St.accessedStorageKeys, hw, ite_true] at run
+    rcases Except.bind_eq_ok run with ⟨s1, h1, h2⟩
+    have e2 := Devm.eq_of_push_ok h2
+    subst e2
+    have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
+    rw [e1]
+    refine ⟨s1.gasLeft, ?_⟩
+    simp only [afterSloadA, afterSload, hw, ite_true]
+    rfl
+  · simp only [St.accessedStorageKeys, hw, ite_false] at run
+    rcases Except.bind_eq_ok run with ⟨s1, h1, h2⟩
+    have e2 := Devm.eq_of_push_ok h2
+    subst e2
+    have e1 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h1)
+    rw [e1]
+    refine ⟨s1.gasLeft, ?_⟩
+    simp only [afterSloadA, afterSload, hw, ite_false]
+    rfl
+
+/-- `SSTORE`, inverted, under any meter: the successor base is `afterSstoreA`, whatever the reservoir
+held. Only the gas is left to the run. -/
+theorem ri_sstoreA {state : StateGasRules} {sevm : Sevm} {b d : Devm} {S : List B256} {M : Mem}
+    {G : Nat} {k v : B256} (hsg : sevm.benvStat.rules.stateGas = some state)
+    (h : Ninst.Run sevm (St b (k :: v :: S) M G) (.reg .sstore) d) :
+    ∃ G', d = St (afterSstoreA state sevm b k v) S M G' := by
+  rcases of_run_reg h with ⟨pc, run⟩
+  simp only [Rinst.run, Rinst.runCore, hsg] at run
+  rcases Except.bind_eq_ok run with ⟨_, -, run⟩
+  rw [show (St b (k :: v :: S) M G).pop = .ok (k, St b (v :: S) M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rw [show (St b (v :: S) M G).pop = .ok (v, St b S M G) from rfl] at run
+  simp only [Except.bind_ok] at run
+  rcases Except.bind_eq_ok run with ⟨_, -, run⟩
+  rcases Except.bind_eq_ok run with ⟨s5, h5, run⟩
+  rcases Except.bind_eq_ok run with ⟨s6, h6, last⟩
+  cases last
+  have e5 := Devm.eq_setGas_of_burn (Devm.burn_of_chargeGas h5)
+  have e6 := chargeStateGas_ok_inv h6
+  refine ⟨s6.gasLeft, ?_⟩
+  rw [e6, e5]
+  by_cases hw : (⟨sevm.currentTarget, k⟩ : Adr × B256) ∈ b.accessedStorageKeys
+  · simp only [St.accessedStorageKeys, afterSstoreA, isColdA, hw, not_true_eq_false, ite_false,
+      Devm.balReadStorage_refundCounter]
+    rfl
+  · simp only [St.accessedStorageKeys, afterSstoreA, isColdA, hw, not_false_eq_true, ite_true,
+      Devm.balReadStorage_refundCounter]
+    rfl
+
+/-- A successful `SSTORE` runs in a non-static frame, under any meter. -/
+theorem ri_sstore_nonstaticA {state : StateGasRules} {sevm : Sevm} {b d : Devm} {S : List B256}
+    {M : Mem} {G : Nat} {k v : B256} (hsg : sevm.benvStat.rules.stateGas = some state)
+    (h : Ninst.Run sevm (St b (k :: v :: S) M G) (.reg .sstore) d) :
+    sevm.isStatic = false := by
+  cases hs : sevm.isStatic with
+  | false => rfl
+  | true =>
+    exfalso
+    rcases of_run_reg h with ⟨pc, run⟩
+    simp only [Rinst.run, Rinst.runCore, hsg, bind, Except.bind, assertDynamic, Except.assert, hs,
+      Bool.not_true, Bool.false_eq_true, ↓reduceIte, reduceCtorEq] at run
 
 /-! ## Reads leave the state alone
 

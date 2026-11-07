@@ -16,7 +16,8 @@ length and the continuation trees differ, so a generated tree is an instance of 
 `rfl`.
 
 These are statements about the code's walk, over any storage. Nothing here says which storage is
-reachable. The inverses are for covered forks; the forward walk takes an `SloadLane`.
+reachable. Every walk here, both directions, is over a fork's `StorageSteps`: the only steps of these
+contracts' frames that differ between covered forks and Amsterdam are `SLOAD` and `SSTORE`.
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -46,8 +47,123 @@ theorem targetExcess_toNat (target slot0 count : B256) :
     rw [ite_eq_right over, Nat.sub_eq_zero_of_le le, Nat.add_zero,
       Nat.mod_eq_of_lt (B256.toNat_lt slot0)]
 
+/-- The fixed charge of `feePathTree` up to the selected continuation, excluding the two `SLOAD`s
+and the fee loop. The two arms of the count test cost the same. -/
+def feePathFixedGas : Nat := 133
+
+/-- A fork's storage steps as a frame's walk sees them: the successor bases of `SLOAD` and `SSTORE`, what a
+store takes from `gasLeft`, and what it returns there. Everything else in these frames is fork-free. -/
+structure StorageSteps (sevm : Sevm) where
+  /-- The base after a read of a key. -/
+  afterRead : Devm → B256 → Devm
+  /-- The base after a write of a key. -/
+  afterWrite : Devm → B256 → B256 → Devm
+  /-- What a write takes from `gasLeft`. -/
+  writeCharge : Devm → B256 → B256 → Nat
+  /-- What a write returns to `gasLeft`, after its charge. -/
+  writeRepay : Devm → B256 → B256 → Nat
+
+/-- That the fork's steps are what its rules execute, both ways. -/
+structure StorageSteps.Valid {sevm : Sevm} (l : StorageSteps sevm) : Prop where
+  push0 : sevm.benvStat.rules.op.push0 = true
+  shifts : sevm.benvStat.rules.op.shifts = true
+  readRun : ∀ {fs : List SFunc} {f : SFunc} {o : Outcome} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {k : B256}, S.length < 1024 →
+    SFunc.RunExact fs sevm (St (l.afterRead b k) (b.getStorVal sevm.currentTarget k :: S) M G) f o →
+    SFunc.RunExact fs sevm (St b (k :: S) M (G + sloadCost sevm b k)) (.next (.reg .sload) f) o
+  readInv : ∀ {b d : Devm} {S : List B256} {M : Mem} {G : Nat} {k : B256},
+    Ninst.Run sevm (St b (k :: S) M G) (.reg .sload) d →
+    ∃ G', d = St (l.afterRead b k) (b.getStorVal sevm.currentTarget k :: S) M G'
+  writeRun : ∀ {fs : List SFunc} {f : SFunc} {o : Outcome} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
+    {k x : B256}, sevm.isStatic = false → gCallStipend < G + l.writeCharge b k x →
+    SFunc.RunExact fs sevm (St (l.afterWrite b k x) S M (G + l.writeRepay b k x)) f o →
+    SFunc.RunExact fs sevm (St b (k :: x :: S) M (G + l.writeCharge b k x)) (.next (.reg .sstore) f) o
+  writeInv : ∀ {b d : Devm} {S : List B256} {M : Mem} {G : Nat} {k x : B256},
+    Ninst.Run sevm (St b (k :: x :: S) M G) (.reg .sstore) d →
+    ∃ G', d = St (l.afterWrite b k x) S M G'
+  writeDynamic : ∀ {b d : Devm} {S : List B256} {M : Mem} {G : Nat} {k x : B256},
+    Ninst.Run sevm (St b (k :: x :: S) M G) (.reg .sstore) d → sevm.isStatic = false
+  readState : ∀ b k, (l.afterRead b k).state = b.state
+  readLogs : ∀ b k, (l.afterRead b k).logs = b.logs
+  readOutput : ∀ b k, (l.afterRead b k).output = b.output
+  writeState : ∀ b k x, (l.afterWrite b k x).state = b.state.setStorVal sevm.currentTarget k x
+  writeLogs : ∀ b k x, (l.afterWrite b k x).logs = b.logs
+  writeOutput : ∀ b k x, (l.afterWrite b k x).output = b.output
+
+/-- The covered forks' storage steps: no state gas, so nothing is repaid. -/
+def coveredSteps (sevm : Sevm) : StorageSteps sevm where
+  afterRead := afterSload sevm
+  afterWrite := afterSstore sevm
+  writeCharge := sstoreCost sevm
+  writeRepay := fun _ _ _ => 0
+
+/-- The covered forks' steps are what those forks execute. -/
+theorem coveredSteps_valid {sevm : Sevm} (fork : CoveredFork sevm.benvStat.fork) :
+    (coveredSteps sevm).Valid where
+  push0 := fork.rules_push0
+  shifts := fork.rules_shifts
+  readRun := fun hroom k => rx_sload_sel fork hroom k
+  readInv := fun h => ri_sload fork h
+  writeRun := fun dynamic slack k => rx_sstore fork slack dynamic k
+  writeInv := fun h => ri_sstore fork h
+  writeDynamic := fun h => ri_sstore_nonstatic fork h
+  readState := fun b k => by
+    show (afterSload sevm b k).state = b.state
+    unfold afterSload
+    split <;> rfl
+  readLogs := fun _ _ => afterSload_logs sevm _ _
+  readOutput := fun _ _ => afterSload_output sevm _ _
+  writeState := fun b k x => by
+    show (afterSstore sevm b k x).state = _
+    unfold afterSstore
+    split <;> rfl
+  writeLogs := fun _ _ _ => afterSstore_logs sevm _ _ _
+  writeOutput := fun _ _ _ => afterSstore_output sevm _ _ _
+
+namespace StorageSteps
+
+variable {sevm : Sevm} (l : StorageSteps sevm)
+
+/-- The fee path's base after its two reads: slots 0 and 1 warmed. -/
+def feeBase (b : Devm) : Devm := l.afterRead (l.afterRead b 0) 1
+
+/-- The exact charge of `feePathTree`. -/
+def feePathGas (b : Devm) (iterations : Nat) : Nat :=
+  feePathFixedGas + RequestFee.feeLoopGas iterations + sloadCost sevm b 0 + sloadCost sevm (l.afterRead b 0) 1
+
+variable {l}
+
+theorem Valid.getStorVal_read (v : l.Valid) (b : Devm) (k : B256) (a : Adr) (k' : B256) :
+    (l.afterRead b k).getStorVal a k' = b.getStorVal a k' := by
+  unfold Devm.getStorVal Devm.getAcct
+  rw [v.readState]
+
+theorem Valid.getStor_feeBase (v : l.Valid) (b : Devm) (a : Adr) :
+    (l.feeBase b).getStor a = b.getStor a := by
+  show ((l.feeBase b).state.get a).stor = (b.state.get a).stor
+  rw [feeBase, v.readState, v.readState]
+
+theorem Valid.getBal_feeBase (v : l.Valid) (b : Devm) (a : Adr) :
+    (l.feeBase b).getBal a = b.getBal a := by
+  show ((l.feeBase b).state.get a).bal = (b.state.get a).bal
+  rw [feeBase, v.readState, v.readState]
+
+theorem Valid.logs_feeBase (v : l.Valid) (b : Devm) : (l.feeBase b).logs = b.logs := by
+  rw [feeBase, v.readLogs, v.readLogs]
+
+/-- A store's repayment, named: it then sinks below the walk's remaining charges with
+`Nat.add_right_comm`. -/
+theorem Valid.write_sink {fs : List SFunc} {f : SFunc} {o : Outcome} {b : Devm} {S : List B256} {M : Mem}
+    {X : Nat} {k x : B256} (v : l.Valid) (dynamic : sevm.isStatic = false)
+    (slack : gCallStipend < X + l.writeCharge b k x)
+    (next : ∀ r, r = l.writeRepay b k x → SFunc.RunExact fs sevm (St (l.afterWrite b k x) S M (X + r)) f o) :
+    SFunc.RunExact fs sevm (St b (k :: x :: S) M (X + l.writeCharge b k x)) (.next (.reg .sstore) f) o :=
+  v.writeRun dynamic slack (next _ rfl)
+
+end StorageSteps
+
 /-- The storage reads of the fee path leave the frame's state with slots 0 and 1 warmed. -/
-def feeBase (sevm : Sevm) (b : Devm) : Devm := afterSload sevm (afterSload sevm b 0) 1
+def feeBase (sevm : Sevm) (b : Devm) : Devm := (coveredSteps sevm).feeBase b
 
 /-- `slot0 + max(0, count - target)` from the frame's own storage. -/
 def storedExcess (target : B256) (sevm : Sevm) (b : Devm) : B256 :=
@@ -109,16 +225,10 @@ def feePathTree (revert getter submission : SFunc) : SFunc :=
   inhibitorTree p.revert
     (excessTree p.target p.over p.under p.window (windowOf p getter submission)) revert
 
-/-- The fixed charge of `feePathTree` up to the selected continuation, excluding the two `SLOAD`s
-and the fee loop. The two arms of the count test cost the same. -/
-def feePathFixedGas : Nat := 133
+/-- The exact charge of `feePathTree`, under covered forks. -/
+def feePathGas (sevm : Sevm) (b : Devm) (iterations : Nat) : Nat := (coveredSteps sevm).feePathGas b iterations
 
-/-- The exact charge of `feePathTree`. -/
-def feePathGas (sevm : Sevm) (b : Devm) (iterations : Nat) : Nat :=
-  feePathFixedGas + feeLoopGas iterations + sloadCost sevm b 0 +
-    sloadCost sevm (afterSload sevm b 0) 1
-
-variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
+variable {fs : List SFunc} {sevm : Sevm} {l : StorageSteps sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
 
 /-- A successful dispatch reaches the arm the caller selects, on the same stack and memory. -/
 theorem dispatch_inv {dest : PushWord} {user system : SFunc}
@@ -145,16 +255,16 @@ theorem dispatch_inv {dest : PushWord} {user system : SFunc}
 
 /-- A run past the guard has slot 0 off the inhibitor. -/
 theorem inhibitor_inv {dest : PushWord} {active revert : SFunc}
-    (fork : CoveredFork sevm.benvStat.fork) (noOk : revert.noOk = true)
+    (v : l.Valid) (noOk : revert.noOk = true)
     (run : SFunc.Run fs sevm (St b [] M G) (inhibitorTree dest active revert) o) :
     b.getStorVal sevm.currentTarget 0 ≠ B256.max ∧
       ∃ G', SFunc.Run fs sevm
-        (St (afterSload sevm b 0) [b.getStorVal sevm.currentTarget 0] M G') active o := by
+        (St (l.afterRead b 0) [b.getStorVal sevm.currentTarget 0] M G') active o := by
   have run := run.cut
   unfold inhibitorTree at run
   winv 1
   obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_sload fork (k := (0 : B256)) h
+  obtain ⟨_, rfl⟩ := v.readInv (k := (0 : B256)) h
   winv 2
   rw [inhibitor_push] at run
   winv 2
@@ -165,37 +275,11 @@ theorem inhibitor_inv {dest : PushWord} {active revert : SFunc}
     exact (by decide : (1 : B256) ≠ 0) flag
   · exact False.elim (run.false_of_noOk noOk)
 
-/-- What the fee path's forward walk needs of a fork's `SLOAD`: the successor base, that it reads the same
-storage, and the step. `coveredLane` is the covered forks' instance. -/
-structure SloadLane (sevm : Sevm) where
-  /-- The base after a read of a key. -/
-  after : Devm → B256 → Devm
-  push0 : sevm.benvStat.rules.op.push0 = true
-  read : ∀ b k a k', (after b k).getStorVal a k' = b.getStorVal a k'
-  run : ∀ {fs : List SFunc} {f : SFunc} {o : Outcome} {b : Devm} {S : List B256} {M : Mem} {G : Nat}
-    {k : B256}, S.length < 1024 →
-    SFunc.RunExact fs sevm (St (after b k) (b.getStorVal sevm.currentTarget k :: S) M G) f o →
-    SFunc.RunExact fs sevm (St b (k :: S) M (G + sloadCost sevm b k)) (.next (.reg .sload) f) o
-
-/-- The covered forks' `SLOAD`. -/
-def coveredLane (fork : CoveredFork sevm.benvStat.fork) : SloadLane sevm where
-  after := afterSload sevm
-  push0 := fork.rules_push0
-  read := afterSload_getStorVal sevm
-  run := fun hroom k => rx_sload_sel fork hroom k
-
-/-- The fee path's base after its two reads, on a lane. -/
-def SloadLane.feeBase (l : SloadLane sevm) (b : Devm) : Devm := l.after (l.after b 0) 1
-
-/-- The exact charge of `feePathTree`, on a lane. -/
-def SloadLane.feePathGas (l : SloadLane sevm) (b : Devm) (iterations : Nat) : Nat :=
-  feePathFixedGas + feeLoopGas iterations + sloadCost sevm b 0 + sloadCost sevm (l.after b 0) 1
-
-/-- The guard, forward, off the inhibitor, on a lane. -/
-theorem SloadLane.inhibitor_exact (l : SloadLane sevm) {dest : PushWord} {active revert : SFunc}
+/-- The guard, forward, off the inhibitor. -/
+theorem inhibitor_exact (v : l.Valid) {dest : PushWord} {active revert : SFunc}
     (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
     (tail : SFunc.RunExact fs sevm
-      (St (l.after b 0) [b.getStorVal sevm.currentTarget 0] M G) active o) :
+      (St (l.afterRead b 0) [b.getStorVal sevm.currentTarget 0] M G) active o) :
     SFunc.RunExact fs sevm (St b [] M (G + 22 + sloadCost sevm b 0 + 2))
       (inhibitorTree dest active revert) o := by
   have hgas : G + 22 + sloadCost sevm b 0 + 2 =
@@ -203,8 +287,8 @@ theorem SloadLane.inhibitor_exact (l : SloadLane sevm) {dest : PushWord} {active
     omega
   rw [hgas]
   unfold inhibitorTree
-  refine rx_push0 (h_push0 := l.push0) (by change 0 < 1024; decide) ?_
-  refine l.run (by change 0 < 1024; decide) ?_
+  refine rx_push0 (h_push0 := v.push0) (by change 0 < 1024; decide) ?_
+  refine v.readRun (by change 0 < 1024; decide) ?_
   refine rx_dup1 (by change 1 < 1024; decide) ?_
   refine rx_push inhibitor_push (by change 2 < 1024; decide) ?_
   refine rx_eq (v := 0) ?_ (by change 1 < 1024; decide) ?_
@@ -212,29 +296,19 @@ theorem SloadLane.inhibitor_exact (l : SloadLane sevm) {dest : PushWord} {active
   · refine rx_push rfl (by change 2 < 1024; decide) ?_
     exact rx_branch_zero tail
 
-/-- The guard, forward, off the inhibitor. -/
-theorem inhibitor_exact {dest : PushWord} {active revert : SFunc}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
-    (tail : SFunc.RunExact fs sevm
-      (St (afterSload sevm b 0) [b.getStorVal sevm.currentTarget 0] M G) active o) :
-    SFunc.RunExact fs sevm (St b [] M (G + 22 + sloadCost sevm b 0 + 2))
-      (inhibitorTree dest active revert) o :=
-  (coveredLane fork).inhibitor_exact off tail
-
 /-- The excess read leaves the target-adjusted excess at the window. -/
 theorem excess_inv {target over under : PushWord} {window : Nat} {fall : SFunc}
-    (fork : CoveredFork sevm.benvStat.fork) (entry : fs[window]? = some fall)
+    (v : l.Valid) (entry : fs[window]? = some fall)
     {slot0 : B256}
     (run : SFunc.Run fs sevm (St b [slot0] M G) (excessTree target over under window fall) o) :
     ∃ G', SFunc.Run fs sevm
-      (St (afterSload sevm b 1)
+      (St (l.afterRead b 1)
         [targetExcess target.word slot0 (b.getStorVal sevm.currentTarget 1)] M G') fall o := by
   have run := run.cut
   unfold excessTree at run
   winv 1
   obtain ⟨_, h, run⟩ := ric_next run
-  obtain ⟨_, rfl⟩ := ri_sload fork (k := (1 : B256)) h
+  obtain ⟨_, rfl⟩ := v.readInv (k := (1 : B256)) h
   generalize hcount' : b.getStorVal sevm.currentTarget 1 = count at run
   winv 4
   rcases ric_branch run with ⟨flag, _, run⟩ | ⟨flag, _, run⟩
@@ -256,11 +330,11 @@ theorem excess_inv {target over under : PushWord} {window : Nat} {fall : SFunc}
     rw [excess]
     exact ⟨_, run.uncut⟩
 
-/-- The excess read, forward, at its exact charge, on a lane. -/
-theorem SloadLane.excess_exact (l : SloadLane sevm) {target over under : PushWord} {window : Nat}
+/-- The excess read, forward, at its exact charge. -/
+theorem excess_exact (v : l.Valid) {target over under : PushWord} {window : Nat}
     {fall : SFunc} (entry : fs[window]? = some fall) {slot0 : B256}
     (tail : SFunc.RunExact fs sevm
-      (St (l.after b 1)
+      (St (l.afterRead b 1)
         [targetExcess target.word slot0 (b.getStorVal sevm.currentTarget 1)] M G) fall o) :
     SFunc.RunExact fs sevm (St b [slot0] M (G + 35 + sloadCost sevm b 1 + 3))
       (excessTree target over under window fall) o := by
@@ -270,7 +344,7 @@ theorem SloadLane.excess_exact (l : SloadLane sevm) {target over under : PushWor
   rw [hgas]
   unfold excessTree
   refine rx_push (w := (1 : B256)) rfl (by change 1 < 1024; decide) ?_
-  refine l.run (by change 1 < 1024; decide) ?_
+  refine v.readRun (by change 1 < 1024; decide) ?_
   generalize hcount : b.getStorVal sevm.currentTarget 1 = count at tail ⊢
   refine rx_push rfl (by change 2 < 1024; decide) ?_
   refine rx_dup2 (by change 3 < 1024; decide) ?_
@@ -282,7 +356,7 @@ theorem SloadLane.excess_exact (l : SloadLane sevm) {target over under : PushWor
     rw [flag]
     refine rx_branch_succ (by decide : (1 : B256) ≠ 0) ?_
     have tail' : SFunc.RunExact fs sevm
-        (St (l.after b 1) [(count - target.word) + slot0] M G) fall o := by
+        (St (l.afterRead b 1) [(count - target.word) + slot0] M G) fall o := by
       simpa only [targetExcess, ite_eq_left isOver] using tail
     have hgas' : G + 13 = G + 3 + 3 + 3 + 3 + 1 := by simp only [Nat.add_assoc]
     rw [hgas']
@@ -295,7 +369,7 @@ theorem SloadLane.excess_exact (l : SloadLane sevm) {target over under : PushWor
       simp only [B256.gtCheck, ite_eq_right isOver]
     rw [flag]
     refine rx_branch_zero ?_
-    have tail' : SFunc.RunExact fs sevm (St (l.after b 1) [slot0] M G) fall o := by
+    have tail' : SFunc.RunExact fs sevm (St (l.afterRead b 1) [slot0] M G) fall o := by
       simpa only [targetExcess, ite_eq_right isOver] using tail
     have hgas' : G + 13 = G + 8 + 3 + 2 := by simp only [Nat.add_assoc]
     rw [hgas']
@@ -303,21 +377,10 @@ theorem SloadLane.excess_exact (l : SloadLane sevm) {target over under : PushWor
     refine rx_push rfl (by change 1 < 1024; decide) ?_
     exact rx_jump entry tail'
 
-/-- The excess read, forward, at its exact charge. -/
-theorem excess_exact {target over under : PushWord} {window : Nat} {fall : SFunc}
-    (fork : CoveredFork sevm.benvStat.fork) (entry : fs[window]? = some fall)
-    {slot0 : B256}
-    (tail : SFunc.RunExact fs sevm
-      (St (afterSload sevm b 1)
-        [targetExcess target.word slot0 (b.getStorVal sevm.currentTarget 1)] M G) fall o) :
-    SFunc.RunExact fs sevm (St b [slot0] M (G + 35 + sloadCost sevm b 1 + 3))
-      (excessTree target over under window fall) o :=
-  (coveredLane fork).excess_exact entry tail
-
 /-- A successful run of the user path passes the guard, runs the word fee recurrence on the stored
 excess, and reaches the branch the calldata length selects with the quotient on the stack. -/
 theorem feePath_inv {revert getter submission : SFunc}
-    (fork : CoveredFork sevm.benvStat.fork) (noOk : revert.noOk = true)
+    (v : l.Valid) (noOk : revert.noOk = true)
     (window : fs[p.window]? = some (windowOf p getter submission))
     (loop : fs[p.loopEntry]? =
       some (loopTree p.post p.loop p.loopEntry (postloopTree p.len p.submit getter submission)))
@@ -325,12 +388,12 @@ theorem feePath_inv {revert getter submission : SFunc}
     b.getStorVal sevm.currentTarget 0 ≠ B256.max ∧
     ∃ iterations finalOutput,
       WordFakeExponential.Run (storedExcess p.target.word sevm b) 17 1 17 0 iterations finalOutput ∧
-      ∃ G', SFunc.Run fs sevm (St (feeBase sevm b) [finalOutput / (17 : B256)] M G')
+      ∃ G', SFunc.Run fs sevm (St (l.feeBase b) [finalOutput / (17 : B256)] M G')
         (selected sevm p.len.word getter submission) o := by
-  obtain ⟨active, _, run⟩ := inhibitor_inv fork noOk run
-  obtain ⟨_, run⟩ := excess_inv fork window run
-  have read0 : (afterSload sevm b 0).getStorVal sevm.currentTarget 1 =
-      b.getStorVal sevm.currentTarget 1 := afterSload_getStorVal sevm b 0 _ 1
+  obtain ⟨active, _, run⟩ := inhibitor_inv v noOk run
+  obtain ⟨_, run⟩ := excess_inv v window run
+  have read0 : (l.afterRead b 0).getStorVal sevm.currentTarget 1 =
+      b.getStorVal sevm.currentTarget 1 := v.getStorVal_read b 0 _ 1
   rw [read0] at run
   obtain ⟨iterations, finalOutput, wordRun, _⟩ :=
     WordFakeExponential.run_exists (storedExcess p.target.word sevm b) 17 1 17 0
@@ -341,8 +404,8 @@ theorem feePath_inv {revert getter submission : SFunc}
   obtain ⟨_, _, run⟩ := RequestFee.loop_inv loop wordRun run
   exact RequestFee.postloop_inv rfl run
 
-/-- The user path, forward, on a lane: the selected continuation transports back at the exact charge. -/
-theorem SloadLane.feePath_exact (l : SloadLane sevm) {revert getter submission : SFunc}
+/-- The user path, forward: the selected continuation transports back at the exact charge. -/
+theorem feePath_exact (v : l.Valid) {revert getter submission : SFunc}
     {iterations : Nat} {finalOutput : B256}
     (window : fs[p.window]? = some (windowOf p getter submission))
     (loop : fs[p.loopEntry]? =
@@ -354,14 +417,14 @@ theorem SloadLane.feePath_exact (l : SloadLane sevm) {revert getter submission :
       (selected sevm p.len.word getter submission) o) :
     SFunc.RunExact fs sevm (St b [] M (G + l.feePathGas b iterations))
       (feePathTree p revert getter submission) o := by
-  have read0 : (l.after b 0).getStorVal sevm.currentTarget 1 =
-      b.getStorVal sevm.currentTarget 1 := l.read b 0 _ 1
+  have read0 : (l.afterRead b 0).getStorVal sevm.currentTarget 1 =
+      b.getStorVal sevm.currentTarget 1 := v.getStorVal_read b 0 _ 1
   have hloop := fun finalCounter => (RequestFee.postloop_exact (len := p.len) (dest := p.submit)
     (w := p.len.word) (numerator := storedExcess p.target.word sevm b) (denominator := 17)
     (accumulator := 0) (output := finalOutput) (counter := finalCounter) (fs := fs) rfl
     (getter := getter) (submission := submission) tail)
-  have hlooped := RequestFee.loop_exact loop l.push0 wordRun hloop
-  have hinit := RequestFee.init_exact l.push0 hlooped
+  have hlooped := RequestFee.loop_exact loop v.push0 wordRun hloop
+  have hinit := RequestFee.init_exact v.push0 hlooped
   have hwindow : SFunc.RunExact fs sevm
       (St (l.feeBase b) [storedExcess p.target.word sevm b] M
         (G + 45 + feeLoopGas iterations + 19 + 3 + 3 + 1)) (windowOf p getter submission) o := by
@@ -370,33 +433,18 @@ theorem SloadLane.feePath_exact (l : SloadLane sevm) {revert getter submission :
     refine rx_push (w := (17 : B256)) rfl (by change 1 < 1024; decide) ?_
     refine rx_swap1 ?_
     exact hinit
-  have hexcess := l.excess_exact (b := l.after b 0) (target := p.target) (over := p.over)
+  have hexcess := excess_exact v (b := l.afterRead b 0) (target := p.target) (over := p.over)
     (under := p.under) (slot0 := b.getStorVal sevm.currentTarget 0) window (by
       rw [read0]
       exact hwindow)
-  have hguard := l.inhibitor_exact (dest := p.revert) (revert := revert) off hexcess
+  have hguard := inhibitor_exact v (dest := p.revert) (revert := revert) off hexcess
   have hgas : G + l.feePathGas b iterations =
-      G + 45 + feeLoopGas iterations + 19 + 3 + 3 + 1 + 35 + sloadCost sevm (l.after b 0) 1 + 3
+      G + 45 + feeLoopGas iterations + 19 + 3 + 3 + 1 + 35 + sloadCost sevm (l.afterRead b 0) 1 + 3
         + 22 + sloadCost sevm b 0 + 2 := by
-    simp only [SloadLane.feePathGas, feePathFixedGas]
+    simp only [StorageSteps.feePathGas, feePathFixedGas]
     omega
   rw [hgas]
   exact hguard
-
-/-- The user path, forward: the selected continuation transports back at the exact charge. -/
-theorem feePath_exact {revert getter submission : SFunc} {iterations : Nat} {finalOutput : B256}
-    (fork : CoveredFork sevm.benvStat.fork)
-    (window : fs[p.window]? = some (windowOf p getter submission))
-    (loop : fs[p.loopEntry]? =
-      some (loopTree p.post p.loop p.loopEntry (postloopTree p.len p.submit getter submission)))
-    (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
-    (wordRun : WordFakeExponential.Run (storedExcess p.target.word sevm b) 17 1 17 0
-      iterations finalOutput)
-    (tail : SFunc.RunExact fs sevm (St (feeBase sevm b) [finalOutput / (17 : B256)] M G)
-      (selected sevm p.len.word getter submission) o) :
-    SFunc.RunExact fs sevm (St b [] M (G + feePathGas sevm b iterations))
-      (feePathTree p revert getter submission) o :=
-  SloadLane.feePath_exact p (coveredLane fork) window loop off wordRun tail
 
 /-- A builder runtime's user path: a checked certificate whose root is caller dispatch into
 `feePathTree`, whose empty-calldata arm is the shared getter. -/
@@ -407,6 +455,8 @@ structure UserPath where
   cert : Cert
   check : Cert.check code cert = true
   jumps : Cert.jumpsOk code cert = true
+  /-- No node of the certificate is a call-family instruction, so the lift holds on any fork. -/
+  noExec : ProgNoExec cert.prog
   /-- The pushed words of the fee path. -/
   shape : Shape
   /-- Destination of the system arm. -/
@@ -448,12 +498,12 @@ abbrev target : B256 := k.shape.target.word
 
 variable {k} {pre post : Devm}
 
-/-- Successful execution from an empty stack at a non-system caller enters the fee path. -/
-theorem exec_user (hcode : sevm.code = k.code) (fork : CoveredFork sevm.benvStat.fork)
-    (stack : pre.stack = []) (caller : sevm.caller ≠ systemAddress)
-    (exec : Exec 0 sevm pre (.ok post)) :
+/-- Successful execution from an empty stack at a non-system caller enters the fee path. The lift holds on
+any fork, since the certificate has no call-family node. -/
+theorem exec_user (hcode : sevm.code = k.code) (stack : pre.stack = [])
+    (caller : sevm.caller ≠ systemAddress) (exec : Exec 0 sevm pre (.ok post)) :
     ∃ G, SFunc.Run k.cert.prog sevm (St pre [] pre.memory G) k.user (.halted post) := by
-  obtain ⟨f, hf, run⟩ := lift_sound k.check hcode fork exec
+  obtain ⟨f, hf, run⟩ := lift_sound_noExec k.check hcode k.noExec exec
   rw [k.root] at hf
   cases hf
   rw [St.self stack rfl] at run
@@ -461,25 +511,25 @@ theorem exec_user (hcode : sevm.code = k.code) (fork : CoveredFork sevm.benvStat
   exact ⟨G, by simpa only [dispatchArm, ite_eq_right caller] using run⟩
 
 /-- An exact fee path at a non-system caller is a successful execution of the bytes. -/
-theorem exec_of_user (hcode : sevm.code = k.code) (fork : CoveredFork sevm.benvStat.fork)
-    (caller : sevm.caller ≠ systemAddress)
+theorem exec_of_user (hcode : sevm.code = k.code) (caller : sevm.caller ≠ systemAddress)
     (tail : SFunc.RunExact k.cert.prog sevm (St b [] M G) k.user (.halted post)) :
     Nonempty (Exec 0 sevm (St b [] M (G + dispatchGas)) (.ok post)) := by
-  apply lift_exact k.check k.jumps hcode fork
+  apply lift_exact_noExec k.check k.jumps hcode k.noExec
   refine ⟨_, k.root, dispatch_exact ?_⟩
   simpa only [dispatchArm, ite_eq_right caller] using tail
 
 /-- While slot 0 holds the inhibitor, no execution at a non-system caller succeeds, whatever the
 calldata, value and memory. -/
-theorem exec_inhibited_no_ok (hcode : sevm.code = k.code) (fork : CoveredFork sevm.benvStat.fork)
+theorem exec_inhibited_no_ok (v : l.Valid) (hcode : sevm.code = k.code)
     (stack : pre.stack = []) (caller : sevm.caller ≠ systemAddress)
     (inhibited : pre.getStorVal sevm.currentTarget 0 = B256.max)
     (exec : Exec 0 sevm pre (.ok post)) : False := by
-  obtain ⟨_, run⟩ := exec_user hcode fork stack caller exec
-  exact (inhibitor_inv fork k.revert_noOk run).1 inhibited
+  obtain ⟨_, run⟩ := exec_user hcode stack caller exec
+  exact (inhibitor_inv v k.revert_noOk run).1 inhibited
 
-/-- What a successful fee read does, for the fee recurrence's iteration count and final output. -/
-structure FeeRead (target : B256) (sevm : Sevm) (pre post : Devm) (iterations : Nat)
+/-- What a successful fee read does on a fork's steps, for the fee recurrence's iteration count and final
+output. `FeeRead` is this under covered forks. -/
+structure FeeReadOn (l : StorageSteps sevm) (target : B256) (pre post : Devm) (iterations : Nat)
     (finalOutput : B256) : Prop where
   /-- The read carried no value. -/
   value : sevm.value = 0
@@ -496,92 +546,109 @@ structure FeeRead (target : B256) (sevm : Sevm) (pre post : Devm) (iterations : 
   /-- No log was appended. -/
   logs : post.logs = pre.logs
   /-- The whole post state: storage keys warmed, the word in memory, the rest unchanged. -/
-  state : ∃ gas, post = RequestFee.feeGetterPost (feeBase sevm pre) pre.memory
+  state : ∃ gas, post = RequestFee.feeGetterPost (l.feeBase pre) pre.memory
     (finalOutput / (17 : B256)) gas
 
+/-- What a successful fee read does under covered forks. -/
+abbrev FeeRead (target : B256) (sevm : Sevm) (pre post : Devm) (iterations : Nat) (finalOutput : B256) : Prop :=
+  FeeReadOn (coveredSteps sevm) target pre post iterations finalOutput
+
 /-- The quoted word fee is at most `fake_exponential(1, excess, 17)` of the quoted excess. -/
-theorem FeeRead.fee_le {target : B256} {iterations : Nat} {finalOutput : B256}
-    (read : FeeRead target sevm pre post iterations finalOutput) :
+theorem FeeReadOn.fee_le {target : B256} {iterations : Nat} {finalOutput : B256}
+    (read : FeeReadOn l target pre post iterations finalOutput) :
     (finalOutput / (17 : B256)).toNat ≤ fakeExp 1 (storedExcess target sevm pre).toNat 17 :=
   RequestFeeWord.word_fee_le read.quote
 
 /-- The quoted word fee equals the natural fee exactly on the recurrence's no-wrap domain. -/
-theorem FeeRead.fee_eq_iff {target : B256} {iterations : Nat} {finalOutput : B256}
-    (read : FeeRead target sevm pre post iterations finalOutput) :
+theorem FeeReadOn.fee_eq_iff {target : B256} {iterations : Nat} {finalOutput : B256}
+    (read : FeeReadOn l target pre post iterations finalOutput) :
     (finalOutput / (17 : B256)).toNat = fakeExp 1 (storedExcess target sevm pre).toNat 17 ↔
       RequestFeeWord.NoWrapDomain (storedExcess target sevm pre) iterations :=
   RequestFeeWord.word_fee_eq_iff read.quote
 
-private theorem feeBase_getStor (sevm : Sevm) (b : Devm) (a : Adr) :
-    (feeBase sevm b).getStor a = b.getStor a := by
-  simp only [feeBase, afterSload_getStor]
-
-private theorem feeBase_getBal (sevm : Sevm) (b : Devm) (a : Adr) :
-    (feeBase sevm b).getBal a = b.getBal a := by
-  simp only [feeBase, Devm.getBal, afterSload_getAcct]
-
-private theorem feeBase_logs (sevm : Sevm) (b : Devm) : (feeBase sevm b).logs = b.logs := by
-  simp only [feeBase, afterSload_logs]
-
 /-- A successful empty-calldata execution at a non-system caller is a fee read. -/
-theorem exec_fee_read (hcode : sevm.code = k.code) (fork : CoveredFork sevm.benvStat.fork)
+theorem exec_fee_read (v : l.Valid) (hcode : sevm.code = k.code)
     (stack : pre.stack = []) (aligned : pre.memory.size % 32 = 0) (wf : Mem.Wf pre.memory)
     (caller : sevm.caller ≠ systemAddress) (empty : sevm.data = [])
     (exec : Exec 0 sevm pre (.ok post)) :
-    ∃ iterations finalOutput, FeeRead k.target sevm pre post iterations finalOutput := by
-  obtain ⟨_, run⟩ := exec_user hcode fork stack caller exec
+    ∃ iterations finalOutput, FeeReadOn l k.target pre post iterations finalOutput := by
+  obtain ⟨_, run⟩ := exec_user hcode stack caller exec
   obtain ⟨active, iterations, finalOutput, wordRun, _, run⟩ :=
-    feePath_inv k.shape fork k.revert_noOk k.window k.loop run
+    feePath_inv k.shape v k.revert_noOk k.window k.loop run
   have hlen : sevm.data.length.toB256 ≠ k.shape.len.word := by
     rw [empty]
     exact k.len_ne.symm
   simp only [selected, ite_eq_right hlen] at run
   obtain ⟨_, zero, _, run⟩ := RequestFee.guard_inv k.getterRevert_noOk run
   obtain ⟨gas, rfl⟩ := RequestFee.return_inv aligned run
-  have facts := RequestFee.feeGetterPost_facts (feeBase sevm pre) pre.memory
+  have facts := RequestFee.feeGetterPost_facts (l.feeBase pre) pre.memory
     (finalOutput / (17 : B256)) gas wf aligned
   refine ⟨iterations, finalOutput, zero, active, wordRun, facts.1, ?_, ?_, ?_, gas, rfl⟩
   · intro address
-    rw [← feeBase_getStor sevm pre address]
+    rw [← v.getStor_feeBase pre address]
     exact congrArg (fun world : World => (world.state.get address).stor) facts.2.1
   · intro address
-    rw [← feeBase_getBal sevm pre address]
+    rw [← v.getBal_feeBase pre address]
     exact congrArg (fun world : World => (world.state.get address).bal) facts.2.1
-  · rw [← feeBase_logs sevm pre]
+  · rw [← v.logs_feeBase pre]
     exact (congrArg Meta.logs facts.2.2.1).trans rfl
 
-/-- The charge of a fee read, from the frame's start. -/
+/-- The charge of a fee read, from the frame's start, on a fork's steps. -/
+def feeReadGasOn (l : StorageSteps sevm) (b : Devm) (M : Mem) (iterations : Nat) : Nat :=
+  RequestFee.feeGetterGas M + 30 + l.feePathGas b iterations + dispatchGas
+
+/-- The charge of a fee read, from the frame's start, under covered forks. -/
 def feeReadGas (sevm : Sevm) (b : Devm) (M : Mem) (iterations : Nat) : Nat :=
-  RequestFee.feeGetterGas M + 30 + feePathGas sevm b iterations + dispatchGas
+  feeReadGasOn (coveredSteps sevm) b M iterations
 
 /-- The fee read forward: empty calldata, no value and slot 0 off the inhibitor give a successful
 execution at the exact charge, returning the word recurrence's quotient. The recurrence always has
 a finite run (`WordFakeExponential.run_exists`), so this premise can always be met. -/
-theorem exec_fee_read_exact {iterations : Nat} {finalOutput : B256}
-    (hcode : sevm.code = k.code) (fork : CoveredFork sevm.benvStat.fork)
-    (aligned : M.size % 32 = 0) (caller : sevm.caller ≠ systemAddress)
+theorem exec_fee_read_exact {iterations : Nat} {finalOutput : B256} (v : l.Valid)
+    (hcode : sevm.code = k.code) (aligned : M.size % 32 = 0) (caller : sevm.caller ≠ systemAddress)
     (empty : sevm.data = []) (zero : sevm.value = 0)
     (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (storedExcess k.target sevm b) 17 1 17 0
       iterations finalOutput) :
-    Nonempty (Exec 0 sevm (St b [] M (G + feeReadGas sevm b M iterations))
-      (.ok (RequestFee.feeGetterPost (feeBase sevm b) M (finalOutput / (17 : B256)) G))) := by
+    Nonempty (Exec 0 sevm (St b [] M (G + feeReadGasOn l b M iterations))
+      (.ok (RequestFee.feeGetterPost (l.feeBase b) M (finalOutput / (17 : B256)) G))) := by
   have hlen : sevm.data.length.toB256 ≠ k.shape.len.word := by
     rw [empty]
     exact k.len_ne.symm
   have hempty : sevm.data.length.toB256 = 0 := by rw [empty]; rfl
   have body := RequestFee.guard_exact (dest := k.getterDest) (revert := k.getterRevert)
     (fs := k.cert.prog) hempty zero
-    (RequestFee.return_exact (b := feeBase sevm b) (M := M) (G := G)
-      (fee := finalOutput / (17 : B256)) fork.rules_push0 aligned)
-  have path := feePath_exact k.shape (revert := k.revert) (submission := k.submission) fork
+    (RequestFee.return_exact (b := l.feeBase b) (M := M) (G := G)
+      (fee := finalOutput / (17 : B256)) v.push0 aligned)
+  have path := feePath_exact k.shape v (revert := k.revert) (submission := k.submission)
     k.window k.loop off wordRun
     (by simpa only [selected, ite_eq_right hlen] using body)
-  have hgas : G + feeReadGas sevm b M iterations =
-      (G + RequestFee.feeGetterGas M + 30 + feePathGas sevm b iterations) + dispatchGas := by
-    simp only [feeReadGas, Nat.add_assoc]
+  have hgas : G + feeReadGasOn l b M iterations =
+      (G + RequestFee.feeGetterGas M + 30 + l.feePathGas b iterations) + dispatchGas := by
+    simp only [feeReadGasOn, Nat.add_assoc]
   rw [hgas]
-  exact exec_of_user hcode fork caller path
+  exact exec_of_user hcode caller path
+
+/-- The fee read forward, with what it does: returns the quotient, and changes no storage, balance or log. -/
+theorem exec_fee_read_effects {iterations : Nat} {finalOutput : B256} (v : l.Valid)
+    (hcode : sevm.code = k.code) (aligned : M.size % 32 = 0) (wf : Mem.Wf M)
+    (caller : sevm.caller ≠ systemAddress) (empty : sevm.data = []) (zero : sevm.value = 0)
+    (off : b.getStorVal sevm.currentTarget 0 ≠ B256.max)
+    (wordRun : WordFakeExponential.Run (storedExcess k.target sevm b) 17 1 17 0
+      iterations finalOutput) :
+    ∃ post, Nonempty (Exec 0 sevm (St b [] M (G + feeReadGasOn l b M iterations)) (.ok post)) ∧
+      post.output = (finalOutput / (17 : B256)).toBytes ∧
+      (∀ a, post.getStor a = b.getStor a) ∧ (∀ a, post.getBal a = b.getBal a) ∧ post.logs = b.logs := by
+  have facts := RequestFee.feeGetterPost_facts (l.feeBase b) M (finalOutput / (17 : B256)) G wf aligned
+  refine ⟨_, exec_fee_read_exact v hcode aligned caller empty zero off wordRun, facts.1, ?_, ?_, ?_⟩
+  · intro address
+    rw [← v.getStor_feeBase b address]
+    exact congrArg (fun world : World => (world.state.get address).stor) facts.2.1
+  · intro address
+    rw [← v.getBal_feeBase b address]
+    exact congrArg (fun world : World => (world.state.get address).bal) facts.2.1
+  · rw [← v.logs_feeBase b]
+    exact (congrArg Meta.logs facts.2.2.1).trans rfl
 
 end UserPath
 

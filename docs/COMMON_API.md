@@ -260,9 +260,12 @@ lines when next changed or relied on, not by a wholesale rewrite.
   `Rinst.runCore_{chainid_of_chainId,basefee_of_baseFee}`.
 - Compiled walk with an arbitrary terminal outcome (`Func.RunCompiledTo`):
   [`Blanc/Reverts.lean`](../Blanc/Reverts.lean).
-- Storage access on a fork with a `StateGasRules` record: `rx_sstoreA` over `sstoreCostA` /
-  `afterSstoreA` (with `sstoreChargeA`, `sstoreCreditA`, `sstoreMeterA`, `chargeStateGas_of_le`,
-  `creditStateGasRefund_of_no_spill`, `chargeGas_ok_of_eq`, `sstoreAmsterdamRefund_ge` and the
+- Storage access on a fork with a `StateGasRules` record, under any meter: `rx_sstoreS` over
+  `sstoreTotalA` (execution gas plus `sstoreSpillA`, the state gas the reservoir cannot cover) and
+  `sstoreRepayA` (a credit against an earlier spill), inverted by `ri_sstoreA`, `ri_sstore_nonstaticA`
+  and `ri_sloadA`; `rx_sstoreA` over `sstoreCostA` / `afterSstoreA` is its no-spill projection (with
+  `sstoreChargeA`, `sstoreCreditA`, `sstoreMeterA`, `chargeStateGas_of_le`, `chargeStateGas_spill`,
+  `chargeStateGas_ok_inv`, `chargeGas_ok_of_eq`, `sstoreAmsterdamRefund_ge` and the
   `afterSstoreA_*` observers), `Ready` and `rx_sstoreR` for a frame's stores, `readsBase` and `readsGas`
   for a list of reads, `rx_sloadV` naming the value read, and `rx_sloadA` over `sloadCost` / `afterSloadA` are in
   [`Blanc/Lift/AmsterdamWalk.lean`](../Blanc/Lift/AmsterdamWalk.lean), stated against the record, not
@@ -7212,6 +7215,8 @@ every shared module with its own summary and the branches that cite it.
 
 #### C9.2. I need to connect a real execution with a lifted run
 
+- On a fork with a state-gas record, for a certificate with no call-family node (`ProgNoExec`,
+  `treeNoExec`, now in `Blanc/Lift/Sound.lean`): `lift_sound_noExec`, on the general `lift_sound_lane`.
 - Execution to lifted run (safety): `lift_sound`, and `lift_sound_in`, which
   keeps each step's derivation (`StepIn`) for arguments about re-entrant child
   frames, in [`Blanc/Lift/Sound.lean`](../Blanc/Lift/Sound.lean).
@@ -8656,6 +8661,9 @@ read, the inhibitor guard and the submission body are not here, since they diffe
 The worked consumers are `Blanc/Lift/WithdrawalRequest/FeeLoop.lean` and
 `Blanc/Lift/BuilderRequest/FeePath.lean`. The builder family's queue layout, generic over record
 width, is family-local at `Blanc/Lift/BuilderRequest/QueueLayout.lean`.
+The builder family's user frames are walked once over a fork's `StorageSteps` (`FeePath.lean`), with
+`coveredSteps` and `amsterdamSteps` (`UserFrameAmsterdam.lean`) as its instances: only `SLOAD` and `SSTORE`
+differ between them, and those certificates have no call-family node, so `lift_sound_noExec` lifts on any fork.
 
 Under Amsterdam, all four request contracts' system paths are one instance family. `SysShape` and `SysPath`
 in `Blanc/Lift/RequestSystem/Path.lean` are a runtime's pushed words, excess arm and record body, with the

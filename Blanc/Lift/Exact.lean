@@ -365,37 +365,6 @@ private lemma dest_cont_exact {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
     Evm.step ⟨pc, sevm, devm⟩ = .cont (pc + 1) devm' := by
   exact Evm.jumpdest_cont h_at h
 
-/-- This node is not a call-family instruction. -/
-def nodeNoExec : Ninst → Bool
-  | .exec _ => false
-  | _ => true
-
-theorem nodeNe_of_noExec {n : Ninst} (h : nodeNoExec n = true) : ∀ x, n ≠ .exec x := by
-  rintro x rfl
-  simp only [nodeNoExec, Bool.false_eq_true] at h
-
-/-- No node of this certificate tree is a call-family instruction. A syntactic fact about the
-certificate: data bytes that merely decode to `DELEGATECALL` are not nodes. -/
-def treeNoExec : SFunc → Bool
-  | .branch f g => treeNoExec f && treeNoExec g
-  | .branchTo f _ => treeNoExec f
-  | .last _ => true
-  | .next n f => nodeNoExec n && treeNoExec f
-  | .dest f => treeNoExec f
-  | .jump _ => true
-  | .callNext _ f => treeNoExec f
-  | .ret => true
-  | .pcAt _ f => treeNoExec f
-  | .undefined => true
-
-/-- Every tree the program can jump to has no call-family node. -/
-abbrev ProgNoExec (fs : List SFunc) : Prop :=
-  ∀ (j : Nat) (g : SFunc), fs[j]? = some g → treeNoExec g = true
-
-/-- A certificate decides `ProgNoExec` by `decide +kernel` on `fs.all treeNoExec`. -/
-theorem progNoExec_of_all {fs : List SFunc} (h : fs.all treeNoExec = true) : ProgNoExec fs :=
-  fun _ _ hg => List.all_eq_true.mp h _ (List.mem_of_getElem? hg)
-
 private def ExactClaim {fs : List SFunc} {sevm : Sevm}
     (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool) (hcode : sevm.code = code)
     (hfork : CoveredFork sevm.benvStat.fork)

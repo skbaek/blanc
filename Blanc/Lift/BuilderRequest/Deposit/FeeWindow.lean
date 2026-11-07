@@ -21,6 +21,7 @@ def userPath : UserPath where
   cert := cert
   check := cert_check
   jumps := jumps_ok
+  noExec := progNoExec_of_all (by decide +kernel)
   shape :=
     { revert := ⟨0x02, [0x70], by decide⟩
       target := ⟨0x08, [], by decide⟩

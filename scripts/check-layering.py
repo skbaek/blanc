@@ -1474,6 +1474,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Exit.Latch", "Lift.BuilderRequest.Deposit.Backlog",
     "Lift.BuilderRequest.Balances", "Lift.BuilderRequest.UserFrame",
     "Lift.BuilderRequest.Exit.Submission", "Lift.BuilderRequest.Exit.SubmissionAmsterdam",
+    "Lift.BuilderRequest.Deposit.SubmissionAmsterdam",
     "Lift.BuilderRequest.UserFrameAmsterdam",
     "Lift.BuilderRequest.Deposit.System", "Lift.BuilderRequest.Deposit.SystemCall",
     "Lift.BuilderRequest.Exit.System", "Lift.BuilderRequest.Exit.SystemCall",
