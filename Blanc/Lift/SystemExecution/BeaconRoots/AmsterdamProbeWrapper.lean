@@ -20,11 +20,25 @@ theorem afterSstoreA_state (state : StateGasRules) (sevm : Sevm) (b : Devm) (k v
   unfold afterSstoreA
   split <;> rfl
 
+theorem balReadAccount_error (r : ForkRules) (a : Adr) (d : Devm) :
+    (d.balReadAccount r a).error = d.error := by
+  unfold Devm.balReadAccount
+  split <;> rfl
+
+theorem balReadStorage_error (r : ForkRules) (a : Adr) (k : B256) (d : Devm) :
+    (d.balReadStorage r a k).error = d.error := by
+  unfold Devm.balReadStorage
+  split <;> rfl
+
 theorem afterSstoreA_error (state : StateGasRules) (sevm : Sevm) (b : Devm) (k v : B256) :
     (afterSstoreA state sevm b k v).error = b.error := by
-  unfold afterSstoreA Devm.balReadAccount Devm.balReadStorage
-  repeat' split
-  all_goals rfl
+  unfold afterSstoreA
+  dsimp only
+  show (Devm.balReadAccount _ _ _).error = _
+  rw [balReadAccount_error]
+  show (Devm.balReadStorage _ _ _ _).error = _
+  rw [balReadStorage_error]
+  split <;> rfl
 
 theorem afterSstoreA_refundCounter (state : StateGasRules) (sevm : Sevm) (b : Devm) (k v : B256) :
     (afterSstoreA state sevm b k v).refundCounter =
@@ -54,7 +68,6 @@ theorem sstoreAmsterdamRefund_ge (gas : GasSchedule) (state : StateGasRules) {v 
     rw [if_neg h1]
     split <;> split <;> omega
   · rw [if_neg hcv]
-    exact le_refl _
 
 /-! ## The frame's post-facts -/
 
@@ -78,9 +91,8 @@ theorem postB_error : (postB benv).error = none := by
   show (endA (SA benv) (BA benv)).error = none
   rw [endA, afterSstoreA_error, midA, afterSstoreA_error]
   show (preparedBase benv).error = none
-  unfold preparedBase Devm.balReadAccount
-  repeat' split
-  all_goals rfl
+  simp only [preparedBase, balReadAccount_error]
+  rfl
 
 theorem postB_state : (postB benv).state =
     (benv.state.setStorVal beaconRootsAddress (keyA (SA benv)) (SA benv).benvStat.time).setStorVal
@@ -168,15 +180,15 @@ theorem runPrepared_beacon (hfork : benv.stat.fork = .amsterdam) :
   unfold runPreparedTopFrame
   have hinner : (Frame.ofCall (systemMsg benv)).inner = systemMsg benv := rfl
   rw [hinner, hentry]
-  show (if (!false && (systemMsg benv).benv.stat.rules.isPrecomp beaconRootsAddress) = true then
-      (Frame.ofCall (systemMsg benv)).settle (executePrecomp ⟨0, SA benv,
+  show (Frame.ofCall (systemMsg benv)).settle
+    (if (!false && (systemMsg benv).benv.stat.rules.isPrecomp beaconRootsAddress) = true then
+      executePrecomp ⟨0, SA benv,
         (((BA benv).withState (systemMsg benv).benv.state).withStorageWrites
           (systemMsg benv).benv.storageWrites).withCreatedAccounts
-            (systemMsg benv).benv.createdAccounts⟩ beaconRootsAddress)
-    else (Frame.ofCall (systemMsg benv)).settle
-      (exec ⟨0, SA benv, ((((BA benv).withState (systemMsg benv).benv.state).withStorageWrites
+            (systemMsg benv).benv.createdAccounts⟩ beaconRootsAddress
+    else exec ⟨0, SA benv, ((((BA benv).withState (systemMsg benv).benv.state).withStorageWrites
           (systemMsg benv).benv.storageWrites).withCreatedAccounts
-            (systemMsg benv).benv.createdAccounts)⟩)) = _
+            (systemMsg benv).benv.createdAccounts)⟩) = _
   simp only [Bool.not_false, Bool.true_and, hnot, decide_false, Bool.false_eq_true, ite_false]
   rw [hdyna, exec_prepared benv hfork]
   have hclean := postB_error benv
