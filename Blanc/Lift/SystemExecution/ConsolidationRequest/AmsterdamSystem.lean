@@ -217,12 +217,12 @@ def sysCall : SysCall sysPath where
 
 /-- **The EIP-7251 system call succeeds under Amsterdam, from any storage.** With the canonical code
 installed, the checked system call returns, its post state is `sysState`, and it uses at most 75,000 of
-its 30,000,000 gas. There is no storage premise. -/
+its 30,000,000 regular gas; state gas is excluded (`RegularGasWithin`). There is no storage premise. -/
 theorem system_call_ok {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode consolidationRequestPredeployAddress = consolidationRequestCode) :
     ∃ out, processCheckedSystemTransaction benv consolidationRequestPredeployAddress [] =
         .ok (sysState sysShape benv.state consolidationRequestPredeployAddress, out) ∧
-      systemTransactionGas - out.gasLeft ≤ 75000 :=
+      RegularGasWithin out.gasLeft 75000 :=
   let h := sysCall.spec hfork installed
   ⟨_, h.1, h.2⟩
 

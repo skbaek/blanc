@@ -131,7 +131,7 @@ theorem system_call_state {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode address = code) :
     ∃ out, processCheckedSystemTransaction benv address [] =
         .ok (sysState sysShape benv.state address, out) ∧
-      systemTransactionGas - out.gasLeft ≤ 888000 :=
+      RegularGasWithin out.gasLeft 888000 :=
   let h := sysCall.spec hfork installed
   ⟨_, h.1, h.2⟩
 
