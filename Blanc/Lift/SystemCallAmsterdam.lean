@@ -68,6 +68,14 @@ theorem systemCallBase_refundCounter (msg : Msg) : (systemCallBase msg).refundCo
   simp only [systemCallBase, Devm.balReadAccount_refundCounter]
   rfl
 
+/-- A top-level frame's base records no storage read, and holds the write ledger the message started with. -/
+theorem systemCallBase_record (msg : Msg) :
+    (systemCallBase msg).meta.storageReads = .emptyWithCapacity ∧
+      (systemCallBase msg).world.storageWrites = msg.benv.storageWrites := by
+  unfold systemCallBase Devm.balReadAccount
+  dsimp only
+  by_cases h : msg.benv.stat.rules.bal.isSome = true <;> simp only [h, ↓reduceIte] <;> exact ⟨rfl, rfl⟩
+
 /-- The reservoir starts at the system grant, with no spill. -/
 theorem systemCallBase_stateGas (hfork : benv.stat.fork = .amsterdam) :
     (systemCallBase M).stateGas.spilled = 0 ∧

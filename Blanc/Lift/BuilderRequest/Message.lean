@@ -1,5 +1,6 @@
 import Blanc.Lift.BuilderRequest.UserFrameAmsterdam
 import Blanc.Lift.SystemCallAmsterdam
+import Blanc.Lift.AmsterdamAccess
 
 /-!
 # The builder contracts' direct messages under Amsterdam
@@ -21,20 +22,6 @@ open Jaune
 /-- Amsterdam's state-gas record. -/
 local notation "A" => amsterdamStateGasRules
 
-/-- `Fresh` passes through a machine-register replacement. -/
-theorem _root_.Blanc.Lift.Fresh.st {sevm : Sevm} {d : Devm} {ks : List B256} {grant used n : Nat}
-    (r : Fresh sevm d ks grant used n) (S : List B256) (M : Mem) (G : Nat) :
-    Fresh sevm (St d S M G) ks grant used n :=
-  ⟨r.error, r.refund, r.deleted, r.clean, r.drawn, r.ledger, r.committed, r.budget⟩
-
-/-- One store at an untouched slot: `Fresh` goes on, with the rest of the keys, and it repays no spill. -/
-theorem _root_.Blanc.Lift.Fresh.step {sevm : Sevm} {d : Devm} {k : B256} {ks : List B256} {grant used n : Nat}
-    (r : Fresh sevm d (k :: ks) grant used n) (nodup : (k :: ks).Nodup) (v : B256) :
-    (∃ used', Fresh sevm (afterSstoreA A sevm d k v) ks grant used' n) ∧ ks.Nodup ∧
-      sstoreRepayA A sevm d k v = 0 :=
-  ⟨⟨_, r.sstore (List.nodup_cons.mp nodup).1 v⟩, (List.nodup_cons.mp nodup).2,
-    Fresh.repay_zero v (r.clean k List.mem_cons_self)⟩
-
 /-- The bound one store puts on what it takes from `gasLeft`: execution gas and at most one `STORAGE_SET` of
 state gas. -/
 theorem writeCharge_le (sevm : Sevm) (b : Devm) (k x : B256) :
@@ -44,11 +31,6 @@ theorem writeCharge_le (sevm : Sevm) (b : Devm) (k x : B256) :
   have hs := sstoreChargeA_le A sevm b k x
   have : sstoreSpillA A sevm b k x ≤ sstoreChargeA A sevm b k x := Nat.sub_le _ _
   omega
-
-theorem sloadCost_le (sevm : Sevm) (b : Devm) (k : B256) : sloadCost sevm b k ≤ gasColdSload := by
-  unfold sloadCost
-  have : gasWarmAccess ≤ gasColdSload := by decide
-  split <;> omega
 
 /-- The quoted excess, from the contract's storage: `slot0 + max(0, count - target)`. -/
 def storageExcess (target : B256) (σ : Stor) : B256 := targetExcess target (σ.get 0) (σ.get 1)
@@ -98,6 +80,14 @@ structure Submissions extends UserFrames where
     (Post s b M G).state = world s b.state
   logs : ∀ {s : Sevm} {b : Devm} {G : Nat}, s.benvStat.fork = .amsterdam → s.data.length = len →
     (Post s b .empty G).logs = b.logs ++ [log s]
+  /-- The contract's storage after a submission. -/
+  storage : Sevm → Stor → Stor
+  world_stor : ∀ (s : Sevm) (σ : State), (world s σ).getStor s.currentTarget = storage s (σ.getStor s.currentTarget)
+  world_get_ne : ∀ (s : Sevm) (σ : State) {a : Adr}, s.currentTarget ≠ a → (world s σ).get a = σ.get a
+  world_bal : ∀ (s : Sevm) (σ : State) (a : Adr), ((world s σ).get a).bal = (σ.get a).bal
+  /-- A submission's access record: it reads slot 0 and every slot it writes, and writes `keys`. -/
+  access : ∀ {s : Sevm} {b : Devm} {M : Mem} {G : Nat}, s.benvStat.fork = .amsterdam →
+    Access s b (Post s b M G) (0 :: keys (b.getStorVal s.currentTarget 3)) (keys (b.getStorVal s.currentTarget 3))
   gas_le : ∀ (s : Sevm) (b : Devm) (n : Nat),
     Gas s b .empty n ≤ fixed + 87 * n + loads * gasColdSload +
       stores * (gasColdSload + amsterdamStateGasRules.storageWrite) + stores * amsterdamStateGasRules.storageSet

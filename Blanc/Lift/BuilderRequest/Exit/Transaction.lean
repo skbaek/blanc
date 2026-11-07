@@ -1,5 +1,7 @@
 import Blanc.Lift.BuilderRequest.Exit.Revert
 import Blanc.Lift.BuilderRequest.Transaction
+import Blanc.Lift.RequestSystem.Access
+import Blanc.Lift.BuilderRequest.Exit.SystemCall
 
 /-!
 # Direct transactions to the exit contract under Amsterdam
@@ -21,6 +23,12 @@ variable {benv : Benv} {bout : BlockOutput} {tx : Tx} {E t : Adr} {chainId : UIn
 /-- **A direct submission to the exit contract.** -/
 abbrev transaction_ok := @Submissions.transaction_ok submissions
 
+/-- **A direct submission's effect and access-list entries.** -/
+abbrev transaction_bal := @Submissions.transaction_bal submissions
+
+/-- **The exit system call's access-list entries, from any storage.** -/
+abbrev system_call_bal := @RequestSystem.SysCall.bal _ sysCall
+
 /-- **A direct submission the guards reject reverts.** -/
 theorem transaction_not_admitted (index : Nat) (d : DirectTx benv bout tx E t chainId prio maxFee i f)
     (installed : benv.state.getCode t = code) (hprecomp : ¬ amsterdamRules.isPrecomp t)
@@ -39,17 +47,7 @@ theorem transaction_not_admitted (index : Nat) (d : DirectTx benv bout tx E t ch
       rejected) hgas
 
 /-- **A direct transaction while slot 0 holds the inhibitor reverts**, whatever its calldata and value. -/
-theorem transaction_inhibited (index : Nat) (d : DirectTx benv bout tx E t chainId prio maxFee i f)
-    (installed : benv.state.getCode t = code) (hprecomp : ¬ amsterdamRules.isPrecomp t)
-    (caller : E ≠ systemAddress) (inhibited : (benv.state.getStor t).get 0 = B256.max)
-    (hgas : i + revertBound 0 ≤ tx.gas) :
-    Submissions.TxReverted benv bout tx index E (twoPrice benv.stat.baseFeePerGas prio maxFee) i f (revertBound 0) :=
-  submissions.transaction_reverts d installed hprecomp (fun _ hentry =>
-    frameReverts_inhibited rfl (submissions.frame_fork d hentry) caller
-      (by
-        show Devm.getStorVal _ t 0 = _
-        rw [submissions.frame_read d installed hentry]
-        exact inhibited)) hgas
+abbrev transaction_inhibited := @Submissions.transaction_inhibited submissions @frameReverts_inhibited
 
 /-- **A direct transaction with calldata of neither form reverts.** -/
 theorem transaction_badLength (index : Nat) (d : DirectTx benv bout tx E t chainId prio maxFee i f)

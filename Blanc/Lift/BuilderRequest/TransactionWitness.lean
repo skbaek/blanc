@@ -171,6 +171,53 @@ theorem deposit_transaction_ok :
   rw [hlogs]
   rfl
 
+/-- **`transaction_bal` has a model**: on an empty builder, the closed deposit's first count write and its tail write each
+gain a change at index 1, with the post value. -/
+theorem deposit_transaction_bal :
+    ∃ (entry : Benv) (st : State) (bout' : BlockOutput),
+      processTransaction (preBenv Deposit.Creation.address Deposit.code) preBout depositTx 0 = .ok (st, bout') ∧
+      (st.get Deposit.Creation.address).bal = goodValue.toB256 ∧
+      (st.get Deposit.Creation.address).stor.get 3 = 1 ∧
+      balChanges bout'.bal Deposit.Creation.address 3 = [(1, 1)] := by
+  obtain ⟨entry, st, bout', hproc, hstor, hbal, hch, -, -⟩ :=
+    Deposit.transaction_bal (index := 0) (n := 1) (out := 17) deposit_direct
+      (by decide +kernel) (by decide +kernel) (Std.HashSet.not_mem_emptyWithCapacity) (by decide) (by decide +kernel) rfl
+      (by decide)
+      (by rw [deposit_stor]; decide +kernel)
+      (by
+        rw [deposit_stor]
+        have hz : storageExcess 8 (Stor.empty) = 0 := by decide +kernel
+        show WordFakeExponential.Run (storageExcess 8 Stor.empty) 17 1 17 0 1 17
+        rw [hz]
+        exact quote_zero_excess)
+      ⟨by decide +kernel, by decide +kernel⟩
+      (by rw [deposit_stor]; decide +kernel)
+      (by decide +kernel) (fun _ => rfl) (fun _ _ h => by cases h)
+  have hprebal : ((preBenv Deposit.Creation.address Deposit.code).state.get Deposit.Creation.address).bal = 0 := by
+    kernel_rfl
+  have h3 : (st.get Deposit.Creation.address).stor.get 3 = 1 := by
+    rw [hstor, deposit_stor]
+    show (Deposit.submittedStorage _ Stor.empty).get 3 = 1
+    unfold Deposit.submittedStorage
+    dsimp only
+    rw [Stor.get_set_self]
+    decide +kernel
+  refine ⟨entry, st, bout', hproc, ?_, h3, ?_⟩
+  · rw [hbal, hprebal]
+    decide +kernel
+  · rw [hch 3, h3]
+    have hkeys : (3 : B256) ∈ Deposit.submissions.keys ((((preBenv Deposit.Creation.address Deposit.code).state.getStor
+        Deposit.Creation.address)).get 3) := by
+      rw [deposit_stor]
+      decide +kernel
+    have hmoved : ((preBenv Deposit.Creation.address Deposit.code).state.get Deposit.Creation.address).stor.get 3 ≠ 1 := by
+      have : ((preBenv Deposit.Creation.address Deposit.code).state.get Deposit.Creation.address).stor = Stor.empty :=
+        deposit_stor
+      rw [this]
+      decide +kernel
+    rw [ite_eq_left ⟨hkeys, hmoved⟩]
+    rfl
+
 /-- **`transaction_not_admitted` has a model.** One wei short of the credit plus the quoted fee, the same transaction
 reverts, and the block's logs stay empty. -/
 theorem deposit_transaction_low :

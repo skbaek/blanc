@@ -821,6 +821,18 @@ theorem sstore {k : B256} {ks : List B256} (r : Fresh sevm d (k :: ks) grant use
     exact r.committed
   · omega
 
+/-- One store at an untouched slot: `Fresh` goes on, with the rest of the keys, and it repays no spill. -/
+theorem step {k : B256} {ks : List B256} (r : Fresh sevm d (k :: ks) grant used n) (nodup : (k :: ks).Nodup) (v : B256) :
+    (∃ used', Fresh sevm (afterSstoreA amsterdamStateGasRules sevm d k v) ks grant used' n) ∧ ks.Nodup ∧
+      sstoreRepayA amsterdamStateGasRules sevm d k v = 0 :=
+  ⟨⟨_, r.sstore (List.nodup_cons.mp nodup).1 v⟩, (List.nodup_cons.mp nodup).2,
+    repay_zero v (r.clean k List.mem_cons_self)⟩
+
+/-- `Fresh` passes through a machine-register replacement. -/
+theorem st (r : Fresh sevm d keys grant used n) (S : List B256) (M : Mem) (G : Nat) :
+    Fresh sevm (St d S M G) keys grant used n :=
+  ⟨r.error, r.refund, r.deleted, r.clean, r.drawn, r.ledger, r.committed, r.budget⟩
+
 end Fresh
 
 end Blanc.Lift

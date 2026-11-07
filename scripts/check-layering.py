@@ -1453,12 +1453,13 @@ SHARED += ["Lift.Create2Factory.Cert", "Lift.Create2Factory.Check", "Lift.Create
            "Lift.Create2Factory.Jumps", "Lift.Create2Factory.Walk", "Lift.RuntimeInstall"]
 # Amsterdam walk-engine support (blanc-eip8282-builder-requests-v1 O6): the state-gas `SSTORE` and
 # `SLOAD` steps and the top-level system-call envelope, contract-neutral. `CoveredFork` is not widened.
-SHARED += ["Lift.AmsterdamWalk", "Lift.ExecCut", "Lift.TransactionAmsterdam", "Lift.SystemCallAmsterdam"]
+SHARED += ["Lift.AmsterdamWalk", "Lift.ExecCut", "Lift.TransactionAmsterdam", "Lift.BalEffect",
+    "Lift.AmsterdamAccess", "Lift.SystemCallAmsterdam"]
 # The two pushed-word facts of a request contract's dispatch and inhibitor guard.
 SHARED += ["Lift.SystemCaller", "MemoryWindows"]
 # The system path all four Amsterdam request contracts share (blanc-eip8282-builder-requests-v1 O9).
 SHARED += ["Lift.RequestSystem.Dispatch", "Lift.RequestSystem.Path", "Lift.RequestSystem.Call",
-           "Lift.RequestSystem.Output", "Lift.RequestSystem.BodySegs",
+           "Lift.RequestSystem.Output", "Lift.RequestSystem.BodySegs", "Lift.RequestSystem.Access",
            "Lift.RequestSystem.PlainExcess", "Lift.SystemExecution.ConsolidationRequest.AmsterdamSystem"]
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
@@ -1503,6 +1504,7 @@ CONTRACTS["builder-request"] = [
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
     "Composition.RequestPhaseAmsterdam": ('builder-request', 'withdrawal-request'),
+    "Composition.RequestPhaseAmsterdamBal": ('builder-request', 'withdrawal-request'),
     "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),
     "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request',),
     "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request',),

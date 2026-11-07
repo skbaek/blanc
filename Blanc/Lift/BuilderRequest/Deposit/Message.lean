@@ -139,6 +139,63 @@ theorem gas_le (s : Sevm) (b : Devm) (n : Nat) :
     (submissionKey ((amsterdamSteps s).tailWord ((amsterdamSteps s).feeBase b)))
   omega
 
+theorem submittedState_getStor (s : Sevm) (σ : State) :
+    (submittedState s σ).getStor s.currentTarget = submittedStorage s (σ.getStor s.currentTarget) := by
+  simp only [submittedState, State.getStor_setStorVal_self, submittedStorage]
+
+theorem submittedState_get_ne (s : Sevm) (σ : State) {a : Adr} (h : s.currentTarget ≠ a) :
+    (submittedState s σ).get a = σ.get a := by
+  simp only [submittedState, State.get_setStorVal_ne _ _ _ h]
+
+/-- A submission's access record. -/
+theorem post_access (hfork : s.benvStat.fork = .amsterdam) :
+    Access s b (submissionPostA s (feeBaseA s b) M G) (0 :: bodyKeys (b.getStorVal s.currentTarget 3))
+      (bodyKeys (b.getStorVal s.currentTarget 3)) := by
+  have ht : (amsterdamSteps s).tailWord (feeBaseA s b) = b.getStorVal s.currentTarget 3 :=
+    ((amsterdamSteps_valid hfork).tailWord_eq _).trans ((amsterdamSteps_valid hfork).read_feeBase 3 _ b)
+  have hbal : s.benvStat.rules.bal.isSome = true := by
+    rw [amsterdam_rules hfork]
+    rfl
+  unfold submissionPostA Steps.submissionPost Steps.submissionBase Steps.logged Steps.recordsWritten
+  rw [ht]
+  generalize b.getStorVal s.currentTarget 3 = t
+  have a0 := (Access.sload hbal b 0).trans (Access.sload hbal _ 1)
+  have a1 := (Access.sload hbal (feeBaseA s b) 1).trans (Access.sstore hbal amsterdamStateGasRules _ 1 (1 + countWord s (feeBaseA s b)))
+  have a2 := a1.trans (Access.sload hbal _ 3)
+  have r := fun d : Devm => ((((((Access.sstore hbal amsterdamStateGasRules d (submissionKey t) (Sevm.dataWord s 0)).trans
+    (Access.sstore hbal amsterdamStateGasRules _ (1 + submissionKey t) (Sevm.dataWord s 32))).trans
+    (Access.sstore hbal amsterdamStateGasRules _ (1 + (1 + submissionKey t)) (Sevm.dataWord s 64))).trans
+    (Access.sstore hbal amsterdamStateGasRules _ (1 + (1 + (1 + submissionKey t))) (Sevm.dataWord s 96))).trans
+    (Access.sstore hbal amsterdamStateGasRules _ (1 + (1 + (1 + (1 + submissionKey t)))) (Sevm.dataWord s 128))).trans
+    (Access.sstore hbal amsterdamStateGasRules _ (1 + (1 + (1 + (1 + (1 + submissionKey t))))) (Sevm.dataWord s 160)))
+  have a3 := fun d : Devm => (Access.addLog s d (submissionLog s M)).trans (Access.sstore hbal amsterdamStateGasRules _ 3 (1 + t))
+  refine (((a0.trans a2).trans (r _)).trans ((a3 _).trans (Access.st s _ _ _ _))).congr (fun x => ?_) (fun x => ?_)
+  · clear a0 a1 a2 r a3 ht hbal hfork
+    simp only [bodyKeys, List.mem_append, List.mem_cons, List.not_mem_nil, or_false, false_or]
+    generalize submissionKey t = K
+    generalize (x = (0 : B256)) = A0
+    generalize (x = (1 : B256)) = A1
+    generalize (x = (3 : B256)) = A3
+    generalize (x = K) = B0
+    generalize (x = 1 + K) = B1
+    generalize (x = 1 + (1 + K)) = B2
+    generalize (x = 1 + (1 + (1 + K))) = B3
+    generalize (x = 1 + (1 + (1 + (1 + K)))) = B4
+    generalize (x = 1 + (1 + (1 + (1 + (1 + K))))) = B5
+    tauto
+  · clear a0 a1 a2 r a3 ht hbal hfork
+    simp only [bodyKeys, List.mem_append, List.mem_cons, List.not_mem_nil, or_false, false_or]
+    generalize submissionKey t = K
+    generalize (x = (1 : B256)) = A1
+    generalize (x = (3 : B256)) = A3
+    generalize (x = K) = B0
+    generalize (x = 1 + K) = B1
+    generalize (x = 1 + (1 + K)) = B2
+    generalize (x = 1 + (1 + (1 + K))) = B3
+    generalize (x = 1 + (1 + (1 + (1 + K)))) = B4
+    generalize (x = 1 + (1 + (1 + (1 + (1 + K))))) = B5
+    tauto
+
 /-- What the top-level path needs of a deposit submission. -/
 def submissions : Submissions where
   toUserFrames := frames
@@ -164,6 +221,11 @@ def submissions : Submissions where
   gasLeft := rfl
   state := fun hfork => submissionBase_state (amsterdamSteps_valid hfork)
   logs := fun hfork hlen => (submissionPostA_effects hfork hlen Mem.wf_empty _).logs
+  storage := submittedStorage
+  world_stor := submittedState_getStor
+  world_get_ne := submittedState_get_ne
+  world_bal := fun s σ a => by simp only [submittedState, State.bal_setStorVal]
+  access := fun hfork => post_access hfork
   gas_le := gas_le
 
 end Blanc.Lift.BuilderRequest.Deposit
