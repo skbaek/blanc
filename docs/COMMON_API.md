@@ -7223,7 +7223,7 @@ every shared module with its own summary and the branches that cite it.
   premise; `ProgNoExec` from `progNoExec_of_all (by decide +kernel)`, a fact about the certificate's
   nodes, so push data that decodes as a call does not matter), and `lift_exact_lane`,
   `lift_exactM_core_lane` and `node_exactM_lane` carry the proof for both premises;
-  `RETURN` with its expansion charged is `rx_return_charged` (`retExt`, `retPost`);
+  `RETURN` with its expansion charged is `rx_return_charged` (`chargedRetExt`, `chargedRetPost`);
   the per-instruction walk steps (`rx_push`, `rx_sload_cold`, `rx_callRet`, …)
   over the gas-carrying state `St`, a frame's entry state as an `St` (`pre_eq_St`), the
   `St` projections (`St.stack`, `St.memory`, `St.gasLeft`, `St.returnData`, `St_error`,
