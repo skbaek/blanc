@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-589 shared modules, 562 with a module summary.
+590 shared modules, 563 with a module summary.
 
 ## `Blanc/`
 
@@ -265,6 +265,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`RunPrefix.lean`](../Blanc/RunPrefix.lean) | Contract-neutral loose walk prefixes with source-path accumulation. | [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [E5](COMMON_API.md#e5-i-need-to-inspect-what-happened-in-an-exec) |
 | [`Semantics.lean`](../Blanc/Semantics.lean) | Blanc's compiled-program semantics over Jaune's execution layer | [Root](COMMON_API.md#root-what-are-you-trying-to-do), [E1](COMMON_API.md#e1-i-need-to-construct-a-source-or-compiled-execution-term), [C9.2](COMMON_API.md#c92-i-need-to-connect-a-real-execution-with-a-lifted-run) |
 | [`Separated.lean`](../Blanc/Separated.lean) | **Pairwise separation over a finite list.** `Separated f xs` says `f` identifies no two distinct members of the finite list `xs`. | [M4](COMMON_API.md#m4-i-need-a-blocks-trie-root-its-header-hash-or-a-finite-hash-separation-premise) |
+| [`ShanghaiOnwards.lean`](../Blanc/ShanghaiOnwards.lean) | **The forks from Shanghai on.** `ShanghaiOnwards` is a domain wider than `CoveredFork`: every fork the code on mainnet has run under since a Shanghai-era activation. | [Root](COMMON_API.md#root-what-are-you-trying-to-do) |
 | [`SlotFootprint.lean`](../Blanc/SlotFootprint.lean) | **Storage footprints over a set of tracked keys.** A contract that keeps values at hashed slots cannot state "every key's slot holds its value" over all keys: two keys may hash to one slot, and the map key type is enormous compared with the number of keys a history touches. | [S7](COMMON_API.md#s7-i-need-a-token-ledger-conservation-invariant) |
 | [`SlotFootprintWord.lean`](../Blanc/SlotFootprintWord.lean) | **The tracked words of a storage footprint.** `trackedWord slot K s k` is the word at a tracked key's slot and `0` at an untracked key: the raw reading a footprint ledger is built from. | [S7](COMMON_API.md#s7-i-need-a-token-ledger-conservation-invariant) |
 | [`StaticCallStorage.lean`](../Blanc/StaticCallStorage.lean) | **Representation-exact storage silence of actual STATICCALL.** The shared direct argument in StaticStorage accounts for normalized balance transfers, static child execution, precompiles and rollback. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |

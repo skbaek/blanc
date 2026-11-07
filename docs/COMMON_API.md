@@ -131,6 +131,9 @@ lines when next changed or relied on, not by a wholesale rewrite.
   reads. `settleMsg_withFork` requires coverage of both saved messages as
   well as the destination. These are covered-fork transports, with no claim
   of equality across arbitrary historical forks.
+- For the forks from Shanghai on (rule facts, a timestamp's lower bound on mainnet's selection, and
+  `CoveredFork`'s coercions into the domain and the `CALL` family's `CallEra`), use
+  [`Blanc/ShanghaiOnwards.lean`](../Blanc/ShanghaiOnwards.lean).
 - Historical extraction uses the separate `HistFork` / `histForks` domain in
   [`Blanc/HistoricalFork.lean`](../Blanc/HistoricalFork.lean): exactly Byzantium through
   BPO2, including synthetic Constantinople and excluding Amsterdam.
