@@ -30,7 +30,7 @@ def storedCount (w : State) (a : Adr) : Nat := ((w.getStor a).get 1).toNat
 
 /-- The queue length a storage claims: head slot minus tail slot. -/
 def storedQueueLen (w : State) (a : Adr) : Nat :=
-  (w.getStor a).get 3 |>.toNat - (w.getStor a).get 2 |>.toNat
+  ((w.getStor a).get 3).toNat - ((w.getStor a).get 2).toNat
 
 /-- Slot 0 holds the inhibitor, so user frames cannot run. -/
 def inhibited (w : State) (a : Adr) : Prop := (w.getStor a).get 0 = B256.max
@@ -57,7 +57,7 @@ noncomputable def feesPaidAt (blocks : List KeptBlock) (a : Adr) : Nat :=
 
 /-- The request bytes a history's blocks carry for one request type. -/
 noncomputable def deliveredOf (ty : UInt8) (blocks : List KeptBlock) : Bytes :=
-  ChainLink.History.delivered ty blocks
+  ChainLink.delivered ty blocks
 
 /-- No kept frame in the history ran with the system caller at this address. -/
 def noSystemFramesAt (blocks : List KeptBlock) (a : Adr) : Prop :=
@@ -89,18 +89,18 @@ def callIsOk (benv : Benv) (a : Adr) (data : Bytes) (post : State)
   processCheckedSystemTransaction benv a data = .ok (post, out)
 
 /-- How many system-caller frames ran at an address in the history. -/
-def sysCallCount (blocks : List KeptBlock) (a : Adr) : Nat :=
+noncomputable def sysCallCount (blocks : List KeptBlock) (a : Adr) : Nat :=
   ((keptAt blocks a).filter (fun f => decide (f.sevm.caller = systemAddress))).length
 
 /-- The natural-fee budget the history's deposit submissions paid. -/
 noncomputable def depositFeeSum (blocks : List KeptBlock) : Nat :=
   ((((keptAt blocks depositAddr).filter (fun f => decide (f.sevm.data.length = 184))).map
-    (ChainLink.History.naturalFee Deposit.contract))).sum
+    (ChainLink.naturalFee Deposit.contract))).sum
 
 /-- The natural-fee budget the history's exit submissions paid. -/
 noncomputable def exitFeeSum (blocks : List KeptBlock) : Nat :=
   ((((keptAt blocks exitAddr).filter (fun f => decide (f.sevm.data.length = 48))).map
-    (ChainLink.History.naturalFee Exit.contract))).sum
+    (ChainLink.naturalFee Exit.contract))).sum
 
 /-- No system-caller, no authority, no created-address frames: the O19 premises. -/
 structure HistoryClean (blocks : List KeptBlock) : Prop where
@@ -111,7 +111,7 @@ structure HistoryClean (blocks : List KeptBlock) : Prop where
   /-- No kept block creates it. -/
   creates : ChainLink.History.NoCreate systemAddress blocks
 
-/-- The deployed storage shape at a chain start. -/
+/-- The deployed storage shape at a chain start: pinned reads at the deployment block. -/
 structure DeployedStart (start : BlockChain) : Prop where
   /-- The deposit queue starts empty of excess. -/
   depExcess : storedExcess start.state depositAddr = 0
@@ -121,6 +121,15 @@ structure DeployedStart (start : BlockChain) : Prop where
   depQueue : storedQueueLen start.state depositAddr = 0
   /-- The exit contract starts inhibited. -/
   exitInhib : inhibited start.state exitAddr
+  /-- The deposit storage is exactly the deployed empty storage. -/
+  depStor : start.state.getStor depositAddr = Stor.empty
+  /-- The exit storage is exactly the deployed inhibited storage. -/
+  exitStor : start.state.getStor exitAddr = Exit.deployedStorage
+
+/-- The system address holds no code at a chain start: a pinned chain read. -/
+structure SystemCodeAbsent (start : BlockChain) : Prop where
+  /-- No code at the system address, so drain outputs reach the request list. -/
+  code : start.state.getCode systemAddress = ByteArray.empty
 
 /-- All four request contracts' code at a start. -/
 structure FourCodes (start : BlockChain) : Prop where

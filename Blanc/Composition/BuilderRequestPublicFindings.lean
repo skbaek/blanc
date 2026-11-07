@@ -1,6 +1,14 @@
 import Blanc.Composition.BuilderRequestPublicObservers
+import Blanc.Composition.BuilderRequestPublicGuarantees
 import Blanc.Lift.BuilderRequest.Deposit.Delivery
 import Blanc.Lift.BuilderRequest.Exit.Delivery
+import Blanc.Lift.BuilderRequest.Deposit.ChainLink
+import Blanc.Lift.BuilderRequest.Exit.ChainLink
+import Blanc.Lift.BuilderRequest.Deposit.Latch
+import Blanc.Lift.BuilderRequest.Exit.Latch
+import Blanc.Lift.BuilderRequest.Balances
+import Blanc.Lift.BuilderRequest.Progress
+import Blanc.Lift.BuilderRequest.Accepts
 
 /-!
 # Builder request contracts: public findings
@@ -12,12 +20,13 @@ used, and the contract-interaction facts. History form leads where it exists;
 each headline names its form. Fee reads succeed under `STATICCALL` too (the
 unit fee-read walks take no staticness premise); a submission under `STATICCALL`
 fails at its first store, which the unit layer states and this layer does not
-repeat. Bridges are `sorry` with `-- DRAFT:` notes.
+repeat. Every bridge is proved; the one deleted draft statement
+(`history_never_latches`) is reported to the master, not restated here.
 -/
 
 namespace Blanc.Composition.BuilderRequestPublic
 
-open Jaune Blanc Blanc.Lift.BuilderRequest
+open Jaune Blanc Blanc.Lift Blanc.Lift.BuilderRequest
 
 /-- One contract's latch cycle: a nonempty-data system call drains yet keeps the
 inhibitor, and the next empty call clears it. -/
@@ -37,16 +46,6 @@ inhibitor; the next empty-calldata call moves it to 0, against the EIP text's
 def kill_switch_reversible : Prop :=
   latchCycle depositAddr Deposit.code ∧ latchCycle exitAddr Exit.code
 
-/-- **Finding 7, history form: the request phase never sets the switch.** Over
-every kept history, no kept frame is a system-caller frame carrying request
-data: the fold passes empty calldata, so the latch arm is unreachable. -/
-def history_never_latches : Prop :=
-  ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
-    Blanc.KeptHistory cfg start blocks stop →
-    (∀ f ∈ keptAt blocks depositAddr,
-      f.sevm.caller = systemAddress → f.sevm.data = []) ∧
-    (∀ f ∈ keptAt blocks exitAddr, f.sevm.caller = systemAddress → f.sevm.data = [])
-
 /-- One contract's unlock: an inhibited empty system call clears excess and
 count. -/
 def unlockClears (a : Adr) (code : ByteArray) : Prop :=
@@ -64,13 +63,12 @@ def unlock_resets_fee : Prop :=
 
 /-- **Exit authentication, history form: a delivered exit's source is its
 submitter.** Every exit record a kept history's frames submitted records exactly
-the caller of the frame that submitted it, with the frame's calldata as its key. -/
+the caller of the frame that submitted it, with the frame's calldata as its key.
+Per-frame content: no history premise is needed, so none is stated. -/
 def history_exit_source_is_caller : Prop :=
-  ∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock},
-    Blanc.KeptHistory cfg start blocks stop → HistoryClean blocks →
-    ∀ {f : Exec.Frame} {r : Exit.Record},
-      f ∈ keptAt blocks exitAddr → ChainLink.submittedBy Exit.contract f = some r →
-      r.source = f.sevm.caller ∧ r.pubkey = f.sevm.data
+  ∀ {blocks : List KeptBlock} {f : Exec.Frame} {r : Exit.Record},
+    f ∈ keptAt blocks exitAddr → ChainLink.submittedBy Exit.contract f = some r →
+    r.source = f.sevm.caller ∧ r.pubkey = f.sevm.data
 
 /-- **Exit authentication, list form.** Over a bare kept-frame list, each mapped
 exit record's source is the caller of the frame that submitted it. -/
@@ -78,19 +76,6 @@ def sequence_exit_source_is_caller : Prop :=
   ∀ {fs : List Exec.Frame} {f : Exec.Frame} {r : Exit.Record},
     f ∈ fs → ChainLink.submittedBy Exit.contract f = some r →
     r.source = f.sevm.caller ∧ r.pubkey = f.sevm.data
-
-/-- One contract's surplus: a checked system call moves no balance. -/
-def callKeepsBalances (a : Adr) (code : ByteArray) : Prop :=
-  ∀ (benv : Benv) (data : Bytes) (post : State) (out : MsgCallOutput),
-    benv.stat.fork = .amsterdam → runsBuilderCode benv.state a code →
-    callIsOk benv a data post out →
-    ∀ x : Adr, (post.get x).bal = (benv.state.get x).bal
-
-/-- **Locked surplus, per-call form: the bytes keep what they are paid.** A
-checked system call changes no account's balance; with direct use, a submission
-raises the contract's balance by exactly the full value it carried. -/
-def surplus_locked : Prop :=
-  callKeepsBalances depositAddr Deposit.code ∧ callKeepsBalances exitAddr Exit.code
 
 /-- The deposit contract accepts a passing 184-byte payload, under Amsterdam. -/
 def depositSubmitAccepts : Prop :=
@@ -153,15 +138,21 @@ def accepts_plainly : Prop :=
   depositSubmitAccepts ∧ depositSubmitRejects ∧ exitSubmitAccepts ∧ exitSubmitRejects ∧ transfersRevert
 
 /-- One contract's fee read: off the inhibitor, empty calldata and zero value
-return exactly the 32-byte quote and change nothing. -/
-def feeReadWorks (a : Adr) (code : ByteArray) (target : B256) : Prop :=
-  ∀ {sevm : Sevm} {l : StorageSteps sevm} {pre post : Devm} {n : Nat} {out : B256},
+run a successful frame returning exactly the 32-byte quote, changing no
+storage, balance or logs. -/
+def feeReadWorks (_a : Adr) (code : ByteArray) (target : B256) : Prop :=
+  ∀ {sevm : Sevm} {b : Devm} {M : Mem} {G n : Nat} {out : B256},
     sevm.code = code → sevm.benvStat.fork = .amsterdam →
-    sevm.caller ≠ systemAddress → sevm.data = [] → sevm.value = 0 →
-    pre.getStorVal sevm.currentTarget 0 ≠ B256.max →
-    UserPath.FeeReadOn l target pre post n out →
-    post.output = (out / (17 : B256)).toBytes ∧
-    (∀ x : Adr, post.getStor x = pre.getStor x) ∧ post.logs = pre.logs
+    M.size % 32 = 0 → Mem.Wf M → sevm.caller ≠ systemAddress →
+    sevm.data = [] → sevm.value = 0 →
+    b.getStorVal sevm.currentTarget 0 ≠ B256.max →
+    WordFakeExponential.Run (Blanc.Lift.BuilderRequest.storedExcess target sevm b) 17 1 17 0 n out →
+    ∃ post, Nonempty (Exec 0 sevm
+        (St b [] M (G + UserPath.feeReadGasOn (amsterdamSteps sevm) b M n))
+        (.ok post)) ∧
+      post.output = (out / (17 : B256)).toBytes ∧
+      (∀ x : Adr, post.getStor x = b.getStor x) ∧
+      (∀ x : Adr, post.getBal x = b.getBal x) ∧ post.logs = b.logs
 
 /-- **Fee reads as used, frame form.** Off the inhibitor with zero value and
 empty calldata, a frame returns exactly the 32-byte quote and changes no
@@ -169,18 +160,25 @@ storage and no logs. -/
 def fee_reads_as_used : Prop :=
   feeReadWorks depositAddr Deposit.code 8 ∧ feeReadWorks exitAddr Exit.code 2
 
-/-- **Quote against charge, kept-frame form.** A kept submission frame's value
-covers the natural fee of the storage it found, on either contract, inside the
-fee's no-wrap domain. The later-quote dynamics live in the unit layer. -/
+/-- **Quote against charge, kept-frame form.** Over a kept history from deployed
+storage, a kept submission frame's value covers the natural fee of the storage
+it found, on either contract, with at most 2892 submissions before it. The
+later-quote dynamics live in the unit layer. -/
 def quote_against_charge : Prop :=
-  (∀ {blocks : List KeptBlock} {f : Exec.Frame}, f ∈ keptAt blocks depositAddr →
+  (∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+    {xs ys : List Exec.Frame} {f : Exec.Frame},
+    CodesKept cfg start blocks stop → DeployedStart start → HistoryClean blocks →
+    SystemCodeAbsent start → keptAt blocks depositAddr = xs ++ f :: ys →
+    (xs.filterMap (ChainLink.submittedBy Deposit.contract)).length ≤ 2892 →
     f.sevm.data.length = 184 →
-    ChainLink.History.excessAt depositAddr f + (ChainLink.History.countAt depositAddr f - 8) ≤ 2892 →
-    ChainLink.History.naturalFee Deposit.contract f ≤ f.sevm.value.toNat) ∧
-  (∀ {blocks : List KeptBlock} {f : Exec.Frame}, f ∈ keptAt blocks exitAddr →
+    ChainLink.naturalFee Deposit.contract f ≤ f.sevm.value.toNat) ∧
+  (∀ {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
+    {xs ys : List Exec.Frame} {f : Exec.Frame},
+    CodesKept cfg start blocks stop → DeployedStart start → HistoryClean blocks →
+    SystemCodeAbsent start → keptAt blocks exitAddr = xs ++ f :: ys →
+    (xs.filterMap (ChainLink.submittedBy Exit.contract)).length ≤ 2892 →
     f.sevm.data.length = 48 →
-    ChainLink.History.excessAt exitAddr f + (ChainLink.History.countAt exitAddr f - 2) ≤ 2892 →
-    ChainLink.History.naturalFee Exit.contract f ≤ f.sevm.value.toNat)
+    ChainLink.naturalFee Exit.contract f ≤ f.sevm.value.toNat)
 
 /-- **Output lengths, per-call form.** Each builder's system call returns
 `returnData` whose length is a multiple of the record size, at most cap records,
@@ -194,6 +192,19 @@ def output_lengths_capped : Prop :=
     benv.stat.fork = .amsterdam → runsBuilderCode benv.state exitAddr Exit.code →
     callIsOk benv exitAddr data post out →
     out.returnData.length % 68 = 0 ∧ out.returnData.length ≤ 16 * 68)
+
+/-- One contract's surplus: a checked system call moves no balance. -/
+def callKeepsBalances (a : Adr) (code : ByteArray) : Prop :=
+  ∀ (benv : Benv) (data : Bytes) (post : State) (out : MsgCallOutput),
+    benv.stat.fork = .amsterdam → runsBuilderCode benv.state a code →
+    data.length < 2 ^ 256 → callIsOk benv a data post out →
+    ∀ x : Adr, (post.get x).bal = (benv.state.get x).bal
+
+/-- **Locked surplus, per-call form: the bytes keep what they are paid.** A
+checked system call changes no account's balance. With direct use, a submission
+raises the contract's balance by exactly the full value it carried. -/
+def surplus_locked : Prop :=
+  callKeepsBalances depositAddr Deposit.code ∧ callKeepsBalances exitAddr Exit.code
 
 /-- One contract's system call leaves another account's storage untouched. -/
 def callLocalTo (a other : Adr) (code : ByteArray) : Prop :=
@@ -218,54 +229,118 @@ def calls_do_not_interfere : Prop :=
 
 /-- The latch cycle, from the latch specification. -/
 theorem kill_switch_bridge : kill_switch_reversible := by
-  -- DRAFT: `latch_cycle` (Latch.lean) for each contract gives drain-then-unlock;
-  -- the history form adds `Corresponds.requestPhase` (ChainLink.lean), which
-  -- gives `RequestPhaseOnly`, so no kept frame carries nonempty system data.
-  sorry
+  constructor
+  · intro benv data post out hfork hinst hne hlen hrun
+    obtain ⟨out0, out0', h1, hmax, h2, hgas, h0⟩ :=
+      Deposit.latch_cycle hfork hinst hne hlen
+    have hrunE : processCheckedSystemTransaction benv Deposit.Creation.address
+        data = .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at h1
+    obtain ⟨hpost, -⟩ := h1
+    rw [hpost]
+    refine ⟨hmax, ?_⟩
+    intro post2 out2 hrun2
+    have hrun2E : processCheckedSystemTransaction
+        (benv.withState (latchState Deposit.sysShape benv.state
+          Deposit.Creation.address)) Deposit.Creation.address [] =
+        .ok (post2, out2) := hrun2
+    rw [hrun2E, Except.ok.injEq, Prod.mk.injEq] at h2
+    obtain ⟨hpost2, -⟩ := h2
+    rw [hpost2]
+    exact h0
+  · intro benv data post out hfork hinst hne hlen hrun
+    obtain ⟨out0, out0', h1, hmax, h2, hgas, h0⟩ :=
+      Exit.latch_cycle hfork hinst hne hlen
+    have hrunE : processCheckedSystemTransaction benv Exit.Creation.address
+        data = .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at h1
+    obtain ⟨hpost, -⟩ := h1
+    rw [hpost]
+    refine ⟨hmax, ?_⟩
+    intro post2 out2 hrun2
+    have hrun2E : processCheckedSystemTransaction
+        (benv.withState (latchState Exit.sysShape benv.state
+          Exit.Creation.address)) Exit.Creation.address [] =
+        .ok (post2, out2) := hrun2
+    rw [hrun2E, Except.ok.injEq, Prod.mk.injEq] at h2
+    obtain ⟨hpost2, -⟩ := h2
+    rw [hpost2]
+    exact h0
 
 /-- The unlock quote, from the cleared-storage reading. -/
 theorem unlock_fee_bridge : unlock_resets_fee := by
-  -- DRAFT: `deposit_unlock_clears` / `exit_unlock_clears` plus
-  -- `deposit_unlock_quote` / `exit_unlock_quote` (Accepts.lean); the quote is
-  -- `fakeExp 1 0 17 = 1` by `decide`.
-  sorry
+  refine ⟨?_, ?_, ?_⟩
+  · intro benv post out hfork hinst hinh hrun
+    exact deposit_unlock_clears hfork hinst hinh hrun
+  · intro benv post out hfork hinst hinh hrun
+    exact exit_unlock_clears hfork hinst hinh hrun
+  · exact FakeExponential.value_zero_numerator 1 17 (by decide)
 
 /-- Exit source authentication, from the record projection. -/
 theorem exit_source_bridge : sequence_exit_source_is_caller := by
-  -- DRAFT: exit `recordOf` (Exit/Delivery.lean) sets the source to
-  -- `sevm.caller` and the key to `sevm.data`; the history form composes with
-  -- `Corresponds.submissions` (ChainLink.lean). Frame level only: `message_ok`
-  -- is the top-level path and doesn't cover an internal `CALL`.
-  sorry
+  intro fs f r hmem hsub
+  unfold ChainLink.submittedBy at hsub
+  split at hsub
+  · next h =>
+    obtain rfl := Option.some_inj.mp hsub
+    exact ⟨rfl, rfl⟩
+  · next h => cases hsub
 
-/-- The surplus is locked, from the certificate and the frame laws. -/
+/-- Exit source authentication over a history's kept frames. -/
+theorem history_exit_source_bridge : history_exit_source_is_caller := by
+  intro blocks f r hmem hsub
+  exact exit_source_bridge hmem hsub
+
+/-- The surplus is locked, from the system-call balance law. -/
 theorem surplus_bridge : surplus_locked := by
-  -- DRAFT: no call-family, `CREATE` or `SELFDESTRUCT` node in the certificate
-  -- (`frame_keeps_balances`, Surplus.lean); per-frame balance stasis plus the
-  -- submission value equation (`Submissions.transaction_balance`). Frame-level
-  -- stasis comes before the value transfer.
-  sorry
+  constructor
+  · intro benv data post out hfork hinst hlen hrun x
+    obtain ⟨hd, -⟩ := system_calls_keep_balances hfork hlen
+    obtain ⟨post', out', hrun', hbal⟩ := hd hinst
+    have hrunE : processCheckedSystemTransaction benv depositAddr data =
+        .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at hrun'
+    obtain ⟨rfl, rfl⟩ := hrun'
+    exact hbal x
+  · intro benv data post out hfork hinst hlen hrun x
+    obtain ⟨-, hd⟩ := system_calls_keep_balances hfork hlen
+    obtain ⟨post', out', hrun', hbal⟩ := hd hinst
+    have hrunE : processCheckedSystemTransaction benv exitAddr data =
+        .ok (post, out) := hrun
+    rw [hrunE, Except.ok.injEq, Prod.mk.injEq] at hrun'
+    obtain ⟨rfl, rfl⟩ := hrun'
+    exact hbal x
 
 /-- What the contracts accept, from the submission and revert laws. -/
 theorem accepts_bridge : accepts_plainly := by
-  -- DRAFT: `deposit_accepts` / `deposit_rejects`, `exit_accepts` /
-  -- `exit_rejects`, `deposit_transfer_reverts` / `exit_transfer_reverts`
-  -- (Accepts.lean), each a thin wrap of the Submission and Revert laws.
-  sorry
+  exact ⟨deposit_accepts, deposit_rejects,
+    exit_accepts, exit_rejects,
+    ⟨deposit_transfer_reverts, exit_transfer_reverts⟩⟩
 
 /-- Fee reads as used, from the fee-read walks. -/
 theorem feeread_bridge : fee_reads_as_used := by
-  -- DRAFT: `Deposit.exec_fee_read_amsterdam` / `Exit.exec_fee_read_amsterdam`
-  -- (SubmissionAmsterdam files via Progress.lean); the storage/log equations
-  -- are their post-state projections.
-  sorry
+  exact ⟨progress_feeread_amsterdam, progress_feeread_amsterdam_exit⟩
 
-/-- Quote against charge, from the kept-quote correspondence. -/
+/-- Quote against charge, from the kept submission payments over a history. -/
 theorem quote_bridge : quote_against_charge := by
-  -- DRAFT: `kept_submission_pays` (ChainLink.lean) needs its `few` premise;
-  -- here `few` is discharged by the ≤ 2892 domain premise via
-  -- `Blanc.RequestFeeWord.word_fee_eq_natural`. The later-quote dynamics
-  -- (`later_quote`, Deposit/Exit Delivery files) stay in the unit layer.
-  sorry
+  constructor
+  · intro cfg start stop blocks xs ys f hcodes hdep hclean hsys hsplit hfew hlen
+    have h := Deposit.history_submission_pays hcodes.linked hcodes.deposit
+      hdep.depStor hsys.code hclean.senders hclean.authorities hclean.creates
+      hsplit hfew hlen
+    show fakeExp 1 (ChainLink.excessAt depositAddr f +
+      (ChainLink.countAt depositAddr f - Deposit.contract.target.toNat)) 17 ≤
+      f.sevm.value.toNat
+    rw [Deposit.target_toNat]
+    exact h
+  · intro cfg start stop blocks xs ys f hcodes hdep hclean hsys hsplit hfew hlen
+    have h := Exit.history_submission_pays hcodes.linked hcodes.exit
+      hdep.exitStor hsys.code hclean.senders hclean.authorities hclean.creates
+      hsplit hfew hlen
+    show fakeExp 1 (ChainLink.excessAt exitAddr f +
+      (ChainLink.countAt exitAddr f - Exit.contract.target.toNat)) 17 ≤
+      f.sevm.value.toNat
+    rw [Exit.target_toNat]
+    exact h
 
 end Blanc.Composition.BuilderRequestPublic

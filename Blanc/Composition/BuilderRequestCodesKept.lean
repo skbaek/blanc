@@ -17,55 +17,64 @@ namespace Blanc.Composition.BuilderRequestCodesKept
 open Jaune
 open Blanc.Lift.BuilderRequest
 
+/-- **The four request contracts' code at a state.** One named bundle for the
+code-installation premises the fold needs; each code is concrete, so nonemptiness
+and no-delegation follow from these equalities and are not premises. -/
+structure CodesAt (σ : State) : Prop where
+  /-- EIP-7002's code is installed. -/
+  w7002 : σ.getCode withdrawalRequestPredeployAddress =
+    Blanc.withdrawalRequestCode
+  /-- EIP-7251's code is installed. -/
+  w7251 : σ.getCode consolidationRequestPredeployAddress =
+    Blanc.consolidationRequestCode
+  /-- The deposit code is installed. -/
+  dep : σ.getCode Deposit.Creation.address = Deposit.code
+  /-- The exit code is installed. -/
+  ext : σ.getCode Exit.Creation.address = Exit.code
+
 /-- **The four codes persist along a kept history.** Each address keeps the
-code it started with, needing only nonempty code and no delegation. -/
+code it started with; the codes are concrete, so nonemptiness and no-delegation
+are derived from the equalities, not assumed. -/
 theorem codes_persist {cfg : ChainConfig} {start post : BlockChain}
     {blocks : List KeptBlock} (h : Blanc.KeptHistory cfg start blocks post)
-    (h7002 : start.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode)
-    (h7251 : start.state.getCode consolidationRequestPredeployAddress =
-      Blanc.consolidationRequestCode)
-    (hdep : start.state.getCode Deposit.Creation.address = Deposit.code)
-    (hexit : start.state.getCode Exit.Creation.address = Exit.code)
-    (ne7002 : (start.state.getCode withdrawalRequestPredeployAddress).toList ≠ [])
-    (nd7002 : ¬ isValidDelegation (start.state.getCode withdrawalRequestPredeployAddress))
-    (ne7251 : (start.state.getCode consolidationRequestPredeployAddress).toList ≠ [])
-    (nd7251 : ¬ isValidDelegation (start.state.getCode consolidationRequestPredeployAddress))
-    (nedep : (start.state.getCode Deposit.Creation.address).toList ≠ [])
-    (nddep : ¬ isValidDelegation (start.state.getCode Deposit.Creation.address))
-    (neexit : (start.state.getCode Exit.Creation.address).toList ≠ [])
-    (ndexit : ¬ isValidDelegation (start.state.getCode Exit.Creation.address)) :
-    post.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode ∧
-    post.state.getCode consolidationRequestPredeployAddress =
-      Blanc.consolidationRequestCode ∧
-    post.state.getCode Deposit.Creation.address = Deposit.code ∧
-    post.state.getCode Exit.Creation.address = Exit.code := by
+    (codes : CodesAt start.state) : CodesAt post.state := by
+  have ne7002 : (start.state.getCode withdrawalRequestPredeployAddress).toList ≠ [] := by
+    rw [codes.w7002]
+    decide +kernel
+  have nd7002 : ¬ isValidDelegation (start.state.getCode withdrawalRequestPredeployAddress) := by
+    rw [codes.w7002]
+    decide +kernel
+  have ne7251 : (start.state.getCode consolidationRequestPredeployAddress).toList ≠ [] := by
+    rw [codes.w7251]
+    decide +kernel
+  have nd7251 : ¬ isValidDelegation (start.state.getCode consolidationRequestPredeployAddress) := by
+    rw [codes.w7251]
+    decide +kernel
+  have nedep : (start.state.getCode Deposit.Creation.address).toList ≠ [] := by
+    rw [codes.dep]
+    decide +kernel
+  have nddep : ¬ isValidDelegation (start.state.getCode Deposit.Creation.address) := by
+    rw [codes.dep]
+    decide +kernel
+  have neexit : (start.state.getCode Exit.Creation.address).toList ≠ [] := by
+    rw [codes.ext]
+    decide +kernel
+  have ndexit : ¬ isValidDelegation (start.state.getCode Exit.Creation.address) := by
+    rw [codes.ext]
+    decide +kernel
   obtain ⟨-, c7002⟩ := h.chain ne7002 nd7002
   obtain ⟨-, c7251⟩ := h.chain ne7251 nd7251
   obtain ⟨-, cdep⟩ := h.chain nedep nddep
   obtain ⟨-, cexit⟩ := h.chain neexit ndexit
-  exact ⟨c7002.trans h7002, c7251.trans h7251, cdep.trans hdep, cexit.trans hexit⟩
+  exact ⟨c7002.trans codes.w7002, c7251.trans codes.w7251, cdep.trans codes.dep,
+    cexit.trans codes.ext⟩
 
 /-- **The next request pass cannot fail.** At any Amsterdam `benv` over the
 post state, the four checked calls return and the fold over
 `amsterdamRules.requests` succeeds. -/
 theorem next_pass_succeeds {cfg : ChainConfig} {start post : BlockChain}
     {blocks : List KeptBlock} (h : Blanc.KeptHistory cfg start blocks post)
-    (h7002 : start.state.getCode withdrawalRequestPredeployAddress =
-      Blanc.withdrawalRequestCode)
-    (h7251 : start.state.getCode consolidationRequestPredeployAddress =
-      Blanc.consolidationRequestCode)
-    (hdep : start.state.getCode Deposit.Creation.address = Deposit.code)
-    (hexit : start.state.getCode Exit.Creation.address = Exit.code)
-    (ne7002 : (start.state.getCode withdrawalRequestPredeployAddress).toList ≠ [])
-    (nd7002 : ¬ isValidDelegation (start.state.getCode withdrawalRequestPredeployAddress))
-    (ne7251 : (start.state.getCode consolidationRequestPredeployAddress).toList ≠ [])
-    (nd7251 : ¬ isValidDelegation (start.state.getCode consolidationRequestPredeployAddress))
-    (nedep : (start.state.getCode Deposit.Creation.address).toList ≠ [])
-    (nddep : ¬ isValidDelegation (start.state.getCode Deposit.Creation.address))
-    (neexit : (start.state.getCode Exit.Creation.address).toList ≠ [])
-    (ndexit : ¬ isValidDelegation (start.state.getCode Exit.Creation.address))
+    (codes : CodesAt start.state)
     {benv : Benv} (hstate : benv.state = post.state)
     (hfork : benv.stat.fork = .amsterdam) (idx : Nat) (acc : List Bytes)
     (bal : BalBuilder) :
@@ -116,8 +125,7 @@ theorem next_pass_succeeds {cfg : ChainConfig} {start post : BlockChain}
             Blanc.ExecutionTrace.optionalRequestEntry 4 out4.returnData,
           bal') ∧
       benv.stat.rules.requests = amsterdamRules.requests := by
-  have hp := codes_persist h h7002 h7251 hdep hexit ne7002 nd7002 ne7251 nd7251
-    nedep nddep neexit ndexit
+  have hp := codes_persist h codes
   rw [← hstate] at hp
   obtain ⟨p7002, p7251, pdep, pexit⟩ := hp
   exact Blanc.Composition.RequestPhaseAmsterdam.request_phase hfork p7002 p7251
