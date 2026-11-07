@@ -1454,6 +1454,8 @@ SHARED += ["Lift.Create2Factory.Cert", "Lift.Create2Factory.Check", "Lift.Create
 # Amsterdam walk-engine support (blanc-eip8282-builder-requests-v1 O6): the state-gas `SSTORE` and
 # `SLOAD` steps and the top-level system-call envelope, contract-neutral. `CoveredFork` is not widened.
 SHARED += ["Lift.AmsterdamWalk", "Lift.SystemCallAmsterdam"]
+# The two pushed-word facts of a request contract's dispatch and inhibitor guard.
+SHARED += ["Lift.SystemCaller"]
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",

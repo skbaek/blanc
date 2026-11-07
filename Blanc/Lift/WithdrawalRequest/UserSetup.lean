@@ -28,13 +28,6 @@ def userSetupGas (sevm : Sevm) (b : Devm) : Nat :=
 
 private theorem denominator_push : Bytes.toB256 [0x11] = (17 : B256) := rfl
 private theorem zero_push : Bytes.toB256 [] = (0 : B256) := rfl
-private theorem inhibitor_push :
-    Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = B256.max := by
-  simpa only [B256.add_zero, List.replicate_succ, List.replicate_zero] using ones_add_zero
-
 /-- The explicit inhibitor arm is a REVERT tree, hence has no successful Outcome. -/
 theorem revert_tail_no_run {sevm : Sevm} {d : Devm} {o : Outcome}
     (run : SFunc.Run prog sevm d t_01f4_c0 o) : False := by

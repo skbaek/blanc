@@ -1,6 +1,7 @@
 import Blanc.Lift.WithdrawalRequest.Prog
 import Blanc.Lift.WithdrawalRequest.Jumps
 import Blanc.Lift.WalkSteps
+import Blanc.Lift.SystemCaller
 
 /-!
 The certified caller-dispatch prefix, ending at the user or system tail.
@@ -25,15 +26,6 @@ private theorem system_push :
       0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe] =
       systemAddress.toB256 := rfl
 
-private theorem caller_eqCheck (sevm : Sevm) :
-    B256.eqCheck systemAddress.toB256 sevm.caller.toB256 =
-      if sevm.caller = systemAddress then 1 else 0 := by
-  by_cases h : sevm.caller = systemAddress
-  · simp only [h, B256.eqCheck, ite_true]
-  · have hw : systemAddress.toB256 ≠ sevm.caller.toB256 :=
-      fun eq => h (Adr.toB256_inj eq.symm)
-    simp only [B256.eqCheck, ite_eq_right hw, ite_eq_right h]
-
 /-- A successful dispatch leaves its original base and memory at the selected tail. -/
 theorem dispatch_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
     (run : SFunc.Run prog sevm (St b [] M G) t_0000_c0 o) :
@@ -51,7 +43,7 @@ theorem dispatch_inv {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome}
         cases k with
         | next hp k =>
           obtain ⟨_, rfl⟩ := ri_push hp
-          rw [caller_eqCheck] at k
+          rw [adr_eqCheck] at k
           by_cases h : sevm.caller = systemAddress
           · simp only [ite_eq_left h, dispatchTail] at k ⊢
             cases k with
@@ -73,7 +65,7 @@ theorem dispatch_exact {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat} {o : Outcome
   unfold t_0000_c0
   refine rx_caller (by decide) ?_
   refine rx_push system_push (by change 1 < 1024; decide) ?_
-  refine rx_eq (caller_eqCheck sevm) (by decide) ?_
+  refine rx_eq (adr_eqCheck systemAddress sevm.caller) (by decide) ?_
   refine rx_push rfl (by change 1 < 1024; decide) ?_
   by_cases h : sevm.caller = systemAddress
   · simp only [ite_eq_left h, dispatchTail] at tail ⊢

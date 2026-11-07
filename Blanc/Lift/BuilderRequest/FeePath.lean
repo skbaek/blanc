@@ -4,6 +4,7 @@ import Blanc.Lift.InvWalkWorld
 import Blanc.Lift.PackedSha
 import Blanc.Lift.ExactWalkSolc
 import Blanc.RequestFeeWord
+import Blanc.Lift.SystemCaller
 
 /-!
 # The EIP-8282 builder contracts' user fee path
@@ -136,13 +137,6 @@ private theorem system_push :
       0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xfe] =
       systemAddress.toB256 := rfl
 
-private theorem adr_eqCheck (a c : Adr) :
-    B256.eqCheck a.toB256 c.toB256 = if c = a then 1 else 0 := by
-  by_cases h : c = a
-  · simp only [h, B256.eqCheck, ite_true]
-  · have hw : a.toB256 ≠ c.toB256 := fun eq => h (Adr.toB256_inj eq.symm)
-    simp only [B256.eqCheck, ite_eq_right hw, ite_eq_right h]
-
 /-- A successful dispatch reaches the arm the caller selects, on the same stack and memory. -/
 theorem dispatch_inv {dest : PushWord} {user system : SFunc}
     (run : SFunc.Run fs sevm (St b [] M G) (dispatchTree dest user system) o) :
@@ -183,13 +177,6 @@ theorem dispatch_exact {dest : PushWord} {user system : SFunc}
     exact rx_branch_succ (by decide) tail
   · simp only [ite_eq_right h, dispatchArm] at tail ⊢
     exact rx_branch_zero tail
-
-private theorem inhibitor_push :
-    Bytes.toB256 [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff,
-      0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff] = B256.max :=
-  (B256.add_zero _).symm.trans ones_add_zero
 
 /-- A run past the guard has slot 0 off the inhibitor. -/
 theorem inhibitor_inv {dest : PushWord} {active revert : SFunc}
