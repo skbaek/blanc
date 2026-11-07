@@ -483,6 +483,9 @@ structure FeeRead (target : B256) (sevm : Sevm) (pre post : Devm) (iterations : 
   balance : ∀ address, post.getBal address = pre.getBal address
   /-- No log was appended. -/
   logs : post.logs = pre.logs
+  /-- The whole post state: storage keys warmed, the word in memory, the rest unchanged. -/
+  state : ∃ gas, post = RequestFee.feeGetterPost (feeBase sevm pre) pre.memory
+    (finalOutput / (17 : B256)) gas
 
 /-- The quoted word fee is at most `fake_exponential(1, excess, 17)` of the quoted excess. -/
 theorem FeeRead.fee_le {target : B256} {iterations : Nat} {finalOutput : B256}
@@ -525,7 +528,7 @@ theorem exec_fee_read (hcode : sevm.code = k.code) (fork : CoveredFork sevm.benv
   obtain ⟨gas, rfl⟩ := RequestFee.return_inv aligned run
   have facts := RequestFee.feeGetterPost_facts (feeBase sevm pre) pre.memory
     (finalOutput / (17 : B256)) gas wf aligned
-  refine ⟨iterations, finalOutput, zero, active, wordRun, facts.1, ?_, ?_, ?_⟩
+  refine ⟨iterations, finalOutput, zero, active, wordRun, facts.1, ?_, ?_, ?_, gas, rfl⟩
   · intro address
     rw [← feeBase_getStor sevm pre address]
     exact congrArg (fun world : World => (world.state.get address).stor) facts.2.1

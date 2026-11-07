@@ -331,6 +331,23 @@ private theorem word_exact {x : UInt8} {xs : Bytes} {le : (x :: xs).length ≤ 3
   refine rx_push rfl (by change 2 < 1024; decide) ?_
   exact rx_add' rfl (by change 1 < 1024; decide) tail'
 
+private theorem word0_exact {key tail : B256} {f : SFunc}
+    (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
+    (slack : gCallStipend < G) {le0 : ([] : Bytes).length ≤ 32}
+    {le1 : [(0x01 : UInt8)].length ≤ 32}
+    (tail' : SFunc.RunExact prog sevm
+      (St (wordStore sevm b key 0) [1 + key, tail] M G) f o) :
+    SFunc.RunExact prog sevm
+      (St b [key, tail] M (G + 3 + 3 + sstoreCost sevm b key (Sevm.dataWord sevm 0) + 3 + 3 + 2))
+      (.next (.push [] le0) (.next (.reg .calldataload) (.next (.reg (.dup 1))
+        (.next (.reg .sstore) (.next (.push [0x01] le1) (.next (.reg .add) f)))))) o := by
+  refine rx_push0 (h_push0 := fork.rules_push0) (by change 2 < 1024; decide) ?_
+  refine rx_calldataload (by change 2 < 1024; decide) ?_
+  refine rx_dup2 (by change 3 < 1024; decide) ?_
+  refine rx_sstore fork (by omega) dynamic ?_
+  refine rx_push rfl (by change 2 < 1024; decide) ?_
+  exact rx_add' rfl (by change 1 < 1024; decide) tail'
+
 private theorem log_exact {tail : B256} (fork : CoveredFork sevm.benvStat.fork)
     (dynamic : sevm.isStatic = false) (slack : gCallStipend < G)
     {le1 : [(0x01 : UInt8)].length ≤ 32} {le3 : [(0x03 : UInt8)].length ≤ 32} :
@@ -404,42 +421,6 @@ private theorem suffix_exact (fork : CoveredFork sevm.benvStat.fork)
   refine rx_push0 (h_push0 := fork.rules_push0) (by change 2 < 1024; decide) ?_
   exact log_exact fork dynamic slack
 
-private theorem words_exact {key tail : B256} {f : SFunc} {G' : Nat}
-    (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
-    (slack : gCallStipend < G') (word5 : f = word5Tree)
-    (next : SFunc.RunExact prog sevm (St (wordStore sevm (wordStore sevm (wordStore sevm
-      (wordStore sevm (wordStore sevm b key 0) (1 + key) 32) (1 + (1 + key)) 64)
-      (1 + (1 + (1 + key))) 96) (1 + (1 + (1 + (1 + key)))) 128)
-      [1 + (1 + (1 + (1 + (1 + key)))), tail] M G') f o) :
-    SFunc.RunExact prog sevm
-      (St b [key, tail] M (G' + 3 + 3 + sstoreCost sevm (wordStore sevm (wordStore sevm
-          (wordStore sevm (wordStore sevm b key 0) (1 + key) 32) (1 + (1 + key)) 64)
-          (1 + (1 + (1 + key))) 96) (1 + (1 + (1 + (1 + key))))
-          (Sevm.dataWord sevm 128) + 3 + 3 + 3
-        + 3 + 3 + sstoreCost sevm (wordStore sevm (wordStore sevm (wordStore sevm b key 0)
-          (1 + key) 32) (1 + (1 + key)) 64) (1 + (1 + (1 + key))) (Sevm.dataWord sevm 96) + 3 + 3 + 3
-        + 3 + 3 + sstoreCost sevm (wordStore sevm (wordStore sevm b key 0) (1 + key) 32)
-          (1 + (1 + key)) (Sevm.dataWord sevm 64) + 3 + 3 + 3
-        + 3 + 3 + sstoreCost sevm (wordStore sevm b key 0) (1 + key) (Sevm.dataWord sevm 32) + 3 + 3 + 3
-        + 3 + 3 + sstoreCost sevm b key (Sevm.dataWord sevm 0) + 3 + 3 + 2))
-      wordsTree o := by
-  subst word5
-  have h4 := word_exact (x := 0x80) (xs := []) (le := by decide) (off := 128) (le1 := by decide)
-    rfl fork dynamic slack next
-  have h3 := word_exact (x := 0x60) (xs := []) (le := by decide) (off := 96) (le1 := by decide)
-    rfl fork dynamic (by omega) h4
-  have h2 := word_exact (x := 0x40) (xs := []) (le := by decide) (off := 64) (le1 := by decide)
-    rfl fork dynamic (by omega) h3
-  have h1 := word_exact (x := 0x20) (xs := []) (le := by decide) (off := 32) (le1 := by decide)
-    rfl fork dynamic (by omega) h2
-  unfold wordsTree
-  refine rx_push0 (h_push0 := fork.rules_push0) (by change 2 < 1024; decide) ?_
-  refine rx_calldataload (by change 2 < 1024; decide) ?_
-  refine rx_dup2 (by change 3 < 1024; decide) ?_
-  refine rx_sstore fork (by omega) dynamic ?_
-  refine rx_push rfl (by change 2 < 1024; decide) ?_
-  exact rx_add' rfl (by change 1 < 1024; decide) h1
-
 private theorem word5_exact {key tail : B256} {G' : Nat}
     (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
     (slack : gCallStipend < G')
@@ -453,52 +434,49 @@ private theorem word5_exact {key tail : B256} {G' : Nat}
   refine rx_swap1 ?_
   exact rx_sstore fork (by omega) dynamic next
 
+private theorem words_exact {key tail : B256} {G' : Nat}
+    (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
+    (slack : gCallStipend < G')
+    (next : SFunc.RunExact prog sevm (St (recordStore sevm b key) [tail] M G') memoryTree o) :
+    SFunc.RunExact prog sevm (St b [key, tail] M (G' + 83 + recordWritesGas sevm b key))
+      wordsTree o := by
+  have h5 := word5_exact (b := wordStore sevm (wordStore sevm (wordStore sevm (wordStore sevm
+    (wordStore sevm b key 0) (1 + key) 32) (1 + (1 + key)) 64) (1 + (1 + (1 + key))) 96)
+    (1 + (1 + (1 + (1 + key)))) 128) fork dynamic slack next
+  have h4 := word_exact (x := 0x80) (xs := []) (le := by decide) (off := 128) (le1 := by decide)
+    rfl fork dynamic (by omega) h5
+  have h3 := word_exact (x := 0x60) (xs := []) (le := by decide) (off := 96) (le1 := by decide)
+    rfl fork dynamic (by omega) h4
+  have h2 := word_exact (x := 0x40) (xs := []) (le := by decide) (off := 64) (le1 := by decide)
+    rfl fork dynamic (by omega) h3
+  have h1 := word_exact (x := 0x20) (xs := []) (le := by decide) (off := 32) (le1 := by decide)
+    rfl fork dynamic (by omega) h2
+  have h0 := word0_exact (le0 := by decide) (le1 := by decide) fork dynamic (by omega) h1
+  have hgas : ∀ X, X = G' + 83 + recordWritesGas sevm b key →
+      SFunc.RunExact prog sevm (St b [key, tail] M X) wordsTree o →
+      SFunc.RunExact prog sevm (St b [key, tail] M (G' + 83 + recordWritesGas sevm b key))
+        wordsTree o := fun _ eq h => eq ▸ h
+  refine hgas _ ?_ h0
+  simp only [recordWritesGas]
+  omega
+
 /-- The submission body, forward: non-static, with more than the `SSTORE` sentry left at the end. -/
 theorem body_exact (fork : CoveredFork sevm.benvStat.fork) (dynamic : sevm.isStatic = false)
     (slack : gCallStipend < G) :
     SFunc.RunExact prog sevm (St b [] M (G + bodyGas sevm b M)) t_00cd_c1
       (.halted (submissionPost sevm b M G)) := by
   have suffix := suffix_exact (b := b) (M := M) fork dynamic slack
-  have word5 := word5_exact (b := wordStore sevm (wordStore sevm (wordStore sevm (wordStore sevm
-      (wordStore sevm (tailRead sevm b) (recordKey (tailWord sevm b)) 0)
-      (1 + recordKey (tailWord sevm b)) 32) (1 + (1 + recordKey (tailWord sevm b))) 64)
-      (1 + (1 + (1 + recordKey (tailWord sevm b)))) 96)
-      (1 + (1 + (1 + (1 + recordKey (tailWord sevm b))))) 128)
-    (key := 1 + (1 + (1 + (1 + (1 + recordKey (tailWord sevm b)))))) fork dynamic (by omega) suffix
-  have words := words_exact fork dynamic (by omega) rfl word5
+  have words := words_exact (b := tailRead sevm b) (key := recordKey (tailWord sevm b))
+    fork dynamic (by omega) suffix
   rw [body_split]
   have hgas : G + bodyGas sevm b M =
       G + sstoreCost sevm (logged sevm b M) 3 (1 + tailWord sevm b) + 3 + 3 + 3 +
           logGas sevm M + 2 + 3 + copyGas M + 2 + 2 + 3
-        + sstoreCost sevm (wordStore sevm (wordStore sevm (wordStore sevm (wordStore sevm
-            (wordStore sevm (tailRead sevm b) (recordKey (tailWord sevm b)) 0)
-            (1 + recordKey (tailWord sevm b)) 32) (1 + (1 + recordKey (tailWord sevm b))) 64)
-            (1 + (1 + (1 + recordKey (tailWord sevm b)))) 96)
-            (1 + (1 + (1 + (1 + recordKey (tailWord sevm b))))) 128)
-            (1 + (1 + (1 + (1 + (1 + recordKey (tailWord sevm b)))))) (Sevm.dataWord sevm 160)
-          + 3 + 3 + 3
-        + 3 + 3 + sstoreCost sevm (wordStore sevm (wordStore sevm (wordStore sevm
-            (wordStore sevm (tailRead sevm b) (recordKey (tailWord sevm b)) 0)
-            (1 + recordKey (tailWord sevm b)) 32) (1 + (1 + recordKey (tailWord sevm b))) 64)
-            (1 + (1 + (1 + recordKey (tailWord sevm b)))) 96)
-            (1 + (1 + (1 + (1 + recordKey (tailWord sevm b))))) (Sevm.dataWord sevm 128) + 3 + 3 + 3
-        + 3 + 3 + sstoreCost sevm (wordStore sevm (wordStore sevm
-            (wordStore sevm (tailRead sevm b) (recordKey (tailWord sevm b)) 0)
-            (1 + recordKey (tailWord sevm b)) 32) (1 + (1 + recordKey (tailWord sevm b))) 64)
-            (1 + (1 + (1 + recordKey (tailWord sevm b)))) (Sevm.dataWord sevm 96) + 3 + 3 + 3
-        + 3 + 3 + sstoreCost sevm (wordStore sevm
-            (wordStore sevm (tailRead sevm b) (recordKey (tailWord sevm b)) 0)
-            (1 + recordKey (tailWord sevm b)) 32)
-            (1 + (1 + recordKey (tailWord sevm b))) (Sevm.dataWord sevm 64) + 3 + 3 + 3
-        + 3 + 3 + sstoreCost sevm
-            (wordStore sevm (tailRead sevm b) (recordKey (tailWord sevm b)) 0)
-            (1 + recordKey (tailWord sevm b)) (Sevm.dataWord sevm 32) + 3 + 3 + 3
-        + 3 + 3 + sstoreCost sevm (tailRead sevm b) (recordKey (tailWord sevm b))
-            (Sevm.dataWord sevm 0) + 3 + 3 + 2
+        + 83 + recordWritesGas sevm (tailRead sevm b) (recordKey (tailWord sevm b))
         + 3 + 3 + 5 + 3 + 3 + sloadCost sevm (countStore sevm b) 3 + 3
         + sstoreCost sevm (afterSload sevm b 1) 1 (1 + countWord sevm b) + 3 + 3 + 3
         + sloadCost sevm b 1 + 3 := by
-    simp only [bodyGas, recordWritesGas]
+    simp only [bodyGas]
     omega
   rw [hgas]
   unfold bodyTree

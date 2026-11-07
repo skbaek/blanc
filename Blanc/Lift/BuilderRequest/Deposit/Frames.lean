@@ -54,6 +54,8 @@ structure Submitted (sevm : Sevm) (pre post : Devm) (iterations : Nat) (finalOut
   logs : post.logs = pre.logs ++ [⟨sevm.currentTarget, [], sevm.data⟩]
   /-- `STOP` returns nothing of its own: the output is the one the frame started with. -/
   output : post.output = pre.output
+  /-- The whole post state, including warmed keys, refunds and memory. -/
+  state : ∃ gas, post = submissionPost sevm (feeBase sevm pre) pre.memory gas
 
 /-- **Deposit frames.** A successful non-system frame at the deposit code. -/
 inductive UserFrame (sevm : Sevm) (pre post : Devm) : Prop where
@@ -207,7 +209,7 @@ theorem exec_user_frame (hcode : sevm.code = code) (fork : CoveredFork sevm.benv
     obtain ⟨storage, other, balance, logs, output⟩ :=
       submissionPost_effects (b := pre) (M := pre.memory) literal wf gas
     exact .submission iterations finalOutput ⟨dynamic, literal, active, wordRun, admitted, storage,
-      other, balance, logs, output⟩
+      other, balance, logs, output, gas, rfl⟩
   · have hword : sevm.data.length.toB256 ≠ userPath.shape.len.word := hlen
     have run' : SFunc.Run userPath.cert.prog sevm
         (St (feeBase sevm pre) [finalOutput / (17 : B256)] pre.memory G0)
@@ -222,6 +224,16 @@ theorem exec_user_frame (hcode : sevm.code = code) (fork : CoveredFork sevm.benv
     obtain ⟨iterations', finalOutput', read⟩ := UserPath.exec_fee_read (k := userPath) hcode fork
       stack aligned wf caller literal exec
     exact .feeRead iterations' finalOutput' literal read
+
+/-- **Deposit fee read.** A successful empty-calldata execution at a non-system caller carries no
+value, changes no storage, balance or log, and returns the word recurrence's quotient on
+`slot0 + max(0, count - 8)`. -/
+theorem exec_fee_read (hcode : sevm.code = code) (fork : CoveredFork sevm.benvStat.fork)
+    (stack : pre.stack = []) (aligned : pre.memory.size % 32 = 0) (wf : Mem.Wf pre.memory)
+    (caller : sevm.caller ≠ systemAddress) (empty : sevm.data = [])
+    (exec : Exec 0 sevm pre (.ok post)) :
+    ∃ iterations finalOutput, UserPath.FeeRead 8 sevm pre post iterations finalOutput :=
+  UserPath.exec_fee_read (k := userPath) hcode fork stack aligned wf caller empty exec
 
 /-- The charge of a submission, from the frame's start. -/
 def submissionGas (sevm : Sevm) (b : Devm) (M : Mem) (iterations : Nat) : Nat :=

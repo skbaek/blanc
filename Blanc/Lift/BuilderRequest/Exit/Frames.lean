@@ -55,9 +55,9 @@ theorem exec_user_inhibited_no_ok (hcode : sevm.code = code)
   UserPath.exec_inhibited_no_ok (k := userPath) hcode fork stack caller inhibited exec
 
 /-- **Exit rejection.** While slot 0 holds the inhibitor, every execution of the exit code at a
-non-system caller from an empty stack ends in failure, for any calldata, value and memory. Failure
-rolls the frame back. With enough gas the failure is the code's `REVERT`; with too little it is
-out-of-gas, so a gas-free statement cannot say `REVERT` specifically. -/
+non-system caller from an empty stack ends in failure, for any calldata, value and memory. The only
+success-free way out of the code's path is its `REVERT` or running out of gas first; this statement
+does not say which, and it constructs no `REVERT`. -/
 theorem exec_user_inhibited_fails {outcome : Execution} (hcode : sevm.code = code)
     (fork : CoveredFork sevm.benvStat.fork) (stack : pre.stack = [])
     (caller : sevm.caller ≠ systemAddress)
