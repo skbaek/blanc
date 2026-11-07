@@ -29,14 +29,10 @@ both meters price the two cold reads at `gasColdSload` (`Blanc.sloadCost_le`). T
 does not generalize is `Submissions.message_reverts`: it is message-level Amsterdam machinery
 (`processMessageCall_revert`, the returned state gas), with no covered-fork counterpart.
 
-**Status.** Inhibited, bad-length and paid-read frames are proved at both codes. The not-admitted
-frames (`frameReverts_not_admitted_covered`) are stated with `sorry`: their tails walk the
-contract-local guard cuts (`lowCut`, `floorCut`, `coverCut`, exit `lowCut`) over `l.feeBase`, and
-those walks live in `Deposit/Revert.lean` and `Exit/Revert.lean` over `(amsterdamSteps s).feeBase`,
-which this run may not edit. Copying them here with `coveredSteps` swapped in would be the
-concept-level twin O35 forbids. The lawful resolution, once Lean capacity is free, is to generalize
-each contract's guard-tail walk over `(v : l.Valid)` in its own `Revert.lean` file and instantiate it
-twice; the `DRAFT` notes below name the exact walks.
+**Status.** All four families (inhibited, bad-length, paid-read, not-admitted) are proved at both
+codes with no twins: each code's guard-tail walk is generalized over `(v : l.Valid)` as
+`frameReverts_not_admitted_on` in its own `Revert.lean` file, and this file instantiates it at
+`coveredSteps_valid` alongside the shared `*_on` proofs.
 -/
 
 namespace Blanc.Lift.BuilderRequest
@@ -88,15 +84,9 @@ theorem frameReverts_not_admitted_covered {s : Sevm} {b : Devm} {n : Nat} {out :
     (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (storedExcess 8 s b) 17 1 17 0 n out)
     (rejected : ¬ Admits s.data s.value (out / (17 : B256))) :
-    FrameReverts s b (revertBound n) := by
-  -- The three guard tails (`lowCut`, `floorCut`, `coverCut`) use only fork-free `rx_*` steps, so the
-  -- covered walk differs from `Deposit/Revert.lean` only in the fee-path base and the `push0` source.
-  -- Do not copy them here as twins: generalize `frameReverts_not_admitted` over `(v : l.Valid)` in
-  -- `Deposit/Revert.lean` instead (constants: `lowCut` at `X = 5 + 10 + 3 + 3 + 2 + 3 + 1`, `floorCut`
-  -- at `X = 5 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 10 + 3 + 3 + 2 + 3 + 1`, `coverCut` at
-  -- `X = 5 + 10 + 3 + 3 + 3 + 2 + 3 + 5 + 3 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 10 + 3 + 3 + 2 + 3 + 1`).
-  -- DRAFT: re-walk the three tails over `(coveredSteps s).feeBase b` and apply `UserPath.frameReverts_of_arm_on (coveredSteps_valid fork)`.
-  sorry
+    FrameReverts s b (revertBound n) :=
+  frameReverts_not_admitted_on (coveredSteps_valid fork) hcode caller hlen off wordRun
+    (feeBase_stateGas_covered s b) rejected
 
 end Deposit
 
@@ -139,13 +129,9 @@ theorem frameReverts_not_admitted_covered {s : Sevm} {b : Devm} {n : Nat} {out :
     (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (storedExcess 2 s b) 17 1 17 0 n out)
     (rejected : ¬ Admits s.data s.value (out / (17 : B256))) :
-    FrameReverts s b (revertBound n) := by
-  -- The `lowCut` tail uses only fork-free `rx_*` steps, so the covered walk differs from
-  -- `Exit/Revert.lean` only in the fee-path base and the `push0` source. Do not copy it here as a twin:
-  -- generalize `frameReverts_not_admitted` over `(v : l.Valid)` in `Exit/Revert.lean` instead (constant:
-  -- `lowCut` at `X = 5 + 10 + 3 + 3 + 2 + 1`).
-  -- DRAFT: re-walk the tail over `(coveredSteps s).feeBase b` and apply `UserPath.frameReverts_of_arm_on (coveredSteps_valid fork)`.
-  sorry
+    FrameReverts s b (revertBound n) :=
+  frameReverts_not_admitted_on (coveredSteps_valid fork) hcode caller hlen off wordRun
+    (feeBase_stateGas_covered s b) rejected
 
 end Exit
 

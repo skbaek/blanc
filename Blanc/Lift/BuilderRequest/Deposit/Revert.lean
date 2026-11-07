@@ -80,21 +80,23 @@ theorem frameReverts_paidRead (hcode : s.code = code) (hfork : s.benvStat.fork =
     FrameReverts s b (revertBound n) :=
   UserPath.frameReverts_paidRead (k := userPath) rfl rfl paidRead_cut revert_at hcode hfork caller off wordRun empty paid
 
-/-- **A submission the guards do not admit reverts.** 184 bytes of calldata, slot 0 off the inhibitor, and either less
-than 1 ETH credited or value below the credit plus the fee the bytes quote: the frame executes `REVERT`, charging no
-state gas. -/
-theorem frameReverts_not_admitted (hcode : s.code = code) (hfork : s.benvStat.fork = .amsterdam)
+/-- **A submission the guards do not admit reverts, on a fork's steps.** 184 bytes of calldata, slot 0 off the
+inhibitor, and either less than 1 ETH credited or value below the credit plus the fee the bytes quote: the frame
+executes `REVERT`, charging no state gas. -/
+theorem frameReverts_not_admitted_on {l : StorageSteps s} (v : l.Valid)
+    (hcode : s.code = code)
     (caller : s.caller ≠ systemAddress) (hlen : s.data.length = 184)
     (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
     (wordRun : WordFakeExponential.Run (storedExcess 8 s b) 17 1 17 0 n out)
+    (hmeter : (l.feeBase b).stateGas = b.stateGas)
     (rejected : ¬ Admits s.data s.value (out / (17 : B256))) :
     FrameReverts s b (revertBound n) := by
-  have hp0 := amsterdam_push0 hfork
+  have hp0 := v.push0
   have word : s.data.length.toB256 = userPath.shape.len.word := by rw [hlen]; rfl
   generalize hfee : out / (17 : B256) = fee at rejected
   by_cases low : s.value < fee
-  · refine UserPath.frameReverts_of_arm (k := userPath) (X := 5 + 10 + 3 + 3 + 2 + 3 + 1) (S := [fee]) rfl rfl low_cut
-      revert_at hcode hfork caller off wordRun (by omega) fun G => ?_
+  · refine UserPath.frameReverts_of_arm_on (k := userPath) v (X := 5 + 10 + 3 + 3 + 2 + 3 + 1) (S := [fee])
+      rfl rfl low_cut revert_at hcode caller off wordRun hmeter (by omega) fun G => ?_
     rw [hfee]
     simp only [selected]
     rw [ite_eq_left word]
@@ -109,9 +111,9 @@ theorem frameReverts_not_admitted (hcode : s.code = code) (hfork : s.benvStat.fo
     refine rx_push rfl (by change 2 < 1024; decide) ?_
     exact rx_branch_succ (by decide : (1 : B256) ≠ 0) (rev0_exact hp0 (by change 2 < 1024; decide))
   by_cases floor : amountGwei s < Bytes.toB256 [0x3b, 0x9a, 0xca, 0x00]
-  · refine UserPath.frameReverts_of_arm (k := userPath)
-      (X := 5 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 10 + 3 + 3 + 2 + 3 + 1) (S := [amountGwei s, fee]) rfl rfl floor_cut
-      revert_at hcode hfork caller off wordRun (by omega) fun G => ?_
+  · refine UserPath.frameReverts_of_arm_on (k := userPath) v
+      (X := 5 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 10 + 3 + 3 + 2 + 3 + 1) (S := [amountGwei s, fee]) rfl rfl
+      floor_cut revert_at hcode caller off wordRun hmeter (by omega) fun G => ?_
     rw [hfee]
     simp only [selected]
     rw [ite_eq_left word]
@@ -147,9 +149,9 @@ theorem frameReverts_not_admitted (hcode : s.code = code) (hfork : s.benvStat.fo
     rw [B256.lt_iff_toNat_lt_toNat, gwei_mul, value_sub paid]
     have hnot : ¬ (creditedWei s + fee.toNat ≤ s.value.toNat) := fun h => rejected ⟨enough, h⟩
     omega
-  refine UserPath.frameReverts_of_arm (k := userPath)
+  refine UserPath.frameReverts_of_arm_on (k := userPath) v
     (X := 5 + 10 + 3 + 3 + 3 + 2 + 3 + 5 + 3 + 10 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 3 + 10 + 3 + 3 + 2 + 3 + 1)
-    (S := []) rfl rfl cover_cut revert_at hcode hfork caller off wordRun (by omega) fun G => ?_
+    (S := []) rfl rfl cover_cut revert_at hcode caller off wordRun hmeter (by omega) fun G => ?_
   rw [hfee]
   simp only [selected]
   rw [ite_eq_left word]
@@ -184,5 +186,17 @@ theorem frameReverts_not_admitted (hcode : s.code = code) (hfork : s.benvStat.fo
   · simp only [B256.ltCheck, ite_eq_left short]
   refine rx_push rfl (by change 1 < 1024; decide) ?_
   exact rx_branch_succ (by decide : (1 : B256) ≠ 0) (rev0_exact (S := []) hp0 (by decide))
+
+/-- **A submission the guards do not admit reverts.** 184 bytes of calldata, slot 0 off the inhibitor, and either less
+than 1 ETH credited or value below the credit plus the fee the bytes quote: the frame executes `REVERT`, charging no
+state gas. -/
+theorem frameReverts_not_admitted (hcode : s.code = code) (hfork : s.benvStat.fork = .amsterdam)
+    (caller : s.caller ≠ systemAddress) (hlen : s.data.length = 184)
+    (off : b.getStorVal s.currentTarget 0 ≠ B256.max)
+    (wordRun : WordFakeExponential.Run (storedExcess 8 s b) 17 1 17 0 n out)
+    (rejected : ¬ Admits s.data s.value (out / (17 : B256))) :
+    FrameReverts s b (revertBound n) :=
+  frameReverts_not_admitted_on (amsterdamSteps_valid hfork) hcode caller hlen off wordRun
+    (UserPath.feeBase_stateGas s b) rejected
 
 end Blanc.Lift.BuilderRequest.Deposit

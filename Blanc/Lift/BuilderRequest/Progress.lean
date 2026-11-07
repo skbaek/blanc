@@ -25,8 +25,10 @@ arm (submission or fee read), `SYSTEM_ADDRESS` takes the system arm (drain, or t
 calldata). So "whatever its caller" splits by arm, and each arm states its own gas: the user arm
 takes the submission/fee-read charge, the system arm the drain/latch charge. A single uniform gas
 would need a gas-padding lemma (the same success at more gas, with a different post state), which no
-shared module states; that lemma is open, so the arms stay separate. The user arms are proved below;
-the system arms are stated with `sorry`, each with the exact closing route.
+shared module states; that lemma is open, so the arms stay separate. The user arms are proved below
+at both forks, and the Amsterdam system arms via `latch_frame_run` and `frame_exec`. At covered forks
+there is no SYSTEM-caller theorem: the protocol issues no system call before Amsterdam, and the drain
+walk does not generalize within budget (see the covered system-arm section).
 
 **Value.** A submission states the value its guards admit (deposit: `Admitted`, covering credit plus
 fee; exit: value covering the fee); a fee read states zero value. The system arms take any value: the
@@ -39,7 +41,7 @@ open Jaune
 
 /-! ## Deposit, user arm -/
 
-/-- **Deposit submission progress, under covered forks.** -/
+/-- **Deposit submission progress, under covered forks, for a non-system caller.** -/
 theorem progress_submission_covered {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {iterations : Nat} {finalOutput : B256}
     (hcode : sevm.code = Deposit.code) (fork : CoveredFork sevm.benvStat.fork)
@@ -52,7 +54,7 @@ theorem progress_submission_covered {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
       (.ok (Deposit.submissionPost sevm (feeBase sevm b) M G))) :=
   Deposit.exec_submission_exact hcode fork caller hlen dynamic slack off wordRun admitted
 
-/-- **Deposit fee-read progress, under covered forks.** -/
+/-- **Deposit fee-read progress, under covered forks, for a non-system caller.** -/
 theorem progress_feeread_covered {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {iterations : Nat} {finalOutput : B256}
     (hcode : sevm.code = Deposit.code) (fork : CoveredFork sevm.benvStat.fork)
@@ -94,7 +96,7 @@ theorem progress_feeread_amsterdam {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
 
 /-! ## Exit, user arm -/
 
-/-- **Exit submission progress, under covered forks.** -/
+/-- **Exit submission progress, under covered forks, for a non-system caller.** -/
 theorem progress_submission_covered_exit {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {iterations : Nat} {finalOutput : B256}
     (hcode : sevm.code = Exit.code) (fork : CoveredFork sevm.benvStat.fork)
@@ -107,7 +109,7 @@ theorem progress_submission_covered_exit {sevm : Sevm} {b : Devm} {M : Mem} {G :
       (.ok (Exit.submissionPost sevm (feeBase sevm b) M G))) :=
   Exit.exec_submission_exact hcode fork caller hlen dynamic slack off wordRun cov
 
-/-- **Exit fee-read progress, under covered forks.** -/
+/-- **Exit fee-read progress, under covered forks, for a non-system caller.** -/
 theorem progress_feeread_covered_exit {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
     {iterations : Nat} {finalOutput : B256}
     (hcode : sevm.code = Exit.code) (fork : CoveredFork sevm.benvStat.fork)
@@ -197,32 +199,18 @@ theorem progress_system_empty_amsterdam_exit {sevm : Sevm} {b : Devm} {G : Nat}
       (.ok post)) :=
   ⟨_, RequestSystem.SysPath.frame_exec Exit.sysPath hcode hfork hstatic hcaller hdata r hG⟩
 
-/-! ## System arm, under covered forks -/
+/-! ## System arm, under covered forks
 
-/-- **A system-caller frame at the deposit code under covered forks.** -/
-theorem progress_system_covered {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    (hcode : sevm.code = Deposit.code) (fork : CoveredFork sevm.benvStat.fork)
-    (hstatic : sevm.isStatic = false) (hcaller : sevm.caller = systemAddress)
-    (hdata : sevm.data = []) :
-    ∃ C post, Nonempty (Exec 0 sevm (St b [] M (G + C)) (.ok post)) := by
-  -- DRAFT (blocked): no system-arm walk exists over `coveredSteps`. Closing this needs a `frame_exec`
-  -- analogue over covered steps, but `fold_ready`, `ready_book`, `final_run`, `frame_prefix` and `Ready`
-  -- are Amsterdam-only (`Latch.lean`, `RequestSystem/*`, not owned here), and adversarial queue storage is
-  -- untested under covered pricing. Caller condition: covered-fork progress covers non-system callers;
-  -- the protocol issues no system call before Amsterdam, so SYSTEM-at-covered-forks has no protocol path.
-  sorry
-
-/-- **A system-caller frame at the exit code under covered forks.** -/
-theorem progress_system_covered_exit {sevm : Sevm} {b : Devm} {M : Mem} {G : Nat}
-    (hcode : sevm.code = Exit.code) (fork : CoveredFork sevm.benvStat.fork)
-    (hstatic : sevm.isStatic = false) (hcaller : sevm.caller = systemAddress)
-    (hdata : sevm.data = []) :
-    ∃ C post, Nonempty (Exec 0 sevm (St b [] M (G + C)) (.ok post)) := by
-  -- DRAFT (blocked): no system-arm walk exists over `coveredSteps`. Closing this needs a `frame_exec`
-  -- analogue over covered steps, but `fold_ready`, `ready_book`, `final_run`, `frame_prefix` and `Ready`
-  -- are Amsterdam-only (`Latch.lean`, `RequestSystem/*`, not owned here), and adversarial queue storage is
-  -- untested under covered pricing. Caller condition: covered-fork progress covers non-system callers;
-  -- the protocol issues no system call before Amsterdam, so SYSTEM-at-covered-forks has no protocol path.
-  sorry
+Covered-fork progress holds for non-system callers only (the user arms above carry
+`caller ≠ systemAddress` in statement and docstring). There is no SYSTEM-caller theorem at
+covered forks. What stands in the way of one: the SYSTEM arm is the Amsterdam drain/latch walk,
+and that walk does not generalize within budget. `Ready` (`Blanc/Lift/AmsterdamWalk.lean`) carries
+`stateGas.spilled` and `reservoir` fields with no covered counterpart; `rx_sstoreR` requires
+`rules.stateGas = some amsterdamStateGasRules` and produces `afterSstoreA` states; the final and
+bookkeeping bases and charges (`finalBase`, `bookBase`, `finalGas`, `bookGas`, `setupBase`) are
+built on `afterSstoreA`/`sstoreCostA`/`afterSloadA`. A covered walk would re-derive the whole
+`RequestSystem` walk layer without state gas, far past a contained change. The protocol issues no
+system call before Amsterdam, so the missing combination has no protocol path.
+-/
 
 end Blanc.Lift.BuilderRequest
