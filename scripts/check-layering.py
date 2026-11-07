@@ -1470,6 +1470,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.FeePath", "Lift.BuilderRequest.QueueLayout",
     "Lift.BuilderRequest.Message", "Lift.BuilderRequest.Revert", "Lift.BuilderRequest.Transaction",
     "Lift.BuilderRequest.Deposit.Transaction", "Lift.BuilderRequest.Exit.Transaction",
+    "Lift.BuilderRequest.TransactionWitness",
     "Lift.BuilderRequest.Deposit.Message", "Lift.BuilderRequest.Deposit.Revert",
     "Lift.BuilderRequest.Exit.Message", "Lift.BuilderRequest.Exit.Revert",
     "Lift.BuilderRequest.SystemPath", "Lift.BuilderRequest.SystemOutput",
