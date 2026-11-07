@@ -9,7 +9,7 @@ Per coin, the walk's two conclusions: at any point of history the books are at m
 any step moving nothing out of a coin, what the coin answers covers the books at that step's entry.
 
 * `pool_backed_holds`: `pool_backed`, at the end of any history;
-* `Moment.backed`: the same right after any transaction;
+* `Moment.backed`: the same right after any transaction, with USDC's flag on the pool clear there;
 * `Assumes.donateCovered`: `donate_admin_fees` reads coverage, so `virtual_price_bound_holds` follows.
 -/
 

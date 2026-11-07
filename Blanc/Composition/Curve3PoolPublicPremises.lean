@@ -93,7 +93,7 @@ structure UsdcMovesOnce (tip : State) (settled : List Exec.Frame) : Prop where
   /-- Once a frame reading USDC's ledger runs V2_2, every later one does. -/
   onward : ∀ before F after, settled = before ++ F :: after → F.sevm.currentTarget = usdc → Usdc.ChainObs usdc F →
     Usdc.V22At usdc F → ∀ G ∈ after, G.sevm.currentTarget = usdc → Usdc.ChainObs usdc G → Usdc.V22At usdc G
-  /-- The pool's whole word is below the flag on entry to a frame reading under V2_2, if no non-static frame has yet. -/
+  /-- The pool's whole word is below the flag on entry to a frame reading under V2_2, if no non-static one has yet. -/
   firstRead : ∀ before F after, settled = before ++ F :: after → F.sevm.currentTarget = usdc → Usdc.ChainObs usdc F →
     Usdc.V22At usdc F → (∀ G ∈ coinFrames usdc (Usdc.ChainObs usdc) before, ¬ Usdc.V22At usdc G) →
     ((F.pre.getStor usdc).get (Usdc.balSlot pool)).toNat < 2 ^ 255
