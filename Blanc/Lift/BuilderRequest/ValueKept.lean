@@ -4,6 +4,8 @@ import Blanc.Lift.BuilderRequest.Balances
 import Blanc.Lift.BuilderRequest.ChainLink
 import Blanc.Lift.BuilderRequest.Deposit.ChainLink
 import Blanc.Lift.BuilderRequest.Exit.ChainLink
+import Blanc.Lift.BuilderRequest.Deposit.Properties
+import Blanc.Lift.BuilderRequest.Exit.Properties
 
 /-!
 # The builder contracts' kept value (O37 sizing draft)
@@ -52,9 +54,10 @@ lowers the account and covers its kept values. The foreign leaves live in
 `Blanc/ExecutionKeptValue.lean`; this is direct application. -/
 theorem kept_run_value {C : ByteArray} {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out)
-    (committed : Execution.commits out = true) (code : pre.getCode c.address = C)
+    (committed : Execution.commits out = true) (target : sevm.currentTarget ≠ c.address)
+    (code : pre.getCode c.address = C)
     (nonempty : C.toList ≠ []) (nondelegating : ¬ isValidDelegation C)
-    (law : AtCodeKeeps c)
+    (law : AtCodeKeeps c) (hC : C = c.code)
     (sums : ∀ {q : Nat} {s : Sevm} {d : Devm} {o : Execution},
       Exec q s d o → SumNof d.state.bal)
     (callers : ∀ f ∈ Exec.keptAt c.address run, f.sevm.caller ≠ c.address) :
@@ -62,11 +65,19 @@ theorem kept_run_value {C : ByteArray} {pc : Nat} {sevm : Sevm} {pre : Devm}
       ((Execution.committedPost out committed).getBal c.address).toNat ∧
     (pre.getBal c.address).toNat + Exec.keptPaid c.address run ≤
       ((Execution.committedPost out committed).getBal c.address).toNat := by
-  -- DRAFT: no leaf here. `law` gives `at_code` by `congrFun` at `c.address`
-  -- (precedent `Devm.balNoninc_of_getBal_eq`, CommonProofs/Balance.lean:164,
-  -- sighted); apply `Exec.kept_bal_neverFalls` and `Exec.kept_bal_ge_keptPaid`.
-  -- Estimated 10-20 lines.
-  sorry
+  -- `law` is about `c.code` while the folds' `at_code` is about `C`: `hC`
+  -- links them. The folds take `at_code` at `pc = 0` only, matching `law`.
+  have at_code : ∀ {s : Sevm} {d e : Devm}, s.currentTarget = c.address →
+      s.code = C → Exec 0 s d (.ok e) →
+      (e.getBal c.address).toNat = (d.getBal c.address).toNat := by
+    intro s d e htarget hcode exec
+    have hcode' : s.code = c.code := hC ▸ hcode
+    have h := law hcode' exec
+    exact congrArg B256.toNat (congrFun h c.address)
+  exact ⟨Exec.kept_bal_neverFalls run committed target code nonempty
+    nondelegating sums at_code,
+    Exec.kept_bal_ge_keptPaid run committed target code nonempty
+    nondelegating sums at_code callers⟩
 
 variable {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
 
@@ -128,19 +139,14 @@ theorem history_value_ge_paid (h : KeptHistory cfg start blocks stop)
 /-- **The deposit contract keeps every balance at its code.** From its lift
 certificate's jump closure holding only balance-silent trees. -/
 theorem Deposit.atCodeKeeps : AtCodeKeeps Deposit.contract := by
-  -- DRAFT: supply the deposit `Cert.check`, `ProgNoExec`, `BalSilentSet`
-  -- triple to `frame_keeps_balances` (Surplus.lean:23, ~10 lines read). Route:
-  -- the lift certificates (`scripts/lift/certificates.json`) plus the deposit
-  -- `SysCall` spec, as `keepsBalances` does in Balances.lean (27 lines read).
-  -- Estimated 20-40 lines.
-  sorry
+  intro sevm pre post hcode exec
+  exact Deposit.frame_keeps_balances hcode exec
 
 /-- **The exit contract keeps every balance at its code.** From its lift
 certificate's jump closure holding only balance-silent trees. -/
 theorem Exit.atCodeKeeps : AtCodeKeeps Exit.contract := by
-  -- DRAFT: as `Deposit.atCodeKeeps`, with the exit triple. Estimated 20-40
-  -- lines.
-  sorry
+  intro sevm pre post hcode exec
+  exact Exit.frame_keeps_balances hcode exec
 
 /-- **O37 at the deposit contract, over a kept history.** The balance never
 falls and covers the committed deposits plus fees. -/
