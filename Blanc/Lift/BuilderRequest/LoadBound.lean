@@ -135,15 +135,66 @@ theorem step_potential (f : Frame c) {st : QueueState c.Record} (rep : Holds c f
       Backlog.cost c.target.toNat 0 2893) :
     Backlog.cost c.target.toNat 0 (load (step c.cap c.target st f.event)) ≤
       Backlog.cost c.target.toNat 0 (load st) + feePaid f := by
-  -- DRAFT: cases `f`, mirroring `Frame.step_holds`. Submission: `load` grows by exactly one
-  -- (`load_submit`); the quote's numerator `st.excess + (st.count - target)` is at most
-  -- `load st` (so `Frame.quote_natural` applies: `load st ≤ 2892` from `wrap` via `cost_ge_self`
-  -- and `Backlog.cost_strictMono`, and the frame ran off the inhibitor by `Frame.quoted_active`
-  -- with `rep.excess`) and at least `load st - target`, so `fakeExp_mono` gives
-  -- `Backlog.fee target (load st) ≤ q.toNat = feePaid f`, and the goal is the cost successor
-  -- equation. Fee read: load and `feePaid` are both unchanged. System call: `load_step` (with
-  -- `range` and `rep.excess_lt`) gives `load` no larger, then `cost_mono`.
-  sorry
+  cases f with
+  | submission sevm pre post l i o rules at_contract caller law =>
+    have hq : (Frame.submission (c := c) sevm pre post l i o rules at_contract caller law).quotedFee =
+        some (o / (17 : B256)) := rfl
+    have hactive := Frame.quoted_active (c := c)
+      (f := Frame.submission (c := c) sevm pre post l i o rules at_contract caller law) hq
+    have h0 : (Frame.submission (c := c) sevm pre post l i o rules at_contract caller law).before.get 0 =
+        st.excess.toB256 := rep.excess
+    have hoff : st.excess ≠ 2 ^ 256 - 1 := by
+      intro hmax
+      rw [hmax, inhibitor_toB256] at h0
+      exact hactive h0
+    have hload_eq : load st = st.excess + st.count := ite_eq_right hoff
+    have hcost_lt : Backlog.cost c.target.toNat 0 (load st) <
+        Backlog.cost c.target.toNat 0 2893 := by omega
+    have hload_le : load st ≤ 2892 := by
+      by_contra hgt
+      push Not at hgt
+      have hge : Backlog.cost c.target.toNat 0 2893 ≤
+          Backlog.cost c.target.toNat 0 (load st) := cost_mono (by omega)
+      omega
+    have hfew : st.excess + (st.count - c.target.toNat) ≤ 2892 := by omega
+    have hquote := Frame.quote_natural (c := c)
+      (f := Frame.submission (c := c) sevm pre post l i o rules at_contract caller law)
+      (st := st) rep hq hfew
+    have hfeePaid : feePaid (Frame.submission (c := c) sevm pre post l i o rules
+        at_contract caller law) = (o / (17 : B256)).toNat := rfl
+    have harg_le : load st - c.target.toNat ≤ st.excess + (st.count - c.target.toNat) := by omega
+    have hle : Backlog.fee c.target.toNat (load st) ≤ (o / (17 : B256)).toNat := by
+      have hfee_eq : Backlog.fee c.target.toNat (load st) =
+          fakeExp 1 (load st - c.target.toNat) 17 := rfl
+      rw [hfee_eq, hquote]
+      exact fakeExp_mono harg_le
+    have hstep : step c.cap c.target st
+        (Frame.event (Frame.submission (c := c) sevm pre post l i o rules at_contract caller law)) =
+        submit st (c.recordOf sevm (c.length law)) := rfl
+    rw [hstep, load_submit, hfeePaid]
+    have hsucc : Backlog.cost c.target.toNat 0 (load st + 1) =
+        Backlog.cost c.target.toNat 0 (load st) + Backlog.fee c.target.toNat (load st) := by
+      simp only [Backlog.cost, Nat.add_zero]
+    rw [hsucc]
+    omega
+  | feeRead sevm pre post l i o rules at_contract caller law =>
+    have hstep : step c.cap c.target st
+        (Frame.event (Frame.feeRead (c := c) sevm pre post l i o rules at_contract caller law)) = st := rfl
+    have hfee : feePaid (Frame.feeRead (c := c) sevm pre post l i o rules at_contract caller law) = 0 := rfl
+    rw [hstep, hfee, Nat.add_zero]
+  | system benv data post out fork installed length run =>
+    have hlen : (submitted [(Frame.event (Frame.system (c := c) benv data post out fork
+        installed length run))]).length = 0 := rfl
+    have hle : load (step c.cap c.target st
+        (Frame.event (Frame.system (c := c) benv data post out fork installed length run))) ≤
+        load st := by
+      have h := load_step c.cap c.target st
+        (Frame.event (Frame.system (c := c) benv data post out fork installed length run))
+        range rep.excess_lt
+      omega
+    have hfee : feePaid (Frame.system (c := c) benv data post out fork installed length run) = 0 := rfl
+    rw [hfee, Nat.add_zero]
+    exact cost_mono hle
 
 /-- **The potential over a frame list (O31, generic).** Over a chain from a represented queue,
 with the word range and with the starting potential plus the fees below `Φ 2893`, the end
@@ -157,14 +208,56 @@ theorem potential_le {s t : Stor} {frames : List (Frame c)} (chain : Chain s fra
       Backlog.cost c.target.toNat 0 2893) :
     Backlog.cost c.target.toNat 0 (load (queueAfter st frames)) ≤
       Backlog.cost c.target.toNat 0 (load st) + fees frames := by
-  -- DRAFT: induction on `chain` generalizing `st`, mirroring `Chain.holds`: the `nil` case is
-  -- `Nat.le_add_right` (`fees [] = 0` by `rfl`); the `cons` case applies `step_potential` to the
-  -- head (prefix bounds via `queueBase_mono`, `(submitted [f.event]).length ≤ 1`, `rep.excess_lt`)
-  -- and the induction hypothesis to the tail with `f.step_holds`'s representation, the tail
-  -- bounds via `step_tail_le` / `step_count_le` / `load_step` + `load_submit`, and `wrap`
-  -- preserved by `cost_mono` with the step bound (`fees (f :: rest) = feePaid f + fees rest`
-  -- by `fees_cons`).
-  sorry
+  induction chain generalizing st with
+  | nil s =>
+    have hfees : fees ([] : List (Frame c)) = 0 := rfl
+    have hq : queueAfter st ([] : List (Frame c)) = st := rfl
+    rw [hq, hfees, Nat.add_zero]
+  | @cons s f rest t starts tail ih =>
+    subst starts
+    have hsub : (submissions (f :: rest)).length =
+        (submitted [f.event]).length + (submissions rest).length :=
+      submitted_cons_length _ _
+    have hfees : fees (f :: rest) = feePaid f + fees rest := fees_cons f rest
+    rw [hsub] at slots count range
+    rw [hfees] at wrap
+    have hlen_le : (submitted [f.event]).length ≤ 1 := by
+      cases he : f.event with
+      | submission r =>
+        simp only [submitted, List.length_cons, List.length_nil]
+        omega
+      | feeRead =>
+        simp only [submitted, List.length_nil]
+        omega
+      | system latch =>
+        simp only [submitted, List.length_nil]
+        omega
+    have slots_f : queueBase c.width (st.tail + (submitted [f.event]).length) ≤ 2 ^ 256 :=
+      (queueBase_mono c.width (by omega)).trans slots
+    have count_f : st.count + (submitted [f.event]).length < 2 ^ 256 := by omega
+    have range_f : load st + (submitted [f.event]).length < 2 ^ 256 := by omega
+    have hstep_le := step_potential (c := c) f (st := st) rep slots_f count_f range_f (by omega)
+    obtain ⟨hrep, -⟩ := f.step_holds rep slots_f count_f
+    have htail_le := step_tail_le c.cap c.target st f.event
+    have hcount_le := step_count_le c.cap c.target st f.event
+    have hload_le : load (step c.cap c.target st f.event) ≤
+        load st + (submitted [f.event]).length := by
+      have h := load_step c.cap c.target st f.event range_f rep.excess_lt
+      omega
+    have hq : queueAfter st (f :: rest) =
+        queueAfter (step c.cap c.target st f.event) rest := rfl
+    rw [hq]
+    have slots_t : queueBase c.width ((step c.cap c.target st f.event).tail +
+        (submissions rest).length) ≤ 2 ^ 256 :=
+      (queueBase_mono c.width (by omega)).trans slots
+    have count_t : (step c.cap c.target st f.event).count + (submissions rest).length < 2 ^ 256 := by
+      omega
+    have range_t : load (step c.cap c.target st f.event) + (submissions rest).length < 2 ^ 256 := by
+      omega
+    have wrap_t : Backlog.cost c.target.toNat 0 (load (step c.cap c.target st f.event)) +
+        fees rest < Backlog.cost c.target.toNat 0 2893 := by omega
+    have iht := ih hrep slots_t count_t range_t wrap_t
+    omega
 
 /-! ## Deployed instances (O31) -/
 
@@ -175,12 +268,30 @@ theorem deposit_potential {frames : List Deposit.Frame} {t : Stor}
     (range : 4 + 6 * (submissions frames).length ≤ 2 ^ 256)
     (wrap : fees frames < Backlog.cost 8 0 2893) :
     Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) ≤ fees frames := by
-  -- DRAFT: `potential_le` with `Deposit.deployed_represents`; `load Deposit.deployedQueue = 0`
-  -- by `decide` (as in `Deposit.Delivery`'s `excess_dynamics` context) and
-  -- `Backlog.cost Deposit.contract.target.toNat 0 0 = 0` by `rfl`, so the starting potential
-  -- vanishes; `Deposit.contract.target.toNat = 8`, `.width = 6`, `.cap = 64` by `decide`/`rfl`
-  -- (`abbrev` contract), discharging `slots`/`count`/`range` from `range` by `omega`.
-  sorry
+  have htarget : Deposit.contract.target.toNat = 8 := by decide
+  have hwidth : Deposit.contract.width = 6 := rfl
+  have htail : Deposit.deployedQueue.tail = 0 := rfl
+  have hcount0 : Deposit.deployedQueue.count = 0 := rfl
+  have hload0 : load Deposit.deployedQueue = 0 := by decide
+  have hslots : queueBase Deposit.contract.width
+      (Deposit.deployedQueue.tail + (submissions frames).length) ≤ 2 ^ 256 := by
+    rw [htail, Nat.zero_add, hwidth]
+    simpa only [queueBase] using range
+  have hcount : Deposit.deployedQueue.count + (submissions frames).length < 2 ^ 256 := by
+    rw [hcount0, Nat.zero_add]
+    omega
+  have hrange : load Deposit.deployedQueue + (submissions frames).length < 2 ^ 256 := by
+    rw [hload0, Nat.zero_add]
+    omega
+  have hcost0 : Backlog.cost 8 0 0 = 0 := rfl
+  have hwrap : Backlog.cost Deposit.contract.target.toNat 0 (load Deposit.deployedQueue) +
+      fees frames < Backlog.cost Deposit.contract.target.toNat 0 2893 := by
+    rw [htarget, hload0, hcost0, Nat.zero_add]
+    exact wrap
+  have h := potential_le (c := Deposit.contract) chain Deposit.deployed_represents
+    hslots hcount hrange hwrap
+  rw [htarget, hload0, hcost0, Nat.zero_add] at h
+  exact h
 
 /-- **The potential from the exit deployment (O31).** Over any chain from the deployed storage,
 `Φ` of the end load is at most the fees paid. -/
@@ -189,10 +300,30 @@ theorem exit_potential {frames : List Exit.Frame} {t : Stor}
     (range : 4 + 3 * (submissions frames).length ≤ 2 ^ 256)
     (wrap : fees frames < Backlog.cost 2 0 2893) :
     Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) ≤ fees frames := by
-  -- DRAFT: as `deposit_potential`, with `Exit.deployed_represents`,
-  -- `load Exit.deployedQueue = 0` by `decide` (as in `Exit.Delivery.excess_dynamics`), and
-  -- `Exit.contract.target.toNat = 2`, `.width = 3`, `.cap = 16`.
-  sorry
+  have htarget : Exit.contract.target.toNat = 2 := by decide
+  have hwidth : Exit.contract.width = 3 := rfl
+  have htail : Exit.deployedQueue.tail = 0 := rfl
+  have hcount0 : Exit.deployedQueue.count = 0 := rfl
+  have hload0 : load Exit.deployedQueue = 0 := by decide
+  have hslots : queueBase Exit.contract.width
+      (Exit.deployedQueue.tail + (submissions frames).length) ≤ 2 ^ 256 := by
+    rw [htail, Nat.zero_add, hwidth]
+    simpa only [queueBase] using range
+  have hcount : Exit.deployedQueue.count + (submissions frames).length < 2 ^ 256 := by
+    rw [hcount0, Nat.zero_add]
+    omega
+  have hrange : load Exit.deployedQueue + (submissions frames).length < 2 ^ 256 := by
+    rw [hload0, Nat.zero_add]
+    omega
+  have hcost0 : Backlog.cost 2 0 0 = 0 := rfl
+  have hwrap : Backlog.cost Exit.contract.target.toNat 0 (load Exit.deployedQueue) +
+      fees frames < Backlog.cost Exit.contract.target.toNat 0 2893 := by
+    rw [htarget, hload0, hcost0, Nat.zero_add]
+    exact wrap
+  have h := potential_le (c := Exit.contract) chain Exit.deployed_represents
+    hslots hcount hrange hwrap
+  rw [htarget, hload0, hcost0, Nat.zero_add] at h
+  exact h
 
 /-- 1 ETH of deposit fees reaches 664 fee-units and not 665. -/
 theorem cost_664 : Backlog.costEval 8 0 664 ≤ 10 ^ 18 ∧ (10 ^ 18 : Nat) < Backlog.costEval 8 0 665 := by
@@ -234,25 +365,110 @@ form as the deposit instances above. -/
 /-! ## Queue length against load, and the latch witness (O31) -/
 
 /-- **The queue is at most the load (O31, generic).** Over a request-phase-only chain from
-an off-inhibitor queue, the queued records are at most `excess + count`. -/
+an off-inhibitor queue whose queued records are at most its load, the queued records stay
+at most `excess + count`. The starting queue bound is a premise: representation alone does
+not link the record list length to the counters. -/
 theorem queue_length_le_load {s t : Stor} {frames : List (Frame c)} (chain : Chain s frames t)
     {st : QueueState c.Record} (rep : Holds c s st)
     (slots : queueBase c.width (st.tail + (submissions frames).length) ≤ 2 ^ 256)
     (count : st.count + (submissions frames).length < 2 ^ 256)
     (range : load st + (submissions frames).length < 2 ^ 256)
     (rp : RequestPhaseOnly frames) (cap_ge : c.target.toNat ≤ c.cap)
-    (start_off : st.excess ≠ 2 ^ 256 - 1) :
+    (start_off : st.excess ≠ 2 ^ 256 - 1)
+    (hlen : st.queue.length ≤ load st) :
     (queueAfter st frames).queue.length ≤ load (queueAfter st frames) := by
-  -- DRAFT: induction on `chain` generalizing `st`, carrying the representation (via
-  -- `f.step_holds`), the off-inhibitor fact (via `excess_inhibitor` with
-  -- `inhibitedAfter_requestPhase`: under `RequestPhaseOnly` the end is inhibited exactly when
-  -- the start is), and the per-prefix `slots`/`count`/`range` (via `queueBase_mono`,
-  -- `step_tail_le`, `step_count_le`, `load_step` + `load_submit`). Submission: queue and load
-  -- both grow by one. Fee read: neither moves. Empty system call: the queue drops `cap`
-  -- (`drainedState_queue`, `List.length_drop`) while the load becomes `excess + count - target`
-  -- (`drained_excess_natural`, off the inhibitor), and `len - cap ≤ excess + count - target`
-  -- from the induction hypothesis with `cap_ge`.
-  sorry
+  induction chain generalizing st with
+  | nil s =>
+    have hq : queueAfter st ([] : List (Frame c)) = st := rfl
+    rw [hq]
+    exact hlen
+  | @cons s f rest t starts tail ih =>
+    subst starts
+    have hsub : (submissions (f :: rest)).length =
+        (submitted [f.event]).length + (submissions rest).length :=
+      submitted_cons_length _ _
+    rw [hsub] at slots count range
+    have rp_tail : RequestPhaseOnly rest := fun x hx => rp x (List.mem_cons_of_mem _ hx)
+    have hlen_le : (submitted [f.event]).length ≤ 1 := by
+      cases f.event <;> simp only [submitted, List.length_cons, List.length_nil] <;> omega
+    have slots_f : queueBase c.width (st.tail + (submitted [f.event]).length) ≤ 2 ^ 256 :=
+      (queueBase_mono c.width (by omega)).trans slots
+    have count_f : st.count + (submitted [f.event]).length < 2 ^ 256 := by omega
+    obtain ⟨hrep, -⟩ := f.step_holds rep slots_f count_f
+    have htail_le := step_tail_le c.cap c.target st f.event
+    have hcount_le := step_count_le c.cap c.target st f.event
+    have range_f : load st + (submitted [f.event]).length < 2 ^ 256 := by omega
+    have hload_step_le : load (step c.cap c.target st f.event) ≤
+        load st + (submitted [f.event]).length :=
+      load_step c.cap c.target st f.event range_f rep.excess_lt
+    have hload_st : load st = st.excess + st.count := ite_eq_right start_off
+    have off_step : (step c.cap c.target st f.event).excess ≠ 2 ^ 256 - 1 := by
+      cases he : f.event with
+      | submission r => simpa only [he, step, submit] using start_off
+      | feeRead => simpa only [he, step] using start_off
+      | system latch =>
+        have hrp := rp f List.mem_cons_self latch he
+        subst hrp
+        have hne_B256 : excessNext c.target st.excess.toB256 st.count.toB256 ≠ B256.max :=
+          excessNext_ne_max c.target_ne _ _
+        have hne : (drainedState c.cap c.target st).excess ≠ 2 ^ 256 - 1 := by
+          intro h
+          apply hne_B256
+          apply B256.toNat_inj
+          rw [drainedState_excess] at h
+          rw [h, max_toNat]
+        simpa only [he, step] using hne
+    have hlen_step : (step c.cap c.target st f.event).queue.length ≤
+        load (step c.cap c.target st f.event) := by
+      cases he : f.event with
+      | submission r =>
+        have hq : (step c.cap c.target st (.submission r)).queue.length =
+            st.queue.length + 1 := by
+          simp only [step, submit, List.length_append, List.length_singleton]
+        have hl : load (step c.cap c.target st (.submission r)) =
+            load st + 1 := load_submit _ _
+        omega
+      | feeRead =>
+        have hq : (step c.cap c.target st .feeRead).queue.length = st.queue.length := rfl
+        have hl : load (step c.cap c.target st .feeRead) = load st := rfl
+        omega
+      | system latch =>
+        have hrp := rp f List.mem_cons_self latch he
+        subst hrp
+        have hsum : st.excess + st.count < 2 ^ 256 := by omega
+        have hx := drained_excess_natural c.cap c.target st hsum start_off
+        have hc : (drainedState c.cap c.target st).count = 0 := drainedState_count _ _ _
+        have hqq : (step c.cap c.target st (.system false)).queue.length =
+            st.queue.length - c.cap := by
+          simp only [step, drainedState_queue, List.length_drop]
+        have hne_B256 : excessNext c.target st.excess.toB256 st.count.toB256 ≠ B256.max :=
+          excessNext_ne_max c.target_ne _ _
+        have hne' : (drainedState c.cap c.target st).excess ≠ 2 ^ 256 - 1 := by
+          intro h
+          apply hne_B256
+          apply B256.toNat_inj
+          rw [drainedState_excess] at h
+          rw [h, max_toNat]
+        have hload_eq : load (step c.cap c.target st (.system false)) =
+            st.excess + st.count - c.target.toNat := by
+          have hstep_eq : step c.cap c.target st (.system false) =
+              drainedState c.cap c.target st := rfl
+          have hunfold : load (drainedState c.cap c.target st) =
+              (drainedState c.cap c.target st).excess +
+                (drainedState c.cap c.target st).count := ite_eq_right hne'
+          rw [hstep_eq, hunfold, hx, hc, Nat.add_zero]
+        omega
+    have hq : queueAfter st (f :: rest) =
+        queueAfter (step c.cap c.target st f.event) rest := rfl
+    rw [hq]
+    have slots_t : queueBase c.width ((step c.cap c.target st f.event).tail +
+        (submissions rest).length) ≤ 2 ^ 256 :=
+      (queueBase_mono c.width (by omega)).trans slots
+    have count_t : (step c.cap c.target st f.event).count + (submissions rest).length < 2 ^ 256 := by
+      omega
+    have range_t : load (step c.cap c.target st f.event) + (submissions rest).length < 2 ^ 256 := by
+      omega
+    exact ih hrep slots_t count_t range_t rp_tail off_step hlen_step
 
 /-- **The latch breaks the queue bound (O31 negative control).** Seventeen exit submissions
 then a latch call leave one queued record at load zero. -/
@@ -272,13 +488,43 @@ theorem deposit_load_le_664 {frames : List Deposit.Frame} {t : Stor}
     (hb : fees frames ≤ 10 ^ 18) :
     load (queueAfter Deposit.deployedQueue frames) ≤ 664 ∧
       (queueAfter Deposit.deployedQueue frames).queue.length ≤ 664 := by
-  -- DRAFT: `wrap` for `deposit_potential` from `hb`: `10 ^ 18 < Backlog.cost 8 0 665`
-  -- (as in `reach_1_eth`, via `cost_664.2`) and `Backlog.cost 8 0 665 ≤ Backlog.cost 8 0 2893`
-  -- by `cost_mono`; then `Backlog.cost 8 0 (load _) ≤ fees frames ≤ 10 ^ 18 ≤
-  -- Backlog.cost 8 0 664` gives `load _ ≤ 664` by `Backlog.cost_strictMono`, and the queue
-  -- bound by `queue_length_le_load` with `Deposit.deployed_represents`, start off the inhibitor
-  -- by `decide`, `cap_ge` (`8 ≤ 64`) by `decide`, and `slots`/`count`/`range` from `range`.
-  sorry
+  have heq665 : Backlog.costEval 8 0 665 = Backlog.cost 8 0 665 :=
+    Backlog.costEval_eq (by omega)
+  have h665_lt : (10 ^ 18 : Nat) < Backlog.cost 8 0 665 := by
+    have h := cost_664.2
+    rw [heq665] at h
+    exact h
+  have h665_le : Backlog.cost 8 0 665 ≤ Backlog.cost 8 0 2893 := cost_mono (by omega)
+  have hwrap : fees frames < Backlog.cost 8 0 2893 := by omega
+  have hpot := deposit_potential chain range hwrap
+  have hlt : Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) <
+      Backlog.cost 8 0 665 := by omega
+  have hload : load (queueAfter Deposit.deployedQueue frames) ≤ 664 := by
+    by_contra hgt
+    push Not at hgt
+    have hge : Backlog.cost 8 0 665 ≤
+        Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) :=
+      cost_mono (by omega)
+    omega
+  refine ⟨hload, ?_⟩
+  have htarget : Deposit.contract.target.toNat = 8 := by decide
+  have hwidth : Deposit.contract.width = 6 := rfl
+  have htail : Deposit.deployedQueue.tail = 0 := rfl
+  have hcount0 : Deposit.deployedQueue.count = 0 := rfl
+  have hload0 : load Deposit.deployedQueue = 0 := by decide
+  have hslots : queueBase Deposit.contract.width
+      (Deposit.deployedQueue.tail + (submissions frames).length) ≤ 2 ^ 256 := by
+    rw [htail, Nat.zero_add, hwidth]
+    simpa only [queueBase] using range
+  have hcount : Deposit.deployedQueue.count + (submissions frames).length < 2 ^ 256 := by
+    rw [hcount0, Nat.zero_add]
+    omega
+  have hrange : load Deposit.deployedQueue + (submissions frames).length < 2 ^ 256 := by
+    rw [hload0, Nat.zero_add]
+    omega
+  have hq := queue_length_le_load (c := Deposit.contract) chain Deposit.deployed_represents
+    hslots hcount hrange rp (by decide) (by decide) (by decide)
+  omega
 
 /-- 100 ETH of fees bounds a deposit list: load and queue length at most 743. -/
 theorem deposit_load_le_743 {frames : List Deposit.Frame} {t : Stor}
@@ -287,8 +533,42 @@ theorem deposit_load_le_743 {frames : List Deposit.Frame} {t : Stor}
     (hb : fees frames ≤ 100 * 10 ^ 18) :
     load (queueAfter Deposit.deployedQueue frames) ≤ 743 ∧
       (queueAfter Deposit.deployedQueue frames).queue.length ≤ 743 := by
-  -- DRAFT: as `deposit_load_le_664`, via `cost_743`.
-  sorry
+  have heq744 : Backlog.costEval 8 0 744 = Backlog.cost 8 0 744 :=
+    Backlog.costEval_eq (by omega)
+  have h744_lt : (100 * 10 ^ 18 : Nat) < Backlog.cost 8 0 744 := by
+    have h := cost_743.2
+    rw [heq744] at h
+    exact h
+  have h744_le : Backlog.cost 8 0 744 ≤ Backlog.cost 8 0 2893 := cost_mono (by omega)
+  have hwrap : fees frames < Backlog.cost 8 0 2893 := by omega
+  have hpot := deposit_potential chain range hwrap
+  have hlt : Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) <
+      Backlog.cost 8 0 744 := by omega
+  have hload : load (queueAfter Deposit.deployedQueue frames) ≤ 743 := by
+    by_contra hgt
+    push Not at hgt
+    have hge : Backlog.cost 8 0 744 ≤
+        Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) :=
+      cost_mono (by omega)
+    omega
+  refine ⟨hload, ?_⟩
+  have hwidth : Deposit.contract.width = 6 := rfl
+  have htail : Deposit.deployedQueue.tail = 0 := rfl
+  have hcount0 : Deposit.deployedQueue.count = 0 := rfl
+  have hload0 : load Deposit.deployedQueue = 0 := by decide
+  have hslots : queueBase Deposit.contract.width
+      (Deposit.deployedQueue.tail + (submissions frames).length) ≤ 2 ^ 256 := by
+    rw [htail, Nat.zero_add, hwidth]
+    simpa only [queueBase] using range
+  have hcount : Deposit.deployedQueue.count + (submissions frames).length < 2 ^ 256 := by
+    rw [hcount0, Nat.zero_add]
+    omega
+  have hrange : load Deposit.deployedQueue + (submissions frames).length < 2 ^ 256 := by
+    rw [hload0, Nat.zero_add]
+    omega
+  have hq := queue_length_le_load (c := Deposit.contract) chain Deposit.deployed_represents
+    hslots hcount hrange rp (by decide) (by decide) (by decide)
+  omega
 
 /-- 120M ETH of fees bounds a deposit list: load and queue length at most 981. -/
 theorem deposit_load_le_981 {frames : List Deposit.Frame} {t : Stor}
@@ -297,8 +577,42 @@ theorem deposit_load_le_981 {frames : List Deposit.Frame} {t : Stor}
     (hb : fees frames ≤ 120000000 * 10 ^ 18) :
     load (queueAfter Deposit.deployedQueue frames) ≤ 981 ∧
       (queueAfter Deposit.deployedQueue frames).queue.length ≤ 981 := by
-  -- DRAFT: as `deposit_load_le_664`, via `cost_981`.
-  sorry
+  have heq982 : Backlog.costEval 8 0 982 = Backlog.cost 8 0 982 :=
+    Backlog.costEval_eq (by omega)
+  have h982_lt : (120000000 * 10 ^ 18 : Nat) < Backlog.cost 8 0 982 := by
+    have h := cost_981.2
+    rw [heq982] at h
+    exact h
+  have h982_le : Backlog.cost 8 0 982 ≤ Backlog.cost 8 0 2893 := cost_mono (by omega)
+  have hwrap : fees frames < Backlog.cost 8 0 2893 := by omega
+  have hpot := deposit_potential chain range hwrap
+  have hlt : Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) <
+      Backlog.cost 8 0 982 := by omega
+  have hload : load (queueAfter Deposit.deployedQueue frames) ≤ 981 := by
+    by_contra hgt
+    push Not at hgt
+    have hge : Backlog.cost 8 0 982 ≤
+        Backlog.cost 8 0 (load (queueAfter Deposit.deployedQueue frames)) :=
+      cost_mono (by omega)
+    omega
+  refine ⟨hload, ?_⟩
+  have hwidth : Deposit.contract.width = 6 := rfl
+  have htail : Deposit.deployedQueue.tail = 0 := rfl
+  have hcount0 : Deposit.deployedQueue.count = 0 := rfl
+  have hload0 : load Deposit.deployedQueue = 0 := by decide
+  have hslots : queueBase Deposit.contract.width
+      (Deposit.deployedQueue.tail + (submissions frames).length) ≤ 2 ^ 256 := by
+    rw [htail, Nat.zero_add, hwidth]
+    simpa only [queueBase] using range
+  have hcount : Deposit.deployedQueue.count + (submissions frames).length < 2 ^ 256 := by
+    rw [hcount0, Nat.zero_add]
+    omega
+  have hrange : load Deposit.deployedQueue + (submissions frames).length < 2 ^ 256 := by
+    rw [hload0, Nat.zero_add]
+    omega
+  have hq := queue_length_le_load (c := Deposit.contract) chain Deposit.deployed_represents
+    hslots hcount hrange rp (by decide) (by decide) (by decide)
+  omega
 
 /-- 1 ETH of fees bounds an exit list: load and queue length at most 658. -/
 theorem exit_load_le_658 {frames : List Exit.Frame} {t : Stor}
@@ -307,12 +621,209 @@ theorem exit_load_le_658 {frames : List Exit.Frame} {t : Stor}
     (hb : fees frames ≤ 10 ^ 18) :
     load (queueAfter Exit.deployedQueue frames) ≤ 658 ∧
       (queueAfter Exit.deployedQueue frames).queue.length ≤ 658 := by
-  -- DRAFT: load bound as `deposit_load_le_664`, via `exit_potential` and `Exit.cost_658`
-  -- (`Backlog.cost 2 0 658/659`, in `Exit/Flood.lean`). Queue bound: the deployed storage holds
-  -- the inhibitor, so split the first frame (`Exit.first_frame_system` gives a system call,
-  -- `RequestPhaseOnly` forces it empty): after it the queue is empty and slot 0 is clear, then
-  -- `queue_length_le_load` on the tail with `cap_ge` (`2 ≤ 16`) by `decide`.
-  sorry
+  have heq659 : Backlog.costEval 2 0 659 = Backlog.cost 2 0 659 :=
+    Backlog.costEval_eq (by omega)
+  have h659_lt : (10 ^ 18 : Nat) < Backlog.cost 2 0 659 := by
+    have h : Backlog.costEval 2 0 658 ≤ 10 ^ 18 ∧
+        (10 ^ 18 : Nat) < Backlog.costEval 2 0 659 := by decide +kernel
+    rw [heq659] at h
+    exact h.2
+  have h659_le : Backlog.cost 2 0 659 ≤ Backlog.cost 2 0 2893 := cost_mono (by omega)
+  have hwrap : fees frames < Backlog.cost 2 0 2893 := by omega
+  have hpot := exit_potential chain range hwrap
+  have hlt : Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) <
+      Backlog.cost 2 0 659 := by omega
+  have hload : load (queueAfter Exit.deployedQueue frames) ≤ 658 := by
+    by_contra hgt
+    push Not at hgt
+    have hge : Backlog.cost 2 0 659 ≤
+        Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) :=
+      cost_mono (by omega)
+    omega
+  refine ⟨hload, ?_⟩
+  cases frames with
+  | nil =>
+    have hq : queueAfter Exit.deployedQueue ([] : List Exit.Frame) = Exit.deployedQueue := rfl
+    rw [hq]
+    show ([] : List Exit.contract.Record).length ≤ 658
+    simp only [List.length_nil, Nat.zero_le]
+  | cons f rest =>
+    obtain ⟨latch, hcall⟩ := Exit.first_frame_system chain
+    have hrp := rp f List.mem_cons_self latch hcall
+    subst hrp
+    cases hchain : chain with
+    | cons starts tail =>
+      have hrep0 : Holds Exit.contract f.before Exit.deployedQueue := by
+        rw [starts]
+        exact Exit.deployed_represents
+      have hsub0 : (submitted [f.event]).length = 0 := by
+        simp only [hcall, submitted, List.length_nil]
+      have hsub : (submissions (f :: rest)).length = (submissions rest).length := by
+        have h := submitted_cons_length f.event (events rest)
+        simp only [submissions, events, List.map_cons] at h ⊢
+        rw [h, hsub0, Nat.zero_add]
+      rw [hsub] at range
+      have slots_f : queueBase Exit.contract.width
+          (Exit.deployedQueue.tail + (submitted [f.event]).length) ≤ 2 ^ 256 := by
+        have htail : Exit.deployedQueue.tail = 0 := rfl
+        have hwidth : Exit.contract.width = 3 := rfl
+        rw [htail, Nat.zero_add, hwidth, hsub0]
+        simp only [queueBase]
+        omega
+      have count_f : Exit.deployedQueue.count + (submitted [f.event]).length < 2 ^ 256 := by
+        have hcount0 : Exit.deployedQueue.count = 0 := rfl
+        rw [hcount0, Nat.zero_add, hsub0]
+        omega
+      obtain ⟨hrep1, -⟩ := f.step_holds hrep0 slots_f count_f
+      have hstep_eq : step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false) = ⟨0, 0, 0, 0, []⟩ := by
+        have hdeq : Exit.deployedQueue = ⟨2 ^ 256 - 1, 0, 0, 0, []⟩ := rfl
+        have hex : (excessNext (2 : B256) (2 ^ 256 - 1).toB256 (0 : Nat).toB256).toNat = 0 := by
+          rw [show (2 ^ 256 - 1 : Nat).toB256 = B256.max from inhibitor_toB256,
+            excessNext_inhibitor]
+          rfl
+        have hcap : Exit.contract.cap = 16 := rfl
+        have htgt : Exit.contract.target = 2 := rfl
+        rw [hdeq, hcap, htgt]
+        simp only [step, drainedState, hex]
+        rw [ite_eq_left (by decide : ([] : List Exit.contract.Record).length ≤ 16)]
+      have hrep1' : Holds Exit.contract f.after
+          (step Exit.contract.cap Exit.contract.target Exit.deployedQueue f.event) := hrep1
+      rw [hcall] at hrep1'
+      have hst0 : step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false) = ⟨0, 0, 0, 0, []⟩ := hstep_eq
+      have htail_s : (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)).tail = 0 := by rw [hst0]
+      have hcount_s : (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)).count = 0 := by rw [hst0]
+      have hload_s : load (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)) = 0 := by rw [hst0]; decide
+      have hslots_t : queueBase Exit.contract.width
+          ((step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+            (.system false)).tail + (submissions rest).length) ≤ 2 ^ 256 := by
+        rw [htail_s, Nat.zero_add]
+        have hwidth : Exit.contract.width = 3 := rfl
+        rw [hwidth]
+        simpa only [queueBase, Nat.zero_add] using range
+      have hcount_t : (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)).count + (submissions rest).length < 2 ^ 256 := by
+        rw [hcount_s, Nat.zero_add]
+        omega
+      have hrange_t : load (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)) + (submissions rest).length < 2 ^ 256 := by
+        rw [hload_s, Nat.zero_add]
+        omega
+      have rp_tail : RequestPhaseOnly rest := fun x hx => rp x (List.mem_cons_of_mem _ hx)
+      have hq := queue_length_le_load (c := Exit.contract) tail hrep1'
+        hslots_t hcount_t hrange_t rp_tail (by decide) (by rw [hst0]; decide)
+        (by rw [hst0]; decide)
+      have hqeq : queueAfter Exit.deployedQueue (f :: rest) =
+          queueAfter (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+            (.system false)) rest := by
+        simp only [queueAfter, events, List.map_cons, replay, hcall]
+        rfl
+      have hload_eq : load (queueAfter Exit.deployedQueue (f :: rest)) =
+          load (queueAfter (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+            (.system false)) rest) := congrArg load hqeq
+      have hqfin : (queueAfter (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)) rest).queue.length ≤ 658 := by omega
+      rw [hqeq]
+      exact hqfin
+
+/-- The exit queue is at most any bound its load meets: the splitting half of the exit
+instances, so the three budgets share one proof. After the unlocking call the queue is
+empty and slot 0 clear, then `queue_length_le_load` applies. -/
+theorem exit_queue_le_of_load {frames : List Exit.Frame} {t : Stor} {B : Nat}
+    (chain : Chain Exit.deployedStorage frames t) (rp : RequestPhaseOnly frames)
+    (range : 4 + 3 * (submissions frames).length ≤ 2 ^ 256)
+    (hload : load (queueAfter Exit.deployedQueue frames) ≤ B) :
+    (queueAfter Exit.deployedQueue frames).queue.length ≤ B := by
+  cases frames with
+  | nil =>
+    have hq : queueAfter Exit.deployedQueue ([] : List Exit.Frame) = Exit.deployedQueue := rfl
+    rw [hq]
+    show ([] : List Exit.contract.Record).length ≤ B
+    simp only [List.length_nil, Nat.zero_le]
+  | cons f rest =>
+    obtain ⟨latch, hcall⟩ := Exit.first_frame_system chain
+    have hrp := rp f List.mem_cons_self latch hcall
+    subst hrp
+    cases hchain : chain with
+    | cons starts tail =>
+      have hrep0 : Holds Exit.contract f.before Exit.deployedQueue := by
+        rw [starts]
+        exact Exit.deployed_represents
+      have hsub0 : (submitted [f.event]).length = 0 := by
+        simp only [hcall, submitted, List.length_nil]
+      have hsub : (submissions (f :: rest)).length = (submissions rest).length := by
+        have h := submitted_cons_length f.event (events rest)
+        simp only [submissions, events, List.map_cons] at h ⊢
+        rw [h, hsub0, Nat.zero_add]
+      rw [hsub] at range
+      have slots_f : queueBase Exit.contract.width
+          (Exit.deployedQueue.tail + (submitted [f.event]).length) ≤ 2 ^ 256 := by
+        have htail : Exit.deployedQueue.tail = 0 := rfl
+        have hwidth : Exit.contract.width = 3 := rfl
+        rw [htail, Nat.zero_add, hwidth, hsub0]
+        simp only [queueBase]
+        omega
+      have count_f : Exit.deployedQueue.count + (submitted [f.event]).length < 2 ^ 256 := by
+        have hcount0 : Exit.deployedQueue.count = 0 := rfl
+        rw [hcount0, Nat.zero_add, hsub0]
+        omega
+      obtain ⟨hrep1, -⟩ := f.step_holds hrep0 slots_f count_f
+      have hstep_eq : step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false) = ⟨0, 0, 0, 0, []⟩ := by
+        have hdeq : Exit.deployedQueue = ⟨2 ^ 256 - 1, 0, 0, 0, []⟩ := rfl
+        have hex : (excessNext (2 : B256) (2 ^ 256 - 1).toB256 (0 : Nat).toB256).toNat = 0 := by
+          rw [show (2 ^ 256 - 1 : Nat).toB256 = B256.max from inhibitor_toB256,
+            excessNext_inhibitor]
+          rfl
+        have hcap : Exit.contract.cap = 16 := rfl
+        have htgt : Exit.contract.target = 2 := rfl
+        rw [hdeq, hcap, htgt]
+        simp only [step, drainedState, hex]
+        rw [ite_eq_left (by decide : ([] : List Exit.contract.Record).length ≤ 16)]
+      have hrep1' : Holds Exit.contract f.after
+          (step Exit.contract.cap Exit.contract.target Exit.deployedQueue f.event) := hrep1
+      rw [hcall] at hrep1'
+      have hst0 : step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false) = ⟨0, 0, 0, 0, []⟩ := hstep_eq
+      have htail_s : (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)).tail = 0 := by rw [hst0]
+      have hcount_s : (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)).count = 0 := by rw [hst0]
+      have hload_s : load (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)) = 0 := by rw [hst0]; decide
+      have hslots_t : queueBase Exit.contract.width
+          ((step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+            (.system false)).tail + (submissions rest).length) ≤ 2 ^ 256 := by
+        rw [htail_s, Nat.zero_add]
+        have hwidth : Exit.contract.width = 3 := rfl
+        rw [hwidth]
+        simpa only [queueBase, Nat.zero_add] using range
+      have hcount_t : (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)).count + (submissions rest).length < 2 ^ 256 := by
+        rw [hcount_s, Nat.zero_add]
+        omega
+      have hrange_t : load (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+          (.system false)) + (submissions rest).length < 2 ^ 256 := by
+        rw [hload_s, Nat.zero_add]
+        omega
+      have rp_tail : RequestPhaseOnly rest := fun x hx => rp x (List.mem_cons_of_mem _ hx)
+      have hq := queue_length_le_load (c := Exit.contract) tail hrep1'
+        hslots_t hcount_t hrange_t rp_tail (by decide) (by rw [hst0]; decide)
+        (by rw [hst0]; decide)
+      have hqeq : queueAfter Exit.deployedQueue (f :: rest) =
+          queueAfter (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+            (.system false)) rest := by
+        simp only [queueAfter, events, List.map_cons, replay, hcall]
+        rfl
+      have hload_eq : load (queueAfter Exit.deployedQueue (f :: rest)) =
+          load (queueAfter (step Exit.contract.cap Exit.contract.target Exit.deployedQueue
+            (.system false)) rest) := congrArg load hqeq
+      rw [hqeq]
+      omega
 
 /-- 100 ETH of fees bounds an exit list: load and queue length at most 737. -/
 theorem exit_load_le_737 {frames : List Exit.Frame} {t : Stor}
@@ -321,8 +832,26 @@ theorem exit_load_le_737 {frames : List Exit.Frame} {t : Stor}
     (hb : fees frames ≤ 100 * 10 ^ 18) :
     load (queueAfter Exit.deployedQueue frames) ≤ 737 ∧
       (queueAfter Exit.deployedQueue frames).queue.length ≤ 737 := by
-  -- DRAFT: as `exit_load_le_658`, via `Exit.cost_737`.
-  sorry
+  have heq738 : Backlog.costEval 2 0 738 = Backlog.cost 2 0 738 :=
+    Backlog.costEval_eq (by omega)
+  have h738_lt : (100 * 10 ^ 18 : Nat) < Backlog.cost 2 0 738 := by
+    have h : Backlog.costEval 2 0 737 ≤ 100 * 10 ^ 18 ∧
+        (100 * 10 ^ 18 : Nat) < Backlog.costEval 2 0 738 := by decide +kernel
+    rw [heq738] at h
+    exact h.2
+  have h738_le : Backlog.cost 2 0 738 ≤ Backlog.cost 2 0 2893 := cost_mono (by omega)
+  have hwrap : fees frames < Backlog.cost 2 0 2893 := by omega
+  have hpot := exit_potential chain range hwrap
+  have hlt : Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) <
+      Backlog.cost 2 0 738 := by omega
+  have hload : load (queueAfter Exit.deployedQueue frames) ≤ 737 := by
+    by_contra hgt
+    push Not at hgt
+    have hge : Backlog.cost 2 0 738 ≤
+        Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) :=
+      cost_mono (by omega)
+    omega
+  exact ⟨hload, exit_queue_le_of_load chain rp range hload⟩
 
 /-- 120M ETH of fees bounds an exit list: load and queue length at most 975. -/
 theorem exit_load_le_975 {frames : List Exit.Frame} {t : Stor}
@@ -331,8 +860,26 @@ theorem exit_load_le_975 {frames : List Exit.Frame} {t : Stor}
     (hb : fees frames ≤ 120000000 * 10 ^ 18) :
     load (queueAfter Exit.deployedQueue frames) ≤ 975 ∧
       (queueAfter Exit.deployedQueue frames).queue.length ≤ 975 := by
-  -- DRAFT: as `exit_load_le_658`, via `Exit.cost_975`.
-  sorry
+  have heq976 : Backlog.costEval 2 0 976 = Backlog.cost 2 0 976 :=
+    Backlog.costEval_eq (by omega)
+  have h976_lt : (120000000 * 10 ^ 18 : Nat) < Backlog.cost 2 0 976 := by
+    have h : Backlog.costEval 2 0 975 ≤ 120000000 * 10 ^ 18 ∧
+        (120000000 * 10 ^ 18 : Nat) < Backlog.costEval 2 0 976 := by decide +kernel
+    rw [heq976] at h
+    exact h.2
+  have h976_le : Backlog.cost 2 0 976 ≤ Backlog.cost 2 0 2893 := cost_mono (by omega)
+  have hwrap : fees frames < Backlog.cost 2 0 2893 := by omega
+  have hpot := exit_potential chain range hwrap
+  have hlt : Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) <
+      Backlog.cost 2 0 976 := by omega
+  have hload : load (queueAfter Exit.deployedQueue frames) ≤ 975 := by
+    by_contra hgt
+    push Not at hgt
+    have hge : Backlog.cost 2 0 976 ≤
+        Backlog.cost 2 0 (load (queueAfter Exit.deployedQueue frames)) :=
+      cost_mono (by omega)
+    omega
+  exact ⟨hload, exit_queue_le_of_load chain rp range hload⟩
 
 /-! ## A record waits a bounded number of calls (O31) -/
 
@@ -344,10 +891,101 @@ theorem delivered_prefix {Record : Type} (cap : Nat) (target : B256) (st : Queue
     (hcalls : k ≤ (es.filter fun e => match e with
       | .system _ => true | _ => false).length) :
     P <+: (chunks cap target st es).flatten := by
-  -- DRAFT: induction on `es` generalizing `st P k`: submission extends both the queue and the
-  -- bound (`submitted` append); fee read changes nothing; system call discharges `cap` records
-  -- of the prefix (`chunk` is `take cap`, `List.take_append_drop`) and one call of the count.
-  sorry
+  induction es generalizing st P k with
+  | nil =>
+    have h0 : k ≤ 0 := by simpa only [List.filter_nil, List.length_nil] using hcalls
+    have hk0 : k = 0 := by omega
+    have hle0 : P.length ≤ 0 := by
+      rw [hk0] at hlen
+      simpa only [Nat.zero_mul] using hlen
+    have hPnil : P = [] := List.length_eq_zero_iff.mp (by omega)
+    subst hPnil
+    simp only [chunks, List.flatten_nil]
+    exact List.nil_prefix
+  | cons e es ih =>
+    cases e with
+    | submission r =>
+      have hchunk : chunk cap st (Event.submission r) = [] := rfl
+      have hflat : (chunks cap target st (Event.submission r :: es)).flatten =
+          (chunks cap target (submit st r) es).flatten := by
+        simp only [chunks, step, hchunk, List.flatten_cons, List.nil_append]
+      rw [hflat]
+      have hfilt : ((Event.submission r :: es).filter fun e => match e with
+          | .system _ => true | _ => false) = es.filter fun e => match e with
+          | .system _ => true | _ => false := rfl
+      have hcalls' : k ≤ (es.filter fun e => match e with
+          | .system _ => true | _ => false).length := by
+        rw [← hfilt]
+        exact hcalls
+      obtain ⟨t, ht⟩ := hpre
+      have hpre' : P <+: (submit st r).queue := by
+        refine ⟨t ++ [r], ?_⟩
+        simp only [submit]
+        rw [← List.append_assoc, ht]
+      exact ih _ _ _ hpre' hlen hcalls'
+    | feeRead =>
+      have hchunk : chunk cap st (Event.feeRead) = [] := rfl
+      have hflat : (chunks cap target st (Event.feeRead :: es)).flatten =
+          (chunks cap target st es).flatten := by
+        simp only [chunks, step, hchunk, List.flatten_cons, List.nil_append]
+      rw [hflat]
+      have hfilt : ((Event.feeRead :: es).filter fun e => match e with
+          | .system _ => true | _ => false) = es.filter fun e => match e with
+          | .system _ => true | _ => false := rfl
+      have hcalls' : k ≤ (es.filter fun e => match e with
+          | .system _ => true | _ => false).length := by
+        rw [← hfilt]
+        exact hcalls
+      exact ih _ _ _ hpre hlen hcalls'
+    | system latch =>
+      have hfilt : ((Event.system latch :: es).filter fun e => match e with
+          | .system _ => true | _ => false) =
+          Event.system latch :: es.filter fun e => match e with
+          | .system _ => true | _ => false := rfl
+      have hlenf : (((Event.system latch :: es).filter fun e => match e with
+          | .system _ => true | _ => false).length) =
+          (es.filter fun e => match e with
+          | .system _ => true | _ => false).length + 1 := by
+        rw [hfilt, List.length_cons]
+      rw [hlenf] at hcalls
+      have hflat : (chunks cap target st (Event.system latch :: es)).flatten =
+          st.queue.take cap ++
+            (chunks cap target (step cap target st (.system latch)) es).flatten := by
+        simp only [chunks, chunk, List.flatten_cons]
+      rw [hflat]
+      by_cases hk0 : k = 0
+      · subst hk0
+        have hle0 : P.length ≤ 0 := by simpa only [Nat.zero_mul] using hlen
+        have hPnil : P = [] := List.length_eq_zero_iff.mp (by omega)
+        subst hPnil
+        exact List.nil_prefix
+      · obtain ⟨j, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
+        by_cases hle : P.length ≤ cap
+        · have hPtake : P.take cap = P := List.take_of_length_le (by omega)
+          obtain ⟨t, ht⟩ := hpre
+          have htakeC : st.queue.take cap = P ++ t.take (cap - P.length) := by
+            rw [← ht, List.take_append, hPtake]
+          have hpreC : P <+: st.queue.take cap := ⟨t.take (cap - P.length), htakeC.symm⟩
+          exact hpreC.trans (List.prefix_append _ _)
+        · obtain ⟨t, ht⟩ := hpre
+          have hpre' : P.drop cap <+: (step cap target st (.system latch)).queue := by
+            rw [step_queue_system, ← ht, List.drop_append]
+            exact List.prefix_append _ _
+          have hmul : (j + 1) * cap = j * cap + cap := by
+            rw [Nat.add_mul, Nat.one_mul]
+          have hlen' : (P.drop cap).length ≤ j * cap := by
+            rw [List.length_drop]
+            omega
+          have hcalls' : j ≤ (es.filter fun e => match e with
+              | .system _ => true | _ => false).length := by omega
+          have ihP := ih _ _ _ hpre' hlen' hcalls'
+          obtain ⟨s', hs'⟩ := ihP
+          have htake : st.queue.take cap = P.take cap := by
+            rw [← ht, List.take_append, show cap - P.length = 0 from by omega,
+              List.take_zero, List.append_nil]
+          have e1 : P = P.take cap ++ P.drop cap := (List.take_append_drop cap P).symm
+          refine ⟨s', ?_⟩
+          rw [e1, List.append_assoc, hs', htake]
 
 /-- **Everything queued is delivered after enough empty calls (O31).** With `m` further empty
 system calls draining `cap` each, the concatenated system-call outputs are exactly the
@@ -356,70 +994,98 @@ theorem all_delivered_after {frames : List (Frame c)} (st : QueueState c.Record)
     (m : Nat) (hm : (queueAfter st frames).queue.length ≤ m * c.cap) :
     (chunks c.cap c.target st (events frames ++ List.replicate m (.system false))).flatten =
       st.queue ++ submissions frames := by
-  -- DRAFT: `chunks_append` splits the frames from the calls; `delivered_append_queue` twice
-  -- (once for `events frames`, once for the replicated calls on the queue after them, whose
-  -- flattened output plus the drained remainder is that queue: `replay_calls_queue` with `hm`
-  -- gives an empty remainder via `List.drop_eq_nil_of_le`, and `submitted_replicate_system`
-  -- shows the calls submit nothing, so the second `delivered_append_queue` closes with
-  -- `List.nil_append`).
-  sorry
+  have h1 := delivered_append_queue c.cap c.target st (events frames)
+  have h2 := delivered_append_queue c.cap c.target (queueAfter st frames)
+    (List.replicate m (.system false))
+  have hsub : submitted (List.replicate m (.system false) : List (Event c.Record)) = [] :=
+    submitted_replicate_system m false
+  have hrep : (replay c.cap c.target (queueAfter st frames)
+      (List.replicate m (.system false))).queue = [] := by
+    rw [replay_calls_queue]
+    rw [show m * c.cap = c.cap * m from Nat.mul_comm _ _] at hm
+    exact List.drop_eq_nil_of_le hm
+  rw [hsub, List.append_nil] at h2
+  rw [hrep, List.append_nil] at h2
+  have hch := chunks_append c.cap c.target st (events frames)
+    (List.replicate m (.system false))
+  have heq : replay c.cap c.target st (events frames) = queueAfter st frames := rfl
+  rw [hch, List.flatten_append, heq, h2] at ⊢
+  have h1' : (chunks c.cap c.target st (events frames)).flatten ++
+      (queueAfter st frames).queue = st.queue ++ submissions frames := h1
+  exact h1'
 
 /-! ## Fee overhang after activation (O32) -/
 
-/-- **The quote after `k` empty calls (O32, generic).** From a represented off-inhibitor queue
-with `excess + count` below the wrap, a frame quoting after `k ≥ 1` empty system calls quotes
-`fakeExp 1 (excess + count - target * (k + 1)) 17`. -/
+/-- **The quote after `k` empty calls (O32, generic).** From a represented off-inhibitor queue,
+a frame quoting after `k ≥ 1` empty system calls quotes
+`fakeExp 1 (excess + count - target * k) 17`: the drained excess after the calls, with the
+count cleared, is what `Frame.quote_natural` charges. (The draft read `k + 1`; corrected:
+`replay_calls_excess` gives excess `E+C - target*k` after `k` calls, and that is the
+numerator `quote_natural` sees.) -/
 theorem quote_after_calls {k : Nat} (hk : 0 < k) {g : Frame c} {q : B256}
     {st : QueueState c.Record}
     (after : Holds c g.before (replay c.cap c.target st (List.replicate k (.system false))))
     (hne : st.excess ≠ 2 ^ 256 - 1) (hsum : st.excess + st.count < 2 ^ 256 - 1)
-    (few : st.excess + st.count - c.target.toNat * (k + 1) ≤ 2892)
+    (few : st.excess + st.count - c.target.toNat * k ≤ 2892)
     (hq : g.quotedFee = some q) :
-    q.toNat = fakeExp 1 (st.excess + st.count - c.target.toNat * (k + 1)) 17 := by
-  -- DRAFT: write `k = j + 1`; `replay_calls_excess` gives the drained excess
-  -- `st.excess + st.count - target * (j + 1)` and count `0`; `Frame.quote_natural` with `after`
-  -- and `few` gives the quote, and the numerator `(excess' + (0 - target))` is
-  -- `st.excess + st.count - target * (k + 1)` by `Nat.sub_sub` and `Nat.mul_succ`.
-  sorry
+    q.toNat = fakeExp 1 (st.excess + st.count - c.target.toNat * k) 17 := by
+  obtain ⟨j, rfl⟩ : ∃ j, k = j + 1 := ⟨k - 1, by omega⟩
+  obtain ⟨hex, hcount⟩ := replay_calls_excess c.cap c.target st j hne hsum
+  have hqeq := Frame.quote_natural (c := c) g after hq (by
+    rw [hex, hcount, Nat.zero_sub, Nat.add_zero]
+    exact few)
+  rw [hex, hcount, Nat.zero_sub, Nat.add_zero] at hqeq
+  exact hqeq
 
 /-- **The quote at call `k` after a pre-fork backlog (O32, deposit).** Over a chain from the
 deployed storage of a covered-fork backlog with `n` submissions followed by Amsterdam empty
 calls, the `k`-th call (`1 ≤ k`) quotes `fakeExp 1 (n - 8 * k) 17`. Attached to the activation
 headline: after at least one call the count is 0 and the excess is `n - 8k` in naturals. -/
 theorem deposit_quote_at_call {backlog calls : List Deposit.Frame} {t : Stor} {q : B256} {k : Nat}
-    (chain : Chain Stor.empty (backlog ++ calls) t)
-    (hp : ∀ f ∈ backlog, Deposit.PreFork f) (hc : ∀ f ∈ calls, Deposit.EmptyCall f)
-    (hk1 : 1 ≤ k) (hk : k - 1 < calls.length)
-    (range : 4 + 6 * (submissions backlog).length ≤ 2 ^ 256)
-    (few : (submissions backlog).length ≤ 2892)
+    (_chain : Chain Stor.empty (backlog ++ calls) t)
+    (_hp : ∀ f ∈ backlog, Deposit.PreFork f) (hc : ∀ f ∈ calls, Deposit.EmptyCall f)
+    (_hk1 : 1 ≤ k) (_hk : k - 1 < calls.length)
+    (_range : 4 + 6 * (submissions backlog).length ≤ 2 ^ 256)
+    (_few : (submissions backlog).length ≤ 2892)
     {g : Deposit.Frame} {ys : List Deposit.Frame}
     (split : calls = calls.take (k - 1) ++ g :: ys) (hq : g.quotedFee = some q) :
     q.toNat = fakeExp 1 ((submissions backlog).length - 8 * k) 17 := by
-  -- DRAFT: set `xs := backlog ++ calls.take (k - 1)`; `Chain.append_split` twice gives a chain
-  -- over `xs ++ g :: _`; `Chain.quote_natural` with `Deposit.deployed_represents`
-  -- (`load Deposit.deployedQueue = 0` by `decide`, `slots`/`count` from `range` since the calls
-  -- submit nothing by `events_calls` on the taken prefix and `submitted_replicate_system`, and
-  -- `few`) quotes the queue after `xs`. That queue: with `k - 1 = 0`, excess `0` and count `n`
-  -- (`excess_noSystem` / `count_noSystem` with `Deposit.noSystem_preFork`); with `k - 1 ≥ 1`,
-  -- excess `n - 8 * (k - 1)` and count `0` (`Deposit.prefork_then_calls` on the split chain).
-  -- Both give numerator `n - 8 * k` by `omega`.
-  sorry
+  -- The premises are contradictory as drafted: `hc` forces every element of `calls`,
+  -- hence `g` via `split`, to satisfy `EmptyCall` (`event = .system false`), whose
+  -- `quotedFee` is `none`, contradicting `hq`. Proved vacuously; the intended O32 fact
+  -- is a quoting frame *after* `k - 1` calls (not the `k`-th call itself), whose quote is
+  -- `n - 8 * k` via `prefork_then_calls` + `Chain.quote_natural`. Reported to master.
+  have hg_in : g ∈ calls := by
+    rw [split]
+    exact List.mem_append_right _ List.mem_cons_self
+  have hg_empty := hc g hg_in
+  cases g with
+  | submission sevm pre post l i o rules at_contract caller law =>
+    cases hg_empty
+  | feeRead sevm pre post l i o rules at_contract caller law =>
+    cases hg_empty
+  | system benv data post out fork installed length run =>
+    cases hq
 
 /-- **The quote after `k` post-unlock calls (O32, exit).** From a represented off-inhibitor
 exit queue, a frame quoting after `k ≥ 1` empty system calls quotes
-`fakeExp 1 (excess + count - 2 * (k + 1)) 17`. The exit contract has no pre-fork backlog
-(`Exit.first_frame_system`): this states the post-unlock dynamics, applied after the
-unlocking call. -/
+`fakeExp 1 (excess + count - 2 * k) 17` (target `2` in `quote_after_calls`). The exit
+contract has no pre-fork backlog (`Exit.first_frame_system`): this states the post-unlock
+dynamics, applied after the unlocking call. -/
 theorem exit_quote_after_calls {k : Nat} (hk : 0 < k) {g : Exit.Frame} {q : B256}
     {st : QueueState Exit.contract.Record}
     (after : Holds Exit.contract g.before
       (replay Exit.contract.cap Exit.contract.target st (List.replicate k (.system false))))
     (hne : st.excess ≠ 2 ^ 256 - 1) (hsum : st.excess + st.count < 2 ^ 256 - 1)
-    (few : st.excess + st.count - 2 * (k + 1) ≤ 2892)
+    (few : st.excess + st.count - 2 * k ≤ 2892)
     (hq : g.quotedFee = some q) :
-    q.toNat = fakeExp 1 (st.excess + st.count - 2 * (k + 1)) 17 := by
-  -- DRAFT: specialization of `quote_after_calls` at `Exit.contract`
-  -- (`Exit.contract.target.toNat = 2` by `decide`).
-  sorry
+    q.toNat = fakeExp 1 (st.excess + st.count - 2 * k) 17 := by
+  have htarget : Exit.contract.target.toNat = 2 := by decide
+  have few' : st.excess + st.count - Exit.contract.target.toNat * k ≤ 2892 := by
+    rw [htarget]
+    exact few
+  have h := quote_after_calls (c := Exit.contract) hk after hne hsum few' hq
+  rw [htarget] at h
+  exact h
 
 end Blanc.Lift.BuilderRequest.LoadBound
