@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-609 shared modules, 582 with a module summary.
+610 shared modules, 583 with a module summary.
 
 ## `Blanc/`
 
@@ -604,6 +604,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`BodySegs.lean`](../Blanc/Lift/RequestSystem/BodySegs.lean) | **The segments a request contract's record body is made of.** Each record body computes its key and offset, then reads a slot and writes a window, word by word, and some recode an amount little-endian byte by byte. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Call.lean`](../Blanc/Lift/RequestSystem/Call.lean) | **A request contract's system call, under Amsterdam: gas and the envelope.** `SysPath.frameCost` is bounded against Jaune's `StateGasRules` record (`frameBound`), and the frame is taken through `processCheckedSystemTransaction` with its exact post state. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Dispatch.lean`](../Blanc/Lift/RequestSystem/Dispatch.lean) | **A request contract's caller dispatch.** Every request contract starts `CALLER; PUSH20 SYSTEM; EQ; PUSH dest; JUMPI`: the system caller takes one arm, every other caller the other. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Effects.lean`](../Blanc/Lift/RequestSystem/Effects.lean) | **What a request system frame touches and returns, in any context.** `sysState_getElem_ne` and `sysState_getElem_congr` are the account-level facts behind non-interference: a call's post state differs from its pre state only at its own address, and what it leaves there depends … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Output.lean`](../Blanc/Lift/RequestSystem/Output.lean) | **What a request system call returns and leaves.** `SysOutput` says a runtime's record writes extend the visible output by one record. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Path.lean`](../Blanc/Lift/RequestSystem/Path.lean) | **A request contract's system path, under Amsterdam.** All four request contracts of Amsterdam (EIP-7002, EIP-7251, EIP-8282's deposit and exit) share one system path: read tail and head, cap the count, drain the records, move the pointers, update the excess from slots 0 and 1 … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`PlainExcess.lean`](../Blanc/Lift/RequestSystem/PlainExcess.lean) | **The excess arm of the EIP-7002 and EIP-7251 runtimes.** These runtimes have no calldata latch. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |

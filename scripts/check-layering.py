@@ -1459,7 +1459,8 @@ SHARED += ["Lift.SystemCaller", "MemoryWindows"]
 # The system path all four Amsterdam request contracts share (blanc-eip8282-builder-requests-v1 O9).
 SHARED += ["Lift.RequestSystem.Dispatch", "Lift.RequestSystem.Path", "Lift.RequestSystem.Call",
            "Lift.RequestSystem.Output", "Lift.RequestSystem.BodySegs",
-           "Lift.RequestSystem.PlainExcess", "Lift.SystemExecution.ConsolidationRequest.AmsterdamSystem"]
+           "Lift.RequestSystem.PlainExcess", "Lift.SystemExecution.ConsolidationRequest.AmsterdamSystem",
+           "Lift.RequestSystem.Effects"]
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
@@ -1478,7 +1479,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.UserFrameAmsterdam",
     "Lift.BuilderRequest.Deposit.System", "Lift.BuilderRequest.Deposit.SystemCall",
     "Lift.BuilderRequest.Exit.System", "Lift.BuilderRequest.Exit.SystemCall",
-    "Lift.BuilderRequest.Exit.Frames",
+    "Lift.BuilderRequest.Exit.Frames", "Lift.BuilderRequest.SystemFrame",
     "Lift.BuilderRequest.Exit.Code", "Lift.BuilderRequest.Exit.Cert",
     "Lift.BuilderRequest.Exit.Check", "Lift.BuilderRequest.Exit.Jumps",
     "Lift.BuilderRequest.Exit.Creation.Input", "Lift.BuilderRequest.Exit.Creation.Cert",
@@ -1498,6 +1499,7 @@ CONTRACTS["builder-request"] = [
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
     "Composition.RequestPhaseAmsterdam": ('builder-request', 'withdrawal-request'),
+    "Composition.RequestPhaseOrder": ('builder-request', 'withdrawal-request'),
     "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),
     "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request',),
     "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request',),

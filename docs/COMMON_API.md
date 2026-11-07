@@ -8677,7 +8677,12 @@ read the return window and one request-phase step. A record body's segments (`se
 excess arm (no latch; the inhibitor counts as zero) is `plainShape` in
 `Blanc/Lift/RequestSystem/PlainExcess.lean`; the EIP-8282 arm is `latchShape` in
 `Blanc/Lift/BuilderRequest/SystemPath.lean`, family-local, and its nonempty-calldata side, on
-`SysPath.frame_prefix` and `SysPath.prefix_le`, is `Blanc/Lift/BuilderRequest/Latch.lean`. Worked consumers:
+`SysPath.frame_prefix` and `SysPath.prefix_le`, is `Blanc/Lift/BuilderRequest/Latch.lean`.
+`Blanc/Lift/RequestSystem/Effects.lean` holds what a call touches and returns: `sysState_getElem_ne` and
+`sysState_getElem_congr` (every other account is unchanged; its own result depends only on its own account),
+`sysFold` with `run_sysFold` and `sysFold_getElem` (a fold of calls, by account), `SysPath.frame_exec` (the walk as
+an `Exec` at any system-caller `Sevm`, not only the phase's message), and `SysOutput.drained_length` and
+`callPost_output_length` (return length from any storage). Worked consumers:
 `Blanc/Lift/WithdrawalRequest/AmsterdamSystem.lean`,
 `Blanc/Lift/SystemExecution/ConsolidationRequest/AmsterdamSystem.lean`, and the phase at
 `Blanc/Composition/RequestPhaseAmsterdam.lean`.
