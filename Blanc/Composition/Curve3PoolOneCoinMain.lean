@@ -418,7 +418,7 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
 /-- **`one_coin_message`.** -/
 theorem one_coin_message_holds : one_coin_message := fun d m A msg E a minDy dy admin i ask req => by
   have fees := m.feesWithin A
-  obtain ⟨cost, refund, hc, h⟩ := one_coin_run (m.facts A) (m.marked A) fees.1 fees.2 ask req
+  obtain ⟨cost, refund, hc, h⟩ := one_coin_run (m.facts A) (m.marked A ask.coinsOpen.usdcParties.1) fees.1 fees.2 ask req
   exact ⟨cost, refund, Nat.le_trans hc (by decide), h⟩
 
 end Blanc.Composition.Curve3PoolPublic

@@ -118,6 +118,11 @@ def UsdcOpen (w : State) : Prop := Usdc.flag20 ((w.getStor usdc).get 1) = false
 def UsdcUnlisted (w : State) (a : Adr) : Prop :=
   Usdc.frozenBit ((w.getStor usdc).get (Usdc.balSlot a)) = false
 
+/-- A word whose flag is clear is below it. -/
+theorem unfrozen_lt {x : B256} (h : Usdc.frozenBit x = false) : x.toNat < 2 ^ 255 := by
+  unfold Usdc.frozenBit at h
+  simpa only [decide_eq_false_iff_not, not_le] using h
+
 /-- USDT is not paused and has not blacklisted `a`. -/
 def UsdtOpen (w : State) (a : Adr) : Prop :=
   Usdt.flag20 ((w.getStor usdt).get 0) = 0 ∧ Usdt.listedByte (w.getStor usdt) a = 0

@@ -23,7 +23,8 @@ open Blanc.Lift.Curve3Pool (PoolInvocation PoolRun PoolEntries balanceOfData dec
 variable {d : Deployment}
 
 /-- **USDC's books at a transaction boundary.** -/
-theorem usdc_window (m : Moment d) (A : Assumes d m.through) : recorded m.world 1 ≤ coinHeld m.world pool 1 := by
+theorem usdc_window (m : Moment d) (A : Assumes d m.through) (unlisted : UsdcUnlisted m.world pool) :
+    recorded m.world 1 ≤ coinHeld m.world pool 1 := by
   have capabilities := BodyStageCapabilities.historical
   have certified := A.circle.usdcCertified
   have code : m.world.getCode usdc = Lift.Usdc.Proxy.code :=
@@ -34,10 +35,10 @@ theorem usdc_window (m : Moment d) (A : Assumes d m.through) : recorded m.world 
       exact List.mem_append_right _ member)).1
   have r := m.coin_window A (usdcWalk A) tail
   rw [show usdcBook.V = Usdc.ledgerView from rfl, show usdcBook.T = usdc from rfl,
-    show usdcBook.Rd = (fun _ m => Usdc.balanceBits (m (Usdc.balSlot pool))) from rfl] at r
+    show usdcBook.Rd = fun xs m => usdcRead xs (m (Usdc.balSlot pool)) from rfl] at r
   dsimp only at r
   rw [view_bal] at r
-  exact r.trans (bits_le_coinHeld _)
+  exact r.trans (usdcRead_le_coinHeld _ fun _ _ => unfrozen_lt unlisted)
 
 /-- A replay's invocation, at the checkpoint it enters, with what `RepliesCovered` says of it. -/
 theorem replies_at {T : Adr} {k : Fin 3} : ∀ {st st' : Curve3Pool.State} {invs : List PoolInvocation},
@@ -97,11 +98,12 @@ open Blanc.Composition.Curve3PoolBacked
 
 variable {d : Deployment}
 
-/-- **The pool's books are covered right after any transaction of mainnet.** -/
-theorem Moment.backed (m : Moment d) (A : Assumes d m.through) : PoolBacked m.world := fun k => by
+/-- **The pool's books are covered right after any transaction of mainnet**, with USDC's flag on the pool clear there. -/
+theorem Moment.backed (m : Moment d) (A : Assumes d m.through) (unlisted : UsdcUnlisted m.world pool) :
+    PoolBacked m.world := fun k => by
   match k with
   | 0 => exact dai_window m A
-  | 1 => exact usdc_window m A
+  | 1 => exact usdc_window m A unlisted
   | 2 => exact usdt_window m A
 
 /-- **`pool_backed`.** -/

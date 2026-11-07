@@ -8,11 +8,11 @@ import Blanc.Lift.Usdc.V2_1Answer
 /-!
 # The pool's books of USDC are covered
 
-USDC reads one word two ways: FiatTokenV2_2 its low 255 bits, the earlier versions the whole word. The walk reads the bits
-throughout. Entering a frame the reading can only rise, since bits are at most the word; leaving one running the earlier
-versions it is equal, by `UsdcMovesOnce.below`. A reader's answer is the bits at its position: under V2_2 by its code, and
-under an earlier version because by `UsdcMovesOnce.onward` nothing before it ran V2_2, so its position is the cut or the
-exit of a frame running words.
+USDC reads one word two ways: FiatTokenV2_2 its low 255 bits, the earlier versions the whole word. A position reads the whole
+word until a chain frame before it has run V2_2, and the bits after. Entering the first such frame the reading can only rise,
+by `UsdcMovesOnce.firstRead`; by `UsdcMovesOnce.onward` a frame running an earlier version has no such frame before it, so it
+reads as its position does. A reader's answer is its position's reading the same way. At the end, `UsdcMovesOnce.atTip` covers
+USDC naming V2_2's address before any chain frame has run it.
 -/
 
 namespace Blanc.Composition.Curve3PoolBacked
@@ -24,7 +24,20 @@ open Blanc.Lift.CurveCoins (PoolCoinSel)
 
 variable {d : Deployment} {future : BlockChain} {h : MainnetHistory d.minter.post future}
 
-/-- USDC's entry for the pool, as a book: the low 255 bits at every position. -/
+open Classical in
+/-- What a position after chain frames `xs` reads of word `w`: the bits once one of them has run V2_2, the whole word before. -/
+noncomputable def usdcRead (xs : List Exec.Frame) (w : B256) : Nat :=
+  if ∃ G ∈ xs, Usdc.V22At usdc G then Usdc.balanceBits w else w.toNat
+
+theorem usdcRead_seen {xs : List Exec.Frame} {G : Exec.Frame} (w : B256) (mem : G ∈ xs) (v22 : Usdc.V22At usdc G) :
+    usdcRead xs w = Usdc.balanceBits w :=
+  ite_eq_left ⟨G, mem, v22⟩
+
+theorem usdcRead_unseen {xs : List Exec.Frame} (w : B256) (none : ∀ G ∈ xs, ¬ Usdc.V22At usdc G) :
+    usdcRead xs w = w.toNat :=
+  ite_eq_right fun ⟨G, mem, v22⟩ => none G mem v22
+
+/-- USDC's entry for the pool, as a book, read by position. -/
 noncomputable def usdcBook : CoinBook where
   T := usdc
   V := Usdc.ledgerView
@@ -33,7 +46,7 @@ noncomputable def usdcBook : CoinBook where
   held := Usdc.heldAt usdc pool
   debit := ownDebit pool
   credit := ownCredit pool
-  Rd := fun _ m => Usdc.balanceBits (m (Usdc.balSlot pool))
+  Rd := fun xs m => usdcRead xs (m (Usdc.balSlot pool))
 
 theorem pool_bal_ne_impl : Usdc.balSlot pool ≠ Usdc.implSlot := Usdc.entryApart_pool.impl
 theorem pool_bal_ne_admin : Usdc.balSlot pool ≠ Usdc.adminSlot := Usdc.entryApart_pool.admin
@@ -130,67 +143,126 @@ theorem usdc_local (A : Assumes d h) :
   rw [caller] at this
   exact usdc_ne_pool this.symm
 
-/-- A chain ends where it starts, or at its last frame's exit. -/
-theorem chain_end {B : CoinBook} {a m : StorWords} : ∀ {xs : List Exec.Frame}, B.Chain a xs m →
-    (xs = [] ∧ m = a) ∨ ∃ ys F, xs = ys ++ [F] ∧ m = B.V (wordsAt B.T F.post.state)
-  | [], c => .inl ⟨rfl, c⟩
-  | F :: fs, c => by
-    rcases chain_end c.2.2 with ⟨rfl, e⟩ | ⟨ys, G, rfl, e⟩
-    · exact .inr ⟨[], F, rfl, e⟩
-    · exact .inr ⟨F :: ys, G, rfl, e⟩
+/-- A chain frame at a position of the frames' chain lies at a split of the frames, with that position before it. -/
+theorem coinFrames_split {T : Adr} {Obs : Exec.Frame → Prop} {F : Exec.Frame} : ∀ {fs xs ys : List Exec.Frame},
+    coinFrames T Obs fs = xs ++ F :: ys → ∃ before after, fs = before ++ F :: after ∧ coinFrames T Obs before = xs
+  | [], xs, _, e => by cases xs <;> simp only [coinFrames, List.flatMap_nil, List.nil_append, List.cons_append, reduceCtorEq] at e
+  | g :: fs, xs, ys, e => by
+    rw [show g :: fs = [g] ++ fs from rfl, coinFrames_append] at e
+    by_cases h : coinFrames T Obs [g] = []
+    · rw [h, List.nil_append] at e
+      obtain ⟨before, after, rfl, c⟩ := coinFrames_split e
+      refine ⟨g :: before, after, rfl, ?_⟩
+      rw [show g :: before = [g] ++ before from rfl, coinFrames_append, h, c, List.nil_append]
+    · have single : coinFrames T Obs [g] = [g] := by
+        simp only [coinFrames, List.flatMap_cons, List.flatMap_nil, List.append_nil, coinObs] at h ⊢
+        split at h
+        · rw [ite_eq_left ‹_›]
+        · exact (h rfl).elim
+      rw [single] at e
+      cases xs with
+      | nil =>
+        obtain ⟨rfl, -⟩ := List.cons.inj e
+        exact ⟨[], fs, rfl, rfl⟩
+      | cons x xs =>
+        obtain ⟨rfl, tail⟩ := List.cons.inj e
+        obtain ⟨before, after, rfl, c⟩ := coinFrames_split (xs := xs) tail
+        refine ⟨g :: before, after, rfl, ?_⟩
+        rw [show g :: before = [g] ++ before from rfl, coinFrames_append, single, c]
+        rfl
 
-/-- **Where a reader runs the earlier versions, the pool's word is below the flag at its position**: by `onward` nothing
-before it ran V2_2, so its position is the cut or the exit of a frame running words. -/
-theorem word_below (A : Assumes d h) {before after : List Exec.Frame} {c : Exec.Frame} {m : StorWords}
+/-- **Before a frame running an earlier version, no chain frame has run V2_2**, by `onward`. -/
+theorem none_before (A : Assumes d h) {before after : List Exec.Frame} {c : Exec.Frame}
     (split : (d.sincePool h).settledFrames = before ++ c :: after) (target : c.sevm.currentTarget = usdc)
-    (obs : Usdc.ChainObs usdc c) (notV22 : ¬ Usdc.V22At usdc c)
-    (chain : usdcBook.Chain (Usdc.ledgerView (wordsAt usdc d.poolCut.afterBenv.state)) (usdcBook.cf before) m) :
-    (m (Usdc.balSlot pool)).toNat < 2 ^ 255 := by
-  have moves := A.circle.movesOnce
-  rcases chain_end chain with ⟨-, rfl⟩ | ⟨ys, F, e, hm⟩
-  · rw [view_bal]
-    exact moves.below.1
-  · have hF : F ∈ usdcBook.cf before := by
-      rw [e]
-      exact List.mem_append_right _ List.mem_cons_self
-    obtain ⟨inBefore, targetF, mutableF, obsF⟩ := mem_coinFrames.mp hF
-    obtain ⟨b₁, b₂, rfl⟩ := List.append_of_mem inBefore
-    have whole : (d.sincePool h).settledFrames = b₁ ++ F :: (b₂ ++ c :: after) := by
-      rw [split]
-      simp only [List.append_assoc, List.cons_append]
-    have notF : ¬ Usdc.V22At usdc F := fun v22 => notV22 (moves.onward b₁ F _ whole targetF obsF v22 c
-      (List.mem_append_right _ List.mem_cons_self) target obs)
-    have inAll : F ∈ (d.sincePool h).settledFrames := by
-      rw [whole]
-      exact List.mem_append_right _ List.mem_cons_self
-    have hm' : m = Usdc.ledgerView (wordsAt usdc F.post.state) := hm
-    rw [hm', view_bal]
-    exact moves.below.2 F (mem_coinFrames.mpr ⟨inAll, targetF, mutableF, obsF⟩) notF
+    (obs : Usdc.ChainObs usdc c) (notV22 : ¬ Usdc.V22At usdc c) :
+    ∀ G ∈ coinFrames usdc (Usdc.ChainObs usdc) before, ¬ Usdc.V22At usdc G := by
+  intro G hG v22
+  obtain ⟨inBefore, targetG, -, obsG⟩ := mem_coinFrames.mp hG
+  obtain ⟨b₁, b₂, rfl⟩ := List.append_of_mem inBefore
+  have whole : (d.sincePool h).settledFrames = b₁ ++ G :: (b₂ ++ c :: after) := by
+    rw [split]
+    simp only [List.append_assoc, List.cons_append]
+  exact notV22 (A.circle.movesOnce.onward b₁ G _ whole targetG obsG v22 c
+    (List.mem_append_right _ List.mem_cons_self) target obs)
+
+/-- **What a reader answers is its position's reading**: the whole word under an earlier version, by `onward`, and the bits
+under V2_2, by `firstRead` if nothing before it has run V2_2. -/
+theorem reply_read (A : Assumes d h) {before after : List Exec.Frame} {c : Exec.Frame} {v : Nat}
+    (split : (d.sincePool h).settledFrames = before ++ c :: after) (target : c.sevm.currentTarget = usdc)
+    (obs : Usdc.ChainObs usdc c)
+    (bits : Usdc.V22At usdc c → v = Usdc.balanceBits (wordsAt usdc c.pre.state (Usdc.balSlot pool)))
+    (whole : ¬ Usdc.V22At usdc c → v = (wordsAt usdc c.pre.state (Usdc.balSlot pool)).toNat) :
+    v = usdcRead (coinFrames usdc (Usdc.ChainObs usdc) before) (wordsAt usdc c.pre.state (Usdc.balSlot pool)) := by
+  by_cases v22 : Usdc.V22At usdc c
+  · rw [bits v22]
+    by_cases seen : ∃ G ∈ coinFrames usdc (Usdc.ChainObs usdc) before, Usdc.V22At usdc G
+    · obtain ⟨G, gm, gv⟩ := seen
+      rw [usdcRead_seen _ gm gv]
+    · have none : ∀ G ∈ coinFrames usdc (Usdc.ChainObs usdc) before, ¬ Usdc.V22At usdc G := fun G gm gv => seen ⟨G, gm, gv⟩
+      rw [usdcRead_unseen _ none]
+      exact Usdc.bits_eq_of_lt (A.circle.movesOnce.firstRead before c after split target obs v22 none)
+  · rw [whole v22, usdcRead_unseen _ (none_before A split target obs v22)]
+
+/-- How a frame reads the pool's entry does not see the view. -/
+theorem heldAt_view (F : Exec.Frame) (w : StorWords) :
+    Usdc.heldAt usdc pool F (Usdc.ledgerView w) = Usdc.heldAt usdc pool F w := by
+  unfold Usdc.heldAt
+  rw [view_bal]
 
 /-- USDC's ledger against the pool's books. -/
 theorem usdc_ledger (A : Assumes d h) :
     Ledger usdcBook pool (d.sincePool h).settledFrames (Usdc.ledgerView (wordsAt usdc d.poolCut.afterBenv.state))
       (Usdc.ledgerView (wordsAt usdc future.state)) where
   loc := usdc_local A
-  seam := fun _ F _ _ => by
-    change Usdc.balanceBits _ ≤ Usdc.heldAt usdc pool F _
+  seam := fun xs F ys split => by
+    obtain ⟨before, after, whole, position⟩ := coinFrames_split (T := usdc) (Obs := Usdc.ChainObs usdc) split
+    have mem : F ∈ coinFrames usdc (Usdc.ChainObs usdc) (d.sincePool h).settledFrames := by
+      change F ∈ usdcBook.cf _
+      rw [split]
+      exact List.mem_append_right _ List.mem_cons_self
+    obtain ⟨-, target, -, obs⟩ := mem_coinFrames.mp mem
+    rw [show usdcBook.V = Usdc.ledgerView from rfl, show usdcBook.T = usdc from rfl,
+      show usdcBook.held = Usdc.heldAt usdc pool from rfl, show usdcBook.Rd = fun xs m => usdcRead xs (m (Usdc.balSlot pool)) from rfl]
+    dsimp only
+    rw [view_bal, heldAt_view]
     unfold Usdc.heldAt
-    split
-    · exact Nat.le_refl _
-    · exact Usdc.bits_le_word _
+    by_cases seen : ∃ G ∈ xs, Usdc.V22At usdc G
+    · obtain ⟨G, gm, gv⟩ := seen
+      rw [usdcRead_seen _ gm gv]
+      split
+      · exact Nat.le_refl _
+      · exact Usdc.bits_le_word _
+    · have none : ∀ G ∈ xs, ¬ Usdc.V22At usdc G := fun G gm gv => seen ⟨G, gm, gv⟩
+      rw [usdcRead_unseen _ none]
+      split
+      · rename_i v22
+        exact Nat.le_of_eq (Usdc.bits_eq_of_lt (A.circle.movesOnce.firstRead before F after whole target obs v22
+          (by rw [position]; exact none))).symm
+      · exact Nat.le_refl _
   leave := fun xs F ys split => by
-    change Usdc.heldAt usdc pool F _ ≤ Usdc.balanceBits _
+    obtain ⟨before, after, whole, position⟩ := coinFrames_split (T := usdc) (Obs := Usdc.ChainObs usdc) split
+    have mem : F ∈ coinFrames usdc (Usdc.ChainObs usdc) (d.sincePool h).settledFrames := by
+      change F ∈ usdcBook.cf _
+      rw [split]
+      exact List.mem_append_right _ List.mem_cons_self
+    obtain ⟨-, target, -, obs⟩ := mem_coinFrames.mp mem
+    rw [show usdcBook.V = Usdc.ledgerView from rfl, show usdcBook.T = usdc from rfl,
+      show usdcBook.held = Usdc.heldAt usdc pool from rfl, show usdcBook.Rd = fun xs m => usdcRead xs (m (Usdc.balSlot pool)) from rfl]
+    dsimp only
+    rw [view_bal, heldAt_view]
     unfold Usdc.heldAt
     split
-    · exact Nat.le_refl _
+    · rename_i v22
+      rw [usdcRead_seen _ (List.mem_append_right _ List.mem_cons_self) v22]
     · rename_i notV22
-      have hF : F ∈ coinFrames usdc (Usdc.ChainObs usdc) (d.sincePool h).settledFrames := by
-        change F ∈ usdcBook.cf _
-        rw [split]
-        exact List.mem_append_right _ List.mem_cons_self
-      have below := A.circle.movesOnce.below.2 F hF notV22
-      rw [show usdcBook.V = Usdc.ledgerView from rfl, show usdcBook.T = usdc from rfl, view_bal]
-      exact Nat.le_of_eq (Usdc.bits_eq_of_lt below).symm
+      have none := none_before A whole target obs notV22
+      rw [position] at none
+      rw [usdcRead_unseen]
+      intro G gm
+      rcases List.mem_append.mp gm with gm | gm
+      · exact none G gm
+      · rw [List.mem_singleton.mp gm]
+        exact notV22
   third := fun _ _ ne => ite_eq_left ne
 
 variable {sevm : Sevm} {pb post : Devm} {exc : Exec 0 sevm pb (.ok post)} {s : Curve3Pool.State}
@@ -307,7 +379,6 @@ theorem usdcWalk (A : Assumes d h) :
         subst m
         exact usdc_ne_pool (tx.symm.trans at')
       rw [this, List.nil_append]
-    have chainFull := chain
     rw [cfP] at chain
     obtain ⟨st, ck, hc, ht⟩ := A.poolFrames Pmem at' mutable
     obtain ⟨sevm, pb, post, exc, cm, e, H⟩ := A.poolAt Pmem at' mutable ck ⟨hc, ht⟩
@@ -326,30 +397,41 @@ theorem usdcWalk (A : Assumes d h) :
     obtain ⟨atV22, atWords⟩ := usdc_balanceOf_answer pc0 code fork has notAdmin certified size sel
     rw [word4, toAdr_toB256, tc] at atV22 atWords
     refine ⟨Usdc.ledgerView (wordsAt usdc c.pre.state), chain, ?_⟩
-    change answerWord c.post.output = Usdc.balanceBits (Usdc.ledgerView (wordsAt usdc c.pre.state) (Usdc.balSlot pool))
-    rw [view_bal]
-    by_cases v22 : Usdc.V22At usdc c
+    change answerWord c.post.output = usdcRead (coinFrames usdc (Usdc.ChainObs usdc) pre ++
+      coinFrames usdc (Usdc.ChainObs usdc) (blocks L₁)) (Usdc.ledgerView (wordsAt usdc c.pre.state) (Usdc.balSlot pool))
+    rw [view_bal, ← cfP]
+    refine reply_read A splitC tc obs (fun v22 => ?_) fun v22 => ?_
     · rw [answerWord, atV22 v22, List.take_of_length_le (by rw [B256.length_toBytes]), B256.toB256_toBytes,
         Usdc.lo255_and_toNat]
       rfl
-    · have below := word_below A splitC tc obs v22 chainFull
-      rw [view_bal] at below
-      rw [answerWord, atWords v22, List.take_of_length_le (by rw [B256.length_toBytes]), B256.toB256_toBytes]
-      exact (Usdc.bits_eq_of_lt below).symm
+    · rw [answerWord, atWords v22, List.take_of_length_le (by rw [B256.length_toBytes]), B256.toB256_toBytes]
+      rfl
 
-/-- What USDC's storage says the pool holds is at least the low bits of its word. -/
-theorem bits_le_coinHeld (w : State) :
-    Usdc.balanceBits ((w.getStor usdc).get (Usdc.balSlot pool)) ≤ coinHeld w pool 1 := by
+/-- **A position's reading is at most what USDC's storage says the pool holds**, given the word below the flag wherever USDC
+names V2_2's address before a chain frame has run it. -/
+theorem usdcRead_le_coinHeld (w : State) {xs : List Exec.Frame}
+    (below : UsdcPacked w → (∀ G ∈ xs, ¬ Usdc.V22At usdc G) → ((w.getStor usdc).get (Usdc.balSlot pool)).toNat < 2 ^ 255) :
+    usdcRead xs ((w.getStor usdc).get (Usdc.balSlot pool)) ≤ coinHeld w pool 1 := by
   unfold coinHeld
-  split
-  · exact Nat.le_refl _
-  · exact Usdc.bits_le_word _
+  by_cases seen : ∃ G ∈ xs, Usdc.V22At usdc G
+  · obtain ⟨G, gm, gv⟩ := seen
+    rw [usdcRead_seen _ gm gv]
+    split
+    · exact Nat.le_refl _
+    · exact Usdc.bits_le_word _
+  · have none : ∀ G ∈ xs, ¬ Usdc.V22At usdc G := fun G gm gv => seen ⟨G, gm, gv⟩
+    rw [usdcRead_unseen _ none]
+    split
+    · rename_i c
+      exact Nat.le_of_eq (Usdc.bits_eq_of_lt (below c.2 none)).symm
+    · exact Nat.le_refl _
 
 /-- **The pool's books of USDC are at most what USDC's storage says it holds.** -/
 theorem usdc_backed (A : Assumes d h) : recorded future.state 1 ≤ coinHeld future.state pool 1 := by
   have r := (A.coin_walk_whole (usdcWalk A)).1
-  change _ ≤ Usdc.balanceBits (Usdc.ledgerView (wordsAt usdc future.state) (Usdc.balSlot pool)) at r
+  change _ ≤ usdcRead (coinFrames usdc (Usdc.ChainObs usdc) (d.sincePool h).settledFrames)
+    (Usdc.ledgerView (wordsAt usdc future.state) (Usdc.balSlot pool)) at r
   rw [view_bal] at r
-  exact r.trans (bits_le_coinHeld _)
+  exact r.trans (usdcRead_le_coinHeld _ A.circle.movesOnce.atTip)
 
 end Blanc.Composition.Curve3PoolBacked

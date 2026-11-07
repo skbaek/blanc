@@ -603,7 +603,7 @@ theorem add_liquidity_message_bounded {d : Deployment} (m : Moment d) (A : Assum
     (ask : Asked msg m.world E (addCalldata am minMint))
     (req : AddRequest m.world E msg.benv.stat.time.toNat am minMint minted stored) :
     ∃ cost refund, cost ≤ addCostBound ∧ MsgDoes msg liquidityRoom cost refund (fun st => AddPaid m.world st E am minted stored) :=
-  add_core (m.facts A) (m.marked A) ask req (m.feesWithin A).1
+  add_core (m.facts A) (m.marked A ask.coinsOpen.usdcParties.1) ask req (m.feesWithin A).1
 
 /-- **`add_liquidity_message`.** -/
 theorem add_liquidity_message_holds : add_liquidity_message := by
