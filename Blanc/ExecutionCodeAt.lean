@@ -1,4 +1,5 @@
 import Blanc.CommonProofs.Messages
+import Blanc.ShanghaiOnwards
 import Blanc.CommonProofs.NoDel
 import Blanc.ExecutionWarmth
 
@@ -656,7 +657,7 @@ end ExecutionTrace
 CREATE frame targeting `a` (a frame with no code address is a CREATE frame, the only kind that
 installs code). -/
 theorem Exec.codeAt_avoid {a : Adr} {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
+    (run : Exec pc sevm pre out) (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (avoid : ∀ root ∈ Exec.rawFrameRoots run,
       root.sevm.codeAddress = none → root.sevm.currentTarget ≠ a) :
     Execution.Rel (Devm.CodeAt a) pre out ∧

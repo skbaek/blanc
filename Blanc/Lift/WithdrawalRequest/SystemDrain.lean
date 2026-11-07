@@ -311,7 +311,7 @@ theorem drain_exec {msg : Msg} {σ : Blanc.WithdrawalRequest.State}
     exact .next run (.last rfl)
   rw [hpre] at hrun
   obtain ⟨exn⟩ := lift_exact Blanc.Lift.SystemDrainer.cert_check Blanc.Lift.SystemDrainer.jumps_ok
-    hcode hfork ⟨Blanc.Lift.SystemDrainer.t_0000_c0, rfl, hrun⟩
+    hcode hfork.shanghaiOnwards ⟨Blanc.Lift.SystemDrainer.t_0000_c0, rfl, hrun⟩
   refine ⟨St post [1] Mem.empty G', (exec_iff_exec_eq 0 (initSevm msg) (initDevm msg) _).mp ⟨exn⟩,
     ?_, rep, pcode, pstor, ?_, ?_, ?_⟩
   · change post.error = none

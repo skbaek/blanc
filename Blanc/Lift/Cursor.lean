@@ -647,7 +647,7 @@ theorem cursor_of_parentPrefix_noStateGas {code : ByteArray} {c : Cert} (hc : Ce
 
 theorem cursor_of_parentPrefix {code : ByteArray} {c : Cert} (hc : Cert.check code c = true)
     {F n : Exec.Deriv} (hpc : F.pc = 0) (hcode : F.sevm.code = code)
-    (hfork : CoveredFork F.sevm.benvStat.fork) (hp : Exec.Deriv.ParentPrefix F n) :
+    (hfork : ShanghaiOnwards F.sevm.benvStat.fork) (hp : Exec.Deriv.ParentPrefix F n) :
     ∃ κ, Relation.ReflTransGen (SStep c) (Cursor.start c) κ ∧ CursorOK code c n κ :=
   cursor_of_parentPrefix_noStateGas hc hpc hcode hfork.rules_stateGas_none hp
 

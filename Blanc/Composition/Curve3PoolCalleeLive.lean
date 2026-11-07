@@ -8,6 +8,7 @@ import Blanc.Composition.Curve3CrvPositional
 import Blanc.Lift.StaticOnlyRoots
 import Blanc.ExecutionErrorKeep
 import Blanc.CodeDelegation
+import Blanc.Lift.HistStaticCall
 
 /-!
 # The pool's 3Crv callee premises, discharged by the deployed 3Crv (U8d)
@@ -120,7 +121,7 @@ theorem fwd_charge (hcharge : acc b t + ext b S M ii is oi os ≤ G) :
 
 /-- **A zero-value `CALL` whose child halts cleanly** resumes in `callChildPost` at the site's
 parent. -/
-theorem call0_cross {cpost : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+theorem call0_cross {cpost : Devm} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false)
     (hdel : getDelegatedCodeAddress (b.getCode t.toAdr) = none) (hroom : S.length < 1024)
     (hG : G < 2 ^ 256) (hcharge : acc b t + ext b S M ii is oi os ≤ G)
@@ -144,7 +145,7 @@ theorem call0_cross {cpost : Devm} (hfork : CoveredFork sevm.benvStat.fork)
 
 /-- **A `STATICCALL` whose child halts cleanly** resumes in `callChildPost` at the site's
 parent. -/
-theorem static_cross {cpost : Devm} (hfork : CoveredFork sevm.benvStat.fork)
+theorem static_cross {cpost : Devm} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false)
     (hdel : getDelegatedCodeAddress (b.getCode t.toAdr) = none) (hroom : S.length < 1024)
     (hG : G < 2 ^ 256) (hcharge : acc b t + ext b S M ii is oi os ≤ G)
@@ -413,7 +414,7 @@ the site's message halts cleanly, within `Cb` gas of the `65000` the site forwar
 replying at least 32 bytes, keeping the caller's storage and the code at the identity precompile,
 and leaving a world in `W'`, the premise holds with any `U ≥ 70000`. -/
 theorem mutCallOkAt_of_child (Cb : Nat) (hCb : Cb ≤ 60000)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hU : 70000 ≤ U)
     (hii : ii.toNat + is.toNat ≤ 4096) (hoi : oi.toNat + (0x20 : B256).toNat ≤ 4096)
     (hchild : ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b →
@@ -438,7 +439,7 @@ theorem mutCallOkAt_of_child (Cb : Nat) (hCb : Cb ≤ 60000)
       (0x20 : B256).toNat).gasLeft =
       G - (fwd b S M G t ii is oi 0x20 + acc b t + ext b S M ii is oi 0x20) + cpost.gasLeft := rfl
   refine ⟨_, hrun, ?_, ?_, ?_, ?_, ?_, hstor, hW', fun hid => ⟨?_, ?_, hid.pre, hid.fork⟩⟩
-  · obtain ⟨flag, hpost⟩ := ri_call_post hfork (Ninst.Run.of_runCompiled hrun)
+  · obtain ⟨flag, hpost⟩ := ri_call_postH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrun)
     have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
       (callChildPost_stack' _ _ _ _))).1
     subst hflag
@@ -454,7 +455,7 @@ theorem mutCallOkAt_of_child (Cb : Nat) (hCb : Cb ≤ 60000)
 
 /-- **A `STATICCALL` word premise from a clean child** answering the word `A`. -/
 theorem staticWordOkAt_of_child {A : B256} (Cb : Nat) (hCb : Cb ≤ 60000)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hU : 70000 ≤ U)
     (hii : ii.toNat + is.toNat ≤ 4096) (hoi : oi.toNat + (0x20 : B256).toNat ≤ 4096)
     (hchild : ∀ (b : Devm) (S : List B256) (M : Mem) (G : Nat), W b →
@@ -477,7 +478,7 @@ theorem staticWordOkAt_of_child {A : B256} (Cb : Nat) (hCb : Cb ≤ 60000)
   have hgas : (callChildPost (parent b S M G t ii is oi 0x20) cpost oi.toNat
       (0x20 : B256).toNat).gasLeft =
       G - (fwd b S M G t ii is oi 0x20 + acc b t + ext b S M ii is oi 0x20) + cpost.gasLeft := rfl
-  obtain ⟨flag, out, hpost, -, -⟩ := ri_staticcall_bounded hfork (Ninst.Run.of_runCompiled hrun)
+  obtain ⟨flag, out, hpost, -, -⟩ := ri_staticcall_boundedH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrun)
   have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
     (callChildPost_stack' _ _ _ _))).1
   subst hflag

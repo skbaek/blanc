@@ -369,7 +369,7 @@ end Reframe
 
 /-- **`transfer`'s run at its exact cost**, under `xfer_lands`' premises. -/
 theorem xfer_runE {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : LGuards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 100056 ≤ pre.gasLeft)
     (hdep : NotDeprecated (Devm.getStor pre sevm.currentTarget))
@@ -388,7 +388,7 @@ theorem xfer_runE {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
 
 /-- **`transfer`'s run at the store sentry above its cost.** -/
 theorem xfer_runF {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : LGuards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : xferG sevm pre + 2300 ≤ pre.gasLeft)
     (hdep : NotDeprecated (Devm.getStor pre sevm.currentTarget))
@@ -405,7 +405,7 @@ theorem xfer_runF {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
 
 /-- **`transferFrom`'s run at its exact cost**, under `pull_lands`' premises. -/
 theorem pull_runE {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : LGuards sevm 0x23b872dd (Bytes.toB256 [96])) (hsrc : pSrc sevm = src.toB256)
     (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 124480 ≤ pre.gasLeft)
@@ -426,7 +426,7 @@ theorem pull_runE {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
 
 /-- **`balanceOf`'s run at its exact cost**, under `bal_lands`' premises. -/
 theorem bal_runE {sevm : Sevm} {pre : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (g : LGuards sevm 0x70a08231 (Bytes.toB256 [32]))
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (g : LGuards sevm 0x70a08231 (Bytes.toB256 [32]))
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 7331 ≤ pre.gasLeft)
     (hdep : NotDeprecated (Devm.getStor pre sevm.currentTarget)) :
     balG sevm pre ≤ 5031 ∧
@@ -442,7 +442,7 @@ theorem bal_runE {sevm : Sevm} {pre : Devm}
 
 /-- **`transferFrom`'s run at the store sentry above its cost.** -/
 theorem pull_runF {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : LGuards sevm 0x23b872dd (Bytes.toB256 [96])) (hsrc : pSrc sevm = src.toB256)
     (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : pullG sevm pre + 2300 ≤ pre.gasLeft)
@@ -461,7 +461,7 @@ theorem pull_runF {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
 
 /-- **`balanceOf`'s run above its cost.** -/
 theorem bal_runF {sevm : Sevm} {pre : Devm}
-    (fork : CoveredFork sevm.benvStat.fork) (g : LGuards sevm 0x70a08231 (Bytes.toB256 [32]))
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (g : LGuards sevm 0x70a08231 (Bytes.toB256 [32]))
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : balG sevm pre ≤ pre.gasLeft)
     (hdep : NotDeprecated (Devm.getStor pre sevm.currentTarget)) :
     SProg.RunExact cert.prog sevm pre (balP sevm pre (pre.gasLeft - balG sevm pre)) := by

@@ -66,7 +66,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
     (h_split : calculateMsgCallGas 0 gw.toNat d1.gasLeft ext acc =
       ⟨mcc, mcs⟩)
     (h_gas : mcc + ext ≤ d1.gasLeft)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (h_depth : sevm.depth ≠ 0)
     (h_parent : parent = callSpawnParent d1 (mcc + ext)
       iiw.toNat 64 oiw.toNat 32)
@@ -128,7 +128,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64
     have hsweep : msg.benv.stat.rules.settle.touchedSweep = false := by
       change sevm.benvStat.rules.settle.touchedSweep = false
       exact hfork.cases
-        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
+        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl rfl rfl
     have hchildError : child.error = none := rfl
     simp only [Frame.settleMsg, Frame.ofCall, Bool.false_eq_true, ↓reduceIte,
       processMessage.settle, Except.bind_ok, hchildError, Option.isSome_none,
@@ -288,7 +288,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0)
     (hfloor : 185 + ext ≤ G)
     (hbound : G < 2 ^ 256)
@@ -514,7 +514,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext_full
       devm.accountsToDelete.isEmpty
     have hrefund : sevm.benvStat.rules.settle.selfdestructRefund = 0 :=
       hfork.cases
-        (motive := fun f => f.ruleSet.settle.selfdestructRefund = 0) rfl rfl rfl rfl
+        (motive := fun f => f.ruleSet.settle.selfdestructRefund = 0) rfl rfl rfl rfl rfl rfl
     have hchildDelete : child.accountsToDelete = .emptyWithCapacity := by
       change (if sevm.benvStat.rules.settle.selfdestructRefund = 0 then
         .emptyWithCapacity else p.accountsToDelete) = .emptyWithCapacity
@@ -554,7 +554,7 @@ theorem Ninst.childlessRunCompiled_staticcall_sha256_64_warm_ext
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0)
     (hfloor : 185 + ext ≤ G)
     (hbound : G < 2 ^ 256)
@@ -602,7 +602,7 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm_ext
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0)
     (hfloor : 185 + ext ≤ G)
     (hbound : G < 2 ^ 256)
@@ -649,7 +649,7 @@ theorem Ninst.runCompiled_staticcall_sha256_64_warm
     (hnodeleg : getDelegatedCodeAddress (devm.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ devm.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0)
     (hfloor : 185 ≤ G)
     (hbound : G < 2 ^ 256)

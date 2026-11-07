@@ -56,7 +56,7 @@ def ocP1Mem (sevm : Sevm) (M : Mem) (dy fee w1 w2 : B256) : Mem :=
 theorem rx_oc_p1E {sevm : Sevm} {b : Devm} {σ : Stor} {M : Mem} {img : Bytes} {G R U : Nat}
     {Q : Outcome → Prop} {W W' : Devm → Prop} {dy fee w1 w2 : B256}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hi3 : (ocI sevm).toNat < 3) (hmin : ¬ dy < ocMin sevm)
@@ -211,7 +211,7 @@ theorem rx_oc_p1E {sevm : Sevm} {b : Devm} {σ : Stor} {M : Mem} {img : Bytes} {
 /-- **The balance store and the burn, forward.** -/
 theorem rx_oc_p1 {sevm : Sevm} {b : Devm} {σ : Stor} {M : Mem} {img : Bytes} {G R U : Nat}
     {Q : Outcome → Prop} {W W' : Devm → Prop} {dy fee w1 w2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hi3 : (ocI sevm).toNat < 3) (hmin : ¬ dy < ocMin sevm)

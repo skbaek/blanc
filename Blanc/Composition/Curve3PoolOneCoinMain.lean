@@ -241,7 +241,7 @@ def ocV (sevm : Sevm) (pre : Devm) (i : Fin 3) (v : B256) : Nat → Devm → Pro
 
 /-- The one-coin chain's closure and its exact premises with the real coin. -/
 theorem oc_premises {sevm : Sevm} {pre : Devm} {T : B256} {i : Fin 3} {v : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : 2 ≤ sevm.depth)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hdepth : 2 ≤ sevm.depth)
     (hC : RealCoins sevm pre) (hto : tokOf sevm pre = c3) (hne : sevm.currentTarget ≠ c3)
     (htok : ¬ sevm.benvStat.rules.isPrecomp c3)
     (hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
@@ -270,7 +270,7 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
   have hcaller : msg.caller = E := ask.entry.named.2.1
   have hopen := ask.coinsOpen
   have hE : E ≠ 0 := ask.nonzero
-  have hfork : CoveredFork (initSevm msg).benvStat.fork := ask.entry.plain.2.2.2
+  have hfork : ShanghaiOnwards (initSevm msg).benvStat.fork := ask.entry.plain.2.2.2
   have hH : HistFork (initSevm msg).benvStat.fork := hfork.histFork
   have hdata : (initSevm msg).data = oneCoinCalldata a i minDy := ask.data
   have hstatic : (initSevm msg).isStatic = false := ask.entry.plain.2.1
@@ -418,7 +418,7 @@ theorem one_coin_run {w : Jaune.State} {E : Adr} {msg : Msg} {a minDy dy admin :
 /-- **`one_coin_message`.** -/
 theorem one_coin_message_holds : one_coin_message := fun d m A msg E a minDy dy admin i ask req => by
   have fees := m.feesWithin A
-  obtain ⟨cost, refund, hc, h⟩ := one_coin_run (m.facts A) (m.marked A) fees.1 fees.2 ask req
+  obtain ⟨cost, refund, hc, h⟩ := one_coin_run (m.facts A) (m.marked A ask.coinsOpen.usdcParties.1) fees.1 fees.2 ask req
   exact ⟨cost, refund, Nat.le_trans hc (by decide), h⟩
 
 end Blanc.Composition.Curve3PoolPublic

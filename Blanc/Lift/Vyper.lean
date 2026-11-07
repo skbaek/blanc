@@ -611,9 +611,9 @@ theorem rx_vySubStoreH {slot : B256} {p h l : UInt8} {fail rest : SFunc}
   refine rx_sstoreH hsg (fun _ => by omega) hstatic ?_
   exact rx_pop k
 
-/-- `rx_vySubStoreH` on a covered fork, over the modern successor and charge. -/
+/-- `rx_vySubStoreH` on a fork from Shanghai on, over the modern successor and charge. -/
 theorem rx_vySubStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hle : Sevm.dataWord sevm (Bytes.toB256 [p]) ≤ b.getStorVal sevm.currentTarget slot)
     (hG : gCallStipend < G + 2) (hroom : S.length + 6 < 1024)
     (k : SFunc.RunExact fs sevm
@@ -673,9 +673,9 @@ theorem rx_vyAddStoreH {slot : B256} {p h l : UInt8} {fail rest : SFunc}
   refine rx_sstoreH hsg (fun _ => by omega) hstatic ?_
   exact rx_pop k
 
-/-- `rx_vyAddStoreH` on a covered fork, over the modern successor and charge. -/
+/-- `rx_vyAddStoreH` on a fork from Shanghai on, over the modern successor and charge. -/
 theorem rx_vyAddStore {slot : B256} {p h l : UInt8} {fail rest : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hnof : (b.getStorVal sevm.currentTarget slot).toNat +
       (Sevm.dataWord sevm (Bytes.toB256 [p])).toNat < 2 ^ 256)
     (hG : gCallStipend < G + 2) (hroom : S.length + 7 < 1024)

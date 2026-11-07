@@ -17,7 +17,7 @@ open Blanc.Composition.Curve3Pool3CrvLiteralWitness (swapPullD swapPullN swapPus
 
 /-- What an entry's coin calls stand on, at a message's entry. -/
 structure CoinStand (s : Sevm) (p : Devm) (w : Jaune.State) (E : Adr) : Prop where
-  fork : CoveredFork s.benvStat.fork
+  fork : ShanghaiOnwards s.benvStat.fork
   target : s.currentTarget = pool
   caller : s.caller = E
   keysCold : ∀ k, k ∉ p.accessedStorageKeys

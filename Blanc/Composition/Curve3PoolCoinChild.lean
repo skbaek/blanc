@@ -1,4 +1,5 @@
 import Blanc.Lift.CoinFrame
+import Blanc.Lift.HistStaticCall
 import Blanc.Composition.Curve3Pool3CrvCoinExactTransport
 
 /-!
@@ -25,7 +26,7 @@ call-site world the child of the site's message, given at least `F`, halts clean
 with a reply passing `ok`, keeping the caller's storage and the code at the identity precompile, and
 leaving a world in `W'`, the premise holds with `U` covering the floor and the charge. -/
 theorem mutCallOkAt_of_childWith {ok : Bytes → Prop} (F Cb : Nat)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hF : F + F / 63 + 3100 ≤ U)
     (hCb : Cb + 3016 ≤ U)
     (hii : ii.toNat + is.toNat ≤ 4096) (hoi : oi.toNat + (0x20 : B256).toNat ≤ 4096)
@@ -54,7 +55,7 @@ theorem mutCallOkAt_of_childWith {ok : Bytes → Prop} (F Cb : Nat)
       (0x20 : B256).toNat).gasLeft =
       G - (fwd b S M G t ii is oi 0x20 + acc b t + ext b S M ii is oi 0x20) + cpost.gasLeft := rfl
   refine ⟨_, hrun, ?_, ?_, ?_, ?_, ?_, hstor, hW', fun hid => ⟨?_, ?_, hid.pre, hid.fork⟩⟩
-  · obtain ⟨flag, hpost⟩ := ri_call_post hfork (Ninst.Run.of_runCompiled hrun)
+  · obtain ⟨flag, hpost⟩ := ri_call_postH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrun)
     have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
       (callChildPost_stack' _ _ _ _))).1
     subst hflag
@@ -70,7 +71,7 @@ theorem mutCallOkAt_of_childWith {ok : Bytes → Prop} (F Cb : Nat)
 /-- `staticWordOkAt_of_child` at any floor and with the call's gas below `2 ^ 256`, which a child that
 itself reads `GAS` needs. -/
 theorem staticWordOkAt_of_childWith {A : B256} (F Cb : Nat)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hF : F + F / 63 + 3100 ≤ U)
     (hCb : Cb ≤ 60000) (hU : 70000 ≤ U)
     (hii : ii.toNat + is.toNat ≤ 4096) (hoi : oi.toNat + (0x20 : B256).toNat ≤ 4096)
@@ -99,7 +100,7 @@ theorem staticWordOkAt_of_childWith {A : B256} (F Cb : Nat)
   have hgas : (callChildPost (parent b S M G t ii is oi 0x20) cpost oi.toNat
       (0x20 : B256).toNat).gasLeft =
       G - (fwd b S M G t ii is oi 0x20 + acc b t + ext b S M ii is oi 0x20) + cpost.gasLeft := rfl
-  obtain ⟨flag, out, hpost, -, -⟩ := ri_staticcall_bounded hfork (Ninst.Run.of_runCompiled hrun)
+  obtain ⟨flag, out, hpost, -, -⟩ := ri_staticcall_boundedH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrun)
   have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
     (callChildPost_stack' _ _ _ _))).1
   subst hflag

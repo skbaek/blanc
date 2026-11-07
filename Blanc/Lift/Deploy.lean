@@ -777,7 +777,7 @@ theorem liftCreate_post {code : ByteArray} {c : Cert}
     show benv.stat = (processCreateMessage.msg msg).benv.stat
     exact benvAfterTransfer_stat htransfer
   obtain ⟨exc⟩ := lift_exact hc hj (sevm := initSevm (createSeed msg benv)) hcode
-    (by rw [hstat]; exact hfork) hrun
+    (by rw [hstat]; exact hfork.shanghaiOnwards) hrun
   have hexec : exec (initEvm (createSeed msg benv)) = .ok raw :=
     (exec_iff_exec_eq _ _ _ _).mp ⟨exc⟩
   have hprocess : processMessage (processCreateMessage.msg msg) = .ok raw :=

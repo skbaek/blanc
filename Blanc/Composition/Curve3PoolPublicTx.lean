@@ -80,7 +80,7 @@ structure SignerReady (benv : Benv) (tx : Tx) (E : Adr) (maxFee : Nat) : Prop wh
 structure GasRoom (benv : Benv) (bout : BlockOutput) (tx : Tx) (need : Nat) : Prop where
   /-- The gas limit covers what the call needs. -/
   enough : need ≤ tx.gas
-  /-- The gas limit is within EIP-7825's per-transaction cap, assumed here on every covered fork. -/
+  /-- The gas limit is within EIP-7825's per-transaction cap, assumed here on every fork. -/
   cap : tx.gas ≤ 16777216
   /-- The gas limit fits the block's remaining gas. -/
   block : tx.gas ≤ benv.stat.blockGasLimit - bout.blockGasUsed
@@ -94,8 +94,8 @@ def CoinbaseApart (benv : Benv) (E : Adr) : Prop :=
 
 /-- **`tx`, signed by `E`, is admissible at `benv` with `need` gas.** -/
 structure TxAdmitted (benv : Benv) (bout : BlockOutput) (tx : Tx) (E : Adr) (need : Nat) : Prop where
-  /-- The block's fork is one these theorems cover: Prague through BPO2. -/
-  fork : CoveredFork benv.stat.fork
+  /-- The block's fork is Shanghai or later: Shanghai is the earliest fork V2_2 ran on, with the same rules throughout it. -/
+  fork : ShanghaiOnwards benv.stat.fork
   /-- Some fees make the transaction a signed type-2 call `E` can pay for. -/
   form : ∃ prio maxFee, TxForm benv tx prio maxFee ∧ SignerReady benv tx E maxFee
   /-- The gas limit covers what the call needs within the cap and the block's room. -/
@@ -118,6 +118,11 @@ def UsdcOpen (w : State) : Prop := Usdc.flag20 ((w.getStor usdc).get 1) = false
 def UsdcUnlisted (w : State) (a : Adr) : Prop :=
   Usdc.frozenBit ((w.getStor usdc).get (Usdc.balSlot a)) = false
 
+/-- A word whose flag is clear is below it. -/
+theorem unfrozen_lt {x : B256} (h : Usdc.frozenBit x = false) : x.toNat < 2 ^ 255 := by
+  unfold Usdc.frozenBit at h
+  simpa only [decide_eq_false_iff_not, not_le] using h
+
 /-- USDT is not paused and has not blacklisted `a`. -/
 def UsdtOpen (w : State) (a : Adr) : Prop :=
   Usdt.flag20 ((w.getStor usdt).get 0) = 0 ∧ Usdt.listedByte (w.getStor usdt) a = 0
@@ -132,8 +137,7 @@ def UsdtFeeFits (w : State) (v : Nat) : Prop :=
 
 /-- **No named liveness power is in force against the pool or `E`.** -/
 structure CoinsOpen (w : State) (E : Adr) : Prop where
-  /-- USDC runs V2_2, as it has since well before `CoveredFork`'s first block: its implementation word names V2_2's
-  address, and V2_2's code is there. -/
+  /-- USDC runs V2_2: its implementation word names V2_2's address, and V2_2's code is there. -/
   usdcV22 : UsdcPacked w ∧ w.getCode Usdc.usdcImpl = Usdc.Impl.code
   /-- USDT is not paused and has not blacklisted the pool. -/
   usdtOpen : UsdtOpen w pool

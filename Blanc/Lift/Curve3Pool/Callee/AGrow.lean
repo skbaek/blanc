@@ -100,7 +100,7 @@ theorem aE_le (sevm : Sevm) (b : Devm) : aE sevm b ≤ 3 := by
 
 /-- `a_exact_1e0` with `_A`'s memory as a term (`aMemNext`). -/
 theorem a_exact_1e0L {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G v : Nat} {ret : B256}
-    {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    {s : State} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hA : aChk s sevm.benvStat.time.toNat = some v) (hwf : Mem.Wf M) (hS : M.size = 0x1e0)
     (hroom : S.length + 16 < 1024) :
@@ -218,7 +218,7 @@ theorem a_exact_1e0L {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G v : N
 /-- **`_A`, forward, over a memory of `0x1e0`**: as `a_exact`, at `aE` more gas (the ramp's store
 at `0x1e0` grows the memory), leaving a memory of `aSz`. -/
 theorem a_exact_1e0 {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G v : Nat} {ret : B256}
-    {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    {s : State} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hA : aChk s sevm.benvStat.time.toNat = some v) (hwf : Mem.Wf M) (hS : M.size = 0x1e0)
     (hroom : S.length + 16 < 1024) :

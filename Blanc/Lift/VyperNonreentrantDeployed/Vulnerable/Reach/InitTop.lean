@@ -155,7 +155,7 @@ theorem frameI_at (hg : CoveredFork g) :
       obtain ⟨run, hcl, hst⟩ := wrun_done hr cI0_agree
       have hrun : SProg.RunExact (Cert.prog cert) (eI.sta.withFork g) eI.dyna d :=
         ⟨t_0000_c0, fsI_zero, run⟩
-      have hx := lift_exactM (sevm := eI.sta.withFork g) cert_checkM cert_jumpsOkM hcode hg hrun
+      have hx := lift_exactM (sevm := eI.sta.withFork g) cert_checkM cert_jumpsOkM hcode hg.shanghaiOnwards hrun
       refine ⟨d, ?_, hgas, ?_, Option.isNone_iff_eq_none.mp herr, fun a k => ?_, fun a => ?_⟩
       · show Nonempty (Exec eI.pc (eI.sta.withFork g) eI.dyna (.ok d))
         rw [hpc]; exact hx

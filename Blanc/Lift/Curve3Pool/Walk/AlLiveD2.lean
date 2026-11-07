@@ -90,7 +90,7 @@ abbrev alStor3 (σ : Stor) (s0 s1 s2 : B256) : Stor :=
     (balancesBase + Nat.toB256 2) s2
 
 /-- `rx_al_store0`, the continuation also receiving the exact charge and the literal memory. -/
-theorem rx_al_store0E {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rx_al_store0E {σ : Stor} {W : Devm → Prop} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hL : ExLive sevm W b σ)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa40)
     (hm : AlPullImg img 3 F AF A T D0 old nv)
@@ -136,7 +136,7 @@ theorem rx_al_store0E {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.
 
 /-- **The first deposit's store, forward** (`t_16e3_c1273` → `t_170b_c1273`):
 `self.balances = new_balances`. -/
-theorem rx_al_store0 {σ : Stor} {W : Devm → Prop} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rx_al_store0 {σ : Stor} {W : Devm → Prop} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hL : ExLive sevm W b σ)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa40)
     (hm : AlPullImg img 3 F AF A T D0 old nv)
@@ -155,7 +155,7 @@ theorem rx_al_feeIt {σ : Stor} {W : Devm → Prop} {i s c1 c2 kZ : Nat}
     {a1 a2 a3 a4 z1 z2 s1 s2 : SFunc}
     {d1 d2 d3 d4 d5 d6 d7 d8 d9 d10 d11 d12 finS : SFunc}
     {e1 e2 e3 e4 e5 e6 e7 e8 e9 e10 e11 e12 finZ : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hi : i < 3) (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = s) (hs : (s = 0xa60 ∧ c1 = 6 ∧ c2 = 7) ∨ (s = 0xaa0 ∧ c1 = 3 ∧ c2 = 3))
     (hctr : WordAt img 0xa40 (Nat.toB256 i)) (hF : WordAt img 0x1a0 F)
@@ -226,7 +226,7 @@ theorem al_prog_93' : cert.prog[93]? = some (alFeeTl t_150b_c93 .undefined .unde
 memory `0xaa0`): the three iterations' `RliFeeIter`s, `fees` at `0x140 …`, `new_balances`
 after the fees at `0x460 …`, the stored balances. -/
 theorem rx_al_feeLoop {σ : Stor} {W : Devm → Prop} {f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa60)
     (hctr : WordAt img 0xa40 (Nat.toB256 0)) (hF : WordAt img 0x1a0 F)
     (hAF : WordAt img 0x1c0 AF) (hD1 : WordAt img 0x900 D1) (hD0w : WordAt img 0x2e0 D0)

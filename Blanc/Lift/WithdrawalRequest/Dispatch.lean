@@ -100,7 +100,7 @@ theorem exec_of_dispatch {sevm : Sevm} {b post : Devm} {M : Mem} {G : Nat}
     (hfork : CoveredFork sevm.benvStat.fork)
     (tail : SFunc.RunExact prog sevm (St b [] M G) (dispatchTail sevm) (.halted post)) :
     Nonempty (Exec 0 sevm (St b [] M (G + dispatchGas)) (.ok post)) := by
-  apply lift_exact cert_check jumps_ok (hcode.trans code_eq.symm) hfork
+  apply lift_exact cert_check jumps_ok (hcode.trans code_eq.symm) hfork.shanghaiOnwards
   exact ⟨t_0000_c0, prog_root, dispatch_exact tail⟩
 
 end Blanc.Lift.WithdrawalRequest

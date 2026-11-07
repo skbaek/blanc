@@ -113,7 +113,7 @@ theorem alExactPremises_c3crv {sevm : Sevm} {pre : Devm} {c3 : Adr} {T B1 B2 min
     {pullN : Nat → Devm → List B256 → Mem → Devm} {balBD balAD : Devm → List B256 → Mem → Nat}
     {balBN balAN : Devm → List B256 → Mem → Devm}
     (ht : (tokW sevm pre).toAdr = c3) (hne : sevm.currentTarget ≠ c3)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (htok : ¬ sevm.benvStat.rules.isPrecomp c3) (hU : 70000 ≤ U)
     (hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
     (hmint : MintFits (Devm.getStor pre c3) sevm.currentTarget sevm.caller.toB256 mint)
@@ -177,7 +177,7 @@ theorem rliExactPremises_c3crv {sevm : Sevm} {pre : Devm} {c3 : Adr} {T burn : B
     {V : Nat → Devm → Prop} {U : Nat} {pushD : Nat → Devm → List B256 → Mem → Nat}
     {pushN : Nat → Devm → List B256 → Mem → Devm}
     (ht : (tokW sevm pre).toAdr = c3) (hne : sevm.currentTarget ≠ c3)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (htok : ¬ sevm.benvStat.rules.isPrecomp c3) (hU : 70000 ≤ U)
     (hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
     (hburn : BurnFits (Devm.getStor pre c3) sevm.currentTarget sevm.caller.toB256 burn)
@@ -225,7 +225,7 @@ theorem ocExactPremises_c3crv {sevm : Sevm} {pre : Devm} {c3 : Adr} {T dy : B256
     {V : Nat → Devm → Prop} {U : Nat} {pushD : Devm → List B256 → Mem → Nat}
     {pushN : Devm → List B256 → Mem → Devm}
     (ht : (tokW sevm pre).toAdr = c3) (hne : sevm.currentTarget ≠ c3)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (htok : ¬ sevm.benvStat.rules.isPrecomp c3) (hU : 70000 ≤ U)
     (hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
     (hburn : BurnFits (Devm.getStor pre c3) sevm.currentTarget sevm.caller.toB256 (ocAmt sevm))

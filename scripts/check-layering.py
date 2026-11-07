@@ -133,7 +133,7 @@ import tomllib
 # lifting it back out to `scripts/contract-modules.txt` is a small change.
 # ---------------------------------------------------------------------------
 
-SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "CommonCore", "MachineDataFacts", "RlpConcrete", "RlpListEncode", "RlpBytesInjective", "RlpRoundTrip",
+SHARED = ["Basic", "BytePattern", "Semantics", "HistoricalFork", "ShanghaiOnwards", "CommonCore", "MachineDataFacts", "RlpConcrete", "RlpListEncode", "RlpBytesInjective", "RlpRoundTrip",
           "ProofRecipesGenerated", "ProofRecipeTactic", "Tactics", "CommonProofs.Base", "CommonProofs.Frames", "CommonProofs.MemImage", "CommonProofs.Messages", "CommonProofs.Walk", "CommonProofs.Hinv", "CommonProofs.NoDel", "CommonProofs.Balance", "Ladder", "BalanceAlgebra", "LedgerConservation", "StorageOnlySpec", "SlotFootprint", "FakeExponential", "FakeExponentialGrowth", "FakeExponentialEval", "WordFakeExponential", "WordFakeExponentialBound", "WordFakeExponentialEval", "FakeExponentialWordCorrespondence", "FakeExponentialWordDomain", "WordArithmetic", "WordByteCodecs", "WordByteRoundtrip", "MemoryImage", "BytesWrite", "MemoryLayout", "MemoryStageGas",
           "Compiled", "DeploymentMessage", "DeploymentTouch", "Forward", "ForwardFlatAccess",
           "Reverts", "ForwardCall", "ForwardStorageAccess", "StorageAccessGas", "StorageRefund", "StorageRefundPotential", "ForwardSha256",

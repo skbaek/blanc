@@ -62,7 +62,7 @@ def ocPushMem (sevm : Sevm) (M : Mem) (dy : B256) : Mem :=
 theorem rx_oc_p2E {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {dy : B256}
     {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hi3 : (ocI sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hdy : WordAt img 0x140 dy)
@@ -248,7 +248,7 @@ theorem rx_oc_p2E {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome 
 /-- **The push to `STOP`, forward.** -/
 theorem rx_oc_p2 {sevm : Sevm} {b : Devm} {σ : Stor} {G U : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {dy : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hi3 : (ocI sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hdy : WordAt img 0x140 dy)

@@ -119,7 +119,7 @@ theorem reAdd_frame : ReAddFrame := by
   obtain ⟨run, -, -⟩ := wrun_done hHat hag
   have hrun : SProg.RunExact (Cert.prog cert) ((sRe.withOrig O).withFork g)
       (Boundary.cfgOfT bRe0 tS tA m w).devm d := ⟨t_0000_c0, fsI_zero, run⟩
-  have hx := lift_exactM cert_checkM cert_jumpsOkM (sevm := (sRe.withOrig O).withFork g) rfl hg hrun
+  have hx := lift_exactM cert_checkM cert_jumpsOkM (sevm := (sRe.withOrig O).withFork g) rfl hg.shanghaiOnwards hrun
   have hca := childAgree_of_halt hHat hag
   rw [hk, ha, hs, hc] at hca
   have hagB := (wrun_cont hBat).1 hag

@@ -33,7 +33,7 @@ structure IdReady (sevm : Sevm) (b : Devm) : Prop where
   nodeleg : getDelegatedCodeAddress (b.getCode 4) = none
   warm : (4 : Adr) ∈ b.accessedAddresses
   pre : decide (sevm.benvStat.rules.isPrecomp 4) = true
-  fork : CoveredFork sevm.benvStat.fork
+  fork : ShanghaiOnwards sevm.benvStat.fork
 
 theorem IdReady.of_rel {sevm : Sevm} {b b' : Devm} (h : IdReady sevm b) (hr : BaseRel b b') :
     IdReady sevm b' :=

@@ -65,7 +65,7 @@ structure E68Ok (sevm : Sevm) (b : Devm) (x y z : B256) : Prop where
 
 /-- **Entry 68, the body of `transferFrom(from, to, value)`**, forward. -/
 @[irreducible] noncomputable def e68W (sevm : Sevm) (b : Devm) (x y z ret : B256) (S : List B256) (M : Mem) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false →
+    {c : Nat // ShanghaiOnwards sevm.benvStat.fork → sevm.isStatic = false →
       FpM (Bytes.toB256 [128]) 96 M → S.length < 960 → E68Ok sevm b x y z →
       ∀ X, 2300 ≤ X →
       SFunc.RunExact cert.prog sevm (St b (x :: y :: z :: ret :: S) M (X + c)) t_1437_c68
@@ -105,7 +105,7 @@ abbrev pullMem (sevm : Sevm) : Mem :=
 
 /-- **The `transferFrom` frame, forward.** -/
 @[irreducible] noncomputable def pullW (sevm : Sevm) (b : Devm) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → sevm.isStatic = false →
+    {c : Nat // ShanghaiOnwards sevm.benvStat.fork → sevm.isStatic = false →
       Guards sevm 0x23b872dd (Bytes.toB256 [96]) → E68Ok sevm b (pVal sevm) (pTo sevm) (pFrom sevm) →
       ∀ G, 2300 ≤ G →
       SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + c)) t_0000_c0
@@ -126,7 +126,7 @@ abbrev pullMem (sevm : Sevm) : Mem :=
 
 /-- **Entry 46, the body of `balanceOf(a)`**, forward. -/
 @[irreducible] noncomputable def e46W (sevm : Sevm) (b : Devm) (a ret : B256) (S : List B256) (M : Mem) (n : Nat) :
-    {c : Nat // CoveredFork sevm.benvStat.fork →
+    {c : Nat // ShanghaiOnwards sevm.benvStat.fork →
       FpM (Bytes.toB256 [128]) n M → S.length < 990 → ∀ X,
       SFunc.RunExact cert.prog sevm (St b (a :: ret :: S) M (X + c)) t_2adf_c46
         (.returned (St (afterSload sevm b (ky a))
@@ -145,7 +145,7 @@ abbrev bAns (sevm : Sevm) (b : Devm) : B256 :=
 
 /-- **The `balanceOf` frame, forward**, static or not. -/
 @[irreducible] noncomputable def balW (sevm : Sevm) (b : Devm) :
-    {c : Nat // CoveredFork sevm.benvStat.fork → Guards sevm 0x70a08231 (Bytes.toB256 [32]) → ∀ G,
+    {c : Nat // ShanghaiOnwards sevm.benvStat.fork → Guards sevm 0x70a08231 (Bytes.toB256 [32]) → ∀ G,
       SFunc.RunExact cert.prog sevm (St b [] Mem.empty (G + c)) t_0000_c0
         (.halted (retV (Bytes.toB256 [128]) (afterSload sevm b (ky (bHolder sevm))) [selW sevm]
           ((sc9 mem0 (m20 &&& bHolder sevm)).write 128 (bAns sevm b).toBytes) (bAns sevm b) G))} :=
@@ -349,7 +349,7 @@ theorem e93Post_refund {sevm : Sevm} {b : Devm} {x y z : B256} {σ : Stor}
 
 /-- **`transfer(dst, v)` from a frame entry, forward.** -/
 theorem xfer_lands {sevm : Sevm} {pre : Devm} {dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : Guards sevm 0xa9059cbb (Bytes.toB256 [64])) (hdst : xTo sevm = dst.toB256) (hv : xVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 74300 ≤ pre.gasLeft)
     (hf : MoveFits (Devm.getStor pre sevm.currentTarget) sevm.caller dst v) :
@@ -430,7 +430,7 @@ theorem _root_.Blanc.Lift.AccumulatedWalk.Keeps.e68 {sevm : Sevm} {pre B : Devm}
 
 /-- **`transferFrom(src, dst, v)` from a frame entry, forward.** -/
 theorem pull_lands {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
-    (fork : CoveredFork sevm.benvStat.fork) (static : sevm.isStatic = false)
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (static : sevm.isStatic = false)
     (g : Guards sevm 0x23b872dd (Bytes.toB256 [96])) (hsrc : pFrom sevm = src.toB256)
     (hdst : pTo sevm = dst.toB256) (hv : pVal sevm = v)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 104300 ≤ pre.gasLeft)
@@ -474,7 +474,7 @@ theorem pull_lands {sevm : Sevm} {pre : Devm} {src dst : Adr} {v : B256}
 /-- **`balanceOf(a)` from a frame entry, forward**, static or not: it answers `a`'s balance bits and
 writes nothing. -/
 theorem bal_lands {sevm : Sevm} {pre : Devm} {a : Adr}
-    (fork : CoveredFork sevm.benvStat.fork) (g : Guards sevm 0x70a08231 (Bytes.toB256 [32]))
+    (fork : ShanghaiOnwards sevm.benvStat.fork) (g : Guards sevm 0x70a08231 (Bytes.toB256 [32]))
     (hholder : bHolder sevm = a.toB256)
     (hs : pre.stack = []) (hm : pre.memory = Mem.empty) (hgas : 5800 ≤ pre.gasLeft) :
     ∃ post used, used ≤ 3500 ∧ FrameLands cert.prog sevm pre post used

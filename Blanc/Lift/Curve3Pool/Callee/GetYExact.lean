@@ -976,7 +976,7 @@ def costGetY (sevm : Sevm) (b : Devm) (amp i j x x0 x1 x2 : Nat) : Nat :=
 /-- **`get_y`'s forward twin, with its result word**: `getY_exact`, and the returned memory also
 reads `v` at the scratch word `0` (where the callee writes its result on its way out). -/
 theorem getY_exact_rich {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List B256} {M : Mem}
-    {G n v amp : Nat} {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    {G n v amp : Nat} {s : State} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hA : aChk s sevm.benvStat.time.toNat = some amp) (hi : i.toNat < 3) (hj : j.toNat < 3)
     (hres : getYChk amp ⟨i.toNat, hi⟩ ⟨j.toNat, hj⟩ x.toNat
@@ -1199,7 +1199,7 @@ entry tree runs from the call's state with `costGetY` gas over `G` to its return
 caller's stack with `G` left and the world moved by `_A`'s reads (`aBase`), over a memory
 already covering `[0, 0x4c0)`: kept off `get_y`'s windows, well formed, of the same size. -/
 theorem getY_exact {sevm : Sevm} {b : Devm} {ρ i j x x0 x1 x2 : B256} {S : List B256} {M : Mem}
-    {G n v amp : Nat} {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    {G n v amp : Nat} {s : State} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hA : aChk s sevm.benvStat.time.toNat = some amp) (hi : i.toNat < 3) (hj : j.toNat < 3)
     (hres : getYChk amp ⟨i.toNat, hi⟩ ⟨j.toNat, hj⟩ x.toNat

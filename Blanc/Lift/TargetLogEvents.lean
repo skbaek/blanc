@@ -1053,7 +1053,7 @@ theorem Xinst.call_none_precompileH {sevm : Sevm} {s sf : Devm}
 /-- The covered-fork form of `Xinst.call_none_precompileH`. -/
 theorem Xinst.call_none_precompile {sevm : Sevm} {s sf : Devm}
     {g c v ii is oi os : B256} {xs : List B256}
-    (fork : CoveredFork sevm.benvStat.fork)
+    (fork : ShanghaiOnwards sevm.benvStat.fork)
     (operands : (g :: c :: v :: ii :: is :: oi :: os :: xs) <<+ s.stack)
     (run : Xinst.Run sevm s .call .none (.ok sf))
     (flag : ∃ f rest, sf.stack = f :: rest ∧ f ≠ 0) :

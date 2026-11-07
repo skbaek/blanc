@@ -133,7 +133,7 @@ variable {sevm : Sevm} {pre : Devm} {s : State} {U amp : Nat} {T B1 B2 : B256}
 /-- **`add_liquidity` on a positive supply, the whole frame forward, exact.** -/
 theorem rx_al_frame1_exact {xa xb xc : V3} {v0 v1 v2 : Nat} {f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256}
     (P : ALExactCalls)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAddLiquidity) (hid : IdReady sevm pre)
     (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre)
@@ -297,7 +297,7 @@ theorem rx_al_frame1_exact {xa xb xc : V3} {v0 v1 v2 : Nat} {f0 f1 f2 s0 s1 s2 x
 
 /-- **`add_liquidity` on a first deposit, the whole frame forward, exact.** -/
 theorem rx_al_frame0_exact {xb : V3} {v1 : Nat} (P : ALExactCalls)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selAddLiquidity) (hid : IdReady sevm pre)
     (hWc : ∀ j, j ≤ 4 → WClosed sevm (W j)) (hWb : W 0 pre)

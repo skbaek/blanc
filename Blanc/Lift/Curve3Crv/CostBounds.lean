@@ -40,7 +40,7 @@ def totalSupplyBodyCost (s : Sevm) (b : Devm) : Nat :=
   34 + sloadCost s b vySupplySlot
 
 /-- `totalSupply()`: a body run at the specified closed cost, its post named. -/
-theorem live_totalSupply_post (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
+theorem live_totalSupply_post (hfork : ShanghaiOnwards sevm.benvStat.fork) {r : Raw}
     (hr : rawTotalSupply sevm stor₀ = some r) :
     ∀ G, gCallStipend < G → ∃ post,
       SFunc.RunExact prog sevm (entrySt sevm b (G + totalSupplyBodyCost sevm b))
@@ -73,7 +73,7 @@ theorem live_totalSupply_post (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
   exact hrun
 
 /-- `totalSupply()`: a body run at the specified closed cost, before all residual gas. -/
-theorem live_totalSupply_cost (hfork : CoveredFork sevm.benvStat.fork) {r : Raw}
+theorem live_totalSupply_cost (hfork : ShanghaiOnwards sevm.benvStat.fork) {r : Raw}
     (hr : rawTotalSupply sevm stor₀ = some r) :
     ∀ G, gCallStipend < G → ∃ post,
       SFunc.RunExact prog sevm (entrySt sevm b (G + totalSupplyBodyCost sevm b))

@@ -15,7 +15,7 @@ lemma Ninst.runCompiled_staticcall_child {sevm : Sevm} {devm : Devm}
     {gw tw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat} {cpost : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: tw :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -52,7 +52,7 @@ lemma Ninst.runCompiled_staticcall_child {sevm : Sevm} {devm : Devm}
   have hsettle : (Frame.ofCall msg).settle (exec child) = .ok cpost := by
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     have hsweep : msg.benv.stat.rules.settle.touchedSweep = false :=
-      CoveredFork.rules_touchedSweep (s := sevm.benvStat) hfork
+      ShanghaiOnwards.rules_touchedSweep (s := sevm.benvStat) hfork.shanghai
     simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
       Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind,
       Devm.recordTouch_of_not_touchedSweep hsweep]

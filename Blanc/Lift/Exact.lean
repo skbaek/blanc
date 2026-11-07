@@ -367,7 +367,7 @@ private lemma dest_cont_exact {pc : Nat} {sevm : Sevm} {devm devm' : Devm}
 
 private def ExactClaim {fs : List SFunc} {sevm : Sevm}
     (code : ByteArray) (c : Cert) (ms : List MemMap) (b : Bool) (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     {devm : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunExact fs sevm devm f o) : Prop :=
   ∀ (pc m : Nat) (a : List AVal) (ρ : B256) (S base : List B256) (μ : MemMap),
@@ -1493,11 +1493,11 @@ theorem node_exactM_noStateGas {code : ByteArray} {c : Cert} {ms : List MemMap} 
     ExactClaimNoStateGas code c ms b hcode hstateGas run :=
   node_exactM_lane hc hj hcode (Or.inl hstateGas) run (Or.inl hstateGas)
 
-/-- Modern compatibility wrapper: covered forks discharge `stateGas = none`. -/
+/-- Modern compatibility wrapper: forks from Shanghai on discharge `stateGas = none`. -/
 theorem node_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.CheckedM code c ms b)
     (hj : Cert.JumpsOkM code c ms b) {sevm : Sevm}
-    (hcode : sevm.code = code) (hfork : CoveredFork sevm.benvStat.fork)
+    (hcode : sevm.code = code) (hfork : ShanghaiOnwards sevm.benvStat.fork)
     {devm : Devm} {f : SFunc} {o : Outcome}
     (run : SFunc.RunExact c.prog sevm devm f o) :
     ExactClaim code c ms b hcode hfork run :=
@@ -1548,7 +1548,7 @@ theorem lift_exactM_core {code : ByteArray} {c : Cert} {ms : List MemMap} {b : B
     (hc : Cert.CheckedM code c ms b) (hj : Cert.JumpsOkM code c ms b)
     (hstart : ∃ e f c', c = (e, f) :: c' ∧ e.pc = 0 ∧ e.frame = [] ∧ ms.getD 0 [] = [])
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hrun : SProg.RunExact c.prog sevm pre post) :
     Nonempty (Exec 0 sevm pre (.ok post)) :=
   lift_exactM_core_noStateGas hc hj hstart hcode hfork.rules_stateGas_none hrun
@@ -1595,7 +1595,7 @@ theorem lift_exact_noExec {code : ByteArray} {c : Cert}
 theorem lift_exact {code : ByteArray} {c : Cert}
     (hc : Cert.check code c = true) (hj : Cert.jumpsOk code c = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hrun : SProg.RunExact c.prog sevm pre post) :
     Nonempty (Exec 0 sevm pre (.ok post)) :=
   lift_exact_noStateGas hc hj hcode hfork.rules_stateGas_none hrun
@@ -1604,7 +1604,7 @@ theorem lift_exact {code : ByteArray} {c : Cert}
 theorem lift_exactM {code : ByteArray} {c : Cert} {ms : List MemMap} {b : Bool}
     (hc : Cert.checkM code c ms b = true) (hj : Cert.jumpsOkM code c ms b = true)
     {sevm : Sevm} {pre post : Devm} (hcode : sevm.code = code)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hrun : SProg.RunExact c.prog sevm pre post) :
     Nonempty (Exec 0 sevm pre (.ok post)) := by
   apply lift_exactM_core (Cert.checkedM_of_checkM hc) (Cert.jumpsOkM_of_jumpsOkM hj) _

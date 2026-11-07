@@ -61,13 +61,13 @@ structure ShaCallPost (b b' : Devm) (rd : Bytes) : Prop where
   refund : b'.refundCounter = b.refundCounter
 
 /-- The SHA-256 precompile premises (`Ninst.runCompiled_staticcall_sha256_64_warm`) a frame's
-world carries: address 2 undelegated and warm, a precompile of the fork, a covered fork.  The
+world carries: address 2 undelegated and warm, a precompile of the fork, a fork from Shanghai on.  The
 frame's nonzero depth is a separate premise of the liveness steps. -/
 structure ShaReady (sevm : Sevm) (b : Devm) : Prop where
   nodeleg : getDelegatedCodeAddress (b.getCode 2) = none
   warm : (2 : Adr) ∈ b.accessedAddresses
   pre : decide (sevm.benvStat.rules.isPrecomp 2) = true
-  fork : CoveredFork sevm.benvStat.fork
+  fork : ShanghaiOnwards sevm.benvStat.fork
 
 theorem ShaReady.of_eq {sevm : Sevm} {b b' : Devm} (h : ShaReady sevm b)
     (hc : ∀ a, b'.getCode a = b.getCode a) (ha : b'.accessedAddresses = b.accessedAddresses) :
@@ -113,7 +113,7 @@ theorem staticcall_sha_step {sevm : Sevm} {b : Devm} {iiw oiw : B256} {S : List 
     (hnodeleg : getDelegatedCodeAddress (b.getCode 2) = none)
     (hwarm : (2 : Adr) ∈ b.accessedAddresses)
     (hpre : decide (sevm.benvStat.rules.isPrecomp 2) = true)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hbound : G + 184 < 2 ^ 256) (hroom : S.length < 1024) (hG : 1 ≤ G) :
     ∃ b', ShaCallPost b b' (Bytes.sha256 (M.read iiw.toNat 64).1).toBytes ∧
       Ninst.RunCompiled sevm
@@ -153,7 +153,7 @@ variable {fs : List SFunc} {sevm : Sevm} {b : Devm} {f g : SFunc} {o : Outcome}
   {S : List B256} {M : Mem} {G : Nat}
 
 /-- `SLOAD` of any key, warm or cold. -/
-theorem rx_sload_sel {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rx_sload_sel {k' : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hroom : S.length < 1024)
     (k : SFunc.RunExact fs sevm
       (St (afterSload sevm b k') (b.getStorVal sevm.currentTarget k' :: S) M G) f o) :
@@ -247,7 +247,7 @@ theorem rxc_exp' {x y : B256} {c : Nat} (hc : gExp + gExpbyte * y.bytecount = c)
   simpa only [St, Devm.memory_setMach, Devm.setMach_gasLeft, add_tsub_cancel_right,
     Devm.stateGas_setMach, Devm.setMach_setMach] using h
 
-theorem rxc_sload_sel {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rxc_sload_sel {k' : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hroom : S.length < 1024)
     (k : SFunc.RunExactCut fs sevm C
       (St (afterSload sevm b k') (b.getStorVal sevm.currentTarget k' :: S) M G) f r) :

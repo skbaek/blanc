@@ -36,7 +36,7 @@ def alTailRefund (sevm : Sevm) (P : ALExactCalls) (n : Devm) (M : Mem) (mint : B
 /-- **The tail, exact.** -/
 theorem rx_al_tailX {sevm : Sevm} {b n : Devm} {σ : Stor} {W W' : Devm → Prop} {M m : Mem}
     {img : Bytes} {R U : Nat} {T mint f0 f1 f2 : B256} {a1 a2 a3 a4 : SFunc} {P : ALExactCalls}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xbc0)
     (hT : WordAt img 0x240 T) (hm : WordAt img 0xba0 mint) (hf0 : WordAt img 0x140 f0)
@@ -117,7 +117,7 @@ variable {sevm : Sevm} {b : Devm} {σ : Stor} {M : Mem} {img : Bytes} {U : Nat}
 /-- **From the pull loop's exit to `STOP` on a positive supply, exact.** -/
 theorem rx_al_back1X {P : ALExactCalls} {n : Devm} {s c0 : Nat} {X : SFunc} {xb xc : V3}
     {v1 v2 : Nat} {f0 f1 f2 s0 s1 s2 x0 x1 x2 : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hctx : (s = 0x840 ∧ c0 = 29 ∧ X = t_1333_c41) ∨ (s = 0x900 ∧ c0 = 9 ∧ X = t_1333_c6))
     (hL : ExLive sevm Wx b σ) (hWmc : WClosed sevm Wm)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)
@@ -212,7 +212,7 @@ theorem alStore0Cost_congr {sevm : Sevm} {b n : Devm} (h : Devm.EqModGas b n) (n
 
 /-- **From the pull loop's exit to `STOP` on a first deposit, exact.** -/
 theorem rx_al_back0X {P : ALExactCalls} {n : Devm} {s c0 : Nat} {X : SFunc} {xb : V3} {v1 : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hctx : (s = 0x840 ∧ c0 = 29 ∧ X = t_1333_c41) ∨ (s = 0x900 ∧ c0 = 9 ∧ X = t_1333_c6))
     (hL : ExLive sevm Wx b σ) (hWmc : WClosed sevm Wm)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s)

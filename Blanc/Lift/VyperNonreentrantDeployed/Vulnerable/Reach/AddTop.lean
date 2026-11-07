@@ -264,7 +264,7 @@ theorem frameB_at (hg : CoveredFork g) (hW : WorldIs W acs6 stor6) :
     simp only [Prod.mk.injEq] at h
     exact h.2.1
   have hrun : SProg.RunExact (Cert.prog cert) S (eB W).dyna d := ⟨t_0000_c0, fsI_zero', s.2 _ hag0 run⟩
-  have hx := lift_exactM cert_checkM cert_jumpsOkM hcode hg hrun
+  have hx := lift_exactM cert_checkM cert_jumpsOkM hcode hg.shanghaiOnwards hrun
   refine ⟨d, ?_, hgas, hout, herr, fun a k => ?_, fun a => ?_⟩
   · have hpc : (eB W).pc = 0 := by
       have h := (addStatic6 W)

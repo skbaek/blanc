@@ -85,7 +85,7 @@ child of the site's message, given at least `F`, halts cleanly having spent exac
 its entry, in a post that agrees with `canon` of the normalized entry modulo gas. -/
 theorem coinMutProfile {ok : Bytes → Prop} (F Cb : Nat) (cost : Sevm → Devm → Nat) (canon : Sevm → Devm → Devm)
     (hcost : ∀ s p G', cost {s with gas := G'} (p.withGasLeft G') = cost s p)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hF : F + F / 63 + 3100 ≤ U)
     (hCb : Cb + 3016 ≤ U) (hCF : Cb ≤ F)
     (hii : ii.toNat + is.toNat ≤ 4096) (hoi : oi.toNat + (0x20 : B256).toNat ≤ 4096)
@@ -145,7 +145,7 @@ theorem coinMutProfile {ok : Bytes → Prop} (F Cb : Nat) (cost : Sevm → Devm 
       rfl
     refine ⟨by rw [hdebit]; omega, _, hrun, by rw [hgas, hdebit, hg]; omega,
       hp.callChildPost hcp _ _, ?_, ?_, ?_, hstor, hW', fun hid => ⟨?_, ?_, hid.pre, hid.fork⟩⟩
-    · obtain ⟨flag, hpost⟩ := ri_call_post hfork (Ninst.Run.of_runCompiled hrun)
+    · obtain ⟨flag, hpost⟩ := ri_call_postH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrun)
       have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
         (callChildPost_stack' _ _ _ _))).1
       subst hflag
@@ -159,7 +159,7 @@ theorem coinMutProfile {ok : Bytes → Prop} (F Cb : Nat) (cost : Sevm → Devm 
 /-- **A `STATICCALL`'s exact profile from a child with a closed cost**, as `coinMutProfile`. -/
 theorem coinStaticProfile {A : B256} (F Cb : Nat) (cost : Sevm → Devm → Nat) (canon : Sevm → Devm → Devm)
     (hcost : ∀ s p G', cost {s with gas := G'} (p.withGasLeft G') = cost s p)
-    (hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hF : F + F / 63 + 3100 ≤ U)
     (hCb : Cb + 3016 ≤ U) (hCF : Cb ≤ F)
     (hii : ii.toNat + is.toNat ≤ 4096) (hoi : oi.toNat + (0x20 : B256).toNat ≤ 4096)
@@ -215,7 +215,7 @@ theorem coinStaticProfile {A : B256} (F Cb : Nat) (cost : Sevm → Devm → Nat)
         (parent (b.withGasLeft 0) S M 0 t ii is oi 0x20) := by
       apply Devm.EqModGas.of_normalized_eq
       rfl
-    obtain ⟨flag, out, hpost, -, -⟩ := ri_staticcall_bounded hfork (Ninst.Run.of_runCompiled hrun)
+    obtain ⟨flag, out, hpost, -, -⟩ := ri_staticcall_boundedH hfork.rules_stateGas_none (Ninst.Run.of_runCompiled hrun)
     have hflag : flag = 1 := (List.cons.inj (hpost.stack.symm.trans
       (callChildPost_stack' _ _ _ _))).1
     subst hflag

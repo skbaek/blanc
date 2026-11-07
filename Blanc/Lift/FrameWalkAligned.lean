@@ -164,7 +164,8 @@ theorem xa_call_imgA {pc' : Nat} {g t v ii is oi os : B256} {i n o z : Nat}
 
 /-- `xa_identity_img` with the memory kept aligned. -/
 theorem xa_identity_imgA {pc' : Nat} {g ii is oi os : B256} {i n o z : Nat}
-    (hid : IdReady sevm b) (hat : Ninst.At sevm.code pc (.exec .call))
+    (hid : IdReady sevm b) (hcov : CoveredFork sevm.benvStat.fork)
+    (hat : Ninst.At sevm.code pc (.exec .call))
     (hpc : pc + 1 = pc') (hii : ii.toNat = i) (his : is.toNat = n) (hoi : oi.toNat = o)
     (hos : os.toNat = z) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hA : M.size % 32 = 0)
     (h : XAt sevm post pc (St b (g :: 4 :: 0 :: ii :: is :: oi :: os :: S) M G) L) :
@@ -175,7 +176,7 @@ theorem xa_identity_imgA {pc' : Nat} {g ii is oi os : B256} {i n o z : Nat}
           M'.size % 32 = 0)) := by
   subst hpc hii his hoi hos
   have hG : G < 2 ^ 256 := h.gasLeft_lt
-  obtain ⟨d, s, L', h, hk⟩ := xa_call hid.fork hat rfl h
+  obtain ⟨d, s, L', h, hk⟩ := xa_call hcov hat rfl h
   refine ⟨d, L', h, ?_⟩
   rcases ri_call_identity hid s with h0 | ⟨b', G', hpost, rfl⟩
   · refine .inl ⟨h0, fun hg hdep hn => ?_⟩

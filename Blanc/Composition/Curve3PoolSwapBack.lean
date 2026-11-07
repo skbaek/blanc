@@ -64,7 +64,7 @@ variable {s : Sevm} {p : Devm} {w : Jaune.State} {E : Adr}
 /-- **The prefix**: the lock read and set, the kill flag, three books and `coins[i]`. -/
 theorem swap_head (f : CoinStand s p w E) (hlock : (w.getStor pool).get lockW = 0) {i : Fin 3} (hi : exI s = Nat.toB256 i.val) :
     exHeadCost s p = 35272 ∧ Mv [pool] 0 p (exN2 s p) ∧ At s.currentTarget (headK i.val) (lockedStor w) (exN2 s p) := by
-  have hg : s.benvStat.rules.gas.storageClearRefund = 4800 := CoveredFork.rules_storageClearRefund f.fork
+  have hg : s.benvStat.rules.gas.storageClearRefund = 4800 := ShanghaiOnwards.rules_storageClearRefund f.fork
   have hx : s.currentTarget = pool ∨ s.currentTarget = c3 ∨ s.currentTarget = dai ∨ s.currentTarget = usdc ∨ s.currentTarget = usdt := Or.inl f.target
   have hS : p.getStor s.currentTarget = w.getStor pool := by rw [f.target]; exact (f.stor pool (Or.inl rfl)).1
   have hO : (getOrigAcct s s.currentTarget).stor = w.getStor pool := by rw [f.target]; exact (f.stor pool (Or.inl rfl)).2
@@ -223,7 +223,7 @@ theorem swap_back {i j : Fin 3} {D O A F : B256} {dy c0 amp v nw : Nat} {B X : N
         D'.getStor pool = swapStored w i j D O A ∧ D'.getStor (coinAt j) = paidStor w E j dy ∧
         ∀ x, x ≠ pool → x ∉ coinT j → D'.getStor x = n.getStor x := by
   have f := g.stand
-  have hg : s.benvStat.rules.gas.storageClearRefund = 4800 := CoveredFork.rules_storageClearRefund f.fork
+  have hg : s.benvStat.rules.gas.storageClearRefund = 4800 := ShanghaiOnwards.rules_storageClearRefund f.fork
   have ht := f.target
   have hO0 : (getOrigAcct s s.currentTarget).stor = w.getStor pool := by rw [ht]; exact (f.stor pool (Or.inl rfl)).2
   have hIw : Sevm.dataWord s (Bytes.toB256 [4]) = Nat.toB256 i.val := g.iw

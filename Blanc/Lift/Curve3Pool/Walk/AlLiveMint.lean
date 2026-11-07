@@ -142,7 +142,7 @@ def alMintMem (sevm : Sevm) (M : Mem) (mint : B256) : Mem :=
 theorem rx_al_tailE {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256}
     {M : Mem} {img : Bytes} {G U : Nat} {Q : Outcome → Prop} {T mint f0 f1 f2 : B256}
     {a1 a2 a3 a4 : SFunc} {E : Devm → List B256 → Mem → Nat → Devm → Prop}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xbc0)
     (hT : WordAt img 0x240 T) (hm : WordAt img 0xba0 mint) (hf0 : WordAt img 0x140 f0)
@@ -296,7 +296,7 @@ new supply checked), the lock released, `STOP`. -/
 theorem rx_al_tail {sevm : Sevm} {b : Devm} {σ : Stor} {W W' : Devm → Prop} {S : List B256}
     {M : Mem} {img : Bytes} {G U : Nat} {Q : Outcome → Prop} {T mint f0 f1 f2 : B256}
     {a1 a2 a3 a4 : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xbc0)
     (hT : WordAt img 0x240 T) (hm : WordAt img 0xba0 mint) (hf0 : WordAt img 0x140 f0)

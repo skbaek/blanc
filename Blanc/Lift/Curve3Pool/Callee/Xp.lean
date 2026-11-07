@@ -335,7 +335,7 @@ def xpGas (sevm : Sevm) (b : Devm) : Nat :=
 over a memory covering `[0, 0x200)` and returns three words reading `x` over `xpBase`, at gas
 `xpGas`, the memory kept off `xpWin` with its size. -/
 theorem xp_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n : Nat} {ret : B256}
-    {s : State} {x : V3} (hfork : CoveredFork sevm.benvStat.fork)
+    {s : State} {x : V3} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s) (hX : xpChk s.balances = some x)
     (hwf : Mem.Wf M) (hS : M.size = n) (hn : n % 32 = 0) (htop : 0x200 ≤ n)
     (hroom : S.length + 16 < 1024) :

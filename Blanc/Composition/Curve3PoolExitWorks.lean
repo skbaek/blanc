@@ -78,7 +78,7 @@ theorem RLWindows.ofStaticGas {sevm : Sevm} {F : Nat} {pre : Devm} {T : B256} {P
 /-- `rx_rl_frame_floor` at message entry, keeping the frame's end. -/
 theorem rl_msg_end {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : B256} {W : Nat → Devm → Prop} {U : Nat}
     (P : RLExactCalls) (hcode : (initSevm msg).code = Curve3Pool.code)
-    (hfork : CoveredFork (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
+    (hfork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hstatic : (initSevm msg).isStatic = false)
     (hdepth : (initSevm msg).depth ≠ 0) (hlen : 4 ≤ (initSevm msg).data.length)
     (hcd : (initSevm msg).data.length < 2 ^ 256)
     (hsel : Sevm.selector (initSevm msg) = Curve3Pool.selRemoveLiquidity)
@@ -113,7 +113,7 @@ theorem rl_msg_end {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : 
 
 /-- **The frame's run at any residual `R ≥ 2201`, ending at its canonical final state.** -/
 theorem exit_run {msg : Msg} {s : Curve3Pool.State} {o : Curve3Pool.Out} {T : B256}
-    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : CoveredFork (initSevm msg).benvStat.fork)
+    (hcode : (initSevm msg).code = Curve3Pool.code) (hfork : ShanghaiOnwards (initSevm msg).benvStat.fork)
     (hstatic : (initSevm msg).isStatic = false) (hdepth : 2 ≤ (initSevm msg).depth)
     (hlen : 4 ≤ (initSevm msg).data.length) (hcd : (initSevm msg).data.length < 2 ^ 256)
     (hsel : Sevm.selector (initSevm msg) = Curve3Pool.selRemoveLiquidity)

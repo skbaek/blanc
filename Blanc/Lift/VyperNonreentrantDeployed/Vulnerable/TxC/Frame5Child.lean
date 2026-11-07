@@ -84,7 +84,7 @@ theorem frame5C_child_at (hg : CoveredFork g) :
     (fun x => by rw [hik, hpk, e4C31_keys]; exact e4C_keys x) (fun a => by rw [hia]; exact hpa a)
     (fun a k => by rw [hst, e4C31_state]; exact e4C_world.1 a k)
     (by rw [hst, e4C31_state]; exact e4C_world.2) hcr hsg (CoveredFork.rules_touchedSweep hg)
-    (fun hr => lift_exactM cert_checkM cert_jumpsOkM e5C_code (hg : CoveredFork g) hr) fs1_zero
+    (fun hr => lift_exactM cert_checkM cert_jumpsOkM e5C_code (hg : CoveredFork g).shanghaiOnwards hr) fs1_zero
     (by rw [Blanc.Lift.Witness.storTransfer_of_keeps (by exact keeps5C)]; exact ⟨id, fun _ _ r => r⟩)
     ((r5C_at hg).trans hrun) herr
   rw [hk, ha, hs, hc] at h

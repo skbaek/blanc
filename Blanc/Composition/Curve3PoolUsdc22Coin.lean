@@ -74,7 +74,7 @@ open Blanc.Composition.Curve3Pool3CrvInstance (CoinLeaves)
 variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : B256}
 
 /-- **The pool's `transfer(msg.sender, amt)` into USDC over FiatTokenV2_2 succeeds** at `U ≥ 89000`. -/
-theorem usdc22_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem usdc22_coinPushOkAt (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 89000 ≤ U)
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -89,7 +89,7 @@ theorem usdc22_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : 
 
 /-- **The pool's `transferFrom(msg.sender, self, amt)` into USDC over FiatTokenV2_2 succeeds** at
 `U ≥ 120000`. -/
-theorem usdc22_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem usdc22_coinPullOkAt (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 120000 ≤ U)
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -106,7 +106,7 @@ theorem usdc22_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : 
 
 /-- **The pool's `balanceOf(self)` into USDC over FiatTokenV2_2 answers the entry's balance bits** at
 `U ≥ 70000`. -/
-theorem usdc22_coinBalOkAt {B : B256} (hfork : CoveredFork sevm.benvStat.fork) (hdepth : 2 ≤ sevm.depth)
+theorem usdc22_coinBalOkAt {B : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : 2 ≤ sevm.depth)
     (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Proxy.code ∧ ProxyAt sevm b t.toAdr Impl.code ∧

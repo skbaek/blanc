@@ -155,7 +155,7 @@ theorem ri_return {i sz : B256} {d : Devm}
   exact ⟨rfl, fun _ => rfl, rfl⟩
 
 /-- `SSTORE` at its selected cost (warm/cold, EIP-2200 schedule), with the sentry premise. -/
-theorem rx_sstore {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rx_sstore {k' v : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hsentry : gCallStipend < G + sstoreCost sevm b k' v) (hstatic : sevm.isStatic = false)
     (k : SFunc.RunExact fs sevm (St (afterSstore sevm b k' v) S M G) f o) :
     SFunc.RunExact fs sevm (St b (k' :: v :: S) M (G + sstoreCost sevm b k' v))

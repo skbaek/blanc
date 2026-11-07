@@ -808,7 +808,7 @@ def burnBodyCost (s : Sevm) (b : Devm) : Nat :=
 
 -- SEGMENT: liveMintBurn (121 + 117 nodes)
 /- Keep the body memory abstract after the nonpayable prefix. -/
-private theorem live_mint_mem (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+private theorem live_mint_mem (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     {r : Raw} (hr : rawMint sevm stor₀ = some r)
     (M0 : Mem) (hM : M0.size = 192) (hwf0 : Mem.Wf M0)
     (hM0eq : M0 = vyMem Mem.empty (Sevm.dataWord sevm 0)) :
@@ -937,7 +937,7 @@ private theorem live_mint_mem (hfork : CoveredFork sevm.benvStat.fork) (hstatic 
       exact output_St_return _ _ _ _ _ _ _
 
 /-- `mint`: a body run at the specified closed cost, before all residual gas. -/
-theorem live_mint_cost (hfork : CoveredFork sevm.benvStat.fork)
+theorem live_mint_cost (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) {r : Raw} (hr : rawMint sevm stor₀ = some r) :
     ∀ G, gCallStipend < G → ∃ post,
       SFunc.RunExact prog sevm (entrySt sevm b (G + mintBodyCost sevm b)) t_056e_c0 (.halted post) ∧
@@ -987,7 +987,7 @@ def burnPost (s : Sevm) (b : Devm) (M : Mem) (G : Nat) : Devm :=
 
 -- SEGMENT: liveMintBurn (see `live_mint`)
 /- Keep the body memory abstract after the nonpayable prefix. -/
-private theorem live_burnFrom_mem (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+private theorem live_burnFrom_mem (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     {r : Raw} (hr : rawBurnFrom sevm stor₀ = some r)
     (M0 : Mem) (hM : M0.size = 192) (hwf0 : Mem.Wf M0)
     (hM0eq : M0 = vyMem Mem.empty (Sevm.dataWord sevm 0)) :
@@ -1116,7 +1116,7 @@ private theorem live_burnFrom_mem (hfork : CoveredFork sevm.benvStat.fork) (hsta
       exact output_St_return _ _ _ _ _ _ _
 
 /-- `burnFrom`: a body run at the specified closed cost, before all residual gas. -/
-theorem live_burnFrom_cost (hfork : CoveredFork sevm.benvStat.fork)
+theorem live_burnFrom_cost (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) {r : Raw} (hr : rawBurnFrom sevm stor₀ = some r) :
     ∀ G, gCallStipend < G → ∃ post,
       SFunc.RunExact prog sevm (entrySt sevm b (G + burnBodyCost sevm b)) t_0644_c0 (.halted post) ∧
@@ -1127,7 +1127,7 @@ theorem live_burnFrom_cost (hfork : CoveredFork sevm.benvStat.fork)
   exact ⟨post, h1, h2, h3⟩
 
 /-- `burnFrom`: the body's run, with the post named. -/
-theorem live_burnFrom_post (hfork : CoveredFork sevm.benvStat.fork)
+theorem live_burnFrom_post (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) {r : Raw} (hr : rawBurnFrom sevm stor₀ = some r) :
     ∀ G, gCallStipend < G → ∃ M,
       SFunc.RunExact prog sevm (entrySt sevm b (G + burnBodyCost sevm b)) t_0644_c0

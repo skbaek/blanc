@@ -17,7 +17,7 @@ open Jaune Blanc.Lift
 
 /-- `SLOAD` at its own charge. -/
 theorem rxe_sloadVE {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {f : SFunc}
-    {Q : Outcome → Prop} {k' : B256} (hfork : CoveredFork sevm.benvStat.fork)
+    {Q : Outcome → Prop} {k' : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hroom : S.length < 1024) (hG : sloadCost sevm b k' ≤ G)
     (k : ∀ G' b' v, b' = afterSload sevm b k' → v = b.getStorVal sevm.currentTarget k' →
       G' ≤ G → G = G' + sloadCost sevm b k' →
@@ -30,7 +30,7 @@ theorem rxe_sloadVE {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {
 
 /-- `SSTORE` at its own charge, above the sentry. -/
 theorem rxe_sstoreVE {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G : Nat} {f : SFunc}
-    {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
+    {Q : Outcome → Prop} {k' v : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hG : sstoreCost sevm b k' v ≤ G) (hs : gCallStipend < G)
     (k : ∀ G' b', b' = afterSstore sevm b k' v → G' ≤ G → G = G' + sstoreCost sevm b k' v →
       SFunc.RunEx fs sevm (St b' S M G') f Q) :
@@ -41,7 +41,7 @@ theorem rxe_sstoreVE {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} 
   exact rx_sstore hfork (by omega) hstatic hr
 
 theorem rx_ex_pre_coreF {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q : Outcome → Prop}
-    {M : Mem} {img : Bytes} {W : Devm → Prop} (hfork : CoveredFork sevm.benvStat.fork)
+    {M : Mem} {img : Bytes} {W : Devm → Prop} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hB : ExBase sevm b0 b σ) (hWc : WClosed sevm W)
     (hWb : W b) (hlock : σ.get lockSlot = 0) (hval : sevm.value = 0)
     (hkill : σ.get isKilledSlot = 0) (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3)
@@ -235,7 +235,7 @@ theorem rx_ex_pre_coreF {sevm : Sevm} {b0 b : Devm} {σ : Stor} {G R : Nat} {Q :
 
 theorem rx_ex_store_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {W : Devm → Prop} {B X : Nat → B256} {D C dyOut dyFee : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ)
     (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xa00)
@@ -428,7 +428,7 @@ structure ExPushWin (sevm : Sevm) (M : Mem) (dyOut : B256) : Prop where
 theorem rx_ex_pull_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G Rf U K Db : Nat} {Q : Outcome → Prop}
     {debit : Devm → List B256 → Mem → Nat} {next : Devm → List B256 → Mem → Devm}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {B X : Nat → B256} {D C : B256}
-    (_hfork : CoveredFork sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
+    (_hfork : ShanghaiOnwards sevm.benvStat.fork) (hdepth : sevm.depth ≠ 0)
     (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) {s c0 : Nat} (hsz : M.size = s)
     (hs : (s = 0x3c0 ∧ c0 = 31) ∨ (s = 0x460 ∧ c0 = 15)) (hF : ExFrame img B X D C)
@@ -580,7 +580,7 @@ theorem rx_ex_pull_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G Rf U K Db : Nat
 theorem rx_ex_push_coreF {sevm : Sevm} {b : Devm} {σ : Stor} {G U K Rf R c : Nat} {Q : Outcome → Prop}
     {debit : Devm → List B256 → Mem → Nat} {next : Devm → List B256 → Mem → Devm}
     {M : Mem} {img : Bytes} {W W' : Devm → Prop} {dyOut : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hL : ExLive sevm W b σ) (hW'c : WClosed sevm W')
     (hj : (exJ sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0xbc0)
     (hdata : Region img 0xb40 ((Bytes.toB256 [0] + Bytes.toB256 [4] + Bytes.toB256 [32] +

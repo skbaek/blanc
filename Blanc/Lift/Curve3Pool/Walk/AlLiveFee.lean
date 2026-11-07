@@ -185,7 +185,7 @@ def alFeeTlMem (M : Mem) (i : Nat) (f af : B256) : Mem :=
 /-- `rx_al_feeTl`, the continuation also receiving the exact charge and the literal memory. -/
 theorem rx_al_feeTlE {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
     {a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 fin : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hi : i < 3) (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0xaa0) (hctr : WordAt img 0xa40 (Nat.toB256 i)) (hF : WordAt img 0x1a0 F)
     (hAF : WordAt img 0x1c0 AF) (hdif : WordAt img 0xa80 dif)
@@ -295,7 +295,7 @@ theorem rx_al_feeTlE {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
 bumped. -/
 theorem rx_al_feeTl {σ : Stor} {W : Devm → Prop} {F AF N dif f st af : B256}
     {a1 a2 a3 a4 a5 a6 a7 a8 a9 a10 a11 a12 fin : SFunc}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hi : i < 3) (hL : ExLive sevm W b σ) (hR : Mem.Reads M img) (hW : Mem.Wf M)
     (hsz : M.size = 0xaa0) (hctr : WordAt img 0xa40 (Nat.toB256 i)) (hF : WordAt img 0x1a0 F)
     (hAF : WordAt img 0x1c0 AF) (hdif : WordAt img 0xa80 dif)

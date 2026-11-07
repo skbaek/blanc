@@ -115,14 +115,14 @@ theorem Exec.static_rawFrameRoots_noStateGas {pc : Nat} {sevm : Sevm} {pre : Dev
 
 /-- **A spawned static frame has a code address**: it is not a CREATE frame. -/
 theorem Xinst.step_spawn_codeAddress_of_static {sevm : Sevm} {devm : Devm} {x : Xinst}
-    (hfork : CoveredFork sevm.benvStat.fork) {f : Frame} {rsm : Resume}
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) {f : Frame} {rsm : Resume}
     (hs : Xinst.step sevm devm x = .spawn f rsm) (hst : f.inner.isStatic = true) :
     f.inner.codeAddress ≠ none :=
   Xinst.step_spawn_codeAddress_of_static_noStateGas hfork.rules_stateGas_none hs hst
 
 /-- **Every frame a static execution enters is static and has a code address.** -/
 theorem Exec.static_rawFrameRoots {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution}
-    (run : Exec pc sevm pre out) (hfork : CoveredFork sevm.benvStat.fork)
+    (run : Exec pc sevm pre out) (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = true) (hca : sevm.codeAddress ≠ none) :
     ∀ root ∈ Exec.rawFrameRoots run, root.sevm.isStatic = true ∧ root.sevm.codeAddress ≠ none :=
   Exec.static_rawFrameRoots_noStateGas run hfork.rules_stateGas_none hstatic hca
@@ -134,7 +134,7 @@ theorem Exec.staticOnly_rawFrameDescendants {code : ByteArray} {c : Cert}
     (checked : Cert.check code c = true)
     (only : ∀ f ∈ c.prog, f.execsSatisfy Xinst.isStaticcall = true)
     {root : Exec.Deriv} (pc0 : root.pc = 0) (installed : root.sevm.code = code)
-    (rootFork : CoveredFork root.sevm.benvStat.fork) :
+    (rootFork : ShanghaiOnwards root.sevm.benvStat.fork) :
     ∀ {pc : Nat} {sevm : Sevm} {pre : Devm} {out : Execution} (run : Exec pc sevm pre out),
       Exec.Deriv.ParentPrefix root ⟨pc, sevm, pre, out, run⟩ →
       ∀ D ∈ Exec.rawFrameDescendants run, D.sevm.codeAddress ≠ none := by
@@ -153,7 +153,7 @@ theorem Exec.staticOnly_rawFrameDescendants {code : ByteArray} {c : Cert}
   | @runErr nodePc nodeSevm nodePre frame rsm nextPc cevm raw e step enter child resume ih =>
     intro chain D member
     have sevmEq : nodeSevm = root.sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
-    have fork : CoveredFork nodeSevm.benvStat.fork := by rw [sevmEq]; exact rootFork
+    have fork : ShanghaiOnwards nodeSevm.benvStat.fork := by rw [sevmEq]; exact rootFork
     obtain ⟨x, instruction, spawn, _⟩ := Evm.step_spawn_inv step
     have onlyStatic : x = .staticcall :=
       parentPrefix_exec_staticcall_of_cert checked only pc0 installed rootFork chain instruction
@@ -163,7 +163,7 @@ theorem Exec.staticOnly_rawFrameDescendants {code : ByteArray} {c : Cert}
     obtain ⟨_, _, hcev⟩ := Frame.enter_run_inv enter
     have cca : cevm.sta.codeAddress ≠ none := by
       rw [hcev]; exact Xinst.step_spawn_codeAddress_of_static fork spawn fst
-    have roots := Exec.static_rawFrameRoots child (Evm.step_spawn_child_fork step enter fork) childStatic
+    have roots := Exec.static_rawFrameRoots child (Evm.step_spawn_child_shanghaiOnwards step enter fork) childStatic
       cca
     simp only [Exec.rawFrameDescendants, List.mem_cons] at member
     rcases member with rfl | member
@@ -173,7 +173,7 @@ theorem Exec.staticOnly_rawFrameDescendants {code : ByteArray} {c : Cert}
       next childIH nextIH =>
     intro chain D member
     have sevmEq : nodeSevm = root.sevm := Blanc.Exec.Deriv.ParentPrefix.sevm_eq chain
-    have fork : CoveredFork nodeSevm.benvStat.fork := by rw [sevmEq]; exact rootFork
+    have fork : ShanghaiOnwards nodeSevm.benvStat.fork := by rw [sevmEq]; exact rootFork
     obtain ⟨x, instruction, spawn, _⟩ := Evm.step_spawn_inv step
     have onlyStatic : x = .staticcall :=
       parentPrefix_exec_staticcall_of_cert checked only pc0 installed rootFork chain instruction
@@ -183,7 +183,7 @@ theorem Exec.staticOnly_rawFrameDescendants {code : ByteArray} {c : Cert}
     obtain ⟨_, _, hcev⟩ := Frame.enter_run_inv enter
     have cca : cevm.sta.codeAddress ≠ none := by
       rw [hcev]; exact Xinst.step_spawn_codeAddress_of_static fork spawn fst
-    have roots := Exec.static_rawFrameRoots child (Evm.step_spawn_child_fork step enter fork) childStatic
+    have roots := Exec.static_rawFrameRoots child (Evm.step_spawn_child_shanghaiOnwards step enter fork) childStatic
       cca
     have nextNodes := nextIH (chain.snoc (.runOk step enter child resume next))
     simp only [Exec.rawFrameDescendants, List.mem_cons, List.mem_append] at member

@@ -272,11 +272,11 @@ macro "rsub" : tactic => `(tactic| first
 macro "riszero" : tactic => `(tactic| first
   | refine rx_iszero (v := 0) (by decide) (by rroom) ?_
   | refine rx_iszero (v := 1) (by decide) (by rroom) ?_)
-macro "rsload" : tactic => `(tactic| refine rx_sload_sel (by assumption) (by rroom) ?_)
+macro "rsload" : tactic => `(tactic| refine rx_sload_sel (by xfork) (by rroom) ?_)
 macro "rsstore" : tactic => `(tactic|
-  refine rx_sstore (by assumption) (by assumption) (by assumption) ?_)
+  refine rx_sstore (by xfork) (by assumption) (by assumption) ?_)
 macro "rsstoreO" : tactic => `(tactic|
-  refine rx_sstore (by assumption) (by unfold gCallStipend at *; omega) (by assumption) ?_)
+  refine rx_sstore (by xfork) (by unfold gCallStipend at *; omega) (by assumption) ?_)
 macro "rsloadC" : tactic => `(tactic|
   refine rx_sload_selC (by assumption) (by assumption) (by rroom) ?_)
 /-- A sentry goal `gCallStipend < g + c₁ + …` follows from a hypothesis about a prefix `g`: peel the

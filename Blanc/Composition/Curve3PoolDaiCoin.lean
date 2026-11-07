@@ -24,7 +24,7 @@ open Blanc.Lift.Dai (MoveFits PullFits moveStor spendStor balSlot allowSlot)
 open Blanc.Lift.Dai
 
 theorem xfer_msg {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Dai.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
     (hgas : 58800 ≤ (initDevm msg).gasLeft)
@@ -47,7 +47,7 @@ theorem xfer_msg {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code
     hu, L⟩
 
 theorem pull_msg {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Dai.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (static : (initSevm msg).isStatic = false)
     (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++
       v.toBytes)
@@ -79,7 +79,7 @@ theorem pull_msg {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).
     hu, L⟩
 
 theorem bal_msg {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Dai.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hval : (initSevm msg).value = 0)
     (hd : (initSevm msg).data = abiSelectorBytes 0x70a08231 ++ a.toB256.toBytes)
     (hgas : 5300 ≤ (initDevm msg).gasLeft) :
     ∃ post used, exec (initEvm msg) = .ok post ∧ used ≤ 3000 ∧
@@ -106,7 +106,7 @@ variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : 
 
 /-- **The pool's `transfer(msg.sender, amt)` into DAI succeeds**, at any window inside the first
 4 KiB and `U ≥ 63000`, wherever the transfer fits the coin's ledger. -/
-theorem dai_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem dai_coinPushOkAt (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 63000 ≤ U)
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -133,7 +133,7 @@ theorem dai_coinPushOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
 
 /-- **The pool's `transferFrom(msg.sender, self, amt)` into DAI succeeds**, at any window inside the
 first 4 KiB and `U ≥ 95000`, wherever the pull fits the coin's ledger. -/
-theorem dai_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem dai_coinPullOkAt (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget) (hU : 95000 ≤ U)
     (hii : ii.toNat + 0x64 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
@@ -164,7 +164,7 @@ theorem dai_coinPullOkAt (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sev
 
 /-- **The pool's `balanceOf(self)` into DAI answers the coin's entry**, at any window inside the
 first 4 KiB and `U ≥ 70000`. -/
-theorem dai_coinBalOkAt {B : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem dai_coinBalOkAt {B : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Dai.code ∧

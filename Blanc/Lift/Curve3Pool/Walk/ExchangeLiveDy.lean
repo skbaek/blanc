@@ -36,7 +36,7 @@ def exDyMem (M : Mem) (xj y fee r : B256) : Mem :=
 buffer is written on the success path too). -/
 theorem rx_ex_dy_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outcome → Prop} {M : Mem}
     {img : Bytes} {W : Devm → Prop} {B X : Nat → B256} {D C y : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ)
     (hj : (exJ sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hF : ExFrame img B X D C) (hy : WordAt img 0x900 y)
     (hy1 : ¬ X (exJ sevm).toNat < y) (hy2 : ¬ X (exJ sevm).toNat - y < Bytes.toB256 [1])
@@ -136,7 +136,7 @@ theorem rx_ex_dy_core {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outc
 /-- **`dy`, forward.** -/
 theorem rx_ex_dy {sevm : Sevm} {b : Devm} {σ : Stor} {G R : Nat} {Q : Outcome → Prop} {M : Mem}
     {img : Bytes} {W : Devm → Prop} {B X : Nat → B256} {D C y : B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ)
     (hj : (exJ sevm).toNat < 3) (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x920)
     (hF : ExFrame img B X D C) (hy : WordAt img 0x900 y)
     (hy1 : ¬ X (exJ sevm).toNat < y) (hy2 : ¬ X (exJ sevm).toNat - y < Bytes.toB256 [1])

@@ -36,7 +36,7 @@ theorem pinsFrom_stable (k : Nat) : GasStable (C3With c3 σ (pinsFrom sevm pre k
 variable {T : B256}
 
 /-- **The three pushes at their floor.** -/
-theorem exit_pushesF (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem exit_pushesF (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hC : RealCoins sevm pre) (htc : ∀ j : Fin 3, coinOf sevm pre j ≠ c3)
     (hf0 : Blanc.Lift.Dai.MoveFits (pre.getStor (coinOf sevm pre 0)) sevm.currentTarget sevm.caller
       (balAt (pre.getStor sevm.currentTarget) 0 * rlAmt sevm / T))
@@ -71,7 +71,7 @@ theorem exit_pushesF (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.is
 theorem rlFloorPremises_c3crv {V : Nat → Devm → Prop} {pushD : Nat → Devm → List B256 → Mem → Nat}
     {pushN : Nat → Devm → List B256 → Mem → Devm}
     (ht : (tokW sevm pre).toAdr = c3) (hne : sevm.currentTarget ≠ c3)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (htok : ¬ sevm.benvStat.rules.isPrecomp c3)
     (hT : (Devm.getStor pre c3).get Curve3Crv.vySupplySlot = T)
     (hburn : BurnFits (Devm.getStor pre c3) sevm.currentTarget sevm.caller.toB256 (rlAmt sevm))
@@ -208,7 +208,7 @@ theorem swapW1_stable : GasStable (swapW1 sevm pre i j) :=
 /-- **`exchange_live_floor`'s premises with the real coins.** For `i ≠ j`, ledgers covering the pull of `exDx` and the
 push of `v`, and a pulled USDT still undeprecated: the world chain's closure, the two balance reads when USDT is pulled,
 the pull and the push, each at its floor, with `swapCalls`' debit and successor. -/
-theorem exchange_coins_floor (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem exchange_coins_floor (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hC : RealCoins sevm pre) (hij : i ≠ j)
     (hpf : PullFitsK i (pre.getStor (coinOf sevm pre i)) sevm.caller sevm.currentTarget (exDx sevm))
     (hqf : PushFitsK j (pre.getStor (coinOf sevm pre j)) sevm.currentTarget sevm.caller v)

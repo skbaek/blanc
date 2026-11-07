@@ -1,4 +1,5 @@
 import Blanc.StaticStorage
+import Blanc.ShanghaiOnwards
 
 /-!
 # Representation-exact storage silence of actual STATICCALL
@@ -20,10 +21,10 @@ theorem Ninst.staticcall_inv_getStor_exact_noStateGas
     Devm.getStor pre = Devm.getStor post :=
   Ninst.staticcall_getStor_eq_noStateGas hstateGas run
 
-/-- Every successful STATICCALL leaves every raw storage map equal on a covered fork. -/
+/-- Every successful STATICCALL leaves every raw storage map equal on a fork from Shanghai on. -/
 theorem Ninst.staticcall_inv_getStor_exact
     {sevm : Sevm} {pre post : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (run : Ninst.Run sevm pre Ninst.staticcall post) :
     Devm.getStor pre = Devm.getStor post :=
   Ninst.staticcall_inv_getStor_exact_noStateGas hfork.rules_stateGas_none run

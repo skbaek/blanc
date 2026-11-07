@@ -32,7 +32,7 @@ theorem StaticWordFloorProfile.okE {sevm : Sevm} {W W' : Devm → Prop} {t : B25
 
 /-- An `SSTORE` at its charge, at any gas above the sentry. -/
 theorem rxe_sstoreS {fs : List SFunc} {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {f : SFunc}
-    {Q : Outcome → Prop} {k' v : B256} {G R : Nat} (hfork : CoveredFork sevm.benvStat.fork)
+    {Q : Outcome → Prop} {k' v : B256} {G R : Nat} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hG : G = R + sstoreCost sevm b k' v) (hs : gCallStipend < G)
     (k : SFunc.RunEx fs sevm (St (afterSstore sevm b k' v) S M R) f Q) :
     SFunc.RunEx fs sevm (St b (k' :: v :: S) M G) (.next (.reg .sstore) f) Q := by
@@ -59,7 +59,7 @@ the exact relation. -/
 theorem rx_rl_s3F {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem} {img : Bytes}
     {s i : Nat} {T V C : B256} {a : Nat → B256} {W W' : Devm → Prop} {U K : Nat}
     {debit : Devm → List B256 → Mem → Nat} {next : Devm → List B256 → Mem → Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hi : i < 3) (hdepth : sevm.depth ≠ 0)
     (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b) (hW'c : WClosed sevm W')
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = s) (hs : s = 0x580 ∨ s = 0x5e0)
     (hL : LoopImg img i T a)
@@ -235,7 +235,7 @@ the gas after the burn named: `R + 3138 + c`, with `c` the lock's charge. -/
 theorem rx_rl_postF {sevm : Sevm} {b : Devm} {Gx : Nat} {Q : Outcome → Prop} {M : Mem}
     {img : Bytes} {T : B256} {a : Nat → B256} {W W' : Devm → Prop} {U K R c : Nat}
     {debit : Devm → List B256 → Mem → Nat} {next : Devm → List B256 → Mem → Devm}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hWc : WClosed sevm W) (hWb : W b)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img 3 T a)
     (hTa : (rlAmt sevm).toNat ≤ T.toNat)
@@ -424,7 +424,7 @@ structure RLPushWin (sevm : Sevm) (pre : Devm) (T : B256) (i : Nat) (M : Mem) (s
 theorem rx_rl_iterTailF {sevm : Sevm} {pre b2 n : Devm} {G : Nat} {Q : Outcome → Prop}
     {M M2 : Mem} {img2 : Bytes} {s i : Nat} {T : B256} {P : RLExactCalls} {a : Nat → B256}
     {W W' : Devm → Prop} {U : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hi : i < 3) (hdepth : sevm.depth ≠ 0)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hi : i < 3) (hdepth : sevm.depth ≠ 0)
     (hid2 : IdReady sevm b2) (hWc : WClosed sevm W) (hWb2 : W b2) (hW'c : WClosed sevm W')
     (hq : Devm.EqModGas b2 (rlS2Base sevm pre T i n M))
     (hC2 : (b2.getStor sevm.currentTarget).get (coinsBase + Nat.toB256 i) =
@@ -481,7 +481,7 @@ theorem rx_rl_iterTailF {sevm : Sevm} {pre b2 n : Devm} {G : Nat} {Q : Outcome �
 theorem rx_rl_iterAF {sevm : Sevm} {pre b n : Devm} {G : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {i : Nat} {T : B256} {P : RLExactCalls} {a : Nat → B256}
     {W W' : Devm → Prop} {U : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hdepth : sevm.depth ≠ 0) (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b)
     (hW'c : WClosed sevm W') (hn : Devm.EqModGas b n)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x2c0) (hL : LoopImg img i T a)
@@ -559,7 +559,7 @@ theorem rx_rl_iterAF {sevm : Sevm} {pre b n : Devm} {G : Nat} {Q : Outcome → P
 theorem rx_rl_iterBF {sevm : Sevm} {pre b n : Devm} {G : Nat} {Q : Outcome → Prop}
     {M : Mem} {img : Bytes} {i : Nat} {T : B256} {P : RLExactCalls} {a : Nat → B256}
     {W W' : Devm → Prop} {U : Nat}
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false) (hi : i < 3)
     (hdepth : sevm.depth ≠ 0) (hid : IdReady sevm b) (hWc : WClosed sevm W) (hWb : W b)
     (hW'c : WClosed sevm W') (hn : Devm.EqModGas b n)
     (hR : Mem.Reads M img) (hW : Mem.Wf M) (hsz : M.size = 0x5e0) (hL : LoopImg img i T a)
@@ -645,7 +645,7 @@ their floors, for every residual gas `R ≥ 2201`: the frame runs from `R + rlEx
 left, at the same cost, whose functions `P` are fixed first. -/
 theorem rx_rl_frame_floor {sevm : Sevm} {pre : Devm} {W : Nat → Devm → Prop} {U : Nat}
     {T : B256} (P : RLExactCalls)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : sevm.depth ≠ 0) (hlen : 4 ≤ sevm.data.length) (hcd : sevm.data.length < 2 ^ 256)
     (hsel : Sevm.selector sevm = selRemoveLiquidity) (hid : IdReady sevm pre)
     (hlock : (pre.getStor sevm.currentTarget).get lockSlot = 0) (hval : sevm.value = 0)

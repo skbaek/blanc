@@ -22,7 +22,7 @@ open Blanc.Composition.Curve3PoolCoinChild
 /-- **An implementation's `transfer` law**, on a message. -/
 def XferLaw (I : ByteArray) (prog : List SFunc) (F Cu : Nat) (Fit : Stor → Adr → Adr → B256 → Prop)
     (mv : Stor → Adr → Adr → B256 → Stor) (Apart : Adr → Adr → Prop) : Prop :=
-  ∀ {msg : Msg} {dst : Adr} {v : B256}, (initSevm msg).code = I → CoveredFork (initSevm msg).benvStat.fork →
+  ∀ {msg : Msg} {dst : Adr} {v : B256}, (initSevm msg).code = I → ShanghaiOnwards (initSevm msg).benvStat.fork →
     (initSevm msg).isStatic = false → (initSevm msg).value = 0 →
     (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes →
     F ≤ (initDevm msg).gasLeft →
@@ -36,7 +36,7 @@ def XferLaw (I : ByteArray) (prog : List SFunc) (F Cu : Nat) (Fit : Stor → Adr
 /-- **An implementation's `transferFrom` law**, on a message. -/
 def PullLaw (I : ByteArray) (prog : List SFunc) (F Cu : Nat) (Fit : Stor → Adr → Adr → Adr → B256 → Prop)
     (mv : Stor → Adr → Adr → Adr → B256 → Stor) (Apart : Adr → Adr → Adr → Prop) : Prop :=
-  ∀ {msg : Msg} {src dst : Adr} {v : B256}, (initSevm msg).code = I → CoveredFork (initSevm msg).benvStat.fork →
+  ∀ {msg : Msg} {src dst : Adr} {v : B256}, (initSevm msg).code = I → ShanghaiOnwards (initSevm msg).benvStat.fork →
     (initSevm msg).isStatic = false → (initSevm msg).value = 0 →
     (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++ v.toBytes →
     F ≤ (initDevm msg).gasLeft →
@@ -49,7 +49,7 @@ def PullLaw (I : ByteArray) (prog : List SFunc) (F Cu : Nat) (Fit : Stor → Adr
 
 /-- **An implementation's `balanceOf` law**, on a message, static or not. -/
 def BalLaw (I : ByteArray) (prog : List SFunc) (F Cu : Nat) (ans : Stor → Adr → B256) : Prop :=
-  ∀ {msg : Msg} {a : Adr}, (initSevm msg).code = I → CoveredFork (initSevm msg).benvStat.fork →
+  ∀ {msg : Msg} {a : Adr}, (initSevm msg).code = I → ShanghaiOnwards (initSevm msg).benvStat.fork →
     (initSevm msg).value = 0 → (initSevm msg).data = abiSelectorBytes 0x70a08231 ++ a.toB256.toBytes →
     F ≤ (initDevm msg).gasLeft →
     ∃ C u, exec (initEvm msg) = .ok C ∧ u ≤ Cu ∧ FrameLands prog (initSevm msg) (initDevm msg) C u
@@ -87,7 +87,7 @@ end Child
 theorem proxyXfer_msg {I : ByteArray} {prog : List SFunc} {F Cu : Nat} {Fit : Stor → Adr → Adr → B256 → Prop}
     {mv : Stor → Adr → Adr → B256 → Stor} {Apart : Adr → Adr → Prop} (law : XferLaw I prog F Cu Fit mv Apart)
     (hCu : Cu ≤ F) {msg : Msg} {dst : Adr} {v : B256} (hcode : (initSevm msg).code = Proxy.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
     (static : (initSevm msg).isStatic = false) (hval : (initSevm msg).value = 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) I)
     (hd : (initSevm msg).data = abiSelectorBytes 0xa9059cbb ++ dst.toB256.toBytes ++ v.toBytes)
@@ -115,7 +115,7 @@ theorem proxyXfer_msg {I : ByteArray} {prog : List SFunc} {F Cu : Nat} {Fit : St
 theorem proxyPull_msg {I : ByteArray} {prog : List SFunc} {F Cu : Nat} {Fit : Stor → Adr → Adr → Adr → B256 → Prop}
     {mv : Stor → Adr → Adr → Adr → B256 → Stor} {Apart : Adr → Adr → Adr → Prop} (law : PullLaw I prog F Cu Fit mv Apart)
     (hCu : Cu ≤ F) {msg : Msg} {src dst : Adr} {v : B256} (hcode : (initSevm msg).code = Proxy.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
     (static : (initSevm msg).isStatic = false) (hval : (initSevm msg).value = 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) I)
     (hd : (initSevm msg).data = abiSelectorBytes 0x23b872dd ++ src.toB256.toBytes ++ dst.toB256.toBytes ++ v.toBytes)
@@ -145,7 +145,7 @@ theorem proxyPull_msg {I : ByteArray} {prog : List SFunc} {F Cu : Nat} {Fit : St
 /-- **`balanceOf` as a message into the proxy.** -/
 theorem proxyBal_msg {I : ByteArray} {prog : List SFunc} {F Cu : Nat} {ans : Stor → Adr → B256}
     (law : BalLaw I prog F Cu ans) (hCu : Cu ≤ F) {msg : Msg} {a : Adr} (hcode : (initSevm msg).code = Proxy.code)
-    (fork : CoveredFork (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
+    (fork : ShanghaiOnwards (initSevm msg).benvStat.fork) (hdepth : (initSevm msg).depth ≠ 0)
     (hval : (initSevm msg).value = 0)
     (hr : ProxyReady (initSevm msg) (initDevm msg) I)
     (hd : (initSevm msg).data = abiSelectorBytes 0x70a08231 ++ a.toB256.toBytes)
@@ -178,7 +178,7 @@ variable {sevm : Sevm} {t amt : B256} {W W' : Devm → Prop} {U : Nat} {ii oi : 
 at depth `2`, wherever the transfer fits the coin's ledger. -/
 theorem usdc_coinPushOkAt {Fit : Stor → Adr → Adr → B256 → Prop} {mv : Stor → Adr → Adr → B256 → Stor}
     {Apart : Adr → Adr → Prop} (law : XferLaw I prog F Cu Fit mv Apart) (hCu : Cu ≤ F)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget)
     (hU : (F + F / 63 + 8300) + (F + F / 63 + 8300) / 63 + 3100 ≤ U)
@@ -210,7 +210,7 @@ theorem usdc_coinPushOkAt {Fit : Stor → Adr → Adr → B256 → Prop} {mv : S
 4 KiB, at depth `2`, wherever the pull fits the coin's ledger. -/
 theorem usdc_coinPullOkAt {Fit : Stor → Adr → Adr → Adr → B256 → Prop} {mv : Stor → Adr → Adr → Adr → B256 → Stor}
     {Apart : Adr → Adr → Adr → Prop} (law : PullLaw I prog F Cu Fit mv Apart) (hCu : Cu ≤ F)
-    (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr)
     (hne : t.toAdr ≠ sevm.currentTarget)
     (hU : (F + F / 63 + 8300) + (F + F / 63 + 8300) / 63 + 3100 ≤ U)
@@ -243,7 +243,7 @@ theorem usdc_coinPullOkAt {Fit : Stor → Adr → Adr → Adr → B256 → Prop}
 4 KiB, at depth `2`. -/
 theorem usdc_coinBalOkAt {ans : Stor → Adr → B256} {B : B256} (law : BalLaw I prog F Cu ans) (hCu : Cu ≤ F)
     (hF : F + F / 63 + 8300 + (F + F / 63 + 8300) / 63 + 3100 ≤ U) (hCb : Cu + 8300 ≤ 60000)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : 2 ≤ sevm.depth) (hprec : ¬ sevm.benvStat.rules.isPrecomp t.toAdr) (hU : 70000 ≤ U)
     (hii : ii.toNat + 0x24 ≤ 4096) (hoi : oi.toNat + 32 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Proxy.code ∧ ProxyAt sevm b t.toAdr I ∧

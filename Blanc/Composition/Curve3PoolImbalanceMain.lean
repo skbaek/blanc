@@ -177,7 +177,7 @@ theorem rmChain_skip {k : Nat} (hz : rliAmt sevm k = 0) {b : Devm} (h : rmChain 
     rw [e, ite_eq_left hz]
 
 /-- Coin `k`'s `transfer` along the chain. -/
-theorem rmChain_push {c3 : Adr} {σ : Stor} (hfork : CoveredFork sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
+theorem rmChain_push {c3 : Adr} {σ : Stor} (hfork : ShanghaiOnwards sevm.benvStat.fork) (hstatic : sevm.isStatic = false)
     (hdepth : 2 ≤ sevm.depth) (hC : RealCoins sevm pre) (htc : ∀ j : Fin 3, coinOf sevm pre j ≠ c3)
     (hfit : ∀ j : Fin 3, rliAmt sevm j.val ≠ 0 → PushFitsK j (pre.getStor (coinOf sevm pre j)) sevm.currentTarget sevm.caller (rliAmt sevm j.val))
     (k : Nat) (hk : k < 3) (ha : rliAmt sevm k ≠ 0) :
@@ -362,7 +362,7 @@ theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg 
   have hcaller : msg.caller = E := e.entry.named.2.1
   have hopen := e.coinsOpen
   have hE : E ≠ 0 := e.nonzero
-  have hfork : CoveredFork (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
+  have hfork : ShanghaiOnwards (initSevm msg).benvStat.fork := e.entry.plain.2.2.2
   have hstatic : (initSevm msg).isStatic = false := e.entry.plain.2.1
   have hdepth : 2 ≤ (initSevm msg).depth := e.entry.plain.2.2.1
   have hdep0 : (initSevm msg).depth ≠ 0 := by have : (2 : Nat) ≤ (initSevm msg).depth := hdepth; omega
@@ -533,7 +533,7 @@ theorem imbalance_frame (mf : MomentFacts w) (mk : ExitMarked w) (e : Asked msg 
 
 /-- **`imbalance_message`.** -/
 theorem imbalance_message_holds : imbalance_message := fun d m A msg E am maxBurn burned stored ask req => by
-  obtain ⟨cost, refund, hc, h⟩ := imbalance_frame (m.facts A) (m.marked A) ask req
+  obtain ⟨cost, refund, hc, h⟩ := imbalance_frame (m.facts A) (m.marked A ask.coinsOpen.usdcParties.1) ask req
   refine ⟨cost, refund, Nat.le_trans hc (by decide), fun R hR hG => h R ?_ hG⟩
   have hR' : 800000 ≤ R := hR
   omega

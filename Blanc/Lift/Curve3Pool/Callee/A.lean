@@ -408,7 +408,7 @@ def aMemNext (sevm : Sevm) (b : Devm) (M : Mem) (ret w : B256) : Mem :=
 address, `future_A_time` and `future_A` at `0x140 … 0x180`, on a ramp `initial_A` and
 `initial_A_time` at `0x1c0`, `0x1e0`, and the result at `0`. -/
 theorem a_exactL {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat} {ret : B256}
-    {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    {s : State} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hA : aChk s sevm.benvStat.time.toNat = some v) (hwf : Mem.Wf M) (hS : M.size = n)
     (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024) :
@@ -522,7 +522,7 @@ theorem a_exactL {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat
 memory covering its frame (`0x200 ≤ M.size`, word aligned) and returns a word reading `v` over
 `aBase`, at gas `aGas`, the memory kept off `aWin` with its size. -/
 theorem a_exact {sevm : Sevm} {b : Devm} {S : List B256} {M : Mem} {G n v : Nat} {ret : B256}
-    {s : State} (hfork : CoveredFork sevm.benvStat.fork)
+    {s : State} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (ha : Abstracts (b.getStor sevm.currentTarget) s)
     (hA : aChk s sevm.benvStat.time.toNat = some v) (hwf : Mem.Wf M) (hS : M.size = n)
     (hn : n % 32 = 0) (htop : 0x200 ≤ n) (hroom : S.length + 16 < 1024) :

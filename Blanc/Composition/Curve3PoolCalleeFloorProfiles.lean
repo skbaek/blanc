@@ -32,7 +32,7 @@ variable {sevm : Sevm} {W W' : Devm → Prop} {t : B256} {U : Nat} {ii oi : B256
 
 /-- **`totalSupply()` at its floor.** -/
 theorem c3crv_supplyFloor {T : B256} {K : Nat} (hK : 2301 + (K + 2320) / 64 + 1 ≤ K)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hdepth : sevm.depth ≠ 0) (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false)
     (hU : 70000 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W') (hii : ii.toNat + 4 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)
     (hW : ∀ b, W b → b.getCode t.toAdr = Curve3Crv.code ∧
@@ -59,7 +59,7 @@ theorem c3crv_supplyFloor {T : B256} {K : Nat} (hK : 2301 + (K + 2320) / 64 + 1 
     totalSupplyBodyCost_reframe (initSevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 4 oi 0x20))
       (initDevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 4 oi 0x20)) (fwd b S M G t ii 4 oi 0x20)
   rw [hused] at hfwd
-  have hfork0 : CoveredFork
+  have hfork0 : ShanghaiOnwards
       (initSevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 4 oi 0x20)).benvStat.fork := hfork
   have hraw : rawTotalSupply (initSevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 4 oi 0x20))
       (Devm.getStor (initDevm (staticMsg sevm (b.withGasLeft 0) S M 0 t ii 4 oi 0x20))
@@ -117,7 +117,7 @@ theorem supplyDebit_le (hii : ii.toNat + 4 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 
 
 /-- **`burnFrom` at its floor.** -/
 theorem c3crv_burnFloor {amt : B256} {K : Nat} (hK : 2301 + (K + 60000) / 64 + 1 ≤ K)
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hdepth : sevm.depth ≠ 0)
     (hprec : sevm.benvStat.rules.isPrecomp t.toAdr = false) (hU : 70000 ≤ U) (hUw : U < 2 ^ 256) (hs : GasStable W')
     (hii : ii.toNat + 0x44 ≤ 4096) (hoi : oi.toNat + 0x20 ≤ 4096)

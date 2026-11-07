@@ -187,7 +187,7 @@ theorem rxe_identityL {Q : Outcome → Prop} {g ii is oi os : B256} {i n o z s e
 
 /-- `SSTORE` at its actual charge, to some outcome: the continuation receives the gas left and
 its exact equation (`rxe_sstore_le` with the charge named). -/
-theorem rxe_sstoreX {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rxe_sstoreX {Q : Outcome → Prop} {k' v : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hG : 24401 ≤ G)
     (k : ∀ G', G = G' + sstoreCost sevm b k' v →
       SFunc.RunEx fs sevm (St (afterSstore sevm b k' v) S M G') f Q) :
@@ -245,7 +245,7 @@ theorem rxe_identity {Q : Outcome → Prop} {g ii is oi os : B256} {i n o z s ex
 
 /-- `SSTORE` at whatever it charges (at most `gasColdSload + gasStorageSet`), to some outcome:
 the continuation receives the gas left. -/
-theorem rxe_sstore_le {Q : Outcome → Prop} {k' v : B256} (hfork : CoveredFork sevm.benvStat.fork)
+theorem rxe_sstore_le {Q : Outcome → Prop} {k' v : B256} (hfork : ShanghaiOnwards sevm.benvStat.fork)
     (hstatic : sevm.isStatic = false) (hG : 24401 ≤ G)
     (k : ∀ G', SFunc.RunEx fs sevm (St (afterSstore sevm b k' v) S M G') f Q) :
     SFunc.RunEx fs sevm (St b (k' :: v :: S) M G) (.next (.reg .sstore) f) Q :=

@@ -199,7 +199,7 @@ theorem vminus_witness :
         (storOf post0.state proxyAddress balanceOfASlot.toB256).toNat := by
   obtain ⟨post1, hrun1, hg1, ho1, h26, hA, h2, he1⟩ := frame1_closed
   have hx1 : Nonempty (Exec 0 sevm1 pre1 (.ok post1)) :=
-    lift_exactM cert_checkM cert_jumpsOkM rfl CoveredFork.prague hrun1
+    lift_exactM cert_checkM cert_jumpsOkM rfl CoveredFork.prague.shanghaiOnwards hrun1
   obtain ⟨hx0, hpm, he0, -, ho0, hst0⟩ := frame0_of_child post1 hx1 hg1 ho1 he1
   -- frame 4's entry agreement
   obtain ⟨-, hpa, hpk, -, hia, hik, -, hst, -⟩ := cp4_spec

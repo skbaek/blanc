@@ -69,7 +69,7 @@ word `0` is retained, so no callee memory witness survives. -/
 theorem rx_ex_y_core {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v : Nat}
     {Q : Outcome → Prop} {M : Mem} {img : Bytes} {W : Devm → Prop} {B X : Nat → B256}
     {D C xw : B256} {w : Nat → B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
     (hA : aChk s sevm.benvStat.time.toNat = some amp)
     (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3)
     (hres : getYChk amp ⟨(exI sevm).toNat, hi⟩ ⟨(exJ sevm).toNat, hj⟩ xw.toNat
@@ -167,7 +167,7 @@ theorem rx_ex_y_core {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v
 theorem rx_ex_y {sevm : Sevm} {b : Devm} {σ : Stor} {s : State} {G R amp v : Nat}
     {Q : Outcome → Prop} {M : Mem} {img : Bytes} {W : Devm → Prop} {B X : Nat → B256}
     {D C xw : B256} {w : Nat → B256}
-    (hfork : CoveredFork sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
+    (hfork : ShanghaiOnwards sevm.benvStat.fork) (hL : ExLive sevm W b σ) (ha : Abstracts σ s)
     (hA : aChk s sevm.benvStat.time.toNat = some amp)
     (hi : (exI sevm).toNat < 3) (hj : (exJ sevm).toNat < 3)
     (hres : getYChk amp ⟨(exI sevm).toNat, hi⟩ ⟨(exJ sevm).toNat, hj⟩ xw.toNat
