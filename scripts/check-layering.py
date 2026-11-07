@@ -1505,6 +1505,8 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Static", "Lift.BuilderRequest.Deposit.Static", "Lift.BuilderRequest.Exit.Static",
     "Lift.BuilderRequest.Flood", "Lift.BuilderRequest.Exit.Flood", "Lift.BuilderRequest.Surplus",
     "Lift.BuilderRequest.Deposit.Properties", "Lift.BuilderRequest.Exit.Properties",
+    "Lift.BuilderRequest.LoadBound", "Lift.BuilderRequest.Accepts",
+    "Lift.BuilderRequest.RevertCovered", "Lift.BuilderRequest.Progress",
 ]
 
 # Explicit semantic ownership, not the union of existing imports. Abstract token
@@ -1519,6 +1521,7 @@ CONTRACTS["builder-request"] = [
 # declares its boundary here; no default family or production exception exists.
 COMPOSITION = {
     "Composition.RequestPhaseAmsterdam": ('builder-request', 'withdrawal-request'),
+    "Composition.BuilderRequestCodesKept": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseOrder": ('builder-request', 'withdrawal-request'),
     "Composition.RequestPhaseAmsterdamBal": ('builder-request', 'withdrawal-request'),
     "Composition.WithdrawalRequestFeeCounterexample": ('withdrawal-request',),
