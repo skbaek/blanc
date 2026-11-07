@@ -229,7 +229,7 @@ theorem system_call (m : SysMemory k) (hfork : benv.stat.fork = .amsterdam)
   have hrun := (exec_iff_exec_eq _ _ _ _).mp hexec
   have rSetup : Ready s (setupBase s b) [2, 3, 0, 1] := (r.sload 3).sload 2
   have rDrain := k.fold_ready (h := SysPath.rd s b 2) 0 (k.count s b).toNat (M := .empty) rSetup
-  have rBooked := rDrain.book (SysPath.rd s b 2) (k.count s b) (SysPath.rd s b 3)
+  have rBooked := ready_book rDrain (SysPath.rd s b 2) (k.count s b) (SysPath.rd s b 3)
   have rRead : Ready s (k.excessRead s b) [0, 1] := (rBooked.sload 0).sload 1
   have rEnd := (rRead.sstore (by decide) (k.excessStored s b)).sstore (by decide) (0 : B256)
   exact processCheckedSystemTransaction_amsterdam_of_exec hfork installed hnonempty hdel hprecomp
@@ -300,6 +300,57 @@ theorem framePost_state (sevm : Sevm) (b : Devm) (G : Nat) :
   rw [e0]
   rfl
 
+/-- A runtime that is no delegation: its length is not a designator's. -/
+theorem not_delegated_of_size {code : ByteArray} (h : code.size ≠ eoaDelegatedCodeLength) :
+    getDelegatedCodeAddress code = none := by
+  simp only [getDelegatedCodeAddress]
+  rw [ite_eq_right_iff.mpr]
+  intro hd
+  exact absurd hd.1 h
+
+/-- **The checked system call with its exact post state and a gas bound**, from any storage. -/
+theorem system_call_spec (m : SysMemory k) {B : Nat} {benv : Benv} {target : Adr}
+    (hfork : benv.stat.fork = .amsterdam) (installed : benv.state.getCode target = k.code)
+    (hnonempty : k.code.isEmpty = false) (hsize : k.code.size ≠ eoaDelegatedCodeLength)
+    (hprecomp : ¬ amsterdamRules.isPrecomp target) (hB : k.frameBound m.alloc ≤ B)
+    (room : B + gCallStipend < systemTransactionGas) :
+    processCheckedSystemTransaction benv target [] =
+      .ok (sysState k.shape benv.state target,
+        systemCallOutputA (systemCallMsg benv target k.code []) (callPost k benv target)) ∧
+    systemTransactionGas - (callPost k benv target).gasLeft ≤ B := by
+  have hle := frameCost_le m (initSevm (systemCallMsg benv target k.code []))
+    (systemCallBase (systemCallMsg benv target k.code []))
+  have hcall := system_call m hfork installed hnonempty (not_delegated_of_size hsize) hprecomp
+    (by omega)
+  have hstate : (callPost k benv target).state = sysState k.shape benv.state target :=
+    framePost_state _ _ _
+  rw [hstate] at hcall
+  refine ⟨hcall, ?_⟩
+  show systemTransactionGas - (systemTransactionGas - k.frameCost _ _) ≤ B
+  omega
+
 end SysPath
+
+/-- A deployed runtime's facts for its system call: its address, its stated gas bound, and that the
+bound holds and leaves the stipend free of the 30,000,000 gas. -/
+structure SysCall (k : SysPath) where
+  memory : SysMemory k
+  target : Adr
+  bound : Nat
+  nonempty : k.code.isEmpty = false
+  size_ne : k.code.size ≠ eoaDelegatedCodeLength
+  not_precompile : ¬ amsterdamRules.isPrecomp target
+  bound_le : k.frameBound memory.alloc ≤ bound
+  room : bound + gCallStipend < systemTransactionGas
+
+/-- **A builder system call under Amsterdam with its exact post state**, from any storage. -/
+theorem SysCall.spec {k : SysPath} (c : SysCall k) {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
+    (installed : benv.state.getCode c.target = k.code) :
+    processCheckedSystemTransaction benv c.target [] =
+      .ok (sysState k.shape benv.state c.target,
+        systemCallOutputA (systemCallMsg benv c.target k.code []) (SysPath.callPost k benv c.target)) ∧
+    systemTransactionGas - (SysPath.callPost k benv c.target).gasLeft ≤ c.bound :=
+  SysPath.system_call_spec c.memory hfork installed c.nonempty c.size_ne c.not_precompile c.bound_le
+    c.room
 
 end Blanc.Lift.BuilderRequest

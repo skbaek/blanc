@@ -5,7 +5,6 @@ import Blanc.Lift.ExactWalkCutOps
 import Blanc.Lift.ExactWalkSolc
 import Blanc.Lift.CreationOps
 import Blanc.MemoryStageGas
-import Blanc.StorageAccessGas
 
 /-!
 # The EIP-8282 builder contracts' system path, under Amsterdam
@@ -141,159 +140,6 @@ def sysSetup (body : SFunc) : SFunc :=
     (sysEntry p body))) 2)))))))))))))
 
 end Trees
-
-/-! ## Reads leave the state alone -/
-
-theorem afterSloadA_getStorVal (sevm : Sevm) (d : Devm) (k : B256) (a : Adr) (k' : B256) :
-    (afterSloadA sevm d k).getStorVal a k' = d.getStorVal a k' := by
-  unfold Devm.getStorVal Devm.getAcct
-  rw [afterSloadA_state]
-
-/-- `SLOAD` with the value it reads named. -/
-theorem rx_sloadV {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {oc : Outcome}
-    {S : List B256} {M : Mem} {G : Nat} {k' v : B256}
-    (hacc : sevm.benvStat.rules.access = .eip2929) (hroom : S.length < 1024)
-    (hv : b.getStorVal sevm.currentTarget k' = v)
-    (k : SFunc.RunExact fs sevm (St (afterSloadA sevm b k') (v :: S) M G) f oc) :
-    SFunc.RunExact fs sevm (St b (k' :: S) M (G + sloadCost sevm b k')) (.next (.reg .sload) f) oc :=
-  rx_sloadA hacc hroom (hv ▸ k)
-
-/-- The base after a list of reads, in order. -/
-def readsBase (sevm : Sevm) (b : Devm) (keys : List B256) : Devm :=
-  keys.foldl (afterSloadA sevm) b
-
-/-- The selected charge of a list of reads, each against its actual incoming base. -/
-def readsGas (sevm : Sevm) : Devm → List B256 → Nat
-  | _, [] => 0
-  | b, k :: ks => sloadCost sevm b k + readsGas sevm (afterSloadA sevm b k) ks
-
-theorem readsGas_le (sevm : Sevm) (b : Devm) (keys : List B256) :
-    readsGas sevm b keys ≤ keys.length * gasColdSload := by
-  induction keys generalizing b with
-  | nil => exact Nat.zero_le _
-  | cons k ks ih =>
-    have h1 := sloadCost_le sevm b k
-    have h2 := ih (afterSloadA sevm b k)
-    simp only [readsGas, List.length_cons, Nat.add_mul, Nat.one_mul]
-    omega
-
-/-! ## What a frame must keep to reach its stores -/
-
-/-- A slot not yet changed in this transaction: its current value is its original one, or its
-original one is zero. -/
-def SlotClean (sevm : Sevm) (d : Devm) (k : B256) : Prop :=
-  d.getOrigStorVal sevm sevm.currentTarget k = d.getStorVal sevm.currentTarget k ∨
-    d.getOrigStorVal sevm sevm.currentTarget k = 0
-
-/-- What the frame carries to its remaining `SSTORE`s at `keys`. -/
-structure Ready (sevm : Sevm) (d : Devm) (keys : List B256) : Prop where
-  error : d.error = none
-  refund : 0 ≤ d.refundCounter
-  spill : d.stateGas.spilled = 0
-  reservoir : keys.length * amsterdamStateGasRules.storageSet ≤ d.stateGas.left
-  clean : ∀ k ∈ keys, SlotClean sevm d k
-
-theorem afterSloadA_createdAccounts (sevm : Sevm) (d : Devm) (k : B256) :
-    (afterSloadA sevm d k).createdAccounts = d.createdAccounts := by
-  unfold afterSloadA Devm.balReadStorage afterSload
-  split <;> split <;> rfl
-
-theorem afterSloadA_getOrig (sevm : Sevm) (d : Devm) (k : B256) (a : Adr) (k' : B256) :
-    (afterSloadA sevm d k).getOrigStorVal sevm a k' = d.getOrigStorVal sevm a k' := by
-  unfold Devm.getOrigStorVal
-  rw [afterSloadA_createdAccounts]
-
-theorem Ready.sload {sevm : Sevm} {d : Devm} {keys : List B256} (r : Ready sevm d keys) (k : B256) :
-    Ready sevm (afterSloadA sevm d k) keys where
-  error := (afterSloadA_error sevm d k).trans r.error
-  refund := by rw [afterSloadA_refundCounter]; exact r.refund
-  spill := by rw [afterSloadA_stateGas]; exact r.spill
-  reservoir := by rw [afterSloadA_stateGas]; exact r.reservoir
-  clean := fun k' hk' => by
-    unfold SlotClean
-    rw [afterSloadA_getOrig, afterSloadA_getStorVal]
-    exact r.clean k' hk'
-
-theorem Ready.reads {sevm : Sevm} {d : Devm} {ks : List B256} (r : Ready sevm d ks)
-    (keys : List B256) : Ready sevm (readsBase sevm d keys) ks := by
-  induction keys generalizing d with
-  | nil => exact r
-  | cons k rest ih => exact ih (r.sload k)
-
-theorem readsBase_state (sevm : Sevm) (d : Devm) (keys : List B256) :
-    (readsBase sevm d keys).state = d.state := by
-  induction keys generalizing d with
-  | nil => rfl
-  | cons k rest ih =>
-    show (readsBase sevm (afterSloadA sevm d k) rest).state = _
-    rw [ih, afterSloadA_state]
-
-theorem afterSstoreA_createdAccounts (sevm : Sevm) (d : Devm) (k v : B256) :
-    (afterSstoreA A sevm d k v).createdAccounts = d.createdAccounts := by
-  unfold afterSstoreA Devm.balReadAccount Devm.balReadStorage
-  dsimp only
-  split <;> split <;> rfl
-
-theorem afterSstoreA_getStorVal_ne (sevm : Sevm) (d : Devm) {k k' : B256} (v : B256)
-    (h : k ≠ k') :
-    (afterSstoreA A sevm d k v).getStorVal sevm.currentTarget k' =
-      d.getStorVal sevm.currentTarget k' := by
-  unfold Devm.getStorVal Devm.getAcct
-  rw [afterSstoreA_state]
-  show ((d.state.setStorVal sevm.currentTarget k v).getStor sevm.currentTarget).get k' =
-    (d.state.getStor sevm.currentTarget).get k'
-  rw [State.getStor_setStorVal_self, Stor.get_set_ne _ h]
-
-theorem Ready.sstore {sevm : Sevm} {d : Devm} {k : B256} {ks : List B256} (r : Ready sevm d (k :: ks))
-    (fresh : k ∉ ks) (v : B256) : Ready sevm (afterSstoreA A sevm d k v) ks where
-  error := (afterSstoreA_error A sevm d k v).trans r.error
-  refund := by
-    rw [afterSstoreA_refundCounter]
-    have hc : d.getOrigStorVal sevm sevm.currentTarget k = d.getStorVal sevm.currentTarget k ∨
-        d.getOrigStorVal sevm sevm.currentTarget k = 0 := r.clean k List.mem_cons_self
-    exact Int.le_trans r.refund (sstoreAmsterdamRefund_ge _ A hc)
-  spill := (afterSstoreA_meter A (n := 0) r.spill (by
-    have := r.reservoir
-    simp only [List.length_cons, Nat.add_mul, Nat.one_mul] at this
-    omega)).1
-  reservoir := (afterSstoreA_meter A (n := ks.length * amsterdamStateGasRules.storageSet) r.spill (by
-    have := r.reservoir
-    simp only [List.length_cons, Nat.add_mul, Nat.one_mul] at this
-    omega)).2
-  clean := fun k' hk' => by
-    have hne : k ≠ k' := fun e => fresh (e ▸ hk')
-    unfold SlotClean Devm.getOrigStorVal
-    rw [afterSstoreA_createdAccounts, afterSstoreA_getStorVal_ne sevm d v hne]
-    exact r.clean k' (List.mem_cons_of_mem _ hk')
-
-/-- `Ready` keeps for fewer stores. -/
-theorem Ready.skip {sevm : Sevm} {d : Devm} {k k' : B256} {ks : List B256}
-    (r : Ready sevm d (k :: k' :: ks)) : Ready sevm d (k :: ks) where
-  error := r.error
-  refund := r.refund
-  spill := r.spill
-  reservoir := by
-    have := r.reservoir
-    simp only [List.length_cons, Nat.add_mul, Nat.one_mul] at this ⊢
-    omega
-  clean := fun x hx => by
-    rcases List.mem_cons.mp hx with rfl | hx
-    · exact r.clean _ List.mem_cons_self
-    · exact r.clean _ (List.mem_cons_of_mem _ (List.mem_cons_of_mem _ hx))
-
-/-- `SSTORE` from a `Ready` frame. -/
-theorem rx_sstoreR {fs : List SFunc} {sevm : Sevm} {b : Devm} {f : SFunc} {o : Outcome} {S : List B256}
-    {M : Mem} {G : Nat} {k' v : B256} {ks : List B256}
-    (hsg : sevm.benvStat.rules.stateGas = some A) (hstatic : sevm.isStatic = false)
-    (r : Ready sevm b (k' :: ks)) (hsentry : gCallStipend < G + sstoreCostA A sevm b k' v)
-    (k : SFunc.RunExact fs sevm (St (afterSstoreA A sevm b k' v) S M G) f o) :
-    SFunc.RunExact fs sevm (St b (k' :: v :: S) M (G + sstoreCostA A sevm b k' v))
-      (.next (.reg .sstore) f) o := by
-  refine rx_sstoreA hsg hsentry hstatic r.spill ?_ k
-  have hc := sstoreChargeA_le A sevm b k' v
-  have hr := r.reservoir
-  simp only [List.length_cons, Nat.add_mul, Nat.one_mul] at hr
-  omega
 
 /-! ## The excess -/
 
@@ -571,7 +417,7 @@ theorem book_run {q : Devm} {c h t : B256} {M : Mem} {G : Nat} {oc : Outcome}
     refine rx_push rfl (by rroom) ?_
     exact rx_jump h3 next
 
-theorem Ready.book {sevm : Sevm} {q : Devm} (r : Ready sevm q [2, 3, 0, 1]) (h c t : B256) :
+theorem ready_book {sevm : Sevm} {q : Devm} (r : Ready sevm q [2, 3, 0, 1]) (h c t : B256) :
     Ready sevm (bookBase sevm q h c t) [0, 1] := by
   unfold bookBase
   split
@@ -864,7 +710,7 @@ theorem frame_run (hfork : sevm.benvStat.fork = .amsterdam) (hstatic : sevm.isSt
   have hsh := amsterdam_shifts (s := sevm.benvStat) hfork
   have rSetup : Ready sevm (setupBase sevm b) [2, 3, 0, 1] := (r.sload 3).sload 2
   have rDrain := k.fold_ready (h := rd sevm b 2) 0 (k.count sevm b).toNat (M := .empty) rSetup
-  have rBooked := rDrain.book (rd sevm b 2) (k.count sevm b) (rd sevm b 3)
+  have rBooked := ready_book rDrain (rd sevm b 2) (k.count sevm b) (rd sevm b 3)
   have rRead : Ready sevm (k.excessRead sevm b) [0, 1] := (rBooked.sload 0).sload 1
   have s1 := final_run k.shape (fs := k.cert.prog) (d := k.excessRead sevm b)
     (e := k.excessStored sevm b) (c := k.count sevm b) (M := (k.drain sevm b).memory) hsg hpush0

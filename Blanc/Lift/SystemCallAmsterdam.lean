@@ -9,8 +9,8 @@ import Batteries.Tactic.OpenPrivate
 `Blanc/SystemCallForward.lean` is the envelope on a covered fork. Under Amsterdam
 `processMessageCall.call` takes `processTopLevelAmsterdam` instead, and the frame does not start at
 `initDevm`: `prepareTopLevelAmsterdam` records two reads first. This module takes a compiled frame
-from that real base, `systemCallBase`, to `processSystemTransaction`,
-`processUncheckedSystemTransaction` and `processCheckedSystemTransaction`, generic in the target, its
+from that real base, `systemCallBase`, to `processSystemTransaction`
+and `processCheckedSystemTransaction`, generic in the target, its
 code and the frame.
 
 `open private` on Jaune's top-level path is isolated here. A pin move can break these names, and
@@ -234,21 +234,6 @@ theorem processSystemTransaction_amsterdam_of_exec {post : Devm}
   simp only [clean, Option.isNone_none, ↓reduceIte, bind, Except.bind,
     Int.toNat?_eq_some_of_nonneg nonneg, Option.toExcept]
   rfl
-
-/-- The unchecked block-level system call under Amsterdam over installed code. -/
-theorem processUncheckedSystemTransaction_amsterdam_of_exec {post : Devm}
-    (hfork : benv.stat.fork = .amsterdam)
-    (installed : benv.state.getCode target = code)
-    (hdel : getDelegatedCodeAddress code = none)
-    (hprecomp : ¬ amsterdamRules.isPrecomp target)
-    (run : exec ⟨0, initSevm (systemCallMsg benv target code data),
-      systemCallBase (systemCallMsg benv target code data)⟩ = .ok post)
-    (clean : post.error = none) (nonneg : 0 ≤ post.refundCounter) :
-    processUncheckedSystemTransaction benv target data =
-      .ok (post.state, systemCallOutputA (systemCallMsg benv target code data) post) := by
-  unfold processUncheckedSystemTransaction
-  simp only [installed]
-  exact processSystemTransaction_amsterdam_of_exec hfork installed hdel hprecomp run clean nonneg
 
 /-- The checked block-level system call under Amsterdam over installed nonempty code: neither checked
 error arm is reachable. -/

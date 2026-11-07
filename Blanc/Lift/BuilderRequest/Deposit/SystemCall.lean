@@ -9,7 +9,7 @@ import Blanc.Lift.BuilderRequest.Deposit.Creation.Address
 text is not the reference where it differs from these bytes and `sys-asm` `83f9801`.
 
 `system_call_ok` is the totality form: canonical code installed and `fork = .amsterdam`, any storage.
-`system_call_spec` is its exact result. It does not claim that storage at activation has any shape, or
+`SysCall.spec` at `sysCall` is its exact result. It does not claim that storage at activation has any shape, or
 anything about a first Amsterdam block's transactions.
 -/
 
@@ -17,11 +17,6 @@ namespace Blanc.Lift.BuilderRequest.Deposit
 
 open Jaune
 open Creation (address)
-
-/-- The bound on the deposit system call's execution gas. Derived in `frameBound_eq`: 64 records of
-six reads and fourteen writes, four more reads, four stores, the allocation's expansion. The state
-gas is separate: it draws on the reservoir. -/
-def gasBound : Nat := 888000
 
 section offsets
 
@@ -101,50 +96,32 @@ def sysMemory : SysMemory sysPath where
       simp only <;> omega
   alloc_lt := by decide
 
-/-- The frame's bound, from the rule record. -/
-theorem frameBound_eq : sysPath.frameBound sysMemory.alloc ≤ gasBound := by decide
+/-- The bound on the system call's execution gas, from the rule record: 64 records of six reads and fourteen writes, four more reads, four stores, the allocation's expansion. The state
+gas is separate: it draws on the reservoir. -/
+theorem frameBound_le : sysPath.frameBound sysMemory.alloc ≤ 888000 := by decide
 
-/-- The checked deposit system call returns and uses at most `gasBound` gas. -/
+/-- The checked deposit system call returns and uses at most 888,000 gas. -/
 def SystemCallOk (benv : Benv) : Prop :=
   ∃ post out, processCheckedSystemTransaction benv address [] = .ok (post, out) ∧
-    systemTransactionGas - out.gasLeft ≤ gasBound
+    systemTransactionGas - out.gasLeft ≤ 888000
 
-theorem not_precompile : ¬ amsterdamRules.isPrecomp address := by decide
-
-theorem not_delegated : getDelegatedCodeAddress code = none := by
-  simp only [getDelegatedCodeAddress]
-  rw [ite_eq_right_iff.mpr]
-  intro h
-  exact absurd h.1 (by decide +kernel)
-
-/-- **The deposit builder's system call, with its exact result.** -/
-theorem system_call_spec {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
-    (installed : benv.state.getCode address = code) :
-    processCheckedSystemTransaction benv address [] =
-      .ok (sysState sysShape benv.state address,
-        systemCallOutputA (systemCallMsg benv address code []) (SysPath.callPost sysPath benv address)) ∧
-    systemTransactionGas - (SysPath.callPost sysPath benv address).gasLeft ≤ gasBound := by
-  have hle := SysPath.frameCost_le (k := sysPath) sysMemory
-    (initSevm (systemCallMsg benv address sysPath.code []))
-    (systemCallBase (systemCallMsg benv address sysPath.code []))
-  have room : sysPath.frameBound sysMemory.alloc + gCallStipend < systemTransactionGas :=
-    Nat.lt_of_le_of_lt (Nat.add_le_add_right frameBound_eq _) (by decide)
-  have hcall := SysPath.system_call (k := sysPath) sysMemory hfork installed (by decide +kernel)
-    not_delegated not_precompile room
-  have hstate : (SysPath.callPost sysPath benv address).state = sysState sysShape benv.state address :=
-    SysPath.framePost_state _ _ _
-  rw [hstate] at hcall
-  refine ⟨hcall, ?_⟩
-  show systemTransactionGas - (systemTransactionGas - sysPath.frameCost _ _) ≤ gasBound
-  have hbound := frameBound_eq
-  omega
+/-- The deposit runtime's system call facts. -/
+def sysCall : SysCall sysPath where
+  memory := sysMemory
+  target := address
+  bound := 888000
+  nonempty := by decide +kernel
+  size_ne := by decide +kernel
+  not_precompile := by decide
+  bound_le := frameBound_le
+  room := by decide
 
 /-- **The deposit builder's system call succeeds, from any storage.** Under Amsterdam, with the canonical
-code installed, the checked system call returns and uses at most `gasBound` of its 30,000,000 gas.
+code installed, the checked system call returns and uses at most 888,000 of its 30,000,000 gas.
 There is no storage premise. -/
 theorem system_call_ok {benv : Benv} (hfork : benv.stat.fork = .amsterdam)
     (installed : benv.state.getCode address = code) : SystemCallOk benv :=
-  let h := system_call_spec hfork installed
+  let h := sysCall.spec hfork installed
   ⟨_, _, h.1, h.2⟩
 
 end Blanc.Lift.BuilderRequest.Deposit

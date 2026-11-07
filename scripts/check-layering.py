@@ -1455,7 +1455,7 @@ SHARED += ["Lift.Create2Factory.Cert", "Lift.Create2Factory.Check", "Lift.Create
 # `SLOAD` steps and the top-level system-call envelope, contract-neutral. `CoveredFork` is not widened.
 SHARED += ["Lift.AmsterdamWalk", "Lift.SystemCallAmsterdam"]
 # The two pushed-word facts of a request contract's dispatch and inhibitor guard.
-SHARED += ["Lift.SystemCaller"]
+SHARED += ["Lift.SystemCaller", "MemoryWindows"]
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
@@ -1465,6 +1465,8 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Submission", "Lift.BuilderRequest.Deposit.Frames",
     "Lift.BuilderRequest.FeePath", "Lift.BuilderRequest.QueueLayout",
     "Lift.BuilderRequest.SystemPath", "Lift.BuilderRequest.SystemCall",
+    "Lift.BuilderRequest.SystemOutput",
+    "Lift.BuilderRequest.Deposit.Fifo", "Lift.BuilderRequest.Exit.Fifo",
     "Lift.BuilderRequest.Deposit.System", "Lift.BuilderRequest.Deposit.SystemCall",
     "Lift.BuilderRequest.Exit.System", "Lift.BuilderRequest.Exit.SystemCall",
     "Lift.BuilderRequest.Exit.Frames",

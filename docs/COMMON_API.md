@@ -263,7 +263,8 @@ lines when next changed or relied on, not by a wholesale rewrite.
 - Storage access on a fork with a `StateGasRules` record: `rx_sstoreA` over `sstoreCostA` /
   `afterSstoreA` (with `sstoreChargeA`, `sstoreCreditA`, `sstoreMeterA`, `chargeStateGas_of_le`,
   `creditStateGasRefund_of_no_spill`, `chargeGas_ok_of_eq`, `sstoreAmsterdamRefund_ge` and the
-  `afterSstoreA_*` observers) and `rx_sloadA` over `sloadCost` / `afterSloadA` are in
+  `afterSstoreA_*` observers), `Ready` and `rx_sstoreR` for a frame's stores, `readsBase` and `readsGas`
+  for a list of reads, `rx_sloadV` naming the value read, and `rx_sloadA` over `sloadCost` / `afterSloadA` are in
   [`Blanc/Lift/AmsterdamWalk.lean`](../Blanc/Lift/AmsterdamWalk.lean), stated against the record, not
   literal prices. `Ninst.runCompiled_sloadA` (`Blanc/ForwardCall.lean`) needs only EIP-2929 access;
   `Ninst.runCompiled_sload_selected` is it where the read record vanishes.
@@ -4703,6 +4704,9 @@ covers unrelated encode/decode goals, so this remains a manual registry route.
   `intended_overlap_guard_rejected`, `intended_empty_write_inside_observation`,
   `intended_empty_observation_inside_write`,
   `intended_relation_with_memory_shape`).
+- To read a window of a stage's image: [`Blanc/MemoryWindows.lean`](../Blanc/MemoryWindows.lean), where
+  `window_at` reads a window inside one write no later write touches, `sliceD_sliceD` and `sliceD_self`
+  reduce it, and `avoids_tac` closes the side condition over literal offsets.
 - For the selected gas of those ordered primitive writes, use
   [`Blanc/MemoryStageGas.lean`](../Blanc/MemoryStageGas.lean).
   `MemoryStage.selectedGas_eq` telescopes the actual expansion charges into
@@ -6675,8 +6679,7 @@ EIP-2935 walks `Blanc/Lift/SystemExecution/BeaconRoots/SystemWalk.lean` and
 **Under Amsterdam** the wrapper takes `processTopLevelAmsterdam`, and the frame starts from
 `systemCallBase` (two read records on `initDevm`), not `initEvm`. Use
 [`Blanc/Lift/SystemCallAmsterdam.lean`](../Blanc/Lift/SystemCallAmsterdam.lean):
-`processSystemTransaction_amsterdam_of_exec`, `processUncheckedSystemTransaction_amsterdam_of_exec`
-and `processCheckedSystemTransaction_amsterdam_of_exec` return the exact `(post.state,
+`processSystemTransaction_amsterdam_of_exec` and `processCheckedSystemTransaction_amsterdam_of_exec` return the exact `(post.state,
 systemCallOutputA msg post)` for any target, from `benv.stat.fork = .amsterdam`, installed code that is
 no delegation and not at a precompile, and `exec ⟨0, initSevm msg, systemCallBase msg⟩ = .ok post` with no
 frame error and a non-negative refund counter. `systemCallBase_St` starts a walk there;

@@ -58,13 +58,18 @@ theorem record_key (width index : Nat) :
     (4 + width * index) % 2 ^ 256
   simp only [Nat.add_mod, Nat.mul_mod, Nat.mod_mod]
 
-/-- The contracts step from one of a record's keys to the next by adding 1. -/
-theorem record_key_succ (width index offset : Nat) :
-    1 + queueSlot width index offset = queueSlot width index (offset + 1) := by
+/-- Word addition of small numbers is addition modulo the word. -/
+theorem toB256_add_toB256 (a b : Nat) : a.toB256 + b.toB256 = (a + b).toB256 := by
   apply B256.toNat_inj
-  simp only [queueSlot, B256.toNat_add, B256.toNat_toB256, Nat.lo_eq]
-  change (1 + (queueBase width index + offset) % 2 ^ 256) % 2 ^ 256 =
-    (queueBase width index + (offset + 1)) % 2 ^ 256
-  rw [Nat.add_mod_mod, Nat.add_comm 1, Nat.add_assoc]
+  simp only [B256.toNat_add, B256.toNat_toB256, Nat.lo_eq]
+  change (a % 2 ^ 256 + b % 2 ^ 256) % 2 ^ 256 = (a + b) % 2 ^ 256
+  rw [← Nat.add_mod]
+
+/-- The contracts step along a record's keys by adding the slot's offset. -/
+theorem record_key_add (width index offset n : Nat) :
+    n.toB256 + queueSlot width index offset = queueSlot width index (offset + n) := by
+  simp only [queueSlot]
+  rw [toB256_add_toB256, show n + (queueBase width index + offset) =
+    queueBase width index + (offset + n) by omega]
 
 end Blanc.Lift.BuilderRequest
