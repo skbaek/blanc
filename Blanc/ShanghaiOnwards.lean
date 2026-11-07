@@ -218,6 +218,9 @@ instance {f : Fork} {dp : Bool} : Coe (CoveredFork f) (CallEra f dp) := ⟨fun h
 theorem ShanghaiOnwards.callEra {f : Fork} (h : ShanghaiOnwards f) : CallEra f false :=
   ⟨h, .inr rfl⟩
 
+/-- A walk whose call target holds no designator passes its domain proof unchanged. -/
+instance {f : Fork} : Coe (ShanghaiOnwards f) (CallEra f false) := ⟨ShanghaiOnwards.callEra⟩
+
 /-- On the call domain the selected rules' delegation resolution is the global one's answer. -/
 theorem CallEra.rules_accessDelegation {s : BenvStat} {dp : Bool} {dadr : Adr} {code : ByteArray}
     {dgc : Nat} {d d1 : Devm} {a : Adr} (h : CallEra s.fork dp)

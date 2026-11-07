@@ -34,12 +34,11 @@ def callChildMsg (sevm : Sevm) (p : Devm) (mcs : Nat) (value : B256) (callee dad
 deletions, so its entry machine's deletion set is empty. -/
 theorem callChildMsg_initDevm_accountsToDelete_isEmpty {sevm : Sevm} {p : Devm} {mcs : Nat}
     {value : B256} {callee dadr : Adr} {ii is : Nat} {code : ByteArray} {dp : Bool}
-    {stmid : State} (hfork : CoveredFork sevm.benvStat.fork) :
+    {stmid : State} (hfork : ShanghaiOnwards sevm.benvStat.fork) :
     (initDevm (callChildMsg sevm p mcs value callee dadr ii is code dp stmid)).accountsToDelete.isEmpty
       = true := by
   have hsd : sevm.benvStat.rules.settle.selfdestructRefund = 0 :=
-    hfork.cases (motive := fun f => (Fork.ruleSet f).settle.selfdestructRefund = 0)
-      rfl rfl rfl rfl
+    hfork.rules_selfdestructRefund
   change (callChildMsg sevm p mcs value callee dadr ii is code dp stmid).inheritedDeletions.isEmpty
     = true
   unfold callChildMsg
@@ -68,7 +67,7 @@ lemma Ninst.runCompiled_call_nonzero_child {sevm : Sevm} {devm : Devm}
     {gw cw vw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc create mcc mcs : Nat} {stmid : State} {cpost : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: vw :: iiw :: isw :: oiw :: osw :: s)
     (h_value : vw ≠ 0)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
@@ -124,8 +123,7 @@ lemma Ninst.runCompiled_call_nonzero_child {sevm : Sevm} {devm : Devm}
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     have hsweep : msg.benv.stat.rules.settle.touchedSweep = false := by
       change sevm.benvStat.rules.settle.touchedSweep = false
-      exact hfork.cases
-        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
+      exact hfork.shanghai.rules_touchedSweep
     simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
       Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind,
       Devm.recordTouch_of_not_touchedSweep hsweep]
@@ -194,7 +192,7 @@ lemma Ninst.runCompiled_call_zero_child {sevm : Sevm} {devm : Devm}
     {gw cw iiw isw oiw osw : B256} {s : List B256}
     {dp : Bool} {dadr : Adr} {code : ByteArray} {dgc : Nat} {d1 : Devm}
     {ext acc mcc mcs : Nat} {stmid : State} {cpost : Devm}
-    (hfork : CoveredFork sevm.benvStat.fork)
+    (hfork : CallEra sevm.benvStat.fork dp)
     (h_stk : devm.stack = gw :: cw :: 0 :: iiw :: isw :: oiw :: osw :: s)
     (h_ext : (devm.setMach ⟨s, devm.memory, devm.gasLeft, devm.stateGas⟩).extCost
       [⟨iiw.toNat, isw.toNat⟩, ⟨oiw.toNat, osw.toNat⟩] = ext)
@@ -235,8 +233,7 @@ lemma Ninst.runCompiled_call_zero_child {sevm : Sevm} {devm : Devm}
     rw [hexec, Frame.settle_eq_settleMsg_handleErrorWith, executeCode.handleErrorWith_ok]
     have hsweep : msg.benv.stat.rules.settle.touchedSweep = false := by
       change sevm.benvStat.rules.settle.touchedSweep = false
-      exact hfork.cases
-        (motive := fun f => f.ruleSet.settle.touchedSweep = false) rfl rfl rfl rfl
+      exact hfork.shanghai.rules_touchedSweep
     simp only [Frame.ofCall, Frame.settleMsg, processMessage.settle, h_error,
       Option.isSome_none, Bool.false_eq_true, ite_false, bind, Except.bind,
       Devm.recordTouch_of_not_touchedSweep hsweep]
