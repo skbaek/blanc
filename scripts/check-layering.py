@@ -194,6 +194,8 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.CheckAssembly", "Lift.ExactWalkO
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["RequestFeeWord", "RequestFeeWordDomain", "RequestFeeWordBound", "Lift.RequestFee.Window", "Lift.RequestFee.Getter"]
+# The plain (EIP-7002/EIP-7251) user path over the shared fee window (blanc-eip7251-consolidation-requests-v1).
+SHARED += ["Lift.RequestFee.Plain"]
 SHARED += ["Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckRange", "Lift.WitnessShadow"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
@@ -1510,6 +1512,11 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.LoadBound", "Lift.BuilderRequest.Accepts",
     "Lift.BuilderRequest.RevertCovered", "Lift.BuilderRequest.Progress",
     "Lift.BuilderRequest.CallerCovered",
+]
+# EIP-7251 consolidation requests: fee and user frames under covered forks.
+CONTRACTS["consolidation-request"] = [
+    "Lift.ConsolidationRequest.Fee", "Lift.ConsolidationRequest.Submission",
+    "Lift.ConsolidationRequest.Frames",
 ]
 
 # Explicit semantic ownership, not the union of existing imports. Abstract token

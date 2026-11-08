@@ -8689,7 +8689,15 @@ as parameters, so a generated tree is an instance by `rfl`. `init_inv`/`init_exa
 the post state `feeGetterPost`. Exact walks take `PUSH0`'s activation as a hypothesis. The excess
 read, the inhibitor guard and the submission body are not here, since they differ by contract.
 The worked consumers are `Blanc/Lift/WithdrawalRequest/FeeLoop.lean` and
-`Blanc/Lift/BuilderRequest/FeePath.lean`. The builder family's queue layout, generic over record
+`Blanc/Lift/BuilderRequest/FeePath.lean`.
+For the plain user path the EIP-7002 and EIP-7251 runtimes share (dispatch, `PUSH1 17`, the slot-zero inhibitor
+guard, the window on slot 0 as stored, then the value guard of a submission), instantiate `PlainUserPath` in
+[`Blanc/Lift/RequestFee/Plain.lean`](../Blanc/Lift/RequestFee/Plain.lean): `plainPath_inv`/`plainPath_exact`
+over `plainPathTree`, `paid_inv`/`paid_exact` over `paidTree`, `dispatch_user_inv` and `exec_of_dispatch_user`
+for any dispatch root, and per runtime `exec_user_cases`, `exec_fee_read`, `exec_fee_read_exact` and
+`exec_inhibited_no_ok`, all under covered forks. `word_fee_eq_of_le` and `word_fee_ne_at_2893` restate the
+2892/2893 boundary on a stored excess word. The worked consumer is `Blanc/Lift/ConsolidationRequest/Frames.lean`;
+EIP-7002 keeps its own glue, which its pins reach. The builder family's queue layout, generic over record
 width, is family-local at `Blanc/Lift/BuilderRequest/QueueLayout.lean`.
 The builder family's user frames are walked once over a fork's `StorageSteps` (`FeePath.lean`), with
 `coveredSteps` and `amsterdamSteps` (`UserFrameAmsterdam.lean`) as its instances: only `SLOAD` and `SSTORE`

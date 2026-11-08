@@ -1212,6 +1212,10 @@ import Blanc.Lift.BuilderRequest.Exit.System
 import Blanc.Lift.BuilderRequest.Exit.SystemCall
 import Blanc.Composition.RequestPhaseAmsterdam
 import Blanc.Lift.RequestSystem.Effects
+import Blanc.Lift.RequestFee.Plain
+import Blanc.Lift.ConsolidationRequest.Fee
+import Blanc.Lift.ConsolidationRequest.Submission
+import Blanc.Lift.ConsolidationRequest.Frames
 import Blanc.Composition.RequestPhaseOrder
 import Blanc.Lift.BuilderRequest.UserFrame
 import Blanc.Lift.BuilderRequest.Exit.Submission

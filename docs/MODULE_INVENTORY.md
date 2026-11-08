@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-623 shared modules, 596 with a module summary.
+624 shared modules, 597 with a module summary.
 
 ## `Blanc/`
 
@@ -607,6 +607,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | module | summary | cited in |
 |---|---|---|
 | [`Getter.lean`](../Blanc/Lift/RequestFee/Getter.lean) | **The request contracts' fee getter.** After the fee quotient is computed, a request contract's getter path requires empty calldata and zero value, then writes the quotient at memory offset zero and returns it. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Plain.lean`](../Blanc/Lift/RequestFee/Plain.lean) | **The plain request contracts' user path, under covered forks.** The EIP-7002 and EIP-7251 runtimes share one user path up to the calldata-length branch: caller dispatch, `PUSH1 17`, the slot-zero inhibitor guard, and the shared fee window run on slot 0 as it is stored. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Window.lean`](../Blanc/Lift/RequestFee/Window.lean) | **The request contracts' fee window.** The system request contracts compute their fee with one instruction sequence: six setup instructions, a loop over the word `fake_exponential` at fraction 17, and a postloop that divides and branches on the calldata length. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 
 ## `Blanc/Lift/RequestSystem/`
