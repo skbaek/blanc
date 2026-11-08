@@ -49,18 +49,16 @@ abbrev AtCodeKeeps (c : Contract) : Prop :=
   ∀ {sevm : Sevm} {pre post : Devm}, sevm.code = c.code →
     Exec 0 sevm pre (.ok post) → post.getBal = pre.getBal
 
-/-- **The generic run corollary.** With the at-code law, one kept run never
-lowers the account and covers its kept values. The foreign leaves live in
-`Blanc/ExecutionKeptValue.lean`; this is direct application. -/
+/-- **The generic run corollary.** With the at-code law, one kept run of a frame not at the
+contract, from a world whose balances sum below `2 ^ 256`, never lowers the contract's balance
+and covers its kept values. The foreign leaves live in `Blanc/ExecutionKeptValue.lean`; this is
+direct application. -/
 theorem kept_run_value {C : ByteArray} {pc : Nat} {sevm : Sevm} {pre : Devm}
     {out : Execution} (run : Exec pc sevm pre out)
     (committed : Execution.commits out = true) (target : sevm.currentTarget ≠ c.address)
     (code : pre.getCode c.address = C)
     (nonempty : C.toList ≠ []) (nondelegating : ¬ isValidDelegation C)
-    (law : AtCodeKeeps c) (hC : C = c.code)
-    (sums : ∀ {q : Nat} {s : Sevm} {d : Devm} {o : Execution},
-      Exec q s d o → SumNof d.state.bal)
-    (callers : ∀ f ∈ Exec.keptAt c.address run, f.sevm.caller ≠ c.address) :
+    (law : AtCodeKeeps c) (hC : C = c.code) (sums : SumNof pre.state.bal) :
     (pre.getBal c.address).toNat ≤
       ((Execution.committedPost out committed).getBal c.address).toNat ∧
     (pre.getBal c.address).toNat + Exec.keptPaid c.address run ≤
@@ -70,14 +68,14 @@ theorem kept_run_value {C : ByteArray} {pc : Nat} {sevm : Sevm} {pre : Devm}
   have at_code : ∀ {s : Sevm} {d e : Devm}, s.currentTarget = c.address →
       s.code = C → Exec 0 s d (.ok e) →
       (e.getBal c.address).toNat = (d.getBal c.address).toNat := by
-    intro s d e htarget hcode exec
+    intro s d e _ hcode exec
     have hcode' : s.code = c.code := hC ▸ hcode
     have h := law hcode' exec
     exact congrArg B256.toNat (congrFun h c.address)
   exact ⟨Exec.kept_bal_neverFalls run committed target code nonempty
     nondelegating sums at_code,
     Exec.kept_bal_ge_keptPaid run committed target code nonempty
-    nondelegating sums at_code callers⟩
+    nondelegating sums at_code⟩
 
 variable {cfg : ChainConfig} {start stop : BlockChain} {blocks : List KeptBlock}
 

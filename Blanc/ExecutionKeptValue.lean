@@ -395,26 +395,223 @@ private theorem Evm.step_cont_getBal_foreign {pc pc' : Nat} {sevm : Sevm}
             exact ⟨rfl, rfl⟩
           exact Ninst.foreignNone_getBal_mono nrun target sum_nof
 
-/-- **Never falls across one kept run.** At an account holding nondelegating
-code, with the world-sum bound at every derivation and the at-code frame law,
-a committed run leaves the account no poorer. The sum premise is universal on
-purpose: the compiling run weakens it to endpoint-plus-preservation. -/
-theorem Exec.kept_bal_neverFalls {C : ByteArray} {a : Adr} {pc : Nat} {sevm : Sevm}
+/-! ## The world across a spawn, for the balance -/
+
+/-- An Amsterdam CREATE spawn transfers its endowment from the parent's target. -/
+private theorem genericCreateAmsterdam_step_spawn_transfer
+    {sevm : Sevm} {state : StateGasRules} {devm : Devm} {endowment : B256}
+    {newAddress : Adr} {mi ms : Nat} {frame : Frame} {resume : Resume}
+    (spawn : genericCreateAmsterdam.step sevm state devm endowment newAddress mi ms =
+      .spawn frame resume) :
+    frame.inner.shouldTransferValue = true := by
+  simp only [genericCreateAmsterdam.step, Bind.bind, Except.bind, Pure.pure, Except.pure] at spawn
+  repeat' split at spawn
+  all_goals simp only [XStep.ofExcept, XStep.spawn.injEq, reduceCtorEq] at spawn
+  all_goals obtain ⟨rfl, -⟩ := spawn
+  all_goals rfl
+
+/-- A spawned frame's two messages open on the parent's balances, and its value moves only
+from the parent's target, or nothing moves and the child stays at the parent's target. For
+every rule record. -/
+private theorem Xinst.step_spawn_bal_neutral {sevm : Sevm} {pre : Devm} {x : Xinst}
+    {frame : Frame} {resume : Resume} (spawn : Xinst.step sevm pre x = .spawn frame resume) :
+    frame.outer.benv.state.bal = pre.state.bal ∧ frame.inner.benv.state.bal = pre.state.bal ∧
+      ((frame.inner.shouldTransferValue = true ∧ frame.inner.caller = sevm.currentTarget) ∨
+        (frame.inner.shouldTransferValue = false ∧
+          frame.inner.currentTarget = sevm.currentTarget)) := by
+  rcases Xinst.step_shape sevm pre x with ⟨ex, shape, -⟩ |
+      ⟨d, endowment, newAddress, mi, ms, hprefix, shape⟩ |
+      ⟨d, d₀, gas, value, caller, target, codeAddress, stv, isStatic,
+        ii, isz, oi, osz, code, delegated, hprefix, -, callerShape, -, shape⟩ |
+      ⟨d, state, endowment, newAddress, mi, ms, hprefix, shape⟩ |
+      ⟨d, d₀, state, gas, reservoir, value, caller, target, codeAddress,
+        stv, isSt, ii, isz, oi, osz, code, dp, nac, ib, hprefix, -, callShape, -, shape⟩ <;>
+    rw [shape] at spawn
+  · cases spawn
+  · obtain ⟨rfl, -⟩ := genericCreate_step_spawn_exact spawn
+    have outer : (addAccessedAddress (((d.withGasLeft (d.gasLeft - except64th d.gasLeft)).withReturnData
+        []).incrNonce sevm.currentTarget) newAddress).state.bal = pre.state.bal := by
+      rw [addAccessedAddress_state]
+      show (((d.withGasLeft (d.gasLeft - except64th d.gasLeft)).withReturnData []).state.incrNonce
+        sevm.currentTarget).bal = _
+      rw [State.incrNonce_bal]
+      exact congrArg Jaune.State.bal hprefix.state.symm
+    refine ⟨outer, ?_, .inl ⟨rfl, rfl⟩⟩
+    rw [Frame.ofCreate, processCreateMessage_msg_bal_eq]
+    exact outer
+  · obtain ⟨rfl, -⟩ := genericCall_step_spawn_exact spawn
+    exact ⟨congrArg Jaune.State.bal hprefix.state.symm, congrArg Jaune.State.bal hprefix.state.symm,
+      callerShape⟩
+  · obtain ⟨m, parent, nacr, hframe, -, hstate, -, -⟩ := genericCreateAmsterdam_step_spawn_form spawn
+    have transfer := genericCreateAmsterdam_step_spawn_transfer spawn
+    have caller := genericCreateAmsterdam_step_spawn_caller spawn
+    subst hframe
+    have outer : m.benv.state.bal = pre.state.bal := by
+      rw [hstate, State.incrNonce_bal]
+      exact congrArg Jaune.State.bal hprefix.state.symm
+    refine ⟨outer, ?_, .inl ⟨transfer, caller⟩⟩
+    rw [Frame.ofCreate, processCreateMessage_msg_bal_eq]
+    exact outer
+  · obtain ⟨rfl, -⟩ := genericCallAmsterdam_step_spawn_exact spawn
+    exact ⟨congrArg Jaune.State.bal hprefix.state.symm, congrArg Jaune.State.bal hprefix.state.symm,
+      callShape⟩
+
+/-- **Entry credit.** A child spawned by a frame not at `a` opens with `a`'s balance plus
+the child's value when the child runs at `a`, and with `a`'s balance unchanged otherwise. -/
+private theorem Evm.step_spawn_enter_bal {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
+    {frame : Frame} {resume : Resume} {child : Evm} {a : Adr}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc') (enter : frame.enter = .run child)
+    (target : sevm.currentTarget ≠ a) (sum_nof : sum pre.state.bal < 2 ^ 256) :
+    (child.dyna.state.bal a).toNat = (pre.state.bal a).toNat +
+      if child.sta.currentTarget = a then child.sta.value.toNat else 0 := by
+  obtain ⟨x, -, spawn, -⟩ := Evm.step_spawn_inv step
+  obtain ⟨-, inner, shape⟩ := Xinst.step_spawn_bal_neutral spawn
+  obtain ⟨benv, transfer, rfl⟩ := Frame.enter_run_inv enter
+  change (benv.state.bal a).toNat = (pre.state.bal a).toNat +
+    if frame.inner.currentTarget = a then frame.inner.value.toNat else 0
+  have sumInner : sum frame.inner.benv.state.bal < 2 ^ 256 := by
+    rw [inner]
+    exact sum_nof
+  rw [← inner]
+  by_cases tr : frame.inner.shouldTransferValue = true ∧ frame.inner.value ≠ 0
+  · obtain ⟨debit, sub, rfl⟩ := of_benvAfterTransfer tr.1 tr.2 transfer
+    have callerNe : frame.inner.caller ≠ a := by
+      rcases shape with ⟨-, caller_eq⟩ | ⟨no_transfer, -⟩
+      · rw [caller_eq]
+        exact target
+      · rw [tr.1] at no_transfer
+        cases no_transfer
+    by_cases here : frame.inner.currentTarget = a
+    · subst a
+      rw [ite_eq_left rfl]
+      exact of_transfer_bal_target sub callerNe sumInner
+    · rw [ite_eq_right here, Nat.add_zero]
+      exact congrArg B256.toNat (of_transfer_bal_other sub callerNe here)
+  · have entry_eq := benvAfterTransfer_eq_of_not_transfer tr transfer
+    subst entry_eq
+    by_cases here : frame.inner.currentTarget = a
+    · rw [ite_eq_left here]
+      have zero : frame.inner.value.toNat = 0 := by
+        rcases shape with ⟨transfers, -⟩ | ⟨-, target_eq⟩
+        · have value_eq : frame.inner.value = 0 := by
+            by_contra nonzero
+            exact tr ⟨transfers, nonzero⟩
+          rw [value_eq]
+          rfl
+        · exact absurd (target_eq.symm.trans here) target
+      rw [zero, Nat.add_zero]
+    · rw [ite_eq_right here, Nat.add_zero]
+
+/-- A spawned child opens on no more balance in total than its parent had. -/
+private theorem Evm.step_spawn_enter_balSum {pc pc' : Nat} {sevm : Sevm} {pre : Devm}
+    {frame : Frame} {resume : Resume} {child : Evm}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc') (enter : frame.enter = .run child) :
+    sum child.dyna.state.bal ≤ sum pre.state.bal := by
+  obtain ⟨x, -, spawn, -⟩ := Evm.step_spawn_inv step
+  obtain ⟨-, inner, -⟩ := Xinst.step_spawn_bal_neutral spawn
+  obtain ⟨benv, transfer, rfl⟩ := Frame.enter_run_inv enter
+  have h := Msg.benvAfterTransfer_balance_effect (out := .ok benv) transfer
+  change State.balSum benv.state ≤ State.balSum frame.inner.benv.state at h
+  change sum benv.state.bal ≤ _
+  rw [← inner]
+  exact h
+
+/-- A child whose settlement commits hands its balances to the parent. -/
+private theorem Evm.step_spawn_settled_getBal {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Frame} {resume : Resume} {child : Evm} {raw : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc') (enter : frame.enter = .run child)
+    (resumed : resume.run (frame.settle raw) = .ok post)
+    (settles : Frame.settlementCommits frame raw = true) :
+    post.state.bal =
+      (Execution.committedPost raw (Frame.raw_commits_of_settlementCommits settles)).state.bal := by
+  obtain ⟨x, -, spawn, -⟩ := Evm.step_spawn_inv step
+  obtain ⟨shape, hstate, -⟩ := Xinst.step_spawn_form spawn
+  have committed := Frame.raw_commits_of_settlementCommits settles
+  cases settledEq : frame.settle raw with
+  | error e =>
+      simp only [Frame.settlementCommits, settledEq, Bool.false_eq_true] at settles
+  | ok s =>
+      rw [settledEq] at resumed
+      have clean : s.error.isSome = false := by
+        unfold Frame.settlementCommits at settles
+        rw [settledEq] at settles
+        cases h : s.error <;> simp_all only [Option.isSome_none, Option.isNone_some, Bool.false_eq_true]
+      have sState := hstate _ _ resumed
+      have process : RunFrame frame (.some ⟨child, raw⟩) (.ok s) := by
+        have := RunFrame.of_run (raw := raw) enter
+        rwa [settledEq] at this
+      rcases shape with ⟨m, rfl, -⟩ | ⟨m, rfl, -, -⟩
+      · have := ProcessMessage.ok_state_eq_committedPost (msg := m) (pc := child.pc) (sevm := child.sta)
+          (pre := child.dyna) process committed
+        exact congrArg Jaune.State.bal (sState.trans this)
+      · obtain ⟨inner, innerProcess, -, code, stateEq⟩ :=
+          ProcessCreateMessage.ok_setCode_state_of_clean process clean
+        have := ProcessMessage.ok_state_eq_committedPost (pc := child.pc) (sevm := child.sta)
+          (pre := child.dyna) innerProcess committed
+        rw [sState, stateEq, State.setCode_bal, this]
+
+/-- A child whose settlement does not commit leaves the parent's balances, whatever its
+subtree did. -/
+private theorem Evm.step_spawn_rolled_getBal {pc pc' : Nat} {sevm : Sevm} {pre post : Devm}
+    {frame : Frame} {resume : Resume} {child : Evm} {raw : Execution}
+    (step : Evm.step ⟨pc, sevm, pre⟩ = .spawn frame resume pc') (enter : frame.enter = .run child)
+    (resumed : resume.run (frame.settle raw) = .ok post)
+    (rolled : ¬ Frame.settlementCommits frame raw = true) : post.state.bal = pre.state.bal := by
+  obtain ⟨x, -, spawn, -⟩ := Evm.step_spawn_inv step
+  obtain ⟨shape, hstate, herr⟩ := Xinst.step_spawn_form spawn
+  have opens := (Xinst.step_spawn_bal_neutral spawn).1
+  cases settledEq : frame.settle raw with
+  | error e =>
+      rw [settledEq] at resumed
+      exact (herr _ _ resumed).elim
+  | ok s =>
+      rw [settledEq] at resumed
+      have dirty : s.error.isSome = true := by
+        unfold Frame.settlementCommits at rolled
+        rw [settledEq] at rolled
+        cases h : s.error <;> simp_all only [Option.isNone_none, not_true_eq_false, Option.isSome_some]
+      have sState := hstate _ _ resumed
+      have process : RunFrame frame (.some ⟨child, raw⟩) (.ok s) := by
+        have := RunFrame.of_run (raw := raw) enter
+        rwa [settledEq] at this
+      rcases shape with ⟨m, rfl, -⟩ | ⟨m, rfl, -, -⟩
+      · have back := (ProcessMessage.rollback_of_error (msg := m) process dirty).1
+        rw [sState, back]
+        exact opens
+      · have back := ProcessCreateMessage.rollback_of_error (msg := m) process dirty
+        rw [sState, back]
+        exact opens
+
+/-- A world with no more balance in total than a bounded one is bounded. -/
+private theorem SumNof.of_le {f g : Adr → B256} (h : sum f ≤ sum g) (bounded : SumNof g) :
+    SumNof f := by
+  unfold SumNof at bounded ⊢
+  exact Nat.lt_of_le_of_lt h bounded
+
+/-! ## The fold -/
+
+/-- **Covers the kept values across one kept run.** At an account holding nondelegating code
+`C`, from a world whose balances sum below `2 ^ 256`, and with the at-code frame law, a committed
+run of a frame not at the account leaves the account with at least its balance plus every kept
+frame's carried value. Each frame entering the account is credited its value by a caller other
+than the account: a value-moving spawn's caller is its parent's target, never the account. -/
+theorem Exec.kept_bal_ge_keptPaid {C : ByteArray} {a : Adr} {pc : Nat} {sevm : Sevm}
     {pre : Devm} {out : Execution} (run : Exec pc sevm pre out)
     (committed : Execution.commits out = true) (target : sevm.currentTarget ≠ a)
     (code : pre.getCode a = C)
     (nonempty : C.toList ≠ []) (nondelegating : ¬ isValidDelegation C)
-    (sums : ∀ {q : Nat} {s : Sevm} {d : Devm} {o : Execution},
-      Exec q s d o → SumNof d.state.bal)
+    (sums : SumNof pre.state.bal)
     (at_code : ∀ {s : Sevm} {d e : Devm}, s.currentTarget = a →
       s.code = C → Exec 0 s d (.ok e) → (e.getBal a).toNat = (d.getBal a).toNat) :
-    (pre.getBal a).toNat ≤ ((Execution.committedPost out committed).getBal a).toNat := by
+    (pre.getBal a).toNat + Exec.keptPaid a run ≤
+      ((Execution.committedPost out committed).getBal a).toNat := by
   refine Exec.retained_induction
     (P := fun _ sevm pre out run => sevm.currentTarget ≠ a → pre.getCode a = C →
-      ∀ (committed : Execution.commits out = true),
-        (pre.getBal a).toNat ≤ ((Execution.committedPost out committed).getBal a).toNat)
-    ?_ ?_ ?_ ?_ ?_ run committed target code committed
-  · intro pc sevm pre out step target code committed
+      SumNof pre.state.bal → ∀ (committed : Execution.commits out = true),
+        (pre.getBal a).toNat + Exec.keptPaid a run ≤
+          ((Execution.committedPost out committed).getBal a).toNat)
+    ?_ ?_ ?_ ?_ ?_ run committed target code sums committed
+  · intro pc sevm pre out step target code sum_pre committed
     revert committed
     cases out with
     | error err =>
@@ -422,8 +619,9 @@ theorem Exec.kept_bal_neverFalls {C : ByteArray} {a : Adr} {pc : Nat} {sevm : Se
         simp only [Execution.commits, Bool.false_eq_true] at committed
     | ok post =>
         intro committed
-        have sum_pre : sum pre.state.bal < 2 ^ 256 :=
-          sums (Exec.halt step)
+        have hpaid : Exec.keptPaid a (Exec.halt step) = 0 := by
+          simp only [Exec.keptPaid, Exec.keptAt, List.map_nil, List.sum_nil]
+        rw [hpaid, Nat.add_zero]
         cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
         | none =>
             unfold Evm.step at step
@@ -448,177 +646,123 @@ theorem Exec.kept_bal_neverFalls {C : ByteArray} {a : Adr} {pc : Nat} {sevm : Se
                 | ok result =>
                     rw [jumpEq] at step
                     cases step
-  · intro pc sevm pre pc' post out step next ih target code committed
-    have sum_pre : sum pre.state.bal < 2 ^ 256 := sums (Exec.cont step next)
+  · intro pc sevm pre pc' post out step next ih target code sum_pre committed
+    have edge := Exec.Deriv.ParentStep.cont step next
     have hmono : (pre.state.bal a).toNat ≤ (post.state.bal a).toNat :=
       Evm.step_cont_getBal_foreign step target sum_pre
-    have hne : (pre.getCode a).toList ≠ [] := by
-      rw [code]
-      exact nonempty
-    have hnext := Blanc.Exec.Deriv.ParentStep.codePreserve
-      (Exec.Deriv.ParentStep.cont step next) a hne
-    have hle := ih target (by rw [hnext]; exact code) committed
-    exact Nat.le_trans hmono hle
-  · intro pc sevm pre frame resume pc' result post out step enter resumed next ih target code committed
+    have hnext := Blanc.Exec.Deriv.ParentStep.codePreserve edge a (by rw [code]; exact nonempty)
+    have hle_sum := Blanc.Exec.Deriv.ParentStep.balSum_le edge
+    dsimp only at hle_sum
+    have hsum : SumNof post.state.bal := SumNof.of_le hle_sum sum_pre
+    have hpaid : Exec.keptPaid a (Exec.cont step next) = Exec.keptPaid a next := by
+      simp only [Exec.keptPaid, Exec.keptAt]
+    have hle := ih target (by rw [hnext]; exact code) hsum committed
+    rw [hpaid]
+    exact Nat.le_trans (Nat.add_le_add_right hmono _) hle
+  · intro pc sevm pre frame resume pc' result post out step enter resumed next ih target code sum_pre
+      committed
+    have edge := Exec.Deriv.ParentStep.doneOk step enter resumed next
     obtain ⟨x, -, spawn, -⟩ := Evm.step_spawn_inv step
-    obtain ⟨shape, hstate, -⟩ := Xinst.step_spawn_form spawn
     have runX : Xinst.Run sevm pre x .none (.ok post) := by
       unfold Xinst.Run
       rw [spawn]
       exact ⟨result, RunFrame.of_done enter, resumed.symm⟩
-    have sum_pre : sum pre.state.bal < 2 ^ 256 :=
-      sums (Exec.doneOk step enter resumed next)
     have hmono : (pre.state.bal a).toNat ≤ (post.state.bal a).toNat :=
       Xinst.foreignNone_getBal_mono runX target sum_pre
-    have hne : (pre.getCode a).toList ≠ [] := by
-      rw [code]
-      exact nonempty
-    have hnext := Blanc.Exec.Deriv.ParentStep.codePreserve
-      (Exec.Deriv.ParentStep.doneOk step enter resumed next) a hne
-    have hle := ih target (by rw [hnext]; exact code) committed
-    exact Nat.le_trans hmono hle
-  · intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next settles childIH nextIH target code committed
-    -- DRAFT: entry analysis resists. Needs a lane-aware entry-credit helper:
-    -- from `Xinst.step_shape` (5 arms) get caller/value identities per arm
-    -- (`callerShape`/`callShape` give caller = currentTarget or no-transfer,
-    -- but staticcall-value-0 and delegatecall-target-preservation are
-    -- unwritten), then `of_transfer_bal_target/other` under `sums` for the
-    -- here case and `of_transfer_bal_other` for the far case; the no-transfer
-    -- subcase at `a` needs the staticcall value-0 fact. At-`a` child via
-    -- `at_code` (pc 0 by `step_spawn_child`), far child via `childIH`,
-    -- resume via `ok_state_eq_committedPost`, then `nextIH`. Estimated 60-100
-    -- lines with the helper.
-    sorry
-  · intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next rolled nextIH target code committed
-    -- DRAFT: needs a lane-aware rolled-entry helper
-    -- `Evm.step_spawn_rolled_getBal`: call lane gives `post.state =
-    -- pre.state` via `rollback_of_error` (names verified in
-    -- `step_spawn_rolled_getStor`); create lane needs `m.benv.state.bal a =
-    -- pre.state.bal a` through the creation prefix, i.e. a balance version of
-    -- `create_access_getStor`/`create_collision_getStor` (Amsterdam prefix
-    -- facts exist as instructionFrames; the per-lane assembly is unwritten).
-    -- Then code via `codePreserve`, callers/`keptPaid` via the `keptAt`
-    -- rewrite, close by the continuation IH. Estimated 30-50 lines.
-    sorry
+    have hnext := Blanc.Exec.Deriv.ParentStep.codePreserve edge a (by rw [code]; exact nonempty)
+    have hle_sum := Blanc.Exec.Deriv.ParentStep.balSum_le edge
+    dsimp only at hle_sum
+    have hsum : SumNof post.state.bal := SumNof.of_le hle_sum sum_pre
+    have hpaid : Exec.keptPaid a (Exec.doneOk step enter resumed next) =
+        Exec.keptPaid a next := by
+      simp only [Exec.keptPaid, Exec.keptAt]
+    have hle := ih target (by rw [hnext]; exact code) hsum committed
+    rw [hpaid]
+    exact Nat.le_trans (Nat.add_le_add_right hmono _) hle
+  · intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next settles
+      childIH nextIH target code sum_pre committed
+    have edge := Exec.Deriv.ParentStep.runOk step enter child resumed next
+    have hnext := Blanc.Exec.Deriv.ParentStep.codePreserve edge a (by rw [code]; exact nonempty)
+    have hle_sum := Blanc.Exec.Deriv.ParentStep.balSum_le edge
+    dsimp only at hle_sum
+    have hsum : SumNof post.state.bal := SumNof.of_le hle_sum sum_pre
+    have tail := nextIH target (by rw [hnext]; exact code) hsum committed
+    have entry := Evm.step_spawn_enter_bal step enter target sum_pre
+    have handed := congrFun (Evm.step_spawn_settled_getBal step enter resumed settles) a
+    have childCommits := Frame.raw_commits_of_settlementCommits settles
+    obtain ⟨pcZero, childCode, source⟩ := Evm.step_spawn_child step enter
+    by_cases here : childEvm.sta.currentTarget = a
+    · have hpaid : Exec.keptPaid a (Exec.runOk step enter child resumed next) =
+          childEvm.sta.value.toNat + Exec.keptPaid a next := by
+        unfold Exec.keptPaid
+        rw [Exec.keptAt, dite_eq_left settles, ite_eq_left here, List.map_append, List.sum_append,
+          List.map_cons, List.map_nil, List.sum_cons, List.sum_nil, Nat.add_zero]
+        rfl
+      rw [ite_eq_left here] at entry
+      have childRuns : childEvm.sta.code = C := by
+        have equal := source (by rw [here]; exact target)
+          (by rw [here, code]; intro empty; subst empty; exact nonempty ByteArray.toList_empty)
+          (by rw [here, code]; exact nondelegating)
+        rw [equal, here, code]
+      cases raw with
+      | error e => simp only [Execution.commits, Bool.false_eq_true] at childCommits
+      | ok e =>
+          have child0 : Exec 0 childEvm.sta childEvm.dyna (.ok e) := pcZero ▸ child
+          have law := at_code here childRuns child0
+          have postBal : (post.getBal a).toNat = (pre.getBal a).toNat + childEvm.sta.value.toNat := by
+            change (post.state.bal a).toNat = _
+            rw [handed]
+            change (e.getBal a).toNat = _
+            rw [law]
+            exact entry
+          rw [hpaid]
+          omega
+    · have hpaid : Exec.keptPaid a (Exec.runOk step enter child resumed next) =
+          Exec.keptPaid a child + Exec.keptPaid a next := by
+        unfold Exec.keptPaid
+        rw [Exec.keptAt, dite_eq_left settles, ite_eq_right here, List.map_append, List.sum_append]
+      rw [ite_eq_right here, Nat.add_zero] at entry
+      have childSum : SumNof childEvm.dyna.state.bal :=
+        SumNof.of_le (Evm.step_spawn_enter_balSum step enter) sum_pre
+      have below := childIH here ((childCode a).trans code) childSum childCommits
+      have postBal : (post.getBal a).toNat =
+          ((Execution.committedPost raw childCommits).getBal a).toNat := by
+        change (post.state.bal a).toNat = _
+        rw [handed]
+        rfl
+      have startBal : (childEvm.dyna.getBal a).toNat = (pre.getBal a).toNat := entry
+      rw [hpaid]
+      omega
+  · intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next rolled
+      nextIH target code sum_pre committed
+    have edge := Exec.Deriv.ParentStep.runOk step enter child resumed next
+    have hnext := Blanc.Exec.Deriv.ParentStep.codePreserve edge a (by rw [code]; exact nonempty)
+    have back := Evm.step_spawn_rolled_getBal step enter resumed rolled
+    have hsum : SumNof post.state.bal := by
+      unfold SumNof
+      rw [back]
+      exact sum_pre
+    have hpaid : Exec.keptPaid a (Exec.runOk step enter child resumed next) =
+        Exec.keptPaid a next := by
+      unfold Exec.keptPaid
+      rw [Exec.keptAt, dite_eq_right rolled, List.nil_append]
+    have tail := nextIH target (by rw [hnext]; exact code) hsum committed
+    have same : post.getBal a = pre.getBal a := congrFun back a
+    rw [hpaid, ← same]
+    exact tail
 
-/-- **Covers the kept values.** Under the never-falls premises, with every kept
-frame's caller away from the account, the post balance covers the pre balance
-plus every kept frame's carried value. The caller premise excludes self-calls,
-whose value moves from the account to itself. -/
-theorem Exec.kept_bal_ge_keptPaid {C : ByteArray} {a : Adr} {pc : Nat} {sevm : Sevm}
+/-- **Never falls across one kept run.** Under the premises of `Exec.kept_bal_ge_keptPaid`, a
+committed run of a frame not at the account leaves the account no poorer. -/
+theorem Exec.kept_bal_neverFalls {C : ByteArray} {a : Adr} {pc : Nat} {sevm : Sevm}
     {pre : Devm} {out : Execution} (run : Exec pc sevm pre out)
     (committed : Execution.commits out = true) (target : sevm.currentTarget ≠ a)
     (code : pre.getCode a = C)
     (nonempty : C.toList ≠ []) (nondelegating : ¬ isValidDelegation C)
-    (sums : ∀ {q : Nat} {s : Sevm} {d : Devm} {o : Execution},
-      Exec q s d o → SumNof d.state.bal)
+    (sums : SumNof pre.state.bal)
     (at_code : ∀ {s : Sevm} {d e : Devm}, s.currentTarget = a →
-      s.code = C → Exec 0 s d (.ok e) → (e.getBal a).toNat = (d.getBal a).toNat)
-    (callers : ∀ f ∈ Exec.keptAt a run, f.sevm.caller ≠ a) :
-    (pre.getBal a).toNat + Exec.keptPaid a run ≤
-      ((Execution.committedPost out committed).getBal a).toNat := by
-  refine Exec.retained_induction
-    (P := fun _ sevm pre out run => sevm.currentTarget ≠ a → pre.getCode a = C →
-      (∀ f ∈ Exec.keptAt a run, f.sevm.caller ≠ a) →
-      ∀ (committed : Execution.commits out = true),
-        (pre.getBal a).toNat + Exec.keptPaid a run ≤
-          ((Execution.committedPost out committed).getBal a).toNat)
-    ?_ ?_ ?_ ?_ ?_ run committed target code callers committed
-  · intro pc sevm pre out step target code callers committed
-    revert committed
-    cases out with
-    | error err =>
-        intro committed
-        simp only [Execution.commits, Bool.false_eq_true] at committed
-    | ok post =>
-        intro committed
-        have sum_pre : sum pre.state.bal < 2 ^ 256 :=
-          sums (Exec.halt step)
-        have hpaid : Exec.keptPaid a (Exec.halt step) = 0 := by
-          simp only [Exec.keptPaid, Exec.keptAt, List.map_nil, List.sum_nil]
-        cases decoded : Evm.getInst ⟨pc, sevm, pre⟩ with
-        | none =>
-            unfold Evm.step at step
-            rw [decoded] at step
-            cases step
-        | some instruction =>
-            cases instruction with
-            | last last =>
-                rw [Evm.step_last decoded] at step
-                have run : Linst.Run sevm pre last (.ok post) :=
-                  Step.halt.inj step
-                have hmono := Linst.targetBalanceMono_of_foreign run target sum_pre
-                rw [hpaid, Nat.add_zero]
-                exact hmono
-            | next next =>
-                rw [Evm.step_next decoded] at step
-                exact (Ninst.step_ne_halt_ok step).elim
-            | jump jumpInst =>
-                rw [Evm.step_jump decoded] at step
-                cases jumpEq : Jinst.run ⟨pc, sevm, pre⟩ jumpInst with
-                | error error =>
-                    rw [jumpEq] at step
-                    cases step
-                | ok result =>
-                    rw [jumpEq] at step
-                    cases step
-  · intro pc sevm pre pc' post out step next ih target code callers committed
-    have sum_pre : sum pre.state.bal < 2 ^ 256 :=
-      sums (Exec.cont step next)
-    have hmono : (pre.state.bal a).toNat ≤ (post.state.bal a).toNat :=
-      Evm.step_cont_getBal_foreign step target sum_pre
-    have hne : (pre.getCode a).toList ≠ [] := by
-      rw [code]
-      exact nonempty
-    have hnext := Blanc.Exec.Deriv.ParentStep.codePreserve
-      (Exec.Deriv.ParentStep.cont step next) a hne
-    have hpaid : Exec.keptPaid a (Exec.cont step next) = Exec.keptPaid a next := by
-      simp only [Exec.keptPaid, Exec.keptAt]
-    have hcall : ∀ f ∈ Exec.keptAt a next, f.sevm.caller ≠ a := by
-      rw [Exec.keptAt] at callers
-      exact callers
-    have hle := ih target (by rw [hnext]; exact code) hcall committed
-    rw [hpaid]
-    exact Nat.le_trans (Nat.add_le_add_right hmono _) hle
-  · intro pc sevm pre frame resume pc' result post out step enter resumed next ih target code callers committed
-    obtain ⟨x, -, spawn, -⟩ := Evm.step_spawn_inv step
-    obtain ⟨shape, hstate, -⟩ := Xinst.step_spawn_form spawn
-    have runX : Xinst.Run sevm pre x .none (.ok post) := by
-      unfold Xinst.Run
-      rw [spawn]
-      exact ⟨result, RunFrame.of_done enter, resumed.symm⟩
-    have sum_pre : sum pre.state.bal < 2 ^ 256 :=
-      sums (Exec.doneOk step enter resumed next)
-    have hmono : (pre.state.bal a).toNat ≤ (post.state.bal a).toNat :=
-      Xinst.foreignNone_getBal_mono runX target sum_pre
-    have hne : (pre.getCode a).toList ≠ [] := by
-      rw [code]
-      exact nonempty
-    have hnext := Blanc.Exec.Deriv.ParentStep.codePreserve
-      (Exec.Deriv.ParentStep.doneOk step enter resumed next) a hne
-    have hpaid : Exec.keptPaid a (Exec.doneOk step enter resumed next) =
-        Exec.keptPaid a next := by
-      simp only [Exec.keptPaid, Exec.keptAt]
-    have hcall : ∀ f ∈ Exec.keptAt a next, f.sevm.caller ≠ a := by
-      rw [Exec.keptAt] at callers
-      exact callers
-    have hle := ih target (by rw [hnext]; exact code) hcall committed
-    rw [hpaid]
-    exact Nat.le_trans (Nat.add_le_add_right hmono _) hle
-  · intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next settles childIH nextIH target code callers committed
-    -- DRAFT: same entry-analysis blocker as the never-falls committed-spawn
-    -- leaf above (lane-aware caller/value identities, staticcall value-0,
-    -- exact credit via `of_transfer_bal_target` under `sums`), plus `keptPaid`
-    -- over the append and the `callers` split. At-`a` child via `at_code`,
-    -- far child via `childIH`, resume via `ok_state_eq_committedPost`, then
-    -- `nextIH` and omega. Estimated 60-100 lines with the helper.
-    sorry
-  · intro pc sevm pre frame resume pc' childEvm raw post out step enter child resumed next rolled nextIH target code callers committed
-    -- DRAFT: same rolled-entry blocker as the never-falls rolled leaf above
-    -- (`Evm.step_spawn_rolled_getBal`, call lane exact, create lane via a
-    -- balance `create_access/collision` assembly), plus `keptPaid` over the
-    -- `[] ++ rest` reduction and the `callers` transport. Estimated 30-50
-    -- lines with the helper.
-    sorry
+      s.code = C → Exec 0 s d (.ok e) → (e.getBal a).toNat = (d.getBal a).toNat) :
+    (pre.getBal a).toNat ≤ ((Execution.committedPost out committed).getBal a).toNat :=
+  Nat.le_trans (Nat.le_add_right _ _)
+    (Exec.kept_bal_ge_keptPaid run committed target code nonempty nondelegating sums at_code)
 
 end Blanc
