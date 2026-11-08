@@ -51,7 +51,14 @@ shared claim map docs/DEPLOYED_BYTECODE_CLAIM_MAP.md or a live family's
 docs/claim-map/<key>.md cites (live: scripts/live-set.toml on disk), resolved
 with scripts/check-deployed-claim-map.py's own patterns, and (keep rule (c))
 every declaration scripts/proof-recipes.toml names as a canonical example or a
-`declaration:` symbol (generate-proof-recipes.py resolves both). `--keep-file FILE`
+`declaration:` symbol (generate-proof-recipes.py resolves both), and (keep
+rule (d)) every declaration of a module whose path or dotted name a tracked live tool under
+scripts/ names (Python, shell, TOML, JSON; not scripts/releases/, not the
+tables that only list modules), e.g. a lift option emitting its import. A module
+left with no public declaration counts as emptied: its private leftovers go
+with it unless something outside the removed and departing sets uses them
+(refused, with the user), and public declarations the census does not list
+(`X.below` theorems) go when no live module imports it. `--keep-file FILE`
 adds names, one per line (`#` comments). Every input (keys, census, keep
 list, claim-map files, release.py's helpers) is read from the tree at run
 time, so the sweep reruns on any departed tree.
@@ -94,6 +101,9 @@ import sys
 import tarfile
 import tempfile
 
+DECL_HEAD = re.compile(
+    r"^(?:@\[[^\]]*\]\s*)?(?:(?:private|protected|noncomputable|partial|unsafe)\s+)*"
+    r"(?:theorem|lemma|def|abbrev|structure|inductive|class|instance|opaque|axiom)\b")
 STRUCTURE = re.compile(
     r"^(?:noncomputable\s+|public\s+)?(namespace|section|mutual|end)\b(.*)$")
 IMPORT = re.compile(r"^(?:public\s+|private\s+)?(?:meta\s+)?import\s+(.*)$")
@@ -555,6 +565,61 @@ def recipe_keeps(root, candidates, module_for):
     return kept
 
 
+TOOL_SUFFIXES = (".py", ".sh", ".toml", ".json")
+
+
+def tool_module_hits(texts, modules, token):
+    """Keep rule (d) core: the modules among `modules` (dotted, `Blanc.X`) whose
+    module path (`Blanc/X.lean`) or dotted name a tool text names. -> {module: file}."""
+    hits = {}
+    for rel, text in sorted(texts.items()):
+        for t in token.findall(text):
+            mod = t[:-5].replace("/", ".") if t.endswith(".lean") else t
+            if mod in modules:
+                hits.setdefault(mod, rel)
+    return hits
+
+
+def tool_keeps(root, release, modules):
+    """Keep rule (d): modules a live tool names, read from the tracked scripts on
+    disk (Python, shell, TOML, JSON under scripts/), excluding the release and sweep
+    records under scripts/releases/, files already gone with the departure, and the
+    tables that merely list modules (check-layering.py, release.py's row files and
+    the registered writers' outputs). A lift generator option emitting
+    `import Blanc.Lift.X`, say, keeps Blanc.Lift.X. -> {module: file}."""
+    listing = {rel for rel, _ in release.ROW_FILES} | {r for _, owned in release.WRITERS for r in owned}
+    listing |= {"scripts/check-layering.py", "scripts/sweep-exposed.py"}
+    texts = {}
+    for rel in git(root, "ls-files", "-z", "--", "scripts").decode().split("\0"):
+        if (not rel.endswith(TOOL_SUFFIXES) or rel.startswith("scripts/releases/")
+                or rel in listing or not os.path.exists(os.path.join(root, rel))):
+            continue
+        try:
+            with open(os.path.join(root, rel), encoding="utf-8") as handle:
+                texts[rel] = handle.read()
+        except UnicodeDecodeError:
+            continue
+    return tool_module_hits(texts, modules, release.BLANC_TOKEN)
+
+
+def promotable_privates(mod, rest, rows, users, module_for, removed, departing, ambiguous):
+    """Gap rule: a module whose public declarations all go keeps no API, so its
+    private leftovers `rest` go with the file, provided nothing outside the removed,
+    departing and leftover sets uses them (an ambiguous name's users are read inside
+    the module only: the others belong to its public twin). -> (ok, problems)."""
+    if not rest or not all(rows[p]["private"] for p in rest):
+        return False, []
+    problems = []
+    for p in sorted(rest):
+        us = set(users.get(p, ()))
+        if p in ambiguous:
+            us = {u for u in us if module_for(u) == mod}
+        live = sorted(us - removed - departing - rest)
+        if live:
+            problems.append(f"private {p} of API-less {mod} is still used by {live[0]}")
+    return True, problems
+
+
 def load_claim_checker(root):
     path = os.path.join(root, "scripts", "check-deployed-claim-map.py")
     spec = importlib.util.spec_from_file_location("claim_map_for_sweep", path)
@@ -672,7 +737,10 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
     kept_generated = {d for d in plain if module_path(ex.module_for(d)) in generated}
     kept_cited = claim_map_keeps(root, plain, ex.population - plain - ex.departing)
     kept_cited.update(recipe_keeps(root, plain, ex.module_for))
-    keep_eff |= kept_generated | set(kept_cited)
+    tool_hits = tool_keeps(root, release, {ex.module_for(d) for d in plain})
+    kept_tool = {d: tool_hits[ex.module_for(d)] for d in plain if ex.module_for(d) in tool_hits}
+    keep_eff |= kept_generated | set(kept_cited) | set(kept_tool)
+    pinned = set(keep) | kept_generated | set(kept_cited) | set(kept_tool)
     ranges = ex.census["ranges"]
     nested_kept = {}
     per_module_names = {}
@@ -719,15 +787,45 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
             continue
         new_texts = {mod: "".join(l for i, l in enumerate(texts[mod], 1) if i not in deletes[mod])
                      for mod in texts}
-        emptied, kept_files = [], {}
+        emptied, kept_files, promoted, unlisted, promo_problems = [], {}, {}, {}, []
         for mod in sorted(by_module):
-            if per_module_names.get(mod, set()) <= removed:
-                left = leftover_commands(new_texts[mod].splitlines(keepends=True))
-                if left:
+            rest = per_module_names.get(mod, set()) - removed
+            ok, probs = (False, []) if rest & pinned else promotable_privates(
+                mod, rest, ex.rows, ex.users, ex.module_for, removed, ex.departing, ex.ambiguous)
+            if rest and not ok:
+                continue
+            if probs:
+                promo_problems += probs
+                continue
+            text = new_texts[mod]
+            if rest:  # the private leftovers' own lines go too, for the leftover test
+                lines = texts[mod]
+                drop, _, _ = plan_lines(lines, {p: ranges[p] for p in rest if p in ranges}, {})
+                text = "".join(l for i, l in enumerate(lines, 1) if i not in deletes[mod] | drop)
+            left = leftover_commands(text.splitlines(keepends=True))
+            if left and any(DECL_HEAD.match(l) for _, l in left) and all(
+                    DECL_HEAD.match(l) for _, l in left):
+                # Public declarations the census does not list (`X.below` theorems,
+                # taken for auxiliaries): unreachable when no live module imports this one.
+                gone = {m for m in by_module if per_module_names.get(m, set()) <= removed}
+                importers = sorted(r for r, t in disk.items()
+                                   if r[:-5].replace("/", ".") not in gone | {mod}
+                                   and mod in imports_of(new_texts.get(r[:-5].replace("/", "."), t)))
+                importers += [r for r in tracked if not r.startswith("Blanc") and r.endswith(".lean")
+                              and os.path.exists(os.path.join(root, r))
+                              and mod in imports_of(open(os.path.join(root, r), encoding="utf-8").read())]
+                if importers:
                     kept_files[mod] = left
-                else:
-                    emptied.append(mod)
+                    continue
+                unlisted[mod] = [l for _, l in left]
+            elif left:
+                kept_files[mod] = left
+                continue
+            emptied.append(mod)
+            if rest:
+                promoted[mod] = sorted(rest)
         emptied_set = set(emptied)
+        promoted_names = {p for ps in promoted.values() for p in ps}
         # What the census misses: a removed declaration the remaining Blanc text
         # still names (a syntax quotation in a tactic `def`, chiefly) is kept.
         remaining = {}
@@ -745,7 +843,8 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
             continue
         break
     if not problems:
-        problems += verify_users(removed, ex.users, ex.departing, ex.permanent)
+        problems += promo_problems
+        problems += verify_users(removed, ex.users, ex.departing | promoted_names, ex.permanent)
         problems += verify_keep(removed, keep_closure(keep_eff, ex.users, plain))
     if problems:
         for p in problems[:40]:
@@ -799,6 +898,13 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
             row = ex.rows[d]
             removed_rows.append({"name": d, "module": mod, "range": [s, e], "lines": span,
                                  "kind": row["kind"], "private": row["private"], "fp": row["fp"]})
+        for d in promoted.get(mod, []):
+            row = ex.rows[d]
+            # An ambiguous name's census range may be its twin's: the file goes whole.
+            r = None if d in ex.ambiguous else ranges.get(d)
+            removed_rows.append({"name": d, "module": mod, "range": r, "lines": r,
+                                 "kind": row["kind"], "private": True, "fp": row["fp"],
+                                 "why": "private leftover of a module with no public declaration left"})
     with open(census_path, "rb") as handle:
         census_sha = hashlib.sha256(handle.read()).hexdigest()
     record = {
@@ -809,6 +915,8 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
         "kept_ambiguous": sorted(plain & ex.ambiguous),
         "kept_generated": sorted(kept_generated),
         "kept_cited": [{"name": d, "cited_in": p} for d, p in sorted(kept_cited.items())],
+        "kept_tool": [{"name": d, "named_in": p} for d, p in sorted(kept_tool.items())],
+        "removed_unlisted": {module_path(m): ls for m, ls in sorted(unlisted.items())},
         "kept_nested": [{"name": d, "inside": h} for d, h in sorted(nested_kept.items())],
         "kept_named": [{"name": d, "named_in": p} for d, p in sorted(mentioned_kept.items())],
         "import_rewrites": {rel: [{"removed": m, "imports": a} for m, a in ch]
@@ -824,7 +932,8 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
           f"declaration(s); keep {len(keep)} (closure {len(closure)}), ambiguous kept "
           f"{len(record['kept_ambiguous'])}, certificate-generated kept {len(kept_generated)}, "
           f"claim-map or recipe cited kept {len(kept_cited)}, nested kept {len(nested_kept)}, kept as still named "
-          f"{len(mentioned_kept)}; removing {len(removed)} "
+          f"{len(mentioned_kept)}, tool-named kept {len(kept_tool)}; removing {len(removed)} "
+          f"(+{len(promoted_names)} private leftover(s) of API-less modules) "
           f"from {len(texts)} module(s), {len(emptied)} module(s) removed, "
           f"{len(kept_files)} emptied module(s) kept for other commands")
     for m, left in kept_files.items():
@@ -835,6 +944,12 @@ def run_sweep(root, keys, date, census_path, keep, commit, dry_run):
         print(f"  cited by the claim map, kept: {d} in {p}")
     for path in sorted({module_path(ex.module_for(d)) for d in kept_generated}):
         print(f"  certificate-generated module, kept: {path}")
+    for mod, rel in sorted(tool_hits.items()):
+        print(f"  named by a live tool, kept: {module_path(mod)} in {rel}")
+    for mod, ps in sorted(promoted.items()):
+        print(f"  no public declaration left, removed with its private leftovers: {module_path(mod)} ({', '.join(ps)})")
+    for mod, ls in sorted(unlisted.items()):
+        print(f"  no live importer, removed with its unlisted declarations: {module_path(mod)} ({'; '.join(l[:60] for l in ls)})")
     for d, p in sorted(mentioned_kept.items()):
         print(f"  still named, kept: {d} in {p}")
     for rel, ch in sorted(import_rewrites.items()):
@@ -1044,6 +1159,28 @@ theorem dead_b : True := dead_a
         failures.append(f"field notation in an example: found {found}")
     else:
         bites.append(("field notation", [f"Fix.T.dead_field is reached by field notation in {found['Fix.T.dead_field']}"]))
+    # Control 7, keep rule (d): a module a live tool names (an emitted import, a path) is kept.
+    hits = tool_module_hits({"scripts/lift/lift.py": '["import Blanc.Lift.Kept"] if opt else []',
+                             "scripts/x.json": '{"p": "Blanc/Lift/Path.lean"}'},
+                            {"Blanc.Lift.Kept", "Blanc.Lift.Path", "Blanc.Lift.Free"}, release.BLANC_TOKEN)
+    if set(hits) != {"Blanc.Lift.Kept", "Blanc.Lift.Path"}:
+        failures.append(f"keep rule (d): hits {sorted(hits)}")
+    else:
+        bites.append(("tool keep", [f"kept {sorted(hits)}; Blanc.Lift.Free removable"]))
+    # Control 8: a module with no public declaration left is emptied with its
+    # private leftovers, unless something live uses one (refused, with the user).
+    rows = {"M.p": {"private": True}, "M.q": {"private": True}, "M.pub": {"private": False}}
+    mod_of = {"M.p": "M", "M.q": "M", "M.pub": "M", "Live.u": "L", "Twin.u": "T"}.get
+    ok, probs = promotable_privates("M", {"M.p"}, rows, {"M.p": set()}, mod_of, set(), set(), set())
+    expect("private leaf of an API-less module", probs if ok else ["not promoted"], False)
+    ok, probs = promotable_privates("M", {"M.q"}, rows, {"M.q": {"Live.u"}}, mod_of, set(), set(), set())
+    expect("private leftover used by a live declaration", probs if ok else [], True)
+    bites.append(("private leftover in use", probs[:1]))
+    ok, probs = promotable_privates("M", {"M.q"}, rows, {"M.q": {"Twin.u"}}, mod_of, set(), set(), {"M.q"})
+    expect("ambiguous private whose other users are its twin's", probs if ok else ["not promoted"], False)
+    ok, _ = promotable_privates("M", {"M.p", "M.pub"}, rows, {}, mod_of, set(), set(), set())
+    if ok:
+        failures.append("a module keeping a public declaration was promoted")
     # Control 5, keep rule (b): claim-map citations keep their declarations.
     checker = load_claim_checker(root)
     doc = ("| x | `Blanc.Fix.cited` (`Blanc/Fix.lean:3`) | y |\n"
@@ -1085,9 +1222,9 @@ theorem dead_b : True := dead_a
     if failures:
         print(f"REGRESSION — sweep self-test: {len(failures)} failure(s)")
         return 1
-    print("OK — sweep self-test: 19 controls (exact fixture sweep with prefix, comment and blank "
+    print("OK — sweep self-test: 24 controls (exact fixture sweep with prefix, comment and blank "
           "line; dangling end; live use; keep and keep closure; nested deriving instance; kept "
-          "overlap; still-named declaration; field notation; claim-map keep rule (b); proof-recipe keep rule (c); emptied-module leftovers; import drop and rewrite; "
+          "overlap; still-named declaration; field notation; claim-map keep rule (b); proof-recipe keep rule (c); tool keep rule (d); API-less module privates; emptied-module leftovers; import drop and rewrite; "
           "SHARED table edit and its refusal)")
     return 0
 
