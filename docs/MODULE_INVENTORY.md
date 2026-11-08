@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-530 shared modules, 503 with a module summary.
+540 shared modules, 513 with a module summary.
 
 ## `Blanc/`
 
@@ -114,6 +114,7 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`ExecutionInRootOwnCode.lean`](../Blanc/ExecutionInRootOwnCode.lean) | Own code and code addresses at actual complete-settlement outer roots. | [E3](COMMON_API.md#e3-i-must-carry-a-predicate-over-all-entered-child-roots) |
 | [`ExecutionInstalledCertCuts.lean`](../Blanc/ExecutionInstalledCertCuts.lean) | **Checked installed runtimes across actual transaction cuts.** Transport starts immediately after an actual transaction, follows the remaining transactions, withdrawals, requests and rewards to block completion, then the existing selected-domain history spine and the target … | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean) | **Kept frames along a transaction, a body and a history.** The levels above `MessageRoots`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
+| [`ExecutionKeptClean.lean`](../Blanc/ExecutionKeptClean.lean) | **A kept history clean of SYSTEM_ADDRESS.** Three per-block premises about `SYSTEM_ADDRESS` over a kept history: no kept block's transaction is sent by it, no authorization recovers to it, and no kept frame creates at it. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptFacts.lean`](../Blanc/ExecutionKeptFacts.lean) | **What every kept frame enters with, and what a committing run leaves at the account.** Rule-neutral companions of `ExecutionKeptFrames`. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptFrames.lean`](../Blanc/ExecutionKeptFrames.lean) | **Kept frames at one account, by recursion on the run.** Rule-neutral: nothing here reads `stateGas` or a fork. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
 | [`ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean) | **The top-level executions of a message.** `processMessageCall` runs at most one interpreter execution, on either lane of the rule record. | [I2](COMMON_API.md#i2-the-property-concerns-a-complete-execution-or-child-frames) |
@@ -504,6 +505,12 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`WriteSiteTerm.lean`](../Blanc/Lift/WriteSiteTerm.lean) | **W2  `Blanc/Lift/WriteSiteTerm.lean` (term meaning; generic).** The meaning of the write-site checker's provenance terms (`Blanc.Lift.WriteSite.Term`): a term is read in an environment of frame constants and the current function's entry words. | [C9.5](COMMON_API.md#c95-i-need-hashed-storage-slots-write-locality-or-demanded-zero-cells) |
 | [`WriteSiteZero.lean`](../Blanc/Lift/WriteSiteZero.lean) | **Zero preservation from checked write locality.** An actual SSTORE satisfying `GuardObs K False` preserves zero on the demanded slots. | [C9.5](COMMON_API.md#c95-i-need-hashed-storage-slots-write-locality-or-demanded-zero-cells) |
 
+## `Blanc/Lift/BuilderRequest/`
+
+| module | summary | cited in |
+|---|---|---|
+| [`QueueLayout.lean`](../Blanc/Lift/BuilderRequest/QueueLayout.lean) | **A request queue's storage layout.** The EIP-7002, EIP-7251 and EIP-8282 request contracts keep the excess, count, head and tail in slots 0 to 3 and the queue's records from slot 4, each record in `width` consecutive slots: 6 for builder deposits, 3 for builder exits, 4 for … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+
 ## `Blanc/Lift/Create2Factory/`
 
 | module | summary | cited in |
@@ -519,7 +526,17 @@ documentation (its title and first sentence), or its leading `--` comment.
 | module | summary | cited in |
 |---|---|---|
 | [`Getter.lean`](../Blanc/Lift/RequestFee/Getter.lean) | **The request contracts' fee getter.** After the fee quotient is computed, a request contract's getter path requires empty calldata and zero value, then writes the quotient at memory offset zero and returns it. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Plain.lean`](../Blanc/Lift/RequestFee/Plain.lean) | **The plain request contracts' user path, under covered forks.** The EIP-7002 and EIP-7251 runtimes share one user path up to the calldata-length branch: caller dispatch, `PUSH1 17`, the slot-zero inhibitor guard, and the shared fee window run on slot 0 as it is stored. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Window.lean`](../Blanc/Lift/RequestFee/Window.lean) | **The request contracts' fee window.** The system request contracts compute their fee with one instruction sequence: six setup instructions, a loop over the word `fake_exponential` at fraction 17, and a postloop that divides and branches on the calldata length. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+
+## `Blanc/Lift/RequestQueue/`
+
+| module | summary | cited in |
+|---|---|---|
+| [`Chain.lean`](../Blanc/Lift/RequestQueue/Chain.lean) | **Exact delivery over a given sequence of request-contract frames.** A `Queue` is a request contract's layout: its record type, the slots per record and the word each keeps, a record's returned bytes, and the cap per drain. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Drain.lean`](../Blanc/Lift/RequestQueue/Drain.lean) | **What a request system call leaves on a represented queue, for any excess arm.** The system path of the EIP-7002, EIP-7251 and EIP-8282 request contracts drains the queue the same way and differs only in the excess it stores (`SysShape.next`). | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Link.lean`](../Blanc/Lift/RequestQueue/Link.lean) | **From a chain's history to a request queue's steps, on the covered forks.** `RequestQueue.Chain` takes a list of steps at a request contract as its input. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Model.lean`](../Blanc/Lift/RequestQueue/Model.lean) | **The request queue model over a list of effects.** What one frame at a request contract does to its queue, in unbounded naturals: it pushes one record, keeps the queue, or drains it, with the excess it stores given as a function of the excess and count it reads. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 
 ## `Blanc/Lift/RequestSystem/`
 
@@ -528,11 +545,14 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`Access.lean`](../Blanc/Lift/RequestSystem/Access.lean) | **A request system call's access-list entries, under Amsterdam.** **Build target.** Jaune pin `e8db2742`, built on `tests@v21.0.1`, EELS `1562e2f`. | [T5](COMMON_API.md#t5-the-wrapper-is-a-block-body-and-the-fact-is-about-an-installed-contract) |
 | [`BodySegs.lean`](../Blanc/Lift/RequestSystem/BodySegs.lean) | **The segments a request contract's record body is made of.** Each record body computes its key and offset, then reads a slot and writes a window, word by word, and some recode an amount little-endian byte by byte. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Call.lean`](../Blanc/Lift/RequestSystem/Call.lean) | **A request contract's system call, under Amsterdam: gas and the envelope.** `SysPath.frameCost` is bounded against Jaune's `StateGasRules` record (`frameBound`), and the frame is taken through `processCheckedSystemTransaction` with its exact post state. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`CoveredCall.lean`](../Blanc/Lift/RequestSystem/CoveredCall.lean) | **A request contract's system call on a covered fork.** The same `SysPath` that `SysCall.spec` takes through Amsterdam's system call, taken through the covered forks' (Prague onward, before Amsterdam): the frame is `SysPath.frame_runOn` on `coveredStores`, from the real … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Dispatch.lean`](../Blanc/Lift/RequestSystem/Dispatch.lean) | **A request contract's caller dispatch.** Every request contract starts `CALLER; PUSH20 SYSTEM; EQ; PUSH dest; JUMPI`: the system caller takes one arm, every other caller the other. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Effects.lean`](../Blanc/Lift/RequestSystem/Effects.lean) | **What a request system frame touches and returns, in any context.** `sysState_getElem_ne` and `sysState_getElem_congr` are the account-level facts behind non-interference: a call's post state differs from its pre state only at its own address, and what it leaves there depends … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Output.lean`](../Blanc/Lift/RequestSystem/Output.lean) | **What a request system call returns and leaves.** `SysOutput` says a runtime's record writes extend the visible output by one record. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Path.lean`](../Blanc/Lift/RequestSystem/Path.lean) | **A request contract's system path, under Amsterdam.** All four request contracts of Amsterdam (EIP-7002, EIP-7251, EIP-8282's deposit and exit) share one system path: read tail and head, cap the count, drain the records, move the pointers, update the excess from slots 0 and 1 … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`PathInv.lean`](../Blanc/Lift/RequestSystem/PathInv.lean) | **A request contract's system path, inverted.** `Path.lean` walks the system path forward from storage it is given. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`PlainExcess.lean`](../Blanc/Lift/RequestSystem/PlainExcess.lean) | **The excess arm of the EIP-7002 and EIP-7251 runtimes.** These runtimes have no calldata latch. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Stores.lean`](../Blanc/Lift/RequestSystem/Stores.lean) | **A fork's stores, as a request contract's system path takes them.** The system path of a request contract (`Blanc/Lift/RequestSystem/Path.lean`) reads and writes storage, and only its writes differ between the covered forks and Amsterdam: its reads are `rx_sloadA` on any fork … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 
 ## `Blanc/Lift/StableSwapNewton/`
 

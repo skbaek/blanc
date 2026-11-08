@@ -2407,6 +2407,9 @@ a bare set-membership goal does not identify this execution-specific route.
   `Exec.descendantFrames_caller_excluded_neutral`.
   [`Blanc/ExecutionKeptTop.lean`](../Blanc/ExecutionKeptTop.lean): `MessageRoots`, both lanes of `processMessageCall`.
   [`Blanc/ExecutionKeptChain.lean`](../Blanc/ExecutionKeptChain.lean): `TransactionRoots`, `BodyRoots`, `KeptHistory`.
+  The per-block SYSTEM_ADDRESS premises a request-contract history theorem takes (no sender, no authority, no
+  creation there) are one structure, [`Blanc/ExecutionKeptClean.lean`](../Blanc/ExecutionKeptClean.lean):
+  `HistoryClean`, stated by the EIP-8282 builder and EIP-7251 public history headlines.
   For the balance at one account across a committed run of a frame elsewhere, kept frames only, under any rule
   record: [`Blanc/ExecutionKeptValue.lean`](../Blanc/ExecutionKeptValue.lean): `Exec.kept_bal_ge_keptPaid` (at least
   the balance plus every kept frame's value, `Exec.keptPaid`), `Exec.kept_bal_neverFalls`; the spawn balance facts
@@ -6162,6 +6165,29 @@ as parameters, so a generated tree is an instance by `rfl`. `init_inv`/`init_exa
 `guard_inv`/`guard_exact` over `guardTree` and `return_inv`/`return_exact` over `returnTree`, with
 the post state `feeGetterPost`. Exact walks take `PUSH0`'s activation as a hypothesis. The excess
 read, the inhibitor guard and the submission body are not here, since they differ by contract.
+For the plain user path the EIP-7002 and EIP-7251 runtimes share (dispatch, `PUSH1 17`, the slot-zero inhibitor
+guard, the window on slot 0 as stored, then the value guard of a submission), instantiate `PlainUserPath` in
+[`Blanc/Lift/RequestFee/Plain.lean`](../Blanc/Lift/RequestFee/Plain.lean): `plainPath_inv`/`plainPath_exact`
+over `plainPathTree`, `paid_inv`/`paid_exact` over `paidTree`, `dispatch_user_inv` and `exec_of_dispatch_user`
+for any dispatch root, and per runtime `exec_user_cases`, `exec_fee_read`, `exec_fee_read_exact` and
+`exec_inhibited_no_ok`, all under covered forks. `word_fee_eq_of_le` and `word_fee_ne_at_2893` restate the
+2892/2893 boundary on a stored excess word. EIP-7002 keeps its own glue, which its pins reach. A request queue's storage layout, generic over record width
+(`QueueState`, `Represents`, `queueSlot`), is
+[`Blanc/Lift/BuilderRequest/QueueLayout.lean`](../Blanc/Lift/BuilderRequest/QueueLayout.lean) (shared; the
+namespace is the builder family's). For what a request system call leaves on a represented queue, for any excess
+arm, use [`Blanc/Lift/RequestQueue/Drain.lean`](../Blanc/Lift/RequestQueue/Drain.lean): `represents_drain` (post
+storage of `sysState` represents `drainedBy`), `drained_represented` and `output_represented` (the return window is
+the oldest `min(length, cap)` records). For the queue model over a list of frames, instantiate
+[`Blanc/Lift/RequestQueue/Model.lean`](../Blanc/Lift/RequestQueue/Model.lean) (`Effect`: push, keep, or drain with a
+stored-excess function; `run`, `deliveries`, the FIFO `fifo`; `represents_push` for a submission's storage) and
+[`Blanc/Lift/RequestQueue/Chain.lean`](../Blanc/Lift/RequestQueue/Chain.lean) (`Queue`, a `Step` packaging a
+frame with its queue law, `Chain`, `Chain.delivered`, `Chain.drain_delivers`).
+To produce that list from a kept history at covered forks, give a canonical request contract a `Linked` (its
+address, type byte, `record?` and a `Step` for each kept user frame and for its request-phase call) and use
+[`Blanc/Lift/RequestQueue/Link.lean`](../Blanc/Lift/RequestQueue/Link.lean): `history_chain` (the kept frames are a
+`Chain`, pushing what `record?` reads, outputting the blocks' requests of the type, whole records per block, with the
+SYSTEM_ADDRESS exclusion discharged from no code, sender, authority or creation there), `covered_request_root` (a
+covered-fork request step at a system contract is one kept root with the system caller) and `chunks_flatMap`.
 The builder family's user frames are walked once over a fork's `StorageSteps` (`FeePath.lean`), with
 `coveredSteps` and `amsterdamSteps` (`UserFrameAmsterdam.lean`) as its instances: only `SLOAD` and `SSTORE`
 differ between them, and those certificates have no call-family node, so `lift_sound_noExec` lifts on any fork.
@@ -6169,6 +6195,14 @@ differ between them, and those certificates have no call-family node, so `lift_s
 Under Amsterdam, all four request contracts' system paths are one instance family. `SysShape` and `SysPath`
 in `Blanc/Lift/RequestSystem/Path.lean` are a runtime's pushed words, excess arm and record body, with the
 whole frame from any storage (`frame_run`); its caller dispatch is `Blanc/Lift/RequestSystem/Dispatch.lean`.
+The path is fork-parametric: its reads and record bodies are fork-free, and its stores are a fork's
+`SysStores` (`Blanc/Lift/RequestSystem/Stores.lean`: `amsterdamStores`, whose readiness is the system
+reservoir, and `coveredStores`), so `frame_runOn`, `frameCost_leOn` (against `frameBoundOn`) and
+`framePostOn_state` serve both, and the Amsterdam statements are their instances. On the covered forks,
+`CoveredSysCall.spec` in `Blanc/Lift/RequestSystem/CoveredCall.lean` takes the same `SysPath` through the
+checked system call of a canonical system contract, with `SysOutput.coveredPost_output` for its return.
+`plainNext_toNat` reads the
+plain excess arm in naturals without wrap.
 `SysCall.spec` in `Blanc/Lift/RequestSystem/Call.lean` takes it through the checked system call, with
 `sysState` as the exact post state and a regular-gas bound (`RegularGasWithin`: regular gas, state gas
 excluded); `sysState_getCode` says no
@@ -6182,6 +6216,14 @@ excess arm (no latch; the inhibitor counts as zero) is `plainShape` in
 statements over a given list of frames (`Contract`, `Frame`, `Chain`, the queue model `step`/`replay`/`chunks`) are
 `Blanc/Lift/BuilderRequest/Delivery.lean`, family-local; word and natural request fee at fraction 17, through excess
 2892 and not at 2893, are `Blanc/RequestFeeWordDomain.lean`. The fee loop's run, length (at most 462, tight at 2892) and value on that domain, its linear bound above, are `Blanc/RequestFeeWordBound.lean`.
+The converse, every *successful* system-arm run from any storage, memory, calldata and gas on a covered
+fork, is [`Blanc/Lift/RequestSystem/PathInv.lean`](../Blanc/Lift/RequestSystem/PathInv.lean): the trees inverted
+node by node (`dispatch_system_inv`, `setup_inv`, `header_inv`, `book_inv`, `final_inv`, and `over_inv`/`excess_inv`
+for the plain arm), the loop by induction on the count (`SysPath.loop_inv`, over a runtime's `SysPath.BodyInv`), and
+the frame: `SysPath.frame_inv`/`SysPath.exec_frame_inv` (non-static, post state `sysState`, the return window over
+`SysPath.memFold`) with `SysOutput.frame_inv_output` (on well-formed memory that window is `drained`, whatever the
+memory held). A runtime supplies `BodyInv` for its record body and `ExcessInv` (from `excess_inv` for the plain
+arm).
 `Blanc/Lift/RequestSystem/Effects.lean` holds what a call touches and returns: `sysState_getElem_ne` and
 `sysState_getElem_congr` (every other account is unchanged; its own result depends only on its own account),
 `sysFold` with `run_sysFold` and `sysFold_getElem` (a fold of calls, by account), `SysPath.frame_exec` (the walk as

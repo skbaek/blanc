@@ -97,8 +97,9 @@ def latchState (p : SysShape) (σ : State) (a : Adr) : State :=
 
 theorem latchPost_state (k : SysPath) (sevm : Sevm) (b : Devm) (G : Nat) :
     (latchPost k sevm b G).state = latchState k.shape b.state sevm.currentTarget := by
-  show (finalBase sevm (k.booked sevm b) B256.max).state = _
-  simp only [finalBase, afterSstoreA_state, SysPath.booked, SysPath.bookBase_state, SysPath.drain_state]
+  have l := amsterdamStores_laws sevm
+  show (finalBaseOn (amsterdamStores sevm) (k.bookedOn b (amsterdamStores sevm)) B256.max).state = _
+  simp only [finalBaseOn, l.state, SysPath.bookedOn, SysPath.bookBaseOn_state l, SysPath.drain_state]
   rfl
 
 /-- Slot by slot, the latch's post storage is the empty-calldata call's, except that slot 0 is the
@@ -137,7 +138,7 @@ theorem latchCost_le (m : SysMemory k) (sevm : Sevm) (b : Devm) :
   have hp := SysPath.prefix_le m sevm b
   have c1 := sstoreCostA_le A sevm (k.booked sevm b) 0 B256.max
   have c2 := sstoreCostA_le A sevm (afterSstoreA A sevm (k.booked sevm b) 0 B256.max) 1 0
-  simp only [latchCost, finalGas]
+  simp only [latchCost, finalGas, finalGasOn, amsterdamStores]
   omega
 
 end Gas
@@ -178,10 +179,18 @@ theorem latch_spec (c : SysCall k) (p : LatchWords) (tree : k.shape.excessTree =
   have hrun := (exec_iff_exec_eq _ _ _ _).mp hexec
   have rSetup : Ready s (setupBase s b) [2, 3, 0, 1] := (r.sload 3).sload 2
   have rDrain := k.fold_ready (h := SysPath.rd s b 2) 0 (k.count s b).toNat (M := .empty) rSetup
-  have rBooked := ready_book rDrain (SysPath.rd s b 2) (k.count s b) (SysPath.rd s b 3)
-  have rEnd := (rBooked.sstore (by decide) B256.max).sstore (by decide) (0 : B256)
+  have rBooked : Ready s (k.booked s b) [0, 1] :=
+    ready_book rDrain (SysPath.rd s b 2) (k.count s b) (SysPath.rd s b 3)
+  have rEnd : Ready s (finalBase s (k.booked s b) B256.max) [] :=
+    (rBooked.sstore (by decide) B256.max).sstore (by decide) (0 : B256)
+  have clean : (latchPost k s b (systemTransactionGas - latchCost k s b)).error = none := by
+    rw [latchPost, chargedRetPost_error]
+    exact rEnd.error
+  have nonneg : 0 ≤ (latchPost k s b (systemTransactionGas - latchCost k s b)).refundCounter := by
+    rw [latchPost, chargedRetPost_refundCounter]
+    exact rEnd.refund
   have hcall := processCheckedSystemTransaction_amsterdam_of_exec hfork installed c.nonempty
-    (SysPath.not_delegated_of_size c.size_ne) c.not_precompile hrun rEnd.error rEnd.refund
+    (SysPath.not_delegated_of_size c.size_ne) c.not_precompile hrun clean nonneg
   rw [show (latchPost k s b (systemTransactionGas - latchCost k s b)).state =
     latchState k.shape benv.state c.target from latchPost_state _ _ _ _] at hcall
   refine ⟨hcall, ?_⟩
@@ -191,7 +200,7 @@ theorem latch_spec (c : SysCall k) (p : LatchWords) (tree : k.shape.excessTree =
 
 theorem latchPost_output (k : SysPath) (sevm : Sevm) (b : Devm) (G G' : Nat) :
     (latchPost k sevm b G).output = (k.framePost sevm b G').output := by
-  unfold latchPost SysPath.framePost
+  unfold latchPost SysPath.framePost SysPath.framePostOn
   rw [chargedRetPost_output, chargedRetPost_output]
 
 /-- The latch returns what the empty-calldata call returns: the same records, read from the same

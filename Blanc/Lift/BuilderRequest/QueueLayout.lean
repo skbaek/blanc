@@ -2,10 +2,12 @@ import Jaune.Types
 import Jaune.WordFacts
 
 /-!
-# The EIP-8282 request queue's storage layout
+# A request queue's storage layout
 
-Both builder contracts keep the excess, count, head and tail in slots 0 to 3 and the queue's records
-from slot 4, each record in `width` consecutive slots: 6 for deposits, 3 for exits. `Represents`
+The EIP-7002, EIP-7251 and EIP-8282 request contracts keep the excess, count, head and tail in slots 0 to 3
+and the queue's records from slot 4, each record in `width` consecutive slots: 6 for builder deposits, 3 for
+builder exits, 4 for consolidations. The module is shared (its namespace is the builder family's, where it
+started); `RequestQueue.Drain`, `RequestQueue.Model` and `RequestQueue.Chain` build on it. `Represents`
 says a storage image holds a queue, with `words record j` the word a record keeps at its slot `j`.
 This is a representation predicate. It claims nothing about which storage is reachable, and it
 constrains only metadata and live records: stale slots may hold anything.

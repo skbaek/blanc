@@ -18,6 +18,7 @@
 # Each key with the reason it is live, in the order of CONTRACTS.
 withdrawal-request = "EIP-7002; its kit is reused by EIP-8282 and EIP-7251"
 builder-request = "EIP-8282 builder request contracts"
+consolidation-request = "EIP-7251 consolidation requests"
 
 # One table per release, written by the release operation:
 # [[released]]

@@ -2,6 +2,7 @@ import Blanc.Lift.BuilderRequest.Deposit.Delivery
 import Blanc.Lift.BuilderRequest.Exit.Delivery
 import Blanc.Lift.BuilderRequest.ChainLink
 import Blanc.ExecutionKeptChain
+import Blanc.ExecutionKeptClean
 
 /-!
 # Builder request contracts: public observers
@@ -102,14 +103,8 @@ noncomputable def exitFeeSum (blocks : List KeptBlock) : Nat :=
   ((((keptAt blocks exitAddr).filter (fun f => decide (f.sevm.data.length = 48))).map
     (ChainLink.naturalFee Exit.contract))).sum
 
-/-- No system-caller, no authority, no created-address frames: the O19 premises. -/
-structure HistoryClean (blocks : List KeptBlock) : Prop where
-  /-- No kept block recovers the system address as a sender. -/
-  senders : ChainLink.History.NoSender systemAddress blocks
-  /-- No kept block carries its authority. -/
-  authorities : ChainLink.History.NoAuthority systemAddress blocks
-  /-- No kept block creates it. -/
-  creates : ChainLink.History.NoCreate systemAddress blocks
+-- `HistoryClean` (no system-caller, no authority, no created-address frames: the O19 premises) is the
+-- shared `Blanc.HistoryClean` of `Blanc/ExecutionKeptClean.lean`, which this namespace resolves to.
 
 /-- The deployed storage shape at a chain start: pinned reads at the deployment block. -/
 structure DeployedStart (start : BlockChain) : Prop where

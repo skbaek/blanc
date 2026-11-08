@@ -188,6 +188,8 @@ SHARED += ["Lift.Loop", "Lift.CheckFast", "Lift.ExactWalkOps",
 # Creation code (deploy-init-v1): the size-optimised packed-hash site and the CREATE bridge
 # for lifted creation code; contract-neutral.
 SHARED += ["RequestFeeWord", "RequestFeeWordDomain", "RequestFeeWordBound", "Lift.RequestFee.Window", "Lift.RequestFee.Getter"]
+# The plain (EIP-7002/EIP-7251) user path over the shared fee window (blanc-eip7251-consolidation-requests-v1).
+SHARED += ["Lift.RequestFee.Plain"]
 SHARED += ["Lift.Deploy", "Lift.CreationOps", "Lift.Create2Deploy", "Lift.CreateEntry", "Lift.Clone1167", "Lift.CheckRange"]
 # Solc-0.4 scratch-memory walk kit and the value-bearing CALL to a code-free recipient
 # (weth9-liveness-v1): contract-neutral.
@@ -549,6 +551,30 @@ SHARED += ["Lift.RequestSystem.Dispatch", "Lift.RequestSystem.Path", "Lift.Reque
            "Lift.RequestSystem.Output", "Lift.RequestSystem.BodySegs", "Lift.RequestSystem.Access",
            "Lift.RequestSystem.PlainExcess", "Lift.SystemExecution.ConsolidationRequest.AmsterdamSystem",
            "Lift.RequestSystem.Effects"]
+# The same system path on the covered forks (blanc-eip7251-consolidation-requests-v1 U2): a fork's stores
+# (`SysStores`, with its Amsterdam and covered instances) and the covered forks' system-call envelope.
+SHARED += ["Lift.RequestSystem.Stores", "Lift.RequestSystem.CoveredCall"]
+# EIP-7251 consolidation requests (blanc-eip7251-consolidation-requests-v1): the covered-fork system call.
+# It imports only shared modules; the lifted runtime and its fork-free system path are the shared
+# `Lift.SystemExecution.ConsolidationRequest.*` modules registered above.
+CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.System"])
+# The request queue model and the sequence statements, shared by the plain family (EIP-7251) and the EIP-8282
+# builder family (blanc-eip7251-consolidation-requests-v1 U3): the drain for any excess arm, the queue model over
+# effects, generic `Step`/`Chain` delivery, and the queue layout (`QueueLayout`, generic in record width,
+# reclassified from the builder family).
+SHARED += ["Lift.RequestQueue.Drain", "Lift.RequestQueue.Model", "Lift.RequestQueue.Chain",
+           "Lift.BuilderRequest.QueueLayout"]
+CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.Queue",
+                                                         "Lift.ConsolidationRequest.Delivery"])
+# The covered-fork chain link over `RequestQueue.Step` (blanc-eip7251-consolidation-requests-v1 U4): a kept
+# history's frames at a canonical request contract as a chain of steps; the EIP-7251 instance and its history.
+SHARED += ["Lift.RequestQueue.Link"]
+CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.Chain"])
+# The system path inverted (blanc-eip7251-consolidation-requests-v1 U5c): every successful system-arm run of a
+# request runtime ends in `sysState` and returns the drained records; the EIP-7251 record body's inversion.
+# `HistoryClean`, the per-block SYSTEM_ADDRESS premises, hoisted from the builder family's public observers.
+SHARED += ["Lift.RequestSystem.PathInv", "ExecutionKeptClean"]
+CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.SystemFrame"])
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
@@ -556,7 +582,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Creation.Check", "Lift.BuilderRequest.Deposit.Creation.Address",
     "Lift.BuilderRequest.Deposit.Creation.Deploy", "Lift.BuilderRequest.Deposit.FeeWindow",
     "Lift.BuilderRequest.Deposit.Submission", "Lift.BuilderRequest.Deposit.Frames",
-    "Lift.BuilderRequest.FeePath", "Lift.BuilderRequest.QueueLayout",
+    "Lift.BuilderRequest.FeePath",
     "Lift.BuilderRequest.Message", "Lift.BuilderRequest.Revert", "Lift.BuilderRequest.Transaction",
     "Lift.BuilderRequest.Deposit.Transaction", "Lift.BuilderRequest.Exit.Transaction",
     "Lift.BuilderRequest.TransactionWitness",
@@ -593,6 +619,11 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.RevertCovered", "Lift.BuilderRequest.Progress",
     "Lift.BuilderRequest.CallerCovered",
 ]
+# EIP-7251 consolidation requests: fee and user frames under covered forks.
+CONTRACTS.setdefault("consolidation-request", []).extend([
+    "Lift.ConsolidationRequest.Fee", "Lift.ConsolidationRequest.Submission",
+    "Lift.ConsolidationRequest.Frames",
+])
 
 # Explicit semantic ownership, not the union of existing imports. Abstract token
 # interfaces do not add WETH9/USDC to PairToken/PairTwoToken; concrete instances
@@ -617,6 +648,9 @@ COMPOSITION = {
     "Composition.WithdrawalRequestFeeRefutation": ('withdrawal-request',),
     "Composition.WithdrawalRequestFeeHeadline": ('withdrawal-request',),
     "Composition.WithdrawalRequestDrainControl": ('withdrawal-request',),
+    "Composition.ConsolidationRequestPublicObservers": ('consolidation-request',),
+    "Composition.ConsolidationRequestPublicHeadlines": ('consolidation-request',),
+    "Composition.ConsolidationRequestPublicHistory": ('consolidation-request',),
     # Every joint owner is explicit; no family or shared module may import back.
 }
 
