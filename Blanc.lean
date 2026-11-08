@@ -1264,6 +1264,7 @@ import Blanc.Lift.BuilderRequest.LoadBound
 import Blanc.Lift.BuilderRequest.Accepts
 import Blanc.Lift.BuilderRequest.RevertCovered
 import Blanc.Lift.BuilderRequest.Progress
+import Blanc.Lift.BuilderRequest.CallerCovered
 import Blanc.Composition.BuilderRequestCodesKept
 import Blanc.Composition.BuilderRequestPublicObservers
 import Blanc.Composition.BuilderRequestPublicGuarantees

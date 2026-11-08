@@ -1507,6 +1507,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Properties", "Lift.BuilderRequest.Exit.Properties",
     "Lift.BuilderRequest.LoadBound", "Lift.BuilderRequest.Accepts",
     "Lift.BuilderRequest.RevertCovered", "Lift.BuilderRequest.Progress",
+    "Lift.BuilderRequest.CallerCovered",
 ]
 
 # Explicit semantic ownership, not the union of existing imports. Abstract token
