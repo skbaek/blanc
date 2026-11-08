@@ -75,6 +75,10 @@ created there from their preserved creation inputs,
 `scripts/lift/inputs/vyper-6326-creation.hex` (17,569 bytes), whose origin is
 recorded in the certificate provenance; that is not historical inclusion.
 
+Each Vyper proxy row is the 45-byte EIP-1167 forwarder to the implementation above it.
+Compilers, from the certificate provenance: V− Vyper 0.2.15; V+ Vyper 0.3.7. Runtime identity:
+the two pool implementations taken from Sourcify v2 records.
+
 ## Trust base
 
 | Component | What is trusted | Evidence |

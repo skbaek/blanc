@@ -41,12 +41,9 @@ Lean, in the file the map cites, before it is relied on.
 The runtime bytes are the lifted inputs in `scripts/lift/inputs/`; the codehash
 column is recomputed from those files by the checker (Section 10), and each
 creation transaction is recorded in the entry's `provenance` in
-`scripts/lift/certificates.json`. Each Vyper proxy row is the 45-byte EIP-1167
-forwarder to the implementation above it.
-
-Compilers, from the certificate provenance: 3Crv Vyper 0.2.4; the Curve 3pool Vyper
-0.2.4; V− Vyper 0.2.15; V+ Vyper 0.3.7; USDC proxy solc 0.4.24;
-implementation solc 0.6.12; library solc 0.6.12.
+`scripts/lift/certificates.json`. A family file's Artifacts part states its rows,
+their compilers from the certificate provenance, and how their runtime identity was
+established.
 
 **Canonical system contracts.** The shared configured-execution machinery names
 the four canonical system contracts at their protocol addresses. Their bytes are the definitions in `Blanc.beaconRootsCode` (`Blanc/SystemContracts.lean:35`) and its neighbours; the SHA-256
@@ -71,8 +68,8 @@ contains call-type bytes at all (offsets 67, 123, 128, 141, all PUSH data).
 | Lean toolchain `v4.35.0` | Kernel soundness | For every constant of every Blanc module, and therefore for every theorem this map cites, the reachable axioms are within `propext`, `Classical.choice`, `Quot.sound`; one from-scratch union walk (Section 8), not `#print axioms` or `collectAxioms` |
 | Jaune revision `e8db2742` | That its EVM and transaction definitions match Ethereum | Not a theorem. Conformance, as reported by that Jaune revision's own README and not re-run here: **4,968/4,968** supported fixture files and **34,449/34,449** cases of the execution-specs mainnet corpus (`tests@v21.0.1`), Prague through BPO2 including configured fork transitions |
 | Lift certificates | Nothing | The Python producers are untrusted. Each certificate is accepted only by its Lean `cert_check`, a kernel decision, against the literal bytes |
-| Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`: `eth_getCode` agreement across separately operated public providers (five for 3Crv, five for the Curve 3pool, six for USDC, each at one finalized block); the creation inputs of 3Crv and the Curve 3pool fetched from two providers and equal byte for byte; the two pool implementations taken from Sourcify v2 records. The codehashes in Section 2 are recomputed from the lifted files by the checker |
-| Fork scope | — | `CoveredFork` is Prague, Osaka, BPO1, BPO2. Amsterdam is not covered. The 3Crv deployment-rooted rows use `HistFork` (Byzantium through BPO2), which includes the Muir Glacier rules the deployment block ran under; the Jaune conformance figures above begin at Prague and do not cover them |
+| Runtime identity | That the lifted bytes are the mainnet bytes | Recorded in each certificate's `provenance`, by `eth_getCode` agreement across separately operated public providers at one finalized block or by a source-verified record; each family file's Artifacts part states which. The codehashes in Section 2 are recomputed from the lifted files by the checker |
+| Fork scope | — | `CoveredFork` is Prague, Osaka, BPO1, BPO2. Amsterdam is not covered. A family whose rows use a wider fork range states it in its file's disclosures; the Jaune conformance figures above begin at Prague |
 | Chain arithmetic | Model bound | Configured traces carry total ETH plus withdrawals below 2^256 (`SumNof` at the checkpoint) |
 | Signature recovery | Premise of the signature-generic transaction theorems | `recoverSender … = .ok E` is a premise of every theorem that quantifies over all signed transactions, since there is then no single signature to evaluate. For a concrete transaction the kernel evaluates recovery. |
 
@@ -255,9 +252,8 @@ toolchain is installed. It requires that:
   repository's; the runtime sizes and codehashes of Section 2 equal the lifted
   input files, its creation transactions and blocks appear in the certificate
   provenance, and the system-contract sizes and SHA-256 digests equal the bytes
-  written in `Blanc/SystemContracts.lean`; the USDC code-read block and block hash,
-  implementation slot and library link sites agree with the certificate provenance
-  and lifted implementation bytes;
+  written in `Blanc/SystemContracts.lean`; and each live family's own record checks,
+  stated in its file, agree with their authorities;
 - the page keeps its section structure, its required headline theorems and its
   load-bearing disclosures, and carries no process vocabulary.
 
@@ -267,7 +263,7 @@ definitions they are stated through whose bodies are themselves the claim (pinne
 by unfolding) and the record types they use (pinned field by field), so a weakened
 headline fails there although this checker elaborates no Lean. The retained required names and their physical source owners are listed by this
 checker; the exact statement-pin population is owned by `scripts/ClaimCheck.lean`.
-The reachable V± and EIP-7002
+The reachable family
 headlines retain their own pins. Pin counts are generated on the exact candidate.
 
 Each of those pins is a definitional-equality check against the current
@@ -300,10 +296,11 @@ reviewed, not that they became weaker.
 Every run also executes in-memory falsifiers, each of which must be rejected:
 a misspelled declaration, a stale line, a wrong file, an orphan line reference,
 a missing cited file, a stale bare name, a wrong leaf count, extra, missing and
-wrong stricter axiom claims, a wrong codehash, runtime size, creation transaction
-and system-contract digest, a wrong Jaune revision, process vocabulary, a deleted
-headline and a dropped disclosure; and for USDC a wrong code-read block, library
-link site and implementation slot, a deleted headline and a dropped disclosure.
+wrong stricter axiom claims, a wrong codehash, runtime size and creation transaction
+(on the first artifact row of a live family file, while one exists), a wrong
+system-contract digest, a wrong Jaune revision, process vocabulary, a deleted
+headline and a dropped disclosure; and each live family's own falsifiers, stated in
+its file.
 The stricter-row controls use a synthetic authority/table pair when the live
 stricter-claim population is empty; equality with the real audit source remains
 mandatory in both directions.

@@ -95,6 +95,10 @@ The proxy holds the implementation address in its implementation slot
 The library address is linked into the implementation runtime at two
 PUSH20 sites (bytes 18,390 and 20,105), each reaching a DELEGATECALL. No Solidity recompilation.
 
+Compilers, from the certificate provenance: USDC proxy solc 0.4.24; implementation solc 0.6.12;
+library solc 0.6.12. Runtime identity: `eth_getCode` agreement across six separately operated
+public providers at one finalized block.
+
 ## Disclosures and limits
 
 35. **USDC: the governance premise.** `UsdcGovernance`: no settled
@@ -145,6 +149,11 @@ PUSH20 sites (bytes 18,390 and 20,105), each reaching a DELEGATECALL. No Solidit
 
 The USDC pins retain `UsdcGovernance`, `UsdcShadowed`, `NeverSigner`
 and the USDC-owned definition `PairUsdcAllowQuiet`.
+
+The checker also requires that the USDC code-read block and block hash, implementation slot and
+library link sites agree with the certificate provenance and lifted implementation bytes. Its
+in-memory falsifiers add, for USDC, a wrong code-read block, library link site and implementation
+slot, a deleted headline and a dropped disclosure.
 
 ## Uses of the shared API
 

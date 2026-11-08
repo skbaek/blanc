@@ -53,6 +53,10 @@ owner-call premise. That the retained block and history are the chain's own, or 
 |---|---|---:|---|---|---:|
 | Curve 3Crv LP token | 0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490 | 2,276 | 0xb731b7a9a74c6c60d715f0c791d663f1530743a48337e7fab9cf3481afdd9feb | 0xa7d90e460bed56181e41b74d143ec98fe097c8391700e4e0788f5282053694f8 (deployer 0xbabe61887f1de2713c6f97e567623453d3c79f67, nonce 42) | 10,809,467 |
 
+Compiler, from the certificate provenance: Vyper 0.2.4. Runtime identity: `eth_getCode`
+agreement across five separately operated public providers at one finalized block; the creation
+input fetched from two providers and equal byte for byte.
+
 ## Summary matrix
 
 | | M1 | M2 | M3 | M4 | M5 | M6 | M7 | M8 |
@@ -81,6 +85,10 @@ is existential.
 9. **Callee premises.** `OwnerCallOk` (Curve `set_name`) assumes the callee's behaviour.
 
 12. **Curve cost is exact but existential** (`∃ c`), with no closed formula.
+
+The 3Crv deployment-rooted rows use `HistFork` (Byzantium through BPO2), which includes the Muir
+Glacier rules the deployment block ran under; the Jaune conformance figures of Section 3 begin at
+Prague and do not cover them.
 
 ## Named premises and definitions
 

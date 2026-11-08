@@ -2,8 +2,7 @@
 """Fail-closed checker for docs/DEPLOYED_BYTECODE_CLAIM_MAP.md.
 
 The map is a claim index over Blanc's paper-v2 results about deployed EVM bytecode
-(Curve 3Crv/3pool, USDC, Vyper V± and EIP-7002), not an
-independent theorem authority.  This checker therefore holds it to the repository:
+(one file per live contract family), not an independent theorem authority.  This checker therefore holds it to the repository:
 
 * every fully qualified declaration it writes (``Blanc.…``) resolves, spelled in full, to a public
   declaration written in Blanc's sources (``scripts/axiom_audit.py``'s lexical resolver, which
@@ -14,9 +13,9 @@ independent theorem authority.  This checker therefore holds it to the repositor
   exactly, in both directions, and the leaf count it quotes equals ``scripts/leaf-count.json``;
 * the trust-base figures it can see (Jaune revision, Lean toolchain, covered forks) equal the
   repository's, the artifact table's byte counts and codehashes equal the lifted input files, its
-  creation transactions equal the certificate provenance, the USDC code-read records,
-  implementation slot and library links agree with their authorities, and the system-contract
-  table equals the bytes written in ``Blanc/SystemContracts.lean``;
+  creation transactions equal the certificate provenance, each live family's own record checks
+  (its part under ``scripts/claim-map-families/``) agree with their authorities, and the
+  system-contract table equals the bytes written in ``Blanc/SystemContracts.lean``;
 * the document carries no process or bookkeeping vocabulary, keeps its section structure, its
   required headline theorems and its load-bearing non-claims.
 
@@ -69,246 +68,25 @@ H2 = [
     "9. Named premises and definitions",
     "10. Checking this document",
 ]
-# One file per live contract family, docs/claim-map/<key>.md: its Section 5 subsections, then
-# its parts of the shared sections, in this order.
-FAMILY_SECTIONS = {'curve-3crv': ['5.3 Curve 3Crv'],
- 'curve-3pool': ['5.11 Curve 3pool StableSwap'],
- 'usdc': ['5.10 USDC'],
- 'vyper-nonreentrant-deployed': ['5.5 Vyper V+', '5.6 Vyper V−'],
- 'withdrawal-request': ['5.7 EIP-7002 withdrawal requests']}
-FAMILY_PARTS = {'builder-request': ['Uses of the shared API'],
- 'curve-3crv': ['Artifacts',
-                'Summary matrix',
-                'Disclosures and limits',
-                'Named premises and definitions',
-                'Uses of the shared API',
-                'See also'],
- 'curve-3pool': ['Artifacts',
-                 'Premise classes',
-                 'Summary matrix',
-                 'Disclosures and limits',
-                 'Named premises and definitions',
-                 'Checking this document',
-                 'Uses of the shared API'],
- 'dai': [],
- 'usdc': ['Artifacts',
-          'Disclosures and limits',
-          'Named premises and definitions',
-          'Checking this document',
-          'Uses of the shared API'],
- 'usdt': [],
- 'vyper-nonreentrant-deployed': ['Artifacts',
-                                 'Trust base',
-                                 'Summary matrix',
-                                 'Disclosures and limits',
-                                 'Named premises and definitions',
-                                 'Uses of the shared API',
-                                 'See also'],
- 'withdrawal-request': ['Trust base',
-                        'Summary matrix',
-                        'Disclosures and limits',
-                        'Uses of the shared API',
-                        'See also']}
+# One file per live contract family, docs/claim-map/<key>.md, and beside it its part of this
+# checker, scripts/claim-map-families/<key>.py: the file's Section 5 subsections and parts of the
+# shared sections (SECTIONS, PARTS), required headlines, load-bearing non-claims, glossary minimum,
+# artifact rows, listed cross-family citations, and optionally a family record check (`check`) and
+# family falsifiers (`falsifiers`). A family's part leaves with its release and comes back on
+# restore, so nothing here names a family.
+FAMILY_CHECK_DIR = "scripts/claim-map-families"
 
-# The headline results each file exists to carry.  A row deleted from the document fails here.
-REQUIRED_HEADLINES = {'curve-3crv': ['Blanc.Lift.Curve3Crv.c3crv_history_committed_derived',
-                'Blanc.Lift.Curve3Crv.c3crv_frame_refines',
-                'Blanc.Lift.Curve3Crv.Creation.curve_deploy_covered',
-                'Blanc.Lift.Curve3Crv.c3crv_conserved',
-                'Blanc.Lift.Curve3Crv.c3crv_policy'],
- 'curve-3pool': ['Blanc.Lift.Curve3Pool.pool_frame_refines_env',
-                 'Blanc.Lift.Curve3Pool.pool_other_fails',
-                 'Blanc.Lift.Curve3Pool.pool_static_noEffect',
-                 'Blanc.Lift.Curve3Pool.pool_history_committed_derived',
-                 'Blanc.Lift.Curve3Pool.pool_history_initialized',
-                 'Blanc.Lift.Curve3Pool.exchange_live',
-                 'Blanc.Lift.Curve3Pool.addLiquidity_live',
-                 'Blanc.Lift.Curve3Pool.removeLiquidity_live',
-                 'Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live',
-                 'Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live',
-                 'Blanc.Lift.Curve3Pool.pool_history_exchange_live',
-                 'Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live',
-                 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live',
-                 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live',
-                 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live',
-                 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidity_live_entry',
-                 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_addLiquidity_live_entry',
-                 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityImbalance_live_entry',
-                 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_removeLiquidityOneCoin_live_entry',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.ex_frame_live',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.rl_frame_live',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.oc_frame_live',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.al_frame_live',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.rli_frame_live',
-                 'Blanc.Composition.Curve3Pool3CrvJoint.checkJoint_sound',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_agreeing',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.curve3pool_closed_instance',
-                 'Blanc.StableSwapNewton.getDChk_lower',
-                 'Blanc.StableSwapNewton.getD_not_mono',
-                 'Blanc.StableSwapNewton.getYDChk_rootOrSucc',
-                 'Blanc.StableSwapNewton.getYChk_rootOrSucc',
-                 'Blanc.Lift.Curve3Pool.u3_refuted_exchange',
-                 'Blanc.Lift.Curve3Pool.u3_refuted_add_liquidity',
-                 'Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity',
-                 'Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_imbalance',
-                 'Blanc.Lift.Curve3Pool.u3_refuted_remove_liquidity_one_coin_deployed',
-                 'Blanc.Lift.Curve3Pool.u3_refuted_donate_admin_fees',
-                 'Blanc.Lift.Curve3Pool.pool_history_u3',
-                 'Blanc.Composition.Curve3PoolSupply.pool_3crv_u3',
-                 'Blanc.Composition.Curve3Pool3CrvHeadlines.pool_3crv_u3_deployed',
-                 'Blanc.Lift.Curve3Pool.pool_history_amp',
-                 'Blanc.Lift.Curve3Pool.dMonoInA',
-                 'Blanc.Lift.Curve3Pool.u5_ramp_control',
-                 'Blanc.Composition.Curve3PoolSupply.pool_3crv_history',
-                 'Blanc.Lift.Curve3Pool.Creation.pool_deploy_covered',
-                 'Blanc.Lift.Curve3Pool.removeLiquidity_live_exact',
-                 'Blanc.Lift.Curve3Pool.exchange_live_exact',
-                 'Blanc.Lift.Curve3Pool.addLiquidity_live_exact',
-                 'Blanc.Lift.Curve3Pool.removeLiquidityImbalance_live_exact',
-                 'Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_live_exact',
-                 'Blanc.Lift.Curve3Pool.removeLiquidity_msg_exact',
-                 'Blanc.Lift.Curve3Pool.exchange_msg_exact',
-                 'Blanc.Lift.Curve3Pool.addLiquidity_msg_exact',
-                 'Blanc.Lift.Curve3Pool.removeLiquidityImbalance_msg_exact',
-                 'Blanc.Lift.Curve3Pool.removeLiquidityOneCoin_msg_exact',
-                 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidity_live_exact',
-                 'Blanc.Lift.Curve3Pool.pool_history_exchange_live_exact',
-                 'Blanc.Lift.Curve3Pool.pool_history_addLiquidity_live_exact',
-                 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidityImbalance_live_exact',
-                 'Blanc.Lift.Curve3Pool.pool_history_removeLiquidityOneCoin_live_exact',
-                 'Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidity_live_exact',
-                 'Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_addLiquidity_live_exact',
-                 'Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityImbalance_live_exact',
-                 'Blanc.Composition.Curve3Pool3CrvHeadlinesExact.pool_3crv_removeLiquidityOneCoin_live_exact',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidity_exactPremises_satisfiable',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.addLiquidity_exactPremises_satisfiable',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityImbalance_exactPremises_satisfiable',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.removeLiquidityOneCoin_exactPremises_satisfiable',
-                 'Blanc.Composition.Curve3Pool3CrvInstance.exchange_exactPremises_satisfiable',
-                 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidity_live_exact_literal',
-                 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_addLiquidity_live_exact_literal',
-                 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityImbalance_live_exact_literal',
-                 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityOneCoin_live_exact_literal',
-                 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidity_live_entry_literal',
-                 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_addLiquidity_live_entry_literal',
-                 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityImbalance_live_entry_literal',
-                 'Blanc.Composition.Curve3Pool3CrvLiteralWitness.pool_3crv_removeLiquidityOneCoin_live_entry_literal'],
- 'usdc': ['Blanc.Lift.Token.BookLaws',
-          'Blanc.Lift.Token.Core',
-          'Blanc.Lift.Token.SelfCaller',
-          'Blanc.Lift.Token.TransferLive',
-          'Blanc.Lift.checkNode_call_at_delegatecall',
-          'Blanc.Lift.Usdc.proxy_forwards',
-          'Blanc.Lift.Usdc.proxy_forwards_control',
-          'Blanc.Lift.Usdc.impl_children',
-          'Blanc.Lift.Usdc.lib_children',
-          'Blanc.Lift.Usdc.usdcBook_lawsS',
-          'Blanc.Lift.Usdc.usdc_history_replayAt',
-          'Blanc.Lift.Usdc.usdc_history_slots',
-          'Blanc.Lift.Usdc.usdc_history_end',
-          'Blanc.Composition.UsdcToken.usdcCore',
-          'Blanc.Composition.UniswapV2PairUsdcWeth9.PairUsdcAllowQuiet'],
- 'vyper-nonreentrant-deployed': ['Blanc.Lift.VyperNonreentrantDeployed.Fixed.vplus_exclusion',
-                                 'Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness.vplus_witness_covered',
-                                 'Blanc.Lift.VyperNonreentrantDeployed.Fixed.Witness2.vplus_witness2_covered',
-                                 'Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Top.vminus_witness_covered',
-                                 'Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.TxC.vminus_txC_process',
-                                 'Blanc.Lift.VyperNonreentrantDeployed.Vulnerable.Reach.Viol.vminus_attack',
-                                 'Blanc.Lift.VyperNonreentrantDeployed.Fixed.Exit.vplus_exit'],
- 'withdrawal-request': ['Blanc.Lift.WithdrawalRequest.history_fifo',
-                        'Blanc.Lift.WithdrawalRequest.history_fifo_mainnet',
-                        'Blanc.Lift.WithdrawalRequest.block_word_delivery',
-                        'Blanc.Lift.WithdrawalRequest.wordSystem_excess_wraps',
-                        'Blanc.Lift.WithdrawalRequest.word_fee_eq_iff_natFeeDomain',
-                        'Blanc.Lift.WithdrawalRequest.FeeCounterexample.nat_fee_guarantee_refuted',
-                        'Blanc.Lift.WithdrawalRequest.history_submission_nat_live',
-                        'Blanc.Lift.WithdrawalRequest.fee_le_spec',
-                        'Blanc.Lift.WithdrawalRequest.fee_eq_spec_iff',
-                        'Blanc.Lift.WithdrawalRequest.FeeCounterexample.fee_guarantee_refuted',
-                        'Blanc.Lift.WithdrawalRequest.system_call_succeeds',
-                        'Blanc.Lift.WithdrawalRequest.history_system_call_succeeds',
-                        'Blanc.Lift.WithdrawalRequest.history_submission_live',
-                        'Blanc.Lift.WithdrawalRequest.history_submission_queued',
-                        'Blanc.Lift.WithdrawalRequest.history_system_call_succeeds_mainnet',
-                        'Blanc.Lift.WithdrawalRequest.history_submission_live_mainnet',
-                        'Blanc.Lift.WithdrawalRequest.history_submission_queued_mainnet',
-                        'Blanc.Lift.WithdrawalRequest.deploy',
-                        'Blanc.Lift.WithdrawalRequest.deploy_mainnet',
-                        'Blanc.Lift.WithdrawalRequest.history_payments',
-                        'Blanc.Lift.WithdrawalRequest.history_payments_mainnet',
-                        'Blanc.Lift.WithdrawalRequest.history_delivery',
-                        'Blanc.Lift.WithdrawalRequest.history_delivery_mainnet',
-                        'Blanc.Lift.WithdrawalRequest.DrainControl.historyFifo_of_checkpoint_needs_systemEmpty']}
+# Load-bearing disclosures of the shared part; a rewording that drops one fails.
+SHARED_NONCLAIM_PHRASES = ['not a deployment audit',
+ 'amsterdam is not covered',
+ 'modeled deployment',
+ 'heuristic bound',
+ 'synthetic',
+ 'not chained',
+ 'not reproduced by any gate']
 
-# Load-bearing disclosures, per file; a rewording that drops one fails.
-NONCLAIM_PHRASES = {'curve-3crv': ['amsterdam is not covered',
-                'modeled deployment',
-                'not historical inclusion',
-                'not chained',
-                'no closed cost formula',
-                'no transaction-level liveness'],
- 'curve-3pool': ['modeled deployment',
-                 'not historical inclusion',
-                 'synthetic',
-                 'fixed signed transaction',
-                 'not chained',
-                 'no transaction-level liveness',
-                 'not an existential cost',
-                 'virtual price is not monotone',
-                 'only a synthetic coin is shown to satisfy it',
-                 'not exact-gas equalities',
-                 'jaune counts call depth down',
-                 "only `exchange` is shown at a transaction's entry",
-                 'the answer is unconstrained',
-                 'not pinned to the premised `t`',
-                 'no such world is instantiated',
-                 'the index-2 path is not instantiated',
-                 'not the recorded constructor arguments',
-                 'no exact-gas theorem is instantiated end to end',
-                 "the composed headlines' coin-chain hypotheses as stated",
-                 'taken as world conditions, not discharged',
-                 'no composed headline is instantiated end to end',
-                 "a coin's gas use is the coin's, not a blanc fact",
-                 'headroom and the no-wrap bound are separate premises',
-                 'it reads no residual gas and is not an existential cost',
-                 'declared in blanc, not by jaune',
-                 'the sufficient-gas rows above remain, unchanged'],
- 'shared': ['not a deployment audit',
-            'amsterdam is not covered',
-            'modeled deployment',
-            'heuristic bound',
-            'synthetic',
-            'not chained',
-            'not reproduced by any gate'],
- 'usdc': ['synthetic',
-          'governance premise',
-          'never-signer premise',
-          'excluded positions',
-          'liveness premises',
-          'key universe',
-          'the closed single-block usdc instance'],
- 'vyper-nonreentrant-deployed': ['not historical inclusion',
-                                 'synthetic',
-                                 'fixed signed transaction',
-                                 'not a kernel fact'],
- 'withdrawal-request': ['synthetic',
-                        'at most 2^254 committed submission-payment occurrences',
-                        'the witness lives only in the model',
-                        'success is classified, failure is not',
-                        'not a code-only fact',
-                        'no claim that the chain produces those later blocks',
-                        'not a proved minimum',
-                        'no transaction-level liveness',
-                        'validator authorization',
-                        'not a practical attack',
-                        "not that one fits mainnet's gas limits"]}
-
-# Glossary rows per file; a file with fewer fails.
-GLOSSARY_ROWS = {'curve-3crv': 6,
- 'curve-3pool': 21,
- 'shared': 26,
- 'usdc': 4,
- 'vyper-nonreentrant-deployed': 1}
+# Glossary rows of the shared part; a file with fewer fails.
+SHARED_GLOSSARY_ROWS = 26
 
 # Process and internal-bookkeeping vocabulary the public map must not carry.
 FORBIDDEN = [
@@ -325,90 +103,60 @@ NON_LEAN_IDENTIFIERS = {
     "add_liquidity", "eth_getCode", "AxiomAudit", "collectAxioms", "sorryAx", "native_decide",
     "bv_decide", "processTransaction", "prepareMessage", "accountsToDelete", "TxC", "hP", "hI",
     "MINIMUM_LIQUIDITY", "kLast", "returnedGas",
-    # Curve 3pool source (Vyper) identifiers and one RPC method (Section 5.11).
-    "eth_getProof", "get_D", "get_y", "get_y_D", "D_P", "get_dy", "get_dy_underlying", "raw_call",
-    "calc_withdraw_one_coin", "remove_liquidity_imbalance", "remove_liquidity_one_coin",
-    "donate_admin_fees", "ramp_A", "stop_ramp_A", "kill_me", "initial_A", "future_A",
-    "MIN_RAMP_TIME", "MAX_A_CHANGE",
 }
 
-# The artifacts the map states: address -> (label, lifted input file or None for a proxy,
-# certificate ids whose provenance records the creation, implementation address for a proxy).
-ARTIFACTS = {'0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490': ('Curve 3Crv LP token',
-                                                'curve-3crv-runtime.hex',
-                                                ['curve-3crv', 'curve-3crv-creation'],
-                                                None),
- '0x847ee1227a9900b73aeeb3a47fac92c52fd54ed9': ('V+ implementation',
-                                                'vyper-847e-runtime.hex',
-                                                ['vyper-847e'],
-                                                None),
- '0x21e27a5e5513d6e65c4f830167390997aa84843a': ('V+ proxy',
-                                                None,
-                                                [],
-                                                '0x847ee1227a9900b73aeeb3a47fac92c52fd54ed9'),
- '0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e': ('V- implementation',
-                                                'vyper-6326-runtime.hex',
-                                                ['vyper-6326'],
-                                                None),
- '0x9848482da3ee3076165ce6497eda906e66bb85c5': ('V- proxy',
-                                                None,
-                                                [],
-                                                '0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e'),
- '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': ('USDC FiatTokenProxy',
-                                                'usdc-proxy-runtime.hex',
-                                                ['usdc-proxy'],
-                                                None),
- '0x43506849D7C04F9138D1A2050bbF3A0c054402dd': ('USDC FiatTokenV2_2 implementation',
-                                                'usdc-impl-runtime.hex',
-                                                ['usdc-impl'],
-                                                None),
- '0x800C32EaA2a6c93cF4CB51794450ED77fBfbB172': ('USDC SignatureChecker library',
-                                                'usdc-lib-runtime.hex',
-                                                ['usdc-lib'],
-                                                None),
- '0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7': ('Curve 3pool StableSwap',
-                                                'curve-3pool-runtime.hex',
-                                                ['curve-3pool', 'curve-3pool-creation'],
-                                                None)}
-# The family file whose artifact table states each address.
-ARTIFACT_FAMILY = {
-    '0x6c3F90f043a72FA612cbac8115EE7e52BDe6E490': 'curve-3crv',
-    '0x847ee1227a9900b73aeeb3a47fac92c52fd54ed9': 'vyper-nonreentrant-deployed',
-    '0x21e27a5e5513d6e65c4f830167390997aa84843a': 'vyper-nonreentrant-deployed',
-    '0x6326debbaa15bcfe603d831e7d75f4fc10d9b43e': 'vyper-nonreentrant-deployed',
-    '0x9848482da3ee3076165ce6497eda906e66bb85c5': 'vyper-nonreentrant-deployed',
-    '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48': 'usdc',
-    '0x43506849D7C04F9138D1A2050bbF3A0c054402dd': 'usdc',
-    '0x800C32EaA2a6c93cF4CB51794450ED77fBfbB172': 'usdc',
-    '0xbEbc44782C7dB0a1A60Cb6fe97d0b483032FF1C7': 'curve-3pool',
-}
 
+
+def load_families(root: Path) -> tuple[dict, list[str]]:
+    """The live keys' parts of this checker, from scripts/live-set.toml and FAMILY_CHECK_DIR.
+    A live key without its part, or a part of a key that is not live, fails closed."""
+
+    import importlib.util
+    errors: list[str] = []
+    try:
+        with open(root / LIVE_SET, "rb") as handle:
+            live = list(tomllib.load(handle).get("live", {}))
+    except (OSError, tomllib.TOMLDecodeError) as exc:
+        return {}, [f"cannot read {LIVE_SET}: {exc}"]
+    families = {}
+    for key in live:
+        path = root / FAMILY_CHECK_DIR / f"{key}.py"
+        if not path.is_file():
+            errors.append(f"live key {key} has no checker part {FAMILY_CHECK_DIR}/{key}.py")
+            continue
+        spec = importlib.util.spec_from_file_location(f"claim_map_family_{key.replace('-', '_')}", path)
+        module = importlib.util.module_from_spec(spec)
+        try:
+            spec.loader.exec_module(module)
+        except Exception as exc:  # a broken part is a failure, not a crash
+            errors.append(f"{FAMILY_CHECK_DIR}/{key}.py does not load: {exc}")
+            continue
+        families[key] = module
+    folder = root / FAMILY_CHECK_DIR
+    for path in sorted(folder.glob("*.py")) if folder.is_dir() else []:
+        if path.stem not in live:
+            errors.append(f"{FAMILY_CHECK_DIR}/{path.name} is not the checker part of a live key; "
+                          f"release or restore it with scripts/release.py")
+    return families, errors
+
+
+FAMILIES, FAMILY_ERRORS = load_families(Path(__file__).resolve().parent.parent)
+FAMILY_SECTIONS = {k: list(getattr(m, "SECTIONS", [])) for k, m in FAMILIES.items()}
+FAMILY_PARTS = {k: list(getattr(m, "PARTS", [])) for k, m in FAMILIES.items()}
+REQUIRED_HEADLINES = {k: list(getattr(m, "REQUIRED_HEADLINES", [])) for k, m in FAMILIES.items()}
+NONCLAIM_PHRASES = {"shared": SHARED_NONCLAIM_PHRASES,
+                    **{k: list(getattr(m, "NONCLAIM_PHRASES", [])) for k, m in FAMILIES.items()}}
+GLOSSARY_ROWS = {"shared": SHARED_GLOSSARY_ROWS,
+                 **{k: getattr(m, "GLOSSARY_ROWS", 0) for k, m in FAMILIES.items()}}
+ARTIFACTS = {a: row for m in FAMILIES.values() for a, row in getattr(m, "ARTIFACTS", {}).items()}
+ARTIFACT_FAMILY = {a: k for k, m in FAMILIES.items() for a in getattr(m, "ARTIFACTS", {})}
 # Cross-family citations that cannot move without rewording: (file, a substring of the line).
 # Each entry must still match a cross-family citation while its file is live.
-MIXED_CITATIONS = [
-    # The trust base's signature-recovery row names one concrete recovery per family.
-    (FAMILY_DIR + "/vyper-nonreentrant-deployed.md", "| Signature recovery |"),
-]
+MIXED_CITATIONS = [(FAMILY_DIR + f"/{k}.md", needle)
+                   for k, m in FAMILIES.items() for needle in getattr(m, "MIXED_CITATIONS", [])]
+NON_LEAN_IDENTIFIERS = NON_LEAN_IDENTIFIERS | {
+    name for m in FAMILIES.values() for name in getattr(m, "NON_LEAN_IDENTIFIERS", [])}
 
-# The Uniswap V2 Pair runtime is one runtime for every pair: its row records the block at which the
-# exhibit instance's code was read, not a creation transaction, and its creation code is a separate
-# input whose hash is the factory's init-code hash.
-
-# The factory runtime, like the Pair's, is a code read at a finalized block; it embeds the Pair
-# creation code as data.
-
-
-# The three USDC runtimes, like the Pair's, are code reads at one finalized block; the
-# implementation is the address the proxy's implementation slot holds there, and the library is
-# linked into the implementation by PUSH20.
-USDC_MARKER = "**The USDC rows.**"
-USDC_INPUTS = {
-    "usdc-proxy": "usdc-proxy-runtime.hex",
-    "usdc-impl": "usdc-impl-runtime.hex",
-    "usdc-lib": "usdc-lib-runtime.hex",
-}
-USDC_IMPLEMENTATION = "0x43506849D7C04F9138D1A2050bbF3A0c054402dd"
-USDC_LIBRARY = "0x800C32EaA2a6c93cF4CB51794450ED77fBfbB172"
 SYSTEM_ARTIFACTS = {
     "0x000F3df6D732807Ef1319fB7B8bB8522d0Beac02": "beaconRootsCode",
     "0x0000F90827F1C53a10cb7A02335B175320002935": "historyStorageCode",
@@ -932,49 +680,6 @@ def check_trust_base(auth: Authority, text: str, errors: list[str]) -> None:
         errors.append("the covered forks are not stated as Prague, Osaka, BPO1 and BPO2")
 
 
-def check_usdc_record(auth: Authority, body: str, errors: list[str]) -> None:
-    """The USDC rows' code-read record, implementation slot and library links."""
-
-    at = body.find(USDC_MARKER)
-    if at < 0:
-        errors.append("USDC: the USDC rows' record is not stated")
-        return
-    end = body.find("\n\n", at)
-    flat = " ".join(body[at:end if end >= 0 else len(body)].split())
-    read = re.search(r"finalized block (\d[\d,]*) \(block hash (0x[0-9a-fA-F]{64})\)", flat)
-    if read is None:
-        errors.append("USDC: the code-read block and block hash are not stated")
-    for cid, filename in USDC_INPUTS.items():
-        if f"`scripts/lift/inputs/{filename}`" not in flat:
-            errors.append(f"USDC: the lifted input {filename} is not named")
-        if read is None:
-            continue
-        provenance = auth.provenance([cid]).lower()
-        if not re.search(r"\bblock\s+" + str(to_int(read.group(1))) + r"\b", provenance):
-            errors.append(f"USDC: code-read block {read.group(1)} is not in the {cid} certificate provenance")
-        if read.group(2).lower() not in provenance:
-            errors.append(f"USDC: the code-read block hash is not in the {cid} certificate provenance")
-    slot = re.search(r"implementation slot (0x[0-9a-fA-F]{64})", flat)
-    impl_provenance = auth.provenance(["usdc-impl"]).lower()
-    if slot is None:
-        errors.append("USDC: the proxy's implementation slot is not stated")
-    elif slot.group(1).lower() not in impl_provenance or USDC_IMPLEMENTATION[2:].lower() not in impl_provenance:
-        errors.append("USDC: the implementation slot and its value are not in the usdc-impl certificate provenance")
-    elif "0x" + keccak.keccak256(b"org.zeppelinos.proxy.implementation").hex() != slot.group(1).lower():
-        errors.append("USDC: the stated implementation slot is not keccak256(\"org.zeppelinos.proxy.implementation\")")
-    sites = re.search(r"PUSH20 sites \(bytes (\d[\d,]*) and (\d[\d,]*)\)", flat)
-    runtime = auth.runtime.get(USDC_INPUTS["usdc-impl"], b"")
-    if sites is None:
-        errors.append("USDC: the library's PUSH20 sites in the implementation are not stated")
-    elif not runtime:
-        errors.append("USDC: the implementation runtime input is missing")
-    else:
-        library = bytes.fromhex(USDC_LIBRARY[2:])
-        for site in (to_int(sites.group(1)), to_int(sites.group(2))):
-            if runtime[site:site + 21] != b"\x73" + library:
-                errors.append(f"USDC: byte {site} of the implementation runtime is not PUSH20 of the library address")
-
-
 def check_artifact_rows(auth: Authority, body: str, key: str, errors: list[str]) -> int:
     """A family file's artifact table: exactly that family's addresses, each recomputed."""
 
@@ -1026,8 +731,6 @@ def check_artifact_rows(auth: Authority, body: str, key: str, errors: list[str])
             errors.append(f"{label}: no certificate ids")
     if seen != expected:
         errors.append(f"{key}: artifact population drifted: missing {sorted(expected - seen)!r}")
-    if key == "usdc":
-        check_usdc_record(auth, body, errors)
     return len(seen)
 
 
@@ -1147,7 +850,7 @@ def index_keys(text: str) -> list[str]:
 def check_bundle(auth: Authority, bundle: dict[str, str]) -> tuple[list[str], dict[str, int]]:
     """`bundle` maps "shared" and each live key to its text (None for a missing file)."""
 
-    errors: list[str] = list(auth.errors)
+    errors: list[str] = list(auth.errors) + list(FAMILY_ERRORS)
     stats = {"cited": 0, "distinct": 0, "paths": 0, "bare_names": 0, "glossary": 0,
              "artifacts": 0, "headlines": 0, "disclosures": 0}
     text = bundle.get("shared") or ""
@@ -1179,6 +882,9 @@ def check_bundle(auth: Authority, bundle: dict[str, str]) -> tuple[list[str], di
                 stats["glossary"] += check_glossary(body, errors, "Named premises",
                                                     GLOSSARY_ROWS[key], where)
             stats["artifacts"] += check_artifact_rows(auth, section(body, "Artifacts"), key, errors)
+            family = FAMILIES.get(key)
+            if family is not None and hasattr(family, "check"):
+                family.check(sys.modules[__name__], auth, body, errors)
         # A family file's "Uses of the shared API" is registry text moved from the shared
         # documents: its names and files must resolve and stay within the family, but it is
         # not held to the map's bare-name and vocabulary rules.
@@ -1285,12 +991,54 @@ def drop_headline(text: str, name: str) -> str:
     return re.sub(re.escape(f"`{name}`") + r" \(`[^`]*`\)", "the headline", text)
 
 
+# A falsifier tagged ARTIFACT_ROW runs only while some live family file has an artifact row.
+ARTIFACT_ROW = "an artifact row"
+
+
+def first_artifact_row(bundle: dict):
+    """(key, line, cells) of the first artifact row of a live family file, or None."""
+    for key, body in bundle.items():
+        if key == "shared" or not body:
+            continue
+        tables = [t for t in re.split(r"\n\s*\n", section(body, "Artifacts"))
+                  if t.lstrip().startswith("| Contract")]
+        for table in tables[:1]:
+            for line in table.splitlines()[2:]:
+                cells = [c.strip() for c in line.strip().strip("|").split(" | ")]
+                if len(cells) == 6 and cells[1] in ARTIFACT_FAMILY:
+                    return key, line, cells
+    return None
+
+
+def mutate_artifact_cell(bundle: dict, column: int, edit) -> dict:
+    found = first_artifact_row(bundle)
+    if found is None:
+        raise KeyError("no live artifact row")
+    key, line, cells = found
+    cells = list(cells)
+    cells[column] = edit(cells[column])
+    return {**bundle, key: bundle[key].replace(line, "| " + " | ".join(cells) + " |", 1)}
+
+
+def flip_creation_tx(cell: str) -> str:
+    match = re.search(r"0x[0-9a-fA-F]{64}", cell)
+    if match is None:
+        raise KeyError("no creation transaction in the first artifact row")
+    tx = match.group(0)
+    return cell.replace(tx, tx[:-1] + ("1" if tx[-1] != "1" else "2"), 1)
+
+
+def misspell_first(text: str) -> str:
+    match = CITE_RE.search(text)
+    return text[:match.end(1)] + "t" + text[match.end(1):]
+
+
 def falsifiers(auth: Authority, bundle: dict) -> list[tuple[str, str, str | None, object]]:
     """``(label, expected diagnostic, family it needs live or None, mutate)``;
     `mutate(auth, bundle)` returns `(auth, bundle)`."""
 
     import copy
-    first_claim = sorted(auth.stricter)[0] if auth.stricter else "Blanc.Lift.Usdc.proxy_forwards"
+    first_claim = sorted(auth.stricter)[0] if auth.stricter else "Blanc.Separated.pair_self"
 
     def with_authority(**changes):
         clone = copy.copy(auth)
@@ -1361,9 +1109,8 @@ def falsifiers(auth: Authority, bundle: dict) -> list[tuple[str, str, str | None
         raise KeyError("no family citation")
 
     return [
-        ("misspelled declaration", "unresolved declaration", "curve-3crv",
-         lambda a, b: (a, replace_in(b, "`Blanc.Lift.Curve3Crv.c3crv_frame_refines`",
-                                     "`Blanc.Lift.Curve3Crv.c3crv_frame_refinest`"))),
+        ("misspelled declaration", "unresolved declaration", None,
+         lambda a, b: (a, map_first(b, CITE_RE, misspell_first))),
         ("stale line", "stale line", None, lambda a, b: (a, map_first(b, CITE_RE, bump_first_line))),
         ("wrong file", "is not declared in", None, lambda a, b: (a, map_first(b, CITE_RE, swap_first_file))),
         ("orphan line reference", "orphan line reference", None,
@@ -1371,19 +1118,19 @@ def falsifiers(auth: Authority, bundle: dict) -> list[tuple[str, str, str | None
         ("missing cited file", "cited file does not exist", None,
          lambda a, b: (a, append_to(b, "shared", "\nSee `scripts/no-such-file.py`.\n"))),
         ("stale bare name", "bare name is no declaration's name", None,
-         lambda a, b: (a, append_to(b, "shared", "\nSee also `c3crv_frame_refinest`.\n"))),
+         lambda a, b: (a, append_to(b, "shared", "\nSee also `pair_self_stale`.\n"))),
         ("wrong leaf count", "leaf count differs", None,
          lambda a, b: (a, map_first(b, LEAF_FULL_RE, lambda t: re.sub(LEAF_FULL_RE, lambda m: f"{to_int(m.group(1)) + 1} leaf results ({m.group(2)} public, {m.group(3)} private)", t, count=1)))),
         ("extra stricter claim in the audit source", "stricter claims differ", None,
          lambda a, b: (with_authority(stricter={**a.stricter, "Blanc.Fabricated.claim": frozenset()}), b)),
         ("missing stricter row in the document", "stricter claims differ", None, missing_stricter),
         ("wrong stricter axiom set", "stricter claim set differs", None, wrong_stricter),
-        ("wrong codehash", "codehash", "curve-3crv",
-         lambda a, b: (a, replace_in(b, "0xb731b7a9a74c6c60", "0xb731b7a9a74c6c61"))),
-        ("wrong runtime size", "runtime bytes", "curve-3crv",
-         lambda a, b: (a, replace_in(b, "| 2,276 |", "| 2,277 |"))),
-        ("wrong creation transaction", "creation transaction is not in the certificate provenance", "curve-3crv",
-         lambda a, b: (a, replace_in(b, "0xa7d90e460bed5618", "0xa7d90e460bed5619"))),
+        ("wrong codehash", "codehash", ARTIFACT_ROW,
+         lambda a, b: (a, mutate_artifact_cell(b, 3, lambda c: c[:-1] + ("1" if c[-1] != "1" else "2")))),
+        ("wrong runtime size", "runtime bytes", ARTIFACT_ROW,
+         lambda a, b: (a, mutate_artifact_cell(b, 2, lambda c: f"{to_int(c) + 1:,}"))),
+        ("wrong creation transaction", "creation transaction is not in the certificate provenance", ARTIFACT_ROW,
+         lambda a, b: (a, mutate_artifact_cell(b, 4, flip_creation_tx))),
         ("wrong system-contract digest", "SHA-256 differs", None,
          lambda a, b: (a, replace_in(b, "22ac79b68752353c", "22ac79b68752353d"))),
         ("wrong Jaune revision", "Jaune revision", None,
@@ -1394,16 +1141,6 @@ def falsifiers(auth: Authority, bundle: dict) -> list[tuple[str, str, str | None
          lambda a, b: (a, map_all(b, lambda t: drop_headline(t, first_headline())))),
         ("dropped disclosure", "load-bearing disclosure vanished", None,
          lambda a, b: (a, map_all(b, lambda t: remove_all(t, "not a deployment audit")))),
-        ("wrong USDC code-read block", "USDC: code-read block", "usdc",
-         lambda a, b: (a, replace_in(b, "finalized block 26,213,219", "finalized block 26,213,220"))),
-        ("wrong USDC library site", "is not PUSH20 of the library address", "usdc",
-         lambda a, b: (a, replace_in(b, "PUSH20 sites (bytes 18,390 and 20,105)", "PUSH20 sites (bytes 18,391 and 20,105)"))),
-        ("wrong USDC implementation slot", "implementation slot", "usdc",
-         lambda a, b: (a, replace_in(b, "0x7050c9e0f4ca769c", "0x7050c9e0f4ca769d"))),
-        ("deleted USDC headline", "required headline", "usdc",
-         lambda a, b: (a, map_all(b, lambda t: drop_headline(t, "Blanc.Lift.Usdc.usdc_history_end")))),
-        ("dropped USDC disclosure", "load-bearing disclosure vanished", "usdc",
-         lambda a, b: (a, map_all(b, lambda t: remove_all(t, "never-signer premise")))),
         ("family file missing for a live key", "family file missing for live key", None,
          lambda a, b: (a, without(b, first_live_family()))),
         ("index omits a live key", "the index of Section 5", None, lambda a, b: (a, unindexed(b))),
@@ -1411,14 +1148,19 @@ def falsifiers(auth: Authority, bundle: dict) -> list[tuple[str, str, str | None
          lambda a, b: (a, foreign_citation(b))),
         ("shared part cites a family", "the shared part cites another family", None,
          lambda a, b: (a, shared_family_citation(b))),
-    ]
+    ] + [(label, expected, key, mutate)
+         for key, family in FAMILIES.items() if hasattr(family, "falsifiers")
+         for label, expected, mutate in family.falsifiers(sys.modules[__name__])]
 
 
 def run_self_tests(auth: Authority, bundle: dict) -> tuple[list[str], int]:
     failures: list[str] = []
     ran = 0
     for label, expected, family, mutate in falsifiers(auth, bundle):
-        if family is not None and family not in bundle:
+        if family == ARTIFACT_ROW:
+            if first_artifact_row(bundle) is None:
+                continue
+        elif family is not None and family not in bundle:
             continue
         ran += 1
         try:

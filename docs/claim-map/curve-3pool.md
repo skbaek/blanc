@@ -163,6 +163,10 @@ and admin fee 0). The lifted inputs are `scripts/lift/inputs/curve-3pool-runtime
 a Sourcify full match). Nothing was recompiled: the refinement of Section 5.11 ties the bytes to
 the source revision.
 
+Compiler, from the certificate provenance: Vyper 0.2.4. Runtime identity: `eth_getCode`
+agreement across five separately operated public providers at one finalized block; the creation
+input fetched from two providers and equal byte for byte.
+
 ## Premise classes
 
 | Class | Meaning | Acceptable in a headline? | INIT established by a deployment theorem? |

@@ -89,6 +89,10 @@
           {
             "pattern": "*.md",
             "root": "docs/claim-map"
+          },
+          {
+            "pattern": "*.py",
+            "root": "scripts/claim-map-families"
           }
         ]
       },
