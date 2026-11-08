@@ -1171,6 +1171,25 @@ def run_self_tests(auth: Authority, bundle: dict) -> tuple[list[str], int]:
         errors, _ = check_bundle(mutated_auth, mutated)
         if not any(expected in error for error in errors):
             failures.append(f"falsifier '{label}' was not rejected with '{expected}'")
+    # The parts loader is fail-closed: a live key without its part, and a part of a key
+    # that is not live, each fail.
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="claim-map-parts-") as raw:
+        root = Path(raw)
+        (root / "scripts").mkdir()
+        (root / LIVE_SET).write_text('[live]\nalpha = "a"\nbeta = "b"\n', encoding="utf-8")
+        (root / FAMILY_CHECK_DIR).mkdir()
+        (root / FAMILY_CHECK_DIR / "alpha.py").write_text("SECTIONS = []\n", encoding="utf-8")
+        (root / FAMILY_CHECK_DIR / "gamma.py").write_text("SECTIONS = []\n", encoding="utf-8")
+        loaded, errors = load_families(root)
+        for label, needle in (("live key without its checker part", "live key beta has no checker part"),
+                              ("checker part of a key that is not live", "gamma.py is not the checker part")):
+            ran += 1
+            if not any(needle in error for error in errors):
+                failures.append(f"falsifier '{label}' was not rejected with '{needle}'")
+        ran += 1
+        if set(loaded) != {"alpha"}:
+            failures.append("falsifier 'loaded parts are exactly the live keys with a part' failed")
     return failures, ran
 
 

@@ -31,8 +31,8 @@
 #
 # `Blanc.ProofRecipeTactic` and `Blanc.ProofRecipesGenerated` (deliberately unreachable from
 # Blanc.lean) are built explicitly so the suggestion controls and the union walk can see them, and
-# so are the write-site checker tops `Blanc.Lift.Usdc.ImplWs` and `Blanc.Lift.WriteSiteLocality`,
-# which AxiomCheck.lean imports.
+# so are the write-site checker tops that AxiomCheck.lean imports (the explicit `lake build` list
+# below).
 #
 # Usage: scripts/check.sh [--no-build | --suggestions-only]
 #

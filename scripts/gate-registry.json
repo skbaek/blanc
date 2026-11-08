@@ -515,7 +515,8 @@
       "id": "keccak-rate-boundary",
       "inputs": {
         "files": [
-          "scripts/check-keccak-rate-boundary.sh"
+          "scripts/check-keccak-rate-boundary.sh",
+          "scripts/keccak-consumers.json"
         ],
         "populations": [
           {

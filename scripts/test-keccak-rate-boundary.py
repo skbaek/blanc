@@ -47,6 +47,7 @@ from __future__ import annotations
 
 import ast
 import importlib.util
+import json
 import re
 import sys
 import tempfile
@@ -63,7 +64,9 @@ import keccak_rate_boundary_vectors as vectors  # noqa: E402
 CANONICAL_IMPLEMENTATION = "keccak.py"
 
 # Retired product aliases are not live assurance surfaces. Pin each canonical
-# representation directly and retain the paper's USDC consumer below.
+# representation directly and check the retained consumers listed in
+# CONSUMERS (a table a release prunes when a consumer leaves with its family).
+CONSUMERS = ROOT / "scripts" / "keccak-consumers.json"
 HISTORICAL_DEFECT_LENGTHS = vectors.DEFECT_LENGTHS
 
 # --- what a sponge is -------------------------------------------------------
@@ -517,6 +520,21 @@ def self_test() -> List[str]:
         if not condition:
             failures.append(f"self-test: {message}")
 
+    # The consumer table is fail-closed: a listed consumer that is missing, and a
+    # malformed table, each redden the adapter check.
+    with tempfile.TemporaryDirectory(prefix="keccak-consumer-control-") as raw:
+        table = Path(raw) / "consumers.json"
+        table.write_text(json.dumps({"consumers": [
+            {"script": "scripts/no-such-consumer.py", "function": "describe"}]}), encoding="utf-8")
+        require(any("no-such-consumer.py is missing" in line for line in adapter_failures(table)),
+                "a listed consumer that is missing did not fail the adapter check")
+        table.write_text(json.dumps({"consumers": [{"script": "keccak.py"}]}), encoding="utf-8")
+        require(any("malformed consumer row" in line for line in adapter_failures(table)),
+                "a malformed consumer row did not fail the adapter check")
+        table.write_text(json.dumps({"rows": []}), encoding="utf-8")
+        require(any("no consumers list" in line for line in adapter_failures(table)),
+                "a consumer table without its list did not fail the adapter check")
+
     with tempfile.TemporaryDirectory(prefix="keccak-sponge-control-") as raw:
         disposable = Path(raw)
         (disposable / "quiet.py").write_text(
@@ -610,8 +628,23 @@ def self_test() -> List[str]:
     return failures
 
 
-def adapter_failures() -> List[str]:
-    """Hold the canonical representations and the retained USDC consumer."""
+def retained_consumers(table: Path = CONSUMERS) -> List[Dict[str, str]]:
+    """The consumer rows, fail-closed: an unreadable table or a malformed row raises."""
+
+    data = json.loads(table.read_text(encoding="utf-8"))
+    rows = data.get("consumers") if isinstance(data, dict) else None
+    if not isinstance(rows, list):
+        raise AssertionError(f"{table.name}: no consumers list")
+    for row in rows:
+        if (not isinstance(row, dict) or set(row) != {"script", "function"}
+                or not all(isinstance(v, str) for v in row.values())
+                or not row["script"].startswith("scripts/") or not row["script"].endswith(".py")):
+            raise AssertionError(f"{table.name}: malformed consumer row {row!r}")
+    return rows
+
+
+def adapter_failures(table: Path = CONSUMERS) -> List[str]:
+    """Hold the canonical representations and the retained consumers."""
 
     failures: List[str] = []
 
@@ -644,11 +677,26 @@ def adapter_failures() -> List[str]:
     else:
         require(False, "canonical selector accepted a signature with spaces")
 
-    description = load("usdc-history-reference.py").describe(message)
-    require(description.get("bytes") == len(message),
-            "USDC history describe must preserve byte length")
-    require(description.get("keccak256") == "0x" + expected_hex,
-            "USDC history describe must return lowercase 0x-prefixed digest")
+    try:
+        rows = retained_consumers(table)
+    except (OSError, ValueError, AssertionError) as exc:
+        require(False, f"consumer table: {exc}")
+        rows = []
+    for row in rows:
+        where = f"{row['script']}:{row['function']}"
+        path = ROOT / row["script"]
+        if not path.is_file():
+            require(False, f"listed consumer {row['script']} is missing")
+            continue
+        try:
+            description = getattr(load(row["script"][len("scripts/"):]), row["function"])(message)
+        except Exception as exc:
+            require(False, f"{where} could not be checked: {exc}")
+            continue
+        require(isinstance(description, dict) and description.get("bytes") == len(message),
+                f"{where} must preserve byte length")
+        require(isinstance(description, dict) and description.get("keccak256") == "0x" + expected_hex,
+                f"{where} must return the lowercase 0x-prefixed digest")
     return failures
 
 
@@ -662,6 +710,10 @@ def main() -> int:
 
     failures.extend(adapter_failures())
     failures.extend(self_test())
+    try:
+        consumers = len(retained_consumers())
+    except (OSError, ValueError, AssertionError):
+        consumers = 0
 
     if failures:
         for line in failures:
@@ -675,7 +727,7 @@ def main() -> int:
           f" x {len(vectors.VECTORS)} lengths + {len(vectors.SELECTORS)}"
           f" selectors = {total} comparisons against {vectors.ORACLE}"
           f" @ {vectors.ORACLE_PIN}; canonical bytes/bare-hex/prefixed-hex/selector"
-          f" shapes and retained USDC history consumer checked; structural sponge"
+          f" shapes and {consumers} retained consumer(s) checked; structural sponge"
           f" scan reconciled and shown to catch 2"
           f" planted implementations; historical padding mutant fails only"
           f" at {HISTORICAL_DEFECT_LENGTHS}")
