@@ -1,6 +1,7 @@
 import Blanc.Lift.BuilderRequest.Latch
 import Blanc.Lift.BuilderRequest.UserFrameAmsterdam
 import Blanc.RequestFeeWordDomain
+import Blanc.Lift.RequestQueue.Chain
 
 /-!
 # Exact delivery over a given sequence of frames
@@ -13,6 +14,11 @@ list, which needs message and transaction level.
 `Event` is what a frame does to the queue model, and `step` that effect. Over any such list, `replay_queue` and
 `chunks_flatten` are the FIFO: the records delivered so far, then the records still queued, are exactly the
 submissions in order. `Chain.delivered` ties it to the frames.
+
+The queue model and the sequence statements are the shared `RequestQueue` ones (`RequestQueue.Model`,
+`RequestQueue.Chain`), which the plain family (EIP-7251) also instantiates: `Event.effect` reads a builder event
+as a queue effect, the calldata latch being a drain that stores the inhibitor, and `Frame.toStep` packages a
+builder frame with its law. The FIFO statements here are those, restated in the builder's terms.
 -/
 
 namespace Blanc.Lift.BuilderRequest.Delivery
@@ -72,14 +78,68 @@ def submitted : List (Event Record) → List Record
   | .submission r :: es => r :: submitted es
   | _ :: es => submitted es
 
+/-- A builder event as a shared queue effect: the excess update of an empty-calldata call is `excessNext`, the
+calldata latch stores the inhibitor. -/
+def Event.effect (target : B256) : Event Record → RequestQueue.Effect Record
+  | .submission r => .push r
+  | .feeRead => .keep
+  | .system false => .drain fun e n => (excessNext target e.toB256 n.toB256).toNat
+  | .system true => .drain fun _ _ => 2 ^ 256 - 1
+
+theorem latched_eq (cap : Nat) (target : B256) (st : QueueState Record) :
+    latched cap target st = RequestQueue.drainedBy cap (2 ^ 256 - 1) st := by
+  by_cases h : st.queue.length ≤ cap
+  · simp only [latched, drainedState, RequestQueue.drainedBy, h, ↓reduceIte]
+  · simp only [latched, drainedState, RequestQueue.drainedBy, h, ↓reduceIte]
+
+/-- The builder step is the shared step of its effect. -/
+theorem step_effect (cap : Nat) (target : B256) (st : QueueState Record) (e : Event Record) :
+    step cap target st e = RequestQueue.apply cap st (e.effect target) := by
+  cases e with
+  | submission r => rfl
+  | feeRead => rfl
+  | system latch =>
+    cases latch
+    · rfl
+    · exact latched_eq cap target st
+
+theorem chunk_effect (cap : Nat) (target : B256) (st : QueueState Record) (e : Event Record) :
+    chunk cap st e = RequestQueue.taken cap st (e.effect target) := by
+  cases e with
+  | submission r => rfl
+  | feeRead => rfl
+  | system latch => cases latch <;> rfl
+
+theorem submitted_effect (target : B256) (es : List (Event Record)) :
+    submitted es = RequestQueue.pushed (es.map (Event.effect target)) := by
+  induction es with
+  | nil => rfl
+  | cons e es ih =>
+    cases e with
+    | submission r => exact congrArg (r :: ·) ih
+    | feeRead => exact ih
+    | system latch => cases latch <;> exact ih
+
+theorem replay_effect (cap : Nat) (target : B256) (st : QueueState Record) (es : List (Event Record)) :
+    replay cap target st es = RequestQueue.run cap st (es.map (Event.effect target)) := by
+  induction es generalizing st with
+  | nil => rfl
+  | cons e es ih =>
+    show replay cap target (step cap target st e) es = RequestQueue.run cap (RequestQueue.apply cap st _) _
+    rw [ih, step_effect]
+
+theorem chunks_effect (cap : Nat) (target : B256) (st : QueueState Record) (es : List (Event Record)) :
+    chunks cap target st es = RequestQueue.deliveries cap st (es.map (Event.effect target)) := by
+  induction es generalizing st with
+  | nil => rfl
+  | cons e es ih =>
+    show chunk cap st e :: chunks cap target (step cap target st e) es =
+      RequestQueue.taken cap st _ :: RequestQueue.deliveries cap (RequestQueue.apply cap st _) _
+    rw [ih, step_effect, chunk_effect cap target]
+
 theorem drainedState_queue (cap : Nat) (target : B256) (st : QueueState Record) :
-    (drainedState cap target st).queue = st.queue.drop cap := by
-  unfold drainedState
-  dsimp only
-  split
-  · rename_i h
-    exact (List.drop_eq_nil_of_le h).symm
-  · rfl
+    (drainedState cap target st).queue = st.queue.drop cap :=
+  RequestQueue.drainedBy_queue cap _ st
 
 theorem step_queue_system (cap : Nat) (target : B256) (st : QueueState Record) (latch : Bool) :
     (step cap target st (.system latch)).queue = st.queue.drop cap := by
@@ -89,10 +149,7 @@ theorem step_queue_system (cap : Nat) (target : B256) (st : QueueState Record) (
 
 theorem submitted_append (xs ys : List (Event Record)) :
     submitted (xs ++ ys) = submitted xs ++ submitted ys := by
-  induction xs with
-  | nil => rfl
-  | cons e xs ih =>
-    cases e <;> simp only [List.cons_append, submitted, ih]
+  rw [submitted_effect 0, submitted_effect 0, submitted_effect 0, List.map_append, RequestQueue.pushed_append]
 
 theorem replay_append (cap : Nat) (target : B256) (st : QueueState Record) (xs ys : List (Event Record)) :
     replay cap target st (xs ++ ys) = replay cap target (replay cap target st xs) ys := by
@@ -101,37 +158,22 @@ theorem replay_append (cap : Nat) (target : B256) (st : QueueState Record) (xs y
 theorem chunks_append (cap : Nat) (target : B256) (st : QueueState Record) (xs ys : List (Event Record)) :
     chunks cap target st (xs ++ ys) =
       chunks cap target st xs ++ chunks cap target (replay cap target st xs) ys := by
-  induction xs generalizing st with
-  | nil => rfl
-  | cons e xs ih =>
-    simp only [List.cons_append, chunks, ih]
-    rfl
+  rw [chunks_effect, chunks_effect, chunks_effect, replay_effect, List.map_append, RequestQueue.deliveries_append]
 
 /-- One event in the FIFO's terms: `chunk` then the next queue are the queue with what the event submits. -/
 theorem chunk_step (cap : Nat) (target : B256) (st : QueueState Record) (e : Event Record) (rest : List Record) :
     chunk cap st e ++ ((step cap target st e).queue ++ rest) =
       st.queue ++ (submitted [e] ++ rest) := by
-  cases e with
-  | submission r =>
-    simp only [chunk, step, submit, submitted, List.nil_append, List.append_assoc, List.singleton_append]
-  | feeRead => rfl
-  | system latch =>
-    rw [step_queue_system, chunk, ← List.append_assoc, List.take_append_drop]
-    rfl
+  rw [chunk_effect cap target, step_effect, submitted_effect target]
+  exact RequestQueue.taken_apply cap st _ rest
 
 /-- **The FIFO over a list of events.** The records the events deliver, in order, followed by the records still
 queued, are the starting queue followed by the records submitted, in order. So nothing is dropped, duplicated
 or reordered. -/
 theorem delivered_append_queue (cap : Nat) (target : B256) (st : QueueState Record) (es : List (Event Record)) :
     (chunks cap target st es).flatten ++ (replay cap target st es).queue = st.queue ++ submitted es := by
-  induction es generalizing st with
-  | nil => simp only [chunks, List.flatten_nil, submitted, replay, List.foldl_nil, List.nil_append, List.append_nil]
-  | cons e es ih =>
-    have hc := chunk_step cap target st e (submitted es)
-    have hs : submitted (e :: es) = submitted [e] ++ submitted es := submitted_append [e] es
-    simp only [chunks, List.flatten_cons, List.append_assoc]
-    show _ ++ (_ ++ (replay cap target (step cap target st e) es).queue) = _
-    rw [ih, hc, hs]
+  rw [chunks_effect, replay_effect, submitted_effect target]
+  exact RequestQueue.fifo cap st _
 
 /-- What has been delivered is a prefix of the submissions. -/
 theorem chunks_flatten (cap : Nat) (target : B256) (st : QueueState Record) (es : List (Event Record)) :
@@ -148,24 +190,16 @@ theorem replay_queue (cap : Nat) (target : B256) (st : QueueState Record) (es : 
 /-! ## The excess over a list of events -/
 
 theorem drainedState_excess (cap : Nat) (target : B256) (st : QueueState Record) :
-    (drainedState cap target st).excess = (excessNext target st.excess.toB256 st.count.toB256).toNat := by
-  unfold drainedState
-  dsimp only
-  split <;> rfl
+    (drainedState cap target st).excess = (excessNext target st.excess.toB256 st.count.toB256).toNat :=
+  RequestQueue.drainedBy_excess cap _ st
 
 theorem drainedState_count (cap : Nat) (target : B256) (st : QueueState Record) :
-    (drainedState cap target st).count = 0 := by
-  unfold drainedState
-  dsimp only
-  split <;> rfl
+    (drainedState cap target st).count = 0 :=
+  RequestQueue.drainedBy_count cap _ st
 
 theorem drainedState_tail_le (cap : Nat) (target : B256) (st : QueueState Record) :
-    (drainedState cap target st).tail ≤ st.tail := by
-  unfold drainedState
-  dsimp only
-  split
-  · exact Nat.zero_le _
-  · exact Nat.le_refl _
+    (drainedState cap target st).tail ≤ st.tail :=
+  RequestQueue.drainedBy_tail_le cap _ st
 
 /-- The inhibitor as a natural. -/
 theorem max_toNat : B256.max.toNat = 2 ^ 256 - 1 := by decide
@@ -520,29 +554,21 @@ theorem after_eq (f : Frame c) : f.after = effect f.before f := by
 
 end Frame
 
-theorem queueBase_succ (w t : Nat) : queueBase w (t + 1) = queueBase w t + w := by
-  simp only [queueBase, Nat.mul_add, Nat.mul_one, Nat.add_assoc]
+theorem queueBase_succ (w t : Nat) : queueBase w (t + 1) = queueBase w t + w :=
+  RequestQueue.queueBase_succ w t
 
-theorem queueBase_mono (w : Nat) {a b : Nat} (h : a ≤ b) : queueBase w a ≤ queueBase w b := by
-  have := Nat.mul_le_mul_left w h
-  simp only [queueBase]
-  omega
+theorem queueBase_mono (w : Nat) {a b : Nat} (h : a ≤ b) : queueBase w a ≤ queueBase w b :=
+  RequestQueue.queueBase_mono w h
 
 /-- Adding one to a word in the word range. -/
-theorem one_add_word (n : Nat) : (1 : B256) + n.toB256 = (n + 1).toB256 := by
-  rw [show (1 : B256) = Nat.toB256 1 by decide, Nat.toB256_add_toB256, Nat.add_comm]
+theorem one_add_word (n : Nat) : (1 : B256) + n.toB256 = (n + 1).toB256 :=
+  RequestQueue.one_add_word n
 
 /-- Record slots of two records, each in word range, differ when the records do. -/
 theorem queueSlot_ne_of_lt {w a b i j : Nat} (hab : a < b) (hi : i < w)
     (ha : queueBase w a + w ≤ 2 ^ 256) (hb : queueBase w b + w ≤ 2 ^ 256) (hj : j < w) :
-    queueSlot w a i ≠ queueSlot w b j := by
-  intro eq
-  have := congrArg B256.toNat eq
-  simp only [queueSlot] at this
-  rw [B256.toNat_toB256_of_lt (by omega), B256.toNat_toB256_of_lt (by omega)] at this
-  have hle := queueBase_mono w (Nat.succ_le_of_lt hab)
-  rw [Nat.succ_eq_add_one, queueBase_succ] at hle
-  omega
+    queueSlot w a i ≠ queueSlot w b j :=
+  RequestQueue.queueSlot_ne_of_lt hab hi ha hb hj
 
 /-- **A storage after a submission represents the queue with the record at its back**: slots 0 and 2 as before, the
 count and tail one higher, the new record's words at the tail's slots, and every other slot as before. -/
@@ -551,40 +577,11 @@ theorem represents_after_submit {w : Nat} {words : Record → Nat → B256} {f g
     (count : st.count + 1 < 2 ^ 256) (g0 : g 0 = f 0) (g1 : g 1 = (st.count + 1).toB256) (g2 : g 2 = f 2)
     (g3 : g 3 = (st.tail + 1).toB256) (new : ∀ j, j < w → g (queueSlot w st.tail j) = words r j)
     (old : ∀ key, (1 : B256) ≠ key → (3 : B256) ≠ key → (∀ j, j < w → queueSlot w st.tail j ≠ key) → g key = f key) :
-    Represents w words g (submit st r) := by
-  have coh := rep.coherent
-  have htail : st.tail + 1 < 2 ^ 256 := by
-    have : st.tail ≤ w * st.tail := Nat.le_mul_of_pos_left _ hw
-    simp only [queueBase] at slots
-    omega
-  have hlen : (submit st r).queue.length = st.queue.length + 1 := List.length_append ..
-  refine ⟨?_, rep.excess_lt, count, rep.head_lt, htail, ?_, g0.trans rep.excess, g1,
-    g2.trans rep.head, g3, ?_⟩
-  · show st.head + (st.queue ++ [r]).length = st.tail + 1
-    rw [List.length_append, List.length_singleton]
-    omega
-  · intro i hi
-    rw [hlen] at hi
-    by_cases h : i < st.queue.length
-    · exact rep.live_lt i h
-    · have hi' : st.head + i = st.tail := by omega
-      show queueBase w (st.head + i) + w ≤ _
-      rw [hi']
-      exact slots
-  · intro i hi j hj
-    have hi1 : i < (st.queue ++ [r]).length := hi
-    rw [hlen] at hi
-    show g (queueSlot w (st.head + i) j) = words ((st.queue ++ [r])[i]'hi1) j
-    by_cases h : i < st.queue.length
-    · have hl := rep.live_lt i h
-      rw [old _ (queueSlot_ne (n := 1) (by omega) (by decide) hl hj) (queueSlot_ne (n := 3) (by omega) (by decide) hl hj)
-        (fun j' hj' => (queueSlot_ne_of_lt (by omega) hj hl slots hj').symm), rep.live i h j hj,
-        List.getElem_append_left h]
-    · have hi' : st.head + i = st.tail := by omega
-      have hi2 : i = st.queue.length := by omega
-      subst hi2
-      rw [hi', new j hj, List.getElem_append_right (Nat.le_refl _)]
-      simp only [Nat.sub_self, List.getElem_cons_zero]
+    Represents w words g (submit st r) :=
+  RequestQueue.represents_push rep hw slots count g0 g1 g2 g3 new old
+
+/-- The contract's queue layout, for the shared sequence statements. -/
+abbrev Contract.queue (c : Contract) : RequestQueue.Queue := ⟨c.Record, c.width, c.words, c.out, c.cap⟩
 
 /-- `s` represents `st`, in this contract's layout. -/
 abbrev Holds (c : Contract) (s : Stor) (st : QueueState c.Record) : Prop :=
@@ -641,6 +638,17 @@ theorem step_holds (f : Frame c) {st : QueueState c.Record} (rep : Holds c f.bef
       have hd := represents_latchState c.shape c.cap_word c.next_eq hrep
       rw [c.target_eq] at hd
       exact hd
+
+/-- A builder frame with its law, as the shared sequence statements take it. -/
+def toStep (f : Frame c) : RequestQueue.Step c.queue where
+  before := f.before
+  after := f.after
+  effect := f.event.effect c.target
+  output := f.output
+  holds := fun rep slots count => by
+    have h := (f.step_holds rep (by rwa [submitted_effect c.target]) (by rwa [submitted_effect c.target])).1
+    rwa [step_effect] at h
+  output_eq := fun rep => by rw [f.output_eq rep, chunk_effect c.cap c.target]
 
 end Frame
 
@@ -699,6 +707,18 @@ theorem submitted_cons_length (e : Event Record) (es : List (Event Record)) :
     (submitted (e :: es)).length = (submitted [e]).length + (submitted es).length := by
   rw [show e :: es = [e] ++ es from rfl, submitted_append, List.length_append]
 
+/-- A chain of builder frames is a chain of their shared steps. -/
+theorem Chain.toSteps {s t : Stor} {frames : List (Frame c)} (chain : Chain s frames t) :
+    RequestQueue.Chain s (frames.map Frame.toStep) t := by
+  induction chain with
+  | nil s => exact .nil s
+  | cons starts tail ih => exact .cons starts ih
+
+theorem events_effect (frames : List (Frame c)) :
+    (events frames).map (Event.effect c.target) = RequestQueue.effects (frames.map Frame.toStep) := by
+  simp only [events, RequestQueue.effects, List.map_map]
+  rfl
+
 /-- **The sequence on a represented queue.** Storage at the chain's end represents the model's queue, and the
 concatenated output is the concatenated records each call delivered. `slots` and `count` are the word range:
 every record slot the frames' submissions could reach, and the count, stay below the word modulus. -/
@@ -708,22 +728,18 @@ theorem Chain.holds {s t : Stor} {frames : List (Frame c)} (chain : Chain s fram
     (count : st.count + (submissions frames).length < 2 ^ 256) :
     Holds c t (queueAfter st frames) ∧
       systemOutput frames = (chunks c.cap c.target st (events frames)).flatten.flatMap c.out := by
-  induction chain generalizing st with
-  | nil s => exact ⟨rep, rfl⟩
-  | @cons s f rest t starts tail ih =>
-    subst starts
-    have hs : (submissions (f :: rest)).length =
-        (submitted [f.event]).length + (submissions rest).length := submitted_cons_length _ _
-    rw [hs] at slots count
-    obtain ⟨hrep, hout⟩ := f.step_holds rep ((queueBase_mono c.width (by omega)).trans slots) (by omega)
-    have ht := step_tail_le c.cap c.target st f.event
-    have hc := step_count_le c.cap c.target st f.event
-    obtain ⟨h1, h2⟩ := ih hrep ((queueBase_mono c.width (by omega)).trans slots) (by omega)
-    refine ⟨h1, ?_⟩
-    show f.output ++ systemOutput rest = _
-    rw [h2, hout]
-    show _ = (chunk c.cap st f.event ++ (chunks c.cap c.target _ (events rest)).flatten).flatMap c.out
-    rw [List.flatMap_append]
+  have hsub : (submissions frames).length = (RequestQueue.submissions (frames.map Frame.toStep)).length := by
+    rw [submissions, submitted_effect c.target, events_effect]
+    rfl
+  rw [hsub] at slots count
+  obtain ⟨h1, h2⟩ := chain.toSteps.holds rep slots count
+  refine ⟨?_, ?_⟩
+  · show Holds c t (replay c.cap c.target st (events frames))
+    rw [replay_effect, events_effect]
+    exact h1
+  · rw [chunks_effect, events_effect, ← h2]
+    simp only [systemOutput, RequestQueue.output, List.flatMap_map]
+    rfl
 
 /-- `Chain.holds` from an empty queue, with the word range as one premise on the number of submissions. -/
 structure Delivered (st : QueueState c.Record) (frames : List (Frame c)) (t : Stor) : Prop where

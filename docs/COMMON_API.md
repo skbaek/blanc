@@ -8697,8 +8697,19 @@ over `plainPathTree`, `paid_inv`/`paid_exact` over `paidTree`, `dispatch_user_in
 for any dispatch root, and per runtime `exec_user_cases`, `exec_fee_read`, `exec_fee_read_exact` and
 `exec_inhibited_no_ok`, all under covered forks. `word_fee_eq_of_le` and `word_fee_ne_at_2893` restate the
 2892/2893 boundary on a stored excess word. The worked consumer is `Blanc/Lift/ConsolidationRequest/Frames.lean`;
-EIP-7002 keeps its own glue, which its pins reach. The builder family's queue layout, generic over record
-width, is family-local at `Blanc/Lift/BuilderRequest/QueueLayout.lean`.
+EIP-7002 keeps its own glue, which its pins reach. A request queue's storage layout, generic over record width
+(`QueueState`, `Represents`, `queueSlot`), is
+[`Blanc/Lift/BuilderRequest/QueueLayout.lean`](../Blanc/Lift/BuilderRequest/QueueLayout.lean) (shared; the
+namespace is the builder family's). For what a request system call leaves on a represented queue, for any excess
+arm, use [`Blanc/Lift/RequestQueue/Drain.lean`](../Blanc/Lift/RequestQueue/Drain.lean): `represents_drain` (post
+storage of `sysState` represents `drainedBy`), `drained_represented` and `output_represented` (the return window is
+the oldest `min(length, cap)` records). For the queue model over a list of frames, instantiate
+[`Blanc/Lift/RequestQueue/Model.lean`](../Blanc/Lift/RequestQueue/Model.lean) (`Effect`: push, keep, or drain with a
+stored-excess function; `run`, `deliveries`, the FIFO `fifo`; `represents_push` for a submission's storage) and
+[`Blanc/Lift/RequestQueue/Chain.lean`](../Blanc/Lift/RequestQueue/Chain.lean) (`Queue`, a `Step` packaging a
+frame with its queue law, `Chain`, `Chain.delivered`, `Chain.drain_delivers`). Worked consumers: EIP-7251
+`Blanc/Lift/ConsolidationRequest/Queue.lean` and `Delivery.lean`, and the EIP-8282 builder family's
+`Delivery.Event.effect` and `Delivery.Frame.toStep`.
 The builder family's user frames are walked once over a fork's `StorageSteps` (`FeePath.lean`), with
 `coveredSteps` and `amsterdamSteps` (`UserFrameAmsterdam.lean`) as its instances: only `SLOAD` and `SSTORE`
 differ between them, and those certificates have no call-family node, so `lift_sound_noExec` lifts on any fork.
@@ -8725,7 +8736,8 @@ excess arm (no latch; the inhibitor counts as zero) is `plainShape` in
 `Blanc/Lift/BuilderRequest/SystemPath.lean`, family-local, and its nonempty-calldata side, on
 `SysPath.frame_prefix` and `SysPath.prefix_le`, is `Blanc/Lift/BuilderRequest/Latch.lean`. The builder family's
 statements over a given list of frames (`Contract`, `Frame`, `Chain`, the queue model `step`/`replay`/`chunks`) are
-`Blanc/Lift/BuilderRequest/Delivery.lean`, family-local; word and natural request fee at fraction 17, through excess
+`Blanc/Lift/BuilderRequest/Delivery.lean`, family-local, and are instances of the shared `RequestQueue` model and
+chain above (`step_effect`, `Frame.toStep`); word and natural request fee at fraction 17, through excess
 2892 and not at 2893, are `Blanc/RequestFeeWordDomain.lean`. The fee loop's run, length (at most 462, tight at 2892) and value on that domain, its linear bound above, are `Blanc/RequestFeeWordBound.lean`.
 `Blanc/Lift/RequestSystem/Effects.lean` holds what a call touches and returns: `sysState_getElem_ne` and
 `sysState_getElem_congr` (every other account is unchanged; its own result depends only on its own account),

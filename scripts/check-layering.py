@@ -1476,6 +1476,14 @@ SHARED += ["Lift.RequestSystem.Stores", "Lift.RequestSystem.CoveredCall"]
 # It imports only shared modules; the lifted runtime and its fork-free system path are the shared
 # `Lift.SystemExecution.ConsolidationRequest.*` modules registered above.
 CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.System"])
+# The request queue model and the sequence statements, shared by the plain family (EIP-7251) and the EIP-8282
+# builder family (blanc-eip7251-consolidation-requests-v1 U3): the drain for any excess arm, the queue model over
+# effects, generic `Step`/`Chain` delivery, and the queue layout (`QueueLayout`, generic in record width,
+# reclassified from the builder family).
+SHARED += ["Lift.RequestQueue.Drain", "Lift.RequestQueue.Model", "Lift.RequestQueue.Chain",
+           "Lift.BuilderRequest.QueueLayout"]
+CONTRACTS.setdefault("consolidation-request", []).extend(["Lift.ConsolidationRequest.Queue",
+                                                         "Lift.ConsolidationRequest.Delivery"])
 CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Code", "Lift.BuilderRequest.Deposit.Cert",
     "Lift.BuilderRequest.Deposit.Check", "Lift.BuilderRequest.Deposit.Jumps",
@@ -1483,7 +1491,7 @@ CONTRACTS["builder-request"] = [
     "Lift.BuilderRequest.Deposit.Creation.Check", "Lift.BuilderRequest.Deposit.Creation.Address",
     "Lift.BuilderRequest.Deposit.Creation.Deploy", "Lift.BuilderRequest.Deposit.FeeWindow",
     "Lift.BuilderRequest.Deposit.Submission", "Lift.BuilderRequest.Deposit.Frames",
-    "Lift.BuilderRequest.FeePath", "Lift.BuilderRequest.QueueLayout",
+    "Lift.BuilderRequest.FeePath",
     "Lift.BuilderRequest.Message", "Lift.BuilderRequest.Revert", "Lift.BuilderRequest.Transaction",
     "Lift.BuilderRequest.Deposit.Transaction", "Lift.BuilderRequest.Exit.Transaction",
     "Lift.BuilderRequest.TransactionWitness",

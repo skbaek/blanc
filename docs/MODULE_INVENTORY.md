@@ -10,7 +10,7 @@ need-first registry; use this index when no branch matches or to see where
 a known module is documented. A summary is the module's leading `/-! … -/`
 documentation (its title and first sentence), or its leading `--` comment.
 
-626 shared modules, 599 with a module summary.
+630 shared modules, 603 with a module summary.
 
 ## `Blanc/`
 
@@ -592,6 +592,12 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`WriteSiteTerm.lean`](../Blanc/Lift/WriteSiteTerm.lean) | **W2  `Blanc/Lift/WriteSiteTerm.lean` (term meaning; generic).** The meaning of the write-site checker's provenance terms (`Blanc.Lift.WriteSite.Term`): a term is read in an environment of frame constants and the current function's entry words. | [C9.5](COMMON_API.md#c95-i-need-hashed-storage-slots-write-locality-or-demanded-zero-cells) |
 | [`WriteSiteZero.lean`](../Blanc/Lift/WriteSiteZero.lean) | **Zero preservation from checked write locality.** An actual SSTORE satisfying `GuardObs K False` preserves zero on the demanded slots. | [C9.5](COMMON_API.md#c95-i-need-hashed-storage-slots-write-locality-or-demanded-zero-cells) |
 
+## `Blanc/Lift/BuilderRequest/`
+
+| module | summary | cited in |
+|---|---|---|
+| [`QueueLayout.lean`](../Blanc/Lift/BuilderRequest/QueueLayout.lean) | **A request queue's storage layout.** The EIP-7002, EIP-7251 and EIP-8282 request contracts keep the excess, count, head and tail in slots 0 to 3 and the queue's records from slot 4, each record in `width` consecutive slots: 6 for builder deposits, 3 for builder exits, 4 for … | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+
 ## `Blanc/Lift/Create2Factory/`
 
 | module | summary | cited in |
@@ -609,6 +615,14 @@ documentation (its title and first sentence), or its leading `--` comment.
 | [`Getter.lean`](../Blanc/Lift/RequestFee/Getter.lean) | **The request contracts' fee getter.** After the fee quotient is computed, a request contract's getter path requires empty calldata and zero value, then writes the quotient at memory offset zero and returns it. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Plain.lean`](../Blanc/Lift/RequestFee/Plain.lean) | **The plain request contracts' user path, under covered forks.** The EIP-7002 and EIP-7251 runtimes share one user path up to the calldata-length branch: caller dispatch, `PUSH1 17`, the slot-zero inhibitor guard, and the shared fee window run on slot 0 as it is stored. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 | [`Window.lean`](../Blanc/Lift/RequestFee/Window.lean) | **The request contracts' fee window.** The system request contracts compute their fee with one instruction sequence: six setup instructions, a loop over the word `fake_exponential` at fraction 17, and a postloop that divides and branches on the calldata length. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+
+## `Blanc/Lift/RequestQueue/`
+
+| module | summary | cited in |
+|---|---|---|
+| [`Chain.lean`](../Blanc/Lift/RequestQueue/Chain.lean) | **Exact delivery over a given sequence of request-contract frames.** A `Queue` is a request contract's layout: its record type, the slots per record and the word each keeps, a record's returned bytes, and the cap per drain. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Drain.lean`](../Blanc/Lift/RequestQueue/Drain.lean) | **What a request system call leaves on a represented queue, for any excess arm.** The system path of the EIP-7002, EIP-7251 and EIP-8282 request contracts drains the queue the same way and differs only in the excess it stores (`SysShape.next`). | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
+| [`Model.lean`](../Blanc/Lift/RequestQueue/Model.lean) | **The request queue model over a list of effects.** What one frame at a request contract does to its queue, in unbounded naturals: it pushes one record, keeps the queue, or drains it, with the excess it stores given as a function of the excess and count it reads. | [C9.9](COMMON_API.md#c99-i-need-to-walk-a-successful-lifted-run) |
 
 ## `Blanc/Lift/RequestSystem/`
 
